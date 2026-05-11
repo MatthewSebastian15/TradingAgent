@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# Environment Variables
+.env
+*.env
+
+# Anaconda
+.conda/
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+*.cache
+
+# TradingAgents data & results
+data_cache/
+results/
+*.db
+*.sqlite
+*.sqlite3
+
+# UV lock (bawaan tradingagents-core, tidak perlu di-track ulang)
+uv.lock
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
