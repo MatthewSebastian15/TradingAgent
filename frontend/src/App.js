@@ -2,8 +2,8 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Analysis from './pages/Analysis';
-import './App.css';
-
+import './index.css';
+ 
 function App() {
   return (
     <BrowserRouter>
@@ -14,5 +14,5 @@ function App() {
     </BrowserRouter>
   );
 }
-
+ 
 export default App;
