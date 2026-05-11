@@ -5,16 +5,13 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const popularTickers = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL'];
 
-const providerInfo = {
-  google: { label: 'Google Gemini', icon: '◆', color: '#60a5fa' },
-  openai: { label: 'OpenAI GPT', icon: '⬡', color: '#34d399' },
-  anthropic: { label: 'Anthropic Claude', icon: '◈', color: '#c084fc' },
-};
+function getTodayDate() {
+  return new Date().toISOString().split('T')[0];
+}
 
 export default function StockForm({ onResult, onLoading, onStatus }) {
   const [ticker, setTicker] = useState('NVDA');
-  const [date, setDate] = useState('2024-05-10');
-  const [provider, setProvider] = useState('google');
+  const [date, setDate] = useState(getTodayDate());
   const [focused, setFocused] = useState(null);
 
   async function handleSubmit(e) {
@@ -28,7 +25,6 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
       const res = await axios.post(`${API_URL}/api/analyze`, {
         ticker,
         trade_date: date,
-        llm_provider: provider,
         max_debate_rounds: 1,
       });
       onResult(res.data);
@@ -68,16 +64,11 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
     fontWeight: 500,
   };
 
-  const fieldStyle = {
-    display: 'flex',
-    flexDirection: 'column',
-  };
-
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* Ticker */}
-      <div style={fieldStyle}>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
         <label style={labelStyle}>Ticker Symbol</label>
         <input
           style={inputBase('ticker')}
@@ -89,7 +80,6 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
           required
           maxLength={8}
         />
-        {/* Quick picks */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
           {popularTickers.map(t => (
             <button
@@ -115,14 +105,26 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
         </div>
       </div>
 
-      {/* Date */}
-      <div style={fieldStyle}>
-        <label style={labelStyle}>Trade Date</label>
+      {/* Trade Date */}
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <label style={labelStyle}>
+          Trade Date
+          <span style={{
+            marginLeft: 8,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--accent)',
+            background: 'var(--accent-dim)',
+            padding: '1px 6px',
+            borderRadius: 4,
+            fontWeight: 400,
+            letterSpacing: '0.04em',
+          }}>
+            default: today
+          </span>
+        </label>
         <input
-          style={{
-            ...inputBase('date'),
-            colorScheme: 'dark',
-          }}
+          style={{ ...inputBase('date'), colorScheme: 'dark' }}
           type="date"
           value={date}
           onChange={e => setDate(e.target.value)}
@@ -130,59 +132,6 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
           onBlur={() => setFocused(null)}
           required
         />
-      </div>
-
-      {/* LLM Provider */}
-      <div style={fieldStyle}>
-        <label style={labelStyle}>LLM Provider</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {Object.entries(providerInfo).map(([key, info]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setProvider(key)}
-              style={{
-                background: provider === key ? `${info.color}14` : 'var(--bg-card)',
-                border: `1px solid ${provider === key ? `${info.color}50` : 'var(--border)'}`,
-                borderRadius: 'var(--radius-md)',
-                padding: '12px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                transition: 'var(--transition)',
-                textAlign: 'left',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 16, color: info.color }}>{info.icon}</span>
-                <span style={{
-                  fontSize: 13,
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 500,
-                  color: provider === key ? 'var(--text-primary)' : 'var(--text-secondary)',
-                }}>
-                  {info.label}
-                </span>
-              </div>
-              <div style={{
-                width: 16, height: 16,
-                borderRadius: '50%',
-                border: `2px solid ${provider === key ? info.color : 'var(--border-active)'}`,
-                background: provider === key ? info.color : 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'var(--transition)',
-                flexShrink: 0,
-              }}>
-                {provider === key && (
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#070a0f' }} />
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Submit */}

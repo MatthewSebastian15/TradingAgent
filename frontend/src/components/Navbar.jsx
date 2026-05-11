@@ -88,7 +88,7 @@ export default function Navbar() {
 
   return (
     <nav style={styles.nav}>
-      <div style={styles.logo} onClick={() => navigate('/')}>
+      <div style={styles.logo} onClick={() => navigate('/home')}>
         <div style={styles.logoIcon}>⬡</div>
         <div>
           <div style={styles.logoText}>TradingAgents</div>
@@ -98,8 +98,8 @@ export default function Navbar() {
 
       <div style={styles.navLinks}>
         <button
-          style={styles.navLink(location.pathname === '/')}
-          onClick={() => navigate('/')}
+          style={styles.navLink(location.pathname === '/home')}
+          onClick={() => navigate('/home')}
         >
           Dashboard
         </button>
