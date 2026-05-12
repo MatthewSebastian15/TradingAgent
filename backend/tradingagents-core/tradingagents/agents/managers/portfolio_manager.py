@@ -1,22 +1,4 @@
-"""Portfolio Manager: synthesises the risk-analyst debate into the final decision.
-
-Uses LangChain's ``with_structured_output`` so the LLM produces a typed
-``PortfolioDecision`` directly, in a single call.  The result is rendered
-back to markdown for storage in ``final_trade_decision`` so memory log,
-CLI display, and saved reports continue to consume the same shape they do
-today.  When a provider does not expose structured output, the agent falls
-back gracefully to free-text generation.
-
-CHANGES vs original:
-- Added ``_trim_history`` helper that caps the risk-debate history fed into
-  the prompt at MAX_HISTORY_CHARS characters. The full history is still
-  stored in ``risk_debate_state``; only the prompt input is trimmed. This
-  prevents qwen3:4b (or any small model) from receiving a context that is
-  longer than its practical attention window, which is a common cause of
-  very slow generation or a hung call at the Portfolio Manager step.
-- The trim always preserves the tail of the history (most recent arguments)
-  because those are what the Portfolio Manager should weigh most heavily.
-"""
+"""Portfolio Manager: synthesises the risk-analyst debate into the final decision."""
 
 from __future__ import annotations
 
@@ -30,39 +12,14 @@ from tradingagents.agents.utils.structured import (
     invoke_structured_or_freetext,
 )
 
-# Maximum characters of debate history to feed into the PM prompt.
-# The three risk analysts each produce ~500-1500 chars per turn, so at
-# max_risk_discuss_rounds=1 the raw history is typically 1500-4500 chars.
-# Setting this to 6000 gives comfortable headroom while keeping the total
-# prompt well inside qwen3:4b's usable context window.
-# Increase if you use a model with a larger context (e.g. 32k+).
 MAX_HISTORY_CHARS = 6000
 
 
 def _trim_history(history: str, max_chars: int = MAX_HISTORY_CHARS) -> str:
-    """Return the tail of ``history`` capped at ``max_chars`` characters.
-
-    The most recent analyst arguments appear at the end of the string, so
-    trimming from the front discards the oldest (least relevant) text while
-    keeping everything the Portfolio Manager needs to make its decision.
-
-    A header line is prepended when trimming occurs so the model understands
-    that earlier context exists but was omitted.
-
-    Args:
-        history: Full concatenated debate history string.
-        max_chars: Hard character limit for the returned string.
-
-    Returns:
-        Original string when it fits; trimmed tail with a notice header otherwise.
-    """
     if len(history) <= max_chars:
         return history
 
     tail = history[-max_chars:]
-
-    # Avoid breaking in the middle of a word or analyst label: advance to
-    # the next newline so the first line in the returned string is complete.
     newline_pos = tail.find("\n")
     if newline_pos != -1:
         tail = tail[newline_pos + 1:]
@@ -80,9 +37,6 @@ def create_portfolio_manager(llm):
     def portfolio_manager_node(state) -> dict:
         instrument_context = build_instrument_context(state["company_of_interest"])
 
-        # Trim history before injecting into the prompt to prevent overly
-        # large inputs from stalling the model. The full history is retained
-        # in risk_debate_state for logging and downstream use.
         raw_history = state["risk_debate_state"]["history"]
         history = _trim_history(raw_history)
 
@@ -119,7 +73,18 @@ def create_portfolio_manager(llm):
 
 ---
 
-Be decisive and ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
+**Output requirements:**
+
+Executive Summary: Write EXACTLY 5 sentences in one paragraph. No bullet points.
+- Sentence 1: State the rating and the single strongest reason for it.
+- Sentence 2: Cite the most important quantitative data point that supports this view.
+- Sentence 3: Name the biggest risk and explain why it does NOT change the decision (or does, if Sell).
+- Sentence 4: Describe the recommended entry strategy, position sizing, and stop-loss level.
+- Sentence 5: State the time horizon and the catalyst that will confirm or invalidate the thesis.
+
+Investment Thesis: Write at minimum 6 sentences as flowing paragraphs (no bullet points, no headers). Explain in plain, everyday language as if talking to a smart friend who does not work in finance. Cover: what the company does and why it matters now, the biggest tailwind or headwind, at least three specific numbers from the analysts' reports, the bear case and how serious it is, why one side wins the argument, and the full action plan (entry, sizing, stop-loss, profit-taking). Avoid unexplained jargon.
+
+Be decisive. Ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
 
         final_trade_decision = invoke_structured_or_freetext(
             structured_llm,
@@ -131,7 +96,6 @@ Be decisive and ground every conclusion in specific evidence from the analysts.{
 
         new_risk_debate_state = {
             "judge_decision": final_trade_decision,
-            # Store the full (untrimmed) history so logs and reports are complete.
             "history": raw_history,
             "aggressive_history": risk_debate_state["aggressive_history"],
             "conservative_history": risk_debate_state["conservative_history"],
