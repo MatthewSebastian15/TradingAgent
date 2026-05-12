@@ -1,12 +1,30 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import {
+  MOCK_RESPONSE,
+  MOCK_SELL_RESPONSE,
+  MOCK_HOLD_RESPONSE,
+  MOCK_ERROR_RESPONSE,
+} from '../mockData';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+const USE_MOCK = true;
+
 const popularTickers = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL'];
+
+const MOCK_MAP = {
+  NVDA: MOCK_RESPONSE,
+  TSLA: MOCK_SELL_RESPONSE,
+  AAPL: MOCK_HOLD_RESPONSE,
+};
 
 function getTodayDate() {
   return new Date().toISOString().split('T')[0];
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export default function StockForm({ onResult, onLoading, onStatus }) {
@@ -21,13 +39,28 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
     onResult(null);
 
     try {
-      onStatus('Running analysis. This may take 2–3 minutes...');
-      const res = await axios.post(`${API_URL}/api/analyze`, {
-        ticker,
-        trade_date: date,
-        max_debate_rounds: 1,
-      });
-      onResult(res.data);
+      if (USE_MOCK) {
+        await sleep(1500);
+        onStatus('Market Analyst fetching price data...');
+        await sleep(2000);
+        onStatus('News Researcher scanning headlines...');
+        await sleep(1500);
+        onStatus('Risk Manager evaluating downside...');
+        await sleep(1500);
+        onStatus('Portfolio Manager issuing final decision...');
+        await sleep(1000);
+
+        const mockData = MOCK_MAP[ticker] || MOCK_RESPONSE;
+        onResult(mockData);
+      } else {
+        onStatus('Running analysis. This may take 2-3 minutes...');
+        const res = await axios.post(`${API_URL}/api/analyze`, {
+          ticker,
+          trade_date: date,
+          max_debate_rounds: 1,
+        });
+        onResult(res.data);
+      }
     } catch (err) {
       onResult({ error: err.message });
     } finally {
@@ -67,7 +100,28 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-      {/* Ticker */}
+      {USE_MOCK && (
+        <div style={{
+          background: 'rgba(255,179,64,0.08)',
+          border: '1px solid rgba(255,179,64,0.25)',
+          borderRadius: 'var(--radius-md)',
+          padding: '10px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <span style={{ fontSize: 13 }}>🧪</span>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--amber)',
+            letterSpacing: '0.06em',
+          }}>
+            MOCK MODE — NVDA · AAPL · TSLA tersedia sebagai contoh
+          </span>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <label style={labelStyle}>Ticker Symbol</label>
         <input
@@ -105,7 +159,6 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
         </div>
       </div>
 
-      {/* Trade Date */}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <label style={labelStyle}>
           Trade Date
@@ -134,7 +187,6 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
         />
       </div>
 
-      {/* Submit */}
       <button
         type="submit"
         style={{
@@ -178,7 +230,7 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
         textAlign: 'center',
         letterSpacing: '0.04em',
       }}>
-        Analysis typically takes 2–3 minutes to complete
+        {USE_MOCK ? 'Mock mode: selesai dalam ~7 detik' : 'Analysis typically takes 2-3 minutes to complete'}
       </p>
     </form>
   );

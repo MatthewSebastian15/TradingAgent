@@ -11,8 +11,8 @@ DEFAULT_CONFIG = {
 
     # LLM settings — Ollama lokal dengan qwen3:4b
     "llm_provider": "google",
-    "deep_think_llm": "gemini-2.5-flash-lite",
-    "quick_think_llm": "gemini-2.5-flash-lite",
+    "deep_think_llm": "gemini-2.5-flash",
+    "quick_think_llm": "gemini-2.5-flash",
 
     # Ollama default berjalan di port 11434
     # "backend_url": "http://localhost:11434/v1",

@@ -1,56 +1,358 @@
-import React from 'react';
+import React, { useState } from 'react';
+
+// Parse markdown bold (**text**) menjadi <strong>
+function parseBold(text) {
+  const parts = text.split(/\*\*(.*?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1
+      ? <strong key={i} style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{part}</strong>
+      : part
+  );
+}
+
+function DecisionBadge({ decision }) {
+  const config = {
+    Buy:  { bg: 'rgba(0,229,160,0.12)', border: 'rgba(0,229,160,0.3)', color: 'var(--accent)',  label: '▲ BUY'  },
+    Sell: { bg: 'rgba(255,77,106,0.12)', border: 'rgba(255,77,106,0.3)', color: 'var(--red)',   label: '▼ SELL' },
+    Hold: { bg: 'rgba(255,179,64,0.12)', border: 'rgba(255,179,64,0.3)', color: 'var(--amber)', label: '◆ HOLD' },
+  };
+  const c = config[decision] || config.Hold;
+  return (
+    <span style={{
+      background: c.bg,
+      border: `1px solid ${c.border}`,
+      color: c.color,
+      padding: '6px 16px',
+      borderRadius: 100,
+      fontSize: 12,
+      fontFamily: 'var(--font-mono)',
+      fontWeight: 700,
+      letterSpacing: '0.08em',
+    }}>
+      {c.label}
+    </span>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        marginBottom: 8,
+      }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 export default function ResultCard({ result }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (!result) return null;
 
+  // Error state
   if (result.error) {
     return (
       <div style={{
-        marginTop: 32,
-        backgroundColor: '#2a1a1a',
-        border: '1px solid #ef4444',
-        borderRadius: 8,
-        padding: 20,
+        marginTop: 24,
+        background: 'rgba(255,77,106,0.06)',
+        border: '1px solid rgba(255,77,106,0.25)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '20px 24px',
+        animation: 'fadeUp 0.4s ease both',
       }}>
-        <p style={{ color: '#ef4444', fontWeight: 600 }}>Error</p>
-        <p style={{ color: '#a0a0b0', fontSize: 14, marginTop: 8 }}>{result.error}</p>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          marginBottom: 10,
+        }}>
+          <span style={{ fontSize: 16 }}>⚠️</span>
+          <span style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--red)',
+          }}>
+            Analysis Failed
+          </span>
+        </div>
+        <p style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 12,
+          color: 'var(--text-secondary)',
+          lineHeight: 1.6,
+        }}>
+          {result.error}
+        </p>
       </div>
     );
   }
 
+  // Parse full_decision menjadi sections
+  const rawText = result.full_decision || result.decision || '';
+  const lines = rawText.split('\n').filter(Boolean);
+
+  // Kelompokkan per section berdasarkan header **...**
+  const sections = [];
+  let currentSection = null;
+  for (const line of lines) {
+    const headerMatch = line.match(/^\*\*(.+?)\*\*:\s*(.*)/);
+    if (headerMatch) {
+      if (currentSection) sections.push(currentSection);
+      currentSection = { title: headerMatch[1], body: headerMatch[2] ? [headerMatch[2]] : [] };
+    } else if (currentSection) {
+      currentSection.body.push(line);
+    }
+  }
+  if (currentSection) sections.push(currentSection);
+
+  // Extract fields spesifik
+  const priceTarget = result.price_target
+    || sections.find(s => s.title === 'Price Target')?.body[0]
+    || null;
+
+  const timeHorizon = result.time_horizon
+    || sections.find(s => s.title === 'Time Horizon')?.body[0]
+    || null;
+
+  const summary = sections.find(s => s.title === 'Executive Summary')?.body.join(' ') || '';
+  const thesis  = sections.find(s => s.title === 'Investment Thesis')?.body.join(' ') || '';
+
+  const agentsUsed = result.agents_used || [];
+
   return (
     <div style={{
-      marginTop: 32,
-      backgroundColor: '#1a1d27',
-      border: '1px solid #2a2d3e',
-      borderRadius: 8,
-      padding: 24,
+      marginTop: 24,
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-lg)',
+      overflow: 'hidden',
+      animation: 'fadeUp 0.4s ease both',
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h3 style={{ fontSize: 20, fontWeight: 700 }}>{result.ticker}</h3>
-        <span style={{
-          backgroundColor: '#14532d',
-          color: '#4ade80',
-          padding: '4px 12px',
-          borderRadius: 20,
-          fontSize: 13,
-          fontWeight: 600,
-        }}>
-          Analysis Complete
-        </span>
-      </div>
+
+      {/* Header */}
       <div style={{
-        backgroundColor: '#0f1117',
-        borderRadius: 8,
-        padding: 16,
-        fontSize: 14,
-        color: '#a0a0b0',
-        whiteSpace: 'pre-wrap',
-        lineHeight: 1.7,
+        padding: '20px 24px',
+        borderBottom: '1px solid var(--border-subtle)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
       }}>
-        {typeof result.decision === 'string'
-          ? result.decision
-          : JSON.stringify(result.decision, null, 2)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 22,
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.5px',
+            }}>
+              {result.ticker}
+            </div>
+            {result.trade_date && (
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                marginTop: 2,
+              }}>
+                {result.trade_date}
+              </div>
+            )}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <DecisionBadge decision={result.decision} />
+          <span style={{
+            background: 'rgba(0,229,160,0.08)',
+            border: '1px solid rgba(0,229,160,0.2)',
+            color: 'var(--accent)',
+            padding: '4px 10px',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 10,
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.06em',
+          }}>
+            ✓ COMPLETE
+          </span>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      {(priceTarget || timeHorizon) && (
+        <div style={{
+          display: 'flex',
+          borderBottom: '1px solid var(--border-subtle)',
+        }}>
+          {priceTarget && (
+            <div style={{
+              flex: 1,
+              padding: '14px 24px',
+              borderRight: '1px solid var(--border-subtle)',
+            }}>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                marginBottom: 4,
+              }}>Price Target</div>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 20,
+                fontWeight: 700,
+                color: 'var(--accent)',
+              }}>
+                ${typeof priceTarget === 'number' ? priceTarget.toLocaleString() : priceTarget}
+              </div>
+            </div>
+          )}
+          {timeHorizon && (
+            <div style={{ flex: 1, padding: '14px 24px' }}>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                marginBottom: 4,
+              }}>Time Horizon</div>
+              <div style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 15,
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+              }}>
+                {timeHorizon}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Body */}
+      <div style={{ padding: '20px 24px' }}>
+
+        {/* Executive Summary */}
+        {summary && (
+          <Section title="Executive Summary">
+            <p style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              lineHeight: 1.7,
+            }}>
+              {parseBold(summary)}
+            </p>
+          </Section>
+        )}
+
+        {/* Investment Thesis — toggle expand */}
+        {thesis && (
+          <Section title="Investment Thesis">
+            <div style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              lineHeight: 1.7,
+              overflow: 'hidden',
+              maxHeight: expanded ? 'none' : '72px',
+              position: 'relative',
+            }}>
+              {parseBold(thesis)}
+              {!expanded && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 32,
+                  background: 'linear-gradient(transparent, var(--bg-card))',
+                }} />
+              )}
+            </div>
+            <button
+              onClick={() => setExpanded(!expanded)}
+              style={{
+                marginTop: 8,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: 'var(--accent)',
+                padding: 0,
+                letterSpacing: '0.04em',
+              }}
+            >
+              {expanded ? '↑ Show less' : '↓ Read full thesis'}
+            </button>
+          </Section>
+        )}
+
+        {/* Agents used */}
+        {agentsUsed.length > 0 && (
+          <Section title="Agent Pipeline">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {agentsUsed.map((agent, i) => (
+                <span key={i} style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '4px 10px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}>
+                  <span style={{ color: 'var(--accent)', fontSize: 10 }}>✓</span>
+                  {agent}
+                </span>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* Raw JSON toggle — berguna untuk debugging */}
+        <details style={{ marginTop: 8 }}>
+          <summary style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            letterSpacing: '0.06em',
+            userSelect: 'none',
+          }}>
+            RAW JSON (debug)
+          </summary>
+          <pre style={{
+            marginTop: 10,
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            padding: 14,
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-secondary)',
+            overflowX: 'auto',
+            lineHeight: 1.6,
+            whiteSpace: 'pre-wrap',
+          }}>
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        </details>
       </div>
     </div>
   );
