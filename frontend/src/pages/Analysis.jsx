@@ -5,9 +5,10 @@ import AgentLog from '../components/AgentLog';
 import Navbar from '../components/Navbar';
 
 export default function Analysis() {
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
+  const [result, setResult]               = useState(null);
+  const [loading, setLoading]             = useState(false);
+  const [status, setStatus]               = useState('');
+  const [agentProgress, setAgentProgress] = useState(null);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
@@ -60,10 +61,11 @@ export default function Analysis() {
             onResult={setResult}
             onLoading={setLoading}
             onStatus={setStatus}
+            onAgentProgress={setAgentProgress}
           />
         </div>
 
-        {loading && <AgentLog status={status} />}
+        {loading && <AgentLog status={status} agentProgress={agentProgress} />}
         {result && !loading && <ResultCard result={result} />}
       </div>
     </div>

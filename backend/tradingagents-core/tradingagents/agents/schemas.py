@@ -1,20 +1,4 @@
-"""Pydantic schemas used by agents that produce structured output.
-
-The framework's primary artifact is still prose: each agent's natural-language
-reasoning is what users read in the saved markdown reports and what the
-downstream agents read as context.  Structured output is layered onto the
-three decision-making agents (Research Manager, Trader, Portfolio Manager)
-so that:
-
-- Their outputs follow consistent section headers across runs and providers
-- Each provider's native structured-output mode is used (json_schema for
-  OpenAI/xAI, response_schema for Gemini, tool-use for Anthropic)
-- Schema field descriptions become the model's output instructions, freeing
-  the prompt body to focus on context and the rating-scale guidance
-- A render helper turns the parsed Pydantic instance back into the same
-  markdown shape the rest of the system already consumes, so display,
-  memory log, and saved reports keep working unchanged
-"""
+"""Pydantic schemas used by agents that produce structured output."""
 
 from __future__ import annotations
 
@@ -24,14 +8,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
-# ---------------------------------------------------------------------------
-# Shared rating types
-# ---------------------------------------------------------------------------
-
-
 class PortfolioRating(str, Enum):
-    """5-tier rating used by the Research Manager and Portfolio Manager."""
-
     BUY = "Buy"
     OVERWEIGHT = "Overweight"
     HOLD = "Hold"
@@ -40,14 +17,6 @@ class PortfolioRating(str, Enum):
 
 
 class TraderAction(str, Enum):
-    """3-tier transaction direction used by the Trader.
-
-    The Trader's job is to translate the Research Manager's investment plan
-    into a concrete transaction proposal: should the desk execute a Buy, a
-    Sell, or sit on Hold this round.  Position sizing and the nuanced
-    Overweight / Underweight calls happen later at the Portfolio Manager.
-    """
-
     BUY = "Buy"
     HOLD = "Hold"
     SELL = "Sell"
@@ -57,16 +26,7 @@ class TraderAction(str, Enum):
 # Research Manager
 # ---------------------------------------------------------------------------
 
-
 class ResearchPlan(BaseModel):
-    """Structured investment plan produced by the Research Manager.
-
-    Hand-off to the Trader: the recommendation pins the directional view,
-    the rationale captures which side of the bull/bear debate carried the
-    argument, and the strategic actions translate that into concrete
-    instructions the trader can execute against.
-    """
-
     recommendation: PortfolioRating = Field(
         description=(
             "The investment recommendation. Exactly one of Buy / Overweight / "
@@ -91,7 +51,6 @@ class ResearchPlan(BaseModel):
 
 
 def render_research_plan(plan: ResearchPlan) -> str:
-    """Render a ResearchPlan to markdown for storage and the trader's prompt context."""
     return "\n".join([
         f"**Recommendation**: {plan.recommendation.value}",
         "",
@@ -105,16 +64,7 @@ def render_research_plan(plan: ResearchPlan) -> str:
 # Trader
 # ---------------------------------------------------------------------------
 
-
 class TraderProposal(BaseModel):
-    """Structured transaction proposal produced by the Trader.
-
-    The trader reads the Research Manager's investment plan and the analyst
-    reports, then turns them into a concrete transaction: what action to
-    take, the reasoning that justifies it, and the practical levels for
-    entry, stop-loss, and sizing.
-    """
-
     action: TraderAction = Field(
         description="The transaction direction. Exactly one of Buy / Hold / Sell.",
     )
@@ -139,12 +89,6 @@ class TraderProposal(BaseModel):
 
 
 def render_trader_proposal(proposal: TraderProposal) -> str:
-    """Render a TraderProposal to markdown.
-
-    The trailing ``FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**`` line is
-    preserved for backward compatibility with the analyst stop-signal text
-    and any external code that greps for it.
-    """
     parts = [
         f"**Action**: {proposal.action.value}",
         "",
@@ -167,16 +111,7 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
 # Portfolio Manager
 # ---------------------------------------------------------------------------
 
-
 class PortfolioDecision(BaseModel):
-    """Structured output produced by the Portfolio Manager.
-
-    The model fills every field as part of its primary LLM call; no separate
-    extraction pass is required. Field descriptions double as the model's
-    output instructions, so the prompt body only needs to convey context and
-    the rating-scale guidance.
-    """
-
     rating: PortfolioRating = Field(
         description=(
             "The final position rating. Exactly one of Buy / Overweight / Hold / "
@@ -185,15 +120,28 @@ class PortfolioDecision(BaseModel):
     )
     executive_summary: str = Field(
         description=(
-            "A concise action plan covering entry strategy, position sizing, "
-            "key risk levels, and time horizon. Two to four sentences."
+            "A single paragraph of EXACTLY 5 sentences summarizing the final decision. "
+            "Sentence 1: state the rating and the single strongest reason for it. "
+            "Sentence 2: cite the most important quantitative data point that supports this view (revenue growth, margin, market share, etc). "
+            "Sentence 3: name the biggest risk or bear argument and explain in plain language why it does NOT override the bull case (or does, if Sell). "
+            "Sentence 4: describe the recommended action — entry strategy, position sizing, and stop-loss level. "
+            "Sentence 5: state the expected time horizon and what specific catalyst will confirm or invalidate the thesis. "
+            "Write in plain, everyday language. Avoid jargon. No bullet points."
         ),
     )
     investment_thesis: str = Field(
         description=(
-            "Detailed reasoning anchored in specific evidence from the analysts' "
-            "debate. If prior lessons are referenced in the prompt context, "
-            "incorporate them; otherwise rely solely on the current analysis."
+            "A thorough, easy-to-understand explanation of WHY this trade makes sense. "
+            "Write as if explaining to a smart friend who does not work in finance. "
+            "Structure the text as flowing paragraphs (no bullet points, no headers). "
+            "Cover ALL of the following in order: "
+            "(1) What does this company actually do and why does it matter right now? "
+            "(2) What is the single biggest tailwind pushing the stock higher (or lower)? Use a concrete analogy if it helps. "
+            "(3) What do the hard numbers say? Quote at least three specific metrics from the analysts' reports (e.g. revenue growth %, margin %, P/E ratio, market share). "
+            "(4) What is the bear case — the main thing that could go wrong — and how serious is it really? "
+            "(5) Why does the bull case (or bear case) win the argument overall? "
+            "(6) What is the specific action plan: when to enter, how much to allocate, where to set the stop-loss, and when to take profit? "
+            "Minimum length: 6 sentences. Use simple words. No jargon without explanation."
         ),
     )
     price_target: Optional[float] = Field(
@@ -207,13 +155,6 @@ class PortfolioDecision(BaseModel):
 
 
 def render_pm_decision(decision: PortfolioDecision) -> str:
-    """Render a PortfolioDecision back to the markdown shape the rest of the system expects.
-
-    Memory log, CLI display, and saved report files all read this markdown,
-    so the rendered output preserves the exact section headers (``**Rating**``,
-    ``**Executive Summary**``, ``**Investment Thesis**``) that downstream
-    parsers and the report writers already handle.
-    """
     parts = [
         f"**Rating**: {decision.rating.value}",
         "",

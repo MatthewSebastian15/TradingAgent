@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useState, useRef } from 'react';
 import {
   MOCK_RESPONSE,
   MOCK_SELL_RESPONSE,
@@ -27,39 +26,37 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export default function StockForm({ onResult, onLoading, onStatus }) {
-  const [ticker, setTicker] = useState('NVDA');
-  const [date, setDate] = useState(getTodayDate());
+// Mock agent steps untuk simulasi progress
+const MOCK_STEPS = [
+  { agent_name: 'Market Analyst',       status_message: 'Fetching price data and technical indicators...' },
+  { agent_name: 'News Researcher',      status_message: 'Scanning recent headlines and macro events...' },
+  { agent_name: 'Fundamentals Analyst', status_message: 'Pulling financial statements and ratios...' },
+  { agent_name: 'Bull Researcher',      status_message: 'Building the bullish investment case...' },
+  { agent_name: 'Bear Researcher',      status_message: 'Building the bearish counterarguments...' },
+  { agent_name: 'Research Manager',     status_message: 'Evaluating the debate and forming an investment plan...' },
+  { agent_name: 'Trader',               status_message: 'Translating the plan into a transaction proposal...' },
+  { agent_name: 'Risk Analysts',        status_message: 'Running risk debate: aggressive vs conservative vs neutral...' },
+  { agent_name: 'Portfolio Manager',    status_message: 'Synthesizing all inputs into the final decision...' },
+];
+
+export default function StockForm({ onResult, onLoading, onStatus, onAgentProgress }) {
+  const [ticker, setTicker]   = useState('NVDA');
+  const [date, setDate]       = useState(getTodayDate());
   const [focused, setFocused] = useState(null);
+  const abortRef              = useRef(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
     onLoading(true);
     onStatus('Initializing agents...');
     onResult(null);
+    if (onAgentProgress) onAgentProgress(null);
 
     try {
       if (USE_MOCK) {
-        await sleep(1500);
-        onStatus('Market Analyst fetching price data...');
-        await sleep(2000);
-        onStatus('News Researcher scanning headlines...');
-        await sleep(1500);
-        onStatus('Risk Manager evaluating downside...');
-        await sleep(1500);
-        onStatus('Portfolio Manager issuing final decision...');
-        await sleep(1000);
-
-        const mockData = MOCK_MAP[ticker] || MOCK_RESPONSE;
-        onResult(mockData);
+        await runMock();
       } else {
-        onStatus('Running analysis. This may take 2-3 minutes...');
-        const res = await axios.post(`${API_URL}/api/analyze`, {
-          ticker,
-          trade_date: date,
-          max_debate_rounds: 1,
-        });
-        onResult(res.data);
+        await runStream();
       }
     } catch (err) {
       onResult({ error: err.message });
@@ -67,6 +64,94 @@ export default function StockForm({ onResult, onLoading, onStatus }) {
       onLoading(false);
       onStatus('');
     }
+  }
+
+  // ---- Mock mode ----
+  async function runMock() {
+    for (const step of MOCK_STEPS) {
+      onStatus(step.status_message);
+      if (onAgentProgress) onAgentProgress(step);
+      await sleep(800);
+    }
+    const mockData = MOCK_MAP[ticker] || MOCK_RESPONSE;
+    onResult(mockData);
+  }
+
+  // ---- Real SSE mode ----
+  async function runStream() {
+    return new Promise((resolve, reject) => {
+      // POST to /analyze/stream — backend returns text/event-stream
+      // We use fetch + ReadableStream because EventSource only supports GET
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      fetch(`${API_URL}/api/analyze/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker,
+          trade_date: date,
+          max_debate_rounds: 1,
+        }),
+        signal: controller.signal,
+      })
+        .then(async res => {
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Server error ${res.status}: ${text}`);
+          }
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // keep incomplete last line
+
+            let eventType = null;
+            let dataLine = null;
+
+            for (const line of lines) {
+              if (line.startsWith('event:')) {
+                eventType = line.replace('event:', '').trim();
+              } else if (line.startsWith('data:')) {
+                dataLine = line.replace('data:', '').trim();
+              } else if (line === '' && eventType && dataLine) {
+                // Dispatch event
+                try {
+                  const payload = JSON.parse(dataLine);
+
+                  if (eventType === 'progress') {
+                    onStatus(payload.status_message);
+                    if (onAgentProgress) onAgentProgress(payload);
+
+                  } else if (eventType === 'result') {
+                    onResult(payload);
+                    resolve();
+
+                  } else if (eventType === 'error') {
+                    onResult({ error: payload.error });
+                    resolve();
+                  }
+                } catch (_) {}
+
+                eventType = null;
+                dataLine = null;
+              }
+            }
+          }
+          resolve();
+        })
+        .catch(err => {
+          if (err.name === 'AbortError') return resolve();
+          reject(err);
+        });
+    });
   }
 
   const inputBase = (name) => ({
