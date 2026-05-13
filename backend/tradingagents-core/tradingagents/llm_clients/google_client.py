@@ -7,6 +7,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
+from tradingagents.dataflows.config import get_config
+from tradingagents.utils_resilience import call_with_retry, call_with_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -39,40 +41,34 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
     """
 
     def invoke(self, input, config=None, **kwargs):
-        last_exc = None
+        cfg = get_config()
+        service_name = f"llm:google:{getattr(self, 'model', 'unknown')}"
 
-        for attempt in range(1, MAX_RETRIES_429 + 1):
-            try:
-                return normalize_content(super().invoke(input, config, **kwargs))
+        def do_call():
+            return call_with_timeout(
+                lambda: normalize_content(ChatGoogleGenerativeAI.invoke(self, input, config, **kwargs)),
+                timeout_seconds=int(cfg.get("timeout", 60)),
+                service_name=service_name,
+            )
 
-            except Exception as exc:
-                error_str = str(exc)
-
-                # Tangani khusus error 429 RESOURCE_EXHAUSTED
-                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                    delay = _extract_retry_delay(error_str)
-                    logger.warning(
-                        "Gemini 429 RESOURCE_EXHAUSTED (attempt %d/%d). "
-                        "Menunggu %.0f detik sebelum retry...",
-                        attempt, MAX_RETRIES_429, delay,
-                    )
-
-                    if attempt < MAX_RETRIES_429:
-                        time.sleep(delay)
-                        last_exc = exc
-                        continue
-                    else:
-                        logger.error(
-                            "Gemini 429 masih terjadi setelah %d retry. Menyerah.",
-                            MAX_RETRIES_429,
-                        )
-                        raise
-
-                # Error lain (bukan 429): langsung lempar tanpa retry
-                raise
-
-        # Seharusnya tidak pernah sampai sini
-        raise last_exc
+        try:
+            return call_with_retry(
+                do_call,
+                service_name=service_name,
+                max_attempts=int(cfg.get("llm_max_retries", MAX_RETRIES_429)),
+                base_delay=float(cfg.get("llm_retry_base_delay", 1.5)),
+                max_delay=float(cfg.get("llm_retry_max_delay", 30)),
+                circuit_failure_threshold=int(cfg.get("circuit_breaker_failure_threshold", 5)),
+                circuit_recovery_seconds=int(cfg.get("circuit_breaker_recovery_seconds", 60)),
+            )
+        except Exception as exc:
+            error_str = str(exc)
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                delay = _extract_retry_delay(error_str)
+                logger.warning("Gemini rate limit. Respecting retryDelay %.0fs before final retry", delay)
+                time.sleep(delay)
+                return do_call()
+            raise
 
 
 class GoogleClient(BaseLLMClient):
