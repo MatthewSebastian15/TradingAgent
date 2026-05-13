@@ -60,3 +60,4 @@ class BaseLLMClient(ABC):
     def validate_model(self) -> bool:
         """Validate that the model is supported by this client."""
         pass
+

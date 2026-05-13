@@ -55,6 +55,7 @@ class TradingMemoryLog:
             self._init_db()
 
         self._max_entries = cfg.get("memory_log_max_entries")
+        self._ttl_days = cfg.get("memory_log_ttl_days")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -84,6 +85,7 @@ class TradingMemoryLog:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS decisions (
                     id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at   TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     trade_date   TEXT    NOT NULL,
                     ticker       TEXT    NOT NULL,
                     rating       TEXT    NOT NULL,
@@ -96,9 +98,15 @@ class TradingMemoryLog:
                 );
                 CREATE INDEX IF NOT EXISTS idx_ticker_pending
                     ON decisions (ticker, pending);
+                CREATE INDEX IF NOT EXISTS idx_created_at
+                    ON decisions (created_at);
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_date_ticker
                     ON decisions (trade_date, ticker);
             """)
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(decisions)").fetchall()}
+            if "created_at" not in cols:
+                conn.execute("ALTER TABLE decisions ADD COLUMN created_at TEXT")
+                conn.execute("UPDATE decisions SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
             conn.commit()
 
     # ------------------------------------------------------------------
@@ -125,6 +133,7 @@ class TradingMemoryLog:
                 (trade_date, ticker, rating, final_trade_decision),
             )
             conn.commit()
+        self._apply_rotation()
 
     # ------------------------------------------------------------------
     # Read path
@@ -255,30 +264,39 @@ class TradingMemoryLog:
     # ------------------------------------------------------------------
 
     def _apply_rotation(self) -> None:
-        """Delete the oldest resolved rows when over max_entries."""
-        if not self._max_entries or self._max_entries <= 0 or self._db_path is None:
+        """Delete old resolved rows using TTL first, then LRU/max-entry rotation."""
+        if self._db_path is None:
             return
         with self._conn() as conn:
-            resolved_count = conn.execute(
-                "SELECT COUNT(*) FROM decisions WHERE pending = 0"
-            ).fetchone()[0]
-
-            if resolved_count <= self._max_entries:
-                return
-
-            to_drop = resolved_count - self._max_entries
-            conn.execute(
-                """
-                DELETE FROM decisions
-                WHERE id IN (
-                    SELECT id FROM decisions
+            if self._ttl_days and self._ttl_days > 0:
+                conn.execute(
+                    """
+                    DELETE FROM decisions
                     WHERE pending = 0
-                    ORDER BY id ASC
-                    LIMIT ?
+                      AND created_at < datetime('now', ?)
+                    """,
+                    (f"-{int(self._ttl_days)} days",),
                 )
-                """,
-                (to_drop,),
-            )
+
+            if self._max_entries and self._max_entries > 0:
+                resolved_count = conn.execute(
+                    "SELECT COUNT(*) FROM decisions WHERE pending = 0"
+                ).fetchone()[0]
+
+                if resolved_count > self._max_entries:
+                    to_drop = resolved_count - self._max_entries
+                    conn.execute(
+                        """
+                        DELETE FROM decisions
+                        WHERE id IN (
+                            SELECT id FROM decisions
+                            WHERE pending = 0
+                            ORDER BY id ASC
+                            LIMIT ?
+                        )
+                        """,
+                        (to_drop,),
+                    )
             conn.commit()
 
     # ------------------------------------------------------------------

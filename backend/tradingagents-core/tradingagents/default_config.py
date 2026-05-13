@@ -7,7 +7,8 @@ DEFAULT_CONFIG = {
     "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", os.path.join(_TRADINGAGENTS_HOME, "logs")),
     "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", os.path.join(_TRADINGAGENTS_HOME, "cache")),
     "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH", os.path.join(_TRADINGAGENTS_HOME, "memory", "trading_memory.md")),
-    "memory_log_max_entries": None,
+    "memory_log_max_entries": int(os.getenv("TRADINGAGENTS_MEMORY_MAX_ENTRIES", "300")),
+    "memory_log_ttl_days": int(os.getenv("TRADINGAGENTS_MEMORY_TTL_DAYS", "90")),
 
     # LLM settings — Ollama lokal dengan qwen3:4b
     "llm_provider": "google",
@@ -24,7 +25,17 @@ DEFAULT_CONFIG = {
     # dari sisi HTTP dan tidak memblokir seluruh pipeline selamanya.
     # qwen3:4b pada hardware biasa biasanya selesai dalam 60-90 detik.
     # Naikkan ke 180 jika hardware kamu lambat, turunkan ke 60 jika cepat.
-    "timeout": 60,
+    "timeout": int(os.getenv("LLM_TIMEOUT_SECONDS", "60")),
+    "llm_max_retries": int(os.getenv("LLM_MAX_RETRIES", "3")),
+    "llm_retry_base_delay": float(os.getenv("LLM_RETRY_BASE_DELAY", "1.5")),
+    "llm_retry_max_delay": float(os.getenv("LLM_RETRY_MAX_DELAY", "30")),
+    "circuit_breaker_failure_threshold": int(os.getenv("CIRCUIT_BREAKER_FAILURE_THRESHOLD", "5")),
+    "circuit_breaker_recovery_seconds": int(os.getenv("CIRCUIT_BREAKER_RECOVERY_SECONDS", "60")),
+    "tool_timeout_seconds": int(os.getenv("TOOL_TIMEOUT_SECONDS", "45")),
+    "tool_max_retries": int(os.getenv("TOOL_MAX_RETRIES", "3")),
+    "cache_ttl_seconds": int(os.getenv("CACHE_TTL_SECONDS", "900")),
+    "cache_max_entries": int(os.getenv("CACHE_MAX_ENTRIES", "512")),
+    "parallel_analysts": os.getenv("PARALLEL_ANALYSTS", "true").lower() == "true",
     
     "google_thinking_level": None,
     "openai_reasoning_effort": None,
