@@ -83,6 +83,8 @@ Executive Summary: Write EXACTLY 5 sentences in one paragraph. No bullet points.
 
 Investment Thesis: Write at minimum 6 sentences as flowing paragraphs (no bullet points, no headers). Explain in plain, everyday language as if talking to a smart friend who does not work in finance. Cover: what the company does and why it matters now, the biggest tailwind or headwind, at least three specific numbers from the analysts' reports, the bear case and how serious it is, why one side wins the argument, and the full action plan (entry, sizing, stop-loss, profit-taking). Avoid unexplained jargon.
 
+Return a confidence_score from 0.0 to 1.0. Lower it when reports are incomplete, risk controls are weak, or debate evidence is mixed.
+
 Be decisive. Ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
 
         # Attempt structured output and capture the typed object.
@@ -119,6 +121,7 @@ Be decisive. Ground every conclusion in specific evidence from the analysts.{get
                 )
 
         new_risk_debate_state = {
+            **risk_debate_state,
             "judge_decision": final_trade_decision,
             "history": raw_history,
             "aggressive_history": risk_debate_state["aggressive_history"],

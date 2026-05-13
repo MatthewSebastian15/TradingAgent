@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -22,11 +22,72 @@ class TraderAction(str, Enum):
     SELL = "Sell"
 
 
+class DebateArgument(BaseModel):
+    stance: Literal["bull", "bear", "aggressive", "conservative", "neutral"] = Field(
+        description="The agent viewpoint that produced this argument."
+    )
+    thesis: str = Field(
+        min_length=20,
+        description="One clear sentence stating the core argument.",
+    )
+    evidence: List[str] = Field(
+        min_length=2,
+        max_length=5,
+        description="Specific evidence points from the supplied reports.",
+    )
+    counterargument: str = Field(
+        min_length=20,
+        description="Direct response to the strongest opposing argument.",
+    )
+    risk_flags: List[str] = Field(
+        default_factory=list,
+        max_length=5,
+        description="Risks, missing data, or assumptions that could weaken this argument.",
+    )
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence in this viewpoint based on evidence quality.",
+    )
+    consensus_signal: bool = Field(
+        default=False,
+        description="True when another round is unlikely to materially change the debate.",
+    )
+
+
+def render_debate_argument(argument: DebateArgument, label: str) -> str:
+    evidence = "\n".join(f"- {item}" for item in argument.evidence)
+    risks = "\n".join(f"- {item}" for item in argument.risk_flags)
+
+    if not risks:
+        risks = "- No major additional risk flags stated."
+
+    return "\n".join([
+        f"{label}: {argument.thesis}",
+        "",
+        "Evidence:",
+        evidence,
+        "",
+        f"Counterargument: {argument.counterargument}",
+        "",
+        "Risk flags:",
+        risks,
+        "",
+        f"Confidence: {argument.confidence:.2f}",
+        f"Consensus Signal: {argument.consensus_signal}",
+    ])
+
+
 # ---------------------------------------------------------------------------
 # Research Manager
 # ---------------------------------------------------------------------------
 
 class ResearchPlan(BaseModel):
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence in the recommendation after evaluating bull and bear evidence.",
+    )
     recommendation: PortfolioRating = Field(
         description=(
             "The investment recommendation. Exactly one of Buy / Overweight / "
@@ -53,6 +114,7 @@ class ResearchPlan(BaseModel):
 def render_research_plan(plan: ResearchPlan) -> str:
     return "\n".join([
         f"**Recommendation**: {plan.recommendation.value}",
+        f"**Confidence**: {plan.confidence:.2f}",
         "",
         f"**Rationale**: {plan.rationale}",
         "",
@@ -65,6 +127,11 @@ def render_research_plan(plan: ResearchPlan) -> str:
 # ---------------------------------------------------------------------------
 
 class TraderProposal(BaseModel):
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence in the transaction proposal.",
+    )
     action: TraderAction = Field(
         description="The transaction direction. Exactly one of Buy / Hold / Sell.",
     )
@@ -91,6 +158,7 @@ class TraderProposal(BaseModel):
 def render_trader_proposal(proposal: TraderProposal) -> str:
     parts = [
         f"**Action**: {proposal.action.value}",
+        f"**Confidence**: {proposal.confidence:.2f}",
         "",
         f"**Reasoning**: {proposal.reasoning}",
     ]
@@ -112,6 +180,11 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
 # ---------------------------------------------------------------------------
 
 class PortfolioDecision(BaseModel):
+    confidence_score: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Final confidence score for the recommendation after validation and debate synthesis.",
+    )
     rating: PortfolioRating = Field(
         description=(
             "The final position rating. Exactly one of Buy / Overweight / Hold / "
@@ -124,7 +197,7 @@ class PortfolioDecision(BaseModel):
             "Sentence 1: state the rating and the single strongest reason for it. "
             "Sentence 2: cite the most important quantitative data point that supports this view (revenue growth, margin, market share, etc). "
             "Sentence 3: name the biggest risk or bear argument and explain in plain language why it does NOT override the bull case (or does, if Sell). "
-            "Sentence 4: describe the recommended action — entry strategy, position sizing, and stop-loss level. "
+            "Sentence 4: describe the recommended action, entry strategy, position sizing, and stop-loss level. "
             "Sentence 5: state the expected time horizon and what specific catalyst will confirm or invalidate the thesis. "
             "Write in plain, everyday language. Avoid jargon. No bullet points."
         ),
@@ -136,12 +209,12 @@ class PortfolioDecision(BaseModel):
             "Structure the text as flowing paragraphs (no bullet points, no headers). "
             "Cover ALL of the following in order: "
             "(1) What does this company actually do and why does it matter right now? "
-            "(2) What is the single biggest tailwind pushing the stock higher (or lower)? Use a concrete analogy if it helps. "
-            "(3) What do the hard numbers say? Quote at least three specific metrics from the analysts' reports (e.g. revenue growth %, margin %, P/E ratio, market share). "
-            "(4) What is the bear case — the main thing that could go wrong — and how serious is it really? "
-            "(5) Why does the bull case (or bear case) win the argument overall? "
+            "(2) What is the single biggest tailwind pushing the stock higher (or lower)? "
+            "(3) What do the hard numbers say? Quote at least three specific metrics from the analysts' reports. "
+            "(4) What is the bear case and how serious is it really? "
+            "(5) Why does the bull case or bear case win overall? "
             "(6) What is the specific action plan: when to enter, how much to allocate, where to set the stop-loss, and when to take profit? "
-            "Minimum length: 6 sentences. Use simple words. No jargon without explanation."
+            "Minimum length: 6 sentences. Use simple words."
         ),
     )
     price_target: Optional[float] = Field(
@@ -157,6 +230,7 @@ class PortfolioDecision(BaseModel):
 def render_pm_decision(decision: PortfolioDecision) -> str:
     parts = [
         f"**Rating**: {decision.rating.value}",
+        f"**Confidence Score**: {decision.confidence_score:.2f}",
         "",
         f"**Executive Summary**: {decision.executive_summary}",
         "",

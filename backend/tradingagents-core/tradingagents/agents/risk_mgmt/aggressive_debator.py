@@ -1,53 +1,78 @@
+from __future__ import annotations
+
+from tradingagents.agents.prompts import ReportBundle, build_risk_debate_prompt
+from tradingagents.agents.schemas import DebateArgument, render_debate_argument
+from tradingagents.agents.utils.agent_utils import build_instrument_context
+from tradingagents.agents.utils.structured import bind_structured, invoke_typed_or_none
+
+
+def _fallback_argument(side: str, label: str, confidence: float = 0.35) -> DebateArgument:
+    return DebateArgument(
+        stance=side,
+        thesis=f"Aggressive Analyst could not produce a fully validated risk argument, so confidence is low.",
+        evidence=[
+            "Structured output validation failed or the model returned incomplete reasoning.",
+            "The final risk decision should rely more heavily on validated reports and portfolio manager synthesis.",
+        ],
+        counterargument="The other risk perspectives may be stronger until this side provides complete evidence.",
+        risk_flags=["Incomplete risk output", "Low confidence fallback used"],
+        confidence=confidence,
+        consensus_signal=False,
+    )
 
 
 def create_aggressive_debator(llm):
+    structured_llm = bind_structured(llm, DebateArgument, "Aggressive Analyst")
+
     def aggressive_node(state) -> dict:
-        risk_debate_state = state["risk_debate_state"]
-        history = risk_debate_state.get("history", "")
-        aggressive_history = risk_debate_state.get("aggressive_history", "")
+        risk_state = state["risk_debate_state"]
+        history = risk_state.get("history", "")
+        own_history = risk_state.get("aggressive_history", "")
 
-        current_conservative_response = risk_debate_state.get("current_conservative_response", "")
-        current_neutral_response = risk_debate_state.get("current_neutral_response", "")
-
-        market_research_report = state["market_report"]
-        sentiment_report = state["sentiment_report"]
-        news_report = state["news_report"]
-        fundamentals_report = state["fundamentals_report"]
-
-        trader_decision = state["trader_investment_plan"]
-
-        prompt = f"""As the Aggressive Risk Analyst, your role is to actively champion high-reward, high-risk opportunities, emphasizing bold strategies and competitive advantages. When evaluating the trader's decision or plan, focus intently on the potential upside, growth potential, and innovative benefits—even when these come with elevated risk. Use the provided market data and sentiment analysis to strengthen your arguments and challenge the opposing views. Specifically, respond directly to each point made by the conservative and neutral analysts, countering with data-driven rebuttals and persuasive reasoning. Highlight where their caution might miss critical opportunities or where their assumptions may be overly conservative. Here is the trader's decision:
-
-{trader_decision}
-
-Your task is to create a compelling case for the trader's decision by questioning and critiquing the conservative and neutral stances to demonstrate why your high-reward perspective offers the best path forward. Incorporate insights from the following sources into your arguments:
-
-Market Research Report: {market_research_report}
-Social Media Sentiment Report: {sentiment_report}
-Latest World Affairs Report: {news_report}
-Company Fundamentals Report: {fundamentals_report}
-Here is the current conversation history: {history} Here are the last arguments from the conservative analyst: {current_conservative_response} Here are the last arguments from the neutral analyst: {current_neutral_response}. If there are no responses from the other viewpoints yet, present your own argument based on the available data.
-
-Engage actively by addressing any specific concerns raised, refuting the weaknesses in their logic, and asserting the benefits of risk-taking to outpace market norms. Maintain a focus on debating and persuading, not just presenting data. Challenge each counterpoint to underscore why a high-risk approach is optimal. Output conversationally as if you are speaking without any special formatting."""
-
-        response = llm.invoke(prompt)
-
-        argument = f"Aggressive Analyst: {response.content}"
-
-        new_risk_debate_state = {
-            "history": history + "\n" + argument,
-            "aggressive_history": aggressive_history + "\n" + argument,
-            "conservative_history": risk_debate_state.get("conservative_history", ""),
-            "neutral_history": risk_debate_state.get("neutral_history", ""),
-            "latest_speaker": "Aggressive",
-            "current_aggressive_response": argument,
-            "current_conservative_response": risk_debate_state.get("current_conservative_response", ""),
-            "current_neutral_response": risk_debate_state.get(
-                "current_neutral_response", ""
-            ),
-            "count": risk_debate_state["count"] + 1,
+        bundle = ReportBundle(
+            instrument_context=build_instrument_context(state["company_of_interest"]),
+            market_report=state["market_report"],
+            sentiment_report=state["sentiment_report"],
+            news_report=state["news_report"],
+            fundamentals_report=state["fundamentals_report"],
+            debate_history=history,
+            trader_plan=state["trader_investment_plan"],
+        )
+        latest_arguments = {
+            "aggressive": risk_state.get("current_aggressive_response", ""),
+            "conservative": risk_state.get("current_conservative_response", ""),
+            "neutral": risk_state.get("current_neutral_response", ""),
         }
 
-        return {"risk_debate_state": new_risk_debate_state}
+        prompt = build_risk_debate_prompt("aggressive", bundle, latest_arguments)
+        typed = invoke_typed_or_none(
+            structured_llm,
+            llm,
+            prompt,
+            DebateArgument,
+            "Aggressive Analyst",
+        )
+
+        if typed is None:
+            typed = _fallback_argument("aggressive", "Aggressive Analyst")
+
+        argument = render_debate_argument(typed, "Aggressive Analyst")
+        count = int(risk_state.get("count", 0)) + 1
+
+        new_state = {
+            **risk_state,
+            "stage": "conservative_turn",
+            "next_speaker": "Conservative Analyst",
+            "history": history + "\n" + argument,
+            "aggressive_history": own_history + "\n" + argument,
+            "latest_speaker": "Aggressive",
+            "current_aggressive_response": argument,
+            "aggressive_confidence": typed.confidence,
+            "last_consensus_signal": typed.consensus_signal,
+            "consensus_reached": bool(typed.consensus_signal),
+            "count": count,
+        }
+
+        return {"risk_debate_state": new_state}
 
     return aggressive_node

@@ -59,7 +59,7 @@ _EXECUTOR = concurrent.futures.ProcessPoolExecutor(
 class AnalysisRequest(BaseModel):
     ticker: str
     trade_date: str
-    max_debate_rounds: int = 1
+    max_debate_rounds: int = 3
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +80,7 @@ def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int) -> dict:
 
     config = _CFG.copy()
     config["max_debate_rounds"] = max_debate_rounds
+    config["max_risk_discuss_rounds"] = max_debate_rounds
 
     ta = TradingAgentsGraph(debug=False, config=config)
     final_state, _ = ta.propagate(ticker, trade_date)
@@ -103,6 +104,7 @@ def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int) -> dict:
             "investment_thesis": pd_obj.investment_thesis,
             "price_target":      pd_obj.price_target,
             "time_horizon":      pd_obj.time_horizon,
+            "confidence_score":  pd_obj.confidence_score,
         }
 
     # Free-text fallback path: structured output was not available.
@@ -114,6 +116,7 @@ def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int) -> dict:
         "investment_thesis": None,
         "price_target":      None,
         "time_horizon":      None,
+        "confidence_score":  None,
     }
 
 
