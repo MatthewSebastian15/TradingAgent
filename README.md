@@ -43,17 +43,30 @@ A full-stack web application that wraps the [TauricResearch/TradingAgents](https
 ```
 TradingAgent/
 ├── backend/
-│   ├── main.py                   # FastAPI app, CORS, startup validation
+│   ├── main.py                   # FastAPI app, CORS, middleware, startup validation
+│   ├── config.py                 # Centralized settings and startup config validation
+│   ├── errors.py                 # Consistent API exceptions and sanitized error responses
+│   ├── logging_config.py         # Request-scoped logging helpers and RequestIdMiddleware
+│   ├── rate_limiter.py           # API-key aware in-memory rate limiting
 │   ├── requirements.txt          # FastAPI, uvicorn, sse-starlette, dotenv
 │   ├── .env                      # API keys (not committed)
 │   └── routes/
-│       └── analysis.py           # SSE + REST endpoints, pipeline runner
+│       ├── analysis.py           # SSE + REST endpoints, pipeline runner
+│       └── validation.py         # Input validation helpers for analysis endpoints
 │
 ├── backend/tradingagents-core/   # TradingAgents engine (from TauricResearch)
 │   ├── tradingagents/
 │   │   ├── agents/               # 9 agent implementations + schemas
 │   │   ├── graph/                # LangGraph orchestration
-│   │   ├── llm_clients/          # Provider adapters (Google, OpenAI, Anthropic, etc.)
+│   │   ├── llm_clients/          # Provider adapters
+│   │   │   ├── base_client.py    # Abstract base client interface
+│   │   │   ├── factory.py        # Client factory by provider name
+│   │   │   ├── model_catalog.py  # Supported models per provider
+│   │   │   ├── validators.py     # Model name and config validators
+│   │   │   ├── anthropic_client.py
+│   │   │   ├── azure_client.py
+│   │   │   ├── google_client.py
+│   │   │   └── openai_client.py
 │   │   └── dataflows/            # yfinance, Alpha Vantage data connectors
 │   └── pyproject.toml
 │
@@ -68,7 +81,8 @@ TradingAgent/
     │   ├── pages/
     │   │   ├── Dashboard.jsx      # Landing page
     │   │   ├── Analysis.jsx       # Main analysis page + history sidebar
-    │   │   └── AnalysisMock.jsx   # UI testing page (/analysis-mock)
+    │   │   ├── AnalysisMock.jsx   # UI testing page (/analysis-mock)
+    │   │   └── NotFound.jsx       # 404 fallback page
     │   └── mockData.js            # Sample responses for UI testing
     └── package.json
 ```
