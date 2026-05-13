@@ -9,7 +9,7 @@ A full-stack web application that wraps the [TauricResearch/TradingAgents](https
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  React Frontend  (port 3000)                                    │
-│  StockForm → SSE stream → AgentLog (live) → ResultCard         │
+│  StockForm → SSE stream → AgentLog (live) → ResultCard          │
 │  Analysis history: localStorage, max 10 entries                 │
 └────────────────────────┬────────────────────────────────────────┘
                          │  POST /api/analyze/stream  (SSE)
@@ -23,15 +23,15 @@ A full-stack web application that wraps the [TauricResearch/TradingAgents](https
 ┌────────────────────────▼────────────────────────────────────────┐
 │  TradingAgents Engine  (tradingagents-core)                     │
 │  Source: TauricResearch/TradingAgents                           │
-│                                                                  │
+│                                                                 │
 │  Market Analyst → News Researcher → Fundamentals Analyst        │
-│       ↓                                                          │
-│  Bull Researcher ⟷ Bear Researcher                              │
-│       ↓                                                          │
-│  Research Manager                                                │
-│       ↓                                                          │
+│       ↓                                                         │
+│  Bull Researcher ⟷ Bear Researcher                             │
+│       ↓                                                         │
+│  Research Manager                                               │
+│       ↓                                                         │
 │  Trader → Risk Analysts (aggressive / conservative / neutral)   │
-│       ↓                                                          │
+│       ↓                                                         │
 │  Portfolio Manager → PortfolioDecision (structured output)      │
 └─────────────────────────────────────────────────────────────────┘
 ```
