@@ -315,3 +315,21 @@ Correct. Mock mode is only at `/analysis-mock`. The main `/analysis` page always
 - Market data: [yfinance](https://github.com/ranaroussi/yfinance)
 - Backend: [FastAPI](https://fastapi.tiangolo.com) + [sse-starlette](https://github.com/sysid/sse-starlette)
 - Frontend: [React 19](https://react.dev) + [React Router 7](https://reactrouter.com)
+
+## Citation
+
+If you use this project or the underlying TradingAgents engine, please cite the original paper:
+
+```bibtex
+@misc{xiao2025tradingagentsmultiagentsllmfinancial,
+      title={TradingAgents: Multi-Agents LLM Financial Trading Framework}, 
+      author={Yijia Xiao and Edward Sun and Di Luo and Wei Wang},
+      year={2025},
+      eprint={2412.20138},
+      archivePrefix={arXiv},
+      primaryClass={q-fin.TR},
+      url={https://arxiv.org/abs/2412.20138}, 
+}
+```
+
+Paper: https://arxiv.org/abs/2412.20138
