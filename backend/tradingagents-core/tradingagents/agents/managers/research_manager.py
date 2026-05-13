@@ -36,8 +36,15 @@ Commit to a clear stance whenever the debate's strongest arguments warrant one; 
 
 ---
 
+**Debate Confidence State:**
+- Bull confidence: {investment_debate_state.get("bull_confidence", 0.0)}
+- Bear confidence: {investment_debate_state.get("bear_confidence", 0.0)}
+- Consensus reached: {investment_debate_state.get("consensus_reached", False)}
+
 **Debate History:**
-{history}"""
+{history}
+
+Return a confidence score from 0.0 to 1.0. Lower confidence if the reports are incomplete, contradictory, or based on weak evidence."""
 
         investment_plan = invoke_structured_or_freetext(
             structured_llm,
@@ -48,6 +55,7 @@ Commit to a clear stance whenever the debate's strongest arguments warrant one; 
         )
 
         new_investment_debate_state = {
+            **investment_debate_state,
             "judge_decision": investment_plan,
             "history": investment_debate_state.get("history", ""),
             "bear_history": investment_debate_state.get("bear_history", ""),

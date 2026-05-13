@@ -98,3 +98,30 @@ def invoke_structured_or_freetext(
             f"Error: {exc}. Periksa apakah Ollama berjalan dan model tersedia.\n\n"
             f"**Investment Thesis**: Analisis tidak tersedia karena error pada model."
         )
+
+
+def invoke_typed_or_none(
+    structured_llm: Optional[Any],
+    plain_llm: Any,
+    prompt: Any,
+    schema: type[T],
+    agent_name: str,
+) -> Optional[T]:
+    """Invoke a structured LLM and validate the returned Pydantic object."""
+    if structured_llm is None:
+        return None
+
+    try:
+        result = structured_llm.invoke(prompt)
+
+        if isinstance(result, schema):
+            return result
+
+        if isinstance(result, dict):
+            return schema.model_validate(result)
+
+        return schema.model_validate(result.model_dump())
+
+    except Exception as exc:
+        logger.warning("%s: typed structured invocation failed (%s)", agent_name, exc)
+        return None

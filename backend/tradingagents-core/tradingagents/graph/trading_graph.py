@@ -107,6 +107,12 @@ class TradingAgentsGraph:
         self.conditional_logic = ConditionalLogic(
             max_debate_rounds=self.config["max_debate_rounds"],
             max_risk_discuss_rounds=self.config["max_risk_discuss_rounds"],
+            adaptive_debate_enabled=self.config.get("adaptive_debate_enabled", True),
+            debate_min_rounds=self.config.get("debate_min_rounds", 2),
+            debate_confidence_gap=self.config.get("debate_confidence_gap", 0.18),
+            debate_consensus_threshold=self.config.get("debate_consensus_threshold", 0.72),
+            risk_min_rounds=self.config.get("risk_min_rounds", 2),
+            risk_consensus_threshold=self.config.get("risk_consensus_threshold", 0.72),
         )
         self.graph_setup = GraphSetup(
             self.quick_thinking_llm,

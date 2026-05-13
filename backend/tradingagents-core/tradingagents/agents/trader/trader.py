@@ -39,7 +39,8 @@ def create_trader(llm):
                     f"insights from current technical market trends, macroeconomic indicators, and "
                     f"social media sentiment. Use this plan as a foundation for evaluating your next "
                     f"trading decision.\n\nProposed Investment Plan: {investment_plan}\n\n"
-                    f"Leverage these insights to make an informed and strategic decision."
+                    f"Leverage these insights to make an informed and strategic decision. "
+                    f"Return a confidence score from 0.0 to 1.0. Lower confidence if the plan lacks clear evidence, entry logic, or risk control."
                 ),
             },
         ]
