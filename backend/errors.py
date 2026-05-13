@@ -1,0 +1,102 @@
+"""Consistent API exceptions and sanitized error responses."""
+
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import dataclass
+from typing import Any
+
+from fastapi import HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+from logging_config import request_id_ctx
+
+logger = logging.getLogger(__name__)
+
+_SECRET_PATTERNS = [
+    re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*[^\s,;&]+"),
+    re.compile(r"sk-[A-Za-z0-9_-]{12,}"),
+    re.compile(r"AIza[0-9A-Za-z_-]{20,}"),
+    re.compile(r"[A-Za-z]:\\[^\s]+"),
+    re.compile(r"/mnt/[^\s]+"),
+]
+
+
+def sanitize_message(message: str) -> str:
+    cleaned = str(message or "")
+    for pattern in _SECRET_PATTERNS:
+        cleaned = pattern.sub("[redacted]", cleaned)
+    return cleaned[:500]
+
+
+@dataclass
+class ApiError(Exception):
+    status_code: int
+    code: str
+    user_message: str
+    details: dict[str, Any] | None = None
+    internal_message: str | None = None
+
+
+class BadRequestError(ApiError):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(400, "BAD_REQUEST", message, details)
+
+
+class RateLimitError(ApiError):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(429, "RATE_LIMITED", message, details)
+
+
+class PipelineTimeoutError(ApiError):
+    def __init__(self, seconds: int):
+        super().__init__(504, "PIPELINE_TIMEOUT", f"Analysis timed out after {seconds} seconds. Try fewer debate rounds.")
+
+
+class PipelineExecutionError(ApiError):
+    def __init__(self, internal_message: str | None = None):
+        super().__init__(500, "PIPELINE_FAILED", "Analysis failed. Check backend logs with the request_id.", internal_message=internal_message)
+
+
+def error_payload(error: ApiError) -> dict[str, Any]:
+    payload = {
+        "request_id": request_id_ctx.get(),
+        "error": {
+            "code": error.code,
+            "message": sanitize_message(error.user_message),
+        },
+    }
+    if error.details:
+        payload["error"]["details"] = error.details
+    return payload
+
+
+async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
+    if exc.status_code >= 500:
+        logger.error("API error: %s", exc.internal_message or exc.user_message, exc_info=True)
+    return JSONResponse(status_code=exc.status_code, content=error_payload(exc))
+
+
+async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
+    message = exc.detail if isinstance(exc.detail, str) else "Request failed."
+    api_error = ApiError(
+        status_code=exc.status_code,
+        code="HTTP_ERROR",
+        user_message=sanitize_message(message),
+        details=exc.detail if isinstance(exc.detail, dict) else None,
+    )
+    return JSONResponse(status_code=exc.status_code, content=error_payload(api_error))
+
+
+async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    details = {"fields": exc.errors()}
+    api_error = ApiError(422, "VALIDATION_ERROR", "Invalid request payload.", details=details)
+    return JSONResponse(status_code=422, content=error_payload(api_error))
+
+
+async def unhandled_exception_handler(_: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled request error")
+    api_error = PipelineExecutionError(internal_message=str(exc))
+    return JSONResponse(status_code=500, content=error_payload(api_error))

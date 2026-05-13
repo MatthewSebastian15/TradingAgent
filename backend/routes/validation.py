@@ -5,8 +5,10 @@ from __future__ import annotations
 from datetime import datetime
 import re
 
-from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from config import settings
+from errors import BadRequestError
 
 _TICKER_RE = re.compile(r"^[A-Z]{1,5}$")
 
@@ -14,15 +16,15 @@ _TICKER_RE = re.compile(r"^[A-Z]{1,5}$")
 class AnalysisRequest(BaseModel):
     """Payload accepted by /api/analyze and /api/analyze/stream."""
 
-    ticker: str
+    ticker: str = Field(..., min_length=1, max_length=12)
     trade_date: str
-    max_debate_rounds: int = 3
+    max_debate_rounds: int = Field(default_factory=lambda: settings.default_max_debate_rounds)
 
 
 def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisRequest:
     """Validate user input before the expensive agent pipeline starts."""
 
-    ticker = req.ticker.strip() if isinstance(req.ticker, str) else req.ticker
+    ticker = req.ticker.strip().upper() if isinstance(req.ticker, str) else req.ticker
     trade_date = req.trade_date.strip() if isinstance(req.trade_date, str) else req.trade_date
 
     errors: dict[str, str] = {}
@@ -44,7 +46,7 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
         errors["max_debate_rounds"] = "max_debate_rounds must be between 1 and 5."
 
     if errors:
-        raise HTTPException(status_code=422, detail={"message": "Invalid analysis request.", "fields": errors})
+        raise BadRequestError("Invalid analysis request.", details={"fields": errors})
 
     return AnalysisRequest(
         ticker=ticker,
