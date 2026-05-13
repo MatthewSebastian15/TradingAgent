@@ -11,6 +11,14 @@ function parseBold(text) {
   );
 }
 
+function getDisplayError(error) {
+  if (!error) return 'Analysis failed.';
+  if (typeof error === 'string') return error;
+  if (error.message) return error.message;
+  if (error.error?.message) return error.error.message;
+  return JSON.stringify(error, null, 2);
+}
+
 function DecisionBadge({ decision }) {
   const config = {
     Buy:  { bg: 'rgba(0,229,160,0.12)', border: 'rgba(0,229,160,0.3)', color: 'var(--accent)',  label: '▲ BUY'  },
@@ -91,7 +99,7 @@ export default function ResultCard({ result }) {
           color: 'var(--text-secondary)',
           lineHeight: 1.6,
         }}>
-          {result.error}
+          {getDisplayError(result.error)}
         </p>
       </div>
     );
@@ -102,8 +110,9 @@ export default function ResultCard({ result }) {
   // when structured output succeeds (portfolio_decision object is present).
   const executiveSummary = result.executive_summary || null;
   const investmentThesis = result.investment_thesis || null;
-  const priceTarget      = result.price_target || null;
-  const timeHorizon      = result.time_horizon || null;
+  const priceTarget      = result.price_target ?? null;
+  const timeHorizon      = result.time_horizon ?? null;
+  const confidenceScore  = result.confidence_score ?? null;
   const agentsUsed       = result.agents_used || [];
 
   // Fallback: if structured fields are null (free-text path), parse from full_decision.
@@ -193,17 +202,17 @@ export default function ResultCard({ result }) {
         </div>
       </div>
 
-      {/* Stats row: price target + time horizon */}
-      {(priceTarget || timeHorizon) && (
+      {/* Stats row: price target + time horizon + confidence */}
+      {(priceTarget !== null || timeHorizon || confidenceScore !== null) && (
         <div style={{
           display: 'flex',
           borderBottom: '1px solid var(--border-subtle)',
         }}>
-          {priceTarget && (
+          {priceTarget !== null && (
             <div style={{
               flex: 1,
               padding: '14px 24px',
-              borderRight: timeHorizon ? '1px solid var(--border-subtle)' : 'none',
+              borderRight: (timeHorizon || confidenceScore !== null) ? '1px solid var(--border-subtle)' : 'none',
             }}>
               <div style={{
                 fontFamily: 'var(--font-mono)',
@@ -224,7 +233,11 @@ export default function ResultCard({ result }) {
             </div>
           )}
           {timeHorizon && (
-            <div style={{ flex: 1, padding: '14px 24px' }}>
+            <div style={{
+              flex: 1,
+              padding: '14px 24px',
+              borderRight: confidenceScore !== null ? '1px solid var(--border-subtle)' : 'none',
+            }}>
               <div style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,
@@ -240,6 +253,26 @@ export default function ResultCard({ result }) {
                 color: 'var(--text-primary)',
               }}>
                 {timeHorizon}
+              </div>
+            </div>
+          )}
+          {confidenceScore !== null && (
+            <div style={{ flex: 1, padding: '14px 24px' }}>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                marginBottom: 4,
+              }}>Confidence</div>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 20,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+              }}>
+                {typeof confidenceScore === 'number' ? `${Math.round(confidenceScore * 100)}%` : confidenceScore}
               </div>
             </div>
           )}

@@ -5,7 +5,12 @@ import Navbar from '../components/Navbar';
 const agents = [
   { icon: '📊', name: 'Market Analyst', desc: 'Reads price action, volume, and trend signals', color: '#00e5a0' },
   { icon: '📰', name: 'News Researcher', desc: 'Scans news sentiment and macro events', color: '#60a5fa' },
-  { icon: '⚖️', name: 'Risk Manager', desc: 'Evaluates downside and position sizing', color: '#ffb340' },
+  { icon: '📈', name: 'Fundamentals Analyst', desc: 'Reviews financial statements and ratios', color: '#a78bfa' },
+  { icon: '🐂', name: 'Bull Researcher', desc: 'Builds the bullish investment case', color: '#34d399' },
+  { icon: '🐻', name: 'Bear Researcher', desc: 'Builds the bearish counterargument', color: '#f87171' },
+  { icon: '🔬', name: 'Research Manager', desc: 'Evaluates debate quality and consensus', color: '#fbbf24' },
+  { icon: '💹', name: 'Trader', desc: 'Turns the plan into a transaction proposal', color: '#38bdf8' },
+  { icon: '⚖️', name: 'Risk Analysts', desc: 'Evaluates downside, sizing, and risk debate', color: '#ffb340' },
   { icon: '🧠', name: 'Portfolio Manager', desc: 'Issues final BUY / HOLD / SELL decision', color: '#c084fc' },
 ];
 
@@ -157,7 +162,7 @@ export default function Dashboard() {
             fontWeight: 500,
             letterSpacing: '0.05em',
           }}>
-            4 AI AGENTS READY
+            9 AI AGENTS READY
           </span>
         </div>
 
