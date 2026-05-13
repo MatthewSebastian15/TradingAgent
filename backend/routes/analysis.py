@@ -9,10 +9,10 @@ import os
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from tradingagents.default_config import DEFAULT_CONFIG
+from logging_config import request_id_ctx
+from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,20 +53,10 @@ _EXECUTOR = concurrent.futures.ProcessPoolExecutor(
 
 
 # ---------------------------------------------------------------------------
-# Request / response models
-# ---------------------------------------------------------------------------
-
-class AnalysisRequest(BaseModel):
-    ticker: str
-    trade_date: str
-    max_debate_rounds: int = 3
-
-
-# ---------------------------------------------------------------------------
 # Pipeline runner
 # ---------------------------------------------------------------------------
 
-def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int) -> dict:
+def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int, request_id: str = "-") -> dict:
     """Run the full TradingAgents pipeline in a subprocess.
 
     Returns a plain dict (picklable) with all PortfolioDecision fields.
@@ -78,12 +68,33 @@ def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int) -> dict:
     from tradingagents.default_config import DEFAULT_CONFIG as _CFG
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 
+    worker_logger = logging.getLogger(__name__)
+    worker_logger.info(
+        "Pipeline worker started",
+        extra={
+            "event": "pipeline_worker_started",
+            "request_id": request_id,
+            "ticker": ticker,
+            "trade_date": trade_date,
+            "max_debate_rounds": max_debate_rounds,
+        },
+    )
+
     config = _CFG.copy()
     config["max_debate_rounds"] = max_debate_rounds
     config["max_risk_discuss_rounds"] = max_debate_rounds
 
     ta = TradingAgentsGraph(debug=False, config=config)
     final_state, _ = ta.propagate(ticker, trade_date)
+    worker_logger.info(
+        "Pipeline worker completed",
+        extra={
+            "event": "pipeline_worker_completed",
+            "request_id": request_id,
+            "ticker": ticker,
+            "trade_date": trade_date,
+        },
+    )
 
     full_decision: str = final_state.get("final_trade_decision", "")
     pd_obj: Optional[PortfolioDecision] = final_state.get("portfolio_decision")
@@ -142,6 +153,7 @@ async def _stream_progress_and_result(
     ticker: str,
     trade_date: str,
     max_debate_rounds: int,
+    request_id: str,
 ):
     """Async generator that yields SSE events during pipeline execution.
 
@@ -157,6 +169,7 @@ async def _stream_progress_and_result(
         yield {
             "event": "error",
             "data": json.dumps({
+                "request_id": request_id,
                 "error": (
                     f"Too many concurrent requests. "
                     f"Max {_MAX_CONCURRENT_PER_IP} pipeline(s) allowed per IP at a time. "
@@ -174,6 +187,7 @@ async def _stream_progress_and_result(
             ticker,
             trade_date,
             max_debate_rounds,
+            request_id,
         )
 
         # Conservative timing estimates for gemini-2.5-flash.
@@ -227,9 +241,20 @@ async def _stream_progress_and_result(
 
             if elapsed >= PIPELINE_TIMEOUT_SECONDS:
                 future.cancel()
+                logger.error(
+                    "Pipeline timeout",
+                    extra={
+                        "event": "pipeline_timeout",
+                        "request_id": request_id,
+                        "ticker": ticker,
+                        "trade_date": trade_date,
+                        "duration_ms": PIPELINE_TIMEOUT_SECONDS * 1000,
+                    },
+                )
                 yield {
                     "event": "error",
                     "data": json.dumps({
+                        "request_id": request_id,
                         "error": (
                             f"Pipeline timeout after {PIPELINE_TIMEOUT_SECONDS}s. "
                             "Try again or reduce max_debate_rounds to 1."
@@ -242,17 +267,25 @@ async def _stream_progress_and_result(
             result_fields = future.result()
         except Exception as exc:
             logger.error(
-                "Pipeline failed for %s on %s: %s", ticker, trade_date, exc, exc_info=True
+                "Pipeline failed",
+                extra={
+                    "event": "pipeline_failed",
+                    "request_id": request_id,
+                    "ticker": ticker,
+                    "trade_date": trade_date,
+                },
+                exc_info=True,
             )
             yield {
                 "event": "error",
-                "data": json.dumps({"error": str(exc)}),
+                "data": json.dumps({"request_id": request_id, "error": str(exc)}),
             }
             return
 
         yield {
             "event": "result",
             "data": json.dumps({
+                "request_id":   request_id,
                 "ticker":      ticker,
                 "trade_date":  trade_date,
                 "agents_used": [a[1] for a in _AGENT_SEQUENCE],
@@ -272,13 +305,25 @@ async def analyze_stream(req: AnalysisRequest, request: Request):
     Rate limited to _MAX_CONCURRENT_PER_IP concurrent pipelines per client IP.
     Sends an 'error' SSE event immediately if the limit is reached.
     """
+    req = normalize_and_validate_analysis_request(req)
+    request_id = request_id_ctx.get()
     client_ip = request.client.host if request.client else "unknown"
+    logger.info(
+        "Analysis stream accepted",
+        extra={
+            "event": "analysis_stream_accepted",
+            "ticker": req.ticker,
+            "trade_date": req.trade_date,
+            "max_debate_rounds": req.max_debate_rounds,
+        },
+    )
     return EventSourceResponse(
         _stream_progress_and_result(
             client_ip,
             req.ticker,
             req.trade_date,
             req.max_debate_rounds,
+            request_id,
         )
     )
 
@@ -290,8 +335,19 @@ async def analyze(req: AnalysisRequest, request: Request):
     Returns HTTP 429 immediately if the per-IP concurrent limit is reached.
     Returns HTTP 504 on pipeline timeout.
     """
+    req = normalize_and_validate_analysis_request(req)
+    request_id = request_id_ctx.get()
     client_ip = request.client.host if request.client else "unknown"
     semaphore = await _get_semaphore(client_ip)
+    logger.info(
+        "Analysis request accepted",
+        extra={
+            "event": "analysis_request_accepted",
+            "ticker": req.ticker,
+            "trade_date": req.trade_date,
+            "max_debate_rounds": req.max_debate_rounds,
+        },
+    )
 
     if semaphore._value == 0:
         raise HTTPException(
@@ -312,13 +368,19 @@ async def analyze(req: AnalysisRequest, request: Request):
                     req.ticker,
                     req.trade_date,
                     req.max_debate_rounds,
+                    request_id,
                 ),
                 timeout=PIPELINE_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
             logger.error(
-                "Pipeline timeout untuk %s pada %s setelah %ds",
-                req.ticker, req.trade_date, PIPELINE_TIMEOUT_SECONDS,
+                "Pipeline timeout",
+                extra={
+                    "event": "pipeline_timeout",
+                    "ticker": req.ticker,
+                    "trade_date": req.trade_date,
+                    "duration_ms": PIPELINE_TIMEOUT_SECONDS * 1000,
+                },
             )
             raise HTTPException(
                 status_code=504,
@@ -329,12 +391,18 @@ async def analyze(req: AnalysisRequest, request: Request):
             )
         except Exception as exc:
             logger.error(
-                "Pipeline failed untuk %s pada %s: %s",
-                req.ticker, req.trade_date, exc, exc_info=True,
+                "Pipeline failed",
+                extra={
+                    "event": "pipeline_failed",
+                    "ticker": req.ticker,
+                    "trade_date": req.trade_date,
+                },
+                exc_info=True,
             )
             raise HTTPException(status_code=500, detail=str(exc))
 
     return {
+        "request_id":   request_id,
         "ticker":      req.ticker,
         "trade_date":  req.trade_date,
         "agents_used": [a[1] for a in _AGENT_SEQUENCE],
