@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+
 from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_language_instruction,
 )
-from tradingagents.agents.utils.structured import (
-    bind_structured,
-    invoke_structured_or_freetext,
-)
+from tradingagents.agents.utils.structured import bind_structured
 
 MAX_HISTORY_CHARS = 6000
+logger = logging.getLogger(__name__)
 
 
 def _trim_history(history: str, max_chars: int = MAX_HISTORY_CHARS) -> str:
@@ -67,8 +67,7 @@ def create_portfolio_manager(llm):
 **Context:**
 - Research Manager's investment plan: **{research_plan}**
 - Trader's transaction proposal: **{trader_plan}**
-{lessons_line}
-**Risk Analysts Debate History:**
+{lessons_line}**Risk Analysts Debate History:**
 {history}
 
 ---
@@ -86,13 +85,38 @@ Investment Thesis: Write at minimum 6 sentences as flowing paragraphs (no bullet
 
 Be decisive. Ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
 
-        final_trade_decision = invoke_structured_or_freetext(
-            structured_llm,
-            llm,
-            prompt,
-            render_pm_decision,
-            "Portfolio Manager",
-        )
+        # Attempt structured output and capture the typed object.
+        portfolio_decision_obj: PortfolioDecision | None = None
+        final_trade_decision: str = ""
+
+        if structured_llm is not None:
+            try:
+                portfolio_decision_obj = structured_llm.invoke(prompt)
+                final_trade_decision = render_pm_decision(portfolio_decision_obj)
+            except Exception as exc:
+                logger.warning(
+                    "Portfolio Manager: structured output failed (%s), falling back to free text",
+                    exc,
+                )
+                portfolio_decision_obj = None
+
+        if not final_trade_decision:
+            # Free-text fallback — no typed object available.
+            try:
+                response = llm.invoke(prompt)
+                final_trade_decision = response.content
+            except Exception as exc:
+                logger.error(
+                    "Portfolio Manager: free-text fallback also failed (%s). "
+                    "Returning placeholder so graph can continue.",
+                    exc,
+                )
+                final_trade_decision = (
+                    f"**Rating**: Hold\n\n"
+                    f"**Executive Summary**: Portfolio Manager failed to produce analysis. "
+                    f"Error: {exc}.\n\n"
+                    f"**Investment Thesis**: Analysis unavailable due to model error."
+                )
 
         new_risk_debate_state = {
             "judge_decision": final_trade_decision,
@@ -110,6 +134,9 @@ Be decisive. Ground every conclusion in specific evidence from the analysts.{get
         return {
             "risk_debate_state": new_risk_debate_state,
             "final_trade_decision": final_trade_decision,
+            # Store the typed object so routes can read fields directly
+            # without regex-parsing the rendered markdown string.
+            "portfolio_decision": portfolio_decision_obj,
         }
 
     return portfolio_manager_node

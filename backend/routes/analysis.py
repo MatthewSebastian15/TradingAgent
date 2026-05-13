@@ -6,11 +6,9 @@ import json
 import logging
 import multiprocessing
 import os
-import re
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -21,11 +19,33 @@ router = APIRouter()
 
 PIPELINE_TIMEOUT_SECONDS = 600
 
-# ProcessPoolExecutor dengan satu worker per CPU.
-# Setiap request analisis mendapat process sendiri sehingga tidak antri
-# di belakang request lain dan tidak saling blokir GIL Python.
-# max_workers=None berarti os.cpu_count() — cocok untuk 1-4 request simultan.
-# Untuk produksi dengan banyak user, ganti dengan Celery + Redis.
+# ---------------------------------------------------------------------------
+# Rate limiting
+# ---------------------------------------------------------------------------
+
+# Maximum concurrent pipeline runs per client IP.
+# Keeps a single user from firing 10 pipelines at once and draining the
+# entire Gemini API quota. Adjust the constant to match your quota limits.
+_MAX_CONCURRENT_PER_IP = 2
+
+# ip -> asyncio.Semaphore (created on first request from that IP).
+_ip_semaphores: dict[str, asyncio.Semaphore] = {}
+_ip_semaphores_lock = asyncio.Lock()
+
+
+async def _get_semaphore(ip: str) -> asyncio.Semaphore:
+    async with _ip_semaphores_lock:
+        if ip not in _ip_semaphores:
+            _ip_semaphores[ip] = asyncio.Semaphore(_MAX_CONCURRENT_PER_IP)
+        return _ip_semaphores[ip]
+
+
+# ---------------------------------------------------------------------------
+# Process pool
+# ---------------------------------------------------------------------------
+
+# One worker process per CPU core, capped at 4.
+# For production with many users, replace with Celery + Redis.
 _EXECUTOR = concurrent.futures.ProcessPoolExecutor(
     max_workers=min(4, os.cpu_count() or 2),
     mp_context=multiprocessing.get_context("spawn"),
@@ -43,211 +63,199 @@ class AnalysisRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Pipeline runner
 # ---------------------------------------------------------------------------
 
-def _parse_decision(full_decision: str) -> dict:
-    """Parse rendered markdown from Portfolio Manager into typed fields.
-
-    PM always renders via render_pm_decision which produces:
-        **Rating**: Buy
-        **Executive Summary**: ...
-        **Investment Thesis**: ...
-        **Price Target**: 1050.0   (optional)
-        **Time Horizon**: 3-6 months  (optional)
-
-    Returns a plain dict so the frontend never has to parse markdown itself.
-    """
-    def extract(label: str) -> Optional[str]:
-        pattern = rf"\*\*{label}\*\*:\s*(.+?)(?=\n\*\*|\Z)"
-        match = re.search(pattern, full_decision, re.DOTALL)
-        return match.group(1).strip() if match else None
-
-    rating_raw = extract("Rating") or ""
-    rating_map = {
-        "buy": "Buy",
-        "overweight": "Buy",
-        "hold": "Hold",
-        "underweight": "Sell",
-        "sell": "Sell",
-    }
-    decision = rating_map.get(rating_raw.lower(), rating_raw)
-
-    price_raw = extract("Price Target")
-    price_target: Optional[float] = None
-    if price_raw:
-        try:
-            price_target = float(re.sub(r"[^\d.]", "", price_raw))
-        except ValueError:
-            pass
-
-    return {
-        "decision": decision,
-        "full_decision": full_decision,
-        "executive_summary": extract("Executive Summary"),
-        "investment_thesis": extract("Investment Thesis"),
-        "price_target": price_target,
-        "time_horizon": extract("Time Horizon"),
-    }
-
-
-def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int) -> str:
+def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int) -> dict:
     """Run the full TradingAgents pipeline in a subprocess.
 
-    Runs in a separate process via ProcessPoolExecutor so it does not block
-    the FastAPI event loop or compete with other in-flight requests for the GIL.
-
-    Returns the raw full_decision markdown string.
+    Returns a plain dict (picklable) with all PortfolioDecision fields.
+    The route assembles the final JSON from this dict directly, with no
+    markdown parsing.
     """
-    # Import inside the function: this runs in a spawned subprocess,
-    # so all imports must happen fresh inside the worker process.
+    # All imports must be inside the function: this runs in a spawned subprocess.
     from tradingagents.graph.trading_graph import TradingAgentsGraph
     from tradingagents.default_config import DEFAULT_CONFIG as _CFG
+    from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 
     config = _CFG.copy()
     config["max_debate_rounds"] = max_debate_rounds
 
     ta = TradingAgentsGraph(debug=False, config=config)
     final_state, _ = ta.propagate(ticker, trade_date)
-    return final_state.get("final_trade_decision", "")
+
+    full_decision: str = final_state.get("final_trade_decision", "")
+    pd_obj: Optional[PortfolioDecision] = final_state.get("portfolio_decision")
+
+    if pd_obj is not None:
+        # Structured output succeeded. Read fields directly from the typed object.
+        rating_map = {
+            PortfolioRating.BUY:         "Buy",
+            PortfolioRating.OVERWEIGHT:  "Buy",
+            PortfolioRating.HOLD:        "Hold",
+            PortfolioRating.UNDERWEIGHT: "Sell",
+            PortfolioRating.SELL:        "Sell",
+        }
+        return {
+            "decision":          rating_map.get(pd_obj.rating, pd_obj.rating.value),
+            "full_decision":     full_decision,
+            "executive_summary": pd_obj.executive_summary,
+            "investment_thesis": pd_obj.investment_thesis,
+            "price_target":      pd_obj.price_target,
+            "time_horizon":      pd_obj.time_horizon,
+        }
+
+    # Free-text fallback path: structured output was not available.
+    # Return None for typed fields so the frontend can handle the degraded case.
+    return {
+        "decision":          None,
+        "full_decision":     full_decision,
+        "executive_summary": None,
+        "investment_thesis": None,
+        "price_target":      None,
+        "time_horizon":      None,
+    }
 
 
 # ---------------------------------------------------------------------------
 # SSE progress tracker
 # ---------------------------------------------------------------------------
 
-# Node names in execution order — used to emit progress events.
-# These match the node names added in GraphSetup.setup_graph().
 _AGENT_SEQUENCE = [
-    ("market_analyst",    "Market Analyst",    "Fetching price data and technical indicators..."),
-    ("news_analyst",      "News Researcher",   "Scanning recent headlines and macro events..."),
+    ("market_analyst",    "Market Analyst",       "Fetching price data and technical indicators..."),
+    ("news_analyst",      "News Researcher",      "Scanning recent headlines and macro events..."),
     ("fundamentals",      "Fundamentals Analyst", "Pulling financial statements and ratios..."),
-    ("bull_researcher",   "Bull Researcher",   "Building the bullish investment case..."),
-    ("bear_researcher",   "Bear Researcher",   "Building the bearish counterarguments..."),
-    ("research_manager",  "Research Manager",  "Evaluating the debate and forming an investment plan..."),
-    ("trader",            "Trader",            "Translating the plan into a transaction proposal..."),
-    ("risk_analysts",     "Risk Analysts",     "Running risk debate: aggressive vs conservative vs neutral..."),
-    ("portfolio_manager", "Portfolio Manager", "Synthesizing all inputs into the final decision..."),
+    ("bull_researcher",   "Bull Researcher",      "Building the bullish investment case..."),
+    ("bear_researcher",   "Bear Researcher",      "Building the bearish counterarguments..."),
+    ("research_manager",  "Research Manager",     "Evaluating the debate and forming an investment plan..."),
+    ("trader",            "Trader",               "Translating the plan into a transaction proposal..."),
+    ("risk_analysts",     "Risk Analysts",        "Running risk debate: aggressive vs conservative vs neutral..."),
+    ("portfolio_manager", "Portfolio Manager",    "Synthesizing all inputs into the final decision..."),
 ]
 
 
 async def _stream_progress_and_result(
+    ip: str,
     ticker: str,
     trade_date: str,
     max_debate_rounds: int,
 ):
     """Async generator that yields SSE events during pipeline execution.
 
-    Events emitted:
-      - type: "progress"  — one per agent step, with estimated timing
-      - type: "result"    — final structured JSON when pipeline completes
-      - type: "error"     — if pipeline fails or times out
-
-    The pipeline runs in a ProcessPoolExecutor subprocess. Progress events
-    are emitted on a timer because LangGraph does not yet expose per-node
-    callbacks over a subprocess boundary. When you add Celery workers, replace
-    the timer with real task-state polling from the Celery result backend.
+    Events:
+      - "progress"  one per agent step with estimated timing
+      - "result"    final structured JSON when pipeline completes
+      - "error"     if pipeline fails, times out, or IP is rate-limited
     """
-    loop = asyncio.get_event_loop()
+    semaphore = await _get_semaphore(ip)
 
-    # Submit pipeline to process pool
-    future = loop.run_in_executor(
-        _EXECUTOR,
-        _run_pipeline,
-        ticker,
-        trade_date,
-        max_debate_rounds,
-    )
-
-    # Emit progress events on estimated timing while pipeline runs.
-    # Thresholds (seconds since start) when each agent is expected to finish.
-    # These are conservative estimates for gemini-2.5-flash.
-    # Adjust if you switch models.
-    thresholds = [
-        ("market_analyst",    20),
-        ("news_analyst",      45),
-        ("fundamentals",      70),
-        ("bull_researcher",   90),
-        ("bear_researcher",   110),
-        ("research_manager",  125),
-        ("trader",            135),
-        ("risk_analysts",     160),
-        ("portfolio_manager", 999),  # stays active until result arrives
-    ]
-
-    agent_map = {a[0]: a for a in _AGENT_SEQUENCE}
-    elapsed = 0
-    threshold_idx = 0
-    active_agent_id = _AGENT_SEQUENCE[0][0]
-
-    # Yield initial event
-    first = agent_map[active_agent_id]
-    yield {
-        "event": "progress",
-        "data": json.dumps({
-            "agent_id": first[0],
-            "agent_name": first[1],
-            "status_message": first[2],
-            "elapsed": 0,
-        }),
-    }
-
-    while not future.done():
-        await asyncio.sleep(1)
-        elapsed += 1
-
-        # Advance to next agent if threshold crossed
-        if threshold_idx < len(thresholds) - 1:
-            _, threshold_sec = thresholds[threshold_idx]
-            if elapsed >= threshold_sec:
-                threshold_idx += 1
-                active_agent_id = thresholds[threshold_idx][0]
-                agent = agent_map[active_agent_id]
-                yield {
-                    "event": "progress",
-                    "data": json.dumps({
-                        "agent_id": agent[0],
-                        "agent_name": agent[1],
-                        "status_message": agent[2],
-                        "elapsed": elapsed,
-                    }),
-                }
-
-        # Hard timeout guard
-        if elapsed >= PIPELINE_TIMEOUT_SECONDS:
-            future.cancel()
-            yield {
-                "event": "error",
-                "data": json.dumps({
-                    "error": f"Pipeline timeout after {PIPELINE_TIMEOUT_SECONDS}s. "
-                             "Try again or reduce max_debate_rounds to 1."
-                }),
-            }
-            return
-
-    # Pipeline finished — get result or exception
-    try:
-        full_decision = future.result()
-    except Exception as exc:
-        logger.error("Pipeline failed for %s on %s: %s", ticker, trade_date, exc, exc_info=True)
+    # Non-blocking check: if both slots are taken, reject immediately.
+    if semaphore._value == 0:
         yield {
             "event": "error",
-            "data": json.dumps({"error": str(exc)}),
+            "data": json.dumps({
+                "error": (
+                    f"Too many concurrent requests. "
+                    f"Max {_MAX_CONCURRENT_PER_IP} pipeline(s) allowed per IP at a time. "
+                    "Wait for your current analysis to finish."
+                )
+            }),
         }
         return
 
-    parsed = _parse_decision(full_decision)
-    result = {
-        "ticker": ticker,
-        "trade_date": trade_date,
-        "agents_used": [a[1] for a in _AGENT_SEQUENCE],
-        **parsed,
-    }
+    async with semaphore:
+        loop = asyncio.get_event_loop()
+        future = loop.run_in_executor(
+            _EXECUTOR,
+            _run_pipeline,
+            ticker,
+            trade_date,
+            max_debate_rounds,
+        )
 
-    yield {
-        "event": "result",
-        "data": json.dumps(result),
-    }
+        # Conservative timing estimates for gemini-2.5-flash.
+        # Adjust per model if needed.
+        thresholds = [
+            ("market_analyst",    20),
+            ("news_analyst",      45),
+            ("fundamentals",      70),
+            ("bull_researcher",   90),
+            ("bear_researcher",   110),
+            ("research_manager",  125),
+            ("trader",            135),
+            ("risk_analysts",     160),
+            ("portfolio_manager", 999),
+        ]
+
+        agent_map = {a[0]: a for a in _AGENT_SEQUENCE}
+        elapsed = 0
+        threshold_idx = 0
+
+        first = agent_map[_AGENT_SEQUENCE[0][0]]
+        yield {
+            "event": "progress",
+            "data": json.dumps({
+                "agent_id":       first[0],
+                "agent_name":     first[1],
+                "status_message": first[2],
+                "elapsed":        0,
+            }),
+        }
+
+        while not future.done():
+            await asyncio.sleep(1)
+            elapsed += 1
+
+            if threshold_idx < len(thresholds) - 1:
+                _, threshold_sec = thresholds[threshold_idx]
+                if elapsed >= threshold_sec:
+                    threshold_idx += 1
+                    active_id = thresholds[threshold_idx][0]
+                    agent = agent_map[active_id]
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({
+                            "agent_id":       agent[0],
+                            "agent_name":     agent[1],
+                            "status_message": agent[2],
+                            "elapsed":        elapsed,
+                        }),
+                    }
+
+            if elapsed >= PIPELINE_TIMEOUT_SECONDS:
+                future.cancel()
+                yield {
+                    "event": "error",
+                    "data": json.dumps({
+                        "error": (
+                            f"Pipeline timeout after {PIPELINE_TIMEOUT_SECONDS}s. "
+                            "Try again or reduce max_debate_rounds to 1."
+                        )
+                    }),
+                }
+                return
+
+        try:
+            result_fields = future.result()
+        except Exception as exc:
+            logger.error(
+                "Pipeline failed for %s on %s: %s", ticker, trade_date, exc, exc_info=True
+            )
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(exc)}),
+            }
+            return
+
+        yield {
+            "event": "result",
+            "data": json.dumps({
+                "ticker":      ticker,
+                "trade_date":  trade_date,
+                "agents_used": [a[1] for a in _AGENT_SEQUENCE],
+                **result_fields,
+            }),
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -255,38 +263,16 @@ async def _stream_progress_and_result(
 # ---------------------------------------------------------------------------
 
 @router.post("/analyze/stream")
-async def analyze_stream(req: AnalysisRequest):
+async def analyze_stream(req: AnalysisRequest, request: Request):
     """SSE endpoint — streams progress events then the final result.
 
-    The frontend connects with EventSource and receives:
-      - Multiple 'progress' events (one per agent) while the pipeline runs
-      - One 'result' event with the full structured JSON when done
-      - One 'error' event if something goes wrong
-
-    Frontend usage (JavaScript):
-        const source = new EventSource('/api/analyze/stream');
-        source.addEventListener('progress', e => {
-            const { agent_name, status_message, elapsed } = JSON.parse(e.data);
-            updateAgentLog(agent_name, status_message, elapsed);
-        });
-        source.addEventListener('result', e => {
-            const result = JSON.parse(e.data);
-            showResult(result);
-            source.close();
-        });
-        source.addEventListener('error', e => {
-            showError(JSON.parse(e.data).error);
-            source.close();
-        });
-
-    Note: EventSource only supports GET. To send POST body over SSE,
-    the frontend must POST the params first to /analyze/session, get a
-    session_id, then open EventSource('/api/analyze/stream?session_id=...').
-    The simpler approach used here: accept POST and return StreamingResponse
-    with text/event-stream content type directly.
+    Rate limited to _MAX_CONCURRENT_PER_IP concurrent pipelines per client IP.
+    Sends an 'error' SSE event immediately if the limit is reached.
     """
+    client_ip = request.client.host if request.client else "unknown"
     return EventSourceResponse(
         _stream_progress_and_result(
+            client_ip,
             req.ticker,
             req.trade_date,
             req.max_debate_rounds,
@@ -295,20 +281,59 @@ async def analyze_stream(req: AnalysisRequest):
 
 
 @router.post("/analyze")
-async def analyze(req: AnalysisRequest):
+async def analyze(req: AnalysisRequest, request: Request):
     """Standard REST endpoint — blocks until pipeline completes, returns full result.
 
-    Keep this endpoint alongside /analyze/stream so existing integrations
-    and the mock-mode frontend (USE_MOCK=true) continue to work without changes.
+    Returns HTTP 429 immediately if the per-IP concurrent limit is reached.
+    Returns HTTP 504 on pipeline timeout.
     """
-    loop = asyncio.get_event_loop()
+    client_ip = request.client.host if request.client else "unknown"
+    semaphore = await _get_semaphore(client_ip)
 
-    try:
-        full_decision = await asyncio.wait_for(
-            loop.run_in_executor(_EXECUTOR, _run_pipeline, req.ticker, req.trade_date, req.max_debate_rounds),
-            timeout=PIPELINE_TIMEOUT_SECONDS,
+    if semaphore._value == 0:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Too many concurrent requests. "
+                f"Max {_MAX_CONCURRENT_PER_IP} pipeline(s) allowed per IP at a time."
+            ),
         )
-    except asyncio.TimeoutError:
-        logger.error(
-            "Pipeline timeout untuk %s pada %s setelah %ds",
-            req.ticker, req.trade_date, PIPELINE_TIMEOUT_
+
+    async with semaphore:
+        loop = asyncio.get_event_loop()
+        try:
+            result_fields = await asyncio.wait_for(
+                loop.run_in_executor(
+                    _EXECUTOR,
+                    _run_pipeline,
+                    req.ticker,
+                    req.trade_date,
+                    req.max_debate_rounds,
+                ),
+                timeout=PIPELINE_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "Pipeline timeout untuk %s pada %s setelah %ds",
+                req.ticker, req.trade_date, PIPELINE_TIMEOUT_SECONDS,
+            )
+            raise HTTPException(
+                status_code=504,
+                detail=(
+                    f"Pipeline timeout after {PIPELINE_TIMEOUT_SECONDS}s. "
+                    "Try again or reduce max_debate_rounds to 1."
+                ),
+            )
+        except Exception as exc:
+            logger.error(
+                "Pipeline failed untuk %s pada %s: %s",
+                req.ticker, req.trade_date, exc, exc_info=True,
+            )
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    return {
+        "ticker":      req.ticker,
+        "trade_date":  req.trade_date,
+        "agents_used": [a[1] for a in _AGENT_SEQUENCE],
+        **result_fields,
+    }
