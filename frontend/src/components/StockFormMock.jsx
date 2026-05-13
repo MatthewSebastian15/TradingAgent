@@ -1,18 +1,53 @@
-import React, { useState, useRef } from 'react';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+/**
+ * StockFormMock.jsx
+ *
+ * Testing-only version of StockForm.
+ * Uses mockData.js so you can test UI without hitting the real backend.
+ * Import this in a test page or replace StockForm temporarily during dev.
+ *
+ * NEVER import this in production pages (Analysis.jsx etc).
+ */
+import React, { useState } from 'react';
+import {
+  MOCK_RESPONSE,
+  MOCK_SELL_RESPONSE,
+  MOCK_HOLD_RESPONSE,
+  MOCK_ERROR_RESPONSE,
+} from '../mockData';
 
 const popularTickers = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL'];
+
+const MOCK_MAP = {
+  NVDA: MOCK_RESPONSE,
+  TSLA: MOCK_SELL_RESPONSE,
+  AAPL: MOCK_HOLD_RESPONSE,
+  ERROR: MOCK_ERROR_RESPONSE,
+};
+
+const MOCK_STEPS = [
+  { agent_id: 'market_analyst',    agent_name: 'Market Analyst',       status_message: 'Fetching price data and technical indicators...' },
+  { agent_id: 'news_analyst',      agent_name: 'News Researcher',      status_message: 'Scanning recent headlines and macro events...' },
+  { agent_id: 'fundamentals',      agent_name: 'Fundamentals Analyst', status_message: 'Pulling financial statements and ratios...' },
+  { agent_id: 'bull_researcher',   agent_name: 'Bull Researcher',      status_message: 'Building the bullish investment case...' },
+  { agent_id: 'bear_researcher',   agent_name: 'Bear Researcher',      status_message: 'Building the bearish counterarguments...' },
+  { agent_id: 'research_manager',  agent_name: 'Research Manager',     status_message: 'Evaluating the debate and forming an investment plan...' },
+  { agent_id: 'trader',            agent_name: 'Trader',               status_message: 'Translating the plan into a transaction proposal...' },
+  { agent_id: 'risk_analysts',     agent_name: 'Risk Analysts',        status_message: 'Running risk debate: aggressive vs conservative vs neutral...' },
+  { agent_id: 'portfolio_manager', agent_name: 'Portfolio Manager',    status_message: 'Synthesizing all inputs into the final decision...' },
+];
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function getTodayDate() {
   return new Date().toISOString().split('T')[0];
 }
 
-export default function StockForm({ onResult, onLoading, onStatus, onAgentProgress }) {
+export default function StockFormMock({ onResult, onLoading, onStatus, onAgentProgress }) {
   const [ticker, setTicker]   = useState('NVDA');
   const [date, setDate]       = useState(getTodayDate());
   const [focused, setFocused] = useState(null);
-  const abortRef              = useRef(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -22,86 +57,19 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     if (onAgentProgress) onAgentProgress(null);
 
     try {
-      await runStream();
+      for (const step of MOCK_STEPS) {
+        onStatus(step.status_message);
+        if (onAgentProgress) onAgentProgress(step);
+        await sleep(700);
+      }
+      const mockData = MOCK_MAP[ticker] || MOCK_RESPONSE;
+      onResult(mockData);
     } catch (err) {
       onResult({ error: err.message });
     } finally {
       onLoading(false);
       onStatus('');
     }
-  }
-
-  async function runStream() {
-    return new Promise((resolve, reject) => {
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      fetch(`${API_URL}/api/analyze/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ticker,
-          trade_date: date,
-          max_debate_rounds: 1,
-        }),
-        signal: controller.signal,
-      })
-        .then(async res => {
-          if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`Server error ${res.status}: ${text}`);
-          }
-
-          const reader  = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer    = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-
-            let eventType = null;
-            let dataLine  = null;
-
-            for (const line of lines) {
-              if (line.startsWith('event:')) {
-                eventType = line.replace('event:', '').trim();
-              } else if (line.startsWith('data:')) {
-                dataLine = line.replace('data:', '').trim();
-              } else if (line === '' && eventType && dataLine) {
-                try {
-                  const payload = JSON.parse(dataLine);
-
-                  if (eventType === 'progress') {
-                    onStatus(payload.status_message);
-                    if (onAgentProgress) onAgentProgress(payload);
-
-                  } else if (eventType === 'result') {
-                    onResult(payload);
-                    resolve();
-
-                  } else if (eventType === 'error') {
-                    onResult({ error: payload.error });
-                    resolve();
-                  }
-                } catch (_) {}
-
-                eventType = null;
-                dataLine  = null;
-              }
-            }
-          }
-          resolve();
-        })
-        .catch(err => {
-          if (err.name === 'AbortError') return resolve();
-          reject(err);
-        });
-    });
   }
 
   const inputBase = (name) => ({
@@ -135,6 +103,27 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
+      {/* Mock mode indicator */}
+      <div style={{
+        background: 'rgba(255,179,64,0.08)',
+        border: '1px solid rgba(255,179,64,0.25)',
+        borderRadius: 'var(--radius-md)',
+        padding: '10px 14px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+      }}>
+        <span style={{ fontSize: 13 }}>🧪</span>
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          color: 'var(--amber)',
+          letterSpacing: '0.06em',
+        }}>
+          MOCK MODE — NVDA · AAPL · TSLA · ERROR tersedia sebagai contoh
+        </span>
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <label style={labelStyle}>Ticker Symbol</label>
         <input
@@ -143,12 +132,12 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
           onChange={e => setTicker(e.target.value.toUpperCase())}
           onFocus={() => setFocused('ticker')}
           onBlur={() => setFocused(null)}
-          placeholder="e.g. NVDA"
+          placeholder="NVDA / AAPL / TSLA / ERROR"
           required
           maxLength={8}
         />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-          {popularTickers.map(t => (
+          {[...popularTickers, 'ERROR'].map(t => (
             <button
               key={t}
               type="button"
@@ -160,7 +149,9 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
                 padding: '4px 10px',
                 fontSize: 11,
                 fontFamily: 'var(--font-mono)',
-                color: ticker === t ? 'var(--accent)' : 'var(--text-secondary)',
+                color: t === 'ERROR'
+                  ? 'var(--red)'
+                  : ticker === t ? 'var(--accent)' : 'var(--text-secondary)',
                 cursor: 'pointer',
                 transition: 'var(--transition)',
                 fontWeight: 500,
@@ -173,22 +164,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <label style={labelStyle}>
-          Trade Date
-          <span style={{
-            marginLeft: 8,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--accent)',
-            background: 'var(--accent-dim)',
-            padding: '1px 6px',
-            borderRadius: 4,
-            fontWeight: 400,
-            letterSpacing: '0.04em',
-          }}>
-            default: today
-          </span>
-        </label>
+        <label style={labelStyle}>Trade Date</label>
         <input
           style={{ ...inputBase('date'), colorScheme: 'dark' }}
           type="date"
@@ -203,7 +179,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
       <button
         type="submit"
         style={{
-          background: 'var(--accent)',
+          background: 'var(--amber)',
           color: '#070a0f',
           border: 'none',
           padding: '14px 24px',
@@ -214,26 +190,14 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
           cursor: 'pointer',
           letterSpacing: '0.03em',
           transition: 'var(--transition)',
-          boxShadow: '0 0 24px rgba(0,229,160,0.25)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 8,
           marginTop: 4,
         }}
-        onMouseEnter={e => {
-          e.currentTarget.style.background = '#00ffb3';
-          e.currentTarget.style.boxShadow = '0 0 36px rgba(0,229,160,0.45)';
-          e.currentTarget.style.transform = 'translateY(-1px)';
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = 'var(--accent)';
-          e.currentTarget.style.boxShadow = '0 0 24px rgba(0,229,160,0.25)';
-          e.currentTarget.style.transform = 'translateY(0)';
-        }}
       >
-        <span>Run Agent Analysis</span>
-        <span style={{ fontSize: 16 }}>→</span>
+        <span>🧪 Run Mock Analysis</span>
       </button>
 
       <p style={{
@@ -243,7 +207,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
         textAlign: 'center',
         letterSpacing: '0.04em',
       }}>
-        Analysis typically takes 2–3 minutes to complete
+        Mock mode: selesai dalam ~7 detik tanpa API call
       </p>
     </form>
   );
