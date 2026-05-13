@@ -133,7 +133,7 @@ The final output is a `PortfolioDecision` Pydantic object with five fields:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/TradingAgent.git
+git clone https://github.com/MatthewSebastian15/TradingAgent.git
 cd TradingAgent
 ```
 
