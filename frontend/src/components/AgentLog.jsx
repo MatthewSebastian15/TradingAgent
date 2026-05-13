@@ -12,31 +12,32 @@ const agentSteps = [
   { id: 'portfolio_manager', label: 'Portfolio Manager',    icon: '🧠', color: '#c084fc' },
 ];
 
-// Timer fallback thresholds (seconds) — used when SSE events are not available (mock mode)
-const STEP_THRESHOLDS = [0, 5, 12, 18, 24, 30, 35, 40, 50];
+// Time-based thresholds (seconds) matching backend estimates for gemini-2.5-flash.
+// Used as fallback only when SSE progress events are not yet received.
+const STEP_THRESHOLDS = [0, 20, 45, 70, 90, 110, 125, 135, 160];
 
 export default function AgentLog({ status, agentProgress }) {
-  const [elapsed, setElapsed] = useState(0);
-  // activeIndex driven by SSE when available, timer fallback when not
+  const [elapsed, setElapsed]           = useState(0);
   const [sseActiveIndex, setSseActiveIndex] = useState(null);
 
+  // Tick every second
   useEffect(() => {
     const timer = setInterval(() => setElapsed(prev => prev + 1), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // When backend sends a real progress event, find the step index
+  // SSE progress event: find the matching agent step by agent_id or agent_name
   useEffect(() => {
     if (!agentProgress) return;
-    const agentName = agentProgress.agent_name || agentProgress.agent_id || '';
     const idx = agentSteps.findIndex(
-      s => s.label.toLowerCase() === agentName.toLowerCase()
-        || s.id === agentProgress.agent_id
+      s =>
+        s.id === agentProgress.agent_id ||
+        s.label.toLowerCase() === (agentProgress.agent_name || '').toLowerCase()
     );
     if (idx !== -1) setSseActiveIndex(idx);
   }, [agentProgress]);
 
-  // Determine active step: SSE wins over timer
+  // SSE takes priority. Timer fallback activates only before first SSE event.
   const timerActive = STEP_THRESHOLDS.reduce(
     (cur, t) => (elapsed >= t ? cur + 1 : cur), 0
   ) - 1;
@@ -46,7 +47,7 @@ export default function AgentLog({ status, agentProgress }) {
     : Math.min(Math.max(timerActive, 0), agentSteps.length - 1);
 
   const formatTime = (s) => {
-    const m = Math.floor(s / 60);
+    const m   = Math.floor(s / 60);
     const sec = s % 60;
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
@@ -54,12 +55,8 @@ export default function AgentLog({ status, agentProgress }) {
   const getStatusMessage = () => {
     if (agentProgress?.status_message) return agentProgress.status_message;
     if (status) return status;
-    if (elapsed < 10)  return 'Starting up agents and fetching market data...';
-    if (elapsed < 45)  return 'Market Analyst fetching price and indicator data...';
-    if (elapsed < 90)  return 'News Researcher scanning recent headlines and filings...';
-    if (elapsed < 150) return 'Risk Manager running bull/bear debate analysis...';
-    if (elapsed < 300) return 'Portfolio Manager synthesizing all reports into a final decision...';
-    return `Portfolio Manager still working... (${formatTime(elapsed)} elapsed).`;
+    const current = agentSteps[activeIndex];
+    return current ? `${current.label} is working...` : 'Starting up agents...';
   };
 
   return (

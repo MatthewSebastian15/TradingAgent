@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 
-// Parse markdown bold (**text**) menjadi <strong>
+// Parse markdown bold (**text**) to <strong>
 function parseBold(text) {
+  if (!text) return null;
   const parts = text.split(/\*\*(.*?)\*\*/g);
   return parts.map((part, i) =>
     i % 2 === 1
@@ -96,37 +97,42 @@ export default function ResultCard({ result }) {
     );
   }
 
-  // Parse full_decision menjadi sections
-  const rawText = result.full_decision || result.decision || '';
-  const lines = rawText.split('\n').filter(Boolean);
+  // Read structured fields directly from the API response.
+  // The backend returns executive_summary and investment_thesis as top-level fields
+  // when structured output succeeds (portfolio_decision object is present).
+  const executiveSummary = result.executive_summary || null;
+  const investmentThesis = result.investment_thesis || null;
+  const priceTarget      = result.price_target || null;
+  const timeHorizon      = result.time_horizon || null;
+  const agentsUsed       = result.agents_used || [];
 
-  // Kelompokkan per section berdasarkan header **...**
-  const sections = [];
-  let currentSection = null;
-  for (const line of lines) {
-    const headerMatch = line.match(/^\*\*(.+?)\*\*:\s*(.*)/);
-    if (headerMatch) {
-      if (currentSection) sections.push(currentSection);
-      currentSection = { title: headerMatch[1], body: headerMatch[2] ? [headerMatch[2]] : [] };
-    } else if (currentSection) {
-      currentSection.body.push(line);
+  // Fallback: if structured fields are null (free-text path), parse from full_decision.
+  // This keeps the UI functional even when the backend falls back to unstructured output.
+  let summaryFallback = null;
+  let thesisFallback  = null;
+
+  if (!executiveSummary || !investmentThesis) {
+    const rawText = result.full_decision || '';
+    const lines   = rawText.split('\n').filter(Boolean);
+    const sections = [];
+    let cur = null;
+    for (const line of lines) {
+      const m = line.match(/^\*\*(.+?)\*\*:\s*(.*)/);
+      if (m) {
+        if (cur) sections.push(cur);
+        cur = { title: m[1], body: m[2] ? [m[2]] : [] };
+      } else if (cur) {
+        cur.body.push(line);
+      }
     }
+    if (cur) sections.push(cur);
+
+    summaryFallback = sections.find(s => s.title === 'Executive Summary')?.body.join(' ') || null;
+    thesisFallback  = sections.find(s => s.title === 'Investment Thesis')?.body.join(' ') || null;
   }
-  if (currentSection) sections.push(currentSection);
 
-  // Extract fields spesifik
-  const priceTarget = result.price_target
-    || sections.find(s => s.title === 'Price Target')?.body[0]
-    || null;
-
-  const timeHorizon = result.time_horizon
-    || sections.find(s => s.title === 'Time Horizon')?.body[0]
-    || null;
-
-  const summary = sections.find(s => s.title === 'Executive Summary')?.body.join(' ') || '';
-  const thesis  = sections.find(s => s.title === 'Investment Thesis')?.body.join(' ') || '';
-
-  const agentsUsed = result.agents_used || [];
+  const summary = executiveSummary || summaryFallback;
+  const thesis  = investmentThesis  || thesisFallback;
 
   return (
     <div style={{
@@ -187,7 +193,7 @@ export default function ResultCard({ result }) {
         </div>
       </div>
 
-      {/* Stats row */}
+      {/* Stats row: price target + time horizon */}
       {(priceTarget || timeHorizon) && (
         <div style={{
           display: 'flex',
@@ -197,7 +203,7 @@ export default function ResultCard({ result }) {
             <div style={{
               flex: 1,
               padding: '14px 24px',
-              borderRight: '1px solid var(--border-subtle)',
+              borderRight: timeHorizon ? '1px solid var(--border-subtle)' : 'none',
             }}>
               <div style={{
                 fontFamily: 'var(--font-mono)',
@@ -243,7 +249,7 @@ export default function ResultCard({ result }) {
       {/* Body */}
       <div style={{ padding: '20px 24px' }}>
 
-        {/* Executive Summary */}
+        {/* Executive Summary — reads directly from result.executive_summary */}
         {summary && (
           <Section title="Executive Summary">
             <p style={{
@@ -257,7 +263,7 @@ export default function ResultCard({ result }) {
           </Section>
         )}
 
-        {/* Investment Thesis — toggle expand */}
+        {/* Investment Thesis — reads directly from result.investment_thesis */}
         {thesis && (
           <Section title="Investment Thesis">
             <div style={{
@@ -300,7 +306,7 @@ export default function ResultCard({ result }) {
           </Section>
         )}
 
-        {/* Agents used */}
+        {/* Agent pipeline */}
         {agentsUsed.length > 0 && (
           <Section title="Agent Pipeline">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -325,7 +331,7 @@ export default function ResultCard({ result }) {
           </Section>
         )}
 
-        {/* Raw JSON toggle — berguna untuk debugging */}
+        {/* Raw JSON for debugging */}
         <details style={{ marginTop: 8 }}>
           <summary style={{
             fontFamily: 'var(--font-mono)',
