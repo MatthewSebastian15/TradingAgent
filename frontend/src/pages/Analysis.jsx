@@ -125,7 +125,7 @@ function HistorySidebar({ currentTicker, onSelect }) {
               borderRadius: 100,
               letterSpacing: '0.06em',
             }}>
-              {item.decision?.toUpperCase()}
+              {(item.decision || 'N/A').toUpperCase()}
             </span>
           </button>
         ))}
@@ -181,7 +181,7 @@ export default function Analysis() {
             marginTop: 8,
             lineHeight: 1.6,
           }}>
-            Four AI agents will research, debate, and return a final trade decision.
+            Nine AI agents will research, debate, assess risk, and return a final trade decision.
           </p>
         </div>
 

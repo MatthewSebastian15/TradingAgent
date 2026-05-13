@@ -13,7 +13,7 @@ export const MOCK_RESPONSE = {
 
 **Time Horizon**: 3-6 months`,
   trade_date: "2026-05-12",
-  agents_used: ["Market Analyst", "News Researcher", "Risk Manager", "Portfolio Manager"],
+  agents_used: ["Market Analyst", "News Researcher", "Fundamentals Analyst", "Bull Researcher", "Bear Researcher", "Research Manager", "Trader", "Risk Analysts", "Portfolio Manager"],
 };
 
 export const MOCK_SELL_RESPONSE = {
@@ -29,7 +29,7 @@ export const MOCK_SELL_RESPONSE = {
 
 **Time Horizon**: 1-3 months`,
   trade_date: "2026-05-12",
-  agents_used: ["Market Analyst", "News Researcher", "Risk Manager", "Portfolio Manager"],
+  agents_used: ["Market Analyst", "News Researcher", "Fundamentals Analyst", "Bull Researcher", "Bear Researcher", "Research Manager", "Trader", "Risk Analysts", "Portfolio Manager"],
 };
 
 export const MOCK_HOLD_RESPONSE = {
@@ -45,7 +45,7 @@ export const MOCK_HOLD_RESPONSE = {
 
 **Time Horizon**: 6-12 months`,
   trade_date: "2026-05-12",
-  agents_used: ["Market Analyst", "News Researcher", "Risk Manager", "Portfolio Manager"],
+  agents_used: ["Market Analyst", "News Researcher", "Fundamentals Analyst", "Bull Researcher", "Bear Researcher", "Research Manager", "Trader", "Risk Analysts", "Portfolio Manager"],
 };
 
 export const MOCK_ERROR_RESPONSE = {

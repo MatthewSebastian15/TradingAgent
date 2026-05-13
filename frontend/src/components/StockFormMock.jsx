@@ -41,7 +41,11 @@ function sleep(ms) {
 }
 
 function getTodayDate() {
-  return new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export default function StockFormMock({ onResult, onLoading, onStatus, onAgentProgress }) {
@@ -129,12 +133,12 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
         <input
           style={inputBase('ticker')}
           value={ticker}
-          onChange={e => setTicker(e.target.value.toUpperCase())}
+          onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5))}
           onFocus={() => setFocused('ticker')}
           onBlur={() => setFocused(null)}
           placeholder="NVDA / AAPL / TSLA / ERROR"
           required
-          maxLength={8}
+          maxLength={5}
         />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
           {[...popularTickers, 'ERROR'].map(t => (
