@@ -57,8 +57,14 @@ def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int, request_
     )
 
     config = build_tradingagents_config(max_debate_rounds=max_debate_rounds)
-    ta = TradingAgentsGraph(debug=False, config=config)
-    final_state, _ = ta.propagate(ticker, trade_date)
+
+    if config.get("analysis_mode", "balanced") == "balanced":
+        from tradingagents.pipeline_balanced import run_balanced_pipeline
+
+        final_state = run_balanced_pipeline(ticker, trade_date, config)
+    else:
+        ta = TradingAgentsGraph(debug=False, config=config)
+        final_state, _ = ta.propagate(ticker, trade_date)
 
     worker_logger.info(
         "Pipeline worker completed",
@@ -179,7 +185,7 @@ async def _run_pipeline_async(req: AnalysisRequest, request_id: str) -> dict:
 
 _AGENT_SEQUENCE = [
     ("market_analyst", "Market Analyst", "Fetching price data and technical indicators..."),
-    ("news_analyst", "News Researcher", "Scanning recent headlines and macro events..."),
+    ("news_analyst", "News + Social Analyst", "Scanning recent headlines, macro events, and sentiment signals..."),
     ("fundamentals", "Fundamentals Analyst", "Pulling financial statements and ratios..."),
     ("bull_researcher", "Bull Researcher", "Building the bullish investment case..."),
     ("bear_researcher", "Bear Researcher", "Building the bearish counterarguments..."),

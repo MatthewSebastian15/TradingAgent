@@ -26,7 +26,7 @@ DEFAULT_CONFIG = {
     # qwen3:4b pada hardware biasa biasanya selesai dalam 60-90 detik.
     # Naikkan ke 180 jika hardware kamu lambat, turunkan ke 60 jika cepat.
     "timeout": int(os.getenv("LLM_TIMEOUT_SECONDS", "60")),
-    "llm_max_retries": int(os.getenv("LLM_MAX_RETRIES", "3")),
+    "llm_max_retries": int(os.getenv("LLM_MAX_RETRIES", "1")),
     "llm_retry_base_delay": float(os.getenv("LLM_RETRY_BASE_DELAY", "1.5")),
     "llm_retry_max_delay": float(os.getenv("LLM_RETRY_MAX_DELAY", "30")),
     "circuit_breaker_failure_threshold": int(os.getenv("CIRCUIT_BREAKER_FAILURE_THRESHOLD", "5")),
@@ -36,14 +36,16 @@ DEFAULT_CONFIG = {
     "cache_ttl_seconds": int(os.getenv("CACHE_TTL_SECONDS", "900")),
     "cache_max_entries": int(os.getenv("CACHE_MAX_ENTRIES", "512")),
     "parallel_analysts": os.getenv("PARALLEL_ANALYSTS", "true").lower() == "true",
+    "analysis_mode": os.getenv("ANALYSIS_MODE", "balanced").lower(),
+    "max_gemini_calls": int(os.getenv("MAX_GEMINI_CALLS", "9")),
     
     "google_thinking_level": None,
     "openai_reasoning_effort": None,
     "anthropic_effort": None,
     "checkpoint_enabled": False,
     "output_language": "English",
-    "max_debate_rounds": int(os.getenv("MAX_DEBATE_ROUNDS", "3")),
-    "max_risk_discuss_rounds": int(os.getenv("MAX_RISK_DISCUSS_ROUNDS", "3")),
+    "max_debate_rounds": int(os.getenv("MAX_DEBATE_ROUNDS", "1")),
+    "max_risk_discuss_rounds": int(os.getenv("MAX_RISK_DISCUSS_ROUNDS", "1")),
     "adaptive_debate_enabled": os.getenv("ADAPTIVE_DEBATE_ENABLED", "true").lower() == "true",
     "debate_min_rounds": int(os.getenv("DEBATE_MIN_ROUNDS", "2")),
     "debate_confidence_gap": float(os.getenv("DEBATE_CONFIDENCE_GAP", "0.18")),

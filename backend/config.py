@@ -81,14 +81,16 @@ class BackendSettings:
     cors_origins: list[str] = field(default_factory=lambda: _csv("CORS_ORIGINS", "*"))
 
     llm_provider: str = os.getenv("LLM_PROVIDER", "google").strip().lower()
-    deep_think_llm: str = os.getenv("DEEP_THINK_LLM", os.getenv("DEEP_MODEL", "gemini-2.5-flash")).strip()
-    quick_think_llm: str = os.getenv("QUICK_THINK_LLM", os.getenv("QUICK_MODEL", "gemini-2.5-flash")).strip()
+    deep_think_llm: str = os.getenv("DEEP_THINK_LLM", os.getenv("DEEP_MODEL", "gemini-2.5-flash-lite")).strip()
+    quick_think_llm: str = os.getenv("QUICK_THINK_LLM", os.getenv("QUICK_MODEL", "gemini-2.5-flash-lite")).strip()
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", os.getenv("BACKEND_URL", "http://localhost:11434")).rstrip("/")
 
     pipeline_timeout_seconds: int = field(default_factory=lambda: _get_int("PIPELINE_TIMEOUT_SECONDS", 600, 30))
     process_pool_workers: int = field(default_factory=lambda: _get_int("PROCESS_POOL_WORKERS", min(4, os.cpu_count() or 2), 1, 16))
-    default_max_debate_rounds: int = field(default_factory=lambda: _get_int("MAX_DEBATE_ROUNDS", 3, 1, 5))
-    max_risk_discuss_rounds: int = field(default_factory=lambda: _get_int("MAX_RISK_DISCUSS_ROUNDS", 3, 1, 5))
+    default_max_debate_rounds: int = field(default_factory=lambda: _get_int("MAX_DEBATE_ROUNDS", 1, 1, 5))
+    max_risk_discuss_rounds: int = field(default_factory=lambda: _get_int("MAX_RISK_DISCUSS_ROUNDS", 1, 1, 5))
+    analysis_mode: str = os.getenv("ANALYSIS_MODE", "balanced").strip().lower()
+    max_gemini_calls: int = field(default_factory=lambda: _get_int("MAX_GEMINI_CALLS", 9, 1, 26))
 
     request_rate_limit_per_minute: int = field(default_factory=lambda: _get_int("REQUEST_RATE_LIMIT_PER_MINUTE", 20, 1))
     stream_rate_limit_per_minute: int = field(default_factory=lambda: _get_int("STREAM_RATE_LIMIT_PER_MINUTE", 8, 1))
@@ -97,7 +99,7 @@ class BackendSettings:
     require_api_key_for_rate_limit: bool = field(default_factory=lambda: _get_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", False))
 
     llm_timeout_seconds: int = field(default_factory=lambda: _get_int("LLM_TIMEOUT_SECONDS", 60, 5))
-    llm_max_retries: int = field(default_factory=lambda: _get_int("LLM_MAX_RETRIES", 3, 0, 10))
+    llm_max_retries: int = field(default_factory=lambda: _get_int("LLM_MAX_RETRIES", 1, 0, 10))
     cache_ttl_seconds: int = field(default_factory=lambda: _get_int("CACHE_TTL_SECONDS", 900, 0))
     cache_max_entries: int = field(default_factory=lambda: _get_int("CACHE_MAX_ENTRIES", 512, 1))
 
@@ -119,6 +121,8 @@ class BackendSettings:
             "cache_max_entries": self.cache_max_entries,
             "max_debate_rounds": self.default_max_debate_rounds,
             "max_risk_discuss_rounds": self.max_risk_discuss_rounds,
+            "analysis_mode": self.analysis_mode,
+            "max_gemini_calls": self.max_gemini_calls,
         }
 
 
@@ -170,6 +174,12 @@ def validate_startup_config() -> list[str]:
         errors.append("DEEP_THINK_LLM must not be empty.")
     if not settings.quick_think_llm:
         errors.append("QUICK_THINK_LLM must not be empty.")
+
+    if settings.analysis_mode not in {"balanced", "classic"}:
+        errors.append("ANALYSIS_MODE must be either balanced or classic.")
+
+    if settings.analysis_mode == "balanced" and settings.max_gemini_calls != 9:
+        errors.append("Balanced mode is implemented as a fixed 9 Gemini-call pipeline. Set MAX_GEMINI_CALLS=9 or ANALYSIS_MODE=classic.")
 
     try:
         config = build_tradingagents_config()
