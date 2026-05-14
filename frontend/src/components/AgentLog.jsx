@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const agentSteps = [
   { id: 'market_analyst',    label: 'Market Analyst',       icon: '📊', color: '#00e5a0' },
-  { id: 'news_analyst',      label: 'News Researcher',      icon: '📰', color: '#60a5fa' },
+  { id: 'news_analyst',      label: 'News + Social Analyst', icon: '📰', color: '#60a5fa' },
   { id: 'fundamentals',      label: 'Fundamentals Analyst', icon: '📈', color: '#a78bfa' },
   { id: 'bull_researcher',   label: 'Bull Researcher',      icon: '🐂', color: '#34d399' },
   { id: 'bear_researcher',   label: 'Bear Researcher',      icon: '🐻', color: '#f87171' },
@@ -12,7 +12,7 @@ const agentSteps = [
   { id: 'portfolio_manager', label: 'Portfolio Manager',    icon: '🧠', color: '#c084fc' },
 ];
 
-// Time-based thresholds (seconds) matching backend estimates for gemini-2.5-flash.
+// Time-based thresholds (seconds) matching backend balanced mode estimates.
 // Used as fallback only when SSE progress events are not yet received.
 const STEP_THRESHOLDS = [0, 20, 45, 70, 90, 110, 125, 135, 160];
 
