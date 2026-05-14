@@ -10,126 +10,70 @@ const HISTORY_LIMIT = 10;
 function saveToHistory(result) {
   if (!result || result.error) return;
   try {
-    const raw     = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(HISTORY_KEY);
     const history = raw ? JSON.parse(raw) : [];
-    // Remove duplicate for same ticker + date
-    const filtered = history.filter(
-      h => !(h.ticker === result.ticker && h.trade_date === result.trade_date)
-    );
-    const updated = [
-      { ...result, saved_at: new Date().toISOString() },
-      ...filtered,
-    ].slice(0, HISTORY_LIMIT);
+    const filtered = history.filter(h => !(h.ticker === result.ticker && h.trade_date === result.trade_date));
+    const updated = [{ ...result, saved_at: new Date().toISOString() }, ...filtered].slice(0, HISTORY_LIMIT);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
   } catch (_) {}
 }
 
-function decisionColor(decision) {
-  if (decision === 'Buy')  return 'var(--accent)';
-  if (decision === 'Sell') return 'var(--red)';
-  return 'var(--amber)';
+function decisionStyle(d) {
+  if (d === 'Buy' || d === 'Overweight')  return 'text-bloomberg-green border-bloomberg-green';
+  if (d === 'Sell'|| d === 'Underweight') return 'text-bloomberg-red border-bloomberg-red';
+  return 'text-bloomberg-amber border-bloomberg-amber';
 }
 
-function HistorySidebar({ currentTicker, onSelect }) {
+function HistoryPanel({ currentTicker, onSelect }) {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(HISTORY_KEY);
       setHistory(raw ? JSON.parse(raw) : []);
-    } catch (_) {
-      setHistory([]);
-    }
-  }, [currentTicker]); // refresh when a new analysis completes
+    } catch { setHistory([]); }
+  }, [currentTicker]);
 
-  if (history.length === 0) return null;
+  if (!history.length) return null;
 
   return (
-    <div style={{
-      marginTop: 24,
-      background: 'var(--bg-card)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-lg)',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        padding: '14px 20px',
-        borderBottom: '1px solid var(--border-subtle)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-muted)',
-          letterSpacing: '0.1em',
-          textTransform: 'uppercase',
-        }}>
-          Recent Analyses
-        </span>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-muted)',
-        }}>
-          {history.length} / {HISTORY_LIMIT}
-        </span>
+    <div className="border border-bloomberg-border bg-bloomberg-card">
+      <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center justify-between bg-black">
+        <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">RECENT ANALYSES</span>
+        <span className="font-mono text-xs text-bloomberg-muted">{history.length}/{HISTORY_LIMIT}</span>
       </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div>
         {history.map((item, i) => (
           <button
             key={i}
             onClick={() => onSelect(item)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 20px',
-              background: 'none',
-              border: 'none',
-              borderBottom: i < history.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-              cursor: 'pointer',
-              textAlign: 'left',
-              transition: 'var(--transition)',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            className="w-full flex items-center justify-between px-4 py-3 border-b border-bloomberg-border last:border-b-0 hover:bg-bloomberg-surface transition-colors duration-150 text-left"
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-              }}>
-                {item.ticker}
-              </span>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                color: 'var(--text-muted)',
-              }}>
-                {item.trade_date}
+            <div>
+              <div className="font-mono text-sm font-semibold text-bloomberg-white">{item.ticker}</div>
+              <div className="font-mono text-xs text-bloomberg-muted">{item.trade_date}</div>
+            </div>
+            <div className="flex items-center gap-3">
+              {item.price_target && (
+                <span className="font-mono text-xs text-bloomberg-muted">${item.price_target}</span>
+              )}
+              <span className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(item.decision)}`}>
+                {(item.decision || 'N/A').toUpperCase()}
               </span>
             </div>
-            <span style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              fontWeight: 700,
-              color: decisionColor(item.decision),
-              background: `${decisionColor(item.decision)}18`,
-              border: `1px solid ${decisionColor(item.decision)}30`,
-              padding: '3px 10px',
-              borderRadius: 100,
-              letterSpacing: '0.06em',
-            }}>
-              {(item.decision || 'N/A').toUpperCase()}
-            </span>
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function StatusBar({ loading, status }) {
+  if (!loading) return null;
+  return (
+    <div className="border-t border-bloomberg-border px-4 py-2 bg-black flex items-center gap-2">
+      <span className="w-1.5 h-1.5 rounded-full bg-bloomberg-orange animate-pulse-dot flex-shrink-0" />
+      <span className="font-mono text-xs text-bloomberg-orange tracking-wider truncate">{status || 'RUNNING...'}</span>
     </div>
   );
 }
@@ -146,70 +90,67 @@ export default function Analysis() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
+    <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
 
-      <div style={{
-        maxWidth: 680,
-        margin: '0 auto',
-        padding: '48px 32px 80px',
-      }}>
-        <div style={{ marginBottom: 36 }}>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--text-muted)',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            marginBottom: 10,
-          }}>
-            Agent Analysis
+      <div className="flex" style={{ minHeight: 'calc(100vh - 68px)' }}>
+        {/* ── Left sidebar: form ── */}
+        <div className="w-80 flex-shrink-0 border-r border-bloomberg-border flex flex-col">
+          <div className="flex-1">
+            <div className="border-b border-bloomberg-border bg-bloomberg-card">
+              <StockForm
+                onResult={handleResult}
+                onLoading={setLoading}
+                onStatus={setStatus}
+                onAgentProgress={setAgentProgress}
+              />
+            </div>
+
+            {/* History */}
+            <div className="p-4">
+              <HistoryPanel
+                currentTicker={result?.ticker}
+                onSelect={item => { setResult(item); setLoading(false); }}
+              />
+            </div>
           </div>
-          <h2 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 28,
-            fontWeight: 700,
-            color: 'var(--text-primary)',
-            letterSpacing: '-0.5px',
-          }}>
-            Stock Analysis
-          </h2>
-          <p style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 14,
-            color: 'var(--text-secondary)',
-            marginTop: 8,
-            lineHeight: 1.6,
-          }}>
-            Nine AI agents will research, debate, assess risk, and return a final trade decision.
-          </p>
+
+          <StatusBar loading={loading} status={status} />
         </div>
 
-        <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '28px',
-          marginBottom: 24,
-        }}>
-          <StockForm
-            onResult={handleResult}
-            onLoading={setLoading}
-            onStatus={setStatus}
-            onAgentProgress={setAgentProgress}
-          />
+        {/* ── Right main panel ── */}
+        <div className="flex-1 overflow-y-auto">
+          {!loading && !result && (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+              <div className="font-display text-6xl font-bold text-bloomberg-border tracking-widest mb-4">
+                READY
+              </div>
+              <div className="font-mono text-sm text-bloomberg-muted tracking-wider max-w-xs">
+                Configure parameters on the left and execute analysis to receive a structured trade decision.
+              </div>
+              <div className="mt-8 grid grid-cols-3 gap-4 w-full max-w-md">
+                {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, i) => (
+                  <div key={step} className="border border-bloomberg-border p-3 text-center">
+                    <div className="font-mono text-2xl text-bloomberg-border mb-2">{i + 1}</div>
+                    <div className="font-mono text-xs text-bloomberg-muted tracking-wider">{step}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {loading && (
+            <div className="p-6">
+              <AgentLog status={status} agentProgress={agentProgress} />
+            </div>
+          )}
+
+          {result && !loading && (
+            <div className="p-6">
+              <ResultCard result={result} />
+            </div>
+          )}
         </div>
-
-        {loading && <AgentLog status={status} agentProgress={agentProgress} />}
-        {result && !loading && <ResultCard result={result} />}
-
-        <HistorySidebar
-          currentTicker={result?.ticker}
-          onSelect={item => {
-            setResult(item);
-            setLoading(false);
-          }}
-        />
       </div>
     </div>
   );

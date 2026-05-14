@@ -1,221 +1,70 @@
-/**
- * StockFormMock.jsx
- *
- * Testing-only version of StockForm.
- * Uses mockData.js so you can test UI without hitting the real backend.
- * Import this in a test page or replace StockForm temporarily during dev.
- *
- * NEVER import this in production pages (Analysis.jsx etc).
- */
 import React, { useState } from 'react';
-import {
-  MOCK_RESPONSE,
-  MOCK_SELL_RESPONSE,
-  MOCK_HOLD_RESPONSE,
-  MOCK_ERROR_RESPONSE,
-} from '../mockData';
-
-const popularTickers = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'NVDA', 'AAPL'];
+import { MOCK_RESPONSE, MOCK_SELL_RESPONSE, MOCK_HOLD_RESPONSE, MOCK_ERROR_RESPONSE } from '../mockData';
 
 const MOCK_MAP = {
-  'BBCA.JK': MOCK_RESPONSE,
-  'BBRI.JK': MOCK_HOLD_RESPONSE,
-  'TLKM.JK': MOCK_SELL_RESPONSE,
   NVDA: MOCK_RESPONSE,
-  TSLA: MOCK_SELL_RESPONSE,
   AAPL: MOCK_HOLD_RESPONSE,
+  TSLA: MOCK_SELL_RESPONSE,
   ERROR: MOCK_ERROR_RESPONSE,
 };
 
-const MOCK_STEPS = [
-  { agent_id: 'market_analyst',    agent_name: 'Market Analyst',       status_message: 'Fetching price data and technical indicators...' },
-  { agent_id: 'news_analyst',      agent_name: 'News Researcher',      status_message: 'Scanning recent headlines and macro events...' },
-  { agent_id: 'fundamentals',      agent_name: 'Fundamentals Analyst', status_message: 'Pulling financial statements and ratios...' },
-  { agent_id: 'bull_researcher',   agent_name: 'Bull Researcher',      status_message: 'Building the bullish investment case...' },
-  { agent_id: 'bear_researcher',   agent_name: 'Bear Researcher',      status_message: 'Building the bearish counterarguments...' },
-  { agent_id: 'research_manager',  agent_name: 'Research Manager',     status_message: 'Evaluating the debate and forming an investment plan...' },
-  { agent_id: 'trader',            agent_name: 'Trader',               status_message: 'Translating the plan into a transaction proposal...' },
-  { agent_id: 'risk_analysts',     agent_name: 'Risk Analysts',        status_message: 'Running risk debate: aggressive vs conservative vs neutral...' },
-  { agent_id: 'portfolio_manager', agent_name: 'Portfolio Manager',    status_message: 'Synthesizing all inputs into the final decision...' },
-];
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function getTodayDate() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 export default function StockFormMock({ onResult, onLoading, onStatus, onAgentProgress }) {
-  const [ticker, setTicker]   = useState('NVDA');
-  const [date, setDate]       = useState(getTodayDate());
-  const [focused, setFocused] = useState(null);
+  const [ticker, setTicker] = useState('NVDA');
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    onLoading(true);
-    onStatus('Initializing agents...');
+  function run() {
     onResult(null);
+    onLoading(true);
+    onStatus('Running mock pipeline...');
     if (onAgentProgress) onAgentProgress(null);
 
-    try {
-      for (const step of MOCK_STEPS) {
-        onStatus(step.status_message);
-        if (onAgentProgress) onAgentProgress(step);
-        await sleep(700);
-      }
-      const mockData = MOCK_MAP[ticker] || MOCK_RESPONSE;
-      onResult(mockData);
-    } catch (err) {
-      onResult({ error: err.message });
-    } finally {
+    const agents = ['market_analyst','news_analyst','fundamentals','bull_researcher','bear_researcher','research_manager','trader','risk_analysts','portfolio_manager'];
+    agents.forEach((id, i) => {
+      setTimeout(() => {
+        if (onAgentProgress) onAgentProgress({ agent_id: id, agent_name: id.replace(/_/g,' ').toUpperCase(), status: 'started', status_message: `Running ${id}...` });
+        setTimeout(() => {
+          if (onAgentProgress) onAgentProgress({ agent_id: id, agent_name: id.replace(/_/g,' ').toUpperCase(), status: 'completed', status_message: `${id} complete` });
+        }, 600);
+      }, i * 800);
+    });
+
+    setTimeout(() => {
+      const res = MOCK_MAP[ticker] || MOCK_RESPONSE;
+      onResult(res);
       onLoading(false);
       onStatus('');
-    }
+    }, agents.length * 800 + 800);
   }
 
-  const inputBase = (name) => ({
-    background: 'var(--bg-input)',
-    border: `1px solid ${focused === name ? 'var(--accent)' : 'var(--border)'}`,
-    borderRadius: 'var(--radius-md)',
-    padding: '12px 16px',
-    color: 'var(--text-primary)',
-    fontSize: 14,
-    width: '100%',
-    fontFamily: 'var(--font-mono)',
-    fontWeight: 400,
-    outline: 'none',
-    transition: 'var(--transition)',
-    boxShadow: focused === name ? '0 0 0 3px var(--accent-dim)' : 'none',
-    WebkitAppearance: 'none',
-    appearance: 'none',
-  });
-
-  const labelStyle = {
-    display: 'block',
-    fontSize: 11,
-    fontFamily: 'var(--font-mono)',
-    color: 'var(--text-muted)',
-    marginBottom: 8,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
-    fontWeight: 500,
-  };
-
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-      {/* Mock mode indicator */}
-      <div style={{
-        background: 'rgba(255,179,64,0.08)',
-        border: '1px solid rgba(255,179,64,0.25)',
-        borderRadius: 'var(--radius-md)',
-        padding: '10px 14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-      }}>
-        <span style={{ fontSize: 13 }}>🧪</span>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 11,
-          color: 'var(--amber)',
-          letterSpacing: '0.06em',
-        }}>
-          MOCK MODE — BBCA.JK · BBRI.JK · TLKM.JK · NVDA · ERROR tersedia sebagai contoh
-        </span>
+    <div className="flex flex-col gap-0">
+      <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center gap-2 bg-bloomberg-amber-dim">
+        <span className="font-mono text-xs font-semibold text-bloomberg-amber tracking-wider">MOCK MODE</span>
+        <span className="font-mono text-xs text-bloomberg-muted">/ NO API CALL</span>
       </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <label style={labelStyle}>Ticker Symbol</label>
-        <input
-          style={inputBase('ticker')}
-          value={ticker}
-          onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 12))}
-          onFocus={() => setFocused('ticker')}
-          onBlur={() => setFocused(null)}
-          placeholder="BBCA.JK / BBRI.JK / TLKM.JK / ERROR"
-          required
-          maxLength={12}
-        />
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-          {[...popularTickers, 'ERROR'].map(t => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTicker(t)}
-              style={{
-                background: ticker === t ? 'var(--accent-dim)' : 'var(--bg-card)',
-                border: `1px solid ${ticker === t ? 'rgba(0,229,160,0.35)' : 'var(--border)'}`,
-                borderRadius: 'var(--radius-sm)',
-                padding: '4px 10px',
-                fontSize: 11,
-                fontFamily: 'var(--font-mono)',
-                color: t === 'ERROR'
-                  ? 'var(--red)'
-                  : ticker === t ? 'var(--accent)' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                transition: 'var(--transition)',
-                fontWeight: 500,
-              }}
-            >
-              {t}
-            </button>
-          ))}
+      <div className="p-4 flex flex-col gap-4">
+        <div>
+          <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">MOCK TICKER</label>
+          <select
+            value={ticker}
+            onChange={e => setTicker(e.target.value)}
+            className="w-full bg-black border border-bloomberg-border px-3 py-2.5 font-mono text-sm text-bloomberg-white focus:outline-none focus:border-bloomberg-orange"
+          >
+            <option value="NVDA" className="bg-black">NVDA — BUY signal</option>
+            <option value="AAPL" className="bg-black">AAPL — HOLD signal</option>
+            <option value="TSLA" className="bg-black">TSLA — SELL signal</option>
+            <option value="ERROR" className="bg-black">ERROR — error state</option>
+          </select>
+        </div>
+        <button
+          onClick={run}
+          className="w-full py-3 bg-bloomberg-amber text-black font-mono text-xs font-bold tracking-widest hover:bg-yellow-300 transition-colors"
+        >
+          ▶ RUN MOCK ANALYSIS
+        </button>
+        <div className="text-center font-mono text-xs text-bloomberg-muted tracking-wider">
+          SIMULATES FULL PIPELINE WITHOUT BACKEND
         </div>
       </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <label style={labelStyle}>Trade Date</label>
-        <input
-          style={{ ...inputBase('date'), colorScheme: 'dark' }}
-          type="date"
-          value={date}
-          onChange={e => setDate(e.target.value)}
-          onFocus={() => setFocused('date')}
-          onBlur={() => setFocused(null)}
-          required
-        />
-      </div>
-
-      <button
-        type="submit"
-        style={{
-          background: 'var(--amber)',
-          color: '#070a0f',
-          border: 'none',
-          padding: '14px 24px',
-          borderRadius: 'var(--radius-md)',
-          fontSize: 14,
-          fontWeight: 700,
-          fontFamily: 'var(--font-display)',
-          cursor: 'pointer',
-          letterSpacing: '0.03em',
-          transition: 'var(--transition)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          marginTop: 4,
-        }}
-      >
-        <span>🧪 Run Mock Analysis</span>
-      </button>
-
-      <p style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 11,
-        color: 'var(--text-muted)',
-        textAlign: 'center',
-        letterSpacing: '0.04em',
-      }}>
-        Mock mode: selesai dalam ~7 detik tanpa API call
-      </p>
-    </form>
+    </div>
   );
 }

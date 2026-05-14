@@ -1,115 +1,75 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const styles = {
-  nav: {
-    position: 'sticky',
-    top: 0,
-    zIndex: 100,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 32px',
-    height: 64,
-    backgroundColor: 'rgba(7, 10, 15, 0.85)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    borderBottom: '1px solid var(--border-subtle)',
-  },
-  logo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    textDecoration: 'none',
-    cursor: 'pointer',
-  },
-  logoIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 16,
-    boxShadow: '0 0 16px rgba(0, 229, 160, 0.3)',
-  },
-  logoText: {
-    fontFamily: 'var(--font-display)',
-    fontSize: 17,
-    fontWeight: 700,
-    color: 'var(--text-primary)',
-    letterSpacing: '-0.3px',
-  },
-  logoSub: {
-    fontFamily: 'var(--font-mono)',
-    fontSize: 10,
-    color: 'var(--accent)',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
-    fontWeight: 400,
-  },
-  navLinks: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  navLink: (active) => ({
-    padding: '6px 14px',
-    borderRadius: 'var(--radius-sm)',
-    fontSize: 13,
-    fontWeight: 500,
-    fontFamily: 'var(--font-display)',
-    color: active ? 'var(--accent)' : 'var(--text-secondary)',
-    background: active ? 'var(--accent-dim)' : 'transparent',
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'var(--transition)',
-    textDecoration: 'none',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-  }),
-  badge: {
-    background: 'var(--accent-dim)',
-    color: 'var(--accent)',
-    fontSize: 10,
-    fontFamily: 'var(--font-mono)',
-    fontWeight: 500,
-    padding: '2px 6px',
-    borderRadius: 4,
-    border: '1px solid rgba(0,229,160,0.2)',
-  },
-};
+function Clock() {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const pad = (n) => String(n).padStart(2, '0');
+  return (
+    <span className="text-bloomberg-orange font-mono text-xs tracking-wider">
+      {pad(time.getHours())}:{pad(time.getMinutes())}:{pad(time.getSeconds())} WIB
+    </span>
+  );
+}
 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const isHome = location.pathname === '/home';
+  const isAnalysis = location.pathname === '/analysis';
+
   return (
-    <nav style={styles.nav}>
-      <div style={styles.logo} onClick={() => navigate('/home')}>
-        <div style={styles.logoIcon}>⬡</div>
-        <div>
-          <div style={styles.logoText}>TradingAgents</div>
-          <div style={styles.logoSub}>Multi-Agent AI</div>
+    <nav className="sticky top-0 z-50 border-b border-bloomberg-border bg-bloomberg-bg">
+      {/* Top status bar */}
+      <div className="flex items-center justify-between px-4 h-7 border-b border-bloomberg-border bg-black">
+        <div className="flex items-center gap-4">
+          <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-widest">TRADINGAGENTS</span>
+          <span className="text-bloomberg-muted font-mono text-xs">MULTI-AGENT AI RESEARCH TERMINAL</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-bloomberg-green animate-pulse-dot" />
+            <span className="text-bloomberg-green font-mono text-xs">LIVE</span>
+          </span>
+          <Clock />
         </div>
       </div>
 
-      <div style={styles.navLinks}>
-        <button
-          style={styles.navLink(location.pathname === '/home')}
-          onClick={() => navigate('/home')}
-        >
-          Dashboard
-        </button>
-        <button
-          style={styles.navLink(location.pathname === '/analysis')}
-          onClick={() => navigate('/analysis')}
-        >
-          Analysis
-          <span style={styles.badge}>AI</span>
-        </button>
+      {/* Main nav */}
+      <div className="flex items-center justify-between px-4 h-10">
+        <div className="flex items-center gap-0">
+          {[
+            { label: 'DASHBOARD', path: '/home', active: isHome },
+            { label: 'ANALYSIS', path: '/analysis', active: isAnalysis },
+          ].map(({ label, path, active }) => (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              className={`
+                h-10 px-4 text-xs font-mono font-medium tracking-wider border-r border-bloomberg-border
+                transition-colors duration-150 relative
+                ${active
+                  ? 'bg-bloomberg-orange text-black'
+                  : 'text-bloomberg-muted hover:text-bloomberg-white hover:bg-bloomberg-surface'}
+              `}
+            >
+              {label}
+              {active && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-bloomberg-orange" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3 text-xs font-mono text-bloomberg-muted">
+          <span>9 AGENTS</span>
+          <span className="text-bloomberg-border">|</span>
+          <span>v2.0</span>
+        </div>
       </div>
     </nav>
   );
