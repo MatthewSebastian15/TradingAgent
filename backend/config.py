@@ -87,7 +87,7 @@ class BackendSettings:
 
     pipeline_timeout_seconds: int = field(default_factory=lambda: _get_int("PIPELINE_TIMEOUT_SECONDS", 600, 30))
     process_pool_workers: int = field(default_factory=lambda: _get_int("PROCESS_POOL_WORKERS", min(4, os.cpu_count() or 2), 1, 16))
-    default_max_debate_rounds: int = field(default_factory=lambda: _get_int("MAX_DEBATE_ROUNDS", 1, 1, 5))
+    default_max_debate_rounds: int = field(default_factory=lambda: _get_int("MAX_DEBATE_ROUNDS", 3, 1, 5))
     max_risk_discuss_rounds: int = field(default_factory=lambda: _get_int("MAX_RISK_DISCUSS_ROUNDS", 1, 1, 5))
     analysis_mode: str = os.getenv("ANALYSIS_MODE", "balanced").strip().lower()
     max_gemini_calls: int = field(default_factory=lambda: _get_int("MAX_GEMINI_CALLS", 9, 1, 26))

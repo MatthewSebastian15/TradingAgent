@@ -8,7 +8,34 @@ import multiprocessing
 from typing import Callable, Optional
 
 from fastapi import APIRouter, Request
-from sse_starlette.sse import EventSourceResponse
+
+try:
+    from sse_starlette.sse import EventSourceResponse
+except ModuleNotFoundError:  # pragma: no cover - exercised when optional dependency is absent
+    from starlette.responses import StreamingResponse
+
+    class EventSourceResponse(StreamingResponse):
+        """Small SSE-compatible fallback for local tests/dev.
+
+        Production should still install sse-starlette from requirements.txt.
+        This fallback prevents the API from failing at import time when the
+        optional package is not installed yet. Because naturally one missing
+        package should not burn down the whole app.
+        """
+
+        def __init__(self, content, *args, **kwargs):
+            async def encode_events():
+                async for item in content:
+                    if isinstance(item, dict):
+                        event = item.get("event")
+                        data = item.get("data", "")
+                        if event:
+                            yield f"event: {event}\n".encode("utf-8")
+                        yield f"data: {data}\n\n".encode("utf-8")
+                    else:
+                        yield str(item).encode("utf-8")
+
+            super().__init__(encode_events(), media_type="text/event-stream")
 
 from config import settings
 from errors import (

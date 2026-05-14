@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Callable, Optional, TypeVar
@@ -130,61 +130,85 @@ def _date_window(trade_date: str) -> tuple[str, str, str]:
 
 
 def collect_market_data(ticker: str, trade_date: str, config: dict[str, Any]) -> CollectedData:
-    """Collect all external data and classify data quality before LLM calls."""
+    """Collect external data in parallel and classify yfinance data quality.
+
+    Price, fundamentals, financial statements, news, insider activity, and
+    indicators are independent calls. Running them concurrently keeps the
+    balanced pipeline from behaving like a government queue with better logs.
+    """
     set_config(config)
     start_90, start_30, end = _date_window(trade_date)
 
     indicator_names = ["close_50_sma", "close_200_sma", "macd", "rsi", "atr"]
-    indicator_parts = []
+    tasks: dict[str, Callable[[], DataField]] = {
+        "price_data": lambda: _safe_data_field(
+            "price_data",
+            lambda: route_to_vendor("get_stock_data", ticker, start_90, end),
+            limit=14_000,
+        ),
+        "fundamentals": lambda: _safe_data_field(
+            "fundamentals",
+            lambda: route_to_vendor("get_fundamentals", ticker, trade_date),
+            limit=12_000,
+        ),
+        "balance_sheet": lambda: _safe_data_field(
+            "balance_sheet",
+            lambda: route_to_vendor("get_balance_sheet", ticker, "quarterly", trade_date),
+            limit=10_000,
+        ),
+        "cashflow": lambda: _safe_data_field(
+            "cashflow",
+            lambda: route_to_vendor("get_cashflow", ticker, "quarterly", trade_date),
+            limit=10_000,
+        ),
+        "income_statement": lambda: _safe_data_field(
+            "income_statement",
+            lambda: route_to_vendor("get_income_statement", ticker, "quarterly", trade_date),
+            limit=10_000,
+        ),
+        "company_news": lambda: _safe_data_field(
+            "company_news",
+            lambda: route_to_vendor("get_news", ticker, start_30, end),
+            limit=12_000,
+        ),
+        "global_news": lambda: _safe_data_field(
+            "global_news",
+            lambda: route_to_vendor("get_global_news", trade_date, 7, 10),
+            limit=8_000,
+        ),
+        "insider_transactions": lambda: _safe_data_field(
+            "insider_transactions",
+            lambda: route_to_vendor("get_insider_transactions", ticker),
+            limit=6_000,
+        ),
+    }
     for indicator in indicator_names:
-        indicator_parts.append(
-            _safe_data_field(
-                f"indicator:{indicator}",
-                lambda indicator=indicator: route_to_vendor("get_indicators", ticker, indicator, trade_date, 30),
-                limit=4_000,
-            )
+        tasks[f"indicator:{indicator}"] = lambda indicator=indicator: _safe_data_field(
+            f"indicator:{indicator}",
+            lambda indicator=indicator: route_to_vendor("get_indicators", ticker, indicator, trade_date, 30),
+            limit=4_000,
         )
 
-    price = _safe_data_field(
-        "price_data",
-        lambda: route_to_vendor("get_stock_data", ticker, start_90, end),
-        limit=14_000,
-    )
-    fundamentals = _safe_data_field(
-        "fundamentals",
-        lambda: route_to_vendor("get_fundamentals", ticker, trade_date),
-        limit=12_000,
-    )
-    balance_sheet = _safe_data_field(
-        "balance_sheet",
-        lambda: route_to_vendor("get_balance_sheet", ticker, "quarterly", trade_date),
-        limit=10_000,
-    )
-    cashflow = _safe_data_field(
-        "cashflow",
-        lambda: route_to_vendor("get_cashflow", ticker, "quarterly", trade_date),
-        limit=10_000,
-    )
-    income_statement = _safe_data_field(
-        "income_statement",
-        lambda: route_to_vendor("get_income_statement", ticker, "quarterly", trade_date),
-        limit=10_000,
-    )
-    company_news = _safe_data_field(
-        "company_news",
-        lambda: route_to_vendor("get_news", ticker, start_30, end),
-        limit=12_000,
-    )
-    global_news = _safe_data_field(
-        "global_news",
-        lambda: route_to_vendor("get_global_news", trade_date, 7, 10),
-        limit=8_000,
-    )
-    insider_transactions = _safe_data_field(
-        "insider_transactions",
-        lambda: route_to_vendor("get_insider_transactions", ticker),
-        limit=6_000,
-    )
+    results: dict[str, DataField] = {}
+    with ThreadPoolExecutor(max_workers=min(12, len(tasks)), thread_name_prefix="balanced-data") as pool:
+        futures = {pool.submit(func): name for name, func in tasks.items()}
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                results[name] = future.result()
+            except Exception as exc:
+                logger.warning("Balanced pipeline data future failed for %s: %s", name, exc)
+                results[name] = DataField(value=f"{name} unavailable: {exc}", status="missing", warning=f"{name} unavailable: {exc}")
+
+    price = results["price_data"]
+    fundamentals = results["fundamentals"]
+    balance_sheet = results["balance_sheet"]
+    cashflow = results["cashflow"]
+    income_statement = results["income_statement"]
+    company_news = results["company_news"]
+    global_news = results["global_news"]
+    insider_transactions = results["insider_transactions"]
+    indicator_parts = [results[f"indicator:{indicator}"] for indicator in indicator_names]
 
     warnings: list[str] = []
     for item in [price, fundamentals, balance_sheet, cashflow, income_statement, company_news, global_news, insider_transactions, *indicator_parts]:
@@ -249,7 +273,6 @@ def collect_market_data(ticker: str, trade_date: str, config: dict[str, Any]) ->
         insider_transactions=insider_transactions.value,
         data_quality=data_quality,
     )
-
 
 def _provider_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
