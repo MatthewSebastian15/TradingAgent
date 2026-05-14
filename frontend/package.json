@@ -1,32 +1,31 @@
 {
-  "name": "tradingagent-frontend",
+  "name": "tradingagents-frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "start": "vite --host 0.0.0.0 --port 3000",
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "test": "vitest --environment jsdom"
+  },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
-    "axios": "^1.16.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.0",
-    "vite": "^5.4.11"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "vite": "^5.4.21"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^13.5.0",
-    "autoprefixer": "^10.5.0",
-    "jsdom": "^27.2.0",
-    "postcss": "^8.5.14",
-    "tailwindcss": "^3.4.19",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "autoprefixer": "^10.4.21",
+    "jsdom": "^25.0.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
     "vitest": "^2.1.9"
-  },
-  "scripts": {
-    "start": "vite --host 0.0.0.0",
-    "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0",
-    "test": "vitest --environment jsdom"
   }
 }

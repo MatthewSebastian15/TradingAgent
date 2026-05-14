@@ -1,7 +1,13 @@
 import React, { useState, useRef } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_API_KEY || '';
+
+function buildApiUrl(path) {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const base = API_URL || 'http://localhost:8000';
+  return base.endsWith('/api') ? `${base}${cleanPath}` : `${base}/api${cleanPath}`;
+}
 const DEFAULT_DEBATE_ROUNDS = clampRounds(import.meta.env.VITE_DEFAULT_MAX_DEBATE_ROUNDS || 1);
 
 const IDX_TICKERS = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'];
@@ -102,7 +108,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const res = await fetch(`${API_URL}/api/analyze/stream`, {
+    const res = await fetch(buildApiUrl('/analyze/stream'), {
       method: 'POST',
       headers: buildHeaders(),
       body: JSON.stringify({ ticker: ticker.trim().toUpperCase(), trade_date: date, max_debate_rounds: rounds }),
