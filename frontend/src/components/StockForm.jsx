@@ -4,7 +4,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const API_KEY = process.env.REACT_APP_API_KEY || '';
 const DEFAULT_DEBATE_ROUNDS = clampDebateRounds(process.env.REACT_APP_DEFAULT_MAX_DEBATE_ROUNDS || 3);
 
-const popularTickers = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL'];
+const popularTickers = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'NVDA', 'AAPL'];
 
 function clampDebateRounds(value) {
   const parsed = Number(value);
@@ -78,8 +78,8 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
 
   function validateForm() {
     const normalizedTicker = ticker.trim().toUpperCase();
-    if (!/^[A-Z]{1,5}$/.test(normalizedTicker)) {
-      return 'Ticker harus 1 sampai 5 huruf A-Z. Backend-nya sudah ketat, jadi frontend ikut disiplin.';
+    if (!/^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$/.test(normalizedTicker)) {
+      return 'Ticker harus memakai format Yahoo Finance, contoh: BBCA.JK, BBRI.JK, TLKM.JK, AAPL, BRK-B, atau 0700.HK.';
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return 'Trade date harus memakai format YYYY-MM-DD.';
@@ -219,13 +219,13 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
         <input
           style={inputBase('ticker')}
           value={ticker}
-          onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5))}
+          onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 12))}
           onFocus={() => setFocused('ticker')}
           onBlur={() => setFocused(null)}
-          placeholder="e.g. NVDA"
+          placeholder="e.g. BBCA.JK"
           required
-          maxLength={5}
-          pattern="[A-Z]{1,5}"
+          maxLength={12}
+          pattern="[A-Z0-9]{1,10}([.-][A-Z0-9]{1,5})?"
         />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
           {popularTickers.map(t => (

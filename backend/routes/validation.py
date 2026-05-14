@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from config import settings
 from errors import BadRequestError
 
-_TICKER_RE = re.compile(r"^[A-Z]{1,5}$")
+_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$")
 
 
 class AnalysisRequest(BaseModel):
@@ -30,7 +30,7 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     errors: dict[str, str] = {}
 
     if not isinstance(ticker, str) or not _TICKER_RE.fullmatch(ticker):
-        errors["ticker"] = "Ticker must contain only uppercase A-Z letters and be 1 to 5 characters long."
+        errors["ticker"] = "Ticker must be a Yahoo Finance compatible symbol, for example AAPL, BBCA.JK, BBRI.JK, TLKM.JK, BRK-B, or 0700.HK."
 
     if not isinstance(trade_date, str):
         errors["trade_date"] = "Trade date must use YYYY-MM-DD format."
