@@ -388,25 +388,6 @@ Returns HTTP 429 if the per-IP concurrent limit is reached. Returns HTTP 504 on 
 
 ---
 
-## Troubleshooting
-
-**Backend exits immediately on startup**
-The startup validator found a missing API key or unwritable directory. Read the `STARTUP CONFIG ERROR` lines in the logs and fix each item.
-
-**`429 RESOURCE_EXHAUSTED` in the result**
-You hit the Gemini rate limit. The backend retries automatically. If the error persists, wait 60 seconds and try again, or reduce `max_debate_rounds` to 1.
-
-**Pipeline timeout after 600 seconds**
-The model is too slow or the API is under heavy load. Try `gemini-2.5-flash` or reduce `max_debate_rounds` to 1.
-
-**Frontend shows no live updates**
-The SSE connection is working but no `progress` events arrived before the result. This happens when the backend is very fast or the first event is delayed. The timer fallback in `AgentLog` keeps the UI animated.
-
-**Indonesian stock shows no data**
-Make sure you append `.JK` to the ticker. For example, use `BBCA.JK` not `BBCA`.
-
----
-
 ## Credits
 
 - Trading engine: [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents/tree/main)
