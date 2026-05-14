@@ -119,3 +119,8 @@ def stream_policy() -> RateLimitPolicy:
 
 def limit_request(request: Request, policy: RateLimitPolicy) -> RateLimitLease:
     return RateLimitLease(get_client_identifier(request), policy)
+
+
+def reset_rate_limiter_for_tests() -> None:
+    """Clear in-memory limiter state for deterministic tests."""
+    _states.clear()
