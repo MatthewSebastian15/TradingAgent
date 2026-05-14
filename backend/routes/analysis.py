@@ -5,7 +5,7 @@ import concurrent.futures
 import json
 import logging
 import multiprocessing
-from typing import Optional
+from typing import Callable, Optional
 
 from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
@@ -75,6 +75,53 @@ def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int, request_
             "trade_date": trade_date,
         },
     )
+
+    full_decision: str = final_state.get("final_trade_decision", "")
+    pd_obj: Optional[PortfolioDecision] = final_state.get("portfolio_decision")
+    return _parse_final_result(full_decision, pd_obj, PortfolioRating)
+
+
+def _run_pipeline_with_progress(
+    ticker: str,
+    trade_date: str,
+    max_debate_rounds: int,
+    request_id: str,
+    progress_callback: Optional[Callable[[dict], None]] = None,
+) -> dict:
+    """Run pipeline in-process so SSE can receive real callback events."""
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
+    from config import build_tradingagents_config
+
+    config = build_tradingagents_config(max_debate_rounds=max_debate_rounds)
+
+    if config.get("analysis_mode", "balanced") == "balanced":
+        from tradingagents.pipeline_balanced import run_balanced_pipeline
+
+        final_state = run_balanced_pipeline(ticker, trade_date, config, progress_callback=progress_callback)
+    else:
+        # Classic graph mode does not expose per-agent callbacks yet. Emit one
+        # truthful coarse event instead of fake per-agent completion.
+        if progress_callback:
+            progress_callback(
+                {
+                    "agent_id": "classic_graph",
+                    "agent_name": "Classic TradingAgents Graph",
+                    "status": "started",
+                    "status_message": "Classic graph pipeline is running...",
+                }
+            )
+        ta = TradingAgentsGraph(debug=False, config=config)
+        final_state, _ = ta.propagate(ticker, trade_date)
+        if progress_callback:
+            progress_callback(
+                {
+                    "agent_id": "classic_graph",
+                    "agent_name": "Classic TradingAgents Graph",
+                    "status": "completed",
+                    "status_message": "Classic graph pipeline completed.",
+                }
+            )
 
     full_decision: str = final_state.get("final_trade_decision", "")
     pd_obj: Optional[PortfolioDecision] = final_state.get("portfolio_decision")
@@ -265,67 +312,89 @@ async def _stream_progress_and_result(
     req: AnalysisRequest,
     request_id: str,
 ):
-    """Yield progress events while the shared analysis runner works."""
-    task = asyncio.create_task(_execute_analysis(request, req, request_id, stream_policy()))
-    thresholds = settings.timing.as_thresholds()
-    agent_map = {agent[0]: agent for agent in _AGENT_SEQUENCE}
-    elapsed = 0
-    threshold_idx = 0
+    """Yield real progress events from the pipeline callback, then result."""
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[dict] = asyncio.Queue()
 
-    first = agent_map[_AGENT_SEQUENCE[0][0]]
-    yield _sse_event(
-        "progress",
-        {
+    def progress_callback(event: dict) -> None:
+        payload = {
             "request_id": request_id,
-            "agent_id": first[0],
-            "agent_name": first[1],
-            "status_message": first[2],
-            "elapsed": 0,
-        },
-    )
+            "ticker": req.ticker,
+            "trade_date": req.trade_date,
+            **event,
+        }
+        loop.call_soon_threadsafe(queue.put_nowait, {"type": "progress", "payload": payload})
 
+    def run() -> dict:
+        return _run_pipeline_with_progress(
+            req.ticker,
+            req.trade_date,
+            req.max_debate_rounds,
+            request_id,
+            progress_callback,
+        )
+
+    async def runner() -> None:
+        try:
+            async with limit_request(request, stream_policy()):
+                result_fields = await asyncio.wait_for(
+                    asyncio.to_thread(run),
+                    timeout=settings.pipeline_timeout_seconds,
+                )
+            payload = _response_payload(request_id, req.ticker, req.trade_date, result_fields)
+            await queue.put({"type": "result", "payload": payload})
+        except asyncio.TimeoutError as exc:
+            await queue.put({"type": "error", "payload": error_payload(PipelineTimeoutError(settings.pipeline_timeout_seconds))})
+        except Exception as exc:
+            if isinstance(exc, ApiError):
+                payload = error_payload(exc)
+            else:
+                payload = {
+                    "request_id": request_id,
+                    "error": {
+                        "code": "PIPELINE_FAILED",
+                        "message": sanitize_message("Analysis failed. Check backend logs with the request_id."),
+                    },
+                }
+                logger.error("Streaming pipeline failed", extra={"event": "streaming_pipeline_failed", "request_id": request_id}, exc_info=True)
+            await queue.put({"type": "error", "payload": payload})
+
+    task = asyncio.create_task(runner())
     try:
-        while not task.done():
-            await asyncio.sleep(1)
-            elapsed += 1
+        yield _sse_event(
+            "progress",
+            {
+                "request_id": request_id,
+                "ticker": req.ticker,
+                "trade_date": req.trade_date,
+                "agent_id": "pipeline",
+                "agent_name": "Analysis Pipeline",
+                "status": "started",
+                "status_message": "Starting analysis pipeline...",
+            },
+        )
 
-            if threshold_idx < len(thresholds) - 1:
-                _, threshold_sec = thresholds[threshold_idx]
-                if elapsed >= threshold_sec:
-                    threshold_idx += 1
-                    active_id = thresholds[threshold_idx][0]
-                    agent = agent_map[active_id]
-                    yield _sse_event(
-                        "progress",
-                        {
-                            "request_id": request_id,
-                            "agent_id": agent[0],
-                            "agent_name": agent[1],
-                            "status_message": agent[2],
-                            "elapsed": elapsed,
-                        },
-                    )
-
+        while True:
             if await request.is_disconnected():
                 task.cancel()
                 logger.info(
                     "SSE client disconnected",
-                    extra={
-                        "event": "sse_client_disconnected",
-                        "request_id": request_id,
-                        "ticker": req.ticker,
-                        "trade_date": req.trade_date,
-                    },
+                    extra={"event": "sse_client_disconnected", "request_id": request_id, "ticker": req.ticker},
                 )
                 return
 
-        payload = await task
-        yield _sse_event("result", payload)
-    except asyncio.CancelledError:
-        task.cancel()
-        raise
-    except Exception as exc:
-        yield _sse_error(exc)
+            try:
+                item = await asyncio.wait_for(queue.get(), timeout=0.5)
+            except asyncio.TimeoutError:
+                continue
+
+            yield _sse_event(item["type"], item["payload"])
+            if item["type"] in {"result", "error"}:
+                return
+    finally:
+        if not task.done():
+            task.cancel()
+
 
 
 # ---------------------------------------------------------------------------

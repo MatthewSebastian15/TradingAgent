@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Callable, Optional, TypeVar
@@ -311,16 +312,82 @@ def _risk_to_markdown(report: RiskCommitteeReport) -> str:
     ])
 
 
-def run_balanced_pipeline(ticker: str, trade_date: str, config: dict[str, Any]) -> dict[str, Any]:
-    """Run the balanced 9-Gemini-call pipeline and return classic-compatible state."""
+
+ProgressCallback = Callable[[dict[str, Any]], None]
+
+
+_AGENT_LABELS = {
+    "data_collection": "Data Collection",
+    "market_analyst": "Market Analyst",
+    "news_analyst": "News + Social Analyst",
+    "fundamentals": "Fundamentals Analyst",
+    "bull_researcher": "Bull Researcher",
+    "bear_researcher": "Bear Researcher",
+    "research_manager": "Research Manager",
+    "trader": "Trader",
+    "risk_analysts": "Risk Analysts",
+    "portfolio_manager": "Portfolio Manager",
+}
+
+
+def _emit_progress(callback: Optional[ProgressCallback], agent_id: str, status: str, message: str) -> None:
+    if callback is None:
+        return
+    try:
+        callback(
+            {
+                "agent_id": agent_id,
+                "agent_name": _AGENT_LABELS.get(agent_id, agent_id.replace("_", " ").title()),
+                "status": status,
+                "status_message": message,
+                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            }
+        )
+    except Exception as exc:
+        logger.debug("Progress callback failed for %s: %s", agent_id, exc)
+
+
+def _run_tracked(callback: Optional[ProgressCallback], agent_id: str, message: str, func: Callable[[], T]) -> T:
+    _emit_progress(callback, agent_id, "started", message)
+    try:
+        result = func()
+    except Exception:
+        _emit_progress(callback, agent_id, "failed", f"{_AGENT_LABELS.get(agent_id, agent_id)} failed.")
+        raise
+    _emit_progress(callback, agent_id, "completed", f"{_AGENT_LABELS.get(agent_id, agent_id)} completed.")
+    return result
+
+
+def run_balanced_pipeline(
+    ticker: str,
+    trade_date: str,
+    config: dict[str, Any],
+    progress_callback: Optional[ProgressCallback] = None,
+) -> dict[str, Any]:
+    """Run the balanced 9-call pipeline and return classic-compatible state.
+
+    The first three analyst calls run in parallel after deterministic data
+    collection. The optional progress callback emits real agent start/completed
+    events for the SSE endpoint instead of pretending a stopwatch is an agent.
+    """
     set_config(config)
     quick_llm, deep_llm = _create_llms(config)
-    data = collect_market_data(ticker, trade_date, config)
+    data = _run_tracked(
+        progress_callback,
+        "data_collection",
+        "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
+        lambda: collect_market_data(ticker, trade_date, config),
+    )
 
-    market_report = _invoke_once(
-        quick_llm,
-        AnalystReport,
-        f"""
+    def build_market_report() -> AnalystReport:
+        return _run_tracked(
+            progress_callback,
+            "market_analyst",
+            "Market Analyst is reading price action and technical indicators...",
+            lambda: _invoke_once(
+                quick_llm,
+                AnalystReport,
+                f"""
 You are the Market Analyst for {ticker} on {trade_date}.
 Use only the supplied price and technical data. Produce a practical technical/market report.
 Focus on trend, momentum, volatility, volume, support/resistance, and what the setup implies.
@@ -331,14 +398,20 @@ PRICE DATA:
 TECHNICAL INDICATORS:
 {data.technical_indicators}
 """,
-        _fallback_report("Market Analyst Report", f"Market data for {ticker} was collected, but the model did not return a complete market view."),
-        "Market Analyst",
-    )
+                _fallback_report("Market Analyst Report", f"Market data for {ticker} was collected, but the model did not return a complete market view."),
+                "Market Analyst",
+            ),
+        )
 
-    news_social_report = _invoke_once(
-        quick_llm,
-        AnalystReport,
-        f"""
+    def build_news_social_report() -> AnalystReport:
+        return _run_tracked(
+            progress_callback,
+            "news_analyst",
+            "News + Social Analyst is scanning company news, macro news, and insider activity...",
+            lambda: _invoke_once(
+                quick_llm,
+                AnalystReport,
+                f"""
 You are the combined News and Social Sentiment Analyst for {ticker} on {trade_date}.
 Use the company news, macro news, and insider activity. Produce a sentiment and catalyst report.
 Separate company-specific catalysts from broad market/macroeconomic pressure.
@@ -352,14 +425,20 @@ GLOBAL/MACRO NEWS:
 INSIDER TRANSACTIONS:
 {data.insider_transactions}
 """,
-        _fallback_report("News and Social Sentiment Report", f"News and sentiment data for {ticker} was collected, but the model did not return a complete sentiment view."),
-        "News + Social Analyst",
-    )
+                _fallback_report("News and Social Sentiment Report", f"News and sentiment data for {ticker} was collected, but the model did not return a complete sentiment view."),
+                "News + Social Analyst",
+            ),
+        )
 
-    fundamentals_report = _invoke_once(
-        quick_llm,
-        AnalystReport,
-        f"""
+    def build_fundamentals_report() -> AnalystReport:
+        return _run_tracked(
+            progress_callback,
+            "fundamentals",
+            "Fundamentals Analyst is reviewing financial statements and ratios...",
+            lambda: _invoke_once(
+                quick_llm,
+                AnalystReport,
+                f"""
 You are the Fundamentals Analyst for {ticker} on {trade_date}.
 Use only the supplied company fundamentals and financial statements.
 Focus on revenue quality, profitability, balance sheet strength, cash flow, valuation signals, and financial risk.
@@ -377,15 +456,24 @@ CASH FLOW:
 INCOME STATEMENT:
 {data.income_statement}
 """,
-        _fallback_report("Fundamentals Analyst Report", f"Fundamental data for {ticker} was collected, but the model did not return a complete fundamental view."),
-        "Fundamentals Analyst",
-    )
+                _fallback_report("Fundamentals Analyst Report", f"Fundamental data for {ticker} was collected, but the model did not return a complete fundamental view."),
+                "Fundamentals Analyst",
+            ),
+        )
+
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="balanced-analyst") as pool:
+        market_future = pool.submit(build_market_report)
+        news_future = pool.submit(build_news_social_report)
+        fundamentals_future = pool.submit(build_fundamentals_report)
+        market_report = market_future.result()
+        news_social_report = news_future.result()
+        fundamentals_report = fundamentals_future.result()
 
     market_md = _report_to_markdown(market_report)
     news_social_md = _report_to_markdown(news_social_report)
     fundamentals_md = _report_to_markdown(fundamentals_report)
 
-    bull = _invoke_once(
+    bull = _run_tracked(progress_callback, "bull_researcher", "Bull Researcher is building the upside case...", lambda: _invoke_once(
         quick_llm,
         DebateArgument,
         f"""
@@ -411,9 +499,9 @@ FUNDAMENTALS REPORT:
             consensus_signal=False,
         ),
         "Bull Researcher",
-    )
+    ))
 
-    bear = _invoke_once(
+    bear = _run_tracked(progress_callback, "bear_researcher", "Bear Researcher is challenging the thesis...", lambda: _invoke_once(
         quick_llm,
         DebateArgument,
         f"""
@@ -442,14 +530,14 @@ BULL CASE TO CHALLENGE:
             consensus_signal=False,
         ),
         "Bear Researcher",
-    )
+    ))
 
     debate_md = "\n\n".join([
         render_debate_argument(bull, "Bull Researcher"),
         render_debate_argument(bear, "Bear Researcher"),
     ])
 
-    research_plan = _invoke_once(
+    research_plan = _run_tracked(progress_callback, "research_manager", "Research Manager is weighing bull and bear arguments...", lambda: _invoke_once(
         deep_llm,
         ResearchPlanLite,
         f"""
@@ -476,10 +564,10 @@ BULL/BEAR DEBATE:
             strategic_actions="Avoid new exposure until data quality, model output, and key risk/reward assumptions are reviewed.",
         ),
         "Research Manager",
-    )
+    ))
     investment_plan = _research_plan_to_markdown(research_plan)
 
-    trader_proposal = _invoke_once(
+    trader_proposal = _run_tracked(progress_callback, "trader", "Trader is turning the plan into trade execution guidance...", lambda: _invoke_once(
         quick_llm,
         TraderProposal,
         f"""
@@ -502,10 +590,10 @@ RESEARCH PLAN:
             position_sizing="0% new allocation until reviewed.",
         ),
         "Trader",
-    )
+    ))
     trader_plan = render_trader_proposal(trader_proposal)
 
-    risk_report = _invoke_once(
+    risk_report = _run_tracked(progress_callback, "risk_analysts", "Risk Analysts are checking sizing, downside, and invalidation triggers...", lambda: _invoke_once(
         quick_llm,
         RiskCommitteeReport,
         f"""
@@ -539,10 +627,10 @@ TRADER PROPOSAL:
             confidence=0.35,
         ),
         "Risk Committee",
-    )
+    ))
     risk_md = _risk_to_markdown(risk_report)
 
-    portfolio_decision = _invoke_once(
+    portfolio_decision = _run_tracked(progress_callback, "portfolio_manager", "Portfolio Manager is preparing the final dashboard decision...", lambda: _invoke_once(
         deep_llm,
         PortfolioDecision,
         f"""
@@ -593,7 +681,7 @@ RISK COMMITTEE REPORT:
             time_horizon="Review required",
         ),
         "Portfolio Manager",
-    )
+    ))
 
     final_decision = render_pm_decision(portfolio_decision)
 
