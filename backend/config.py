@@ -159,16 +159,44 @@ def validate_startup_config() -> list[str]:
     errors: list[str] = []
 
     provider = settings.llm_provider
-    supported = {"google", "openai", "anthropic", "ollama"}
+    supported = {
+        "anthropic",
+        "azure",
+        "deepseek",
+        "glm",
+        "google",
+        "ollama",
+        "openai",
+        "openrouter",
+        "qwen",
+        "xai",
+    }
     if provider not in supported:
         errors.append(f"LLM_PROVIDER must be one of: {', '.join(sorted(supported))}.")
 
-    if provider == "google" and not _has_any_env(("GOOGLE_API_KEY", "GEMINI_API_KEY")):
-        errors.append("GOOGLE_API_KEY or GEMINI_API_KEY is required when LLM_PROVIDER=google.")
-    if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
-        errors.append("OPENAI_API_KEY is required when LLM_PROVIDER=openai.")
-    if provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
-        errors.append("ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic.")
+    provider_key_requirements: dict[str, tuple[tuple[str, ...], str]] = {
+        "google": (("GOOGLE_API_KEY", "GEMINI_API_KEY"), "GOOGLE_API_KEY or GEMINI_API_KEY is required when LLM_PROVIDER=google."),
+        "openai": (("OPENAI_API_KEY",), "OPENAI_API_KEY is required when LLM_PROVIDER=openai."),
+        "anthropic": (("ANTHROPIC_API_KEY",), "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic."),
+        "deepseek": (("DEEPSEEK_API_KEY",), "DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek."),
+        "xai": (("XAI_API_KEY",), "XAI_API_KEY is required when LLM_PROVIDER=xai."),
+        "qwen": (("DASHSCOPE_API_KEY", "QWEN_API_KEY"), "DASHSCOPE_API_KEY or QWEN_API_KEY is required when LLM_PROVIDER=qwen."),
+        "glm": (("ZHIPU_API_KEY", "GLM_API_KEY"), "ZHIPU_API_KEY or GLM_API_KEY is required when LLM_PROVIDER=glm."),
+        "openrouter": (("OPENROUTER_API_KEY",), "OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter."),
+    }
+
+    if provider in provider_key_requirements:
+        env_names, message = provider_key_requirements[provider]
+        if not _has_any_env(env_names):
+            errors.append(message)
+
+    if provider == "azure":
+        if not os.getenv("AZURE_OPENAI_API_KEY"):
+            errors.append("AZURE_OPENAI_API_KEY is required when LLM_PROVIDER=azure.")
+        if not os.getenv("AZURE_OPENAI_ENDPOINT"):
+            errors.append("AZURE_OPENAI_ENDPOINT is required when LLM_PROVIDER=azure.")
+        if not os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME") and not settings.deep_think_llm:
+            errors.append("AZURE_OPENAI_DEPLOYMENT_NAME or DEEP_THINK_LLM is required when LLM_PROVIDER=azure.")
 
     if not settings.deep_think_llm:
         errors.append("DEEP_THINK_LLM must not be empty.")
@@ -179,7 +207,7 @@ def validate_startup_config() -> list[str]:
         errors.append("ANALYSIS_MODE must be either balanced or classic.")
 
     if settings.analysis_mode == "balanced" and settings.max_gemini_calls != 9:
-        errors.append("Balanced mode is implemented as a fixed 9 Gemini-call pipeline. Set MAX_GEMINI_CALLS=9 or ANALYSIS_MODE=classic.")
+        errors.append("Balanced mode is implemented as a fixed 9 LLM-call pipeline. Set MAX_GEMINI_CALLS=9 or ANALYSIS_MODE=classic.")
 
     try:
         config = build_tradingagents_config()

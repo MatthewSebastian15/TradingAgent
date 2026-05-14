@@ -132,11 +132,11 @@ _PASSTHROUGH_KWARGS = (
 
 # Provider base URLs and API key env vars
 _PROVIDER_CONFIG = {
-    "xai": ("https://api.x.ai/v1", "XAI_API_KEY"),
-    "deepseek": ("https://api.deepseek.com", "DEEPSEEK_API_KEY"),
-    "qwen": ("https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "DASHSCOPE_API_KEY"),
-    "glm": ("https://api.z.ai/api/paas/v4/", "ZHIPU_API_KEY"),
-    "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
+    "xai": ("https://api.x.ai/v1", ("XAI_API_KEY",)),
+    "deepseek": ("https://api.deepseek.com", ("DEEPSEEK_API_KEY",)),
+    "qwen": ("https://dashscope-intl.aliyuncs.com/compatible-mode/v1", ("DASHSCOPE_API_KEY", "QWEN_API_KEY")),
+    "glm": ("https://api.z.ai/api/paas/v4/", ("ZHIPU_API_KEY", "GLM_API_KEY")),
+    "openrouter": ("https://openrouter.ai/api/v1", ("OPENROUTER_API_KEY",)),
     "ollama": ("http://localhost:11434/v1", None),
 }
 
@@ -169,10 +169,10 @@ class OpenAIClient(BaseLLMClient):
         # client (e.g. a corporate proxy) takes precedence over the
         # provider default so users can route through their own gateway.
         if self.provider in _PROVIDER_CONFIG:
-            default_base, api_key_env = _PROVIDER_CONFIG[self.provider]
+            default_base, api_key_envs = _PROVIDER_CONFIG[self.provider]
             llm_kwargs["base_url"] = self.base_url or default_base
-            if api_key_env:
-                api_key = os.environ.get(api_key_env)
+            if api_key_envs:
+                api_key = next((os.environ.get(name) for name in api_key_envs if os.environ.get(name)), None)
                 if api_key:
                     llm_kwargs["api_key"] = api_key
             else:

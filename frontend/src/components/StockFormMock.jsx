@@ -15,9 +15,12 @@ import {
   MOCK_ERROR_RESPONSE,
 } from '../mockData';
 
-const popularTickers = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL'];
+const popularTickers = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'NVDA', 'AAPL'];
 
 const MOCK_MAP = {
+  'BBCA.JK': MOCK_RESPONSE,
+  'BBRI.JK': MOCK_HOLD_RESPONSE,
+  'TLKM.JK': MOCK_SELL_RESPONSE,
   NVDA: MOCK_RESPONSE,
   TSLA: MOCK_SELL_RESPONSE,
   AAPL: MOCK_HOLD_RESPONSE,
@@ -124,7 +127,7 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           color: 'var(--amber)',
           letterSpacing: '0.06em',
         }}>
-          MOCK MODE — NVDA · AAPL · TSLA · ERROR tersedia sebagai contoh
+          MOCK MODE — BBCA.JK · BBRI.JK · TLKM.JK · NVDA · ERROR tersedia sebagai contoh
         </span>
       </div>
 
@@ -133,12 +136,12 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
         <input
           style={inputBase('ticker')}
           value={ticker}
-          onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5))}
+          onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 12))}
           onFocus={() => setFocused('ticker')}
           onBlur={() => setFocused(null)}
-          placeholder="NVDA / AAPL / TSLA / ERROR"
+          placeholder="BBCA.JK / BBRI.JK / TLKM.JK / ERROR"
           required
-          maxLength={5}
+          maxLength={12}
         />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
           {[...popularTickers, 'ERROR'].map(t => (
