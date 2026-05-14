@@ -38,12 +38,14 @@ from tradingagents.agents.schemas import (
     PortfolioRating,
     TraderAction,
     TraderProposal,
+    VolatilityLevel,
     render_debate_argument,
     render_pm_decision,
     render_trader_proposal,
 )
 from tradingagents.agents.utils.structured import bind_structured
 from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.llm_clients import create_llm_client
 
@@ -90,6 +92,7 @@ class CollectedData:
     company_news: str
     global_news: str
     insider_transactions: str
+    data_quality: DataQualityReport
 
 
 def _truncate(value: Any, limit: int = 12_000) -> str:
@@ -97,6 +100,17 @@ def _truncate(value: Any, limit: int = 12_000) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + "\n\n[TRUNCATED FOR TOKEN CONTROL]"
+
+
+def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -> DataField:
+    try:
+        value = _truncate(func(), limit)
+        status = "missing" if looks_missing(value) else "ok"
+        warning = value.splitlines()[0] if status == "missing" and value else None
+        return DataField(value=value, status=status, warning=warning)
+    except Exception as exc:
+        logger.warning("Balanced pipeline data call failed for %s: %s", label, exc)
+        return DataField(value=f"{label} unavailable: {exc}", status="missing", warning=f"{label} unavailable: {exc}")
 
 
 def _safe_data_call(label: str, func: Callable[[], Any], limit: int = 12_000) -> str:
@@ -116,11 +130,7 @@ def _date_window(trade_date: str) -> tuple[str, str, str]:
 
 
 def collect_market_data(ticker: str, trade_date: str, config: dict[str, Any]) -> CollectedData:
-    """Collect all external data before any LLM call.
-
-    These are yfinance/tool requests, not Gemini requests. Keeping them outside
-    the LLM is the main reason the balanced mode can stay near 9 Gemini calls.
-    """
+    """Collect all external data and classify data quality before LLM calls."""
     set_config(config)
     start_90, start_30, end = _date_window(trade_date)
 
@@ -128,57 +138,116 @@ def collect_market_data(ticker: str, trade_date: str, config: dict[str, Any]) ->
     indicator_parts = []
     for indicator in indicator_names:
         indicator_parts.append(
-            _safe_data_call(
+            _safe_data_field(
                 f"indicator:{indicator}",
                 lambda indicator=indicator: route_to_vendor("get_indicators", ticker, indicator, trade_date, 30),
                 limit=4_000,
             )
         )
 
+    price = _safe_data_field(
+        "price_data",
+        lambda: route_to_vendor("get_stock_data", ticker, start_90, end),
+        limit=14_000,
+    )
+    fundamentals = _safe_data_field(
+        "fundamentals",
+        lambda: route_to_vendor("get_fundamentals", ticker, trade_date),
+        limit=12_000,
+    )
+    balance_sheet = _safe_data_field(
+        "balance_sheet",
+        lambda: route_to_vendor("get_balance_sheet", ticker, "quarterly", trade_date),
+        limit=10_000,
+    )
+    cashflow = _safe_data_field(
+        "cashflow",
+        lambda: route_to_vendor("get_cashflow", ticker, "quarterly", trade_date),
+        limit=10_000,
+    )
+    income_statement = _safe_data_field(
+        "income_statement",
+        lambda: route_to_vendor("get_income_statement", ticker, "quarterly", trade_date),
+        limit=10_000,
+    )
+    company_news = _safe_data_field(
+        "company_news",
+        lambda: route_to_vendor("get_news", ticker, start_30, end),
+        limit=12_000,
+    )
+    global_news = _safe_data_field(
+        "global_news",
+        lambda: route_to_vendor("get_global_news", trade_date, 7, 10),
+        limit=8_000,
+    )
+    insider_transactions = _safe_data_field(
+        "insider_transactions",
+        lambda: route_to_vendor("get_insider_transactions", ticker),
+        limit=6_000,
+    )
+
+    warnings: list[str] = []
+    for item in [price, fundamentals, balance_sheet, cashflow, income_statement, company_news, global_news, insider_transactions, *indicator_parts]:
+        if item.warning:
+            warnings.append(item.warning)
+
+    price_dates = extract_price_dates(price.value)
+    if price.status == "missing":
+        price_status = "invalid_ticker" if fundamentals.status == "missing" else "missing"
+    elif trade_date not in price_dates:
+        price_status = "market_closed"
+        warnings.append(f"No yfinance OHLCV row found exactly on {trade_date}; market may have been closed or ticker may not trade that day.")
+    elif len(price_dates) < 10:
+        price_status = "partial"
+        warnings.append(f"Only {len(price_dates)} price rows found in the 90-day yfinance window.")
+    else:
+        price_status = "ok"
+
+    financial_statuses = [fundamentals.status, balance_sheet.status, cashflow.status, income_statement.status]
+    if all(status == "missing" for status in financial_statuses):
+        fundamentals_status = "missing"
+    elif any(status == "missing" for status in financial_statuses):
+        fundamentals_status = "partial"
+        missing_parts = [
+            name for name, item in [
+                ("fundamentals", fundamentals),
+                ("balance_sheet", balance_sheet),
+                ("cashflow", cashflow),
+                ("income_statement", income_statement),
+            ] if item.status == "missing"
+        ]
+        warnings.append(f"Partial fundamentals from yfinance; missing: {', '.join(missing_parts)}.")
+    else:
+        fundamentals_status = "ok"
+
+    if company_news.status == "missing" and global_news.status == "missing":
+        news_status = "missing"
+    elif company_news.status == "missing" or global_news.status == "missing":
+        news_status = "partial"
+        warnings.append("Partial news coverage from yfinance; company-specific or global news is missing.")
+    else:
+        news_status = "ok"
+
+    data_quality = DataQualityReport(
+        price_data=price_status,
+        fundamentals=fundamentals_status,
+        news=news_status,
+        warnings=list(dict.fromkeys(warnings))[:20],
+    )
+
     return CollectedData(
         ticker=ticker,
         trade_date=trade_date,
-        price_data=_safe_data_call(
-            "price_data",
-            lambda: route_to_vendor("get_stock_data", ticker, start_90, end),
-            limit=14_000,
-        ),
-        technical_indicators="\n\n".join(indicator_parts),
-        fundamentals=_safe_data_call(
-            "fundamentals",
-            lambda: route_to_vendor("get_fundamentals", ticker, trade_date),
-            limit=12_000,
-        ),
-        balance_sheet=_safe_data_call(
-            "balance_sheet",
-            lambda: route_to_vendor("get_balance_sheet", ticker, "quarterly", trade_date),
-            limit=10_000,
-        ),
-        cashflow=_safe_data_call(
-            "cashflow",
-            lambda: route_to_vendor("get_cashflow", ticker, "quarterly", trade_date),
-            limit=10_000,
-        ),
-        income_statement=_safe_data_call(
-            "income_statement",
-            lambda: route_to_vendor("get_income_statement", ticker, "quarterly", trade_date),
-            limit=10_000,
-        ),
-        company_news=_safe_data_call(
-            "company_news",
-            lambda: route_to_vendor("get_news", ticker, start_30, end),
-            limit=12_000,
-        ),
-        global_news=_safe_data_call(
-            "global_news",
-            lambda: route_to_vendor("get_global_news", trade_date, 7, 10),
-            limit=8_000,
-        ),
-        insider_transactions=_safe_data_call(
-            "insider_transactions",
-            lambda: route_to_vendor("get_insider_transactions", ticker),
-            limit=6_000,
-        ),
+        price_data=price.value,
+        technical_indicators="\n\n".join(part.value for part in indicator_parts),
+        fundamentals=fundamentals.value,
+        balance_sheet=balance_sheet.value,
+        cashflow=cashflow.value,
+        income_statement=income_statement.value,
+        company_news=company_news.value,
+        global_news=global_news.value,
+        insider_transactions=insider_transactions.value,
+        data_quality=data_quality,
     )
 
 
@@ -378,6 +447,7 @@ def run_balanced_pipeline(
         "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
         lambda: collect_market_data(ticker, trade_date, config),
     )
+    data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
 
     def build_market_report() -> AnalystReport:
         return _run_tracked(
@@ -397,6 +467,9 @@ PRICE DATA:
 
 TECHNICAL INDICATORS:
 {data.technical_indicators}
+
+DATA QUALITY:
+{data_quality_json}
 """,
                 _fallback_report("Market Analyst Report", f"Market data for {ticker} was collected, but the model did not return a complete market view."),
                 "Market Analyst",
@@ -424,6 +497,9 @@ GLOBAL/MACRO NEWS:
 
 INSIDER TRANSACTIONS:
 {data.insider_transactions}
+
+DATA QUALITY:
+{data_quality_json}
 """,
                 _fallback_report("News and Social Sentiment Report", f"News and sentiment data for {ticker} was collected, but the model did not return a complete sentiment view."),
                 "News + Social Analyst",
@@ -455,6 +531,9 @@ CASH FLOW:
 
 INCOME STATEMENT:
 {data.income_statement}
+
+DATA QUALITY:
+{data_quality_json}
 """,
                 _fallback_report("Fundamentals Analyst Report", f"Fundamental data for {ticker} was collected, but the model did not return a complete fundamental view."),
                 "Fundamentals Analyst",
@@ -556,6 +635,9 @@ FUNDAMENTALS REPORT:
 
 BULL/BEAR DEBATE:
 {debate_md}
+
+DATA QUALITY:
+{data_quality_json}
 """,
         ResearchPlanLite(
             recommendation=PortfolioRating.HOLD,
@@ -573,13 +655,16 @@ BULL/BEAR DEBATE:
         f"""
 You are the Trader for {ticker} on {trade_date}.
 Translate the research manager plan into a trade proposal.
-Use the market report for entry/stop context. Provide practical sizing guidance.
+Use the market report for entry/stop context. Provide practical sizing guidance. Return suggested_allocation_percent, entry_price, stop_loss, take_profit, risk_reward_ratio, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_catalysts, and invalidation_conditions when data supports them.
 
 MARKET REPORT:
 {market_md}
 
 RESEARCH PLAN:
 {investment_plan}
+
+DATA QUALITY:
+{data_quality_json}
 """,
         TraderProposal(
             confidence=0.35,
@@ -587,7 +672,12 @@ RESEARCH PLAN:
             reasoning="The balanced pipeline could not generate a reliable trader proposal, so no new trade should be opened.",
             entry_price=None,
             stop_loss=None,
+            suggested_allocation_percent=0.0,
             position_sizing="0% new allocation until reviewed.",
+            position_sizing_reason="Fallback output used; no reliable trade sizing available.",
+            rebalancing_action="Hold existing exposure and avoid adding until reviewed.",
+            key_catalysts=[],
+            invalidation_conditions=["Data quality or model output cannot be verified."],
         ),
         "Trader",
     ))
@@ -616,6 +706,9 @@ RESEARCH PLAN:
 
 TRADER PROPOSAL:
 {trader_plan}
+
+DATA QUALITY:
+{data_quality_json}
 """,
         RiskCommitteeReport(
             overall_risk_level="High",
@@ -636,7 +729,7 @@ TRADER PROPOSAL:
         f"""
 You are the Portfolio Manager for {ticker} on {trade_date}.
 Make the final decision using every prior report. The final answer must be usable by a frontend investment dashboard.
-Keep language simple and practical. Include an action plan, risk controls, price target when data supports it, and time horizon.
+Keep language simple and practical. Include an action plan, risk controls, price target when data supports it, and time horizon. Return all actionable dashboard fields: suggested_allocation_percent, entry_price, stop_loss, take_profit, risk_reward_ratio, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_catalysts, and invalidation_conditions. Reduce confidence and allocation when data_quality has partial or missing inputs.
 
 MARKET REPORT:
 {market_md}
@@ -658,6 +751,9 @@ TRADER PROPOSAL:
 
 RISK COMMITTEE REPORT:
 {risk_md}
+
+DATA QUALITY:
+{data_quality_json}
 """,
         PortfolioDecision(
             confidence_score=0.35,
@@ -677,6 +773,17 @@ RISK COMMITTEE REPORT:
                 "The safest action is to avoid adding exposure. "
                 "A new decision should be generated once the model and data calls complete normally."
             ),
+            suggested_allocation_percent=0.0,
+            entry_price=None,
+            stop_loss=None,
+            take_profit=None,
+            risk_reward_ratio=None,
+            max_drawdown_estimate="Not estimated because final output used fallback.",
+            volatility_level=VolatilityLevel.HIGH,
+            position_sizing_reason="Fallback output and/or incomplete data quality require zero new allocation.",
+            rebalancing_action="Hold or move to watchlist until verified.",
+            key_catalysts=[],
+            invalidation_conditions=["Clean data and clean model output are not available."],
             price_target=None,
             time_horizon="Review required",
         ),
@@ -711,5 +818,6 @@ RISK COMMITTEE REPORT:
         },
         "final_trade_decision": final_decision,
         "portfolio_decision": portfolio_decision,
+        "data_quality": data.data_quality.model_dump(),
         "balanced_gemini_request_budget": 9,
     }

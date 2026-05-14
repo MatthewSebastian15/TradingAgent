@@ -61,6 +61,104 @@ function Section({ title, children }) {
   );
 }
 
+
+function formatValue(value, suffix = '') {
+  if (value === null || value === undefined || value === '') return 'N/A';
+  if (typeof value === 'number') return `${value.toLocaleString()}${suffix}`;
+  return `${value}${suffix}`;
+}
+
+function ActionMetric({ label, value, suffix }) {
+  if (value === null || value === undefined || value === '') return null;
+  return (
+    <div style={{
+      background: 'var(--bg-surface)',
+      border: '1px solid var(--border-subtle)',
+      borderRadius: 'var(--radius-md)',
+      padding: '12px 14px',
+    }}>
+      <div style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 9,
+        color: 'var(--text-muted)',
+        letterSpacing: '0.09em',
+        textTransform: 'uppercase',
+        marginBottom: 6,
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontFamily: 'var(--font-display)',
+        fontSize: 14,
+        fontWeight: 700,
+        color: 'var(--text-primary)',
+      }}>
+        {formatValue(value, suffix)}
+      </div>
+    </div>
+  );
+}
+
+function ListBlock({ title, items }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <Section title={title}>
+      <ul style={{
+        margin: 0,
+        paddingLeft: 18,
+        fontFamily: 'var(--font-display)',
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        lineHeight: 1.7,
+      }}>
+        {items.map((item, i) => <li key={i}>{item}</li>)}
+      </ul>
+    </Section>
+  );
+}
+
+function DataQualityPanel({ dataQuality }) {
+  if (!dataQuality) return null;
+  const statuses = [
+    ['Price Data', dataQuality.price_data],
+    ['Fundamentals', dataQuality.fundamentals],
+    ['News', dataQuality.news],
+  ];
+  return (
+    <Section title="Data Quality">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: dataQuality.warnings?.length ? 10 : 0 }}>
+        {statuses.map(([label, status]) => (
+          <span key={label} style={{
+            background: status === 'ok' ? 'rgba(0,229,160,0.08)' : 'rgba(255,179,64,0.10)',
+            border: status === 'ok' ? '1px solid rgba(0,229,160,0.22)' : '1px solid rgba(255,179,64,0.25)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '5px 9px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: status === 'ok' ? 'var(--accent)' : 'var(--amber)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}>
+            {label}: {status || 'missing'}
+          </span>
+        ))}
+      </div>
+      {dataQuality.warnings?.length > 0 && (
+        <ul style={{
+          margin: 0,
+          paddingLeft: 18,
+          fontFamily: 'var(--font-display)',
+          fontSize: 12,
+          color: 'var(--text-muted)',
+          lineHeight: 1.6,
+        }}>
+          {dataQuality.warnings.slice(0, 5).map((warning, i) => <li key={i}>{warning}</li>)}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
 export default function ResultCard({ result }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -113,6 +211,18 @@ export default function ResultCard({ result }) {
   const priceTarget      = result.price_target ?? null;
   const timeHorizon      = result.time_horizon ?? null;
   const confidenceScore  = result.confidence_score ?? null;
+  const allocation       = result.suggested_allocation_percent ?? null;
+  const entryPrice       = result.entry_price ?? null;
+  const stopLoss         = result.stop_loss ?? null;
+  const takeProfit       = result.take_profit ?? null;
+  const riskRewardRatio  = result.risk_reward_ratio ?? null;
+  const maxDrawdown      = result.max_drawdown_estimate ?? null;
+  const volatilityLevel  = result.volatility_level ?? null;
+  const sizingReason     = result.position_sizing_reason ?? null;
+  const rebalancing      = result.rebalancing_action ?? null;
+  const keyCatalysts     = result.key_catalysts || [];
+  const invalidations    = result.invalidation_conditions || [];
+  const dataQuality      = result.data_quality || null;
   const agentsUsed       = result.agents_used || [];
 
   // Fallback: if structured fields are null (free-text path), parse from full_decision.
@@ -202,15 +312,42 @@ export default function ResultCard({ result }) {
         </div>
       </div>
 
-      {/* Stats row: price target + time horizon + confidence */}
-      {(priceTarget !== null || timeHorizon || confidenceScore !== null) && (
+      {/* Stats row: allocation + price target + time horizon + confidence */}
+      {(allocation !== null || priceTarget !== null || timeHorizon || confidenceScore !== null) && (
         <div style={{
           display: 'flex',
           borderBottom: '1px solid var(--border-subtle)',
+          flexWrap: 'wrap',
         }}>
+          {allocation !== null && (
+            <div style={{
+              flex: 1,
+              minWidth: 150,
+              padding: '14px 24px',
+              borderRight: (priceTarget !== null || timeHorizon || confidenceScore !== null) ? '1px solid var(--border-subtle)' : 'none',
+            }}>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                marginBottom: 4,
+              }}>Allocation</div>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 20,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+              }}>
+                {typeof allocation === 'number' ? `${allocation}%` : allocation}
+              </div>
+            </div>
+          )}
           {priceTarget !== null && (
             <div style={{
               flex: 1,
+              minWidth: 150,
               padding: '14px 24px',
               borderRight: (timeHorizon || confidenceScore !== null) ? '1px solid var(--border-subtle)' : 'none',
             }}>
@@ -235,6 +372,7 @@ export default function ResultCard({ result }) {
           {timeHorizon && (
             <div style={{
               flex: 1,
+              minWidth: 150,
               padding: '14px 24px',
               borderRight: confidenceScore !== null ? '1px solid var(--border-subtle)' : 'none',
             }}>
@@ -257,7 +395,7 @@ export default function ResultCard({ result }) {
             </div>
           )}
           {confidenceScore !== null && (
-            <div style={{ flex: 1, padding: '14px 24px' }}>
+            <div style={{ flex: 1, minWidth: 150, padding: '14px 24px' }}>
               <div style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,
@@ -281,6 +419,41 @@ export default function ResultCard({ result }) {
 
       {/* Body */}
       <div style={{ padding: '20px 24px' }}>
+
+        <DataQualityPanel dataQuality={dataQuality} />
+
+        {(entryPrice !== null || stopLoss !== null || takeProfit !== null || riskRewardRatio !== null || maxDrawdown || volatilityLevel || rebalancing) && (
+          <Section title="Action Plan">
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: 10,
+            }}>
+              <ActionMetric label="Entry Price" value={entryPrice} />
+              <ActionMetric label="Stop Loss" value={stopLoss} />
+              <ActionMetric label="Take Profit" value={takeProfit} />
+              <ActionMetric label="Risk/Reward" value={riskRewardRatio} />
+              <ActionMetric label="Max Drawdown" value={maxDrawdown} />
+              <ActionMetric label="Volatility" value={volatilityLevel} />
+              <ActionMetric label="Rebalancing" value={rebalancing} />
+            </div>
+            {sizingReason && (
+              <p style={{
+                marginTop: 12,
+                marginBottom: 0,
+                fontFamily: 'var(--font-display)',
+                fontSize: 13,
+                color: 'var(--text-secondary)',
+                lineHeight: 1.7,
+              }}>
+                {parseBold(sizingReason)}
+              </p>
+            )}
+          </Section>
+        )}
+
+        <ListBlock title="Key Catalysts" items={keyCatalysts} />
+        <ListBlock title="Invalidation Conditions" items={invalidations} />
 
         {/* Executive Summary — reads directly from result.executive_summary */}
         {summary && (

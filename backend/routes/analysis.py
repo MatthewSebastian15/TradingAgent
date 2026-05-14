@@ -78,7 +78,7 @@ def _run_pipeline(ticker: str, trade_date: str, max_debate_rounds: int, request_
 
     full_decision: str = final_state.get("final_trade_decision", "")
     pd_obj: Optional[PortfolioDecision] = final_state.get("portfolio_decision")
-    return _parse_final_result(full_decision, pd_obj, PortfolioRating)
+    return _parse_final_result(full_decision, pd_obj, PortfolioRating, final_state.get("data_quality"))
 
 
 def _run_pipeline_with_progress(
@@ -125,10 +125,15 @@ def _run_pipeline_with_progress(
 
     full_decision: str = final_state.get("final_trade_decision", "")
     pd_obj: Optional[PortfolioDecision] = final_state.get("portfolio_decision")
-    return _parse_final_result(full_decision, pd_obj, PortfolioRating)
+    return _parse_final_result(full_decision, pd_obj, PortfolioRating, final_state.get("data_quality"))
 
 
-def _parse_final_result(full_decision: str, pd_obj: object | None, portfolio_rating: object | None = None) -> dict:
+def _parse_final_result(
+    full_decision: str,
+    pd_obj: object | None,
+    portfolio_rating: object | None = None,
+    data_quality: dict | None = None,
+) -> dict:
     """Convert the final agent state into the API response fields.
 
     Kept separate from endpoint code so REST and SSE always return the same
@@ -143,6 +148,23 @@ def _parse_final_result(full_decision: str, pd_obj: object | None, portfolio_rat
             "price_target": None,
             "time_horizon": None,
             "confidence_score": None,
+            "suggested_allocation_percent": None,
+            "entry_price": None,
+            "stop_loss": None,
+            "take_profit": None,
+            "risk_reward_ratio": None,
+            "max_drawdown_estimate": None,
+            "volatility_level": None,
+            "position_sizing_reason": None,
+            "rebalancing_action": None,
+            "key_catalysts": [],
+            "invalidation_conditions": [],
+            "data_quality": data_quality or {
+                "price_data": "missing",
+                "fundamentals": "missing",
+                "news": "missing",
+                "warnings": ["Pipeline did not return data quality metadata."],
+            },
         }
 
     rating_map = {}
@@ -166,6 +188,23 @@ def _parse_final_result(full_decision: str, pd_obj: object | None, portfolio_rat
         "price_target": getattr(pd_obj, "price_target", None),
         "time_horizon": getattr(pd_obj, "time_horizon", None),
         "confidence_score": getattr(pd_obj, "confidence_score", None),
+        "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
+        "entry_price": getattr(pd_obj, "entry_price", None),
+        "stop_loss": getattr(pd_obj, "stop_loss", None),
+        "take_profit": getattr(pd_obj, "take_profit", None),
+        "risk_reward_ratio": getattr(pd_obj, "risk_reward_ratio", None),
+        "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
+        "volatility_level": getattr(getattr(pd_obj, "volatility_level", None), "value", getattr(pd_obj, "volatility_level", None)),
+        "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
+        "rebalancing_action": getattr(pd_obj, "rebalancing_action", None),
+        "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
+        "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
+        "data_quality": data_quality or {
+            "price_data": "missing",
+            "fundamentals": "missing",
+            "news": "missing",
+            "warnings": ["Pipeline did not return data quality metadata."],
+        },
     }
 
 

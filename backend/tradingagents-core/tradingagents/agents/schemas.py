@@ -22,6 +22,13 @@ class TraderAction(str, Enum):
     SELL = "Sell"
 
 
+class VolatilityLevel(str, Enum):
+    LOW = "Low"
+    MEDIUM = "Medium"
+    HIGH = "High"
+    VERY_HIGH = "Very High"
+
+
 class DebateArgument(BaseModel):
     stance: Literal["bull", "bear", "aggressive", "conservative", "neutral"] = Field(
         description="The agent viewpoint that produced this argument."
@@ -141,6 +148,12 @@ class TraderProposal(BaseModel):
             "the research plan. Two to four sentences."
         ),
     )
+    suggested_allocation_percent: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description="Suggested portfolio allocation percentage for this position.",
+    )
     entry_price: Optional[float] = Field(
         default=None,
         description="Optional entry price target in the instrument's quote currency.",
@@ -149,11 +162,44 @@ class TraderProposal(BaseModel):
         default=None,
         description="Optional stop-loss price in the instrument's quote currency.",
     )
+    take_profit: Optional[float] = Field(
+        default=None,
+        description="Optional take-profit price in the instrument's quote currency.",
+    )
+    risk_reward_ratio: Optional[float] = Field(
+        default=None,
+        description="Expected reward divided by expected risk. Example: 2.0 means 2:1.",
+    )
+    max_drawdown_estimate: Optional[str] = Field(
+        default=None,
+        description="Estimated adverse move or drawdown range, e.g. '8-12%'.",
+    )
+    volatility_level: Optional[VolatilityLevel] = Field(
+        default=None,
+        description="Expected volatility level for the position.",
+    )
     position_sizing: Optional[str] = Field(
         default=None,
         description="Optional sizing guidance, e.g. '5% of portfolio'.",
     )
-
+    position_sizing_reason: Optional[str] = Field(
+        default=None,
+        description="Plain-language reason for the suggested allocation and sizing.",
+    )
+    rebalancing_action: Optional[str] = Field(
+        default=None,
+        description="Concrete action for portfolio rebalancing: add, trim, hold, exit, or watchlist.",
+    )
+    key_catalysts: List[str] = Field(
+        default_factory=list,
+        max_length=6,
+        description="Specific events or conditions that could drive the trade.",
+    )
+    invalidation_conditions: List[str] = Field(
+        default_factory=list,
+        max_length=6,
+        description="Conditions that invalidate the trade thesis.",
+    )
 
 def render_trader_proposal(proposal: TraderProposal) -> str:
     parts = [
@@ -162,12 +208,30 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         "",
         f"**Reasoning**: {proposal.reasoning}",
     ]
+    if proposal.suggested_allocation_percent is not None:
+        parts.extend(["", f"**Suggested Allocation**: {proposal.suggested_allocation_percent}%"])
     if proposal.entry_price is not None:
         parts.extend(["", f"**Entry Price**: {proposal.entry_price}"])
     if proposal.stop_loss is not None:
         parts.extend(["", f"**Stop Loss**: {proposal.stop_loss}"])
+    if proposal.take_profit is not None:
+        parts.extend(["", f"**Take Profit**: {proposal.take_profit}"])
+    if proposal.risk_reward_ratio is not None:
+        parts.extend(["", f"**Risk/Reward Ratio**: {proposal.risk_reward_ratio}"])
+    if proposal.max_drawdown_estimate:
+        parts.extend(["", f"**Max Drawdown Estimate**: {proposal.max_drawdown_estimate}"])
+    if proposal.volatility_level:
+        parts.extend(["", f"**Volatility Level**: {proposal.volatility_level.value}"])
     if proposal.position_sizing:
         parts.extend(["", f"**Position Sizing**: {proposal.position_sizing}"])
+    if proposal.position_sizing_reason:
+        parts.extend(["", f"**Position Sizing Reason**: {proposal.position_sizing_reason}"])
+    if proposal.rebalancing_action:
+        parts.extend(["", f"**Rebalancing Action**: {proposal.rebalancing_action}"])
+    if proposal.key_catalysts:
+        parts.extend(["", "**Key Catalysts**:", *[f"- {item}" for item in proposal.key_catalysts]])
+    if proposal.invalidation_conditions:
+        parts.extend(["", "**Invalidation Conditions**:", *[f"- {item}" for item in proposal.invalidation_conditions]])
     parts.extend([
         "",
         f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value.upper()}**",
@@ -217,6 +281,54 @@ class PortfolioDecision(BaseModel):
             "Minimum length: 6 sentences. Use simple words."
         ),
     )
+    suggested_allocation_percent: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description="Final suggested allocation percentage for the position.",
+    )
+    entry_price: Optional[float] = Field(
+        default=None,
+        description="Final entry price target in the instrument's quote currency.",
+    )
+    stop_loss: Optional[float] = Field(
+        default=None,
+        description="Final stop-loss price in the instrument's quote currency.",
+    )
+    take_profit: Optional[float] = Field(
+        default=None,
+        description="Final take-profit price in the instrument's quote currency.",
+    )
+    risk_reward_ratio: Optional[float] = Field(
+        default=None,
+        description="Final expected reward divided by expected risk.",
+    )
+    max_drawdown_estimate: Optional[str] = Field(
+        default=None,
+        description="Estimated maximum drawdown or adverse move for the trade.",
+    )
+    volatility_level: Optional[VolatilityLevel] = Field(
+        default=None,
+        description="Expected volatility level for the recommendation.",
+    )
+    position_sizing_reason: Optional[str] = Field(
+        default=None,
+        description="Reason for final allocation and position size.",
+    )
+    rebalancing_action: Optional[str] = Field(
+        default=None,
+        description="Final portfolio action: add, trim, hold, exit, or watchlist.",
+    )
+    key_catalysts: List[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Key catalysts that support the final recommendation.",
+    )
+    invalidation_conditions: List[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Specific conditions that invalidate the final thesis.",
+    )
     price_target: Optional[float] = Field(
         default=None,
         description="Optional target price in the instrument's quote currency.",
@@ -236,6 +348,24 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         "",
         f"**Investment Thesis**: {decision.investment_thesis}",
     ]
+    actionable_fields = [
+        ("Suggested Allocation", f"{decision.suggested_allocation_percent}%" if decision.suggested_allocation_percent is not None else None),
+        ("Entry Price", decision.entry_price),
+        ("Stop Loss", decision.stop_loss),
+        ("Take Profit", decision.take_profit),
+        ("Risk/Reward Ratio", decision.risk_reward_ratio),
+        ("Max Drawdown Estimate", decision.max_drawdown_estimate),
+        ("Volatility Level", decision.volatility_level.value if decision.volatility_level else None),
+        ("Position Sizing Reason", decision.position_sizing_reason),
+        ("Rebalancing Action", decision.rebalancing_action),
+    ]
+    for label, value in actionable_fields:
+        if value is not None:
+            parts.extend(["", f"**{label}**: {value}"])
+    if decision.key_catalysts:
+        parts.extend(["", "**Key Catalysts**:", *[f"- {item}" for item in decision.key_catalysts]])
+    if decision.invalidation_conditions:
+        parts.extend(["", "**Invalidation Conditions**:", *[f"- {item}" for item in decision.invalidation_conditions]])
     if decision.price_target is not None:
         parts.extend(["", f"**Price Target**: {decision.price_target}"])
     if decision.time_horizon:
