@@ -1,122 +1,101 @@
 import React, { useState, useRef } from 'react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const API_KEY = process.env.REACT_APP_API_KEY || '';
-const DEFAULT_DEBATE_ROUNDS = clampDebateRounds(process.env.REACT_APP_DEFAULT_MAX_DEBATE_ROUNDS || 3);
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_KEY = import.meta.env.VITE_API_KEY || '';
+const DEFAULT_DEBATE_ROUNDS = clampRounds(import.meta.env.VITE_DEFAULT_MAX_DEBATE_ROUNDS || 1);
 
-const popularTickers = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'NVDA', 'AAPL'];
+const IDX_TICKERS = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'];
+const US_TICKERS  = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'];
 
-function clampDebateRounds(value) {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed)) return 3;
-  return Math.min(5, Math.max(1, parsed));
+function clampRounds(v) {
+  const n = Number(v);
+  return Number.isInteger(n) ? Math.min(5, Math.max(1, n)) : 1;
 }
 
-function getTodayDate() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function buildHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  if (API_KEY) headers['x-api-key'] = API_KEY;
-  return headers;
-}
-
-function getErrorMessage(payload, fallback = 'Analysis failed.') {
-  if (!payload) return fallback;
-  if (typeof payload === 'string') return payload;
-  if (payload.error?.message) return payload.error.message;
-  if (payload.message) return payload.message;
-  return fallback;
+  const h = { 'Content-Type': 'application/json' };
+  if (API_KEY) h['x-api-key'] = API_KEY;
+  return h;
 }
 
 async function readHttpError(res) {
   const text = await res.text();
   try {
-    const payload = JSON.parse(text);
-    const requestId = payload.request_id ? ` Request ID: ${payload.request_id}` : '';
-    return `${getErrorMessage(payload, `Server error ${res.status}.`)}${requestId}`;
-  } catch (_) {
-    return `Server error ${res.status}: ${text || res.statusText}`;
-  }
+    const j = JSON.parse(text);
+    return j.error?.message || j.message || `HTTP ${res.status}`;
+  } catch { return `HTTP ${res.status}: ${text || res.statusText}`; }
 }
 
 function parseSseBlock(block) {
-  const event = { type: 'message', data: [] };
-
+  const ev = { type: 'message', data: [] };
   for (const rawLine of block.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
     if (!line || line.startsWith(':')) continue;
-
     const idx = line.indexOf(':');
     const field = idx === -1 ? line : line.slice(0, idx);
     const value = idx === -1 ? '' : line.slice(idx + 1).replace(/^ /, '');
-
-    if (field === 'event') event.type = value;
-    if (field === 'data') event.data.push(value);
+    if (field === 'event') ev.type = value;
+    if (field === 'data') ev.data.push(value);
   }
+  if (!ev.data.length) return null;
+  try { return { type: ev.type, payload: JSON.parse(ev.data.join('\n')) }; }
+  catch { return null; }
+}
 
-  if (event.data.length === 0) return null;
-  return {
-    type: event.type,
-    payload: JSON.parse(event.data.join('\n')),
-  };
+function TickerChip({ label, active, onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`
+        px-2.5 py-1 text-xs font-mono border transition-colors duration-150
+        disabled:opacity-40 disabled:cursor-not-allowed
+        ${active
+          ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
+          : 'border-bloomberg-border bg-bloomberg-surface text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'}
+      `}
+    >
+      {label}
+    </button>
+  );
 }
 
 export default function StockForm({ onResult, onLoading, onStatus, onAgentProgress }) {
-  const [ticker, setTicker]       = useState('NVDA');
-  const [date, setDate]           = useState(getTodayDate());
-  const [maxRounds, setMaxRounds] = useState(DEFAULT_DEBATE_ROUNDS);
-  const [focused, setFocused]     = useState(null);
-  const [formError, setFormError] = useState('');
-  const [running, setRunning]     = useState(false);
-  const abortRef                  = useRef(null);
+  const [ticker, setTicker]   = useState('NVDA');
+  const [date, setDate]       = useState(today());
+  const [rounds, setRounds]   = useState(DEFAULT_DEBATE_ROUNDS);
+  const [error, setError]     = useState('');
+  const [running, setRunning] = useState(false);
+  const abortRef              = useRef(null);
 
-  function validateForm() {
-    const normalizedTicker = ticker.trim().toUpperCase();
-    if (!/^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$/.test(normalizedTicker)) {
-      return 'Ticker harus memakai format Yahoo Finance, contoh: BBCA.JK, BBRI.JK, TLKM.JK, AAPL, BRK-B, atau 0700.HK.';
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return 'Trade date harus memakai format YYYY-MM-DD.';
-    }
-    if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 5) {
-      return 'Debate rounds harus antara 1 sampai 5.';
-    }
+  function validate() {
+    const t = ticker.trim().toUpperCase();
+    if (!/^[A-Z0-9]{1,10}([.\-][A-Z0-9]{1,5})?$/.test(t))
+      return 'Invalid ticker. Examples: BBCA.JK, NVDA, BRK-B';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+      return 'Date must be YYYY-MM-DD';
     return '';
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-
-    const validationError = validateForm();
-    if (validationError) {
-      setFormError(validationError);
-      onResult({ error: validationError });
-      return;
-    }
-
-    setFormError('');
+    const err = validate();
+    if (err) { setError(err); onResult({ error: err }); return; }
+    setError('');
     setRunning(true);
     onLoading(true);
-    onStatus('Initializing agents...');
+    onStatus('Connecting to agent pipeline...');
     onResult(null);
     if (onAgentProgress) onAgentProgress(null);
-
-    try {
-      await runStream();
-    } catch (err) {
-      onResult({ error: err.message || 'Analysis failed.' });
-    } finally {
-      setRunning(false);
-      onLoading(false);
-      onStatus('');
-      abortRef.current = null;
-    }
+    try { await runStream(); }
+    catch (ex) { onResult({ error: ex.message || 'Analysis failed.' }); }
+    finally { setRunning(false); onLoading(false); onStatus(''); abortRef.current = null; }
   }
 
   async function runStream() {
@@ -126,239 +105,161 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     const res = await fetch(`${API_URL}/api/analyze/stream`, {
       method: 'POST',
       headers: buildHeaders(),
-      body: JSON.stringify({
-        ticker: ticker.trim().toUpperCase(),
-        trade_date: date,
-        max_debate_rounds: maxRounds,
-      }),
+      body: JSON.stringify({ ticker: ticker.trim().toUpperCase(), trade_date: date, max_debate_rounds: rounds }),
       signal: controller.signal,
     });
 
-    if (!res.ok) {
-      throw new Error(await readHttpError(res));
-    }
-
-    if (!res.body) {
-      throw new Error('Browser tidak menerima stream dari backend. Dunia web modern, tetap saja bisa begini.');
-    }
+    if (!res.ok) throw new Error(await readHttpError(res));
+    if (!res.body) throw new Error('SSE stream not supported by browser.');
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
+    let buf = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const blocks = buffer.split(/\r?\n\r?\n/);
-      buffer = blocks.pop() || '';
-
+      buf += decoder.decode(value, { stream: true });
+      const blocks = buf.split(/\r?\n\r?\n/);
+      buf = blocks.pop() || '';
       for (const block of blocks) {
-        const event = parseSseBlock(block);
-        if (!event) continue;
-
-        if (event.type === 'progress') {
-          onStatus(event.payload.status_message || 'Agents running...');
-          if (onAgentProgress) onAgentProgress(event.payload);
+        const ev = parseSseBlock(block);
+        if (!ev) continue;
+        if (ev.type === 'progress') {
+          onStatus(ev.payload.status_message || 'Running...');
+          if (onAgentProgress) onAgentProgress(ev.payload);
         }
-
-        if (event.type === 'result') {
-          onResult(event.payload);
-          return;
-        }
-
-        if (event.type === 'error') {
-          const requestId = event.payload.request_id ? ` Request ID: ${event.payload.request_id}` : '';
-          onResult({ error: `${getErrorMessage(event.payload)}${requestId}` });
+        if (ev.type === 'result') { onResult(ev.payload); return; }
+        if (ev.type === 'error') {
+          const rid = ev.payload.request_id ? ` [${ev.payload.request_id}]` : '';
+          onResult({ error: (ev.payload.error || ev.payload.message || 'Error') + rid });
           return;
         }
       }
     }
-
-    if (buffer.trim()) {
-      const event = parseSseBlock(buffer);
-      if (event?.type === 'result') onResult(event.payload);
-      if (event?.type === 'error') onResult({ error: getErrorMessage(event.payload) });
+    if (buf.trim()) {
+      const ev = parseSseBlock(buf);
+      if (ev?.type === 'result') onResult(ev.payload);
+      if (ev?.type === 'error') onResult({ error: ev.payload.error || 'Error' });
     }
   }
 
-  const inputBase = (name) => ({
-    background: 'var(--bg-input)',
-    border: `1px solid ${focused === name ? 'var(--accent)' : 'var(--border)'}`,
-    borderRadius: 'var(--radius-md)',
-    padding: '12px 16px',
-    color: 'var(--text-primary)',
-    fontSize: 14,
-    width: '100%',
-    fontFamily: 'var(--font-mono)',
-    fontWeight: 400,
-    outline: 'none',
-    transition: 'var(--transition)',
-    boxShadow: focused === name ? '0 0 0 3px var(--accent-dim)' : 'none',
-    WebkitAppearance: 'none',
-    appearance: 'none',
-  });
-
-  const labelStyle = {
-    display: 'block',
-    fontSize: 11,
-    fontFamily: 'var(--font-mono)',
-    color: 'var(--text-muted)',
-    marginBottom: 8,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
-    fontWeight: 500,
-  };
-
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-0">
+      {/* Form header */}
+      <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center gap-2">
+        <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-wider">NEW ANALYSIS</span>
+        <span className="text-bloomberg-muted font-mono text-xs">/ CONFIGURE PARAMETERS</span>
+      </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <label style={labelStyle}>Ticker Symbol</label>
-        <input
-          style={inputBase('ticker')}
-          value={ticker}
-          onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 12))}
-          onFocus={() => setFocused('ticker')}
-          onBlur={() => setFocused(null)}
-          placeholder="e.g. BBCA.JK"
-          required
-          maxLength={12}
-          pattern="[A-Z0-9]{1,10}([.-][A-Z0-9]{1,5})?"
-        />
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-          {popularTickers.map(t => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTicker(t)}
+      <div className="p-4 flex flex-col gap-4">
+        {/* Ticker */}
+        <div>
+          <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+            TICKER SYMBOL
+          </label>
+          <input
+            value={ticker}
+            onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g,'').slice(0,12))}
+            placeholder="e.g. BBCA.JK"
+            required
+            disabled={running}
+            className="
+              w-full bg-black border border-bloomberg-border px-3 py-2.5
+              font-mono text-sm text-bloomberg-white tracking-wider
+              focus:outline-none focus:border-bloomberg-orange
+              disabled:opacity-50 transition-colors duration-150
+              placeholder:text-bloomberg-muted
+            "
+          />
+
+          <div className="mt-2">
+            <div className="text-xs font-mono text-bloomberg-muted mb-1.5 tracking-wider">IDX</div>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {IDX_TICKERS.map(t => (
+                <TickerChip key={t} label={t} active={ticker===t} onClick={()=>setTicker(t)} disabled={running} />
+              ))}
+            </div>
+            <div className="text-xs font-mono text-bloomberg-muted mb-1.5 tracking-wider">US</div>
+            <div className="flex flex-wrap gap-1.5">
+              {US_TICKERS.map(t => (
+                <TickerChip key={t} label={t} active={ticker===t} onClick={()=>setTicker(t)} disabled={running} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Date + Rounds */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+              TRADE DATE
+            </label>
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
               disabled={running}
-              style={{
-                background: ticker === t ? 'var(--accent-dim)' : 'var(--bg-card)',
-                border: `1px solid ${ticker === t ? 'rgba(0,229,160,0.35)' : 'var(--border)'}`,
-                borderRadius: 'var(--radius-sm)',
-                padding: '4px 10px',
-                fontSize: 11,
-                fontFamily: 'var(--font-mono)',
-                color: ticker === t ? 'var(--accent)' : 'var(--text-secondary)',
-                cursor: running ? 'not-allowed' : 'pointer',
-                transition: 'var(--transition)',
-                fontWeight: 500,
-                opacity: running ? 0.7 : 1,
-              }}
+              required
+              className="
+                w-full bg-black border border-bloomberg-border px-3 py-2.5
+                font-mono text-xs text-bloomberg-white tracking-wider
+                focus:outline-none focus:border-bloomberg-orange
+                disabled:opacity-50 transition-colors duration-150
+              "
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+              DEBATE ROUNDS
+            </label>
+            <select
+              value={rounds}
+              onChange={e => setRounds(Number(e.target.value))}
+              disabled={running}
+              className="
+                w-full bg-black border border-bloomberg-border px-3 py-2.5
+                font-mono text-xs text-bloomberg-white tracking-wider
+                focus:outline-none focus:border-bloomberg-orange
+                disabled:opacity-50 transition-colors duration-150 cursor-pointer
+              "
             >
-              {t}
-            </button>
-          ))}
+              {[1,2,3,4,5].map(n => (
+                <option key={n} value={n} className="bg-black">{n} ROUND{n>1?'S':''}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="border border-bloomberg-red bg-bloomberg-red-dim px-3 py-2">
+            <span className="font-mono text-xs text-bloomberg-red">ERR: {error}</span>
+          </div>
+        )}
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={running}
+          className="
+            w-full py-3 font-mono text-xs font-semibold tracking-widest uppercase
+            transition-all duration-150 border
+            disabled:opacity-50 disabled:cursor-not-allowed
+            bg-bloomberg-orange border-bloomberg-orange text-black
+            hover:bg-orange-400 hover:border-orange-400
+            active:scale-[0.99]
+          "
+        >
+          {running
+            ? '▶ RUNNING AGENT PIPELINE...'
+            : '▶ EXECUTE ANALYSIS'}
+        </button>
+
+        <div className="text-center font-mono text-xs text-bloomberg-muted tracking-wider">
+          EST. RUNTIME: 2–5 MIN PER ANALYSIS
         </div>
       </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <label style={labelStyle}>
-          Trade Date
-          <span style={{
-            marginLeft: 8,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--accent)',
-            background: 'var(--accent-dim)',
-            padding: '1px 6px',
-            borderRadius: 4,
-            fontWeight: 400,
-            letterSpacing: '0.04em',
-          }}>
-            default: today
-          </span>
-        </label>
-        <input
-          style={{ ...inputBase('date'), colorScheme: 'dark' }}
-          type="date"
-          value={date}
-          onChange={e => setDate(e.target.value)}
-          onFocus={() => setFocused('date')}
-          onBlur={() => setFocused(null)}
-          required
-          disabled={running}
-        />
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <label style={labelStyle}>Debate Rounds</label>
-        <select
-          style={{ ...inputBase('rounds'), colorScheme: 'dark' }}
-          value={maxRounds}
-          onChange={e => setMaxRounds(Number(e.target.value))}
-          onFocus={() => setFocused('rounds')}
-          onBlur={() => setFocused(null)}
-          disabled={running}
-        >
-          {[1, 2, 3, 4, 5].map(n => (
-            <option key={n} value={n}>{n} round{n > 1 ? 's' : ''}</option>
-          ))}
-        </select>
-      </div>
-
-      {formError && (
-        <p style={{
-          margin: 0,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 11,
-          color: 'var(--red)',
-          lineHeight: 1.5,
-        }}>
-          {formError}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        disabled={running}
-        style={{
-          background: 'var(--accent)',
-          color: '#070a0f',
-          border: 'none',
-          padding: '14px 24px',
-          borderRadius: 'var(--radius-md)',
-          fontSize: 14,
-          fontWeight: 700,
-          fontFamily: 'var(--font-display)',
-          cursor: running ? 'not-allowed' : 'pointer',
-          letterSpacing: '0.03em',
-          transition: 'var(--transition)',
-          boxShadow: '0 0 24px rgba(0,229,160,0.25)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          marginTop: 4,
-          opacity: running ? 0.7 : 1,
-        }}
-        onMouseEnter={e => {
-          if (running) return;
-          e.currentTarget.style.background = '#00ffb3';
-          e.currentTarget.style.boxShadow = '0 0 36px rgba(0,229,160,0.45)';
-          e.currentTarget.style.transform = 'translateY(-1px)';
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = 'var(--accent)';
-          e.currentTarget.style.boxShadow = '0 0 24px rgba(0,229,160,0.25)';
-          e.currentTarget.style.transform = 'translateY(0)';
-        }}
-      >
-        <span>{running ? 'Running Agent Analysis...' : 'Run Agent Analysis'}</span>
-        <span style={{ fontSize: 16 }}>→</span>
-      </button>
-
-      <p style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 11,
-        color: 'var(--text-muted)',
-        textAlign: 'center',
-        letterSpacing: '0.04em',
-      }}>
-        Analysis can take several minutes, depending on debate rounds and provider speed
-      </p>
     </form>
   );
 }

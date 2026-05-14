@@ -11,12 +11,16 @@ const ENABLE_MOCK = String(import.meta.env.VITE_ENABLE_MOCK || '').toLowerCase()
 function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={null}>
+      <Suspense fallback={
+        <div className="min-h-screen bg-bloomberg-bg flex items-center justify-center">
+          <span className="font-mono text-xs text-bloomberg-muted tracking-widest">LOADING...</span>
+        </div>
+      }>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Dashboard />} />
           <Route path="/analysis" element={<Analysis />} />
-          {ENABLE_MOCK && <Route path="/analysis-mock" element={<AnalysisMock />} />}
+          <Route path="/analysis-mock" element={<AnalysisMock />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
