@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: tradingagent-backend
+    env_file:
+      - ./backend/.env
+    environment:
+      PYTHONPATH: /app/backend:/app/backend/tradingagents-core
+      OLLAMA_BASE_URL: http://ollama:11434
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8080,http://frontend
+    ports:
+      - "8000:8000"
+    volumes:
+      - tradingagent-cache:/app/backend/tradingagents-core/dataflows/data_cache
+      - tradingagent-results:/app/backend/tradingagents-core/results
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        REACT_APP_API_URL: /api
+        REACT_APP_API_KEY: ${REACT_APP_API_KEY:-}
+        REACT_APP_DEFAULT_MAX_DEBATE_ROUNDS: ${REACT_APP_DEFAULT_MAX_DEBATE_ROUNDS:-3}
+    container_name: tradingagent-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: tradingagent-ollama
+    profiles:
+      - ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  tradingagent-cache:
+  tradingagent-results:
+  ollama-data:
