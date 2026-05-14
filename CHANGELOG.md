@@ -241,10 +241,3 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Updated README documentation.
 
 ---
-
-## Suggested Git Command
-
-```bash
-git add CHANGELOG.md
-git commit -m "docs: add project changelog"
-```
