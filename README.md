@@ -2,7 +2,7 @@
 
 A full-stack web application that wraps the [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents/tree/main) engine with a FastAPI backend and a React frontend. Enter a ticker and a date, nine specialized AI agents collaborate and debate, then deliver a structured trade decision: **Buy / Hold / Sell** with an executive summary, investment thesis, price target, and time horizon.
 
-![TradingAgent Dashboard](assets/Web/TradingAgent%20Home%20UI.png)
+![TradingAgent Dashboard](assets/TradingAgent%20Home%20UI.png)
 
 ---
 
@@ -277,7 +277,7 @@ Indonesian stocks listed on the Indonesia Stock Exchange (IDX) use the `.JK` suf
 
 Go to **Analysis** in the navigation bar. You will see the input form on the left and a blank result area on the right.
 
-![Analysis Form](assets/Web/TradingAgent%20Analysis%20UI%201.png)
+![Analysis Form](assets/TradingAgent%20Analysis%20UI%201.png)
 
 ### 2. Enter your parameters and run
 
@@ -287,9 +287,9 @@ Enter a ticker symbol (e.g. `NVDA` for Nvidia, or `BBCA.JK` for Bank Central Asi
 
 When the pipeline finishes, the ResultCard shows the decision badge (Buy / Hold / Sell), price target, time horizon, confidence, action plan, key catalysts, executive summary, and full investment thesis.
 
-![Analysis Result - Sell example](assets/Web/TradingAgent%20Analysis%20UI%202.png)
+![Analysis Result - Sell example](assets/TradingAgent%20Analysis%20UI%202.png)
 
-![Analysis Result - Hold example](assets/Web/TradingAgent%20Analysis%20UI%203.png)
+![Analysis Result - Hold example](assets/TradingAgent%20Analysis%20UI%203.png)
 
 Your last 10 analyses are saved automatically in the **Recent Analyses** sidebar.
 
