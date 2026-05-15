@@ -2,6 +2,16 @@
 
 A full-stack web application that wraps the [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents/tree/main) engine with a FastAPI backend and a React frontend. Enter a ticker and a date, nine specialized AI agents collaborate and debate, then deliver a structured trade decision: **Buy / Hold / Sell** with an executive summary, investment thesis, price target, and time horizon.
 
+![TradingAgent Dashboard](assets/Web/TradingAgent%20Home%20UI.png)
+
+---
+
+## How It Works
+
+The system takes your stock input through six stages: market reading, news evaluation, fundamental checks, opportunity and risk comparison, and a final investment decision.
+
+![Investment Analysis Flow](assets/Investment%20Analysis%20Flow.png)
+
 ---
 
 ## Architecture Overview
@@ -34,6 +44,10 @@ A full-stack web application that wraps the [TauricResearch/TradingAgents](https
 │  Portfolio Manager → PortfolioDecision (structured output)      │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+The diagram below shows the full technical flow from user input to result displayed in the app.
+
+![Technical Flow](assets/Technical%20Flow.png)
 
 ---
 
@@ -117,7 +131,7 @@ TradingAgent/
 | Azure OpenAI | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` | |
 | Ollama (local) | No key needed | Set `OLLAMA_BASE_URL` |
 
-Recommended model: **Gemini 2.5 Flash** (`gemini-2.5-flash`). The pipeline sends 40–80K tokens per run across 9 agents. Models below 30B parameters or without strong structured-output support will produce inconsistent results.
+Recommended model: **Gemini 2.5 Flash** (`gemini-2.5-flash`). The pipeline sends 40-80K tokens per run across 9 agents. Models below 30B parameters or without strong structured-output support will produce inconsistent results.
 
 ---
 
@@ -257,6 +271,30 @@ Indonesian stocks listed on the Indonesia Stock Exchange (IDX) use the `.JK` suf
 
 ---
 
+## Usage
+
+### 1. Open the Analysis page
+
+Go to **Analysis** in the navigation bar. You will see the input form on the left and a blank result area on the right.
+
+![Analysis Form](assets/Web/TradingAgent%20Analysis%20UI%201.png)
+
+### 2. Enter your parameters and run
+
+Enter a ticker symbol (e.g. `NVDA` for Nvidia, or `BBCA.JK` for Bank Central Asia), set a trade date, and click **Execute Analysis**. The pipeline takes 2-5 minutes per run.
+
+### 3. Read the result
+
+When the pipeline finishes, the ResultCard shows the decision badge (Buy / Hold / Sell), price target, time horizon, confidence, action plan, key catalysts, executive summary, and full investment thesis.
+
+![Analysis Result - Sell example](assets/Web/TradingAgent%20Analysis%20UI%202.png)
+
+![Analysis Result - Hold example](assets/Web/TradingAgent%20Analysis%20UI%203.png)
+
+Your last 10 analyses are saved automatically in the **Recent Analyses** sidebar.
+
+---
+
 ## Mock Mode vs Real Mode
 
 **Real mode** (default) calls the live backend SSE pipeline. It requires a running backend with a valid API key. Use the main `/analysis` page.
@@ -374,17 +412,6 @@ Returns HTTP 429 if the per-IP concurrent limit is reached. Returns HTTP 504 on 
 | `VITE_API_KEY` | — | Must match `API_KEY` in backend if auth is enabled |
 | `VITE_DEFAULT_MAX_DEBATE_ROUNDS` | `1` | Default shown in the form |
 | `VITE_ENABLE_MOCK` | `false` | Set `true` to use mock data on `/analysis` |
-
----
-
-## Usage
-
-1. Go to **Analysis** in the navigation bar.
-2. Enter a ticker symbol (e.g. `NVDA` for Nvidia, or `BBCA.JK` for Bank Central Asia) and a trade date.
-3. Click **Run Agent Analysis**.
-4. Watch the **AgentLog** update live via SSE as each agent completes.
-5. Read the **ResultCard** when the pipeline finishes. It shows the decision badge, price target, time horizon, executive summary, and full investment thesis.
-6. Your last 10 analyses are saved automatically in the **Recent Analyses** sidebar.
 
 ---
 
