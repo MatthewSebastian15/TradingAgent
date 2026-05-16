@@ -394,9 +394,9 @@ Returns HTTP 429 if the per-IP concurrent limit is reached. Returns HTTP 504 on 
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `google` | LLM provider name |
-| `DEEP_THINK_LLM` | `gemini-2.5-flash` | Model for Research Manager and Portfolio Manager |
-| `QUICK_THINK_LLM` | `gemini-2.5-flash` | Model for all other agents |
+| `LLM_PROVIDER` | — | LLM provider name |
+| `DEEP_THINK_LLM` | — | Model for Research Manager and Portfolio Manager |
+| `QUICK_THINK_LLM` | — | Model for all other agents |
 | `GOOGLE_API_KEY` | — | Google Gemini API key |
 | `DEEPSEEK_API_KEY` | — | DeepSeek API key |
 | `ANALYSIS_MODE` | `balanced` | `balanced` (9-call fixed) or `classic` (full graph) |
