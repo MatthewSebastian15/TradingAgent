@@ -10,7 +10,9 @@ from dataclasses import dataclass
 
 from fastapi import Request
 
-from config import settings
+from config import (REQUIRE_API_KEY_FOR_RATE_LIMIT, REQUEST_RATE_LIMIT_PER_MINUTE,
+    MAX_CONCURRENT_REQUESTS_PER_KEY, STREAM_RATE_LIMIT_PER_MINUTE,
+    MAX_CONCURRENT_STREAMS_PER_KEY)
 from errors import RateLimitError
 
 
@@ -44,7 +46,7 @@ def get_client_identifier(request: Request) -> str:
     if api_key:
         return f"api_key:{_hash(api_key)}"
 
-    if settings.require_api_key_for_rate_limit:
+    if REQUIRE_API_KEY_FOR_RATE_LIMIT:
         raise RateLimitError("Missing API key. Send x-api-key or Authorization: Bearer <key>.")
 
     forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
@@ -104,16 +106,16 @@ class RateLimitLease:
 def request_policy() -> RateLimitPolicy:
     return RateLimitPolicy(
         scope="request",
-        max_per_minute=settings.request_rate_limit_per_minute,
-        max_concurrent=settings.max_concurrent_requests_per_key,
+        max_per_minute=REQUEST_RATE_LIMIT_PER_MINUTE,
+        max_concurrent=MAX_CONCURRENT_REQUESTS_PER_KEY,
     )
 
 
 def stream_policy() -> RateLimitPolicy:
     return RateLimitPolicy(
         scope="stream",
-        max_per_minute=settings.stream_rate_limit_per_minute,
-        max_concurrent=settings.max_concurrent_streams_per_key,
+        max_per_minute=STREAM_RATE_LIMIT_PER_MINUTE,
+        max_concurrent=MAX_CONCURRENT_STREAMS_PER_KEY,
     )
 
 

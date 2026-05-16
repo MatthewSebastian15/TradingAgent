@@ -4,7 +4,14 @@ import warnings
 import pytest
 
 from backend.tradingagents.llm_clients.base_client import BaseLLMClient
-from backend.tradingagents.llm_clients.model_catalog import get_known_models
+try:
+    from config import KNOWN_MODELS as _known_models_dict
+    def get_known_models():
+        return _known_models_dict
+except ImportError:
+    from tradingagents.llm_clients.validators import KNOWN_MODELS as _known_models_dict
+    def get_known_models():
+        return _known_models_dict
 from backend.tradingagents.llm_clients.validators import validate_model
 
 

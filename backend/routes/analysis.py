@@ -37,7 +37,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised when optional depend
 
             super().__init__(encode_events(), media_type="text/event-stream")
 
-from config import settings
+from config import PIPELINE_TIMEOUT_SECONDS, PROCESS_POOL_WORKERS
 from errors import (
     ApiError,
     PipelineExecutionError,
@@ -242,7 +242,7 @@ async def _get_executor() -> concurrent.futures.ProcessPoolExecutor:
         async with _EXECUTOR_LOCK:
             if _EXECUTOR is None:
                 _EXECUTOR = concurrent.futures.ProcessPoolExecutor(
-                    max_workers=settings.process_pool_workers,
+                    max_workers=PROCESS_POOL_WORKERS,
                     mp_context=multiprocessing.get_context("spawn"),
                 )
     return _EXECUTOR
@@ -262,7 +262,7 @@ async def _run_pipeline_async(req: AnalysisRequest, request_id: str) -> dict:
                 req.max_debate_rounds,
                 request_id,
             ),
-            timeout=settings.pipeline_timeout_seconds,
+            timeout=PIPELINE_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError as exc:
         logger.error(
@@ -272,10 +272,10 @@ async def _run_pipeline_async(req: AnalysisRequest, request_id: str) -> dict:
                 "request_id": request_id,
                 "ticker": req.ticker,
                 "trade_date": req.trade_date,
-                "duration_ms": settings.pipeline_timeout_seconds * 1000,
+                "duration_ms": PIPELINE_TIMEOUT_SECONDS * 1000,
             },
         )
-        raise PipelineTimeoutError(settings.pipeline_timeout_seconds) from exc
+        raise PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS) from exc
     except ApiError:
         raise
     except Exception as exc:
@@ -405,12 +405,12 @@ async def _stream_progress_and_result(
             async with limit_request(request, stream_policy()):
                 result_fields = await asyncio.wait_for(
                     asyncio.to_thread(run),
-                    timeout=settings.pipeline_timeout_seconds,
+                    timeout=PIPELINE_TIMEOUT_SECONDS,
                 )
             payload = _response_payload(request_id, req.ticker, req.trade_date, result_fields)
             await queue.put({"type": "result", "payload": payload})
         except asyncio.TimeoutError as exc:
-            await queue.put({"type": "error", "payload": error_payload(PipelineTimeoutError(settings.pipeline_timeout_seconds))})
+            await queue.put({"type": "error", "payload": error_payload(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS))})
         except Exception as exc:
             if isinstance(exc, ApiError):
                 payload = error_payload(exc)
