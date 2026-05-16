@@ -6,7 +6,7 @@ import NotFound from './pages/NotFound';
 import './index.css';
 
 const AnalysisMock = lazy(() => import('./pages/AnalysisMock'));
-const ENABLE_MOCK = String(import.meta.env.VITE_ENABLE_MOCK || '').toLowerCase() === 'true';
+const ENABLE_MOCK = false;
 
 function LoadingScreen() {
   return (

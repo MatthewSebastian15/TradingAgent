@@ -7,7 +7,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from config import settings
+from config import DEFAULT_MAX_DEBATE_ROUNDS
 from errors import BadRequestError
 
 _TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$")
@@ -18,7 +18,7 @@ class AnalysisRequest(BaseModel):
 
     ticker: str = Field(..., min_length=1, max_length=12)
     trade_date: str
-    max_debate_rounds: int = Field(default_factory=lambda: settings.default_max_debate_rounds)
+    max_debate_rounds: int = Field(default=DEFAULT_MAX_DEBATE_ROUNDS)
 
 
 def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisRequest:

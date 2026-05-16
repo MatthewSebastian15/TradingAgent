@@ -4,7 +4,14 @@ from typing import List, Optional, Tuple, Dict
 from rich.console import Console
 
 from backend.cli.models import AnalystType
-from backend.tradingagents.llm_clients.model_catalog import get_model_options
+try:
+    from config import MODEL_CATALOG as _MODEL_CATALOG
+except ImportError:
+    # CLI used standalone without backend on path — provide a minimal inline catalog
+    _MODEL_CATALOG: dict = {}
+
+def get_model_options(provider: str, mode: str):
+    return _MODEL_CATALOG.get(provider, {}).get(mode, [])
 
 console = Console()
 

@@ -1,13 +1,6 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-ARG REACT_APP_API_URL=/api
-ARG REACT_APP_API_KEY=
-ARG REACT_APP_DEFAULT_MAX_DEBATE_ROUNDS=3
-ENV REACT_APP_API_URL=$REACT_APP_API_URL \
-    REACT_APP_API_KEY=$REACT_APP_API_KEY \
-    REACT_APP_DEFAULT_MAX_DEBATE_ROUNDS=$REACT_APP_DEFAULT_MAX_DEBATE_ROUNDS
-
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend ./
@@ -15,6 +8,6 @@ RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/build /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

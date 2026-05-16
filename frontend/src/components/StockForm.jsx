@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+// Empty string = relative URL, nginx proxies /api/* to backend in Docker.
+// For local dev without Docker, use: http://localhost:8000
+const API_URL = '';
 const API_KEY = import.meta.env.VITE_API_KEY || '';
 
 function buildApiUrl(path) {
@@ -8,7 +10,7 @@ function buildApiUrl(path) {
   const base = API_URL || 'http://localhost:8000';
   return base.endsWith('/api') ? `${base}${cleanPath}` : `${base}/api${cleanPath}`;
 }
-const DEFAULT_DEBATE_ROUNDS = clampRounds(import.meta.env.VITE_DEFAULT_MAX_DEBATE_ROUNDS || 1);
+const DEFAULT_DEBATE_ROUNDS = 3;
 
 const IDX_TICKERS = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'];
 const US_TICKERS  = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'];

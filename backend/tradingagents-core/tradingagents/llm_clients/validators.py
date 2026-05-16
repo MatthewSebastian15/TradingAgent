@@ -1,26 +1,35 @@
-"""Model name validators for each provider."""
+"""Model name validators for each provider.
 
-from .model_catalog import get_known_models
+Imports KNOWN_MODELS from backend config so model_catalog.py is no longer needed.
+Falls back to an empty dict if imported outside the backend context (e.g. in CLI).
+"""
 
+from __future__ import annotations
 
-VALID_MODELS = {
-    provider: models
-    for provider, models in get_known_models().items()
-    if provider not in ("ollama", "openrouter")
-}
+import sys
+
+try:
+    # When running inside the backend process, config is on sys.path
+    from config import KNOWN_MODELS, OPEN_MODEL_PROVIDERS
+except ImportError:
+    # CLI or standalone usage: accept any model without validation
+    KNOWN_MODELS: dict[str, list[str]] = {}
+    OPEN_MODEL_PROVIDERS: frozenset[str] = frozenset({"ollama", "openrouter", "azure"})
 
 
 def validate_model(provider: str, model: str) -> bool:
     """Check if model name is valid for the given provider.
 
-    For ollama, openrouter - any model is accepted.
+    For ollama, openrouter, and azure any model string is accepted.
+    For providers with a known catalog, the model must be in the list.
+    Unknown providers (not in catalog) are also accepted to stay forward-compatible.
     """
     provider_lower = provider.lower()
 
-    if provider_lower in ("ollama", "openrouter"):
+    if provider_lower in OPEN_MODEL_PROVIDERS:
         return True
 
-    if provider_lower not in VALID_MODELS:
+    if provider_lower not in KNOWN_MODELS:
         return True
 
-    return model in VALID_MODELS[provider_lower]
+    return model in KNOWN_MODELS[provider_lower]
