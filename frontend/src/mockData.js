@@ -1,53 +1,325 @@
 // frontend/src/mockData.js
+// Central mock source for /analysis.test and VITE_ENABLE_MOCK=true.
+// Keep the shape close to the backend response so the UI can be debugged
+// without spending LLM quota or running the agent pipeline.
+
+const AGENTS_USED = [
+  'Data Collection',
+  'Market Analyst',
+  'News Analyst',
+  'Fundamentals Analyst',
+  'Bull Researcher',
+  'Bear Researcher',
+  'Research Manager',
+  'Trader',
+  'Risk Analysts',
+  'Portfolio Manager',
+];
+
+export const MOCK_PIPELINE_STEPS = [
+  {
+    agent_id: 'data_collection',
+    agent_name: 'DATA COLLECTION',
+    running: 'Fetching price history, fundamentals, and news snapshot...',
+    completed: 'Market data package prepared.',
+  },
+  {
+    agent_id: 'market_analyst',
+    agent_name: 'MARKET ANALYST',
+    running: 'Reading price trend, volume behavior, and momentum context...',
+    completed: 'Market structure analysis complete.',
+  },
+  {
+    agent_id: 'news_analyst',
+    agent_name: 'NEWS ANALYST',
+    running: 'Reviewing recent headlines and sentiment drivers...',
+    completed: 'News sentiment analysis complete.',
+  },
+  {
+    agent_id: 'fundamentals',
+    agent_name: 'FUNDAMENTALS ANALYST',
+    running: 'Checking growth, margins, valuation, and balance sheet quality...',
+    completed: 'Fundamental review complete.',
+  },
+  {
+    agent_id: 'bull_researcher',
+    agent_name: 'BULL RESEARCHER',
+    running: 'Building the optimistic case and upside scenario...',
+    completed: 'Bull case complete.',
+  },
+  {
+    agent_id: 'bear_researcher',
+    agent_name: 'BEAR RESEARCHER',
+    running: 'Building the downside case and key risk scenario...',
+    completed: 'Bear case complete.',
+  },
+  {
+    agent_id: 'research_manager',
+    agent_name: 'RESEARCH MANAGER',
+    running: 'Reconciling bull and bear arguments into a decision frame...',
+    completed: 'Research verdict complete.',
+  },
+  {
+    agent_id: 'trader',
+    agent_name: 'TRADER',
+    running: 'Drafting entry, stop loss, take profit, and execution plan...',
+    completed: 'Trade plan complete.',
+  },
+  {
+    agent_id: 'risk_analysts',
+    agent_name: 'RISK ANALYSTS',
+    running: 'Stress testing drawdown, volatility, and invalidation levels...',
+    completed: 'Risk review complete.',
+  },
+  {
+    agent_id: 'portfolio_manager',
+    agent_name: 'PORTFOLIO MANAGER',
+    running: 'Finalizing allocation and portfolio action...',
+    completed: 'Portfolio decision complete.',
+  },
+];
 
 export const MOCK_RESPONSE = {
-  ticker: "NVDA",
-  decision: "Buy",
+  request_id: 'mock-nvda-buy',
+  ticker: 'NVDA',
+  trade_date: '2026-05-18',
+  decision: 'Buy',
+  rating: 'Buy',
+  price_target: 1050,
+  time_horizon: '3-6 months',
+  confidence_score: 0.86,
+  suggested_allocation_percent: 6,
+  entry_price: 920,
+  stop_loss: 850,
+  take_profit: 1050,
+  risk_reward_ratio: '2.6:1',
+  max_drawdown_estimate: '8-12%',
+  volatility_level: 'High',
+  rebalancing_action: 'Add gradually',
+  position_sizing_reason:
+    'Use a staged 5-7% allocation because momentum remains strong, but valuation risk is still high. Split entries across 2-3 tranches instead of buying all at once.',
+  executive_summary:
+    'NVDA remains in a strong position because AI infrastructure spending is still concentrated around its GPU and software ecosystem. Demand for accelerated computing stays above available supply, and the company keeps high operating leverage through premium pricing. The main risk is valuation: the market already expects strong execution, so position sizing matters more than blind conviction.',
+  investment_thesis:
+    'The core thesis is simple: NVDA is still the default supplier for high-end AI training and inference workloads. Its CUDA ecosystem, data center GPU roadmap, and customer lock-in give it a moat that competitors can attack but not quickly erase. The upside case depends on sustained cloud capex, Blackwell adoption, and enterprise AI demand expanding beyond the largest hyperscalers. The downside case is also real: export restrictions, margin normalization, or slower AI monetization could compress the multiple. The practical action is to buy gradually, keep the stop loss disciplined, and avoid oversized exposure just because the chart looks heroic, as humans keep doing before learning nothing.',
+  key_catalysts: [
+    'Sustained AI data center capex from hyperscalers.',
+    'Blackwell platform ramp and supply expansion.',
+    'High-margin software and networking attach rate.',
+  ],
+  invalidation_conditions: [
+    'Break below the stop loss with heavy volume.',
+    'Cloud capex guidance weakens across major customers.',
+    'Gross margin compression accelerates for two quarters.',
+  ],
+  data_quality: {
+    price_data: 'ok',
+    fundamentals: 'ok',
+    news: 'ok',
+    warnings: ['Mock data only. No backend, yfinance, or LLM call was executed.'],
+  },
+  agents_used: AGENTS_USED,
   full_decision: `**Rating**: Buy
 
-**Executive Summary**: NVDA saat ini berada dalam posisi yang sangat kuat di industri semikonduktor global, terutama karena permintaan chip AI yang terus melonjak dari perusahaan-perusahaan teknologi besar. Pendapatan perusahaan tumbuh 262% dibanding tahun lalu, mencapai $26 miliar hanya dalam satu kuartal, angka yang belum pernah dicapai perusahaan chip manapun sebelumnya. Margin keuntungan operasional mereka mencapai 54%, artinya lebih dari separuh setiap dolar pendapatan langsung menjadi keuntungan bersih. Permintaan chip Blackwell generasi terbaru mereka sudah melebihi kapasitas produksi, dengan antrian pemesanan yang memanjang hingga tahun 2026. Dengan posisi monopoli de facto di pasar GPU untuk training AI, NVDA layak mendapat alokasi portofolio 5–7% dengan target masuk secara bertahap.
+**Executive Summary**: NVDA remains in a strong position because AI infrastructure spending is still concentrated around its GPU and software ecosystem.
 
-**Investment Thesis**: Bayangkan NVDA seperti perusahaan yang menjual sekop di tengah demam emas — hanya saja sekop mereka adalah satu-satunya yang bisa dipakai, dan semua penambang emas dunia antre membelinya. Setiap perusahaan yang ingin membangun sistem AI, mulai dari Microsoft, Google, Meta, hingga startup kecil, harus membeli GPU NVDA karena tidak ada alternatif yang setara. Ini yang disebut parit kompetitif: sangat sulit bagi pesaing untuk menyamainya dalam waktu dekat. Di sisi angka, revenue kuartal terakhir $26B tumbuh 262% YoY, margin operasional 54.1%, dan backlog order artinya pesanan yang sudah masuk tapi belum dikirim membentang hingga 2026. Risiko utama ada dua: pertama, regulasi ekspor Amerika ke China bisa memangkas sekitar 15–20% pasar potensial mereka; kedua, valuasi sahamnya mahal di P/E 35x forward, yang berarti pasar sudah memperhitungkan banyak pertumbuhan di harga sekarang. Namun kedua risiko ini sudah diketahui pasar dan sudah sebagian tercermin di harga. Bull case lebih kuat: siklus belanja infrastruktur AI baru saja dimulai, NVDA punya software moat lewat ekosistem CUDA yang sudah dipakai jutaan developer selama 15 tahun sehingga sangat sulit diganti, dan pipeline produk mereka di 2025-2026 terlihat lebih kuat dari generasi sebelumnya. Rekomendasi: beli bertahap dalam 2-3 transaksi, pasang stop loss di $850, dan siapkan horizon investasi minimal 3-6 bulan.
+**Investment Thesis**: Buy gradually, use disciplined risk controls, and avoid oversized exposure.
 
 **Price Target**: 1050.0
 
 **Time Horizon**: 3-6 months`,
-  trade_date: "2026-05-12",
-  agents_used: ["Market Analyst", "News Researcher", "Fundamentals Analyst", "Bull Researcher", "Bear Researcher", "Research Manager", "Trader", "Risk Analysts", "Portfolio Manager"],
 };
 
 export const MOCK_SELL_RESPONSE = {
-  ticker: "TSLA",
-  decision: "Sell",
+  request_id: 'mock-tsla-sell',
+  ticker: 'TSLA',
+  trade_date: '2026-05-18',
+  decision: 'Sell',
+  rating: 'Sell',
+  price_target: 155,
+  time_horizon: '1-3 months',
+  confidence_score: 0.78,
+  suggested_allocation_percent: 0,
+  entry_price: 185,
+  stop_loss: 220,
+  take_profit: 155,
+  risk_reward_ratio: '1.8:1',
+  max_drawdown_estimate: '12-18%',
+  volatility_level: 'Very High',
+  rebalancing_action: 'Reduce exposure',
+  position_sizing_reason:
+    'Avoid adding new exposure until margins stabilize and the stock regains clear technical strength. Existing positions can be reduced in stages.',
+  executive_summary:
+    'TSLA faces pressure from price competition, margin compression, and uncertainty around the timing of robotaxi and software monetization. The brand remains valuable, but the current setup lacks a clear near-term catalyst. Risk control matters more than hope, which is tragic news for spreadsheet optimism.',
+  investment_thesis:
+    'The sell thesis centers on weaker automotive margins and rising EV competition, especially from lower-cost Chinese manufacturers. TSLA still has long-term optionality from energy storage, FSD, and robotics, but those businesses need time before they can offset margin pressure in the core auto segment. In the short term, the stock needs evidence of margin recovery, stronger delivery growth, or credible software revenue acceleration. Until that appears, reducing exposure is cleaner than waiting for narrative magic to repair the P&L.',
+  key_catalysts: [
+    'Possible rebound if deliveries surprise to the upside.',
+    'Energy storage growth could soften automotive weakness.',
+  ],
+  invalidation_conditions: [
+    'Recovery above $220 with improving volume.',
+    'Gross margin stabilizes and guidance improves.',
+    'FSD monetization shows measurable revenue contribution.',
+  ],
+  data_quality: {
+    price_data: 'ok',
+    fundamentals: 'partial',
+    news: 'ok',
+    warnings: ['Mock bearish scenario. Fundamentals are synthetic for UI debugging.'],
+  },
+  agents_used: AGENTS_USED,
   full_decision: `**Rating**: Sell
 
-**Executive Summary**: TSLA menghadapi tekanan dari dua arah sekaligus: persaingan harga yang semakin brutal dari produsen EV China dan penurunan margin keuntungan yang konsisten selama empat kuartal terakhir. Pangsa pasar mereka di China, yang sebelumnya menjadi mesin pertumbuhan utama, turun 8% dalam satu kuartal saja karena BYD dan Xiaomi menawarkan produk setara dengan harga jauh lebih murah. Margin gross otomotif mereka sudah jatuh ke 14.6% dari 19.3% setahun lalu, dan tren ini belum menunjukkan tanda pembalikan. Segmen robotaxi dan Optimus yang diharapkan menjadi katalis baru masih butuh waktu 2-3 tahun sebelum berkontribusi nyata ke pendapatan. Dengan risiko yang ada, mengurangi eksposur secara bertahap adalah langkah yang lebih bijak dibanding mempertahankan posisi penuh.
+**Executive Summary**: TSLA faces margin and competition pressure.
 
-**Investment Thesis**: Masalah utama TSLA sekarang bukan soal teknologi, tapi soal harga dan persaingan yang makin berat di pasar yang paling penting baginya. Di China, BYD sudah menjual lebih banyak mobil listrik dari TSLA secara global, dan mereka melakukannya dengan harga yang 20-30% lebih murah untuk spesifikasi serupa. Untuk bersaing, TSLA terus memotong harga, dan ini langsung memukul margin keuntungan mereka. Setiap kali harga dipotong 5%, margin gross turun hampir proporsional karena biaya produksi mereka tidak turun secepat itu. Di Amerika, pasar EV premium mulai jenuh dan insentif pajak federal yang dulu membantu penjualan kini tidak sepasti dulu karena perubahan regulasi. Satu-satunya harapan jangka menengah adalah segmen energy storage dan software FSD (Full Self-Driving), tapi FSD masih dalam proses regulasi yang panjang di sebagian besar negara. Bear case lebih dominan saat ini: tidak ada katalis besar dalam 1-3 bulan ke depan yang bisa membalik tren margin negatif ini. Rekomendasi: kurangi posisi 50% sekarang, dan pertimbangkan exit penuh jika harga tidak recovery di atas $200 dalam 4 minggu ke depan. Stop loss ketat di $220.
+**Investment Thesis**: Reduce exposure until the setup improves.
 
 **Price Target**: 155.0
 
 **Time Horizon**: 1-3 months`,
-  trade_date: "2026-05-12",
-  agents_used: ["Market Analyst", "News Researcher", "Fundamentals Analyst", "Bull Researcher", "Bear Researcher", "Research Manager", "Trader", "Risk Analysts", "Portfolio Manager"],
 };
 
 export const MOCK_HOLD_RESPONSE = {
-  ticker: "AAPL",
-  decision: "Hold",
+  request_id: 'mock-aapl-hold',
+  ticker: 'AAPL',
+  trade_date: '2026-05-18',
+  decision: 'Hold',
+  rating: 'Hold',
+  price_target: 210,
+  time_horizon: '6-12 months',
+  confidence_score: 0.72,
+  suggested_allocation_percent: 4,
+  entry_price: 190,
+  stop_loss: 175,
+  take_profit: 210,
+  risk_reward_ratio: '1.3:1',
+  max_drawdown_estimate: '6-9%',
+  volatility_level: 'Medium',
+  rebalancing_action: 'Maintain position',
+  position_sizing_reason:
+    'Keep the position near benchmark weight. The business quality is high, but the short-term upside does not justify aggressive additions.',
+  executive_summary:
+    'AAPL remains a high-quality compounder with strong services revenue and a resilient ecosystem. The issue is timing. Hardware growth looks mature, and the next upgrade cycle needs clearer evidence before a stronger rating makes sense.',
+  investment_thesis:
+    'The hold thesis reflects a strong company with limited near-term upside. Services revenue, buybacks, and ecosystem retention support the downside, while AI-driven device upgrades could create a better catalyst later. For now, the stock deserves patience rather than new aggressive buying. Even the machines can see that sometimes doing nothing is a decision, despite humanity requiring dashboards for it.',
+  key_catalysts: [
+    'Services growth remains resilient.',
+    'AI features may support a future iPhone upgrade cycle.',
+    'Large buyback program supports per-share earnings.',
+  ],
+  invalidation_conditions: [
+    'Services growth slows sharply.',
+    'Regulatory pressure reduces App Store economics.',
+    'iPhone demand weakens across two reporting periods.',
+  ],
+  data_quality: {
+    price_data: 'ok',
+    fundamentals: 'ok',
+    news: 'partial',
+    warnings: ['Mock neutral scenario. News field is intentionally partial for UI testing.'],
+  },
+  agents_used: AGENTS_USED,
   full_decision: `**Rating**: Hold
 
-**Executive Summary**: AAPL saat ini berada di fase konsolidasi di mana bisnis intinya tetap sehat tapi belum ada pendorong pertumbuhan besar yang akan muncul dalam waktu dekat. Segmen Services mereka — yang mencakup App Store, Apple Music, iCloud, dan Apple TV — tumbuh 14% dan sekarang menyumbang hampir 25% dari total pendapatan, memberikan stabilitas yang tidak dimiliki perusahaan hardware murni. Di sisi lain, penjualan iPhone masih stagnan secara unit karena siklus upgrade pengguna melambat dan pasar smartphone premium global sudah relatif jenuh. Integrasi fitur AI di iOS 18 berpotensi menjadi alasan kuat bagi pengguna untuk upgrade di paruh kedua 2026, tapi dampaknya baru akan terlihat di laporan keuangan berikutnya. Dengan fundamentals yang kuat tapi upside terbatas jangka pendek, mempertahankan posisi saat ini adalah keputusan paling rasional.
+**Executive Summary**: AAPL is stable but lacks a strong near-term catalyst.
 
-**Investment Thesis**: AAPL adalah salah satu bisnis paling stabil di dunia, tapi stabil bukan berarti akan naik drastis dalam 3 bulan ke depan. Kekuatan terbesar mereka sekarang adalah ekosistem yang lengkap: begitu seseorang pakai iPhone, mereka cenderung beli Mac, AirPods, Apple Watch, dan berlangganan berbagai layanan Apple, menciptakan pendapatan berulang yang sangat dapat diprediksi. Margin gross mereka di 46% adalah salah satu yang tertinggi di industri hardware konsumen, mencerminkan kekuatan brand dan kemampuan mereka mematok harga premium. Tantangan jangka pendek adalah tidak adanya produk blockbuster baru yang siap diluncurkan — Apple Vision Pro masih niche, dan model iPhone terbaru tidak menghadirkan lompatan yang cukup besar untuk mendorong gelombang upgrade massal. Katalis terbesar yang ditunggu adalah siklus upgrade berbasis AI: jika fitur Apple Intelligence di iOS 18 terbukti berguna dan hanya berjalan optimal di chip A17 ke atas, ratusan juta pengguna iPhone lama punya alasan konkret untuk upgrade di H2 2026. Risiko yang perlu diawasi: tekanan regulasi antitrust terhadap App Store di Eropa dan Amerika bisa memangkas margin Services, yang sekarang menjadi mesin pertumbuhan utama. Hold berarti tidak perlu tambah posisi sekarang, tapi juga tidak ada alasan untuk keluar dari saham yang fundamentalnya sekuat ini.
+**Investment Thesis**: Maintain exposure and wait for better upside confirmation.
 
 **Price Target**: 210.0
 
 **Time Horizon**: 6-12 months`,
-  trade_date: "2026-05-12",
-  agents_used: ["Market Analyst", "News Researcher", "Fundamentals Analyst", "Bull Researcher", "Bear Researcher", "Research Manager", "Trader", "Risk Analysts", "Portfolio Manager"],
+};
+
+export const MOCK_IDX_RESPONSE = {
+  request_id: 'mock-bbca-buy',
+  ticker: 'BBCA.JK',
+  trade_date: '2026-05-18',
+  decision: 'Buy',
+  rating: 'Buy',
+  price_target: 10800,
+  time_horizon: '3-6 months',
+  confidence_score: 0.81,
+  suggested_allocation_percent: 8,
+  entry_price: 9800,
+  stop_loss: 9300,
+  take_profit: 10800,
+  risk_reward_ratio: '2.0:1',
+  max_drawdown_estimate: '5-8%',
+  volatility_level: 'Medium',
+  rebalancing_action: 'Accumulate on pullback',
+  position_sizing_reason:
+    'Use a larger allocation only when the portfolio needs defensive financial exposure. Add on weakness instead of chasing short rallies.',
+  executive_summary:
+    'The IDX mock scenario uses a large-cap bank profile with steady profitability, strong liquidity, and defensive characteristics. It helps you test IDR formatting, .JK ticker behavior, and local-market UI cases without hitting the backend.',
+  investment_thesis:
+    'The buy thesis depends on resilient loan growth, stable asset quality, and strong deposit franchise economics. Upside comes from improving credit demand and consistent profitability. The main risk is macro pressure from rates, weaker consumption, or rising credit costs. This mock exists so the UI can behave like a serious finance tool instead of a decorative loading screen wearing a suit.',
+  key_catalysts: [
+    'Stable net interest margin.',
+    'Healthy loan growth from corporate and consumer demand.',
+    'Defensive large-cap rotation in IDX.',
+  ],
+  invalidation_conditions: [
+    'Credit cost rises above management guidance.',
+    'Break below stop loss with weak market breadth.',
+    'Banking sector liquidity tightens materially.',
+  ],
+  data_quality: {
+    price_data: 'ok',
+    fundamentals: 'ok',
+    news: 'partial',
+    warnings: ['Mock IDX scenario. Values are synthetic and intended only for UI debugging.'],
+  },
+  agents_used: AGENTS_USED,
+  full_decision: `**Rating**: Buy
+
+**Executive Summary**: IDX large-cap bank mock with IDR metrics.
+
+**Investment Thesis**: Accumulate on pullback with disciplined risk control.
+
+**Price Target**: 10800
+
+**Time Horizon**: 3-6 months`,
 };
 
 export const MOCK_ERROR_RESPONSE = {
-  error: "Analysis failed: 429 RESOURCE_EXHAUSTED. Quota exceeded. Please retry in 60s.",
+  request_id: 'mock-error',
+  ticker: 'ERROR',
+  trade_date: '2026-05-18',
+  error: 'Analysis failed: 429 RESOURCE_EXHAUSTED. Quota exceeded. Please retry later.',
 };
+
+const MOCK_MAP = {
+  NVDA: MOCK_RESPONSE,
+  AAPL: MOCK_HOLD_RESPONSE,
+  TSLA: MOCK_SELL_RESPONSE,
+  'BBCA.JK': MOCK_IDX_RESPONSE,
+  'BBRI.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-bbri-buy', ticker: 'BBRI.JK', price_target: 6200, entry_price: 5500, stop_loss: 5200, take_profit: 6200 },
+  'TLKM.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-tlkm-hold', ticker: 'TLKM.JK', decision: 'Hold', rating: 'Hold', price_target: 3500, entry_price: 3200, stop_loss: 3000, take_profit: 3500, suggested_allocation_percent: 5, rebalancing_action: 'Maintain position' },
+  'BMRI.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-bmri-buy', ticker: 'BMRI.JK', price_target: 7600, entry_price: 6900, stop_loss: 6500, take_profit: 7600 },
+  'ASII.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-asii-hold', ticker: 'ASII.JK', decision: 'Hold', rating: 'Hold', price_target: 6100, entry_price: 5700, stop_loss: 5300, take_profit: 6100, suggested_allocation_percent: 4, rebalancing_action: 'Maintain position' },
+  'GOTO.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-goto-sell', ticker: 'GOTO.JK', decision: 'Sell', rating: 'Sell', price_target: 55, entry_price: 70, stop_loss: 82, take_profit: 55, suggested_allocation_percent: 0, volatility_level: 'Very High', rebalancing_action: 'Avoid exposure' },
+  ERROR: MOCK_ERROR_RESPONSE,
+};
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+export function getMockAnalysisResponse({ ticker = 'NVDA', trade_date, max_debate_rounds = 3 } = {}) {
+  const normalizedTicker = String(ticker || 'NVDA').trim().toUpperCase();
+  const base = MOCK_MAP[normalizedTicker] || (normalizedTicker.endsWith('.JK') ? MOCK_IDX_RESPONSE : MOCK_RESPONSE);
+  const response = clone(base);
+
+  response.ticker = normalizedTicker;
+  response.trade_date = trade_date || response.trade_date;
+  response.max_debate_rounds = max_debate_rounds;
+  response.mock = true;
+  response.source = 'frontend/src/mockData.js';
+
+  if (!response.request_id) {
+    response.request_id = `mock-${normalizedTicker.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  }
+
+  return response;
+}

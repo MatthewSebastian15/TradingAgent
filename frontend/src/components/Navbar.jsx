@@ -20,7 +20,7 @@ export default function Navbar() {
   const location = useLocation();
 
   const isHome = location.pathname === '/home';
-  const isAnalysis = location.pathname === '/analysis';
+  const isAnalysis = ['/analysis', '/analysis-live', '/analysis.test'].includes(location.pathname);
 
   return (
     <nav className="sticky top-0 z-50 border-b border-bloomberg-border bg-bloomberg-bg">
