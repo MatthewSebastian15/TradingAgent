@@ -7,6 +7,17 @@ node_modules/
 dist/
 build/
 
+# ─── Virtual environment ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+.conda/
+__pypackages__/
+.pixi/
+.env
+*.env
+
 # ─── Testing ──────────────────────────────────────────────────────────────────
 coverage/
 
