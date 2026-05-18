@@ -59,51 +59,58 @@ The first three analyst LLM calls run in parallel after data collection. Later d
 
 ```
 TradingAgent/
+├── README.md
+├── CHANGELOG.md
 ├── docker-compose.yml
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
+├── assets/
 │
 ├── backend/
-│   ├── .env.example              # Copy to .env and fill your keys
-│   ├── .env                      # Your actual keys — not committed
-│   ├── main.py                   # FastAPI app, CORS, middleware, startup validation
-│   ├── config.py                 # Centralized settings and startup config validation
-│   ├── errors.py                 # Consistent API exceptions and sanitized error responses
-│   ├── logging_config.py         # Request-scoped logging and RequestIdMiddleware
-│   ├── rate_limiter.py           # API-key aware in-memory rate limiting
-│   ├── requirements.txt          # FastAPI, uvicorn, sse-starlette, python-dotenv
-│   └── routes/
-│       ├── analysis.py           # SSE + REST endpoints, pipeline runner
-│       └── validation.py         # Input validation helpers
-│
-├── backend/tradingagents-core/   # TradingAgents engine (TauricResearch)
-│   ├── tradingagents/
-│   │   ├── agents/               # 9 agent implementations + schemas
-│   │   ├── graph/                # LangGraph orchestration
-│   │   ├── llm_clients/          # Provider adapters (google, openai, anthropic, etc.)
-│   │   ├── dataflows/            # yfinance, Alpha Vantage data connectors
-│   │   ├── default_config.py     # Engine defaults (overridden by backend .env)
-│   │   └── pipeline_balanced.py  # Fixed 9-call balanced pipeline
-│   └── pyproject.toml
+│   ├── .env.example
+│   ├── config.py                  # Backend config, provider settings, model catalog, CORS, tunables
+│   ├── errors.py                  # Sanitized API errors
+│   ├── logging_config.py          # Request ID middleware and logging
+│   ├── main.py                    # FastAPI app setup and startup validation
+│   ├── rate_limiter.py            # API-key-aware in-memory rate limiter
+│   ├── requirements.txt           # FastAPI wrapper dependencies
+│   ├── routes/
+│   │   ├── analysis.py            # REST + SSE analysis endpoints
+│   │   └── validation.py          # Request validation and normalization
+│   ├── tests/                     # FastAPI wrapper tests
+│   └── tradingagents-core/
+│       ├── pyproject.toml         # TradingAgents package dependencies
+│       ├── tradingagents/
+│       │   ├── agents/            # Agent prompts, schemas, managers, analysts, researchers, trader
+│       │   ├── dataflows/         # yfinance and Alpha Vantage-related data modules
+│       │   ├── graph/             # Classic graph orchestration
+│       │   ├── llm_clients/       # Google, OpenAI, Anthropic, DeepSeek, Ollama, etc.
+│       │   ├── default_config.py  # Core defaults
+│       │   └── pipeline_balanced.py
+│       └── tests/
 │
 └── frontend/
     ├── .env.example              # Copy to .env and fill your values
     ├── .env                      # Your actual frontend env — not committed
+    ├── index.html
+    ├── nginx.conf                 # Docker nginx proxy for /api
+    ├── package.json
     ├── vite.config.js
-    ├── nginx.conf                # Used inside Docker
     └── src/
+        ├── App.jsx                # Frontend routes
+        ├── main.jsx
+        ├── mockData.js            # Sample responses for UI testing
         ├── components/
-        │   ├── StockForm.jsx      # Real analysis form (calls backend SSE)
-        │   ├── StockFormMock.jsx  # Mock form (no API call, for UI testing)
         │   ├── AgentLog.jsx       # Live progress via SSE events
+        │   ├── Navbar.jsx
         │   ├── ResultCard.jsx     # Structured result display
-        │   └── Navbar.jsx
-        ├── pages/
-        │   ├── Dashboard.jsx      # Landing page
-        │   ├── Analysis.jsx       # Main analysis page + history sidebar
-        │   ├── AnalysisMock.jsx   # UI testing page at /analysis-mock
-        │   └── NotFound.jsx       # 404 fallback
-        └── mockData.js            # Sample responses for UI testing
+        │   ├── StockForm.jsx      # Real analysis form (calls backend SSE)
+        │   └── StockFormMock.jsx  # Mock form (no API call, for UI testing)
+        └── pages/
+            ├── Analysis.jsx       # Main analysis page + history sidebar
+            ├── AnalysisMock.jsx   # UI testing page at /analysis-mock
+            ├── Dashboard.jsx      # Landing page
+            └── NotFound.jsx       # 404 fallback
 ```
 
 ---
