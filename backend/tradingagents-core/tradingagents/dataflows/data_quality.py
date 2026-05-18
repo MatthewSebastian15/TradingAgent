@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -47,8 +48,22 @@ def looks_missing(text: str) -> bool:
 
 
 def extract_price_dates(price_data: str) -> set[str]:
+    """Return the set of valid calendar dates found at the start of each line.
+
+    A candidate is accepted only when it passes a full datetime.strptime parse,
+    so strings like '2026-99-99' are silently discarded rather than counted as
+    present-but-invalid trading days.
+    """
     dates: set[str] = set()
     for line in (price_data or "").splitlines():
-        if len(line) >= 10 and line[:4].isdigit() and line[4] == "-" and line[7] == "-":
-            dates.add(line[:10])
+        # Fast pre-filter: lines must start with YYYY-MM-DD format characters.
+        if len(line) < 10 or not line[:4].isdigit() or line[4] != "-" or line[7] != "-":
+            continue
+        candidate = line[:10]
+        try:
+            datetime.strptime(candidate, "%Y-%m-%d")
+            dates.add(candidate)
+        except ValueError:
+            # Not a real calendar date — skip silently.
+            pass
     return dates

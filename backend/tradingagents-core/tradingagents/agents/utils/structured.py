@@ -107,7 +107,19 @@ def invoke_typed_or_none(
     schema: type[T],
     agent_name: str,
 ) -> Optional[T]:
-    """Invoke a structured LLM and validate the returned Pydantic object."""
+    """Invoke a structured LLM and validate the returned Pydantic object.
+
+    Returns *None* on any failure so callers can apply their own fallback
+    without catching exceptions. The three coercion paths are tried in order:
+
+    1. Result is already the target schema — return it directly.
+    2. Result is a plain dict — validate via model_validate.
+    3. Result has a model_dump() method — dump then validate.
+
+    Path 3 is guarded with hasattr so that exotic provider return types (bare
+    strings, response objects, etc.) do not raise AttributeError and instead
+    fall through to the logged warning.
+    """
     if structured_llm is None:
         return None
 
@@ -120,7 +132,16 @@ def invoke_typed_or_none(
         if isinstance(result, dict):
             return schema.model_validate(result)
 
-        return schema.model_validate(result.model_dump())
+        if hasattr(result, "model_dump") and callable(result.model_dump):
+            return schema.model_validate(result.model_dump())
+
+        logger.warning(
+            "%s: structured result type %s is not coercible to %s; returning None.",
+            agent_name,
+            type(result).__name__,
+            schema.__name__,
+        )
+        return None
 
     except Exception as exc:
         logger.warning("%s: typed structured invocation failed (%s)", agent_name, exc)

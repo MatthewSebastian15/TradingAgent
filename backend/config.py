@@ -201,19 +201,6 @@ RISK_MIN_ROUNDS = 2
 RISK_CONSENSUS_THRESHOLD = 0.72
 ADAPTIVE_DEBATE_ENABLED = True
 
-# SSE progress timing estimates (seconds elapsed per agent)
-TIMING_THRESHOLDS: list[tuple[str, int]] = [
-    ("market_analyst", 20),
-    ("news_analyst", 45),
-    ("fundamentals", 70),
-    ("bull_researcher", 90),
-    ("bear_researcher", 110),
-    ("research_manager", 125),
-    ("trader", 135),
-    ("risk_analysts", 160),
-    ("portfolio_manager", 999_999),
-]
-
 
 # ---------------------------------------------------------------------------
 # Confidential settings loaded from .env
@@ -376,7 +363,6 @@ class _BackendSettingsShim:
     @property
     def api_key(self): return llm.api_key
 
-    def timing_thresholds(self): return TIMING_THRESHOLDS
     def tradingagents_overrides(self): return llm.tradingagents_overrides()
 
 

@@ -10,7 +10,10 @@ from pydantic import BaseModel, Field
 from config import DEFAULT_MAX_DEBATE_ROUNDS
 from errors import BadRequestError
 
-_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$")
+# Accepts plain tickers (AAPL, NVDA, 0700) and exchange-suffixed tickers
+# (BBCA.JK, BRK-B, 0700.HK). The base segment requires at least 2 characters
+# so single-letter ghosts like "A.B" are rejected before reaching the pipeline.
+_TICKER_RE = re.compile(r"^[A-Z0-9]{2,10}(?:[.-][A-Z0-9]{1,5})?$")
 
 
 class AnalysisRequest(BaseModel):

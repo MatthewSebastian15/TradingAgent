@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -96,10 +97,20 @@ class CollectedData:
 
 
 def _truncate(value: Any, limit: int = 12_000) -> str:
+    """Convert *value* to a string and truncate it to *limit* characters.
+
+    Truncation always happens on a newline boundary so the LLM never receives
+    a line that is split mid-number, mid-word, or mid-JSON value. If no newline
+    exists before the limit the hard character boundary is used as a fallback.
+    """
     text = str(value or "")
     if len(text) <= limit:
         return text
-    return text[:limit] + "\n\n[TRUNCATED FOR TOKEN CONTROL]"
+
+    # Walk back from the hard limit to find the last complete line.
+    boundary = text.rfind("\n", 0, limit)
+    cut = boundary if boundary > 0 else limit
+    return text[:cut] + "\n\n[TRUNCATED FOR TOKEN CONTROL]"
 
 
 def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -> DataField:
@@ -472,9 +483,27 @@ def run_balanced_pipeline(
     )
     data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
 
-    def build_market_report() -> AnalystReport:
+    # Parallel analyst execution.
+    #
+    # The three analyst tasks run concurrently inside a thread pool, so their
+    # _emit_progress calls can fire from different threads at the same time.
+    # Without serialisation, the SSE queue receives interleaved start/completed
+    # events that make the frontend show all three agents finishing at once.
+    #
+    # A threading.Lock wrapping the callback ensures every start→completed pair
+    # is written atomically. The lock is only held for the microseconds it takes
+    # to enqueue one event, so it does not introduce meaningful latency.
+    _analyst_lock = threading.Lock()
+
+    def _locked_callback(event: dict) -> None:
+        if progress_callback is None:
+            return
+        with _analyst_lock:
+            progress_callback(event)
+
+    def build_market_report_parallel() -> AnalystReport:
         return _run_tracked(
-            progress_callback,
+            _locked_callback,
             "market_analyst",
             "Market Analyst is reading price action and technical indicators...",
             lambda: _invoke_once(
@@ -499,9 +528,9 @@ DATA QUALITY:
             ),
         )
 
-    def build_news_social_report() -> AnalystReport:
+    def build_news_social_report_parallel() -> AnalystReport:
         return _run_tracked(
-            progress_callback,
+            _locked_callback,
             "news_analyst",
             "News + Social Analyst is scanning company news, macro news, and insider activity...",
             lambda: _invoke_once(
@@ -529,9 +558,9 @@ DATA QUALITY:
             ),
         )
 
-    def build_fundamentals_report() -> AnalystReport:
+    def build_fundamentals_report_parallel() -> AnalystReport:
         return _run_tracked(
-            progress_callback,
+            _locked_callback,
             "fundamentals",
             "Fundamentals Analyst is reviewing financial statements and ratios...",
             lambda: _invoke_once(
@@ -564,9 +593,9 @@ DATA QUALITY:
         )
 
     with ThreadPoolExecutor(max_workers=3, thread_name_prefix="balanced-analyst") as pool:
-        market_future = pool.submit(build_market_report)
-        news_future = pool.submit(build_news_social_report)
-        fundamentals_future = pool.submit(build_fundamentals_report)
+        market_future = pool.submit(build_market_report_parallel)
+        news_future = pool.submit(build_news_social_report_parallel)
+        fundamentals_future = pool.submit(build_fundamentals_report_parallel)
         market_report = market_future.result()
         news_social_report = news_future.result()
         fundamentals_report = fundamentals_future.result()
