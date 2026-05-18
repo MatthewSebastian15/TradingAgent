@@ -42,7 +42,6 @@ from errors import (
     ApiError,
     PipelineExecutionError,
     PipelineTimeoutError,
-    RateLimitError,
     error_payload,
     sanitize_message,
 )
@@ -358,9 +357,13 @@ def _sse_event(event: str, payload: dict) -> dict:
 
 
 def _sse_error(exc: Exception) -> dict:
+    """Build a safe SSE error payload from any exception.
+
+    ApiError subclasses (including RateLimitError) are serialised via
+    error_payload so user-facing messages are already sanitised. All other
+    exceptions fall through to a generic safe message.
+    """
     if isinstance(exc, ApiError):
-        payload = error_payload(exc)
-    elif isinstance(exc, RateLimitError):
         payload = error_payload(exc)
     else:
         payload = {
@@ -409,21 +412,18 @@ async def _stream_progress_and_result(
                 )
             payload = _response_payload(request_id, req.ticker, req.trade_date, result_fields)
             await queue.put({"type": "result", "payload": payload})
-        except asyncio.TimeoutError as exc:
-            await queue.put({"type": "error", "payload": error_payload(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS))})
+        except asyncio.TimeoutError:
+            # No exc variable — TimeoutError carries no useful detail for the client.
+            timeout_exc = PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)
+            await queue.put(_sse_error(timeout_exc))
         except Exception as exc:
-            if isinstance(exc, ApiError):
-                payload = error_payload(exc)
-            else:
-                payload = {
-                    "request_id": request_id,
-                    "error": {
-                        "code": "PIPELINE_FAILED",
-                        "message": sanitize_message("Analysis failed. Check backend logs with the request_id."),
-                    },
-                }
-                logger.error("Streaming pipeline failed", extra={"event": "streaming_pipeline_failed", "request_id": request_id}, exc_info=True)
-            await queue.put({"type": "error", "payload": payload})
+            if not isinstance(exc, ApiError):
+                logger.error(
+                    "Streaming pipeline failed",
+                    extra={"event": "streaming_pipeline_failed", "request_id": request_id},
+                    exc_info=True,
+                )
+            await queue.put(_sse_error(exc))
 
     task = asyncio.create_task(runner())
     try:
