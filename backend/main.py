@@ -28,8 +28,11 @@ app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    # Whitelist only the headers the API actually needs.
+    # Wildcard "*" permits arbitrary custom headers and bypasses
+    # browser preflight protection for sensitive header names.
+    allow_headers=["Content-Type", "x-api-key", "Authorization"],
 )
 
 app.add_exception_handler(ApiError, api_error_handler)
@@ -38,6 +41,12 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(analysis_router, prefix="/api")
+
+
+@app.get("/health", tags=["ops"])
+async def health_check() -> dict:
+    """Lightweight liveness probe for Docker healthcheck and load balancers."""
+    return {"status": "ok", "provider": llm.provider}
 
 
 @app.on_event("startup")
