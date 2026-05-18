@@ -4,18 +4,54 @@ import ResultCard from '../components/ResultCard';
 import AgentLog from '../components/AgentLog';
 import Navbar from '../components/Navbar';
 
-const HISTORY_KEY   = 'ta_analysis_history';
-const HISTORY_LIMIT = 10;
+const HISTORY_KEY      = 'ta_analysis_history';
+const HISTORY_LIMIT    = 10;
+// Entries older than this are pruned automatically on every read and write.
+const HISTORY_TTL_DAYS = 30;
+
+/** Return true when a saved entry has exceeded the TTL. */
+function isExpired(entry) {
+  if (!entry?.saved_at) return false;
+  const ageMs = Date.now() - new Date(entry.saved_at).getTime();
+  return ageMs > HISTORY_TTL_DAYS * 24 * 60 * 60 * 1000;
+}
+
+/** Read history from localStorage, dropping expired and malformed entries. */
+function readHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(e => e && !isExpired(e)) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Persist history, enforcing the item limit and TTL. */
+function writeHistory(entries) {
+  try {
+    const clean = entries.filter(e => e && !isExpired(e)).slice(0, HISTORY_LIMIT);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(clean));
+  } catch {
+    // localStorage may be unavailable (private browsing, storage quota exceeded).
+  }
+}
 
 function saveToHistory(result) {
   if (!result || result.error) return;
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    const history = raw ? JSON.parse(raw) : [];
-    const filtered = history.filter(h => !(h.ticker === result.ticker && h.trade_date === result.trade_date));
-    const updated = [{ ...result, saved_at: new Date().toISOString() }, ...filtered].slice(0, HISTORY_LIMIT);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
-  } catch (_) {}
+  const history = readHistory();
+  // Deduplicate by ticker + trade_date so re-running the same query replaces the old entry.
+  const deduped = history.filter(h => !(h.ticker === result.ticker && h.trade_date === result.trade_date));
+  writeHistory([{ ...result, saved_at: new Date().toISOString() }, ...deduped]);
+}
+
+/** Return a currency-prefixed string appropriate for the ticker's exchange.
+ *  Tickers ending in .JK trade in IDR; everything else defaults to USD ($).
+ */
+function formatPrice(price, ticker = '') {
+  const value = typeof price === 'number' ? price.toLocaleString() : price;
+  return ticker.toUpperCase().endsWith('.JK') ? `Rp ${value}` : `$${value}`;
 }
 
 function decisionStyle(d) {
@@ -55,7 +91,9 @@ function HistoryPanel({ currentTicker, onSelect }) {
             </div>
             <div className="flex items-center gap-3">
               {item.price_target && (
-                <span className="font-mono text-xs text-bloomberg-muted">${item.price_target}</span>
+                <span className="font-mono text-xs text-bloomberg-muted">
+                  {formatPrice(item.price_target, item.ticker)}
+                </span>
               )}
               <span className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(item.decision)}`}>
                 {(item.decision || 'N/A').toUpperCase()}

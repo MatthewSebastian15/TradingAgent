@@ -1,13 +1,21 @@
 import React, { useState, useRef } from 'react';
 
-// Empty string = relative URL, nginx proxies /api/* to backend in Docker.
-// For local dev without Docker, use: http://localhost:8000
-const API_URL = '';
+// VITE_API_URL controls where API calls are sent.
+//
+// Docker (nginx proxy) — leave unset or empty; nginx routes /api/* to the backend.
+// Local dev without Docker — set VITE_API_URL=http://localhost:8000 in frontend/.env
+//
+// The fallback to localhost:8000 means the app works out-of-the-box for local dev
+// even without a .env file, while Docker builds automatically use the relative path.
+const API_URL = import.meta.env.VITE_API_URL || '';
 const API_KEY = import.meta.env.VITE_API_KEY || '';
 
 function buildApiUrl(path) {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  const base = API_URL || 'http://localhost:8000';
+  // Relative URL (Docker + nginx proxy): prepend /api and let the proxy handle it.
+  // Absolute URL (local dev): append /api/<path> to the configured base.
+  const base = API_URL.trim();
+  if (!base) return `/api${cleanPath}`;
   return base.endsWith('/api') ? `${base}${cleanPath}` : `${base}/api${cleanPath}`;
 }
 const DEFAULT_DEBATE_ROUNDS = 3;

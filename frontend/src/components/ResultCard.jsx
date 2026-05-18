@@ -9,6 +9,16 @@ function parseBold(text) {
   );
 }
 
+/** Return a currency-prefixed string matching the ticker's exchange.
+ *  Tickers with a .JK suffix trade on the Indonesia Stock Exchange in IDR.
+ *  All other tickers default to USD ($).
+ */
+function formatPrice(price, ticker = '') {
+  if (price === null || price === undefined || price === '') return null;
+  const value = typeof price === 'number' ? price.toLocaleString() : String(price);
+  return ticker.toUpperCase().endsWith('.JK') ? `Rp ${value}` : `$${value}`;
+}
+
 function getError(e) {
   if (!e) return 'Analysis failed.';
   if (typeof e === 'string') return e;
@@ -162,7 +172,7 @@ export default function ResultCard({ result }) {
         {/* Key metrics */}
         <div className="grid grid-cols-2 gap-2 min-w-0 flex-shrink-0">
           {priceTarget !== null && (
-            <MetricBox label="PRICE TARGET" value={`$${typeof priceTarget === 'number' ? priceTarget.toLocaleString() : priceTarget}`} highlight />
+            <MetricBox label="PRICE TARGET" value={formatPrice(priceTarget, result.ticker)} highlight />
           )}
           {timeHorizon && (
             <MetricBox label="HORIZON" value={timeHorizon} />
@@ -181,9 +191,9 @@ export default function ResultCard({ result }) {
         <div className="px-4 py-4 border-b border-bloomberg-border">
           <SectionHeader label="ACTION PLAN" />
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-            {entryPrice  !== null && <MetricBox label="ENTRY"     value={entryPrice} />}
-            {stopLoss    !== null && <MetricBox label="STOP LOSS" value={stopLoss} />}
-            {takeProfit  !== null && <MetricBox label="TAKE PROFIT" value={takeProfit} />}
+            {entryPrice  !== null && <MetricBox label="ENTRY"       value={formatPrice(entryPrice,  result.ticker)} />}
+            {stopLoss    !== null && <MetricBox label="STOP LOSS"   value={formatPrice(stopLoss,    result.ticker)} />}
+            {takeProfit  !== null && <MetricBox label="TAKE PROFIT" value={formatPrice(takeProfit,  result.ticker)} />}
             {riskReward  !== null && <MetricBox label="R/R RATIO" value={riskReward} />}
             {maxDrawdown && <MetricBox label="MAX DRAWDOWN" value={maxDrawdown} />}
             {volatility  && <MetricBox label="VOLATILITY"  value={volatility} />}
