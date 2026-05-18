@@ -8,7 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
 from tradingagents.dataflows.config import get_config
-from tradingagents.utils_resilience import call_with_retry, call_with_timeout
+from tradingagents.utils_resilience import call_with_retry, call_with_timeout, limit_concurrency
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +45,13 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
         service_name = f"llm:google:{getattr(self, 'model', 'unknown')}"
 
         def do_call():
-            return call_with_timeout(
-                lambda: normalize_content(ChatGoogleGenerativeAI.invoke(self, input, config, **kwargs)),
-                timeout_seconds=int(cfg.get("timeout", 60)),
-                service_name=service_name,
-            )
+            concurrency_limit = int(cfg.get("max_concurrent_llm_calls", 3))
+            with limit_concurrency("llm:google", concurrency_limit):
+                return call_with_timeout(
+                    lambda: normalize_content(ChatGoogleGenerativeAI.invoke(self, input, config, **kwargs)),
+                    timeout_seconds=int(cfg.get("timeout", 60)),
+                    service_name=service_name,
+                )
 
         try:
             return call_with_retry(
@@ -64,8 +66,14 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
         except Exception as exc:
             error_str = str(exc)
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                delay = _extract_retry_delay(error_str)
-                logger.warning("Gemini rate limit. Respecting retryDelay %.0fs before final retry", delay)
+                raw_delay = _extract_retry_delay(error_str)
+                max_wait = float(cfg.get("llm_429_max_wait_seconds", 20))
+                delay = min(raw_delay, max_wait)
+                logger.warning(
+                    "Gemini rate limit. Respecting retryDelay %.0fs before final retry (capped at %.0fs)",
+                    raw_delay,
+                    delay,
+                )
                 time.sleep(delay)
                 return do_call()
             raise

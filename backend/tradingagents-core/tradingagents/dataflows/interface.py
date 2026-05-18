@@ -27,6 +27,10 @@ from .alpha_vantage_common import AlphaVantageRateLimitError
 # Configuration and routing logic
 from .config import get_config
 from tradingagents.utils_resilience import TTLCache, call_with_retry, call_with_timeout
+try:
+    from persistent_cache import SQLiteTTLCache
+except Exception:  # pragma: no cover - backend wrapper may not be available in CLI mode
+    SQLiteTTLCache = None  # type: ignore[assignment]
 
 # Tools organized by category
 TOOLS_CATEGORIES = {
@@ -62,6 +66,8 @@ TOOLS_CATEGORIES = {
 }
 
 _TOOL_CACHE = TTLCache(maxsize=512, ttl_seconds=900)
+_PERSISTENT_TOOL_CACHE = None
+_PERSISTENT_TOOL_CACHE_CONFIG = None
 
 VENDOR_LIST = [
     "yfinance",
@@ -138,6 +144,45 @@ def _cache_key(method: str, vendor: str, args: tuple, kwargs: dict) -> tuple:
     return (method, vendor, args, tuple(sorted(kwargs.items())))
 
 
+
+def _active_cache(config: dict):
+    """Return the configured tool cache, preferring persistent SQLite when enabled."""
+    global _PERSISTENT_TOOL_CACHE, _PERSISTENT_TOOL_CACHE_CONFIG
+
+    backend = str(config.get("data_cache_backend", "memory")).lower()
+    if backend != "sqlite" or SQLiteTTLCache is None:
+        _TOOL_CACHE.maxsize = int(config.get("cache_max_entries", 512))
+        _TOOL_CACHE.ttl_seconds = int(config.get("cache_ttl_seconds", 900))
+        return _TOOL_CACHE
+
+    cache_config = (
+        config.get("data_cache_db_path", ".cache/market_data.sqlite3"),
+        int(config.get("data_cache_ttl_seconds", config.get("cache_ttl_seconds", 900))),
+        int(config.get("data_cache_max_entries", config.get("cache_max_entries", 512))),
+    )
+    if _PERSISTENT_TOOL_CACHE is None or _PERSISTENT_TOOL_CACHE_CONFIG != cache_config:
+        _PERSISTENT_TOOL_CACHE = SQLiteTTLCache(
+            db_path=str(cache_config[0]),
+            ttl_seconds=int(cache_config[1]),
+            max_entries=int(cache_config[2]),
+        )
+        _PERSISTENT_TOOL_CACHE_CONFIG = cache_config
+    return _PERSISTENT_TOOL_CACHE
+
+
+def get_tool_cache_stats() -> dict:
+    """Return cache stats for status/debug endpoints."""
+    config = get_config()
+    cache = _active_cache(config)
+    if hasattr(cache, "stats"):
+        return cache.stats()
+    return {
+        "backend": "memory",
+        "entries": len(getattr(cache, "_data", {})),
+        "ttl_seconds": int(getattr(cache, "ttl_seconds", 0)),
+        "max_entries": int(getattr(cache, "maxsize", 0)),
+    }
+
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to vendors with fallback, timeout, retry, circuit breaker, and TTL cache."""
     category = get_category_for_method(method)
@@ -159,8 +204,9 @@ def route_to_vendor(method: str, *args, **kwargs):
         if vendor not in VENDOR_METHODS[method]:
             continue
 
+        cache = _active_cache(config)
         cache_key = _cache_key(method, vendor, args, kwargs)
-        cached = _TOOL_CACHE.get(cache_key)
+        cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
@@ -182,9 +228,7 @@ def route_to_vendor(method: str, *args, **kwargs):
                 circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
                 circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
             )
-            _TOOL_CACHE.maxsize = int(config.get("cache_max_entries", 512))
-            _TOOL_CACHE.ttl_seconds = int(config.get("cache_ttl_seconds", 900))
-            _TOOL_CACHE.set(cache_key, result)
+            cache.set(cache_key, result)
             return result
         except AlphaVantageRateLimitError as exc:
             errors.append(f"{vendor}: rate limited: {exc}")
