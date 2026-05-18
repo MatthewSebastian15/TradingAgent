@@ -365,9 +365,7 @@ docker compose down
 | `/` | Redirects to `/home` |
 | `/home` | Landing/dashboard page |
 | `/analysis` | Real backend-powered analysis page |
-| `/analysis-live` | Redirects to `/analysis` |
 | `/analysis.test` | Mock UI page using `frontend/src/mockData.js` |
-| `/analysis-mock` | Redirects to `/analysis.test` when mock route is enabled |
 | `*` | 404 page |
 
 Mock route behavior:
@@ -393,24 +391,6 @@ Mock source file:
 ```text
 frontend/src/mockData.js
 ```
-
-Available mock cases include:
-
-| Ticker | Scenario |
-|---|---|
-| `NVDA` | Buy |
-| `AAPL` | Hold |
-| `TSLA` | Sell |
-| `BBCA.JK` | IDX Buy |
-| `BBRI.JK` | IDX Buy |
-| `TLKM.JK` | IDX Hold |
-| `BMRI.JK` | IDX Buy |
-| `ASII.JK` | IDX Hold |
-| `GOTO.JK` | IDX Sell |
-| `ERROR` | Error state |
-
-Mock mode uses the same `AnalysisMock`, `StockFormMock`, `AgentLog`, and `ResultCard` UI structure as the live page, but all data comes from `mockData.js`.
-
 ---
 
 ## API Reference
@@ -833,73 +813,6 @@ Run backend tests:
 cd backend
 python -m pytest tests -q
 ```
-
----
-
-## Troubleshooting
-
-### CORS error in browser
-
-Current allowed origins live in `backend/config.py`:
-
-```python
-CORS_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-]
-```
-
-If your frontend runs on another host or port, add it there and restart the backend.
-
-### Frontend cannot reach backend locally
-
-Set this in `frontend/.env`:
-
-```env
-VITE_API_URL=http://localhost:8000
-```
-
-Then restart Vite.
-
-### Docker frontend cannot reach backend
-
-Leave `VITE_API_URL` empty for Docker. The nginx config proxies `/api/*` to `http://backend:8000/api/*`.
-
-### Backend exits on startup
-
-Check the startup logs. The most common causes are:
-
-- Missing API key for selected `LLM_PROVIDER`.
-- Empty `DEEP_THINK_LLM` or `QUICK_THINK_LLM`.
-- Non-writable TradingAgents cache or logs directory.
-
-### 429 rate limit
-
-The backend allows one active SSE stream per API-key identity or fallback client identity. Wait for the current analysis to finish or use a different client key for separate rate-limit grouping.
-
-### yfinance returns missing or partial data
-
-Check the `data_quality` block in the UI or raw JSON. Common causes:
-
-- Wrong ticker format.
-- Market was closed on the selected trade date.
-- Fundamentals are unavailable for that symbol.
-- News coverage is empty or limited.
-
-### Google Gemini quota error
-
-The app will show the provider error as a sanitized pipeline error. Reduce runs, use a cheaper model, switch providers, or test UI with `/analysis.test` until quota resets. Machines also enjoy budgeting, sadly.
-
----
-
-## Known Constraints
-
-- The app is for analysis support and UI experimentation, not automated order execution.
-- yfinance data can be delayed, incomplete, or unavailable for some tickers.
-- Mock mode uses synthetic data and never calls the backend.
-- The balanced pipeline keeps a fixed LLM request budget and does not perform unlimited debate loops.
-- In-memory rate limiting resets when the backend process restarts.
-- This repository currently stores analysis history in browser `localStorage`, not a shared database.
 
 ---
 
