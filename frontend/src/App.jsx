@@ -7,10 +7,9 @@ import './index.css';
 
 const AnalysisMock = lazy(() => import('./pages/AnalysisMock'));
 
-// Controlled via VITE_ENABLE_MOCK=true in frontend/.env (or .env.local).
-// The hardcoded fallback is always false so production builds are safe even
-// when no .env file is present.
-const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK === 'true';
+// Mock UI route is available in local Vite dev mode.
+// In production builds, expose it only when VITE_ENABLE_MOCK=true.
+const ENABLE_MOCK_ROUTE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCK === 'true';
 
 function LoadingScreen() {
   return (
@@ -27,9 +26,10 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Dashboard />} />
-          <Route path="/analysis" element={ENABLE_MOCK ? <AnalysisMock /> : <Analysis />} />
-          <Route path="/analysis-live" element={<Analysis />} />
-          {ENABLE_MOCK && <Route path="/analysis-mock" element={<AnalysisMock />} />}
+          <Route path="/analysis" element={<Analysis />} />
+          <Route path="/analysis-live" element={<Navigate to="/analysis" replace />} />
+          {ENABLE_MOCK_ROUTE && <Route path="/analysis.test" element={<AnalysisMock />} />}
+          {ENABLE_MOCK_ROUTE && <Route path="/analysis-mock" element={<Navigate to="/analysis.test" replace />} />}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
