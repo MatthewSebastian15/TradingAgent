@@ -6,7 +6,11 @@ import NotFound from './pages/NotFound';
 import './index.css';
 
 const AnalysisMock = lazy(() => import('./pages/AnalysisMock'));
-const ENABLE_MOCK = false;
+
+// Controlled via VITE_ENABLE_MOCK=true in frontend/.env (or .env.local).
+// The hardcoded fallback is always false so production builds are safe even
+// when no .env file is present.
+const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK === 'true';
 
 function LoadingScreen() {
   return (
