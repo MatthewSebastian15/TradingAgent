@@ -131,6 +131,66 @@ def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_na
             raise TimeoutError(f"{service_name} timed out after {timeout_seconds}s") from exc
 
 
+class NamedSemaphorePool:
+    """Thread-safe named semaphore registry for provider concurrency limits."""
+
+    def __init__(self) -> None:
+        self._items: dict[str, tuple[int, threading.BoundedSemaphore]] = {}
+        self._lock = threading.Lock()
+
+    def acquire(self, name: str, limit: int):
+        pool = self
+
+        class _Lease:
+            def __enter__(self):
+                self._semaphore = pool._get(name, max(1, int(limit)))
+                self._semaphore.acquire()
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                self._semaphore.release()
+                return False
+
+        return _Lease()
+
+    def _get(self, name: str, limit: int) -> threading.BoundedSemaphore:
+        with self._lock:
+            current = self._items.get(name)
+            if current is None or current[0] != limit:
+                current = (limit, threading.BoundedSemaphore(limit))
+                self._items[name] = current
+            return current[1]
+
+
+_SEMAPHORES = NamedSemaphorePool()
+
+
+def limit_concurrency(name: str, limit: int):
+    return _SEMAPHORES.acquire(name, limit)
+
+
+def get_circuit_states() -> dict[str, dict[str, float | int | bool | None]]:
+    """Return safe circuit-breaker status for /api/status."""
+    now = time.monotonic()
+    with _CIRCUITS_LOCK:
+        circuits = list(_CIRCUITS.items())
+    states: dict[str, dict[str, float | int | bool | None]] = {}
+    for name, circuit in circuits:
+        with circuit._lock:
+            opened_at = circuit._state.opened_at
+            retry_after = None
+            if opened_at is not None:
+                retry_after = max(0.0, circuit.recovery_seconds - (now - opened_at))
+            states[name] = {
+                "open": opened_at is not None,
+                "failures": circuit._state.failures,
+                "retry_after_seconds": retry_after,
+                "failure_threshold": circuit.failure_threshold,
+                "recovery_seconds": circuit.recovery_seconds,
+            }
+    return states
+
+
 class TTLCache:
     def __init__(self, maxsize: int = 256, ttl_seconds: int = 900):
         self.maxsize = maxsize

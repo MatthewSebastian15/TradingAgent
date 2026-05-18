@@ -1,31 +1,26 @@
 import React, { useState, useRef } from 'react';
 
 // VITE_API_URL controls where API calls are sent.
-//
-// Docker (nginx proxy) — leave unset or empty; nginx routes /api/* to the backend.
-// Local dev without Docker — set VITE_API_URL=http://localhost:8000 in frontend/.env
-//
-// The fallback to localhost:8000 means the app works out-of-the-box for local dev
-// even without a .env file, while Docker builds automatically use the relative path.
+// Docker (nginx proxy): leave empty and let /api/* proxy to backend.
+// Local dev: set VITE_API_URL=http://localhost:8000.
 const API_URL = import.meta.env.VITE_API_URL || '';
 const API_KEY = import.meta.env.VITE_API_KEY || '';
 
-function buildApiUrl(path) {
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  // Relative URL (Docker + nginx proxy): prepend /api and let the proxy handle it.
-  // Absolute URL (local dev): append /api/<path> to the configured base.
-  const base = API_URL.trim();
-  if (!base) return `/api${cleanPath}`;
-  return base.endsWith('/api') ? `${base}${cleanPath}` : `${base}/api${cleanPath}`;
-}
 const DEFAULT_DEBATE_ROUNDS = 3;
-
 const IDX_TICKERS = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'];
 const US_TICKERS  = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'];
+const DEPTH_OPTIONS = [
+  { value: 'fast', label: 'FAST', runtime: 'LOWER GEMINI COST' },
+  { value: 'balanced', label: 'BALANCED', runtime: 'DEFAULT 9-CALL PIPELINE' },
+  { value: 'deep', label: 'DEEP', runtime: 'MORE RETRIES / MORE PATIENCE' },
+];
 
-function clampRounds(v) {
-  const n = Number(v);
-  return Number.isInteger(n) ? Math.min(5, Math.max(1, n)) : 1;
+function buildApiUrl(path) {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const base = API_URL.trim().replace(/\/+$/, '');
+  if (!base) return `/api${cleanPath}`;
+  const cleanBase = base.endsWith('/api') ? base.slice(0, -4) : base;
+  return `${cleanBase}/api${cleanPath}`;
 }
 
 function today() {
@@ -34,17 +29,19 @@ function today() {
 }
 
 function buildHeaders() {
-  const h = { 'Content-Type': 'application/json' };
-  if (API_KEY) h['x-api-key'] = API_KEY;
-  return h;
+  const headers = { 'Content-Type': 'application/json' };
+  if (API_KEY) headers['x-api-key'] = API_KEY;
+  return headers;
 }
 
 async function readHttpError(res) {
   const text = await res.text();
   try {
-    const j = JSON.parse(text);
-    return j.error?.message || j.message || `HTTP ${res.status}`;
-  } catch { return `HTTP ${res.status}: ${text || res.statusText}`; }
+    const json = JSON.parse(text);
+    return json.error?.message || json.message || `HTTP ${res.status}`;
+  } catch {
+    return `HTTP ${res.status}: ${text || res.statusText}`;
+  }
 }
 
 function parseSseBlock(block) {
@@ -83,52 +80,119 @@ function TickerChip({ label, active, onClick, disabled }) {
 }
 
 export default function StockForm({ onResult, onLoading, onStatus, onAgentProgress }) {
-  const [ticker, setTicker]   = useState('NVDA');
-  const [date, setDate]       = useState(today());
-  const [rounds, setRounds]   = useState(DEFAULT_DEBATE_ROUNDS);
-  const [error, setError]     = useState('');
-  const [running, setRunning] = useState(false);
-  const abortRef              = useRef(null);
+  const [ticker, setTicker]             = useState('NVDA');
+  const [date, setDate]                 = useState(today());
+  const [rounds, setRounds]             = useState(DEFAULT_DEBATE_ROUNDS);
+  const [analysisDepth, setDepth]       = useState('balanced');
+  const [responseDetail, setDetail]     = useState('full');
+  const [error, setError]               = useState('');
+  const [running, setRunning]           = useState(false);
+  const abortRef                        = useRef(null);
+  const jobIdRef                        = useRef(null);
 
   function validate() {
     const t = ticker.trim().toUpperCase();
-    if (!/^[A-Z0-9]{1,10}([.\-][A-Z0-9]{1,5})?$/.test(t))
+    if (!/^[A-Z0-9]{2,10}([.\-][A-Z0-9]{1,5})?$/.test(t)) {
       return 'Invalid ticker. Examples: BBCA.JK, NVDA, BRK-B';
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
-      return 'Date must be YYYY-MM-DD';
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date must be YYYY-MM-DD';
+    if (!['fast', 'balanced', 'deep'].includes(analysisDepth)) return 'Invalid analysis depth.';
+    if (!['summary', 'full', 'debug'].includes(responseDetail)) return 'Invalid response detail.';
     return '';
+  }
+
+  async function cancelCurrentJob() {
+    const jobId = jobIdRef.current;
+    if (!jobId) return;
+    try {
+      await fetch(buildApiUrl(`/analysis/jobs/${jobId}`), {
+        method: 'DELETE',
+        headers: buildHeaders(),
+      });
+    } catch {
+      // The abort below still closes the client stream; backend cancellation is best-effort.
+    }
+  }
+
+  async function stopAnalysis() {
+    onStatus('Cancelling analysis...');
+    await cancelCurrentJob();
+    abortRef.current?.abort();
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const err = validate();
-    if (err) { setError(err); onResult({ error: err }); return; }
+
+    if (running) {
+      await stopAnalysis();
+      return;
+    }
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      onResult({ error: validationError });
+      return;
+    }
+
     setError('');
     setRunning(true);
     onLoading(true);
-    onStatus('Connecting to agent pipeline...');
+    onStatus('Creating analysis job...');
     onResult(null);
     if (onAgentProgress) onAgentProgress(null);
-    try { await runStream(); }
-    catch (ex) { onResult({ error: ex.message || 'Analysis failed.' }); }
-    finally { setRunning(false); onLoading(false); onStatus(''); abortRef.current = null; }
+
+    try {
+      await runJobStream();
+    } catch (ex) {
+      if (ex.name === 'AbortError') {
+        onResult({ error: 'Analysis cancelled.' });
+      } else {
+        onResult({ error: ex.message || 'Analysis failed.' });
+      }
+    } finally {
+      setRunning(false);
+      onLoading(false);
+      onStatus('');
+      abortRef.current = null;
+      jobIdRef.current = null;
+    }
   }
 
-  async function runStream() {
+  async function runJobStream() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const res = await fetch(buildApiUrl('/analyze/stream'), {
+    const payload = {
+      ticker: ticker.trim().toUpperCase(),
+      trade_date: date,
+      max_debate_rounds: Number(rounds),
+      analysis_depth: analysisDepth,
+      response_detail: responseDetail,
+    };
+
+    const createRes = await fetch(buildApiUrl('/analysis/jobs'), {
       method: 'POST',
       headers: buildHeaders(),
-      body: JSON.stringify({ ticker: ticker.trim().toUpperCase(), trade_date: date, max_debate_rounds: rounds }),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
 
-    if (!res.ok) throw new Error(await readHttpError(res));
-    if (!res.body) throw new Error('SSE stream not supported by browser.');
+    if (!createRes.ok) throw new Error(await readHttpError(createRes));
+    const job = await createRes.json();
+    jobIdRef.current = job.job_id;
+    onStatus(`Job queued: ${job.job_id}`);
 
-    const reader = res.body.getReader();
+    const streamRes = await fetch(buildApiUrl(`/analysis/jobs/${job.job_id}/events`), {
+      method: 'GET',
+      headers: API_KEY ? { 'x-api-key': API_KEY } : {},
+      signal: controller.signal,
+    });
+
+    if (!streamRes.ok) throw new Error(await readHttpError(streamRes));
+    if (!streamRes.body) throw new Error('SSE stream not supported by browser.');
+
+    const reader = streamRes.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
 
@@ -138,38 +202,50 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
       buf += decoder.decode(value, { stream: true });
       const blocks = buf.split(/\r?\n\r?\n/);
       buf = blocks.pop() || '';
+
       for (const block of blocks) {
-        const ev = parseSseBlock(block);
-        if (!ev) continue;
-        if (ev.type === 'progress') {
-          onStatus(ev.payload.status_message || 'Running...');
-          if (onAgentProgress) onAgentProgress(ev.payload);
+        const event = parseSseBlock(block);
+        if (!event) continue;
+
+        if (event.type === 'job') {
+          onStatus(`Job status: ${(event.payload.status || 'queued').toUpperCase()}`);
         }
-        if (ev.type === 'result') { onResult(ev.payload); return; }
-        if (ev.type === 'error') {
-          const rid = ev.payload.request_id ? ` [${ev.payload.request_id}]` : '';
-          onResult({ error: (ev.payload.error || ev.payload.message || 'Error') + rid });
+
+        if (event.type === 'heartbeat') {
+          onStatus(`Pipeline heartbeat: ${(event.payload.status || 'running').toUpperCase()}`);
+        }
+
+        if (event.type === 'progress') {
+          onStatus(event.payload.status_message || 'Running...');
+          if (onAgentProgress) onAgentProgress(event.payload);
+        }
+
+        if (event.type === 'result') {
+          onResult(event.payload);
+          return;
+        }
+
+        if (event.type === 'error') {
+          const errorPayload = event.payload.error || event.payload.message || 'Error';
+          const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
+          const rid = event.payload.request_id ? ` [${event.payload.request_id}]` : '';
+          onResult({ error: `${message || 'Analysis failed.'}${rid}` });
           return;
         }
       }
     }
-    if (buf.trim()) {
-      const ev = parseSseBlock(buf);
-      if (ev?.type === 'result') onResult(ev.payload);
-      if (ev?.type === 'error') onResult({ error: ev.payload.error || 'Error' });
-    }
   }
+
+  const selectedDepth = DEPTH_OPTIONS.find(item => item.value === analysisDepth);
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-0">
-      {/* Form header */}
       <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center gap-2">
         <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-wider">NEW ANALYSIS</span>
         <span className="text-bloomberg-muted font-mono text-xs">/ CONFIGURE PARAMETERS</span>
       </div>
 
       <div className="p-4 flex flex-col gap-4">
-        {/* Ticker */}
         <div>
           <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
             TICKER SYMBOL
@@ -205,7 +281,6 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
           </div>
         </div>
 
-        {/* Date + Rounds */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
@@ -225,6 +300,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
               "
             />
           </div>
+
           <div>
             <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
               DEBATE ROUNDS
@@ -247,33 +323,71 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
           </div>
         </div>
 
-        {/* Error */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+              ANALYSIS DEPTH
+            </label>
+            <select
+              value={analysisDepth}
+              onChange={e => setDepth(e.target.value)}
+              disabled={running}
+              className="
+                w-full bg-black border border-bloomberg-border px-3 py-2.5
+                font-mono text-xs text-bloomberg-white tracking-wider
+                focus:outline-none focus:border-bloomberg-orange
+                disabled:opacity-50 transition-colors duration-150 cursor-pointer
+              "
+            >
+              {DEPTH_OPTIONS.map(option => (
+                <option key={option.value} value={option.value} className="bg-black">{option.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+              RESPONSE
+            </label>
+            <select
+              value={responseDetail}
+              onChange={e => setDetail(e.target.value)}
+              disabled={running}
+              className="
+                w-full bg-black border border-bloomberg-border px-3 py-2.5
+                font-mono text-xs text-bloomberg-white tracking-wider
+                focus:outline-none focus:border-bloomberg-orange
+                disabled:opacity-50 transition-colors duration-150 cursor-pointer
+              "
+            >
+              <option value="summary" className="bg-black">SUMMARY</option>
+              <option value="full" className="bg-black">FULL</option>
+              <option value="debug" className="bg-black">DEBUG</option>
+            </select>
+          </div>
+        </div>
+
         {error && (
           <div className="border border-bloomberg-red bg-bloomberg-red-dim px-3 py-2">
             <span className="font-mono text-xs text-bloomberg-red">ERR: {error}</span>
           </div>
         )}
 
-        {/* Submit */}
         <button
           type="submit"
-          disabled={running}
-          className="
+          className={`
             w-full py-3 font-mono text-xs font-semibold tracking-widest uppercase
-            transition-all duration-150 border
-            disabled:opacity-50 disabled:cursor-not-allowed
-            bg-bloomberg-orange border-bloomberg-orange text-black
-            hover:bg-orange-400 hover:border-orange-400
-            active:scale-[0.99]
-          "
+            transition-all duration-150 border active:scale-[0.99]
+            ${running
+              ? 'bg-bloomberg-red-dim border-bloomberg-red text-bloomberg-red hover:bg-bloomberg-red hover:text-black'
+              : 'bg-bloomberg-orange border-bloomberg-orange text-black hover:bg-orange-400 hover:border-orange-400'}
+          `}
         >
-          {running
-            ? '▶ RUNNING AGENT PIPELINE...'
-            : '▶ EXECUTE ANALYSIS'}
+          {running ? '■ STOP ANALYSIS' : '▶ EXECUTE ANALYSIS'}
         </button>
 
         <div className="text-center font-mono text-xs text-bloomberg-muted tracking-wider">
-          EST. RUNTIME: 2–5 MIN PER ANALYSIS
+          {selectedDepth?.label || 'BALANCED'} / {selectedDepth?.runtime || 'DEFAULT PIPELINE'}
         </div>
       </div>
     </form>

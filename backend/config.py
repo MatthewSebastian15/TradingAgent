@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 
@@ -166,7 +166,18 @@ PROCESS_POOL_WORKERS = min(4, os.cpu_count() or 2)
 DEFAULT_MAX_DEBATE_ROUNDS = 3
 MAX_RISK_DISCUSS_ROUNDS = 1
 ANALYSIS_MODE = "balanced"
-MAX_GEMINI_CALLS = 9
+DEFAULT_ANALYSIS_DEPTH = "balanced"
+ANALYSIS_DEPTHS: tuple[str, ...] = ("fast", "balanced", "deep")
+RESPONSE_DETAILS: tuple[str, ...] = ("summary", "full", "debug")
+
+# Actual LLM call budgets enforced inside the balanced pipeline.
+# Fast mode skips the debate/risk committee and keeps a final PM call.
+ANALYSIS_DEPTH_LLM_BUDGETS: dict[str, int] = {
+    "fast": 6,
+    "balanced": 9,
+    "deep": 9,
+}
+MAX_GEMINI_CALLS = ANALYSIS_DEPTH_LLM_BUDGETS[DEFAULT_ANALYSIS_DEPTH]
 
 # Rate limiting
 REQUEST_RATE_LIMIT_PER_MINUTE = 20
@@ -181,13 +192,28 @@ REQUIRE_API_KEY_FOR_RATE_LIMIT = False
 
 # LLM resilience
 LLM_TIMEOUT_SECONDS = 60
-LLM_MAX_RETRIES = 1
+LLM_MAX_RETRIES = 2
+LLM_RETRIES_BY_DEPTH: dict[str, int] = {
+    "fast": 1,
+    "balanced": 2,
+    "deep": 3,
+}
 LLM_RETRY_BASE_DELAY = 1.5
 LLM_RETRY_MAX_DELAY = 30
+LLM_429_MAX_WAIT_SECONDS = 20
+MAX_CONCURRENT_LLM_CALLS = 3
 
 # Cache
 CACHE_TTL_SECONDS = 900
 CACHE_MAX_ENTRIES = 512
+ANALYSIS_RESULT_CACHE_TTL_SECONDS = 60 * 60 * 8
+ANALYSIS_RESULT_CACHE_MAX_ENTRIES = 256
+ANALYSIS_JOB_TTL_SECONDS = 60 * 60
+ANALYSIS_JOB_MAX_ENTRIES = 256
+DATA_CACHE_BACKEND = "sqlite"
+DATA_CACHE_DB_PATH = str(BASE_DIR / ".cache" / "market_data.sqlite3")
+DATA_CACHE_TTL_SECONDS = CACHE_TTL_SECONDS
+DATA_CACHE_MAX_ENTRIES = CACHE_MAX_ENTRIES
 
 # Circuit breaker
 CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
@@ -228,20 +254,37 @@ class LLMSettings:
             return self.ollama_base_url
         return None
 
-    def tradingagents_overrides(self) -> dict[str, Any]:
+    def tradingagents_overrides(
+        self,
+        *,
+        analysis_depth: str = DEFAULT_ANALYSIS_DEPTH,
+        response_detail: str = "full",
+    ) -> dict[str, Any]:
+        retries = LLM_RETRIES_BY_DEPTH.get(analysis_depth, LLM_MAX_RETRIES)
+        budget = ANALYSIS_DEPTH_LLM_BUDGETS.get(analysis_depth, MAX_GEMINI_CALLS)
         return {
             "llm_provider": self.provider,
             "deep_think_llm": self.deep_think_llm,
             "quick_think_llm": self.quick_think_llm,
             "backend_url": self.backend_url(),
             "timeout": LLM_TIMEOUT_SECONDS,
-            "llm_max_retries": LLM_MAX_RETRIES,
+            "llm_max_retries": retries,
+            "llm_retry_base_delay": LLM_RETRY_BASE_DELAY,
+            "llm_retry_max_delay": LLM_RETRY_MAX_DELAY,
+            "llm_429_max_wait_seconds": LLM_429_MAX_WAIT_SECONDS,
+            "max_concurrent_llm_calls": MAX_CONCURRENT_LLM_CALLS,
             "cache_ttl_seconds": CACHE_TTL_SECONDS,
             "cache_max_entries": CACHE_MAX_ENTRIES,
+            "data_cache_backend": DATA_CACHE_BACKEND,
+            "data_cache_db_path": DATA_CACHE_DB_PATH,
+            "data_cache_ttl_seconds": DATA_CACHE_TTL_SECONDS,
+            "data_cache_max_entries": DATA_CACHE_MAX_ENTRIES,
             "max_debate_rounds": DEFAULT_MAX_DEBATE_ROUNDS,
             "max_risk_discuss_rounds": MAX_RISK_DISCUSS_ROUNDS,
             "analysis_mode": ANALYSIS_MODE,
-            "max_gemini_calls": MAX_GEMINI_CALLS,
+            "analysis_depth": analysis_depth,
+            "response_detail": response_detail,
+            "max_gemini_calls": budget,
         }
 
 
@@ -252,11 +295,22 @@ llm = LLMSettings()
 # Config builder
 # ---------------------------------------------------------------------------
 
-def build_tradingagents_config(max_debate_rounds: int | None = None) -> dict[str, Any]:
+def build_tradingagents_config(
+    max_debate_rounds: int | None = None,
+    *,
+    analysis_depth: str | None = None,
+    response_detail: str = "full",
+) -> dict[str, Any]:
     from tradingagents.default_config import DEFAULT_CONFIG
 
+    depth = analysis_depth or DEFAULT_ANALYSIS_DEPTH
+    if depth not in ANALYSIS_DEPTHS:
+        depth = DEFAULT_ANALYSIS_DEPTH
+    if response_detail not in RESPONSE_DETAILS:
+        response_detail = "full"
+
     config = DEFAULT_CONFIG.copy()
-    config.update(llm.tradingagents_overrides())
+    config.update(llm.tradingagents_overrides(analysis_depth=depth, response_detail=response_detail))
     if max_debate_rounds is not None:
         config["max_debate_rounds"] = max_debate_rounds
         config["max_risk_discuss_rounds"] = max_debate_rounds
@@ -321,6 +375,8 @@ def validate_startup_config() -> list[str]:
 
     if ANALYSIS_MODE not in {"balanced", "classic"}:
         errors.append("ANALYSIS_MODE must be either balanced or classic.")
+    if DEFAULT_ANALYSIS_DEPTH not in ANALYSIS_DEPTHS:
+        errors.append("DEFAULT_ANALYSIS_DEPTH must be one of: fast, balanced, deep.")
 
     try:
         config = build_tradingagents_config()
@@ -345,6 +401,8 @@ class _BackendSettingsShim:
     default_max_debate_rounds = DEFAULT_MAX_DEBATE_ROUNDS
     max_risk_discuss_rounds = MAX_RISK_DISCUSS_ROUNDS
     analysis_mode = ANALYSIS_MODE
+    default_analysis_depth = DEFAULT_ANALYSIS_DEPTH
+    analysis_depth_llm_budgets = ANALYSIS_DEPTH_LLM_BUDGETS
     max_gemini_calls = MAX_GEMINI_CALLS
     request_rate_limit_per_minute = REQUEST_RATE_LIMIT_PER_MINUTE
     stream_rate_limit_per_minute = STREAM_RATE_LIMIT_PER_MINUTE
@@ -353,8 +411,11 @@ class _BackendSettingsShim:
     require_api_key_for_rate_limit = REQUIRE_API_KEY_FOR_RATE_LIMIT
     llm_timeout_seconds = LLM_TIMEOUT_SECONDS
     llm_max_retries = LLM_MAX_RETRIES
+    max_concurrent_llm_calls = MAX_CONCURRENT_LLM_CALLS
     cache_ttl_seconds = CACHE_TTL_SECONDS
     cache_max_entries = CACHE_MAX_ENTRIES
+    analysis_result_cache_ttl_seconds = ANALYSIS_RESULT_CACHE_TTL_SECONDS
+    analysis_result_cache_max_entries = ANALYSIS_RESULT_CACHE_MAX_ENTRIES
 
     @property
     def llm_provider(self): return llm.provider

@@ -96,6 +96,41 @@ class CollectedData:
     data_quality: DataQualityReport
 
 
+class AnalysisCancelledError(RuntimeError):
+    """Raised when an API client cancels an in-progress analysis."""
+
+
+class LLMBudget:
+    """Thread-safe logical LLM call budget for the whole pipeline."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = max(0, int(limit))
+        self.used = 0
+        self._lock = threading.Lock()
+
+    def consume(self, agent_name: str) -> bool:
+        with self._lock:
+            if self.used >= self.limit:
+                logger.warning(
+                    "LLM budget exhausted before %s. Used %d/%d calls.",
+                    agent_name,
+                    self.used,
+                    self.limit,
+                )
+                return False
+            self.used += 1
+            return True
+
+    def snapshot(self) -> dict[str, int]:
+        with self._lock:
+            return {"used": self.used, "limit": self.limit}
+
+
+def _check_cancel(cancel_check: Optional[Callable[[], bool]]) -> None:
+    if cancel_check is not None and cancel_check():
+        raise AnalysisCancelledError("Analysis was cancelled by the client.")
+
+
 def _truncate(value: Any, limit: int = 12_000) -> str:
     """Convert *value* to a string and truncate it to *limit* characters.
 
@@ -341,13 +376,25 @@ def _coerce_structured(raw: Any, schema: type[T]) -> Optional[T]:
     return None
 
 
-def _invoke_once(llm: Any, schema: type[T], prompt: str, fallback: T, agent_name: str) -> T:
-    """Call the LLM once for a structured result.
+def _invoke_once(
+    llm: Any,
+    schema: type[T],
+    prompt: str,
+    fallback: T,
+    agent_name: str,
+    budget: LLMBudget | None = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
+) -> T:
+    """Call the LLM once for a structured result while enforcing budget.
 
     No second LLM fallback is used. This keeps the balanced pipeline's request
     budget predictable. If the provider cannot produce structured output, one
     plain JSON-style invoke is attempted and parsed locally.
     """
+    _check_cancel(cancel_check)
+    if budget is not None and not budget.consume(agent_name):
+        return fallback
+
     structured = bind_structured(llm, schema, agent_name)
     try:
         if structured is not None:
@@ -358,10 +405,11 @@ def _invoke_once(llm: Any, schema: type[T], prompt: str, fallback: T, agent_name
         if parsed is not None:
             return parsed
         logger.warning("%s returned unparseable structured output. Using local fallback.", agent_name)
+    except AnalysisCancelledError:
+        raise
     except Exception as exc:
         logger.warning("%s LLM call failed in balanced pipeline: %s", agent_name, exc)
     return fallback
-
 
 def _fallback_report(title: str, summary: str) -> AnalystReport:
     return AnalystReport(title=title, summary=summary, key_points=[summary], risks=["Data quality should be verified before trading."], confidence=0.35)
@@ -450,13 +498,24 @@ def _emit_progress(callback: Optional[ProgressCallback], agent_id: str, status: 
         logger.debug("Progress callback failed for %s: %s", agent_id, exc)
 
 
-def _run_tracked(callback: Optional[ProgressCallback], agent_id: str, message: str, func: Callable[[], T]) -> T:
+def _run_tracked(
+    callback: Optional[ProgressCallback],
+    agent_id: str,
+    message: str,
+    func: Callable[[], T],
+    cancel_check: Optional[Callable[[], bool]] = None,
+) -> T:
+    _check_cancel(cancel_check)
     _emit_progress(callback, agent_id, "started", message)
     try:
         result = func()
+    except AnalysisCancelledError:
+        _emit_progress(callback, agent_id, "failed", f"{_AGENT_LABELS.get(agent_id, agent_id)} cancelled.")
+        raise
     except Exception:
         _emit_progress(callback, agent_id, "failed", f"{_AGENT_LABELS.get(agent_id, agent_id)} failed.")
         raise
+    _check_cancel(cancel_check)
     _emit_progress(callback, agent_id, "completed", f"{_AGENT_LABELS.get(agent_id, agent_id)} completed.")
     return result
 
@@ -466,6 +525,7 @@ def run_balanced_pipeline(
     trade_date: str,
     config: dict[str, Any],
     progress_callback: Optional[ProgressCallback] = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
 ) -> dict[str, Any]:
     """Run the balanced 9-call pipeline and return classic-compatible state.
 
@@ -475,11 +535,14 @@ def run_balanced_pipeline(
     """
     set_config(config)
     quick_llm, deep_llm = _create_llms(config)
+    analysis_depth = str(config.get("analysis_depth", "balanced")).lower()
+    llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
     data = _run_tracked(
         progress_callback,
         "data_collection",
         "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
         lambda: collect_market_data(ticker, trade_date, config),
+        cancel_check=cancel_check,
     )
     data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
 
@@ -525,6 +588,8 @@ DATA QUALITY:
 """,
                 _fallback_report("Market Analyst Report", f"Market data for {ticker} was collected, but the model did not return a complete market view."),
                 "Market Analyst",
+                llm_budget,
+                cancel_check,
             ),
         )
 
@@ -555,6 +620,8 @@ DATA QUALITY:
 """,
                 _fallback_report("News and Social Sentiment Report", f"News and sentiment data for {ticker} was collected, but the model did not return a complete sentiment view."),
                 "News + Social Analyst",
+                llm_budget,
+                cancel_check,
             ),
         )
 
@@ -589,6 +656,8 @@ DATA QUALITY:
 """,
                 _fallback_report("Fundamentals Analyst Report", f"Fundamental data for {ticker} was collected, but the model did not return a complete fundamental view."),
                 "Fundamentals Analyst",
+                llm_budget,
+                cancel_check,
             ),
         )
 
@@ -604,64 +673,90 @@ DATA QUALITY:
     news_social_md = _report_to_markdown(news_social_report)
     fundamentals_md = _report_to_markdown(fundamentals_report)
 
-    bull = _run_tracked(progress_callback, "bull_researcher", "Bull Researcher is building the upside case...", lambda: _invoke_once(
-        quick_llm,
-        DebateArgument,
-        f"""
-You are the Bull Researcher for {ticker} on {trade_date}.
-Build the strongest bullish case from the analyst reports. Do not ignore risks, but argue why upside outweighs downside.
-
-MARKET REPORT:
-{market_md}
-
-NEWS/SOCIAL REPORT:
-{news_social_md}
-
-FUNDAMENTALS REPORT:
-{fundamentals_md}
-""",
-        DebateArgument(
+    if analysis_depth == "fast":
+        _emit_progress(progress_callback, "bull_researcher", "completed", "Bull debate skipped in fast mode.")
+        _emit_progress(progress_callback, "bear_researcher", "completed", "Bear debate skipped in fast mode.")
+        bull = DebateArgument(
             stance="bull",
-            thesis=f"The bullish case for {ticker} is not strong enough to rate confidently because model output failed.",
-            evidence=["Market, news, and fundamental reports were collected.", "A complete bullish argument was not generated."],
-            counterargument="The absence of a reliable bullish argument weakens any aggressive buy decision.",
-            risk_flags=["Model output fallback used."],
-            confidence=0.35,
+            thesis=f"Fast mode uses the analyst reports directly for {ticker} instead of a separate bull debate.",
+            evidence=["Market report completed.", "News/social report completed.", "Fundamentals report completed."],
+            counterargument="Fast mode has less debate depth than balanced/deep mode.",
+            risk_flags=["Debate skipped to reduce LLM calls."],
+            confidence=max(0.25, min(0.75, (market_report.confidence + news_social_report.confidence + fundamentals_report.confidence) / 3)),
             consensus_signal=False,
-        ),
-        "Bull Researcher",
-    ))
-
-    bear = _run_tracked(progress_callback, "bear_researcher", "Bear Researcher is challenging the thesis...", lambda: _invoke_once(
-        quick_llm,
-        DebateArgument,
-        f"""
-You are the Bear Researcher for {ticker} on {trade_date}.
-Build the strongest bearish case from the analyst reports. Be specific about downside, missing data, valuation risk, execution risk, and market risk.
-
-MARKET REPORT:
-{market_md}
-
-NEWS/SOCIAL REPORT:
-{news_social_md}
-
-FUNDAMENTALS REPORT:
-{fundamentals_md}
-
-BULL CASE TO CHALLENGE:
-{render_debate_argument(bull, 'Bull Researcher')}
-""",
-        DebateArgument(
+        )
+        bear = DebateArgument(
             stance="bear",
-            thesis=f"The bearish case for {ticker} is incomplete because model output failed, so risk should be treated cautiously.",
-            evidence=["Market, news, and fundamental reports were collected.", "A complete bearish argument was not generated."],
-            counterargument="Without a reliable bear case, the final decision should avoid overconfidence.",
-            risk_flags=["Model output fallback used."],
-            confidence=0.35,
+            thesis=f"Fast mode keeps downside assumptions conservative for {ticker} because no separate bear debate was run.",
+            evidence=["Risk is inferred from analyst report risk sections.", "Data quality warnings are preserved."],
+            counterargument="Balanced/deep mode should be used before high-conviction trades.",
+            risk_flags=list(dict.fromkeys(market_report.risks + news_social_report.risks + fundamentals_report.risks))[:6],
+            confidence=0.45,
             consensus_signal=False,
-        ),
-        "Bear Researcher",
-    ))
+        )
+    else:
+        bull = _run_tracked(progress_callback, "bull_researcher", "Bull Researcher is building the upside case...", lambda: _invoke_once(
+            quick_llm,
+            DebateArgument,
+            f"""
+    You are the Bull Researcher for {ticker} on {trade_date}.
+    Build the strongest bullish case from the analyst reports. Do not ignore risks, but argue why upside outweighs downside.
+
+    MARKET REPORT:
+    {market_md}
+
+    NEWS/SOCIAL REPORT:
+    {news_social_md}
+
+    FUNDAMENTALS REPORT:
+    {fundamentals_md}
+    """,
+            DebateArgument(
+                stance="bull",
+                thesis=f"The bullish case for {ticker} is not strong enough to rate confidently because model output failed.",
+                evidence=["Market, news, and fundamental reports were collected.", "A complete bullish argument was not generated."],
+                counterargument="The absence of a reliable bullish argument weakens any aggressive buy decision.",
+                risk_flags=["Model output fallback used."],
+                confidence=0.35,
+                consensus_signal=False,
+            ),
+            "Bull Researcher",
+            llm_budget,
+            cancel_check,
+        ))
+
+        bear = _run_tracked(progress_callback, "bear_researcher", "Bear Researcher is challenging the thesis...", lambda: _invoke_once(
+            quick_llm,
+            DebateArgument,
+            f"""
+    You are the Bear Researcher for {ticker} on {trade_date}.
+    Build the strongest bearish case from the analyst reports. Be specific about downside, missing data, valuation risk, execution risk, and market risk.
+
+    MARKET REPORT:
+    {market_md}
+
+    NEWS/SOCIAL REPORT:
+    {news_social_md}
+
+    FUNDAMENTALS REPORT:
+    {fundamentals_md}
+
+    BULL CASE TO CHALLENGE:
+    {render_debate_argument(bull, 'Bull Researcher')}
+    """,
+            DebateArgument(
+                stance="bear",
+                thesis=f"The bearish case for {ticker} is incomplete because model output failed, so risk should be treated cautiously.",
+                evidence=["Market, news, and fundamental reports were collected.", "A complete bearish argument was not generated."],
+                counterargument="Without a reliable bear case, the final decision should avoid overconfidence.",
+                risk_flags=["Model output fallback used."],
+                confidence=0.35,
+                consensus_signal=False,
+            ),
+            "Bear Researcher",
+            llm_budget,
+            cancel_check,
+        ))
 
     debate_md = "\n\n".join([
         render_debate_argument(bull, "Bull Researcher"),
@@ -698,6 +793,8 @@ DATA QUALITY:
             strategic_actions="Avoid new exposure until data quality, model output, and key risk/reward assumptions are reviewed.",
         ),
         "Research Manager",
+        llm_budget,
+        cancel_check,
     ))
     investment_plan = _research_plan_to_markdown(research_plan)
 
@@ -732,47 +829,63 @@ DATA QUALITY:
             invalidation_conditions=["Data quality or model output cannot be verified."],
         ),
         "Trader",
+        llm_budget,
+        cancel_check,
     ))
     trader_plan = render_trader_proposal(trader_proposal)
 
-    risk_report = _run_tracked(progress_callback, "risk_analysts", "Risk Analysts are checking sizing, downside, and invalidation triggers...", lambda: _invoke_once(
-        quick_llm,
-        RiskCommitteeReport,
-        f"""
-You are a combined Risk Committee for {ticker} on {trade_date}.
-Simulate three perspectives in one call: aggressive, neutral, and conservative.
-Evaluate the trader proposal, downside risk, invalidation triggers, position sizing, stop-loss logic, liquidity, volatility, and headline risk.
+    if analysis_depth == "fast":
+        _emit_progress(progress_callback, "risk_analysts", "completed", "Risk committee skipped in fast mode; conservative risk fallback applied.")
+        risk_report = RiskCommitteeReport(
+            overall_risk_level="Medium" if data.data_quality.price_data == "ok" else "High",
+            aggressive_view="Fast mode skips a separate aggressive risk debate to save LLM calls.",
+            neutral_view="Use the trader proposal with conservative sizing and verify manually before increasing exposure.",
+            conservative_view="Prefer Hold or small allocation until balanced/deep analysis confirms the setup.",
+            key_risks=list(dict.fromkeys((data.data_quality.warnings or []) + market_report.risks + news_social_report.risks + fundamentals_report.risks))[:8],
+            mitigation_plan="Keep sizing small, require a clear stop-loss, and rerun balanced/deep mode before a high-conviction trade.",
+            confidence=0.45,
+        )
+    else:
+        risk_report = _run_tracked(progress_callback, "risk_analysts", "Risk Analysts are checking sizing, downside, and invalidation triggers...", lambda: _invoke_once(
+            quick_llm,
+            RiskCommitteeReport,
+            f"""
+    You are a combined Risk Committee for {ticker} on {trade_date}.
+    Simulate three perspectives in one call: aggressive, neutral, and conservative.
+    Evaluate the trader proposal, downside risk, invalidation triggers, position sizing, stop-loss logic, liquidity, volatility, and headline risk.
 
-ANALYST REPORTS:
-{market_md}
+    ANALYST REPORTS:
+    {market_md}
 
-{news_social_md}
+    {news_social_md}
 
-{fundamentals_md}
+    {fundamentals_md}
 
-DEBATE:
-{debate_md}
+    DEBATE:
+    {debate_md}
 
-RESEARCH PLAN:
-{investment_plan}
+    RESEARCH PLAN:
+    {investment_plan}
 
-TRADER PROPOSAL:
-{trader_plan}
+    TRADER PROPOSAL:
+    {trader_plan}
 
-DATA QUALITY:
-{data_quality_json}
-""",
-        RiskCommitteeReport(
-            overall_risk_level="High",
-            aggressive_view="The opportunity cannot be assessed aggressively because the risk model call failed.",
-            neutral_view="Hold is preferred until the analysis is verified.",
-            conservative_view="Avoid new exposure until reliable downside controls are available.",
-            key_risks=["Risk committee model output fallback used.", "Data and model output should be reviewed before trading."],
-            mitigation_plan="Use no new allocation or a very small test position only after manual review.",
-            confidence=0.35,
-        ),
-        "Risk Committee",
-    ))
+    DATA QUALITY:
+    {data_quality_json}
+    """,
+            RiskCommitteeReport(
+                overall_risk_level="High",
+                aggressive_view="The opportunity cannot be assessed aggressively because the risk model call failed.",
+                neutral_view="Hold is preferred until the analysis is verified.",
+                conservative_view="Avoid new exposure until reliable downside controls are available.",
+                key_risks=["Risk committee model output fallback used.", "Data and model output should be reviewed before trading."],
+                mitigation_plan="Use no new allocation or a very small test position only after manual review.",
+                confidence=0.35,
+            ),
+            "Risk Committee",
+            llm_budget,
+            cancel_check,
+        ))
     risk_md = _risk_to_markdown(risk_report)
 
     portfolio_decision = _run_tracked(progress_callback, "portfolio_manager", "Portfolio Manager is preparing the final dashboard decision...", lambda: _invoke_once(
@@ -840,6 +953,8 @@ DATA QUALITY:
             time_horizon="Review required",
         ),
         "Portfolio Manager",
+        llm_budget,
+        cancel_check,
     ))
 
     final_decision = render_pm_decision(portfolio_decision)
@@ -871,5 +986,7 @@ DATA QUALITY:
         "final_trade_decision": final_decision,
         "portfolio_decision": portfolio_decision,
         "data_quality": data.data_quality.model_dump(),
-        "balanced_gemini_request_budget": 9,
+        "analysis_depth": analysis_depth,
+        "balanced_gemini_request_budget": llm_budget.limit,
+        "balanced_gemini_calls_used": llm_budget.snapshot()["used"],
     }
