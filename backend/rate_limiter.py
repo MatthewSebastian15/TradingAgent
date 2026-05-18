@@ -1,19 +1,34 @@
-"""API-key aware in-memory rate limiting."""
+"""API-key aware in-memory rate limiting with automatic state cleanup."""
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import time
-from collections import defaultdict, deque
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 
 from fastapi import Request
 
-from config import (REQUIRE_API_KEY_FOR_RATE_LIMIT, REQUEST_RATE_LIMIT_PER_MINUTE,
-    MAX_CONCURRENT_REQUESTS_PER_KEY, STREAM_RATE_LIMIT_PER_MINUTE,
-    MAX_CONCURRENT_STREAMS_PER_KEY)
+from config import (
+    REQUIRE_API_KEY_FOR_RATE_LIMIT,
+    REQUEST_RATE_LIMIT_PER_MINUTE,
+    MAX_CONCURRENT_REQUESTS_PER_KEY,
+    STREAM_RATE_LIMIT_PER_MINUTE,
+    MAX_CONCURRENT_STREAMS_PER_KEY,
+)
 from errors import RateLimitError
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Idle slots older than this are eligible for eviction.
+_TTL_SECONDS = 120
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -25,20 +40,58 @@ class RateLimitPolicy:
 
 @dataclass
 class _ClientState:
-    timestamps: deque[float]
+    timestamps: deque[float] = field(default_factory=deque)
     active: int = 0
+    last_seen: float = field(default_factory=time.monotonic)
 
 
-_states: dict[tuple[str, str], _ClientState] = defaultdict(lambda: _ClientState(deque()))
+# Single global lock guards both _states and the cleanup routine so they never
+# race against each other.
+_states: dict[tuple[str, str], _ClientState] = {}
 _lock = asyncio.Lock()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:24]
 
 
+def _evict_stale_entries(now: float) -> None:
+    """Remove entries that have no active requests and haven't been seen recently.
+
+    Must be called while holding *_lock*.
+    """
+    stale = [
+        key
+        for key, state in _states.items()
+        if state.active == 0 and (now - state.last_seen) > _TTL_SECONDS
+    ]
+    for key in stale:
+        del _states[key]
+
+
 def get_client_identifier(request: Request) -> str:
-    api_key = request.headers.get("x-api-key")
+    """Derive a stable, opaque identifier for the caller.
+
+    Priority:
+      1. x-api-key header
+      2. Authorization: Bearer <token>
+      3. Fallback: direct client IP (not x-forwarded-for, which can be spoofed)
+
+    When *REQUIRE_API_KEY_FOR_RATE_LIMIT* is True and neither key nor bearer
+    token is present, a *RateLimitError* is raised immediately.
+
+    The fallback deliberately ignores x-forwarded-for and x-real-ip to prevent
+    clients from spoofing those headers to bypass per-IP limits.  If the
+    server sits behind a trusted reverse proxy that strips and re-injects those
+    headers you can re-enable them, but that is a deployment-level decision, not
+    a default.
+    """
+    api_key = request.headers.get("x-api-key", "").strip()
     auth = request.headers.get("authorization", "")
     if not api_key and auth.lower().startswith("bearer "):
         api_key = auth.split(" ", 1)[1].strip()
@@ -47,27 +100,37 @@ def get_client_identifier(request: Request) -> str:
         return f"api_key:{_hash(api_key)}"
 
     if REQUIRE_API_KEY_FOR_RATE_LIMIT:
-        raise RateLimitError("Missing API key. Send x-api-key or Authorization: Bearer <key>.")
+        raise RateLimitError(
+            "Missing API key. Send x-api-key or Authorization: Bearer <key>."
+        )
 
-    forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    real_ip = request.headers.get("x-real-ip", "").strip()
+    # Use only the direct TCP peer address — it cannot be forged by the client.
     client_host = request.client.host if request.client else "unknown-client"
-    user_agent = request.headers.get("user-agent", "unknown-agent")[:160]
-    fallback = forwarded_for or real_ip or client_host or "unknown-client"
-    return f"fallback:{_hash(fallback + '|' + user_agent)}"
+    return f"ip:{_hash(client_host)}"
+
+
+# ---------------------------------------------------------------------------
+# Rate-limit lease (context manager)
+# ---------------------------------------------------------------------------
 
 
 class RateLimitLease:
-    def __init__(self, identifier: str, policy: RateLimitPolicy):
+    def __init__(self, identifier: str, policy: RateLimitPolicy) -> None:
         self.identifier = identifier
         self.policy = policy
-        self.acquired = False
+        self._acquired = False
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "RateLimitLease":
         now = time.monotonic()
         key = (self.policy.scope, self.identifier)
+
         async with _lock:
-            state = _states[key]
+            _evict_stale_entries(now)
+
+            state = _states.setdefault(key, _ClientState())
+            state.last_seen = now
+
+            # Drop timestamps older than 60 s sliding window.
             while state.timestamps and now - state.timestamps[0] >= 60:
                 state.timestamps.popleft()
 
@@ -91,16 +154,24 @@ class RateLimitLease:
 
             state.timestamps.append(now)
             state.active += 1
-            self.acquired = True
+            self._acquired = True
+
         return self
 
-    async def __aexit__(self, exc_type, exc, tb):
-        if not self.acquired:
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        if not self._acquired:
             return
         key = (self.policy.scope, self.identifier)
         async with _lock:
-            state = _states[key]
-            state.active = max(0, state.active - 1)
+            state = _states.get(key)
+            if state is not None:
+                state.active = max(0, state.active - 1)
+                state.last_seen = time.monotonic()
+
+
+# ---------------------------------------------------------------------------
+# Policy factories
+# ---------------------------------------------------------------------------
 
 
 def request_policy() -> RateLimitPolicy:
@@ -121,6 +192,11 @@ def stream_policy() -> RateLimitPolicy:
 
 def limit_request(request: Request, policy: RateLimitPolicy) -> RateLimitLease:
     return RateLimitLease(get_client_identifier(request), policy)
+
+
+# ---------------------------------------------------------------------------
+# Test utility
+# ---------------------------------------------------------------------------
 
 
 def reset_rate_limiter_for_tests() -> None:

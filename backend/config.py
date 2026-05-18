@@ -173,6 +173,10 @@ REQUEST_RATE_LIMIT_PER_MINUTE = 20
 STREAM_RATE_LIMIT_PER_MINUTE = 8
 MAX_CONCURRENT_REQUESTS_PER_KEY = 2
 MAX_CONCURRENT_STREAMS_PER_KEY = 1
+# Security note: set to True in production to enforce API key authentication
+# for every request.  When False (the default for local/personal use), anonymous
+# requests are still rate-limited by direct client IP — they are not unlimited.
+# Changing this to True without distributing API keys will lock out all clients.
 REQUIRE_API_KEY_FOR_RATE_LIMIT = False
 
 # LLM resilience
