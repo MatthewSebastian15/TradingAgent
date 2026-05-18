@@ -8,7 +8,20 @@ A full-stack web application that wraps the [TauricResearch/TradingAgents](https
 
 ## How It Works
 
-The system takes your stock input through six stages: market reading, news evaluation, fundamental checks, opportunity and risk comparison, and a final investment decision.
+The app runs a data collection step and then a balanced 9-agent LLM pipeline.
+
+1. Data Collection fetches yfinance-backed price data, technical indicators, fundamentals, financial statements, company news, macro news, and insider transactions.
+2. Market Analyst reviews price action and technical setup.
+3. News + Social Analyst reviews company news, macro news, sentiment, and insider activity.
+4. Fundamentals Analyst reviews financial statements and ratios.
+5. Bull Researcher builds the upside case.
+6. Bear Researcher builds the downside case.
+7. Research Manager weighs the debate and creates an investment plan.
+8. Trader converts the plan into actionable trade guidance.
+9. Risk Analysts review downside, volatility, sizing, and invalidation triggers.
+10. Portfolio Manager produces the final structured decision.
+
+The first three analyst LLM calls run in parallel after data collection. Later decision stages run sequentially so each stage can use the output from the prior stage.
 
 ![Investment Analysis Flow](assets/Investment%20Analysis%20Flow.png)
 
@@ -18,38 +31,29 @@ The system takes your stock input through six stages: market reading, news evalu
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  React Frontend  (port 3000 / 5173)                             │
-│  StockForm → SSE stream → AgentLog (live) → ResultCard          │
-│  Analysis history: localStorage, max 10 entries                 │
+│ React/Vite Frontend                                             │
+│ Port: 3000                                                      │
+│ Routes: /home, /analysis, /analysis.test                        │
+│ Components: StockForm, AgentLog, ResultCard, mock UI            │
 └────────────────────────┬────────────────────────────────────────┘
-                         │  POST /api/analyze/stream  (SSE)
+                         │ POST /api/analyze/stream (SSE)
+                         │ POST /api/analyze (JSON)
 ┌────────────────────────▼────────────────────────────────────────┐
-│  FastAPI Backend  (port 8000)                                   │
-│  Rate limit: 2 concurrent pipelines per IP                      │
-│  Process pool: up to 4 workers (one per CPU core)               │
-│  Timeout: 600 seconds per pipeline run                          │
+│ FastAPI Backend                                                 │
+│ Port: 8000                                                      │
+│ Validation, request IDs, sanitized errors, rate limiting        │
+│ REST uses ProcessPoolExecutor                                   │
+│ SSE uses real progress callbacks from the balanced pipeline     │
 └────────────────────────┬────────────────────────────────────────┘
                          │  Python subprocess
 ┌────────────────────────▼────────────────────────────────────────┐
-│  TradingAgents Engine  (tradingagents-core)                     │
-│                                                                 │
-│  Market Analyst → News Researcher → Fundamentals Analyst        │
-│       ↓                                                         │
-│  Bull Researcher ⟷ Bear Researcher                             │
-│       ↓                                                         │
-│  Research Manager                                               │
-│       ↓                                                         │
-│  Trader → Risk Analysts (aggressive / conservative / neutral)   │
-│       ↓                                                         │
-│  Portfolio Manager → PortfolioDecision (structured output)      │
+│ TradingAgents Core                                              │
+│ yfinance data collection                                        │
+│ Multi-provider LLM clients                                      │
+│ Balanced pipeline with structured Pydantic outputs              │
+│ Final PortfolioDecision response                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
-
-The diagram below shows the full technical flow from user input to result displayed in the app.
-
-![Technical Flow](assets/Technical%20Flow.png)
-
----
 
 ## Project Structure
 
