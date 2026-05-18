@@ -1,5 +1,3 @@
-# TradingAgents/graph/trading_graph.py
-
 import logging
 import os
 from pathlib import Path
@@ -7,7 +5,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple, List, Optional
 
-import yfinance as yf
+from tradingagents.yfinance_runtime import yf
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@ import time
 import logging
 
 import pandas as pd
-import yfinance as yf
+from tradingagents.yfinance_runtime import yf
 from yfinance.exceptions import YFRateLimitError
 from stockstats import wrap
 from typing import Annotated

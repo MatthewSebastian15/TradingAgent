@@ -9,6 +9,8 @@ services:
     environment:
       PYTHONPATH: /app/backend:/app/backend/tradingagents-core
       OLLAMA_BASE_URL: http://ollama:11434
+      XDG_CACHE_HOME: /root/.tradingagents/cache
+      YFINANCE_CACHE_DIR: /root/.tradingagents/cache/py-yfinance
     ports:
       - "8000:8000"
     volumes:
