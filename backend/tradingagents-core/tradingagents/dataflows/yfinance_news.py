@@ -1,6 +1,6 @@
 """yfinance-based news data fetching functions."""
 
-import yfinance as yf
+from tradingagents.yfinance_runtime import yf
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
