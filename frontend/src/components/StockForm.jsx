@@ -7,12 +7,32 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 const API_KEY = import.meta.env.VITE_API_KEY || '';
 
 const DEFAULT_DEBATE_ROUNDS = 3;
-const IDX_TICKERS = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'];
-const US_TICKERS  = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'];
+
+const MARKETS = {
+  US: {
+    label: 'US',
+    flag: '🇺🇸',
+    defaultTicker: 'NVDA',
+    tickers: ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'],
+  },
+  ID: {
+    label: 'INDONESIA',
+    flag: '🇮🇩',
+    defaultTicker: 'BBCA.JK',
+    tickers: ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'],
+  },
+  GLOBAL: {
+    label: 'GLOBAL',
+    flag: '🌐',
+    defaultTicker: '700.HK',
+    tickers: ['700.HK', '9984.T', 'SAP.DE', 'RIO.L', 'TSM'],
+  },
+};
+
 const DEPTH_OPTIONS = [
-  { value: 'fast', label: 'FAST', runtime: 'LOWER GEMINI COST' },
+  { value: 'fast',     label: 'FAST',     runtime: 'LOWER GEMINI COST' },
   { value: 'balanced', label: 'BALANCED', runtime: 'DEFAULT 9-CALL PIPELINE' },
-  { value: 'deep', label: 'DEEP', runtime: 'MORE RETRIES / MORE PATIENCE' },
+  { value: 'deep',     label: 'DEEP',     runtime: 'MORE RETRIES / MORE PATIENCE' },
 ];
 
 function buildApiUrl(path) {
@@ -49,15 +69,36 @@ function parseSseBlock(block) {
   for (const rawLine of block.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
     if (!line || line.startsWith(':')) continue;
-    const idx = line.indexOf(':');
+    const idx   = line.indexOf(':');
     const field = idx === -1 ? line : line.slice(0, idx);
     const value = idx === -1 ? '' : line.slice(idx + 1).replace(/^ /, '');
     if (field === 'event') ev.type = value;
-    if (field === 'data') ev.data.push(value);
+    if (field === 'data')  ev.data.push(value);
   }
   if (!ev.data.length) return null;
   try { return { type: ev.type, payload: JSON.parse(ev.data.join('\n')) }; }
   catch { return null; }
+}
+
+function MarketTab({ id, market, active, disabled, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(id)}
+      disabled={disabled}
+      className={`
+        flex-1 py-2.5 font-mono text-xs font-semibold tracking-wider
+        border-b-2 transition-colors duration-150
+        disabled:opacity-40 disabled:cursor-not-allowed
+        ${active
+          ? 'border-bloomberg-orange text-bloomberg-orange bg-bloomberg-orange-dim'
+          : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white hover:border-bloomberg-subtle'}
+      `}
+    >
+      <span className="mr-1">{market.flag}</span>
+      {market.label}
+    </button>
+  );
 }
 
 function TickerChip({ label, active, onClick, disabled }) {
@@ -80,7 +121,8 @@ function TickerChip({ label, active, onClick, disabled }) {
 }
 
 export default function StockForm({ onResult, onLoading, onStatus, onAgentProgress }) {
-  const [ticker, setTicker]             = useState('NVDA');
+  const [activeMarket, setActiveMarket] = useState('US');
+  const [ticker, setTicker]             = useState(MARKETS.US.defaultTicker);
   const [date, setDate]                 = useState(today());
   const [rounds, setRounds]             = useState(DEFAULT_DEBATE_ROUNDS);
   const [analysisDepth, setDepth]       = useState('balanced');
@@ -90,10 +132,17 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
   const abortRef                        = useRef(null);
   const jobIdRef                        = useRef(null);
 
+  function handleMarketSwitch(marketId) {
+    if (running) return;
+    setActiveMarket(marketId);
+    setTicker(MARKETS[marketId].defaultTicker);
+    setError('');
+  }
+
   function validate() {
     const t = ticker.trim().toUpperCase();
-    if (!/^[A-Z0-9]{2,10}([.\-][A-Z0-9]{1,5})?$/.test(t)) {
-      return 'Invalid ticker. Examples: BBCA.JK, NVDA, BRK-B';
+    if (!/^[A-Z0-9]{1,10}([.\-][A-Z0-9]{1,5})?$/.test(t)) {
+      return 'Invalid ticker. Examples: BBCA.JK, NVDA, 700.HK, SAP.DE';
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date must be YYYY-MM-DD';
     if (!['fast', 'balanced', 'deep'].includes(analysisDepth)) return 'Invalid analysis depth.';
@@ -110,7 +159,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
         headers: buildHeaders(),
       });
     } catch {
-      // The abort below still closes the client stream; backend cancellation is best-effort.
+      // Abort below still closes the client stream; backend cancellation is best-effort.
     }
   }
 
@@ -164,18 +213,18 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     abortRef.current = controller;
 
     const payload = {
-      ticker: ticker.trim().toUpperCase(),
-      trade_date: date,
+      ticker:            ticker.trim().toUpperCase(),
+      trade_date:        date,
       max_debate_rounds: Number(rounds),
-      analysis_depth: analysisDepth,
-      response_detail: responseDetail,
+      analysis_depth:    analysisDepth,
+      response_detail:   responseDetail,
     };
 
     const createRes = await fetch(buildApiUrl('/analysis/jobs'), {
-      method: 'POST',
+      method:  'POST',
       headers: buildHeaders(),
-      body: JSON.stringify(payload),
-      signal: controller.signal,
+      body:    JSON.stringify(payload),
+      signal:  controller.signal,
     });
 
     if (!createRes.ok) throw new Error(await readHttpError(createRes));
@@ -184,15 +233,15 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     onStatus(`Job queued: ${job.job_id}`);
 
     const streamRes = await fetch(buildApiUrl(`/analysis/jobs/${job.job_id}/events`), {
-      method: 'GET',
+      method:  'GET',
       headers: API_KEY ? { 'x-api-key': API_KEY } : {},
-      signal: controller.signal,
+      signal:  controller.signal,
     });
 
     if (!streamRes.ok) throw new Error(await readHttpError(streamRes));
     if (!streamRes.body) throw new Error('SSE stream not supported by browser.');
 
-    const reader = streamRes.body.getReader();
+    const reader  = streamRes.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
 
@@ -210,21 +259,17 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
         if (event.type === 'job') {
           onStatus(`Job status: ${(event.payload.status || 'queued').toUpperCase()}`);
         }
-
         if (event.type === 'heartbeat') {
           onStatus(`Pipeline heartbeat: ${(event.payload.status || 'running').toUpperCase()}`);
         }
-
         if (event.type === 'progress') {
           onStatus(event.payload.status_message || 'Running...');
           if (onAgentProgress) onAgentProgress(event.payload);
         }
-
         if (event.type === 'result') {
           onResult(event.payload);
           return;
         }
-
         if (event.type === 'error') {
           const errorPayload = event.payload.error || event.payload.message || 'Error';
           const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
@@ -237,23 +282,49 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
   }
 
   const selectedDepth = DEPTH_OPTIONS.find(item => item.value === analysisDepth);
+  const currentMarket = MARKETS[activeMarket];
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-0">
+
+      {/* Header */}
       <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center gap-2">
         <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-wider">NEW ANALYSIS</span>
         <span className="text-bloomberg-muted font-mono text-xs">/ CONFIGURE PARAMETERS</span>
       </div>
 
+      {/* Market tabs */}
+      <div className="flex border-b border-bloomberg-border bg-bloomberg-surface">
+        {Object.entries(MARKETS).map(([id, market]) => (
+          <MarketTab
+            key={id}
+            id={id}
+            market={market}
+            active={activeMarket === id}
+            disabled={running}
+            onClick={handleMarketSwitch}
+          />
+        ))}
+      </div>
+
       <div className="p-4 flex flex-col gap-4">
+
+        {/* Ticker input */}
         <div>
           <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
             TICKER SYMBOL
+            <span className="ml-2 text-bloomberg-border normal-case font-normal">
+              {activeMarket === 'ID'
+                ? '· IDX (append .JK)'
+                : activeMarket === 'GLOBAL'
+                ? '· Global Exchange'
+                : '· NYSE / NASDAQ'}
+            </span>
           </label>
           <input
             value={ticker}
             onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g,'').slice(0,12))}
-            placeholder="e.g. BBCA.JK"
+            placeholder={currentMarket.defaultTicker}
             required
             disabled={running}
             className="
@@ -265,22 +336,26 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
             "
           />
 
+          {/* Quick-pick chips */}
           <div className="mt-2">
-            <div className="text-xs font-mono text-bloomberg-muted mb-1.5 tracking-wider">IDX</div>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {IDX_TICKERS.map(t => (
-                <TickerChip key={t} label={t} active={ticker===t} onClick={()=>setTicker(t)} disabled={running} />
-              ))}
+            <div className="text-xs font-mono text-bloomberg-muted mb-1.5 tracking-wider">
+              {currentMarket.flag} QUICK-PICK
             </div>
-            <div className="text-xs font-mono text-bloomberg-muted mb-1.5 tracking-wider">US</div>
             <div className="flex flex-wrap gap-1.5">
-              {US_TICKERS.map(t => (
-                <TickerChip key={t} label={t} active={ticker===t} onClick={()=>setTicker(t)} disabled={running} />
+              {currentMarket.tickers.map(t => (
+                <TickerChip
+                  key={t}
+                  label={t}
+                  active={ticker === t}
+                  onClick={() => setTicker(t)}
+                  disabled={running}
+                />
               ))}
             </div>
           </div>
         </div>
 
+        {/* Date + Rounds */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
@@ -323,6 +398,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
           </div>
         </div>
 
+        {/* Depth + Detail */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
@@ -361,18 +437,20 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
               "
             >
               <option value="summary" className="bg-black">SUMMARY</option>
-              <option value="full" className="bg-black">FULL</option>
-              <option value="debug" className="bg-black">DEBUG</option>
+              <option value="full"    className="bg-black">FULL</option>
+              <option value="debug"   className="bg-black">DEBUG</option>
             </select>
           </div>
         </div>
 
+        {/* Error */}
         {error && (
           <div className="border border-bloomberg-red bg-bloomberg-red-dim px-3 py-2">
             <span className="font-mono text-xs text-bloomberg-red">ERR: {error}</span>
           </div>
         )}
 
+        {/* Submit */}
         <button
           type="submit"
           className={`
