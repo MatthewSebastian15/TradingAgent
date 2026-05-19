@@ -117,20 +117,9 @@ TradingAgent/
 
 ## Requirements
 
-Backend:
-
 - Python 3.10+
-- pip
-
-Frontend:
-
 - Node.js 18+
-- npm
-
-Recommended for Docker:
-
-- Docker
-- Docker Compose
+- An API key for at least one supported LLM provider (see below)
 
 ---
 
@@ -138,20 +127,18 @@ Recommended for Docker:
 
 Set `LLM_PROVIDER` in `backend/.env`.
 
-| Provider | `LLM_PROVIDER` | Required key or setting |
-|---|---:|---|
-| Google Gemini | `google` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
+| Provider | `LLM_PROVIDER` | Required key |
+|---|---|---|
+| Google Gemini | `google` | `GOOGLE_API_KEY` |
 | OpenAI | `openai` | `OPENAI_API_KEY` |
 | Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
 | DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` |
 | xAI | `xai` | `XAI_API_KEY` |
-| Qwen | `qwen` | `DASHSCOPE_API_KEY` or `QWEN_API_KEY` |
-| GLM | `glm` | `ZHIPU_API_KEY` or `GLM_API_KEY` |
 | OpenRouter | `openrouter` | `OPENROUTER_API_KEY` |
-| Azure OpenAI | `azure` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME` |
-| Ollama | `ollama` | No API key. Set `OLLAMA_BASE_URL` |
+| Azure OpenAI | `azure` | `AZURE_OPENAI_API_KEY` + endpoint + deployment |
+| Ollama | `ollama` | None. Set `OLLAMA_BASE_URL` |
 
-Default recommended local config:
+Recommended default:
 
 ```env
 LLM_PROVIDER=google
@@ -160,42 +147,33 @@ QUICK_THINK_LLM=gemini-2.5-flash
 GOOGLE_API_KEY=your_key_here
 ```
 
-Notes:
-
-- `DEEP_THINK_LLM` is used by heavier reasoning stages such as Research Manager and Portfolio Manager.
-- `QUICK_THINK_LLM` is used by faster analyst and debate stages.
-- `ollama`, `openrouter`, and `azure` accept custom model strings.
-- Other providers warn when the model is outside the known catalog, but the code continues.
+`DEEP_THINK_LLM` is used by heavier stages (Research Manager, Portfolio Manager). `QUICK_THINK_LLM` is used by analyst and debate stages.
 
 ---
 
 ## Setup Without Docker
 
-### 1. Clone the repository
+### 1. Clone
 
 ```bash
 git clone https://github.com/MatthewSebastian15/TradingAgent.git
 cd TradingAgent
 ```
 
-### 2. Configure the backend
+### 2. Backend
 
 ```bash
 cd backend
 python -m venv venv
 ```
 
-Activate the virtual environment.
-
-Linux/macOS:
+Activate:
 
 ```bash
+# Linux/macOS
 source venv/bin/activate
-```
 
-Windows PowerShell:
-
-```powershell
+# Windows PowerShell
 .\venv\Scripts\Activate.ps1
 ```
 
@@ -206,63 +184,27 @@ pip install -r requirements.txt
 pip install -e tradingagents-core/
 ```
 
-Create the backend env file:
+Configure:
 
 ```bash
-cp .env.example .env
+cp .env.example .env   # Windows: Copy-Item .env.example .env
 ```
 
-Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Edit `backend/.env` and set your provider, model names, and API key.
-
-Example for Google Gemini:
-
-```env
-LLM_PROVIDER=google
-DEEP_THINK_LLM=gemini-2.5-flash
-QUICK_THINK_LLM=gemini-2.5-flash
-GOOGLE_API_KEY=your_key_here
-API_KEY=
-```
-
-In the current code, `API_KEY` is not enforced as authentication. `x-api-key` is used by the rate limiter as a client identity when the frontend sends it.
-
-Start the backend:
+Edit `backend/.env` and set your provider, model names, and API key. Then start:
 
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Backend URL:
-
-```text
-http://localhost:8000
-```
-
-### 3. Configure the frontend
-
-Open a new terminal:
+### 3. Frontend
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env
+cp .env.example .env   # Windows: Copy-Item .env.example .env
 ```
 
-Windows PowerShell:
-
-```powershell
-cd frontend
-npm install
-Copy-Item .env.example .env
-```
-
-For local development without Docker, set this in `frontend/.env`:
+Set in `frontend/.env`:
 
 ```env
 VITE_API_URL=http://localhost:8000
@@ -270,90 +212,33 @@ VITE_API_KEY=
 VITE_ENABLE_MOCK=false
 ```
 
-Start the frontend:
+Start:
 
 ```bash
 npm run dev
 ```
 
-Frontend URL:
-
-```text
-http://localhost:3000
-```
+Open `http://localhost:3000`.
 
 ---
 
 ## Setup With Docker
 
-Docker runs the backend, frontend, and optional Ollama service.
-
-### 1. Create backend env
-
 ```bash
 cp backend/.env.example backend/.env
-```
-
-Windows PowerShell:
-
-```powershell
-Copy-Item backend/.env.example backend/.env
-```
-
-Edit `backend/.env` and set your provider and API key.
-
-Example:
-
-```env
-LLM_PROVIDER=google
-DEEP_THINK_LLM=gemini-2.5-flash
-QUICK_THINK_LLM=gemini-2.5-flash
-GOOGLE_API_KEY=your_key_here
-API_KEY=
-```
-
-### 2. Start the stack
-
-```bash
+# Edit backend/.env and set your provider and API key
 docker compose up --build
 ```
 
-Service URLs:
+Frontend: `http://localhost:3000` — Backend: `http://localhost:8000`
 
-```text
-Frontend: http://localhost:3000
-Backend:  http://localhost:8000
-```
+Inside Docker, nginx proxies `/api/*` to the backend. You do not need to set `VITE_API_URL`.
 
-Inside Docker, the frontend uses nginx to proxy `/api/*` to the backend container. You do not need to set `VITE_API_URL` for the Docker build.
-
-### 3. Optional Ollama profile
-
-Start with Ollama:
+Optional Ollama:
 
 ```bash
 docker compose --profile ollama up --build
-```
-
-Pull a model:
-
-```bash
 docker exec -it tradingagent-ollama ollama pull qwen3:latest
-```
-
-Use this in `backend/.env`:
-
-```env
-LLM_PROVIDER=ollama
-DEEP_THINK_LLM=qwen3:latest
-QUICK_THINK_LLM=qwen3:latest
-OLLAMA_BASE_URL=http://ollama:11434
-```
-
-Stop the stack:
-
-```bash
-docker compose down
 ```
 
 ---
@@ -362,124 +247,70 @@ docker compose down
 
 | Route | Purpose |
 |---|---|
-| `/` | Redirects to `/home` |
-| `/home` | Landing/dashboard page |
-| `/analysis` | Real backend-powered analysis page |
-| `/analysis.test` | Mock UI page using `frontend/src/mockData.js` |
-| `*` | 404 page |
+| `/home` | Landing page |
+| `/analysis` | Main analysis page |
+| `/analysis.test` | Mock UI (no backend required) |
 
-Mock route behavior:
+The mock route is always available in local dev. In production builds, it requires `VITE_ENABLE_MOCK=true` at build time.
 
-- In Vite local dev, `/analysis.test` is always available.
-- In production builds, `/analysis.test` is available only when `VITE_ENABLE_MOCK=true` at build time.
-- `VITE_ENABLE_MOCK=true` does not convert `/analysis` into mock mode. It only exposes the mock route in production.
-
----
-
-## Mock Mode
-
-Mock mode lets you debug the UI without running the backend or spending LLM quota.
-
-Open:
-
-```text
-http://localhost:3000/analysis.test
-```
-
-Mock source file:
-
-```text
-frontend/src/mockData.js
-```
 ---
 
 ## API Reference
 
-### POST `/api/analyze/stream`
+### POST `/api/analysis/jobs`
 
-Streams Server-Sent Events while the pipeline runs.
-
-Request body:
+Creates an analysis job. Returns a `job_id`.
 
 ```json
 {
   "ticker": "BBCA.JK",
   "trade_date": "2026-05-18",
-  "max_debate_rounds": 3
+  "max_debate_rounds": 3,
+  "analysis_depth": "balanced",
+  "response_detail": "full"
 }
 ```
 
-Events:
+### GET `/api/analysis/jobs/{job_id}/events`
+
+Streams Server-Sent Events for job progress.
 
 | Event | Description |
 |---|---|
-| `progress` | Agent started, completed, or failed |
-| `result` | Final analysis result |
+| `progress` | Agent started or completed |
+| `result` | Final structured decision |
 | `error` | Sanitized error payload |
 
-Example progress payload:
+### DELETE `/api/analysis/jobs/{job_id}`
+
+Cancels a running job.
+
+### Input rules
+
+| Field | Rule |
+|---|---|
+| `ticker` | Yahoo Finance-compatible symbol, 1-10 characters |
+| `trade_date` | `YYYY-MM-DD` |
+| `max_debate_rounds` | Integer 1 to 5 |
+| `analysis_depth` | `fast`, `balanced`, or `deep` |
+| `response_detail` | `summary`, `full`, or `debug` |
+
+### Result shape (key fields)
 
 ```json
 {
-  "request_id": "abc123def456",
   "ticker": "BBCA.JK",
-  "trade_date": "2026-05-18",
-  "agent_id": "market_analyst",
-  "agent_name": "Market Analyst",
-  "status": "completed",
-  "status_message": "Market Analyst completed.",
-  "timestamp": "2026-05-18T08:00:00Z"
-}
-```
-
-### POST `/api/analyze`
-
-Runs the same analysis and returns JSON after completion.
-
-Request body:
-
-```json
-{
-  "ticker": "NVDA",
-  "trade_date": "2026-05-18",
-  "max_debate_rounds": 3
-}
-```
-
-Example response shape:
-
-```json
-{
-  "request_id": "abc123def456",
-  "ticker": "NVDA",
-  "trade_date": "2026-05-18",
-  "agents_used": [
-    "Market Analyst",
-    "News + Social Analyst",
-    "Fundamentals Analyst",
-    "Bull Researcher",
-    "Bear Researcher",
-    "Research Manager",
-    "Trader",
-    "Risk Analysts",
-    "Portfolio Manager"
-  ],
   "decision": "Buy",
-  "full_decision": "...",
   "executive_summary": "...",
   "investment_thesis": "...",
-  "price_target": 1050,
+  "price_target": 9800,
   "time_horizon": "3-6 months",
-  "confidence_score": 0.86,
-  "suggested_allocation_percent": 6,
-  "entry_price": 920,
-  "stop_loss": 850,
-  "take_profit": 1050,
-  "risk_reward_ratio": 2.6,
-  "max_drawdown_estimate": "8-12%",
-  "volatility_level": "High",
-  "position_sizing_reason": "...",
-  "rebalancing_action": "Add gradually",
+  "confidence_score": 0.82,
+  "entry_price": 9000,
+  "stop_loss": 8400,
+  "take_profit": 9800,
+  "risk_reward_ratio": 2.3,
+  "suggested_allocation_percent": 5,
   "key_catalysts": [],
   "invalidation_conditions": [],
   "data_quality": {
@@ -491,210 +322,61 @@ Example response shape:
 }
 ```
 
-### Error response shape
+### Error codes
 
-```json
-{
-  "request_id": "abc123def456",
-  "error": {
-    "code": "BAD_REQUEST",
-    "message": "Invalid analysis request.",
-    "details": {
-      "fields": {
-        "trade_date": "Trade date must be a valid date in YYYY-MM-DD format."
-      }
-    }
-  }
-}
-```
-
-Common error codes:
-
-| Code | HTTP status | Meaning |
-|---|---:|---|
-| `BAD_REQUEST` | 400 | Invalid ticker, date, or debate rounds |
-| `RATE_LIMITED` | 429 | Too many requests or active analyses |
+| Code | HTTP | Meaning |
+|---|---|---|
+| `BAD_REQUEST` | 400 | Invalid ticker, date, or parameters |
+| `RATE_LIMITED` | 429 | Too many requests |
 | `PIPELINE_TIMEOUT` | 504 | Analysis exceeded timeout |
-| `PIPELINE_FAILED` | 500 | Pipeline failed. Check backend logs with `request_id` |
-| `VALIDATION_ERROR` | 422 | Invalid JSON payload shape |
-
----
-
-## Input Rules
-
-| Field | Rule |
-|---|---|
-| `ticker` | Yahoo Finance-compatible symbol, normalized to uppercase |
-| `trade_date` | Valid `YYYY-MM-DD` date |
-| `max_debate_rounds` | Integer from 1 to 5 |
-
-Ticker examples:
-
-| Market | Example |
-|---|---|
-| US stocks | `NVDA`, `AAPL`, `TSLA`, `MSFT` |
-| Indonesia IDX | `BBCA.JK`, `BBRI.JK`, `TLKM.JK`, `GOTO.JK` |
-| Hong Kong | `0700.HK` |
-| Tokyo | `7203.T` |
-| Hyphenated tickers | `BRK-B` |
-
-In the current balanced pipeline, `max_debate_rounds` is accepted and passed into config, but the balanced path keeps a fixed request budget. It does not expand into extra LLM debate loops per round.
+| `PIPELINE_FAILED` | 500 | Internal error — check logs with `request_id` |
 
 ---
 
 ## Environment Variables
 
-### Backend: `backend/.env`
-
-The backend `.env.example` contains provider and secret-related values.
+### `backend/.env`
 
 | Variable | Required | Description |
-|---|---:|---|
-| `LLM_PROVIDER` | Yes | Provider name: `google`, `openai`, `anthropic`, `deepseek`, `xai`, `qwen`, `glm`, `openrouter`, `ollama`, or `azure` |
+|---|---|---|
+| `LLM_PROVIDER` | Yes | Provider name |
 | `DEEP_THINK_LLM` | Yes | Model for heavier reasoning stages |
 | `QUICK_THINK_LLM` | Yes | Model for faster stages |
-| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google only | Gemini API key |
+| `GOOGLE_API_KEY` | Google only | Gemini API key |
 | `OPENAI_API_KEY` | OpenAI only | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Anthropic only | Anthropic API key |
 | `DEEPSEEK_API_KEY` | DeepSeek only | DeepSeek API key |
-| `XAI_API_KEY` | xAI only | xAI API key |
-| `QWEN_API_KEY` / `DASHSCOPE_API_KEY` | Qwen only | Qwen/DashScope key |
-| `GLM_API_KEY` / `ZHIPU_API_KEY` | GLM only | GLM/Zhipu key |
-| `OPENROUTER_API_KEY` | OpenRouter only | OpenRouter key |
-| `AZURE_OPENAI_API_KEY` | Azure only | Azure OpenAI key |
-| `AZURE_OPENAI_ENDPOINT` | Azure only | Azure OpenAI endpoint |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | Azure only | Azure deployment name |
 | `OLLAMA_BASE_URL` | Ollama only | Local or Docker Ollama URL |
-| `API_KEY` | Optional | Loaded into config, but current request handling does not enforce key matching. Rate limiting uses the incoming `x-api-key` or bearer token as client identity when present. |
+| `API_KEY` | Optional | Used as rate-limit identity, not enforced auth |
 
-Backend values currently defined in `backend/config.py` instead of `.env`:
-
-| Setting | Current value |
-|---|---:|
-| `BACKEND_PORT` | `8000` |
-| `FRONTEND_PORT` | `3000` |
-| `CORS_ORIGINS` | `http://localhost:3000`, `http://localhost:5173` |
-| `PIPELINE_TIMEOUT_SECONDS` | `600` |
-| `PROCESS_POOL_WORKERS` | `min(4, os.cpu_count() or 2)` |
-| `DEFAULT_MAX_DEBATE_ROUNDS` | `3` |
-| `MAX_RISK_DISCUSS_ROUNDS` | `1` |
-| `ANALYSIS_MODE` | `balanced` |
-| `MAX_GEMINI_CALLS` | `9` |
-| `REQUEST_RATE_LIMIT_PER_MINUTE` | `20` |
-| `STREAM_RATE_LIMIT_PER_MINUTE` | `8` |
-| `MAX_CONCURRENT_REQUESTS_PER_KEY` | `2` |
-| `MAX_CONCURRENT_STREAMS_PER_KEY` | `1` |
-| `LLM_TIMEOUT_SECONDS` | `60` |
-| `LLM_MAX_RETRIES` | `1` |
-| `CACHE_TTL_SECONDS` | `900` |
-| `CACHE_MAX_ENTRIES` | `512` |
-
-To change local frontend origins, edit `CORS_ORIGINS` in `backend/config.py`.
-
-### Frontend: `frontend/.env`
+### `frontend/.env`
 
 | Variable | Default | Description |
 |---|---|---|
-| `VITE_API_URL` | Empty string | Backend base URL. Empty uses relative `/api/*`, useful in Docker nginx. Local dev should use `http://localhost:8000`. |
-| `VITE_API_KEY` | Empty string | Sent as `x-api-key`. The backend currently uses this header for rate-limit identity, not strict authentication. |
-| `VITE_ENABLE_MOCK` | `false` | Exposes `/analysis.test` in production builds when set to `true`. |
-
----
-
-## Rate Limiting
-
-Rate limiting is in memory and grouped by the incoming `x-api-key` or bearer token when available. The current code does not compare this header against `API_KEY`; it uses the header as a client identity for limiting. If no key is sent, the backend falls back to IP/user-agent-derived identity.
-
-| Endpoint type | Limit per minute | Max concurrent |
-|---|---:|---:|
-| REST `/api/analyze` | 20 | 2 |
-| SSE `/api/analyze/stream` | 8 | 1 |
-
-When the limit is exceeded, the API returns `RATE_LIMITED` with HTTP 429 or an SSE `error` event.
-
----
-
-## Data Quality
-
-The backend adds a `data_quality` object to the API result:
-
-```json
-{
-  "price_data": "ok",
-  "fundamentals": "partial",
-  "news": "missing",
-  "warnings": [
-    "Partial fundamentals from yfinance; missing: cashflow."
-  ]
-}
-```
-
-Possible `price_data` values:
-
-- `ok`
-- `partial`
-- `missing`
-- `invalid_ticker`
-- `market_closed`
-
-Possible `fundamentals` and `news` values:
-
-- `ok`
-- `partial`
-- `missing`
-
-The frontend renders these fields in the ResultCard so you can see whether the recommendation used complete data or a sad pile of partial market scraps.
+| `VITE_API_URL` | Empty | Backend URL. Empty uses relative `/api/*` (Docker). Set to `http://localhost:8000` for local dev. |
+| `VITE_API_KEY` | Empty | Sent as `x-api-key` for rate-limit identity |
+| `VITE_ENABLE_MOCK` | `false` | Exposes `/analysis.test` in production builds |
 
 ---
 
 ## Testing
-
-Run FastAPI wrapper tests:
 
 ```bash
 cd backend
 python -m pytest tests -q
 ```
 
-Current backend wrapper coverage includes:
-
-- Valid `BBCA.JK` ticker.
-- Valid normalized `BBCA` ticker.
-- Invalid date rejection.
-- `max_debate_rounds` above 5 rejection.
-- DeepSeek provider validation when API key exists.
-- REST analysis route response shape.
-- SSE progress and final result events.
-- Rate limit HTTP 429 behavior.
-
-Run frontend build check:
-
-```bash
-cd frontend
-npm run build
-```
-
-Run frontend tests when test files are present:
-
-```bash
-cd frontend
-npm test
-```
-
----
-
-
+Coverage includes ticker validation, date validation, debate round limits, rate limiting (HTTP 429), SSE progress events, and result schema shape.
 
 ---
 
 ## Credits
 
-- Trading engine foundation: [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)
-- Backend: [FastAPI](https://fastapi.tiangolo.com/)
-- Streaming: [sse-starlette](https://github.com/sysid/sse-starlette)
+- Trading engine: [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)
+- Backend: [FastAPI](https://fastapi.tiangolo.com/) + [sse-starlette](https://github.com/sysid/sse-starlette)
 - Frontend: [React](https://react.dev/) + [Vite](https://vite.dev/)
 - Market data: [yfinance](https://github.com/ranaroussi/yfinance)
-- Graph orchestration: [LangGraph](https://github.com/langchain-ai/langgraph)
+- Pipeline: [LangGraph](https://github.com/langchain-ai/langgraph)
 
 ---
 
