@@ -9,14 +9,25 @@ function parseBold(text) {
   );
 }
 
-/** Return a currency-prefixed string matching the ticker's exchange.
- *  Tickers with a .JK suffix trade on the Indonesia Stock Exchange in IDR.
- *  All other tickers default to USD ($).
+/**
+ * Return a currency-prefixed price string based on the ticker's exchange suffix.
+ *   .JK  -> IDR  (Rp)
+ *   .HK  -> HKD  (HK$)
+ *   .T   -> JPY  (¥)
+ *   .DE  -> EUR  (€)
+ *   .L   -> GBP  (£)
+ *   else -> USD  ($)
  */
 function formatPrice(price, ticker = '') {
   if (price === null || price === undefined || price === '') return null;
   const value = typeof price === 'number' ? price.toLocaleString() : String(price);
-  return ticker.toUpperCase().endsWith('.JK') ? `Rp ${value}` : `$${value}`;
+  const t = ticker.toUpperCase();
+  if (t.endsWith('.JK')) return `Rp ${value}`;
+  if (t.endsWith('.HK')) return `HK$ ${value}`;
+  if (t.endsWith('.T'))  return `¥${value}`;
+  if (t.endsWith('.DE')) return `€${value}`;
+  if (t.endsWith('.L'))  return `£${value}`;
+  return `$${value}`;
 }
 
 function getError(e) {
@@ -65,9 +76,9 @@ function SectionHeader({ label }) {
 function DataQuality({ dq }) {
   if (!dq) return null;
   const items = [
-    { label: 'PRICE', status: dq.price_data },
+    { label: 'PRICE',        status: dq.price_data   },
     { label: 'FUNDAMENTALS', status: dq.fundamentals },
-    { label: 'NEWS', status: dq.news },
+    { label: 'NEWS',         status: dq.news         },
   ];
   return (
     <div className="mb-5">
@@ -97,7 +108,7 @@ function DataQuality({ dq }) {
 
 export default function ResultCard({ result }) {
   const [thesisExpanded, setThesisExpanded] = useState(false);
-  const [showRaw, setShowRaw] = useState(false);
+  const [showRaw, setShowRaw]               = useState(false);
 
   if (!result) return null;
 
@@ -144,7 +155,7 @@ export default function ResultCard({ result }) {
   return (
     <div className="border border-bloomberg-border bg-bloomberg-card animate-fade-up">
 
-      {/* ── Header bar ── */}
+      {/* Header bar */}
       <div className="bg-black px-4 py-2 border-b border-bloomberg-border flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="font-mono text-xs text-bloomberg-muted tracking-wider">ANALYSIS COMPLETE</span>
@@ -153,7 +164,7 @@ export default function ResultCard({ result }) {
         <span className="font-mono text-xs text-bloomberg-muted">{result.trade_date}</span>
       </div>
 
-      {/* ── Decision hero ── */}
+      {/* Decision hero */}
       <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
         <div>
           <div className={`font-display text-5xl font-bold tracking-wider ${decisionColor}`}>
@@ -186,7 +197,7 @@ export default function ResultCard({ result }) {
         </div>
       </div>
 
-      {/* ── Action plan metrics ── */}
+      {/* Action plan */}
       {(entryPrice !== null || stopLoss !== null || takeProfit !== null || riskReward !== null || maxDrawdown || volatility || rebalancing) && (
         <div className="px-4 py-4 border-b border-bloomberg-border">
           <SectionHeader label="ACTION PLAN" />
@@ -194,10 +205,10 @@ export default function ResultCard({ result }) {
             {entryPrice  !== null && <MetricBox label="ENTRY"       value={formatPrice(entryPrice,  result.ticker)} />}
             {stopLoss    !== null && <MetricBox label="STOP LOSS"   value={formatPrice(stopLoss,    result.ticker)} />}
             {takeProfit  !== null && <MetricBox label="TAKE PROFIT" value={formatPrice(takeProfit,  result.ticker)} />}
-            {riskReward  !== null && <MetricBox label="R/R RATIO" value={riskReward} />}
+            {riskReward  !== null && <MetricBox label="R/R RATIO"   value={riskReward} />}
             {maxDrawdown && <MetricBox label="MAX DRAWDOWN" value={maxDrawdown} />}
-            {volatility  && <MetricBox label="VOLATILITY"  value={volatility} />}
-            {rebalancing && <MetricBox label="REBALANCING" value={rebalancing} />}
+            {volatility  && <MetricBox label="VOLATILITY"   value={volatility} />}
+            {rebalancing && <MetricBox label="REBALANCING"  value={rebalancing} />}
           </div>
           {sizingReason && (
             <p className="mt-3 font-mono text-xs text-bloomberg-muted leading-relaxed">
@@ -207,14 +218,14 @@ export default function ResultCard({ result }) {
         </div>
       )}
 
-      {/* ── Data quality ── */}
+      {/* Data quality */}
       {dataQuality && (
         <div className="px-4 py-4 border-b border-bloomberg-border">
           <DataQuality dq={dataQuality} />
         </div>
       )}
 
-      {/* ── Catalysts + Invalidations ── */}
+      {/* Catalysts + Invalidations */}
       {(catalysts.length > 0 || invalidations.length > 0) && (
         <div className="px-4 py-4 border-b border-bloomberg-border grid grid-cols-2 gap-4">
           {catalysts.length > 0 && (
@@ -246,7 +257,7 @@ export default function ResultCard({ result }) {
         </div>
       )}
 
-      {/* ── Executive Summary ── */}
+      {/* Executive Summary */}
       {summary && (
         <div className="px-4 py-4 border-b border-bloomberg-border">
           <SectionHeader label="EXECUTIVE SUMMARY" />
@@ -256,7 +267,7 @@ export default function ResultCard({ result }) {
         </div>
       )}
 
-      {/* ── Investment Thesis ── */}
+      {/* Investment Thesis */}
       {thesis && (
         <div className="px-4 py-4 border-b border-bloomberg-border">
           <SectionHeader label="INVESTMENT THESIS" />
@@ -277,7 +288,7 @@ export default function ResultCard({ result }) {
         </div>
       )}
 
-      {/* ── Agents used ── */}
+      {/* Agents used */}
       {agents.length > 0 && (
         <div className="px-4 py-4 border-b border-bloomberg-border">
           <SectionHeader label="AGENT PIPELINE" />
@@ -291,7 +302,7 @@ export default function ResultCard({ result }) {
         </div>
       )}
 
-      {/* ── Raw JSON debug ── */}
+      {/* Raw JSON debug */}
       <div className="px-4 py-3">
         <button
           onClick={() => setShowRaw(!showRaw)}

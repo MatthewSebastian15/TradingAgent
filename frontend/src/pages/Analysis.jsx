@@ -6,17 +6,14 @@ import Navbar from '../components/Navbar';
 
 const HISTORY_KEY      = 'ta_analysis_history';
 const HISTORY_LIMIT    = 10;
-// Entries older than this are pruned automatically on every read and write.
 const HISTORY_TTL_DAYS = 30;
 
-/** Return true when a saved entry has exceeded the TTL. */
 function isExpired(entry) {
   if (!entry?.saved_at) return false;
   const ageMs = Date.now() - new Date(entry.saved_at).getTime();
   return ageMs > HISTORY_TTL_DAYS * 24 * 60 * 60 * 1000;
 }
 
-/** Read history from localStorage, dropping expired and malformed entries. */
 function readHistory() {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
@@ -28,30 +25,39 @@ function readHistory() {
   }
 }
 
-/** Persist history, enforcing the item limit and TTL. */
 function writeHistory(entries) {
   try {
     const clean = entries.filter(e => e && !isExpired(e)).slice(0, HISTORY_LIMIT);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(clean));
-  } catch {
-    // localStorage may be unavailable (private browsing, storage quota exceeded).
-  }
+  } catch {}
 }
 
 function saveToHistory(result) {
   if (!result || result.error) return;
   const history = readHistory();
-  // Deduplicate by ticker + trade_date so re-running the same query replaces the old entry.
   const deduped = history.filter(h => !(h.ticker === result.ticker && h.trade_date === result.trade_date));
   writeHistory([{ ...result, saved_at: new Date().toISOString() }, ...deduped]);
 }
 
-/** Return a currency-prefixed string appropriate for the ticker's exchange.
- *  Tickers ending in .JK trade in IDR; everything else defaults to USD ($).
+/**
+ * Detect market from ticker format and return appropriate currency prefix.
+ *   .JK  -> IDR  (Rp)
+ *   .HK  -> HKD  (HK$)
+ *   .T   -> JPY  (¥)
+ *   .DE  -> EUR  (€)
+ *   .L   -> GBP  (£)
+ *   else -> USD  ($)
  */
 function formatPrice(price, ticker = '') {
-  const value = typeof price === 'number' ? price.toLocaleString() : price;
-  return ticker.toUpperCase().endsWith('.JK') ? `Rp ${value}` : `$${value}`;
+  if (price === null || price === undefined || price === '') return null;
+  const value = typeof price === 'number' ? price.toLocaleString() : String(price);
+  const t = ticker.toUpperCase();
+  if (t.endsWith('.JK')) return `Rp ${value}`;
+  if (t.endsWith('.HK')) return `HK$ ${value}`;
+  if (t.endsWith('.T'))  return `¥${value}`;
+  if (t.endsWith('.DE')) return `€${value}`;
+  if (t.endsWith('.L'))  return `£${value}`;
+  return `$${value}`;
 }
 
 function decisionStyle(d) {
@@ -132,7 +138,7 @@ export default function Analysis() {
       <Navbar />
 
       <div className="flex" style={{ minHeight: 'calc(100vh - 68px)' }}>
-        {/* ── Left sidebar: form ── */}
+        {/* Left sidebar: form */}
         <div className="w-80 flex-shrink-0 border-r border-bloomberg-border flex flex-col">
           <div className="flex-1">
             <div className="border-b border-bloomberg-border bg-bloomberg-card">
@@ -144,7 +150,6 @@ export default function Analysis() {
               />
             </div>
 
-            {/* History */}
             <div className="p-4">
               <HistoryPanel
                 currentTicker={result?.ticker}
@@ -156,7 +161,7 @@ export default function Analysis() {
           <StatusBar loading={loading} status={status} />
         </div>
 
-        {/* ── Right main panel ── */}
+        {/* Right main panel */}
         <div className="flex-1 overflow-y-auto">
           {!loading && !result && (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center">
@@ -164,7 +169,7 @@ export default function Analysis() {
                 READY
               </div>
               <div className="font-mono text-sm text-bloomberg-muted tracking-wider max-w-xs">
-                Configure parameters on the left and execute analysis to receive a structured trade decision.
+                Select a market tab, configure parameters on the left, and execute analysis to receive a structured trade decision.
               </div>
               <div className="mt-8 grid grid-cols-3 gap-4 w-full max-w-md">
                 {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, i) => (
