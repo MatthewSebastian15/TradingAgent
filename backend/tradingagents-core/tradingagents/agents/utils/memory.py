@@ -38,6 +38,9 @@ class TradingMemoryLog:
     """Append-only SQLite log of trading decisions and reflections."""
 
     # One connection per thread. SQLite connections are not thread-safe.
+    # Connections are keyed by database path so isolated logs do not leak
+    # state into each other when tests or multiple graph instances run in
+    # the same thread.
     _local = threading.local()
 
     def __init__(self, config: dict = None):
@@ -68,11 +71,17 @@ class TradingMemoryLog:
             yield None
             return
 
-        conn = getattr(self._local, "conn", None)
+        db_key = str(self._db_path)
+        conns = getattr(self._local, "conns", None)
+        if conns is None:
+            conns = {}
+            self._local.conns = conns
+
+        conn = conns.get(db_key)
         if conn is None:
-            conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
+            conn = sqlite3.connect(db_key, check_same_thread=False)
             conn.row_factory = sqlite3.Row
-            self._local.conn = conn
+            conns[db_key] = conn
         try:
             yield conn
         except Exception:
@@ -123,6 +132,7 @@ class TradingMemoryLog:
         if self._db_path is None:
             return
         rating = parse_rating(final_trade_decision)
+        decision = final_trade_decision.strip()
         with self._conn() as conn:
             conn.execute(
                 """
@@ -130,7 +140,7 @@ class TradingMemoryLog:
                     (trade_date, ticker, rating, decision, pending)
                 VALUES (?, ?, ?, ?, 1)
                 """,
-                (trade_date, ticker, rating, final_trade_decision),
+                (trade_date, ticker, rating, decision),
             )
             conn.commit()
         self._apply_rotation()
@@ -147,7 +157,7 @@ class TradingMemoryLog:
             rows = conn.execute(
                 "SELECT * FROM decisions ORDER BY id ASC"
             ).fetchall()
-        return [dict(r) for r in rows]
+        return [self._row_to_entry(r) for r in rows]
 
     def get_pending_entries(self) -> List[dict]:
         """Return rows where pending = 1."""
@@ -157,7 +167,7 @@ class TradingMemoryLog:
             rows = conn.execute(
                 "SELECT * FROM decisions WHERE pending = 1 ORDER BY id ASC"
             ).fetchall()
-        return [dict(r) for r in rows]
+        return [self._row_to_entry(r) for r in rows]
 
     def get_past_context(self, ticker: str, n_same: int = 5, n_cross: int = 3) -> str:
         """Return formatted past context for agent prompt injection.
@@ -188,8 +198,8 @@ class TradingMemoryLog:
                 (ticker, n_cross),
             ).fetchall()
 
-        same = [dict(r) for r in same_rows]
-        cross = [dict(r) for r in cross_rows]
+        same = [self._row_to_entry(r) for r in same_rows]
+        cross = [self._row_to_entry(r) for r in cross_rows]
 
         if not same and not cross:
             return ""
@@ -243,6 +253,11 @@ class TradingMemoryLog:
         """
         if self._db_path is None or not updates:
             return
+        normalized_updates = []
+        for update in updates:
+            normalized = dict(update)
+            normalized.setdefault("trade_date", normalized.get("date"))
+            normalized_updates.append(normalized)
         with self._conn() as conn:
             conn.executemany(
                 """
@@ -254,7 +269,7 @@ class TradingMemoryLog:
                     reflection   = :reflection
                 WHERE trade_date = :trade_date AND ticker = :ticker AND pending = 1
                 """,
-                updates,
+                normalized_updates,
             )
             conn.commit()
         self._apply_rotation()
@@ -302,6 +317,23 @@ class TradingMemoryLog:
     # ------------------------------------------------------------------
     # Formatters (used by get_past_context)
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_return(value: Optional[float]) -> Optional[str]:
+        return f"{value:+.1%}" if value is not None else None
+
+    def _row_to_entry(self, row) -> dict:
+        entry = dict(row)
+        entry["pending"] = bool(entry.get("pending"))
+        entry["date"] = entry.get("trade_date")
+        entry["raw"] = self._format_return(entry.get("raw_return"))
+        entry["alpha"] = self._format_return(entry.get("alpha_return"))
+        entry["holding"] = (
+            f"{entry['holding_days']}d"
+            if entry.get("holding_days") is not None
+            else None
+        )
+        return entry
 
     def _format_full(self, e: dict) -> str:
         raw = f"{e['raw_return']:+.1%}" if e["raw_return"] is not None else "n/a"

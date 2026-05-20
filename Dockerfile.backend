@@ -1,10 +1,40 @@
+# Stage 1: Builder
+# Install all dependencies and build wheels in this stage.
+FROM python:3.11-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DEFAULT_TIMEOUT=300 \
+    PIP_RETRIES=10 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /build
+
+# Install build tools required to compile Python packages.
+# These tools will not be included in the final runtime image.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade Python packaging tools.
+RUN pip install --upgrade pip setuptools wheel
+
+# Build wheels from the backend requirements file.
+COPY backend/requirements.txt .
+RUN pip wheel --wheel-dir=/wheels -r requirements.txt
+
+# Build wheel from the local tradingagents-core package.
+COPY backend/tradingagents-core /build/tradingagents-core
+RUN pip wheel --wheel-dir=/wheels /build/tradingagents-core
+
+
+# Stage 2: Runtime
+# Copy only the prebuilt wheels and application source code.
+# Build tools are intentionally excluded from this final image.
 FROM python:3.11-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DEFAULT_TIMEOUT=300 \
-    PIP_RETRIES=10 \
     PYTHONPATH=/app/backend:/app/backend/tradingagents-core \
     XDG_CACHE_HOME=/root/.tradingagents/cache \
     YFINANCE_CACHE_DIR=/root/.tradingagents/cache/py-yfinance \
@@ -12,34 +42,23 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Install only curl for health checks.
+# Do not install build-essential in the runtime image.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential curl \
-    && mkdir -p /root/.tradingagents/cache/py-yfinance \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip supaya lebih stabil saat download package
-RUN python -m pip install --upgrade pip setuptools wheel
+# Copy wheels from the builder stage and install them without rebuilding.
+COPY --from=builder /wheels /wheels
+RUN pip install --no-index --find-links=/wheels /wheels/*.whl \
+    && rm -rf /wheels
 
-# Install backend dependencies dulu
-COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install \
-    --timeout 300 \
-    --retries 10 \
-    --prefer-binary \
-    -r /app/backend/requirements.txt
-
-# Copy tradingagents-core dan install dari folder lokal
+# Copy backend source code.
 COPY backend/tradingagents-core /app/backend/tradingagents-core
-RUN pip install \
-    --timeout 300 \
-    --retries 10 \
-    --prefer-binary \
-    /app/backend/tradingagents-core
-
-# Copy sisa backend code
 COPY backend /app/backend
 
 WORKDIR /app/backend
+
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -404,6 +404,8 @@ def validate_startup_config() -> list[str]:
         errors.append("DEEP_THINK_LLM must not be empty.")
     if not llm.quick_think_llm:
         errors.append("QUICK_THINK_LLM must not be empty.")
+    if REQUIRE_API_KEY_FOR_RATE_LIMIT and not llm.api_key:
+        errors.append("API_KEY is required when REQUIRE_API_KEY_FOR_RATE_LIMIT=true.")
 
     if ANALYSIS_MODE not in {"balanced", "classic"}:
         errors.append("ANALYSIS_MODE must be either balanced or classic.")

@@ -289,7 +289,7 @@ Cancels a running job.
 
 | Field | Rule |
 |---|---|
-| `ticker` | Yahoo Finance-compatible symbol, 1-10 characters |
+| `ticker` | Yahoo Finance-compatible symbol, 1-10 characters. Use exchange suffixes when needed, e.g. `BBCA.JK`; common IDX tickers such as `BBCA` are auto-normalized to `.JK`. |
 | `trade_date` | `YYYY-MM-DD` |
 | `max_debate_rounds` | Integer 1 to 5 |
 | `analysis_depth` | `fast`, `balanced`, or `deep` |
@@ -347,14 +347,14 @@ Cancels a running job.
 | `ANTHROPIC_API_KEY` | Anthropic only | Anthropic API key |
 | `DEEPSEEK_API_KEY` | DeepSeek only | DeepSeek API key |
 | `OLLAMA_BASE_URL` | Ollama only | Local or Docker Ollama URL |
-| `API_KEY` | Optional | Used as rate-limit identity, not enforced auth |
+| `API_KEY` | Optional locally; required when `REQUIRE_API_KEY_FOR_RATE_LIMIT=true` | Shared API key accepted from `x-api-key` or `Authorization: Bearer ...` |
 
 ### `frontend/.env`
 
 | Variable | Default | Description |
 |---|---|---|
 | `VITE_API_URL` | Empty | Backend URL. Empty uses relative `/api/*` (Docker). Set to `http://localhost:8000` for local dev. |
-| `VITE_API_KEY` | Empty | Sent as `x-api-key` for rate-limit identity |
+| `VITE_API_KEY` | Empty | Must match backend `API_KEY` when backend API-key enforcement is enabled |
 | `VITE_ENABLE_MOCK` | `false` | Exposes `/analysis.test` in production builds |
 
 ---

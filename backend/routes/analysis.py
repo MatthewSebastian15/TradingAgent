@@ -889,6 +889,12 @@ async def _start_job(job: AnalysisJob, request: Request) -> None:
 
 async def _stream_job_events(request: Request, job: AnalysisJob):
     yield _sse_event("job", job.public_summary())
+    if job.result is not None:
+        yield _sse_event("result", job.result)
+        return
+    if job.error is not None:
+        yield _sse_event("error", job.error)
+        return
 
     while True:
         if await request.is_disconnected():

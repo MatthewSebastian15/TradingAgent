@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple, Dict
 
 from rich.console import Console
 
-from backend.cli.models import AnalystType
+from cli.models import AnalystType
 try:
     from config import MODEL_CATALOG as _MODEL_CATALOG
 except ImportError:

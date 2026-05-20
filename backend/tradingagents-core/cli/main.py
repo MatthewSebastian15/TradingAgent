@@ -26,12 +26,12 @@ from rich import box
 from rich.align import Align
 from rich.rule import Rule
 
-from backend.tradingagents.graph.trading_graph import TradingAgentsGraph
-from backend.tradingagents.default_config import DEFAULT_CONFIG
-from backend.cli.models import AnalystType
-from backend.cli.utils import *
-from backend.cli.announcements import fetch_announcements, display_announcements
-from backend.cli.stats_handler import StatsCallbackHandler
+from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.default_config import DEFAULT_CONFIG
+from cli.models import AnalystType
+from cli.utils import *
+from cli.announcements import fetch_announcements, display_announcements
+from cli.stats_handler import StatsCallbackHandler
 
 console = Console()
 
@@ -1213,7 +1213,7 @@ def analyze(
     ),
 ):
     if clear_checkpoints:
-        from backend.tradingagents.graph.checkpointer import clear_all_checkpoints
+        from tradingagents.graph.checkpointer import clear_all_checkpoints
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])
         console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
     run_analysis(checkpoint=checkpoint)

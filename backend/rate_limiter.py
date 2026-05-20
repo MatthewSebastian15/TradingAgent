@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import hashlib
 import time
 from collections import deque
@@ -16,6 +17,7 @@ from config import (
     MAX_CONCURRENT_REQUESTS_PER_KEY,
     STREAM_RATE_LIMIT_PER_MINUTE,
     MAX_CONCURRENT_STREAMS_PER_KEY,
+    llm,
 )
 from errors import RateLimitError
 
@@ -96,7 +98,19 @@ def get_client_identifier(request: Request) -> str:
     if not api_key and auth.lower().startswith("bearer "):
         api_key = auth.split(" ", 1)[1].strip()
 
+    configured_api_key = llm.api_key
+    if configured_api_key:
+        if not api_key:
+            raise RateLimitError(
+                "Missing API key. Send x-api-key or Authorization: Bearer <key>."
+            )
+        if not hmac.compare_digest(api_key, configured_api_key):
+            raise RateLimitError("Invalid API key.")
+        return f"api_key:{_hash(api_key)}"
+
     if api_key:
+        if REQUIRE_API_KEY_FOR_RATE_LIMIT:
+            raise RateLimitError("Server API key is not configured.")
         return f"api_key:{_hash(api_key)}"
 
     if REQUIRE_API_KEY_FOR_RATE_LIMIT:

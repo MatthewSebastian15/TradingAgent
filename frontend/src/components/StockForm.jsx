@@ -258,6 +258,17 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
 
         if (event.type === 'job') {
           onStatus(`Job status: ${(event.payload.status || 'queued').toUpperCase()}`);
+          if (event.payload.result) {
+            onResult(event.payload.result);
+            return;
+          }
+          if (event.payload.error) {
+            const errorPayload = event.payload.error.error || event.payload.error.message || event.payload.error;
+            const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
+            const rid = event.payload.error.request_id ? ` [${event.payload.error.request_id}]` : '';
+            onResult({ error: `${message || 'Analysis failed.'}${rid}` });
+            return;
+          }
         }
         if (event.type === 'heartbeat') {
           onStatus(`Pipeline heartbeat: ${(event.payload.status || 'running').toUpperCase()}`);

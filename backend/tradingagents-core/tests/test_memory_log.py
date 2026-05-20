@@ -4,14 +4,12 @@ import pytest
 import pandas as pd
 from unittest.mock import MagicMock, patch
 
-from backend.tradingagents.agents.utils.memory import TradingMemoryLog
-from backend.tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
-from backend.tradingagents.graph.reflection import Reflector
-from backend.tradingagents.graph.trading_graph import TradingAgentsGraph
-from backend.tradingagents.graph.propagation import Propagator
-from backend.tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
-
-_SEP = TradingMemoryLog._SEPARATOR
+from tradingagents.agents.utils.memory import TradingMemoryLog
+from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
+from tradingagents.graph.reflection import Reflector
+from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.graph.propagation import Propagator
+from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
 
 DECISION_BUY = "Rating: Buy\nEnter at $189-192, 6% portfolio cap."
 DECISION_OVERWEIGHT = (
@@ -35,16 +33,17 @@ def make_log(tmp_path, filename="trading_memory.md"):
     return TradingMemoryLog(config)
 
 
+def _db_path(tmp_path, filename="trading_memory.md"):
+    path = tmp_path / filename
+    if path.suffix.lower() in (".md", ".txt"):
+        path = path.with_suffix(".db")
+    return path
+
+
 def _seed_completed(tmp_path, ticker, date, decision_text, reflection_text, filename="trading_memory.md"):
-    """Write a completed entry directly to file, bypassing the API."""
-    entry = (
-        f"[{date} | {ticker} | Buy | +1.0% | +0.5% | 5d]\n\n"
-        f"DECISION:\n{decision_text}\n\n"
-        f"REFLECTION:\n{reflection_text}"
-        + _SEP
-    )
-    with open(tmp_path / filename, "a", encoding="utf-8") as f:
-        f.write(entry)
+    """Write a completed entry using the public SQLite-backed API."""
+    log = make_log(tmp_path, filename)
+    _resolve_entry(log, ticker, date, decision_text, reflection_text)
 
 
 def _resolve_entry(log, ticker, date, decision, reflection="Good call."):
@@ -89,8 +88,13 @@ def _structured_pm_llm(captured: dict, decision: PortfolioDecision | None = None
     """
     if decision is None:
         decision = PortfolioDecision(
+            confidence_score=0.55,
             rating=PortfolioRating.HOLD,
-            executive_summary="Hold the position; await catalyst.",
+            executive_summary=(
+                "Hold the position because the evidence is balanced. "
+                "The current data does not show a strong edge in either direction. "
+                "Wait for the next catalyst before changing allocation."
+            ),
             investment_thesis="Balanced view; neither side carried the debate.",
         )
     structured = MagicMock()
@@ -109,10 +113,11 @@ def _structured_pm_llm(captured: dict, decision: PortfolioDecision | None = None
 class TestTradingMemoryLogCore:
 
     def test_store_creates_file(self, tmp_path):
+        assert not _db_path(tmp_path).exists()
         log = make_log(tmp_path)
-        assert not (tmp_path / "trading_memory.md").exists()
+        assert _db_path(tmp_path).exists()
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
-        assert (tmp_path / "trading_memory.md").exists()
+        assert len(log.load_entries()) == 1
 
     def test_store_appends_not_overwrites(self, tmp_path):
         log = make_log(tmp_path)
@@ -152,11 +157,14 @@ class TestTradingMemoryLogCore:
         assert entries[0]["reflection"] == "First correct."
         assert entries[1]["reflection"] == "Second correct."
 
-    def test_pending_tag_format(self, tmp_path):
+    def test_pending_entry_shape(self, tmp_path):
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
-        text = (tmp_path / "trading_memory.md").read_text(encoding="utf-8")
-        assert "[2026-01-10 | NVDA | Buy | pending]" in text
+        entry = log.load_entries()[0]
+        assert entry["date"] == "2026-01-10"
+        assert entry["ticker"] == "NVDA"
+        assert entry["rating"] == "Buy"
+        assert entry["pending"] is True
 
     # Rating parsing
 
@@ -391,11 +399,11 @@ class TestDeferredReflection:
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
         log.update_with_outcome("NVDA", "2026-01-10", 0.042, 0.021, 5, "Momentum confirmed.")
-        text = (tmp_path / "trading_memory.md").read_text(encoding="utf-8")
-        assert "[2026-01-10 | NVDA | Buy | pending]" not in text
-        assert "+4.2%" in text
-        assert "+2.1%" in text
-        assert "5d" in text
+        entry = log.load_entries()[0]
+        assert entry["pending"] is False
+        assert entry["raw"] == "+4.2%"
+        assert entry["alpha"] == "+2.1%"
+        assert entry["holding"] == "5d"
 
     def test_update_appends_reflection(self, tmp_path):
         log = make_log(tmp_path)
@@ -423,14 +431,14 @@ class TestDeferredReflection:
         assert aapl["reflection"] == "Neutral result."
         assert msft["ticker"] == "MSFT" and msft["pending"] is True
 
-    def test_update_atomic_write(self, tmp_path):
-        """A pre-existing .tmp file is overwritten; the log is correctly updated."""
+    def test_update_ignores_legacy_tmp_file(self, tmp_path):
+        """A stale markdown-era .tmp file does not affect SQLite updates."""
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
         stale_tmp = tmp_path / "trading_memory.tmp"
         stale_tmp.write_text("GARBAGE CONTENT — should be overwritten", encoding="utf-8")
         log.update_with_outcome("NVDA", "2026-01-10", 0.042, 0.021, 5, "Correct.")
-        assert not stale_tmp.exists()
+        assert stale_tmp.exists()
         entries = log.load_entries()
         assert len(entries) == 1
         assert entries[0]["reflection"] == "Correct."
@@ -454,8 +462,8 @@ class TestDeferredReflection:
         assert e["raw"] == "+4.2%"
         assert e["alpha"] == "+2.1%"
         assert e["holding"] == "5d"
-        raw_text = (tmp_path / "trading_memory.md").read_text(encoding="utf-8")
-        assert "[2026-01-10 | NVDA | Buy | +4.2% | +2.1% | 5d]\n\nDECISION:" in raw_text
+        rendered = log._format_full(e)
+        assert "[2026-01-10 | NVDA | Buy | +4.2% | +2.1% | 5d]\n\nDECISION:" in rendered
 
     # Reflector.reflect_on_final_decision
 
@@ -613,8 +621,13 @@ class TestPortfolioManagerInjection:
         can parse without any extra LLM call."""
         captured = {}
         decision = PortfolioDecision(
+            confidence_score=0.72,
             rating=PortfolioRating.OVERWEIGHT,
-            executive_summary="Build position gradually over the next two weeks.",
+            executive_summary=(
+                "Build position gradually over the next two weeks. "
+                "The most important data points still support constructive demand. "
+                "Risk remains present, but it does not yet override the thesis."
+            ),
             investment_thesis="AI capex cycle remains intact; institutional flows constructive.",
             price_target=215.0,
             time_horizon="3-6 months",
@@ -708,12 +721,12 @@ class TestLegacyRemoval:
 
     def test_financial_situation_memory_removed(self):
         """FinancialSituationMemory must not be importable from the memory module."""
-        import backend.tradingagents.agents.utils.memory as m
+        import tradingagents.agents.utils.memory as m
         assert not hasattr(m, "FinancialSituationMemory")
 
     def test_bm25_not_imported(self):
         """rank_bm25 must not be present in the memory module namespace."""
-        import backend.tradingagents.agents.utils.memory as m
+        import tradingagents.agents.utils.memory as m
         assert not hasattr(m, "BM25Okapi")
 
     def test_reflect_and_remember_removed(self):

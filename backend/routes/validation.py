@@ -15,7 +15,7 @@ from tradingagents.dataflows.y_finance import normalize_ticker
 # Accepts plain tickers (AAPL, NVDA, 0700) and exchange-suffixed tickers
 # (BBCA.JK, BRK-B, 0700.HK). Backend and frontend intentionally share the
 # same rule so the UI no longer smiles politely before the API rejects you.
-_TICKER_RE = re.compile(r"^[A-Z0-9]{2,10}(?:[.-][A-Z0-9]{1,5})?$")
+_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$")
 
 AnalysisDepth = Literal["fast", "balanced", "deep"]
 ResponseDetail = Literal["summary", "full", "debug"]

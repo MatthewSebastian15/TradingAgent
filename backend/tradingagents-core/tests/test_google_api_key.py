@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.tradingagents.llm_clients.google_client import GoogleClient
+from tradingagents.llm_clients.google_client import GoogleClient
 
 
 @pytest.mark.unit
