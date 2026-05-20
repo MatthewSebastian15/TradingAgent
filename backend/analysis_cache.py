@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Hashable, Literal
 
@@ -55,7 +56,7 @@ class AnalysisResultCache:
         self.ttl_seconds = ttl_seconds
         self.max_entries = max_entries
         self._items: dict[tuple[Hashable, ...], CacheEntry] = {}
-        self._order: list[tuple[Hashable, ...]] = []
+        self._order: OrderedDict[tuple[Hashable, ...], None] = OrderedDict()
         self._lock = asyncio.Lock()
 
     async def get(self, key: AnalysisCacheKey) -> dict[str, Any] | None:
@@ -67,7 +68,7 @@ class AnalysisResultCache:
                 return None
             if entry.expires_at <= now:
                 self._items.pop(raw_key, None)
-                self._order = [item for item in self._order if item != raw_key]
+                self._order.pop(raw_key, None)
                 return None
             self._touch(raw_key)
             cached = dict(entry.value)
@@ -85,7 +86,7 @@ class AnalysisResultCache:
             )
             self._touch(raw_key)
             while len(self._order) > self.max_entries:
-                stale_key = self._order.pop(0)
+                stale_key, _ = self._order.popitem(last=False)
                 self._items.pop(stale_key, None)
 
     async def stats(self) -> dict[str, int]:
@@ -94,8 +95,7 @@ class AnalysisResultCache:
             expired = [key for key, entry in self._items.items() if entry.expires_at <= now]
             for key in expired:
                 self._items.pop(key, None)
-            if expired:
-                self._order = [item for item in self._order if item in self._items]
+                self._order.pop(key, None)
             return {
                 "entries": len(self._items),
                 "max_entries": self.max_entries,
@@ -103,8 +103,8 @@ class AnalysisResultCache:
             }
 
     def _touch(self, raw_key: tuple[Hashable, ...]) -> None:
-        self._order = [item for item in self._order if item != raw_key]
-        self._order.append(raw_key)
+        self._order[raw_key] = None
+        self._order.move_to_end(raw_key)
 
 
 class InFlightRegistry:

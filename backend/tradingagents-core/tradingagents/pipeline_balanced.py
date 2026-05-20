@@ -659,6 +659,7 @@ def run_balanced_pipeline(
         lambda: collect_market_data(ticker, trade_date, config),
         cancel_check=cancel_check,
     )
+    data_fetched_at = datetime.utcnow().isoformat()
     data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
     last_close_text = f"{data.last_close_price:.2f}" if data.last_close_price is not None else "Unavailable"
     _emit_data_quality(progress_callback, data.data_quality)
@@ -1153,6 +1154,7 @@ DATA QUALITY:
         },
         "portfolio_decision": portfolio_decision,
         "data_quality": data.data_quality.model_dump(),
+        "data_fetched_at": data_fetched_at,
         "last_close_price": data.last_close_price,
         "analysis_depth": analysis_depth,
         "balanced_gemini_request_budget": llm_budget.limit,
