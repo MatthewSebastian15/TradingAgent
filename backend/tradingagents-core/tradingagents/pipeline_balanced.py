@@ -48,7 +48,9 @@ from tradingagents.agents.utils.structured import bind_structured
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_vendor
+from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.llm_clients import create_llm_client
+from tradingagents.agents.utils.agent_utils import get_language_instruction
 
 logger = logging.getLogger(__name__)
 
@@ -183,9 +185,25 @@ def collect_market_data(ticker: str, trade_date: str, config: dict[str, Any]) ->
     balanced pipeline from behaving like a government queue with better logs.
     """
     set_config(config)
+    # Normalize ticker early so all downstream calls (yfinance, cache filenames,
+    # display output) use the canonical symbol with the correct exchange suffix.
+    ticker = normalize_ticker(ticker)
     start_90, start_30, end = _date_window(trade_date)
 
-    indicator_names = ["close_50_sma", "close_200_sma", "macd", "rsi", "atr"]
+    # Default indicator set covers trend, momentum, volatility (Bollinger bands),
+    # and money flow. boll_ub / boll_lb give the agent overbought/oversold context
+    # that the plain boll middle-band alone cannot provide. mfi adds volume-weighted
+    # momentum confirmation alongside RSI.
+    indicator_names = [
+        "close_50_sma",
+        "close_200_sma",
+        "macd",
+        "rsi",
+        "atr",
+        "boll_ub",
+        "boll_lb",
+        "mfi",
+    ]
     tasks: dict[str, Callable[[], DataField]] = {
         "price_data": lambda: _safe_data_field(
             "price_data",
@@ -577,6 +595,12 @@ You are the Market Analyst for {ticker} on {trade_date}.
 Use only the supplied price and technical data. Produce a practical technical/market report.
 Focus on trend, momentum, volatility, volume, support/resistance, and what the setup implies.
 
+DATA QUALITY INSTRUCTION:
+Review the DATA QUALITY block below before writing your report.
+If any field shows status "partial" or "missing", explicitly state that limitation
+in your report and lower your confidence score accordingly. Do not present conclusions
+as certain when the underlying data is incomplete.
+
 PRICE DATA:
 {data.price_data}
 
@@ -585,7 +609,7 @@ TECHNICAL INDICATORS:
 
 DATA QUALITY:
 {data_quality_json}
-""",
+{get_language_instruction()}""",
                 _fallback_report("Market Analyst Report", f"Market data for {ticker} was collected, but the model did not return a complete market view."),
                 "Market Analyst",
                 llm_budget,
@@ -606,6 +630,12 @@ You are the combined News and Social Sentiment Analyst for {ticker} on {trade_da
 Use the company news, macro news, and insider activity. Produce a sentiment and catalyst report.
 Separate company-specific catalysts from broad market/macroeconomic pressure.
 
+DATA QUALITY INSTRUCTION:
+Review the DATA QUALITY block below before writing your report.
+If news shows status "partial" or "missing", explicitly state that the sentiment assessment
+is limited. Do not assert market sentiment with confidence when news data is incomplete.
+Lower your confidence score when news data coverage is partial or missing.
+
 COMPANY NEWS:
 {data.company_news}
 
@@ -617,7 +647,7 @@ INSIDER TRANSACTIONS:
 
 DATA QUALITY:
 {data_quality_json}
-""",
+{get_language_instruction()}""",
                 _fallback_report("News and Social Sentiment Report", f"News and sentiment data for {ticker} was collected, but the model did not return a complete sentiment view."),
                 "News + Social Analyst",
                 llm_budget,
@@ -639,6 +669,12 @@ Use only the supplied company fundamentals and financial statements.
 Focus on revenue quality, profitability, balance sheet strength, cash flow, valuation signals, and financial risk.
 Quote specific metrics when available.
 
+DATA QUALITY INSTRUCTION:
+Review the DATA QUALITY block below before writing your report.
+If fundamentals show status "partial" or "missing", explicitly name which statements
+are unavailable, state that your analysis is limited to what is present, and lower
+your confidence score to reflect the gap. Do not extrapolate from absent data.
+
 FUNDAMENTALS:
 {data.fundamentals}
 
@@ -653,7 +689,7 @@ INCOME STATEMENT:
 
 DATA QUALITY:
 {data_quality_json}
-""",
+{get_language_instruction()}""",
                 _fallback_report("Fundamentals Analyst Report", f"Fundamental data for {ticker} was collected, but the model did not return a complete fundamental view."),
                 "Fundamentals Analyst",
                 llm_budget,
@@ -701,6 +737,11 @@ DATA QUALITY:
             f"""
     You are the Bull Researcher for {ticker} on {trade_date}.
     Build the strongest bullish case from the analyst reports. Do not ignore risks, but argue why upside outweighs downside.
+    If DATA QUALITY shows any field as "partial" or "missing", acknowledge this as a risk_flag
+    and lower your confidence score accordingly. Do not present bullish claims as certain when data is incomplete.
+
+    DATA QUALITY:
+    {data_quality_json}
 
     MARKET REPORT:
     {market_md}
@@ -710,7 +751,7 @@ DATA QUALITY:
 
     FUNDAMENTALS REPORT:
     {fundamentals_md}
-    """,
+    {get_language_instruction()}""",
             DebateArgument(
                 stance="bull",
                 thesis=f"The bullish case for {ticker} is not strong enough to rate confidently because model output failed.",
@@ -731,6 +772,11 @@ DATA QUALITY:
             f"""
     You are the Bear Researcher for {ticker} on {trade_date}.
     Build the strongest bearish case from the analyst reports. Be specific about downside, missing data, valuation risk, execution risk, and market risk.
+    If DATA QUALITY shows any field as "partial" or "missing", treat this as a direct risk factor
+    and include it as a risk_flag. Incomplete data weakens any high-conviction bull case.
+
+    DATA QUALITY:
+    {data_quality_json}
 
     MARKET REPORT:
     {market_md}
@@ -743,7 +789,7 @@ DATA QUALITY:
 
     BULL CASE TO CHALLENGE:
     {render_debate_argument(bull, 'Bull Researcher')}
-    """,
+    {get_language_instruction()}""",
             DebateArgument(
                 stance="bear",
                 thesis=f"The bearish case for {ticker} is incomplete because model output failed, so risk should be treated cautiously.",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PortfolioRating(str, Enum):
@@ -266,6 +266,27 @@ class PortfolioDecision(BaseModel):
             "Write in plain, everyday language. Avoid jargon. No bullet points."
         ),
     )
+
+    @field_validator("executive_summary")
+    @classmethod
+    def executive_summary_min_sentences(cls, v: str) -> str:
+        """Reject summaries with fewer than 3 sentences.
+
+        The schema asks for exactly 5, but enforcing a hard minimum of 3
+        catches cases where the LLM returns a single-sentence stub while
+        still allowing slight variation without breaking the pipeline.
+        Sentences are split on period/exclamation/question mark followed
+        by a space or end-of-string, so abbreviations inside a sentence
+        rarely trigger false splits.
+        """
+        import re
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])(?:\s|$)", v) if s.strip()]
+        if len(sentences) < 3:
+            raise ValueError(
+                f"executive_summary must contain at least 3 sentences; got {len(sentences)}. "
+                "Expand the summary to meet the minimum requirement."
+            )
+        return v
     investment_thesis: str = Field(
         description=(
             "A thorough, easy-to-understand explanation of WHY this trade makes sense. "

@@ -6,6 +6,60 @@ from tradingagents.yfinance_runtime import yf
 import os
 from .stockstats_utils import StockstatsUtils, _clean_dataframe, yf_retry, load_ohlcv, filter_financials_by_date
 
+
+# ---------------------------------------------------------------------------
+# Ticker normalization
+# ---------------------------------------------------------------------------
+
+def normalize_ticker(ticker: str) -> str:
+    """Normalize a ticker symbol for yfinance.
+
+    Indonesian tickers submitted without the exchange suffix (e.g. ``BBCA``)
+    are automatically appended with ``.JK`` so yfinance resolves to the
+    correct IDX instrument instead of defaulting to an unrelated market.
+
+    Rules applied in order:
+    1. Strip surrounding whitespace and convert to uppercase.
+    2. If the symbol already contains a dot (e.g. ``BBCA.JK``, ``AAPL``),
+       leave it unchanged.
+    3. If the symbol is 4-6 characters long and matches the common IDX
+       ticker pattern (only ASCII letters), append ``.JK``.
+    4. Everything else is returned as-is.
+    """
+    cleaned = ticker.strip().upper()
+
+    # Already has an exchange suffix — honour it.
+    if "." in cleaned:
+        return cleaned
+
+    # Pure-alpha symbols of 4-6 chars are assumed to be IDX tickers.
+    if cleaned.isalpha() and 4 <= len(cleaned) <= 6:
+        return f"{cleaned}.JK"
+
+    return cleaned
+
+
+# ---------------------------------------------------------------------------
+# Shared yf.Ticker object cache (per-symbol, single Python process)
+# ---------------------------------------------------------------------------
+
+_ticker_cache: dict[str, object] = {}
+
+
+def _get_ticker(symbol: str):
+    """Return a cached yf.Ticker instance for *symbol*.
+
+    Creating a new yf.Ticker object for every financial-statement call
+    triggers repeated DNS/HTTP resolution for the same instrument. Reusing
+    one object per symbol eliminates that overhead inside a single pipeline
+    run. The cache is process-scoped and intentionally never evicted — it
+    holds only lightweight proxy objects, not downloaded data.
+    """
+    normalized = normalize_ticker(symbol)
+    if normalized not in _ticker_cache:
+        _ticker_cache[normalized] = yf.Ticker(normalized)
+    return _ticker_cache[normalized]
+
 def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
@@ -15,8 +69,11 @@ def get_YFin_data_online(
     datetime.strptime(start_date, "%Y-%m-%d")
     datetime.strptime(end_date, "%Y-%m-%d")
 
+    # Normalize ticker (handles IDX suffix e.g. BBCA -> BBCA.JK)
+    symbol = normalize_ticker(symbol)
+
     # Create ticker object
-    ticker = yf.Ticker(symbol.upper())
+    ticker = _get_ticker(symbol)
 
     # Fetch historical data for the specified date range
     data = yf_retry(lambda: ticker.history(start=start_date, end=end_date))
@@ -56,77 +113,22 @@ def get_stock_stats_indicators_window(
     look_back_days: Annotated[int, "how many days to look back"],
 ) -> str:
 
+    # Concise one-line descriptions reduce token usage on every LLM call
+    # while still giving the agent enough context to interpret each indicator.
     best_ind_params = {
-        # Moving Averages
-        "close_50_sma": (
-            "50 SMA: A medium-term trend indicator. "
-            "Usage: Identify trend direction and serve as dynamic support/resistance. "
-            "Tips: It lags price; combine with faster indicators for timely signals."
-        ),
-        "close_200_sma": (
-            "200 SMA: A long-term trend benchmark. "
-            "Usage: Confirm overall market trend and identify golden/death cross setups. "
-            "Tips: It reacts slowly; best for strategic trend confirmation rather than frequent trading entries."
-        ),
-        "close_10_ema": (
-            "10 EMA: A responsive short-term average. "
-            "Usage: Capture quick shifts in momentum and potential entry points. "
-            "Tips: Prone to noise in choppy markets; use alongside longer averages for filtering false signals."
-        ),
-        # MACD Related
-        "macd": (
-            "MACD: Computes momentum via differences of EMAs. "
-            "Usage: Look for crossovers and divergence as signals of trend changes. "
-            "Tips: Confirm with other indicators in low-volatility or sideways markets."
-        ),
-        "macds": (
-            "MACD Signal: An EMA smoothing of the MACD line. "
-            "Usage: Use crossovers with the MACD line to trigger trades. "
-            "Tips: Should be part of a broader strategy to avoid false positives."
-        ),
-        "macdh": (
-            "MACD Histogram: Shows the gap between the MACD line and its signal. "
-            "Usage: Visualize momentum strength and spot divergence early. "
-            "Tips: Can be volatile; complement with additional filters in fast-moving markets."
-        ),
-        # Momentum Indicators
-        "rsi": (
-            "RSI: Measures momentum to flag overbought/oversold conditions. "
-            "Usage: Apply 70/30 thresholds and watch for divergence to signal reversals. "
-            "Tips: In strong trends, RSI may remain extreme; always cross-check with trend analysis."
-        ),
-        # Volatility Indicators
-        "boll": (
-            "Bollinger Middle: A 20 SMA serving as the basis for Bollinger Bands. "
-            "Usage: Acts as a dynamic benchmark for price movement. "
-            "Tips: Combine with the upper and lower bands to effectively spot breakouts or reversals."
-        ),
-        "boll_ub": (
-            "Bollinger Upper Band: Typically 2 standard deviations above the middle line. "
-            "Usage: Signals potential overbought conditions and breakout zones. "
-            "Tips: Confirm signals with other tools; prices may ride the band in strong trends."
-        ),
-        "boll_lb": (
-            "Bollinger Lower Band: Typically 2 standard deviations below the middle line. "
-            "Usage: Indicates potential oversold conditions. "
-            "Tips: Use additional analysis to avoid false reversal signals."
-        ),
-        "atr": (
-            "ATR: Averages true range to measure volatility. "
-            "Usage: Set stop-loss levels and adjust position sizes based on current market volatility. "
-            "Tips: It's a reactive measure, so use it as part of a broader risk management strategy."
-        ),
-        # Volume-Based Indicators
-        "vwma": (
-            "VWMA: A moving average weighted by volume. "
-            "Usage: Confirm trends by integrating price action with volume data. "
-            "Tips: Watch for skewed results from volume spikes; use in combination with other volume analyses."
-        ),
-        "mfi": (
-            "MFI: The Money Flow Index is a momentum indicator that uses both price and volume to measure buying and selling pressure. "
-            "Usage: Identify overbought (>80) or oversold (<20) conditions and confirm the strength of trends or reversals. "
-            "Tips: Use alongside RSI or MACD to confirm signals; divergence between price and MFI can indicate potential reversals."
-        ),
+        "close_50_sma": "50 SMA: medium-term trend; dynamic support/resistance. Lags price — combine with faster indicators.",
+        "close_200_sma": "200 SMA: long-term benchmark; golden/death cross confirmation. Reacts slowly — use for strategic trend only.",
+        "close_10_ema": "10 EMA: responsive short-term average for momentum shifts. Prone to noise — filter with longer averages.",
+        "macd": "MACD: momentum via EMA difference; watch crossovers and divergence. Confirm in low-volatility markets.",
+        "macds": "MACD Signal: EMA of MACD; crossovers trigger trades. Use as part of a broader strategy.",
+        "macdh": "MACD Histogram: gap between MACD and signal; visualise momentum strength. Can be volatile.",
+        "rsi": "RSI: overbought (>70) / oversold (<30) momentum. In strong trends RSI may stay extreme — cross-check with trend.",
+        "boll": "Bollinger Middle: 20 SMA basis; dynamic benchmark. Combine with upper/lower bands for breakout signals.",
+        "boll_ub": "Bollinger Upper: ~2 std above middle; potential overbought / breakout zone. Confirm with other tools.",
+        "boll_lb": "Bollinger Lower: ~2 std below middle; potential oversold zone. Use extra analysis to avoid false reversals.",
+        "atr": "ATR: average true range; set stop-loss and size positions by current volatility. Reactive — part of risk strategy.",
+        "vwma": "VWMA: volume-weighted moving average; confirm trends with price+volume. Watch for spikes skewing results.",
+        "mfi": "MFI: volume-weighted momentum; overbought (>80) / oversold (<20). Use with RSI/MACD; divergence signals reversals.",
     }
 
     if indicator not in best_ind_params:
@@ -251,7 +253,8 @@ def get_fundamentals(
 ):
     """Get company fundamentals overview from yfinance."""
     try:
-        ticker_obj = yf.Ticker(ticker.upper())
+        ticker = normalize_ticker(ticker)
+        ticker_obj = _get_ticker(ticker)
         info = yf_retry(lambda: ticker_obj.info)
 
         if not info:
@@ -309,7 +312,8 @@ def get_balance_sheet(
 ):
     """Get balance sheet data from yfinance."""
     try:
-        ticker_obj = yf.Ticker(ticker.upper())
+        ticker = normalize_ticker(ticker)
+        ticker_obj = _get_ticker(ticker)
 
         if freq.lower() == "quarterly":
             data = yf_retry(lambda: ticker_obj.quarterly_balance_sheet)
@@ -341,7 +345,8 @@ def get_cashflow(
 ):
     """Get cash flow data from yfinance."""
     try:
-        ticker_obj = yf.Ticker(ticker.upper())
+        ticker = normalize_ticker(ticker)
+        ticker_obj = _get_ticker(ticker)
 
         if freq.lower() == "quarterly":
             data = yf_retry(lambda: ticker_obj.quarterly_cashflow)
@@ -373,7 +378,8 @@ def get_income_statement(
 ):
     """Get income statement data from yfinance."""
     try:
-        ticker_obj = yf.Ticker(ticker.upper())
+        ticker = normalize_ticker(ticker)
+        ticker_obj = _get_ticker(ticker)
 
         if freq.lower() == "quarterly":
             data = yf_retry(lambda: ticker_obj.quarterly_income_stmt)
@@ -403,7 +409,8 @@ def get_insider_transactions(
 ):
     """Get insider transactions data from yfinance."""
     try:
-        ticker_obj = yf.Ticker(ticker.upper())
+        ticker = normalize_ticker(ticker)
+        ticker_obj = _get_ticker(ticker)
         data = yf_retry(lambda: ticker_obj.insider_transactions)
         
         if data is None or data.empty:

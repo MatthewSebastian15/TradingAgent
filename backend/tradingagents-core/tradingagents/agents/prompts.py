@@ -32,6 +32,9 @@ class ReportBundle:
     debate_history: str = ""
     last_opponent_argument: str = ""
     trader_plan: str = ""
+    # Data quality summary injected so Bull/Bear researchers know which inputs
+    # are partial or missing before building their arguments.
+    data_quality_summary: str = ""
 
 
 def build_investment_debate_prompt(side: DebateSide, bundle: ReportBundle) -> str:
@@ -66,8 +69,12 @@ Debate rules:
 - Include what would make your view wrong.
 - Set confidence from 0.0 to 1.0 based on evidence quality.
 - Set consensus_signal to true only if your side and the opponent are now close enough that another round is unlikely to change the final recommendation.
+- If DATA QUALITY shows any field as "partial" or "missing", explicitly acknowledge this limitation in your risk_flags and adjust your confidence downward.
 
 {bundle.instrument_context}
+
+DATA QUALITY:
+{bundle.data_quality_summary if bundle.data_quality_summary else "No data quality report available."}
 
 Reports:
 Market report:
