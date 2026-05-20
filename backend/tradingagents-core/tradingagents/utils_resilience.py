@@ -12,6 +12,7 @@ from __future__ import annotations
 import concurrent.futures
 import functools
 import logging
+import os
 import random
 import threading
 import time
@@ -31,6 +32,7 @@ class CircuitOpenError(RuntimeError):
 class CircuitState:
     failures: int = 0
     opened_at: float | None = None
+    half_open_probe_in_flight: bool = False
 
 
 class CircuitBreaker:
@@ -47,9 +49,10 @@ class CircuitBreaker:
                 return
             elapsed = time.monotonic() - self._state.opened_at
             if elapsed >= self.recovery_seconds:
+                if self._state.half_open_probe_in_flight:
+                    raise CircuitOpenError(f"Circuit breaker is half-open for {self.name}; recovery probe already in progress.")
                 logger.warning("Circuit half-open for %s after %.1fs", self.name, elapsed)
-                self._state.opened_at = None
-                self._state.failures = 0
+                self._state.half_open_probe_in_flight = True
                 return
             raise CircuitOpenError(
                 f"Circuit breaker is open for {self.name}. Retry after {self.recovery_seconds - elapsed:.0f}s."
@@ -59,17 +62,28 @@ class CircuitBreaker:
         with self._lock:
             self._state.failures = 0
             self._state.opened_at = None
+            self._state.half_open_probe_in_flight = False
 
     def record_failure(self, exc: Exception) -> None:
         with self._lock:
+            if self._state.half_open_probe_in_flight:
+                self._state.failures = self.failure_threshold
+                self._state.opened_at = time.monotonic()
+                self._state.half_open_probe_in_flight = False
+                logger.error("Circuit reopened for %s after failed half-open probe. Last error: %s", self.name, exc)
+                return
             self._state.failures += 1
             if self._state.failures >= self.failure_threshold:
                 self._state.opened_at = time.monotonic()
+                self._state.half_open_probe_in_flight = False
                 logger.error("Circuit opened for %s after %d failures. Last error: %s", self.name, self._state.failures, exc)
 
 
 _CIRCUITS: dict[str, CircuitBreaker] = {}
 _CIRCUITS_LOCK = threading.Lock()
+_TIMEOUT_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
+_TIMEOUT_EXECUTOR_LOCK = threading.Lock()
+_TIMEOUT_MAX_WORKERS = min(32, (os.cpu_count() or 1) + 4)
 
 
 def get_circuit(name: str, failure_threshold: int = 5, recovery_seconds: int = 60) -> CircuitBreaker:
@@ -77,6 +91,17 @@ def get_circuit(name: str, failure_threshold: int = 5, recovery_seconds: int = 6
         if name not in _CIRCUITS:
             _CIRCUITS[name] = CircuitBreaker(name, failure_threshold, recovery_seconds)
         return _CIRCUITS[name]
+
+
+def _get_timeout_executor() -> concurrent.futures.ThreadPoolExecutor:
+    global _TIMEOUT_EXECUTOR
+    with _TIMEOUT_EXECUTOR_LOCK:
+        if _TIMEOUT_EXECUTOR is None:
+            _TIMEOUT_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+                max_workers=_TIMEOUT_MAX_WORKERS,
+                thread_name_prefix="resilience-timeout",
+            )
+        return _TIMEOUT_EXECUTOR
 
 
 def call_with_retry(
@@ -122,20 +147,12 @@ def call_with_retry(
 
 
 def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_name: str) -> T:
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(func)
+    future = _get_timeout_executor().submit(func)
     try:
-        result = future.result(timeout=timeout_seconds)
+        return future.result(timeout=timeout_seconds)
     except concurrent.futures.TimeoutError as exc:
         future.cancel()
-        executor.shutdown(wait=False, cancel_futures=True)
         raise TimeoutError(f"{service_name} timed out after {timeout_seconds}s") from exc
-    except Exception:
-        executor.shutdown(wait=False, cancel_futures=True)
-        raise
-    else:
-        executor.shutdown(wait=True)
-        return result
 
 
 class NamedSemaphorePool:
@@ -190,6 +207,7 @@ def get_circuit_states() -> dict[str, dict[str, float | int | bool | None]]:
                 retry_after = max(0.0, circuit.recovery_seconds - (now - opened_at))
             states[name] = {
                 "open": opened_at is not None,
+                "half_open": circuit._state.half_open_probe_in_flight,
                 "failures": circuit._state.failures,
                 "retry_after_seconds": retry_after,
                 "failure_threshold": circuit.failure_threshold,

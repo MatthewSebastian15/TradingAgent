@@ -2,6 +2,7 @@ import time
 
 import pytest
 
+from tradingagents import utils_resilience
 from tradingagents.pipeline_balanced import (
     AnalystReport,
     LLMBudget,
@@ -10,7 +11,7 @@ from tradingagents.pipeline_balanced import (
 )
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.stockstats_utils import yf_retry
-from tradingagents.utils_resilience import call_with_timeout
+from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout
 
 
 def test_llm_budget_records_exhaustion_and_skipped_agents():
@@ -51,6 +52,58 @@ def test_call_with_timeout_returns_without_waiting_for_hung_call():
         )
 
     assert time.monotonic() - started_at < 1.8
+
+
+def test_call_with_timeout_reuses_shared_executor(monkeypatch):
+    previous_executor = utils_resilience._TIMEOUT_EXECUTOR
+    utils_resilience._TIMEOUT_EXECUTOR = None
+    created = []
+    original_executor_class = utils_resilience.concurrent.futures.ThreadPoolExecutor
+
+    class CountingExecutor(original_executor_class):
+        def __init__(self, *args, **kwargs):
+            created.append(1)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(utils_resilience.concurrent.futures, "ThreadPoolExecutor", CountingExecutor)
+    try:
+        assert call_with_timeout(lambda: "first", timeout_seconds=1, service_name="test-shared-executor") == "first"
+        assert call_with_timeout(lambda: "second", timeout_seconds=1, service_name="test-shared-executor") == "second"
+        assert len(created) == 1
+    finally:
+        created_executor = utils_resilience._TIMEOUT_EXECUTOR
+        utils_resilience._TIMEOUT_EXECUTOR = previous_executor
+        if created_executor is not None:
+            created_executor.shutdown(wait=True, cancel_futures=True)
+
+
+def test_circuit_breaker_allows_only_one_half_open_probe():
+    circuit = CircuitBreaker("test-half-open-single-probe", failure_threshold=2, recovery_seconds=1)
+    circuit.record_failure(RuntimeError("first failure"))
+    circuit.record_failure(RuntimeError("second failure"))
+    with circuit._lock:
+        circuit._state.opened_at = time.monotonic() - 2
+
+    circuit.before_call()
+    with pytest.raises(CircuitOpenError):
+        circuit.before_call()
+
+    circuit.record_success()
+    circuit.before_call()
+
+
+def test_circuit_breaker_reopens_after_failed_half_open_probe():
+    circuit = CircuitBreaker("test-half-open-failure", failure_threshold=2, recovery_seconds=1)
+    circuit.record_failure(RuntimeError("first failure"))
+    circuit.record_failure(RuntimeError("second failure"))
+    with circuit._lock:
+        circuit._state.opened_at = time.monotonic() - 2
+
+    circuit.before_call()
+    circuit.record_failure(RuntimeError("probe failed"))
+
+    with pytest.raises(CircuitOpenError):
+        circuit.before_call()
 
 
 def test_yf_retry_retries_timeout_errors():
