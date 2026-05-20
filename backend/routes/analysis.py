@@ -80,6 +80,7 @@ SUMMARY_FIELDS = {
     "executive_summary",
     "price_target",
     "time_horizon",
+    "data_fetched_at",
     "confidence_score",
     "suggested_allocation_percent",
     "entry_price",
@@ -242,6 +243,7 @@ def _parse_final_result(
     data_quality = final_state.get("data_quality")
     common = {
         "analysis_depth": final_state.get("analysis_depth", DEFAULT_ANALYSIS_DEPTH),
+        "data_fetched_at": final_state.get("data_fetched_at") or datetime.utcnow().isoformat(),
         "llm_call_budget": final_state.get("balanced_gemini_request_budget"),
         "llm_calls_used": final_state.get("balanced_gemini_calls_used"),
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
@@ -472,6 +474,12 @@ def _shape_result(result_fields: dict[str, Any], response_detail: str) -> dict[s
     return {key: value for key, value in result_fields.items() if key not in {"raw_agent_state"}}
 
 
+def _with_data_fetched_at(result_fields: dict[str, Any]) -> dict[str, Any]:
+    stamped = dict(result_fields)
+    stamped.setdefault("data_fetched_at", datetime.utcnow().isoformat())
+    return stamped
+
+
 def _request_warnings(req: AnalysisRequest) -> list[str]:
     if req.analysis_depth == "fast" and req.max_debate_rounds > 1:
         return [
@@ -555,6 +563,7 @@ async def _compute_result_fields(req: AnalysisRequest, request_id: str) -> dict[
     if _is_default_callable(_run_pipeline_async, "_run_pipeline_async"):
         await _preflight_market_data(req)
     result_fields = await _run_pipeline_async(req, request_id)
+    result_fields = _with_data_fetched_at(result_fields)
     return _shape_result(result_fields, req.response_detail)
 
 
@@ -675,6 +684,7 @@ async def _run_stream_pipeline(
     if _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress"):
         await _preflight_market_data(req)
     fields = await asyncio.wait_for(asyncio.to_thread(run), timeout=PIPELINE_TIMEOUT_SECONDS)
+    fields = _with_data_fetched_at(fields)
     shaped = _shape_result(fields, req.response_detail)
     if _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress"):
         await _RESULT_CACHE.set(_cache_key(req), shaped)

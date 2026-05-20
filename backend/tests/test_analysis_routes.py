@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 
 
 def _mock_result() -> dict:
@@ -44,6 +45,7 @@ def test_analyze_accepts_valid_request_and_returns_result(client, monkeypatch):
     assert body["ticker"] == "BBCA.JK"
     assert body["trade_date"] == "2026-05-14"
     assert body["decision"] == "Buy"
+    assert datetime.fromisoformat(body["data_fetched_at"])
     assert body["data_quality"]["price_data"] == "ok"
 
 
