@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-def test_parse_final_result_renders_full_decision_from_typed_object():
+def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     from routes.analysis import _parse_final_result
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating, VolatilityLevel
 
@@ -34,14 +34,13 @@ def test_parse_final_result_renders_full_decision_from_typed_object():
     )
 
     parsed = _parse_final_result(
-        "stale markdown should be ignored",
+        "existing markdown should be passed through",
         decision,
         PortfolioRating,
         {"budget_exhausted": True, "agents_skipped": ["Portfolio Manager"]},
     )
 
     assert parsed["decision"] == "Buy"
-    assert parsed["full_decision"].startswith("**Rating**: Buy")
-    assert "stale markdown" not in parsed["full_decision"]
+    assert parsed["full_decision"] == "existing markdown should be passed through"
     assert parsed["budget_exhausted"] is True
     assert parsed["agents_skipped"] == ["Portfolio Manager"]

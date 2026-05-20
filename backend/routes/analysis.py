@@ -5,6 +5,7 @@ import concurrent.futures
 import json
 import logging
 import multiprocessing
+from multiprocessing.managers import SyncManager
 from datetime import datetime, timedelta
 from typing import Callable, Optional, Any
 
@@ -61,6 +62,8 @@ router = APIRouter()
 
 _EXECUTOR: concurrent.futures.ProcessPoolExecutor | None = None
 _EXECUTOR_LOCK = asyncio.Lock()
+_CANCEL_MANAGER: SyncManager | None = None
+_CANCEL_MANAGER_LOCK = asyncio.Lock()
 
 _RESULT_CACHE = AnalysisResultCache(
     ttl_seconds=ANALYSIS_RESULT_CACHE_TTL_SECONDS,
@@ -108,6 +111,7 @@ def _run_pipeline(
     analysis_depth: str,
     response_detail: str,
     request_id: str = "-",
+    cancel_event: Any | None = None,
 ) -> dict:
     """Run the full TradingAgents pipeline in a subprocess."""
     from tradingagents.graph.trading_graph import TradingAgentsGraph
@@ -126,6 +130,9 @@ def _run_pipeline(
         },
     )
 
+    def is_cancelled() -> bool:
+        return _is_cancel_event_set(cancel_event)
+
     config = build_tradingagents_config(
         max_debate_rounds=max_debate_rounds,
         analysis_depth=analysis_depth,
@@ -135,10 +142,14 @@ def _run_pipeline(
     if config.get("analysis_mode", "balanced") == "balanced":
         from tradingagents.pipeline_balanced import run_balanced_pipeline
 
-        final_state = run_balanced_pipeline(ticker, trade_date, config)
+        final_state = run_balanced_pipeline(ticker, trade_date, config, cancel_check=is_cancelled)
     else:
+        if is_cancelled():
+            raise RuntimeError("Analysis was cancelled by the client.")
         ta = TradingAgentsGraph(debug=False, config=config)
         final_state, _ = ta.propagate(ticker, trade_date)
+        if is_cancelled():
+            raise RuntimeError("Analysis was cancelled by the client.")
 
     worker_logger.info(
         "Pipeline worker completed",
@@ -222,11 +233,10 @@ def _parse_final_result(
     final_state = final_state or {}
     if pd_obj is not None:
         try:
-            from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
+            from tradingagents.agents.schemas import PortfolioDecision
 
             if isinstance(pd_obj, dict):
                 pd_obj = PortfolioDecision.model_validate(pd_obj)
-            full_decision = render_pm_decision(pd_obj)  # typed object is the source of truth
         except Exception:
             full_decision = full_decision or ""
     data_quality = final_state.get("data_quality")
@@ -316,33 +326,71 @@ async def _get_executor() -> concurrent.futures.ProcessPoolExecutor:
     return _EXECUTOR
 
 
+async def _get_cancel_manager() -> SyncManager:
+    """Create a process-safe cancellation manager lazily."""
+    global _CANCEL_MANAGER
+    if _CANCEL_MANAGER is None:
+        async with _CANCEL_MANAGER_LOCK:
+            if _CANCEL_MANAGER is None:
+                _CANCEL_MANAGER = multiprocessing.Manager()
+    return _CANCEL_MANAGER
+
+
+async def _new_cancel_event() -> Any:
+    manager = await _get_cancel_manager()
+    return manager.Event()
+
+
+def _is_cancel_event_set(cancel_event: Any | None) -> bool:
+    if cancel_event is None:
+        return False
+    try:
+        return bool(cancel_event.is_set())
+    except Exception:
+        return False
+
+
+def _set_cancel_event(cancel_event: Any | None) -> None:
+    if cancel_event is None:
+        return
+    try:
+        cancel_event.set()
+    except Exception:
+        logger.debug("Unable to set pipeline cancellation event", exc_info=True)
+
+
 async def shutdown_executor() -> None:
     """Stop worker processes during FastAPI shutdown."""
-    global _EXECUTOR
+    global _EXECUTOR, _CANCEL_MANAGER
     if _EXECUTOR is not None:
         _EXECUTOR.shutdown(wait=False, cancel_futures=True)
         _EXECUTOR = None
+    if _CANCEL_MANAGER is not None:
+        _CANCEL_MANAGER.shutdown()
+        _CANCEL_MANAGER = None
 
 
 async def _run_pipeline_async(req: AnalysisRequest, request_id: str) -> dict:
     """Run the blocking pipeline with one shared timeout path."""
     loop = asyncio.get_running_loop()
     executor = await _get_executor()
+    cancel_event = await _new_cancel_event()
+    future = loop.run_in_executor(
+        executor,
+        _run_pipeline,
+        req.ticker,
+        req.trade_date,
+        req.max_debate_rounds,
+        req.analysis_depth,
+        req.response_detail,
+        request_id,
+        cancel_event,
+    )
     try:
-        return await asyncio.wait_for(
-            loop.run_in_executor(
-                executor,
-                _run_pipeline,
-                req.ticker,
-                req.trade_date,
-                req.max_debate_rounds,
-                req.analysis_depth,
-                req.response_detail,
-                request_id,
-            ),
-            timeout=PIPELINE_TIMEOUT_SECONDS,
-        )
+        return await asyncio.wait_for(future, timeout=PIPELINE_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as exc:
+        _set_cancel_event(cancel_event)
+        future.cancel()
         logger.error(
             "Pipeline timeout",
             extra={
@@ -354,6 +402,19 @@ async def _run_pipeline_async(req: AnalysisRequest, request_id: str) -> dict:
             },
         )
         raise PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS) from exc
+    except asyncio.CancelledError:
+        _set_cancel_event(cancel_event)
+        future.cancel()
+        logger.info(
+            "Pipeline request cancelled",
+            extra={
+                "event": "pipeline_cancelled",
+                "request_id": request_id,
+                "ticker": req.ticker,
+                "trade_date": req.trade_date,
+            },
+        )
+        raise
     except ApiError:
         raise
     except Exception as exc:
@@ -411,8 +472,16 @@ def _shape_result(result_fields: dict[str, Any], response_detail: str) -> dict[s
     return {key: value for key, value in result_fields.items() if key not in {"raw_agent_state"}}
 
 
+def _request_warnings(req: AnalysisRequest) -> list[str]:
+    if req.analysis_depth == "fast" and req.max_debate_rounds > 1:
+        return [
+            "analysis_depth=fast skips the bull/bear and risk debate stages, so max_debate_rounds greater than 1 is ignored.",
+        ]
+    return []
+
+
 def _response_payload(request_id: str, req: AnalysisRequest, result_fields: dict) -> dict:
-    return {
+    payload = {
         "request_id": request_id,
         "ticker": req.ticker,
         "trade_date": req.trade_date,
@@ -421,6 +490,10 @@ def _response_payload(request_id: str, req: AnalysisRequest, result_fields: dict
         "agents_used": [agent[1] for agent in _AGENT_SEQUENCE],
         **result_fields,
     }
+    warnings = _request_warnings(req)
+    if warnings:
+        payload["warnings"] = warnings
+    return payload
 
 
 def _log_request_accepted(mode: str, request_id: str, req: AnalysisRequest) -> None:
@@ -485,6 +558,28 @@ async def _compute_result_fields(req: AnalysisRequest, request_id: str) -> dict[
     return _shape_result(result_fields, req.response_detail)
 
 
+async def _get_or_start_analysis(
+    req: AnalysisRequest,
+    factory: Callable[[], Any],
+    *,
+    use_cache: bool,
+) -> dict[str, Any]:
+    key = _cache_key(req)
+    if use_cache:
+        cached = await _RESULT_CACHE.get(key)
+        if cached is not None:
+            return cached
+
+    async def cached_factory() -> dict[str, Any]:
+        fields = await factory()
+        if use_cache:
+            await _RESULT_CACHE.set(key, fields)
+        return fields
+
+    fields, _joined = await _IN_FLIGHT.run(key, cached_factory)
+    return fields
+
+
 async def _execute_analysis(
     request: Request,
     req: AnalysisRequest,
@@ -492,23 +587,12 @@ async def _execute_analysis(
     policy: RateLimitPolicy,
 ) -> dict:
     """Run cached/deduplicated JSON analysis."""
-    key = _cache_key(req)
     use_cache = _is_default_callable(_run_pipeline_async, "_run_pipeline_async")
     async with limit_request(request, policy):
-        if not use_cache:
-            fields = await _compute_result_fields(req, request_id)
-            return _response_payload(request_id, req, fields)
-
-        cached = await _RESULT_CACHE.get(key)
-        if cached is not None:
-            return _response_payload(request_id, req, cached)
-
         async def factory() -> dict[str, Any]:
-            fields = await _compute_result_fields(req, request_id)
-            await _RESULT_CACHE.set(key, fields)
-            return fields
+            return await _compute_result_fields(req, request_id)
 
-        fields, _joined = await _IN_FLIGHT.run(key, factory)
+        fields = await _get_or_start_analysis(req, factory, use_cache=use_cache)
         return _response_payload(request_id, req, fields)
 
 
@@ -604,7 +688,8 @@ async def _stream_progress_and_result(
 ):
     """Yield cached result, real progress events, heartbeats, then result."""
     key = _cache_key(req)
-    cached = await _RESULT_CACHE.get(key) if _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress") else None
+    use_cache = _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress")
+    cached = await _RESULT_CACHE.get(key) if use_cache else None
     if cached is not None:
         yield _sse_event(
             "progress",
@@ -627,7 +712,10 @@ async def _stream_progress_and_result(
     async def runner() -> None:
         try:
             async with limit_request(request, stream_policy()):
-                result_fields = await _run_stream_pipeline(req, request_id, queue, cancel_event)
+                async def factory() -> dict[str, Any]:
+                    return await _run_stream_pipeline(req, request_id, queue, cancel_event)
+
+                result_fields = await _get_or_start_analysis(req, factory, use_cache=use_cache)
             await queue.put({"type": "result", "payload": _response_payload(request_id, req, result_fields)})
         except asyncio.TimeoutError:
             await queue.put(_sse_error(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)))
