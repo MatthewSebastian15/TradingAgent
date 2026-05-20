@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from rate_limiter import RateLimitPolicy
 
 
@@ -40,5 +42,27 @@ def test_rate_limit_returns_429(client, monkeypatch):
     second = client.post("/api/analyze", json=payload, headers=headers)
 
     assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "RATE_LIMITED"
+
+
+def test_ticker_validate_is_rate_limited(client, monkeypatch):
+    async def fake_preflight_market_data(req):
+        return None
+
+    monkeypatch.setattr("routes.analysis._preflight_market_data", fake_preflight_market_data)
+    monkeypatch.setattr(
+        "routes.analysis.request_policy",
+        lambda: RateLimitPolicy(scope="ticker-validate-test", max_per_minute=1, max_concurrent=1),
+    )
+
+    params = {"ticker": "BBCA", "trade_date": date.today().strftime("%Y-%m-%d")}
+    headers = {"x-api-key": "same-ticker-validation-key"}
+
+    first = client.get("/api/ticker/validate", params=params, headers=headers)
+    second = client.get("/api/ticker/validate", params=params, headers=headers)
+
+    assert first.status_code == 200
+    assert first.json()["ticker"] == "BBCA.JK"
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "RATE_LIMITED"

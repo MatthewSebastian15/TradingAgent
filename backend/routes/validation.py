@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 import re
 
@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from config import DEFAULT_ANALYSIS_DEPTH, DEFAULT_MAX_DEBATE_ROUNDS
 from errors import BadRequestError
+from tradingagents.dataflows.y_finance import normalize_ticker
 
 # Accepts plain tickers (AAPL, NVDA, 0700) and exchange-suffixed tickers
 # (BBCA.JK, BRK-B, 0700.HK). Backend and frontend intentionally share the
@@ -44,7 +45,7 @@ class TickerValidationResponse(BaseModel):
 def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisRequest:
     """Validate user input before the expensive agent pipeline starts."""
 
-    ticker = req.ticker.strip().upper() if isinstance(req.ticker, str) else req.ticker
+    ticker = normalize_ticker(req.ticker) if isinstance(req.ticker, str) else req.ticker
     trade_date = req.trade_date.strip() if isinstance(req.trade_date, str) else req.trade_date
     analysis_depth = str(req.analysis_depth or DEFAULT_ANALYSIS_DEPTH).strip().lower()
     response_detail = str(req.response_detail or "full").strip().lower()
@@ -61,6 +62,8 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
             parsed = datetime.strptime(trade_date, "%Y-%m-%d")
             if parsed.strftime("%Y-%m-%d") != trade_date:
                 errors["trade_date"] = "Trade date must be a valid date in YYYY-MM-DD format."
+            elif parsed.date() > date.today() + timedelta(days=1):
+                errors["trade_date"] = "Trade date cannot be more than 1 day in the future."
         except ValueError:
             errors["trade_date"] = "Trade date must be a valid date in YYYY-MM-DD format."
 
