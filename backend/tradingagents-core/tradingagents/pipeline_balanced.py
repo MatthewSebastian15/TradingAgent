@@ -241,13 +241,19 @@ def _date_window(trade_date: str) -> tuple[str, str, str]:
     return start_90, start_30, end
 
 
-def collect_market_data(ticker: str, trade_date: str, config: dict[str, Any]) -> CollectedData:
+def collect_market_data(
+    ticker: str,
+    trade_date: str,
+    config: dict[str, Any],
+    cancel_check: Optional[Callable[[], bool]] = None,
+) -> CollectedData:
     """Collect external data in parallel and classify yfinance data quality.
 
     Price, fundamentals, financial statements, news, insider activity, and
     indicators are independent calls. Running them concurrently keeps the
     balanced pipeline from behaving like a government queue with better logs.
     """
+    _check_cancel(cancel_check)
     set_config(config)
     # Normalize ticker early so all downstream calls (yfinance, cache filenames,
     # display output) use the canonical symbol with the correct exchange suffix.
@@ -321,6 +327,7 @@ def collect_market_data(ticker: str, trade_date: str, config: dict[str, Any]) ->
     with ThreadPoolExecutor(max_workers=min(12, len(tasks)), thread_name_prefix="balanced-data") as pool:
         futures = {pool.submit(func): name for name, func in tasks.items()}
         for future in as_completed(futures):
+            _check_cancel(cancel_check)
             name = futures[future]
             try:
                 results[name] = future.result()
@@ -387,6 +394,7 @@ def collect_market_data(ticker: str, trade_date: str, config: dict[str, Any]) ->
         warnings=list(dict.fromkeys(warnings))[:20],
     )
 
+    _check_cancel(cancel_check)
     return CollectedData(
         ticker=ticker,
         trade_date=trade_date,
@@ -491,6 +499,7 @@ def _invoke_once(
             timeout_seconds=timeout_seconds,
             service_name=f"llm:{agent_name}",
         )
+        _check_cancel(cancel_check)
         parsed = _coerce_structured(result, schema)
         if parsed is not None:
             return parsed
@@ -656,7 +665,7 @@ def run_balanced_pipeline(
         progress_callback,
         "data_collection",
         "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
-        lambda: collect_market_data(ticker, trade_date, config),
+        lambda: collect_market_data(ticker, trade_date, config, cancel_check=cancel_check),
         cancel_check=cancel_check,
     )
     data_fetched_at = datetime.utcnow().isoformat()

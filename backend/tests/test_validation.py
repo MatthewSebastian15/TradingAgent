@@ -28,6 +28,22 @@ def test_ticker_bbca_is_valid_and_normalized():
     assert req.ticker == "BBCA.JK"
 
 
+def test_us_ticker_is_not_normalized_to_idx_suffix():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(ticker="aapl", trade_date="2026-05-14", max_debate_rounds=1)
+    )
+
+    assert req.ticker == "AAPL"
+
+
+def test_single_character_ticker_is_valid():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(ticker="F", trade_date="2026-05-14", max_debate_rounds=1)
+    )
+
+    assert req.ticker == "F"
+
+
 def test_invalid_trade_date_is_rejected():
     with pytest.raises(BadRequestError) as exc_info:
         normalize_and_validate_analysis_request(

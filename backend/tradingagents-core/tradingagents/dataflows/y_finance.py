@@ -14,16 +14,15 @@ from .stockstats_utils import StockstatsUtils, _clean_dataframe, yf_retry, load_
 def normalize_ticker(ticker: str) -> str:
     """Normalize a ticker symbol for yfinance.
 
-    Indonesian tickers submitted without the exchange suffix (e.g. ``BBCA``)
-    are automatically appended with ``.JK`` so yfinance resolves to the
-    correct IDX instrument instead of defaulting to an unrelated market.
+    A small allowlist of common Indonesian tickers can be submitted without
+    ``.JK``. Other plain symbols are preserved exactly so US tickers such as
+    AAPL, NVDA, MSFT, and META are not accidentally rewritten to IDX symbols.
 
     Rules applied in order:
     1. Strip surrounding whitespace and convert to uppercase.
-    2. If the symbol already contains a dot (e.g. ``BBCA.JK``, ``AAPL``),
+    2. If the symbol already contains an exchange suffix (e.g. ``BBCA.JK``),
        leave it unchanged.
-    3. If the symbol is 4-6 characters long and matches the common IDX
-       ticker pattern (only ASCII letters), append ``.JK``.
+    3. If the symbol is in the common IDX allowlist, append ``.JK``.
     4. Everything else is returned as-is.
     """
     cleaned = ticker.strip().upper()
@@ -32,8 +31,44 @@ def normalize_ticker(ticker: str) -> str:
     if "." in cleaned:
         return cleaned
 
-    # Pure-alpha symbols of 4-6 chars are assumed to be IDX tickers.
-    if cleaned.isalpha() and 4 <= len(cleaned) <= 6:
+    idx_auto_suffix = {
+        "AALI",
+        "ACES",
+        "ADRO",
+        "AKRA",
+        "AMMN",
+        "ANTM",
+        "ARTO",
+        "ASII",
+        "BBCA",
+        "BBNI",
+        "BBRI",
+        "BBTN",
+        "BMRI",
+        "BRIS",
+        "BRPT",
+        "CPIN",
+        "ESSA",
+        "EXCL",
+        "GOTO",
+        "ICBP",
+        "INCO",
+        "INDF",
+        "INKP",
+        "INTP",
+        "ISAT",
+        "ITMG",
+        "KLBF",
+        "MDKA",
+        "MEDC",
+        "PGAS",
+        "PTBA",
+        "SMGR",
+        "TLKM",
+        "UNTR",
+        "UNVR",
+    }
+    if cleaned in idx_auto_suffix:
         return f"{cleaned}.JK"
 
     return cleaned

@@ -9,7 +9,7 @@ from typing import TypedDict
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 
-from backend.tradingagents.graph.checkpointer import (
+from tradingagents.graph.checkpointer import (
     checkpoint_step,
     clear_checkpoint,
     get_checkpointer,

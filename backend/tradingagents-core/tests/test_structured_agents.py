@@ -11,8 +11,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from backend.tradingagents.agents.managers.research_manager import create_research_manager
-from backend.tradingagents.agents.schemas import (
+from tradingagents.agents.managers.research_manager import create_research_manager
+from tradingagents.agents.schemas import (
     PortfolioRating,
     ResearchPlan,
     TraderAction,
@@ -20,7 +20,7 @@ from backend.tradingagents.agents.schemas import (
     render_research_plan,
     render_trader_proposal,
 )
-from backend.tradingagents.agents.trader.trader import create_trader
+from tradingagents.agents.trader.trader import create_trader
 
 
 # ---------------------------------------------------------------------------
@@ -31,7 +31,11 @@ from backend.tradingagents.agents.trader.trader import create_trader
 @pytest.mark.unit
 class TestRenderTraderProposal:
     def test_minimal_required_fields(self):
-        p = TraderProposal(action=TraderAction.HOLD, reasoning="Balanced setup; no edge.")
+        p = TraderProposal(
+            confidence=0.50,
+            action=TraderAction.HOLD,
+            reasoning="Balanced setup; no edge.",
+        )
         md = render_trader_proposal(p)
         assert "**Action**: Hold" in md
         assert "**Reasoning**: Balanced setup; no edge." in md
@@ -41,6 +45,7 @@ class TestRenderTraderProposal:
 
     def test_optional_fields_included_when_present(self):
         p = TraderProposal(
+            confidence=0.78,
             action=TraderAction.BUY,
             reasoning="Strong technicals + fundamentals.",
             entry_price=189.5,
@@ -55,7 +60,11 @@ class TestRenderTraderProposal:
         assert "FINAL TRANSACTION PROPOSAL: **BUY**" in md
 
     def test_optional_fields_omitted_when_absent(self):
-        p = TraderProposal(action=TraderAction.SELL, reasoning="Guidance cut.")
+        p = TraderProposal(
+            confidence=0.64,
+            action=TraderAction.SELL,
+            reasoning="Guidance cut.",
+        )
         md = render_trader_proposal(p)
         assert "Entry Price" not in md
         assert "Stop Loss" not in md
@@ -67,6 +76,7 @@ class TestRenderTraderProposal:
 class TestRenderResearchPlan:
     def test_required_fields(self):
         p = ResearchPlan(
+            confidence=0.74,
             recommendation=PortfolioRating.OVERWEIGHT,
             rationale="Bull case carried; tailwinds intact.",
             strategic_actions="Build position over two weeks; cap at 5%.",
@@ -79,6 +89,7 @@ class TestRenderResearchPlan:
     def test_all_5_tier_ratings_render(self):
         for rating in PortfolioRating:
             p = ResearchPlan(
+                confidence=0.60,
                 recommendation=rating,
                 rationale="r",
                 strategic_actions="s",
@@ -105,6 +116,7 @@ def _structured_trader_llm(captured: dict, proposal: TraderProposal | None = Non
     """
     if proposal is None:
         proposal = TraderProposal(
+            confidence=0.81,
             action=TraderAction.BUY,
             reasoning="Strong setup.",
         )
@@ -122,6 +134,7 @@ class TestTraderAgent:
     def test_structured_path_produces_rendered_markdown(self):
         captured = {}
         proposal = TraderProposal(
+            confidence=0.86,
             action=TraderAction.BUY,
             reasoning="AI capex cycle intact; institutional flows constructive.",
             entry_price=189.5,
@@ -182,6 +195,7 @@ def _make_rm_state():
 def _structured_rm_llm(captured: dict, plan: ResearchPlan | None = None):
     if plan is None:
         plan = ResearchPlan(
+            confidence=0.62,
             recommendation=PortfolioRating.HOLD,
             rationale="Balanced view across both sides.",
             strategic_actions="Hold current position; reassess after earnings.",
@@ -200,6 +214,7 @@ class TestResearchManagerAgent:
     def test_structured_path_produces_rendered_markdown(self):
         captured = {}
         plan = ResearchPlan(
+            confidence=0.79,
             recommendation=PortfolioRating.OVERWEIGHT,
             rationale="Bull case is stronger; AI tailwind intact.",
             strategic_actions="Build position gradually over two weeks.",

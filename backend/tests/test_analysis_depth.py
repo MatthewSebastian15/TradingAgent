@@ -87,7 +87,7 @@ def test_analysis_depth_controls_llm_agent_calls(depth, expected_budget, expecte
     def fake_create_llms(config):
         return object(), object()
 
-    def fake_collect_market_data(ticker, trade_date, config):
+    def fake_collect_market_data(ticker, trade_date, config, cancel_check=None):
         return _collected_data(trade_date)
 
     def fake_invoke_once(llm, schema, prompt, fallback, agent_name, budget=None, cancel_check=None):
