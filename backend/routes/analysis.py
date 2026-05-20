@@ -92,6 +92,8 @@ SUMMARY_FIELDS = {
     "analysis_depth",
     "llm_call_budget",
     "llm_calls_used",
+    "budget_exhausted",
+    "agents_skipped",
 }
 
 # ---------------------------------------------------------------------------
@@ -218,11 +220,22 @@ def _parse_final_result(
 ) -> dict:
     """Convert the final agent state into API response fields."""
     final_state = final_state or {}
+    if pd_obj is not None:
+        try:
+            from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
+
+            if isinstance(pd_obj, dict):
+                pd_obj = PortfolioDecision.model_validate(pd_obj)
+            full_decision = render_pm_decision(pd_obj)  # typed object is the source of truth
+        except Exception:
+            full_decision = full_decision or ""
     data_quality = final_state.get("data_quality")
     common = {
         "analysis_depth": final_state.get("analysis_depth", DEFAULT_ANALYSIS_DEPTH),
         "llm_call_budget": final_state.get("balanced_gemini_request_budget"),
         "llm_calls_used": final_state.get("balanced_gemini_calls_used"),
+        "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
+        "agents_skipped": final_state.get("agents_skipped", []) or [],
         "data_quality": data_quality or {
             "price_data": "missing",
             "fundamentals": "missing",

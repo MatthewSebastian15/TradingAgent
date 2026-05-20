@@ -23,12 +23,15 @@ hold a committee meeting for every sentence.
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
+import queue
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from io import StringIO
 from typing import Any, Callable, Optional, TypeVar
 
 from pydantic import BaseModel, Field
@@ -41,16 +44,16 @@ from tradingagents.agents.schemas import (
     TraderProposal,
     VolatilityLevel,
     render_debate_argument,
-    render_pm_decision,
     render_trader_proposal,
 )
 from tradingagents.agents.utils.structured import bind_structured
-from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.config import get_config, set_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.llm_clients import create_llm_client
 from tradingagents.agents.utils.agent_utils import get_language_instruction
+from tradingagents.utils_resilience import call_with_retry, call_with_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +99,7 @@ class CollectedData:
     global_news: str
     insider_transactions: str
     data_quality: DataQualityReport
+    last_close_price: float | None
 
 
 class AnalysisCancelledError(RuntimeError):
@@ -108,11 +112,15 @@ class LLMBudget:
     def __init__(self, limit: int) -> None:
         self.limit = max(0, int(limit))
         self.used = 0
+        self.exhausted = False
+        self.agents_skipped: list[str] = []
         self._lock = threading.Lock()
 
     def consume(self, agent_name: str) -> bool:
         with self._lock:
             if self.used >= self.limit:
+                self.exhausted = True
+                self.agents_skipped.append(agent_name)
                 logger.warning(
                     "LLM budget exhausted before %s. Used %d/%d calls.",
                     agent_name,
@@ -123,9 +131,14 @@ class LLMBudget:
             self.used += 1
             return True
 
-    def snapshot(self) -> dict[str, int]:
+    def snapshot(self) -> dict[str, Any]:
         with self._lock:
-            return {"used": self.used, "limit": self.limit}
+            return {
+                "used": self.used,
+                "limit": self.limit,
+                "budget_exhausted": self.exhausted,
+                "agents_skipped": list(dict.fromkeys(self.agents_skipped)),
+            }
 
 
 def _check_cancel(cancel_check: Optional[Callable[[], bool]]) -> None:
@@ -150,9 +163,22 @@ def _truncate(value: Any, limit: int = 12_000) -> str:
     return text[:cut] + "\n\n[TRUNCATED FOR TOKEN CONTROL]"
 
 
+def _call_yfinance_with_resilience(func: Callable[[], Any]) -> Any:
+    config = get_config()
+    return call_with_retry(
+        func,
+        service_name="yfinance",
+        max_attempts=int(config.get("tool_max_retries", 3)),
+        base_delay=1.0,
+        max_delay=10.0,
+        circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
+        circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
+    )
+
+
 def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -> DataField:
     try:
-        value = _truncate(func(), limit)
+        value = _truncate(_call_yfinance_with_resilience(func), limit)
         status = "missing" if looks_missing(value) else "ok"
         warning = value.splitlines()[0] if status == "missing" and value else None
         return DataField(value=value, status=status, warning=warning)
@@ -167,6 +193,44 @@ def _safe_data_call(label: str, func: Callable[[], Any], limit: int = 12_000) ->
     except Exception as exc:
         logger.warning("Balanced pipeline data call failed for %s: %s", label, exc)
         return f"{label} unavailable: {exc}"
+
+
+def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
+    """Parse the last Close value at or before trade_date from yfinance CSV."""
+    lines = [
+        line
+        for line in (price_data or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not lines:
+        return None
+
+    try:
+        cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
+    except ValueError:
+        cutoff = None
+
+    last_date: datetime | None = None
+    last_close: float | None = None
+    reader = csv.DictReader(StringIO("\n".join(lines)))
+    for row in reader:
+        if not row:
+            continue
+        date_raw = (row.get("Date") or row.get("") or next(iter(row.values()), "") or "").strip()
+        close_raw = (row.get("Close") or row.get("Adj Close") or "").strip()
+        if not date_raw or not close_raw:
+            continue
+        try:
+            row_date = datetime.strptime(date_raw[:10], "%Y-%m-%d")
+            close = float(close_raw.replace(",", ""))
+        except (TypeError, ValueError):
+            continue
+        if cutoff is not None and row_date > cutoff:
+            continue
+        if last_date is None or row_date >= last_date:
+            last_date = row_date
+            last_close = close
+    return last_close
 
 
 def _date_window(trade_date: str) -> tuple[str, str, str]:
@@ -336,6 +400,7 @@ def collect_market_data(ticker: str, trade_date: str, config: dict[str, Any]) ->
         global_news=global_news.value,
         insider_transactions=insider_transactions.value,
         data_quality=data_quality,
+        last_close_price=_extract_last_close_price(price.value, trade_date),
     )
 
 def _provider_kwargs(config: dict[str, Any]) -> dict[str, Any]:
@@ -415,10 +480,17 @@ def _invoke_once(
 
     structured = bind_structured(llm, schema, agent_name)
     try:
-        if structured is not None:
-            result = structured.invoke(prompt)
-        else:
-            result = llm.invoke(prompt + "\n\nReturn only valid JSON matching this schema: " + json.dumps(schema.model_json_schema()))
+        def invoke_model() -> Any:
+            if structured is not None:
+                return structured.invoke(prompt)
+            return llm.invoke(prompt + "\n\nReturn only valid JSON matching this schema: " + json.dumps(schema.model_json_schema()))
+
+        timeout_seconds = max(1, int(get_config().get("timeout", 60)))
+        result = call_with_timeout(
+            invoke_model,
+            timeout_seconds=timeout_seconds,
+            service_name=f"llm:{agent_name}",
+        )
         parsed = _coerce_structured(result, schema)
         if parsed is not None:
             return parsed
@@ -487,6 +559,7 @@ ProgressCallback = Callable[[dict[str, Any]], None]
 
 _AGENT_LABELS = {
     "data_collection": "Data Collection",
+    "data_quality": "Data Quality",
     "market_analyst": "Market Analyst",
     "news_analyst": "News + Social Analyst",
     "fundamentals": "Fundamentals Analyst",
@@ -514,6 +587,30 @@ def _emit_progress(callback: Optional[ProgressCallback], agent_id: str, status: 
         )
     except Exception as exc:
         logger.debug("Progress callback failed for %s: %s", agent_id, exc)
+
+
+def _emit_data_quality(callback: Optional[ProgressCallback], report: DataQualityReport) -> None:
+    if callback is None:
+        return
+    message = (
+        f"Data quality: price={report.price_data}, "
+        f"fundamentals={report.fundamentals}, news={report.news}."
+    )
+    if report.warnings:
+        message = f"{message} Warning: {report.warnings[0]}"
+    try:
+        callback(
+            {
+                "agent_id": "data_quality",
+                "agent_name": _AGENT_LABELS["data_quality"],
+                "status": "completed",
+                "status_message": message,
+                "data_quality": report.model_dump(),
+                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            }
+        )
+    except Exception as exc:
+        logger.debug("Progress callback failed for data_quality: %s", exc)
 
 
 def _run_tracked(
@@ -563,28 +660,43 @@ def run_balanced_pipeline(
         cancel_check=cancel_check,
     )
     data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
+    last_close_text = f"{data.last_close_price:.2f}" if data.last_close_price is not None else "Unavailable"
+    _emit_data_quality(progress_callback, data.data_quality)
 
-    # Parallel analyst execution.
-    #
-    # The three analyst tasks run concurrently inside a thread pool, so their
-    # _emit_progress calls can fire from different threads at the same time.
-    # Without serialisation, the SSE queue receives interleaved start/completed
-    # events that make the frontend show all three agents finishing at once.
-    #
-    # A threading.Lock wrapping the callback ensures every start→completed pair
-    # is written atomically. The lock is only held for the microseconds it takes
-    # to enqueue one event, so it does not introduce meaningful latency.
-    _analyst_lock = threading.Lock()
+    # Analyst threads enqueue progress immediately; a lightweight forwarder
+    # serializes delivery without making worker threads wait on the SSE path.
+    analyst_event_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
+    analyst_forwarder: threading.Thread | None = None
 
-    def _locked_callback(event: dict) -> None:
+    def _forward_analyst_events() -> None:
+        while True:
+            event = analyst_event_queue.get()
+            try:
+                if event is None:
+                    return
+                if progress_callback is not None:
+                    progress_callback(event)
+            except Exception as exc:
+                logger.debug("Analyst progress forwarding failed: %s", exc)
+            finally:
+                analyst_event_queue.task_done()
+
+    if progress_callback is not None:
+        analyst_forwarder = threading.Thread(
+            target=_forward_analyst_events,
+            name="balanced-analyst-progress",
+            daemon=True,
+        )
+        analyst_forwarder.start()
+
+    def _queued_callback(event: dict) -> None:
         if progress_callback is None:
             return
-        with _analyst_lock:
-            progress_callback(event)
+        analyst_event_queue.put_nowait(event)
 
     def build_market_report_parallel() -> AnalystReport:
         return _run_tracked(
-            _locked_callback,
+            _queued_callback,
             "market_analyst",
             "Market Analyst is reading price action and technical indicators...",
             lambda: _invoke_once(
@@ -619,7 +731,7 @@ DATA QUALITY:
 
     def build_news_social_report_parallel() -> AnalystReport:
         return _run_tracked(
-            _locked_callback,
+            _queued_callback,
             "news_analyst",
             "News + Social Analyst is scanning company news, macro news, and insider activity...",
             lambda: _invoke_once(
@@ -657,7 +769,7 @@ DATA QUALITY:
 
     def build_fundamentals_report_parallel() -> AnalystReport:
         return _run_tracked(
-            _locked_callback,
+            _queued_callback,
             "fundamentals",
             "Fundamentals Analyst is reviewing financial statements and ratios...",
             lambda: _invoke_once(
@@ -697,13 +809,19 @@ DATA QUALITY:
             ),
         )
 
-    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="balanced-analyst") as pool:
-        market_future = pool.submit(build_market_report_parallel)
-        news_future = pool.submit(build_news_social_report_parallel)
-        fundamentals_future = pool.submit(build_fundamentals_report_parallel)
-        market_report = market_future.result()
-        news_social_report = news_future.result()
-        fundamentals_report = fundamentals_future.result()
+    try:
+        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="balanced-analyst") as pool:
+            market_future = pool.submit(build_market_report_parallel)
+            news_future = pool.submit(build_news_social_report_parallel)
+            fundamentals_future = pool.submit(build_fundamentals_report_parallel)
+            market_report = market_future.result()
+            news_social_report = news_future.result()
+            fundamentals_report = fundamentals_future.result()
+    finally:
+        if analyst_forwarder is not None:
+            analyst_event_queue.put(None)
+            analyst_event_queue.join()
+            analyst_forwarder.join(timeout=1)
 
     market_md = _report_to_markdown(market_report)
     news_social_md = _report_to_markdown(news_social_report)
@@ -941,6 +1059,10 @@ DATA QUALITY:
 You are the Portfolio Manager for {ticker} on {trade_date}.
 Make the final decision using every prior report. The final answer must be usable by a frontend investment dashboard.
 Keep language simple and practical. Include an action plan, risk controls, price target when data supports it, and time horizon. Return all actionable dashboard fields: suggested_allocation_percent, entry_price, stop_loss, take_profit, risk_reward_ratio, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_catalysts, and invalidation_conditions. Reduce confidence and allocation when data_quality has partial or missing inputs.
+Use LAST CLOSE PRICE as the current market price anchor for entry_price, stop_loss, take_profit, and price_target. If LAST CLOSE PRICE is unavailable or data quality is not usable, leave unsupported price fields null instead of inventing numbers.
+
+LAST CLOSE PRICE:
+{last_close_text}
 
 MARKET REPORT:
 {market_md}
@@ -1003,7 +1125,7 @@ DATA QUALITY:
         cancel_check,
     ))
 
-    final_decision = render_pm_decision(portfolio_decision)
+    budget_snapshot = llm_budget.snapshot()
 
     return {
         "company_of_interest": ticker,
@@ -1029,10 +1151,12 @@ DATA QUALITY:
             "judge_decision": risk_md,
             "count": 3,
         },
-        "final_trade_decision": final_decision,
         "portfolio_decision": portfolio_decision,
         "data_quality": data.data_quality.model_dump(),
+        "last_close_price": data.last_close_price,
         "analysis_depth": analysis_depth,
         "balanced_gemini_request_budget": llm_budget.limit,
-        "balanced_gemini_calls_used": llm_budget.snapshot()["used"],
+        "balanced_gemini_calls_used": budget_snapshot["used"],
+        "budget_exhausted": budget_snapshot["budget_exhausted"],
+        "agents_skipped": budget_snapshot["agents_skipped"],
     }

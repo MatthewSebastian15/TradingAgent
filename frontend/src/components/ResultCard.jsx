@@ -145,6 +145,8 @@ export default function ResultCard({ result }) {
   const invalidations = result.invalidation_conditions || [];
   const dataQuality   = result.data_quality || null;
   const agents        = result.agents_used || [];
+  const budgetExhausted = Boolean(result.budget_exhausted);
+  const agentsSkipped = result.agents_skipped || [];
 
   const decisionColor = {
     Buy: 'text-bloomberg-green', Overweight: 'text-bloomberg-green',
@@ -222,6 +224,20 @@ export default function ResultCard({ result }) {
       {dataQuality && (
         <div className="px-4 py-4 border-b border-bloomberg-border">
           <DataQuality dq={dataQuality} />
+        </div>
+      )}
+
+      {budgetExhausted && (
+        <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
+          <SectionHeader label="PIPELINE LIMIT" />
+          <p className="font-mono text-xs text-bloomberg-amber leading-relaxed">
+            LLM call budget exhausted before all stages completed. Treat this analysis as incomplete.
+          </p>
+          {agentsSkipped.length > 0 && (
+            <div className="mt-2 font-mono text-xs text-bloomberg-muted">
+              SKIPPED: {agentsSkipped.join(', ')}
+            </div>
+          )}
         </div>
       )}
 

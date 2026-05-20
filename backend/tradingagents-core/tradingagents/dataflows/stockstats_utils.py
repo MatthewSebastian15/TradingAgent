@@ -12,21 +12,61 @@ from .utils import safe_ticker_component
 
 logger = logging.getLogger(__name__)
 
+_retryable_yf_errors: list[type[BaseException]] = [
+    YFRateLimitError,
+    ConnectionError,
+    TimeoutError,
+]
+
+try:  # requests is a direct dependency, but keep import defensive for packaging.
+    from requests import exceptions as requests_exceptions
+
+    _retryable_yf_errors.extend(
+        [
+            requests_exceptions.ConnectionError,
+            requests_exceptions.Timeout,
+            requests_exceptions.ReadTimeout,
+        ]
+    )
+except Exception:  # pragma: no cover - dependency absence only
+    pass
+
+try:  # yfinance may surface curl_cffi request exceptions on newer versions.
+    from curl_cffi.requests import exceptions as curl_exceptions
+
+    _retryable_yf_errors.extend(
+        [
+            curl_exceptions.ConnectionError,
+            curl_exceptions.Timeout,
+            curl_exceptions.RequestsError,
+        ]
+    )
+except Exception:  # pragma: no cover - optional dependency shape varies
+    pass
+
+_RETRYABLE_YF_EXCEPTIONS = tuple(dict.fromkeys(_retryable_yf_errors))
+
 
 def yf_retry(func, max_retries=3, base_delay=2.0):
-    """Execute a yfinance call with exponential backoff on rate limits.
+    """Execute a yfinance call with exponential backoff on transient failures.
 
-    yfinance raises YFRateLimitError on HTTP 429 responses but does not
-    retry them internally. This wrapper adds retry logic specifically
-    for rate limits. Other exceptions propagate immediately.
+    yfinance raises YFRateLimitError on HTTP 429 responses and can also surface
+    network timeouts/connection errors from requests or curl_cffi. Retry only
+    those transient failures; other exceptions still propagate immediately.
     """
     for attempt in range(max_retries + 1):
         try:
             return func()
-        except YFRateLimitError:
+        except _RETRYABLE_YF_EXCEPTIONS as exc:
             if attempt < max_retries:
                 delay = base_delay * (2 ** attempt)
-                logger.warning(f"Yahoo Finance rate limited, retrying in {delay:.0f}s (attempt {attempt + 1}/{max_retries})")
+                logger.warning(
+                    "Yahoo Finance transient failure (%s), retrying in %.0fs (attempt %d/%d)",
+                    exc,
+                    delay,
+                    attempt + 1,
+                    max_retries,
+                )
                 time.sleep(delay)
             else:
                 raise
