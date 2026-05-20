@@ -825,11 +825,12 @@ async def cancel_analysis_job_alias(job_id: str):
 
 
 @router.get("/ticker/validate")
-async def validate_ticker(ticker: str, trade_date: str):
+async def validate_ticker(ticker: str, trade_date: str, request: Request):
     req = normalize_and_validate_analysis_request(
         AnalysisRequest(ticker=ticker, trade_date=trade_date, max_debate_rounds=1, analysis_depth="fast", response_detail="summary")
     )
-    await _preflight_market_data(req)
+    async with limit_request(request, request_policy()):
+        await _preflight_market_data(req)
     return {"ticker": req.ticker, "trade_date": req.trade_date, "valid": True, "message": "Ticker has usable market data."}
 
 

@@ -1,12 +1,14 @@
 """Centralized backend configuration.
 
-Only confidential values (API keys, LLM provider, model names) come from .env.
-Everything else is hardcoded here as named constants so there is one place to
-change non-secret tunables without touching environment files.
+Confidential values (API keys, LLM provider, model names) come from .env.
+Most non-secret tunables live here as named defaults; deployment-sensitive
+settings such as APP_ENV, CORS_ORIGINS, and API-key enforcement can be
+overridden through environment variables.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +19,34 @@ from dotenv import load_dotenv
 # Load .env from backend/ (same folder as this file)
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
+
+logger = logging.getLogger(__name__)
+
+
+def _env(name: str, default: str = "") -> str:
+    return os.getenv(name, default).strip()
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    logger.warning("Invalid boolean value for %s=%r; using default %s.", name, raw, default)
+    return default
+
+
+def _env_list(name: str, default: list[str]) -> list[str]:
+    raw = os.getenv(name)
+    if raw is None:
+        return list(default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 # ---------------------------------------------------------------------------
 # Supported providers and their required env key(s)
@@ -143,22 +173,25 @@ KNOWN_MODELS: dict[str, list[str]] = {
 
 
 # ---------------------------------------------------------------------------
-# Non-secret tunables (hardcoded, not from .env)
+# Non-secret tunables and deployment defaults
 # ---------------------------------------------------------------------------
+
+# App
+APP_NAME = "TradingAgents API"
+APP_ENV = _env("APP_ENV", "development").lower()  # kept as env for docker override
+_IS_PRODUCTION = APP_ENV == "production"
 
 # Ports
 BACKEND_PORT = 8000
 FRONTEND_PORT = 3000
 
-# CORS
-CORS_ORIGINS: list[str] = [
+# CORS. Production defaults to same-origin only; set CORS_ORIGINS to a
+# comma-separated allowlist when the frontend is deployed on another origin.
+_DEFAULT_CORS_ORIGINS: list[str] = [] if _IS_PRODUCTION else [
     f"http://localhost:{FRONTEND_PORT}",
     "http://localhost:5173",  # Vite default fallback
 ]
-
-# App
-APP_NAME = "TradingAgents API"
-APP_ENV = os.getenv("APP_ENV", "development")  # kept as env for docker override
+CORS_ORIGINS: list[str] = _env_list("CORS_ORIGINS", _DEFAULT_CORS_ORIGINS)
 
 # Pipeline tunables
 PIPELINE_TIMEOUT_SECONDS = 600
@@ -184,11 +217,14 @@ REQUEST_RATE_LIMIT_PER_MINUTE = 20
 STREAM_RATE_LIMIT_PER_MINUTE = 8
 MAX_CONCURRENT_REQUESTS_PER_KEY = 2
 MAX_CONCURRENT_STREAMS_PER_KEY = 1
-# Security note: set to True in production to enforce API key authentication
-# for every request.  When False (the default for local/personal use), anonymous
-# requests are still rate-limited by direct client IP — they are not unlimited.
-# Changing this to True without distributing API keys will lock out all clients.
-REQUIRE_API_KEY_FOR_RATE_LIMIT = False
+# Production defaults to API-key-only rate limiting. Local/test environments
+# still allow anonymous clients, rate-limited by direct client IP.
+REQUIRE_API_KEY_FOR_RATE_LIMIT = _env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", _IS_PRODUCTION)
+if _IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
+    logger.warning(
+        "APP_ENV=production but REQUIRE_API_KEY_FOR_RATE_LIMIT is disabled; "
+        "anonymous clients will be accepted and rate-limited by IP only."
+    )
 
 # LLM resilience
 LLM_TIMEOUT_SECONDS = 60
@@ -235,10 +271,6 @@ ADAPTIVE_DEBATE_ENABLED = True
 # ---------------------------------------------------------------------------
 # Confidential settings loaded from .env
 # ---------------------------------------------------------------------------
-
-def _env(name: str, default: str = "") -> str:
-    return os.getenv(name, default).strip()
-
 
 @dataclass(frozen=True)
 class LLMSettings:

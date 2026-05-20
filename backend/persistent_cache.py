@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import pickle
 import sqlite3
 import time
 from pathlib import Path
@@ -12,7 +11,7 @@ from typing import Any
 
 
 class SQLiteTTLCache:
-    """Persistent TTL cache for values that can be pickled.
+    """Persistent TTL cache for JSON-serializable values.
 
     This is intentionally small and dependency-free. It is not Redis, because
     this project is personal-scale and apparently not every nail needs a cloud
@@ -33,25 +32,30 @@ class SQLiteTTLCache:
             row = conn.execute("SELECT expires_at, value FROM cache WHERE key = ?", (key_hash,)).fetchone()
             if row is None:
                 return None
-            expires_at, value_blob = row
+            expires_at, serialized_value = row
             if expires_at <= now:
                 conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
                 return None
+            try:
+                value = self._loads(serialized_value)
+            except (TypeError, ValueError):
+                conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
+                return None
             conn.execute("UPDATE cache SET last_accessed_at = ? WHERE key = ?", (now, key_hash))
-        return pickle.loads(value_blob)
+            return value
 
     def set(self, key: Any, value: Any) -> None:
         key_hash = self._hash_key(key)
         now = time.time()
         expires_at = now + self.ttl_seconds
-        blob = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+        serialized_value = self._dumps(value)
         with self._connect() as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO cache (key, expires_at, last_accessed_at, value)
                 VALUES (?, ?, ?, ?)
                 """,
-                (key_hash, expires_at, now, blob),
+                (key_hash, expires_at, now, serialized_value),
             )
             self._evict(conn)
 
@@ -95,3 +99,13 @@ class SQLiteTTLCache:
     def _hash_key(key: Any) -> str:
         raw = json.dumps(key, sort_keys=True, default=str).encode("utf-8")
         return hashlib.sha256(raw).hexdigest()
+
+    @staticmethod
+    def _dumps(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def _loads(value: Any) -> Any:
+        if isinstance(value, memoryview):
+            value = value.tobytes()
+        return json.loads(value)
