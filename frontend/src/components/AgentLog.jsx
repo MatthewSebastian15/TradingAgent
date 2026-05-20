@@ -13,8 +13,11 @@ const PIPELINE = [
   { id: 'portfolio_manager', label: 'PORTFOLIO MANAGER',     short: 'PORT',  color: '#a855f7' },
 ];
 
+const PIPELINE_IDS = new Set(PIPELINE.map(step => step.id));
+
 const AGENT_ALIASES = {
   data: 'data_collection',
+  data_quality: 'data_quality',
   data_fetch: 'data_collection',
   data_collector: 'data_collection',
   market: 'market_analyst',
@@ -79,17 +82,18 @@ export default function AgentLog({ status, agentProgress }) {
     const agentName = agentProgress.agent_name || agentId;
     const eventStatus = normalizeStatus(agentProgress.status);
     const statusMessage = agentProgress.status_message || '';
+    const isPipelineAgent = PIPELINE_IDS.has(agentId);
 
     setActiveIds(prev => {
       const next = new Set(prev);
-      if (eventStatus === 'started') next.add(agentId);
-      if (eventStatus === 'completed' || eventStatus === 'failed') next.delete(agentId);
+      if (isPipelineAgent && eventStatus === 'started') next.add(agentId);
+      if (isPipelineAgent && (eventStatus === 'completed' || eventStatus === 'failed')) next.delete(agentId);
       return next;
     });
 
     setDoneIds(prev => {
       const next = new Set(prev);
-      if (eventStatus === 'completed') next.add(agentId);
+      if (isPipelineAgent && eventStatus === 'completed') next.add(agentId);
       return next;
     });
 

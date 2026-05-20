@@ -122,13 +122,20 @@ def call_with_retry(
 
 
 def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_name: str) -> T:
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(func)
-        try:
-            return future.result(timeout=timeout_seconds)
-        except concurrent.futures.TimeoutError as exc:
-            future.cancel()
-            raise TimeoutError(f"{service_name} timed out after {timeout_seconds}s") from exc
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(func)
+    try:
+        result = future.result(timeout=timeout_seconds)
+    except concurrent.futures.TimeoutError as exc:
+        future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise TimeoutError(f"{service_name} timed out after {timeout_seconds}s") from exc
+    except Exception:
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise
+    else:
+        executor.shutdown(wait=True)
+        return result
 
 
 class NamedSemaphorePool:
