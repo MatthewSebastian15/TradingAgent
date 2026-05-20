@@ -361,6 +361,43 @@ def _set_cancel_event(cancel_event: Any | None) -> None:
         logger.debug("Unable to set pipeline cancellation event", exc_info=True)
 
 
+async def _watch_request_disconnect(
+    request: Request | None,
+    req: AnalysisRequest,
+    request_id: str,
+    cancel_event: Any | None,
+    future: asyncio.Future,
+) -> None:
+    """Cancel the subprocess pipeline when a regular HTTP client disconnects."""
+    if request is None:
+        return
+
+    while not future.done():
+        try:
+            disconnected = await request.is_disconnected()
+        except Exception:
+            logger.debug(
+                "Unable to check request disconnect state",
+                extra={"event": "request_disconnect_check_failed", "request_id": request_id},
+                exc_info=True,
+            )
+            return
+        if disconnected:
+            _set_cancel_event(cancel_event)
+            future.cancel()
+            logger.info(
+                "HTTP client disconnected; cancelling pipeline worker",
+                extra={
+                    "event": "http_client_disconnected",
+                    "request_id": request_id,
+                    "ticker": req.ticker,
+                    "trade_date": req.trade_date,
+                },
+            )
+            return
+        await asyncio.sleep(0.5)
+
+
 async def shutdown_executor() -> None:
     """Stop worker processes during FastAPI shutdown."""
     global _EXECUTOR, _CANCEL_MANAGER
@@ -372,7 +409,7 @@ async def shutdown_executor() -> None:
         _CANCEL_MANAGER = None
 
 
-async def _run_pipeline_async(req: AnalysisRequest, request_id: str) -> dict:
+async def _run_pipeline_async(req: AnalysisRequest, request_id: str, request: Request | None = None) -> dict:
     """Run the blocking pipeline with one shared timeout path."""
     loop = asyncio.get_running_loop()
     executor = await _get_executor()
@@ -388,6 +425,9 @@ async def _run_pipeline_async(req: AnalysisRequest, request_id: str) -> dict:
         request_id,
         cancel_event,
     )
+    disconnect_task = asyncio.create_task(
+        _watch_request_disconnect(request, req, request_id, cancel_event, future)
+    ) if request is not None else None
     try:
         return await asyncio.wait_for(future, timeout=PIPELINE_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as exc:
@@ -431,6 +471,9 @@ async def _run_pipeline_async(req: AnalysisRequest, request_id: str) -> dict:
             exc_info=True,
         )
         raise PipelineExecutionError(internal_message=str(exc)) from exc
+    finally:
+        if disconnect_task is not None and not disconnect_task.done():
+            disconnect_task.cancel()
 
 
 # ---------------------------------------------------------------------------
@@ -559,10 +602,16 @@ def _is_default_callable(func: Callable[..., Any], name: str) -> bool:
     return getattr(func, "__module__", "") == __name__ and getattr(func, "__name__", "") == name
 
 
-async def _compute_result_fields(req: AnalysisRequest, request_id: str) -> dict[str, Any]:
+async def _call_run_pipeline_async(req: AnalysisRequest, request_id: str, request: Request | None) -> dict[str, Any]:
+    if _is_default_callable(_run_pipeline_async, "_run_pipeline_async"):
+        return await _run_pipeline_async(req, request_id, request=request)
+    return await _run_pipeline_async(req, request_id)
+
+
+async def _compute_result_fields(req: AnalysisRequest, request_id: str, request: Request | None = None) -> dict[str, Any]:
     if _is_default_callable(_run_pipeline_async, "_run_pipeline_async"):
         await _preflight_market_data(req)
-    result_fields = await _run_pipeline_async(req, request_id)
+    result_fields = await _call_run_pipeline_async(req, request_id, request)
     result_fields = _with_data_fetched_at(result_fields)
     return _shape_result(result_fields, req.response_detail)
 
@@ -599,7 +648,7 @@ async def _execute_analysis(
     use_cache = _is_default_callable(_run_pipeline_async, "_run_pipeline_async")
     async with limit_request(request, policy):
         async def factory() -> dict[str, Any]:
-            return await _compute_result_fields(req, request_id)
+            return await _compute_result_fields(req, request_id, request)
 
         fields = await _get_or_start_analysis(req, factory, use_cache=use_cache)
         return _response_payload(request_id, req, fields)

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+
+import pytest
 
 
 def _mock_result() -> dict:
@@ -116,3 +121,56 @@ def test_get_or_start_analysis_shares_in_flight_work():
     assert results[0]["decision"] == "Hold"
     assert results[1]["decision"] == "Hold"
     assert results[1]["cache"] == {"hit": True, "source": "in_flight"}
+
+
+def test_run_pipeline_async_cancels_worker_on_client_disconnect(monkeypatch):
+    from routes.analysis import _run_pipeline_async
+    from routes.validation import AnalysisRequest
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    started = threading.Event()
+
+    class CancelEvent:
+        def __init__(self):
+            self._event = threading.Event()
+
+        def is_set(self):
+            return self._event.is_set()
+
+        def set(self):
+            self._event.set()
+
+    cancel_event = CancelEvent()
+
+    async def fake_get_executor():
+        return executor
+
+    async def fake_new_cancel_event():
+        return cancel_event
+
+    def fake_run_pipeline(*args):
+        worker_cancel_event = args[-1]
+        started.set()
+        while not worker_cancel_event.is_set():
+            time.sleep(0.01)
+        return {"decision": "Hold"}
+
+    class DisconnectingRequest:
+        async def is_disconnected(self):
+            return await asyncio.to_thread(started.wait, 1)
+
+    monkeypatch.setattr("routes.analysis._get_executor", fake_get_executor)
+    monkeypatch.setattr("routes.analysis._new_cancel_event", fake_new_cancel_event)
+    monkeypatch.setattr("routes.analysis._run_pipeline", fake_run_pipeline)
+
+    async def main():
+        req = AnalysisRequest(ticker="BBCA.JK", trade_date="2026-05-14", max_debate_rounds=1)
+        with pytest.raises(asyncio.CancelledError):
+            await _run_pipeline_async(req, "disconnect-test", request=DisconnectingRequest())
+
+    try:
+        asyncio.run(main())
+        assert started.is_set()
+        assert cancel_event.is_set()
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
