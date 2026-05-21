@@ -348,6 +348,8 @@ Cancels a running job.
 | `DEEPSEEK_API_KEY` | DeepSeek only | DeepSeek API key |
 | `OLLAMA_BASE_URL` | Ollama only | Local or Docker Ollama URL |
 | `API_KEY` | Optional locally; required when `REQUIRE_API_KEY_FOR_RATE_LIMIT=true` | Shared API key accepted from `x-api-key` or `Authorization: Bearer ...` |
+| `APP_ENV` | No | Defaults to `production`; set `development` or `test` explicitly for local relaxed defaults |
+| `REQUEST_BODY_MAX_BYTES` | No | Maximum request body accepted by FastAPI; default `65536` |
 | `ANALYSIS_JOB_MAX_ACTIVE` | No | Maximum queued/running analysis jobs kept in memory; default `32` |
 
 ### `frontend/.env`
@@ -355,7 +357,8 @@ Cancels a running job.
 | Variable | Default | Description |
 |---|---|---|
 | `VITE_API_URL` | Empty | Backend URL. Empty uses relative `/api/*` (Docker). Set to `http://localhost:8000` for local dev. |
-| `VITE_API_KEY` | Empty | Must match backend `API_KEY` when backend API-key enforcement is enabled |
+| `VITE_API_KEY` | Empty | Browser-visible key. Only sent when `VITE_ENABLE_BROWSER_API_KEY=true`; prefer a private proxy for shared deployments. |
+| `VITE_ENABLE_BROWSER_API_KEY` | `false` | Explicit opt-in to send `VITE_API_KEY` from the browser |
 | `VITE_ENABLE_MOCK` | `false` | Exposes `/analysis.test` in production builds |
 
 ---

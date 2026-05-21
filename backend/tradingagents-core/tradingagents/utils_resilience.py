@@ -10,6 +10,7 @@ Provides:
 from __future__ import annotations
 
 import concurrent.futures
+import contextvars
 import functools
 import logging
 import os
@@ -84,6 +85,7 @@ _CIRCUITS_LOCK = threading.Lock()
 _TIMEOUT_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
 _TIMEOUT_EXECUTOR_LOCK = threading.Lock()
 _TIMEOUT_MAX_WORKERS = min(32, (os.cpu_count() or 1) + 4)
+_TIMEOUT_CAPACITY = threading.BoundedSemaphore(_TIMEOUT_MAX_WORKERS)
 
 
 def get_circuit(name: str, failure_threshold: int = 5, recovery_seconds: int = 60) -> CircuitBreaker:
@@ -147,11 +149,30 @@ def call_with_retry(
 
 
 def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_name: str) -> T:
-    future = _get_timeout_executor().submit(func)
+    if not _TIMEOUT_CAPACITY.acquire(blocking=False):
+        raise TimeoutError(
+            f"{service_name} timed out before starting because the timeout worker pool is saturated."
+        )
+
+    context = contextvars.copy_context()
+    future = _get_timeout_executor().submit(context.run, func)
+
+    def release_capacity(_: concurrent.futures.Future) -> None:
+        try:
+            _TIMEOUT_CAPACITY.release()
+        except ValueError:
+            logger.debug("Timeout worker capacity was already released for %s", service_name)
+
+    future.add_done_callback(release_capacity)
     try:
         return future.result(timeout=timeout_seconds)
     except concurrent.futures.TimeoutError as exc:
         future.cancel()
+        logger.warning(
+            "%s timed out after %ss; the underlying blocking call may finish later.",
+            service_name,
+            timeout_seconds,
+        )
         raise TimeoutError(f"{service_name} timed out after {timeout_seconds}s") from exc
 
 

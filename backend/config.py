@@ -196,7 +196,7 @@ KNOWN_MODELS: dict[str, list[str]] = {
 
 # App
 APP_NAME = "TradingAgents API"
-APP_ENV = _env("APP_ENV", "development").lower()  # kept as env for docker override
+APP_ENV = _env("APP_ENV", "production").lower()  # secure default unless explicitly set to development/test
 _IS_PRODUCTION = APP_ENV == "production"
 
 # Ports
@@ -212,9 +212,9 @@ _DEFAULT_CORS_ORIGINS: list[str] = [] if _IS_PRODUCTION else [
 CORS_ORIGINS: list[str] = _env_list("CORS_ORIGINS", _DEFAULT_CORS_ORIGINS)
 
 # Pipeline tunables
-PIPELINE_TIMEOUT_SECONDS = 600
-PROCESS_POOL_WORKERS = min(4, os.cpu_count() or 2)
-DEFAULT_MAX_DEBATE_ROUNDS = 3
+PIPELINE_TIMEOUT_SECONDS = _env_int("PIPELINE_TIMEOUT_SECONDS", 600, min_value=1)
+PROCESS_POOL_WORKERS = min(_env_int("PROCESS_POOL_WORKERS", 4, min_value=1), os.cpu_count() or 2)
+DEFAULT_MAX_DEBATE_ROUNDS = _env_int("DEFAULT_MAX_DEBATE_ROUNDS", 3, min_value=1)
 MAX_RISK_DISCUSS_ROUNDS = 1
 ANALYSIS_MODE = "balanced"
 DEFAULT_ANALYSIS_DEPTH = "balanced"
@@ -231,10 +231,11 @@ ANALYSIS_DEPTH_LLM_BUDGETS: dict[str, int] = {
 MAX_GEMINI_CALLS = ANALYSIS_DEPTH_LLM_BUDGETS[DEFAULT_ANALYSIS_DEPTH]
 
 # Rate limiting
-REQUEST_RATE_LIMIT_PER_MINUTE = 20
-STREAM_RATE_LIMIT_PER_MINUTE = 8
-MAX_CONCURRENT_REQUESTS_PER_KEY = 2
-MAX_CONCURRENT_STREAMS_PER_KEY = 1
+REQUEST_RATE_LIMIT_PER_MINUTE = _env_int("REQUEST_RATE_LIMIT_PER_MINUTE", 20, min_value=1)
+STREAM_RATE_LIMIT_PER_MINUTE = _env_int("STREAM_RATE_LIMIT_PER_MINUTE", 8, min_value=1)
+MAX_CONCURRENT_REQUESTS_PER_KEY = _env_int("MAX_CONCURRENT_REQUESTS_PER_KEY", 2, min_value=1)
+MAX_CONCURRENT_STREAMS_PER_KEY = _env_int("MAX_CONCURRENT_STREAMS_PER_KEY", 1, min_value=1)
+REQUEST_BODY_MAX_BYTES = _env_int("REQUEST_BODY_MAX_BYTES", 64 * 1024, min_value=1024)
 # Production defaults to API-key-only rate limiting. Local/test environments
 # still allow anonymous clients, rate-limited by direct client IP.
 REQUIRE_API_KEY_FOR_RATE_LIMIT = _env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", _IS_PRODUCTION)
@@ -245,8 +246,9 @@ if _IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
     )
 
 # LLM resilience
-LLM_TIMEOUT_SECONDS = 60
-LLM_MAX_RETRIES = 2
+LLM_TIMEOUT_SECONDS = _env_int("LLM_TIMEOUT_SECONDS", 60, min_value=1)
+LLM_MAX_RETRIES = _env_int("LLM_MAX_RETRIES", 2, min_value=1)
+PROVIDER_SDK_MAX_RETRIES = _env_int("PROVIDER_SDK_MAX_RETRIES", 0, min_value=0)
 LLM_RETRIES_BY_DEPTH: dict[str, int] = {
     "fast": 1,
     "balanced": 2,
@@ -258,8 +260,8 @@ LLM_429_MAX_WAIT_SECONDS = 20
 MAX_CONCURRENT_LLM_CALLS = 3
 
 # Cache
-CACHE_TTL_SECONDS = 900
-CACHE_MAX_ENTRIES = 512
+CACHE_TTL_SECONDS = _env_int("CACHE_TTL_SECONDS", 900, min_value=1)
+CACHE_MAX_ENTRIES = _env_int("CACHE_MAX_ENTRIES", 512, min_value=1)
 ANALYSIS_RESULT_CACHE_TTL_SECONDS = 60 * 60 * 8
 ANALYSIS_RESULT_CACHE_MAX_ENTRIES = 256
 ANALYSIS_JOB_TTL_SECONDS = 60 * 60
@@ -275,8 +277,8 @@ CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
 CIRCUIT_BREAKER_RECOVERY_SECONDS = 60
 
 # Tool
-TOOL_TIMEOUT_SECONDS = 45
-TOOL_MAX_RETRIES = 3
+TOOL_TIMEOUT_SECONDS = _env_int("TOOL_TIMEOUT_SECONDS", 45, min_value=1)
+TOOL_MAX_RETRIES = _env_int("TOOL_MAX_RETRIES", 2, min_value=1)
 
 # Debate
 DEBATE_MIN_ROUNDS = 2
@@ -320,6 +322,7 @@ class LLMSettings:
             "backend_url": self.backend_url(),
             "timeout": LLM_TIMEOUT_SECONDS,
             "llm_max_retries": retries,
+            "provider_sdk_max_retries": PROVIDER_SDK_MAX_RETRIES,
             "llm_retry_base_delay": LLM_RETRY_BASE_DELAY,
             "llm_retry_max_delay": LLM_RETRY_MAX_DELAY,
             "llm_429_max_wait_seconds": LLM_429_MAX_WAIT_SECONDS,
@@ -461,9 +464,11 @@ class _BackendSettingsShim:
     stream_rate_limit_per_minute = STREAM_RATE_LIMIT_PER_MINUTE
     max_concurrent_requests_per_key = MAX_CONCURRENT_REQUESTS_PER_KEY
     max_concurrent_streams_per_key = MAX_CONCURRENT_STREAMS_PER_KEY
+    request_body_max_bytes = REQUEST_BODY_MAX_BYTES
     require_api_key_for_rate_limit = REQUIRE_API_KEY_FOR_RATE_LIMIT
     llm_timeout_seconds = LLM_TIMEOUT_SECONDS
     llm_max_retries = LLM_MAX_RETRIES
+    provider_sdk_max_retries = PROVIDER_SDK_MAX_RETRIES
     max_concurrent_llm_calls = MAX_CONCURRENT_LLM_CALLS
     cache_ttl_seconds = CACHE_TTL_SECONDS
     cache_max_entries = CACHE_MAX_ENTRIES

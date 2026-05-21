@@ -71,6 +71,30 @@ def test_ticker_validate_is_rate_limited(client, monkeypatch):
     assert second.json()["error"]["code"] == "RATE_LIMITED"
 
 
+def test_legacy_sse_rate_limit_returns_http_429(client, monkeypatch):
+    def fake_run_pipeline_with_progress(ticker, trade_date, max_debate_rounds, request_id, progress_callback=None):
+        return {
+            "decision": "Hold",
+            "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []},
+        }
+
+    monkeypatch.setattr("routes.analysis._run_pipeline_with_progress", fake_run_pipeline_with_progress)
+    monkeypatch.setattr(
+        "routes.analysis.stream_policy",
+        lambda: RateLimitPolicy(scope="legacy-sse-limit-test", max_per_minute=1, max_concurrent=1),
+    )
+
+    payload = {"ticker": "BBCA.JK", "trade_date": "2026-05-14", "max_debate_rounds": 1}
+    headers = {"x-api-key": "same-legacy-sse-key"}
+
+    first = client.post("/api/analyze/stream", json=payload, headers=headers)
+    second = client.post("/api/analyze/stream", json=payload, headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "RATE_LIMITED"
+
+
 def test_configured_api_key_must_match(client, monkeypatch):
     async def fake_run_pipeline_async(req, request_id):
         return {

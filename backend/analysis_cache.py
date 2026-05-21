@@ -163,8 +163,22 @@ class AnalysisJob:
     error: dict[str, Any] | None = None
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     done_event: asyncio.Event = field(default_factory=asyncio.Event)
+    event_condition: asyncio.Condition = field(default_factory=asyncio.Condition)
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     task: asyncio.Task | None = None
+
+    async def publish(self, event_type: str, payload: dict[str, Any]) -> None:
+        """Append a replayable job event and wake all current subscribers."""
+        event = {
+            "sequence": len(self.events),
+            "type": event_type,
+            "payload": payload,
+            "created_at": time.time(),
+        }
+        async with self.event_condition:
+            self.events.append(event)
+            self.updated_at = time.time()
+            self.event_condition.notify_all()
 
     def public_summary(self) -> dict[str, Any]:
         return {
@@ -224,7 +238,8 @@ class AnalysisJobStore:
         if job.status not in {"completed", "failed", "cancelled"}:
             job.status = "cancelled"
             job.updated_at = time.time()
-            await job.queue.put({"type": "error", "payload": {"request_id": job.request_id, "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."}}})
+            job.error = {"request_id": job.request_id, "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."}}
+            await job.publish("error", job.error)
             job.done_event.set()
         if job.task and not job.task.done():
             job.task.cancel()

@@ -47,13 +47,13 @@ from tradingagents.agents.schemas import (
     render_trader_proposal,
 )
 from tradingagents.agents.utils.structured import bind_structured
-from tradingagents.dataflows.config import get_config, set_config
+from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.llm_clients import create_llm_client
 from tradingagents.agents.utils.agent_utils import get_language_instruction
-from tradingagents.utils_resilience import call_with_retry, call_with_timeout
+from tradingagents.utils_resilience import call_with_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -164,16 +164,15 @@ def _truncate(value: Any, limit: int = 12_000) -> str:
 
 
 def _call_yfinance_with_resilience(func: Callable[[], Any]) -> Any:
-    config = get_config()
-    return call_with_retry(
-        func,
-        service_name="yfinance",
-        max_attempts=int(config.get("tool_max_retries", 3)),
-        base_delay=1.0,
-        max_delay=10.0,
-        circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
-        circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
-    )
+    # route_to_vendor is the single app-level retry/circuit/timeout layer for
+    # market-data calls. yfinance-specific helpers keep their narrow transient
+    # retry, so the balanced pipeline must not wrap the same field again.
+    return func()
+
+
+def _run_with_config(config: dict[str, Any], func: Callable[[], T]) -> T:
+    with use_config(config):
+        return func()
 
 
 def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -> DataField:
@@ -325,7 +324,7 @@ def collect_market_data(
 
     results: dict[str, DataField] = {}
     with ThreadPoolExecutor(max_workers=min(12, len(tasks)), thread_name_prefix="balanced-data") as pool:
-        futures = {pool.submit(func): name for name, func in tasks.items()}
+        futures = {pool.submit(_run_with_config, config, func): name for name, func in tasks.items()}
         for future in as_completed(futures):
             _check_cancel(cancel_check)
             name = futures[future]
@@ -415,8 +414,8 @@ def _provider_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
     if config.get("timeout"):
         kwargs["timeout"] = config.get("timeout")
-    if config.get("llm_max_retries") is not None:
-        kwargs["max_retries"] = config.get("llm_max_retries")
+    if config.get("provider_sdk_max_retries") is not None:
+        kwargs["max_retries"] = config.get("provider_sdk_max_retries")
 
     provider = str(config.get("llm_provider", "")).lower()
     if provider == "google" and config.get("google_thinking_level"):
@@ -821,9 +820,9 @@ DATA QUALITY:
 
     try:
         with ThreadPoolExecutor(max_workers=3, thread_name_prefix="balanced-analyst") as pool:
-            market_future = pool.submit(build_market_report_parallel)
-            news_future = pool.submit(build_news_social_report_parallel)
-            fundamentals_future = pool.submit(build_fundamentals_report_parallel)
+            market_future = pool.submit(_run_with_config, config, build_market_report_parallel)
+            news_future = pool.submit(_run_with_config, config, build_news_social_report_parallel)
+            fundamentals_future = pool.submit(_run_with_config, config, build_fundamentals_report_parallel)
             market_report = market_future.result()
             news_social_report = news_future.result()
             fundamentals_report = fundamentals_future.result()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
 
 import pytest
 
@@ -35,8 +36,10 @@ def _price_csv(*dates: str) -> str:
 def _mock_market_data(monkeypatch: pytest.MonkeyPatch, sample: str | Exception) -> list[tuple[str, str, str, str]]:
     calls: list[tuple[str, str, str, str]] = []
 
-    def fake_set_config(config):
+    @contextmanager
+    def fake_use_config(config):
         assert config["analysis_depth"] == "fast"
+        yield config
 
     def fake_route_to_vendor(tool_name: str, ticker: str, start: str, end: str) -> str:
         calls.append((tool_name, ticker, start, end))
@@ -44,7 +47,7 @@ def _mock_market_data(monkeypatch: pytest.MonkeyPatch, sample: str | Exception) 
             raise sample
         return sample
 
-    monkeypatch.setattr("tradingagents.dataflows.config.set_config", fake_set_config)
+    monkeypatch.setattr("tradingagents.dataflows.config.use_config", fake_use_config)
     monkeypatch.setattr("tradingagents.dataflows.interface.route_to_vendor", fake_route_to_vendor)
     return calls
 

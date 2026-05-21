@@ -5,6 +5,7 @@ import concurrent.futures
 import json
 import logging
 import multiprocessing
+import queue as thread_queue
 import time
 from multiprocessing.managers import SyncManager
 from datetime import datetime, timedelta
@@ -233,6 +234,42 @@ def _run_pipeline_with_progress(
     full_decision: str = final_state.get("final_trade_decision", "")
     pd_obj: Optional[PortfolioDecision] = final_state.get("portfolio_decision")
     return _parse_final_result(full_decision, pd_obj, PortfolioRating, final_state)
+
+
+def _run_pipeline_with_progress_worker(
+    ticker: str,
+    trade_date: str,
+    max_debate_rounds: int,
+    analysis_depth: str,
+    response_detail: str,
+    request_id: str,
+    progress_queue: Any,
+    cancel_event: Any | None = None,
+) -> dict:
+    """Run the progress pipeline inside a process-pool worker."""
+
+    def progress_callback(event: dict) -> None:
+        payload = {
+            "request_id": request_id,
+            "ticker": ticker,
+            "trade_date": trade_date,
+            **event,
+        }
+        progress_queue.put({"type": "progress", "payload": payload})
+
+    def is_cancelled() -> bool:
+        return _is_cancel_event_set(cancel_event)
+
+    return _run_pipeline_with_progress(
+        ticker,
+        trade_date,
+        max_debate_rounds,
+        analysis_depth,
+        response_detail,
+        request_id,
+        progress_callback,
+        is_cancelled,
+    )
 
 
 def _parse_final_result(
@@ -576,7 +613,7 @@ def _log_request_accepted(mode: str, request_id: str, req: AnalysisRequest) -> N
 
 async def _preflight_market_data(req: AnalysisRequest) -> None:
     """Fail fast for obviously invalid tickers before any Gemini call."""
-    from tradingagents.dataflows.config import set_config
+    from tradingagents.dataflows.config import use_config
     from tradingagents.dataflows.data_quality import looks_missing
     from tradingagents.dataflows.interface import route_to_vendor
 
@@ -591,8 +628,8 @@ async def _preflight_market_data(req: AnalysisRequest) -> None:
     end = (trade_dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
     def check() -> str:
-        set_config(config)
-        return str(route_to_vendor("get_stock_data", req.ticker, start, end))
+        with use_config(config):
+            return str(route_to_vendor("get_stock_data", req.ticker, start, end))
 
     try:
         sample = await asyncio.to_thread(check)
@@ -703,47 +740,107 @@ async def _run_stream_pipeline(
     """Run a progress-capable pipeline and cache its final result."""
     loop = asyncio.get_running_loop()
 
-    def progress_callback(event: dict) -> None:
-        payload = {
-            "request_id": request_id,
-            "ticker": req.ticker,
-            "trade_date": req.trade_date,
-            **event,
-        }
-        loop.call_soon_threadsafe(queue.put_nowait, {"type": "progress", "payload": payload})
-
-    def is_cancelled() -> bool:
-        return bool(cancel_event and cancel_event.is_set())
-
-    def run() -> dict:
-        try:
-            return _run_pipeline_with_progress(
-                req.ticker,
-                req.trade_date,
-                req.max_debate_rounds,
-                req.analysis_depth,
-                req.response_detail,
-                request_id,
-                progress_callback,
-                is_cancelled,
-            )
-        except TypeError as exc:
-            # Backward-compatible path for older tests/local monkeypatches that
-            # still use the pre-depth signature. Real runtime uses the new path.
-            if _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress"):
-                raise
-            logger.debug("Using legacy _run_pipeline_with_progress signature: %s", exc)
-            return _run_pipeline_with_progress(
-                req.ticker,
-                req.trade_date,
-                req.max_debate_rounds,
-                request_id,
-                progress_callback,
-            )
-
     if _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress"):
         await _preflight_market_data(req)
-    fields = await asyncio.wait_for(asyncio.to_thread(run), timeout=PIPELINE_TIMEOUT_SECONDS)
+
+        manager = await _get_cancel_manager()
+        progress_queue = manager.Queue()
+        worker_cancel_event = manager.Event()
+        executor = await _get_executor()
+        future = loop.run_in_executor(
+            executor,
+            _run_pipeline_with_progress_worker,
+            req.ticker,
+            req.trade_date,
+            req.max_debate_rounds,
+            req.analysis_depth,
+            req.response_detail,
+            request_id,
+            progress_queue,
+            worker_cancel_event,
+        )
+
+        async def pump_progress() -> None:
+            while True:
+                if future.done():
+                    try:
+                        item = progress_queue.get(False)
+                    except thread_queue.Empty:
+                        return
+                else:
+                    try:
+                        item = await asyncio.to_thread(progress_queue.get, True, 0.5)
+                    except thread_queue.Empty:
+                        continue
+                await queue.put(item)
+
+        async def watch_cancel() -> None:
+            if cancel_event is None:
+                return
+            while not future.done():
+                if cancel_event.is_set():
+                    _set_cancel_event(worker_cancel_event)
+                    future.cancel()
+                    return
+                await asyncio.sleep(0.2)
+
+        pump_task = asyncio.create_task(pump_progress())
+        cancel_task = asyncio.create_task(watch_cancel())
+        try:
+            fields = await asyncio.wait_for(asyncio.shield(future), timeout=PIPELINE_TIMEOUT_SECONDS)
+            try:
+                await asyncio.wait_for(pump_task, timeout=2)
+            except asyncio.TimeoutError:
+                logger.debug("Timed out while draining worker progress queue", extra={"request_id": request_id})
+        except asyncio.TimeoutError:
+            _set_cancel_event(worker_cancel_event)
+            future.cancel()
+            raise
+        except asyncio.CancelledError:
+            _set_cancel_event(worker_cancel_event)
+            future.cancel()
+            raise
+        finally:
+            for task in (pump_task, cancel_task):
+                if not task.done():
+                    task.cancel()
+    else:
+        def progress_callback(event: dict) -> None:
+            payload = {
+                "request_id": request_id,
+                "ticker": req.ticker,
+                "trade_date": req.trade_date,
+                **event,
+            }
+            loop.call_soon_threadsafe(queue.put_nowait, {"type": "progress", "payload": payload})
+
+        def is_cancelled() -> bool:
+            return bool(cancel_event and cancel_event.is_set())
+
+        def run() -> dict:
+            try:
+                return _run_pipeline_with_progress(
+                    req.ticker,
+                    req.trade_date,
+                    req.max_debate_rounds,
+                    req.analysis_depth,
+                    req.response_detail,
+                    request_id,
+                    progress_callback,
+                    is_cancelled,
+                )
+            except TypeError as exc:
+                logger.debug("Using legacy _run_pipeline_with_progress signature: %s", exc)
+                return _run_pipeline_with_progress(
+                    req.ticker,
+                    req.trade_date,
+                    req.max_debate_rounds,
+                    request_id,
+                    progress_callback,
+                )
+
+        fields = await asyncio.wait_for(asyncio.to_thread(run), timeout=PIPELINE_TIMEOUT_SECONDS)
+
     fields = _with_data_fetched_at(fields)
     shaped = _shape_result(fields, req.response_detail)
     if _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress"):
@@ -755,98 +852,102 @@ async def _stream_progress_and_result(
     request: Request,
     req: AnalysisRequest,
     request_id: str,
+    rate_limit_lease: RateLimitLease | None = None,
 ):
     """Yield cached result, real progress events, heartbeats, then result."""
     key = _cache_key(req)
     use_cache = _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress")
     cached = await _RESULT_CACHE.get(key) if use_cache else None
-    if cached is not None:
-        yield _sse_event(
-            "progress",
-            {
-                "request_id": request_id,
-                "ticker": req.ticker,
-                "trade_date": req.trade_date,
-                "agent_id": "cache",
-                "agent_name": "Analysis Cache",
-                "status": "completed",
-                "status_message": "Returning cached analysis result.",
-            },
-        )
-        yield _sse_event("result", _response_payload(request_id, req, cached))
-        return
+    try:
+        if cached is not None:
+            yield _sse_event(
+                "progress",
+                {
+                    "request_id": request_id,
+                    "ticker": req.ticker,
+                    "trade_date": req.trade_date,
+                    "agent_id": "cache",
+                    "agent_name": "Analysis Cache",
+                    "status": "completed",
+                    "status_message": "Returning cached analysis result.",
+                },
+            )
+            yield _sse_event("result", _response_payload(request_id, req, cached))
+            return
 
-    queue: asyncio.Queue[dict] = asyncio.Queue()
-    cancel_event = asyncio.Event()
+        queue: asyncio.Queue[dict] = asyncio.Queue()
+        cancel_event = asyncio.Event()
 
-    async def runner() -> None:
-        try:
-            async with limit_request(request, stream_policy()):
+        async def runner() -> None:
+            try:
                 async def factory() -> dict[str, Any]:
                     return await _run_stream_pipeline(req, request_id, queue, cancel_event)
 
                 result_fields = await _get_or_start_analysis(req, factory, use_cache=use_cache)
-            await queue.put({"type": "result", "payload": _response_payload(request_id, req, result_fields)})
-        except asyncio.TimeoutError:
-            await queue.put(_sse_error(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)))
-        except asyncio.CancelledError as exc:
-            cancel_event.set()
-            await queue.put(_sse_error(exc))
-        except Exception as exc:
-            if not isinstance(exc, ApiError):
-                logger.error(
-                    "Streaming pipeline failed",
-                    extra={"event": "streaming_pipeline_failed", "request_id": request_id},
-                    exc_info=True,
-                )
-            await queue.put(_sse_error(exc))
+                await queue.put({"type": "result", "payload": _response_payload(request_id, req, result_fields)})
+            except asyncio.TimeoutError:
+                await queue.put(_sse_error(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)))
+            except asyncio.CancelledError as exc:
+                cancel_event.set()
+                await queue.put(_sse_error(exc))
+            except Exception as exc:
+                if not isinstance(exc, ApiError):
+                    logger.error(
+                        "Streaming pipeline failed",
+                        extra={"event": "streaming_pipeline_failed", "request_id": request_id},
+                        exc_info=True,
+                    )
+                await queue.put(_sse_error(exc))
 
-    task = asyncio.create_task(runner())
-    try:
-        yield _sse_event(
-            "progress",
-            {
-                "request_id": request_id,
-                "ticker": req.ticker,
-                "trade_date": req.trade_date,
-                "agent_id": "pipeline",
-                "agent_name": "Analysis Pipeline",
-                "status": "started",
-                "status_message": "Starting analysis pipeline...",
-            },
-        )
+        task = asyncio.create_task(runner())
+        try:
+            yield _sse_event(
+                "progress",
+                {
+                    "request_id": request_id,
+                    "ticker": req.ticker,
+                    "trade_date": req.trade_date,
+                    "agent_id": "pipeline",
+                    "agent_name": "Analysis Pipeline",
+                    "status": "started",
+                    "status_message": "Starting analysis pipeline...",
+                },
+            )
 
-        while True:
-            if await request.is_disconnected():
+            while True:
+                if await request.is_disconnected():
+                    cancel_event.set()
+                    task.cancel()
+                    logger.info(
+                        "SSE client disconnected",
+                        extra={"event": "sse_client_disconnected", "request_id": request_id, "ticker": req.ticker},
+                    )
+                    return
+
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield _sse_event(
+                        "heartbeat",
+                        {
+                            "request_id": request_id,
+                            "ticker": req.ticker,
+                            "trade_date": req.trade_date,
+                            "status": "running",
+                        },
+                    )
+                    continue
+
+                yield _sse_event(item["type"], item["payload"])
+                if item["type"] in {"result", "error"}:
+                    return
+        finally:
+            if not task.done():
                 cancel_event.set()
                 task.cancel()
-                logger.info(
-                    "SSE client disconnected",
-                    extra={"event": "sse_client_disconnected", "request_id": request_id, "ticker": req.ticker},
-                )
-                return
-
-            try:
-                item = await asyncio.wait_for(queue.get(), timeout=15)
-            except asyncio.TimeoutError:
-                yield _sse_event(
-                    "heartbeat",
-                    {
-                        "request_id": request_id,
-                        "ticker": req.ticker,
-                        "trade_date": req.trade_date,
-                        "status": "running",
-                    },
-                )
-                continue
-
-            yield _sse_event(item["type"], item["payload"])
-            if item["type"] in {"result", "error"}:
-                return
     finally:
-        if not task.done():
-            cancel_event.set()
-            task.cancel()
+        if rate_limit_lease is not None:
+            await rate_limit_lease.__aexit__(None, None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -858,7 +959,29 @@ def _job_not_found(job_id: str) -> BadRequestError:
     return BadRequestError("Analysis job was not found.", details={"job_id": job_id})
 
 
+async def _forward_job_progress(job: AnalysisJob, source_queue: asyncio.Queue) -> None:
+    while True:
+        item = await source_queue.get()
+        try:
+            if item is None:
+                return
+            if job.status in {"completed", "failed", "cancelled"}:
+                continue
+            await job.publish(item["type"], item["payload"])
+        finally:
+            source_queue.task_done()
+
+
+async def _wait_for_job_progress(source_queue: asyncio.Queue) -> None:
+    try:
+        await asyncio.wait_for(source_queue.join(), timeout=2)
+    except asyncio.TimeoutError:
+        logger.debug("Timed out while waiting for job progress events to flush")
+
+
 async def _start_job(job: AnalysisJob, rate_limit_lease: RateLimitLease) -> None:
+    progress_queue: asyncio.Queue = asyncio.Queue()
+    progress_task = asyncio.create_task(_forward_job_progress(job, progress_queue))
     try:
         req = AnalysisRequest(**job.payload)
         cached = await _RESULT_CACHE.get(job.cache_key)
@@ -866,36 +989,46 @@ async def _start_job(job: AnalysisJob, rate_limit_lease: RateLimitLease) -> None
             job.status = "completed"
             job.result = _response_payload(job.request_id, req, cached)
             job.updated_at = time.time()
-            await job.queue.put({"type": "result", "payload": job.result})
+            await job.publish("result", job.result)
             return
 
         job.status = "running"
         job.updated_at = time.time()
 
-        fields = await _run_stream_pipeline(req, job.request_id, job.queue, job.cancel_event)
+        fields = await _run_stream_pipeline(req, job.request_id, progress_queue, job.cancel_event)
+        await _wait_for_job_progress(progress_queue)
         if job.cancel_event.is_set():
             raise asyncio.CancelledError()
         job.result = _response_payload(job.request_id, req, fields)
         job.status = "completed"
-        await job.queue.put({"type": "result", "payload": job.result})
+        await job.publish("result", job.result)
     except asyncio.CancelledError:
         job.status = "cancelled"
-        job.error = {"request_id": job.request_id, "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."}}
-        await job.queue.put({"type": "error", "payload": job.error})
+        if job.error is None:
+            await _wait_for_job_progress(progress_queue)
+            job.error = {"request_id": job.request_id, "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."}}
+            await job.publish("error", job.error)
     except asyncio.TimeoutError:
         exc = PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)
         job.status = "failed"
+        await _wait_for_job_progress(progress_queue)
         job.error = error_payload(exc)
-        await job.queue.put({"type": "error", "payload": job.error})
+        await job.publish("error", job.error)
     except Exception as exc:
         job.status = "failed"
+        await _wait_for_job_progress(progress_queue)
         if isinstance(exc, ApiError):
             job.error = error_payload(exc)
         else:
             logger.error("Analysis job failed", extra={"event": "analysis_job_failed", "job_id": job.id}, exc_info=True)
             job.error = error_payload(PipelineExecutionError(internal_message=str(exc)))
-        await job.queue.put({"type": "error", "payload": job.error})
+        await job.publish("error", job.error)
     finally:
+        await progress_queue.put(None)
+        try:
+            await asyncio.wait_for(progress_task, timeout=2)
+        except asyncio.TimeoutError:
+            progress_task.cancel()
         job.updated_at = time.time()
         job.done_event.set()
         await rate_limit_lease.__aexit__(None, None, None)
@@ -911,27 +1044,35 @@ async def _stream_job_events_with_lease(request: Request, job: AnalysisJob, rate
 
 async def _stream_job_events(request: Request, job: AnalysisJob):
     yield _sse_event("job", job.public_summary())
-    if job.result is not None:
-        yield _sse_event("result", job.result)
-        return
-    if job.error is not None:
-        yield _sse_event("error", job.error)
-        return
 
+    next_index = 0
     while True:
+        while next_index < len(job.events):
+            item = job.events[next_index]
+            next_index += 1
+            yield _sse_event(item["type"], item["payload"])
+            if item["type"] in {"result", "error"}:
+                return
+
+        if job.result is not None:
+            yield _sse_event("result", job.result)
+            return
+        if job.error is not None:
+            yield _sse_event("error", job.error)
+            return
+
         if await request.is_disconnected():
             return
 
         try:
-            item = await asyncio.wait_for(job.queue.get(), timeout=15)
+            async with job.event_condition:
+                if next_index >= len(job.events) and not job.done_event.is_set():
+                    await asyncio.wait_for(job.event_condition.wait(), timeout=15)
         except asyncio.TimeoutError:
             yield _sse_event("heartbeat", {"job_id": job.id, "request_id": job.request_id, "status": job.status})
-            if job.done_event.is_set() and job.queue.empty():
+            if job.done_event.is_set() and next_index >= len(job.events):
                 return
-            continue
-
-        yield _sse_event(item["type"], item["payload"])
-        if item["type"] in {"result", "error"}:
+        if job.done_event.is_set() and next_index >= len(job.events):
             return
 
 
@@ -945,8 +1086,10 @@ async def analyze_stream(req: AnalysisRequest, request: Request):
     """SSE endpoint with cache hit shortcut, heartbeat, and cancellation on disconnect."""
     req = normalize_and_validate_analysis_request(req)
     request_id = request_id_ctx.get()
+    rate_limit_lease = limit_request(request, stream_policy())
+    await rate_limit_lease.__aenter__()
     _log_request_accepted("stream", request_id, req)
-    return EventSourceResponse(_stream_progress_and_result(request, req, request_id))
+    return EventSourceResponse(_stream_progress_and_result(request, req, request_id, rate_limit_lease))
 
 
 @router.post("/analyze")

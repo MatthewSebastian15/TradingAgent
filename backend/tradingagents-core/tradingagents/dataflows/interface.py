@@ -215,6 +215,13 @@ def route_to_vendor(method: str, *args, **kwargs):
         service_name = f"tool:{vendor}:{method}"
 
         try:
+            max_attempts = int(config.get("tool_max_retries", 2))
+            if vendor == "yfinance":
+                # yfinance implementations already retry their own transient
+                # YF/network errors. Keep the router as timeout/circuit/cache
+                # layer only to avoid multiplicative retries per data field.
+                max_attempts = 1
+
             result = call_with_retry(
                 lambda: call_with_timeout(
                     lambda: impl_func(*args, **kwargs),
@@ -222,7 +229,7 @@ def route_to_vendor(method: str, *args, **kwargs):
                     service_name=service_name,
                 ),
                 service_name=service_name,
-                max_attempts=int(config.get("tool_max_retries", 3)),
+                max_attempts=max_attempts,
                 base_delay=1.0,
                 max_delay=10.0,
                 circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
