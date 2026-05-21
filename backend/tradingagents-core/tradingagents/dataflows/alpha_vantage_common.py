@@ -5,6 +5,8 @@ import json
 from datetime import datetime
 from io import StringIO
 
+from .config import get_config
+
 API_BASE_URL = "https://www.alphavantage.co/query"
 
 def get_api_key() -> str:
@@ -63,7 +65,8 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
         # Remove entitlement if it's None or empty
         api_params.pop("entitlement", None)
     
-    response = requests.get(API_BASE_URL, params=api_params)
+    timeout_seconds = max(1, int(get_config().get("tool_timeout_seconds", 45)))
+    response = requests.get(API_BASE_URL, params=api_params, timeout=(5, timeout_seconds))
     response.raise_for_status()
 
     response_text = response.text

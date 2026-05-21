@@ -16,7 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from config import APP_NAME, CORS_ORIGINS, APP_ENV, validate_startup_config, llm
+from body_limit import RequestBodyLimitMiddleware
+from config import APP_NAME, CORS_ORIGINS, APP_ENV, REQUEST_BODY_MAX_BYTES, validate_startup_config, llm
 from errors import (
     ApiError,
     api_error_handler,
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title=APP_NAME)
 
+app.add_middleware(RequestBodyLimitMiddleware, max_bytes=REQUEST_BODY_MAX_BYTES)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(

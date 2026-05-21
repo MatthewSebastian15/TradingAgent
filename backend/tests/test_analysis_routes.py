@@ -91,6 +91,22 @@ def test_analyze_rejects_invalid_date_before_pipeline_runs(client, monkeypatch):
     assert "trade_date" in response.json()["error"]["details"]["fields"]
 
 
+def test_analyze_rejects_oversized_json_body_before_validation(client, monkeypatch):
+    async def should_not_run(*args, **kwargs):
+        raise AssertionError("Pipeline should not run for oversized input")
+
+    monkeypatch.setattr("routes.analysis._run_pipeline_async", should_not_run)
+
+    response = client.post(
+        "/api/analyze",
+        content='{"ticker":"' + ("A" * 70000) + '"}',
+        headers={"content-type": "application/json", "x-api-key": "body-limit-test-key"},
+    )
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "REQUEST_BODY_TOO_LARGE"
+
+
 def test_get_or_start_analysis_shares_in_flight_work():
     from routes.analysis import _get_or_start_analysis
     from routes.validation import AnalysisRequest

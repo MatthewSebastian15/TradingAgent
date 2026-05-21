@@ -1,10 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 // VITE_API_URL controls where API calls are sent.
 // Docker (nginx proxy): leave empty and let /api/* proxy to backend.
 // Local dev: set VITE_API_URL=http://localhost:8000.
 const API_URL = import.meta.env.VITE_API_URL || '';
-const API_KEY = import.meta.env.VITE_API_KEY || '';
+const BROWSER_API_KEY_ENABLED = import.meta.env.VITE_ENABLE_BROWSER_API_KEY === 'true';
+const API_KEY = BROWSER_API_KEY_ENABLED ? (import.meta.env.VITE_API_KEY || '') : '';
+
+if (import.meta.env.VITE_API_KEY && !BROWSER_API_KEY_ENABLED) {
+  console.warn('VITE_API_KEY is not sent unless VITE_ENABLE_BROWSER_API_KEY=true.');
+}
 
 const DEFAULT_DEBATE_ROUNDS = 3;
 
@@ -52,6 +57,10 @@ function buildHeaders() {
   const headers = { 'Content-Type': 'application/json' };
   if (API_KEY) headers['x-api-key'] = API_KEY;
   return headers;
+}
+
+function buildAuthHeaders() {
+  return API_KEY ? { 'x-api-key': API_KEY } : {};
 }
 
 async function readHttpError(res) {
@@ -131,6 +140,26 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
   const [running, setRunning]           = useState(false);
   const abortRef                        = useRef(null);
   const jobIdRef                        = useRef(null);
+  const mountedRef                      = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+      cancelCurrentJob({ keepalive: true });
+    };
+  }, []);
+
+  function abortError() {
+    const err = new Error('Analysis aborted.');
+    err.name = 'AbortError';
+    return err;
+  }
+
+  function ensureMounted() {
+    if (!mountedRef.current) throw abortError();
+  }
 
   function handleMarketSwitch(marketId) {
     if (running) return;
@@ -150,30 +179,38 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     return '';
   }
 
-  async function cancelCurrentJob() {
+  function cancelCurrentJob({ keepalive = false } = {}) {
     const jobId = jobIdRef.current;
-    if (!jobId) return;
-    try {
-      await fetch(buildApiUrl(`/analysis/jobs/${jobId}`), {
+    if (!jobId) return Promise.resolve();
+
+    const controller = keepalive ? null : new AbortController();
+    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 3000) : null;
+
+    return fetch(buildApiUrl(`/analysis/jobs/${jobId}`), {
         method: 'DELETE',
-        headers: buildHeaders(),
-      });
-    } catch {
+        headers: buildAuthHeaders(),
+        signal: controller?.signal,
+        keepalive,
+      })
+      .catch(() => {
       // Abort below still closes the client stream; backend cancellation is best-effort.
-    }
+      })
+      .finally(() => {
+        if (timeoutId) window.clearTimeout(timeoutId);
+      });
   }
 
-  async function stopAnalysis() {
+  function stopAnalysis() {
     onStatus('Cancelling analysis...');
-    await cancelCurrentJob();
     abortRef.current?.abort();
+    cancelCurrentJob();
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
 
     if (running) {
-      await stopAnalysis();
+      stopAnalysis();
       return;
     }
 
@@ -194,12 +231,14 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     try {
       await runJobStream();
     } catch (ex) {
+      if (!mountedRef.current) return;
       if (ex.name === 'AbortError') {
         onResult({ error: 'Analysis cancelled.' });
       } else {
         onResult({ error: ex.message || 'Analysis failed.' });
       }
     } finally {
+      if (!mountedRef.current) return;
       setRunning(false);
       onLoading(false);
       onStatus('');
@@ -228,26 +267,31 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     });
 
     if (!createRes.ok) throw new Error(await readHttpError(createRes));
+    ensureMounted();
     const job = await createRes.json();
+    ensureMounted();
     jobIdRef.current = job.job_id;
     onStatus(`Job queued: ${job.job_id}`);
 
     const streamRes = await fetch(buildApiUrl(`/analysis/jobs/${job.job_id}/events`), {
       method:  'GET',
-      headers: API_KEY ? { 'x-api-key': API_KEY } : {},
+      headers: buildAuthHeaders(),
       signal:  controller.signal,
     });
 
     if (!streamRes.ok) throw new Error(await readHttpError(streamRes));
     if (!streamRes.body) throw new Error('SSE stream not supported by browser.');
+    ensureMounted();
 
     const reader  = streamRes.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
 
     while (true) {
+      ensureMounted();
       const { done, value } = await reader.read();
       if (done) break;
+      ensureMounted();
       buf += decoder.decode(value, { stream: true });
       const blocks = buf.split(/\r?\n\r?\n/);
       buf = blocks.pop() || '';
@@ -255,6 +299,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
       for (const block of blocks) {
         const event = parseSseBlock(block);
         if (!event) continue;
+        ensureMounted();
 
         if (event.type === 'job') {
           onStatus(`Job status: ${(event.payload.status || 'queued').toUpperCase()}`);

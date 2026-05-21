@@ -118,6 +118,22 @@ def test_production_defaults_require_api_key_and_same_origin_cors(monkeypatch):
         _restore_test_config(monkeypatch)
 
 
+def test_missing_app_env_uses_secure_defaults(monkeypatch):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", raising=False)
+    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+
+    import config
+
+    reloaded = importlib.reload(config)
+    try:
+        assert reloaded.APP_ENV == "production"
+        assert reloaded.REQUIRE_API_KEY_FOR_RATE_LIMIT is True
+        assert reloaded.CORS_ORIGINS == []
+    finally:
+        _restore_test_config(monkeypatch)
+
+
 def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com, https://admin.example.com")

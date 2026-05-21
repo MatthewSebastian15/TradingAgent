@@ -3,6 +3,7 @@ import time
 import pytest
 
 from tradingagents import utils_resilience
+from tradingagents.dataflows.config import get_config
 from tradingagents.pipeline_balanced import (
     AnalystReport,
     LLMBudget,
@@ -77,6 +78,16 @@ def test_call_with_timeout_reuses_shared_executor(monkeypatch):
             created_executor.shutdown(wait=True, cancel_futures=True)
 
 
+def test_config_scope_propagates_into_timeout_worker():
+    set_config({"timeout": 17})
+
+    assert call_with_timeout(
+        lambda: get_config()["timeout"],
+        timeout_seconds=1,
+        service_name="test-config-context",
+    ) == 17
+
+
 def test_circuit_breaker_allows_only_one_half_open_probe():
     circuit = CircuitBreaker("test-half-open-single-probe", failure_threshold=2, recovery_seconds=1)
     circuit.record_failure(RuntimeError("first failure"))
@@ -117,6 +128,63 @@ def test_yf_retry_retries_timeout_errors():
 
     assert yf_retry(flaky_call, max_retries=1, base_delay=0) == "ok"
     assert attempts["count"] == 2
+
+
+def test_alpha_vantage_requests_use_native_timeout(monkeypatch):
+    from tradingagents.dataflows import alpha_vantage_common
+
+    set_config({"tool_timeout_seconds": 7})
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-test-key")
+    captured = {}
+
+    class Response:
+        text = "{}"
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, params, timeout):
+        captured["url"] = url
+        captured["params"] = params
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr(alpha_vantage_common.requests, "get", fake_get)
+
+    assert alpha_vantage_common._make_api_request("TIME_SERIES_DAILY", {"symbol": "AAPL"}) == "{}"
+    assert captured["timeout"] == (5, 7)
+    assert captured["params"]["apikey"] == "alpha-test-key"
+
+
+def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
+    from tradingagents.dataflows import interface
+
+    attempts = []
+
+    monkeypatch.setattr(
+        interface,
+        "get_config",
+        lambda: {
+            "tool_timeout_seconds": 1,
+            "tool_max_retries": 5,
+            "cache_ttl_seconds": 1,
+            "cache_max_entries": 10,
+            "circuit_breaker_failure_threshold": 5,
+            "circuit_breaker_recovery_seconds": 60,
+        },
+    )
+    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance")
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", lambda *args, **kwargs: "ok")
+    monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
+
+    def fake_retry(func, **kwargs):
+        attempts.append(kwargs["max_attempts"])
+        return func()
+
+    monkeypatch.setattr(interface, "call_with_retry", fake_retry)
+
+    assert interface.route_to_vendor("get_stock_data", "AAPL", "2026-05-01", "2026-05-02") == "ok"
+    assert attempts == [1]
 
 
 def test_invoke_once_uses_timeout_and_returns_fallback():

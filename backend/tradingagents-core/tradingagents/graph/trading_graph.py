@@ -142,8 +142,8 @@ class TradingAgentsGraph:
         # lives in llm_clients/* so every LLM call gets the same protection.
         if self.config.get("timeout"):
             kwargs["timeout"] = self.config.get("timeout")
-        if self.config.get("llm_max_retries") is not None:
-            kwargs["max_retries"] = self.config.get("llm_max_retries")
+        if self.config.get("provider_sdk_max_retries") is not None:
+            kwargs["max_retries"] = self.config.get("provider_sdk_max_retries")
 
         if provider == "google":
             thinking_level = self.config.get("google_thinking_level")
