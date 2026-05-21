@@ -5,6 +5,7 @@ import concurrent.futures
 import json
 import logging
 import multiprocessing
+import time
 from multiprocessing.managers import SyncManager
 from datetime import datetime, timedelta
 from typing import Callable, Optional, Any
@@ -33,8 +34,16 @@ except ModuleNotFoundError:  # pragma: no cover - exercised when optional depend
 
             super().__init__(encode_events(), media_type="text/event-stream")
 
-from analysis_cache import AnalysisCacheKey, AnalysisJob, AnalysisJobStore, AnalysisResultCache, InFlightRegistry
+from analysis_cache import (
+    AnalysisCacheKey,
+    AnalysisJob,
+    AnalysisJobLimitError,
+    AnalysisJobStore,
+    AnalysisResultCache,
+    InFlightRegistry,
+)
 from config import (
+    ANALYSIS_JOB_MAX_ACTIVE,
     ANALYSIS_JOB_MAX_ENTRIES,
     ANALYSIS_JOB_TTL_SECONDS,
     ANALYSIS_RESULT_CACHE_MAX_ENTRIES,
@@ -50,11 +59,12 @@ from errors import (
     BadRequestError,
     PipelineExecutionError,
     PipelineTimeoutError,
+    RateLimitError,
     error_payload,
     sanitize_message,
 )
 from logging_config import request_id_ctx
-from rate_limiter import RateLimitPolicy, limit_request, request_policy, stream_policy
+from rate_limiter import RateLimitLease, RateLimitPolicy, limit_request, request_policy, stream_policy
 from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
 
 logger = logging.getLogger(__name__)
@@ -73,6 +83,7 @@ _IN_FLIGHT = InFlightRegistry()
 _JOB_STORE = AnalysisJobStore(
     ttl_seconds=ANALYSIS_JOB_TTL_SECONDS,
     max_entries=ANALYSIS_JOB_MAX_ENTRIES,
+    max_active_jobs=ANALYSIS_JOB_MAX_ACTIVE,
 )
 
 SUMMARY_FIELDS = {
@@ -843,23 +854,25 @@ async def _stream_progress_and_result(
 # ---------------------------------------------------------------------------
 
 
-async def _start_job(job: AnalysisJob, request: Request) -> None:
-    req = AnalysisRequest(**job.payload)
-    cached = await _RESULT_CACHE.get(job.cache_key)
-    if cached is not None:
-        job.status = "completed"
-        job.result = _response_payload(job.request_id, req, cached)
-        job.updated_at = datetime.utcnow().timestamp()
-        await job.queue.put({"type": "result", "payload": job.result})
-        job.done_event.set()
-        return
+def _job_not_found(job_id: str) -> BadRequestError:
+    return BadRequestError("Analysis job was not found.", details={"job_id": job_id})
 
-    job.status = "running"
-    job.updated_at = datetime.utcnow().timestamp()
 
+async def _start_job(job: AnalysisJob, rate_limit_lease: RateLimitLease) -> None:
     try:
-        async with limit_request(request, stream_policy()):
-            fields = await _run_stream_pipeline(req, job.request_id, job.queue, job.cancel_event)
+        req = AnalysisRequest(**job.payload)
+        cached = await _RESULT_CACHE.get(job.cache_key)
+        if cached is not None:
+            job.status = "completed"
+            job.result = _response_payload(job.request_id, req, cached)
+            job.updated_at = time.time()
+            await job.queue.put({"type": "result", "payload": job.result})
+            return
+
+        job.status = "running"
+        job.updated_at = time.time()
+
+        fields = await _run_stream_pipeline(req, job.request_id, job.queue, job.cancel_event)
         if job.cancel_event.is_set():
             raise asyncio.CancelledError()
         job.result = _response_payload(job.request_id, req, fields)
@@ -883,8 +896,17 @@ async def _start_job(job: AnalysisJob, request: Request) -> None:
             job.error = error_payload(PipelineExecutionError(internal_message=str(exc)))
         await job.queue.put({"type": "error", "payload": job.error})
     finally:
-        job.updated_at = datetime.utcnow().timestamp()
+        job.updated_at = time.time()
         job.done_event.set()
+        await rate_limit_lease.__aexit__(None, None, None)
+
+
+async def _stream_job_events_with_lease(request: Request, job: AnalysisJob, rate_limit_lease: RateLimitLease):
+    try:
+        async for event in _stream_job_events(request, job):
+            yield event
+    finally:
+        await rate_limit_lease.__aexit__(None, None, None)
 
 
 async def _stream_job_events(request: Request, job: AnalysisJob):
@@ -941,40 +963,68 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
     """Create a cancellable analysis job and return its job_id immediately."""
     req = normalize_and_validate_analysis_request(req)
     request_id = request_id_ctx.get()
-    _log_request_accepted("job", request_id, req)
-    job = await _JOB_STORE.create(request_id=request_id, cache_key=_cache_key(req), payload=req.model_dump())
-    job.task = asyncio.create_task(_start_job(job, request))
+
+    rate_limit_lease = limit_request(request, stream_policy())
+    await rate_limit_lease.__aenter__()
+    release_lease = True
+    try:
+        job = await _JOB_STORE.create(
+            owner_id=rate_limit_lease.identifier,
+            request_id=request_id,
+            cache_key=_cache_key(req),
+            payload=req.model_dump(),
+        )
+        job.task = asyncio.create_task(_start_job(job, rate_limit_lease))
+        release_lease = False
+        _log_request_accepted("job", request_id, req)
+    except AnalysisJobLimitError as exc:
+        raise RateLimitError(
+            "Too many analysis jobs are already queued or running.",
+            details={"max_active_jobs": exc.max_active_jobs},
+        ) from exc
+    finally:
+        if release_lease:
+            await rate_limit_lease.__aexit__(None, None, None)
+
     return {"job_id": job.id, "request_id": request_id, "status": job.status, "events_url": f"/api/analysis/jobs/{job.id}/events"}
 
 
 @router.get("/analysis/jobs/{job_id}")
-async def get_analysis_job(job_id: str):
-    job = await _JOB_STORE.get(job_id)
-    if job is None:
-        raise BadRequestError("Analysis job was not found.", details={"job_id": job_id})
-    return job.public_summary()
+async def get_analysis_job(job_id: str, request: Request):
+    async with limit_request(request, request_policy()) as lease:
+        job = await _JOB_STORE.get(job_id, owner_id=lease.identifier)
+        if job is None:
+            raise _job_not_found(job_id)
+        return job.public_summary()
 
 
 @router.get("/analysis/jobs/{job_id}/events")
 async def analysis_job_events(job_id: str, request: Request):
-    job = await _JOB_STORE.get(job_id)
-    if job is None:
-        raise BadRequestError("Analysis job was not found.", details={"job_id": job_id})
-    return EventSourceResponse(_stream_job_events(request, job))
+    rate_limit_lease = limit_request(request, request_policy())
+    await rate_limit_lease.__aenter__()
+    try:
+        job = await _JOB_STORE.get(job_id, owner_id=rate_limit_lease.identifier)
+        if job is None:
+            raise _job_not_found(job_id)
+    except BaseException:
+        await rate_limit_lease.__aexit__(None, None, None)
+        raise
+    return EventSourceResponse(_stream_job_events_with_lease(request, job, rate_limit_lease))
 
 
 @router.delete("/analysis/jobs/{job_id}")
-async def cancel_analysis_job(job_id: str):
-    job = await _JOB_STORE.cancel(job_id)
-    if job is None:
-        raise BadRequestError("Analysis job was not found.", details={"job_id": job_id})
-    return job.public_summary()
+async def cancel_analysis_job(job_id: str, request: Request):
+    async with limit_request(request, request_policy()) as lease:
+        job = await _JOB_STORE.cancel(job_id, owner_id=lease.identifier)
+        if job is None:
+            raise _job_not_found(job_id)
+        return job.public_summary()
 
 
 @router.delete("/analysis/{job_id}")
-async def cancel_analysis_job_alias(job_id: str):
+async def cancel_analysis_job_alias(job_id: str, request: Request):
     """Compatibility alias for cancellation endpoint."""
-    return await cancel_analysis_job(job_id)
+    return await cancel_analysis_job(job_id, request)
 
 
 @router.get("/ticker/validate")
@@ -988,7 +1038,12 @@ async def validate_ticker(ticker: str, trade_date: str, request: Request):
 
 
 @router.get("/status")
-async def api_status():
+async def api_status(request: Request):
+    async with limit_request(request, request_policy()):
+        return await _api_status_payload()
+
+
+async def _api_status_payload():
     try:
         from tradingagents.dataflows.interface import get_tool_cache_stats
         tool_cache = get_tool_cache_stats()

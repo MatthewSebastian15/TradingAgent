@@ -87,6 +87,7 @@ def test_completed_job_event_stream_replays_result():
         job = AnalysisJob(
             id="job-1",
             request_id="request-1",
+            owner_id="owner-1",
             cache_key=AnalysisCacheKey(
                 ticker="AAPL",
                 trade_date="2026-05-14",

@@ -42,6 +42,24 @@ def _env_bool(name: str, default: bool) -> bool:
     return default
 
 
+def _env_int(name: str, default: int, *, min_value: int | None = None) -> int:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        logger.warning("Invalid integer value for %s=%r; using default %s.", name, raw, default)
+        return default
+
+    if min_value is not None and value < min_value:
+        logger.warning("%s=%r is below minimum %s; using default %s.", name, raw, min_value, default)
+        return default
+
+    return value
+
+
 def _env_list(name: str, default: list[str]) -> list[str]:
     raw = os.getenv(name)
     if raw is None:
@@ -246,6 +264,7 @@ ANALYSIS_RESULT_CACHE_TTL_SECONDS = 60 * 60 * 8
 ANALYSIS_RESULT_CACHE_MAX_ENTRIES = 256
 ANALYSIS_JOB_TTL_SECONDS = 60 * 60
 ANALYSIS_JOB_MAX_ENTRIES = 256
+ANALYSIS_JOB_MAX_ACTIVE = min(_env_int("ANALYSIS_JOB_MAX_ACTIVE", 32, min_value=1), ANALYSIS_JOB_MAX_ENTRIES)
 DATA_CACHE_BACKEND = "sqlite"
 DATA_CACHE_DB_PATH = str(BASE_DIR / ".cache" / "market_data.sqlite3")
 DATA_CACHE_TTL_SECONDS = CACHE_TTL_SECONDS

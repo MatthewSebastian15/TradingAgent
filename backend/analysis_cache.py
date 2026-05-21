@@ -17,6 +17,14 @@ from typing import Any, Hashable, Literal
 AnalysisStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 
 
+class AnalysisJobLimitError(RuntimeError):
+    """Raised when the in-memory job store is at active-job capacity."""
+
+    def __init__(self, max_active_jobs: int) -> None:
+        self.max_active_jobs = max_active_jobs
+        super().__init__("Too many analysis jobs are already queued or running.")
+
+
 @dataclass(frozen=True)
 class AnalysisCacheKey:
     ticker: str
@@ -144,6 +152,7 @@ class InFlightRegistry:
 class AnalysisJob:
     id: str
     request_id: str
+    owner_id: str
     cache_key: AnalysisCacheKey
     payload: dict[str, Any]
     status: AnalysisStatus = "queued"
@@ -173,26 +182,42 @@ class AnalysisJob:
 class AnalysisJobStore:
     """In-memory job registry for job-based API and cancellation."""
 
-    def __init__(self, ttl_seconds: int, max_entries: int) -> None:
+    def __init__(self, ttl_seconds: int, max_entries: int, max_active_jobs: int | None = None) -> None:
         self.ttl_seconds = ttl_seconds
         self.max_entries = max_entries
+        self.max_active_jobs = max_active_jobs if max_active_jobs is not None else max_entries
         self._jobs: dict[str, AnalysisJob] = {}
         self._lock = asyncio.Lock()
 
-    async def create(self, *, request_id: str, cache_key: AnalysisCacheKey, payload: dict[str, Any]) -> AnalysisJob:
+    async def create(self, *, owner_id: str, request_id: str, cache_key: AnalysisCacheKey, payload: dict[str, Any]) -> AnalysisJob:
         await self.cleanup()
-        job = AnalysisJob(id=str(uuid.uuid4()), request_id=request_id, cache_key=cache_key, payload=payload)
         async with self._lock:
+            active_jobs = self._active_job_count_locked()
+            if active_jobs >= self.max_active_jobs:
+                raise AnalysisJobLimitError(self.max_active_jobs)
+
+            job = AnalysisJob(
+                id=str(uuid.uuid4()),
+                request_id=request_id,
+                owner_id=owner_id,
+                cache_key=cache_key,
+                payload=payload,
+            )
             self._jobs[job.id] = job
             await self._evict_locked()
         return job
 
-    async def get(self, job_id: str) -> AnalysisJob | None:
+    async def get(self, job_id: str, *, owner_id: str | None = None) -> AnalysisJob | None:
         async with self._lock:
-            return self._jobs.get(job_id)
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+            if owner_id is not None and job.owner_id != owner_id:
+                return None
+            return job
 
-    async def cancel(self, job_id: str) -> AnalysisJob | None:
-        job = await self.get(job_id)
+    async def cancel(self, job_id: str, *, owner_id: str | None = None) -> AnalysisJob | None:
+        job = await self.get(job_id, owner_id=owner_id)
         if job is None:
             return None
         job.cancel_event.set()
@@ -220,8 +245,13 @@ class AnalysisJobStore:
                 "jobs": len(self._jobs),
                 "running": sum(1 for job in self._jobs.values() if job.status == "running"),
                 "queued": sum(1 for job in self._jobs.values() if job.status == "queued"),
+                "active": self._active_job_count_locked(),
+                "max_active": self.max_active_jobs,
                 "ttl_seconds": self.ttl_seconds,
             }
+
+    def _active_job_count_locked(self) -> int:
+        return sum(1 for job in self._jobs.values() if job.status in {"queued", "running"})
 
     async def _evict_locked(self) -> None:
         if len(self._jobs) <= self.max_entries:

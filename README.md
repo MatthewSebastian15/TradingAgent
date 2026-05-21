@@ -348,6 +348,7 @@ Cancels a running job.
 | `DEEPSEEK_API_KEY` | DeepSeek only | DeepSeek API key |
 | `OLLAMA_BASE_URL` | Ollama only | Local or Docker Ollama URL |
 | `API_KEY` | Optional locally; required when `REQUIRE_API_KEY_FOR_RATE_LIMIT=true` | Shared API key accepted from `x-api-key` or `Authorization: Bearer ...` |
+| `ANALYSIS_JOB_MAX_ACTIVE` | No | Maximum queued/running analysis jobs kept in memory; default `32` |
 
 ### `frontend/.env`
 

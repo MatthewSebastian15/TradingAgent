@@ -8,6 +8,8 @@ from datetime import datetime
 
 import pytest
 
+from analysis_cache import AnalysisJobStore
+
 
 def _mock_result() -> dict:
     return {
@@ -174,3 +176,33 @@ def test_run_pipeline_async_cancels_worker_on_client_disconnect(monkeypatch):
         assert cancel_event.is_set()
     finally:
         executor.shutdown(wait=True, cancel_futures=True)
+
+
+def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+        return _mock_result()
+
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
+
+    payload = {"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1}
+    owner_headers = {"x-api-key": "job-owner-key"}
+    other_headers = {"x-api-key": "different-job-owner-key"}
+
+    create_response = client.post("/api/analysis/jobs", json=payload, headers=owner_headers)
+    assert create_response.status_code == 200
+    job_id = create_response.json()["job_id"]
+
+    assert client.get(f"/api/analysis/jobs/{job_id}", headers=owner_headers).status_code == 200
+
+    wrong_get = client.get(f"/api/analysis/jobs/{job_id}", headers=other_headers)
+    wrong_events = client.get(f"/api/analysis/jobs/{job_id}/events", headers=other_headers)
+    wrong_delete = client.delete(f"/api/analysis/jobs/{job_id}", headers=other_headers)
+
+    assert wrong_get.status_code == 400
+    assert wrong_get.json()["error"]["code"] == "BAD_REQUEST"
+    assert wrong_events.status_code == 400
+    assert wrong_events.json()["error"]["code"] == "BAD_REQUEST"
+    assert wrong_delete.status_code == 400
+    assert wrong_delete.json()["error"]["code"] == "BAD_REQUEST"
