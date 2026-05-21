@@ -61,14 +61,24 @@ export default function AgentLog({ status, agentProgress }) {
   const [doneIds, setDoneIds]     = useState(new Set());
   const [log, setLog]             = useState([]);
   const logRef                    = useRef(null);
+  const elapsedRef                = useRef(0);
+  const eventSeqRef               = useRef(0);
 
   useEffect(() => {
-    const t = setInterval(() => setElapsed(p => p + 1), 1000);
+    const t = setInterval(() => {
+      setElapsed(p => {
+        const next = p + 1;
+        elapsedRef.current = next;
+        return next;
+      });
+    }, 1000);
     return () => clearInterval(t);
   }, []);
 
   useEffect(() => {
     if (agentProgress === null) {
+      elapsedRef.current = 0;
+      eventSeqRef.current = 0;
       setElapsed(0);
       setActiveIds(new Set());
       setDoneIds(new Set());
@@ -98,13 +108,13 @@ export default function AgentLog({ status, agentProgress }) {
     });
 
     setLog(prev => [{
-      id: `${agentId}-${Date.now()}`,
-      ts: formatTime(elapsed),
+      id: `${agentId}-${eventSeqRef.current += 1}`,
+      ts: formatTime(elapsedRef.current),
       agent: agentName,
       status: eventStatus,
       msg: statusMessage,
     }, ...prev].slice(0, 30));
-  }, [agentProgress, elapsed]);
+  }, [agentProgress]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = 0;

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from types import SimpleNamespace
 
+from analysis_cache import AnalysisJobStore
 from rate_limiter import RateLimitPolicy
 
 
@@ -105,3 +107,59 @@ def test_configured_api_key_must_match(client, monkeypatch):
     assert rejected.json()["error"]["code"] == "RATE_LIMITED"
     assert rejected.json()["error"]["message"] == "Invalid API key."
     assert accepted.status_code == 200
+
+
+def test_job_create_rejects_invalid_api_key_before_storing_job(client, monkeypatch):
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="expected-key"))
+
+    response = client.post(
+        "/api/analysis/jobs",
+        json={"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1},
+        headers={"x-api-key": "wrong-key"},
+    )
+
+    assert response.status_code == 429
+    assert response.json()["error"]["message"] == "Invalid API key."
+    assert asyncio.run(store.stats())["jobs"] == 0
+
+
+def test_job_create_rate_limit_runs_before_storing_second_job(client, monkeypatch):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+        return {"decision": "Hold", "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []}}
+
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
+    monkeypatch.setattr(
+        "routes.analysis.stream_policy",
+        lambda: RateLimitPolicy(scope="job-create-limit-test", max_per_minute=1, max_concurrent=1),
+    )
+
+    payload = {"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1}
+    headers = {"x-api-key": "same-job-create-key"}
+
+    first = client.post("/api/analysis/jobs", json=payload, headers=headers)
+    second = client.post("/api/analysis/jobs", json=payload, headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "RATE_LIMITED"
+    assert asyncio.run(store.stats())["jobs"] == 1
+
+
+def test_status_endpoint_is_rate_limited(client, monkeypatch):
+    monkeypatch.setattr(
+        "routes.analysis.request_policy",
+        lambda: RateLimitPolicy(scope="status-limit-test", max_per_minute=1, max_concurrent=1),
+    )
+
+    headers = {"x-api-key": "same-status-key"}
+
+    first = client.get("/api/status", headers=headers)
+    second = client.get("/api/status", headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "RATE_LIMITED"
