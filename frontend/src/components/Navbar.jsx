@@ -1,15 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { createClockFormatter, resolveClockConfig } from '../utils/clock';
 
-const CLOCK_TIME_ZONE = import.meta.env.VITE_CLOCK_TIME_ZONE || 'Asia/Jakarta';
-const CLOCK_LABEL = import.meta.env.VITE_CLOCK_LABEL || 'WIB';
-const CLOCK_FORMATTER = new Intl.DateTimeFormat('en-GB', {
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-  timeZone: CLOCK_TIME_ZONE,
-});
+const CLOCK_CONFIG = resolveClockConfig();
+const CLOCK_FORMATTER = createClockFormatter(CLOCK_CONFIG);
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -20,7 +14,7 @@ function Clock() {
 
   return (
     <span className="text-bloomberg-orange font-mono text-xs tracking-wider">
-      {CLOCK_FORMATTER.format(time)} {CLOCK_LABEL}
+      {CLOCK_FORMATTER.format(time)} {CLOCK_CONFIG.label}
     </span>
   );
 }

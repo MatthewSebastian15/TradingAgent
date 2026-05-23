@@ -364,6 +364,8 @@ Cancels a running job.
 | Variable | Default | Description |
 |---|---|---|
 | `VITE_API_URL` | Empty | Backend URL. Empty uses relative `/api/*` (Docker). Set to `http://localhost:8000` for local dev. |
+| `VITE_CLOCK_TIME_ZONE` | `Asia/Jakarta` | IANA timezone used by the navbar clock |
+| `VITE_CLOCK_LABEL` | `WIB` | Label shown next to the navbar clock |
 | `VITE_ENABLE_MOCK` | `false` | Exposes `/analysis.test` in production builds |
 
 Frontend code intentionally does not read or send any API key from Vite environment variables. For shared deployments, inject backend `x-api-key` at a private reverse proxy such as the included nginx container via `BACKEND_API_KEY`.
@@ -377,7 +379,7 @@ cd backend
 python -m pytest tests -q
 ```
 
-Coverage includes ticker validation, date validation, debate round limits, rate limiting (HTTP 429), SSE progress events, and result schema shape.
+Coverage includes ticker validation, date validation, debate round limits, job ownership, request body limits, rate limiting (HTTP 429), SSE progress/replay events, config isolation, frontend stream cleanup, AgentLog de-duplication, and result schema shape.
 
 ---
 

@@ -23,6 +23,7 @@ describe('StockForm cleanup', () => {
 
   it('cancels the backend job when unmounted during a live run', async () => {
     const props = callbacks();
+    let streamAborted = false;
     const fetchMock = vi.fn((url, options = {}) => {
       if (options.method === 'POST') {
         return Promise.resolve({
@@ -34,6 +35,7 @@ describe('StockForm cleanup', () => {
       if (options.method === 'GET') {
         return new Promise((_resolve, reject) => {
           options.signal?.addEventListener('abort', () => {
+            streamAborted = true;
             const error = new Error('Aborted');
             error.name = 'AbortError';
             reject(error);
@@ -71,6 +73,8 @@ describe('StockForm cleanup', () => {
         expect.objectContaining({ method: 'DELETE', keepalive: true })
       );
     });
+    expect(streamAborted).toBe(true);
+    expect(props.onResult).not.toHaveBeenCalledWith({ error: 'Analysis cancelled.' });
   });
 
   it('clears mock pipeline timers when unmounted', () => {
