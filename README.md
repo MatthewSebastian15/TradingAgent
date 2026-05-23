@@ -43,7 +43,7 @@ The first three analyst LLM calls run in parallel after data collection. Later d
 │ FastAPI Backend                                                 │
 │ Port: 8000                                                      │
 │ Validation, request IDs, sanitized errors, rate limiting        │
-│ Job API runs analysis asynchronously and streams job events      │
+│ Job API runs analysis asynchronously and streams job events     │
 │ Legacy REST/SSE endpoints remain available for API clients      │
 └────────────────────────┬────────────────────────────────────────┘
                          │  Python subprocess
@@ -358,6 +358,8 @@ Cancels a running job.
 | `APP_ENV` | No | Defaults to `production`; set `development` or `test` explicitly for local relaxed defaults |
 | `REQUEST_BODY_MAX_BYTES` | No | Maximum request body accepted by FastAPI; default `65536` |
 | `ANALYSIS_JOB_MAX_ACTIVE` | No | Maximum queued/running analysis jobs kept in memory; default `32` |
+| `PROCESS_POOL_MAX_TASKS_PER_CHILD` | No | Recycle isolated pipeline worker processes after this many tasks; default `1` |
+| `TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS` | No | Maximum timed-out blocking calls tracked per worker process; defaults to timed-call active capacity |
 
 ### `frontend/.env`
 

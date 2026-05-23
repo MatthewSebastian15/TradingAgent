@@ -340,11 +340,13 @@ async def _api_status_payload():
         tool_cache = {"backend": "unavailable", "error": sanitize_message(str(exc))}
 
     try:
-        from tradingagents.utils_resilience import get_circuit_states
+        from tradingagents.utils_resilience import get_circuit_states, get_timeout_stats
 
         circuits = get_circuit_states()
+        timeout_workers = get_timeout_stats()
     except Exception as exc:  # pragma: no cover
         circuits = {"error": sanitize_message(str(exc))}
+        timeout_workers = {"error": sanitize_message(str(exc))}
 
     cache_stats = await _RESULT_CACHE.stats()
     inflight_stats = await _IN_FLIGHT.stats()
@@ -363,4 +365,5 @@ async def _api_status_payload():
         "jobs": job_stats,
         "tool_cache": tool_cache,
         "circuits": circuits,
+        "timeout_workers": timeout_workers,
     }

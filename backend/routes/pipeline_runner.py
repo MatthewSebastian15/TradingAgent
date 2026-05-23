@@ -4,13 +4,14 @@ import asyncio
 import concurrent.futures
 import logging
 import multiprocessing
+import sys
 from datetime import datetime, timedelta
 from multiprocessing.managers import SyncManager
 from typing import Any, Callable, Optional
 
 from fastapi import Request
 
-from config import PIPELINE_TIMEOUT_SECONDS, PROCESS_POOL_WORKERS, build_tradingagents_config
+from config import PIPELINE_TIMEOUT_SECONDS, PROCESS_POOL_MAX_TASKS_PER_CHILD, PROCESS_POOL_WORKERS, build_tradingagents_config
 from errors import ApiError, BadRequestError, PipelineExecutionError, PipelineTimeoutError, sanitize_message
 from routes.serializers import parse_final_result
 from routes.validation import AnalysisRequest
@@ -208,10 +209,13 @@ async def get_executor() -> concurrent.futures.ProcessPoolExecutor:
     if _EXECUTOR is None:
         async with _EXECUTOR_LOCK:
             if _EXECUTOR is None:
-                _EXECUTOR = concurrent.futures.ProcessPoolExecutor(
-                    max_workers=PROCESS_POOL_WORKERS,
-                    mp_context=multiprocessing.get_context("spawn"),
-                )
+                executor_kwargs = {
+                    "max_workers": PROCESS_POOL_WORKERS,
+                    "mp_context": multiprocessing.get_context("spawn"),
+                }
+                if sys.version_info >= (3, 11):
+                    executor_kwargs["max_tasks_per_child"] = PROCESS_POOL_MAX_TASKS_PER_CHILD
+                _EXECUTOR = concurrent.futures.ProcessPoolExecutor(**executor_kwargs)
     return _EXECUTOR
 
 
