@@ -1,16 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+const CLOCK_TIME_ZONE = import.meta.env.VITE_CLOCK_TIME_ZONE || 'Asia/Jakarta';
+const CLOCK_LABEL = import.meta.env.VITE_CLOCK_LABEL || 'WIB';
+const CLOCK_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+  timeZone: CLOCK_TIME_ZONE,
+});
+
 function Clock() {
   const [time, setTime] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-  const pad = (n) => String(n).padStart(2, '0');
+
   return (
     <span className="text-bloomberg-orange font-mono text-xs tracking-wider">
-      {pad(time.getHours())}:{pad(time.getMinutes())}:{pad(time.getSeconds())} WIB
+      {CLOCK_FORMATTER.format(time)} {CLOCK_LABEL}
     </span>
   );
 }

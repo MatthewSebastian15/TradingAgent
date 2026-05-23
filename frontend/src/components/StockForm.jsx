@@ -1,15 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-
-// VITE_API_URL controls where API calls are sent.
-// Docker (nginx proxy): leave empty and let /api/* proxy to backend.
-// Local dev: set VITE_API_URL=http://localhost:8000.
-const API_URL = import.meta.env.VITE_API_URL || '';
-const BROWSER_API_KEY_ENABLED = import.meta.env.VITE_ENABLE_BROWSER_API_KEY === 'true';
-const API_KEY = BROWSER_API_KEY_ENABLED ? (import.meta.env.VITE_API_KEY || '') : '';
-
-if (import.meta.env.VITE_API_KEY && !BROWSER_API_KEY_ENABLED) {
-  console.warn('VITE_API_KEY is not sent unless VITE_ENABLE_BROWSER_API_KEY=true.');
-}
+import { buildApiUrl, buildAuthHeaders, buildHeaders, readHttpError } from '../utils/api';
 
 const DEFAULT_DEBATE_ROUNDS = 3;
 
@@ -40,37 +30,9 @@ const DEPTH_OPTIONS = [
   { value: 'deep',     label: 'DEEP',     runtime: 'MORE RETRIES / MORE PATIENCE' },
 ];
 
-function buildApiUrl(path) {
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  const base = API_URL.trim().replace(/\/+$/, '');
-  if (!base) return `/api${cleanPath}`;
-  const cleanBase = base.endsWith('/api') ? base.slice(0, -4) : base;
-  return `${cleanBase}/api${cleanPath}`;
-}
-
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-function buildHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  if (API_KEY) headers['x-api-key'] = API_KEY;
-  return headers;
-}
-
-function buildAuthHeaders() {
-  return API_KEY ? { 'x-api-key': API_KEY } : {};
-}
-
-async function readHttpError(res) {
-  const text = await res.text();
-  try {
-    const json = JSON.parse(text);
-    return json.error?.message || json.message || `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}: ${text || res.statusText}`;
-  }
 }
 
 function parseSseBlock(block) {

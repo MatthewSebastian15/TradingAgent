@@ -63,6 +63,7 @@ export default function AgentLog({ status, agentProgress }) {
   const logRef                    = useRef(null);
   const elapsedRef                = useRef(0);
   const eventSeqRef               = useRef(0);
+  const lastEventSignatureRef     = useRef('');
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -79,6 +80,7 @@ export default function AgentLog({ status, agentProgress }) {
     if (agentProgress === null) {
       elapsedRef.current = 0;
       eventSeqRef.current = 0;
+      lastEventSignatureRef.current = '';
       setElapsed(0);
       setActiveIds(new Set());
       setDoneIds(new Set());
@@ -93,6 +95,9 @@ export default function AgentLog({ status, agentProgress }) {
     const eventStatus = normalizeStatus(agentProgress.status);
     const statusMessage = agentProgress.status_message || '';
     const isPipelineAgent = PIPELINE_IDS.has(agentId);
+    const eventSignature = [agentId, eventStatus, statusMessage].join('|');
+    if (eventSignature === lastEventSignatureRef.current) return;
+    lastEventSignatureRef.current = eventSignature;
 
     setActiveIds(prev => {
       const next = new Set(prev);

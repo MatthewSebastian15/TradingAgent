@@ -74,3 +74,20 @@ def test_parse_final_result_does_not_render_full_decision_from_portfolio_object(
 
     assert parsed["decision"] == "Hold"
     assert parsed["full_decision"] == ""
+
+
+def test_parse_final_result_treats_invalid_pd_obj_as_missing():
+    from routes.analysis import _parse_final_result
+    from tradingagents.agents.schemas import PortfolioRating
+
+    parsed = _parse_final_result(
+        "raw final decision",
+        {"rating": "NOT_A_VALID_RATING", "confidence_score": "not-a-number"},
+        PortfolioRating,
+        {},
+    )
+
+    assert parsed["decision"] is None
+    assert parsed["full_decision"] == "raw final decision"
+    assert parsed["key_catalysts"] == []
+    assert parsed["invalidation_conditions"] == []

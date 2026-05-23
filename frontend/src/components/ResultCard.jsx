@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPrice } from '../utils/formatting';
 
 function parseBold(text) {
   if (!text) return null;
@@ -7,27 +8,6 @@ function parseBold(text) {
       ? <strong key={i} className="text-bloomberg-white font-semibold">{p}</strong>
       : p
   );
-}
-
-/**
- * Return a currency-prefixed price string based on the ticker's exchange suffix.
- *   .JK  -> IDR  (Rp)
- *   .HK  -> HKD  (HK$)
- *   .T   -> JPY  (¥)
- *   .DE  -> EUR  (€)
- *   .L   -> GBP  (£)
- *   else -> USD  ($)
- */
-function formatPrice(price, ticker = '') {
-  if (price === null || price === undefined || price === '') return null;
-  const value = typeof price === 'number' ? price.toLocaleString() : String(price);
-  const t = ticker.toUpperCase();
-  if (t.endsWith('.JK')) return `Rp ${value}`;
-  if (t.endsWith('.HK')) return `HK$ ${value}`;
-  if (t.endsWith('.T'))  return `¥${value}`;
-  if (t.endsWith('.DE')) return `€${value}`;
-  if (t.endsWith('.L'))  return `£${value}`;
-  return `$${value}`;
 }
 
 function getError(e) {

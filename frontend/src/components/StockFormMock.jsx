@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getMockAnalysisResponse, MOCK_PIPELINE_STEPS } from '../mockData';
 
 const DEFAULT_DEBATE_ROUNDS = 3;
@@ -48,6 +48,12 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
     timersRef.current.push(id);
     return id;
   }
+
+  useEffect(() => {
+    return () => {
+      clearTimers();
+    };
+  }, []);
 
   function validate() {
     const t = ticker.trim().toUpperCase();
