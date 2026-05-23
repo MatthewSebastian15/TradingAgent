@@ -103,6 +103,7 @@ def call_with_retry(
     circuit_failure_threshold: int = 5,
     circuit_recovery_seconds: int = 60,
     retryable: tuple[type[BaseException], ...] = (Exception,),
+    should_retry: Callable[[BaseException], bool] | None = None,
 ) -> T:
     circuit = get_circuit(service_name, circuit_failure_threshold, circuit_recovery_seconds)
     attempt = 0
@@ -118,6 +119,8 @@ def call_with_retry(
         except retryable as exc:
             last_exc = exc
             circuit.record_failure(exc if isinstance(exc, Exception) else Exception(str(exc)))
+            if should_retry is not None and not should_retry(exc):
+                break
             if attempt >= max_attempts:
                 break
             sleep_for = min(max_delay, base_delay * (2 ** (attempt - 1)))

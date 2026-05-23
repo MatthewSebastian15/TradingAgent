@@ -5,7 +5,7 @@ from rich.console import Console
 
 from cli.models import AnalystType
 try:
-    from config import MODEL_CATALOG as _MODEL_CATALOG
+    from tradingagents.llm_clients.model_catalog import MODEL_CATALOG as _MODEL_CATALOG
 except ImportError:
     # CLI used standalone without backend on path — provide a minimal inline catalog
     _MODEL_CATALOG: dict = {}

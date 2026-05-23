@@ -1,6 +1,6 @@
+import asyncio
 import logging
 import re
-import time
 from typing import Any, Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -31,13 +31,19 @@ def _extract_retry_delay(error_message: str) -> float:
     return DEFAULT_RETRY_DELAY
 
 
+def _is_rate_limit_error(exc: BaseException) -> bool:
+    error_str = str(exc)
+    return "429" in error_str or "RESOURCE_EXHAUSTED" in error_str
+
+
 class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
-    """ChatGoogleGenerativeAI dengan normalized content output dan retry 429.
+    """ChatGoogleGenerativeAI dengan normalized content output.
 
     Gemini Free Tier membatasi 250.000 token per menit. Pipeline multi-agent
-    ini bisa melewati batas itu dalam satu run. Kelas ini menangkap error 429
-    secara otomatis, menunggu sesuai retryDelay dari Gemini, lalu mencoba lagi
-    sampai MAX_RETRIES_429 kali sebelum menyerah dan melempar exception.
+    ini bisa melewati batas itu dalam satu run. Invoke sinkron tidak tidur
+    setelah 429 agar worker thread segera bebas dan pipeline memakai fallback
+    lokal. Caller async dapat memakai ainvoke untuk menunggu dengan
+    asyncio.sleep tanpa memblokir thread.
     """
 
     def invoke(self, input, config=None, **kwargs):
@@ -62,21 +68,39 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
                 max_delay=float(cfg.get("llm_retry_max_delay", 30)),
                 circuit_failure_threshold=int(cfg.get("circuit_breaker_failure_threshold", 5)),
                 circuit_recovery_seconds=int(cfg.get("circuit_breaker_recovery_seconds", 60)),
+                should_retry=lambda exc: not _is_rate_limit_error(exc),
             )
         except Exception as exc:
-            error_str = str(exc)
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                raw_delay = _extract_retry_delay(error_str)
+            if _is_rate_limit_error(exc):
+                raw_delay = _extract_retry_delay(str(exc))
                 max_wait = float(cfg.get("llm_429_max_wait_seconds", 20))
                 delay = min(raw_delay, max_wait)
                 logger.warning(
-                    "Gemini rate limit. Respecting retryDelay %.0fs before final retry (capped at %.0fs)",
+                    "Gemini rate limit. retryDelay %.0fs was returned and capped at %.0fs; "
+                    "sync pipeline will fail fast instead of blocking a worker thread.",
                     raw_delay,
                     delay,
                 )
-                time.sleep(delay)
-                return do_call()
             raise
+
+    async def ainvoke(self, input, config=None, **kwargs):
+        """Async Gemini invoke can honor retryDelay without occupying a worker thread."""
+        try:
+            return await asyncio.to_thread(self.invoke, input, config, **kwargs)
+        except Exception as exc:
+            if not _is_rate_limit_error(exc):
+                raise
+            cfg = get_config()
+            raw_delay = _extract_retry_delay(str(exc))
+            max_wait = float(cfg.get("llm_429_max_wait_seconds", 20))
+            delay = min(raw_delay, max_wait)
+            logger.warning(
+                "Gemini async rate limit. Waiting %.0fs before one retry (retryDelay %.0fs).",
+                delay,
+                raw_delay,
+            )
+            await asyncio.sleep(delay)
+            return await asyncio.to_thread(self.invoke, input, config, **kwargs)
 
 
 class GoogleClient(BaseLLMClient):

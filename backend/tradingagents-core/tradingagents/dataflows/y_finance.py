@@ -4,6 +4,8 @@ from dateutil.relativedelta import relativedelta
 import pandas as pd
 from tradingagents.yfinance_runtime import yf
 import os
+import threading
+from collections import OrderedDict
 from .stockstats_utils import StockstatsUtils, _clean_dataframe, yf_retry, load_ohlcv, filter_financials_by_date
 
 
@@ -78,7 +80,16 @@ def normalize_ticker(ticker: str) -> str:
 # Shared yf.Ticker object cache (per-symbol, single Python process)
 # ---------------------------------------------------------------------------
 
-_ticker_cache: dict[str, object] = {}
+def _ticker_cache_max_entries() -> int:
+    try:
+        return max(1, int(os.getenv("YFINANCE_TICKER_CACHE_MAX_ENTRIES", "512")))
+    except ValueError:
+        return 512
+
+
+_TICKER_CACHE_MAX_ENTRIES = _ticker_cache_max_entries()
+_ticker_cache: OrderedDict[str, object] = OrderedDict()
+_ticker_cache_lock = threading.RLock()
 
 
 def _get_ticker(symbol: str):
@@ -86,14 +97,22 @@ def _get_ticker(symbol: str):
 
     Creating a new yf.Ticker object for every financial-statement call
     triggers repeated DNS/HTTP resolution for the same instrument. Reusing
-    one object per symbol eliminates that overhead inside a single pipeline
-    run. The cache is process-scoped and intentionally never evicted — it
-    holds only lightweight proxy objects, not downloaded data.
+    one object per symbol eliminates that overhead inside a single process.
+    The cache is bounded LRU so long-running API workers do not retain an
+    unbounded number of unique symbols.
     """
     normalized = normalize_ticker(symbol)
-    if normalized not in _ticker_cache:
-        _ticker_cache[normalized] = yf.Ticker(normalized)
-    return _ticker_cache[normalized]
+    with _ticker_cache_lock:
+        cached = _ticker_cache.get(normalized)
+        if cached is not None:
+            _ticker_cache.move_to_end(normalized)
+            return cached
+
+        ticker_obj = yf.Ticker(normalized)
+        _ticker_cache[normalized] = ticker_obj
+        if len(_ticker_cache) > _TICKER_CACHE_MAX_ENTRIES:
+            _ticker_cache.popitem(last=False)
+        return ticker_obj
 
 def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],

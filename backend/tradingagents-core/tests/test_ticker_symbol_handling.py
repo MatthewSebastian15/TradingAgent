@@ -17,5 +17,29 @@ class TickerSymbolHandlingTests(unittest.TestCase):
         self.assertIn("exchange suffix", context)
 
 
+def test_yfinance_ticker_cache_evicts_oldest_symbol(monkeypatch):
+    from tradingagents.dataflows import y_finance
+
+    created = []
+
+    class FakeYF:
+        @staticmethod
+        def Ticker(symbol):
+            created.append(symbol)
+            return {"symbol": symbol}
+
+    monkeypatch.setattr(y_finance, "yf", FakeYF)
+    monkeypatch.setattr(y_finance, "_TICKER_CACHE_MAX_ENTRIES", 2)
+    y_finance._ticker_cache.clear()
+
+    y_finance._get_ticker("AAA")
+    y_finance._get_ticker("BBB")
+    y_finance._get_ticker("AAA")
+    y_finance._get_ticker("CCC")
+
+    assert list(y_finance._ticker_cache.keys()) == ["AAA", "CCC"]
+    assert created == ["AAA", "BBB", "CCC"]
+
+
 if __name__ == "__main__":
     unittest.main()

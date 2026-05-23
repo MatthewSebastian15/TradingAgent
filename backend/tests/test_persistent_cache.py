@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from persistent_cache import SQLiteTTLCache
 
@@ -36,3 +37,16 @@ def test_sqlite_ttl_cache_ignores_non_json_legacy_values(tmp_path):
         row = conn.execute("SELECT key FROM cache WHERE key = ?", (key_hash,)).fetchone()
 
     assert row is None
+
+
+def test_sqlite_ttl_cache_serializes_concurrent_writes(tmp_path):
+    cache = SQLiteTTLCache(str(tmp_path / "market_data.sqlite3"), ttl_seconds=60, max_entries=200)
+
+    def write_value(index: int) -> None:
+        cache.set({"key": index}, {"value": index})
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        list(pool.map(write_value, range(100)))
+
+    assert cache.stats()["entries"] == 100
+    assert cache.get({"key": 42}) == {"value": 42}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -31,7 +32,40 @@ from routes.analysis import router as analysis_router, shutdown_executor
 configure_logging()
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title=APP_NAME)
+
+async def validate_config() -> None:
+    """Fail fast when provider keys, models, or writable dirs are invalid."""
+    errors = validate_startup_config()
+
+    if errors:
+        for msg in errors:
+            logger.critical("STARTUP CONFIG ERROR: %s", msg)
+        logger.critical("%d config error(s) found. Fix them and restart the server.", len(errors))
+        sys.exit(1)
+
+    logger.info(
+        "Startup validation passed. Provider: %s | deep: %s | quick: %s",
+        llm.provider,
+        llm.deep_think_llm,
+        llm.quick_think_llm,
+    )
+
+
+async def shutdown_resources() -> None:
+    """Release process-pool workers on server shutdown."""
+    await shutdown_executor()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await validate_config()
+    try:
+        yield
+    finally:
+        await shutdown_resources()
+
+
+app = FastAPI(title=APP_NAME, lifespan=lifespan)
 
 app.add_middleware(RequestBodyLimitMiddleware, max_bytes=REQUEST_BODY_MAX_BYTES)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -58,28 +92,3 @@ app.include_router(analysis_router, prefix="/api")
 async def health_check() -> dict:
     """Lightweight liveness probe for Docker healthcheck and load balancers."""
     return {"status": "ok", "provider": llm.provider}
-
-
-@app.on_event("startup")
-async def validate_config() -> None:
-    """Fail fast when provider keys, models, or writable dirs are invalid."""
-    errors = validate_startup_config()
-
-    if errors:
-        for msg in errors:
-            logger.critical("STARTUP CONFIG ERROR: %s", msg)
-        logger.critical("%d config error(s) found. Fix them and restart the server.", len(errors))
-        sys.exit(1)
-
-    logger.info(
-        "Startup validation passed. Provider: %s | deep: %s | quick: %s",
-        llm.provider,
-        llm.deep_think_llm,
-        llm.quick_think_llm,
-    )
-
-
-@app.on_event("shutdown")
-async def shutdown_resources() -> None:
-    """Release process-pool workers on server shutdown."""
-    await shutdown_executor()
