@@ -22,24 +22,13 @@ ResponseDetail = Literal["summary", "full", "debug"]
 
 
 class AnalysisRequest(BaseModel):
-    """Payload accepted by /api/analyze and /api/analyze/stream."""
+    """Payload accepted by analysis API entry points."""
 
     ticker: str = Field(..., min_length=1, max_length=12)
     trade_date: str
     max_debate_rounds: int = Field(default=DEFAULT_MAX_DEBATE_ROUNDS)
     analysis_depth: AnalysisDepth = Field(default=DEFAULT_ANALYSIS_DEPTH)
     response_detail: ResponseDetail = Field(default="full")
-
-
-class AnalysisJobRequest(AnalysisRequest):
-    """Payload accepted by the job-based analysis API."""
-
-
-class TickerValidationResponse(BaseModel):
-    ticker: str
-    trade_date: str
-    valid: bool
-    message: str
 
 
 def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisRequest:
