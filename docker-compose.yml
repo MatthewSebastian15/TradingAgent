@@ -29,6 +29,8 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     container_name: tradingagent-frontend
+    environment:
+      BACKEND_API_KEY: ${BACKEND_API_KEY:-}
     depends_on:
       backend:
         condition: service_healthy

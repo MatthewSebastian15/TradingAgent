@@ -272,6 +272,30 @@ def _run_pipeline_with_progress_worker(
     )
 
 
+def _preflight_market_data_worker(
+    ticker: str,
+    trade_date: str,
+    max_debate_rounds: int,
+    analysis_depth: str,
+    response_detail: str,
+) -> str:
+    """Fetch a small price sample inside an isolated worker process."""
+    from tradingagents.dataflows.config import use_config
+    from tradingagents.dataflows.interface import route_to_vendor
+
+    config = build_tradingagents_config(
+        max_debate_rounds=max_debate_rounds,
+        analysis_depth=analysis_depth,
+        response_detail=response_detail,
+    )
+    trade_dt = datetime.strptime(trade_date, "%Y-%m-%d")
+    start = (trade_dt - timedelta(days=10)).strftime("%Y-%m-%d")
+    end = (trade_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    with use_config(config):
+        return str(route_to_vendor("get_stock_data", ticker, start, end))
+
+
 def _parse_final_result(
     full_decision: str,
     pd_obj: object | None,
@@ -614,26 +638,32 @@ def _log_request_accepted(mode: str, request_id: str, req: AnalysisRequest) -> N
 
 async def _preflight_market_data(req: AnalysisRequest) -> None:
     """Fail fast for obviously invalid tickers before any Gemini call."""
-    from tradingagents.dataflows.config import use_config
     from tradingagents.dataflows.data_quality import looks_missing
-    from tradingagents.dataflows.interface import route_to_vendor
 
-    config = build_tradingagents_config(
-        max_debate_rounds=req.max_debate_rounds,
-        analysis_depth=req.analysis_depth,
-        response_detail=req.response_detail,
+    loop = asyncio.get_running_loop()
+    executor = await _get_executor()
+    future = loop.run_in_executor(
+        executor,
+        _preflight_market_data_worker,
+        req.ticker,
+        req.trade_date,
+        req.max_debate_rounds,
+        req.analysis_depth,
+        req.response_detail,
     )
-
-    trade_dt = datetime.strptime(req.trade_date, "%Y-%m-%d")
-    start = (trade_dt - timedelta(days=10)).strftime("%Y-%m-%d")
-    end = (trade_dt + timedelta(days=1)).strftime("%Y-%m-%d")
-
-    def check() -> str:
-        with use_config(config):
-            return str(route_to_vendor("get_stock_data", req.ticker, start, end))
-
     try:
-        sample = await asyncio.to_thread(check)
+        sample = await asyncio.wait_for(future, timeout=PIPELINE_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError as exc:
+        if future.done():
+            raise BadRequestError(
+                "Ticker preflight failed before the LLM pipeline started.",
+                details={"ticker": req.ticker, "reason": sanitize_message(str(exc))},
+            ) from exc
+        future.cancel()
+        raise BadRequestError(
+            "Ticker preflight timed out before the LLM pipeline started.",
+            details={"ticker": req.ticker, "trade_date": req.trade_date},
+        ) from exc
     except Exception as exc:
         raise BadRequestError(
             "Ticker preflight failed before the LLM pipeline started.",
@@ -741,111 +771,76 @@ async def _run_stream_pipeline(
     """Run a progress-capable pipeline and cache its final result."""
     loop = asyncio.get_running_loop()
 
-    if _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress"):
-        await _preflight_market_data(req)
+    await _preflight_market_data(req)
 
-        manager = await _get_cancel_manager()
-        progress_queue = manager.Queue()
-        worker_cancel_event = manager.Event()
-        executor = await _get_executor()
-        future = loop.run_in_executor(
-            executor,
-            _run_pipeline_with_progress_worker,
-            req.ticker,
-            req.trade_date,
-            req.max_debate_rounds,
-            req.analysis_depth,
-            req.response_detail,
-            request_id,
-            progress_queue,
-            worker_cancel_event,
-        )
+    manager = await _get_cancel_manager()
+    progress_queue = manager.Queue()
+    worker_cancel_event = manager.Event()
+    executor = await _get_executor()
+    future = loop.run_in_executor(
+        executor,
+        _run_pipeline_with_progress_worker,
+        req.ticker,
+        req.trade_date,
+        req.max_debate_rounds,
+        req.analysis_depth,
+        req.response_detail,
+        request_id,
+        progress_queue,
+        worker_cancel_event,
+    )
 
-        async def pump_progress() -> None:
-            while True:
+    async def pump_progress() -> None:
+        empty_after_done = 0
+        while True:
+            try:
+                item = progress_queue.get(False)
+            except thread_queue.Empty:
                 if future.done():
-                    try:
-                        item = progress_queue.get(False)
-                    except thread_queue.Empty:
+                    empty_after_done += 1
+                    if empty_after_done >= 5:
                         return
-                else:
-                    try:
-                        item = await asyncio.to_thread(progress_queue.get, True, 0.5)
-                    except thread_queue.Empty:
-                        continue
-                await queue.put(item)
-
-        async def watch_cancel() -> None:
-            if cancel_event is None:
-                return
-            while not future.done():
-                if cancel_event.is_set():
-                    _set_cancel_event(worker_cancel_event)
-                    future.cancel()
-                    return
+                    await asyncio.sleep(0.1)
+                    continue
                 await asyncio.sleep(0.2)
+                continue
+            empty_after_done = 0
+            await queue.put(item)
 
-        pump_task = asyncio.create_task(pump_progress())
-        cancel_task = asyncio.create_task(watch_cancel())
+    async def watch_cancel() -> None:
+        if cancel_event is None:
+            return
+        while not future.done():
+            if cancel_event.is_set():
+                _set_cancel_event(worker_cancel_event)
+                future.cancel()
+                return
+            await asyncio.sleep(0.2)
+
+    pump_task = asyncio.create_task(pump_progress())
+    cancel_task = asyncio.create_task(watch_cancel())
+    try:
+        fields = await asyncio.wait_for(asyncio.shield(future), timeout=PIPELINE_TIMEOUT_SECONDS)
         try:
-            fields = await asyncio.wait_for(asyncio.shield(future), timeout=PIPELINE_TIMEOUT_SECONDS)
-            try:
-                await asyncio.wait_for(pump_task, timeout=2)
-            except asyncio.TimeoutError:
-                logger.debug("Timed out while draining worker progress queue", extra={"request_id": request_id})
+            await asyncio.wait_for(pump_task, timeout=2)
         except asyncio.TimeoutError:
-            _set_cancel_event(worker_cancel_event)
-            future.cancel()
-            raise
-        except asyncio.CancelledError:
-            _set_cancel_event(worker_cancel_event)
-            future.cancel()
-            raise
-        finally:
-            for task in (pump_task, cancel_task):
-                if not task.done():
-                    task.cancel()
-    else:
-        def progress_callback(event: dict) -> None:
-            payload = {
-                "request_id": request_id,
-                "ticker": req.ticker,
-                "trade_date": req.trade_date,
-                **event,
-            }
-            loop.call_soon_threadsafe(queue.put_nowait, {"type": "progress", "payload": payload})
-
-        def is_cancelled() -> bool:
-            return bool(cancel_event and cancel_event.is_set())
-
-        def run() -> dict:
-            try:
-                return _run_pipeline_with_progress(
-                    req.ticker,
-                    req.trade_date,
-                    req.max_debate_rounds,
-                    req.analysis_depth,
-                    req.response_detail,
-                    request_id,
-                    progress_callback,
-                    is_cancelled,
-                )
-            except TypeError as exc:
-                logger.debug("Using legacy _run_pipeline_with_progress signature: %s", exc)
-                return _run_pipeline_with_progress(
-                    req.ticker,
-                    req.trade_date,
-                    req.max_debate_rounds,
-                    request_id,
-                    progress_callback,
-                )
-
-        fields = await asyncio.wait_for(asyncio.to_thread(run), timeout=PIPELINE_TIMEOUT_SECONDS)
+            logger.debug("Timed out while draining worker progress queue", extra={"request_id": request_id})
+    except asyncio.TimeoutError:
+        _set_cancel_event(worker_cancel_event)
+        future.cancel()
+        raise
+    except asyncio.CancelledError:
+        _set_cancel_event(worker_cancel_event)
+        future.cancel()
+        raise
+    finally:
+        for task in (pump_task, cancel_task):
+            if not task.done():
+                task.cancel()
 
     fields = _with_data_fetched_at(fields)
     shaped = _shape_result(fields, req.response_detail)
-    if _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress"):
-        await _RESULT_CACHE.set(_cache_key(req), shaped)
+    await _RESULT_CACHE.set(_cache_key(req), shaped)
     return shaped
 
 

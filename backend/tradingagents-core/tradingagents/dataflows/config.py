@@ -9,8 +9,6 @@ from typing import Dict, Iterator, Optional
 import tradingagents.default_config as default_config
 
 _DEFAULT_CONFIG: Dict = copy.deepcopy(default_config.DEFAULT_CONFIG)
-_config: Dict = copy.deepcopy(_DEFAULT_CONFIG)
-_config_lock = threading.RLock()
 _thread_config = threading.local()
 _context_config: ContextVar[Optional[Dict]] = ContextVar("tradingagents_config", default=None)
 
@@ -24,10 +22,10 @@ def _snapshot(config: Dict | None = None) -> Dict:
 
 
 def initialize_config():
-    """Initialize the process fallback configuration with default values."""
-    global _config
-    with _config_lock:
-        _config = copy.deepcopy(_DEFAULT_CONFIG)
+    """Clear config overrides for the current execution context/thread."""
+    _context_config.set(None)
+    if hasattr(_thread_config, "value"):
+        delattr(_thread_config, "value")
 
 
 def set_config(config: Dict):
@@ -36,16 +34,13 @@ def set_config(config: Dict):
     The old implementation mutated one module-level dictionary. In a web API,
     concurrent analyses could overwrite each other's provider, depth, timeout,
     and retry values. This function now installs an isolated snapshot in both a
-    ContextVar and thread-local storage. A process fallback is retained for
-    legacy call paths that do not propagate context into their own worker
-    threads, but normal API paths should read the scoped value.
+    ContextVar and thread-local storage only. There is deliberately no
+    process-global mutable fallback; unscoped reads return defaults instead of
+    another job's most recent config.
     """
-    global _config
     scoped = _snapshot(config)
     _context_config.set(scoped)
     _thread_config.value = scoped
-    with _config_lock:
-        _config = copy.deepcopy(scoped)
 
 
 @contextmanager
@@ -76,8 +71,7 @@ def get_config() -> Dict:
     if thread_scoped is not None:
         return copy.deepcopy(thread_scoped)
 
-    with _config_lock:
-        return copy.deepcopy(_config)
+    return copy.deepcopy(_DEFAULT_CONFIG)
 
 
 initialize_config()

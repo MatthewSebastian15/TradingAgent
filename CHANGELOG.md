@@ -36,6 +36,9 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Improved dashboard layout, analysis form, result cards, and agent progress log.
 - Refactored backend analysis flow so REST and SSE endpoints share the same core logic.
 - Improved backend reliability, error handling, logging, and rate limiting.
+- Scoped TradingAgents runtime config per context/thread instead of mutating process-global config during concurrent jobs.
+- Moved analysis preflight, REST, job, and SSE pipeline execution onto isolated process-pool workers.
+- Changed frontend API-key handling so browser code never reads or sends API keys; Docker nginx can inject `x-api-key` server-side with `BACKEND_API_KEY`.
 - Improved analysis pipeline performance with parallel analyst execution.
 - Improved mock data and result rendering.
 - Switched the documented frontend analysis flow to the job API used by the real UI.
@@ -49,6 +52,7 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Fixed provider and ticker handling.
 - Fixed merge conflicts in the main branch.
 - Removed unused validation models, an unused balanced-pipeline data helper, and unused analyst imports.
+- Reworked blocking-call timeout handling so timed-out calls do not occupy a shared timeout worker pool.
 
 ### Security
 - Improved API-key-aware rate limiting.

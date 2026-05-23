@@ -22,16 +22,21 @@ def _collect_sse_events(response_text: str) -> list[tuple[str | None, dict]]:
 
 
 def test_sse_sends_progress_and_final_result(client, monkeypatch):
-    def fake_run_pipeline_with_progress(ticker, trade_date, max_debate_rounds, request_id, progress_callback=None):
-        if progress_callback:
-            progress_callback(
-                {
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+        await queue.put(
+            {
+                "type": "progress",
+                "payload": {
+                    "request_id": request_id,
+                    "ticker": req.ticker,
+                    "trade_date": req.trade_date,
                     "agent_id": "market_analyst",
                     "agent_name": "Market Analyst",
                     "status": "completed",
                     "status_message": "Mock market analysis completed.",
-                }
-            )
+                },
+            }
+        )
         return {
             "decision": "Buy",
             "full_decision": "Mocked streaming decision",
@@ -54,12 +59,12 @@ def test_sse_sends_progress_and_final_result(client, monkeypatch):
             "data_quality": {"price_data": "ok", "fundamentals": "partial", "news": "missing", "warnings": []},
         }
 
-    monkeypatch.setattr("routes.analysis._run_pipeline_with_progress", fake_run_pipeline_with_progress)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
 
     with client.stream(
         "POST",
         "/api/analyze/stream",
-        json={"ticker": "BBCA.JK", "trade_date": "2026-05-14", "max_debate_rounds": 1},
+        json={"ticker": "AAPL", "trade_date": "2026-05-17", "max_debate_rounds": 1},
         headers={"x-api-key": "sse-test-key"},
     ) as response:
         assert response.status_code == 200
@@ -70,7 +75,7 @@ def test_sse_sends_progress_and_final_result(client, monkeypatch):
     assert "result" in event_names
 
     result_payload = next(payload for name, payload in events if name == "result")
-    assert result_payload["ticker"] == "BBCA.JK"
+    assert result_payload["ticker"] == "AAPL"
     assert result_payload["decision"] == "Buy"
     assert result_payload["data_quality"]["price_data"] == "ok"
 
