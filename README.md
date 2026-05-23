@@ -36,14 +36,15 @@ The first three analyst LLM calls run in parallel after data collection. Later d
 │ Routes: /home, /analysis, /analysis.test                        │
 │ Components: StockForm, AgentLog, ResultCard, mock UI            │
 └────────────────────────┬────────────────────────────────────────┘
-                         │ POST /api/analyze/stream (SSE)
-                         │ POST /api/analyze (JSON)
+                         │ POST /api/analysis/jobs (create job)
+                         │ GET /api/analysis/jobs/{job_id}/events (SSE)
+                         │ DELETE /api/analysis/jobs/{job_id} (cancel)
 ┌────────────────────────▼────────────────────────────────────────┐
 │ FastAPI Backend                                                 │
 │ Port: 8000                                                      │
 │ Validation, request IDs, sanitized errors, rate limiting        │
-│ REST uses ProcessPoolExecutor                                   │
-│ SSE uses real progress callbacks from the balanced pipeline     │
+│ Job API runs analysis asynchronously and streams job events      │
+│ Legacy REST/SSE endpoints remain available for API clients      │
 └────────────────────────┬────────────────────────────────────────┘
                          │  Python subprocess
 ┌────────────────────────▼────────────────────────────────────────┐
@@ -75,7 +76,7 @@ TradingAgent/
 │   ├── rate_limiter.py            # API-key-aware in-memory rate limiter
 │   ├── requirements.txt           # FastAPI wrapper dependencies
 │   ├── routes/
-│   │   ├── analysis.py            # REST + SSE analysis endpoints
+│   │   ├── analysis.py            # Job, REST, and SSE analysis endpoints
 │   │   └── validation.py          # Request validation and normalization
 │   ├── tests/                     # FastAPI wrapper tests
 │   └── tradingagents-core/
@@ -104,7 +105,7 @@ TradingAgent/
         │   ├── AgentLog.jsx       # Live progress via SSE events
         │   ├── Navbar.jsx
         │   ├── ResultCard.jsx     # Structured result display
-        │   ├── StockForm.jsx      # Real analysis form (calls backend SSE)
+        │   ├── StockForm.jsx      # Real analysis form (job API + SSE events)
         │   └── StockFormMock.jsx  # Mock form (no API call, for UI testing)
         └── pages/
             ├── Analysis.jsx       # Main analysis page + history sidebar
@@ -257,6 +258,8 @@ The mock route is always available in local dev. In production builds, it requir
 
 ## API Reference
 
+The React UI uses the job API below. `/api/analyze` and `/api/analyze/stream` remain available as compatibility endpoints for direct API clients.
+
 ### POST `/api/analysis/jobs`
 
 Creates an analysis job. Returns a `job_id`.
@@ -280,6 +283,10 @@ Streams Server-Sent Events for job progress.
 | `progress` | Agent started or completed |
 | `result` | Final structured decision |
 | `error` | Sanitized error payload |
+
+### GET `/api/analysis/jobs/{job_id}`
+
+Returns the current job status, events seen so far, and result or error if the job has finished.
 
 ### DELETE `/api/analysis/jobs/{job_id}`
 

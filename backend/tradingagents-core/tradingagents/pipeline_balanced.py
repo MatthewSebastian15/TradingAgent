@@ -186,14 +186,6 @@ def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -
         return DataField(value=f"{label} unavailable: {exc}", status="missing", warning=f"{label} unavailable: {exc}")
 
 
-def _safe_data_call(label: str, func: Callable[[], Any], limit: int = 12_000) -> str:
-    try:
-        return _truncate(func(), limit)
-    except Exception as exc:
-        logger.warning("Balanced pipeline data call failed for %s: %s", label, exc)
-        return f"{label} unavailable: {exc}"
-
-
 def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
     """Parse the last Close value at or before trade_date from yfinance CSV."""
     lines = [

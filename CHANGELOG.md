@@ -10,6 +10,7 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Added full-stack TradingAgent architecture with FastAPI backend, React/Vite frontend, and TradingAgents core integration.
 - Added REST analysis endpoint at `/api/analyze`.
 - Added Server-Sent Events analysis endpoint at `/api/analyze/stream`.
+- Added job-based analysis API at `/api/analysis/jobs` with event streaming and cancellation.
 - Added real-time agent progress streaming for long-running analysis.
 - Added mock analysis mode for frontend-only testing.
 - Added structured `PortfolioDecision` output for final analysis results.
@@ -37,6 +38,7 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Improved backend reliability, error handling, logging, and rate limiting.
 - Improved analysis pipeline performance with parallel analyst execution.
 - Improved mock data and result rendering.
+- Switched the documented frontend analysis flow to the job API used by the real UI.
 - Updated README to match the current project structure, setup steps, and runtime behavior.
 
 ### Fixed
@@ -46,6 +48,7 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Fixed backend SSE handling.
 - Fixed provider and ticker handling.
 - Fixed merge conflicts in the main branch.
+- Removed unused validation models, an unused balanced-pipeline data helper, and unused analyst imports.
 
 ### Security
 - Improved API-key-aware rate limiting.
@@ -58,6 +61,8 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Added `Dockerfile.frontend`.
 - Added `docker-compose.yml`.
 - Added `.dockerignore`.
+- Excluded `frontend/dist` from Docker build context.
+- Removed the redundant `backend/tradingagents-core/requirements.txt` stub; dependencies live in `pyproject.toml`.
 - Documented local setup without Docker.
 - Documented Docker-based setup.
 
@@ -192,6 +197,7 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 
 ### Backend
 - FastAPI wrapper for TradingAgents.
+- Job-based analysis API with progress event streaming and cancellation.
 - REST endpoint for analysis.
 - SSE endpoint for streaming analysis.
 - Startup validation.
