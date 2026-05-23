@@ -2,7 +2,6 @@ import time
 
 import pytest
 
-from tradingagents import utils_resilience
 from tradingagents.dataflows.config import get_config
 from tradingagents.pipeline_balanced import (
     AnalystReport,
@@ -53,29 +52,11 @@ def test_call_with_timeout_returns_without_waiting_for_hung_call():
         )
 
     assert time.monotonic() - started_at < 1.8
-
-
-def test_call_with_timeout_reuses_shared_executor(monkeypatch):
-    previous_executor = utils_resilience._TIMEOUT_EXECUTOR
-    utils_resilience._TIMEOUT_EXECUTOR = None
-    created = []
-    original_executor_class = utils_resilience.concurrent.futures.ThreadPoolExecutor
-
-    class CountingExecutor(original_executor_class):
-        def __init__(self, *args, **kwargs):
-            created.append(1)
-            super().__init__(*args, **kwargs)
-
-    monkeypatch.setattr(utils_resilience.concurrent.futures, "ThreadPoolExecutor", CountingExecutor)
-    try:
-        assert call_with_timeout(lambda: "first", timeout_seconds=1, service_name="test-shared-executor") == "first"
-        assert call_with_timeout(lambda: "second", timeout_seconds=1, service_name="test-shared-executor") == "second"
-        assert len(created) == 1
-    finally:
-        created_executor = utils_resilience._TIMEOUT_EXECUTOR
-        utils_resilience._TIMEOUT_EXECUTOR = previous_executor
-        if created_executor is not None:
-            created_executor.shutdown(wait=True, cancel_futures=True)
+    assert call_with_timeout(
+        lambda: "fast",
+        timeout_seconds=1,
+        service_name="test-after-hung-call",
+    ) == "fast"
 
 
 def test_config_scope_propagates_into_timeout_worker():

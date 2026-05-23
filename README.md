@@ -209,7 +209,6 @@ Set in `frontend/.env`:
 
 ```env
 VITE_API_URL=http://localhost:8000
-VITE_API_KEY=
 VITE_ENABLE_MOCK=false
 ```
 
@@ -234,6 +233,7 @@ docker compose up --build
 Frontend: `http://localhost:3000` — Backend: `http://localhost:8000`
 
 Inside Docker, nginx proxies `/api/*` to the backend. You do not need to set `VITE_API_URL`.
+If backend API-key enforcement is enabled, set `BACKEND_API_KEY` in your shell to the same value as backend `API_KEY`; nginx injects it server-side and the key is never bundled into browser JavaScript.
 
 Optional Ollama:
 
@@ -364,9 +364,9 @@ Cancels a running job.
 | Variable | Default | Description |
 |---|---|---|
 | `VITE_API_URL` | Empty | Backend URL. Empty uses relative `/api/*` (Docker). Set to `http://localhost:8000` for local dev. |
-| `VITE_API_KEY` | Empty | Browser-visible key. Only sent when `VITE_ENABLE_BROWSER_API_KEY=true`; prefer a private proxy for shared deployments. |
-| `VITE_ENABLE_BROWSER_API_KEY` | `false` | Explicit opt-in to send `VITE_API_KEY` from the browser |
 | `VITE_ENABLE_MOCK` | `false` | Exposes `/analysis.test` in production builds |
+
+Frontend code intentionally does not read or send any API key from Vite environment variables. For shared deployments, inject backend `x-api-key` at a private reverse proxy such as the included nginx container via `BACKEND_API_KEY`.
 
 ---
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
+import concurrent.futures
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -36,19 +37,30 @@ def _price_csv(*dates: str) -> str:
 def _mock_market_data(monkeypatch: pytest.MonkeyPatch, sample: str | Exception) -> list[tuple[str, str, str, str]]:
     calls: list[tuple[str, str, str, str]] = []
 
-    @contextmanager
-    def fake_use_config(config):
-        assert config["analysis_depth"] == "fast"
-        yield config
+    class ImmediateExecutor:
+        def submit(self, fn, *args):
+            future: concurrent.futures.Future = concurrent.futures.Future()
+            try:
+                future.set_result(fn(*args))
+            except BaseException as exc:
+                future.set_exception(exc)
+            return future
 
-    def fake_route_to_vendor(tool_name: str, ticker: str, start: str, end: str) -> str:
-        calls.append((tool_name, ticker, start, end))
+    async def fake_get_executor():
+        return ImmediateExecutor()
+
+    def fake_preflight_worker(ticker: str, trade_date: str, max_debate_rounds: int, analysis_depth: str, response_detail: str) -> str:
+        assert analysis_depth == "fast"
+        trade_dt = datetime.strptime(trade_date, "%Y-%m-%d")
+        start = (trade_dt - timedelta(days=10)).strftime("%Y-%m-%d")
+        end = (trade_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        calls.append(("get_stock_data", ticker, start, end))
         if isinstance(sample, Exception):
             raise sample
         return sample
 
-    monkeypatch.setattr("tradingagents.dataflows.config.use_config", fake_use_config)
-    monkeypatch.setattr("tradingagents.dataflows.interface.route_to_vendor", fake_route_to_vendor)
+    monkeypatch.setattr("routes.analysis._get_executor", fake_get_executor)
+    monkeypatch.setattr("routes.analysis._preflight_market_data_worker", fake_preflight_worker)
     return calls
 
 

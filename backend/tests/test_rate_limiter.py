@@ -72,13 +72,13 @@ def test_ticker_validate_is_rate_limited(client, monkeypatch):
 
 
 def test_legacy_sse_rate_limit_returns_http_429(client, monkeypatch):
-    def fake_run_pipeline_with_progress(ticker, trade_date, max_debate_rounds, request_id, progress_callback=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
         return {
             "decision": "Hold",
             "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []},
         }
 
-    monkeypatch.setattr("routes.analysis._run_pipeline_with_progress", fake_run_pipeline_with_progress)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
     monkeypatch.setattr(
         "routes.analysis.stream_policy",
         lambda: RateLimitPolicy(scope="legacy-sse-limit-test", max_per_minute=1, max_concurrent=1),
