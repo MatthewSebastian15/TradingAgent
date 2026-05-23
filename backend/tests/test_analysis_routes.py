@@ -107,6 +107,25 @@ def test_analyze_rejects_oversized_json_body_before_validation(client, monkeypat
     assert response.json()["error"]["code"] == "REQUEST_BODY_TOO_LARGE"
 
 
+def test_job_create_rejects_oversized_json_body_before_storing_job(client, monkeypatch):
+    async def should_not_run(*args, **kwargs):
+        raise AssertionError("Pipeline should not run for oversized job input")
+
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", should_not_run)
+
+    response = client.post(
+        "/api/analysis/jobs",
+        content='{"ticker":"' + ("A" * 70000) + '"}',
+        headers={"content-type": "application/json", "x-api-key": "job-body-limit-test-key"},
+    )
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "REQUEST_BODY_TOO_LARGE"
+    assert asyncio.run(store.stats())["jobs"] == 0
+
+
 def test_get_or_start_analysis_shares_in_flight_work():
     from routes.analysis import _get_or_start_analysis
     from routes.validation import AnalysisRequest

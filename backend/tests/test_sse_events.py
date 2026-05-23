@@ -3,6 +3,32 @@ from __future__ import annotations
 import asyncio
 import json
 
+from analysis_cache import AnalysisJobStore
+
+
+def _stream_result() -> dict:
+    return {
+        "decision": "Buy",
+        "full_decision": "Mocked streaming decision",
+        "executive_summary": "Streaming summary",
+        "investment_thesis": "Streaming thesis",
+        "price_target": 10000,
+        "time_horizon": "1M",
+        "confidence_score": 0.75,
+        "suggested_allocation_percent": 8,
+        "entry_price": 9200,
+        "stop_loss": 8800,
+        "take_profit": 10000,
+        "risk_reward_ratio": 2.0,
+        "max_drawdown_estimate": 0.07,
+        "volatility_level": "medium",
+        "position_sizing_reason": "Mock position sizing",
+        "rebalancing_action": "Hold current allocation",
+        "key_catalysts": ["volume"],
+        "invalidation_conditions": ["support break"],
+        "data_quality": {"price_data": "ok", "fundamentals": "partial", "news": "missing", "warnings": []},
+    }
+
 
 def _collect_sse_events(response_text: str) -> list[tuple[str | None, dict]]:
     events: list[tuple[str | None, dict]] = []
@@ -37,27 +63,7 @@ def test_sse_sends_progress_and_final_result(client, monkeypatch):
                 },
             }
         )
-        return {
-            "decision": "Buy",
-            "full_decision": "Mocked streaming decision",
-            "executive_summary": "Streaming summary",
-            "investment_thesis": "Streaming thesis",
-            "price_target": 10000,
-            "time_horizon": "1M",
-            "confidence_score": 0.75,
-            "suggested_allocation_percent": 8,
-            "entry_price": 9200,
-            "stop_loss": 8800,
-            "take_profit": 10000,
-            "risk_reward_ratio": 2.0,
-            "max_drawdown_estimate": 0.07,
-            "volatility_level": "medium",
-            "position_sizing_reason": "Mock position sizing",
-            "rebalancing_action": "Hold current allocation",
-            "key_catalysts": ["volume"],
-            "invalidation_conditions": ["support break"],
-            "data_quality": {"price_data": "ok", "fundamentals": "partial", "news": "missing", "warnings": []},
-        }
+        return _stream_result()
 
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
 
@@ -78,6 +84,51 @@ def test_sse_sends_progress_and_final_result(client, monkeypatch):
     assert result_payload["ticker"] == "AAPL"
     assert result_payload["decision"] == "Buy"
     assert result_payload["data_quality"]["price_data"] == "ok"
+
+
+def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+        await queue.put(
+            {
+                "type": "progress",
+                "payload": {
+                    "request_id": request_id,
+                    "ticker": req.ticker,
+                    "trade_date": req.trade_date,
+                    "agent_id": "market_analyst",
+                    "agent_name": "Market Analyst",
+                    "status": "completed",
+                    "status_message": "Mock market analysis completed.",
+                },
+            }
+        )
+        return _stream_result()
+
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
+
+    headers = {"x-api-key": "sse-refresh-test-key"}
+    create_response = client.post(
+        "/api/analysis/jobs",
+        json={"ticker": "AAPL", "trade_date": "2026-05-17", "max_debate_rounds": 1},
+        headers=headers,
+    )
+    assert create_response.status_code == 200
+    job_id = create_response.json()["job_id"]
+
+    def read_events():
+        with client.stream("GET", f"/api/analysis/jobs/{job_id}/events", headers=headers) as response:
+            assert response.status_code == 200
+            return _collect_sse_events(response.read().decode("utf-8"))
+
+    first = read_events()
+    second = read_events()
+
+    assert [name for name, _ in first] == ["job", "progress", "result"]
+    assert [name for name, _ in second] == ["job", "progress", "result"]
+    assert first[1][1]["agent_id"] == "market_analyst"
+    assert second[2][1]["decision"] == "Buy"
 
 
 def test_completed_job_event_stream_replays_result():

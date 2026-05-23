@@ -26,6 +26,7 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Added multi-provider LLM support.
 - Added backend validation tests.
 - Added SSE streaming tests.
+- Added regression coverage for job ownership, job request body limits, SSE job replay after browser refresh, parallel config isolation, AgentLog de-duplication, and StockForm unmount cleanup.
 - Added Docker support for backend and frontend.
 - Added Docker Compose setup for full-stack local execution.
 - Added startup configuration validation.
@@ -39,6 +40,7 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Scoped TradingAgents runtime config per context/thread instead of mutating process-global config during concurrent jobs.
 - Moved analysis preflight, REST, job, and SSE pipeline execution onto isolated process-pool workers.
 - Changed frontend API-key handling so browser code never reads or sends API keys; Docker nginx can inject `x-api-key` server-side with `BACKEND_API_KEY`.
+- Made the navbar clock timezone and label configurable with `VITE_CLOCK_TIME_ZONE` and `VITE_CLOCK_LABEL`, retaining `Asia/Jakarta`/`WIB` as the Indonesia-local default.
 - Improved analysis pipeline performance with parallel analyst execution.
 - Improved mock data and result rendering.
 - Switched the documented frontend analysis flow to the job API used by the real UI.
