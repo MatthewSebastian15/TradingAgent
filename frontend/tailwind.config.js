@@ -7,9 +7,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        mono: ['"IBM Plex Mono"', 'monospace'],
-        sans: ['"IBM Plex Sans"', 'sans-serif'],
-        display: ['"Barlow Condensed"', 'sans-serif'],
+        mono: ['ui-monospace', '"Cascadia Mono"', '"SFMono-Regular"', 'Consolas', '"Liberation Mono"', 'monospace'],
+        sans: ['system-ui', '-apple-system', '"Segoe UI"', 'Arial', 'sans-serif'],
+        display: ['"Arial Narrow"', '"Roboto Condensed"', '"Segoe UI"', 'Arial', 'sans-serif'],
       },
       colors: {
         bloomberg: {

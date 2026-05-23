@@ -34,4 +34,19 @@ describe('AgentLog', () => {
     expect(screen.getAllByText('Market Analyst')).toHaveLength(1);
     expect(screen.getByText('0:03')).toBeTruthy();
   });
+
+  it('does not duplicate the same progress payload on rerender', () => {
+    const progress = {
+      agent_id: 'market_analyst',
+      agent_name: 'Market Analyst',
+      status: 'completed',
+      status_message: 'Market analysis completed.',
+    };
+
+    const { rerender } = render(<AgentLog status="Running" agentProgress={progress} />);
+
+    rerender(<AgentLog status="Still running" agentProgress={{ ...progress }} />);
+
+    expect(screen.getAllByText('Market Analyst')).toHaveLength(1);
+  });
 });

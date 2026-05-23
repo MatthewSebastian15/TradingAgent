@@ -288,6 +288,7 @@ def _parse_final_result(
                 pd_obj = PortfolioDecision.model_validate(pd_obj)
         except Exception:
             full_decision = full_decision or ""
+            pd_obj = None
     data_quality = final_state.get("data_quality")
     common = {
         "analysis_depth": final_state.get("analysis_depth", DEFAULT_ANALYSIS_DEPTH),

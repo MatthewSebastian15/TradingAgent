@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 
 const AGENTS = [
   { short: 'MKT',  label: 'MARKET ANALYST',       desc: 'Price action, volume, technical indicators', color: '#06b6d4' },
@@ -71,11 +72,76 @@ function AgentRow({ agent, index, visible }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [visible, setVisible] = useState(false);
+  const [status, setStatus] = useState({ loading: true, ok: false, provider: null, error: null });
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function checkBackendStatus() {
+      try {
+        const response = await fetch(buildApiUrl('/status'), {
+          headers: buildAuthHeaders(),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const payload = await response.json();
+        setStatus({
+          loading: false,
+          ok: true,
+          provider: payload.provider || 'unknown',
+          error: null,
+          toolCacheOk: !payload.tool_cache?.error,
+        });
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        setStatus({
+          loading: false,
+          ok: false,
+          provider: null,
+          error: error.message || 'Backend unavailable',
+          toolCacheOk: false,
+        });
+      }
+    }
+
+    checkBackendStatus();
+    return () => controller.abort();
+  }, []);
+
+  const systemRows = [
+    {
+      label: 'AGENT PIPELINE',
+      status: status.loading ? 'CHECKING' : status.ok ? 'READY' : 'UNKNOWN',
+      tone: status.loading ? 'warn' : status.ok ? 'ok' : 'bad',
+    },
+    {
+      label: 'LLM BACKEND',
+      status: status.loading ? 'CHECKING' : status.ok ? `${status.provider.toUpperCase()} READY` : 'OFFLINE',
+      tone: status.loading ? 'warn' : status.ok ? 'ok' : 'bad',
+    },
+    {
+      label: 'MARKET DATA',
+      status: status.loading ? 'CHECKING' : status.toolCacheOk ? 'READY' : 'LIMITED',
+      tone: status.loading ? 'warn' : status.toolCacheOk ? 'ok' : 'warn',
+    },
+    {
+      label: 'SSE STREAM',
+      status: status.loading ? 'CHECKING' : status.ok ? 'READY' : 'UNKNOWN',
+      tone: status.loading ? 'warn' : status.ok ? 'ok' : 'bad',
+    },
+  ];
+  const statusToneClass = {
+    ok: 'text-bloomberg-green',
+    warn: 'text-bloomberg-amber',
+    bad: 'text-bloomberg-red',
+  };
+  const statusToneMarker = { ok: '● ', warn: '◐ ', bad: '○ ' };
 
   return (
     <div className="min-h-screen bg-bloomberg-bg">
@@ -91,16 +157,11 @@ export default function Dashboard() {
             {/* System status */}
             <div className="border border-bloomberg-border bg-bloomberg-card p-4">
               <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-3">System Status</div>
-              {[
-                { label: 'AGENT PIPELINE', status: 'OPERATIONAL', ok: true },
-                { label: 'LLM BACKEND',    status: 'CONNECTED',   ok: true },
-                { label: 'MARKET DATA',    status: 'LIVE',        ok: true },
-                { label: 'SSE STREAM',     status: 'READY',       ok: true },
-              ].map(({ label, status, ok }) => (
-                <div key={label} className="flex items-center justify-between py-1.5 border-b border-bloomberg-border last:border-b-0">
+              {systemRows.map(({ label, status: rowStatus, tone }) => (
+                <div key={label} title={tone === 'bad' ? status.error || 'Backend status check failed' : undefined} className="flex items-center justify-between py-1.5 border-b border-bloomberg-border last:border-b-0">
                   <span className="font-mono text-xs text-bloomberg-muted tracking-wider">{label}</span>
-                  <span className={`font-mono text-xs tracking-wider ${ok ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
-                    {ok ? '● ' : '○ '}{status}
+                  <span className={`font-mono text-xs tracking-wider ${statusToneClass[tone]}`}>
+                    {statusToneMarker[tone]}{rowStatus}
                   </span>
                 </div>
               ))}
