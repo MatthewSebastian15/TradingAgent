@@ -4,6 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     container_name: tradingagent-backend
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     env_file:
       - ./backend/.env
     environment:
@@ -29,6 +32,9 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     container_name: tradingagent-frontend
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       BACKEND_API_KEY: ${BACKEND_API_KEY:-}
     depends_on:
@@ -41,6 +47,9 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: tradingagent-ollama
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     profiles:
       - ollama
     ports:
