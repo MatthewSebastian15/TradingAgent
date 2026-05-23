@@ -55,6 +55,7 @@ This project follows the principles of [Keep a Changelog](https://keepachangelog
 - Fixed merge conflicts in the main branch.
 - Removed unused validation models, an unused balanced-pipeline data helper, and unused analyst imports.
 - Reworked blocking-call timeout handling so timed-out calls do not occupy a shared timeout worker pool.
+- Added abandoned-call tracking and process-worker recycling so timed-out blocking vendor calls cannot permanently consume active timeout capacity.
 
 ### Security
 - Improved API-key-aware rate limiting.

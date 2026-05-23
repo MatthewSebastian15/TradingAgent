@@ -1,3 +1,4 @@
+import threading
 import time
 
 import pytest
@@ -11,7 +12,7 @@ from tradingagents.pipeline_balanced import (
 )
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.stockstats_utils import yf_retry
-from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout
+from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout, get_timeout_stats
 
 
 def test_llm_budget_records_exhaustion_and_skipped_agents():
@@ -57,6 +58,38 @@ def test_call_with_timeout_returns_without_waiting_for_hung_call():
         timeout_seconds=1,
         service_name="test-after-hung-call",
     ) == "fast"
+
+
+def test_call_with_timeout_releases_active_capacity_after_timeout():
+    done = threading.Event()
+
+    def slow_call():
+        try:
+            time.sleep(0.2)
+        finally:
+            done.set()
+
+    before = get_timeout_stats()
+
+    with pytest.raises(TimeoutError):
+        call_with_timeout(
+            slow_call,
+            timeout_seconds=0.05,
+            service_name="test-active-capacity-release",
+        )
+
+    after_timeout = get_timeout_stats()
+    assert after_timeout["active_calls"] == before["active_calls"]
+    assert after_timeout["abandoned_calls"] >= before["abandoned_calls"] + 1
+
+    assert done.wait(1)
+    deadline = time.monotonic() + 1
+    while time.monotonic() < deadline:
+        if get_timeout_stats()["abandoned_calls"] <= before["abandoned_calls"]:
+            break
+        time.sleep(0.01)
+
+    assert get_timeout_stats()["abandoned_calls"] <= before["abandoned_calls"]
 
 
 def test_config_scope_propagates_into_timeout_worker():

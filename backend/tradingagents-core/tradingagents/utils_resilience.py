@@ -82,8 +82,26 @@ class CircuitBreaker:
 
 _CIRCUITS: dict[str, CircuitBreaker] = {}
 _CIRCUITS_LOCK = threading.Lock()
+
+
+def _env_int(name: str, default: int, *, min_value: int = 1) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return max(min_value, int(raw))
+    except ValueError:
+        logger.warning("Invalid integer for %s=%r; using default %s", name, raw, default)
+        return default
+
+
 _TIMEOUT_MAX_ACTIVE_CALLS = min(32, (os.cpu_count() or 1) + 4)
-_TIMEOUT_CAPACITY = threading.BoundedSemaphore(_TIMEOUT_MAX_ACTIVE_CALLS)
+_TIMEOUT_MAX_ABANDONED_CALLS = _env_int("TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS", _TIMEOUT_MAX_ACTIVE_CALLS)
+_TIMEOUT_ACTIVE_CAPACITY = threading.BoundedSemaphore(_TIMEOUT_MAX_ACTIVE_CALLS)
+_TIMEOUT_ABANDONED_CAPACITY = threading.BoundedSemaphore(max(1, _TIMEOUT_MAX_ABANDONED_CALLS))
+_TIMEOUT_STATS_LOCK = threading.Lock()
+_TIMEOUT_ACTIVE_CALLS = 0
+_TIMEOUT_ABANDONED_CALLS = 0
 
 
 def get_circuit(name: str, failure_threshold: int = 5, recovery_seconds: int = 60) -> CircuitBreaker:
@@ -138,14 +156,95 @@ def call_with_retry(
     raise last_exc or RuntimeError(f"{service_name} failed without an exception")
 
 
+def _record_timeout_active_started() -> None:
+    global _TIMEOUT_ACTIVE_CALLS
+    with _TIMEOUT_STATS_LOCK:
+        _TIMEOUT_ACTIVE_CALLS += 1
+
+
+def _record_timeout_active_finished() -> None:
+    global _TIMEOUT_ACTIVE_CALLS
+    with _TIMEOUT_STATS_LOCK:
+        _TIMEOUT_ACTIVE_CALLS = max(0, _TIMEOUT_ACTIVE_CALLS - 1)
+
+
+def _record_timeout_abandoned_started() -> None:
+    global _TIMEOUT_ABANDONED_CALLS
+    with _TIMEOUT_STATS_LOCK:
+        _TIMEOUT_ABANDONED_CALLS += 1
+
+
+def _record_timeout_abandoned_finished() -> None:
+    global _TIMEOUT_ABANDONED_CALLS
+    with _TIMEOUT_STATS_LOCK:
+        _TIMEOUT_ABANDONED_CALLS = max(0, _TIMEOUT_ABANDONED_CALLS - 1)
+
+
+def get_timeout_stats() -> dict[str, int]:
+    """Return timeout-worker capacity stats for health/status endpoints."""
+    with _TIMEOUT_STATS_LOCK:
+        return {
+            "active_calls": _TIMEOUT_ACTIVE_CALLS,
+            "max_active_calls": _TIMEOUT_MAX_ACTIVE_CALLS,
+            "abandoned_calls": _TIMEOUT_ABANDONED_CALLS,
+            "max_abandoned_calls": max(1, _TIMEOUT_MAX_ABANDONED_CALLS),
+        }
+
+
 def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_name: str) -> T:
-    if not _TIMEOUT_CAPACITY.acquire(blocking=False):
+    """Run *func* with a caller-visible timeout.
+
+    Python cannot safely kill a thread that is blocked inside vendor I/O. The
+    wrapper therefore uses daemon threads, releases the caller capacity when a
+    timeout fires, and keeps a separate abandoned-call reservation until the
+    underlying blocking call returns. API pipeline workers are process-recycled,
+    so a permanently blocked daemon thread is ultimately reaped with its worker
+    process instead of accumulating in the API process.
+    """
+    if not _TIMEOUT_ACTIVE_CAPACITY.acquire(blocking=False):
         raise TimeoutError(
-            f"{service_name} timed out before starting because timed-call capacity is saturated."
+            f"{service_name} timed out before starting because active timed-call capacity is saturated."
+        )
+    if not _TIMEOUT_ABANDONED_CAPACITY.acquire(blocking=False):
+        _TIMEOUT_ACTIVE_CAPACITY.release()
+        raise TimeoutError(
+            f"{service_name} timed out before starting because abandoned timed-call capacity is saturated."
         )
 
+    _record_timeout_active_started()
     context = contextvars.copy_context()
     result_queue: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
+    state_lock = threading.Lock()
+    timed_out = threading.Event()
+    active_released = False
+    abandoned_released = False
+    abandoned_recorded = False
+
+    def release_active_once() -> None:
+        nonlocal active_released
+        with state_lock:
+            if active_released:
+                return
+            active_released = True
+        _record_timeout_active_finished()
+        try:
+            _TIMEOUT_ACTIVE_CAPACITY.release()
+        except ValueError:
+            logger.debug("Timed-call active capacity was already released for %s", service_name)
+
+    def release_abandoned_once() -> None:
+        nonlocal abandoned_released
+        with state_lock:
+            if abandoned_released:
+                return
+            abandoned_released = True
+            should_record_finish = abandoned_recorded
+        if should_record_finish:
+            _record_timeout_abandoned_finished()
+        try:
+            _TIMEOUT_ABANDONED_CAPACITY.release()
+        except ValueError:
+            logger.debug("Timed-call abandoned capacity was already released for %s", service_name)
 
     def run() -> None:
         try:
@@ -153,10 +252,8 @@ def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_na
         except BaseException as exc:  # noqa: BLE001 - preserve caller exceptions across thread boundary.
             result_queue.put(("error", exc))
         finally:
-            try:
-                _TIMEOUT_CAPACITY.release()
-            except ValueError:
-                logger.debug("Timed-call capacity was already released for %s", service_name)
+            release_active_once()
+            release_abandoned_once()
 
     worker = threading.Thread(
         target=run,
@@ -167,8 +264,15 @@ def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_na
     try:
         status, value = result_queue.get(timeout=timeout_seconds)
     except queue.Empty as exc:
+        with state_lock:
+            should_track_abandoned = not abandoned_released and not timed_out.is_set()
+            if should_track_abandoned:
+                timed_out.set()
+                abandoned_recorded = True
+                _record_timeout_abandoned_started()
+        release_active_once()
         logger.warning(
-            "%s timed out after %ss; the underlying blocking call is isolated in a daemon thread and may finish later.",
+            "%s timed out after %ss; the underlying blocking call is abandoned in a daemon thread and will be reaped when the worker process exits.",
             service_name,
             timeout_seconds,
         )
