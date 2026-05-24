@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
+
+from rate_limiter import limit_request, request_policy
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +20,8 @@ _CORE_DIR = _BASE_DIR / "tradingagents-core"
 for _p in (str(_BASE_DIR), str(_CORE_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+from routes.validation import normalize_ticker_symbol  # noqa: E402
 
 router = APIRouter()
 
@@ -69,8 +74,17 @@ def _fetch_quote(symbol: str) -> dict:
         return {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "error": True}
 
 
+async def _fetch_quotes(symbols: list[str]) -> list[dict]:
+    """Fetch quotes without blocking the FastAPI event loop."""
+    if not symbols:
+        return []
+    tasks = [asyncio.to_thread(_fetch_quote, symbol) for symbol in symbols]
+    return await asyncio.gather(*tasks)
+
+
 @router.get("/market/quotes", tags=["market"])
 async def get_market_quotes(
+    request: Request,
     symbols: str = Query(
         default=",".join(_DEFAULT_TICKERS),
         description="Comma-separated list of ticker symbols, e.g. BBCA.JK,NVDA",
@@ -82,11 +96,12 @@ async def get_market_quotes(
     symbol, no historical download).  Results are returned even when some
     symbols fail — failed tickers include ``"error": true`` and ``"chg": "N/A"``.
     """
-    raw_symbols = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    async with limit_request(request, request_policy()):
+        raw_symbols = [s.strip() for s in symbols.split(",") if s.strip()]
 
-    # Cap at 20 to avoid overloading yfinance on a single request.
-    capped = raw_symbols[:20]
+        # Cap at 20 to avoid overloading yfinance on a single request.
+        capped = [normalize_ticker_symbol(sym) for sym in raw_symbols[:20]]
 
-    quotes = [_fetch_quote(sym) for sym in capped]
+        quotes = await _fetch_quotes(capped)
 
     return JSONResponse({"quotes": quotes})

@@ -6,6 +6,30 @@ import { formatPrice } from '../utils/formatting';
 
 const HISTORY_LIMIT = 10;
 const HISTORY_TTL_DAYS = 30;
+const HISTORY_FIELDS = [
+  'request_id',
+  'ticker',
+  'trade_date',
+  'analysis_depth',
+  'response_detail',
+  'decision',
+  'executive_summary',
+  'price_target',
+  'time_horizon',
+  'confidence_score',
+  'suggested_allocation_percent',
+  'entry_price',
+  'stop_loss',
+  'take_profit',
+  'risk_reward_ratio',
+  'max_drawdown_estimate',
+  'volatility_level',
+  'rebalancing_action',
+  'key_catalysts',
+  'invalidation_conditions',
+  'data_quality',
+  'warnings',
+];
 
 function isExpired(entry) {
   if (!entry?.saved_at) return false;
@@ -33,14 +57,25 @@ function writeHistory(historyKey, entries) {
   }
 }
 
+function historySnapshot(result) {
+  if (result?.response_detail === 'debug') return null;
+  return HISTORY_FIELDS.reduce((acc, key) => {
+    if (result[key] !== undefined) acc[key] = result[key];
+    return acc;
+  }, {});
+}
+
 function saveToHistory(historyKey, result) {
   if (!result || result.error) return;
+
+  const snapshot = historySnapshot(result);
+  if (!snapshot) return;
 
   const history = readHistory(historyKey);
   const deduped = history.filter(
     item => !(item.ticker === result.ticker && item.trade_date === result.trade_date)
   );
-  writeHistory(historyKey, [{ ...result, saved_at: new Date().toISOString() }, ...deduped]);
+  writeHistory(historyKey, [{ ...snapshot, saved_at: new Date().toISOString() }, ...deduped]);
 }
 
 function decisionStyle(decision) {

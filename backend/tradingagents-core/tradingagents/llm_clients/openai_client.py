@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
 from tradingagents.dataflows.config import get_config
-from tradingagents.utils_resilience import call_with_retry, call_with_timeout
+from tradingagents.utils_resilience import call_with_retry
 
 
 class NormalizedChatOpenAI(ChatOpenAI):
@@ -31,11 +31,7 @@ class NormalizedChatOpenAI(ChatOpenAI):
         service_name = f"llm:{provider}:{getattr(self, 'model_name', getattr(self, 'model', 'unknown'))}"
 
         def do_call():
-            return call_with_timeout(
-                lambda: normalize_content(ChatOpenAI.invoke(self, input, config, **kwargs)),
-                timeout_seconds=int(cfg.get("timeout", 60)),
-                service_name=service_name,
-            )
+            return normalize_content(ChatOpenAI.invoke(self, input, config, **kwargs))
 
         return call_with_retry(
             do_call,

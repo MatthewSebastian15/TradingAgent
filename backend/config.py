@@ -18,7 +18,25 @@ from dotenv import load_dotenv
 
 # Load .env from backend/ (same folder as this file)
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+
+
+def _env_bool_raw(value: str | None, default: bool = False) -> bool:
+    if value is None or not value.strip():
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _should_load_dotenv() -> bool:
+    """Load local .env for app runtime, but keep tests hermetic."""
+    if _env_bool_raw(os.getenv("TRADINGAGENTS_SKIP_DOTENV"), False):
+        return False
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return False
+    return True
+
+
+if _should_load_dotenv():
+    load_dotenv(BASE_DIR / ".env")
 
 logger = logging.getLogger(__name__)
 
@@ -213,8 +231,11 @@ CORS_ORIGINS: list[str] = _env_list("CORS_ORIGINS", _DEFAULT_CORS_ORIGINS)
 
 # Pipeline tunables
 PIPELINE_TIMEOUT_SECONDS = _env_int("PIPELINE_TIMEOUT_SECONDS", 600, min_value=1)
-PROCESS_POOL_WORKERS = min(_env_int("PROCESS_POOL_WORKERS", 4, min_value=1), os.cpu_count() or 2)
+PREFLIGHT_TIMEOUT_SECONDS = min(_env_int("PREFLIGHT_TIMEOUT_SECONDS", 30, min_value=1), PIPELINE_TIMEOUT_SECONDS)
+PROCESS_POOL_WORKERS = min(_env_int("PROCESS_POOL_WORKERS", 2, min_value=1), os.cpu_count() or 2)
 PROCESS_POOL_MAX_TASKS_PER_CHILD = _env_int("PROCESS_POOL_MAX_TASKS_PER_CHILD", 1, min_value=1)
+DATA_COLLECTION_WORKERS = _env_int("DATA_COLLECTION_WORKERS", 6, min_value=1)
+ANALYST_PARALLEL_WORKERS = _env_int("ANALYST_PARALLEL_WORKERS", 3, min_value=1)
 DEFAULT_MAX_DEBATE_ROUNDS = _env_int("DEFAULT_MAX_DEBATE_ROUNDS", 3, min_value=1)
 MAX_RISK_DISCUSS_ROUNDS = 1
 ANALYSIS_MODE = "balanced"
@@ -324,6 +345,8 @@ class LLMSettings:
             "timeout": LLM_TIMEOUT_SECONDS,
             "llm_max_retries": retries,
             "provider_sdk_max_retries": PROVIDER_SDK_MAX_RETRIES,
+            "data_collection_workers": DATA_COLLECTION_WORKERS,
+            "analyst_parallel_workers": ANALYST_PARALLEL_WORKERS,
             "llm_retry_base_delay": LLM_RETRY_BASE_DELAY,
             "llm_retry_max_delay": LLM_RETRY_MAX_DELAY,
             "llm_429_max_wait_seconds": LLM_429_MAX_WAIT_SECONDS,
@@ -454,7 +477,10 @@ class _BackendSettingsShim:
     environment = APP_ENV
     cors_origins = CORS_ORIGINS
     pipeline_timeout_seconds = PIPELINE_TIMEOUT_SECONDS
+    preflight_timeout_seconds = PREFLIGHT_TIMEOUT_SECONDS
     process_pool_workers = PROCESS_POOL_WORKERS
+    data_collection_workers = DATA_COLLECTION_WORKERS
+    analyst_parallel_workers = ANALYST_PARALLEL_WORKERS
     default_max_debate_rounds = DEFAULT_MAX_DEBATE_ROUNDS
     max_risk_discuss_rounds = MAX_RISK_DISCUSS_ROUNDS
     analysis_mode = ANALYSIS_MODE

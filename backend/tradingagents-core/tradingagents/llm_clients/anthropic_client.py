@@ -5,7 +5,7 @@ from langchain_anthropic import ChatAnthropic
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
 from tradingagents.dataflows.config import get_config
-from tradingagents.utils_resilience import call_with_retry, call_with_timeout
+from tradingagents.utils_resilience import call_with_retry
 
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "api_key", "max_tokens",
@@ -26,11 +26,7 @@ class NormalizedChatAnthropic(ChatAnthropic):
         service_name = f"llm:anthropic:{getattr(self, 'model', 'unknown')}"
 
         def do_call():
-            return call_with_timeout(
-                lambda: normalize_content(ChatAnthropic.invoke(self, input, config, **kwargs)),
-                timeout_seconds=int(cfg.get("timeout", 60)),
-                service_name=service_name,
-            )
+            return normalize_content(ChatAnthropic.invoke(self, input, config, **kwargs))
 
         return call_with_retry(
             do_call,

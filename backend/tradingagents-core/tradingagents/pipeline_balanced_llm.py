@@ -7,7 +7,6 @@ from typing import Any, Optional, TypeVar
 from pydantic import BaseModel
 
 from tradingagents.agents.utils.structured import bind_structured
-from tradingagents.dataflows.config import get_config
 from tradingagents.llm_clients import create_llm_client
 from tradingagents.pipeline_balanced_data import _check_cancel
 from tradingagents.pipeline_balanced_types import (
@@ -17,7 +16,6 @@ from tradingagents.pipeline_balanced_types import (
     ResearchPlanLite,
     RiskCommitteeReport,
 )
-from tradingagents.utils_resilience import call_with_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -101,12 +99,7 @@ def _invoke_once(
                 return structured.invoke(prompt)
             return llm.invoke(prompt + "\n\nReturn only valid JSON matching this schema: " + json.dumps(schema.model_json_schema()))
 
-        timeout_seconds = max(1, int(get_config().get("timeout", 60)))
-        result = call_with_timeout(
-            invoke_model,
-            timeout_seconds=timeout_seconds,
-            service_name=f"llm:{agent_name}",
-        )
+        result = invoke_model()
         _check_cancel(cancel_check)
         parsed = _coerce_structured(result, schema)
         if parsed is not None:

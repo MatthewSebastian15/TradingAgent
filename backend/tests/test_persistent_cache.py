@@ -50,3 +50,9 @@ def test_sqlite_ttl_cache_serializes_concurrent_writes(tmp_path):
 
     assert cache.stats()["entries"] == 100
     assert cache.get({"key": 42}) == {"value": 42}
+
+
+def test_sqlite_ttl_cache_stats_redacts_full_path(tmp_path):
+    cache = SQLiteTTLCache(str(tmp_path / "market_data.sqlite3"), ttl_seconds=60, max_entries=10)
+
+    assert cache.stats()["path"] == "market_data.sqlite3"

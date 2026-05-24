@@ -241,3 +241,20 @@ def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
     assert wrong_events.json()["error"]["code"] == "BAD_REQUEST"
     assert wrong_delete.status_code == 400
     assert wrong_delete.json()["error"]["code"] == "BAD_REQUEST"
+
+
+def test_market_quotes_rejects_invalid_ticker_before_fetch(client, monkeypatch):
+    async def should_not_fetch(symbols):
+        raise AssertionError("market quote fetch should not run for invalid symbols")
+
+    monkeypatch.setattr("routes.market._fetch_quotes", should_not_fetch)
+
+    response = client.get(
+        "/api/market/quotes",
+        params={"symbols": "@@@,AAPL"},
+        headers={"x-api-key": "market-invalid-test-key"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "BAD_REQUEST"
+    assert "ticker" in response.json()["error"]["details"]["fields"]

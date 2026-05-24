@@ -127,6 +127,7 @@ export default function ResultCard({ result }) {
   const agents        = result.agents_used || [];
   const budgetExhausted = Boolean(result.budget_exhausted);
   const agentsSkipped = result.agents_skipped || [];
+  const canShowRaw = result.response_detail === 'debug';
 
   const decisionColor = {
     Buy: 'text-bloomberg-green', Overweight: 'text-bloomberg-green',
@@ -299,19 +300,21 @@ export default function ResultCard({ result }) {
       )}
 
       {/* Raw JSON debug */}
-      <div className="px-4 py-3">
-        <button
-          onClick={() => setShowRaw(!showRaw)}
-          className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white tracking-wider transition-colors"
-        >
+      {canShowRaw && (
+        <div className="px-4 py-3">
+          <button
+            onClick={() => setShowRaw(!showRaw)}
+            className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white tracking-wider transition-colors"
+          >
           {showRaw ? '▲ HIDE' : '▼ RAW JSON'} (DEBUG)
-        </button>
-        {showRaw && (
-          <pre className="mt-3 bg-black border border-bloomberg-border p-3 text-xs font-mono text-bloomberg-muted overflow-x-auto leading-relaxed whitespace-pre-wrap">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        )}
-      </div>
+          </button>
+          {showRaw && (
+            <pre className="mt-3 bg-black border border-bloomberg-border p-3 text-xs font-mono text-bloomberg-muted overflow-x-auto leading-relaxed whitespace-pre-wrap">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }
