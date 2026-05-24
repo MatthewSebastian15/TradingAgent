@@ -294,11 +294,64 @@ const MOCK_MAP = {
   AAPL: MOCK_HOLD_RESPONSE,
   TSLA: MOCK_SELL_RESPONSE,
   'BBCA.JK': MOCK_IDX_RESPONSE,
-  'BBRI.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-bbri-buy', ticker: 'BBRI.JK', price_target: 6200, entry_price: 5500, stop_loss: 5200, take_profit: 6200 },
-  'TLKM.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-tlkm-hold', ticker: 'TLKM.JK', decision: 'Hold', rating: 'Hold', price_target: 3500, entry_price: 3200, stop_loss: 3000, take_profit: 3500, suggested_allocation_percent: 5, rebalancing_action: 'Maintain position' },
-  'BMRI.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-bmri-buy', ticker: 'BMRI.JK', price_target: 7600, entry_price: 6900, stop_loss: 6500, take_profit: 7600 },
-  'ASII.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-asii-hold', ticker: 'ASII.JK', decision: 'Hold', rating: 'Hold', price_target: 6100, entry_price: 5700, stop_loss: 5300, take_profit: 6100, suggested_allocation_percent: 4, rebalancing_action: 'Maintain position' },
-  'GOTO.JK': { ...MOCK_IDX_RESPONSE, request_id: 'mock-goto-sell', ticker: 'GOTO.JK', decision: 'Sell', rating: 'Sell', price_target: 55, entry_price: 70, stop_loss: 82, take_profit: 55, suggested_allocation_percent: 0, volatility_level: 'Very High', rebalancing_action: 'Avoid exposure' },
+  'BBRI.JK': {
+    ...MOCK_IDX_RESPONSE,
+    request_id: 'mock-bbri-buy',
+    ticker: 'BBRI.JK',
+    price_target: 6200,
+    entry_price: 5500,
+    stop_loss: 5200,
+    take_profit: 6200,
+  },
+  'TLKM.JK': {
+    ...MOCK_IDX_RESPONSE,
+    request_id: 'mock-tlkm-hold',
+    ticker: 'TLKM.JK',
+    decision: 'Hold',
+    rating: 'Hold',
+    price_target: 3500,
+    entry_price: 3200,
+    stop_loss: 3000,
+    take_profit: 3500,
+    suggested_allocation_percent: 5,
+    rebalancing_action: 'Maintain position',
+  },
+  'BMRI.JK': {
+    ...MOCK_IDX_RESPONSE,
+    request_id: 'mock-bmri-buy',
+    ticker: 'BMRI.JK',
+    price_target: 7600,
+    entry_price: 6900,
+    stop_loss: 6500,
+    take_profit: 7600,
+  },
+  'ASII.JK': {
+    ...MOCK_IDX_RESPONSE,
+    request_id: 'mock-asii-hold',
+    ticker: 'ASII.JK',
+    decision: 'Hold',
+    rating: 'Hold',
+    price_target: 6100,
+    entry_price: 5700,
+    stop_loss: 5300,
+    take_profit: 6100,
+    suggested_allocation_percent: 4,
+    rebalancing_action: 'Maintain position',
+  },
+  'GOTO.JK': {
+    ...MOCK_IDX_RESPONSE,
+    request_id: 'mock-goto-sell',
+    ticker: 'GOTO.JK',
+    decision: 'Sell',
+    rating: 'Sell',
+    price_target: 55,
+    entry_price: 70,
+    stop_loss: 82,
+    take_profit: 55,
+    suggested_allocation_percent: 0,
+    volatility_level: 'Very High',
+    rebalancing_action: 'Avoid exposure',
+  },
   ERROR: MOCK_ERROR_RESPONSE,
 };
 
@@ -306,9 +359,17 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-export function getMockAnalysisResponse({ ticker = 'NVDA', trade_date, max_debate_rounds = 3 } = {}) {
-  const normalizedTicker = String(ticker || 'NVDA').trim().toUpperCase();
-  const base = MOCK_MAP[normalizedTicker] || (normalizedTicker.endsWith('.JK') ? MOCK_IDX_RESPONSE : MOCK_RESPONSE);
+export function getMockAnalysisResponse({
+  ticker = 'NVDA',
+  trade_date,
+  max_debate_rounds = 3,
+} = {}) {
+  const normalizedTicker = String(ticker || 'NVDA')
+    .trim()
+    .toUpperCase();
+  const base =
+    MOCK_MAP[normalizedTicker] ||
+    (normalizedTicker.endsWith('.JK') ? MOCK_IDX_RESPONSE : MOCK_RESPONSE);
   const response = clone(base);
 
   response.ticker = normalizedTicker;

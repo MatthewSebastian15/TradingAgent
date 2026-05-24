@@ -28,12 +28,14 @@ describe('AnalysisWorkspace history storage', () => {
       return (
         <button
           type="button"
-          onClick={() => onResult({
-            ticker: 'AAPL',
-            trade_date: '2026-05-14',
-            response_detail: 'debug',
-            raw_agent_state: { internal: true },
-          })}
+          onClick={() =>
+            onResult({
+              ticker: 'AAPL',
+              trade_date: '2026-05-14',
+              response_detail: 'debug',
+              raw_agent_state: { internal: true },
+            })
+          }
         >
           Emit debug
         </button>
@@ -51,15 +53,17 @@ describe('AnalysisWorkspace history storage', () => {
       return (
         <button
           type="button"
-          onClick={() => onResult({
-            ticker: 'AAPL',
-            trade_date: '2026-05-14',
-            response_detail: 'full',
-            decision: 'Buy',
-            executive_summary: 'Summary',
-            investment_thesis: 'Long thesis should not be stored',
-            raw_agent_state: { internal: true },
-          })}
+          onClick={() =>
+            onResult({
+              ticker: 'AAPL',
+              trade_date: '2026-05-14',
+              response_detail: 'full',
+              decision: 'Buy',
+              executive_summary: 'Summary',
+              investment_thesis: 'Long thesis should not be stored',
+              raw_agent_state: { internal: true },
+            })
+          }
         >
           Emit full
         </button>

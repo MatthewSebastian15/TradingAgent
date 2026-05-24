@@ -7,21 +7,9 @@ default environment values before tests import the FastAPI app.
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-CORE_DIR = BACKEND_DIR / "tradingagents-core"
-
-# Keep backend before tradingagents-core because both folders contain main.py.
-for path in (CORE_DIR, BACKEND_DIR):
-    path_str = str(path)
-    if path_str in sys.path:
-        sys.path.remove(path_str)
-    sys.path.insert(0, path_str)
 
 _DEFAULT_ENV = {
     "APP_ENV": "test",

@@ -81,6 +81,20 @@ async def run_stream_pipeline(
     """Run a progress-capable pipeline and cache its final result."""
     loop = asyncio.get_running_loop()
 
+    await queue.put(
+        {
+            "type": "progress",
+            "payload": {
+                "request_id": request_id,
+                "ticker": req.ticker,
+                "trade_date": req.trade_date,
+                "agent_id": "data_collection",
+                "agent_name": "Data Collection",
+                "status": "started",
+                "status_message": "Preparing market data preflight...",
+            },
+        }
+    )
     await preflight_market_data_func(req)
 
     manager = await get_cancel_manager_func()

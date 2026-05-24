@@ -10,11 +10,13 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 from typing import Any, Hashable, Literal
 
 AnalysisStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
+TERMINAL_ANALYSIS_STATUSES = {"completed", "failed", "cancelled"}
+DEFAULT_JOB_EVENT_REPLAY_LIMIT = 500
 
 
 class AnalysisJobLimitError(RuntimeError):
@@ -158,27 +160,88 @@ class AnalysisJob:
     status: AnalysisStatus = "queued"
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
-    events: list[dict[str, Any]] = field(default_factory=list)
+    events: deque[dict[str, Any]] = field(default_factory=deque)
+    max_event_history: int = DEFAULT_JOB_EVENT_REPLAY_LIMIT
     result: dict[str, Any] | None = None
     error: dict[str, Any] | None = None
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     done_event: asyncio.Event = field(default_factory=asyncio.Event)
     event_condition: asyncio.Condition = field(default_factory=asyncio.Condition)
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    state_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     task: asyncio.Task | None = None
+    _next_event_sequence: int = 0
 
-    async def publish(self, event_type: str, payload: dict[str, Any]) -> None:
-        """Append a replayable job event and wake all current subscribers."""
+    def __post_init__(self) -> None:
+        self.max_event_history = max(1, int(self.max_event_history))
+        self.events = deque(self.events, maxlen=self.max_event_history)
+        if self.events:
+            self._next_event_sequence = max(int(event.get("sequence", -1)) for event in self.events) + 1
+
+    async def _append_event(self, event_type: str, payload: dict[str, Any]) -> None:
         event = {
-            "sequence": len(self.events),
+            "sequence": self._next_event_sequence,
             "type": event_type,
             "payload": payload,
             "created_at": time.time(),
         }
+        self._next_event_sequence += 1
         async with self.event_condition:
             self.events.append(event)
             self.updated_at = time.time()
             self.event_condition.notify_all()
+
+    async def publish(self, event_type: str, payload: dict[str, Any]) -> bool:
+        """Append a bounded replayable job event and wake all subscribers."""
+        async with self.state_lock:
+            if self.status in TERMINAL_ANALYSIS_STATUSES and event_type not in {"result", "error"}:
+                return False
+            await self._append_event(event_type, payload)
+            return True
+
+    async def events_since(self, sequence: int) -> list[dict[str, Any]]:
+        async with self.event_condition:
+            return [event for event in self.events if event["sequence"] >= sequence]
+
+    async def mark_running(self) -> bool:
+        async with self.state_lock:
+            if self.status in TERMINAL_ANALYSIS_STATUSES:
+                return False
+            self.status = "running"
+            self.updated_at = time.time()
+            return True
+
+    async def complete(self, result: dict[str, Any]) -> bool:
+        async with self.state_lock:
+            if self.status in TERMINAL_ANALYSIS_STATUSES:
+                return False
+            self.result = result
+            self.error = None
+            self.status = "completed"
+            self.done_event.set()
+            await self._append_event("result", result)
+            return True
+
+    async def fail(self, error: dict[str, Any]) -> bool:
+        async with self.state_lock:
+            if self.status in TERMINAL_ANALYSIS_STATUSES:
+                return False
+            self.error = error
+            self.status = "failed"
+            self.done_event.set()
+            await self._append_event("error", error)
+            return True
+
+    async def cancel(self, error: dict[str, Any]) -> bool:
+        async with self.state_lock:
+            self.cancel_event.set()
+            if self.status in TERMINAL_ANALYSIS_STATUSES:
+                return False
+            self.error = error
+            self.status = "cancelled"
+            self.done_event.set()
+            await self._append_event("error", error)
+            return True
 
     def public_summary(self) -> dict[str, Any]:
         return {
@@ -196,10 +259,17 @@ class AnalysisJob:
 class AnalysisJobStore:
     """In-memory job registry for job-based API and cancellation."""
 
-    def __init__(self, ttl_seconds: int, max_entries: int, max_active_jobs: int | None = None) -> None:
+    def __init__(
+        self,
+        ttl_seconds: int,
+        max_entries: int,
+        max_active_jobs: int | None = None,
+        max_event_history: int = DEFAULT_JOB_EVENT_REPLAY_LIMIT,
+    ) -> None:
         self.ttl_seconds = ttl_seconds
         self.max_entries = max_entries
         self.max_active_jobs = max_active_jobs if max_active_jobs is not None else max_entries
+        self.max_event_history = max(1, int(max_event_history))
         self._jobs: dict[str, AnalysisJob] = {}
         self._lock = asyncio.Lock()
 
@@ -216,6 +286,7 @@ class AnalysisJobStore:
                 owner_id=owner_id,
                 cache_key=cache_key,
                 payload=payload,
+                max_event_history=self.max_event_history,
             )
             self._jobs[job.id] = job
             await self._evict_locked()
@@ -234,14 +305,10 @@ class AnalysisJobStore:
         job = await self.get(job_id, owner_id=owner_id)
         if job is None:
             return None
-        job.cancel_event.set()
-        if job.status not in {"completed", "failed", "cancelled"}:
-            job.status = "cancelled"
-            job.updated_at = time.time()
-            job.error = {"request_id": job.request_id, "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."}}
-            await job.publish("error", job.error)
-            job.done_event.set()
-        if job.task and not job.task.done():
+        changed = await job.cancel(
+            {"request_id": job.request_id, "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."}}
+        )
+        if changed and job.task and not job.task.done():
             job.task.cancel()
         return job
 

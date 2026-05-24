@@ -4,24 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
-from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from rate_limiter import limit_request, request_policy
+from routes.validation import normalize_ticker_symbol
 
 logger = logging.getLogger(__name__)
-
-# Ensure core package is importable when this module is loaded in isolation.
-_BASE_DIR = Path(__file__).resolve().parent.parent
-_CORE_DIR = _BASE_DIR / "tradingagents-core"
-for _p in (str(_BASE_DIR), str(_CORE_DIR)):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
-from routes.validation import normalize_ticker_symbol  # noqa: E402
 
 router = APIRouter()
 

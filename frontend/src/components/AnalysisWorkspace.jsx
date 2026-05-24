@@ -42,7 +42,7 @@ function readHistory(historyKey) {
     const raw = localStorage.getItem(historyKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(entry => entry && !isExpired(entry)) : [];
+    return Array.isArray(parsed) ? parsed.filter((entry) => entry && !isExpired(entry)) : [];
   } catch {
     return [];
   }
@@ -50,7 +50,7 @@ function readHistory(historyKey) {
 
 function writeHistory(historyKey, entries) {
   try {
-    const clean = entries.filter(entry => entry && !isExpired(entry)).slice(0, HISTORY_LIMIT);
+    const clean = entries.filter((entry) => entry && !isExpired(entry)).slice(0, HISTORY_LIMIT);
     localStorage.setItem(historyKey, JSON.stringify(clean));
   } catch {
     // Storage can be unavailable in private browsing or when quota is exceeded.
@@ -73,14 +73,16 @@ function saveToHistory(historyKey, result) {
 
   const history = readHistory(historyKey);
   const deduped = history.filter(
-    item => !(item.ticker === result.ticker && item.trade_date === result.trade_date)
+    (item) => !(item.ticker === result.ticker && item.trade_date === result.trade_date)
   );
   writeHistory(historyKey, [{ ...snapshot, saved_at: new Date().toISOString() }, ...deduped]);
 }
 
 function decisionStyle(decision) {
-  if (decision === 'Buy' || decision === 'Overweight') return 'text-bloomberg-green border-bloomberg-green';
-  if (decision === 'Sell' || decision === 'Underweight') return 'text-bloomberg-red border-bloomberg-red';
+  if (decision === 'Buy' || decision === 'Overweight')
+    return 'text-bloomberg-green border-bloomberg-green';
+  if (decision === 'Sell' || decision === 'Underweight')
+    return 'text-bloomberg-red border-bloomberg-red';
   return 'text-bloomberg-amber border-bloomberg-amber';
 }
 
@@ -96,8 +98,12 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
   return (
     <div className="border border-bloomberg-border bg-bloomberg-card">
       <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center justify-between bg-black">
-        <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">RECENT ANALYSES</span>
-        <span className="font-mono text-xs text-bloomberg-muted">{history.length}/{HISTORY_LIMIT}</span>
+        <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
+          RECENT ANALYSES
+        </span>
+        <span className="font-mono text-xs text-bloomberg-muted">
+          {history.length}/{HISTORY_LIMIT}
+        </span>
       </div>
       <div>
         {history.map((item, index) => (
@@ -107,7 +113,9 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
             className="w-full flex items-center justify-between px-4 py-3 border-b border-bloomberg-border last:border-b-0 hover:bg-bloomberg-surface transition-colors duration-150 text-left"
           >
             <div>
-              <div className="font-mono text-sm font-semibold text-bloomberg-white">{item.ticker}</div>
+              <div className="font-mono text-sm font-semibold text-bloomberg-white">
+                {item.ticker}
+              </div>
               <div className="font-mono text-xs text-bloomberg-muted">{item.trade_date}</div>
             </div>
             <div className="flex items-center gap-3">
@@ -116,7 +124,9 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
                   {formatPrice(item.price_target, item.ticker)}
                 </span>
               )}
-              <span className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(item.decision)}`}>
+              <span
+                className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(item.decision)}`}
+              >
                 {(item.decision || 'N/A').toUpperCase()}
               </span>
             </div>
@@ -132,7 +142,9 @@ function StatusBar({ loading, status }) {
   return (
     <div className="border-t border-bloomberg-border px-4 py-2 bg-black flex items-center gap-2">
       <span className="w-1.5 h-1.5 rounded-full bg-bloomberg-orange animate-pulse-dot flex-shrink-0" />
-      <span className="font-mono text-xs text-bloomberg-orange tracking-wider truncate">{status || 'RUNNING...'}</span>
+      <span className="font-mono text-xs text-bloomberg-orange tracking-wider truncate">
+        {status || 'RUNNING...'}
+      </span>
     </div>
   );
 }
@@ -168,7 +180,10 @@ export default function AnalysisWorkspace({ FormComponent, historyKey, emptyDesc
               <HistoryPanel
                 currentTicker={result?.ticker}
                 historyKey={historyKey}
-                onSelect={item => { setResult(item); setLoading(false); }}
+                onSelect={(item) => {
+                  setResult(item);
+                  setLoading(false);
+                }}
               />
             </div>
           </div>
@@ -189,7 +204,9 @@ export default function AnalysisWorkspace({ FormComponent, historyKey, emptyDesc
                 {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
                   <div key={step} className="border border-bloomberg-border p-3 text-center">
                     <div className="font-mono text-2xl text-bloomberg-border mb-2">{index + 1}</div>
-                    <div className="font-mono text-xs text-bloomberg-muted tracking-wider">{step}</div>
+                    <div className="font-mono text-xs text-bloomberg-muted tracking-wider">
+                      {step}
+                    </div>
                   </div>
                 ))}
               </div>
