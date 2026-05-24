@@ -82,7 +82,7 @@ class SQLiteTTLCache:
             count = conn.execute("SELECT COUNT(*) FROM cache WHERE expires_at > ?", (time.time(),)).fetchone()[0]
         return {
             "backend": "sqlite",
-            "path": str(self.db_path),
+            "path": self.db_path.name,
             "entries": int(count),
             "ttl_seconds": int(self.ttl_seconds),
             "max_entries": int(self.max_entries),

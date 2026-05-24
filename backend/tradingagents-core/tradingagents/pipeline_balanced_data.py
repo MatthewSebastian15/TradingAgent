@@ -175,7 +175,8 @@ def collect_market_data(
         )
 
     results: dict[str, DataField] = {}
-    with ThreadPoolExecutor(max_workers=min(12, len(tasks)), thread_name_prefix="balanced-data") as pool:
+    max_workers = min(max(1, int(config.get("data_collection_workers", 6))), len(tasks))
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="balanced-data") as pool:
         futures = {pool.submit(_run_with_config, config, func): name for name, func in tasks.items()}
         for future in as_completed(futures):
             _check_cancel(cancel_check)

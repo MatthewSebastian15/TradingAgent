@@ -147,7 +147,8 @@ def run_balanced_pipeline(
         )
 
     try:
-        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="balanced-analyst") as pool:
+        analyst_workers = min(max(1, int(config.get("analyst_parallel_workers", 3))), 3)
+        with ThreadPoolExecutor(max_workers=analyst_workers, thread_name_prefix="balanced-analyst") as pool:
             market_future = pool.submit(_run_with_config, config, build_market_report_parallel)
             news_future = pool.submit(_run_with_config, config, build_news_social_report_parallel)
             fundamentals_future = pool.submit(_run_with_config, config, build_fundamentals_report_parallel)

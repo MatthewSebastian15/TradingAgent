@@ -31,6 +31,21 @@ class AnalysisRequest(BaseModel):
     response_detail: ResponseDetail = Field(default="full")
 
 
+def normalize_ticker_symbol(ticker: str) -> str:
+    """Normalize and validate one user-supplied ticker symbol."""
+    normalized = normalize_ticker(ticker) if isinstance(ticker, str) else ticker
+    if not isinstance(normalized, str) or not _TICKER_RE.fullmatch(normalized):
+        raise BadRequestError(
+            "Invalid ticker symbol.",
+            details={
+                "fields": {
+                    "ticker": "Ticker must be a Yahoo Finance compatible symbol, for example AAPL, BBCA.JK, BBRI.JK, TLKM.JK, BRK-B, or 0700.HK."
+                }
+            },
+        )
+    return normalized
+
+
 def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisRequest:
     """Validate user input before the expensive agent pipeline starts."""
 

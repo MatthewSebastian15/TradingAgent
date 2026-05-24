@@ -8,7 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
 from tradingagents.dataflows.config import get_config
-from tradingagents.utils_resilience import call_with_retry, call_with_timeout, limit_concurrency
+from tradingagents.utils_resilience import call_with_retry, limit_concurrency
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +53,7 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
         def do_call():
             concurrency_limit = int(cfg.get("max_concurrent_llm_calls", 3))
             with limit_concurrency("llm:google", concurrency_limit):
-                return call_with_timeout(
-                    lambda: normalize_content(ChatGoogleGenerativeAI.invoke(self, input, config, **kwargs)),
-                    timeout_seconds=int(cfg.get("timeout", 60)),
-                    service_name=service_name,
-                )
+                return normalize_content(ChatGoogleGenerativeAI.invoke(self, input, config, **kwargs))
 
         try:
             return call_with_retry(

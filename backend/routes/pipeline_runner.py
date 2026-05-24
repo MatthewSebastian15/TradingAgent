@@ -11,7 +11,13 @@ from typing import Any, Callable, Optional
 
 from fastapi import Request
 
-from config import PIPELINE_TIMEOUT_SECONDS, PROCESS_POOL_MAX_TASKS_PER_CHILD, PROCESS_POOL_WORKERS, build_tradingagents_config
+from config import (
+    PIPELINE_TIMEOUT_SECONDS,
+    PREFLIGHT_TIMEOUT_SECONDS,
+    PROCESS_POOL_MAX_TASKS_PER_CHILD,
+    PROCESS_POOL_WORKERS,
+    build_tradingagents_config,
+)
 from errors import ApiError, BadRequestError, PipelineExecutionError, PipelineTimeoutError, sanitize_message
 from routes.serializers import parse_final_result
 from routes.validation import AnalysisRequest
@@ -411,7 +417,7 @@ async def preflight_market_data(
         req.response_detail,
     )
     try:
-        sample = await asyncio.wait_for(future, timeout=PIPELINE_TIMEOUT_SECONDS)
+        sample = await asyncio.wait_for(future, timeout=PREFLIGHT_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as exc:
         if future.done():
             raise BadRequestError(

@@ -187,3 +187,24 @@ def test_status_endpoint_is_rate_limited(client, monkeypatch):
     assert first.status_code == 200
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "RATE_LIMITED"
+
+
+def test_market_quotes_endpoint_is_rate_limited(client, monkeypatch):
+    async def fake_fetch_quotes(symbols):
+        return [{"sym": symbol, "chg": "0.00%", "pos": True, "price": 1.0, "error": False} for symbol in symbols]
+
+    monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
+    monkeypatch.setattr(
+        "routes.market.request_policy",
+        lambda: RateLimitPolicy(scope="market-quotes-limit-test", max_per_minute=1, max_concurrent=1),
+    )
+
+    headers = {"x-api-key": "same-market-key"}
+
+    first = client.get("/api/market/quotes?symbols=bbca,aapl", headers=headers)
+    second = client.get("/api/market/quotes?symbols=bbca,aapl", headers=headers)
+
+    assert first.status_code == 200
+    assert [item["sym"] for item in first.json()["quotes"]] == ["BBCA.JK", "AAPL"]
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "RATE_LIMITED"

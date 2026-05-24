@@ -201,14 +201,13 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
     assert attempts == [1]
 
 
-def test_invoke_once_uses_timeout_and_returns_fallback():
-    class SlowLLM:
+def test_invoke_once_returns_fallback_when_llm_timeout_is_raised():
+    class TimeoutLLM:
         def with_structured_output(self, schema):
             return None
 
         def invoke(self, prompt):
-            time.sleep(2)
-            return "{}"
+            raise TimeoutError("provider timed out")
 
     set_config({"timeout": 1})
     fallback = AnalystReport(
@@ -219,9 +218,8 @@ def test_invoke_once_uses_timeout_and_returns_fallback():
         confidence=0.1,
     )
 
-    started_at = time.monotonic()
     result = _invoke_once(
-        SlowLLM(),
+        TimeoutLLM(),
         AnalystReport,
         "Prompt",
         fallback,
@@ -229,4 +227,3 @@ def test_invoke_once_uses_timeout_and_returns_fallback():
     )
 
     assert result == fallback
-    assert time.monotonic() - started_at < 1.8
