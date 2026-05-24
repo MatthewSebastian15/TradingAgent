@@ -2,15 +2,15 @@ services:
   backend:
     build:
       context: .
+      network: host
       dockerfile: Dockerfile.backend
     container_name: tradingagent-backend
     dns:
-      - 8.8.8.8
-      - 8.8.4.4
+      - 1.1.1.1
+      - 1.0.0.1
     env_file:
       - ./backend/.env
     environment:
-      PYTHONPATH: /app/backend:/app/backend/tradingagents-core
       OLLAMA_BASE_URL: http://ollama:11434
       XDG_CACHE_HOME: /root/.tradingagents/cache
       YFINANCE_CACHE_DIR: /root/.tradingagents/cache/py-yfinance
@@ -33,8 +33,8 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: tradingagent-frontend
     dns:
-      - 8.8.8.8
-      - 8.8.4.4
+      - 1.1.1.1
+      - 1.0.0.1
     environment:
       BACKEND_API_KEY: ${BACKEND_API_KEY:-}
     depends_on:
@@ -48,8 +48,8 @@ services:
     image: ollama/ollama:latest
     container_name: tradingagent-ollama
     dns:
-      - 8.8.8.8
-      - 8.8.4.4
+      - 1.1.1.1
+      - 1.0.0.1
     profiles:
       - ollama
     ports:
