@@ -15,28 +15,70 @@ const AGENTS = [
   { short: 'PORT', label: 'PORTFOLIO MANAGER',     desc: 'Final BUY / HOLD / SELL decision',          color: '#a855f7' },
 ];
 
-const TICKERS = [
-  { sym: 'BBCA.JK', chg: '+1.24%', pos: true },
-  { sym: 'BBRI.JK', chg: '-0.83%', pos: false },
-  { sym: 'TLKM.JK', chg: '+0.51%', pos: true },
-  { sym: 'NVDA',    chg: '+2.17%', pos: true },
-  { sym: 'AAPL',    chg: '-0.32%', pos: false },
-  { sym: 'TSLA',    chg: '-1.94%', pos: false },
-  { sym: 'MSFT',    chg: '+0.78%', pos: true },
-  { sym: 'META',    chg: '+3.12%', pos: true },
-  { sym: 'GOTO.JK', chg: '+4.60%', pos: true },
-  { sym: 'ASII.JK', chg: '-0.22%', pos: false },
+const DEFAULT_TICKERS = [
+  'BBCA.JK','BBRI.JK','TLKM.JK','NVDA','AAPL','TSLA','MSFT','META','GOTO.JK','ASII.JK',
 ];
 
+// Refresh interval in milliseconds (5 minutes).
+const TICKER_REFRESH_MS = 5 * 60 * 1000;
+
+function useTickerQuotes() {
+  const [quotes, setQuotes] = useState([]);
+  const [fetchError, setFetchError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const symbols = DEFAULT_TICKERS.join(',');
+        const res = await fetch(buildApiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols)}`), {
+          headers: buildAuthHeaders(),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!cancelled) {
+          setQuotes(data.quotes || []);
+          setFetchError(false);
+        }
+      } catch {
+        if (!cancelled) setFetchError(true);
+      }
+    }
+
+    load();
+    const interval = setInterval(load, TICKER_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  return { quotes, fetchError };
+}
+
 function TickerTape() {
+  const { quotes, fetchError } = useTickerQuotes();
+
+  // While loading or on error, show skeleton placeholders so the tape
+  // is never empty and layout does not shift.
+  const items = quotes.length > 0
+    ? quotes
+    : DEFAULT_TICKERS.map((sym) => ({ sym, chg: '…', pos: true }));
+
   return (
     <div className="border-b border-bloomberg-border bg-black overflow-hidden">
+      {fetchError && (
+        <div className="font-mono text-xs text-bloomberg-amber text-center py-0.5 bg-bloomberg-surface">
+          ◐ MARKET DATA UNAVAILABLE — backend offline or yfinance error
+        </div>
+      )}
       <div className="flex gap-8 py-1.5 animate-marquee whitespace-nowrap" style={{ width: 'max-content' }}>
-        {[...TICKERS, ...TICKERS].map((t, i) => (
+        {[...items, ...items].map((t, i) => (
           <span key={i} className="flex items-center gap-2 font-mono text-xs">
             <span className="text-bloomberg-white font-semibold tracking-wider">{t.sym}</span>
-            <span className={t.pos ? 'text-bloomberg-green' : 'text-bloomberg-red'}>
-              {t.pos ? '▲' : '▼'} {t.chg}
+            <span className={t.chg === '…' ? 'text-bloomberg-muted' : t.pos ? 'text-bloomberg-green' : 'text-bloomberg-red'}>
+              {t.chg === '…' ? '…' : (t.pos ? '▲' : '▼') + ' ' + t.chg}
             </span>
           </span>
         ))}
