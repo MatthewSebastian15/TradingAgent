@@ -8,7 +8,7 @@ from io import StringIO
 from typing import Any, Callable, Optional, TypeVar
 
 from tradingagents.dataflows.config import set_config, use_config
-from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
+from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates
 from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
@@ -48,13 +48,13 @@ def _run_with_config(config: dict[str, Any], func: Callable[[], T]) -> T:
 
 def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -> DataField:
     try:
-        value = _truncate(_call_yfinance_with_resilience(func), limit)
-        status = "missing" if looks_missing(value) else "ok"
-        warning = value.splitlines()[0] if status == "missing" and value else None
-        return DataField(value=value, status=status, warning=warning)
+        raw_value = _call_yfinance_with_resilience(func)
+        if isinstance(raw_value, DataField):
+            return raw_value
+        return DataField.from_text(_truncate(raw_value, limit))
     except Exception as exc:
         logger.warning("Balanced pipeline data call failed for %s: %s", label, exc)
-        return DataField(value=f"{label} unavailable: {exc}", status="missing", warning=f"{label} unavailable: {exc}")
+        return DataField.unavailable(label, exc)
 
 
 def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
@@ -103,28 +103,19 @@ def _date_window(trade_date: str) -> tuple[str, str, str]:
     return start_90, start_30, end
 
 
-def collect_market_data(
-    ticker: str,
-    trade_date: str,
-    config: dict[str, Any],
-    cancel_check: Optional[Callable[[], bool]] = None,
-) -> CollectedData:
-    """Collect external data in parallel and classify yfinance data quality."""
-    _check_cancel(cancel_check)
-    set_config(config)
-    ticker = normalize_ticker(ticker)
-    start_90, start_30, end = _date_window(trade_date)
+INDICATOR_NAMES = [
+    "close_50_sma",
+    "close_200_sma",
+    "macd",
+    "rsi",
+    "atr",
+    "boll_ub",
+    "boll_lb",
+    "mfi",
+]
 
-    indicator_names = [
-        "close_50_sma",
-        "close_200_sma",
-        "macd",
-        "rsi",
-        "atr",
-        "boll_ub",
-        "boll_lb",
-        "mfi",
-    ]
+
+def _build_collection_tasks(ticker: str, trade_date: str, start_90: str, start_30: str, end: str) -> dict[str, Callable[[], DataField]]:
     tasks: dict[str, Callable[[], DataField]] = {
         "price_data": lambda: _safe_data_field(
             "price_data",
@@ -167,13 +158,20 @@ def collect_market_data(
             limit=6_000,
         ),
     }
-    for indicator in indicator_names:
+    for indicator in INDICATOR_NAMES:
         tasks[f"indicator:{indicator}"] = lambda indicator=indicator: _safe_data_field(
             f"indicator:{indicator}",
             lambda indicator=indicator: route_to_vendor("get_indicators", ticker, indicator, trade_date, 30),
             limit=4_000,
         )
+    return tasks
 
+
+def _run_collection_tasks(
+    tasks: dict[str, Callable[[], DataField]],
+    config: dict[str, Any],
+    cancel_check: Optional[Callable[[], bool]],
+) -> dict[str, DataField]:
     results: dict[str, DataField] = {}
     max_workers = min(max(1, int(config.get("data_collection_workers", 6))), len(tasks))
     with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="balanced-data") as pool:
@@ -185,7 +183,97 @@ def collect_market_data(
                 results[name] = future.result()
             except Exception as exc:
                 logger.warning("Balanced pipeline data future failed for %s: %s", name, exc)
-                results[name] = DataField(value=f"{name} unavailable: {exc}", status="missing", warning=f"{name} unavailable: {exc}")
+                results[name] = DataField.unavailable(name, exc)
+    return results
+
+
+def _warnings_from_fields(fields: list[DataField]) -> list[str]:
+    warnings: list[str] = []
+    for item in fields:
+        if item.warning:
+            warnings.append(item.warning)
+    return warnings
+
+
+def _classify_price_data(price: DataField, fundamentals: DataField, trade_date: str, warnings: list[str]) -> str:
+    price_dates = extract_price_dates(price.value)
+    if price.status == "missing":
+        return "invalid_ticker" if fundamentals.status == "missing" else "missing"
+    if trade_date not in price_dates:
+        warnings.append(f"No yfinance OHLCV row found exactly on {trade_date}; market may have been closed or ticker may not trade that day.")
+        return "market_closed"
+    if len(price_dates) < 10:
+        warnings.append(f"Only {len(price_dates)} price rows found in the 90-day yfinance window.")
+        return "partial"
+    return "ok"
+
+
+def _classify_fundamentals(
+    fundamentals: DataField,
+    balance_sheet: DataField,
+    cashflow: DataField,
+    income_statement: DataField,
+    warnings: list[str],
+) -> str:
+    fields = [
+        ("fundamentals", fundamentals),
+        ("balance_sheet", balance_sheet),
+        ("cashflow", cashflow),
+        ("income_statement", income_statement),
+    ]
+    statuses = [item.status for _name, item in fields]
+    if all(status == "missing" for status in statuses):
+        return "missing"
+    if any(status == "missing" for status in statuses):
+        missing_parts = [name for name, item in fields if item.status == "missing"]
+        warnings.append(f"Partial fundamentals from yfinance; missing: {', '.join(missing_parts)}.")
+        return "partial"
+    return "ok"
+
+
+def _classify_news(company_news: DataField, global_news: DataField, warnings: list[str]) -> str:
+    if company_news.status == "missing" and global_news.status == "missing":
+        return "missing"
+    if company_news.status == "missing" or global_news.status == "missing":
+        warnings.append("Partial news coverage from yfinance; company-specific or global news is missing.")
+        return "partial"
+    return "ok"
+
+
+def _build_data_quality(
+    trade_date: str,
+    price: DataField,
+    fundamentals: DataField,
+    balance_sheet: DataField,
+    cashflow: DataField,
+    income_statement: DataField,
+    company_news: DataField,
+    global_news: DataField,
+    all_fields: list[DataField],
+) -> DataQualityReport:
+    warnings = _warnings_from_fields(all_fields)
+    return DataQualityReport(
+        price_data=_classify_price_data(price, fundamentals, trade_date, warnings),
+        fundamentals=_classify_fundamentals(fundamentals, balance_sheet, cashflow, income_statement, warnings),
+        news=_classify_news(company_news, global_news, warnings),
+        warnings=list(dict.fromkeys(warnings))[:20],
+    )
+
+
+def collect_market_data(
+    ticker: str,
+    trade_date: str,
+    config: dict[str, Any],
+    cancel_check: Optional[Callable[[], bool]] = None,
+) -> CollectedData:
+    """Collect external data in parallel and classify yfinance data quality."""
+    _check_cancel(cancel_check)
+    set_config(config)
+    ticker = normalize_ticker(ticker)
+    start_90, start_30, end = _date_window(trade_date)
+
+    tasks = _build_collection_tasks(ticker, trade_date, start_90, start_30, end)
+    results = _run_collection_tasks(tasks, config, cancel_check)
 
     price = results["price_data"]
     fundamentals = results["fundamentals"]
@@ -195,58 +283,9 @@ def collect_market_data(
     company_news = results["company_news"]
     global_news = results["global_news"]
     insider_transactions = results["insider_transactions"]
-    indicator_parts = [results[f"indicator:{indicator}"] for indicator in indicator_names]
-
-    warnings: list[str] = []
-    for item in [price, fundamentals, balance_sheet, cashflow, income_statement, company_news, global_news, insider_transactions, *indicator_parts]:
-        if item.warning:
-            warnings.append(item.warning)
-
-    price_dates = extract_price_dates(price.value)
-    if price.status == "missing":
-        price_status = "invalid_ticker" if fundamentals.status == "missing" else "missing"
-    elif trade_date not in price_dates:
-        price_status = "market_closed"
-        warnings.append(f"No yfinance OHLCV row found exactly on {trade_date}; market may have been closed or ticker may not trade that day.")
-    elif len(price_dates) < 10:
-        price_status = "partial"
-        warnings.append(f"Only {len(price_dates)} price rows found in the 90-day yfinance window.")
-    else:
-        price_status = "ok"
-
-    financial_statuses = [fundamentals.status, balance_sheet.status, cashflow.status, income_statement.status]
-    if all(status == "missing" for status in financial_statuses):
-        fundamentals_status = "missing"
-    elif any(status == "missing" for status in financial_statuses):
-        fundamentals_status = "partial"
-        missing_parts = [
-            name
-            for name, item in [
-                ("fundamentals", fundamentals),
-                ("balance_sheet", balance_sheet),
-                ("cashflow", cashflow),
-                ("income_statement", income_statement),
-            ]
-            if item.status == "missing"
-        ]
-        warnings.append(f"Partial fundamentals from yfinance; missing: {', '.join(missing_parts)}.")
-    else:
-        fundamentals_status = "ok"
-
-    if company_news.status == "missing" and global_news.status == "missing":
-        news_status = "missing"
-    elif company_news.status == "missing" or global_news.status == "missing":
-        news_status = "partial"
-        warnings.append("Partial news coverage from yfinance; company-specific or global news is missing.")
-    else:
-        news_status = "ok"
-
-    data_quality = DataQualityReport(
-        price_data=price_status,
-        fundamentals=fundamentals_status,
-        news=news_status,
-        warnings=list(dict.fromkeys(warnings))[:20],
-    )
+    indicator_parts = [results[f"indicator:{indicator}"] for indicator in INDICATOR_NAMES]
+    all_fields = [price, fundamentals, balance_sheet, cashflow, income_statement, company_news, global_news, insider_transactions, *indicator_parts]
+    data_quality = _build_data_quality(trade_date, price, fundamentals, balance_sheet, cashflow, income_statement, company_news, global_news, all_fields)
 
     _check_cancel(cancel_check)
     return CollectedData(

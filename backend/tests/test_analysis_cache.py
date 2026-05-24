@@ -63,3 +63,36 @@ def test_job_store_rejects_jobs_over_active_cap():
         assert (await store.stats())["active"] == 1
 
     asyncio.run(main())
+
+
+def test_job_event_history_is_bounded():
+    async def main():
+        store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10, max_event_history=2)
+        job = await store.create(owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"})
+
+        for index in range(5):
+            await job.publish("progress", {"index": index})
+
+        events = await job.events_since(0)
+
+        assert [event["payload"]["index"] for event in events] == [3, 4]
+        assert [event["sequence"] for event in events] == [3, 4]
+
+    asyncio.run(main())
+
+
+def test_job_terminal_transition_does_not_overwrite_cancelled_state():
+    async def main():
+        store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+        job = await store.create(owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"})
+
+        cancelled = await job.cancel({"request_id": "request-1", "error": {"code": "ANALYSIS_CANCELLED", "message": "cancelled"}})
+        completed = await job.complete({"decision": "Buy"})
+
+        assert cancelled is True
+        assert completed is False
+        assert job.status == "cancelled"
+        assert job.result is None
+        assert job.error["error"]["code"] == "ANALYSIS_CANCELLED"
+
+    asyncio.run(main())

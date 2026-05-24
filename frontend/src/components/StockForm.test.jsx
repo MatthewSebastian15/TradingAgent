@@ -77,6 +77,48 @@ describe('StockForm cleanup', () => {
     expect(props.onResult).not.toHaveBeenCalledWith({ error: 'Analysis cancelled.' });
   });
 
+  it('surfaces an error when the SSE stream ends before a result or error event', async () => {
+    const props = callbacks();
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn((url, options = {}) => {
+      if (options.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ job_id: 'job-closed-early', status: 'queued' }),
+        });
+      }
+
+      if (options.method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  'event: progress\n' +
+                    'data: {"status_message":"Mock progress","agent_id":"market"}\n\n'
+                )
+              );
+              controller.close();
+            },
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<StockForm {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
+
+    await waitFor(() => {
+      expect(props.onResult).toHaveBeenCalledWith({ error: 'SSE stream ended before result.' });
+    });
+    expect(props.onLoading).toHaveBeenLastCalledWith(false);
+  });
+
   it('clears mock pipeline timers when unmounted', () => {
     vi.useFakeTimers();
     const props = callbacks();

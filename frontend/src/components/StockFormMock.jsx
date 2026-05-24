@@ -4,11 +4,11 @@ import { getMockAnalysisResponse, MOCK_PIPELINE_STEPS } from '../mockData';
 const DEFAULT_DEBATE_ROUNDS = 3;
 
 const IDX_TICKERS = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'];
-const US_TICKERS  = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'];
+const US_TICKERS = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'];
 
 function today() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function TickerChip({ label, active, onClick, disabled }) {
@@ -20,9 +20,11 @@ function TickerChip({ label, active, onClick, disabled }) {
       className={`
         px-2.5 py-1 text-xs font-mono border transition-colors duration-150
         disabled:opacity-40 disabled:cursor-not-allowed
-        ${active
-          ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
-          : 'border-bloomberg-border bg-bloomberg-surface text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'}
+        ${
+          active
+            ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
+            : 'border-bloomberg-border bg-bloomberg-surface text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'
+        }
       `}
     >
       {label}
@@ -31,12 +33,12 @@ function TickerChip({ label, active, onClick, disabled }) {
 }
 
 export default function StockFormMock({ onResult, onLoading, onStatus, onAgentProgress }) {
-  const [ticker, setTicker]   = useState('NVDA');
-  const [date, setDate]       = useState(today());
-  const [rounds, setRounds]   = useState(DEFAULT_DEBATE_ROUNDS);
-  const [error, setError]     = useState('');
+  const [ticker, setTicker] = useState('NVDA');
+  const [date, setDate] = useState(today());
+  const [rounds, setRounds] = useState(DEFAULT_DEBATE_ROUNDS);
+  const [error, setError] = useState('');
   const [running, setRunning] = useState(false);
-  const timersRef             = useRef([]);
+  const timersRef = useRef([]);
 
   function clearTimers() {
     timersRef.current.forEach(window.clearTimeout);
@@ -57,7 +59,7 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
 
   function validate() {
     const t = ticker.trim().toUpperCase();
-    if (!/^[A-Z0-9]{1,10}([.\-][A-Z0-9]{1,5})?$/.test(t)) {
+    if (!/^[A-Z0-9]{1,10}([.-][A-Z0-9]{1,5})?$/.test(t)) {
       return 'Invalid ticker. Examples: BBCA.JK, NVDA, BRK-B';
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -119,25 +121,30 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
       schedule(() => emitProgress(step, 'completed', step.completed), startAt + stepDuration);
     });
 
-    schedule(() => {
-      const mockResult = getMockAnalysisResponse({
-        ticker: normalizedTicker,
-        trade_date: date,
-        max_debate_rounds: rounds,
-      });
-      onResult(mockResult);
-      setRunning(false);
-      onLoading(false);
-      onStatus('');
-      clearTimers();
-    }, MOCK_PIPELINE_STEPS.length * stepGap + 300);
+    schedule(
+      () => {
+        const mockResult = getMockAnalysisResponse({
+          ticker: normalizedTicker,
+          trade_date: date,
+          max_debate_rounds: rounds,
+        });
+        onResult(mockResult);
+        setRunning(false);
+        onLoading(false);
+        onStatus('');
+        clearTimers();
+      },
+      MOCK_PIPELINE_STEPS.length * stepGap + 300
+    );
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-0">
       {/* Form header */}
       <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center gap-2">
-        <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-wider">NEW ANALYSIS</span>
+        <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-wider">
+          NEW ANALYSIS
+        </span>
         <span className="text-bloomberg-muted font-mono text-xs">/ CONFIGURE PARAMETERS</span>
       </div>
 
@@ -149,7 +156,14 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           </label>
           <input
             value={ticker}
-            onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g,'').slice(0,12))}
+            onChange={(e) =>
+              setTicker(
+                e.target.value
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9.-]/g, '')
+                  .slice(0, 12)
+              )
+            }
             placeholder="e.g. BBCA.JK"
             required
             disabled={running}
@@ -165,14 +179,26 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           <div className="mt-2">
             <div className="text-xs font-mono text-bloomberg-muted mb-1.5 tracking-wider">IDX</div>
             <div className="flex flex-wrap gap-1.5 mb-2">
-              {IDX_TICKERS.map(t => (
-                <TickerChip key={t} label={t} active={ticker===t} onClick={()=>setTicker(t)} disabled={running} />
+              {IDX_TICKERS.map((t) => (
+                <TickerChip
+                  key={t}
+                  label={t}
+                  active={ticker === t}
+                  onClick={() => setTicker(t)}
+                  disabled={running}
+                />
               ))}
             </div>
             <div className="text-xs font-mono text-bloomberg-muted mb-1.5 tracking-wider">US</div>
             <div className="flex flex-wrap gap-1.5">
-              {US_TICKERS.map(t => (
-                <TickerChip key={t} label={t} active={ticker===t} onClick={()=>setTicker(t)} disabled={running} />
+              {US_TICKERS.map((t) => (
+                <TickerChip
+                  key={t}
+                  label={t}
+                  active={ticker === t}
+                  onClick={() => setTicker(t)}
+                  disabled={running}
+                />
               ))}
             </div>
           </div>
@@ -187,7 +213,7 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
             <input
               type="date"
               value={date}
-              onChange={e => setDate(e.target.value)}
+              onChange={(e) => setDate(e.target.value)}
               disabled={running}
               required
               className="
@@ -204,7 +230,7 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
             </label>
             <select
               value={rounds}
-              onChange={e => setRounds(Number(e.target.value))}
+              onChange={(e) => setRounds(Number(e.target.value))}
               disabled={running}
               className="
                 w-full bg-black border border-bloomberg-border px-3 py-2.5
@@ -213,8 +239,10 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
                 disabled:opacity-50 transition-colors duration-150 cursor-pointer
               "
             >
-              {[1,2,3,4,5].map(n => (
-                <option key={n} value={n} className="bg-black">{n} ROUND{n>1?'S':''}</option>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n} className="bg-black">
+                  {n} ROUND{n > 1 ? 'S' : ''}
+                </option>
               ))}
             </select>
           </div>
@@ -238,9 +266,7 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
             active:scale-[0.99]
           "
         >
-          {running
-            ? '■ STOP MOCK PIPELINE'
-            : '▶ EXECUTE ANALYSIS'}
+          {running ? '■ STOP MOCK PIPELINE' : '▶ EXECUTE ANALYSIS'}
         </button>
 
         <div className="text-center font-mono text-xs text-bloomberg-muted tracking-wider">

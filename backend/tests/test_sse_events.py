@@ -216,3 +216,49 @@ def test_running_job_event_stream_replays_history_to_multiple_subscribers():
     assert [event["event"] for event in second] == ["job", "progress", "result"]
     assert json.loads(first[1]["data"])["agent_id"] == "market"
     assert json.loads(second[2]["data"])["decision"] == "Hold"
+
+
+def test_running_job_event_stream_yields_result_after_wait_notification():
+    from analysis_cache import AnalysisCacheKey, AnalysisJob
+    from routes.analysis import _stream_job_events
+
+    class ConnectedRequest:
+        async def is_disconnected(self):
+            return False
+
+    async def collect(job):
+        events = []
+        async for event in _stream_job_events(ConnectedRequest(), job):
+            events.append(event)
+        return events
+
+    async def main():
+        job = AnalysisJob(
+            id="job-1",
+            request_id="request-1",
+            owner_id="owner-1",
+            cache_key=AnalysisCacheKey(
+                ticker="AAPL",
+                trade_date="2026-05-14",
+                provider="google",
+                quick_model="gemini-2.5-flash",
+                deep_model="gemini-2.5-flash",
+                analysis_mode="balanced",
+                analysis_depth="balanced",
+                max_debate_rounds=1,
+                response_detail="full",
+            ),
+            payload={"ticker": "AAPL", "trade_date": "2026-05-14"},
+            status="running",
+        )
+
+        collector = asyncio.create_task(collect(job))
+        await asyncio.sleep(0.01)
+        await job.publish("progress", {"request_id": "request-1", "agent_id": "market", "status": "completed"})
+        await asyncio.sleep(0.01)
+        await job.complete({"request_id": "request-1", "ticker": "AAPL", "decision": "Hold"})
+        return await asyncio.wait_for(collector, timeout=1)
+
+    events = asyncio.run(main())
+    assert [event["event"] for event in events] == ["job", "progress", "result"]
+    assert json.loads(events[2]["data"])["decision"] == "Hold"

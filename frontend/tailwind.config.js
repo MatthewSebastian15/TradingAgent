@@ -1,13 +1,17 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       fontFamily: {
-        mono: ['ui-monospace', '"Cascadia Mono"', '"SFMono-Regular"', 'Consolas', '"Liberation Mono"', 'monospace'],
+        mono: [
+          'ui-monospace',
+          '"Cascadia Mono"',
+          '"SFMono-Regular"',
+          'Consolas',
+          '"Liberation Mono"',
+          'monospace',
+        ],
         sans: ['system-ui', '-apple-system', '"Segoe UI"', 'Arial', 'sans-serif'],
         display: ['"Arial Narrow"', '"Roboto Condensed"', '"Segoe UI"', 'Arial', 'sans-serif'],
       },
@@ -32,12 +36,12 @@ export default {
           white: '#e5e5e5',
           muted: '#525252',
           subtle: '#3d3d3d',
-        }
+        },
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'blink': 'blink 1s step-end infinite',
-        'marquee': 'marquee 30s linear infinite',
+        blink: 'blink 1s step-end infinite',
+        marquee: 'marquee 30s linear infinite',
         'spin-slow': 'spin 3s linear infinite',
         'fade-up': 'fadeUp 0.4s ease both',
       },
@@ -51,11 +55,11 @@ export default {
           '100%': { transform: 'translateX(-50%)' },
         },
         fadeUp: {
-          'from': { opacity: '0', transform: 'translateY(12px)' },
-          'to': { opacity: '1', transform: 'translateY(0)' },
-        }
-      }
+          from: { opacity: '0', transform: 'translateY(12px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
     },
   },
   plugins: [],
-}
+};

@@ -3,13 +3,6 @@ from __future__ import annotations
 import logging
 import sys
 from contextlib import asynccontextmanager
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent
-CORE_DIR = BASE_DIR / "tradingagents-core"
-for import_path in (str(BASE_DIR), str(CORE_DIR)):
-    if import_path not in sys.path:
-        sys.path.insert(0, import_path)
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError

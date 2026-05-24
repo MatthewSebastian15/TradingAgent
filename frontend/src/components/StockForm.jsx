@@ -25,14 +25,14 @@ const MARKETS = {
 };
 
 const DEPTH_OPTIONS = [
-  { value: 'fast',     label: 'FAST',     runtime: 'LOWER GEMINI COST' },
+  { value: 'fast', label: 'FAST', runtime: 'LOWER GEMINI COST' },
   { value: 'balanced', label: 'BALANCED', runtime: 'DEFAULT 9-CALL PIPELINE' },
-  { value: 'deep',     label: 'DEEP',     runtime: 'MORE RETRIES / MORE PATIENCE' },
+  { value: 'deep', label: 'DEEP', runtime: 'MORE RETRIES / MORE PATIENCE' },
 ];
 
 function today() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function parseSseBlock(block) {
@@ -40,15 +40,18 @@ function parseSseBlock(block) {
   for (const rawLine of block.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
     if (!line || line.startsWith(':')) continue;
-    const idx   = line.indexOf(':');
+    const idx = line.indexOf(':');
     const field = idx === -1 ? line : line.slice(0, idx);
     const value = idx === -1 ? '' : line.slice(idx + 1).replace(/^ /, '');
     if (field === 'event') ev.type = value;
-    if (field === 'data')  ev.data.push(value);
+    if (field === 'data') ev.data.push(value);
   }
   if (!ev.data.length) return null;
-  try { return { type: ev.type, payload: JSON.parse(ev.data.join('\n')) }; }
-  catch { return null; }
+  try {
+    return { type: ev.type, payload: JSON.parse(ev.data.join('\n')) };
+  } catch {
+    return null;
+  }
 }
 
 function MarketTab({ id, market, active, disabled, onClick }) {
@@ -61,9 +64,11 @@ function MarketTab({ id, market, active, disabled, onClick }) {
         flex-1 py-2.5 font-mono text-xs font-semibold tracking-wider
         border-b-2 transition-colors duration-150
         disabled:opacity-40 disabled:cursor-not-allowed
-        ${active
-          ? 'border-bloomberg-orange text-bloomberg-orange bg-bloomberg-orange-dim'
-          : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white hover:border-bloomberg-subtle'}
+        ${
+          active
+            ? 'border-bloomberg-orange text-bloomberg-orange bg-bloomberg-orange-dim'
+            : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white hover:border-bloomberg-subtle'
+        }
       `}
     >
       <span className="mr-1">{market.flag}</span>
@@ -81,9 +86,11 @@ function TickerChip({ label, active, onClick, disabled }) {
       className={`
         px-2.5 py-1 text-xs font-mono border transition-colors duration-150
         disabled:opacity-40 disabled:cursor-not-allowed
-        ${active
-          ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
-          : 'border-bloomberg-border bg-bloomberg-surface text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'}
+        ${
+          active
+            ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
+            : 'border-bloomberg-border bg-bloomberg-surface text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'
+        }
       `}
     >
       {label}
@@ -93,16 +100,16 @@ function TickerChip({ label, active, onClick, disabled }) {
 
 export default function StockForm({ onResult, onLoading, onStatus, onAgentProgress }) {
   const [activeMarket, setActiveMarket] = useState('US');
-  const [ticker, setTicker]             = useState(MARKETS.US.defaultTicker);
-  const [date, setDate]                 = useState(today());
-  const [rounds, setRounds]             = useState(DEFAULT_DEBATE_ROUNDS);
-  const [analysisDepth, setDepth]       = useState('balanced');
-  const [responseDetail, setDetail]     = useState('full');
-  const [error, setError]               = useState('');
-  const [running, setRunning]           = useState(false);
-  const abortRef                        = useRef(null);
-  const jobIdRef                        = useRef(null);
-  const mountedRef                      = useRef(true);
+  const [ticker, setTicker] = useState(MARKETS.US.defaultTicker);
+  const [date, setDate] = useState(today());
+  const [rounds, setRounds] = useState(DEFAULT_DEBATE_ROUNDS);
+  const [analysisDepth, setDepth] = useState('balanced');
+  const [responseDetail, setDetail] = useState('full');
+  const [error, setError] = useState('');
+  const [running, setRunning] = useState(false);
+  const abortRef = useRef(null);
+  const jobIdRef = useRef(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -132,7 +139,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
 
   function validate() {
     const t = ticker.trim().toUpperCase();
-    if (!/^[A-Z0-9]{1,10}([.\-][A-Z0-9]{1,5})?$/.test(t)) {
+    if (!/^[A-Z0-9]{1,10}([.-][A-Z0-9]{1,5})?$/.test(t)) {
       return 'Invalid ticker. Examples: BBCA.JK, NVDA, 700.HK, SAP.DE';
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date must be YYYY-MM-DD';
@@ -149,13 +156,13 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     const timeoutId = controller ? window.setTimeout(() => controller.abort(), 3000) : null;
 
     return fetch(buildApiUrl(`/analysis/jobs/${jobId}`), {
-        method: 'DELETE',
-        headers: buildAuthHeaders(),
-        signal: controller?.signal,
-        keepalive,
-      })
+      method: 'DELETE',
+      headers: buildAuthHeaders(),
+      signal: controller?.signal,
+      keepalive,
+    })
       .catch(() => {
-      // Abort below still closes the client stream; backend cancellation is best-effort.
+        // Abort below still closes the client stream; backend cancellation is best-effort.
       })
       .finally(() => {
         if (timeoutId) window.clearTimeout(timeoutId);
@@ -200,12 +207,13 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
         onResult({ error: ex.message || 'Analysis failed.' });
       }
     } finally {
-      if (!mountedRef.current) return;
-      setRunning(false);
-      onLoading(false);
-      onStatus('');
-      abortRef.current = null;
-      jobIdRef.current = null;
+      if (mountedRef.current) {
+        setRunning(false);
+        onLoading(false);
+        onStatus('');
+        abortRef.current = null;
+        jobIdRef.current = null;
+      }
     }
   }
 
@@ -214,18 +222,18 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     abortRef.current = controller;
 
     const payload = {
-      ticker:            ticker.trim().toUpperCase(),
-      trade_date:        date,
+      ticker: ticker.trim().toUpperCase(),
+      trade_date: date,
       max_debate_rounds: Number(rounds),
-      analysis_depth:    analysisDepth,
-      response_detail:   responseDetail,
+      analysis_depth: analysisDepth,
+      response_detail: responseDetail,
     };
 
     const createRes = await fetch(buildApiUrl('/analysis/jobs'), {
-      method:  'POST',
+      method: 'POST',
       headers: buildHeaders(),
-      body:    JSON.stringify(payload),
-      signal:  controller.signal,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
     });
 
     if (!createRes.ok) throw new Error(await readHttpError(createRes));
@@ -236,23 +244,63 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     onStatus(`Job queued: ${job.job_id}`);
 
     const streamRes = await fetch(buildApiUrl(`/analysis/jobs/${job.job_id}/events`), {
-      method:  'GET',
+      method: 'GET',
       headers: buildAuthHeaders(),
-      signal:  controller.signal,
+      signal: controller.signal,
     });
 
     if (!streamRes.ok) throw new Error(await readHttpError(streamRes));
     if (!streamRes.body) throw new Error('SSE stream not supported by browser.');
     ensureMounted();
 
-    const reader  = streamRes.body.getReader();
+    const reader = streamRes.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
+
+    const handleStreamEvent = (event) => {
+      if (event.type === 'job') {
+        onStatus(`Job status: ${(event.payload.status || 'queued').toUpperCase()}`);
+        if (event.payload.result) {
+          onResult(event.payload.result);
+          return true;
+        }
+        if (event.payload.error) {
+          const errorPayload =
+            event.payload.error.error || event.payload.error.message || event.payload.error;
+          const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
+          const rid = event.payload.error.request_id ? ` [${event.payload.error.request_id}]` : '';
+          onResult({ error: `${message || 'Analysis failed.'}${rid}` });
+          return true;
+        }
+      }
+      if (event.type === 'heartbeat') {
+        onStatus(`Pipeline heartbeat: ${(event.payload.status || 'running').toUpperCase()}`);
+      }
+      if (event.type === 'progress') {
+        onStatus(event.payload.status_message || 'Running...');
+        if (onAgentProgress) onAgentProgress(event.payload);
+      }
+      if (event.type === 'result') {
+        onResult(event.payload);
+        return true;
+      }
+      if (event.type === 'error') {
+        const errorPayload = event.payload.error || event.payload.message || 'Error';
+        const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
+        const rid = event.payload.request_id ? ` [${event.payload.request_id}]` : '';
+        onResult({ error: `${message || 'Analysis failed.'}${rid}` });
+        return true;
+      }
+      return false;
+    };
 
     while (true) {
       ensureMounted();
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        buf += decoder.decode();
+        break;
+      }
       ensureMounted();
       buf += decoder.decode(value, { stream: true });
       const blocks = buf.split(/\r?\n\r?\n/);
@@ -263,51 +311,30 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
         if (!event) continue;
         ensureMounted();
 
-        if (event.type === 'job') {
-          onStatus(`Job status: ${(event.payload.status || 'queued').toUpperCase()}`);
-          if (event.payload.result) {
-            onResult(event.payload.result);
-            return;
-          }
-          if (event.payload.error) {
-            const errorPayload = event.payload.error.error || event.payload.error.message || event.payload.error;
-            const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
-            const rid = event.payload.error.request_id ? ` [${event.payload.error.request_id}]` : '';
-            onResult({ error: `${message || 'Analysis failed.'}${rid}` });
-            return;
-          }
-        }
-        if (event.type === 'heartbeat') {
-          onStatus(`Pipeline heartbeat: ${(event.payload.status || 'running').toUpperCase()}`);
-        }
-        if (event.type === 'progress') {
-          onStatus(event.payload.status_message || 'Running...');
-          if (onAgentProgress) onAgentProgress(event.payload);
-        }
-        if (event.type === 'result') {
-          onResult(event.payload);
-          return;
-        }
-        if (event.type === 'error') {
-          const errorPayload = event.payload.error || event.payload.message || 'Error';
-          const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
-          const rid = event.payload.request_id ? ` [${event.payload.request_id}]` : '';
-          onResult({ error: `${message || 'Analysis failed.'}${rid}` });
+        if (handleStreamEvent(event)) {
           return;
         }
       }
     }
+
+    ensureMounted();
+    const trailingEvent = parseSseBlock(buf);
+    if (trailingEvent && handleStreamEvent(trailingEvent)) {
+      return;
+    }
+    throw new Error('SSE stream ended before result.');
   }
 
-  const selectedDepth = DEPTH_OPTIONS.find(item => item.value === analysisDepth);
+  const selectedDepth = DEPTH_OPTIONS.find((item) => item.value === analysisDepth);
   const currentMarket = MARKETS[activeMarket];
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-0">
-
       {/* Header */}
       <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center gap-2">
-        <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-wider">NEW ANALYSIS</span>
+        <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-wider">
+          NEW ANALYSIS
+        </span>
         <span className="text-bloomberg-muted font-mono text-xs">/ CONFIGURE PARAMETERS</span>
       </div>
 
@@ -326,7 +353,6 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
       </div>
 
       <div className="p-4 flex flex-col gap-4">
-
         {/* Ticker input */}
         <div>
           <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
@@ -335,13 +361,20 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
               {activeMarket === 'ID'
                 ? '· IDX (append .JK)'
                 : activeMarket === 'GLOBAL'
-                ? '· Global Exchange'
-                : '· NYSE / NASDAQ'}
+                  ? '· Global Exchange'
+                  : '· NYSE / NASDAQ'}
             </span>
           </label>
           <input
             value={ticker}
-            onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g,'').slice(0,12))}
+            onChange={(e) =>
+              setTicker(
+                e.target.value
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9.-]/g, '')
+                  .slice(0, 12)
+              )
+            }
             placeholder={currentMarket.defaultTicker}
             required
             disabled={running}
@@ -360,7 +393,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
               {currentMarket.flag} QUICK-PICK
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {currentMarket.tickers.map(t => (
+              {currentMarket.tickers.map((t) => (
                 <TickerChip
                   key={t}
                   label={t}
@@ -382,7 +415,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
             <input
               type="date"
               value={date}
-              onChange={e => setDate(e.target.value)}
+              onChange={(e) => setDate(e.target.value)}
               disabled={running}
               required
               className="
@@ -400,7 +433,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
             </label>
             <select
               value={rounds}
-              onChange={e => setRounds(Number(e.target.value))}
+              onChange={(e) => setRounds(Number(e.target.value))}
               disabled={running}
               className="
                 w-full bg-black border border-bloomberg-border px-3 py-2.5
@@ -409,8 +442,10 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
                 disabled:opacity-50 transition-colors duration-150 cursor-pointer
               "
             >
-              {[1,2,3,4,5].map(n => (
-                <option key={n} value={n} className="bg-black">{n} ROUND{n>1?'S':''}</option>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n} className="bg-black">
+                  {n} ROUND{n > 1 ? 'S' : ''}
+                </option>
               ))}
             </select>
           </div>
@@ -424,7 +459,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
             </label>
             <select
               value={analysisDepth}
-              onChange={e => setDepth(e.target.value)}
+              onChange={(e) => setDepth(e.target.value)}
               disabled={running}
               className="
                 w-full bg-black border border-bloomberg-border px-3 py-2.5
@@ -433,8 +468,10 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
                 disabled:opacity-50 transition-colors duration-150 cursor-pointer
               "
             >
-              {DEPTH_OPTIONS.map(option => (
-                <option key={option.value} value={option.value} className="bg-black">{option.label}</option>
+              {DEPTH_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value} className="bg-black">
+                  {option.label}
+                </option>
               ))}
             </select>
           </div>
@@ -445,7 +482,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
             </label>
             <select
               value={responseDetail}
-              onChange={e => setDetail(e.target.value)}
+              onChange={(e) => setDetail(e.target.value)}
               disabled={running}
               className="
                 w-full bg-black border border-bloomberg-border px-3 py-2.5
@@ -454,9 +491,15 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
                 disabled:opacity-50 transition-colors duration-150 cursor-pointer
               "
             >
-              <option value="summary" className="bg-black">SUMMARY</option>
-              <option value="full"    className="bg-black">FULL</option>
-              <option value="debug"   className="bg-black">DEBUG</option>
+              <option value="summary" className="bg-black">
+                SUMMARY
+              </option>
+              <option value="full" className="bg-black">
+                FULL
+              </option>
+              <option value="debug" className="bg-black">
+                DEBUG
+              </option>
             </select>
           </div>
         </div>
@@ -474,9 +517,11 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
           className={`
             w-full py-3 font-mono text-xs font-semibold tracking-widest uppercase
             transition-all duration-150 border active:scale-[0.99]
-            ${running
-              ? 'bg-bloomberg-red-dim border-bloomberg-red text-bloomberg-red hover:bg-bloomberg-red hover:text-black'
-              : 'bg-bloomberg-orange border-bloomberg-orange text-black hover:bg-orange-400 hover:border-orange-400'}
+            ${
+              running
+                ? 'bg-bloomberg-red-dim border-bloomberg-red text-bloomberg-red hover:bg-bloomberg-red hover:text-black'
+                : 'bg-bloomberg-orange border-bloomberg-orange text-black hover:bg-orange-400 hover:border-orange-400'
+            }
           `}
         >
           {running ? '■ STOP ANALYSIS' : '▶ EXECUTE ANALYSIS'}

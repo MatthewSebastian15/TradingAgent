@@ -31,8 +31,12 @@ export default function Navbar() {
       {/* Top status bar */}
       <div className="flex items-center justify-between px-4 h-7 border-b border-bloomberg-border bg-black">
         <div className="flex items-center gap-4">
-          <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-widest">TRADINGAGENTS</span>
-          <span className="text-bloomberg-muted font-mono text-xs">MULTI-AGENT AI RESEARCH TERMINAL</span>
+          <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-widest">
+            TRADINGAGENTS
+          </span>
+          <span className="text-bloomberg-muted font-mono text-xs">
+            MULTI-AGENT AI RESEARCH TERMINAL
+          </span>
         </div>
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
@@ -56,9 +60,11 @@ export default function Navbar() {
               className={`
                 h-10 px-4 text-xs font-mono font-medium tracking-wider border-r border-bloomberg-border
                 transition-colors duration-150 relative
-                ${active
-                  ? 'bg-bloomberg-orange text-black'
-                  : 'text-bloomberg-muted hover:text-bloomberg-white hover:bg-bloomberg-surface'}
+                ${
+                  active
+                    ? 'bg-bloomberg-orange text-black'
+                    : 'text-bloomberg-muted hover:text-bloomberg-white hover:bg-bloomberg-surface'
+                }
               `}
             >
               {label}

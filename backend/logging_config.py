@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import re
 import time
 import uuid
 from typing import Callable
@@ -12,10 +13,18 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 
 
 def new_request_id() -> str:
     return uuid.uuid4().hex[:12]
+
+
+def normalize_request_id(value: str | None) -> str:
+    candidate = (value or "").strip()
+    if _REQUEST_ID_RE.fullmatch(candidate):
+        return candidate
+    return new_request_id()
 
 
 class RequestIdFilter(logging.Filter):
@@ -46,7 +55,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     """Create a request ID for every request and return it to the client."""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        request_id = request.headers.get("x-request-id") or new_request_id()
+        request_id = normalize_request_id(request.headers.get("x-request-id"))
         token = request_id_ctx.set(request_id)
         start = time.perf_counter()
         try:

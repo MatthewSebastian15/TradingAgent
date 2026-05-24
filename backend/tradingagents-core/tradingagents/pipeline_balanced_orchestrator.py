@@ -45,30 +45,17 @@ from tradingagents.pipeline_balanced_types import AnalystReport, LLMBudget, Prog
 logger = logging.getLogger(__name__)
 
 
-def run_balanced_pipeline(
+def _build_initial_analyst_reports(
     ticker: str,
     trade_date: str,
     config: dict[str, Any],
-    progress_callback: Optional[ProgressCallback] = None,
-    cancel_check: Optional[Callable[[], bool]] = None,
-) -> dict[str, Any]:
-    """Run the balanced 9-call pipeline and return classic-compatible state."""
-    set_config(config)
-    quick_llm, deep_llm = _create_llms(config)
-    analysis_depth = str(config.get("analysis_depth", "balanced")).lower()
-    llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
-    data = _run_tracked(
-        progress_callback,
-        "data_collection",
-        "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
-        lambda: collect_market_data(ticker, trade_date, config, cancel_check=cancel_check),
-        cancel_check=cancel_check,
-    )
-    data_fetched_at = datetime.utcnow().isoformat()
-    data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
-    last_close_text = f"{data.last_close_price:.2f}" if data.last_close_price is not None else "Unavailable"
-    _emit_data_quality(progress_callback, data.data_quality)
-
+    quick_llm: Any,
+    data,
+    data_quality_json: str,
+    llm_budget: LLMBudget,
+    progress_callback: Optional[ProgressCallback],
+    cancel_check: Optional[Callable[[], bool]],
+) -> tuple[AnalystReport, AnalystReport, AnalystReport]:
     analyst_event_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
     analyst_forwarder: threading.Thread | None = None
 
@@ -94,9 +81,8 @@ def run_balanced_pipeline(
         analyst_forwarder.start()
 
     def _queued_callback(event: dict) -> None:
-        if progress_callback is None:
-            return
-        analyst_event_queue.put_nowait(event)
+        if progress_callback is not None:
+            analyst_event_queue.put_nowait(event)
 
     def build_market_report_parallel() -> AnalystReport:
         return _run_tracked(
@@ -152,14 +138,49 @@ def run_balanced_pipeline(
             market_future = pool.submit(_run_with_config, config, build_market_report_parallel)
             news_future = pool.submit(_run_with_config, config, build_news_social_report_parallel)
             fundamentals_future = pool.submit(_run_with_config, config, build_fundamentals_report_parallel)
-            market_report = market_future.result()
-            news_social_report = news_future.result()
-            fundamentals_report = fundamentals_future.result()
+            return market_future.result(), news_future.result(), fundamentals_future.result()
     finally:
         if analyst_forwarder is not None:
             analyst_event_queue.put(None)
             analyst_event_queue.join()
             analyst_forwarder.join(timeout=1)
+
+
+def run_balanced_pipeline(
+    ticker: str,
+    trade_date: str,
+    config: dict[str, Any],
+    progress_callback: Optional[ProgressCallback] = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
+) -> dict[str, Any]:
+    """Run the balanced 9-call pipeline and return classic-compatible state."""
+    set_config(config)
+    quick_llm, deep_llm = _create_llms(config)
+    analysis_depth = str(config.get("analysis_depth", "balanced")).lower()
+    llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
+    data = _run_tracked(
+        progress_callback,
+        "data_collection",
+        "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
+        lambda: collect_market_data(ticker, trade_date, config, cancel_check=cancel_check),
+        cancel_check=cancel_check,
+    )
+    data_fetched_at = datetime.utcnow().isoformat()
+    data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
+    last_close_text = f"{data.last_close_price:.2f}" if data.last_close_price is not None else "Unavailable"
+    _emit_data_quality(progress_callback, data.data_quality)
+
+    market_report, news_social_report, fundamentals_report = _build_initial_analyst_reports(
+        ticker,
+        trade_date,
+        config,
+        quick_llm,
+        data,
+        data_quality_json,
+        llm_budget,
+        progress_callback,
+        cancel_check,
+    )
 
     market_md = _report_to_markdown(market_report)
     news_social_md = _report_to_markdown(news_social_report)

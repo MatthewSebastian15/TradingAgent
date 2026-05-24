@@ -45,6 +45,16 @@ def sanitize_message(message: str) -> str:
     return cleaned[:_MAX_MESSAGE_LENGTH]
 
 
+def sanitize_validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove raw user input from Pydantic validation errors before responding."""
+    sanitized: list[dict[str, Any]] = []
+    for error in errors:
+        clean = dict(error)
+        clean.pop("input", None)
+        sanitized.append(clean)
+    return sanitized
+
+
 # ---------------------------------------------------------------------------
 # Exception hierarchy
 # ---------------------------------------------------------------------------
@@ -136,7 +146,7 @@ async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse
 async def validation_exception_handler(
     _: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    details = {"fields": exc.errors()}
+    details = {"fields": sanitize_validation_errors(exc.errors())}
     api_error = ApiError(422, "VALIDATION_ERROR", "Invalid request payload.", details=details)
     return JSONResponse(status_code=422, content=error_payload(api_error))
 
