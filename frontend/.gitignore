@@ -1,13 +1,13 @@
-# ─── Dependencies ─────────────────────────────────────────────────────────────
+# Dependencies
 node_modules/
 .pnp
 .pnp.js
 
-# ─── Build output ─────────────────────────────────────────────────────────────
+# Build output
 dist/
 build/
 
-# ─── Virtual environment ──────────────────────────────────────────────────────
+# Virtual environments
 venv/
 .venv/
 env/
@@ -15,14 +15,24 @@ ENV/
 .conda/
 __pypackages__/
 .pixi/
+
+# Local environment files
 .env
+.env.*
 *.env
+!.env.example
 
-# ─── Testing ──────────────────────────────────────────────────────────────────
+# Testing and coverage
 coverage/
+.vitest/
+.nyc_output/
 
-# ─── Logs ─────────────────────────────────────────────────────────────────────
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# OS noise
+.DS_Store
+Thumbs.db

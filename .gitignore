@@ -1,21 +1,23 @@
-# Git
-.git/
-**/.git/
-
 # Local environment files
-**/.env
-**/.env.*
+.env
+.env.*
 *.env
 !**/.env.example
 
-# Python bytecode, caches, and virtual environments
+# Python bytecode and caches
 **/__pycache__/
 **/*.py[cod]
+**/*.pyo
+**/*.pyd
 **/.pytest_cache/
 **/.mypy_cache/
 **/.ruff_cache/
-**/.venv/
-**/venv/
+**/.pyre/
+**/.pytype/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # Backend runtime data
 backend/.cache/
@@ -24,16 +26,31 @@ backend/results/
 backend/**/*.db
 backend/**/*.sqlite
 backend/**/*.sqlite3
+
+# Python packaging
+build/
+dist/
+sdist/
+*.egg
+*.egg-info/
 backend/tradingagents-core/tradingagents.egg-info/
 
 # Frontend dependencies and build output
 frontend/node_modules/
-frontend/build/
 frontend/dist/
+frontend/build/
 frontend/coverage/
 
-# Logs and archives
+# Logs and local artifacts
 *.log
 logs/
 *.zip
 *.tar.gz
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

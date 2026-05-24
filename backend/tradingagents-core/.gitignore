@@ -149,6 +149,9 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+*.env
+!.env.example
 .envrc
 .venv
 env/
@@ -215,5 +218,11 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Cache
+# Runtime data and caches
+.cache/
+data_cache/
 **/data_cache/
+results/
+*.db
+*.sqlite
+*.sqlite3

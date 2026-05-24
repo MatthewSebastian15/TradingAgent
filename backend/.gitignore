@@ -1,13 +1,13 @@
-# ─── Python ───────────────────────────────────────────────────────────────────
+# Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 *.so
-*.egg
-*.egg-info/
+*$py.class
 
-# ─── Build & packaging ────────────────────────────────────────────────────────
+# Build and packaging
 dist/
 build/
 sdist/
@@ -15,9 +15,11 @@ develop-eggs/
 .eggs/
 wheels/
 *.whl
+*.egg
+*.egg-info/
 MANIFEST
 
-# ─── Virtual environment ──────────────────────────────────────────────────────
+# Virtual environments
 venv/
 .venv/
 env/
@@ -25,10 +27,14 @@ ENV/
 .conda/
 __pypackages__/
 .pixi/
-.env
-*.env
 
-# ─── Type checkers & linters ──────────────────────────────────────────────────
+# Local environment files
+.env
+.env.*
+*.env
+!.env.example
+
+# Type checkers and linters
 .mypy_cache/
 .dmypy.json
 dmypy.json
@@ -36,7 +42,7 @@ dmypy.json
 .pytype/
 .ruff_cache/
 
-# ─── Testing ──────────────────────────────────────────────────────────────────
+# Testing and coverage
 .pytest_cache/
 .coverage
 .coverage.*
@@ -47,24 +53,23 @@ htmlcov/
 coverage.xml
 *.cover
 
-# ─── Logs ─────────────────────────────────────────────────────────────────────
+# Logs
 *.log
 logs/
 
-# ─── TradingAgents runtime data ───────────────────────────────────────────────
+# TradingAgents runtime data
+.cache/
 data_cache/
 results/
 *.db
 *.sqlite
 *.sqlite3
 
-# ─── Lock files (core sudah punya sendiri) ────────────────────────────────────
+# Lock files
 uv.lock
 
-# ─── Jupyter ──────────────────────────────────────────────────────────────────
+# Jupyter and Cython
 .ipynb_checkpoints/
 profile_default/
 ipython_config.py
-
-# ─── Cython ───────────────────────────────────────────────────────────────────
 cython_debug/
