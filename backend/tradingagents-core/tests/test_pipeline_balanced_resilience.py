@@ -201,6 +201,101 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
     assert attempts == [1]
 
 
+def test_router_falls_back_when_primary_returns_missing_text(monkeypatch):
+    from tradingagents.dataflows import interface
+
+    monkeypatch.setattr(
+        interface,
+        "get_config",
+        lambda: {
+            "tool_timeout_seconds": 1,
+            "tool_max_retries": 2,
+            "cache_ttl_seconds": 1,
+            "cache_max_entries": 10,
+            "circuit_breaker_failure_threshold": 5,
+            "circuit_breaker_recovery_seconds": 60,
+        },
+    )
+    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage")
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_news"], "yfinance", lambda *args, **kwargs: "No news found for TEST")
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_news"], "alpha_vantage", lambda *args, **kwargs: "## Alpha Vantage News\n\n### Useful headline")
+    monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
+    monkeypatch.setattr(interface, "call_with_retry", lambda func, **kwargs: func())
+
+    result = interface.route_to_vendor("get_news", "TEST_FALLBACK", "2026-05-01", "2026-05-02")
+
+    assert "Useful headline" in result
+
+
+def test_route_to_all_vendors_returns_every_usable_payload(monkeypatch):
+    from tradingagents.dataflows import interface
+
+    monkeypatch.setattr(
+        interface,
+        "get_config",
+        lambda: {
+            "tool_timeout_seconds": 1,
+            "tool_max_retries": 2,
+            "cache_ttl_seconds": 1,
+            "cache_max_entries": 10,
+            "circuit_breaker_failure_threshold": 5,
+            "circuit_breaker_recovery_seconds": 60,
+        },
+    )
+    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage")
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_news"], "yfinance", lambda *args, **kwargs: "## Yahoo News")
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_news"], "alpha_vantage", lambda *args, **kwargs: "## Alpha News")
+    monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
+    monkeypatch.setattr(interface, "call_with_retry", lambda func, **kwargs: func())
+
+    result = interface.route_to_all_vendors("get_news", "TEST_ALL", "2026-05-03", "2026-05-04")
+
+    assert result == {"yfinance": "## Yahoo News", "alpha_vantage": "## Alpha News"}
+
+
+def test_alpha_vantage_stock_normalizes_csv_for_pipeline(monkeypatch):
+    from tradingagents.dataflows import alpha_vantage_stock
+
+    raw_csv = "\n".join(
+        [
+            "timestamp,open,high,low,close,volume",
+            "2026-05-14,10,11,9,10.5,1000",
+        ]
+    )
+    monkeypatch.setattr(alpha_vantage_stock, "_make_api_request", lambda function_name, params: raw_csv)
+
+    result = alpha_vantage_stock.get_stock("TEST", "2026-05-14", "2026-05-15")
+
+    assert "Alpha Vantage daily stock data for TEST" in result
+    assert "Date,Open,High,Low,Close,Volume" in result
+    assert "2026-05-14,10,11,9,10.5,1000" in result
+
+
+def test_alpha_vantage_news_formats_feed_and_empty_response(monkeypatch):
+    from tradingagents.dataflows import alpha_vantage_news
+
+    monkeypatch.setattr(
+        alpha_vantage_news,
+        "_make_api_request",
+        lambda function_name, params: (
+            '{"feed":[{"title":"Astra expands","source":"Example","summary":"Expansion summary",'
+            '"url":"https://example.com/news","time_published":"20260514T120000"}]}'
+        ),
+    )
+
+    result = alpha_vantage_news.get_news("ASII.JK", "2026-05-01", "2026-05-15")
+
+    assert "Astra expands" in result
+    assert "source: Example" in result
+    assert "https://example.com/news" in result
+
+    monkeypatch.setattr(alpha_vantage_news, "_make_api_request", lambda function_name, params: '{"feed":[]}')
+
+    empty = alpha_vantage_news.get_news("ASII.JK", "2026-05-01", "2026-05-15")
+
+    assert empty.startswith("No news found for ASII.JK")
+
+
 def test_invoke_once_returns_fallback_when_llm_timeout_is_raised():
     class TimeoutLLM:
         def with_structured_output(self, schema):

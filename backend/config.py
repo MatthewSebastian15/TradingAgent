@@ -178,6 +178,13 @@ DATA_CACHE_DB_PATH = str(BASE_DIR / ".cache" / "market_data.sqlite3")
 DATA_CACHE_TTL_SECONDS = CACHE_TTL_SECONDS
 DATA_CACHE_MAX_ENTRIES = CACHE_MAX_ENTRIES
 
+# Market-data vendor order. The router tries vendors from left to right and
+# falls back when a provider errors or returns an empty/unusable payload.
+DATA_VENDOR_CORE_STOCK_APIS = _env("DATA_VENDOR_CORE_STOCK_APIS", "yfinance,alpha_vantage")
+DATA_VENDOR_TECHNICAL_INDICATORS = _env("DATA_VENDOR_TECHNICAL_INDICATORS", "yfinance,alpha_vantage")
+DATA_VENDOR_FUNDAMENTAL_DATA = _env("DATA_VENDOR_FUNDAMENTAL_DATA", "yfinance,alpha_vantage")
+DATA_VENDOR_NEWS_DATA = _env("DATA_VENDOR_NEWS_DATA", "yfinance,alpha_vantage")
+
 # Circuit breaker
 CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
 CIRCUIT_BREAKER_RECOVERY_SECONDS = 60
@@ -241,6 +248,12 @@ class LLMSettings:
             "data_cache_db_path": DATA_CACHE_DB_PATH,
             "data_cache_ttl_seconds": DATA_CACHE_TTL_SECONDS,
             "data_cache_max_entries": DATA_CACHE_MAX_ENTRIES,
+            "data_vendors": {
+                "core_stock_apis": DATA_VENDOR_CORE_STOCK_APIS,
+                "technical_indicators": DATA_VENDOR_TECHNICAL_INDICATORS,
+                "fundamental_data": DATA_VENDOR_FUNDAMENTAL_DATA,
+                "news_data": DATA_VENDOR_NEWS_DATA,
+            },
             "max_debate_rounds": DEFAULT_MAX_DEBATE_ROUNDS,
             "max_risk_discuss_rounds": MAX_RISK_DISCUSS_ROUNDS,
             "analysis_mode": ANALYSIS_MODE,
@@ -376,6 +389,10 @@ class _BackendSettingsShim:
     cache_max_entries = CACHE_MAX_ENTRIES
     analysis_result_cache_ttl_seconds = ANALYSIS_RESULT_CACHE_TTL_SECONDS
     analysis_result_cache_max_entries = ANALYSIS_RESULT_CACHE_MAX_ENTRIES
+    data_vendor_core_stock_apis = DATA_VENDOR_CORE_STOCK_APIS
+    data_vendor_technical_indicators = DATA_VENDOR_TECHNICAL_INDICATORS
+    data_vendor_fundamental_data = DATA_VENDOR_FUNDAMENTAL_DATA
+    data_vendor_news_data = DATA_VENDOR_NEWS_DATA
 
     @property
     def llm_provider(self): return llm.provider

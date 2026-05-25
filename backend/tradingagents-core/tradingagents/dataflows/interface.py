@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 # Import from vendor-specific modules
 from .y_finance import (
@@ -26,6 +26,7 @@ from .alpha_vantage_common import AlphaVantageRateLimitError
 
 # Configuration and routing logic
 from .config import get_config
+from .data_quality import looks_missing
 from tradingagents.utils_resilience import TTLCache, call_with_retry, call_with_timeout
 try:
     from persistent_cache import SQLiteTTLCache
@@ -144,6 +145,73 @@ def _cache_key(method: str, vendor: str, args: tuple, kwargs: dict) -> tuple:
     return (method, vendor, args, tuple(sorted(kwargs.items())))
 
 
+def _vendor_sequence(method: str, preferred: str | None = None) -> list[str]:
+    """Return configured vendors followed by any supported fallback vendors."""
+    vendor_config = preferred if preferred is not None else get_vendor(get_category_for_method(method), method)
+    primary_vendors = [v.strip() for v in str(vendor_config or "").split(",") if v.strip()]
+    all_available_vendors = list(VENDOR_METHODS[method].keys())
+
+    sequence: list[str] = []
+    for vendor in [*primary_vendors, *all_available_vendors]:
+        if vendor in VENDOR_METHODS[method] and vendor not in sequence:
+            sequence.append(vendor)
+    return sequence
+
+
+def _is_unusable_result(result: Any) -> bool:
+    """Return True when a vendor completed but returned an empty/error payload."""
+    if isinstance(result, str):
+        return looks_missing(result)
+    if result is None:
+        return True
+    if isinstance(result, dict):
+        if not result:
+            return True
+        error_keys = {"Error Message", "Information", "Note"}
+        if any(key in result for key in error_keys):
+            return True
+        feed = result.get("feed")
+        if isinstance(feed, list) and not feed:
+            return True
+    return False
+
+
+def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: dict) -> Any:
+    """Call one concrete vendor with the shared timeout/retry/cache layer."""
+    cache = _active_cache(config)
+    cache_key = _cache_key(method, vendor, args, kwargs)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    vendor_impl = VENDOR_METHODS[method][vendor]
+    impl_func = vendor_impl[0] if isinstance(vendor_impl, list) else vendor_impl
+    service_name = f"tool:{vendor}:{method}"
+
+    max_attempts = int(config.get("tool_max_retries", 2))
+    if vendor == "yfinance":
+        # yfinance implementations already retry their own transient
+        # YF/network errors. Keep the router as timeout/circuit/cache
+        # layer only to avoid multiplicative retries per data field.
+        max_attempts = 1
+
+    result = call_with_retry(
+        lambda: call_with_timeout(
+            lambda: impl_func(*args, **kwargs),
+            timeout_seconds=int(config.get("tool_timeout_seconds", 45)),
+            service_name=service_name,
+        ),
+        service_name=service_name,
+        max_attempts=max_attempts,
+        base_delay=1.0,
+        max_delay=10.0,
+        circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
+        circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
+    )
+    cache.set(cache_key, result)
+    return result
+
+
 
 def _active_cache(config: dict):
     """Return the configured tool cache, preferring persistent SQLite when enabled."""
@@ -185,57 +253,21 @@ def get_tool_cache_stats() -> dict:
 
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to vendors with fallback, timeout, retry, circuit breaker, and TTL cache."""
-    category = get_category_for_method(method)
-    vendor_config = get_vendor(category, method)
-    primary_vendors = [v.strip() for v in vendor_config.split(',')]
     config = get_config()
 
     if method not in VENDOR_METHODS:
         raise ValueError(f"Method '{method}' not supported")
 
-    all_available_vendors = list(VENDOR_METHODS[method].keys())
-    fallback_vendors = primary_vendors.copy()
-    for vendor in all_available_vendors:
-        if vendor not in fallback_vendors:
-            fallback_vendors.append(vendor)
-
     errors = []
-    for vendor in fallback_vendors:
-        if vendor not in VENDOR_METHODS[method]:
-            continue
-
-        cache = _active_cache(config)
-        cache_key = _cache_key(method, vendor, args, kwargs)
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        vendor_impl = VENDOR_METHODS[method][vendor]
-        impl_func = vendor_impl[0] if isinstance(vendor_impl, list) else vendor_impl
-        service_name = f"tool:{vendor}:{method}"
-
+    first_unusable_result = None
+    for vendor in _vendor_sequence(method):
         try:
-            max_attempts = int(config.get("tool_max_retries", 2))
-            if vendor == "yfinance":
-                # yfinance implementations already retry their own transient
-                # YF/network errors. Keep the router as timeout/circuit/cache
-                # layer only to avoid multiplicative retries per data field.
-                max_attempts = 1
-
-            result = call_with_retry(
-                lambda: call_with_timeout(
-                    lambda: impl_func(*args, **kwargs),
-                    timeout_seconds=int(config.get("tool_timeout_seconds", 45)),
-                    service_name=service_name,
-                ),
-                service_name=service_name,
-                max_attempts=max_attempts,
-                base_delay=1.0,
-                max_delay=10.0,
-                circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
-                circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
-            )
-            cache.set(cache_key, result)
+            result = _call_vendor(method, vendor, args, kwargs, config)
+            if _is_unusable_result(result):
+                if first_unusable_result is None:
+                    first_unusable_result = result
+                errors.append(f"{vendor}: empty or unusable response")
+                continue
             return result
         except AlphaVantageRateLimitError as exc:
             errors.append(f"{vendor}: rate limited: {exc}")
@@ -244,4 +276,43 @@ def route_to_vendor(method: str, *args, **kwargs):
             errors.append(f"{vendor}: {exc}")
             continue
 
+    if first_unusable_result is not None:
+        return first_unusable_result
+
+    raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")
+
+
+def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
+    """Return usable payloads from every configured/supported vendor.
+
+    This is intentionally used only for fields where multi-source context is
+    worth the extra calls, such as news. Single-source fields should keep using
+    route_to_vendor to avoid consuming provider quotas unnecessarily.
+    """
+    config = get_config()
+    if method not in VENDOR_METHODS:
+        raise ValueError(f"Method '{method}' not supported")
+
+    results: dict[str, Any] = {}
+    errors: list[str] = []
+    first_unusable: tuple[str, Any] | None = None
+    for vendor in _vendor_sequence(method):
+        try:
+            result = _call_vendor(method, vendor, args, kwargs, config)
+            if _is_unusable_result(result):
+                if first_unusable is None:
+                    first_unusable = (vendor, result)
+                errors.append(f"{vendor}: empty or unusable response")
+                continue
+            results[vendor] = result
+        except AlphaVantageRateLimitError as exc:
+            errors.append(f"{vendor}: rate limited: {exc}")
+        except Exception as exc:
+            errors.append(f"{vendor}: {exc}")
+
+    if results:
+        return results
+    if first_unusable is not None:
+        vendor, result = first_unusable
+        return {vendor: result}
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")

@@ -61,10 +61,10 @@ DEFAULT_CONFIG = {
     "max_recur_limit": 100,
 
     "data_vendors": {
-        "core_stock_apis": "yfinance",
-        "technical_indicators": "yfinance",
-        "fundamental_data": "yfinance",
-        "news_data": "yfinance",
+        "core_stock_apis": _env("DATA_VENDOR_CORE_STOCK_APIS") or "yfinance,alpha_vantage",
+        "technical_indicators": _env("DATA_VENDOR_TECHNICAL_INDICATORS") or "yfinance,alpha_vantage",
+        "fundamental_data": _env("DATA_VENDOR_FUNDAMENTAL_DATA") or "yfinance,alpha_vantage",
+        "news_data": _env("DATA_VENDOR_NEWS_DATA") or "yfinance,alpha_vantage",
     },
     "tool_vendors": {},
 }
