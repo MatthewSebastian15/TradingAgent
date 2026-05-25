@@ -71,7 +71,7 @@ app.add_middleware(
     # Whitelist only the headers the API actually needs.
     # Wildcard "*" permits arbitrary custom headers and bypasses
     # browser preflight protection for sensitive header names.
-    allow_headers=["Content-Type", "x-api-key", "Authorization"],
+    allow_headers=["Content-Type", "x-api-key", "Authorization", "x-session-id"],
 )
 
 app.add_exception_handler(ApiError, api_error_handler)
