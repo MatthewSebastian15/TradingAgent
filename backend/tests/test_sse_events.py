@@ -131,6 +131,65 @@ def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch):
     assert second[2][1]["decision"] == "Buy"
 
 
+def test_job_event_stream_is_not_gzipped(client, monkeypatch):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+        await queue.put(
+            {
+                "type": "progress",
+                "payload": {
+                    "request_id": request_id,
+                    "ticker": req.ticker,
+                    "trade_date": req.trade_date,
+                    "agent_id": "market_analyst",
+                    "agent_name": "Market Analyst",
+                    "status": "completed",
+                    "status_message": "Mock market analysis completed.",
+                },
+            }
+        )
+        return _stream_result()
+
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
+
+    headers = {"x-api-key": "sse-no-gzip-test-key", "accept-encoding": "gzip"}
+    create_response = client.post(
+        "/api/analysis/jobs",
+        json={"ticker": "AAPL", "trade_date": "2026-05-17", "max_debate_rounds": 1},
+        headers=headers,
+    )
+    assert create_response.status_code == 200
+    job_id = create_response.json()["job_id"]
+
+    with client.stream("GET", f"/api/analysis/jobs/{job_id}/events", headers=headers) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert response.headers.get("content-encoding") is None
+        events = _collect_sse_events(response.read().decode("utf-8"))
+
+    assert [name for name, _ in events] == ["job", "progress", "result"]
+
+
+def test_stream_error_event_is_forwarded(client, monkeypatch):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+        raise RuntimeError("mock stream failure")
+
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
+
+    with client.stream(
+        "POST",
+        "/api/analyze/stream",
+        json={"ticker": "AAPL", "trade_date": "2026-05-17", "max_debate_rounds": 1},
+        headers={"x-api-key": "sse-error-test-key"},
+    ) as response:
+        assert response.status_code == 200
+        events = _collect_sse_events(response.read().decode("utf-8"))
+
+    assert [name for name, _ in events] == ["progress", "error"]
+    assert events[1][1]["error"]["code"] == "PIPELINE_FAILED"
+
+
 def test_completed_job_event_stream_replays_result():
     from analysis_cache import AnalysisCacheKey, AnalysisJob
     from routes.analysis import _stream_job_events

@@ -61,7 +61,13 @@ describe('StockForm cleanup', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('/analysis/jobs/job-123/events'),
-        expect.objectContaining({ method: 'GET' })
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            Accept: 'text/event-stream',
+            'Cache-Control': 'no-cache',
+          }),
+        })
       );
     });
 

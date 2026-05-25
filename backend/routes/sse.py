@@ -274,8 +274,15 @@ async def stream_progress_and_result(
                     )
                     continue
 
-                yield sse_event(item["type"], item["payload"])
-                if item["type"] in {"result", "error"}:
+                if "event" in item and "data" in item:
+                    yield item
+                    if item["event"] in {"result", "error"}:
+                        return
+                    continue
+
+                event_type = item["type"]
+                yield sse_event(event_type, item["payload"])
+                if event_type in {"result", "error"}:
                     return
         finally:
             if not task.done():
