@@ -10,10 +10,16 @@ import os
 
 import pytest
 from fastapi.testclient import TestClient
+from tradingagents.llm_clients.model_catalog import MODEL_CATALOG
+
+_GOOGLE_QUICK_LLM = MODEL_CATALOG["google"]["quick"][0][1]
+_GOOGLE_DEEP_LLM = MODEL_CATALOG["google"]["deep"][0][1]
 
 _DEFAULT_ENV = {
     "APP_ENV": "test",
     "LLM_PROVIDER": "google",
+    "DEEP_THINK_LLM": _GOOGLE_DEEP_LLM,
+    "QUICK_THINK_LLM": _GOOGLE_QUICK_LLM,
     "GOOGLE_API_KEY": "test-google-key",
     "GEMINI_API_KEY": "test-gemini-key",
     "DEEPSEEK_API_KEY": "test-deepseek-key",

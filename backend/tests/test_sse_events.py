@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 
-from analysis_cache import AnalysisJobStore
+from analysis_cache import AnalysisCacheKey, AnalysisJobStore
 
 
 def _stream_result() -> dict:
@@ -45,6 +46,20 @@ def _collect_sse_events(response_text: str) -> list[tuple[str | None, dict]]:
             events.append((current_event, json.loads(line.removeprefix("data: "))))
 
     return events
+
+
+def _analysis_cache_key(response_detail: str = "full") -> AnalysisCacheKey:
+    return AnalysisCacheKey(
+        ticker="AAPL",
+        trade_date="2026-05-14",
+        provider=os.environ["LLM_PROVIDER"],
+        quick_model=os.environ["QUICK_THINK_LLM"],
+        deep_model=os.environ["DEEP_THINK_LLM"],
+        analysis_mode="balanced",
+        analysis_depth="balanced",
+        max_debate_rounds=1,
+        response_detail=response_detail,
+    )
 
 
 def test_sse_sends_progress_and_final_result(client, monkeypatch):
@@ -191,7 +206,7 @@ def test_stream_error_event_is_forwarded(client, monkeypatch):
 
 
 def test_completed_job_event_stream_replays_result():
-    from analysis_cache import AnalysisCacheKey, AnalysisJob
+    from analysis_cache import AnalysisJob
     from routes.analysis import _stream_job_events
 
     class ConnectedRequest:
@@ -203,17 +218,7 @@ def test_completed_job_event_stream_replays_result():
             id="job-1",
             request_id="request-1",
             owner_id="owner-1",
-            cache_key=AnalysisCacheKey(
-                ticker="AAPL",
-                trade_date="2026-05-14",
-                provider="google",
-                quick_model="gemini-2.5-flash",
-                deep_model="gemini-2.5-flash",
-                analysis_mode="balanced",
-                analysis_depth="balanced",
-                max_debate_rounds=1,
-                response_detail="full",
-            ),
+            cache_key=_analysis_cache_key(),
             payload={"ticker": "AAPL", "trade_date": "2026-05-14"},
             status="completed",
             result={"request_id": "request-1", "ticker": "AAPL", "decision": "Hold"},
@@ -229,7 +234,7 @@ def test_completed_job_event_stream_replays_result():
 
 
 def test_running_job_event_stream_replays_history_to_multiple_subscribers():
-    from analysis_cache import AnalysisCacheKey, AnalysisJob
+    from analysis_cache import AnalysisJob
     from routes.analysis import _stream_job_events
 
     class ConnectedRequest:
@@ -247,17 +252,7 @@ def test_running_job_event_stream_replays_history_to_multiple_subscribers():
             id="job-1",
             request_id="request-1",
             owner_id="owner-1",
-            cache_key=AnalysisCacheKey(
-                ticker="AAPL",
-                trade_date="2026-05-14",
-                provider="google",
-                quick_model="gemini-2.5-flash",
-                deep_model="gemini-2.5-flash",
-                analysis_mode="balanced",
-                analysis_depth="balanced",
-                max_debate_rounds=1,
-                response_detail="full",
-            ),
+            cache_key=_analysis_cache_key(),
             payload={"ticker": "AAPL", "trade_date": "2026-05-14"},
             status="running",
         )
@@ -278,7 +273,7 @@ def test_running_job_event_stream_replays_history_to_multiple_subscribers():
 
 
 def test_running_job_event_stream_yields_result_after_wait_notification():
-    from analysis_cache import AnalysisCacheKey, AnalysisJob
+    from analysis_cache import AnalysisJob
     from routes.analysis import _stream_job_events
 
     class ConnectedRequest:
@@ -296,17 +291,7 @@ def test_running_job_event_stream_yields_result_after_wait_notification():
             id="job-1",
             request_id="request-1",
             owner_id="owner-1",
-            cache_key=AnalysisCacheKey(
-                ticker="AAPL",
-                trade_date="2026-05-14",
-                provider="google",
-                quick_model="gemini-2.5-flash",
-                deep_model="gemini-2.5-flash",
-                analysis_mode="balanced",
-                analysis_depth="balanced",
-                max_debate_rounds=1,
-                response_detail="full",
-            ),
+            cache_key=_analysis_cache_key(),
             payload={"ticker": "AAPL", "trade_date": "2026-05-14"},
             status="running",
         )

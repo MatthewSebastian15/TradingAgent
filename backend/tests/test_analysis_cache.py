@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 import pytest
 
@@ -11,9 +12,9 @@ def _cache_key(ticker: str) -> AnalysisCacheKey:
     return AnalysisCacheKey(
         ticker=ticker,
         trade_date="2026-05-14",
-        provider="google",
-        quick_model="gemini-2.5-flash",
-        deep_model="gemini-2.5-flash",
+        provider=os.environ["LLM_PROVIDER"],
+        quick_model=os.environ["QUICK_THINK_LLM"],
+        deep_model=os.environ["DEEP_THINK_LLM"],
         analysis_mode="balanced",
         analysis_depth="balanced",
         max_debate_rounds=1,

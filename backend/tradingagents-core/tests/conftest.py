@@ -4,6 +4,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tradingagents.llm_clients.model_catalog import MODEL_CATALOG
 
 
 def pytest_configure(config):
@@ -29,6 +30,9 @@ _API_KEY_ENV_VARS = (
 def _dummy_api_keys(monkeypatch):
     for env_var in _API_KEY_ENV_VARS:
         monkeypatch.setenv(env_var, os.environ.get(env_var, "placeholder"))
+    monkeypatch.setenv("LLM_PROVIDER", os.environ.get("LLM_PROVIDER", "google"))
+    monkeypatch.setenv("QUICK_THINK_LLM", os.environ.get("QUICK_THINK_LLM", MODEL_CATALOG["google"]["quick"][0][1]))
+    monkeypatch.setenv("DEEP_THINK_LLM", os.environ.get("DEEP_THINK_LLM", MODEL_CATALOG["google"]["deep"][0][1]))
 
 
 @pytest.fixture()

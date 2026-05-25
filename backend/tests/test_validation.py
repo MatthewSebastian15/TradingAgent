@@ -8,6 +8,14 @@ import pytest
 
 from errors import BadRequestError
 from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
+from tradingagents.llm_clients.model_catalog import (
+    DEEPSEEK_CHAT_MODEL,
+    DEEPSEEK_REASONER_MODEL,
+    MODEL_CATALOG,
+)
+
+_GOOGLE_QUICK_LLM = MODEL_CATALOG["google"]["quick"][0][1]
+_GOOGLE_DEEP_LLM = MODEL_CATALOG["google"]["deep"][0][1]
 
 
 def test_ticker_bbcajk_is_valid():
@@ -78,6 +86,8 @@ def test_max_debate_rounds_above_five_is_rejected():
 
 def test_deepseek_provider_is_valid_when_api_key_exists(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEP_THINK_LLM", DEEPSEEK_REASONER_MODEL)
+    monkeypatch.setenv("QUICK_THINK_LLM", DEEPSEEK_CHAT_MODEL)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-deepseek-key")
     monkeypatch.setenv("ANALYSIS_MODE", "balanced")
     monkeypatch.setenv("MAX_GEMINI_CALLS", "9")
@@ -93,8 +103,28 @@ def test_deepseek_provider_is_valid_when_api_key_exists(monkeypatch):
     importlib.reload(config)
 
 
+def test_startup_config_requires_model_env(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "google")
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-google-key")
+    monkeypatch.delenv("DEEP_THINK_LLM", raising=False)
+    monkeypatch.delenv("QUICK_THINK_LLM", raising=False)
+
+    import config
+
+    reloaded = importlib.reload(config)
+    try:
+        errors = reloaded.validate_startup_config()
+        assert "DEEP_THINK_LLM must not be empty." in errors
+        assert "QUICK_THINK_LLM must not be empty." in errors
+    finally:
+        _restore_test_config(monkeypatch)
+
+
 def _restore_test_config(monkeypatch):
     monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("LLM_PROVIDER", "google")
+    monkeypatch.setenv("DEEP_THINK_LLM", _GOOGLE_DEEP_LLM)
+    monkeypatch.setenv("QUICK_THINK_LLM", _GOOGLE_QUICK_LLM)
     monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "false")
     monkeypatch.delenv("CORS_ORIGINS", raising=False)
 

@@ -6,7 +6,7 @@ Two pieces verified:
    ``additional_kwargs`` and re-attached on send so DeepSeek's API
    sees the same value across turns.
 2. ``with_structured_output`` raises NotImplementedError for
-   ``deepseek-reasoner`` so the agent factories' free-text fallback
+   DeepSeek reasoner models so the agent factories' free-text fallback
    handles the request instead of failing at runtime.
 """
 
@@ -21,6 +21,7 @@ from tradingagents.llm_clients.openai_client import (
     NormalizedChatOpenAI,
     _input_to_messages,
 )
+from tradingagents.llm_clients.model_catalog import DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +57,7 @@ class TestDeepSeekReasoningContent:
     def _client(self):
         os.environ.setdefault("DEEPSEEK_API_KEY", "placeholder")
         return DeepSeekChatOpenAI(
-            model="deepseek-v4-flash",
+            model=DEEPSEEK_CHAT_MODEL,
             api_key="placeholder",
             base_url="https://api.deepseek.com",
         )
@@ -67,7 +68,7 @@ class TestDeepSeekReasoningContent:
         client = self._client()
         result = client._create_chat_result(
             {
-                "model": "deepseek-v4-flash",
+                "model": DEEPSEEK_CHAT_MODEL,
                 "choices": [
                     {
                         "index": 0,
@@ -115,7 +116,7 @@ class TestDeepSeekReasoningContent:
 
 
 # ---------------------------------------------------------------------------
-# deepseek-reasoner: structured output unavailable, falls through to free-text
+# DeepSeek reasoner models: structured output unavailable, falls through to free-text
 # ---------------------------------------------------------------------------
 
 
@@ -123,7 +124,7 @@ class TestDeepSeekReasoningContent:
 class TestDeepSeekReasonerStructuredOutput:
     def test_with_structured_output_raises_for_reasoner(self):
         client = DeepSeekChatOpenAI(
-            model="deepseek-reasoner",
+            model=DEEPSEEK_REASONER_MODEL,
             api_key="placeholder",
             base_url="https://api.deepseek.com",
         )
@@ -138,7 +139,7 @@ class TestDeepSeekReasonerStructuredOutput:
     def test_with_structured_output_works_for_v4(self):
         """V4 models (non-reasoner) accept tool_choice; structured output works."""
         client = DeepSeekChatOpenAI(
-            model="deepseek-v4-flash",
+            model=DEEPSEEK_CHAT_MODEL,
             api_key="placeholder",
             base_url="https://api.deepseek.com",
         )

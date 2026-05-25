@@ -142,10 +142,10 @@ Set `LLM_PROVIDER` in `backend/.env`.
 Recommended default:
 
 ```env
-LLM_PROVIDER=google
-DEEP_THINK_LLM=gemini-2.5-flash
-QUICK_THINK_LLM=gemini-2.5-flash
-GOOGLE_API_KEY=your_key_here
+LLM_PROVIDER=<provider>
+DEEP_THINK_LLM=<provider-model-id>
+QUICK_THINK_LLM=<provider-model-id>
+<PROVIDER_API_KEY>=your_key_here
 ```
 
 `DEEP_THINK_LLM` is used by heavier stages (Research Manager, Portfolio Manager). `QUICK_THINK_LLM` is used by analyst and debate stages.
@@ -239,7 +239,7 @@ Optional Ollama:
 
 ```bash
 docker compose --profile ollama up --build
-docker exec -it tradingagent-ollama ollama pull qwen3:latest
+docker exec -it tradingagent-ollama ollama pull <local-model-id>
 ```
 
 ---
