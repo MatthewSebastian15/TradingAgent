@@ -85,4 +85,40 @@ describe('AnalysisWorkspace history storage', () => {
     expect(stored[0]).not.toHaveProperty('investment_thesis');
     expect(stored[0]).not.toHaveProperty('raw_agent_state');
   });
+
+  it('persists every non-debug response without a hard history cap', () => {
+    function BatchForm({ onResult }) {
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            for (let i = 0; i < 12; i += 1) {
+              onResult({
+                ticker: `T${i}`,
+                trade_date: `2026-05-${String(i + 1).padStart(2, '0')}`,
+                response_detail: 'summary',
+                decision: 'Hold',
+              });
+            }
+          }}
+        >
+          Emit batch
+        </button>
+      );
+    }
+
+    renderWorkspace(BatchForm);
+    fireEvent.click(screen.getByRole('button', { name: /emit batch/i }));
+
+    const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
+    expect(stored).toHaveLength(12);
+    expect(stored[0]).toMatchObject({
+      ticker: 'T11',
+      trade_date: '2026-05-12',
+    });
+    expect(stored[11]).toMatchObject({
+      ticker: 'T0',
+      trade_date: '2026-05-01',
+    });
+  });
 });

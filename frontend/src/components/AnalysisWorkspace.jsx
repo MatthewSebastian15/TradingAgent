@@ -4,7 +4,7 @@ import Navbar from './Navbar';
 import ResultCard from './ResultCard';
 import { formatPrice } from '../utils/formatting';
 
-const HISTORY_LIMIT = 10;
+const HISTORY_PANEL_MAX_HEIGHT = 560;
 const HISTORY_TTL_DAYS = 30;
 const HISTORY_FIELDS = [
   'request_id',
@@ -50,7 +50,7 @@ function readHistory(historyKey) {
 
 function writeHistory(historyKey, entries) {
   try {
-    const clean = entries.filter((entry) => entry && !isExpired(entry)).slice(0, HISTORY_LIMIT);
+    const clean = entries.filter((entry) => entry && !isExpired(entry));
     localStorage.setItem(historyKey, JSON.stringify(clean));
   } catch {
     // Storage can be unavailable in private browsing or when quota is exceeded.
@@ -102,10 +102,10 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
           RECENT ANALYSES
         </span>
         <span className="font-mono text-xs text-bloomberg-muted">
-          {history.length}/{HISTORY_LIMIT}
+          {history.length}
         </span>
       </div>
-      <div>
+      <div className="overflow-y-auto" style={{ maxHeight: HISTORY_PANEL_MAX_HEIGHT }}>
         {history.map((item, index) => (
           <button
             key={`${item.ticker || 'item'}-${item.trade_date || index}`}
