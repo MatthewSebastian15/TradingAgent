@@ -245,7 +245,11 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
 
     const streamRes = await fetch(buildApiUrl(`/analysis/jobs/${job.job_id}/events`), {
       method: 'GET',
-      headers: buildAuthHeaders(),
+      headers: {
+        ...buildAuthHeaders(),
+        Accept: 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
       signal: controller.signal,
     });
 

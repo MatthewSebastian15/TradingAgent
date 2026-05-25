@@ -27,6 +27,29 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
+class SkipSseCompressionMiddleware:
+    """Keep SSE responses uncompressed so progress events flush immediately."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and self._is_sse_path(scope.get("path", "")):
+            scope = dict(scope)
+            scope["headers"] = [
+                (name, value)
+                for name, value in scope.get("headers", [])
+                if name.lower() != b"accept-encoding"
+            ]
+        await self.app(scope, receive, send)
+
+    @staticmethod
+    def _is_sse_path(path: str) -> bool:
+        return path == "/api/analyze/stream" or (
+            path.startswith("/api/analysis/jobs/") and path.endswith("/events")
+        )
+
+
 async def validate_config() -> None:
     """Fail fast when provider keys, models, or writable dirs are invalid."""
     errors = validate_startup_config()
@@ -63,6 +86,7 @@ app = FastAPI(title=APP_NAME, lifespan=lifespan)
 
 app.add_middleware(RequestBodyLimitMiddleware, max_bytes=REQUEST_BODY_MAX_BYTES)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(SkipSseCompressionMiddleware)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,

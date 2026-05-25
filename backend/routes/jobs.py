@@ -152,6 +152,16 @@ async def stream_job_events(request, job: AnalysisJob):
 
     next_sequence = 0
     while True:
+        # If a subscriber attaches after completion and there is no replayable
+        # history, send the terminal payload immediately instead of waiting for
+        # the heartbeat timeout.
+        if job.result is not None and next_sequence == 0 and not job.events:
+            yield sse_event("result", job.result)
+            return
+        if job.error is not None and next_sequence == 0 and not job.events:
+            yield sse_event("error", job.error)
+            return
+
         # Acquire the condition lock once and do BOTH the event check and the
         # wait() inside it. This eliminates the race where publish() fires a
         # notify_all() between our events_since() call and our wait() call,
@@ -174,13 +184,6 @@ async def stream_job_events(request, job: AnalysisJob):
             if item["type"] in {"result", "error"}:
                 return
 
-        # Terminal state checks (handles jobs that completed before we started streaming).
-        if job.result is not None and next_sequence == 0:
-            yield sse_event("result", job.result)
-            return
-        if job.error is not None and next_sequence == 0:
-            yield sse_event("error", job.error)
-            return
         if job.done_event.is_set() and not pending:
             # Job finished but we may have already consumed the result/error event above.
             return
