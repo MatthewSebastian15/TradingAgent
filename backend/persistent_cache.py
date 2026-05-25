@@ -43,39 +43,37 @@ class SQLiteTTLCache:
     def get(self, key: Any) -> Any | None:
         key_hash = self._hash_key(key)
         now = time.time()
-        with self._write_lock:
-            with self._connect() as conn:
-                row = conn.execute("SELECT expires_at, value FROM cache WHERE key = ?", (key_hash,)).fetchone()
-                if row is None:
-                    return None
-                expires_at, serialized_value = row
-                if expires_at <= now:
-                    conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
-                    return None
-                try:
-                    value = self._loads(serialized_value)
-                except (TypeError, ValueError):
-                    conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
-                    return None
-                conn.execute("UPDATE cache SET last_accessed_at = ? WHERE key = ?", (now, key_hash))
-                return value
+        with self._write_lock, self._connect() as conn:
+            row = conn.execute("SELECT expires_at, value FROM cache WHERE key = ?", (key_hash,)).fetchone()
+            if row is None:
+                return None
+            expires_at, serialized_value = row
+            if expires_at <= now:
+                conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
+                return None
+            try:
+                value = self._loads(serialized_value)
+            except (TypeError, ValueError):
+                conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
+                return None
+            conn.execute("UPDATE cache SET last_accessed_at = ? WHERE key = ?", (now, key_hash))
+            return value
 
     def set(self, key: Any, value: Any) -> None:
         key_hash = self._hash_key(key)
         now = time.time()
         expires_at = now + self.ttl_seconds
         serialized_value = self._dumps(value)
-        with self._write_lock:
-            with self._connect() as conn:
-                conn.execute("BEGIN IMMEDIATE")
-                conn.execute(
-                    """
+        with self._write_lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
                     INSERT OR REPLACE INTO cache (key, expires_at, last_accessed_at, value)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (key_hash, expires_at, now, serialized_value),
-                )
-                self._evict(conn)
+                (key_hash, expires_at, now, serialized_value),
+            )
+            self._evict(conn)
 
     def stats(self) -> dict[str, int | str]:
         with self._connect() as conn:
@@ -94,11 +92,10 @@ class SQLiteTTLCache:
         return conn
 
     def _ensure_schema(self) -> None:
-        with self._write_lock:
-            with self._connect() as conn:
-                conn.execute("PRAGMA journal_mode = WAL")
-                conn.execute(
-                    """
+        with self._write_lock, self._connect() as conn:
+            conn.execute("PRAGMA journal_mode = WAL")
+            conn.execute(
+                """
                     CREATE TABLE IF NOT EXISTS cache (
                         key TEXT PRIMARY KEY,
                         expires_at REAL NOT NULL,
@@ -106,14 +103,16 @@ class SQLiteTTLCache:
                         value BLOB NOT NULL
                     )
                     """
-                )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache (expires_at)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_last_accessed_at ON cache (last_accessed_at)")
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache (expires_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_last_accessed_at ON cache (last_accessed_at)")
 
     def _evict(self, conn: sqlite3.Connection) -> None:
         now = time.time()
         conn.execute("DELETE FROM cache WHERE expires_at <= ?", (now,))
-        rows = conn.execute("SELECT key FROM cache ORDER BY last_accessed_at DESC LIMIT -1 OFFSET ?", (self.max_entries,)).fetchall()
+        rows = conn.execute(
+            "SELECT key FROM cache ORDER BY last_accessed_at DESC LIMIT -1 OFFSET ?", (self.max_entries,)
+        ).fetchall()
         if rows:
             conn.executemany("DELETE FROM cache WHERE key = ?", rows)
 

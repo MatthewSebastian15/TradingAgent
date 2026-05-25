@@ -3,19 +3,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from analysis_cache import (
     AnalysisJob,
-    AnalysisJobLimitError,
     AnalysisJobStore,
     AnalysisResultCache,
     InFlightRegistry,
 )
 from config import (
+    ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
     ANALYSIS_JOB_MAX_ACTIVE,
     ANALYSIS_JOB_MAX_ENTRIES,
-    ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
     ANALYSIS_JOB_TTL_SECONDS,
     ANALYSIS_RESULT_CACHE_MAX_ENTRIES,
     ANALYSIS_RESULT_CACHE_TTL_SECONDS,
@@ -86,7 +86,7 @@ async def forward_job_progress(job: AnalysisJob, source_queue: asyncio.Queue) ->
 async def wait_for_job_progress(source_queue: asyncio.Queue) -> None:
     try:
         await asyncio.wait_for(source_queue.join(), timeout=2)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.debug("Timed out while waiting for job progress events to flush")
 
 
@@ -117,8 +117,13 @@ async def start_job(
         await job.complete(response_payload_func(job.request_id, req, fields))
     except asyncio.CancelledError:
         await wait_for_job_progress(progress_queue)
-        await job.cancel({"request_id": job.request_id, "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."}})
-    except asyncio.TimeoutError:
+        await job.cancel(
+            {
+                "request_id": job.request_id,
+                "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."},
+            }
+        )
+    except TimeoutError:
         exc = PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)
         await wait_for_job_progress(progress_queue)
         await job.fail(error_payload(exc))
@@ -133,7 +138,7 @@ async def start_job(
         await progress_queue.put(None)
         try:
             await asyncio.wait_for(progress_task, timeout=2)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             progress_task.cancel()
         job.updated_at = time.time()
         await rate_limit_lease.__aexit__(None, None, None)
@@ -174,7 +179,7 @@ async def stream_job_events(request, job: AnalysisJob):
                     # No events yet — wait for the next notify_all().
                     await asyncio.wait_for(job.event_condition.wait(), timeout=15)
                     pending = [e for e in job.events if e["sequence"] >= next_sequence]
-        except asyncio.TimeoutError:
+        except TimeoutError:
             yield sse_event("heartbeat", {"job_id": job.id, "request_id": job.request_id, "status": job.status})
             pending = []
 

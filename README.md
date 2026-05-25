@@ -376,7 +376,17 @@ Frontend code intentionally does not read or send any API key from Vite environm
 
 ```bash
 cd backend
+pip install -r requirements-dev.txt
+python -m ruff format --check .
+python -m ruff check .
 python -m pytest tests -q
+```
+
+On Windows PowerShell, the backend quality gate can also be run with:
+
+```powershell
+cd backend
+.\scripts\quality.ps1
 ```
 
 Coverage includes ticker validation, date validation, debate round limits, job ownership, request body limits, rate limiting (HTTP 429), SSE progress/replay events, config isolation, frontend stream cleanup, AgentLog de-duplication, and result schema shape.

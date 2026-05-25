@@ -55,10 +55,17 @@ def test_result_cache_uses_recently_touched_lru_entry():
 def test_job_store_rejects_jobs_over_active_cap():
     async def main():
         store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=1)
-        await store.create(owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"})
+        await store.create(
+            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+        )
 
         with pytest.raises(AnalysisJobLimitError) as exc_info:
-            await store.create(owner_id="owner-2", request_id="request-2", cache_key=_cache_key("BBRI.JK"), payload={"ticker": "BBRI.JK"})
+            await store.create(
+                owner_id="owner-2",
+                request_id="request-2",
+                cache_key=_cache_key("BBRI.JK"),
+                payload={"ticker": "BBRI.JK"},
+            )
 
         assert exc_info.value.max_active_jobs == 1
         assert (await store.stats())["active"] == 1
@@ -69,7 +76,9 @@ def test_job_store_rejects_jobs_over_active_cap():
 def test_job_event_history_is_bounded():
     async def main():
         store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10, max_event_history=2)
-        job = await store.create(owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"})
+        job = await store.create(
+            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+        )
 
         for index in range(5):
             await job.publish("progress", {"index": index})
@@ -85,9 +94,13 @@ def test_job_event_history_is_bounded():
 def test_job_terminal_transition_does_not_overwrite_cancelled_state():
     async def main():
         store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-        job = await store.create(owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"})
+        job = await store.create(
+            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+        )
 
-        cancelled = await job.cancel({"request_id": "request-1", "error": {"code": "ANALYSIS_CANCELLED", "message": "cancelled"}})
+        cancelled = await job.cancel(
+            {"request_id": "request-1", "error": {"code": "ANALYSIS_CANCELLED", "message": "cancelled"}}
+        )
         completed = await job.complete({"decision": "Buy"})
 
         assert cancelled is True

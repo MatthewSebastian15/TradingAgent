@@ -143,9 +143,7 @@ async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse
     return JSONResponse(status_code=exc.status_code, content=error_payload(api_error))
 
 
-async def validation_exception_handler(
-    _: Request, exc: RequestValidationError
-) -> JSONResponse:
+async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
     details = {"fields": sanitize_validation_errors(exc.errors())}
     api_error = ApiError(422, "VALIDATION_ERROR", "Invalid request payload.", details=details)
     return JSONResponse(status_code=422, content=error_payload(api_error))

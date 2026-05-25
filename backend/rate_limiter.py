@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import hmac
 import hashlib
+import hmac
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -12,11 +12,11 @@ from dataclasses import dataclass, field
 from fastapi import Request
 
 from config import (
-    REQUIRE_API_KEY_FOR_RATE_LIMIT,
-    REQUEST_RATE_LIMIT_PER_MINUTE,
     MAX_CONCURRENT_REQUESTS_PER_KEY,
-    STREAM_RATE_LIMIT_PER_MINUTE,
     MAX_CONCURRENT_STREAMS_PER_KEY,
+    REQUEST_RATE_LIMIT_PER_MINUTE,
+    REQUIRE_API_KEY_FOR_RATE_LIMIT,
+    STREAM_RATE_LIMIT_PER_MINUTE,
     llm,
 )
 from errors import RateLimitError
@@ -67,11 +67,7 @@ def _evict_stale_entries(now: float) -> None:
 
     Must be called while holding *_lock*.
     """
-    stale = [
-        key
-        for key, state in _states.items()
-        if state.active == 0 and (now - state.last_seen) > _TTL_SECONDS
-    ]
+    stale = [key for key, state in _states.items() if state.active == 0 and (now - state.last_seen) > _TTL_SECONDS]
     for key in stale:
         del _states[key]
 
@@ -101,9 +97,7 @@ def get_client_identifier(request: Request) -> str:
     configured_api_key = llm.api_key
     if configured_api_key:
         if not api_key:
-            raise RateLimitError(
-                "Missing API key. Send x-api-key or Authorization: Bearer <key>."
-            )
+            raise RateLimitError("Missing API key. Send x-api-key or Authorization: Bearer <key>.")
         if not hmac.compare_digest(api_key, configured_api_key):
             raise RateLimitError("Invalid API key.")
         return f"api_key:{_hash(api_key)}"
@@ -114,9 +108,7 @@ def get_client_identifier(request: Request) -> str:
         return f"api_key:{_hash(api_key)}"
 
     if REQUIRE_API_KEY_FOR_RATE_LIMIT:
-        raise RateLimitError(
-            "Missing API key. Send x-api-key or Authorization: Bearer <key>."
-        )
+        raise RateLimitError("Missing API key. Send x-api-key or Authorization: Bearer <key>.")
 
     # x-session-id is sent by the frontend on every request within the same
     # browser tab. This guarantees POST /jobs and GET /jobs/{id}/events always
@@ -141,7 +133,7 @@ class RateLimitLease:
         self.policy = policy
         self._acquired = False
 
-    async def __aenter__(self) -> "RateLimitLease":
+    async def __aenter__(self) -> RateLimitLease:
         now = time.monotonic()
         key = (self.policy.scope, self.identifier)
 

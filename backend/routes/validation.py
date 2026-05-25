@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
 from typing import Literal
-import re
 
 from pydantic import BaseModel, Field
+from tradingagents.dataflows.y_finance import normalize_ticker
 
 from config import DEFAULT_ANALYSIS_DEPTH, DEFAULT_MAX_DEBATE_ROUNDS
 from errors import BadRequestError
-from tradingagents.dataflows.y_finance import normalize_ticker
 
 # Accepts plain tickers (AAPL, NVDA, 0700) and exchange-suffixed tickers
 # (BBCA.JK, BRK-B, 0700.HK). Backend and frontend intentionally share the
@@ -57,7 +57,9 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     errors: dict[str, str] = {}
 
     if not isinstance(ticker, str) or not _TICKER_RE.fullmatch(ticker):
-        errors["ticker"] = "Ticker must be a Yahoo Finance compatible symbol, for example AAPL, BBCA.JK, BBRI.JK, TLKM.JK, BRK-B, or 0700.HK."
+        errors["ticker"] = (
+            "Ticker must be a Yahoo Finance compatible symbol, for example AAPL, BBCA.JK, BBRI.JK, TLKM.JK, BRK-B, or 0700.HK."
+        )
 
     if not isinstance(trade_date, str):
         errors["trade_date"] = "Trade date must use YYYY-MM-DD format."

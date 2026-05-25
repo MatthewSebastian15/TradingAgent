@@ -1,0 +1,34 @@
+[tool.pytest.ini_options]
+pythonpath = [
+    ".",
+    "tradingagents-core",
+]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [
+    ".cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "tradingagents-core",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",
+    "B008",
+    "B904",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

@@ -4,10 +4,10 @@ import asyncio
 import concurrent.futures
 import logging
 import multiprocessing
-import sys
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from multiprocessing.managers import SyncManager
-from typing import Any, Callable, Optional
+from typing import Any
 
 from fastapi import Request
 
@@ -88,7 +88,7 @@ def run_pipeline(
     )
 
     full_decision: str = final_state.get("final_trade_decision", "")
-    pd_obj: Optional[PortfolioDecision] = final_state.get("portfolio_decision")
+    pd_obj: PortfolioDecision | None = final_state.get("portfolio_decision")
     return parse_final_result(full_decision, pd_obj, PortfolioRating, final_state)
 
 
@@ -99,8 +99,8 @@ def run_pipeline_with_progress(
     analysis_depth: str,
     response_detail: str,
     request_id: str,
-    progress_callback: Optional[Callable[[dict], None]] = None,
-    cancel_check: Optional[Callable[[], bool]] = None,
+    progress_callback: Callable[[dict], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> dict:
     """Run pipeline in-process so SSE can receive real callback events."""
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
@@ -145,7 +145,7 @@ def run_pipeline_with_progress(
             )
 
     full_decision: str = final_state.get("final_trade_decision", "")
-    pd_obj: Optional[PortfolioDecision] = final_state.get("portfolio_decision")
+    pd_obj: PortfolioDecision | None = final_state.get("portfolio_decision")
     return parse_final_result(full_decision, pd_obj, PortfolioRating, final_state)
 
 
@@ -218,9 +218,8 @@ async def get_executor() -> concurrent.futures.ProcessPoolExecutor:
                 executor_kwargs = {
                     "max_workers": PROCESS_POOL_WORKERS,
                     "mp_context": multiprocessing.get_context("spawn"),
+                    "max_tasks_per_child": PROCESS_POOL_MAX_TASKS_PER_CHILD,
                 }
-                if sys.version_info >= (3, 11):
-                    executor_kwargs["max_tasks_per_child"] = PROCESS_POOL_MAX_TASKS_PER_CHILD
                 _EXECUTOR = concurrent.futures.ProcessPoolExecutor(**executor_kwargs)
     return _EXECUTOR
 
@@ -350,7 +349,7 @@ async def run_pipeline_async(
     )
     try:
         return await asyncio.wait_for(future, timeout=PIPELINE_TIMEOUT_SECONDS)
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         set_cancel_event_func(cancel_event)
         future.cancel()
         logger.error(
@@ -418,7 +417,7 @@ async def preflight_market_data(
     )
     try:
         sample = await asyncio.wait_for(future, timeout=PREFLIGHT_TIMEOUT_SECONDS)
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         if future.done():
             raise BadRequestError(
                 "Ticker preflight failed before the LLM pipeline started.",

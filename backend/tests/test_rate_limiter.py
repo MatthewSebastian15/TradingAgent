@@ -151,7 +151,10 @@ def test_job_create_rejects_invalid_api_key_before_storing_job(client, monkeypat
 
 def test_job_create_rate_limit_runs_before_storing_second_job(client, monkeypatch):
     async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
-        return {"decision": "Hold", "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []}}
+        return {
+            "decision": "Hold",
+            "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []},
+        }
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     monkeypatch.setattr("routes.analysis._JOB_STORE", store)

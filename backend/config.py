@@ -31,9 +31,7 @@ def _should_load_dotenv() -> bool:
     """Load local .env for app runtime, but keep tests hermetic."""
     if _env_bool_raw(os.getenv("TRADINGAGENTS_SKIP_DOTENV"), False):
         return False
-    if os.getenv("PYTEST_CURRENT_TEST"):
-        return False
-    return True
+    return not os.getenv("PYTEST_CURRENT_TEST")
 
 
 if _should_load_dotenv():
@@ -91,6 +89,7 @@ def _env_list(name: str, default: list[str]) -> list[str]:
         return list(default)
     return [item.strip() for item in raw.split(",") if item.strip()]
 
+
 # ---------------------------------------------------------------------------
 # Non-secret tunables and deployment defaults
 # ---------------------------------------------------------------------------
@@ -106,10 +105,14 @@ FRONTEND_PORT = 3000
 
 # CORS. Production defaults to same-origin only; set CORS_ORIGINS to a
 # comma-separated allowlist when the frontend is deployed on another origin.
-_DEFAULT_CORS_ORIGINS: list[str] = [] if _IS_PRODUCTION else [
-    f"http://localhost:{FRONTEND_PORT}",
-    "http://localhost:5173",  # Vite default fallback
-]
+_DEFAULT_CORS_ORIGINS: list[str] = (
+    []
+    if _IS_PRODUCTION
+    else [
+        f"http://localhost:{FRONTEND_PORT}",
+        "http://localhost:5173",  # Vite default fallback
+    ]
+)
 CORS_ORIGINS: list[str] = _env_list("CORS_ORIGINS", _DEFAULT_CORS_ORIGINS)
 
 # Pipeline tunables
@@ -206,9 +209,11 @@ ADAPTIVE_DEBATE_ENABLED = True
 # Confidential settings loaded from .env
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class LLMSettings:
     """Confidential LLM configuration from .env."""
+
     provider: str = field(default_factory=lambda: _env("LLM_PROVIDER").lower())
     deep_think_llm: str = field(default_factory=lambda: _env("DEEP_THINK_LLM"))
     quick_think_llm: str = field(default_factory=lambda: _env("QUICK_THINK_LLM"))
@@ -270,6 +275,7 @@ llm = LLMSettings()
 # Config builder
 # ---------------------------------------------------------------------------
 
+
 def build_tradingagents_config(
     max_debate_rounds: int | None = None,
     *,
@@ -296,6 +302,7 @@ def build_tradingagents_config(
 # Startup validation
 # ---------------------------------------------------------------------------
 
+
 def _has_any_env(*names: str) -> bool:
     return any(bool(os.getenv(n)) for n in names)
 
@@ -312,11 +319,14 @@ def _validate_writable_dir(path: str, key: str, errors: list[str]) -> None:
 
 
 PROVIDER_KEY_REQUIREMENTS: dict[str, tuple[tuple[str, ...], str]] = {
-    "google":      (("GOOGLE_API_KEY", "GEMINI_API_KEY"), "GOOGLE_API_KEY or GEMINI_API_KEY is required when LLM_PROVIDER=google."),
-    "openai":      (("OPENAI_API_KEY",),                  "OPENAI_API_KEY is required when LLM_PROVIDER=openai."),
-    "anthropic":   (("ANTHROPIC_API_KEY",),               "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic."),
-    "deepseek":    (("DEEPSEEK_API_KEY",),                "DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek."),
-    "openrouter":  (("OPENROUTER_API_KEY",),              "OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter."),
+    "google": (
+        ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+        "GOOGLE_API_KEY or GEMINI_API_KEY is required when LLM_PROVIDER=google.",
+    ),
+    "openai": (("OPENAI_API_KEY",), "OPENAI_API_KEY is required when LLM_PROVIDER=openai."),
+    "anthropic": (("ANTHROPIC_API_KEY",), "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic."),
+    "deepseek": (("DEEPSEEK_API_KEY",), "DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek."),
+    "openrouter": (("OPENROUTER_API_KEY",), "OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter."),
 }
 
 
@@ -361,6 +371,7 @@ def validate_startup_config() -> list[str]:
 # ---------------------------------------------------------------------------
 class _BackendSettingsShim:
     """Compatibility shim for code that still references `settings.*`."""
+
     app_name = APP_NAME
     environment = APP_ENV
     cors_origins = CORS_ORIGINS
@@ -395,17 +406,27 @@ class _BackendSettingsShim:
     data_vendor_news_data = DATA_VENDOR_NEWS_DATA
 
     @property
-    def llm_provider(self): return llm.provider
-    @property
-    def deep_think_llm(self): return llm.deep_think_llm
-    @property
-    def quick_think_llm(self): return llm.quick_think_llm
-    @property
-    def ollama_base_url(self): return llm.ollama_base_url
-    @property
-    def api_key(self): return llm.api_key
+    def llm_provider(self):
+        return llm.provider
 
-    def tradingagents_overrides(self): return llm.tradingagents_overrides()
+    @property
+    def deep_think_llm(self):
+        return llm.deep_think_llm
+
+    @property
+    def quick_think_llm(self):
+        return llm.quick_think_llm
+
+    @property
+    def ollama_base_url(self):
+        return llm.ollama_base_url
+
+    @property
+    def api_key(self):
+        return llm.api_key
+
+    def tradingagents_overrides(self):
+        return llm.tradingagents_overrides()
 
 
 settings = _BackendSettingsShim()

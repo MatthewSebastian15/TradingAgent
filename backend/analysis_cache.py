@@ -11,8 +11,9 @@ import asyncio
 import time
 import uuid
 from collections import OrderedDict, deque
+from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Any, Hashable, Literal
+from typing import Any, Literal
 
 AnalysisStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 TERMINAL_ANALYSIS_STATUSES = {"completed", "failed", "cancelled"}
@@ -273,7 +274,9 @@ class AnalysisJobStore:
         self._jobs: dict[str, AnalysisJob] = {}
         self._lock = asyncio.Lock()
 
-    async def create(self, *, owner_id: str, request_id: str, cache_key: AnalysisCacheKey, payload: dict[str, Any]) -> AnalysisJob:
+    async def create(
+        self, *, owner_id: str, request_id: str, cache_key: AnalysisCacheKey, payload: dict[str, Any]
+    ) -> AnalysisJob:
         await self.cleanup()
         async with self._lock:
             active_jobs = self._active_job_count_locked()
@@ -306,7 +309,10 @@ class AnalysisJobStore:
         if job is None:
             return None
         changed = await job.cancel(
-            {"request_id": job.request_id, "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."}}
+            {
+                "request_id": job.request_id,
+                "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."},
+            }
         )
         if changed and job.task and not job.task.done():
             job.task.cancel()
@@ -315,7 +321,11 @@ class AnalysisJobStore:
     async def cleanup(self) -> None:
         cutoff = time.time() - self.ttl_seconds
         async with self._lock:
-            stale = [job_id for job_id, job in self._jobs.items() if job.updated_at < cutoff and job.status in {"completed", "failed", "cancelled"}]
+            stale = [
+                job_id
+                for job_id, job in self._jobs.items()
+                if job.updated_at < cutoff and job.status in {"completed", "failed", "cancelled"}
+            ]
             for job_id in stale:
                 self._jobs.pop(job_id, None)
             await self._evict_locked()
