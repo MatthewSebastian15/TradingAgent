@@ -4,7 +4,7 @@ from .base_client import BaseLLMClient
 
 # Providers that use the OpenAI-compatible chat completions API
 _OPENAI_COMPATIBLE = (
-    "openai", "xai", "deepseek", "qwen", "glm", "ollama", "openrouter",
+    "openai", "deepseek", "qwen", "glm", "ollama", "openrouter",
 )
 
 
@@ -45,9 +45,5 @@ def create_llm_client(
     if provider_lower == "google":
         from .google_client import GoogleClient
         return GoogleClient(model, base_url, **kwargs)
-
-    if provider_lower == "azure":
-        from .azure_client import AzureOpenAIClient
-        return AzureOpenAIClient(model, base_url, **kwargs)
 
     raise ValueError(f"Unsupported LLM provider: {provider}")

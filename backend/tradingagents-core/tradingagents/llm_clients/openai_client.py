@@ -129,7 +129,6 @@ _PASSTHROUGH_KWARGS = (
 
 # Provider base URLs and API key env vars
 _PROVIDER_CONFIG = {
-    "xai": ("https://api.x.ai/v1", ("XAI_API_KEY",)),
     "deepseek": ("https://api.deepseek.com", ("DEEPSEEK_API_KEY",)),
     "qwen": ("https://dashscope-intl.aliyuncs.com/compatible-mode/v1", ("DASHSCOPE_API_KEY", "QWEN_API_KEY")),
     "glm": ("https://api.z.ai/api/paas/v4/", ("ZHIPU_API_KEY", "GLM_API_KEY")),
@@ -139,12 +138,12 @@ _PROVIDER_CONFIG = {
 
 
 class OpenAIClient(BaseLLMClient):
-    """Client for OpenAI, Ollama, OpenRouter, and xAI providers.
+    """Client for OpenAI and OpenAI-compatible providers.
 
     For native OpenAI models, uses the Responses API (/v1/responses) which
     supports reasoning_effort with function tools across all model families
-    (GPT-4.1, GPT-5). Third-party compatible providers (xAI, OpenRouter,
-    Ollama) use standard Chat Completions.
+    (GPT-4.1, GPT-5). Third-party compatible providers use standard Chat
+    Completions.
     """
 
     def __init__(

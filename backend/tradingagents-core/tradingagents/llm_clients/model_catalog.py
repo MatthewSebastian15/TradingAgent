@@ -3,7 +3,6 @@ from __future__ import annotations
 SUPPORTED_PROVIDERS: frozenset[str] = frozenset(
     {
         "anthropic",
-        "azure",
         "deepseek",
         "glm",
         "google",
@@ -11,11 +10,10 @@ SUPPORTED_PROVIDERS: frozenset[str] = frozenset(
         "openai",
         "openrouter",
         "qwen",
-        "xai",
     }
 )
 
-OPEN_MODEL_PROVIDERS: frozenset[str] = frozenset({"ollama", "openrouter", "azure"})
+OPEN_MODEL_PROVIDERS: frozenset[str] = frozenset({"ollama", "openrouter"})
 
 DEEPSEEK_CHAT_MODEL = "deepseek-chat"
 DEEPSEEK_REASONER_MODEL = "deepseek-reasoner"
@@ -58,16 +56,6 @@ MODEL_CATALOG: dict[str, dict[str, list[tuple[str, str]]]] = {
             ("Gemini 2.5 Pro - Stable pro model", "gemini-2.5-pro"),
             ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
             ("Gemini 2.0 Flash - Previous generation fast", "gemini-2.0-flash"),
-        ],
-    },
-    "xai": {
-        "quick": [
-            ("Grok Beta - Speed optimized", "grok-beta"),
-            ("Grok 2 - Balanced", "grok-2"),
-        ],
-        "deep": [
-            ("Grok 2 - Balanced", "grok-2"),
-            ("Grok Beta - Speed optimized", "grok-beta"),
         ],
     },
     "deepseek": {

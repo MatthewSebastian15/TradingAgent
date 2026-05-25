@@ -8,7 +8,7 @@ from .model_catalog import KNOWN_MODELS, OPEN_MODEL_PROVIDERS
 def validate_model(provider: str, model: str) -> bool:
     """Check if model name is valid for the given provider.
 
-    For ollama, openrouter, and azure any model string is accepted.
+    For ollama and openrouter any model string is accepted.
     For providers with a known catalog, the model must be in the list.
     Unknown providers are also accepted to stay forward-compatible.
     """
