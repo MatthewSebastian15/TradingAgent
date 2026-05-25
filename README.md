@@ -27,13 +27,31 @@ The first three analyst LLM calls run in parallel after data collection. Later d
 
 ---
 
+## Analysis Result Examples
+
+The `assets/` folder includes example result screens for each final decision type: **Buy**, **Sell**, and **Hold**.
+
+### Buy
+
+![TradingAgent Buy Result](assets/Result%20Analyst%20Buy.png)
+
+### Sell
+
+![TradingAgent Sell Result](assets/Result%20Analyst%20Sell.png)
+
+### Hold
+
+![TradingAgent Hold Result](assets/Result%20Analyst%20Hold.png)
+
+---
+
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ React/Vite Frontend                                             │
 │ Port: 3000                                                      │
-│ Routes: /home, /analysis, /analysis.test                        │
+│ Routes: /home, /analysis, /analysis.test, redirects             │
 │ Components: StockForm, AgentLog, ResultCard, mock UI            │
 └────────────────────────┬────────────────────────────────────────┘
                          │ POST /api/analysis/jobs (create job)
@@ -102,6 +120,7 @@ TradingAgent/
         ├── main.jsx
         ├── mockData.js            # Sample responses for UI testing
         ├── components/
+        │   ├── AnalysisWorkspace.jsx # Shared analysis layout and history sidebar
         │   ├── AgentLog.jsx       # Live progress via SSE events
         │   ├── Navbar.jsx
         │   ├── ResultCard.jsx     # Structured result display
@@ -109,7 +128,7 @@ TradingAgent/
         │   └── StockFormMock.jsx  # Mock form (no API call, for UI testing)
         └── pages/
             ├── Analysis.jsx       # Main analysis page + history sidebar
-            ├── AnalysisMock.jsx   # UI testing page at /analysis-mock
+            ├── AnalysisMock.jsx   # UI testing page at /analysis.test
             ├── Dashboard.jsx      # Landing page
             └── NotFound.jsx       # 404 fallback
 ```
@@ -130,7 +149,7 @@ Set `LLM_PROVIDER` in `backend/.env`.
 
 | Provider | `LLM_PROVIDER` | Required key |
 |---|---|---|
-| Google Gemini | `google` | `GOOGLE_API_KEY` |
+| Google Gemini | `google` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
 | OpenAI | `openai` | `OPENAI_API_KEY` |
 | Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
 | DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` |
@@ -246,17 +265,34 @@ docker exec -it tradingagent-ollama ollama pull <local-model-id>
 
 | Route | Purpose |
 |---|---|
+| `/` | Redirects to `/home` |
 | `/home` | Landing page |
 | `/analysis` | Main analysis page |
+| `/analysis-live` | Redirects to `/analysis` |
 | `/analysis.test` | Mock UI (no backend required) |
+| `/analysis-mock` | Redirects to `/analysis.test` when mock routes are enabled |
 
-The mock route is always available in local dev. In production builds, it requires `VITE_ENABLE_MOCK=true` at build time.
+The mock routes are always available in local dev. In production builds, they require `VITE_ENABLE_MOCK=true` at build time.
 
 ---
 
 ## API Reference
 
-The React UI uses the job API below. `/api/analyze` and `/api/analyze/stream` remain available as compatibility endpoints for direct API clients.
+The React analysis page uses the job API below. The dashboard also calls `/api/status` and `/api/market/quotes`. `/api/analyze` and `/api/analyze/stream` remain available as compatibility endpoints for direct API clients.
+
+### GET `/api/status`
+
+Returns backend status metadata used by the dashboard.
+
+### GET `/api/market/quotes`
+
+Returns lightweight ticker-tape quotes for the dashboard.
+
+Query parameter:
+
+| Field | Rule |
+|---|---|
+| `symbols` | Optional comma-separated ticker symbols, capped at 20 symbols |
 
 ### POST `/api/analysis/jobs`
 
@@ -284,7 +320,7 @@ Streams Server-Sent Events for job progress.
 
 ### GET `/api/analysis/jobs/{job_id}`
 
-Returns the current job status, events seen so far, and result or error if the job has finished.
+Returns the current job status, original payload, timestamps, and result or error if the job has finished.
 
 ### DELETE `/api/analysis/jobs/{job_id}`
 
@@ -304,20 +340,34 @@ Cancels a running job.
 
 ```json
 {
+  "request_id": "...",
   "ticker": "BBCA.JK",
+  "trade_date": "2026-05-18",
+  "analysis_depth": "balanced",
+  "response_detail": "full",
   "decision": "Buy",
+  "full_decision": "...",
   "executive_summary": "...",
   "investment_thesis": "...",
   "price_target": 9800,
   "time_horizon": "3-6 months",
   "confidence_score": 0.82,
+  "suggested_allocation_percent": 5,
   "entry_price": 9000,
   "stop_loss": 8400,
   "take_profit": 9800,
   "risk_reward_ratio": 2.3,
-  "suggested_allocation_percent": 5,
+  "max_drawdown_estimate": "8-12%",
+  "volatility_level": "Medium",
+  "position_sizing_reason": "...",
+  "rebalancing_action": "Add gradually",
   "key_catalysts": [],
   "invalidation_conditions": [],
+  "data_fetched_at": "2026-05-18T10:30:00",
+  "llm_call_budget": 9,
+  "llm_calls_used": 9,
+  "budget_exhausted": false,
+  "agents_skipped": [],
   "data_quality": {
     "price_data": "ok",
     "fundamentals": "partial",
@@ -329,35 +379,45 @@ Cancels a running job.
 
 ### Error codes
 
-| Code | HTTP | Meaning |
+| Code | HTTP / Context | Meaning |
 |---|---|---|
 | `BAD_REQUEST` | 400 | Invalid ticker, date, or parameters |
+| `REQUEST_BODY_TOO_LARGE` | 413 | Request body exceeds the configured backend limit |
+| `VALIDATION_ERROR` | 422 | Invalid request payload shape |
 | `RATE_LIMITED` | 429 | Too many requests |
 | `PIPELINE_TIMEOUT` | 504 | Analysis exceeded timeout |
 | `PIPELINE_FAILED` | 500 | Internal error — check logs with `request_id` |
+| `HTTP_ERROR` | Varies | FastAPI/Starlette HTTP exception surfaced through the API error envelope |
+| `ANALYSIS_CANCELLED` | Job/SSE event | Analysis was cancelled by the client |
 
 ---
 
 ## Environment Variables
 
+This section mirrors the variables currently present in `backend/.env.example` and `frontend/.env.example`.
+The local `.env` files should use the same keys, with secret values filled in privately.
+
 ### `backend/.env`
 
 | Variable | Required | Description |
 |---|---|---|
-| `LLM_PROVIDER` | Yes | Provider name |
-| `DEEP_THINK_LLM` | Yes | Model for heavier reasoning stages |
-| `QUICK_THINK_LLM` | Yes | Model for faster stages |
-| `GOOGLE_API_KEY` | Google only | Gemini API key |
+| `LLM_PROVIDER` | Yes | Provider name: `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, or `ollama` |
+| `DEEP_THINK_LLM` | Yes | Model used by heavier reasoning stages such as Research Manager and Portfolio Manager |
+| `QUICK_THINK_LLM` | Yes | Model used by the faster analyst and debate stages |
+| `GOOGLE_API_KEY` | Google only | Gemini API key. Either this or `GEMINI_API_KEY` is accepted |
+| `GEMINI_API_KEY` | Google only | Alternate Gemini API key variable. Either this or `GOOGLE_API_KEY` is accepted |
 | `OPENAI_API_KEY` | OpenAI only | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Anthropic only | Anthropic API key |
 | `DEEPSEEK_API_KEY` | DeepSeek only | DeepSeek API key |
-| `OLLAMA_BASE_URL` | Ollama only | Local or Docker Ollama URL |
-| `API_KEY` | Optional locally; required when `REQUIRE_API_KEY_FOR_RATE_LIMIT=true` | Shared API key accepted from `x-api-key` or `Authorization: Bearer ...` |
-| `APP_ENV` | No | Defaults to `production`; set `development` or `test` explicitly for local relaxed defaults |
-| `REQUEST_BODY_MAX_BYTES` | No | Maximum request body accepted by FastAPI; default `65536` |
-| `ANALYSIS_JOB_MAX_ACTIVE` | No | Maximum queued/running analysis jobs kept in memory; default `32` |
-| `PROCESS_POOL_MAX_TASKS_PER_CHILD` | No | Recycle isolated pipeline worker processes after this many tasks; default `1` |
-| `TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS` | No | Maximum timed-out blocking calls tracked per worker process; defaults to timed-call active capacity |
+| `OPENROUTER_API_KEY` | OpenRouter only | OpenRouter API key |
+| `ALPHA_VANTAGE_API_KEY` | No | Optional Alpha Vantage key for market, news, and fundamental-data enrichment or fallback |
+| `DATA_VENDOR_CORE_STOCK_APIS` | No | Comma-separated vendor order for core stock data. Default: `yfinance,alpha_vantage` |
+| `DATA_VENDOR_TECHNICAL_INDICATORS` | No | Comma-separated vendor order for technical indicators. Default: `yfinance,alpha_vantage` |
+| `DATA_VENDOR_FUNDAMENTAL_DATA` | No | Comma-separated vendor order for fundamentals. Default: `yfinance,alpha_vantage` |
+| `DATA_VENDOR_NEWS_DATA` | No | Comma-separated vendor order for news data. Default: `yfinance,alpha_vantage` |
+| `OLLAMA_BASE_URL` | Ollama only | Local or Docker Ollama URL. Default: `http://localhost:11434` |
+| `API_KEY` | Required when API-key rate limiting is enabled | Shared backend API key accepted from `x-api-key` or `Authorization: Bearer ...` |
+| `REQUIRE_API_KEY_FOR_RATE_LIMIT` | No | Set to `true` to require `API_KEY` for rate-limited backend access. `backend/.env.example` sets `false`; when unset, production defaults to `true` |
 
 ### `frontend/.env`
 
@@ -374,6 +434,8 @@ Frontend code intentionally does not read or send any API key from Vite environm
 
 ## Testing
 
+### Backend
+
 ```bash
 cd backend
 pip install -r requirements-dev.txt
@@ -389,7 +451,33 @@ cd backend
 .\scripts\quality.ps1
 ```
 
-Coverage includes ticker validation, date validation, debate round limits, job ownership, request body limits, rate limiting (HTTP 429), SSE progress/replay events, config isolation, frontend stream cleanup, AgentLog de-duplication, and result schema shape.
+On Linux/macOS:
+
+```bash
+cd backend
+./scripts/quality.sh
+```
+
+Backend coverage includes ticker validation, date validation, debate round limits, job ownership, request body limits, rate limiting (HTTP 429), SSE progress/replay events, config isolation, AgentLog de-duplication, and result schema shape.
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run quality
+```
+
+The frontend quality gate runs ESLint, Prettier format check, and Vitest once. To run them separately:
+
+```bash
+cd frontend
+npm run lint
+npm run format:check
+npm test -- --run
+```
+
+Frontend coverage includes stream cleanup and UI utility behavior.
 
 ---
 
