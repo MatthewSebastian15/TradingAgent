@@ -194,12 +194,6 @@ def _select_model(provider: str, mode: str) -> str:
     if provider.lower() == "openrouter":
         return select_openrouter_model()
 
-    if provider.lower() == "azure":
-        return questionary.text(
-            f"Enter Azure deployment name ({mode}-thinking):",
-            validate=lambda x: len(x.strip()) > 0 or "Please enter a deployment name.",
-        ).ask().strip()
-
     choice = questionary.select(
         f"Select Your [{mode.title()}-Thinking LLM Engine]:",
         choices=[
@@ -242,12 +236,10 @@ def select_llm_provider() -> tuple[str, str | None]:
         ("OpenAI", "openai", "https://api.openai.com/v1"),
         ("Google", "google", None),
         ("Anthropic", "anthropic", "https://api.anthropic.com/"),
-        ("xAI", "xai", "https://api.x.ai/v1"),
         ("DeepSeek", "deepseek", "https://api.deepseek.com"),
         ("Qwen", "qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
         ("GLM", "glm", "https://open.bigmodel.cn/api/paas/v4/"),
         ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
-        ("Azure OpenAI", "azure", None),
         ("Ollama", "ollama", "http://localhost:11434/v1"),
     ]
 

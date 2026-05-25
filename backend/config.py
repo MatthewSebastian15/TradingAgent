@@ -303,7 +303,6 @@ PROVIDER_KEY_REQUIREMENTS: dict[str, tuple[tuple[str, ...], str]] = {
     "openai":      (("OPENAI_API_KEY",),                  "OPENAI_API_KEY is required when LLM_PROVIDER=openai."),
     "anthropic":   (("ANTHROPIC_API_KEY",),               "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic."),
     "deepseek":    (("DEEPSEEK_API_KEY",),                "DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek."),
-    "xai":         (("XAI_API_KEY",),                     "XAI_API_KEY is required when LLM_PROVIDER=xai."),
     "qwen":        (("DASHSCOPE_API_KEY", "QWEN_API_KEY"), "DASHSCOPE_API_KEY or QWEN_API_KEY is required when LLM_PROVIDER=qwen."),
     "glm":         (("ZHIPU_API_KEY", "GLM_API_KEY"),     "ZHIPU_API_KEY or GLM_API_KEY is required when LLM_PROVIDER=glm."),
     "openrouter":  (("OPENROUTER_API_KEY",),              "OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter."),
@@ -323,14 +322,6 @@ def validate_startup_config() -> list[str]:
         env_names, message = PROVIDER_KEY_REQUIREMENTS[provider]
         if not _has_any_env(*env_names):
             errors.append(message)
-
-    if provider == "azure":
-        if not os.getenv("AZURE_OPENAI_API_KEY"):
-            errors.append("AZURE_OPENAI_API_KEY is required when LLM_PROVIDER=azure.")
-        if not os.getenv("AZURE_OPENAI_ENDPOINT"):
-            errors.append("AZURE_OPENAI_ENDPOINT is required when LLM_PROVIDER=azure.")
-        if not os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME") and not llm.deep_think_llm:
-            errors.append("AZURE_OPENAI_DEPLOYMENT_NAME or DEEP_THINK_LLM is required when LLM_PROVIDER=azure.")
 
     if not llm.deep_think_llm:
         errors.append("DEEP_THINK_LLM must not be empty.")
