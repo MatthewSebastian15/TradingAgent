@@ -303,8 +303,6 @@ PROVIDER_KEY_REQUIREMENTS: dict[str, tuple[tuple[str, ...], str]] = {
     "openai":      (("OPENAI_API_KEY",),                  "OPENAI_API_KEY is required when LLM_PROVIDER=openai."),
     "anthropic":   (("ANTHROPIC_API_KEY",),               "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic."),
     "deepseek":    (("DEEPSEEK_API_KEY",),                "DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek."),
-    "qwen":        (("DASHSCOPE_API_KEY", "QWEN_API_KEY"), "DASHSCOPE_API_KEY or QWEN_API_KEY is required when LLM_PROVIDER=qwen."),
-    "glm":         (("ZHIPU_API_KEY", "GLM_API_KEY"),     "ZHIPU_API_KEY or GLM_API_KEY is required when LLM_PROVIDER=glm."),
     "openrouter":  (("OPENROUTER_API_KEY",),              "OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter."),
 }
 
