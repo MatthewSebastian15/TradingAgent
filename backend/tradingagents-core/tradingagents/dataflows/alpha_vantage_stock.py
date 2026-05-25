@@ -1,4 +1,8 @@
 from datetime import datetime
+from io import StringIO
+
+import pandas as pd
+
 from .alpha_vantage_common import _make_api_request, _filter_csv_by_date_range
 
 def get_stock(
@@ -7,8 +11,7 @@ def get_stock(
     end_date: str
 ) -> str:
     """
-    Returns raw daily OHLCV values, adjusted close values, and historical split/dividend events
-    filtered to the specified date range.
+    Returns raw daily OHLCV values filtered to the specified date range.
 
     Args:
         symbol: The name of the equity. For example: symbol=IBM
@@ -33,6 +36,32 @@ def get_stock(
         "datatype": "csv",
     }
 
-    response = _make_api_request("TIME_SERIES_DAILY_ADJUSTED", params)
+    response = _make_api_request("TIME_SERIES_DAILY", params)
+    filtered = _filter_csv_by_date_range(response, start_date, end_date)
+    if not filtered or not str(filtered).strip():
+        return f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
 
-    return _filter_csv_by_date_range(response, start_date, end_date)
+    try:
+        data = pd.read_csv(StringIO(str(filtered)))
+    except Exception:
+        return str(filtered)
+
+    rename_map = {
+        "timestamp": "Date",
+        "open": "Open",
+        "high": "High",
+        "low": "Low",
+        "close": "Close",
+        "volume": "Volume",
+    }
+    data = data.rename(columns=rename_map)
+    expected_columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
+    available_columns = [column for column in expected_columns if column in data.columns]
+    if not available_columns or "Date" not in available_columns:
+        return str(filtered)
+
+    data = data[available_columns]
+    header = f"# Alpha Vantage daily stock data for {symbol.upper()} from {start_date} to {end_date}\n"
+    header += f"# Total records: {len(data)}\n"
+    header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    return header + data.to_csv(index=False)

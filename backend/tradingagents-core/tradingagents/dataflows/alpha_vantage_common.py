@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def get_api_key() -> str:
     """Retrieve the API key for Alpha Vantage from environment variables."""
-    api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "").strip()
     if not api_key:
         raise ValueError("ALPHA_VANTAGE_API_KEY environment variable is not set.")
     return api_key
@@ -76,11 +76,23 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
     # Check if response is JSON (error responses are typically JSON)
     try:
         response_json = json.loads(response_text)
-        # Check for rate limit error
+        if "Error Message" in response_json:
+            raise ValueError(f"Alpha Vantage error: {response_json['Error Message']}")
+        if "Note" in response_json:
+            note_message = str(response_json["Note"])
+            if "call frequency" in note_message.lower() or "rate limit" in note_message.lower():
+                raise AlphaVantageRateLimitError(f"Alpha Vantage rate limit exceeded: {note_message}")
+            raise ValueError(f"Alpha Vantage note: {note_message}")
         if "Information" in response_json:
-            info_message = response_json["Information"]
-            if "rate limit" in info_message.lower() or "api key" in info_message.lower():
+            info_message = str(response_json["Information"])
+            lowered_info = info_message.lower()
+            if (
+                "rate limit" in lowered_info
+                or "api key" in lowered_info
+                or "premium" in lowered_info
+            ):
                 raise AlphaVantageRateLimitError(f"Alpha Vantage rate limit exceeded: {info_message}")
+            raise ValueError(f"Alpha Vantage information: {info_message}")
     except json.JSONDecodeError:
         # Response is not JSON (likely CSV data), which is normal
         pass

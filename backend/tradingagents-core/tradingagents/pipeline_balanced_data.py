@@ -8,8 +8,8 @@ from io import StringIO
 from typing import Any, Callable, Optional, TypeVar
 
 from tradingagents.dataflows.config import set_config, use_config
-from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates
-from tradingagents.dataflows.interface import route_to_vendor
+from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
+from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
 from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 
@@ -54,6 +54,28 @@ def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -
         return DataField.from_text(_truncate(raw_value, limit))
     except Exception as exc:
         logger.warning("Balanced pipeline data call failed for %s: %s", label, exc)
+        return DataField.unavailable(label, exc)
+
+
+def _safe_multi_source_data_field(label: str, func: Callable[[], dict[str, Any]], limit: int = 12_000) -> DataField:
+    """Collect and format every usable vendor payload for high-value fields."""
+    try:
+        raw_results = func()
+        if not raw_results:
+            return DataField.from_text("")
+        if len(raw_results) == 1:
+            only_value = next(iter(raw_results.values()))
+            if looks_missing(str(only_value)):
+                return DataField.from_text(_truncate(only_value, limit))
+
+        parts: list[str] = []
+        for source, value in raw_results.items():
+            text = _truncate(value, limit)
+            if text.strip():
+                parts.append(f"## Source: {source}\n\n{text}")
+        return DataField.from_text(_truncate("\n\n".join(parts), limit))
+    except Exception as exc:
+        logger.warning("Balanced pipeline multi-source data call failed for %s: %s", label, exc)
         return DataField.unavailable(label, exc)
 
 
@@ -142,22 +164,22 @@ def _build_collection_tasks(ticker: str, trade_date: str, start_90: str, start_3
             lambda: route_to_vendor("get_income_statement", ticker, "quarterly", trade_date),
             limit=10_000,
         ),
-        "company_news": lambda: _safe_data_field(
-            "company_news",
-            lambda: route_to_vendor("get_news", ticker, start_30, end),
-            limit=12_000,
-        ),
-        "global_news": lambda: _safe_data_field(
-            "global_news",
-            lambda: route_to_vendor("get_global_news", trade_date, 7, 10),
-            limit=8_000,
-        ),
         "insider_transactions": lambda: _safe_data_field(
             "insider_transactions",
             lambda: route_to_vendor("get_insider_transactions", ticker),
             limit=6_000,
         ),
     }
+    tasks["company_news"] = lambda: _safe_multi_source_data_field(
+        "company_news",
+        lambda: route_to_all_vendors("get_news", ticker, start_30, end),
+        limit=12_000,
+    )
+    tasks["global_news"] = lambda: _safe_multi_source_data_field(
+        "global_news",
+        lambda: route_to_all_vendors("get_global_news", trade_date, 7, 10),
+        limit=8_000,
+    )
     for indicator in INDICATOR_NAMES:
         tasks[f"indicator:{indicator}"] = lambda indicator=indicator: _safe_data_field(
             f"indicator:{indicator}",
