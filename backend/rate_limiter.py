@@ -118,6 +118,13 @@ def get_client_identifier(request: Request) -> str:
             "Missing API key. Send x-api-key or Authorization: Bearer <key>."
         )
 
+    # x-session-id is sent by the frontend on every request within the same
+    # browser tab. This guarantees POST /jobs and GET /jobs/{id}/events always
+    # resolve to the same owner_id, so job lookup never fails due to mismatch.
+    session_id = request.headers.get("x-session-id", "").strip()
+    if session_id:
+        return f"session:{_hash(session_id)}"
+
     # Use only the direct TCP peer address — it cannot be forged by the client.
     client_host = request.client.host if request.client else "unknown-client"
     return f"ip:{_hash(client_host)}"

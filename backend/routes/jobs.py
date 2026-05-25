@@ -152,29 +152,38 @@ async def stream_job_events(request, job: AnalysisJob):
 
     next_sequence = 0
     while True:
-        events = await job.events_since(next_sequence)
-        for item in events:
+        # Acquire the condition lock once and do BOTH the event check and the
+        # wait() inside it. This eliminates the race where publish() fires a
+        # notify_all() between our events_since() call and our wait() call,
+        # which previously caused progress events to be missed for up to 15 s.
+        try:
+            async with job.event_condition:
+                # Drain any events that arrived before we acquired the lock.
+                pending = [e for e in job.events if e["sequence"] >= next_sequence]
+                if not pending and not job.done_event.is_set():
+                    # No events yet — wait for the next notify_all().
+                    await asyncio.wait_for(job.event_condition.wait(), timeout=15)
+                    pending = [e for e in job.events if e["sequence"] >= next_sequence]
+        except asyncio.TimeoutError:
+            yield sse_event("heartbeat", {"job_id": job.id, "request_id": job.request_id, "status": job.status})
+            pending = []
+
+        for item in pending:
             next_sequence = item["sequence"] + 1
             yield sse_event(item["type"], item["payload"])
             if item["type"] in {"result", "error"}:
                 return
 
-        if job.result is not None:
+        # Terminal state checks (handles jobs that completed before we started streaming).
+        if job.result is not None and next_sequence == 0:
             yield sse_event("result", job.result)
             return
-        if job.error is not None:
+        if job.error is not None and next_sequence == 0:
             yield sse_event("error", job.error)
             return
-        if job.done_event.is_set():
+        if job.done_event.is_set() and not pending:
+            # Job finished but we may have already consumed the result/error event above.
             return
 
         if await request.is_disconnected():
             return
-
-        try:
-            async with job.event_condition:
-                has_pending_events = any(item["sequence"] >= next_sequence for item in job.events)
-                if not has_pending_events and not job.done_event.is_set():
-                    await asyncio.wait_for(job.event_condition.wait(), timeout=15)
-        except asyncio.TimeoutError:
-            yield sse_event("heartbeat", {"job_id": job.id, "request_id": job.request_id, "status": job.status})

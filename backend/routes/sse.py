@@ -115,18 +115,28 @@ async def run_stream_pipeline(
     )
 
     async def pump_progress() -> None:
+        # progress_queue is a multiprocessing.managers.AutoProxy[Queue].
+        # Calling .get() on it (even with block=False) performs an IPC round-trip
+        # to the manager server, which can stall the asyncio event loop for
+        # several milliseconds and cause progress events to be delayed.
+        # We therefore run each .get() in the default thread-pool executor so
+        # the event loop stays free to serve other coroutines (forward_job_progress,
+        # stream_job_events, etc.) while we wait for worker events.
         empty_after_done = 0
         while True:
             try:
-                item = progress_queue.get(False)
-            except thread_queue.Empty:
+                item = await loop.run_in_executor(
+                    None, lambda: progress_queue.get(timeout=0.15)
+                )
+            except Exception:
+                # Covers queue.Empty, RemoteError, and any IPC hiccup.
                 if future.done():
                     empty_after_done += 1
                     if empty_after_done >= 5:
                         return
-                    await asyncio.sleep(0.1)
-                    continue
-                await asyncio.sleep(0.2)
+                else:
+                    empty_after_done = 0
+                await asyncio.sleep(0)
                 continue
             empty_after_done = 0
             await queue.put(item)
