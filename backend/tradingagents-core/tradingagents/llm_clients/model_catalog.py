@@ -4,12 +4,10 @@ SUPPORTED_PROVIDERS: frozenset[str] = frozenset(
     {
         "anthropic",
         "deepseek",
-        "glm",
         "google",
         "ollama",
         "openai",
         "openrouter",
-        "qwen",
     }
 )
 
@@ -69,37 +67,12 @@ MODEL_CATALOG: dict[str, dict[str, list[tuple[str, str]]]] = {
             ("Custom model ID", "custom"),
         ],
     },
-    "qwen": {
-        "quick": [
-            ("Qwen Plus", "qwen-plus"),
-            ("Qwen Turbo", "qwen-turbo"),
-            ("Custom model ID", "custom"),
-        ],
-        "deep": [
-            ("Qwen Max", "qwen-max"),
-            ("Qwen Plus", "qwen-plus"),
-            ("Custom model ID", "custom"),
-        ],
-    },
-    "glm": {
-        "quick": [
-            ("GLM-4 Flash", "glm-4-flash"),
-            ("Custom model ID", "custom"),
-        ],
-        "deep": [
-            ("GLM-4 Plus", "glm-4-plus"),
-            ("GLM-4 Flash", "glm-4-flash"),
-            ("Custom model ID", "custom"),
-        ],
-    },
     "ollama": {
         "quick": [
-            ("Qwen3:latest (8B, local)", "qwen3:latest"),
             ("Llama3:latest (8B, local)", "llama3:latest"),
         ],
         "deep": [
             ("Llama3:latest (8B, local)", "llama3:latest"),
-            ("Qwen3:latest (8B, local)", "qwen3:latest"),
         ],
     },
 }
