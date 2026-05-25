@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from collections import Counter
 import threading
+from collections import Counter
 
 import pytest
+import tradingagents.pipeline_balanced as pipeline
+from tradingagents.dataflows.data_quality import DataQualityReport
 
 from config import build_tradingagents_config
-from tradingagents.dataflows.data_quality import DataQualityReport
-import tradingagents.pipeline_balanced as pipeline
 
 
 def _collected_data(trade_date: str = "2026-05-18") -> pipeline.CollectedData:

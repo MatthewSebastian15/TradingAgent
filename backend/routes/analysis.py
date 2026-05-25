@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from fastapi import APIRouter, Request
 
@@ -107,7 +108,9 @@ async def _call_run_pipeline_async(req: AnalysisRequest, request_id: str, reques
     return await _run_pipeline_async(req, request_id)
 
 
-async def _compute_result_fields(req: AnalysisRequest, request_id: str, request: Request | None = None) -> dict[str, Any]:
+async def _compute_result_fields(
+    req: AnalysisRequest, request_id: str, request: Request | None = None
+) -> dict[str, Any]:
     if _is_default_callable(_run_pipeline_async, "_run_pipeline_async"):
         await _preflight_market_data(req)
     result_fields = await _call_run_pipeline_async(req, request_id, request)
@@ -140,6 +143,7 @@ async def _execute_analysis(
     """Run cached/deduplicated JSON analysis."""
     use_cache = _is_default_callable(_run_pipeline_async, "_run_pipeline_async")
     async with limit_request(request, policy):
+
         async def factory() -> dict[str, Any]:
             return await _compute_result_fields(req, request_id, request)
 
@@ -175,10 +179,9 @@ async def _stream_progress_and_result(
     request_id: str,
     rate_limit_lease=None,
 ):
-    use_cache = (
-        _is_default_callable(_run_pipeline_with_progress, "_run_pipeline_with_progress")
-        and _is_default_callable(_run_stream_pipeline, "_run_stream_pipeline")
-    )
+    use_cache = _is_default_callable(
+        _run_pipeline_with_progress, "_run_pipeline_with_progress"
+    ) and _is_default_callable(_run_stream_pipeline, "_run_stream_pipeline")
     async for event in sse.stream_progress_and_result(
         request,
         req,
@@ -274,7 +277,12 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
         if release_lease:
             await rate_limit_lease.__aexit__(None, None, None)
 
-    return {"job_id": job.id, "request_id": request_id, "status": job.status, "events_url": f"/api/analysis/jobs/{job.id}/events"}
+    return {
+        "job_id": job.id,
+        "request_id": request_id,
+        "status": job.status,
+        "events_url": f"/api/analysis/jobs/{job.id}/events",
+    }
 
 
 @router.get("/analysis/jobs/{job_id}")
@@ -318,11 +326,18 @@ async def cancel_analysis_job_alias(job_id: str, request: Request):
 @router.get("/ticker/validate")
 async def validate_ticker(ticker: str, trade_date: str, request: Request):
     req = normalize_and_validate_analysis_request(
-        AnalysisRequest(ticker=ticker, trade_date=trade_date, max_debate_rounds=1, analysis_depth="fast", response_detail="summary")
+        AnalysisRequest(
+            ticker=ticker, trade_date=trade_date, max_debate_rounds=1, analysis_depth="fast", response_detail="summary"
+        )
     )
     async with limit_request(request, request_policy()):
         await _preflight_market_data(req)
-    return {"ticker": req.ticker, "trade_date": req.trade_date, "valid": True, "message": "Ticker has usable market data."}
+    return {
+        "ticker": req.ticker,
+        "trade_date": req.trade_date,
+        "valid": True,
+        "message": "Ticker has usable market data.",
+    }
 
 
 @router.get("/status")

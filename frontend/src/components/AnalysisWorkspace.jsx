@@ -101,9 +101,7 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
         <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
           RECENT ANALYSES
         </span>
-        <span className="font-mono text-xs text-bloomberg-muted">
-          {history.length}
-        </span>
+        <span className="font-mono text-xs text-bloomberg-muted">{history.length}</span>
       </div>
       <div className="overflow-y-auto" style={{ maxHeight: HISTORY_PANEL_MAX_HEIGHT }}>
         {history.map((item, index) => (

@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import queue as thread_queue
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 try:
     from sse_starlette.sse import EventSourceResponse
@@ -21,12 +21,13 @@ except ModuleNotFoundError:  # pragma: no cover - exercised when optional depend
                         event = item.get("event")
                         data = item.get("data", "")
                         if event:
-                            yield f"event: {event}\n".encode("utf-8")
-                        yield f"data: {data}\n\n".encode("utf-8")
+                            yield f"event: {event}\n".encode()
+                        yield f"data: {data}\n\n".encode()
                     else:
                         yield str(item).encode("utf-8")
 
             super().__init__(encode_events(), media_type="text/event-stream")
+
 
 from analysis_cache import AnalysisResultCache
 from config import PIPELINE_TIMEOUT_SECONDS
@@ -125,9 +126,7 @@ async def run_stream_pipeline(
         empty_after_done = 0
         while True:
             try:
-                item = await loop.run_in_executor(
-                    None, lambda: progress_queue.get(timeout=0.15)
-                )
+                item = await loop.run_in_executor(None, lambda: progress_queue.get(timeout=0.15))
             except Exception:
                 # Covers queue.Empty, RemoteError, and any IPC hiccup.
                 if future.done():
@@ -157,9 +156,9 @@ async def run_stream_pipeline(
         fields = await asyncio.wait_for(asyncio.shield(future), timeout=PIPELINE_TIMEOUT_SECONDS)
         try:
             await asyncio.wait_for(pump_task, timeout=2)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.debug("Timed out while draining worker progress queue", extra={"request_id": request_id})
-    except asyncio.TimeoutError:
+    except TimeoutError:
         pipeline_runner.set_cancel_event(worker_cancel_event)
         future.cancel()
         raise
@@ -216,12 +215,13 @@ async def stream_progress_and_result(
 
         async def runner() -> None:
             try:
+
                 async def factory() -> dict[str, Any]:
                     return await run_stream_pipeline_func(req, request_id, queue, cancel_event)
 
                 result_fields = await get_or_start_analysis_func(req, factory, use_cache=use_cache)
                 await queue.put({"type": "result", "payload": response_payload_func(request_id, req, result_fields)})
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await queue.put(sse_error(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)))
             except asyncio.CancelledError as exc:
                 cancel_event.set()
@@ -262,7 +262,7 @@ async def stream_progress_and_result(
 
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=15)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield sse_event(
                         "heartbeat",
                         {

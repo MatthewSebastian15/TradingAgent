@@ -5,14 +5,14 @@ import logging
 from datetime import date, timedelta
 
 import pytest
-
-from errors import BadRequestError
-from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
 from tradingagents.llm_clients.model_catalog import (
     DEEPSEEK_CHAT_MODEL,
     DEEPSEEK_REASONER_MODEL,
     MODEL_CATALOG,
 )
+
+from errors import BadRequestError
+from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
 
 _GOOGLE_QUICK_LLM = MODEL_CATALOG["google"]["quick"][0][1]
 _GOOGLE_DEEP_LLM = MODEL_CATALOG["google"]["deep"][0][1]

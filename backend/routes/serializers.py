@@ -74,7 +74,8 @@ def parse_final_result(
         "llm_calls_used": final_state.get("balanced_gemini_calls_used"),
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
-        "data_quality": data_quality or {
+        "data_quality": data_quality
+        or {
             "price_data": "missing",
             "fundamentals": "missing",
             "news": "missing",
@@ -132,7 +133,9 @@ def parse_final_result(
         "take_profit": getattr(pd_obj, "take_profit", None),
         "risk_reward_ratio": getattr(pd_obj, "risk_reward_ratio", None),
         "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
-        "volatility_level": getattr(getattr(pd_obj, "volatility_level", None), "value", getattr(pd_obj, "volatility_level", None)),
+        "volatility_level": getattr(
+            getattr(pd_obj, "volatility_level", None), "value", getattr(pd_obj, "volatility_level", None)
+        ),
         "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
         "rebalancing_action": getattr(pd_obj, "rebalancing_action", None),
         "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],

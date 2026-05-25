@@ -2,8 +2,9 @@ from __future__ import annotations
 
 
 def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
-    from routes.analysis import _parse_final_result
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating, VolatilityLevel
+
+    from routes.analysis import _parse_final_result
 
     decision = PortfolioDecision(
         confidence_score=0.7,
@@ -52,8 +53,9 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
 
 
 def test_parse_final_result_does_not_render_full_decision_from_portfolio_object():
-    from routes.analysis import _parse_final_result
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
+
+    from routes.analysis import _parse_final_result
 
     decision = PortfolioDecision(
         confidence_score=0.4,
@@ -77,8 +79,9 @@ def test_parse_final_result_does_not_render_full_decision_from_portfolio_object(
 
 
 def test_parse_final_result_treats_invalid_pd_obj_as_missing():
-    from routes.analysis import _parse_final_result
     from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
 
     parsed = _parse_final_result(
         "raw final decision",

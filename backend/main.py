@@ -11,7 +11,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from body_limit import RequestBodyLimitMiddleware
-from config import APP_NAME, CORS_ORIGINS, APP_ENV, REQUEST_BODY_MAX_BYTES, validate_startup_config, llm
+from config import APP_NAME, CORS_ORIGINS, REQUEST_BODY_MAX_BYTES, llm, validate_startup_config
 from errors import (
     ApiError,
     api_error_handler,
@@ -20,7 +20,8 @@ from errors import (
     validation_exception_handler,
 )
 from logging_config import RequestIdMiddleware, configure_logging
-from routes.analysis import router as analysis_router, shutdown_executor
+from routes.analysis import router as analysis_router
+from routes.analysis import shutdown_executor
 from routes.market import router as market_router
 
 configure_logging()
@@ -37,17 +38,13 @@ class SkipSseCompressionMiddleware:
         if scope.get("type") == "http" and self._is_sse_path(scope.get("path", "")):
             scope = dict(scope)
             scope["headers"] = [
-                (name, value)
-                for name, value in scope.get("headers", [])
-                if name.lower() != b"accept-encoding"
+                (name, value) for name, value in scope.get("headers", []) if name.lower() != b"accept-encoding"
             ]
         await self.app(scope, receive, send)
 
     @staticmethod
     def _is_sse_path(path: str) -> bool:
-        return path == "/api/analyze/stream" or (
-            path.startswith("/api/analysis/jobs/") and path.endswith("/events")
-        )
+        return path == "/api/analyze/stream" or (path.startswith("/api/analysis/jobs/") and path.endswith("/events"))
 
 
 async def validate_config() -> None:
