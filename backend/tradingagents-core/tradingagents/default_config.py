@@ -2,6 +2,10 @@ import os
 
 _TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
 
+
+def _env(name: str) -> str:
+    return os.getenv(name, "").strip()
+
 DEFAULT_CONFIG = {
     "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
     "results_dir": os.path.join(_TRADINGAGENTS_HOME, "logs"),
@@ -10,10 +14,11 @@ DEFAULT_CONFIG = {
     "memory_log_max_entries": 300,
     "memory_log_ttl_days": 90,
 
-    # LLM — overridden at runtime by backend/config.py
-    "llm_provider": "google",
-    "deep_think_llm": "gemini-2.5-flash",
-    "quick_think_llm": "gemini-2.5-flash",
+    # LLM model selection is environment-driven; backend/config.py validates
+    # these before starting the API.
+    "llm_provider": _env("LLM_PROVIDER"),
+    "deep_think_llm": _env("DEEP_THINK_LLM"),
+    "quick_think_llm": _env("QUICK_THINK_LLM"),
     "backend_url": None,
 
     # Resilience

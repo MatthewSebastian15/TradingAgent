@@ -17,6 +17,10 @@ SUPPORTED_PROVIDERS: frozenset[str] = frozenset(
 
 OPEN_MODEL_PROVIDERS: frozenset[str] = frozenset({"ollama", "openrouter", "azure"})
 
+DEEPSEEK_CHAT_MODEL = "deepseek-chat"
+DEEPSEEK_REASONER_MODEL = "deepseek-reasoner"
+DEEPSEEK_STRUCTURED_OUTPUT_UNSUPPORTED_MODELS: frozenset[str] = frozenset({DEEPSEEK_REASONER_MODEL})
+
 MODEL_CATALOG: dict[str, dict[str, list[tuple[str, str]]]] = {
     "openai": {
         "quick": [
@@ -68,12 +72,12 @@ MODEL_CATALOG: dict[str, dict[str, list[tuple[str, str]]]] = {
     },
     "deepseek": {
         "quick": [
-            ("DeepSeek Chat - V3 fast model", "deepseek-chat"),
+            ("DeepSeek Chat - V3 fast model", DEEPSEEK_CHAT_MODEL),
             ("Custom model ID", "custom"),
         ],
         "deep": [
-            ("DeepSeek Reasoner - Thinking model", "deepseek-reasoner"),
-            ("DeepSeek Chat - V3 fast model", "deepseek-chat"),
+            ("DeepSeek Reasoner - Thinking model", DEEPSEEK_REASONER_MODEL),
+            ("DeepSeek Chat - V3 fast model", DEEPSEEK_CHAT_MODEL),
             ("Custom model ID", "custom"),
         ],
     },

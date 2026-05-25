@@ -12,9 +12,10 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from dotenv import load_dotenv
+from tradingagents.llm_clients import model_catalog as llm_model_catalog
 
 # Load .env from backend/ (same folder as this file)
 BASE_DIR = Path(__file__).resolve().parent
@@ -39,6 +40,12 @@ if _should_load_dotenv():
     load_dotenv(BASE_DIR / ".env")
 
 logger = logging.getLogger(__name__)
+
+# Re-export the core catalog for legacy imports while keeping one source.
+SUPPORTED_PROVIDERS = llm_model_catalog.SUPPORTED_PROVIDERS
+OPEN_MODEL_PROVIDERS = llm_model_catalog.OPEN_MODEL_PROVIDERS
+MODEL_CATALOG = llm_model_catalog.MODEL_CATALOG
+KNOWN_MODELS = llm_model_catalog.KNOWN_MODELS
 
 
 def _env(name: str, default: str = "") -> str:
@@ -83,130 +90,6 @@ def _env_list(name: str, default: list[str]) -> list[str]:
     if raw is None:
         return list(default)
     return [item.strip() for item in raw.split(",") if item.strip()]
-
-# ---------------------------------------------------------------------------
-# Supported providers and their required env key(s)
-# ---------------------------------------------------------------------------
-SUPPORTED_PROVIDERS: frozenset[str] = frozenset({
-    "anthropic",
-    "azure",
-    "deepseek",
-    "glm",
-    "google",
-    "ollama",
-    "openai",
-    "openrouter",
-    "qwen",
-    "xai",
-})
-
-# Providers that accept any model string without hard validation
-OPEN_MODEL_PROVIDERS: frozenset[str] = frozenset({"ollama", "openrouter", "azure"})
-
-# Model catalog: known models per provider and usage mode
-# quick_think_llm → fast/cheap agents
-# deep_think_llm  → Research Manager and Portfolio Manager
-MODEL_CATALOG: dict[str, dict[str, list[tuple[str, str]]]] = {
-    "openai": {
-        "quick": [
-            ("GPT-4o Mini - Fast, strong coding and tool use", "gpt-4o-mini"),
-            ("GPT-4o - Latest frontier, 128k context", "gpt-4o"),
-            ("GPT-4 Turbo - High capability", "gpt-4-turbo"),
-        ],
-        "deep": [
-            ("GPT-4o - Latest frontier, 128k context", "gpt-4o"),
-            ("GPT-4 Turbo - High capability", "gpt-4-turbo"),
-            ("o1 - Strong reasoning", "o1"),
-            ("o1 Mini - Fast reasoning", "o1-mini"),
-        ],
-    },
-    "anthropic": {
-        "quick": [
-            ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
-            ("Claude Haiku 4.5 - Fast, near-instant responses", "claude-haiku-4-5"),
-            ("Claude Sonnet 4.5 - Agents and coding", "claude-sonnet-4-5"),
-        ],
-        "deep": [
-            ("Claude Opus 4.6 - Most intelligent, agents and coding", "claude-opus-4-6"),
-            ("Claude Opus 4.5 - Premium, max intelligence", "claude-opus-4-5"),
-            ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
-            ("Claude Sonnet 4.5 - Agents and coding", "claude-sonnet-4-5"),
-        ],
-    },
-    "google": {
-        "quick": [
-            ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
-            ("Gemini 2.5 Flash Lite - Fast, low-cost", "gemini-2.5-flash-lite"),
-            ("Gemini 2.0 Flash - Previous generation fast", "gemini-2.0-flash"),
-        ],
-        "deep": [
-            ("Gemini 2.5 Pro - Stable pro model", "gemini-2.5-pro"),
-            ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
-            ("Gemini 2.0 Flash - Previous generation fast", "gemini-2.0-flash"),
-        ],
-    },
-    "xai": {
-        "quick": [
-            ("Grok Beta - Speed optimized", "grok-beta"),
-            ("Grok 2 - Balanced", "grok-2"),
-        ],
-        "deep": [
-            ("Grok 2 - Balanced", "grok-2"),
-            ("Grok Beta - Speed optimized", "grok-beta"),
-        ],
-    },
-    "deepseek": {
-        "quick": [
-            ("DeepSeek Chat - V3 fast model", "deepseek-chat"),
-            ("Custom model ID", "custom"),
-        ],
-        "deep": [
-            ("DeepSeek Reasoner - Thinking model", "deepseek-reasoner"),
-            ("DeepSeek Chat - V3 fast model", "deepseek-chat"),
-            ("Custom model ID", "custom"),
-        ],
-    },
-    "qwen": {
-        "quick": [
-            ("Qwen Plus", "qwen-plus"),
-            ("Qwen Turbo", "qwen-turbo"),
-            ("Custom model ID", "custom"),
-        ],
-        "deep": [
-            ("Qwen Max", "qwen-max"),
-            ("Qwen Plus", "qwen-plus"),
-            ("Custom model ID", "custom"),
-        ],
-    },
-    "glm": {
-        "quick": [
-            ("GLM-4 Flash", "glm-4-flash"),
-            ("Custom model ID", "custom"),
-        ],
-        "deep": [
-            ("GLM-4 Plus", "glm-4-plus"),
-            ("GLM-4 Flash", "glm-4-flash"),
-            ("Custom model ID", "custom"),
-        ],
-    },
-    "ollama": {
-        "quick": [
-            ("Qwen3:latest (8B, local)", "qwen3:latest"),
-            ("Llama3:latest (8B, local)", "llama3:latest"),
-        ],
-        "deep": [
-            ("Llama3:latest (8B, local)", "llama3:latest"),
-            ("Qwen3:latest (8B, local)", "qwen3:latest"),
-        ],
-    },
-}
-
-# Known model names per provider (derived from catalog, used for soft validation)
-KNOWN_MODELS: dict[str, list[str]] = {
-    provider: sorted({value for options in modes.values() for _, value in options})
-    for provider, modes in MODEL_CATALOG.items()
-}
-
 
 # ---------------------------------------------------------------------------
 # Non-secret tunables and deployment defaults
@@ -319,9 +202,9 @@ ADAPTIVE_DEBATE_ENABLED = True
 @dataclass(frozen=True)
 class LLMSettings:
     """Confidential LLM configuration from .env."""
-    provider: str = field(default_factory=lambda: _env("LLM_PROVIDER", "google").lower())
-    deep_think_llm: str = field(default_factory=lambda: _env("DEEP_THINK_LLM", _env("DEEP_MODEL", "gemini-2.5-flash")))
-    quick_think_llm: str = field(default_factory=lambda: _env("QUICK_THINK_LLM", _env("QUICK_MODEL", "gemini-2.5-flash")))
+    provider: str = field(default_factory=lambda: _env("LLM_PROVIDER").lower())
+    deep_think_llm: str = field(default_factory=lambda: _env("DEEP_THINK_LLM"))
+    quick_think_llm: str = field(default_factory=lambda: _env("QUICK_THINK_LLM"))
     ollama_base_url: str = field(default_factory=lambda: _env("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"))
     api_key: str = field(default_factory=lambda: _env("API_KEY", ""))
 
@@ -431,7 +314,9 @@ def validate_startup_config() -> list[str]:
     errors: list[str] = []
 
     provider = llm.provider
-    if provider not in SUPPORTED_PROVIDERS:
+    if not provider:
+        errors.append("LLM_PROVIDER must not be empty.")
+    elif provider not in SUPPORTED_PROVIDERS:
         errors.append(f"LLM_PROVIDER must be one of: {', '.join(sorted(SUPPORTED_PROVIDERS))}.")
 
     if provider in PROVIDER_KEY_REQUIREMENTS:

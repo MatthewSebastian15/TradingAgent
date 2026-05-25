@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
 from .base_client import BaseLLMClient, normalize_content
+from .model_catalog import DEEPSEEK_STRUCTURED_OUTPUT_UNSUPPORTED_MODELS
 from .validators import validate_model
 from tradingagents.dataflows.config import get_config
 from tradingagents.utils_resilience import call_with_retry
@@ -77,7 +78,7 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
        fails with HTTP 400. ``_create_chat_result`` captures the field on
        receive and ``_get_request_payload`` re-attaches it on send.
 
-    2. **deepseek-reasoner has no tool_choice.** Structured output via
+    2. **DeepSeek reasoner models have no tool_choice.** Structured output via
        function-calling is unavailable, so we raise NotImplementedError
        and let the agent factories fall back to free-text generation
        (see ``tradingagents/agents/utils/structured.py``).
@@ -112,9 +113,9 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
         return chat_result
 
     def with_structured_output(self, schema, *, method=None, **kwargs):
-        if self.model_name == "deepseek-reasoner":
+        if self.model_name in DEEPSEEK_STRUCTURED_OUTPUT_UNSUPPORTED_MODELS:
             raise NotImplementedError(
-                "deepseek-reasoner does not support tool_choice; structured "
+                f"{self.model_name} does not support tool_choice; structured "
                 "output is unavailable. Agent factories fall back to "
                 "free-text generation automatically."
             )
