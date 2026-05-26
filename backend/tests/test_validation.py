@@ -25,7 +25,26 @@ def test_ticker_bbcajk_is_valid():
 
     assert req.ticker == "BBCA.JK"
     assert req.trade_date == "2026-05-14"
+    assert req.time_horizon_months == 1
     assert req.max_debate_rounds == 3
+
+
+def test_time_horizon_months_accepts_supported_values():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(ticker="BBCA.JK", trade_date="2026-05-14", time_horizon_months=3)
+    )
+
+    assert req.time_horizon_months == 3
+
+
+def test_time_horizon_months_rejects_unsupported_values():
+    with pytest.raises(BadRequestError) as exc_info:
+        normalize_and_validate_analysis_request(
+            AnalysisRequest(ticker="BBCA.JK", trade_date="2026-05-14", time_horizon_months=6)
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "time_horizon_months" in exc_info.value.details["fields"]
 
 
 def test_ticker_bbca_is_valid_and_normalized():

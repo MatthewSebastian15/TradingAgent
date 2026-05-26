@@ -26,6 +26,7 @@ class AnalysisRequest(BaseModel):
 
     ticker: str = Field(..., min_length=1, max_length=12)
     trade_date: str
+    time_horizon_months: int = Field(default=1)
     max_debate_rounds: int = Field(default=DEFAULT_MAX_DEBATE_ROUNDS)
     analysis_depth: AnalysisDepth = Field(default=DEFAULT_ANALYSIS_DEPTH)
     response_detail: ResponseDetail = Field(default="full")
@@ -53,6 +54,7 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     trade_date = req.trade_date.strip() if isinstance(req.trade_date, str) else req.trade_date
     analysis_depth = str(req.analysis_depth or DEFAULT_ANALYSIS_DEPTH).strip().lower()
     response_detail = str(req.response_detail or "full").strip().lower()
+    time_horizon_months = req.time_horizon_months
 
     errors: dict[str, str] = {}
 
@@ -76,6 +78,13 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     if not isinstance(req.max_debate_rounds, int) or not 1 <= req.max_debate_rounds <= 5:
         errors["max_debate_rounds"] = "max_debate_rounds must be between 1 and 5."
 
+    if (
+        isinstance(time_horizon_months, bool)
+        or not isinstance(time_horizon_months, int)
+        or time_horizon_months not in {1, 2, 3}
+    ):
+        errors["time_horizon_months"] = "time_horizon_months must be one of: 1, 2, 3."
+
     if analysis_depth not in {"fast", "balanced", "deep"}:
         errors["analysis_depth"] = "analysis_depth must be one of: fast, balanced, deep."
 
@@ -88,6 +97,7 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     return AnalysisRequest(
         ticker=ticker,
         trade_date=trade_date,
+        time_horizon_months=time_horizon_months,
         max_debate_rounds=req.max_debate_rounds,
         analysis_depth=analysis_depth,  # type: ignore[arg-type]
         response_detail=response_detail,  # type: ignore[arg-type]

@@ -10,6 +10,7 @@ const HISTORY_FIELDS = [
   'request_id',
   'ticker',
   'trade_date',
+  'time_horizon_months',
   'analysis_depth',
   'response_detail',
   'decision',
@@ -72,8 +73,14 @@ function saveToHistory(historyKey, result) {
   if (!snapshot) return;
 
   const history = readHistory(historyKey);
+  const resultHorizon = result.time_horizon_months ?? null;
   const deduped = history.filter(
-    (item) => !(item.ticker === result.ticker && item.trade_date === result.trade_date)
+    (item) =>
+      !(
+        item.ticker === result.ticker &&
+        item.trade_date === result.trade_date &&
+        (item.time_horizon_months ?? null) === resultHorizon
+      )
   );
   writeHistory(historyKey, [{ ...snapshot, saved_at: new Date().toISOString() }, ...deduped]);
 }
@@ -84,6 +91,12 @@ function decisionStyle(decision) {
   if (decision === 'Sell' || decision === 'Underweight')
     return 'text-bloomberg-red border-bloomberg-red';
   return 'text-bloomberg-amber border-bloomberg-amber';
+}
+
+function formatHistoryHorizon(months) {
+  const value = Number(months);
+  if (![1, 2, 3].includes(value)) return null;
+  return `${value}M`;
 }
 
 function HistoryPanel({ currentTicker, historyKey, onSelect }) {
@@ -114,7 +127,12 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
               <div className="font-mono text-sm font-semibold text-bloomberg-white">
                 {item.ticker}
               </div>
-              <div className="font-mono text-xs text-bloomberg-muted">{item.trade_date}</div>
+              <div className="font-mono text-xs text-bloomberg-muted">
+                {item.trade_date}
+                {formatHistoryHorizon(item.time_horizon_months)
+                  ? ` / ${formatHistoryHorizon(item.time_horizon_months)}`
+                  : ''}
+              </div>
             </div>
             <div className="flex items-center gap-3">
               {item.price_target && (

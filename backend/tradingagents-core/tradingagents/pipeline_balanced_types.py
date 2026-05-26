@@ -44,6 +44,7 @@ class RiskCommitteeReport(BaseModel):
 class CollectedData:
     ticker: str
     trade_date: str
+    time_horizon_months: int
     price_data: str
     technical_indicators: str
     fundamentals: str

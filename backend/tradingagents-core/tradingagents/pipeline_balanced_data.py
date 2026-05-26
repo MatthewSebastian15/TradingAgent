@@ -16,6 +16,30 @@ from tradingagents.pipeline_balanced_types import AnalysisCancelledError, Collec
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+VALID_TIME_HORIZON_MONTHS = {1, 2, 3}
+
+
+def _normalize_time_horizon_months(value: Any = 1) -> int:
+    if isinstance(value, bool):
+        return 1
+    try:
+        months = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return months if months in VALID_TIME_HORIZON_MONTHS else 1
+
+
+def _time_horizon_label(time_horizon_months: int) -> str:
+    months = _normalize_time_horizon_months(time_horizon_months)
+    return f"{months} month" if months == 1 else f"{months} months"
+
+
+def _horizon_days(time_horizon_months: int) -> int:
+    return _normalize_time_horizon_months(time_horizon_months) * 30
+
+
+def _price_lookback_days(time_horizon_months: int) -> int:
+    return _horizon_days(time_horizon_months) + 30
 
 
 def _check_cancel(cancel_check: Optional[Callable[[], bool]]) -> None:
@@ -117,12 +141,12 @@ def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
     return last_close
 
 
-def _date_window(trade_date: str) -> tuple[str, str, str]:
+def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, str, str]:
     current = datetime.strptime(trade_date, "%Y-%m-%d")
-    start_90 = (current - timedelta(days=90)).strftime("%Y-%m-%d")
-    start_30 = (current - timedelta(days=30)).strftime("%Y-%m-%d")
+    start_price = (current - timedelta(days=_price_lookback_days(time_horizon_months))).strftime("%Y-%m-%d")
+    start_news = (current - timedelta(days=_horizon_days(time_horizon_months))).strftime("%Y-%m-%d")
     end = (current + timedelta(days=1)).strftime("%Y-%m-%d")
-    return start_90, start_30, end
+    return start_price, start_news, end
 
 
 INDICATOR_NAMES = [
@@ -137,11 +161,18 @@ INDICATOR_NAMES = [
 ]
 
 
-def _build_collection_tasks(ticker: str, trade_date: str, start_90: str, start_30: str, end: str) -> dict[str, Callable[[], DataField]]:
+def _build_collection_tasks(
+    ticker: str,
+    trade_date: str,
+    start_price: str,
+    start_news: str,
+    end: str,
+    news_lookback_days: int,
+) -> dict[str, Callable[[], DataField]]:
     tasks: dict[str, Callable[[], DataField]] = {
         "price_data": lambda: _safe_data_field(
             "price_data",
-            lambda: route_to_vendor("get_stock_data", ticker, start_90, end),
+            lambda: route_to_vendor("get_stock_data", ticker, start_price, end),
             limit=14_000,
         ),
         "fundamentals": lambda: _safe_data_field(
@@ -172,18 +203,20 @@ def _build_collection_tasks(ticker: str, trade_date: str, start_90: str, start_3
     }
     tasks["company_news"] = lambda: _safe_multi_source_data_field(
         "company_news",
-        lambda: route_to_all_vendors("get_news", ticker, start_30, end),
+        lambda: route_to_all_vendors("get_news", ticker, start_news, end),
         limit=12_000,
     )
     tasks["global_news"] = lambda: _safe_multi_source_data_field(
         "global_news",
-        lambda: route_to_all_vendors("get_global_news", trade_date, 7, 10),
+        lambda: route_to_all_vendors("get_global_news", trade_date, news_lookback_days, 10),
         limit=8_000,
     )
     for indicator in INDICATOR_NAMES:
         tasks[f"indicator:{indicator}"] = lambda indicator=indicator: _safe_data_field(
             f"indicator:{indicator}",
-            lambda indicator=indicator: route_to_vendor("get_indicators", ticker, indicator, trade_date, 30),
+            lambda indicator=indicator: route_to_vendor(
+                "get_indicators", ticker, indicator, trade_date, news_lookback_days
+            ),
             limit=4_000,
         )
     return tasks
@@ -217,7 +250,13 @@ def _warnings_from_fields(fields: list[DataField]) -> list[str]:
     return warnings
 
 
-def _classify_price_data(price: DataField, fundamentals: DataField, trade_date: str, warnings: list[str]) -> str:
+def _classify_price_data(
+    price: DataField,
+    fundamentals: DataField,
+    trade_date: str,
+    price_lookback_days: int,
+    warnings: list[str],
+) -> str:
     price_dates = extract_price_dates(price.value)
     if price.status == "missing":
         return "invalid_ticker" if fundamentals.status == "missing" else "missing"
@@ -225,7 +264,7 @@ def _classify_price_data(price: DataField, fundamentals: DataField, trade_date: 
         warnings.append(f"No yfinance OHLCV row found exactly on {trade_date}; market may have been closed or ticker may not trade that day.")
         return "market_closed"
     if len(price_dates) < 10:
-        warnings.append(f"Only {len(price_dates)} price rows found in the 90-day yfinance window.")
+        warnings.append(f"Only {len(price_dates)} price rows found in the {price_lookback_days}-day yfinance window.")
         return "partial"
     return "ok"
 
@@ -272,10 +311,11 @@ def _build_data_quality(
     company_news: DataField,
     global_news: DataField,
     all_fields: list[DataField],
+    price_lookback_days: int,
 ) -> DataQualityReport:
     warnings = _warnings_from_fields(all_fields)
     return DataQualityReport(
-        price_data=_classify_price_data(price, fundamentals, trade_date, warnings),
+        price_data=_classify_price_data(price, fundamentals, trade_date, price_lookback_days, warnings),
         fundamentals=_classify_fundamentals(fundamentals, balance_sheet, cashflow, income_statement, warnings),
         news=_classify_news(company_news, global_news, warnings),
         warnings=list(dict.fromkeys(warnings))[:20],
@@ -292,9 +332,12 @@ def collect_market_data(
     _check_cancel(cancel_check)
     set_config(config)
     ticker = normalize_ticker(ticker)
-    start_90, start_30, end = _date_window(trade_date)
+    time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
+    news_lookback_days = _horizon_days(time_horizon_months)
+    price_lookback = _price_lookback_days(time_horizon_months)
+    start_price, start_news, end = _date_window(trade_date, time_horizon_months)
 
-    tasks = _build_collection_tasks(ticker, trade_date, start_90, start_30, end)
+    tasks = _build_collection_tasks(ticker, trade_date, start_price, start_news, end, news_lookback_days)
     results = _run_collection_tasks(tasks, config, cancel_check)
 
     price = results["price_data"]
@@ -307,12 +350,24 @@ def collect_market_data(
     insider_transactions = results["insider_transactions"]
     indicator_parts = [results[f"indicator:{indicator}"] for indicator in INDICATOR_NAMES]
     all_fields = [price, fundamentals, balance_sheet, cashflow, income_statement, company_news, global_news, insider_transactions, *indicator_parts]
-    data_quality = _build_data_quality(trade_date, price, fundamentals, balance_sheet, cashflow, income_statement, company_news, global_news, all_fields)
+    data_quality = _build_data_quality(
+        trade_date,
+        price,
+        fundamentals,
+        balance_sheet,
+        cashflow,
+        income_statement,
+        company_news,
+        global_news,
+        all_fields,
+        price_lookback,
+    )
 
     _check_cancel(cancel_check)
     return CollectedData(
         ticker=ticker,
         trade_date=trade_date,
+        time_horizon_months=time_horizon_months,
         price_data=price.value,
         technical_indicators="\n\n".join(part.value for part in indicator_parts),
         fundamentals=fundamentals.value,

@@ -107,6 +107,7 @@ async def run_stream_pipeline(
         pipeline_worker_func,
         req.ticker,
         req.trade_date,
+        req.time_horizon_months,
         req.max_debate_rounds,
         req.analysis_depth,
         req.response_detail,

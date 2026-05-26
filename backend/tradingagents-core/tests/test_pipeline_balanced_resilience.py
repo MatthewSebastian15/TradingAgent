@@ -7,6 +7,7 @@ from tradingagents.dataflows.config import get_config
 from tradingagents.pipeline_balanced import (
     AnalystReport,
     LLMBudget,
+    _date_window,
     _extract_last_close_price,
     _invoke_once,
 )
@@ -40,6 +41,11 @@ Date,Open,High,Low,Close,Volume
 """
 
     assert _extract_last_close_price(price_data, "2026-05-20") == 11.25
+
+
+def test_date_window_scales_with_time_horizon():
+    assert _date_window("2026-05-15", 1) == ("2026-03-16", "2026-04-15", "2026-05-16")
+    assert _date_window("2026-05-15", 3) == ("2026-01-15", "2026-02-14", "2026-05-16")
 
 
 def test_call_with_timeout_returns_without_waiting_for_hung_call():

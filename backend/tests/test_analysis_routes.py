@@ -43,7 +43,7 @@ def test_analyze_accepts_valid_request_and_returns_result(client, monkeypatch):
 
     response = client.post(
         "/api/analyze",
-        json={"ticker": "BBCA.JK", "trade_date": "2026-05-14", "max_debate_rounds": 3},
+        json={"ticker": "BBCA.JK", "trade_date": "2026-05-14", "time_horizon_months": 2, "max_debate_rounds": 3},
         headers={"x-api-key": "route-test-key"},
     )
 
@@ -51,6 +51,7 @@ def test_analyze_accepts_valid_request_and_returns_result(client, monkeypatch):
     body = response.json()
     assert body["ticker"] == "BBCA.JK"
     assert body["trade_date"] == "2026-05-14"
+    assert body["time_horizon_months"] == 2
     assert body["decision"] == "Buy"
     assert datetime.fromisoformat(body["data_fetched_at"])
     assert body["data_quality"]["price_data"] == "ok"

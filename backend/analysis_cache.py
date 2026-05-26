@@ -37,6 +37,7 @@ class AnalysisCacheKey:
     deep_model: str
     analysis_mode: str
     analysis_depth: str
+    time_horizon_months: int
     max_debate_rounds: int
     response_detail: str
 
@@ -49,6 +50,7 @@ class AnalysisCacheKey:
             self.deep_model,
             self.analysis_mode,
             self.analysis_depth,
+            self.time_horizon_months,
             self.max_debate_rounds,
             self.response_detail,
         )

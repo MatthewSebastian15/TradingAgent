@@ -16,6 +16,16 @@ const AGENTS_USED = [
   'Portfolio Manager',
 ];
 
+function normalizeTimeHorizonMonths(value) {
+  const months = Number(value);
+  return [1, 2, 3].includes(months) ? months : 1;
+}
+
+function formatTimeHorizon(months) {
+  const normalized = normalizeTimeHorizonMonths(months);
+  return `${normalized} Month${normalized > 1 ? 's' : ''}`;
+}
+
 export const MOCK_PIPELINE_STEPS = [
   {
     agent_id: 'data_collection',
@@ -86,7 +96,8 @@ export const MOCK_RESPONSE = {
   decision: 'Buy',
   rating: 'Buy',
   price_target: 1050,
-  time_horizon: '3-6 months',
+  time_horizon_months: 3,
+  time_horizon: '3 Months',
   confidence_score: 0.86,
   suggested_allocation_percent: 6,
   entry_price: 920,
@@ -127,7 +138,7 @@ export const MOCK_RESPONSE = {
 
 **Price Target**: 1050.0
 
-**Time Horizon**: 3-6 months`,
+**Time Horizon**: 3 Months`,
 };
 
 export const MOCK_SELL_RESPONSE = {
@@ -137,7 +148,8 @@ export const MOCK_SELL_RESPONSE = {
   decision: 'Sell',
   rating: 'Sell',
   price_target: 155,
-  time_horizon: '1-3 months',
+  time_horizon_months: 1,
+  time_horizon: '1 Month',
   confidence_score: 0.78,
   suggested_allocation_percent: 0,
   entry_price: 185,
@@ -177,7 +189,7 @@ export const MOCK_SELL_RESPONSE = {
 
 **Price Target**: 155.0
 
-**Time Horizon**: 1-3 months`,
+**Time Horizon**: 1 Month`,
 };
 
 export const MOCK_HOLD_RESPONSE = {
@@ -187,7 +199,8 @@ export const MOCK_HOLD_RESPONSE = {
   decision: 'Hold',
   rating: 'Hold',
   price_target: 210,
-  time_horizon: '6-12 months',
+  time_horizon_months: 2,
+  time_horizon: '2 Months',
   confidence_score: 0.72,
   suggested_allocation_percent: 4,
   entry_price: 190,
@@ -228,7 +241,7 @@ export const MOCK_HOLD_RESPONSE = {
 
 **Price Target**: 210.0
 
-**Time Horizon**: 6-12 months`,
+**Time Horizon**: 2 Months`,
 };
 
 export const MOCK_IDX_RESPONSE = {
@@ -238,7 +251,8 @@ export const MOCK_IDX_RESPONSE = {
   decision: 'Buy',
   rating: 'Buy',
   price_target: 10800,
-  time_horizon: '3-6 months',
+  time_horizon_months: 3,
+  time_horizon: '3 Months',
   confidence_score: 0.81,
   suggested_allocation_percent: 8,
   entry_price: 9800,
@@ -279,7 +293,7 @@ export const MOCK_IDX_RESPONSE = {
 
 **Price Target**: 10800
 
-**Time Horizon**: 3-6 months`,
+**Time Horizon**: 3 Months`,
 };
 
 export const MOCK_ERROR_RESPONSE = {
@@ -362,6 +376,7 @@ function clone(value) {
 export function getMockAnalysisResponse({
   ticker = 'NVDA',
   trade_date,
+  time_horizon_months = 1,
   max_debate_rounds = 3,
 } = {}) {
   const normalizedTicker = String(ticker || 'NVDA')
@@ -371,9 +386,18 @@ export function getMockAnalysisResponse({
     MOCK_MAP[normalizedTicker] ||
     (normalizedTicker.endsWith('.JK') ? MOCK_IDX_RESPONSE : MOCK_RESPONSE);
   const response = clone(base);
+  const normalizedHorizon = normalizeTimeHorizonMonths(time_horizon_months);
 
   response.ticker = normalizedTicker;
   response.trade_date = trade_date || response.trade_date;
+  response.time_horizon_months = normalizedHorizon;
+  response.time_horizon = formatTimeHorizon(normalizedHorizon);
+  if (typeof response.full_decision === 'string') {
+    response.full_decision = response.full_decision.replace(
+      /\*\*Time Horizon\*\*: .*/,
+      `**Time Horizon**: ${response.time_horizon}`
+    );
+  }
   response.max_debate_rounds = max_debate_rounds;
   response.mock = true;
   response.source = 'frontend/src/mockData.js';

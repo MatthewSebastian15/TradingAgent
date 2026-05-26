@@ -30,6 +30,12 @@ const DEPTH_OPTIONS = [
   { value: 'deep', label: 'DEEP', runtime: 'MORE RETRIES / MORE PATIENCE' },
 ];
 
+const HORIZON_OPTIONS = [
+  { value: 1, label: '1 MONTH' },
+  { value: 2, label: '2 MONTHS' },
+  { value: 3, label: '3 MONTHS' },
+];
+
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -103,6 +109,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
   const [ticker, setTicker] = useState(MARKETS.US.defaultTicker);
   const [date, setDate] = useState(today());
   const [rounds, setRounds] = useState(DEFAULT_DEBATE_ROUNDS);
+  const [timeHorizonMonths, setTimeHorizonMonths] = useState(1);
   const [analysisDepth, setDepth] = useState('balanced');
   const [responseDetail, setDetail] = useState('full');
   const [error, setError] = useState('');
@@ -143,6 +150,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
       return 'Invalid ticker. Examples: BBCA.JK, NVDA, 700.HK, SAP.DE';
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date must be YYYY-MM-DD';
+    if (![1, 2, 3].includes(Number(timeHorizonMonths))) return 'Invalid analysis horizon.';
     if (!['fast', 'balanced', 'deep'].includes(analysisDepth)) return 'Invalid analysis depth.';
     if (!['summary', 'full', 'debug'].includes(responseDetail)) return 'Invalid response detail.';
     return '';
@@ -224,6 +232,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     const payload = {
       ticker: ticker.trim().toUpperCase(),
       trade_date: date,
+      time_horizon_months: Number(timeHorizonMonths),
       max_debate_rounds: Number(rounds),
       analysis_depth: analysisDepth,
       response_detail: responseDetail,
@@ -330,6 +339,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
   }
 
   const selectedDepth = DEPTH_OPTIONS.find((item) => item.value === analysisDepth);
+  const selectedHorizon = HORIZON_OPTIONS.find((item) => item.value === Number(timeHorizonMonths));
   const currentMarket = MARKETS[activeMarket];
 
   return (
@@ -407,6 +417,34 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
                 />
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Horizon */}
+        <div>
+          <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+            ANALYSIS HORIZON
+          </label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {HORIZON_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setTimeHorizonMonths(option.value)}
+                disabled={running}
+                className={`
+                  px-2 py-2 text-xs font-mono border tracking-wider transition-colors duration-150
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  ${
+                    Number(timeHorizonMonths) === option.value
+                      ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
+                      : 'border-bloomberg-border bg-black text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'
+                  }
+                `}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -532,7 +570,8 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
         </button>
 
         <div className="text-center font-mono text-xs text-bloomberg-muted tracking-wider">
-          {selectedDepth?.label || 'BALANCED'} / {selectedDepth?.runtime || 'DEFAULT PIPELINE'}
+          {selectedHorizon?.label || '1 MONTH'} / {selectedDepth?.label || 'BALANCED'} /{' '}
+          {selectedDepth?.runtime || 'DEFAULT PIPELINE'}
         </div>
       </div>
     </form>

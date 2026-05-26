@@ -20,6 +20,12 @@ function getError(e) {
   return e.message || e.error?.message || JSON.stringify(e, null, 2);
 }
 
+function formatAnalysisHorizon(months, fallback) {
+  const value = Number(months);
+  if ([1, 2, 3].includes(value)) return `${value} Month${value > 1 ? 's' : ''}`;
+  return fallback || null;
+}
+
 function DecisionBadge({ decision }) {
   const cfg = {
     Buy: {
@@ -141,7 +147,7 @@ export default function ResultCard({ result }) {
   const summary = result.executive_summary;
   const thesis = result.investment_thesis;
   const priceTarget = result.price_target ?? null;
-  const timeHorizon = result.time_horizon ?? null;
+  const timeHorizon = formatAnalysisHorizon(result.time_horizon_months, result.time_horizon);
   const confidence = result.confidence_score ?? null;
   const allocation = result.suggested_allocation_percent ?? null;
   const entryPrice = result.entry_price ?? null;
@@ -172,14 +178,23 @@ export default function ResultCard({ result }) {
   return (
     <div className="border border-bloomberg-border bg-bloomberg-card animate-fade-up">
       {/* Header bar */}
-      <div className="bg-black px-4 py-2 border-b border-bloomberg-border flex items-center justify-between">
+      <div className="bg-black px-4 py-2 border-b border-bloomberg-border flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="font-mono text-xs text-bloomberg-muted tracking-wider">
             ANALYSIS COMPLETE
           </span>
           <span className="font-mono text-xs text-bloomberg-green">●</span>
         </div>
-        <span className="font-mono text-xs text-bloomberg-muted">{result.trade_date}</span>
+        <div className="flex items-center gap-3 min-w-0">
+          {timeHorizon && (
+            <span className="font-mono text-xs text-bloomberg-orange truncate">
+              Analysis Horizon: {timeHorizon}
+            </span>
+          )}
+          <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
+            {result.trade_date}
+          </span>
+        </div>
       </div>
 
       {/* Decision hero */}

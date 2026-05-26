@@ -29,6 +29,7 @@ SUMMARY_FIELDS = {
     "invalidation_conditions",
     "data_quality",
     "analysis_depth",
+    "time_horizon_months",
     "llm_call_budget",
     "llm_calls_used",
     "budget_exhausted",
@@ -67,8 +68,10 @@ def parse_final_result(
             full_decision = full_decision or ""
             pd_obj = None
     data_quality = final_state.get("data_quality")
+    configured_time_horizon = final_state.get("time_horizon")
     common = {
         "analysis_depth": final_state.get("analysis_depth", DEFAULT_ANALYSIS_DEPTH),
+        "time_horizon_months": final_state.get("time_horizon_months"),
         "data_fetched_at": final_state.get("data_fetched_at") or datetime.utcnow().isoformat(),
         "llm_call_budget": final_state.get("balanced_gemini_request_budget"),
         "llm_calls_used": final_state.get("balanced_gemini_calls_used"),
@@ -90,7 +93,7 @@ def parse_final_result(
             "executive_summary": None,
             "investment_thesis": None,
             "price_target": None,
-            "time_horizon": None,
+            "time_horizon": configured_time_horizon,
             "confidence_score": None,
             "suggested_allocation_percent": None,
             "entry_price": None,
@@ -125,7 +128,7 @@ def parse_final_result(
         "executive_summary": getattr(pd_obj, "executive_summary", None),
         "investment_thesis": getattr(pd_obj, "investment_thesis", None),
         "price_target": getattr(pd_obj, "price_target", None),
-        "time_horizon": getattr(pd_obj, "time_horizon", None),
+        "time_horizon": configured_time_horizon or getattr(pd_obj, "time_horizon", None),
         "confidence_score": getattr(pd_obj, "confidence_score", None),
         "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
         "entry_price": getattr(pd_obj, "entry_price", None),
@@ -153,6 +156,7 @@ def cache_key(req: AnalysisRequest) -> AnalysisCacheKey:
         deep_model=llm.deep_think_llm,
         analysis_mode="balanced",
         analysis_depth=req.analysis_depth,
+        time_horizon_months=req.time_horizon_months,
         max_debate_rounds=req.max_debate_rounds,
         response_detail=req.response_detail,
     )
@@ -190,6 +194,7 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
         "response_detail": req.response_detail,
         "agents_used": [agent[1] for agent in AGENT_SEQUENCE],
         **result_fields,
+        "time_horizon_months": req.time_horizon_months,
     }
     warnings = request_warnings(req)
     if warnings:
@@ -206,6 +211,7 @@ def log_request_accepted(mode: str, request_id: str, req: AnalysisRequest) -> No
             "request_id": request_id,
             "ticker": req.ticker,
             "trade_date": req.trade_date,
+            "time_horizon_months": req.time_horizon_months,
             "max_debate_rounds": req.max_debate_rounds,
             "analysis_depth": req.analysis_depth,
             "response_detail": req.response_detail,
