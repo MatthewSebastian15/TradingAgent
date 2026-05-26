@@ -172,10 +172,11 @@ CACHE_TTL_SECONDS = _env_int("CACHE_TTL_SECONDS", 900, min_value=1)
 CACHE_MAX_ENTRIES = _env_int("CACHE_MAX_ENTRIES", 512, min_value=1)
 ANALYSIS_RESULT_CACHE_TTL_SECONDS = 60 * 60 * 8
 ANALYSIS_RESULT_CACHE_MAX_ENTRIES = 256
-ANALYSIS_JOB_TTL_SECONDS = 60 * 60
+ANALYSIS_JOB_TTL_SECONDS = 60 * 60 * 8
 ANALYSIS_JOB_MAX_ENTRIES = 256
 ANALYSIS_JOB_MAX_ACTIVE = min(_env_int("ANALYSIS_JOB_MAX_ACTIVE", 32, min_value=1), ANALYSIS_JOB_MAX_ENTRIES)
 ANALYSIS_JOB_EVENT_REPLAY_LIMIT = _env_int("ANALYSIS_JOB_EVENT_REPLAY_LIMIT", 500, min_value=1)
+ANALYSIS_JOB_CACHE_DB_PATH = str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3")
 DATA_CACHE_BACKEND = "sqlite"
 DATA_CACHE_DB_PATH = str(BASE_DIR / ".cache" / "market_data.sqlite3")
 DATA_CACHE_TTL_SECONDS = CACHE_TTL_SECONDS
@@ -405,6 +406,8 @@ class _BackendSettingsShim:
     cache_max_entries = CACHE_MAX_ENTRIES
     analysis_result_cache_ttl_seconds = ANALYSIS_RESULT_CACHE_TTL_SECONDS
     analysis_result_cache_max_entries = ANALYSIS_RESULT_CACHE_MAX_ENTRIES
+    analysis_job_ttl_seconds = ANALYSIS_JOB_TTL_SECONDS
+    analysis_job_cache_db_path = ANALYSIS_JOB_CACHE_DB_PATH
     data_vendor_core_stock_apis = DATA_VENDOR_CORE_STOCK_APIS
     data_vendor_technical_indicators = DATA_VENDOR_TECHNICAL_INDICATORS
     data_vendor_fundamental_data = DATA_VENDOR_FUNDAMENTAL_DATA

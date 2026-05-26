@@ -1,38 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import AgentLog from './AgentLog';
 import Navbar from './Navbar';
 import ResultCard from './ResultCard';
+import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const HISTORY_PANEL_MAX_HEIGHT = 560;
 const HISTORY_TTL_DAYS = 30;
-const HISTORY_FIELDS = [
-  'request_id',
-  'ticker',
-  'trade_date',
-  'analysis_created_at',
-  'time_horizon_months',
-  'analysis_depth',
-  'response_detail',
-  'decision',
-  'executive_summary',
-  'investment_thesis',
-  'price_target',
-  'time_horizon',
-  'confidence_score',
-  'suggested_allocation_percent',
-  'entry_price',
-  'stop_loss',
-  'take_profit',
-  'risk_reward_ratio',
-  'max_drawdown_estimate',
-  'volatility_level',
-  'rebalancing_action',
-  'key_catalysts',
-  'invalidation_conditions',
-  'data_quality',
-  'warnings',
-];
+const RESULT_EXPIRED_MESSAGE = 'Result expired, submit ulang';
 
 function isExpired(entry) {
   if (!entry?.saved_at) return false;
@@ -60,12 +36,34 @@ function writeHistory(historyKey, entries) {
   }
 }
 
-function historySnapshot(result) {
-  if (result?.response_detail === 'debug') return null;
-  return HISTORY_FIELDS.reduce((acc, key) => {
-    if (result[key] !== undefined) acc[key] = result[key];
-    return acc;
-  }, {});
+function resultStorageKey(historyKey, requestId) {
+  return `${historyKey}:result:${requestId}`;
+}
+
+function readStoredResult(historyKey, requestId) {
+  if (!requestId) return null;
+
+  try {
+    const raw = localStorage.getItem(resultStorageKey(historyKey, requestId));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && !isExpired(parsed)) return parsed;
+      localStorage.removeItem(resultStorageKey(historyKey, requestId));
+    }
+  } catch {
+    // Fall through to the history array for older saved results.
+  }
+
+  return readHistory(historyKey).find((entry) => entry?.request_id === requestId) || null;
+}
+
+function writeStoredResult(historyKey, entry) {
+  if (!entry?.request_id) return;
+  try {
+    localStorage.setItem(resultStorageKey(historyKey, entry.request_id), JSON.stringify(entry));
+  } catch {
+    // Storage can be unavailable in private browsing or when quota is exceeded.
+  }
 }
 
 function withAnalysisCreatedAt(result) {
@@ -74,22 +72,13 @@ function withAnalysisCreatedAt(result) {
 }
 
 function saveToHistory(historyKey, result) {
-  if (!result || result.error) return;
+  if (!result || result.error || !result.request_id) return;
 
-  const snapshot = historySnapshot(result);
-  if (!snapshot) return;
-
+  const storedResult = { ...result, saved_at: result.saved_at || new Date().toISOString() };
   const history = readHistory(historyKey);
-  const resultHorizon = result.time_horizon_months ?? null;
-  const deduped = history.filter(
-    (item) =>
-      !(
-        item.ticker === result.ticker &&
-        item.trade_date === result.trade_date &&
-        (item.time_horizon_months ?? null) === resultHorizon
-      )
-  );
-  writeHistory(historyKey, [{ ...snapshot, saved_at: new Date().toISOString() }, ...deduped]);
+  const deduped = history.filter((item) => item.request_id !== storedResult.request_id);
+  writeStoredResult(historyKey, storedResult);
+  writeHistory(historyKey, [storedResult, ...deduped]);
 }
 
 function decisionStyle(decision) {
@@ -128,7 +117,7 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
           const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
           return (
             <button
-              key={`${item.ticker || 'item'}-${item.trade_date || index}`}
+              key={item.request_id || `${item.ticker || 'item'}-${item.trade_date || index}`}
               onClick={() => onSelect(item)}
               className="w-full flex items-center justify-between px-4 py-3 border-b border-bloomberg-border last:border-b-0 hover:bg-bloomberg-surface transition-colors duration-150 text-left"
             >
@@ -180,16 +169,123 @@ function StatusBar({ loading, status }) {
   );
 }
 
-export default function AnalysisWorkspace({ FormComponent, historyKey, emptyDescription }) {
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
+function unwrapJobLookupPayload(payload) {
+  if (!payload) return null;
+  if (payload.result) return payload.result;
+  if (payload.error) {
+    const errorPayload = payload.error.error || payload.error.message || payload.error;
+    const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
+    return {
+      request_id: payload.request_id,
+      error: message || 'Analysis failed.',
+    };
+  }
+  if (payload.status && payload.status !== 'completed') {
+    return {
+      request_id: payload.request_id,
+      error: `Analysis result is ${payload.status}.`,
+    };
+  }
+  return payload.request_id ? payload : null;
+}
+
+async function readLookupError(response) {
+  const message = await readHttpError(response);
+  if (response.status === 404 || /not found/i.test(message)) return RESULT_EXPIRED_MESSAGE;
+  return message;
+}
+
+function resultPath(basePath, requestId) {
+  if (!basePath || !requestId) return null;
+  return `${basePath.replace(/\/+$/, '')}/${encodeURIComponent(requestId)}`;
+}
+
+export default function AnalysisWorkspace({
+  FormComponent,
+  historyKey,
+  emptyDescription,
+  resultPathBase = '/analysis',
+}) {
+  const navigate = useNavigate();
+  const { requestId } = useParams();
+  const initialResult = readStoredResult(historyKey, requestId);
+  const [result, setResult] = useState(initialResult);
+  const [loading, setLoading] = useState(Boolean(requestId && !initialResult));
+  const [status, setStatus] = useState(
+    requestId && !initialResult ? 'Loading saved analysis...' : ''
+  );
   const [agentProgress, setAgentProgress] = useState(null);
 
+  useEffect(() => {
+    if (!requestId) return undefined;
+
+    const stored = readStoredResult(historyKey, requestId);
+    if (stored) {
+      setResult(stored);
+      setLoading(false);
+      setStatus('');
+      setAgentProgress(null);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    async function loadResult() {
+      setLoading(true);
+      setStatus('Loading saved analysis...');
+      setAgentProgress(null);
+
+      try {
+        const response = await fetch(
+          buildApiUrl(`/analysis/jobs/${encodeURIComponent(requestId)}`),
+          {
+            method: 'GET',
+            headers: buildAuthHeaders(),
+            signal: controller.signal,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(await readLookupError(response));
+        }
+
+        const payload = await response.json();
+        const loadedResult = unwrapJobLookupPayload(payload);
+        if (!loadedResult || loadedResult.error === 'Analysis result is queued.') {
+          throw new Error(RESULT_EXPIRED_MESSAGE);
+        }
+
+        const enrichedResult = withAnalysisCreatedAt(loadedResult);
+        setResult(enrichedResult);
+        saveToHistory(historyKey, enrichedResult);
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        setResult({ error: error.message || RESULT_EXPIRED_MESSAGE });
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          setStatus('');
+        }
+      }
+    }
+
+    loadResult();
+    return () => controller.abort();
+  }, [historyKey, requestId]);
+
   function handleResult(nextResult) {
+    if (!nextResult) {
+      setResult(null);
+      if (resultPathBase) navigate(resultPathBase, { replace: true });
+      return;
+    }
+
     const enrichedResult = withAnalysisCreatedAt(nextResult);
     setResult(enrichedResult);
     saveToHistory(historyKey, enrichedResult);
+
+    const nextPath = resultPath(resultPathBase, enrichedResult?.request_id);
+    if (nextPath) navigate(nextPath);
   }
 
   return (
@@ -215,6 +311,8 @@ export default function AnalysisWorkspace({ FormComponent, historyKey, emptyDesc
                 onSelect={(item) => {
                   setResult(item);
                   setLoading(false);
+                  const nextPath = resultPath(resultPathBase, item?.request_id);
+                  if (nextPath) navigate(nextPath);
                 }}
               />
             </div>

@@ -1,18 +1,45 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import AnalysisWorkspace from './AnalysisWorkspace';
 
-function renderWorkspace(FormComponent, historyKey = 'analysis-history-test') {
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname}</div>;
+}
+
+function renderWorkspace(
+  FormComponent,
+  historyKey = 'analysis-history-test',
+  initialEntry = '/analysis'
+) {
   return render(
-    <MemoryRouter initialEntries={['/analysis']}>
-      <AnalysisWorkspace
-        FormComponent={FormComponent}
-        historyKey={historyKey}
-        emptyDescription="Empty"
-      />
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route
+          path="/analysis"
+          element={
+            <AnalysisWorkspace
+              FormComponent={FormComponent}
+              historyKey={historyKey}
+              emptyDescription="Empty"
+            />
+          }
+        />
+        <Route
+          path="/analysis/:requestId"
+          element={
+            <AnalysisWorkspace
+              FormComponent={FormComponent}
+              historyKey={historyKey}
+              emptyDescription="Empty"
+            />
+          }
+        />
+      </Routes>
+      <LocationProbe />
     </MemoryRouter>
   );
 }
@@ -21,15 +48,17 @@ describe('AnalysisWorkspace history storage', () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    vi.restoreAllMocks();
   });
 
-  it('does not persist debug responses to localStorage', () => {
+  it('persists full debug responses by request_id', () => {
     function DebugForm({ onResult }) {
       return (
         <button
           type="button"
           onClick={() =>
             onResult({
+              request_id: 'debug-request',
               ticker: 'AAPL',
               trade_date: '2026-05-14',
               response_detail: 'debug',
@@ -45,16 +74,31 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(DebugForm);
     fireEvent.click(screen.getByRole('button', { name: /emit debug/i }));
 
-    expect(localStorage.getItem('analysis-history-test')).toBeNull();
+    const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
+    const storedById = JSON.parse(
+      localStorage.getItem('analysis-history-test:result:debug-request')
+    );
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      request_id: 'debug-request',
+      response_detail: 'debug',
+      raw_agent_state: { internal: true },
+    });
+    expect(storedById).toMatchObject({
+      request_id: 'debug-request',
+      response_detail: 'debug',
+      raw_agent_state: { internal: true },
+    });
   });
 
-  it('persists only display-safe fields for non-debug responses', () => {
+  it('persists the full non-debug response', () => {
     function FullForm({ onResult }) {
       return (
         <button
           type="button"
           onClick={() =>
             onResult({
+              request_id: 'full-request',
               ticker: 'AAPL',
               trade_date: '2026-05-14',
               response_detail: 'full',
@@ -76,6 +120,7 @@ describe('AnalysisWorkspace history storage', () => {
     const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({
+      request_id: 'full-request',
       ticker: 'AAPL',
       trade_date: '2026-05-14',
       response_detail: 'full',
@@ -83,11 +128,11 @@ describe('AnalysisWorkspace history storage', () => {
       executive_summary: 'Summary',
       investment_thesis: 'Long thesis should be stored',
       analysis_created_at: expect.any(String),
+      raw_agent_state: { internal: true },
     });
-    expect(stored[0]).not.toHaveProperty('raw_agent_state');
   });
 
-  it('persists every non-debug response without a hard history cap', () => {
+  it('persists every response without a hard history cap', () => {
     function BatchForm({ onResult }) {
       return (
         <button
@@ -95,6 +140,7 @@ describe('AnalysisWorkspace history storage', () => {
           onClick={() => {
             for (let i = 0; i < 12; i += 1) {
               onResult({
+                request_id: `request-${i}`,
                 ticker: `T${i}`,
                 trade_date: `2026-05-${String(i + 1).padStart(2, '0')}`,
                 response_detail: 'summary',
@@ -114,12 +160,119 @@ describe('AnalysisWorkspace history storage', () => {
     const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
     expect(stored).toHaveLength(12);
     expect(stored[0]).toMatchObject({
+      request_id: 'request-11',
       ticker: 'T11',
       trade_date: '2026-05-12',
     });
     expect(stored[11]).toMatchObject({
+      request_id: 'request-0',
       ticker: 'T0',
       trade_date: '2026-05-01',
     });
+  });
+
+  it('navigates to the request URL when a result arrives', async () => {
+    function FullForm({ onResult }) {
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            onResult({
+              request_id: 'request-nav',
+              ticker: 'AAPL',
+              trade_date: '2026-05-14',
+              response_detail: 'full',
+              decision: 'Buy',
+            })
+          }
+        >
+          Emit full
+        </button>
+      );
+    }
+
+    renderWorkspace(FullForm);
+    fireEvent.click(screen.getByRole('button', { name: /emit full/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe('/analysis/request-nav');
+    });
+  });
+
+  it('loads a direct request URL from localStorage', async () => {
+    localStorage.setItem(
+      'analysis-history-test:result:request-local',
+      JSON.stringify({
+        request_id: 'request-local',
+        ticker: 'AAPL',
+        trade_date: '2026-05-14',
+        response_detail: 'full',
+        decision: 'Buy',
+        saved_at: new Date().toISOString(),
+      })
+    );
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/request-local');
+
+    expect(await screen.findByText('AAPL')).toBeTruthy();
+  });
+
+  it('falls back to the backend when localStorage misses', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          job_id: 'job-1',
+          request_id: 'request-backend',
+          status: 'completed',
+          result: {
+            request_id: 'request-backend',
+            ticker: 'MSFT',
+            trade_date: '2026-05-14',
+            response_detail: 'full',
+            decision: 'Buy',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/request-backend');
+
+    expect(await screen.findByText('MSFT')).toBeTruthy();
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/analysis/jobs/request-backend'),
+      expect.any(Object)
+    );
+    expect(localStorage.getItem('analysis-history-test:result:request-backend')).toBeTruthy();
+  });
+
+  it('shows an expired message when backend lookup misses', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Analysis result was not found.',
+          },
+        }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/request-expired');
+
+    expect(await screen.findByText('Result expired, submit ulang')).toBeTruthy();
   });
 });

@@ -8,7 +8,7 @@ from datetime import datetime
 
 import pytest
 
-from analysis_cache import AnalysisJobStore
+from analysis_cache import AnalysisCacheKey, AnalysisJobStore
 
 
 def _mock_result() -> dict:
@@ -33,6 +33,21 @@ def _mock_result() -> dict:
         "invalidation_conditions": ["breakdown"],
         "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []},
     }
+
+
+def _cache_key(ticker: str) -> AnalysisCacheKey:
+    return AnalysisCacheKey(
+        ticker=ticker,
+        trade_date="2026-05-14",
+        provider="google",
+        quick_model="test-quick",
+        deep_model="test-deep",
+        analysis_mode="balanced",
+        analysis_depth="balanced",
+        time_horizon_months=1,
+        max_debate_rounds=1,
+        response_detail="summary",
+    )
 
 
 def test_analyze_accepts_valid_request_and_returns_result(client, monkeypatch):
@@ -243,6 +258,60 @@ def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
     assert wrong_events.json()["error"]["code"] == "BAD_REQUEST"
     assert wrong_delete.status_code == 400
     assert wrong_delete.json()["error"]["code"] == "BAD_REQUEST"
+
+
+def test_analysis_result_endpoint_looks_up_by_request_id(client, monkeypatch):
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+
+    async def create_completed_job():
+        job = await store.create(
+            owner_id="owner-1",
+            request_id="request-lookup",
+            cache_key=_cache_key("MSFT"),
+            payload={"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1},
+        )
+        await job.complete({"request_id": "request-lookup", "ticker": "MSFT", "decision": "Buy"})
+
+    asyncio.run(create_completed_job())
+
+    response = client.get("/api/analysis/request-lookup", headers={"x-session-id": "different-owner"})
+
+    assert response.status_code == 200
+    assert response.json()["request_id"] == "request-lookup"
+    assert response.json()["ticker"] == "MSFT"
+
+
+def test_job_lookup_accepts_request_id_for_frontend_fallback(client, monkeypatch):
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+
+    async def create_completed_job():
+        job = await store.create(
+            owner_id="owner-1",
+            request_id="request-fallback",
+            cache_key=_cache_key("AAPL"),
+            payload={"ticker": "AAPL", "trade_date": "2026-05-14", "max_debate_rounds": 1},
+        )
+        await job.complete({"request_id": "request-fallback", "ticker": "AAPL", "decision": "Hold"})
+
+    asyncio.run(create_completed_job())
+
+    response = client.get("/api/analysis/jobs/request-fallback", headers={"x-session-id": "different-owner"})
+
+    assert response.status_code == 200
+    assert response.json()["request_id"] == "request-fallback"
+    assert response.json()["result"]["decision"] == "Hold"
+
+
+def test_analysis_result_endpoint_returns_404_for_expired_result(client, monkeypatch):
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+
+    response = client.get("/api/analysis/missing-request")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
 def test_market_quotes_rejects_invalid_ticker_before_fetch(client, monkeypatch):

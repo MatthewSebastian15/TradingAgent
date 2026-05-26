@@ -27,6 +27,7 @@ function App() {
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Dashboard />} />
           <Route path="/analysis" element={<Analysis />} />
+          <Route path="/analysis/:requestId" element={<Analysis />} />
           <Route path="/analysis-live" element={<Navigate to="/analysis" replace />} />
           {ENABLE_MOCK_ROUTE && <Route path="/analysis.test" element={<AnalysisMock />} />}
           {ENABLE_MOCK_ROUTE && (

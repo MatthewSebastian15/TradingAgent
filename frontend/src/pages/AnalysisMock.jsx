@@ -8,6 +8,7 @@ export default function AnalysisMock() {
       FormComponent={StockFormMock}
       historyKey="ta_analysis_mock_history"
       emptyDescription="Configure parameters on the left and execute analysis to receive a structured trade decision."
+      resultPathBase={null}
     />
   );
 }
