@@ -47,10 +47,16 @@ class _ClientState:
     last_seen: float = field(default_factory=time.monotonic)
 
 
-# Single global lock guards both _states and the cleanup routine so they never
-# race against each other.
-_states: dict[tuple[str, str], _ClientState] = {}
-_lock = asyncio.Lock()
+@dataclass
+class RateLimiterState:
+    """Mutable limiter state kept behind a small resettable container."""
+
+    ttl_seconds: int = _TTL_SECONDS
+    states: dict[tuple[str, str], _ClientState] = field(default_factory=dict)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
+_RATE_LIMITER_STATE = RateLimiterState()
 
 
 # ---------------------------------------------------------------------------
@@ -62,14 +68,22 @@ def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:24]
 
 
-def _evict_stale_entries(now: float) -> None:
+def get_rate_limiter_state() -> RateLimiterState:
+    return _RATE_LIMITER_STATE
+
+
+def _evict_stale_entries(now: float, limiter_state: RateLimiterState) -> None:
     """Remove entries that have no active requests and haven't been seen recently.
 
-    Must be called while holding *_lock*.
+    Must be called while holding *limiter_state.lock*.
     """
-    stale = [key for key, state in _states.items() if state.active == 0 and (now - state.last_seen) > _TTL_SECONDS]
+    stale = [
+        key
+        for key, state in limiter_state.states.items()
+        if state.active == 0 and (now - state.last_seen) > limiter_state.ttl_seconds
+    ]
     for key in stale:
-        del _states[key]
+        del limiter_state.states[key]
 
 
 def get_client_identifier(request: Request) -> str:
@@ -128,19 +142,25 @@ def get_client_identifier(request: Request) -> str:
 
 
 class RateLimitLease:
-    def __init__(self, identifier: str, policy: RateLimitPolicy) -> None:
+    def __init__(
+        self,
+        identifier: str,
+        policy: RateLimitPolicy,
+        limiter_state: RateLimiterState | None = None,
+    ) -> None:
         self.identifier = identifier
         self.policy = policy
+        self._state = limiter_state or get_rate_limiter_state()
         self._acquired = False
 
     async def __aenter__(self) -> RateLimitLease:
         now = time.monotonic()
         key = (self.policy.scope, self.identifier)
 
-        async with _lock:
-            _evict_stale_entries(now)
+        async with self._state.lock:
+            _evict_stale_entries(now, self._state)
 
-            state = _states.setdefault(key, _ClientState())
+            state = self._state.states.setdefault(key, _ClientState())
             state.last_seen = now
 
             # Drop timestamps older than 60 s sliding window.
@@ -175,8 +195,8 @@ class RateLimitLease:
         if not self._acquired:
             return
         key = (self.policy.scope, self.identifier)
-        async with _lock:
-            state = _states.get(key)
+        async with self._state.lock:
+            state = self._state.states.get(key)
             if state is not None:
                 state.active = max(0, state.active - 1)
                 state.last_seen = time.monotonic()
@@ -203,8 +223,12 @@ def stream_policy() -> RateLimitPolicy:
     )
 
 
-def limit_request(request: Request, policy: RateLimitPolicy) -> RateLimitLease:
-    return RateLimitLease(get_client_identifier(request), policy)
+def limit_request(
+    request: Request,
+    policy: RateLimitPolicy,
+    limiter_state: RateLimiterState | None = None,
+) -> RateLimitLease:
+    return RateLimitLease(get_client_identifier(request), policy, limiter_state)
 
 
 # ---------------------------------------------------------------------------
@@ -214,4 +238,5 @@ def limit_request(request: Request, policy: RateLimitPolicy) -> RateLimitLease:
 
 def reset_rate_limiter_for_tests() -> None:
     """Clear in-memory limiter state for deterministic tests."""
-    _states.clear()
+    global _RATE_LIMITER_STATE
+    _RATE_LIMITER_STATE = RateLimiterState()

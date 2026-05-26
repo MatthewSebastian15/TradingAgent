@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from analysis_cache import (
@@ -30,22 +31,62 @@ from routes.validation import AnalysisRequest
 
 logger = logging.getLogger(__name__)
 
-RESULT_CACHE = AnalysisResultCache(
-    ttl_seconds=ANALYSIS_RESULT_CACHE_TTL_SECONDS,
-    max_entries=ANALYSIS_RESULT_CACHE_MAX_ENTRIES,
-)
-IN_FLIGHT = InFlightRegistry()
-JOB_STORE = AnalysisJobStore(
-    ttl_seconds=ANALYSIS_JOB_TTL_SECONDS,
-    max_entries=ANALYSIS_JOB_MAX_ENTRIES,
-    max_active_jobs=ANALYSIS_JOB_MAX_ACTIVE,
-    max_event_history=ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
-    persistent_cache=SQLiteTTLCache(
-        ANALYSIS_JOB_CACHE_DB_PATH,
-        ttl_seconds=ANALYSIS_JOB_TTL_SECONDS,
-        max_entries=ANALYSIS_JOB_MAX_ENTRIES * 2,
-    ),
-)
+
+@dataclass(frozen=True)
+class AnalysisRuntimeState:
+    """Runtime-owned caches and stores for analysis requests."""
+
+    result_cache: AnalysisResultCache
+    in_flight: InFlightRegistry
+    job_store: AnalysisJobStore
+
+
+def create_analysis_runtime() -> AnalysisRuntimeState:
+    return AnalysisRuntimeState(
+        result_cache=AnalysisResultCache(
+            ttl_seconds=ANALYSIS_RESULT_CACHE_TTL_SECONDS,
+            max_entries=ANALYSIS_RESULT_CACHE_MAX_ENTRIES,
+        ),
+        in_flight=InFlightRegistry(),
+        job_store=AnalysisJobStore(
+            ttl_seconds=ANALYSIS_JOB_TTL_SECONDS,
+            max_entries=ANALYSIS_JOB_MAX_ENTRIES,
+            max_active_jobs=ANALYSIS_JOB_MAX_ACTIVE,
+            max_event_history=ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
+            persistent_cache=SQLiteTTLCache(
+                ANALYSIS_JOB_CACHE_DB_PATH,
+                ttl_seconds=ANALYSIS_JOB_TTL_SECONDS,
+                max_entries=ANALYSIS_JOB_MAX_ENTRIES * 2,
+            ),
+        ),
+    )
+
+
+_RUNTIME = create_analysis_runtime()
+
+# Compatibility aliases for existing route code and tests. New code should get
+# state from get_analysis_runtime() so tests can replace the whole container.
+RESULT_CACHE = _RUNTIME.result_cache
+IN_FLIGHT = _RUNTIME.in_flight
+JOB_STORE = _RUNTIME.job_store
+
+
+def get_analysis_runtime() -> AnalysisRuntimeState:
+    return _RUNTIME
+
+
+def install_analysis_runtime(runtime: AnalysisRuntimeState) -> AnalysisRuntimeState:
+    global _RUNTIME, RESULT_CACHE, IN_FLIGHT, JOB_STORE
+    _RUNTIME = runtime
+    RESULT_CACHE = runtime.result_cache
+    IN_FLIGHT = runtime.in_flight
+    JOB_STORE = runtime.job_store
+    return runtime
+
+
+def reset_analysis_runtime_for_tests() -> AnalysisRuntimeState:
+    """Replace analysis runtime state for deterministic tests."""
+    return install_analysis_runtime(create_analysis_runtime())
 
 
 async def get_or_start_analysis(
@@ -53,10 +94,13 @@ async def get_or_start_analysis(
     factory: Callable[[], Any],
     *,
     use_cache: bool,
-    result_cache: AnalysisResultCache = RESULT_CACHE,
-    in_flight: InFlightRegistry = IN_FLIGHT,
+    result_cache: AnalysisResultCache | None = None,
+    in_flight: InFlightRegistry | None = None,
     cache_key_func: Callable[[AnalysisRequest], Any],
 ) -> dict[str, Any]:
+    runtime = get_analysis_runtime()
+    result_cache = result_cache or runtime.result_cache
+    in_flight = in_flight or runtime.in_flight
     key = cache_key_func(req)
     if use_cache:
         cached = await result_cache.get(key)
