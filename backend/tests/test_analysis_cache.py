@@ -6,6 +6,7 @@ import os
 import pytest
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobLimitError, AnalysisJobStore, AnalysisResultCache
+from persistent_cache import SQLiteTTLCache
 
 
 def _cache_key(ticker: str) -> AnalysisCacheKey:
@@ -109,5 +110,44 @@ def test_job_terminal_transition_does_not_overwrite_cancelled_state():
         assert job.status == "cancelled"
         assert job.result is None
         assert job.error["error"]["code"] == "ANALYSIS_CANCELLED"
+
+    asyncio.run(main())
+
+
+def test_job_store_loads_persisted_completed_jobs_by_request_id(tmp_path):
+    async def main():
+        persistent_cache = SQLiteTTLCache(
+            str(tmp_path / "analysis_jobs.sqlite3"), ttl_seconds=60, max_entries=20
+        )
+        first_store = AnalysisJobStore(
+            ttl_seconds=60,
+            max_entries=10,
+            max_active_jobs=10,
+            persistent_cache=persistent_cache,
+        )
+        job = await first_store.create(
+            owner_id="owner-1",
+            request_id="request-1",
+            cache_key=_cache_key("BBCA.JK"),
+            payload={"ticker": "BBCA.JK"},
+        )
+        await job.complete({"request_id": "request-1", "ticker": "BBCA.JK", "decision": "Buy"})
+
+        second_store = AnalysisJobStore(
+            ttl_seconds=60,
+            max_entries=10,
+            max_active_jobs=10,
+            persistent_cache=persistent_cache,
+        )
+
+        loaded_by_request = await second_store.get_by_request_id("request-1")
+        loaded_by_job = await second_store.get(job.id, owner_id="owner-1")
+
+        assert loaded_by_request is not None
+        assert loaded_by_request.id == job.id
+        assert loaded_by_request.result["decision"] == "Buy"
+        assert loaded_by_request.done_event.is_set()
+        assert loaded_by_job is not None
+        assert loaded_by_job.request_id == "request-1"
 
     asyncio.run(main())

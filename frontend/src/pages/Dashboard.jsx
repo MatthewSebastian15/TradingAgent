@@ -331,7 +331,7 @@ export default function Dashboard() {
               {[
                 { label: 'DECISION', val: 'BUY / HOLD / SELL', color: 'text-bloomberg-orange' },
                 { label: 'PRICE TARGET', val: 'Numeric target', color: 'text-bloomberg-white' },
-                { label: 'TIME HORIZON', val: 'e.g. 3–6 months', color: 'text-bloomberg-white' },
+                { label: 'TIME HORIZON', val: 'e.g. 1–3 months', color: 'text-bloomberg-white' },
                 { label: 'EXEC SUMMARY', val: '5-sentence brief', color: 'text-bloomberg-white' },
                 {
                   label: 'THESIS',

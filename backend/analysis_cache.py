@@ -11,7 +11,7 @@ import asyncio
 import time
 import uuid
 from collections import OrderedDict, deque
-from collections.abc import Hashable
+from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -173,6 +173,7 @@ class AnalysisJob:
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     state_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     task: asyncio.Task | None = None
+    persist_callback: Callable[[AnalysisJob], Awaitable[None]] | None = field(default=None, repr=False)
     _next_event_sequence: int = 0
 
     def __post_init__(self) -> None:
@@ -180,6 +181,59 @@ class AnalysisJob:
         self.events = deque(self.events, maxlen=self.max_event_history)
         if self.events:
             self._next_event_sequence = max(int(event.get("sequence", -1)) for event in self.events) + 1
+        if self.status in TERMINAL_ANALYSIS_STATUSES:
+            self.done_event.set()
+        if self.status == "cancelled":
+            self.cancel_event.set()
+
+    @classmethod
+    def from_snapshot(
+        cls,
+        snapshot: dict[str, Any],
+        *,
+        persist_callback: Callable[[AnalysisJob], Awaitable[None]] | None = None,
+    ) -> AnalysisJob:
+        cache_key = snapshot.get("cache_key")
+        if isinstance(cache_key, dict):
+            parsed_cache_key = AnalysisCacheKey(**cache_key)
+        else:
+            parsed_cache_key = AnalysisCacheKey(*cache_key)
+
+        return cls(
+            id=snapshot["id"],
+            request_id=snapshot["request_id"],
+            owner_id=snapshot["owner_id"],
+            cache_key=parsed_cache_key,
+            payload=snapshot.get("payload") or {},
+            status=snapshot.get("status", "queued"),
+            created_at=float(snapshot.get("created_at") or time.time()),
+            updated_at=float(snapshot.get("updated_at") or time.time()),
+            events=deque(snapshot.get("events") or []),
+            max_event_history=int(snapshot.get("max_event_history") or DEFAULT_JOB_EVENT_REPLAY_LIMIT),
+            result=snapshot.get("result"),
+            error=snapshot.get("error"),
+            persist_callback=persist_callback,
+        )
+
+    def to_snapshot(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "request_id": self.request_id,
+            "owner_id": self.owner_id,
+            "cache_key": self.cache_key.__dict__,
+            "payload": self.payload,
+            "status": self.status,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "events": list(self.events),
+            "max_event_history": self.max_event_history,
+            "result": self.result,
+            "error": self.error,
+        }
+
+    async def _persist(self) -> None:
+        if self.persist_callback is not None:
+            await self.persist_callback(self)
 
     async def _append_event(self, event_type: str, payload: dict[str, Any]) -> None:
         event = {
@@ -223,7 +277,8 @@ class AnalysisJob:
             self.status = "completed"
             self.done_event.set()
             await self._append_event("result", result)
-            return True
+        await self._persist()
+        return True
 
     async def fail(self, error: dict[str, Any]) -> bool:
         async with self.state_lock:
@@ -233,7 +288,8 @@ class AnalysisJob:
             self.status = "failed"
             self.done_event.set()
             await self._append_event("error", error)
-            return True
+        await self._persist()
+        return True
 
     async def cancel(self, error: dict[str, Any]) -> bool:
         async with self.state_lock:
@@ -244,7 +300,8 @@ class AnalysisJob:
             self.status = "cancelled"
             self.done_event.set()
             await self._append_event("error", error)
-            return True
+        await self._persist()
+        return True
 
     def public_summary(self) -> dict[str, Any]:
         return {
@@ -260,7 +317,11 @@ class AnalysisJob:
 
 
 class AnalysisJobStore:
-    """In-memory job registry for job-based API and cancellation."""
+    """Job registry for job-based API and cancellation.
+
+    Active jobs live in memory. Terminal jobs can also be written through the
+    optional persistent cache so completed results survive backend restarts.
+    """
 
     def __init__(
         self,
@@ -268,11 +329,13 @@ class AnalysisJobStore:
         max_entries: int,
         max_active_jobs: int | None = None,
         max_event_history: int = DEFAULT_JOB_EVENT_REPLAY_LIMIT,
+        persistent_cache: Any | None = None,
     ) -> None:
         self.ttl_seconds = ttl_seconds
         self.max_entries = max_entries
         self.max_active_jobs = max_active_jobs if max_active_jobs is not None else max_entries
         self.max_event_history = max(1, int(max_event_history))
+        self.persistent_cache = persistent_cache
         self._jobs: dict[str, AnalysisJob] = {}
         self._lock = asyncio.Lock()
 
@@ -292,6 +355,7 @@ class AnalysisJobStore:
                 cache_key=cache_key,
                 payload=payload,
                 max_event_history=self.max_event_history,
+                persist_callback=self._persist_terminal_job,
             )
             self._jobs[job.id] = job
             await self._evict_locked()
@@ -300,11 +364,26 @@ class AnalysisJobStore:
     async def get(self, job_id: str, *, owner_id: str | None = None) -> AnalysisJob | None:
         async with self._lock:
             job = self._jobs.get(job_id)
-            if job is None:
-                return None
-            if owner_id is not None and job.owner_id != owner_id:
-                return None
-            return job
+        if job is None:
+            job = await self._load_persisted_job("job_id", job_id)
+        if job is None:
+            return None
+        if owner_id is not None and job.owner_id != owner_id:
+            return None
+        return job
+
+    async def get_by_request_id(
+        self, request_id: str, *, owner_id: str | None = None
+    ) -> AnalysisJob | None:
+        async with self._lock:
+            job = next((item for item in self._jobs.values() if item.request_id == request_id), None)
+        if job is None:
+            job = await self._load_persisted_job("request_id", request_id)
+        if job is None:
+            return None
+        if owner_id is not None and job.owner_id != owner_id:
+            return None
+        return job
 
     async def cancel(self, job_id: str, *, owner_id: str | None = None) -> AnalysisJob | None:
         job = await self.get(job_id, owner_id=owner_id)
@@ -335,7 +414,7 @@ class AnalysisJobStore:
     async def stats(self) -> dict[str, int]:
         await self.cleanup()
         async with self._lock:
-            return {
+            stats = {
                 "jobs": len(self._jobs),
                 "running": sum(1 for job in self._jobs.values() if job.status == "running"),
                 "queued": sum(1 for job in self._jobs.values() if job.status == "queued"),
@@ -343,6 +422,10 @@ class AnalysisJobStore:
                 "max_active": self.max_active_jobs,
                 "ttl_seconds": self.ttl_seconds,
             }
+        if self.persistent_cache is not None:
+            cache_stats = await asyncio.to_thread(self.persistent_cache.stats)
+            stats["persistent_entries"] = int(cache_stats.get("entries", 0))
+        return stats
 
     def _active_job_count_locked(self) -> int:
         return sum(1 for job in self._jobs.values() if job.status in {"queued", "running"})
@@ -356,3 +439,35 @@ class AnalysisJobStore:
                 break
             if job.status in {"completed", "failed", "cancelled"}:
                 self._jobs.pop(job.id, None)
+
+    async def _persist_terminal_job(self, job: AnalysisJob) -> None:
+        if self.persistent_cache is None or job.status not in TERMINAL_ANALYSIS_STATUSES:
+            return
+
+        snapshot = job.to_snapshot()
+        await asyncio.to_thread(self.persistent_cache.set, self._persistent_key("job_id", job.id), snapshot)
+        await asyncio.to_thread(
+            self.persistent_cache.set, self._persistent_key("request_id", job.request_id), snapshot
+        )
+
+    async def _load_persisted_job(self, key_type: str, value: str) -> AnalysisJob | None:
+        if self.persistent_cache is None:
+            return None
+
+        snapshot = await asyncio.to_thread(self.persistent_cache.get, self._persistent_key(key_type, value))
+        if not isinstance(snapshot, dict):
+            return None
+
+        try:
+            job = AnalysisJob.from_snapshot(snapshot, persist_callback=self._persist_terminal_job)
+        except (KeyError, TypeError, ValueError):
+            return None
+
+        async with self._lock:
+            self._jobs[job.id] = job
+            await self._evict_locked()
+        return job
+
+    @staticmethod
+    def _persistent_key(key_type: str, value: str) -> list[str]:
+        return ["analysis_job", key_type, value]

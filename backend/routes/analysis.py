@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 
 from analysis_cache import AnalysisJobLimitError
 from config import DEFAULT_ANALYSIS_DEPTH, llm
-from errors import RateLimitError, sanitize_message
+from errors import NotFoundError, RateLimitError, sanitize_message
 from logging_config import request_id_ctx
 from rate_limiter import limit_request, request_policy, stream_policy
 from routes import jobs, pipeline_runner, serializers, sse
@@ -201,6 +201,10 @@ def _job_not_found(job_id: str):
     return jobs.job_not_found(job_id)
 
 
+def _analysis_result_not_found(request_id: str):
+    return NotFoundError("Analysis result was not found.", details={"request_id": request_id})
+
+
 async def _forward_job_progress(job, source_queue: asyncio.Queue) -> None:
     await jobs.forward_job_progress(job, source_queue)
 
@@ -290,7 +294,20 @@ async def get_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job = await _JOB_STORE.get(job_id, owner_id=lease.identifier)
         if job is None:
+            job = await _JOB_STORE.get_by_request_id(job_id)
+        if job is None:
             raise _job_not_found(job_id)
+        return job.public_summary()
+
+
+@router.get("/analysis/{request_id}")
+async def get_analysis_result_by_request_id(request_id: str, request: Request):
+    async with limit_request(request, request_policy()):
+        job = await _JOB_STORE.get_by_request_id(request_id)
+        if job is None:
+            raise _analysis_result_not_found(request_id)
+        if job.result is not None:
+            return job.result
         return job.public_summary()
 
 

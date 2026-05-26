@@ -13,6 +13,7 @@ from analysis_cache import (
     InFlightRegistry,
 )
 from config import (
+    ANALYSIS_JOB_CACHE_DB_PATH,
     ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
     ANALYSIS_JOB_MAX_ACTIVE,
     ANALYSIS_JOB_MAX_ENTRIES,
@@ -22,6 +23,7 @@ from config import (
     PIPELINE_TIMEOUT_SECONDS,
 )
 from errors import ApiError, BadRequestError, PipelineExecutionError, PipelineTimeoutError, error_payload
+from persistent_cache import SQLiteTTLCache
 from rate_limiter import RateLimitLease
 from routes.sse import sse_event
 from routes.validation import AnalysisRequest
@@ -38,6 +40,11 @@ JOB_STORE = AnalysisJobStore(
     max_entries=ANALYSIS_JOB_MAX_ENTRIES,
     max_active_jobs=ANALYSIS_JOB_MAX_ACTIVE,
     max_event_history=ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
+    persistent_cache=SQLiteTTLCache(
+        ANALYSIS_JOB_CACHE_DB_PATH,
+        ttl_seconds=ANALYSIS_JOB_TTL_SECONDS,
+        max_entries=ANALYSIS_JOB_MAX_ENTRIES * 2,
+    ),
 )
 
 
