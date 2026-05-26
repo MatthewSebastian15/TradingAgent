@@ -94,3 +94,22 @@ def test_parse_final_result_treats_invalid_pd_obj_as_missing():
     assert parsed["full_decision"] == "raw final decision"
     assert parsed["key_catalysts"] == []
     assert parsed["invalidation_conditions"] == []
+
+
+def test_summary_shape_keeps_investment_thesis():
+    from routes.serializers import shape_result
+
+    shaped = shape_result(
+        {
+            "decision": "Buy",
+            "executive_summary": "Summary",
+            "investment_thesis": "Thesis should remain visible in summary mode.",
+            "full_decision": "Verbose markdown should be trimmed.",
+            "raw_agent_state": {"internal": True},
+        },
+        "summary",
+    )
+
+    assert shaped["investment_thesis"] == "Thesis should remain visible in summary mode."
+    assert "full_decision" not in shaped
+    assert "raw_agent_state" not in shaped
