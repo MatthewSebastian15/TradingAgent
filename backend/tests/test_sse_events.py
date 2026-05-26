@@ -57,6 +57,7 @@ def _analysis_cache_key(response_detail: str = "full") -> AnalysisCacheKey:
         deep_model=os.environ["DEEP_THINK_LLM"],
         analysis_mode="balanced",
         analysis_depth="balanced",
+        time_horizon_months=1,
         max_debate_rounds=1,
         response_detail=response_detail,
     )

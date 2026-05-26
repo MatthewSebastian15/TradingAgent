@@ -14,6 +14,7 @@ def _collected_data(trade_date: str = "2026-05-18") -> pipeline.CollectedData:
     return pipeline.CollectedData(
         ticker="BBCA.JK",
         trade_date=trade_date,
+        time_horizon_months=1,
         price_data="\n".join(
             [
                 "Date,Open,High,Low,Close,Volume",

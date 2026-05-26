@@ -302,6 +302,7 @@ Creates an analysis job. Returns a `job_id`.
 {
   "ticker": "BBCA.JK",
   "trade_date": "2026-05-18",
+  "time_horizon_months": 1,
   "max_debate_rounds": 3,
   "analysis_depth": "balanced",
   "response_detail": "full"
@@ -332,6 +333,7 @@ Cancels a running job.
 |---|---|
 | `ticker` | Yahoo Finance-compatible symbol, 1-10 characters. Use exchange suffixes when needed, e.g. `BBCA.JK`; common IDX tickers such as `BBCA` are auto-normalized to `.JK`. |
 | `trade_date` | `YYYY-MM-DD` |
+| `time_horizon_months` | `1`, `2`, or `3`; defaults to `1` |
 | `max_debate_rounds` | Integer 1 to 5 |
 | `analysis_depth` | `fast`, `balanced`, or `deep` |
 | `response_detail` | `summary`, `full`, or `debug` |
@@ -343,6 +345,7 @@ Cancels a running job.
   "request_id": "...",
   "ticker": "BBCA.JK",
   "trade_date": "2026-05-18",
+  "time_horizon_months": 1,
   "analysis_depth": "balanced",
   "response_detail": "full",
   "decision": "Buy",
@@ -350,7 +353,7 @@ Cancels a running job.
   "executive_summary": "...",
   "investment_thesis": "...",
   "price_target": 9800,
-  "time_horizon": "3-6 months",
+  "time_horizon": "1 month",
   "confidence_score": 0.82,
   "suggested_allocation_percent": 5,
   "entry_price": 9000,

@@ -5,11 +5,26 @@ from tradingagents.agents.utils.agent_utils import get_language_instruction
 from tradingagents.pipeline_balanced_types import CollectedData
 
 
-def market_analyst_prompt(ticker: str, trade_date: str, data: CollectedData, data_quality_json: str) -> str:
+def _horizon_instruction(time_horizon_text: str) -> str:
+    return f"""
+ANALYSIS HORIZON:
+The selected analysis horizon is exactly {time_horizon_text}.
+All conclusions, confidence, catalysts, entry price, stop loss, take profit, allocation, and risk controls must fit this holding period.
+Do not invent a different horizon such as "short term", "3-6 months", or "6-12 months"."""
+
+
+def market_analyst_prompt(
+    ticker: str,
+    trade_date: str,
+    data: CollectedData,
+    data_quality_json: str,
+    time_horizon_text: str,
+) -> str:
     return f"""
 You are the Market Analyst for {ticker} on {trade_date}.
 Use only the supplied price and technical data. Produce a practical technical/market report.
 Focus on trend, momentum, volatility, volume, support/resistance, and what the setup implies.
+{_horizon_instruction(time_horizon_text)}
 
 DATA QUALITY INSTRUCTION:
 Review the DATA QUALITY block below before writing your report.
@@ -28,11 +43,18 @@ DATA QUALITY:
 {get_language_instruction()}"""
 
 
-def news_social_prompt(ticker: str, trade_date: str, data: CollectedData, data_quality_json: str) -> str:
+def news_social_prompt(
+    ticker: str,
+    trade_date: str,
+    data: CollectedData,
+    data_quality_json: str,
+    time_horizon_text: str,
+) -> str:
     return f"""
 You are the combined News and Social Sentiment Analyst for {ticker} on {trade_date}.
 Use the company news, macro news, and insider activity. Produce a sentiment and catalyst report.
 Separate company-specific catalysts from broad market/macroeconomic pressure.
+{_horizon_instruction(time_horizon_text)}
 
 DATA QUALITY INSTRUCTION:
 Review the DATA QUALITY block below before writing your report.
@@ -54,12 +76,19 @@ DATA QUALITY:
 {get_language_instruction()}"""
 
 
-def fundamentals_prompt(ticker: str, trade_date: str, data: CollectedData, data_quality_json: str) -> str:
+def fundamentals_prompt(
+    ticker: str,
+    trade_date: str,
+    data: CollectedData,
+    data_quality_json: str,
+    time_horizon_text: str,
+) -> str:
     return f"""
 You are the Fundamentals Analyst for {ticker} on {trade_date}.
 Use only the supplied company fundamentals and financial statements.
 Focus on revenue quality, profitability, balance sheet strength, cash flow, valuation signals, and financial risk.
 Quote specific metrics when available.
+{_horizon_instruction(time_horizon_text)}
 
 DATA QUALITY INSTRUCTION:
 Review the DATA QUALITY block below before writing your report.
@@ -87,6 +116,7 @@ DATA QUALITY:
 def bull_prompt(
     ticker: str,
     trade_date: str,
+    time_horizon_text: str,
     data_quality_json: str,
     market_md: str,
     news_social_md: str,
@@ -95,6 +125,7 @@ def bull_prompt(
     return f"""
     You are the Bull Researcher for {ticker} on {trade_date}.
     Build the strongest bullish case from the analyst reports. Do not ignore risks, but argue why upside outweighs downside.
+    {_horizon_instruction(time_horizon_text)}
     If DATA QUALITY shows any field as "partial" or "missing", acknowledge this as a risk_flag
     and lower your confidence score accordingly. Do not present bullish claims as certain when data is incomplete.
 
@@ -115,6 +146,7 @@ def bull_prompt(
 def bear_prompt(
     ticker: str,
     trade_date: str,
+    time_horizon_text: str,
     data_quality_json: str,
     market_md: str,
     news_social_md: str,
@@ -124,6 +156,7 @@ def bear_prompt(
     return f"""
     You are the Bear Researcher for {ticker} on {trade_date}.
     Build the strongest bearish case from the analyst reports. Be specific about downside, missing data, valuation risk, execution risk, and market risk.
+    {_horizon_instruction(time_horizon_text)}
     If DATA QUALITY shows any field as "partial" or "missing", treat this as a direct risk factor
     and include it as a risk_flag. Incomplete data weakens any high-conviction bull case.
 
@@ -147,6 +180,7 @@ def bear_prompt(
 def research_manager_prompt(
     ticker: str,
     trade_date: str,
+    time_horizon_text: str,
     market_md: str,
     news_social_md: str,
     fundamentals_md: str,
@@ -157,6 +191,7 @@ def research_manager_prompt(
 You are the Research Manager for {ticker} on {trade_date}.
 Weigh the analyst reports and the bull/bear debate. Produce one investment plan.
 Commit to Buy, Overweight, Hold, Underweight, or Sell based on evidence quality.
+{_horizon_instruction(time_horizon_text)}
 
 MARKET REPORT:
 {market_md}
@@ -178,6 +213,7 @@ DATA QUALITY:
 def trader_prompt(
     ticker: str,
     trade_date: str,
+    time_horizon_text: str,
     market_md: str,
     investment_plan: str,
     data_quality_json: str,
@@ -186,6 +222,7 @@ def trader_prompt(
 You are the Trader for {ticker} on {trade_date}.
 Translate the research manager plan into a trade proposal.
 Use the market report for entry/stop context. Provide practical sizing guidance. Return suggested_allocation_percent, entry_price, stop_loss, take_profit, risk_reward_ratio, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_catalysts, and invalidation_conditions when data supports them.
+{_horizon_instruction(time_horizon_text)}
 
 MARKET REPORT:
 {market_md}
@@ -201,6 +238,7 @@ DATA QUALITY:
 def risk_committee_prompt(
     ticker: str,
     trade_date: str,
+    time_horizon_text: str,
     market_md: str,
     news_social_md: str,
     fundamentals_md: str,
@@ -213,6 +251,7 @@ def risk_committee_prompt(
     You are a combined Risk Committee for {ticker} on {trade_date}.
     Simulate three perspectives in one call: aggressive, neutral, and conservative.
     Evaluate the trader proposal, downside risk, invalidation triggers, position sizing, stop-loss logic, liquidity, volatility, and headline risk.
+    {_horizon_instruction(time_horizon_text)}
 
     ANALYST REPORTS:
     {market_md}
@@ -238,6 +277,7 @@ def risk_committee_prompt(
 def portfolio_manager_prompt(
     ticker: str,
     trade_date: str,
+    time_horizon_text: str,
     last_close_text: str,
     market_md: str,
     news_social_md: str,
@@ -253,6 +293,8 @@ You are the Portfolio Manager for {ticker} on {trade_date}.
 Make the final decision using every prior report. The final answer must be usable by a frontend investment dashboard.
 Keep language simple and practical. Include an action plan, risk controls, price target when data supports it, and time horizon. Return all actionable dashboard fields: suggested_allocation_percent, entry_price, stop_loss, take_profit, risk_reward_ratio, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_catalysts, and invalidation_conditions. Reduce confidence and allocation when data_quality has partial or missing inputs.
 Use LAST CLOSE PRICE as the current market price anchor for entry_price, stop_loss, take_profit, and price_target. If LAST CLOSE PRICE is unavailable or data quality is not usable, leave unsupported price fields null instead of inventing numbers.
+{_horizon_instruction(time_horizon_text)}
+Set the structured time_horizon field exactly to "{time_horizon_text}".
 
 LAST CLOSE PRICE:
 {last_close_text}

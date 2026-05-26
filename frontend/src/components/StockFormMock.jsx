@@ -5,6 +5,11 @@ const DEFAULT_DEBATE_ROUNDS = 3;
 
 const IDX_TICKERS = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'];
 const US_TICKERS = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'];
+const HORIZON_OPTIONS = [
+  { value: 1, label: '1 MONTH' },
+  { value: 2, label: '2 MONTHS' },
+  { value: 3, label: '3 MONTHS' },
+];
 
 function today() {
   const d = new Date();
@@ -36,6 +41,7 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
   const [ticker, setTicker] = useState('NVDA');
   const [date, setDate] = useState(today());
   const [rounds, setRounds] = useState(DEFAULT_DEBATE_ROUNDS);
+  const [timeHorizonMonths, setTimeHorizonMonths] = useState(1);
   const [error, setError] = useState('');
   const [running, setRunning] = useState(false);
   const timersRef = useRef([]);
@@ -64,6 +70,9 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return 'Date must be YYYY-MM-DD';
+    }
+    if (![1, 2, 3].includes(Number(timeHorizonMonths))) {
+      return 'Invalid analysis horizon.';
     }
     return '';
   }
@@ -126,6 +135,7 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
         const mockResult = getMockAnalysisResponse({
           ticker: normalizedTicker,
           trade_date: date,
+          time_horizon_months: Number(timeHorizonMonths),
           max_debate_rounds: rounds,
         });
         onResult(mockResult);
@@ -204,6 +214,34 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           </div>
         </div>
 
+        {/* Horizon */}
+        <div>
+          <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+            ANALYSIS HORIZON
+          </label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {HORIZON_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setTimeHorizonMonths(option.value)}
+                disabled={running}
+                className={`
+                  px-2 py-2 text-xs font-mono border tracking-wider transition-colors duration-150
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  ${
+                    Number(timeHorizonMonths) === option.value
+                      ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
+                      : 'border-bloomberg-border bg-black text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'
+                  }
+                `}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Date + Rounds */}
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -270,7 +308,9 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
         </button>
 
         <div className="text-center font-mono text-xs text-bloomberg-muted tracking-wider">
-          MOCK MODE: LOCAL DATA ONLY
+          {HORIZON_OPTIONS.find((item) => item.value === Number(timeHorizonMonths))?.label ||
+            '1 MONTH'}{' '}
+          / MOCK MODE
         </div>
       </div>
     </form>

@@ -19,7 +19,12 @@ from tradingagents.agents.schemas import (
     render_trader_proposal,
 )
 from tradingagents.dataflows.config import set_config
-from tradingagents.pipeline_balanced_data import _run_with_config, collect_market_data
+from tradingagents.pipeline_balanced_data import (
+    _normalize_time_horizon_months,
+    _run_with_config,
+    _time_horizon_label,
+    collect_market_data,
+)
 from tradingagents.pipeline_balanced_llm import (
     _create_llms,
     _fallback_report,
@@ -52,6 +57,7 @@ def _build_initial_analyst_reports(
     quick_llm: Any,
     data,
     data_quality_json: str,
+    time_horizon_text: str,
     llm_budget: LLMBudget,
     progress_callback: Optional[ProgressCallback],
     cancel_check: Optional[Callable[[], bool]],
@@ -92,7 +98,7 @@ def _build_initial_analyst_reports(
             lambda: _invoke_once(
                 quick_llm,
                 AnalystReport,
-                market_analyst_prompt(ticker, trade_date, data, data_quality_json),
+                market_analyst_prompt(ticker, trade_date, data, data_quality_json, time_horizon_text),
                 _fallback_report("Market Analyst Report", f"Market data for {ticker} was collected, but the model did not return a complete market view."),
                 "Market Analyst",
                 llm_budget,
@@ -108,7 +114,7 @@ def _build_initial_analyst_reports(
             lambda: _invoke_once(
                 quick_llm,
                 AnalystReport,
-                news_social_prompt(ticker, trade_date, data, data_quality_json),
+                news_social_prompt(ticker, trade_date, data, data_quality_json, time_horizon_text),
                 _fallback_report("News and Social Sentiment Report", f"News and sentiment data for {ticker} was collected, but the model did not return a complete sentiment view."),
                 "News + Social Analyst",
                 llm_budget,
@@ -124,7 +130,7 @@ def _build_initial_analyst_reports(
             lambda: _invoke_once(
                 quick_llm,
                 AnalystReport,
-                fundamentals_prompt(ticker, trade_date, data, data_quality_json),
+                fundamentals_prompt(ticker, trade_date, data, data_quality_json, time_horizon_text),
                 _fallback_report("Fundamentals Analyst Report", f"Fundamental data for {ticker} was collected, but the model did not return a complete fundamental view."),
                 "Fundamentals Analyst",
                 llm_budget,
@@ -157,6 +163,8 @@ def run_balanced_pipeline(
     set_config(config)
     quick_llm, deep_llm = _create_llms(config)
     analysis_depth = str(config.get("analysis_depth", "balanced")).lower()
+    time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
+    time_horizon_text = _time_horizon_label(time_horizon_months)
     llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
     data = _run_tracked(
         progress_callback,
@@ -177,6 +185,7 @@ def run_balanced_pipeline(
         quick_llm,
         data,
         data_quality_json,
+        time_horizon_text,
         llm_budget,
         progress_callback,
         cancel_check,
@@ -215,7 +224,15 @@ def run_balanced_pipeline(
             lambda: _invoke_once(
                 quick_llm,
                 DebateArgument,
-                bull_prompt(ticker, trade_date, data_quality_json, market_md, news_social_md, fundamentals_md),
+                bull_prompt(
+                    ticker,
+                    trade_date,
+                    time_horizon_text,
+                    data_quality_json,
+                    market_md,
+                    news_social_md,
+                    fundamentals_md,
+                ),
                 DebateArgument(
                     stance="bull",
                     thesis=f"The bullish case for {ticker} is not strong enough to rate confidently because model output failed.",
@@ -238,7 +255,16 @@ def run_balanced_pipeline(
             lambda: _invoke_once(
                 quick_llm,
                 DebateArgument,
-                bear_prompt(ticker, trade_date, data_quality_json, market_md, news_social_md, fundamentals_md, bull),
+                bear_prompt(
+                    ticker,
+                    trade_date,
+                    time_horizon_text,
+                    data_quality_json,
+                    market_md,
+                    news_social_md,
+                    fundamentals_md,
+                    bull,
+                ),
                 DebateArgument(
                     stance="bear",
                     thesis=f"The bearish case for {ticker} is incomplete because model output failed, so risk should be treated cautiously.",
@@ -268,7 +294,16 @@ def run_balanced_pipeline(
         lambda: _invoke_once(
             deep_llm,
             ResearchPlanLite,
-            research_manager_prompt(ticker, trade_date, market_md, news_social_md, fundamentals_md, debate_md, data_quality_json),
+            research_manager_prompt(
+                ticker,
+                trade_date,
+                time_horizon_text,
+                market_md,
+                news_social_md,
+                fundamentals_md,
+                debate_md,
+                data_quality_json,
+            ),
             ResearchPlanLite(
                 recommendation=PortfolioRating.HOLD,
                 confidence=0.35,
@@ -289,7 +324,7 @@ def run_balanced_pipeline(
         lambda: _invoke_once(
             quick_llm,
             TraderProposal,
-            trader_prompt(ticker, trade_date, market_md, investment_plan, data_quality_json),
+            trader_prompt(ticker, trade_date, time_horizon_text, market_md, investment_plan, data_quality_json),
             TraderProposal(
                 confidence=0.35,
                 action=TraderAction.HOLD,
@@ -329,7 +364,18 @@ def run_balanced_pipeline(
             lambda: _invoke_once(
                 quick_llm,
                 RiskCommitteeReport,
-                risk_committee_prompt(ticker, trade_date, market_md, news_social_md, fundamentals_md, debate_md, investment_plan, trader_plan, data_quality_json),
+                risk_committee_prompt(
+                    ticker,
+                    trade_date,
+                    time_horizon_text,
+                    market_md,
+                    news_social_md,
+                    fundamentals_md,
+                    debate_md,
+                    investment_plan,
+                    trader_plan,
+                    data_quality_json,
+                ),
                 RiskCommitteeReport(
                     overall_risk_level="High",
                     aggressive_view="The opportunity cannot be assessed aggressively because the risk model call failed.",
@@ -356,6 +402,7 @@ def run_balanced_pipeline(
             portfolio_manager_prompt(
                 ticker,
                 trade_date,
+                time_horizon_text,
                 last_close_text,
                 market_md,
                 news_social_md,
@@ -374,7 +421,7 @@ def run_balanced_pipeline(
                     "The available market, news, and fundamental data were collected, but the final structured output needs manual review. "
                     "The biggest risk is acting on incomplete or fallback analysis, and that risk overrides any aggressive trade idea. "
                     "The recommended action is to avoid new exposure, keep position size at zero for new trades, and wait for a verified analysis before setting a stop-loss. "
-                    "The time horizon is review-only until a clean model run confirms or invalidates the thesis."
+                    f"The selected analysis horizon is {time_horizon_text}, but this fallback result requires review before trading."
                 ),
                 investment_thesis=(
                     f"{ticker} should stay on hold until the analysis can be verified. "
@@ -396,7 +443,7 @@ def run_balanced_pipeline(
                 key_catalysts=[],
                 invalidation_conditions=["Clean data and clean model output are not available."],
                 price_target=None,
-                time_horizon="Review required",
+                time_horizon=time_horizon_text,
             ),
             "Portfolio Manager",
             llm_budget,
@@ -409,6 +456,8 @@ def run_balanced_pipeline(
     return {
         "company_of_interest": ticker,
         "trade_date": trade_date,
+        "time_horizon_months": time_horizon_months,
+        "time_horizon": time_horizon_text,
         "market_report": market_md,
         "sentiment_report": news_social_md,
         "news_report": news_social_md,

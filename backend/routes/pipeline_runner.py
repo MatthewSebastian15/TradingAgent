@@ -33,6 +33,7 @@ _CANCEL_MANAGER_LOCK = asyncio.Lock()
 def run_pipeline(
     ticker: str,
     trade_date: str,
+    time_horizon_months: int,
     max_debate_rounds: int,
     analysis_depth: str,
     response_detail: str,
@@ -51,6 +52,7 @@ def run_pipeline(
             "request_id": request_id,
             "ticker": ticker,
             "trade_date": trade_date,
+            "time_horizon_months": time_horizon_months,
             "max_debate_rounds": max_debate_rounds,
             "analysis_depth": analysis_depth,
         },
@@ -64,6 +66,7 @@ def run_pipeline(
         analysis_depth=analysis_depth,
         response_detail=response_detail,
     )
+    config["time_horizon_months"] = time_horizon_months
 
     if config.get("analysis_mode", "balanced") == "balanced":
         from tradingagents.pipeline_balanced import run_balanced_pipeline
@@ -95,6 +98,7 @@ def run_pipeline(
 def run_pipeline_with_progress(
     ticker: str,
     trade_date: str,
+    time_horizon_months: int,
     max_debate_rounds: int,
     analysis_depth: str,
     response_detail: str,
@@ -111,6 +115,7 @@ def run_pipeline_with_progress(
         analysis_depth=analysis_depth,
         response_detail=response_detail,
     )
+    config["time_horizon_months"] = time_horizon_months
 
     if config.get("analysis_mode", "balanced") == "balanced":
         from tradingagents.pipeline_balanced import run_balanced_pipeline
@@ -152,6 +157,7 @@ def run_pipeline_with_progress(
 def run_pipeline_with_progress_worker(
     ticker: str,
     trade_date: str,
+    time_horizon_months: int,
     max_debate_rounds: int,
     analysis_depth: str,
     response_detail: str,
@@ -176,6 +182,7 @@ def run_pipeline_with_progress_worker(
     return run_pipeline_with_progress(
         ticker,
         trade_date,
+        time_horizon_months,
         max_debate_rounds,
         analysis_depth,
         response_detail,
@@ -327,6 +334,7 @@ async def run_pipeline_async(
         run_pipeline_func,
         req.ticker,
         req.trade_date,
+        req.time_horizon_months,
         req.max_debate_rounds,
         req.analysis_depth,
         req.response_detail,
