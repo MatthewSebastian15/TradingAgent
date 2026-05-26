@@ -300,7 +300,8 @@ Creates an analysis job. Returns a `job_id`.
 
 ```json
 {
-  "ticker": "BBCA.JK",
+  "ticker": "BBCA",
+  "market": "ID",
   "trade_date": "2026-05-18",
   "time_horizon_months": 1,
   "max_debate_rounds": 3,
@@ -331,7 +332,8 @@ Cancels a running job.
 
 | Field | Rule |
 |---|---|
-| `ticker` | Yahoo Finance-compatible symbol, 1-10 characters. Use exchange suffixes when needed, e.g. `BBCA.JK`; common IDX tickers such as `BBCA` are auto-normalized to `.JK`. |
+| `ticker` | Yahoo Finance-compatible symbol. For Indonesia, submit the plain IDX code such as `BBCA` with `market: "ID"`; the backend stores and queries it as `BBCA.JK`. Use exchange suffixes for other markets when needed, e.g. `700.HK`. |
+| `market` | Optional UI market context: `US`, `ID`, or `GLOBAL`. `ID` forces plain IDX codes to `.JK` in the backend. |
 | `trade_date` | `YYYY-MM-DD` |
 | `time_horizon_months` | `1`, `2`, or `3`; defaults to `1` |
 | `max_debate_rounds` | Integer 1 to 5 |

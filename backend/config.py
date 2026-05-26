@@ -220,6 +220,11 @@ class LLMSettings:
     ollama_base_url: str = field(default_factory=lambda: _env("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"))
     api_key: str = field(default_factory=lambda: _env("API_KEY", ""))
 
+    def __post_init__(self) -> None:
+        if self.provider == "google":
+            object.__setattr__(self, "deep_think_llm", self.deep_think_llm.lower())
+            object.__setattr__(self, "quick_think_llm", self.quick_think_llm.lower())
+
     def backend_url(self) -> str | None:
         if self.provider == "ollama":
             return self.ollama_base_url

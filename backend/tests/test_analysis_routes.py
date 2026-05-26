@@ -53,6 +53,7 @@ def test_analyze_accepts_valid_request_and_returns_result(client, monkeypatch):
     assert body["trade_date"] == "2026-05-14"
     assert body["time_horizon_months"] == 2
     assert body["decision"] == "Buy"
+    assert datetime.fromisoformat(body["analysis_created_at"])
     assert datetime.fromisoformat(body["data_fetched_at"])
     assert body["data_quality"]["price_data"] == "ok"
 

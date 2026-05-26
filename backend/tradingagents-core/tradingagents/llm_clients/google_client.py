@@ -103,7 +103,7 @@ class GoogleClient(BaseLLMClient):
     """Client for Google Gemini models."""
 
     def __init__(self, model: str, base_url: Optional[str] = None, **kwargs):
-        super().__init__(model, base_url, **kwargs)
+        super().__init__(model.strip().lower(), base_url, **kwargs)
 
     def get_llm(self) -> Any:
         """Return configured ChatGoogleGenerativeAI instance."""

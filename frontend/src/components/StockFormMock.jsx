@@ -3,7 +3,7 @@ import { getMockAnalysisResponse, MOCK_PIPELINE_STEPS } from '../mockData';
 
 const DEFAULT_DEBATE_ROUNDS = 3;
 
-const IDX_TICKERS = ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'];
+const IDX_TICKERS = ['BBCA', 'BBRI', 'TLKM', 'BMRI', 'ASII', 'GOTO', 'UNVR'];
 const US_TICKERS = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'];
 const HORIZON_OPTIONS = [
   { value: 1, label: '1 MONTH' },
@@ -14,6 +14,14 @@ const HORIZON_OPTIONS = [
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function normalizeTickerInput(value) {
+  return value
+    .toUpperCase()
+    .replace(/\.JK$/, '')
+    .replace(/[^A-Z0-9.-]/g, '')
+    .slice(0, 12);
 }
 
 function TickerChip({ label, active, onClick, disabled }) {
@@ -66,7 +74,7 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
   function validate() {
     const t = ticker.trim().toUpperCase();
     if (!/^[A-Z0-9]{1,10}([.-][A-Z0-9]{1,5})?$/.test(t)) {
-      return 'Invalid ticker. Examples: BBCA.JK, NVDA, BRK-B';
+      return 'Invalid ticker. Examples: BBCA, NVDA, BRK-B';
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return 'Date must be YYYY-MM-DD';
@@ -166,15 +174,8 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           </label>
           <input
             value={ticker}
-            onChange={(e) =>
-              setTicker(
-                e.target.value
-                  .toUpperCase()
-                  .replace(/[^A-Z0-9.-]/g, '')
-                  .slice(0, 12)
-              )
-            }
-            placeholder="e.g. BBCA.JK"
+            onChange={(e) => setTicker(normalizeTickerInput(e.target.value))}
+            placeholder="e.g. BBCA"
             required
             disabled={running}
             className="

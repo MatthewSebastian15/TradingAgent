@@ -20,4 +20,5 @@ def validate_model(provider: str, model: str) -> bool:
     if provider_lower not in KNOWN_MODELS:
         return True
 
-    return model in KNOWN_MODELS[provider_lower]
+    normalized_model = model.strip().lower()
+    return normalized_model in {known_model.lower() for known_model in KNOWN_MODELS[provider_lower]}

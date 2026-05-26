@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { formatPrice } from '../utils/formatting';
+import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 function parseBold(text) {
   if (!text) return null;
@@ -165,6 +165,7 @@ export default function ResultCard({ result }) {
   const budgetExhausted = Boolean(result.budget_exhausted);
   const agentsSkipped = result.agents_skipped || [];
   const canShowRaw = result.response_detail === 'debug';
+  const createdAtLabel = formatDateTimeLabel(result.analysis_created_at || result.saved_at);
 
   const decisionColor =
     {
@@ -185,15 +186,20 @@ export default function ResultCard({ result }) {
           </span>
           <span className="font-mono text-xs text-bloomberg-green">●</span>
         </div>
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-wrap justify-end">
           {timeHorizon && (
             <span className="font-mono text-xs text-bloomberg-orange truncate">
               Analysis Horizon: {timeHorizon}
             </span>
           )}
           <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
-            {result.trade_date}
+            Trade Date: {result.trade_date}
           </span>
+          {createdAtLabel && (
+            <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
+              Created: {createdAtLabel}
+            </span>
+          )}
         </div>
       </div>
 
@@ -201,7 +207,7 @@ export default function ResultCard({ result }) {
       <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
         <div>
           <div className={`font-display text-5xl font-bold tracking-wider ${decisionColor}`}>
-            {result.ticker}
+            {formatTickerLabel(result.ticker)}
           </div>
           <div className="mt-3">
             <DecisionBadge decision={result.decision || result.rating} />

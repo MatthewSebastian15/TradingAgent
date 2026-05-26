@@ -46,11 +46,13 @@ MODEL_CATALOG: dict[str, dict[str, list[tuple[str, str]]]] = {
     },
     "google": {
         "quick": [
+            ("Gemini 3.1 Flash-Lite - Fast, low-cost", "gemini-3.1-flash-lite"),
             ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
             ("Gemini 2.5 Flash Lite - Fast, low-cost", "gemini-2.5-flash-lite"),
             ("Gemini 2.0 Flash - Previous generation fast", "gemini-2.0-flash"),
         ],
         "deep": [
+            ("Gemini 3.5 Flash - Strong agentic model", "gemini-3.5-flash"),
             ("Gemini 2.5 Pro - Stable pro model", "gemini-2.5-pro"),
             ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
             ("Gemini 2.0 Flash - Previous generation fast", "gemini-2.0-flash"),

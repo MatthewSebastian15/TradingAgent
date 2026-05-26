@@ -324,10 +324,15 @@ async def cancel_analysis_job_alias(job_id: str, request: Request):
 
 
 @router.get("/ticker/validate")
-async def validate_ticker(ticker: str, trade_date: str, request: Request):
+async def validate_ticker(ticker: str, trade_date: str, request: Request, market: str | None = None):
     req = normalize_and_validate_analysis_request(
         AnalysisRequest(
-            ticker=ticker, trade_date=trade_date, max_debate_rounds=1, analysis_depth="fast", response_detail="summary"
+            ticker=ticker,
+            trade_date=trade_date,
+            max_debate_rounds=1,
+            analysis_depth="fast",
+            response_detail="summary",
+            market=market,
         )
     )
     async with limit_request(request, request_policy()):
