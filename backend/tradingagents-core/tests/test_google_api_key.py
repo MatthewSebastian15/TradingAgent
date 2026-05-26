@@ -27,6 +27,14 @@ class TestGoogleApiKeyStandardization(unittest.TestCase):
                 call_kwargs = mock_chat.call_args[1]
                 self.assertEqual(call_kwargs.get("google_api_key"), expected_key)
 
+    @patch("tradingagents.llm_clients.google_client.NormalizedChatGoogleGenerativeAI")
+    def test_model_id_is_normalized_to_lowercase(self, mock_chat):
+        client = GoogleClient("gemini-3.5-Flash", api_key="test-key")
+        client.get_llm()
+
+        call_kwargs = mock_chat.call_args[1]
+        self.assertEqual(call_kwargs.get("model"), "gemini-3.5-flash")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -81,6 +81,7 @@ describe('AnalysisWorkspace history storage', () => {
       response_detail: 'full',
       decision: 'Buy',
       executive_summary: 'Summary',
+      analysis_created_at: expect.any(String),
     });
     expect(stored[0]).not.toHaveProperty('investment_thesis');
     expect(stored[0]).not.toHaveProperty('raw_agent_state');

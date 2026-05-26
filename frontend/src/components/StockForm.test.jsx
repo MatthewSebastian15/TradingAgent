@@ -125,6 +125,63 @@ describe('StockForm cleanup', () => {
     expect(props.onLoading).toHaveBeenLastCalledWith(false);
   });
 
+  it('submits Indonesian tickers as plain codes with market context', async () => {
+    const props = callbacks();
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn((url, options = {}) => {
+      if (options.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ job_id: 'job-idx', status: 'queued' }),
+        });
+      }
+
+      if (options.method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  'event: result\n' + 'data: {"ticker":"UNVR.JK","decision":"Hold"}\n\n'
+                )
+              );
+              controller.close();
+            },
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<StockForm {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /indonesia/i }));
+    expect(screen.queryByRole('button', { name: 'BBCA.JK' })).toBeNull();
+
+    const tickerInput = screen.getByRole('textbox');
+    fireEvent.change(tickerInput, { target: { value: 'UNVR.JK' } });
+    expect(tickerInput.value).toBe('UNVR');
+
+    fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/analysis/jobs'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+    const [, postOptions] = fetchMock.mock.calls.find(([, options]) => options?.method === 'POST');
+    expect(JSON.parse(postOptions.body)).toMatchObject({ ticker: 'UNVR', market: 'ID' });
+    await waitFor(() => {
+      expect(props.onResult).toHaveBeenCalledWith(
+        expect.objectContaining({ ticker: 'UNVR.JK', decision: 'Hold' })
+      );
+    });
+  });
+
   it('clears mock pipeline timers when unmounted', () => {
     vi.useFakeTimers();
     const props = callbacks();

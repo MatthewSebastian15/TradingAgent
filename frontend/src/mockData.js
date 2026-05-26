@@ -369,8 +369,18 @@ const MOCK_MAP = {
   ERROR: MOCK_ERROR_RESPONSE,
 };
 
+const MOCK_IDX_CODES = ['BBCA', 'BBRI', 'TLKM', 'BMRI', 'ASII', 'GOTO', 'UNVR'];
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeMockTicker(ticker) {
+  const normalizedTicker = String(ticker || 'NVDA')
+    .trim()
+    .toUpperCase();
+  if (MOCK_IDX_CODES.includes(normalizedTicker)) return `${normalizedTicker}.JK`;
+  return normalizedTicker;
 }
 
 export function getMockAnalysisResponse({
@@ -379,9 +389,7 @@ export function getMockAnalysisResponse({
   time_horizon_months = 1,
   max_debate_rounds = 3,
 } = {}) {
-  const normalizedTicker = String(ticker || 'NVDA')
-    .trim()
-    .toUpperCase();
+  const normalizedTicker = normalizeMockTicker(ticker);
   const base =
     MOCK_MAP[normalizedTicker] ||
     (normalizedTicker.endsWith('.JK') ? MOCK_IDX_RESPONSE : MOCK_RESPONSE);

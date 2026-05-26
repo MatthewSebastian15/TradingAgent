@@ -13,8 +13,8 @@ const MARKETS = {
   ID: {
     label: 'INDONESIA',
     flag: '🇮🇩',
-    defaultTicker: 'BBCA.JK',
-    tickers: ['BBCA.JK', 'BBRI.JK', 'TLKM.JK', 'BMRI.JK', 'ASII.JK', 'GOTO.JK'],
+    defaultTicker: 'BBCA',
+    tickers: ['BBCA', 'BBRI', 'TLKM', 'BMRI', 'ASII', 'GOTO', 'UNVR'],
   },
   GLOBAL: {
     label: 'GLOBAL',
@@ -39,6 +39,17 @@ const HORIZON_OPTIONS = [
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function normalizeTickerInput(value, marketId) {
+  const upperValue = value.toUpperCase();
+  if (marketId === 'ID') {
+    return upperValue
+      .replace(/\.JK$/, '')
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 10);
+  }
+  return upperValue.replace(/[^A-Z0-9.-]/g, '').slice(0, 12);
 }
 
 function parseSseBlock(block) {
@@ -146,8 +157,11 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
 
   function validate() {
     const t = ticker.trim().toUpperCase();
+    if (activeMarket === 'ID' && !/^[A-Z0-9]{1,10}$/.test(t)) {
+      return 'Invalid IDX ticker. Enter code only, for example BBCA or UNVR.';
+    }
     if (!/^[A-Z0-9]{1,10}([.-][A-Z0-9]{1,5})?$/.test(t)) {
-      return 'Invalid ticker. Examples: BBCA.JK, NVDA, 700.HK, SAP.DE';
+      return 'Invalid ticker. Examples: BBCA, NVDA, 700.HK, SAP.DE';
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date must be YYYY-MM-DD';
     if (![1, 2, 3].includes(Number(timeHorizonMonths))) return 'Invalid analysis horizon.';
@@ -231,6 +245,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
 
     const payload = {
       ticker: ticker.trim().toUpperCase(),
+      market: activeMarket,
       trade_date: date,
       time_horizon_months: Number(timeHorizonMonths),
       max_debate_rounds: Number(rounds),
@@ -373,7 +388,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
             TICKER SYMBOL
             <span className="ml-2 text-bloomberg-border normal-case font-normal">
               {activeMarket === 'ID'
-                ? '· IDX (append .JK)'
+                ? '· IDX code'
                 : activeMarket === 'GLOBAL'
                   ? '· Global Exchange'
                   : '· NYSE / NASDAQ'}
@@ -381,14 +396,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
           </label>
           <input
             value={ticker}
-            onChange={(e) =>
-              setTicker(
-                e.target.value
-                  .toUpperCase()
-                  .replace(/[^A-Z0-9.-]/g, '')
-                  .slice(0, 12)
-              )
-            }
+            onChange={(e) => setTicker(normalizeTickerInput(e.target.value, activeMarket))}
             placeholder={currentMarket.defaultTicker}
             required
             disabled={running}

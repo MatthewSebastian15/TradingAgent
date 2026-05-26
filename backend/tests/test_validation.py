@@ -55,12 +55,38 @@ def test_ticker_bbca_is_valid_and_normalized():
     assert req.ticker == "BBCA.JK"
 
 
+def test_indonesia_market_appends_jk_for_plain_symbol():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(ticker="unvr", market="ID", trade_date="2026-05-14", max_debate_rounds=1)
+    )
+
+    assert req.ticker == "UNVR.JK"
+    assert req.market == "ID"
+
+
+def test_indonesia_market_appends_jk_for_symbol_outside_common_allowlist():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(ticker="bren", market="id", trade_date="2026-05-14", max_debate_rounds=1)
+    )
+
+    assert req.ticker == "BREN.JK"
+    assert req.market == "ID"
+
+
 def test_us_ticker_is_not_normalized_to_idx_suffix():
     req = normalize_and_validate_analysis_request(
         AnalysisRequest(ticker="aapl", trade_date="2026-05-14", max_debate_rounds=1)
     )
 
     assert req.ticker == "AAPL"
+
+
+def test_explicit_us_market_does_not_apply_idx_allowlist():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(ticker="bbca", market="US", trade_date="2026-05-14", max_debate_rounds=1)
+    )
+
+    assert req.ticker == "BBCA"
 
 
 def test_single_character_ticker_is_valid():
@@ -135,6 +161,22 @@ def test_startup_config_requires_model_env(monkeypatch):
         errors = reloaded.validate_startup_config()
         assert "DEEP_THINK_LLM must not be empty." in errors
         assert "QUICK_THINK_LLM must not be empty." in errors
+    finally:
+        _restore_test_config(monkeypatch)
+
+
+def test_google_model_env_values_are_normalized_to_lowercase(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "google")
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-google-key")
+    monkeypatch.setenv("DEEP_THINK_LLM", "gemini-3.5-Flash")
+    monkeypatch.setenv("QUICK_THINK_LLM", "gemini-3.1-Flash-Lite")
+
+    import config
+
+    reloaded = importlib.reload(config)
+    try:
+        assert reloaded.llm.deep_think_llm == "gemini-3.5-flash"
+        assert reloaded.llm.quick_think_llm == "gemini-3.1-flash-lite"
     finally:
         _restore_test_config(monkeypatch)
 

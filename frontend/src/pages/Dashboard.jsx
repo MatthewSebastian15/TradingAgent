@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
+import { formatTickerLabel } from '../utils/formatting';
 
 const AGENTS = [
   {
@@ -51,16 +52,16 @@ const AGENTS = [
 ];
 
 const DEFAULT_TICKERS = [
-  'BBCA.JK',
-  'BBRI.JK',
-  'TLKM.JK',
+  'BBCA',
+  'BBRI',
+  'TLKM',
   'NVDA',
   'AAPL',
   'TSLA',
   'MSFT',
   'META',
-  'GOTO.JK',
-  'ASII.JK',
+  'GOTO',
+  'ASII',
 ];
 
 // Refresh interval in milliseconds (5 minutes).
@@ -125,7 +126,9 @@ function TickerTape() {
       >
         {[...items, ...items].map((t, i) => (
           <span key={i} className="flex items-center gap-2 font-mono text-xs">
-            <span className="text-bloomberg-white font-semibold tracking-wider">{t.sym}</span>
+            <span className="text-bloomberg-white font-semibold tracking-wider">
+              {formatTickerLabel(t.sym)}
+            </span>
             <span
               className={
                 t.chg === '…'
@@ -391,7 +394,7 @@ export default function Dashboard() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { market: 'Indonesia IDX', format: 'BBCA.JK', ex: 'Bank Central Asia' },
+                  { market: 'Indonesia IDX', format: 'BBCA', ex: 'Bank Central Asia' },
                   { market: 'US Markets', format: 'NVDA', ex: 'NVIDIA Corporation' },
                   { market: 'Other', format: 'BARC.L', ex: 'London, Tokyo, etc.' },
                 ].map(({ market, format, ex }) => (

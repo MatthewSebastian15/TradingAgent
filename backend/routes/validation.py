@@ -16,6 +16,8 @@ from errors import BadRequestError
 # (BBCA.JK, BRK-B, 0700.HK). Backend and frontend intentionally share the
 # same rule so the UI no longer smiles politely before the API rejects you.
 _TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$")
+_IDX_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}\.JK$")
+_SUPPORTED_MARKETS = {"US", "ID", "GLOBAL"}
 
 AnalysisDepth = Literal["fast", "balanced", "deep"]
 ResponseDetail = Literal["summary", "full", "debug"]
@@ -30,6 +32,28 @@ class AnalysisRequest(BaseModel):
     max_debate_rounds: int = Field(default=DEFAULT_MAX_DEBATE_ROUNDS)
     analysis_depth: AnalysisDepth = Field(default=DEFAULT_ANALYSIS_DEPTH)
     response_detail: ResponseDetail = Field(default="full")
+    market: str | None = Field(default=None, max_length=16)
+
+
+def normalize_market(market: str | None) -> str | None:
+    """Normalize optional UI market context."""
+    if market is None:
+        return None
+    if not isinstance(market, str):
+        return None
+    normalized = market.strip().upper()
+    return normalized or None
+
+
+def normalize_ticker_for_market(ticker: str, market: str | None) -> str:
+    """Normalize ticker using explicit market context when supplied."""
+    cleaned = ticker.strip().upper()
+    if market == "ID":
+        base = cleaned.removesuffix(".JK")
+        return f"{base}.JK"
+    if market in {"US", "GLOBAL"}:
+        return cleaned
+    return normalize_ticker(ticker)
 
 
 def normalize_ticker_symbol(ticker: str) -> str:
@@ -50,7 +74,8 @@ def normalize_ticker_symbol(ticker: str) -> str:
 def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisRequest:
     """Validate user input before the expensive agent pipeline starts."""
 
-    ticker = normalize_ticker(req.ticker) if isinstance(req.ticker, str) else req.ticker
+    market = normalize_market(req.market)
+    ticker = normalize_ticker_for_market(req.ticker, market) if isinstance(req.ticker, str) else req.ticker
     trade_date = req.trade_date.strip() if isinstance(req.trade_date, str) else req.trade_date
     analysis_depth = str(req.analysis_depth or DEFAULT_ANALYSIS_DEPTH).strip().lower()
     response_detail = str(req.response_detail or "full").strip().lower()
@@ -58,10 +83,15 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
 
     errors: dict[str, str] = {}
 
+    if market is not None and market not in _SUPPORTED_MARKETS:
+        errors["market"] = "market must be one of: US, ID, GLOBAL."
+
     if not isinstance(ticker, str) or not _TICKER_RE.fullmatch(ticker):
         errors["ticker"] = (
             "Ticker must be a Yahoo Finance compatible symbol, for example AAPL, BBCA.JK, BBRI.JK, TLKM.JK, BRK-B, or 0700.HK."
         )
+    elif market == "ID" and not _IDX_TICKER_RE.fullmatch(ticker):
+        errors["ticker"] = "IDX ticker must be submitted as a plain stock code, for example BBCA or UNVR."
 
     if not isinstance(trade_date, str):
         errors["trade_date"] = "Trade date must use YYYY-MM-DD format."
@@ -101,4 +131,5 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
         max_debate_rounds=req.max_debate_rounds,
         analysis_depth=analysis_depth,  # type: ignore[arg-type]
         response_detail=response_detail,  # type: ignore[arg-type]
+        market=market,
     )

@@ -39,6 +39,10 @@ class ModelValidationTests(unittest.TestCase):
                 with self.subTest(provider=provider, model=model):
                     self.assertTrue(validate_model(provider, model))
 
+    def test_validator_accepts_known_models_with_mixed_case(self):
+        self.assertTrue(validate_model("google", "gemini-3.5-Flash"))
+        self.assertTrue(validate_model("google", "gemini-3.1-Flash-Lite"))
+
     def test_unknown_model_emits_warning_for_strict_provider(self):
         client = DummyLLMClient("openai", "not-a-real-openai-model")
 

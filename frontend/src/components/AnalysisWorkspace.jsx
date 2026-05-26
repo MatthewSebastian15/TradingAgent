@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import AgentLog from './AgentLog';
 import Navbar from './Navbar';
 import ResultCard from './ResultCard';
-import { formatPrice } from '../utils/formatting';
+import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const HISTORY_PANEL_MAX_HEIGHT = 560;
 const HISTORY_TTL_DAYS = 30;
@@ -10,6 +10,7 @@ const HISTORY_FIELDS = [
   'request_id',
   'ticker',
   'trade_date',
+  'analysis_created_at',
   'time_horizon_months',
   'analysis_depth',
   'response_detail',
@@ -66,6 +67,11 @@ function historySnapshot(result) {
   }, {});
 }
 
+function withAnalysisCreatedAt(result) {
+  if (!result || result.error || result.analysis_created_at) return result;
+  return { ...result, analysis_created_at: new Date().toISOString() };
+}
+
 function saveToHistory(historyKey, result) {
   if (!result || result.error) return;
 
@@ -117,37 +123,45 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
         <span className="font-mono text-xs text-bloomberg-muted">{history.length}</span>
       </div>
       <div className="overflow-y-auto" style={{ maxHeight: HISTORY_PANEL_MAX_HEIGHT }}>
-        {history.map((item, index) => (
-          <button
-            key={`${item.ticker || 'item'}-${item.trade_date || index}`}
-            onClick={() => onSelect(item)}
-            className="w-full flex items-center justify-between px-4 py-3 border-b border-bloomberg-border last:border-b-0 hover:bg-bloomberg-surface transition-colors duration-150 text-left"
-          >
-            <div>
-              <div className="font-mono text-sm font-semibold text-bloomberg-white">
-                {item.ticker}
+        {history.map((item, index) => {
+          const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
+          return (
+            <button
+              key={`${item.ticker || 'item'}-${item.trade_date || index}`}
+              onClick={() => onSelect(item)}
+              className="w-full flex items-center justify-between px-4 py-3 border-b border-bloomberg-border last:border-b-0 hover:bg-bloomberg-surface transition-colors duration-150 text-left"
+            >
+              <div>
+                <div className="font-mono text-sm font-semibold text-bloomberg-white">
+                  {formatTickerLabel(item.ticker)}
+                </div>
+                <div className="font-mono text-xs text-bloomberg-muted">
+                  {item.trade_date}
+                  {formatHistoryHorizon(item.time_horizon_months)
+                    ? ` / ${formatHistoryHorizon(item.time_horizon_months)}`
+                    : ''}
+                </div>
+                {createdAtLabel && (
+                  <div className="mt-1 font-mono text-[10px] text-bloomberg-muted tracking-wider uppercase">
+                    CREATED: {createdAtLabel}
+                  </div>
+                )}
               </div>
-              <div className="font-mono text-xs text-bloomberg-muted">
-                {item.trade_date}
-                {formatHistoryHorizon(item.time_horizon_months)
-                  ? ` / ${formatHistoryHorizon(item.time_horizon_months)}`
-                  : ''}
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {item.price_target && (
-                <span className="font-mono text-xs text-bloomberg-muted">
-                  {formatPrice(item.price_target, item.ticker)}
+              <div className="flex items-center gap-3">
+                {item.price_target && (
+                  <span className="font-mono text-xs text-bloomberg-muted">
+                    {formatPrice(item.price_target, item.ticker)}
+                  </span>
+                )}
+                <span
+                  className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(item.decision)}`}
+                >
+                  {(item.decision || 'N/A').toUpperCase()}
                 </span>
-              )}
-              <span
-                className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(item.decision)}`}
-              >
-                {(item.decision || 'N/A').toUpperCase()}
-              </span>
-            </div>
-          </button>
-        ))}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -172,8 +186,9 @@ export default function AnalysisWorkspace({ FormComponent, historyKey, emptyDesc
   const [agentProgress, setAgentProgress] = useState(null);
 
   function handleResult(nextResult) {
-    setResult(nextResult);
-    saveToHistory(historyKey, nextResult);
+    const enrichedResult = withAnalysisCreatedAt(nextResult);
+    setResult(enrichedResult);
+    saveToHistory(historyKey, enrichedResult);
   }
 
   return (
