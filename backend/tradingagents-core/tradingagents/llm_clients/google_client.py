@@ -1,14 +1,15 @@
 import asyncio
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from .base_client import BaseLLMClient, normalize_content
-from .validators import validate_model
 from tradingagents.dataflows.config import get_config
 from tradingagents.utils_resilience import call_with_retry, limit_concurrency
+
+from .base_client import BaseLLMClient, normalize_content
+from .validators import validate_model
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
 class GoogleClient(BaseLLMClient):
     """Client for Google Gemini models."""
 
-    def __init__(self, model: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, model: str, base_url: str | None = None, **kwargs):
         super().__init__(model.strip().lower(), base_url, **kwargs)
 
     def get_llm(self) -> Any:

@@ -10,6 +10,7 @@ The implementation is split by concern:
 
 from __future__ import annotations
 
+from tradingagents import pipeline_balanced_orchestrator as _orchestrator
 from tradingagents.pipeline_balanced_data import (
     _call_yfinance_with_resilience,
     _check_cancel,
@@ -34,7 +35,6 @@ from tradingagents.pipeline_balanced_llm import (
     _research_plan_to_markdown,
     _risk_to_markdown,
 )
-from tradingagents import pipeline_balanced_orchestrator as _orchestrator
 from tradingagents.pipeline_balanced_progress import AGENT_LABELS as _AGENT_LABELS
 from tradingagents.pipeline_balanced_progress import _emit_data_quality, _emit_progress, _run_tracked
 from tradingagents.pipeline_balanced_types import (
@@ -54,6 +54,7 @@ def run_balanced_pipeline(*args, **kwargs):
     _orchestrator.collect_market_data = collect_market_data
     _orchestrator._invoke_once = _invoke_once
     return _orchestrator.run_balanced_pipeline(*args, **kwargs)
+
 
 __all__ = [
     "AnalysisCancelledError",

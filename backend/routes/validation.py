@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from tradingagents.dataflows.y_finance import normalize_ticker
 
-from config import DEFAULT_ANALYSIS_DEPTH, DEFAULT_MAX_DEBATE_ROUNDS
+from config import ANALYSIS_DEPTHS, DEFAULT_ANALYSIS_DEPTH, DEFAULT_MAX_DEBATE_ROUNDS, RESPONSE_DETAILS
 from errors import BadRequestError
 
 # Accepts plain tickers (AAPL, NVDA, 0700) and exchange-suffixed tickers
@@ -115,10 +115,10 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     ):
         errors["time_horizon_months"] = "time_horizon_months must be one of: 1, 2, 3."
 
-    if analysis_depth not in {"fast", "balanced", "deep"}:
+    if analysis_depth not in ANALYSIS_DEPTHS:
         errors["analysis_depth"] = "analysis_depth must be one of: fast, balanced, deep."
 
-    if response_detail not in {"summary", "full", "debug"}:
+    if response_detail not in RESPONSE_DETAILS:
         errors["response_detail"] = "response_detail must be one of: summary, full, debug."
 
     if errors:

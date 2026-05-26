@@ -35,10 +35,7 @@ def _filter_reports_by_date(result, curr_date: str):
         return result
     for key in ("annualReports", "quarterlyReports"):
         if key in result:
-            result[key] = [
-                r for r in result[key]
-                if r.get("fiscalDateEnding", "") <= curr_date
-            ]
+            result[key] = [r for r in result[key] if r.get("fiscalDateEnding", "") <= curr_date]
     return result
 
 
@@ -65,7 +62,9 @@ def get_fundamentals(ticker: str, curr_date: str = None) -> str:
 
 def get_balance_sheet(ticker: str, freq: str = "quarterly", curr_date: str = None):
     """Retrieve balance sheet data for a given ticker symbol using Alpha Vantage."""
-    result = _filter_reports_by_date(_load_json_payload(_make_api_request("BALANCE_SHEET", {"symbol": ticker})), curr_date)
+    result = _filter_reports_by_date(
+        _load_json_payload(_make_api_request("BALANCE_SHEET", {"symbol": ticker})), curr_date
+    )
     if not result.get("annualReports") and not result.get("quarterlyReports"):
         return f"No balance sheet data found for symbol '{ticker}'"
     return _dump_payload(result)
@@ -81,8 +80,9 @@ def get_cashflow(ticker: str, freq: str = "quarterly", curr_date: str = None):
 
 def get_income_statement(ticker: str, freq: str = "quarterly", curr_date: str = None):
     """Retrieve income statement data for a given ticker symbol using Alpha Vantage."""
-    result = _filter_reports_by_date(_load_json_payload(_make_api_request("INCOME_STATEMENT", {"symbol": ticker})), curr_date)
+    result = _filter_reports_by_date(
+        _load_json_payload(_make_api_request("INCOME_STATEMENT", {"symbol": ticker})), curr_date
+    )
     if not result.get("annualReports") and not result.get("quarterlyReports"):
         return f"No income statement data found for symbol '{ticker}'"
     return _dump_payload(result)
-

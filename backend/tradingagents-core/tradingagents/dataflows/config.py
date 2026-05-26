@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import copy
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Dict, Iterator, Optional
 
 import tradingagents.default_config as default_config
 
-_DEFAULT_CONFIG: Dict = copy.deepcopy(default_config.DEFAULT_CONFIG)
+_DEFAULT_CONFIG: dict = copy.deepcopy(default_config.DEFAULT_CONFIG)
 _thread_config = threading.local()
-_context_config: ContextVar[Optional[Dict]] = ContextVar("tradingagents_config", default=None)
+_context_config: ContextVar[dict | None] = ContextVar("tradingagents_config", default=None)
 
 
-def _snapshot(config: Dict | None = None) -> Dict:
+def _snapshot(config: dict | None = None) -> dict:
     """Return an isolated config snapshot merged over defaults."""
     merged = copy.deepcopy(_DEFAULT_CONFIG)
     if config:
@@ -28,7 +28,7 @@ def initialize_config():
         delattr(_thread_config, "value")
 
 
-def set_config(config: Dict):
+def set_config(config: dict):
     """Set the active configuration for the current execution context.
 
     The old implementation mutated one module-level dictionary. In a web API,
@@ -44,7 +44,7 @@ def set_config(config: Dict):
 
 
 @contextmanager
-def use_config(config: Dict) -> Iterator[Dict]:
+def use_config(config: dict) -> Iterator[dict]:
     """Temporarily install *config* for the current context/thread."""
     scoped = _snapshot(config)
     token = _context_config.set(scoped)
@@ -61,7 +61,7 @@ def use_config(config: Dict) -> Iterator[Dict]:
             delattr(_thread_config, "value")
 
 
-def get_config() -> Dict:
+def get_config() -> dict:
     """Get the active configuration for this execution context."""
     scoped = _context_config.get()
     if scoped is not None:

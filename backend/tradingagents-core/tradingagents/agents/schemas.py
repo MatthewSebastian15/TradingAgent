@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -37,7 +37,7 @@ class DebateArgument(BaseModel):
         min_length=20,
         description="One clear sentence stating the core argument.",
     )
-    evidence: List[str] = Field(
+    evidence: list[str] = Field(
         min_length=2,
         max_length=5,
         description="Specific evidence points from the supplied reports.",
@@ -46,7 +46,7 @@ class DebateArgument(BaseModel):
         min_length=20,
         description="Direct response to the strongest opposing argument.",
     )
-    risk_flags: List[str] = Field(
+    risk_flags: list[str] = Field(
         default_factory=list,
         max_length=5,
         description="Risks, missing data, or assumptions that could weaken this argument.",
@@ -69,25 +69,28 @@ def render_debate_argument(argument: DebateArgument, label: str) -> str:
     if not risks:
         risks = "- No major additional risk flags stated."
 
-    return "\n".join([
-        f"{label}: {argument.thesis}",
-        "",
-        "Evidence:",
-        evidence,
-        "",
-        f"Counterargument: {argument.counterargument}",
-        "",
-        "Risk flags:",
-        risks,
-        "",
-        f"Confidence: {argument.confidence:.2f}",
-        f"Consensus Signal: {argument.consensus_signal}",
-    ])
+    return "\n".join(
+        [
+            f"{label}: {argument.thesis}",
+            "",
+            "Evidence:",
+            evidence,
+            "",
+            f"Counterargument: {argument.counterargument}",
+            "",
+            "Risk flags:",
+            risks,
+            "",
+            f"Confidence: {argument.confidence:.2f}",
+            f"Consensus Signal: {argument.consensus_signal}",
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
 # Research Manager
 # ---------------------------------------------------------------------------
+
 
 class ResearchPlan(BaseModel):
     confidence: float = Field(
@@ -119,19 +122,22 @@ class ResearchPlan(BaseModel):
 
 
 def render_research_plan(plan: ResearchPlan) -> str:
-    return "\n".join([
-        f"**Recommendation**: {plan.recommendation.value}",
-        f"**Confidence**: {plan.confidence:.2f}",
-        "",
-        f"**Rationale**: {plan.rationale}",
-        "",
-        f"**Strategic Actions**: {plan.strategic_actions}",
-    ])
+    return "\n".join(
+        [
+            f"**Recommendation**: {plan.recommendation.value}",
+            f"**Confidence**: {plan.confidence:.2f}",
+            "",
+            f"**Rationale**: {plan.rationale}",
+            "",
+            f"**Strategic Actions**: {plan.strategic_actions}",
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
 # Trader
 # ---------------------------------------------------------------------------
+
 
 class TraderProposal(BaseModel):
     confidence: float = Field(
@@ -144,62 +150,62 @@ class TraderProposal(BaseModel):
     )
     reasoning: str = Field(
         description=(
-            "The case for this action, anchored in the analysts' reports and "
-            "the research plan. Two to four sentences."
+            "The case for this action, anchored in the analysts' reports and the research plan. Two to four sentences."
         ),
     )
-    suggested_allocation_percent: Optional[float] = Field(
+    suggested_allocation_percent: float | None = Field(
         default=None,
         ge=0.0,
         le=100.0,
         description="Suggested portfolio allocation percentage for this position.",
     )
-    entry_price: Optional[float] = Field(
+    entry_price: float | None = Field(
         default=None,
         description="Optional entry price target in the instrument's quote currency.",
     )
-    stop_loss: Optional[float] = Field(
+    stop_loss: float | None = Field(
         default=None,
         description="Optional stop-loss price in the instrument's quote currency.",
     )
-    take_profit: Optional[float] = Field(
+    take_profit: float | None = Field(
         default=None,
         description="Optional take-profit price in the instrument's quote currency.",
     )
-    risk_reward_ratio: Optional[float] = Field(
+    risk_reward_ratio: float | None = Field(
         default=None,
         description="Expected reward divided by expected risk. Example: 2.0 means 2:1.",
     )
-    max_drawdown_estimate: Optional[str] = Field(
+    max_drawdown_estimate: str | None = Field(
         default=None,
         description="Estimated adverse move or drawdown range, e.g. '8-12%'.",
     )
-    volatility_level: Optional[VolatilityLevel] = Field(
+    volatility_level: VolatilityLevel | None = Field(
         default=None,
         description="Expected volatility level for the position.",
     )
-    position_sizing: Optional[str] = Field(
+    position_sizing: str | None = Field(
         default=None,
         description="Optional sizing guidance, e.g. '5% of portfolio'.",
     )
-    position_sizing_reason: Optional[str] = Field(
+    position_sizing_reason: str | None = Field(
         default=None,
         description="Plain-language reason for the suggested allocation and sizing.",
     )
-    rebalancing_action: Optional[str] = Field(
+    rebalancing_action: str | None = Field(
         default=None,
         description="Concrete action for portfolio rebalancing: add, trim, hold, exit, or watchlist.",
     )
-    key_catalysts: List[str] = Field(
+    key_catalysts: list[str] = Field(
         default_factory=list,
         max_length=6,
         description="Specific events or conditions that could drive the trade.",
     )
-    invalidation_conditions: List[str] = Field(
+    invalidation_conditions: list[str] = Field(
         default_factory=list,
         max_length=6,
         description="Conditions that invalidate the trade thesis.",
     )
+
 
 def render_trader_proposal(proposal: TraderProposal) -> str:
     parts = [
@@ -232,16 +238,19 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         parts.extend(["", "**Key Catalysts**:", *[f"- {item}" for item in proposal.key_catalysts]])
     if proposal.invalidation_conditions:
         parts.extend(["", "**Invalidation Conditions**:", *[f"- {item}" for item in proposal.invalidation_conditions]])
-    parts.extend([
-        "",
-        f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value.upper()}**",
-    ])
+    parts.extend(
+        [
+            "",
+            f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value.upper()}**",
+        ]
+    )
     return "\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
 # Portfolio Manager
 # ---------------------------------------------------------------------------
+
 
 class PortfolioDecision(BaseModel):
     confidence_score: float = Field(
@@ -280,6 +289,7 @@ class PortfolioDecision(BaseModel):
         rarely trigger false splits.
         """
         import re
+
         sentences = [s.strip() for s in re.split(r"(?<=[.!?])(?:\s|$)", v) if s.strip()]
         if len(sentences) < 3:
             raise ValueError(
@@ -287,6 +297,7 @@ class PortfolioDecision(BaseModel):
                 "Expand the summary to meet the minimum requirement."
             )
         return v
+
     investment_thesis: str = Field(
         description=(
             "A thorough, easy-to-understand explanation of WHY this trade makes sense. "
@@ -302,59 +313,59 @@ class PortfolioDecision(BaseModel):
             "Minimum length: 6 sentences. Use simple words."
         ),
     )
-    suggested_allocation_percent: Optional[float] = Field(
+    suggested_allocation_percent: float | None = Field(
         default=None,
         ge=0.0,
         le=100.0,
         description="Final suggested allocation percentage for the position.",
     )
-    entry_price: Optional[float] = Field(
+    entry_price: float | None = Field(
         default=None,
         description="Final entry price target in the instrument's quote currency.",
     )
-    stop_loss: Optional[float] = Field(
+    stop_loss: float | None = Field(
         default=None,
         description="Final stop-loss price in the instrument's quote currency.",
     )
-    take_profit: Optional[float] = Field(
+    take_profit: float | None = Field(
         default=None,
         description="Final take-profit price in the instrument's quote currency.",
     )
-    risk_reward_ratio: Optional[float] = Field(
+    risk_reward_ratio: float | None = Field(
         default=None,
         description="Final expected reward divided by expected risk.",
     )
-    max_drawdown_estimate: Optional[str] = Field(
+    max_drawdown_estimate: str | None = Field(
         default=None,
         description="Estimated maximum drawdown or adverse move for the trade.",
     )
-    volatility_level: Optional[VolatilityLevel] = Field(
+    volatility_level: VolatilityLevel | None = Field(
         default=None,
         description="Expected volatility level for the recommendation.",
     )
-    position_sizing_reason: Optional[str] = Field(
+    position_sizing_reason: str | None = Field(
         default=None,
         description="Reason for final allocation and position size.",
     )
-    rebalancing_action: Optional[str] = Field(
+    rebalancing_action: str | None = Field(
         default=None,
         description="Final portfolio action: add, trim, hold, exit, or watchlist.",
     )
-    key_catalysts: List[str] = Field(
+    key_catalysts: list[str] = Field(
         default_factory=list,
         max_length=8,
         description="Key catalysts that support the final recommendation.",
     )
-    invalidation_conditions: List[str] = Field(
+    invalidation_conditions: list[str] = Field(
         default_factory=list,
         max_length=8,
         description="Specific conditions that invalidate the final thesis.",
     )
-    price_target: Optional[float] = Field(
+    price_target: float | None = Field(
         default=None,
         description="Optional target price in the instrument's quote currency.",
     )
-    time_horizon: Optional[str] = Field(
+    time_horizon: str | None = Field(
         default=None,
         description="Optional recommended holding period, e.g. '3-6 months'.",
     )
@@ -370,7 +381,10 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         f"**Investment Thesis**: {decision.investment_thesis}",
     ]
     actionable_fields = [
-        ("Suggested Allocation", f"{decision.suggested_allocation_percent}%" if decision.suggested_allocation_percent is not None else None),
+        (
+            "Suggested Allocation",
+            f"{decision.suggested_allocation_percent}%" if decision.suggested_allocation_percent is not None else None,
+        ),
         ("Entry Price", decision.entry_price),
         ("Stop Loss", decision.stop_loss),
         ("Take Profit", decision.take_profit),

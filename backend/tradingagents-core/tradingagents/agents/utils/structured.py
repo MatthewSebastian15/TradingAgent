@@ -26,7 +26,8 @@ PERUBAHAN vs original:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
-def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]:
+def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Any | None:
     """Return ``llm.with_structured_output(schema)`` or ``None`` if unsupported.
 
     Logs a warning when the binding fails so the user understands the agent
@@ -45,15 +46,15 @@ def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]
         return llm.with_structured_output(schema)
     except (NotImplementedError, AttributeError) as exc:
         logger.warning(
-            "%s: provider does not support with_structured_output (%s); "
-            "falling back to free-text generation",
-            agent_name, exc,
+            "%s: provider does not support with_structured_output (%s); falling back to free-text generation",
+            agent_name,
+            exc,
         )
         return None
 
 
 def invoke_structured_or_freetext(
-    structured_llm: Optional[Any],
+    structured_llm: Any | None,
     plain_llm: Any,
     prompt: Any,
     render: Callable[[T], str],
@@ -80,7 +81,8 @@ def invoke_structured_or_freetext(
         except Exception as exc:
             logger.warning(
                 "%s: structured-output invocation failed (%s); retrying as free text",
-                agent_name, exc,
+                agent_name,
+                exc,
             )
 
     # --- Attempt 2: free-text fallback ---
@@ -90,7 +92,8 @@ def invoke_structured_or_freetext(
     except Exception as exc:
         logger.error(
             "%s: free-text fallback also failed (%s). Returning placeholder so graph can continue.",
-            agent_name, exc,
+            agent_name,
+            exc,
         )
         return (
             f"**Rating**: Hold\n\n"
@@ -101,12 +104,12 @@ def invoke_structured_or_freetext(
 
 
 def invoke_typed_or_none(
-    structured_llm: Optional[Any],
+    structured_llm: Any | None,
     plain_llm: Any,
     prompt: Any,
     schema: type[T],
     agent_name: str,
-) -> Optional[T]:
+) -> T | None:
     """Invoke a structured LLM and validate the returned Pydantic object.
 
     Returns *None* on any failure so callers can apply their own fallback

@@ -1,8 +1,11 @@
 """yfinance-based news data fetching functions."""
 
-from tradingagents.yfinance_runtime import yf
+from contextlib import suppress
 from datetime import datetime
+
 from dateutil.relativedelta import relativedelta
+
+from tradingagents.yfinance_runtime import yf
 
 from .stockstats_utils import yf_retry
 
@@ -25,10 +28,8 @@ def _extract_article_data(article: dict) -> dict:
         pub_date_str = content.get("pubDate", "")
         pub_date = None
         if pub_date_str:
-            try:
+            with suppress(ValueError, AttributeError):
                 pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
 
         return {
             "title": title,
@@ -133,11 +134,13 @@ def get_global_news_yfinance(
 
     try:
         for query in search_queries:
-            search = yf_retry(lambda q=query: yf.Search(
-                query=q,
-                news_count=limit,
-                enable_fuzzy_query=True,
-            ))
+            search = yf_retry(
+                lambda q=query: yf.Search(
+                    query=q,
+                    news_count=limit,
+                    enable_fuzzy_query=True,
+                )
+            )
 
             if search.news:
                 for article in search.news:
@@ -171,7 +174,11 @@ def get_global_news_yfinance(
                 data = _extract_article_data(article)
                 # Skip articles published after curr_date (look-ahead guard)
                 if data.get("pub_date"):
-                    pub_naive = data["pub_date"].replace(tzinfo=None) if hasattr(data["pub_date"], "replace") else data["pub_date"]
+                    pub_naive = (
+                        data["pub_date"].replace(tzinfo=None)
+                        if hasattr(data["pub_date"], "replace")
+                        else data["pub_date"]
+                    )
                     if not (start_dt <= pub_naive <= curr_dt + relativedelta(days=1)):
                         continue
                 title = data["title"]

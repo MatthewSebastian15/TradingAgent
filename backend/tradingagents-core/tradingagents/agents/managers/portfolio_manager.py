@@ -22,12 +22,11 @@ def _trim_history(history: str, max_chars: int = MAX_HISTORY_CHARS) -> str:
     tail = history[-max_chars:]
     newline_pos = tail.find("\n")
     if newline_pos != -1:
-        tail = tail[newline_pos + 1:]
+        tail = tail[newline_pos + 1 :]
 
     return (
         "[Earlier debate history omitted to stay within model context limits. "
-        "The most recent arguments from each analyst are preserved below.]\n\n"
-        + tail
+        "The most recent arguments from each analyst are preserved below.]\n\n" + tail
     )
 
 
@@ -45,11 +44,7 @@ def create_portfolio_manager(llm):
         trader_plan = state["trader_investment_plan"]
 
         past_context = state.get("past_context", "")
-        lessons_line = (
-            f"- Lessons from prior decisions and outcomes:\n{past_context}\n"
-            if past_context
-            else ""
-        )
+        lessons_line = f"- Lessons from prior decisions and outcomes:\n{past_context}\n" if past_context else ""
 
         prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision.
 

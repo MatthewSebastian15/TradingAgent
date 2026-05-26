@@ -1,14 +1,15 @@
 import os
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
+from tradingagents.dataflows.config import get_config
+from tradingagents.utils_resilience import call_with_retry
+
 from .base_client import BaseLLMClient, normalize_content
 from .model_catalog import DEEPSEEK_STRUCTURED_OUTPUT_UNSUPPORTED_MODELS
 from .validators import validate_model
-from tradingagents.dataflows.config import get_config
-from tradingagents.utils_resilience import call_with_retry
 
 
 class NormalizedChatOpenAI(ChatOpenAI):
@@ -87,7 +88,7 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
     def _get_request_payload(self, input_, *, stop=None, **kwargs):
         payload = super()._get_request_payload(input_, stop=stop, **kwargs)
         outgoing = payload.get("messages", [])
-        for message_dict, message in zip(outgoing, _input_to_messages(input_)):
+        for message_dict, message in zip(outgoing, _input_to_messages(input_), strict=False):
             if not isinstance(message, AIMessage):
                 continue
             reasoning = message.additional_kwargs.get("reasoning_content")
@@ -100,13 +101,9 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
         response_dict = (
             response
             if isinstance(response, dict)
-            else response.model_dump(
-                exclude={"choices": {"__all__": {"message": {"parsed"}}}}
-            )
+            else response.model_dump(exclude={"choices": {"__all__": {"message": {"parsed"}}}})
         )
-        for generation, choice in zip(
-            chat_result.generations, response_dict.get("choices", [])
-        ):
+        for generation, choice in zip(chat_result.generations, response_dict.get("choices", []), strict=False):
             reasoning = choice.get("message", {}).get("reasoning_content")
             if reasoning is not None:
                 generation.message.additional_kwargs["reasoning_content"] = reasoning
@@ -121,10 +118,16 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
             )
         return super().with_structured_output(schema, method=method, **kwargs)
 
+
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
-    "timeout", "max_retries", "reasoning_effort",
-    "api_key", "callbacks", "http_client", "http_async_client",
+    "timeout",
+    "max_retries",
+    "reasoning_effort",
+    "api_key",
+    "callbacks",
+    "http_client",
+    "http_async_client",
 )
 
 # Provider base URLs and API key env vars
@@ -147,7 +150,7 @@ class OpenAIClient(BaseLLMClient):
     def __init__(
         self,
         model: str,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         provider: str = "openai",
         **kwargs,
     ):

@@ -1,6 +1,7 @@
 # TradingAgents/graph/propagation.py
 
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from tradingagents.agents.utils.agent_states import (
     InvestDebateState,
     RiskDebateState,
@@ -13,9 +14,7 @@ class Propagator:
     def __init__(self, max_recur_limit=100):
         self.max_recur_limit = max_recur_limit
 
-    def create_initial_state(
-        self, company_name: str, trade_date: str, past_context: str = ""
-    ) -> Dict[str, Any]:
+    def create_initial_state(self, company_name: str, trade_date: str, past_context: str = "") -> dict[str, Any]:
         return {
             "messages": [("human", company_name)],
             "company_of_interest": company_name,
@@ -65,7 +64,7 @@ class Propagator:
             "portfolio_decision": None,
         }
 
-    def get_graph_args(self, callbacks: Optional[List] = None) -> Dict[str, Any]:
+    def get_graph_args(self, callbacks: list | None = None) -> dict[str, Any]:
         config = {"recursion_limit": self.max_recur_limit}
         if callbacks:
             config["callbacks"] = callbacks

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from analysis_cache import AnalysisCacheKey
-from config import DEFAULT_ANALYSIS_DEPTH, llm
+from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
 from routes.validation import AnalysisRequest
 
 logger = logging.getLogger(__name__)
@@ -156,7 +156,7 @@ def cache_key(req: AnalysisRequest) -> AnalysisCacheKey:
         provider=llm.provider,
         quick_model=llm.quick_think_llm,
         deep_model=llm.deep_think_llm,
-        analysis_mode="balanced",
+        analysis_mode=ANALYSIS_MODE,
         analysis_depth=req.analysis_depth,
         time_horizon_months=req.time_horizon_months,
         max_debate_rounds=req.max_debate_rounds,

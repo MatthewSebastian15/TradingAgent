@@ -80,7 +80,10 @@ def _parse_indicator_csv(
     if not target_column:
         return [], f"Error: Indicator {indicator} does not expose a CSV value column."
     if target_column not in reader.fieldnames:
-        return [], f"Error: Column '{target_column}' not found for indicator '{indicator}'. Available columns: {reader.fieldnames}"
+        return (
+            [],
+            f"Error: Column '{target_column}' not found for indicator '{indicator}'. Available columns: {reader.fieldnames}",
+        )
 
     rows: list[tuple[datetime, str]] = []
     for row in reader:
@@ -129,7 +132,9 @@ def get_indicator(
 ) -> str:
     """Return Alpha Vantage technical indicator values over a time window."""
     if indicator not in SUPPORTED_INDICATORS:
-        raise ValueError(f"Indicator {indicator} is not supported. Please choose from: {list(SUPPORTED_INDICATORS.keys())}")
+        raise ValueError(
+            f"Indicator {indicator} is not supported. Please choose from: {list(SUPPORTED_INDICATORS.keys())}"
+        )
 
     if indicator == "vwma":
         return (
