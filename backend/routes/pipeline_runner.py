@@ -24,10 +24,64 @@ from routes.validation import AnalysisRequest
 
 logger = logging.getLogger(__name__)
 
-_EXECUTOR: concurrent.futures.ProcessPoolExecutor | None = None
-_EXECUTOR_LOCK = asyncio.Lock()
-_CANCEL_MANAGER: SyncManager | None = None
-_CANCEL_MANAGER_LOCK = asyncio.Lock()
+
+class PipelineProcessRuntime:
+    """Owns process-pool resources behind a resettable runtime object."""
+
+    def __init__(self) -> None:
+        self.executor: concurrent.futures.ProcessPoolExecutor | None = None
+        self.executor_lock = asyncio.Lock()
+        self.cancel_manager: SyncManager | None = None
+        self.cancel_manager_lock = asyncio.Lock()
+
+    async def get_executor(self) -> concurrent.futures.ProcessPoolExecutor:
+        """Create the process pool lazily after the event loop has started."""
+        if self.executor is None:
+            async with self.executor_lock:
+                if self.executor is None:
+                    executor_kwargs = {
+                        "max_workers": PROCESS_POOL_WORKERS,
+                        "mp_context": multiprocessing.get_context("spawn"),
+                        "max_tasks_per_child": PROCESS_POOL_MAX_TASKS_PER_CHILD,
+                    }
+                    self.executor = concurrent.futures.ProcessPoolExecutor(**executor_kwargs)
+        return self.executor
+
+    async def get_cancel_manager(self) -> SyncManager:
+        """Create a process-safe cancellation manager lazily."""
+        if self.cancel_manager is None:
+            async with self.cancel_manager_lock:
+                if self.cancel_manager is None:
+                    self.cancel_manager = multiprocessing.Manager()
+        return self.cancel_manager
+
+    async def new_cancel_event(self) -> Any:
+        manager = await self.get_cancel_manager()
+        return manager.Event()
+
+    async def shutdown(self) -> None:
+        """Stop worker processes during FastAPI shutdown."""
+        if self.executor is not None:
+            self.executor.shutdown(wait=False, cancel_futures=True)
+            self.executor = None
+        if self.cancel_manager is not None:
+            self.cancel_manager.shutdown()
+            self.cancel_manager = None
+
+
+_PIPELINE_RUNTIME = PipelineProcessRuntime()
+
+
+def get_pipeline_runtime() -> PipelineProcessRuntime:
+    return _PIPELINE_RUNTIME
+
+
+async def reset_pipeline_runtime_for_tests() -> PipelineProcessRuntime:
+    """Shutdown and replace process runtime state for deterministic tests."""
+    global _PIPELINE_RUNTIME
+    await _PIPELINE_RUNTIME.shutdown()
+    _PIPELINE_RUNTIME = PipelineProcessRuntime()
+    return _PIPELINE_RUNTIME
 
 
 def run_pipeline(
@@ -217,33 +271,15 @@ def preflight_market_data_worker(
 
 
 async def get_executor() -> concurrent.futures.ProcessPoolExecutor:
-    """Create the process pool lazily after the event loop has started."""
-    global _EXECUTOR
-    if _EXECUTOR is None:
-        async with _EXECUTOR_LOCK:
-            if _EXECUTOR is None:
-                executor_kwargs = {
-                    "max_workers": PROCESS_POOL_WORKERS,
-                    "mp_context": multiprocessing.get_context("spawn"),
-                    "max_tasks_per_child": PROCESS_POOL_MAX_TASKS_PER_CHILD,
-                }
-                _EXECUTOR = concurrent.futures.ProcessPoolExecutor(**executor_kwargs)
-    return _EXECUTOR
+    return await get_pipeline_runtime().get_executor()
 
 
 async def get_cancel_manager() -> SyncManager:
-    """Create a process-safe cancellation manager lazily."""
-    global _CANCEL_MANAGER
-    if _CANCEL_MANAGER is None:
-        async with _CANCEL_MANAGER_LOCK:
-            if _CANCEL_MANAGER is None:
-                _CANCEL_MANAGER = multiprocessing.Manager()
-    return _CANCEL_MANAGER
+    return await get_pipeline_runtime().get_cancel_manager()
 
 
 async def new_cancel_event() -> Any:
-    manager = await get_cancel_manager()
-    return manager.Event()
+    return await get_pipeline_runtime().new_cancel_event()
 
 
 def is_cancel_event_set(cancel_event: Any | None) -> bool:
@@ -304,14 +340,7 @@ async def watch_request_disconnect(
 
 
 async def shutdown_executor() -> None:
-    """Stop worker processes during FastAPI shutdown."""
-    global _EXECUTOR, _CANCEL_MANAGER
-    if _EXECUTOR is not None:
-        _EXECUTOR.shutdown(wait=False, cancel_futures=True)
-        _EXECUTOR = None
-    if _CANCEL_MANAGER is not None:
-        _CANCEL_MANAGER.shutdown()
-        _CANCEL_MANAGER = None
+    await get_pipeline_runtime().shutdown()
 
 
 async def run_pipeline_async(

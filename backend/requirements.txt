@@ -3,5 +3,3 @@ uvicorn[standard]==0.34.0
 python-dotenv==1.2.2
 sse-starlette==3.0.3
 python-multipart==0.0.28
-pytest==9.0.3
-httpx==0.28.1

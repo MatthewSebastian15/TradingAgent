@@ -150,11 +150,11 @@ function TickerTape() {
 function AgentRow({ agent, index, visible }) {
   return (
     <div
-      className={`flex items-center gap-4 p-4 border-b border-bloomberg-border hover:bg-bloomberg-surface transition-all duration-300 group cursor-default ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+      className={`flex items-center gap-3 p-3 border-b border-bloomberg-border hover:bg-bloomberg-surface transition-all duration-300 group cursor-default sm:gap-4 sm:p-4 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
       style={{ transitionDelay: `${index * 60}ms` }}
     >
       <div
-        className="w-12 font-mono text-xs font-bold tracking-wider flex-shrink-0"
+        className="w-10 font-mono text-xs font-bold tracking-wider flex-shrink-0 sm:w-12"
         style={{ color: agent.color }}
       >
         {agent.short}
@@ -261,10 +261,10 @@ export default function Dashboard() {
       <Navbar />
       <TickerTape />
 
-      <div className="max-w-5xl mx-auto px-6 py-10">
-        <div className="grid grid-cols-5 gap-6">
+      <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-10">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
           {/* ── Left: Hero + CTA ── */}
-          <div className="col-span-2 flex flex-col gap-5">
+          <div className="flex flex-col gap-5 lg:col-span-2">
             {/* System status */}
             <div className="border border-bloomberg-border bg-bloomberg-card p-4">
               <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-3">
@@ -274,12 +274,14 @@ export default function Dashboard() {
                 <div
                   key={label}
                   title={tone === 'bad' ? status.error || 'Backend status check failed' : undefined}
-                  className="flex items-center justify-between py-1.5 border-b border-bloomberg-border last:border-b-0"
+                  className="flex flex-col gap-1 py-1.5 border-b border-bloomberg-border last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <span className="font-mono text-xs text-bloomberg-muted tracking-wider">
                     {label}
                   </span>
-                  <span className={`font-mono text-xs tracking-wider ${statusToneClass[tone]}`}>
+                  <span
+                    className={`font-mono text-xs tracking-wider sm:text-right ${statusToneClass[tone]}`}
+                  >
                     {statusToneMarker[tone]}
                     {rowStatus}
                   </span>
@@ -292,7 +294,7 @@ export default function Dashboard() {
               <div className="font-mono text-xs text-bloomberg-orange tracking-widest uppercase mb-4">
                 Multi-Agent AI Research
               </div>
-              <div className="font-display text-4xl font-bold text-bloomberg-white leading-tight tracking-wide mb-3">
+              <div className="font-display text-3xl font-bold text-bloomberg-white leading-tight tracking-wide mb-3 sm:text-4xl">
                 9 AI AGENTS.
                 <br />
                 ONE DECISION.
@@ -309,7 +311,7 @@ export default function Dashboard() {
                 ▶ OPEN TERMINAL
               </button>
 
-              <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="grid grid-cols-1 gap-2 text-center sm:grid-cols-3">
                 {[
                   { val: '9', label: 'AGENTS' },
                   { val: '~3', label: 'MIN' },
@@ -341,17 +343,17 @@ export default function Dashboard() {
               ].map(({ label, val, color }) => (
                 <div
                   key={label}
-                  className="flex items-center justify-between py-1.5 border-b border-bloomberg-border last:border-b-0"
+                  className="flex flex-col gap-1 py-1.5 border-b border-bloomberg-border last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <span className="font-mono text-xs text-bloomberg-muted">{label}</span>
-                  <span className={`font-mono text-xs ${color} text-right`}>{val}</span>
+                  <span className={`font-mono text-xs ${color} sm:text-right`}>{val}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* ── Right: Agent pipeline ── */}
-          <div className="col-span-3">
+          <div className="lg:col-span-3">
             <div className="border border-bloomberg-border bg-bloomberg-card">
               <div className="px-4 py-2.5 border-b border-bloomberg-border bg-black flex items-center justify-between">
                 <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
@@ -392,7 +394,7 @@ export default function Dashboard() {
               <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-3">
                 Supported Markets
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {[
                   { market: 'Indonesia IDX', format: 'BBCA', ex: 'Bank Central Asia' },
                   { market: 'US Markets', format: 'NVDA', ex: 'NVIDIA Corporation' },
@@ -414,7 +416,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── Footer ── */}
-        <div className="border-t border-bloomberg-border mt-8 pt-4 flex items-center justify-between">
+        <div className="border-t border-bloomberg-border mt-8 pt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <span className="font-mono text-xs text-bloomberg-border tracking-wider">
             TRADINGAGENTS · POWERED BY TAURICRESEARCH ENGINE · LANGGRAPH ORCHESTRATION
           </span>

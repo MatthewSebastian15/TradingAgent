@@ -105,7 +105,7 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
   if (!history.length) return null;
 
   return (
-    <div className="border border-bloomberg-border bg-bloomberg-card">
+    <div className="border border-bloomberg-border bg-bloomberg-card min-w-0">
       <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center justify-between bg-black">
         <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
           RECENT ANALYSES
@@ -119,9 +119,9 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
             <button
               key={item.request_id || `${item.ticker || 'item'}-${item.trade_date || index}`}
               onClick={() => onSelect(item)}
-              className="w-full flex items-center justify-between px-4 py-3 border-b border-bloomberg-border last:border-b-0 hover:bg-bloomberg-surface transition-colors duration-150 text-left"
+              className="w-full flex flex-col gap-3 px-4 py-3 border-b border-bloomberg-border last:border-b-0 hover:bg-bloomberg-surface transition-colors duration-150 text-left sm:flex-row sm:items-center sm:justify-between"
             >
-              <div>
+              <div className="min-w-0">
                 <div className="font-mono text-sm font-semibold text-bloomberg-white">
                   {formatTickerLabel(item.ticker)}
                 </div>
@@ -137,7 +137,7 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 self-stretch justify-between sm:self-auto sm:justify-end">
                 {item.price_target && (
                   <span className="font-mono text-xs text-bloomberg-muted">
                     {formatPrice(item.price_target, item.ticker)}
@@ -292,8 +292,8 @@ export default function AnalysisWorkspace({
     <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
 
-      <div className="flex" style={{ minHeight: 'calc(100vh - 68px)' }}>
-        <div className="w-80 flex-shrink-0 border-r border-bloomberg-border flex flex-col">
+      <div className="flex flex-col lg:flex-row" style={{ minHeight: 'calc(100vh - 68px)' }}>
+        <div className="w-full flex-shrink-0 border-b border-bloomberg-border flex flex-col lg:w-80 lg:border-b-0 lg:border-r">
           <div className="flex-1">
             <div className="border-b border-bloomberg-border bg-bloomberg-card">
               <FormComponent
@@ -321,16 +321,16 @@ export default function AnalysisWorkspace({
           <StatusBar loading={loading} status={status} />
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-w-0 overflow-y-auto">
           {!loading && !result && (
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-              <div className="font-display text-6xl font-bold text-bloomberg-border tracking-widest mb-4">
+            <div className="flex flex-col items-center justify-center min-h-[480px] p-4 text-center sm:p-8 lg:h-full">
+              <div className="font-display text-4xl font-bold text-bloomberg-border tracking-widest mb-4 sm:text-6xl">
                 READY
               </div>
               <div className="font-mono text-sm text-bloomberg-muted tracking-wider max-w-xs">
                 {emptyDescription}
               </div>
-              <div className="mt-8 grid grid-cols-3 gap-4 w-full max-w-md">
+              <div className="mt-8 grid grid-cols-1 gap-3 w-full max-w-md sm:grid-cols-3 sm:gap-4">
                 {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
                   <div key={step} className="border border-bloomberg-border p-3 text-center">
                     <div className="font-mono text-2xl text-bloomberg-border mb-2">{index + 1}</div>
@@ -344,13 +344,13 @@ export default function AnalysisWorkspace({
           )}
 
           {loading && (
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <AgentLog status={status} agentProgress={agentProgress} />
             </div>
           )}
 
           {result && !loading && (
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <ResultCard result={result} />
             </div>
           )}
