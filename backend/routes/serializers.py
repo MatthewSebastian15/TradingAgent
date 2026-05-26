@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 SUMMARY_FIELDS = {
     "decision",
     "executive_summary",
+    "investment_thesis",
     "price_target",
     "time_horizon",
     "data_fetched_at",

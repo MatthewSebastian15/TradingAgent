@@ -48,7 +48,7 @@ describe('AnalysisWorkspace history storage', () => {
     expect(localStorage.getItem('analysis-history-test')).toBeNull();
   });
 
-  it('persists only summary-safe fields for non-debug responses', () => {
+  it('persists only display-safe fields for non-debug responses', () => {
     function FullForm({ onResult }) {
       return (
         <button
@@ -60,7 +60,7 @@ describe('AnalysisWorkspace history storage', () => {
               response_detail: 'full',
               decision: 'Buy',
               executive_summary: 'Summary',
-              investment_thesis: 'Long thesis should not be stored',
+              investment_thesis: 'Long thesis should be stored',
               raw_agent_state: { internal: true },
             })
           }
@@ -81,9 +81,9 @@ describe('AnalysisWorkspace history storage', () => {
       response_detail: 'full',
       decision: 'Buy',
       executive_summary: 'Summary',
+      investment_thesis: 'Long thesis should be stored',
       analysis_created_at: expect.any(String),
     });
-    expect(stored[0]).not.toHaveProperty('investment_thesis');
     expect(stored[0]).not.toHaveProperty('raw_agent_state');
   });
 

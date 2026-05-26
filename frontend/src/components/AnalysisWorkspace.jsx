@@ -16,6 +16,7 @@ const HISTORY_FIELDS = [
   'response_detail',
   'decision',
   'executive_summary',
+  'investment_thesis',
   'price_target',
   'time_horizon',
   'confidence_score',
