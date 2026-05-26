@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import csv
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
 from tradingagents.dataflows.config import set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
@@ -42,7 +43,7 @@ def _price_lookback_days(time_horizon_months: int) -> int:
     return _horizon_days(time_horizon_months) + 30
 
 
-def _check_cancel(cancel_check: Optional[Callable[[], bool]]) -> None:
+def _check_cancel(cancel_check: Callable[[], bool] | None) -> None:
     if cancel_check is not None and cancel_check():
         raise AnalysisCancelledError("Analysis was cancelled by the client.")
 
@@ -105,11 +106,7 @@ def _safe_multi_source_data_field(label: str, func: Callable[[], dict[str, Any]]
 
 def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
     """Parse the last Close value at or before trade_date from yfinance CSV."""
-    lines = [
-        line
-        for line in (price_data or "").splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
+    lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if not lines:
         return None
 
@@ -225,7 +222,7 @@ def _build_collection_tasks(
 def _run_collection_tasks(
     tasks: dict[str, Callable[[], DataField]],
     config: dict[str, Any],
-    cancel_check: Optional[Callable[[], bool]],
+    cancel_check: Callable[[], bool] | None,
 ) -> dict[str, DataField]:
     results: dict[str, DataField] = {}
     max_workers = min(max(1, int(config.get("data_collection_workers", 6))), len(tasks))
@@ -261,7 +258,9 @@ def _classify_price_data(
     if price.status == "missing":
         return "invalid_ticker" if fundamentals.status == "missing" else "missing"
     if trade_date not in price_dates:
-        warnings.append(f"No yfinance OHLCV row found exactly on {trade_date}; market may have been closed or ticker may not trade that day.")
+        warnings.append(
+            f"No yfinance OHLCV row found exactly on {trade_date}; market may have been closed or ticker may not trade that day."
+        )
         return "market_closed"
     if len(price_dates) < 10:
         warnings.append(f"Only {len(price_dates)} price rows found in the {price_lookback_days}-day yfinance window.")
@@ -326,7 +325,7 @@ def collect_market_data(
     ticker: str,
     trade_date: str,
     config: dict[str, Any],
-    cancel_check: Optional[Callable[[], bool]] = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> CollectedData:
     """Collect external data in parallel and classify yfinance data quality."""
     _check_cancel(cancel_check)
@@ -349,7 +348,17 @@ def collect_market_data(
     global_news = results["global_news"]
     insider_transactions = results["insider_transactions"]
     indicator_parts = [results[f"indicator:{indicator}"] for indicator in INDICATOR_NAMES]
-    all_fields = [price, fundamentals, balance_sheet, cashflow, income_statement, company_news, global_news, insider_transactions, *indicator_parts]
+    all_fields = [
+        price,
+        fundamentals,
+        balance_sheet,
+        cashflow,
+        income_statement,
+        company_news,
+        global_news,
+        insider_transactions,
+        *indicator_parts,
+    ]
     data_quality = _build_data_quality(
         trade_date,
         price,

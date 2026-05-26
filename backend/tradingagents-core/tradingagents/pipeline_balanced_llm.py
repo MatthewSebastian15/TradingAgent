@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -56,7 +56,7 @@ def _create_llms(config: dict[str, Any]) -> tuple[Any, Any]:
     return quick_client.get_llm(), deep_client.get_llm()
 
 
-def _coerce_structured(raw: Any, schema: type[T]) -> Optional[T]:
+def _coerce_structured(raw: Any, schema: type[T]) -> T | None:
     if raw is None:
         return None
     if isinstance(raw, schema):
@@ -94,10 +94,13 @@ def _invoke_once(
 
     structured = bind_structured(llm, schema, agent_name)
     try:
+
         def invoke_model() -> Any:
             if structured is not None:
                 return structured.invoke(prompt)
-            return llm.invoke(prompt + "\n\nReturn only valid JSON matching this schema: " + json.dumps(schema.model_json_schema()))
+            return llm.invoke(
+                prompt + "\n\nReturn only valid JSON matching this schema: " + json.dumps(schema.model_json_schema())
+            )
 
         result = invoke_model()
         _check_cancel(cancel_check)

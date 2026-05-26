@@ -3,7 +3,8 @@ import time
 
 import pytest
 
-from tradingagents.dataflows.config import get_config
+from tradingagents.dataflows.config import get_config, set_config
+from tradingagents.dataflows.stockstats_utils import yf_retry
 from tradingagents.pipeline_balanced import (
     AnalystReport,
     LLMBudget,
@@ -11,8 +12,6 @@ from tradingagents.pipeline_balanced import (
     _extract_last_close_price,
     _invoke_once,
 )
-from tradingagents.dataflows.config import set_config
-from tradingagents.dataflows.stockstats_utils import yf_retry
 from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout, get_timeout_stats
 
 
@@ -59,11 +58,14 @@ def test_call_with_timeout_returns_without_waiting_for_hung_call():
         )
 
     assert time.monotonic() - started_at < 1.8
-    assert call_with_timeout(
-        lambda: "fast",
-        timeout_seconds=1,
-        service_name="test-after-hung-call",
-    ) == "fast"
+    assert (
+        call_with_timeout(
+            lambda: "fast",
+            timeout_seconds=1,
+            service_name="test-after-hung-call",
+        )
+        == "fast"
+    )
 
 
 def test_call_with_timeout_releases_active_capacity_after_timeout():
@@ -101,11 +103,14 @@ def test_call_with_timeout_releases_active_capacity_after_timeout():
 def test_config_scope_propagates_into_timeout_worker():
     set_config({"timeout": 17})
 
-    assert call_with_timeout(
-        lambda: get_config()["timeout"],
-        timeout_seconds=1,
-        service_name="test-config-context",
-    ) == 17
+    assert (
+        call_with_timeout(
+            lambda: get_config()["timeout"],
+            timeout_seconds=1,
+            service_name="test-config-context",
+        )
+        == 17
+    )
 
 
 def test_circuit_breaker_allows_only_one_half_open_probe():
@@ -223,8 +228,14 @@ def test_router_falls_back_when_primary_returns_missing_text(monkeypatch):
         },
     )
     monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage")
-    monkeypatch.setitem(interface.VENDOR_METHODS["get_news"], "yfinance", lambda *args, **kwargs: "No news found for TEST")
-    monkeypatch.setitem(interface.VENDOR_METHODS["get_news"], "alpha_vantage", lambda *args, **kwargs: "## Alpha Vantage News\n\n### Useful headline")
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS["get_news"], "yfinance", lambda *args, **kwargs: "No news found for TEST"
+    )
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS["get_news"],
+        "alpha_vantage",
+        lambda *args, **kwargs: "## Alpha Vantage News\n\n### Useful headline",
+    )
     monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
     monkeypatch.setattr(interface, "call_with_retry", lambda func, **kwargs: func())
 

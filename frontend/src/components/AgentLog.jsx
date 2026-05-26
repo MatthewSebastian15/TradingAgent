@@ -1,40 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const PIPELINE = [
-  { id: 'data_collection', label: 'DATA COLLECTION', short: 'DATA', color: '#525252' },
-  { id: 'market_analyst', label: 'MARKET ANALYST', short: 'MKT', color: '#06b6d4' },
-  { id: 'news_analyst', label: 'NEWS + SOCIAL', short: 'NEWS', color: '#3b82f6' },
-  { id: 'fundamentals', label: 'FUNDAMENTALS ANALYST', short: 'FUND', color: '#8b5cf6' },
-  { id: 'bull_researcher', label: 'BULL RESEARCHER', short: 'BULL', color: '#22c55e' },
-  { id: 'bear_researcher', label: 'BEAR RESEARCHER', short: 'BEAR', color: '#ef4444' },
-  { id: 'research_manager', label: 'RESEARCH MANAGER', short: 'RSRCH', color: '#eab308' },
-  { id: 'trader', label: 'TRADER', short: 'TRD', color: '#06b6d4' },
-  { id: 'risk_analysts', label: 'RISK ANALYSTS', short: 'RISK', color: '#f97316' },
-  { id: 'portfolio_manager', label: 'PORTFOLIO MANAGER', short: 'PORT', color: '#a855f7' },
-];
-
-const PIPELINE_IDS = new Set(PIPELINE.map((step) => step.id));
-
-const AGENT_ALIASES = {
-  data: 'data_collection',
-  data_quality: 'data_quality',
-  data_fetch: 'data_collection',
-  data_collector: 'data_collection',
-  market: 'market_analyst',
-  market_analysis: 'market_analyst',
-  news: 'news_analyst',
-  news_researcher: 'news_analyst',
-  social_analyst: 'news_analyst',
-  fundamentals_analyst: 'fundamentals',
-  fundamental_analyst: 'fundamentals',
-  bull: 'bull_researcher',
-  bear: 'bear_researcher',
-  research: 'research_manager',
-  risk: 'risk_analysts',
-  risk_manager: 'risk_analysts',
-  risk_management: 'risk_analysts',
-  portfolio: 'portfolio_manager',
-};
+import { AGENT_ALIASES, PIPELINE, PIPELINE_IDS } from '../domain/analysisContract';
 
 function normalizeAgentId(id = '') {
   const normalized = String(id)

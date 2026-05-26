@@ -4,9 +4,10 @@ import json
 import logging
 import queue
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any
 
 from tradingagents.agents.schemas import (
     DebateArgument,
@@ -45,7 +46,13 @@ from tradingagents.pipeline_balanced_prompts import (
     risk_committee_prompt,
     trader_prompt,
 )
-from tradingagents.pipeline_balanced_types import AnalystReport, LLMBudget, ProgressCallback, ResearchPlanLite, RiskCommitteeReport
+from tradingagents.pipeline_balanced_types import (
+    AnalystReport,
+    LLMBudget,
+    ProgressCallback,
+    ResearchPlanLite,
+    RiskCommitteeReport,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +66,8 @@ def _build_initial_analyst_reports(
     data_quality_json: str,
     time_horizon_text: str,
     llm_budget: LLMBudget,
-    progress_callback: Optional[ProgressCallback],
-    cancel_check: Optional[Callable[[], bool]],
+    progress_callback: ProgressCallback | None,
+    cancel_check: Callable[[], bool] | None,
 ) -> tuple[AnalystReport, AnalystReport, AnalystReport]:
     analyst_event_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
     analyst_forwarder: threading.Thread | None = None
@@ -99,7 +106,10 @@ def _build_initial_analyst_reports(
                 quick_llm,
                 AnalystReport,
                 market_analyst_prompt(ticker, trade_date, data, data_quality_json, time_horizon_text),
-                _fallback_report("Market Analyst Report", f"Market data for {ticker} was collected, but the model did not return a complete market view."),
+                _fallback_report(
+                    "Market Analyst Report",
+                    f"Market data for {ticker} was collected, but the model did not return a complete market view.",
+                ),
                 "Market Analyst",
                 llm_budget,
                 cancel_check,
@@ -115,7 +125,10 @@ def _build_initial_analyst_reports(
                 quick_llm,
                 AnalystReport,
                 news_social_prompt(ticker, trade_date, data, data_quality_json, time_horizon_text),
-                _fallback_report("News and Social Sentiment Report", f"News and sentiment data for {ticker} was collected, but the model did not return a complete sentiment view."),
+                _fallback_report(
+                    "News and Social Sentiment Report",
+                    f"News and sentiment data for {ticker} was collected, but the model did not return a complete sentiment view.",
+                ),
                 "News + Social Analyst",
                 llm_budget,
                 cancel_check,
@@ -131,7 +144,10 @@ def _build_initial_analyst_reports(
                 quick_llm,
                 AnalystReport,
                 fundamentals_prompt(ticker, trade_date, data, data_quality_json, time_horizon_text),
-                _fallback_report("Fundamentals Analyst Report", f"Fundamental data for {ticker} was collected, but the model did not return a complete fundamental view."),
+                _fallback_report(
+                    "Fundamentals Analyst Report",
+                    f"Fundamental data for {ticker} was collected, but the model did not return a complete fundamental view.",
+                ),
                 "Fundamentals Analyst",
                 llm_budget,
                 cancel_check,
@@ -156,8 +172,8 @@ def run_balanced_pipeline(
     ticker: str,
     trade_date: str,
     config: dict[str, Any],
-    progress_callback: Optional[ProgressCallback] = None,
-    cancel_check: Optional[Callable[[], bool]] = None,
+    progress_callback: ProgressCallback | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     """Run the balanced 9-call pipeline and return classic-compatible state."""
     set_config(config)
@@ -204,7 +220,13 @@ def run_balanced_pipeline(
             evidence=["Market report completed.", "News/social report completed.", "Fundamentals report completed."],
             counterargument="Fast mode has less debate depth than balanced/deep mode.",
             risk_flags=["Debate skipped to reduce LLM calls."],
-            confidence=max(0.25, min(0.75, (market_report.confidence + news_social_report.confidence + fundamentals_report.confidence) / 3)),
+            confidence=max(
+                0.25,
+                min(
+                    0.75,
+                    (market_report.confidence + news_social_report.confidence + fundamentals_report.confidence) / 3,
+                ),
+            ),
             consensus_signal=False,
         )
         bear = DebateArgument(
@@ -212,7 +234,9 @@ def run_balanced_pipeline(
             thesis=f"Fast mode keeps downside assumptions conservative for {ticker} because no separate bear debate was run.",
             evidence=["Risk is inferred from analyst report risk sections.", "Data quality warnings are preserved."],
             counterargument="Balanced/deep mode should be used before high-conviction trades.",
-            risk_flags=list(dict.fromkeys(market_report.risks + news_social_report.risks + fundamentals_report.risks))[:6],
+            risk_flags=list(dict.fromkeys(market_report.risks + news_social_report.risks + fundamentals_report.risks))[
+                :6
+            ],
             confidence=0.45,
             consensus_signal=False,
         )
@@ -236,7 +260,10 @@ def run_balanced_pipeline(
                 DebateArgument(
                     stance="bull",
                     thesis=f"The bullish case for {ticker} is not strong enough to rate confidently because model output failed.",
-                    evidence=["Market, news, and fundamental reports were collected.", "A complete bullish argument was not generated."],
+                    evidence=[
+                        "Market, news, and fundamental reports were collected.",
+                        "A complete bullish argument was not generated.",
+                    ],
                     counterargument="The absence of a reliable bullish argument weakens any aggressive buy decision.",
                     risk_flags=["Model output fallback used."],
                     confidence=0.35,
@@ -268,7 +295,10 @@ def run_balanced_pipeline(
                 DebateArgument(
                     stance="bear",
                     thesis=f"The bearish case for {ticker} is incomplete because model output failed, so risk should be treated cautiously.",
-                    evidence=["Market, news, and fundamental reports were collected.", "A complete bearish argument was not generated."],
+                    evidence=[
+                        "Market, news, and fundamental reports were collected.",
+                        "A complete bearish argument was not generated.",
+                    ],
                     counterargument="Without a reliable bear case, the final decision should avoid overconfidence.",
                     risk_flags=["Model output fallback used."],
                     confidence=0.35,
@@ -346,13 +376,25 @@ def run_balanced_pipeline(
     trader_plan = render_trader_proposal(trader_proposal)
 
     if analysis_depth == "fast":
-        _emit_progress(progress_callback, "risk_analysts", "completed", "Risk committee skipped in fast mode; conservative risk fallback applied.")
+        _emit_progress(
+            progress_callback,
+            "risk_analysts",
+            "completed",
+            "Risk committee skipped in fast mode; conservative risk fallback applied.",
+        )
         risk_report = RiskCommitteeReport(
             overall_risk_level="Medium" if data.data_quality.price_data == "ok" else "High",
             aggressive_view="Fast mode skips a separate aggressive risk debate to save LLM calls.",
             neutral_view="Use the trader proposal with conservative sizing and verify manually before increasing exposure.",
             conservative_view="Prefer Hold or small allocation until balanced/deep analysis confirms the setup.",
-            key_risks=list(dict.fromkeys((data.data_quality.warnings or []) + market_report.risks + news_social_report.risks + fundamentals_report.risks))[:8],
+            key_risks=list(
+                dict.fromkeys(
+                    (data.data_quality.warnings or [])
+                    + market_report.risks
+                    + news_social_report.risks
+                    + fundamentals_report.risks
+                )
+            )[:8],
             mitigation_plan="Keep sizing small, require a clear stop-loss, and rerun balanced/deep mode before a high-conviction trade.",
             confidence=0.45,
         )
@@ -381,7 +423,10 @@ def run_balanced_pipeline(
                     aggressive_view="The opportunity cannot be assessed aggressively because the risk model call failed.",
                     neutral_view="Hold is preferred until the analysis is verified.",
                     conservative_view="Avoid new exposure until reliable downside controls are available.",
-                    key_risks=["Risk committee model output fallback used.", "Data and model output should be reviewed before trading."],
+                    key_risks=[
+                        "Risk committee model output fallback used.",
+                        "Data and model output should be reviewed before trading.",
+                    ],
                     mitigation_plan="Use no new allocation or a very small test position only after manual review.",
                     confidence=0.35,
                 ),

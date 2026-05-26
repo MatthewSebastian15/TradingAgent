@@ -1,75 +1,16 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { buildApiUrl, buildAuthHeaders, buildHeaders, readHttpError } from '../utils/api';
+import React, { useState } from 'react';
 
-const DEFAULT_DEBATE_ROUNDS = 3;
-
-const MARKETS = {
-  US: {
-    label: 'US',
-    flag: '🇺🇸',
-    defaultTicker: 'NVDA',
-    tickers: ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'META'],
-  },
-  ID: {
-    label: 'INDONESIA',
-    flag: '🇮🇩',
-    defaultTicker: 'BBCA',
-    tickers: ['BBCA', 'BBRI', 'TLKM', 'BMRI', 'ASII', 'GOTO', 'UNVR'],
-  },
-  GLOBAL: {
-    label: 'GLOBAL',
-    flag: '🌐',
-    defaultTicker: '700.HK',
-    tickers: ['700.HK', '9984.T', 'SAP.DE', 'RIO.L', 'TSM'],
-  },
-};
-
-const DEPTH_OPTIONS = [
-  { value: 'fast', label: 'FAST', runtime: 'LOWER GEMINI COST' },
-  { value: 'balanced', label: 'BALANCED', runtime: 'DEFAULT 9-CALL PIPELINE' },
-  { value: 'deep', label: 'DEEP', runtime: 'MORE RETRIES / MORE PATIENCE' },
-];
-
-const HORIZON_OPTIONS = [
-  { value: 1, label: '1 MONTH' },
-  { value: 2, label: '2 MONTHS' },
-  { value: 3, label: '3 MONTHS' },
-];
-
-function today() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function normalizeTickerInput(value, marketId) {
-  const upperValue = value.toUpperCase();
-  if (marketId === 'ID') {
-    return upperValue
-      .replace(/\.JK$/, '')
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 10);
-  }
-  return upperValue.replace(/[^A-Z0-9.-]/g, '').slice(0, 12);
-}
-
-function parseSseBlock(block) {
-  const ev = { type: 'message', data: [] };
-  for (const rawLine of block.split(/\r?\n/)) {
-    const line = rawLine.trimEnd();
-    if (!line || line.startsWith(':')) continue;
-    const idx = line.indexOf(':');
-    const field = idx === -1 ? line : line.slice(0, idx);
-    const value = idx === -1 ? '' : line.slice(idx + 1).replace(/^ /, '');
-    if (field === 'event') ev.type = value;
-    if (field === 'data') ev.data.push(value);
-  }
-  if (!ev.data.length) return null;
-  try {
-    return { type: ev.type, payload: JSON.parse(ev.data.join('\n')) };
-  } catch {
-    return null;
-  }
-}
+import {
+  buildAnalysisPayload,
+  DEFAULT_DEBATE_ROUNDS,
+  DEPTH_OPTIONS,
+  HORIZON_OPTIONS,
+  MARKETS,
+  normalizeTickerInput,
+  today,
+  validateAnalysisInput,
+} from '../domain/analysisContract';
+import { useAnalysisJob } from '../hooks/useAnalysisJob';
 
 function MarketTab({ id, market, active, disabled, onClick }) {
   return (
@@ -124,77 +65,18 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
   const [analysisDepth, setDepth] = useState('balanced');
   const [responseDetail, setDetail] = useState('full');
   const [error, setError] = useState('');
-  const [running, setRunning] = useState(false);
-  const abortRef = useRef(null);
-  const jobIdRef = useRef(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      abortRef.current?.abort();
-      cancelCurrentJob({ keepalive: true });
-    };
-  }, []);
-
-  function abortError() {
-    const err = new Error('Analysis aborted.');
-    err.name = 'AbortError';
-    return err;
-  }
-
-  function ensureMounted() {
-    if (!mountedRef.current) throw abortError();
-  }
+  const { running, startAnalysis, stopAnalysis } = useAnalysisJob({
+    onResult,
+    onLoading,
+    onStatus,
+    onAgentProgress,
+  });
 
   function handleMarketSwitch(marketId) {
     if (running) return;
     setActiveMarket(marketId);
     setTicker(MARKETS[marketId].defaultTicker);
     setError('');
-  }
-
-  function validate() {
-    const t = ticker.trim().toUpperCase();
-    if (activeMarket === 'ID' && !/^[A-Z0-9]{1,10}$/.test(t)) {
-      return 'Invalid IDX ticker. Enter code only, for example BBCA or UNVR.';
-    }
-    if (!/^[A-Z0-9]{1,10}([.-][A-Z0-9]{1,5})?$/.test(t)) {
-      return 'Invalid ticker. Examples: BBCA, NVDA, 700.HK, SAP.DE';
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date must be YYYY-MM-DD';
-    if (![1, 2, 3].includes(Number(timeHorizonMonths))) return 'Invalid analysis horizon.';
-    if (!['fast', 'balanced', 'deep'].includes(analysisDepth)) return 'Invalid analysis depth.';
-    if (!['summary', 'full', 'debug'].includes(responseDetail)) return 'Invalid response detail.';
-    return '';
-  }
-
-  function cancelCurrentJob({ keepalive = false } = {}) {
-    const jobId = jobIdRef.current;
-    if (!jobId) return Promise.resolve();
-
-    const controller = keepalive ? null : new AbortController();
-    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 3000) : null;
-
-    return fetch(buildApiUrl(`/analysis/jobs/${jobId}`), {
-      method: 'DELETE',
-      headers: buildAuthHeaders(),
-      signal: controller?.signal,
-      keepalive,
-    })
-      .catch(() => {
-        // Abort below still closes the client stream; backend cancellation is best-effort.
-      })
-      .finally(() => {
-        if (timeoutId) window.clearTimeout(timeoutId);
-      });
-  }
-
-  function stopAnalysis() {
-    onStatus('Cancelling analysis...');
-    abortRef.current?.abort();
-    cancelCurrentJob();
   }
 
   async function handleSubmit(e) {
@@ -205,7 +87,14 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
       return;
     }
 
-    const validationError = validate();
+    const validationError = validateAnalysisInput({
+      activeMarket,
+      ticker,
+      date,
+      timeHorizonMonths,
+      analysisDepth,
+      responseDetail,
+    });
     if (validationError) {
       setError(validationError);
       onResult({ error: validationError });
@@ -213,144 +102,17 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
     }
 
     setError('');
-    setRunning(true);
-    onLoading(true);
-    onStatus('Creating analysis job...');
-    onResult(null);
-    if (onAgentProgress) onAgentProgress(null);
-
-    try {
-      await runJobStream();
-    } catch (ex) {
-      if (!mountedRef.current) return;
-      if (ex.name === 'AbortError') {
-        onResult({ error: 'Analysis cancelled.' });
-      } else {
-        onResult({ error: ex.message || 'Analysis failed.' });
-      }
-    } finally {
-      if (mountedRef.current) {
-        setRunning(false);
-        onLoading(false);
-        onStatus('');
-        abortRef.current = null;
-        jobIdRef.current = null;
-      }
-    }
-  }
-
-  async function runJobStream() {
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    const payload = {
-      ticker: ticker.trim().toUpperCase(),
-      market: activeMarket,
-      trade_date: date,
-      time_horizon_months: Number(timeHorizonMonths),
-      max_debate_rounds: Number(rounds),
-      analysis_depth: analysisDepth,
-      response_detail: responseDetail,
-    };
-
-    const createRes = await fetch(buildApiUrl('/analysis/jobs'), {
-      method: 'POST',
-      headers: buildHeaders(),
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-
-    if (!createRes.ok) throw new Error(await readHttpError(createRes));
-    ensureMounted();
-    const job = await createRes.json();
-    ensureMounted();
-    jobIdRef.current = job.job_id;
-    onStatus(`Job queued: ${job.job_id}`);
-
-    const streamRes = await fetch(buildApiUrl(`/analysis/jobs/${job.job_id}/events`), {
-      method: 'GET',
-      headers: {
-        ...buildAuthHeaders(),
-        Accept: 'text/event-stream',
-        'Cache-Control': 'no-cache',
-      },
-      signal: controller.signal,
-    });
-
-    if (!streamRes.ok) throw new Error(await readHttpError(streamRes));
-    if (!streamRes.body) throw new Error('SSE stream not supported by browser.');
-    ensureMounted();
-
-    const reader = streamRes.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-
-    const handleStreamEvent = (event) => {
-      if (event.type === 'job') {
-        onStatus(`Job status: ${(event.payload.status || 'queued').toUpperCase()}`);
-        if (event.payload.result) {
-          onResult(event.payload.result);
-          return true;
-        }
-        if (event.payload.error) {
-          const errorPayload =
-            event.payload.error.error || event.payload.error.message || event.payload.error;
-          const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
-          const rid = event.payload.error.request_id ? ` [${event.payload.error.request_id}]` : '';
-          onResult({ error: `${message || 'Analysis failed.'}${rid}` });
-          return true;
-        }
-      }
-      if (event.type === 'heartbeat') {
-        onStatus(`Pipeline heartbeat: ${(event.payload.status || 'running').toUpperCase()}`);
-      }
-      if (event.type === 'progress') {
-        onStatus(event.payload.status_message || 'Running...');
-        if (onAgentProgress) onAgentProgress(event.payload);
-      }
-      if (event.type === 'result') {
-        onResult(event.payload);
-        return true;
-      }
-      if (event.type === 'error') {
-        const errorPayload = event.payload.error || event.payload.message || 'Error';
-        const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
-        const rid = event.payload.request_id ? ` [${event.payload.request_id}]` : '';
-        onResult({ error: `${message || 'Analysis failed.'}${rid}` });
-        return true;
-      }
-      return false;
-    };
-
-    while (true) {
-      ensureMounted();
-      const { done, value } = await reader.read();
-      if (done) {
-        buf += decoder.decode();
-        break;
-      }
-      ensureMounted();
-      buf += decoder.decode(value, { stream: true });
-      const blocks = buf.split(/\r?\n\r?\n/);
-      buf = blocks.pop() || '';
-
-      for (const block of blocks) {
-        const event = parseSseBlock(block);
-        if (!event) continue;
-        ensureMounted();
-
-        if (handleStreamEvent(event)) {
-          return;
-        }
-      }
-    }
-
-    ensureMounted();
-    const trailingEvent = parseSseBlock(buf);
-    if (trailingEvent && handleStreamEvent(trailingEvent)) {
-      return;
-    }
-    throw new Error('SSE stream ended before result.');
+    await startAnalysis(
+      buildAnalysisPayload({
+        activeMarket,
+        ticker,
+        date,
+        timeHorizonMonths,
+        rounds,
+        analysisDepth,
+        responseDetail,
+      })
+    );
   }
 
   const selectedDepth = DEPTH_OPTIONS.find((item) => item.value === analysisDepth);

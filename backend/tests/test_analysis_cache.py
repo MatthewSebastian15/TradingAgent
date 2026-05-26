@@ -116,9 +116,7 @@ def test_job_terminal_transition_does_not_overwrite_cancelled_state():
 
 def test_job_store_loads_persisted_completed_jobs_by_request_id(tmp_path):
     async def main():
-        persistent_cache = SQLiteTTLCache(
-            str(tmp_path / "analysis_jobs.sqlite3"), ttl_seconds=60, max_entries=20
-        )
+        persistent_cache = SQLiteTTLCache(str(tmp_path / "analysis_jobs.sqlite3"), ttl_seconds=60, max_entries=20)
         first_store = AnalysisJobStore(
             ttl_seconds=60,
             max_entries=10,

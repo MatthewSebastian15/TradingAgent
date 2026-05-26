@@ -17,7 +17,6 @@ extend-exclude = [
     ".pytest_cache",
     ".ruff_cache",
     "__pycache__",
-    "tradingagents-core",
 ]
 
 [tool.ruff.lint]

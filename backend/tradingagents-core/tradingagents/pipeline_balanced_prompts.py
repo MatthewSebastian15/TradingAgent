@@ -173,7 +173,7 @@ def bear_prompt(
     {fundamentals_md}
 
     BULL CASE TO CHALLENGE:
-    {render_debate_argument(bull, 'Bull Researcher')}
+    {render_debate_argument(bull, "Bull Researcher")}
     {get_language_instruction()}"""
 
 

@@ -372,9 +372,7 @@ class AnalysisJobStore:
             return None
         return job
 
-    async def get_by_request_id(
-        self, request_id: str, *, owner_id: str | None = None
-    ) -> AnalysisJob | None:
+    async def get_by_request_id(self, request_id: str, *, owner_id: str | None = None) -> AnalysisJob | None:
         async with self._lock:
             job = next((item for item in self._jobs.values() if item.request_id == request_id), None)
         if job is None:
@@ -446,9 +444,7 @@ class AnalysisJobStore:
 
         snapshot = job.to_snapshot()
         await asyncio.to_thread(self.persistent_cache.set, self._persistent_key("job_id", job.id), snapshot)
-        await asyncio.to_thread(
-            self.persistent_cache.set, self._persistent_key("request_id", job.request_id), snapshot
-        )
+        await asyncio.to_thread(self.persistent_cache.set, self._persistent_key("request_id", job.request_id), snapshot)
 
     async def _load_persisted_job(self, key_type: str, value: str) -> AnalysisJob | None:
         if self.persistent_cache is None:

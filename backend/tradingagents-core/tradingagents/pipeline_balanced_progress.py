@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Optional, TypeVar
+from typing import TypeVar
 
 from tradingagents.dataflows.data_quality import DataQualityReport
 from tradingagents.pipeline_balanced_data import _check_cancel
@@ -27,7 +28,7 @@ AGENT_LABELS = {
 }
 
 
-def _emit_progress(callback: Optional[ProgressCallback], agent_id: str, status: str, message: str) -> None:
+def _emit_progress(callback: ProgressCallback | None, agent_id: str, status: str, message: str) -> None:
     if callback is None:
         return
     try:
@@ -44,13 +45,10 @@ def _emit_progress(callback: Optional[ProgressCallback], agent_id: str, status: 
         logger.debug("Progress callback failed for %s: %s", agent_id, exc)
 
 
-def _emit_data_quality(callback: Optional[ProgressCallback], report: DataQualityReport) -> None:
+def _emit_data_quality(callback: ProgressCallback | None, report: DataQualityReport) -> None:
     if callback is None:
         return
-    message = (
-        f"Data quality: price={report.price_data}, "
-        f"fundamentals={report.fundamentals}, news={report.news}."
-    )
+    message = f"Data quality: price={report.price_data}, fundamentals={report.fundamentals}, news={report.news}."
     if report.warnings:
         message = f"{message} Warning: {report.warnings[0]}"
     try:
@@ -69,7 +67,7 @@ def _emit_data_quality(callback: Optional[ProgressCallback], report: DataQuality
 
 
 def _run_tracked(
-    callback: Optional[ProgressCallback],
+    callback: ProgressCallback | None,
     agent_id: str,
     message: str,
     func: Callable[[], T],

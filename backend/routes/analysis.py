@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 
 from analysis_cache import AnalysisJobLimitError
-from config import DEFAULT_ANALYSIS_DEPTH, llm
+from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
 from errors import NotFoundError, RateLimitError, sanitize_message
 from logging_config import request_id_ctx
 from rate_limiter import limit_request, request_policy, stream_policy
@@ -392,7 +392,7 @@ async def _api_status_payload():
         "provider": llm.provider,
         "quick_model": llm.quick_think_llm,
         "deep_model": llm.deep_think_llm,
-        "analysis_mode": "balanced",
+        "analysis_mode": ANALYSIS_MODE,
         "default_analysis_depth": DEFAULT_ANALYSIS_DEPTH,
         "limits": {
             "pipeline_timeout_seconds": pipeline_runner.PIPELINE_TIMEOUT_SECONDS,

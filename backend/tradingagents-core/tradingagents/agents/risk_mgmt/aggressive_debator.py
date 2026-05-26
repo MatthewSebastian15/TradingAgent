@@ -9,7 +9,7 @@ from tradingagents.agents.utils.structured import bind_structured, invoke_typed_
 def _fallback_argument(side: str, label: str, confidence: float = 0.35) -> DebateArgument:
     return DebateArgument(
         stance=side,
-        thesis=f"Aggressive Analyst could not produce a fully validated risk argument, so confidence is low.",
+        thesis="Aggressive Analyst could not produce a fully validated risk argument, so confidence is low.",
         evidence=[
             "Structured output validation failed or the model returned incomplete reasoning.",
             "The final risk decision should rely more heavily on validated reports and portfolio manager synthesis.",

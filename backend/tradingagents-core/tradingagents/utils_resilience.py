@@ -18,8 +18,9 @@ import random
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass
-from typing import Any, Callable, Hashable, Optional, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -51,7 +52,9 @@ class CircuitBreaker:
             elapsed = time.monotonic() - self._state.opened_at
             if elapsed >= self.recovery_seconds:
                 if self._state.half_open_probe_in_flight:
-                    raise CircuitOpenError(f"Circuit breaker is half-open for {self.name}; recovery probe already in progress.")
+                    raise CircuitOpenError(
+                        f"Circuit breaker is half-open for {self.name}; recovery probe already in progress."
+                    )
                 logger.warning("Circuit half-open for %s after %.1fs", self.name, elapsed)
                 self._state.half_open_probe_in_flight = True
                 return
@@ -77,7 +80,9 @@ class CircuitBreaker:
             if self._state.failures >= self.failure_threshold:
                 self._state.opened_at = time.monotonic()
                 self._state.half_open_probe_in_flight = False
-                logger.error("Circuit opened for %s after %d failures. Last error: %s", self.name, self._state.failures, exc)
+                logger.error(
+                    "Circuit opened for %s after %d failures. Last error: %s", self.name, self._state.failures, exc
+                )
 
 
 _CIRCUITS: dict[str, CircuitBreaker] = {}
@@ -202,9 +207,7 @@ def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_na
     process instead of accumulating in the API process.
     """
     if not _TIMEOUT_ACTIVE_CAPACITY.acquire(blocking=False):
-        raise TimeoutError(
-            f"{service_name} timed out before starting because active timed-call capacity is saturated."
-        )
+        raise TimeoutError(f"{service_name} timed out before starting because active timed-call capacity is saturated.")
     if not _TIMEOUT_ABANDONED_CAPACITY.acquire(blocking=False):
         _TIMEOUT_ACTIVE_CAPACITY.release()
         raise TimeoutError(
@@ -392,6 +395,7 @@ def ttl_cache(maxsize: int = 256, ttl_seconds: int = 900):
             value = func(*args, **kwargs)
             cache.set(key, value)
             return value
+
         wrapper.cache_clear_expired = cache.clear_expired  # type: ignore[attr-defined]
         return wrapper
 

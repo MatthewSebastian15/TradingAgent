@@ -16,13 +16,12 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompt_values import ChatPromptValue
 
+from tradingagents.llm_clients.model_catalog import DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL
 from tradingagents.llm_clients.openai_client import (
     DeepSeekChatOpenAI,
     NormalizedChatOpenAI,
     _input_to_messages,
 )
-from tradingagents.llm_clients.model_catalog import DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL
-
 
 # ---------------------------------------------------------------------------
 # _input_to_messages — the helper that handles list / ChatPromptValue / other
@@ -165,6 +164,5 @@ class TestBaseClassIsolation:
         """The general-purpose NormalizedChatOpenAI must not carry
         DeepSeek-specific behaviour. Only the subclass does."""
         assert not hasattr(NormalizedChatOpenAI, "_get_request_payload") or (
-            NormalizedChatOpenAI._get_request_payload
-            is NormalizedChatOpenAI.__bases__[0]._get_request_payload
+            NormalizedChatOpenAI._get_request_payload is NormalizedChatOpenAI.__bases__[0]._get_request_payload
         )

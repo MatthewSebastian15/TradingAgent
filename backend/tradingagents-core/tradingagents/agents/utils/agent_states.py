@@ -1,6 +1,7 @@
-from typing import Annotated, Optional, Any
-from typing_extensions import TypedDict
+from typing import Annotated, Any
+
 from langgraph.graph import MessagesState
+from typing_extensions import TypedDict
 
 
 class InvestDebateState(TypedDict):
@@ -52,4 +53,4 @@ class AgentState(MessagesState):
     risk_debate_state: Annotated[RiskDebateState, "Current state of risk debate"]
     final_trade_decision: Annotated[str, "Final decision made by the Portfolio Manager"]
     past_context: Annotated[str, "Memory log context injected at run start"]
-    portfolio_decision: Annotated[Optional[Any], "Typed PortfolioDecision from the Portfolio Manager"]
+    portfolio_decision: Annotated[Any | None, "Typed PortfolioDecision from the Portfolio Manager"]

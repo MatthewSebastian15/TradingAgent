@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -26,16 +25,16 @@ class DataQualityReport(BaseModel):
 class DataField:
     value: str
     status: str = "ok"
-    warning: Optional[str] = None
+    warning: str | None = None
 
     @classmethod
-    def from_text(cls, value: str) -> "DataField":
+    def from_text(cls, value: str) -> DataField:
         status = "missing" if looks_missing(value) else "ok"
         warning = value.splitlines()[0] if status == "missing" and value else None
         return cls(value=value, status=status, warning=warning)
 
     @classmethod
-    def unavailable(cls, label: str, exc: Exception) -> "DataField":
+    def unavailable(cls, label: str, exc: Exception) -> DataField:
         message = f"{label} unavailable: {exc}"
         return cls(value=message, status="missing", warning=message)
 

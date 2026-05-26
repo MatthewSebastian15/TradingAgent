@@ -29,7 +29,6 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import List, Optional
 
 from tradingagents.agents.utils.rating import parse_rating
 
@@ -45,7 +44,7 @@ class TradingMemoryLog:
 
     def __init__(self, config: dict = None):
         cfg = config or {}
-        self._db_path: Optional[Path] = None
+        self._db_path: Path | None = None
         path = cfg.get("memory_log_path")
         if path:
             # Accept legacy .md path — change the extension to .db automatically
@@ -149,24 +148,20 @@ class TradingMemoryLog:
     # Read path
     # ------------------------------------------------------------------
 
-    def load_entries(self) -> List[dict]:
+    def load_entries(self) -> list[dict]:
         """Return all rows as a list of dicts."""
         if self._db_path is None:
             return []
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM decisions ORDER BY id ASC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM decisions ORDER BY id ASC").fetchall()
         return [self._row_to_entry(r) for r in rows]
 
-    def get_pending_entries(self) -> List[dict]:
+    def get_pending_entries(self) -> list[dict]:
         """Return rows where pending = 1."""
         if self._db_path is None:
             return []
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM decisions WHERE pending = 1 ORDER BY id ASC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM decisions WHERE pending = 1 ORDER BY id ASC").fetchall()
         return [self._row_to_entry(r) for r in rows]
 
     def get_past_context(self, ticker: str, n_same: int = 5, n_cross: int = 3) -> str:
@@ -245,7 +240,7 @@ class TradingMemoryLog:
             conn.commit()
         self._apply_rotation()
 
-    def batch_update_with_outcomes(self, updates: List[dict]) -> None:
+    def batch_update_with_outcomes(self, updates: list[dict]) -> None:
         """Apply multiple outcome updates in a single transaction.
 
         Each element of updates must have keys: ticker, trade_date,
@@ -294,9 +289,7 @@ class TradingMemoryLog:
                 )
 
             if self._max_entries and self._max_entries > 0:
-                resolved_count = conn.execute(
-                    "SELECT COUNT(*) FROM decisions WHERE pending = 0"
-                ).fetchone()[0]
+                resolved_count = conn.execute("SELECT COUNT(*) FROM decisions WHERE pending = 0").fetchone()[0]
 
                 if resolved_count > self._max_entries:
                     to_drop = resolved_count - self._max_entries
@@ -319,7 +312,7 @@ class TradingMemoryLog:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _format_return(value: Optional[float]) -> Optional[str]:
+    def _format_return(value: float | None) -> str | None:
         return f"{value:+.1%}" if value is not None else None
 
     def _row_to_entry(self, row) -> dict:
@@ -328,21 +321,14 @@ class TradingMemoryLog:
         entry["date"] = entry.get("trade_date")
         entry["raw"] = self._format_return(entry.get("raw_return"))
         entry["alpha"] = self._format_return(entry.get("alpha_return"))
-        entry["holding"] = (
-            f"{entry['holding_days']}d"
-            if entry.get("holding_days") is not None
-            else None
-        )
+        entry["holding"] = f"{entry['holding_days']}d" if entry.get("holding_days") is not None else None
         return entry
 
     def _format_full(self, e: dict) -> str:
         raw = f"{e['raw_return']:+.1%}" if e["raw_return"] is not None else "n/a"
         alpha = f"{e['alpha_return']:+.1%}" if e["alpha_return"] is not None else "n/a"
         holding = f"{e['holding_days']}d" if e["holding_days"] is not None else "n/a"
-        tag = (
-            f"[{e['trade_date']} | {e['ticker']} | {e['rating']} "
-            f"| {raw} | {alpha} | {holding}]"
-        )
+        tag = f"[{e['trade_date']} | {e['ticker']} | {e['rating']} | {raw} | {alpha} | {holding}]"
         parts = [tag, f"DECISION:\n{e['decision']}"]
         if e.get("reflection"):
             parts.append(f"REFLECTION:\n{e['reflection']}")

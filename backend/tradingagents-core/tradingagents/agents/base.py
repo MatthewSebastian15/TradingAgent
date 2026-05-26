@@ -9,8 +9,9 @@ agent modules and graph wiring.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Protocol, TypeAlias
+from typing import Any, Protocol, TypeAlias
 
 AgentStateLike: TypeAlias = Mapping[str, Any]
 AgentOutput: TypeAlias = dict[str, Any]
