@@ -95,11 +95,42 @@ def _get_current_price_fields(final_state: dict[str, Any], pd_obj: object | None
     }
 
 
+def _coerce_data_quality(value: Any) -> dict[str, Any]:
+    if hasattr(value, "model_dump"):
+        try:
+            value = value.model_dump()
+        except Exception:
+            value = None
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _complete_risk_engine_data_quality(
+    value: Any,
+    *,
+    current_price: Any,
+    trade_plan_valid: bool,
+    decision_adjusted: bool,
+    volatility_score: Any = None,
+    llm_output_fallback: str = "ok",
+) -> dict[str, Any]:
+    """Return data_quality with the risk-engine keys required by the API contract."""
+    merged = _coerce_data_quality(value)
+    if "price_data" not in merged:
+        merged["price_data"] = "ok" if current_price is not None else "missing"
+    if "trade_levels" not in merged:
+        merged["trade_levels"] = "ok" if trade_plan_valid else "invalid"
+    if "llm_output" not in merged:
+        merged["llm_output"] = "downgraded" if decision_adjusted else llm_output_fallback
+    if "volatility_data" not in merged:
+        merged["volatility_data"] = "ok" if volatility_score is not None else "missing"
+    return merged
+
+
 def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
     current_price_fields = _get_current_price_fields(final_state, pd_obj)
     return {
         "llm_decision": None,
-        "final_decision": None,
+        "final_decision": "Hold",
         "decision_adjusted": False,
         "decision_adjusted_reason": None,
         "trade_plan_valid": False,
@@ -107,7 +138,7 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
         "position_quantity": getattr(pd_obj, "position_quantity", None) if pd_obj is not None else None,
         "average_entry_price": getattr(pd_obj, "average_entry_price", None) if pd_obj is not None else None,
         "position_action": getattr(pd_obj, "position_action", None) if pd_obj is not None else None,
-        "new_entry_action": getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else None,
+        "new_entry_action": getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else "Wait and monitor",
         **current_price_fields,
         "risk_per_share": None,
         "reward_per_share": None,
@@ -115,7 +146,7 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
         "max_drawdown_min_pct": None,
         "max_drawdown_max_pct": None,
         "volatility_score": None,
-        "position_size_hint": None,
+        "position_size_hint": "No new position suggested.",
         "validation_warnings": [],
     }
 
@@ -138,6 +169,7 @@ def parse_final_result(
             full_decision = full_decision or ""
             pd_obj = None
     data_quality = final_state.get("data_quality")
+    current_price_fields_for_common = _get_current_price_fields(final_state, pd_obj)
     configured_time_horizon = final_state.get("time_horizon")
     common = {
         "analysis_depth": final_state.get("analysis_depth", DEFAULT_ANALYSIS_DEPTH),
@@ -147,18 +179,24 @@ def parse_final_result(
         "llm_calls_used": final_state.get("balanced_gemini_calls_used"),
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
-        "data_quality": data_quality
-        or {
-            "price_data": "missing",
-            "fundamentals": "missing",
-            "news": "missing",
-            "warnings": ["Pipeline did not return data quality metadata."],
-        },
+        "data_quality": _complete_risk_engine_data_quality(
+            data_quality
+            or {
+                "fundamentals": "missing",
+                "news": "missing",
+                "warnings": ["Pipeline did not return data quality metadata."],
+            },
+            current_price=current_price_fields_for_common["current_price"],
+            trade_plan_valid=False,
+            decision_adjusted=False,
+            volatility_score=None,
+            llm_output_fallback="fallback",
+        ),
     }
 
     if pd_obj is None:
         return {
-            "decision": None,
+            "decision": "Hold",
             "full_decision": full_decision,
             "executive_summary": None,
             "investment_thesis": None,
@@ -171,9 +209,9 @@ def parse_final_result(
             "take_profit": None,
             "risk_reward_ratio": None,
             "max_drawdown_estimate": None,
-            "volatility_level": None,
+            "volatility_level": "Medium",
             "position_sizing_reason": None,
-            "rebalancing_action": None,
+            "rebalancing_action": "Wait and monitor",
             "key_catalysts": [],
             "invalidation_conditions": [],
             **_empty_trade_contract(final_state),
@@ -184,7 +222,14 @@ def parse_final_result(
     fallback_rating = _enum_value(rating)
     final_decision = getattr(pd_obj, "final_decision", None) or getattr(pd_obj, "decision", None) or fallback_rating
     current_price_fields = _get_current_price_fields(final_state, pd_obj)
-    pd_data_quality = getattr(pd_obj, "data_quality", None) or common["data_quality"]
+    pd_data_quality = _complete_risk_engine_data_quality(
+        getattr(pd_obj, "data_quality", None) or common["data_quality"],
+        current_price=current_price_fields["current_price"],
+        trade_plan_valid=bool(getattr(pd_obj, "trade_plan_valid", False)),
+        decision_adjusted=bool(getattr(pd_obj, "decision_adjusted", False)),
+        volatility_score=getattr(pd_obj, "volatility_score", None),
+        llm_output_fallback="ok",
+    )
 
     return {
         "decision": final_decision,
