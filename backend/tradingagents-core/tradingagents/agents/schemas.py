@@ -339,9 +339,9 @@ class PortfolioDecision(BaseModel):
         default=None,
         description="Estimated maximum drawdown or adverse move for the trade.",
     )
-    volatility_level: VolatilityLevel | None = Field(
+    volatility_level: VolatilityLevel | str | None = Field(
         default=None,
-        description="Expected volatility level for the recommendation.",
+        description="Expected volatility level for the recommendation. Backend normalizes this to Low, Medium, High, or Very High.",
     )
     position_sizing_reason: str | None = Field(
         default=None,
@@ -370,6 +370,39 @@ class PortfolioDecision(BaseModel):
         description="Optional recommended holding period, e.g. '3-6 months'.",
     )
 
+    decision: str | None = Field(
+        default=None,
+        description="Backward-compatible final decision alias after backend validation.",
+    )
+    current_price: float | None = Field(default=None)
+    current_price_as_of: str | None = Field(default=None)
+    current_price_source: str | None = Field(default=None)
+
+    llm_decision: str | None = Field(default=None)
+    final_decision: str | None = Field(default=None)
+    decision_adjusted: bool = Field(default=False)
+    decision_adjusted_reason: str | None = Field(default=None)
+
+    trade_plan_valid: bool = Field(default=False)
+    has_existing_position: bool = Field(default=False)
+    position_quantity: float | None = Field(default=None)
+    average_entry_price: float | None = Field(default=None)
+    position_action: str | None = Field(default=None)
+    new_entry_action: str | None = Field(default=None)
+
+    risk_reward_display: str | None = Field(default=None)
+    risk_per_share: float | None = Field(default=None)
+    reward_per_share: float | None = Field(default=None)
+
+    volatility_score: float | None = Field(default=None)
+    position_size_hint: str | None = Field(default=None)
+
+    max_drawdown_min_pct: float | None = Field(default=None)
+    max_drawdown_max_pct: float | None = Field(default=None)
+
+    data_quality: dict[str, str] = Field(default_factory=dict)
+    validation_warnings: list[str] = Field(default_factory=list)
+
 
 def render_pm_decision(decision: PortfolioDecision) -> str:
     parts = [
@@ -388,9 +421,16 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         ("Entry Price", decision.entry_price),
         ("Stop Loss", decision.stop_loss),
         ("Take Profit", decision.take_profit),
-        ("Risk/Reward Ratio", decision.risk_reward_ratio),
+        ("Risk/Reward Ratio", decision.risk_reward_display or decision.risk_reward_ratio),
         ("Max Drawdown Estimate", decision.max_drawdown_estimate),
-        ("Volatility Level", decision.volatility_level.value if decision.volatility_level else None),
+        (
+            "Volatility Level",
+            decision.volatility_level.value
+            if isinstance(decision.volatility_level, VolatilityLevel)
+            else decision.volatility_level,
+        ),
+        ("Volatility Score", decision.volatility_score),
+        ("Position Size Hint", decision.position_size_hint),
         ("Position Sizing Reason", decision.position_sizing_reason),
         ("Rebalancing Action", decision.rebalancing_action),
     ]

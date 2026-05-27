@@ -12,6 +12,19 @@ logger = logging.getLogger(__name__)
 
 SUMMARY_FIELDS = {
     "decision",
+    "llm_decision",
+    "final_decision",
+    "decision_adjusted",
+    "decision_adjusted_reason",
+    "trade_plan_valid",
+    "has_existing_position",
+    "position_quantity",
+    "average_entry_price",
+    "position_action",
+    "new_entry_action",
+    "current_price",
+    "current_price_as_of",
+    "current_price_source",
     "executive_summary",
     "investment_thesis",
     "price_target",
@@ -22,13 +35,21 @@ SUMMARY_FIELDS = {
     "entry_price",
     "stop_loss",
     "take_profit",
+    "risk_per_share",
+    "reward_per_share",
     "risk_reward_ratio",
+    "risk_reward_display",
     "max_drawdown_estimate",
+    "max_drawdown_min_pct",
+    "max_drawdown_max_pct",
     "volatility_level",
+    "volatility_score",
     "rebalancing_action",
+    "position_size_hint",
     "key_catalysts",
     "invalidation_conditions",
     "data_quality",
+    "validation_warnings",
     "analysis_created_at",
     "analysis_depth",
     "time_horizon_months",
@@ -50,6 +71,53 @@ AGENT_SEQUENCE = [
     ("risk_analysts", "Risk Analysts", "Running or skipping risk debate..."),
     ("portfolio_manager", "Portfolio Manager", "Synthesizing all inputs into the final decision..."),
 ]
+
+
+def _enum_value(value: Any) -> Any:
+    return getattr(value, "value", value)
+
+
+def _get_current_price_fields(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
+    current_price = final_state.get("last_close_price")
+    if current_price is None and pd_obj is not None:
+        current_price = getattr(pd_obj, "current_price", None)
+    current_price_as_of = final_state.get("last_close_price_as_of")
+    if current_price_as_of is None and pd_obj is not None:
+        current_price_as_of = getattr(pd_obj, "current_price_as_of", None)
+    current_price_as_of = current_price_as_of or final_state.get("trade_date")
+    current_price_source = "yfinance:last_close" if current_price is not None else None
+    if pd_obj is not None:
+        current_price_source = getattr(pd_obj, "current_price_source", None) or current_price_source
+    return {
+        "current_price": current_price,
+        "current_price_as_of": current_price_as_of,
+        "current_price_source": current_price_source,
+    }
+
+
+def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
+    current_price_fields = _get_current_price_fields(final_state, pd_obj)
+    return {
+        "llm_decision": None,
+        "final_decision": None,
+        "decision_adjusted": False,
+        "decision_adjusted_reason": None,
+        "trade_plan_valid": False,
+        "has_existing_position": bool(getattr(pd_obj, "has_existing_position", False)) if pd_obj is not None else False,
+        "position_quantity": getattr(pd_obj, "position_quantity", None) if pd_obj is not None else None,
+        "average_entry_price": getattr(pd_obj, "average_entry_price", None) if pd_obj is not None else None,
+        "position_action": getattr(pd_obj, "position_action", None) if pd_obj is not None else None,
+        "new_entry_action": getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else None,
+        **current_price_fields,
+        "risk_per_share": None,
+        "reward_per_share": None,
+        "risk_reward_display": None,
+        "max_drawdown_min_pct": None,
+        "max_drawdown_max_pct": None,
+        "volatility_score": None,
+        "position_size_hint": None,
+        "validation_warnings": [],
+    }
 
 
 def parse_final_result(
@@ -108,24 +176,29 @@ def parse_final_result(
             "rebalancing_action": None,
             "key_catalysts": [],
             "invalidation_conditions": [],
+            **_empty_trade_contract(final_state),
             **common,
         }
 
-    rating_map = {}
-    if portfolio_rating is not None:
-        rating_map = {
-            portfolio_rating.BUY: "Buy",
-            portfolio_rating.OVERWEIGHT: "Buy",
-            portfolio_rating.HOLD: "Hold",
-            portfolio_rating.UNDERWEIGHT: "Sell",
-            portfolio_rating.SELL: "Sell",
-        }
-
     rating = getattr(pd_obj, "rating", None)
-    fallback_rating = getattr(rating, "value", rating)
+    fallback_rating = _enum_value(rating)
+    final_decision = getattr(pd_obj, "final_decision", None) or getattr(pd_obj, "decision", None) or fallback_rating
+    current_price_fields = _get_current_price_fields(final_state, pd_obj)
+    pd_data_quality = getattr(pd_obj, "data_quality", None) or common["data_quality"]
 
     return {
-        "decision": rating_map.get(rating, fallback_rating),
+        "decision": final_decision,
+        "llm_decision": getattr(pd_obj, "llm_decision", None) or fallback_rating,
+        "final_decision": final_decision,
+        "decision_adjusted": bool(getattr(pd_obj, "decision_adjusted", False)),
+        "decision_adjusted_reason": getattr(pd_obj, "decision_adjusted_reason", None),
+        "trade_plan_valid": bool(getattr(pd_obj, "trade_plan_valid", False)),
+        "has_existing_position": bool(getattr(pd_obj, "has_existing_position", False)),
+        "position_quantity": getattr(pd_obj, "position_quantity", None),
+        "average_entry_price": getattr(pd_obj, "average_entry_price", None),
+        "position_action": getattr(pd_obj, "position_action", None),
+        "new_entry_action": getattr(pd_obj, "new_entry_action", None),
+        **current_price_fields,
         "full_decision": full_decision,
         "executive_summary": getattr(pd_obj, "executive_summary", None),
         "investment_thesis": getattr(pd_obj, "investment_thesis", None),
@@ -136,16 +209,23 @@ def parse_final_result(
         "entry_price": getattr(pd_obj, "entry_price", None),
         "stop_loss": getattr(pd_obj, "stop_loss", None),
         "take_profit": getattr(pd_obj, "take_profit", None),
+        "risk_per_share": getattr(pd_obj, "risk_per_share", None),
+        "reward_per_share": getattr(pd_obj, "reward_per_share", None),
         "risk_reward_ratio": getattr(pd_obj, "risk_reward_ratio", None),
+        "risk_reward_display": getattr(pd_obj, "risk_reward_display", None),
         "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
-        "volatility_level": getattr(
-            getattr(pd_obj, "volatility_level", None), "value", getattr(pd_obj, "volatility_level", None)
-        ),
+        "max_drawdown_min_pct": getattr(pd_obj, "max_drawdown_min_pct", None),
+        "max_drawdown_max_pct": getattr(pd_obj, "max_drawdown_max_pct", None),
+        "volatility_level": _enum_value(getattr(pd_obj, "volatility_level", None)),
+        "volatility_score": getattr(pd_obj, "volatility_score", None),
         "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
         "rebalancing_action": getattr(pd_obj, "rebalancing_action", None),
+        "position_size_hint": getattr(pd_obj, "position_size_hint", None),
         "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
         "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
-        **common,
+        "data_quality": pd_data_quality,
+        "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
+        **{key: value for key, value in common.items() if key != "data_quality"},
     }
 
 
@@ -161,6 +241,9 @@ def cache_key(req: AnalysisRequest) -> AnalysisCacheKey:
         time_horizon_months=req.time_horizon_months,
         max_debate_rounds=req.max_debate_rounds,
         response_detail=req.response_detail,
+        has_existing_position=bool(req.has_existing_position) if req.has_existing_position is not None else False,
+        position_quantity=req.position_quantity,
+        average_entry_price=req.average_entry_price,
     )
 
 
@@ -196,6 +279,9 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
         "analysis_created_at": datetime.utcnow().isoformat(),
         "analysis_depth": req.analysis_depth,
         "response_detail": req.response_detail,
+        "has_existing_position": bool(req.has_existing_position) if req.has_existing_position is not None else False,
+        "position_quantity": req.position_quantity,
+        "average_entry_price": req.average_entry_price,
         "agents_used": [agent[1] for agent in AGENT_SEQUENCE],
         **result_fields,
         "time_horizon_months": req.time_horizon_months,

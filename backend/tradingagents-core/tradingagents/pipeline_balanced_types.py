@@ -57,6 +57,7 @@ class CollectedData:
     insider_transactions: str
     data_quality: DataQualityReport
     last_close_price: float | None
+    last_close_price_as_of: str | None = None
 
 
 class AnalysisCancelledError(RuntimeError):

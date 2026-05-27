@@ -117,6 +117,9 @@ export function buildAnalysisPayload({
   rounds,
   analysisDepth,
   responseDetail,
+  hasExistingPosition = false,
+  positionQuantity = null,
+  averageEntryPrice = null,
 }) {
   return {
     ticker: ticker.trim().toUpperCase(),
@@ -126,5 +129,8 @@ export function buildAnalysisPayload({
     max_debate_rounds: Number(rounds),
     analysis_depth: analysisDepth,
     response_detail: responseDetail,
+    has_existing_position: Boolean(hasExistingPosition),
+    position_quantity: positionQuantity === '' || positionQuantity === null ? null : Number(positionQuantity),
+    average_entry_price: averageEntryPrice === '' || averageEntryPrice === null ? null : Number(averageEntryPrice),
   };
 }
