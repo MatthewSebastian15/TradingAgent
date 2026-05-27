@@ -3,6 +3,42 @@ import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/fo
 
 const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
 
+const WARNING_LABELS = {
+  CURRENT_PRICE_MISSING: 'Current price missing',
+  LLM_CURRENT_PRICE_IGNORED: 'LLM current price ignored',
+  RR_CLAMPED_TO_3: 'Risk/reward clamped to 1:3',
+  RR_CLAMPED_TO_5: 'Risk/reward clamped to 1:5',
+  TAKE_PROFIT_RECOMPUTED: 'Take profit recomputed',
+  STOP_LOSS_RECOMPUTED: 'Stop loss recomputed',
+  PRICE_TARGET_RECOMPUTED: 'Price target recomputed',
+  INVALID_VOLATILITY_FIXED: 'Invalid volatility fixed',
+  INVALID_REBALANCING_FIXED: 'Invalid rebalancing fixed',
+  DECISION_DOWNGRADED_TO_HOLD: 'Decision downgraded to Hold',
+  TRADE_PLAN_INVALID: 'Trade plan invalid',
+  PRICE_DATA_INVALID: 'Price data invalid',
+  INDONESIA_TICK_SIZE_ROUNDED: 'Indonesia tick size rounded',
+  HOLD_TRADE_LEVELS_HIDDEN: 'Hold trade levels hidden',
+};
+
+function formatWarningCode(warning) {
+  if (!hasDisplayValue(warning)) return null;
+  const code = String(warning).trim();
+  return WARNING_LABELS[code] ? `${code} - ${WARNING_LABELS[code]}` : code;
+}
+
+function getTradePlanStatus(isActionable, tradePlanValid) {
+  if (tradePlanValid) return { label: 'TRADE PLAN', status: 'valid', tone: 'ok' };
+  if (isActionable) return { label: 'TRADE PLAN', status: 'not valid', tone: 'warning' };
+  return { label: 'TRADE PLAN', status: 'not actionable', tone: 'neutral' };
+}
+
+function getStatusClasses(tone) {
+  if (tone === 'ok') return 'border-bloomberg-green bg-bloomberg-green-dim text-bloomberg-green';
+  if (tone === 'neutral')
+    return 'border-bloomberg-border bg-bloomberg-surface text-bloomberg-muted';
+  return 'border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber';
+}
+
 function parseBold(text) {
   if (!text) return null;
   return text.split(/\*\*(.*?)\*\*/g).map((p, i) =>
@@ -132,9 +168,19 @@ function NoticeBox({ title, children, tone = 'amber' }) {
   );
 }
 
-function DataQuality({ dq, validationWarnings = [] }) {
+function DataQuality({
+  dq,
+  validationWarnings = [],
+  tradePlanValid = false,
+  isActionable = false,
+}) {
   const warnings = Array.isArray(validationWarnings) ? validationWarnings : [];
-  if (!dq && warnings.length === 0) return null;
+  const readableWarnings = warnings.map(formatWarningCode).filter(Boolean);
+  const tradePlanStatus = getTradePlanStatus(isActionable, tradePlanValid);
+  const hasDataQuality = Boolean(dq);
+
+  if (!hasDataQuality && readableWarnings.length === 0 && !tradePlanStatus) return null;
+
   const items = [
     { label: 'PRICE', status: dq?.price_data },
     { label: 'TRADE LEVELS', status: dq?.trade_levels },
@@ -147,22 +193,25 @@ function DataQuality({ dq, validationWarnings = [] }) {
   return (
     <div>
       <SectionHeader label="DATA QUALITY" />
-      {items.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {items.map(({ label, status }) => (
-            <span
-              key={label}
-              className={`font-mono text-xs px-2.5 py-1 border tracking-wider ${
-                status === 'ok'
-                  ? 'border-bloomberg-green bg-bloomberg-green-dim text-bloomberg-green'
-                  : 'border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber'
-              }`}
-            >
-              {label}: {status || 'N/A'}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <span
+          className={`font-mono text-xs px-2.5 py-1 border tracking-wider ${getStatusClasses(
+            tradePlanStatus.tone
+          )}`}
+        >
+          {tradePlanStatus.label}: {tradePlanStatus.status}
+        </span>
+        {items.map(({ label, status }) => (
+          <span
+            key={label}
+            className={`font-mono text-xs px-2.5 py-1 border tracking-wider ${getStatusClasses(
+              status === 'ok' ? 'ok' : 'warning'
+            )}`}
+          >
+            {label}: {status || 'N/A'}
+          </span>
+        ))}
+      </div>
       {dq?.warnings?.length > 0 && (
         <ul className="mt-2 list-disc list-inside font-mono text-xs text-bloomberg-muted leading-relaxed">
           {dq.warnings.slice(0, 5).map((w, i) => (
@@ -170,16 +219,21 @@ function DataQuality({ dq, validationWarnings = [] }) {
           ))}
         </ul>
       )}
-      {warnings.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {warnings.map((warning) => (
-            <span
-              key={warning}
-              className="font-mono text-xs px-2.5 py-1 border border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber tracking-wider"
-            >
-              {warning}
-            </span>
-          ))}
+      {readableWarnings.length > 0 && (
+        <div className="mt-3">
+          <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-1.5">
+            Validation Warnings
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {readableWarnings.map((warning) => (
+              <span
+                key={warning}
+                className="font-mono text-xs px-2.5 py-1 border border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber tracking-wider"
+              >
+                {warning}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -475,7 +529,12 @@ export default function ResultCard({ result }) {
       {/* Data quality */}
       {(dataQuality || validationWarnings.length > 0) && (
         <div className="px-4 py-4 border-b border-bloomberg-border">
-          <DataQuality dq={dataQuality} validationWarnings={validationWarnings} />
+          <DataQuality
+            dq={dataQuality}
+            validationWarnings={validationWarnings}
+            tradePlanValid={tradePlanValid}
+            isActionable={isActionable}
+          />
         </div>
       )}
 
