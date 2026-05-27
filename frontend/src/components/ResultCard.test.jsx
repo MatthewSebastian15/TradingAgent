@@ -18,13 +18,13 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getAllByText('ENTRY').length).toBeGreaterThan(0);
     expect(screen.getAllByText('STOP LOSS').length).toBeGreaterThan(0);
     expect(screen.getAllByText('TAKE PROFIT').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('RISK / SHARE').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('REWARD / SHARE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('RISK PER SHARE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('REWARD PER SHARE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('MAX DRAWDOWN').length).toBeGreaterThan(0);
     expect(screen.getAllByText('VOLATILITY').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('VOL SCORE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('VOLATILITY SCORE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('REBALANCING').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('POSITION SIZE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('POSITION SIZE HINT').length).toBeGreaterThan(0);
   });
 
   it('renders Sell action plan when trade_plan_valid is true', () => {
@@ -46,16 +46,16 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('Invalid risk reward structure')).toBeTruthy();
     expect(screen.getAllByText('CURRENT PRICE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('VOLATILITY').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('VOL SCORE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('VOLATILITY SCORE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('REBALANCING').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('POSITION SIZE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('POSITION SIZE HINT').length).toBeGreaterThan(0);
 
     expect(screen.queryByText('ENTRY')).toBeNull();
     expect(screen.queryByText('STOP LOSS')).toBeNull();
     expect(screen.queryByText('TAKE PROFIT')).toBeNull();
     expect(screen.queryByText('R/R RATIO')).toBeNull();
-    expect(screen.queryByText('RISK / SHARE')).toBeNull();
-    expect(screen.queryByText('REWARD / SHARE')).toBeNull();
+    expect(screen.queryByText('RISK PER SHARE')).toBeNull();
+    expect(screen.queryByText('REWARD PER SHARE')).toBeNull();
     expect(screen.queryByText('MAX DRAWDOWN')).toBeNull();
   });
 

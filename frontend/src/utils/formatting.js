@@ -1,5 +1,6 @@
 export function formatPrice(price, ticker = '') {
   if (price === null || price === undefined || price === '') return null;
+  if (typeof price === 'number' && !Number.isFinite(price)) return null;
 
   const value = typeof price === 'number' ? price.toLocaleString() : String(price);
   const normalizedTicker = ticker.toUpperCase();

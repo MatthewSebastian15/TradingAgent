@@ -149,8 +149,8 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           time_horizon_months: Number(timeHorizonMonths),
           max_debate_rounds: rounds,
           has_existing_position: hasExistingPosition,
-          position_quantity: positionQuantity || null,
-          average_entry_price: averageEntryPrice || null,
+          position_quantity: hasExistingPosition ? positionQuantity || null : null,
+          average_entry_price: hasExistingPosition ? averageEntryPrice || null : null,
         });
         onResult(mockResult);
         setRunning(false);
@@ -293,7 +293,6 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           </div>
         </div>
 
-
         {/* Existing position */}
         <div className="border border-bloomberg-border bg-bloomberg-surface px-3 py-3">
           <label className="flex items-start gap-3 cursor-pointer">
@@ -316,7 +315,10 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           {hasExistingPosition && (
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label htmlFor="mock-position-quantity" className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+                <label
+                  htmlFor="mock-position-quantity"
+                  className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2"
+                >
                   POSITION QTY
                 </label>
                 <input
@@ -338,7 +340,10 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
                 />
               </div>
               <div>
-                <label htmlFor="mock-average-entry-price" className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+                <label
+                  htmlFor="mock-average-entry-price"
+                  className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2"
+                >
                   AVG ENTRY
                 </label>
                 <input

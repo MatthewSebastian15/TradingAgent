@@ -109,6 +109,12 @@ export function validateAnalysisInput({
   return '';
 }
 
+function optionalNumber(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 export function buildAnalysisPayload({
   activeMarket,
   ticker,
@@ -121,6 +127,8 @@ export function buildAnalysisPayload({
   positionQuantity = null,
   averageEntryPrice = null,
 }) {
+  const hasPosition = Boolean(hasExistingPosition);
+
   return {
     ticker: ticker.trim().toUpperCase(),
     market: activeMarket,
@@ -129,8 +137,8 @@ export function buildAnalysisPayload({
     max_debate_rounds: Number(rounds),
     analysis_depth: analysisDepth,
     response_detail: responseDetail,
-    has_existing_position: Boolean(hasExistingPosition),
-    position_quantity: positionQuantity === '' || positionQuantity === null ? null : Number(positionQuantity),
-    average_entry_price: averageEntryPrice === '' || averageEntryPrice === null ? null : Number(averageEntryPrice),
+    has_existing_position: hasPosition,
+    position_quantity: hasPosition ? optionalNumber(positionQuantity) : null,
+    average_entry_price: hasPosition ? optionalNumber(averageEntryPrice) : null,
   };
 }
