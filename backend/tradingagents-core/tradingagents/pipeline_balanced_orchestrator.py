@@ -53,6 +53,7 @@ from tradingagents.pipeline_balanced_types import (
     ResearchPlanLite,
     RiskCommitteeReport,
 )
+from tradingagents.trade_levels import normalize_trade_levels
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,9 @@ def run_balanced_pipeline(
     config: dict[str, Any],
     progress_callback: ProgressCallback | None = None,
     cancel_check: Callable[[], bool] | None = None,
+    has_existing_position: bool = False,
+    position_quantity: float | None = None,
+    average_entry_price: float | None = None,
 ) -> dict[str, Any]:
     """Run the balanced 9-call pipeline and return classic-compatible state."""
     set_config(config)
@@ -489,11 +493,41 @@ def run_balanced_pipeline(
                 invalidation_conditions=["Clean data and clean model output are not available."],
                 price_target=None,
                 time_horizon=time_horizon_text,
+                current_price=data.last_close_price,
+                current_price_as_of=data.last_close_price_as_of or trade_date,
+                current_price_source="yfinance:last_close" if data.last_close_price is not None else None,
+                llm_decision="Hold",
+                final_decision="Hold",
+                decision="Hold",
+                trade_plan_valid=False,
+                has_existing_position=bool(has_existing_position),
+                position_quantity=position_quantity,
+                average_entry_price=average_entry_price,
+                data_quality={
+                    "price_data": "ok" if data.last_close_price is not None else "missing",
+                    "trade_levels": "invalid",
+                    "llm_output": "fallback",
+                    "volatility_data": "missing",
+                },
+                validation_warnings=[],
             ),
             "Portfolio Manager",
             llm_budget,
             cancel_check,
         ),
+    )
+
+    portfolio_decision = normalize_trade_levels(
+        portfolio_decision,
+        current_price=data.last_close_price,
+        ticker=ticker,
+        current_price_as_of=data.last_close_price_as_of or trade_date,
+        current_price_source="yfinance:last_close" if data.last_close_price is not None else None,
+        has_existing_position=bool(has_existing_position),
+        position_quantity=position_quantity,
+        average_entry_price=average_entry_price,
+        price_data=data.price_data,
+        data_quality=data.data_quality.model_dump(),
     )
 
     budget_snapshot = llm_budget.snapshot()
@@ -528,6 +562,7 @@ def run_balanced_pipeline(
         "data_quality": data.data_quality.model_dump(),
         "data_fetched_at": data_fetched_at,
         "last_close_price": data.last_close_price,
+        "last_close_price_as_of": data.last_close_price_as_of or trade_date,
         "analysis_depth": analysis_depth,
         "balanced_gemini_request_budget": llm_budget.limit,
         "balanced_gemini_calls_used": budget_snapshot["used"],

@@ -32,6 +32,22 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
         invalidation_conditions=["Breaks support"],
         price_target=116.0,
         time_horizon="3 months",
+        current_price=100.0,
+        current_price_as_of="2026-05-18",
+        current_price_source="yfinance:last_close",
+        llm_decision="Buy",
+        final_decision="Buy",
+        decision="Buy",
+        trade_plan_valid=True,
+        risk_per_share=8.0,
+        reward_per_share=24.0,
+        risk_reward_display="1:3",
+        volatility_score=44.0,
+        position_size_hint="Use standard risk management and avoid oversized position.",
+        max_drawdown_min_pct=8.0,
+        max_drawdown_max_pct=12.0,
+        data_quality={"price_data": "ok", "trade_levels": "ok", "llm_output": "ok", "volatility_data": "ok"},
+        validation_warnings=[],
     )
 
     parsed = _parse_final_result(
@@ -42,6 +58,9 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
             "budget_exhausted": True,
             "agents_skipped": ["Portfolio Manager"],
             "data_fetched_at": "2026-05-20T10:11:12.123456",
+            "last_close_price": 100.0,
+            "last_close_price_as_of": "2026-05-18",
+            "trade_date": "2026-05-18",
         },
     )
 
@@ -50,6 +69,19 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     assert parsed["data_fetched_at"] == "2026-05-20T10:11:12.123456"
     assert parsed["budget_exhausted"] is True
     assert parsed["agents_skipped"] == ["Portfolio Manager"]
+    assert parsed["current_price"] == 100.0
+    assert parsed["current_price_as_of"] == "2026-05-18"
+    assert parsed["current_price_source"] == "yfinance:last_close"
+    assert parsed["llm_decision"] == "Buy"
+    assert parsed["final_decision"] == "Buy"
+    assert parsed["trade_plan_valid"] is True
+    assert parsed["risk_reward_display"] == "1:3"
+    assert parsed["risk_per_share"] == 8.0
+    assert parsed["reward_per_share"] == 24.0
+    assert parsed["volatility_score"] == 44.0
+    assert parsed["position_size_hint"] == "Use standard risk management and avoid oversized position."
+    assert parsed["data_quality"]["price_data"] == "ok"
+    assert parsed["validation_warnings"] == []
 
 
 def test_parse_final_result_does_not_render_full_decision_from_portfolio_object():
@@ -113,3 +145,18 @@ def test_summary_shape_keeps_investment_thesis():
     assert shaped["investment_thesis"] == "Thesis should remain visible in summary mode."
     assert "full_decision" not in shaped
     assert "raw_agent_state" not in shaped
+
+
+def test_parse_final_result_fallback_contract_is_non_actionable():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    parsed = _parse_final_result("", None, PortfolioRating, {"trade_date": "2026-05-18"})
+
+    assert parsed["current_price"] is None
+    assert parsed["current_price_as_of"] == "2026-05-18"
+    assert parsed["trade_plan_valid"] is False
+    assert parsed["final_decision"] is None
+    assert parsed["decision_adjusted"] is False
+    assert parsed["validation_warnings"] == []

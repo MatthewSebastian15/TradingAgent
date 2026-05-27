@@ -114,6 +114,9 @@ async def run_stream_pipeline(
         request_id,
         progress_queue,
         worker_cancel_event,
+        req.has_existing_position if req.has_existing_position is not None else False,
+        req.position_quantity,
+        req.average_entry_price,
     )
 
     async def pump_progress() -> None:

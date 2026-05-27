@@ -33,6 +33,9 @@ class AnalysisRequest(BaseModel):
     analysis_depth: AnalysisDepth = Field(default=DEFAULT_ANALYSIS_DEPTH)
     response_detail: ResponseDetail = Field(default="full")
     market: str | None = Field(default=None, max_length=16)
+    has_existing_position: bool | None = Field(default=False)
+    position_quantity: float | None = Field(default=None, ge=0)
+    average_entry_price: float | None = Field(default=None, ge=0)
 
 
 def is_non_id_exchange_ticker(ticker: str) -> bool:
@@ -85,6 +88,9 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     analysis_depth = str(req.analysis_depth or DEFAULT_ANALYSIS_DEPTH).strip().lower()
     response_detail = str(req.response_detail or "full").strip().lower()
     time_horizon_months = req.time_horizon_months
+    has_existing_position = bool(req.has_existing_position) if req.has_existing_position is not None else False
+    position_quantity = req.position_quantity
+    average_entry_price = req.average_entry_price
 
     errors: dict[str, str] = {}
 
@@ -128,6 +134,12 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     if response_detail not in RESPONSE_DETAILS:
         errors["response_detail"] = "response_detail must be one of: summary, full, debug."
 
+    if position_quantity is not None and (isinstance(position_quantity, bool) or position_quantity < 0):
+        errors["position_quantity"] = "position_quantity must be a non-negative number or null."
+
+    if average_entry_price is not None and (isinstance(average_entry_price, bool) or average_entry_price < 0):
+        errors["average_entry_price"] = "average_entry_price must be a non-negative number or null."
+
     if errors:
         raise BadRequestError("Invalid analysis request.", details={"fields": errors})
 
@@ -139,4 +151,7 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
         analysis_depth=analysis_depth,  # type: ignore[arg-type]
         response_detail=response_detail,  # type: ignore[arg-type]
         market=market,
+        has_existing_position=has_existing_position,
+        position_quantity=position_quantity,
+        average_entry_price=average_entry_price,
     )

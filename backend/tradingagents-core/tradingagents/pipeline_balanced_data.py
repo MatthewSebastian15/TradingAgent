@@ -104,11 +104,11 @@ def _safe_multi_source_data_field(label: str, func: Callable[[], dict[str, Any]]
         return DataField.unavailable(label, exc)
 
 
-def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
-    """Parse the last Close value at or before trade_date from yfinance CSV."""
+def _extract_last_close_price_and_date(price_data: str, trade_date: str) -> tuple[float | None, str | None]:
+    """Parse the last Close value and row date at or before trade_date from yfinance CSV."""
     lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if not lines:
-        return None
+        return None, None
 
     try:
         cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
@@ -135,7 +135,13 @@ def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
         if last_date is None or row_date >= last_date:
             last_date = row_date
             last_close = close
-    return last_close
+    return last_close, last_date.strftime("%Y-%m-%d") if last_date is not None else None
+
+
+def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
+    """Parse the last Close value at or before trade_date from yfinance CSV."""
+    price, _as_of = _extract_last_close_price_and_date(price_data, trade_date)
+    return price
 
 
 def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, str, str]:
@@ -373,6 +379,7 @@ def collect_market_data(
     )
 
     _check_cancel(cancel_check)
+    last_close_price, last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
     return CollectedData(
         ticker=ticker,
         trade_date=trade_date,
@@ -387,5 +394,6 @@ def collect_market_data(
         global_news=global_news.value,
         insider_transactions=insider_transactions.value,
         data_quality=data_quality,
-        last_close_price=_extract_last_close_price(price.value, trade_date),
+        last_close_price=last_close_price,
+        last_close_price_as_of=last_close_price_as_of or trade_date,
     )

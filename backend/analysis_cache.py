@@ -40,6 +40,9 @@ class AnalysisCacheKey:
     time_horizon_months: int
     max_debate_rounds: int
     response_detail: str
+    has_existing_position: bool = False
+    position_quantity: float | None = None
+    average_entry_price: float | None = None
 
     def as_tuple(self) -> tuple[Hashable, ...]:
         return (
@@ -53,6 +56,9 @@ class AnalysisCacheKey:
             self.time_horizon_months,
             self.max_debate_rounds,
             self.response_detail,
+            self.has_existing_position,
+            self.position_quantity,
+            self.average_entry_price,
         )
 
 

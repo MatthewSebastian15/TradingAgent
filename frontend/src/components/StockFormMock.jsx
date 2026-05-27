@@ -51,6 +51,9 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
   const [rounds, setRounds] = useState(DEFAULT_DEBATE_ROUNDS);
   const [timeHorizonMonths, setTimeHorizonMonths] = useState(1);
   const [error, setError] = useState('');
+  const [hasExistingPosition, setHasExistingPosition] = useState(false);
+  const [positionQuantity, setPositionQuantity] = useState('');
+  const [averageEntryPrice, setAverageEntryPrice] = useState('');
   const [running, setRunning] = useState(false);
   const timersRef = useRef([]);
 
@@ -145,6 +148,9 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           trade_date: date,
           time_horizon_months: Number(timeHorizonMonths),
           max_debate_rounds: rounds,
+          has_existing_position: hasExistingPosition,
+          position_quantity: positionQuantity || null,
+          average_entry_price: averageEntryPrice || null,
         });
         onResult(mockResult);
         setRunning(false);
@@ -285,6 +291,74 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
               ))}
             </select>
           </div>
+        </div>
+
+
+        {/* Existing position */}
+        <div className="border border-bloomberg-border bg-bloomberg-surface px-3 py-3">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={hasExistingPosition}
+              onChange={(e) => setHasExistingPosition(e.target.checked)}
+              disabled={running}
+              className="mt-0.5 accent-bloomberg-orange"
+            />
+            <span>
+              <span className="block text-xs font-mono text-bloomberg-white tracking-wider uppercase">
+                EXISTING POSITION
+              </span>
+              <span className="block mt-1 text-xs font-mono text-bloomberg-muted leading-relaxed">
+                Saya sudah punya posisi di ticker ini.
+              </span>
+            </span>
+          </label>
+          {hasExistingPosition && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+                  POSITION QTY
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={positionQuantity}
+                  onChange={(e) => setPositionQuantity(e.target.value)}
+                  disabled={running}
+                  placeholder="Optional"
+                  className="
+                    w-full bg-black border border-bloomberg-border px-3 py-2.5
+                    font-mono text-xs text-bloomberg-white tracking-wider
+                    focus:outline-none focus:border-bloomberg-orange
+                    disabled:opacity-50 transition-colors duration-150
+                    placeholder:text-bloomberg-muted
+                  "
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+                  AVG ENTRY
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={averageEntryPrice}
+                  onChange={(e) => setAverageEntryPrice(e.target.value)}
+                  disabled={running}
+                  placeholder="Optional"
+                  className="
+                    w-full bg-black border border-bloomberg-border px-3 py-2.5
+                    font-mono text-xs text-bloomberg-white tracking-wider
+                    focus:outline-none focus:border-bloomberg-orange
+                    disabled:opacity-50 transition-colors duration-150
+                    placeholder:text-bloomberg-muted
+                  "
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Error */}

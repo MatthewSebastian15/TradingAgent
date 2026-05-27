@@ -93,6 +93,9 @@ def run_pipeline(
     response_detail: str,
     request_id: str = "-",
     cancel_event: Any | None = None,
+    has_existing_position: bool = False,
+    position_quantity: float | None = None,
+    average_entry_price: float | None = None,
 ) -> dict:
     """Run the full TradingAgents pipeline in a subprocess."""
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
@@ -125,7 +128,15 @@ def run_pipeline(
     if config.get("analysis_mode", "balanced") == "balanced":
         from tradingagents.pipeline_balanced import run_balanced_pipeline
 
-        final_state = run_balanced_pipeline(ticker, trade_date, config, cancel_check=is_cancelled)
+        final_state = run_balanced_pipeline(
+            ticker,
+            trade_date,
+            config,
+            cancel_check=is_cancelled,
+            has_existing_position=has_existing_position,
+            position_quantity=position_quantity,
+            average_entry_price=average_entry_price,
+        )
     else:
         if is_cancelled():
             raise RuntimeError("Analysis was cancelled by the client.")
@@ -159,6 +170,9 @@ def run_pipeline_with_progress(
     request_id: str,
     progress_callback: Callable[[dict], None] | None = None,
     cancel_check: Callable[[], bool] | None = None,
+    has_existing_position: bool = False,
+    position_quantity: float | None = None,
+    average_entry_price: float | None = None,
 ) -> dict:
     """Run pipeline in-process so SSE can receive real callback events."""
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
@@ -180,6 +194,9 @@ def run_pipeline_with_progress(
             config,
             progress_callback=progress_callback,
             cancel_check=cancel_check,
+            has_existing_position=has_existing_position,
+            position_quantity=position_quantity,
+            average_entry_price=average_entry_price,
         )
     else:
         if progress_callback:
@@ -218,6 +235,9 @@ def run_pipeline_with_progress_worker(
     request_id: str,
     progress_queue: Any,
     cancel_event: Any | None = None,
+    has_existing_position: bool = False,
+    position_quantity: float | None = None,
+    average_entry_price: float | None = None,
 ) -> dict:
     """Run the progress pipeline inside a process-pool worker."""
 
@@ -243,6 +263,9 @@ def run_pipeline_with_progress_worker(
         request_id,
         progress_callback,
         is_cancelled,
+        has_existing_position,
+        position_quantity,
+        average_entry_price,
     )
 
 
@@ -369,6 +392,9 @@ async def run_pipeline_async(
         req.response_detail,
         request_id,
         cancel_event,
+        req.has_existing_position if req.has_existing_position is not None else False,
+        req.position_quantity,
+        req.average_entry_price,
     )
     disconnect_task = (
         asyncio.create_task(
