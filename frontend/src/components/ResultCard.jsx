@@ -128,15 +128,22 @@ function DecisionBadge({ decision }) {
   );
 }
 
-function MetricBox({ label, value, highlight }) {
+function MetricBox({ label, value, highlight, compact = false }) {
   if (!hasDisplayValue(value)) return null;
+
+  const boxPadding = compact ? 'px-3 py-2' : 'p-3';
+  const labelSpacing = compact ? 'mb-1' : 'mb-1.5';
+  const valueSize = compact ? 'text-xs' : 'text-base';
+
   return (
-    <div className="border border-bloomberg-border bg-bloomberg-surface p-3">
-      <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-1.5">
+    <div className={`border border-bloomberg-border bg-bloomberg-surface ${boxPadding}`}>
+      <div
+        className={`font-mono text-xs text-bloomberg-muted tracking-wider uppercase ${labelSpacing}`}
+      >
         {label}
       </div>
       <div
-        className={`font-mono text-base font-semibold ${highlight ? 'text-bloomberg-orange' : 'text-bloomberg-white'}`}
+        className={`font-mono ${valueSize} font-semibold break-words ${highlight ? 'text-bloomberg-orange' : 'text-bloomberg-white'}`}
       >
         {value}
       </div>
@@ -244,7 +251,7 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border">
       <SectionHeader label="ACTION PLAN" />
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
         {hasDisplayValue(currentPrice) && (
           <MetricBox
             label="CURRENT PRICE"
@@ -458,6 +465,11 @@ export default function ResultCard({ result }) {
               RECOMMENDATION: {finalDecision.toUpperCase()}
             </div>
           )}
+          {currentPriceSource && (
+            <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
+              SOURCE: <span className="text-bloomberg-white">{currentPriceSource}</span>
+            </div>
+          )}
           {result.llm_decision && result.llm_decision !== finalDecision && (
             <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
               LLM: {String(result.llm_decision).toUpperCase()} → FINAL:{' '}
@@ -467,31 +479,32 @@ export default function ResultCard({ result }) {
         </div>
 
         {/* Key metrics */}
-        <div className="grid grid-cols-2 gap-2 min-w-0 flex-shrink-0">
-          {hasDisplayValue(currentPrice) && (
-            <MetricBox
-              label="LAST PRICE"
-              value={formatPrice(currentPrice, result.ticker)}
-              highlight
-            />
-          )}
-          {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
-          {currentPriceSource && <MetricBox label="SOURCE" value={currentPriceSource} />}
-          {priceTarget !== null && (
-            <MetricBox label="PRICE TARGET" value={formatPrice(priceTarget, result.ticker)} />
-          )}
-          {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
-          {confidence !== null && (
-            <MetricBox
-              label="CONFIDENCE"
-              value={
-                typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : confidence
-              }
-            />
-          )}
-          {allocation !== null && (
-            <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
-          )}
+        <div className="min-w-0 flex-shrink-0 w-full lg:w-[43rem] max-w-full">
+          <div className="grid grid-cols-3 gap-2">
+            {hasDisplayValue(currentPrice) && (
+              <MetricBox
+                label="LAST PRICE"
+                value={formatPrice(currentPrice, result.ticker)}
+                highlight
+              />
+            )}
+            {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
+            {priceTarget !== null && (
+              <MetricBox label="PRICE TARGET" value={formatPrice(priceTarget, result.ticker)} />
+            )}
+            {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
+            {confidence !== null && (
+              <MetricBox
+                label="CONFIDENCE"
+                value={
+                  typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : confidence
+                }
+              />
+            )}
+            {allocation !== null && (
+              <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
+            )}
+          </div>
         </div>
       </div>
 

@@ -122,8 +122,10 @@ def test_parse_final_result_treats_invalid_pd_obj_as_missing():
         {},
     )
 
-    assert parsed["decision"] is None
+    assert parsed["decision"] == "Hold"
+    assert parsed["final_decision"] == "Hold"
     assert parsed["full_decision"] == "raw final decision"
+    assert parsed["trade_plan_valid"] is False
     assert parsed["key_catalysts"] == []
     assert parsed["invalidation_conditions"] == []
 
@@ -157,6 +159,49 @@ def test_parse_final_result_fallback_contract_is_non_actionable():
     assert parsed["current_price"] is None
     assert parsed["current_price_as_of"] == "2026-05-18"
     assert parsed["trade_plan_valid"] is False
-    assert parsed["final_decision"] is None
+    assert parsed["decision"] == "Hold"
+    assert parsed["final_decision"] == "Hold"
+    assert parsed["rebalancing_action"] == "Wait and monitor"
+    assert parsed["position_size_hint"] == "No new position suggested."
     assert parsed["decision_adjusted"] is False
     assert parsed["validation_warnings"] == []
+    assert parsed["data_quality"]["price_data"] == "missing"
+    assert parsed["data_quality"]["trade_levels"] == "invalid"
+    assert parsed["data_quality"]["llm_output"] == "fallback"
+    assert parsed["data_quality"]["volatility_data"] == "missing"
+
+
+def test_parse_final_result_completes_legacy_data_quality_contract():
+    from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    decision = PortfolioDecision(
+        confidence_score=0.6,
+        rating=PortfolioRating.HOLD,
+        executive_summary=(
+            "The rating is Hold because the setup is balanced. "
+            "The strongest data point is stable price action. "
+            "The main risk is weak confirmation."
+        ),
+        investment_thesis=(
+            "The company is stable. The setup needs patience. "
+            "The risk is not severe. The reward is not compelling. "
+            "No new trade is needed. The thesis can be reviewed later."
+        ),
+        data_quality={"price_data": "ok", "fundamentals": "partial", "news": "missing"},
+    )
+
+    parsed = _parse_final_result(
+        "",
+        decision,
+        PortfolioRating,
+        {"last_close_price": 100.0, "last_close_price_as_of": "2026-05-18"},
+    )
+
+    assert parsed["data_quality"]["price_data"] == "ok"
+    assert parsed["data_quality"]["fundamentals"] == "partial"
+    assert parsed["data_quality"]["news"] == "missing"
+    assert parsed["data_quality"]["trade_levels"] == "invalid"
+    assert parsed["data_quality"]["llm_output"] == "ok"
+    assert parsed["data_quality"]["volatility_data"] == "missing"

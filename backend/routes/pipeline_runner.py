@@ -84,6 +84,32 @@ async def reset_pipeline_runtime_for_tests() -> PipelineProcessRuntime:
     return _PIPELINE_RUNTIME
 
 
+def _coerce_pipeline_position_args(
+    has_existing_position: Any,
+    position_quantity: Any,
+    average_entry_price: Any,
+    cancel_event: Any,
+) -> tuple[bool, float | None, float | None, Any | None]:
+    """Support both legacy and current positional argument order.
+
+    Older internal callers passed cancel_event immediately after request_id.
+    Newer integration flow keeps cancel_event last so tests and cancellation
+    wrappers can always find it at args[-1]. This adapter keeps both
+    positional styles safe during the transition.
+    """
+    legacy_cancel_first = has_existing_position is not None and not isinstance(has_existing_position, bool)
+    legacy_position_payload = isinstance(position_quantity, bool)
+    if legacy_cancel_first or (has_existing_position is None and legacy_position_payload):
+        legacy_cancel_event = has_existing_position
+        return (
+            bool(position_quantity) if legacy_position_payload else False,
+            average_entry_price if legacy_position_payload else None,
+            cancel_event if legacy_position_payload else None,
+            legacy_cancel_event,
+        )
+    return bool(has_existing_position), position_quantity, average_entry_price, cancel_event
+
+
 def run_pipeline(
     ticker: str,
     trade_date: str,
@@ -92,12 +118,21 @@ def run_pipeline(
     analysis_depth: str,
     response_detail: str,
     request_id: str = "-",
-    cancel_event: Any | None = None,
     has_existing_position: bool = False,
     position_quantity: float | None = None,
     average_entry_price: float | None = None,
+    cancel_event: Any | None = None,
 ) -> dict:
     """Run the full TradingAgents pipeline in a subprocess."""
+    has_existing_position, position_quantity, average_entry_price, cancel_event = (
+        _coerce_pipeline_position_args(
+            has_existing_position,
+            position_quantity,
+            average_entry_price,
+            cancel_event,
+        )
+    )
+
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
     from tradingagents.graph.trading_graph import TradingAgentsGraph
 
@@ -391,10 +426,10 @@ async def run_pipeline_async(
         req.analysis_depth,
         req.response_detail,
         request_id,
-        cancel_event,
         req.has_existing_position if req.has_existing_position is not None else False,
         req.position_quantity,
         req.average_entry_price,
+        cancel_event,
     )
     disconnect_task = (
         asyncio.create_task(
