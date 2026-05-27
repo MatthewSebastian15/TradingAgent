@@ -13,11 +13,11 @@ from config import ANALYSIS_DEPTHS, DEFAULT_ANALYSIS_DEPTH, DEFAULT_MAX_DEBATE_R
 from errors import BadRequestError
 
 # Accepts plain tickers (AAPL, NVDA, 0700) and exchange-suffixed tickers
-# (BBCA.JK, BRK-B, 0700.HK). Backend and frontend intentionally share the
-# same rule so the UI no longer smiles politely before the API rejects you.
+# (BBCA.JK, BRK-B). Only US tickers and Indonesian IDX tickers are supported.
 _TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$")
 _IDX_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}\.JK$")
-_SUPPORTED_MARKETS = {"US", "ID", "GLOBAL"}
+_NON_ID_EXCHANGE_SUFFIX_RE = re.compile(r"\.(?!JK$)[A-Z0-9]{1,5}$")
+_SUPPORTED_MARKETS = {"US", "ID"}
 
 AnalysisDepth = Literal["fast", "balanced", "deep"]
 ResponseDetail = Literal["summary", "full", "debug"]
@@ -33,6 +33,11 @@ class AnalysisRequest(BaseModel):
     analysis_depth: AnalysisDepth = Field(default=DEFAULT_ANALYSIS_DEPTH)
     response_detail: ResponseDetail = Field(default="full")
     market: str | None = Field(default=None, max_length=16)
+
+
+def is_non_id_exchange_ticker(ticker: str) -> bool:
+    """Return True if ticker has a non-IDX exchange suffix like .HK, .T, .DE."""
+    return bool(_NON_ID_EXCHANGE_SUFFIX_RE.search(ticker.upper()))
 
 
 def normalize_market(market: str | None) -> str | None:
@@ -51,7 +56,7 @@ def normalize_ticker_for_market(ticker: str, market: str | None) -> str:
     if market == "ID":
         base = cleaned.removesuffix(".JK")
         return f"{base}.JK"
-    if market in {"US", "GLOBAL"}:
+    if market == "US":
         return cleaned
     return normalize_ticker(ticker)
 
@@ -64,7 +69,7 @@ def normalize_ticker_symbol(ticker: str) -> str:
             "Invalid ticker symbol.",
             details={
                 "fields": {
-                    "ticker": "Ticker must be a Yahoo Finance compatible symbol, for example AAPL, BBCA.JK, BBRI.JK, TLKM.JK, BRK-B, or 0700.HK."
+                    "ticker": "Ticker must be a supported US or Indonesian symbol, for example AAPL, NVDA, BBCA, BBRI, TLKM, or BBCA.JK."
                 }
             },
         )
@@ -84,14 +89,16 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     errors: dict[str, str] = {}
 
     if market is not None and market not in _SUPPORTED_MARKETS:
-        errors["market"] = "market must be one of: US, ID, GLOBAL."
+        errors["market"] = "market must be one of: US, ID."
 
     if not isinstance(ticker, str) or not _TICKER_RE.fullmatch(ticker):
         errors["ticker"] = (
-            "Ticker must be a Yahoo Finance compatible symbol, for example AAPL, BBCA.JK, BBRI.JK, TLKM.JK, BRK-B, or 0700.HK."
+            "Ticker must be a supported US or Indonesian symbol, for example AAPL, NVDA, BBCA, BBRI, TLKM, or BBCA.JK."
         )
     elif market == "ID" and not _IDX_TICKER_RE.fullmatch(ticker):
         errors["ticker"] = "IDX ticker must be submitted as a plain stock code, for example BBCA or UNVR."
+    elif is_non_id_exchange_ticker(ticker):
+        errors["ticker"] = "Only US tickers and Indonesian IDX tickers are supported. Global exchange suffixes are no longer supported."
 
     if not isinstance(trade_date, str):
         errors["trade_date"] = "Trade date must use YYYY-MM-DD format."

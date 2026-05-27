@@ -13,12 +13,6 @@ export const MARKETS = {
     defaultTicker: 'BBCA',
     tickers: ['BBCA', 'BBRI', 'TLKM', 'BMRI', 'ASII', 'GOTO', 'UNVR'],
   },
-  GLOBAL: {
-    label: 'GLOBAL',
-    flag: '\uD83C\uDF10',
-    defaultTicker: '700.HK',
-    tickers: ['700.HK', '9984.T', 'SAP.DE', 'RIO.L', 'TSM'],
-  },
 };
 
 export const DEPTH_OPTIONS = [
@@ -106,7 +100,7 @@ export function validateAnalysisInput({
     return 'Invalid IDX ticker. Enter code only, for example BBCA or UNVR.';
   }
   if (!TICKER_RE.test(normalizedTicker)) {
-    return 'Invalid ticker. Examples: BBCA, NVDA, 700.HK, SAP.DE';
+    return 'Invalid ticker. Examples: BBCA, NVDA, AAPL, MSFT';
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date must be YYYY-MM-DD';
   if (!HORIZON_VALUES.has(Number(timeHorizonMonths))) return 'Invalid analysis horizon.';

@@ -275,4 +275,49 @@ describe('AnalysisWorkspace history storage', () => {
 
     expect(await screen.findByText('Result expired, submit ulang')).toBeTruthy();
   });
+
+  it('removes global recent analyses from localStorage history', () => {
+    localStorage.setItem(
+      'analysis-history-test',
+      JSON.stringify([
+        {
+          request_id: 'global-request',
+          ticker: '700.HK',
+          market: 'GLOBAL',
+          trade_date: '2026-05-14',
+          decision: 'Hold',
+          saved_at: new Date().toISOString(),
+        },
+        {
+          request_id: 'us-request',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-14',
+          decision: 'Buy',
+          saved_at: new Date().toISOString(),
+        },
+        {
+          request_id: 'id-request',
+          ticker: 'BBCA.JK',
+          market: 'ID',
+          trade_date: '2026-05-14',
+          decision: 'Hold',
+          saved_at: new Date().toISOString(),
+        },
+      ])
+    );
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis');
+
+    expect(screen.queryByText('700.HK')).toBeNull();
+    expect(screen.getByText('AAPL')).toBeTruthy();
+    expect(screen.getByText('BBCA.JK')).toBeTruthy();
+
+    const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
+    expect(stored.map((item) => item.request_id)).toEqual(['us-request', 'id-request']);
+  });
 });

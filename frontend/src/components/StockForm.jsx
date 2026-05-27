@@ -149,11 +149,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
           <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
             TICKER SYMBOL
             <span className="ml-2 text-bloomberg-border normal-case font-normal">
-              {activeMarket === 'ID'
-                ? '· IDX code'
-                : activeMarket === 'GLOBAL'
-                  ? '· Global Exchange'
-                  : '· NYSE / NASDAQ'}
+              {activeMarket === 'ID' ? '· IDX code' : '· NYSE / NASDAQ'}
             </span>
           </label>
           <input
