@@ -7,8 +7,6 @@ from datetime import date, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, Field
-from tradingagents.dataflows.y_finance import normalize_ticker
-
 from config import ANALYSIS_DEPTHS, DEFAULT_ANALYSIS_DEPTH, DEFAULT_MAX_DEBATE_ROUNDS, RESPONSE_DETAILS
 from errors import BadRequestError
 
@@ -18,6 +16,56 @@ _TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$")
 _IDX_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}\.JK$")
 _NON_ID_EXCHANGE_SUFFIX_RE = re.compile(r"\.(?!JK$)[A-Z0-9]{1,5}$")
 _SUPPORTED_MARKETS = {"US", "ID"}
+
+
+_IDX_AUTO_SUFFIX = {
+    "AALI",
+    "ACES",
+    "ADRO",
+    "AKRA",
+    "AMMN",
+    "ANTM",
+    "ARTO",
+    "ASII",
+    "BBCA",
+    "BBNI",
+    "BBRI",
+    "BBTN",
+    "BMRI",
+    "BRIS",
+    "BRPT",
+    "CPIN",
+    "ESSA",
+    "EXCL",
+    "GOTO",
+    "ICBP",
+    "INCO",
+    "INDF",
+    "INKP",
+    "INTP",
+    "ISAT",
+    "ITMG",
+    "KLBF",
+    "MDKA",
+    "MEDC",
+    "PGAS",
+    "PTBA",
+    "SMGR",
+    "TLKM",
+    "UNTR",
+    "UNVR",
+}
+
+
+def normalize_ticker(ticker: str) -> str:
+    """Normalize one supported ticker without importing yfinance runtime dependencies."""
+
+    cleaned = ticker.strip().upper()
+    if "." in cleaned:
+        return cleaned
+    if cleaned in _IDX_AUTO_SUFFIX:
+        return f"{cleaned}.JK"
+    return cleaned
 
 AnalysisDepth = Literal["fast", "balanced", "deep"]
 ResponseDetail = Literal["summary", "full", "debug"]

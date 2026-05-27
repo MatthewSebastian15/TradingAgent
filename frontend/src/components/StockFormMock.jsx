@@ -316,10 +316,11 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
           {hasExistingPosition && (
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+                <label htmlFor="mock-position-quantity" className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
                   POSITION QTY
                 </label>
                 <input
+                  id="mock-position-quantity"
                   type="number"
                   min="0"
                   step="any"
@@ -337,10 +338,11 @@ export default function StockFormMock({ onResult, onLoading, onStatus, onAgentPr
                 />
               </div>
               <div>
-                <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+                <label htmlFor="mock-average-entry-price" className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
                   AVG ENTRY
                 </label>
                 <input
+                  id="mock-average-entry-price"
                   type="number"
                   min="0"
                   step="any"

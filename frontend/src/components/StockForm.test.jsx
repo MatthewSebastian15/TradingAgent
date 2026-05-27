@@ -182,6 +182,59 @@ describe('StockForm cleanup', () => {
     });
   });
 
+
+  it('sends existing-position context when user checks the position box', async () => {
+    const props = callbacks();
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn((url, options = {}) => {
+      if (options.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ job_id: 'job-position', status: 'queued' }),
+        });
+      }
+
+      if (options.method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  'event: result\n' + 'data: {"ticker":"NVDA","decision":"Hold"}\n\n'
+                )
+              );
+              controller.close();
+            },
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<StockForm {...props} />);
+
+    fireEvent.click(screen.getByLabelText(/existing position/i));
+    fireEvent.change(screen.getByLabelText(/position qty/i), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText(/avg entry/i), { target: { value: '900' } });
+    fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/analysis/jobs'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+    const [, postOptions] = fetchMock.mock.calls.find(([, options]) => options?.method === 'POST');
+    expect(JSON.parse(postOptions.body)).toMatchObject({
+      has_existing_position: true,
+      position_quantity: 10,
+      average_entry_price: 900,
+    });
+  });
+
   it('clears mock pipeline timers when unmounted', () => {
     vi.useFakeTimers();
     const props = callbacks();
