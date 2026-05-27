@@ -115,8 +115,8 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
         analysisDepth,
         responseDetail,
         hasExistingPosition,
-        positionQuantity: positionQuantity || null,
-        averageEntryPrice: averageEntryPrice || null,
+        positionQuantity: hasExistingPosition ? positionQuantity || null : null,
+        averageEntryPrice: hasExistingPosition ? averageEntryPrice || null : null,
       })
     );
   }
@@ -333,14 +333,18 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
                 EXISTING POSITION
               </span>
               <span className="block mt-1 text-xs font-mono text-bloomberg-muted leading-relaxed">
-                Saya sudah punya posisi di ticker ini. Jika tidak dicentang, sistem akan menganggap belum ada posisi.
+                Saya sudah punya posisi di ticker ini. Jika tidak dicentang, sistem akan menganggap
+                belum ada posisi.
               </span>
             </span>
           </label>
           {hasExistingPosition && (
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label htmlFor="position-quantity" className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+                <label
+                  htmlFor="position-quantity"
+                  className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2"
+                >
                   POSITION QTY
                 </label>
                 <input
@@ -362,7 +366,10 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
                 />
               </div>
               <div>
-                <label htmlFor="average-entry-price" className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
+                <label
+                  htmlFor="average-entry-price"
+                  className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2"
+                >
                   AVG ENTRY
                 </label>
                 <input

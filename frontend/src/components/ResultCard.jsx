@@ -30,12 +30,26 @@ function formatAnalysisHorizon(months, fallback) {
 
 function formatPercent(value) {
   if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number' && !Number.isFinite(value)) return null;
   return typeof value === 'number' ? `${value}%` : value;
+}
+
+function hasDisplayValue(value) {
+  return (
+    value !== null &&
+    value !== undefined &&
+    value !== '' &&
+    !(typeof value === 'number' && !Number.isFinite(value))
+  );
+}
+
+function coalesceDisplayValue(...values) {
+  return values.find((value) => hasDisplayValue(value)) ?? null;
 }
 
 function formatRiskReward(result) {
   if (result.risk_reward_display) return result.risk_reward_display;
-  if (result.risk_reward_ratio === null || result.risk_reward_ratio === undefined) return null;
+  if (!hasDisplayValue(result.risk_reward_ratio)) return null;
   return typeof result.risk_reward_ratio === 'number'
     ? `1:${Math.round(result.risk_reward_ratio)}`
     : result.risk_reward_ratio;
@@ -79,7 +93,7 @@ function DecisionBadge({ decision }) {
 }
 
 function MetricBox({ label, value, highlight }) {
-  if (value === null || value === undefined || value === '') return null;
+  if (!hasDisplayValue(value)) return null;
   return (
     <div className="border border-bloomberg-border bg-bloomberg-surface p-3">
       <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-1.5">
@@ -119,7 +133,8 @@ function NoticeBox({ title, children, tone = 'amber' }) {
 }
 
 function DataQuality({ dq, validationWarnings = [] }) {
-  if (!dq && validationWarnings.length === 0) return null;
+  const warnings = Array.isArray(validationWarnings) ? validationWarnings : [];
+  if (!dq && warnings.length === 0) return null;
   const items = [
     { label: 'PRICE', status: dq?.price_data },
     { label: 'TRADE LEVELS', status: dq?.trade_levels },
@@ -155,9 +170,9 @@ function DataQuality({ dq, validationWarnings = [] }) {
           ))}
         </ul>
       )}
-      {validationWarnings.length > 0 && (
+      {warnings.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
-          {validationWarnings.map((warning) => (
+          {warnings.map((warning) => (
             <span
               key={warning}
               className="font-mono text-xs px-2.5 py-1 border border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber tracking-wider"
@@ -176,39 +191,57 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
     <div className="px-4 py-4 border-b border-bloomberg-border">
       <SectionHeader label="ACTION PLAN" />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {currentPrice !== null && (
-          <MetricBox label="CURRENT PRICE" value={formatPrice(currentPrice, result.ticker)} highlight />
+        {hasDisplayValue(currentPrice) && (
+          <MetricBox
+            label="CURRENT PRICE"
+            value={formatPrice(currentPrice, result.ticker)}
+            highlight
+          />
         )}
-        {result.price_target !== null && result.price_target !== undefined && (
+        {hasDisplayValue(result.price_target) && (
           <MetricBox label="PRICE TARGET" value={formatPrice(result.price_target, result.ticker)} />
         )}
-        {result.entry_price !== null && result.entry_price !== undefined && (
+        {hasDisplayValue(result.entry_price) && (
           <MetricBox label="ENTRY" value={formatPrice(result.entry_price, result.ticker)} />
         )}
-        {result.stop_loss !== null && result.stop_loss !== undefined && (
+        {hasDisplayValue(result.stop_loss) && (
           <MetricBox label="STOP LOSS" value={formatPrice(result.stop_loss, result.ticker)} />
         )}
-        {result.take_profit !== null && result.take_profit !== undefined && (
+        {hasDisplayValue(result.take_profit) && (
           <MetricBox label="TAKE PROFIT" value={formatPrice(result.take_profit, result.ticker)} />
         )}
-        {result.risk_per_share !== null && result.risk_per_share !== undefined && (
-          <MetricBox label="RISK / SHARE" value={formatPrice(result.risk_per_share, result.ticker)} />
+        {hasDisplayValue(result.risk_per_share) && (
+          <MetricBox
+            label="RISK PER SHARE"
+            value={formatPrice(result.risk_per_share, result.ticker)}
+          />
         )}
-        {result.reward_per_share !== null && result.reward_per_share !== undefined && (
-          <MetricBox label="REWARD / SHARE" value={formatPrice(result.reward_per_share, result.ticker)} />
+        {hasDisplayValue(result.reward_per_share) && (
+          <MetricBox
+            label="REWARD PER SHARE"
+            value={formatPrice(result.reward_per_share, result.ticker)}
+          />
         )}
         {result.max_drawdown_estimate && (
           <MetricBox label="MAX DRAWDOWN" value={result.max_drawdown_estimate} />
         )}
-        {result.volatility_level && <MetricBox label="VOLATILITY" value={result.volatility_level} />}
-        {result.volatility_score !== null && result.volatility_score !== undefined && (
-          <MetricBox label="VOL SCORE" value={result.volatility_score} />
+        {result.volatility_level && (
+          <MetricBox label="VOLATILITY" value={result.volatility_level} />
+        )}
+        {hasDisplayValue(result.volatility_score) && (
+          <MetricBox label="VOLATILITY SCORE" value={result.volatility_score} />
         )}
         {result.rebalancing_action && (
           <MetricBox label="REBALANCING" value={result.rebalancing_action} />
         )}
+        {result.position_action && (
+          <MetricBox label="POSITION ACTION" value={result.position_action} />
+        )}
+        {result.new_entry_action && (
+          <MetricBox label="NEW ENTRY ACTION" value={result.new_entry_action} />
+        )}
         {result.position_size_hint && (
-          <MetricBox label="POSITION SIZE" value={result.position_size_hint} />
+          <MetricBox label="POSITION SIZE HINT" value={result.position_size_hint} />
         )}
         {riskReward && <MetricBox label="R/R RATIO" value={riskReward} highlight />}
       </div>
@@ -223,10 +256,12 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
 
 function HoldMetrics({ result, currentPrice }) {
   const hasHoldMetrics =
-    currentPrice !== null ||
+    hasDisplayValue(currentPrice) ||
     result.volatility_level ||
-    result.volatility_score !== null ||
+    hasDisplayValue(result.volatility_score) ||
     result.rebalancing_action ||
+    result.position_action ||
+    result.new_entry_action ||
     result.position_size_hint;
 
   if (!hasHoldMetrics) return null;
@@ -235,18 +270,30 @@ function HoldMetrics({ result, currentPrice }) {
     <div className="px-4 py-4 border-b border-bloomberg-border">
       <SectionHeader label="ACTION STATUS" />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {currentPrice !== null && (
-          <MetricBox label="CURRENT PRICE" value={formatPrice(currentPrice, result.ticker)} highlight />
+        {hasDisplayValue(currentPrice) && (
+          <MetricBox
+            label="CURRENT PRICE"
+            value={formatPrice(currentPrice, result.ticker)}
+            highlight
+          />
         )}
-        {result.volatility_level && <MetricBox label="VOLATILITY" value={result.volatility_level} />}
-        {result.volatility_score !== null && result.volatility_score !== undefined && (
-          <MetricBox label="VOL SCORE" value={result.volatility_score} />
+        {result.volatility_level && (
+          <MetricBox label="VOLATILITY" value={result.volatility_level} />
+        )}
+        {hasDisplayValue(result.volatility_score) && (
+          <MetricBox label="VOLATILITY SCORE" value={result.volatility_score} />
         )}
         {result.rebalancing_action && (
           <MetricBox label="REBALANCING" value={result.rebalancing_action} />
         )}
+        {result.position_action && (
+          <MetricBox label="POSITION ACTION" value={result.position_action} />
+        )}
+        {result.new_entry_action && (
+          <MetricBox label="NEW ENTRY ACTION" value={result.new_entry_action} />
+        )}
         {result.position_size_hint && (
-          <MetricBox label="POSITION SIZE" value={result.position_size_hint} />
+          <MetricBox label="POSITION SIZE HINT" value={result.position_size_hint} />
         )}
       </div>
     </div>
@@ -284,9 +331,13 @@ export default function ResultCard({ result }) {
 
   const summary = result.executive_summary;
   const thesis = result.investment_thesis;
-  const currentPrice = result.current_price ?? result.last_close_price ?? null;
-  const currentPriceAsOf = result.current_price_as_of ?? result.last_close_price_as_of ?? null;
-  const priceTarget = shouldShowActionPlan ? (result.price_target ?? null) : null;
+  const currentPrice = coalesceDisplayValue(result.current_price, result.last_close_price);
+  const currentPriceAsOf = coalesceDisplayValue(
+    result.current_price_as_of,
+    result.last_close_price_as_of
+  );
+  const currentPriceSource = coalesceDisplayValue(result.current_price_source);
+  const priceTarget = shouldShowActionPlan ? coalesceDisplayValue(result.price_target) : null;
   const timeHorizon = formatAnalysisHorizon(result.time_horizon_months, result.time_horizon);
   const confidence = result.confidence_score ?? null;
   const allocation = result.suggested_allocation_percent ?? null;
@@ -294,7 +345,9 @@ export default function ResultCard({ result }) {
   const catalysts = result.key_catalysts || [];
   const invalidations = result.invalidation_conditions || [];
   const dataQuality = result.data_quality || null;
-  const validationWarnings = result.validation_warnings || [];
+  const validationWarnings = Array.isArray(result.validation_warnings)
+    ? result.validation_warnings
+    : [];
   const agents = result.agents_used || [];
   const budgetExhausted = Boolean(result.budget_exhausted);
   const agentsSkipped = result.agents_skipped || [];
@@ -361,10 +414,15 @@ export default function ResultCard({ result }) {
 
         {/* Key metrics */}
         <div className="grid grid-cols-2 gap-2 min-w-0 flex-shrink-0">
-          {currentPrice !== null && (
-            <MetricBox label="LAST PRICE" value={formatPrice(currentPrice, result.ticker)} highlight />
+          {hasDisplayValue(currentPrice) && (
+            <MetricBox
+              label="LAST PRICE"
+              value={formatPrice(currentPrice, result.ticker)}
+              highlight
+            />
           )}
           {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
+          {currentPriceSource && <MetricBox label="SOURCE" value={currentPriceSource} />}
           {priceTarget !== null && (
             <MetricBox label="PRICE TARGET" value={formatPrice(priceTarget, result.ticker)} />
           )}
@@ -372,12 +430,24 @@ export default function ResultCard({ result }) {
           {confidence !== null && (
             <MetricBox
               label="CONFIDENCE"
-              value={typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : confidence}
+              value={
+                typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : confidence
+              }
             />
           )}
-          {allocation !== null && <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />}
+          {allocation !== null && (
+            <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
+          )}
         </div>
       </div>
+
+      {!hasDisplayValue(currentPrice) && (
+        <div className="px-4 py-4 border-b border-bloomberg-border">
+          <NoticeBox title="PRICE DATA MISSING" tone="red">
+            Last price is unavailable, so no synthetic price is shown.
+          </NoticeBox>
+        </div>
+      )}
 
       {(result.decision_adjusted || (isActionable && !tradePlanValid)) && (
         <div className="px-4 py-4 border-b border-bloomberg-border">
@@ -413,7 +483,8 @@ export default function ResultCard({ result }) {
         <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
           <SectionHeader label="PIPELINE LIMIT" />
           <p className="font-mono text-xs text-bloomberg-amber leading-relaxed">
-            LLM call budget exhausted before all stages completed. Treat this analysis as incomplete.
+            LLM call budget exhausted before all stages completed. Treat this analysis as
+            incomplete.
           </p>
           {agentsSkipped.length > 0 && (
             <div className="mt-2 font-mono text-xs text-bloomberg-muted">

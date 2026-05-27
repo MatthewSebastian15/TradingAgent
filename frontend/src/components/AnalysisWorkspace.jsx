@@ -4,7 +4,7 @@ import AgentLog from './AgentLog';
 import Navbar from './Navbar';
 import ResultCard from './ResultCard';
 import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
-import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
+import { formatDateTimeLabel, formatPrice } from '../utils/formatting';
 
 const HISTORY_PANEL_MAX_HEIGHT = 560;
 const HISTORY_TTL_DAYS = 30;
@@ -160,7 +160,7 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
             >
               <div className="min-w-0">
                 <div className="font-mono text-sm font-semibold text-bloomberg-white">
-                  {formatTickerLabel(item.ticker)}
+                  {item.ticker || 'N/A'}
                 </div>
                 <div className="font-mono text-xs text-bloomberg-muted">
                   {item.trade_date}
