@@ -198,4 +198,13 @@ describe('StockForm cleanup', () => {
 
     expect(props.onResult).toHaveBeenCalledTimes(1);
   });
+
+  it('only shows US and Indonesia market tabs', () => {
+    const props = callbacks();
+    render(<StockForm {...props} />);
+
+    expect(screen.getByRole('button', { name: /us/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /indonesia/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /global/i })).toBeNull();
+  });
 });

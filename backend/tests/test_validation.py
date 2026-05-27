@@ -251,3 +251,34 @@ def test_production_logs_warning_when_api_key_requirement_is_disabled(monkeypatc
         assert "APP_ENV=production but REQUIRE_API_KEY_FOR_RATE_LIMIT is disabled" in caplog.text
     finally:
         _restore_test_config(monkeypatch)
+
+
+def test_global_market_is_rejected():
+    with pytest.raises(BadRequestError) as exc_info:
+        normalize_and_validate_analysis_request(
+            AnalysisRequest(ticker="700.HK", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "market" in exc_info.value.details["fields"]
+
+
+def test_non_id_exchange_suffix_is_rejected():
+    with pytest.raises(BadRequestError) as exc_info:
+        normalize_and_validate_analysis_request(
+            AnalysisRequest(ticker="SAP.DE", market="US", trade_date="2026-05-14", max_debate_rounds=1)
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "ticker" in exc_info.value.details["fields"]
+
+
+def test_hk_suffix_ticker_is_rejected():
+    with pytest.raises(BadRequestError) as exc_info:
+        normalize_and_validate_analysis_request(
+            AnalysisRequest(ticker="700.HK", market="US", trade_date="2026-05-14", max_debate_rounds=1)
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "ticker" in exc_info.value.details["fields"]
+

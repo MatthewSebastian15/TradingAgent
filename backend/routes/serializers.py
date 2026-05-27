@@ -191,6 +191,7 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
     payload = {
         "request_id": request_id,
         "ticker": req.ticker,
+        "market": req.market,
         "trade_date": req.trade_date,
         "analysis_created_at": datetime.utcnow().isoformat(),
         "analysis_depth": req.analysis_depth,

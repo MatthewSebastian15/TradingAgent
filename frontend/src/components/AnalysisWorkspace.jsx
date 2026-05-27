@@ -10,10 +10,41 @@ const HISTORY_PANEL_MAX_HEIGHT = 560;
 const HISTORY_TTL_DAYS = 30;
 const RESULT_EXPIRED_MESSAGE = 'Result expired, submit ulang';
 
+const SUPPORTED_HISTORY_MARKETS = new Set(['US', 'ID']);
+const GLOBAL_EXCHANGE_SUFFIX_RE = /\.(?!JK$)[A-Z0-9]{1,5}$/i;
+
 function isExpired(entry) {
   if (!entry?.saved_at) return false;
   const ageMs = Date.now() - new Date(entry.saved_at).getTime();
   return ageMs > HISTORY_TTL_DAYS * 24 * 60 * 60 * 1000;
+}
+
+function isGlobalHistoryEntry(entry) {
+  if (!entry) return false;
+  const market = String(entry.market || '').toUpperCase();
+  const ticker = String(entry.ticker || '').toUpperCase();
+
+  if (market === 'GLOBAL') return true;
+  if (market && !SUPPORTED_HISTORY_MARKETS.has(market)) return true;
+
+  return GLOBAL_EXCHANGE_SUFFIX_RE.test(ticker);
+}
+
+function isSupportedHistoryEntry(entry) {
+  return entry && !isExpired(entry) && !isGlobalHistoryEntry(entry);
+}
+
+function resultStorageKey(historyKey, requestId) {
+  return `${historyKey}:result:${requestId}`;
+}
+
+function removeStoredResult(historyKey, entry) {
+  if (!entry?.request_id) return;
+  try {
+    localStorage.removeItem(resultStorageKey(historyKey, entry.request_id));
+  } catch {
+    // Storage can be unavailable in private browsing or when quota is exceeded.
+  }
 }
 
 function readHistory(historyKey) {
@@ -21,7 +52,17 @@ function readHistory(historyKey) {
     const raw = localStorage.getItem(historyKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((entry) => entry && !isExpired(entry)) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    const clean = parsed.filter(isSupportedHistoryEntry);
+    const removed = parsed.filter((entry) => entry && !isSupportedHistoryEntry(entry));
+
+    removed.forEach((entry) => removeStoredResult(historyKey, entry));
+    if (clean.length !== parsed.length) {
+      localStorage.setItem(historyKey, JSON.stringify(clean));
+    }
+
+    return clean;
   } catch {
     return [];
   }
@@ -29,15 +70,11 @@ function readHistory(historyKey) {
 
 function writeHistory(historyKey, entries) {
   try {
-    const clean = entries.filter((entry) => entry && !isExpired(entry));
+    const clean = entries.filter(isSupportedHistoryEntry);
     localStorage.setItem(historyKey, JSON.stringify(clean));
   } catch {
     // Storage can be unavailable in private browsing or when quota is exceeded.
   }
-}
-
-function resultStorageKey(historyKey, requestId) {
-  return `${historyKey}:result:${requestId}`;
 }
 
 function readStoredResult(historyKey, requestId) {
@@ -47,7 +84,7 @@ function readStoredResult(historyKey, requestId) {
     const raw = localStorage.getItem(resultStorageKey(historyKey, requestId));
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && !isExpired(parsed)) return parsed;
+      if (parsed && isSupportedHistoryEntry(parsed)) return parsed;
       localStorage.removeItem(resultStorageKey(historyKey, requestId));
     }
   } catch {
@@ -72,7 +109,7 @@ function withAnalysisCreatedAt(result) {
 }
 
 function saveToHistory(historyKey, result) {
-  if (!result || result.error || !result.request_id) return;
+  if (!result || result.error || !result.request_id || !isSupportedHistoryEntry(result)) return;
 
   const storedResult = { ...result, saved_at: result.saved_at || new Date().toISOString() };
   const history = readHistory(historyKey);
