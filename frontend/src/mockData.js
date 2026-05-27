@@ -311,6 +311,140 @@ MOCK_HOLD_RESPONSE.full_decision = createFullDecision({
   timeHorizon: MOCK_HOLD_RESPONSE.time_horizon,
 });
 
+export const MOCK_MISSING_PRICE_RESPONSE = {
+  request_id: 'mock-msft-missing-price',
+  ticker: 'MSFT',
+  trade_date: '2026-05-18',
+  llm_decision: 'Buy',
+  final_decision: 'Hold',
+  decision: 'Hold',
+  rating: 'Hold',
+  decision_adjusted: true,
+  decision_adjusted_reason: 'Missing current price',
+  trade_plan_valid: false,
+  has_existing_position: false,
+  position_quantity: null,
+  average_entry_price: null,
+  current_price: null,
+  current_price_as_of: null,
+  current_price_source: null,
+  price_target: null,
+  time_horizon_months: 1,
+  time_horizon: '1 Month',
+  confidence_score: 0.52,
+  suggested_allocation_percent: 0,
+  entry_price: null,
+  stop_loss: null,
+  take_profit: null,
+  risk_per_share: null,
+  reward_per_share: null,
+  risk_reward_ratio: null,
+  risk_reward_display: null,
+  max_drawdown_estimate: null,
+  max_drawdown_min_pct: null,
+  max_drawdown_max_pct: null,
+  volatility_level: 'Medium',
+  volatility_score: 45,
+  rebalancing_action: 'Wait and monitor',
+  position_action: null,
+  new_entry_action: 'Wait and monitor',
+  position_size_hint: 'No new position suggested.',
+  position_sizing_reason: null,
+  executive_summary:
+    'The backend could not verify a current price, so the LLM Buy recommendation was downgraded to Hold. The UI should show the missing price warning, data quality badges, and no synthetic trade levels.',
+  investment_thesis:
+    'This mock exists to validate the missing-current-price path. Because current price is unavailable, no entry, stop loss, take profit, or risk/reward value should be rendered. The frontend should treat this as a safe non-actionable Hold instead of inventing a price.',
+  key_catalysts: ['Price data recovers from the market data provider.'],
+  invalidation_conditions: ['Ticker remains unavailable or price data is stale.'],
+  data_quality: {
+    ...COMMON_QUALITY,
+    price_data: 'missing',
+    trade_levels: 'invalid',
+    llm_output: 'downgraded',
+    volatility_data: 'fallback',
+    warnings: ['Current price intentionally missing for UI debugging.'],
+  },
+  validation_warnings: [
+    'CURRENT_PRICE_MISSING',
+    'DECISION_DOWNGRADED_TO_HOLD',
+    'TRADE_PLAN_INVALID',
+  ],
+  agents_used: AGENTS_USED,
+};
+MOCK_MISSING_PRICE_RESPONSE.full_decision = createFullDecision({
+  decision: MOCK_MISSING_PRICE_RESPONSE.final_decision,
+  summary: MOCK_MISSING_PRICE_RESPONSE.executive_summary,
+  thesis: MOCK_MISSING_PRICE_RESPONSE.investment_thesis,
+  priceTarget: MOCK_MISSING_PRICE_RESPONSE.price_target,
+  timeHorizon: MOCK_MISSING_PRICE_RESPONSE.time_horizon,
+});
+
+export const MOCK_REPAIRED_RESPONSE = {
+  request_id: 'mock-meta-repaired-buy',
+  ticker: 'META',
+  trade_date: '2026-05-18',
+  llm_decision: 'Buy',
+  final_decision: 'Buy',
+  decision: 'Buy',
+  rating: 'Buy',
+  decision_adjusted: false,
+  decision_adjusted_reason: null,
+  trade_plan_valid: true,
+  has_existing_position: false,
+  position_quantity: null,
+  average_entry_price: null,
+  current_price: 510,
+  current_price_as_of: '2026-05-18',
+  current_price_source: 'yfinance:last_close',
+  price_target: 585,
+  time_horizon_months: 2,
+  time_horizon: '2 Months',
+  confidence_score: 0.8,
+  suggested_allocation_percent: 5,
+  entry_price: 510,
+  stop_loss: 485,
+  take_profit: 585,
+  risk_per_share: 25,
+  reward_per_share: 75,
+  risk_reward_ratio: 3.0,
+  risk_reward_display: '1:3',
+  max_drawdown_estimate: '6-10%',
+  max_drawdown_min_pct: 6,
+  max_drawdown_max_pct: 10,
+  volatility_level: 'Medium',
+  volatility_score: 48,
+  rebalancing_action: 'Add gradually',
+  position_action: null,
+  new_entry_action: 'Add gradually',
+  position_size_hint: 'Use standard risk management and avoid oversized position.',
+  position_sizing_reason:
+    'Backend validation repaired the original LLM levels by clamping risk/reward to 1:3 and recomputing the take profit from the current price anchor.',
+  executive_summary:
+    'META is a repaired Buy mock. The final decision remains Buy, but the backend contract marks the trade levels as recomputed because the original LLM risk/reward was not acceptable.',
+  investment_thesis:
+    'This scenario tests that repaired-but-valid trade plans still render as actionable. The UI should show the full action plan, data quality status, and validation warning codes in readable form. Price target remains the analytical target, while take profit is the execution target created from entry, stop, and the 1:3 risk/reward requirement.',
+  key_catalysts: [
+    'Ad revenue remains resilient.',
+    'AI infrastructure spending improves product engagement.',
+  ],
+  invalidation_conditions: ['Break below stop loss.', 'Ad pricing weakens materially.'],
+  data_quality: {
+    ...COMMON_QUALITY,
+    trade_levels: 'recomputed',
+    llm_output: 'repaired',
+    warnings: ['Mock repaired scenario. Original LLM levels were intentionally invalid.'],
+  },
+  validation_warnings: ['RR_CLAMPED_TO_3', 'TAKE_PROFIT_RECOMPUTED', 'PRICE_TARGET_RECOMPUTED'],
+  agents_used: AGENTS_USED,
+};
+MOCK_REPAIRED_RESPONSE.full_decision = createFullDecision({
+  decision: MOCK_REPAIRED_RESPONSE.final_decision,
+  summary: MOCK_REPAIRED_RESPONSE.executive_summary,
+  thesis: MOCK_REPAIRED_RESPONSE.investment_thesis,
+  priceTarget: MOCK_REPAIRED_RESPONSE.price_target,
+  timeHorizon: MOCK_REPAIRED_RESPONSE.time_horizon,
+});
+
 export const MOCK_IDX_RESPONSE = {
   request_id: 'mock-bbca-buy',
   ticker: 'BBCA.JK',
@@ -407,6 +541,8 @@ const MOCK_MAP = {
   NVDA: MOCK_RESPONSE,
   AAPL: MOCK_HOLD_RESPONSE,
   TSLA: MOCK_SELL_RESPONSE,
+  MSFT: MOCK_MISSING_PRICE_RESPONSE,
+  META: MOCK_REPAIRED_RESPONSE,
   'BBCA.JK': MOCK_IDX_RESPONSE,
   'BBRI.JK': withFullDecision({
     ...MOCK_IDX_RESPONSE,
@@ -488,6 +624,20 @@ const MOCK_MAP = {
     volatility_score: 91,
     validation_warnings: ['INDONESIA_TICK_SIZE_ROUNDED'],
   }),
+  'UNVR.JK': withFullDecision({
+    ...MOCK_MISSING_PRICE_RESPONSE,
+    request_id: 'mock-unvr-missing-price',
+    ticker: 'UNVR.JK',
+    volatility_level: 'High',
+    volatility_score: 63,
+    rebalancing_action: 'No new entry',
+    new_entry_action: 'No new entry',
+    data_quality: {
+      ...MOCK_MISSING_PRICE_RESPONSE.data_quality,
+      news: 'partial',
+      warnings: ['Mock IDX missing-price scenario. No synthetic IDR price is shown.'],
+    },
+  }),
   ERROR: MOCK_ERROR_RESPONSE,
 };
 
@@ -521,7 +671,10 @@ export function getMockAnalysisResponse(options = {}) {
     (normalizedTicker.endsWith('.JK') ? MOCK_IDX_RESPONSE : MOCK_RESPONSE);
   const response = clone(base);
   const normalizedHorizon = normalizeTimeHorizonMonths(time_horizon_months);
-  const hasExistingProvided = Object.prototype.hasOwnProperty.call(options, 'has_existing_position');
+  const hasExistingProvided = Object.prototype.hasOwnProperty.call(
+    options,
+    'has_existing_position'
+  );
 
   response.ticker = normalizedTicker;
   response.trade_date = trade_date || response.trade_date;
