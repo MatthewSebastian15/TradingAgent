@@ -388,7 +388,7 @@ export default function AnalysisWorkspace({
 
           {result && !loading && (
             <div className="p-4 sm:p-6">
-              <ResultCard result={result} />
+              <ResultCard result={result} enableReportExport={Boolean(resultPathBase)} />
             </div>
           )}
         </div>

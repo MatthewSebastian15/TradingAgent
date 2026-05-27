@@ -23,6 +23,7 @@ from logging_config import RequestIdMiddleware, configure_logging
 from routes.analysis import router as analysis_router
 from routes.analysis import shutdown_executor
 from routes.market import router as market_router
+from routes.reports import router as reports_router
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -102,6 +103,7 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(analysis_router, prefix="/api")
 app.include_router(market_router, prefix="/api")
+app.include_router(reports_router, prefix="/api")
 
 
 @app.get("/health", tags=["ops"])

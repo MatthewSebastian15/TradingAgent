@@ -103,6 +103,7 @@ const COMMON_QUALITY = {
 export const MOCK_RESPONSE = {
   request_id: 'mock-nvda-buy',
   ticker: 'NVDA',
+  market: 'US',
   trade_date: '2026-05-18',
   llm_decision: 'Buy',
   final_decision: 'Buy',
@@ -174,6 +175,7 @@ MOCK_RESPONSE.full_decision = createFullDecision({
 export const MOCK_SELL_RESPONSE = {
   request_id: 'mock-tsla-sell',
   ticker: 'TSLA',
+  market: 'US',
   trade_date: '2026-05-18',
   llm_decision: 'Sell',
   final_decision: 'Sell',
@@ -244,6 +246,7 @@ MOCK_SELL_RESPONSE.full_decision = createFullDecision({
 export const MOCK_HOLD_RESPONSE = {
   request_id: 'mock-aapl-hold',
   ticker: 'AAPL',
+  market: 'US',
   trade_date: '2026-05-18',
   llm_decision: 'Buy',
   final_decision: 'Hold',
@@ -314,6 +317,7 @@ MOCK_HOLD_RESPONSE.full_decision = createFullDecision({
 export const MOCK_MISSING_PRICE_RESPONSE = {
   request_id: 'mock-msft-missing-price',
   ticker: 'MSFT',
+  market: 'US',
   trade_date: '2026-05-18',
   llm_decision: 'Buy',
   final_decision: 'Hold',
@@ -382,6 +386,7 @@ MOCK_MISSING_PRICE_RESPONSE.full_decision = createFullDecision({
 export const MOCK_REPAIRED_RESPONSE = {
   request_id: 'mock-meta-repaired-buy',
   ticker: 'META',
+  market: 'US',
   trade_date: '2026-05-18',
   llm_decision: 'Buy',
   final_decision: 'Buy',
@@ -448,6 +453,7 @@ MOCK_REPAIRED_RESPONSE.full_decision = createFullDecision({
 export const MOCK_IDX_RESPONSE = {
   request_id: 'mock-bbca-buy',
   ticker: 'BBCA.JK',
+  market: 'ID',
   trade_date: '2026-05-18',
   llm_decision: 'Buy',
   final_decision: 'Buy',
@@ -520,6 +526,7 @@ MOCK_IDX_RESPONSE.full_decision = createFullDecision({
 export const MOCK_ERROR_RESPONSE = {
   request_id: 'mock-error',
   ticker: 'ERROR',
+  market: 'US',
   trade_date: '2026-05-18',
   error: 'Analysis failed: 429 RESOURCE_EXHAUSTED. Quota exceeded. Please retry later.',
 };
@@ -677,6 +684,7 @@ export function getMockAnalysisResponse(options = {}) {
   );
 
   response.ticker = normalizedTicker;
+  response.market = normalizedTicker.endsWith('.JK') ? 'ID' : 'US';
   response.trade_date = trade_date || response.trade_date;
   response.time_horizon_months = normalizedHorizon;
   response.time_horizon = formatTimeHorizon(normalizedHorizon);
