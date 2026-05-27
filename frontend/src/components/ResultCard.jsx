@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ExportReportButtons from './ExportReportButtons';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
@@ -361,7 +362,7 @@ function HoldMetrics({ result, currentPrice }) {
   );
 }
 
-export default function ResultCard({ result }) {
+export default function ResultCard({ result, enableReportExport = true }) {
   const [thesisExpanded, setThesisExpanded] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
 
@@ -447,6 +448,9 @@ export default function ResultCard({ result }) {
             <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
               Created: {createdAtLabel}
             </span>
+          )}
+          {enableReportExport && result.request_id && (
+            <ExportReportButtons requestId={result.request_id} disabled={Boolean(result.error)} />
           )}
         </div>
       </div>

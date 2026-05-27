@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TradingAgent Analysis Report - {{ report.ticker }}</title>
+    <style>{{ css }}</style>
+  </head>
+  <body>
+    <main class="report">
+      <header class="report-header">
+        <h1>TradingAgent Analysis Report</h1>
+        <div class="meta-grid">
+          <div><span>Ticker</span>{{ report.ticker }}</div>
+          <div><span>Market</span>{{ report.market_label }}</div>
+          <div><span>Trade date</span>{{ report.trade_date }}</div>
+          <div><span>Generated at</span>{{ report.generated_at }}</div>
+          <div><span>Analysis created</span>{{ report.analysis_created_at }}</div>
+          <div><span>Request ID</span>{{ report.request_id }}</div>
+        </div>
+      </header>
+
+      {% if report.current_price == none %}
+        <div class="warning">
+          <strong>Price data warning:</strong> current_price is unavailable. The report is rendered without synthetic price or trade levels.
+        </div>
+      {% endif %}
+
+      {% if report.decision_adjusted %}
+        <div class="warning">
+          <strong>Decision adjusted:</strong>
+          {{ report.llm_decision }} to {{ report.final_decision }}.
+          Reason: {{ report.decision_adjusted_reason }}
+        </div>
+      {% endif %}
+
+      <section class="section">
+        <h2>Executive Summary</h2>
+        <table>
+          <tbody>
+            {% for row in report.executive_rows %}
+              <tr>
+                <th>{{ row.label }}</th>
+                <td>{{ row.value }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section">
+        <h2>Decision Summary</h2>
+        <table>
+          <tbody>
+            {% for row in report.decision_rows %}
+              <tr>
+                <th>{{ row.label }}</th>
+                <td>{{ row.value }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section">
+        <h2>Price And Trade Plan</h2>
+        {% if report.show_trade_plan %}
+          <table>
+            <tbody>
+              {% for row in report.trade_plan_rows %}
+                <tr>
+                  <th>{{ row.label }}</th>
+                  <td>{{ row.value }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="muted">No actionable trade plan is available. Final decision: {{ report.final_decision }}.</p>
+        {% endif %}
+      </section>
+
+      <section class="section">
+        <h2>Risk And Volatility</h2>
+        <table>
+          <tbody>
+            {% for row in report.risk_rows %}
+              <tr>
+                <th>{{ row.label }}</th>
+                <td>{{ row.value }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section">
+        <h2>Data Quality And Validation</h2>
+        <table>
+          <tbody>
+            {% for row in report.validation_rows %}
+              <tr>
+                <th>{{ row.label }}</th>
+                <td>{{ row.value }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        {% if report.validation_warnings %}
+          <h3>Validation Warnings</h3>
+          <ul>
+            {% for warning in report.validation_warnings %}
+              <li>{{ warning }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        {% if report.data_quality_warnings %}
+          <h3>Data Quality Notes</h3>
+          <ul>
+            {% for warning in report.data_quality_warnings %}
+              <li>{{ warning }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </section>
+
+      {% if report.analyst_sections %}
+        <section class="section page-break-soft">
+          <h2>Analyst Notes</h2>
+          {% for section in report.analyst_sections %}
+            <article class="analyst-note">
+              <h3>{{ section.title }}</h3>
+              <p>{{ section.body }}</p>
+            </article>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      <section class="section disclaimer">
+        <h2>Disclaimer</h2>
+        <p>
+          This report is generated for informational and research purposes only. It is not financial advice.
+          Always verify market data, risk levels, and trade decisions independently.
+        </p>
+      </section>
+
+      <footer>
+        TradingAgent report · {{ report.ticker }} · {{ report.request_id }}
+      </footer>
+    </main>
+  </body>
+</html>

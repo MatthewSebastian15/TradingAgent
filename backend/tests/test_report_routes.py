@@ -1,0 +1,144 @@
+from __future__ import annotations
+
+import asyncio
+
+from analysis_cache import AnalysisCacheKey, AnalysisJobStore
+
+
+def _cache_key(ticker: str = "NVDA") -> AnalysisCacheKey:
+    return AnalysisCacheKey(
+        ticker=ticker,
+        trade_date="2026-05-26",
+        provider="google",
+        quick_model="test-quick",
+        deep_model="test-deep",
+        analysis_mode="balanced",
+        analysis_depth="balanced",
+        time_horizon_months=1,
+        max_debate_rounds=1,
+        response_detail="full",
+    )
+
+
+def _result(**overrides):
+    result = {
+        "request_id": "rid-report-1",
+        "ticker": "NVDA",
+        "market": "US",
+        "trade_date": "2026-05-26",
+        "analysis_created_at": "2026-05-26T12:00:00Z",
+        "current_price": 920,
+        "current_price_as_of": "2026-05-26",
+        "current_price_source": "yfinance:last_close",
+        "llm_decision": "Buy",
+        "final_decision": "Buy",
+        "decision": "Buy",
+        "decision_adjusted": False,
+        "decision_adjusted_reason": None,
+        "trade_plan_valid": True,
+        "has_existing_position": False,
+        "price_target": 1060,
+        "entry_price": 920,
+        "stop_loss": 880,
+        "take_profit": 1040,
+        "risk_per_share": 40,
+        "reward_per_share": 120,
+        "risk_reward_display": "1:3",
+        "max_drawdown_estimate": "8-12%",
+        "volatility_level": "High",
+        "volatility_score": 78,
+        "rebalancing_action": "Buy with tight risk control",
+        "position_size_hint": "Use smaller size due to High volatility.",
+        "data_quality": {
+            "price_data": "ok",
+            "trade_levels": "recomputed",
+            "llm_output": "repaired",
+            "volatility_data": "ok",
+        },
+        "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
+        "executive_summary": "A concise test summary.",
+    }
+    result.update(overrides)
+    return result
+
+
+def _store_with_result(result: dict) -> AnalysisJobStore:
+    async def main():
+        store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+        job = await store.create(
+            owner_id="route-test",
+            request_id=result["request_id"],
+            cache_key=_cache_key(result.get("ticker", "NVDA")),
+            payload={"ticker": result.get("ticker", "NVDA"), "trade_date": result.get("trade_date", "2026-05-26")},
+        )
+        await job.complete(result)
+        return store
+
+    return asyncio.run(main())
+
+
+def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypatch):
+    store = _store_with_result(_result())
+    monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
+
+    response = client.get("/api/analysis/jobs/rid-report-1/report.html")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "TradingAgent Analysis Report" in response.text
+    assert "Final Decision" in response.text
+    assert "TAKE_PROFIT_RECOMPUTED" in response.text
+    assert "Entry Price" in response.text
+
+
+def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(client, monkeypatch):
+    store = _store_with_result(_result(ticker="BBCA.JK", market="ID", request_id="rid-report-pdf"))
+    monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
+    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+
+    response = client.get("/api/analysis/jobs/rid-report-pdf/report.pdf")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment" in response.headers["content-disposition"]
+    assert "TradingAgent_BBCA.JK_2026-05-26.pdf" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF")
+
+
+def test_report_endpoint_returns_404_for_missing_request_id(client):
+    response = client.get("/api/analysis/jobs/missing-request/report.html")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "report_not_found"
+
+
+def test_report_endpoint_rejects_global_legacy_result(client, monkeypatch):
+    store = _store_with_result(_result(request_id="rid-global", market="GLOBAL", ticker="700.HK"))
+    monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
+
+    response = client.get("/api/analysis/jobs/rid-global/report.html")
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "unsupported_report_market"
+
+
+def test_hold_report_does_not_render_actionable_trade_levels(client, monkeypatch):
+    store = _store_with_result(
+        _result(
+            request_id="rid-hold",
+            final_decision="Hold",
+            decision="Hold",
+            trade_plan_valid=False,
+            decision_adjusted=True,
+            decision_adjusted_reason="Invalid risk reward structure",
+        )
+    )
+    monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
+
+    response = client.get("/api/analysis/jobs/rid-hold/report.html")
+
+    assert response.status_code == 200
+    assert "No actionable trade plan is available" in response.text
+    assert "Entry Price" not in response.text
+    assert "Stop Loss" not in response.text
+    assert "Take Profit" not in response.text
