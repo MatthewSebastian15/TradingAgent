@@ -170,6 +170,39 @@ QUICK_THINK_LLM=<provider-model-id>
 
 ---
 
+## Environment Mode
+
+TradingAgent defaults to local development/personal use. Production must be selected explicitly.
+
+Default local mode:
+
+```env
+APP_ENV=development
+```
+
+Production mode:
+
+```env
+APP_ENV=production
+```
+
+Production requires:
+
+- `CORS_ORIGINS` with explicit frontend origins, not `*`
+- `API_KEY` configured
+- `REQUIRE_API_KEY_FOR_RATE_LIMIT=true`
+- frontend mock route disabled with `VITE_ENABLE_MOCK=false`
+
+Development CORS defaults to this local whitelist when `CORS_ORIGINS` is empty:
+
+```env
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173
+```
+
+For local commands, backend, frontend, and optional Ollama should bind to `127.0.0.1` by default. Use LAN/public bindings only when you intentionally need them.
+
+---
+
 ## Setup Without Docker
 
 ### 1. Clone
@@ -212,7 +245,7 @@ cp .env.example .env   # Windows: Copy-Item .env.example .env
 Edit `backend/.env` and set your provider, model names, and API key. Then start:
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 ### 3. Frontend
@@ -226,8 +259,8 @@ cp .env.example .env   # Windows: Copy-Item .env.example .env
 Set in `frontend/.env`:
 
 ```env
-VITE_API_URL=http://localhost:8000
-VITE_ENABLE_MOCK=false
+VITE_API_BASE_URL=http://localhost:8000
+VITE_ENABLE_MOCK=true
 ```
 
 Start:
@@ -248,9 +281,9 @@ cp backend/.env.example backend/.env
 docker compose up --build
 ```
 
-Frontend: `http://localhost:3000` — Backend: `http://localhost:8000`
+Frontend: `http://localhost:3000` — Backend: `http://localhost:8000` — Mock UI: `http://localhost:3000/analysis.test`
 
-Inside Docker, nginx proxies `/api/*` to the backend. You do not need to set `VITE_API_URL`.
+The default Docker dev build uses `VITE_API_BASE_URL=http://localhost:8000` and binds both frontend and backend to localhost. nginx can still proxy `/api/*` when the frontend is built with an empty API base URL.
 If backend API-key enforcement is enabled, set `BACKEND_API_KEY` in your shell to the same value as backend `API_KEY`; nginx injects it server-side and the key is never bundled into browser JavaScript.
 
 Optional Ollama:
@@ -259,6 +292,14 @@ Optional Ollama:
 docker compose --profile ollama up --build
 docker exec -it tradingagent-ollama ollama pull <local-model-id>
 ```
+
+Production is intentionally a separate override so the default compose file stays development-focused:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+```
+
+Before using the production override, set `APP_ENV=production`, explicit `CORS_ORIGINS`, and a strong `API_KEY` in `backend/.env`; the backend will reject production startup without them.
 
 ---
 
@@ -469,6 +510,11 @@ The local `.env` files should use the same keys, with secret values filled in pr
 
 | Variable | Required | Description |
 |---|---|---|
+| `APP_ENV` | No | Runtime mode. Defaults to `development`. Use `production` only when explicitly deploying. |
+| `CORS_ORIGINS` | Production yes | Comma-separated explicit frontend origins. Development falls back to local origins when empty. Wildcard `*` is rejected. |
+| `API_KEY` | Production yes | Shared backend API key accepted from `x-api-key` or `Authorization: Bearer ...`. Leave empty only for local development. |
+| `REQUIRE_API_KEY_FOR_RATE_LIMIT` | No | Defaults to `false` in development and `true` in production. |
+| `TRUSTED_PROXY_HOSTS` | No | Direct proxy IP/host allowlist for trusting forwarded client IP headers. Leave empty for local dev without reverse proxy. |
 | `LLM_PROVIDER` | Yes | Provider name: `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, or `ollama` |
 | `DEEP_THINK_LLM` | Yes | Model used by heavier reasoning stages such as Research Manager and Portfolio Manager |
 | `QUICK_THINK_LLM` | Yes | Model used by the faster analyst and debate stages |
@@ -484,17 +530,25 @@ The local `.env` files should use the same keys, with secret values filled in pr
 | `DATA_VENDOR_FUNDAMENTAL_DATA` | No | Comma-separated vendor order for fundamentals. Default: `yfinance,alpha_vantage` |
 | `DATA_VENDOR_NEWS_DATA` | No | Comma-separated vendor order for news data. Default: `yfinance,alpha_vantage` |
 | `OLLAMA_BASE_URL` | Ollama only | Local or Docker Ollama URL. Default: `http://localhost:11434` |
-| `API_KEY` | Required when API-key rate limiting is enabled | Shared backend API key accepted from `x-api-key` or `Authorization: Bearer ...` |
-| `REQUIRE_API_KEY_FOR_RATE_LIMIT` | No | Set to `true` to require `API_KEY` for rate-limited backend access. `backend/.env.example` sets `false`; when unset, production defaults to `true` |
+
+Production example:
+
+```env
+APP_ENV=production
+CORS_ORIGINS=https://frontend.domain-anda.com
+API_KEY=isi_api_key_yang_panjang_dan_random
+REQUIRE_API_KEY_FOR_RATE_LIMIT=true
+```
 
 ### `frontend/.env`
 
 | Variable | Default | Description |
 |---|---|---|
-| `VITE_API_URL` | Empty | Backend URL. Empty uses relative `/api/*` (Docker). Set to `http://localhost:8000` for local dev. |
+| `VITE_API_BASE_URL` | `http://localhost:8000` in dev example | Backend URL. Use `http://localhost:8000` for local dev. Empty uses relative `/api/*`. |
+| `VITE_API_URL` | Empty | Legacy alias kept for old local tooling. Prefer `VITE_API_BASE_URL`. |
 | `VITE_CLOCK_TIME_ZONE` | `Asia/Jakarta` | IANA timezone used by the navbar clock |
 | `VITE_CLOCK_LABEL` | `WIB` | Label shown next to the navbar clock |
-| `VITE_ENABLE_MOCK` | `false` | Exposes `/analysis.test` in production builds |
+| `VITE_ENABLE_MOCK` | `true` in dev example | Exposes `/analysis.test` in production builds. Local Vite dev exposes it automatically. Set `false` for production. |
 
 Frontend code intentionally does not read or send any API key from Vite environment variables. For shared deployments, inject backend `x-api-key` at a private reverse proxy such as the included nginx container via `BACKEND_API_KEY`.
 

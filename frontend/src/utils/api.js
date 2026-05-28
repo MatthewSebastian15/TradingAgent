@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
 // Generate a stable session ID for this browser tab.
 // This ensures POST /jobs and GET /jobs/{id}/events share the same

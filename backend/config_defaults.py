@@ -5,30 +5,57 @@ from __future__ import annotations
 import logging
 import os
 
-from config_env import BASE_DIR, env, env_bool, env_int, env_list
+from config_env import BASE_DIR, env, env_bool, env_int
 
 logger = logging.getLogger("config")
 
 # App
 APP_NAME = "TradingAgents API"
-APP_ENV = env("APP_ENV", "production").lower()
-_IS_PRODUCTION = APP_ENV == "production"
+APP_ENV = env("APP_ENV", "development").lower().strip()
+
+if APP_ENV not in {"development", "production"}:
+    raise ValueError(
+        f"Invalid APP_ENV={APP_ENV!r}. "
+        "Allowed values: development, production."
+    )
+
+IS_PRODUCTION = APP_ENV == "production"
+IS_DEVELOPMENT = APP_ENV == "development"
+_IS_PRODUCTION = IS_PRODUCTION
 
 # Ports
 BACKEND_PORT = 8000
 FRONTEND_PORT = 3000
 
-# CORS. Production defaults to same-origin only; set CORS_ORIGINS to a
-# comma-separated allowlist when the frontend is deployed on another origin.
-_DEFAULT_CORS_ORIGINS: list[str] = (
-    []
-    if _IS_PRODUCTION
-    else [
-        f"http://localhost:{FRONTEND_PORT}",
-        "http://localhost:5173",
-    ]
-)
-CORS_ORIGINS: list[str] = env_list("CORS_ORIGINS", _DEFAULT_CORS_ORIGINS)
+# CORS. Development gets an explicit local allowlist when CORS_ORIGINS is empty.
+# Production must opt in to allowed frontend origins explicitly.
+DEFAULT_DEV_CORS_ORIGINS: list[str] = [
+    f"http://localhost:{FRONTEND_PORT}",
+    "http://localhost:5173",
+    f"http://127.0.0.1:{FRONTEND_PORT}",
+    "http://127.0.0.1:5173",
+]
+
+_raw_cors_origins = env("CORS_ORIGINS", "")
+if _raw_cors_origins.strip():
+    CORS_ORIGINS: list[str] = [origin.strip() for origin in _raw_cors_origins.split(",") if origin.strip()]
+elif IS_DEVELOPMENT:
+    CORS_ORIGINS = list(DEFAULT_DEV_CORS_ORIGINS)
+else:
+    CORS_ORIGINS = []
+
+if "*" in CORS_ORIGINS:
+    raise ValueError(
+        "CORS_ORIGINS='*' is not allowed. "
+        "Use explicit origins instead."
+    )
+
+if IS_PRODUCTION and not CORS_ORIGINS:
+    raise ValueError("CORS_ORIGINS must be explicitly configured in production.")
+
+API_KEY = env("API_KEY", "")
+if IS_PRODUCTION and not API_KEY:
+    raise ValueError("API_KEY must be configured in production.")
 
 # Pipeline tunables
 PIPELINE_TIMEOUT_SECONDS = env_int("PIPELINE_TIMEOUT_SECONDS", 600, min_value=1)
@@ -59,8 +86,8 @@ STREAM_RATE_LIMIT_PER_MINUTE = env_int("STREAM_RATE_LIMIT_PER_MINUTE", 8, min_va
 MAX_CONCURRENT_REQUESTS_PER_KEY = env_int("MAX_CONCURRENT_REQUESTS_PER_KEY", 2, min_value=1)
 MAX_CONCURRENT_STREAMS_PER_KEY = env_int("MAX_CONCURRENT_STREAMS_PER_KEY", 1, min_value=1)
 REQUEST_BODY_MAX_BYTES = env_int("REQUEST_BODY_MAX_BYTES", 64 * 1024, min_value=1024)
-REQUIRE_API_KEY_FOR_RATE_LIMIT = env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", _IS_PRODUCTION)
-if _IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
+REQUIRE_API_KEY_FOR_RATE_LIMIT = env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", IS_PRODUCTION)
+if IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
     logger.warning(
         "APP_ENV=production but REQUIRE_API_KEY_FOR_RATE_LIMIT is disabled; "
         "anonymous clients will be accepted and rate-limited by IP only."

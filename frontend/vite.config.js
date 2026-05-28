@@ -1,16 +1,19 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const viteHost = process.env.VITE_DEV_HOST || '127.0.0.1';
+const vitePort = Number(process.env.VITE_DEV_PORT || 3000);
+
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0',
-    port: 3000,
+    host: viteHost,
+    port: vitePort,
     strictPort: true,
   },
   preview: {
-    host: '0.0.0.0',
-    port: 3000,
+    host: viteHost,
+    port: vitePort,
     strictPort: true,
   },
 });

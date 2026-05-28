@@ -11,11 +11,14 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      APP_ENV: development
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173
+      REQUIRE_API_KEY_FOR_RATE_LIMIT: "false"
       OLLAMA_BASE_URL: http://ollama:11434
       XDG_CACHE_HOME: /root/.tradingagents/cache
       YFINANCE_CACHE_DIR: /root/.tradingagents/cache/py-yfinance
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - tradingagent-cache:/root/.tradingagents/cache
       - tradingagent-results:/root/.tradingagents/logs
@@ -29,8 +32,8 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./backend 
-          target: /app 
+          path: ./backend
+          target: /app
           ignore:
             - __pycache__/
             - .venv/
@@ -39,6 +42,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+        VITE_ENABLE_MOCK: "true"
     container_name: tradingagent-frontend
     dns:
       - 1.1.1.1
@@ -49,7 +55,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     restart: unless-stopped
     develop:
       watch:
@@ -68,7 +74,7 @@ services:
     profiles:
       - ollama
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama-data:/root/.ollama
     restart: unless-stopped
