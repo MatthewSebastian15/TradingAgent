@@ -242,6 +242,8 @@ export default function AnalysisWorkspace({
   historyKey,
   emptyDescription,
   resultPathBase = '/analysis',
+  lookupResult = null,
+  enableReportExport = true,
 }) {
   const navigate = useNavigate();
   const { requestId } = useParams();
@@ -263,6 +265,38 @@ export default function AnalysisWorkspace({
       setStatus('');
       setAgentProgress(null);
       return undefined;
+    }
+
+    if (lookupResult) {
+      let cancelled = false;
+
+      async function loadMockResult() {
+        setLoading(true);
+        setStatus('Loading saved analysis...');
+        setAgentProgress(null);
+
+        try {
+          const loadedResult = await lookupResult(requestId);
+          if (!loadedResult) throw new Error(RESULT_EXPIRED_MESSAGE);
+
+          const enrichedResult = withAnalysisCreatedAt(loadedResult);
+          if (cancelled) return;
+          setResult(enrichedResult);
+          saveToHistory(historyKey, enrichedResult);
+        } catch (error) {
+          if (!cancelled) setResult({ error: error.message || RESULT_EXPIRED_MESSAGE });
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+            setStatus('');
+          }
+        }
+      }
+
+      loadMockResult();
+      return () => {
+        cancelled = true;
+      };
     }
 
     const controller = new AbortController();
@@ -308,7 +342,7 @@ export default function AnalysisWorkspace({
 
     loadResult();
     return () => controller.abort();
-  }, [historyKey, requestId]);
+  }, [historyKey, lookupResult, requestId]);
 
   function handleResult(nextResult) {
     if (!nextResult) {
@@ -388,7 +422,7 @@ export default function AnalysisWorkspace({
 
           {result && !loading && (
             <div className="p-4 sm:p-6">
-              <ResultCard result={result} enableReportExport={Boolean(resultPathBase)} />
+              <ResultCard result={result} enableReportExport={enableReportExport && Boolean(resultPathBase)} />
             </div>
           )}
         </div>

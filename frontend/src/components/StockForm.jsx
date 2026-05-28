@@ -56,7 +56,13 @@ function TickerChip({ label, active, onClick, disabled }) {
   );
 }
 
-export default function StockForm({ onResult, onLoading, onStatus, onAgentProgress }) {
+export default function StockForm({
+  onResult,
+  onLoading,
+  onStatus,
+  onAgentProgress,
+  useAnalysisJobHook = useAnalysisJob,
+}) {
   const [activeMarket, setActiveMarket] = useState('US');
   const [ticker, setTicker] = useState(MARKETS.US.defaultTicker);
   const [date, setDate] = useState(today());
@@ -68,7 +74,7 @@ export default function StockForm({ onResult, onLoading, onStatus, onAgentProgre
   const [positionQuantity, setPositionQuantity] = useState('');
   const [averageEntryPrice, setAverageEntryPrice] = useState('');
   const [error, setError] = useState('');
-  const { running, startAnalysis, stopAnalysis } = useAnalysisJob({
+  const { running, startAnalysis, stopAnalysis } = useAnalysisJobHook({
     onResult,
     onLoading,
     onStatus,

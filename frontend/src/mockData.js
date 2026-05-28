@@ -1,7 +1,9 @@
 // frontend/src/mockData.js
-// Central mock source for /analysis.test and VITE_ENABLE_MOCK=true.
-// Keep the shape close to the backend response so the UI can be debugged
-// without spending LLM quota or running the agent pipeline.
+// Central mock source for /analysis.test.
+// Mock mode deliberately reuses the same form, workspace, result card, history,
+// and agent-log components as /analysis. Only the job runner and response source
+// are replaced, so UI regressions show up before humans spend LLM quota. A rare
+// victory against needless API bills.
 
 const AGENTS_USED = [
   'Data Collection',
@@ -16,19 +18,14 @@ const AGENTS_USED = [
   'Portfolio Manager',
 ];
 
-function normalizeTimeHorizonMonths(value) {
-  const months = Number(value);
-  return [1, 2, 3].includes(months) ? months : 1;
-}
+const COMMON_QUALITY = {
+  price_data: 'ok',
+  fundamentals: 'ok',
+  news: 'ok',
+  volatility_data: 'ok',
+};
 
-function formatTimeHorizon(months) {
-  const normalized = normalizeTimeHorizonMonths(months);
-  return `${normalized} Month${normalized > 1 ? 's' : ''}`;
-}
-
-function createFullDecision({ decision, summary, thesis, priceTarget, timeHorizon }) {
-  return `**Rating**: ${decision}\n\n**Executive Summary**: ${summary}\n\n**Investment Thesis**: ${thesis}\n\n**Price Target**: ${priceTarget ?? 'N/A'}\n\n**Time Horizon**: ${timeHorizon}`;
-}
+const DEFAULT_ANALYSIS_CREATED_AT = '2026-05-18T15:36:00+07:00';
 
 export const MOCK_PIPELINE_STEPS = [
   {
@@ -45,7 +42,7 @@ export const MOCK_PIPELINE_STEPS = [
   },
   {
     agent_id: 'news_analyst',
-    agent_name: 'NEWS ANALYST',
+    agent_name: 'NEWS + SOCIAL',
     running: 'Reviewing recent headlines and sentiment drivers...',
     completed: 'News sentiment analysis complete.',
   },
@@ -93,14 +90,52 @@ export const MOCK_PIPELINE_STEPS = [
   },
 ];
 
-const COMMON_QUALITY = {
-  price_data: 'ok',
-  fundamentals: 'ok',
-  news: 'ok',
-  volatility_data: 'ok',
-};
+function normalizeTimeHorizonMonths(value) {
+  const months = Number(value);
+  return [1, 2, 3].includes(months) ? months : 1;
+}
 
-export const MOCK_RESPONSE = {
+function formatTimeHorizon(months) {
+  const normalized = normalizeTimeHorizonMonths(months);
+  return `${normalized} Month${normalized > 1 ? 's' : ''}`;
+}
+
+function createFullDecision({ decision, summary, thesis, priceTarget, timeHorizon }) {
+  return `**Rating**: ${decision}\n\n**Executive Summary**: ${summary || 'N/A'}\n\n**Investment Thesis**: ${thesis || 'N/A'}\n\n**Price Target**: ${priceTarget ?? 'N/A'}\n\n**Time Horizon**: ${timeHorizon || 'N/A'}`;
+}
+
+function completeResponse(response) {
+  const completed = {
+    max_debate_rounds: 3,
+    analysis_depth: 'balanced',
+    response_detail: 'full',
+    data_fetched_at: DEFAULT_ANALYSIS_CREATED_AT,
+    analysis_created_at: DEFAULT_ANALYSIS_CREATED_AT,
+    llm_call_budget: 9,
+    llm_calls_used: 9,
+    budget_exhausted: false,
+    agents_skipped: [],
+    raw_agent_state: null,
+    source: 'frontend/src/mockData.js',
+    mock: true,
+    ...response,
+  };
+
+  return {
+    ...completed,
+    full_decision:
+      completed.full_decision ||
+      createFullDecision({
+        decision: completed.final_decision ?? completed.decision,
+        summary: completed.executive_summary,
+        thesis: completed.investment_thesis,
+        priceTarget: completed.price_target,
+        timeHorizon: completed.time_horizon,
+      }),
+  };
+}
+
+export const MOCK_RESPONSE = completeResponse({
   request_id: 'mock-nvda-buy',
   ticker: 'NVDA',
   market: 'US',
@@ -142,9 +177,9 @@ export const MOCK_RESPONSE = {
   position_sizing_reason:
     'Use a smaller staged allocation because volatility is high. Keep the stop loss disciplined and do not add unless the setup keeps a valid 1:3 risk/reward profile.',
   executive_summary:
-    'NVDA remains in a strong position because AI infrastructure spending is still concentrated around its GPU and software ecosystem. Demand for accelerated computing stays above available supply, and the company keeps high operating leverage through premium pricing. The backend-valid trade plan is actionable only because current price and risk/reward levels are complete.',
+    'NVDA remains in a strong position because AI infrastructure spending is still concentrated around its GPU and software ecosystem. Demand for accelerated computing stays above available supply, and the backend-valid trade plan is actionable because current price and risk/reward levels are complete.',
   investment_thesis:
-    'The core thesis is that NVDA remains a leading supplier for high-end AI training and inference workloads. Its CUDA ecosystem, data center GPU roadmap, and customer lock-in create durable advantages. The upside case depends on sustained cloud capex, Blackwell adoption, and broader enterprise AI demand. The downside case is valuation sensitivity if growth expectations cool. The trade plan uses backend current price as the anchor, not a model-invented number. The setup remains valid only while entry, stop loss, and take profit preserve the fixed 1:3 risk/reward ratio.',
+    'The core thesis is that NVDA remains a leading supplier for high-end AI training and inference workloads. Its CUDA ecosystem, data center GPU roadmap, and customer lock-in create durable advantages. The upside case depends on sustained cloud capex, Blackwell adoption, and broader enterprise AI demand. The downside case is valuation sensitivity if growth expectations cool. The setup remains valid only while entry, stop loss, and take profit preserve the fixed 1:3 risk/reward ratio.',
   key_catalysts: [
     'Sustained AI data center capex from hyperscalers.',
     'Blackwell platform ramp and supply expansion.',
@@ -163,16 +198,9 @@ export const MOCK_RESPONSE = {
   },
   validation_warnings: ['TAKE_PROFIT_RECOMPUTED'],
   agents_used: AGENTS_USED,
-};
-MOCK_RESPONSE.full_decision = createFullDecision({
-  decision: MOCK_RESPONSE.final_decision,
-  summary: MOCK_RESPONSE.executive_summary,
-  thesis: MOCK_RESPONSE.investment_thesis,
-  priceTarget: MOCK_RESPONSE.price_target,
-  timeHorizon: MOCK_RESPONSE.time_horizon,
 });
 
-export const MOCK_SELL_RESPONSE = {
+export const MOCK_SELL_RESPONSE = completeResponse({
   request_id: 'mock-tsla-sell',
   ticker: 'TSLA',
   market: 'US',
@@ -214,9 +242,9 @@ export const MOCK_SELL_RESPONSE = {
   position_sizing_reason:
     'Existing exposure can be exited because the user already has a position and volatility is very high. New exposure is not suggested.',
   executive_summary:
-    'TSLA faces pressure from price competition, margin compression, and uncertainty around the timing of robotaxi and software monetization. The current setup is a valid Sell because backend validation confirms current price, stop loss, take profit, and risk/reward direction. Existing-position context allows the portfolio action to be Exit position.',
+    'TSLA faces pressure from price competition, margin compression, and uncertainty around the timing of robotaxi and software monetization. The current setup is a valid Sell because backend validation confirms current price, stop loss, take profit, and risk/reward direction.',
   investment_thesis:
-    'The sell thesis centers on weaker automotive margins and rising EV competition. TSLA still has long-term optionality from energy storage, FSD, and robotics, but those businesses need time before they can offset pressure in the core auto segment. In the short term, the stock needs evidence of margin recovery, stronger delivery growth, or credible software revenue acceleration. The trade plan treats price target as an analytical target and take profit as the execution target. Risk/reward is constrained at 1:3, keeping the setup testable. The action is valid only because has_existing_position is true.',
+    'The sell thesis centers on weaker automotive margins and rising EV competition. TSLA still has long-term optionality from energy storage, FSD, and robotics, but those businesses need time before they can offset pressure in the core auto segment. In the short term, the stock needs evidence of margin recovery, stronger delivery growth, or credible software revenue acceleration. Risk/reward is constrained at 1:3, keeping the setup testable.',
   key_catalysts: [
     'Possible rebound if deliveries surprise to the upside.',
     'Energy storage growth could soften automotive weakness.',
@@ -234,16 +262,9 @@ export const MOCK_SELL_RESPONSE = {
   },
   validation_warnings: [],
   agents_used: AGENTS_USED,
-};
-MOCK_SELL_RESPONSE.full_decision = createFullDecision({
-  decision: MOCK_SELL_RESPONSE.final_decision,
-  summary: MOCK_SELL_RESPONSE.executive_summary,
-  thesis: MOCK_SELL_RESPONSE.investment_thesis,
-  priceTarget: MOCK_SELL_RESPONSE.price_target,
-  timeHorizon: MOCK_SELL_RESPONSE.time_horizon,
 });
 
-export const MOCK_HOLD_RESPONSE = {
+export const MOCK_HOLD_RESPONSE = completeResponse({
   request_id: 'mock-aapl-hold',
   ticker: 'AAPL',
   market: 'US',
@@ -286,7 +307,7 @@ export const MOCK_HOLD_RESPONSE = {
   executive_summary:
     'AAPL remains a high-quality company, but the backend downgraded the LLM Buy decision because the trade structure did not meet the required risk/reward contract. Current price is still shown so the user has context. The UI should not render entry, stop loss, take profit, or R/R metrics for this Hold result.',
   investment_thesis:
-    'The hold thesis reflects a strong company with limited near-term upside. Services revenue, buybacks, and ecosystem retention support downside stability, while AI-driven device upgrades could become a future catalyst. The decision is not a new trade plan. The backend keeps current price, volatility, and rebalancing visible while hiding invalid trade levels. This mock specifically tests that Hold output stays clean. It also tests that decision_adjusted warnings are visible to the user.',
+    'The hold thesis reflects a strong company with limited near-term upside. Services revenue, buybacks, and ecosystem retention support downside stability, while AI-driven device upgrades could become a future catalyst. The decision is not a new trade plan. The backend keeps current price, volatility, and rebalancing visible while hiding invalid trade levels.',
   key_catalysts: [
     'Services growth remains resilient.',
     'AI features may support a future iPhone upgrade cycle.',
@@ -305,17 +326,10 @@ export const MOCK_HOLD_RESPONSE = {
   },
   validation_warnings: ['DECISION_DOWNGRADED_TO_HOLD', 'TRADE_PLAN_INVALID'],
   agents_used: AGENTS_USED,
-};
-MOCK_HOLD_RESPONSE.full_decision = createFullDecision({
-  decision: MOCK_HOLD_RESPONSE.final_decision,
-  summary: MOCK_HOLD_RESPONSE.executive_summary,
-  thesis: MOCK_HOLD_RESPONSE.investment_thesis,
-  priceTarget: MOCK_HOLD_RESPONSE.price_target,
-  timeHorizon: MOCK_HOLD_RESPONSE.time_horizon,
 });
 
-export const MOCK_MISSING_PRICE_RESPONSE = {
-  request_id: 'mock-msft-missing-price',
+export const MOCK_MISSING_PRICE_RESPONSE = completeResponse({
+  request_id: 'mock-missing-price',
   ticker: 'MSFT',
   market: 'US',
   trade_date: '2026-05-18',
@@ -374,16 +388,9 @@ export const MOCK_MISSING_PRICE_RESPONSE = {
     'TRADE_PLAN_INVALID',
   ],
   agents_used: AGENTS_USED,
-};
-MOCK_MISSING_PRICE_RESPONSE.full_decision = createFullDecision({
-  decision: MOCK_MISSING_PRICE_RESPONSE.final_decision,
-  summary: MOCK_MISSING_PRICE_RESPONSE.executive_summary,
-  thesis: MOCK_MISSING_PRICE_RESPONSE.investment_thesis,
-  priceTarget: MOCK_MISSING_PRICE_RESPONSE.price_target,
-  timeHorizon: MOCK_MISSING_PRICE_RESPONSE.time_horizon,
 });
 
-export const MOCK_REPAIRED_RESPONSE = {
+export const MOCK_REPAIRED_RESPONSE = completeResponse({
   request_id: 'mock-meta-repaired-buy',
   ticker: 'META',
   market: 'US',
@@ -441,16 +448,9 @@ export const MOCK_REPAIRED_RESPONSE = {
   },
   validation_warnings: ['RR_FORCED_TO_3', 'TAKE_PROFIT_RECOMPUTED', 'PRICE_TARGET_RECOMPUTED'],
   agents_used: AGENTS_USED,
-};
-MOCK_REPAIRED_RESPONSE.full_decision = createFullDecision({
-  decision: MOCK_REPAIRED_RESPONSE.final_decision,
-  summary: MOCK_REPAIRED_RESPONSE.executive_summary,
-  thesis: MOCK_REPAIRED_RESPONSE.investment_thesis,
-  priceTarget: MOCK_REPAIRED_RESPONSE.price_target,
-  timeHorizon: MOCK_REPAIRED_RESPONSE.time_horizon,
 });
 
-export const MOCK_IDX_RESPONSE = {
+export const MOCK_IDX_RESPONSE = completeResponse({
   request_id: 'mock-bbca-buy',
   ticker: 'BBCA.JK',
   market: 'ID',
@@ -494,7 +494,7 @@ export const MOCK_IDX_RESPONSE = {
   executive_summary:
     'The IDX mock scenario uses a large-cap bank profile with steady profitability, strong liquidity, and defensive characteristics. It validates IDR formatting, .JK ticker behavior, current price display, and tick-size-rounded trade levels. The Buy decision is valid because risk/reward is exactly 1:3.',
   investment_thesis:
-    'The buy thesis depends on resilient loan growth, stable asset quality, and strong deposit franchise economics. Upside comes from improving credit demand and consistent profitability. The main risk is macro pressure from rates, weaker consumption, or rising credit costs. This mock uses backend-style current price as the anchor. Take profit is the execution target based on risk/reward, while price target remains the analytical target. Rebalancing is constrained to the allowed mapping for Buy with High volatility.',
+    'The buy thesis depends on resilient loan growth, stable asset quality, and strong deposit franchise economics. Upside comes from improving credit demand and consistent profitability. The main risk is macro pressure from rates, weaker consumption, or rising credit costs. This mock uses backend-style current price as the anchor. Take profit is the execution target based on risk/reward, while price target remains the analytical target.',
   key_catalysts: [
     'Stable net interest margin.',
     'Healthy loan growth from corporate and consumer demand.',
@@ -514,13 +514,6 @@ export const MOCK_IDX_RESPONSE = {
   },
   validation_warnings: ['TAKE_PROFIT_RECOMPUTED', 'INDONESIA_TICK_SIZE_ROUNDED'],
   agents_used: AGENTS_USED,
-};
-MOCK_IDX_RESPONSE.full_decision = createFullDecision({
-  decision: MOCK_IDX_RESPONSE.final_decision,
-  summary: MOCK_IDX_RESPONSE.executive_summary,
-  thesis: MOCK_IDX_RESPONSE.investment_thesis,
-  priceTarget: MOCK_IDX_RESPONSE.price_target,
-  timeHorizon: MOCK_IDX_RESPONSE.time_horizon,
 });
 
 export const MOCK_ERROR_RESPONSE = {
@@ -531,28 +524,40 @@ export const MOCK_ERROR_RESPONSE = {
   error: 'Analysis failed: 429 RESOURCE_EXHAUSTED. Quota exceeded. Please retry later.',
 };
 
-function withFullDecision(response) {
-  return {
-    ...response,
-    full_decision: createFullDecision({
-      decision: response.final_decision ?? response.decision,
-      summary: response.executive_summary,
-      thesis: response.investment_thesis,
-      priceTarget: response.price_target,
-      timeHorizon: response.time_horizon,
-    }),
-  };
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function withOverrides(base, overrides) {
+  return completeResponse({ ...base, ...overrides });
 }
 
 const MOCK_MAP = {
   NVDA: MOCK_RESPONSE,
   AAPL: MOCK_HOLD_RESPONSE,
   TSLA: MOCK_SELL_RESPONSE,
-  MSFT: MOCK_MISSING_PRICE_RESPONSE,
   META: MOCK_REPAIRED_RESPONSE,
+  MSFT: withOverrides(MOCK_RESPONSE, {
+    request_id: 'mock-msft-buy',
+    ticker: 'MSFT',
+    current_price: 430,
+    price_target: 505,
+    entry_price: 430,
+    stop_loss: 405,
+    take_profit: 505,
+    risk_per_share: 25,
+    reward_per_share: 75,
+    volatility_level: 'Medium',
+    volatility_score: 46,
+    confidence_score: 0.82,
+    suggested_allocation_percent: 6,
+    executive_summary:
+      'MSFT is a complete Buy mock that mirrors the normal backend display path: current price is available, trade levels are valid, and risk/reward is fixed at 1:3.',
+    investment_thesis:
+      'The thesis centers on cloud growth, enterprise AI adoption, security software, and durable Office cash flow. This scenario exists so /analysis.test shows the same complete UI layout as a real analysis without using backend data.',
+  }),
   'BBCA.JK': MOCK_IDX_RESPONSE,
-  'BBRI.JK': withFullDecision({
-    ...MOCK_IDX_RESPONSE,
+  'BBRI.JK': withOverrides(MOCK_IDX_RESPONSE, {
     request_id: 'mock-bbri-buy',
     ticker: 'BBRI.JK',
     current_price: 5500,
@@ -562,14 +567,11 @@ const MOCK_MAP = {
     take_profit: 6400,
     risk_per_share: 300,
     reward_per_share: 900,
-    max_drawdown_estimate: '8-12%',
-    max_drawdown_min_pct: 8,
-    max_drawdown_max_pct: 12,
   }),
-  'TLKM.JK': withFullDecision({
-    ...MOCK_HOLD_RESPONSE,
+  'TLKM.JK': withOverrides(MOCK_HOLD_RESPONSE, {
     request_id: 'mock-tlkm-hold',
     ticker: 'TLKM.JK',
+    market: 'ID',
     llm_decision: 'Hold',
     final_decision: 'Hold',
     decision: 'Hold',
@@ -580,10 +582,9 @@ const MOCK_MAP = {
     volatility_level: 'Medium',
     volatility_score: 38,
     rebalancing_action: 'Wait and monitor',
-    validation_warnings: [],
+    validation_warnings: ['HOLD_TRADE_LEVELS_HIDDEN'],
   }),
-  'BMRI.JK': withFullDecision({
-    ...MOCK_IDX_RESPONSE,
+  'BMRI.JK': withOverrides(MOCK_IDX_RESPONSE, {
     request_id: 'mock-bmri-buy',
     ticker: 'BMRI.JK',
     current_price: 6900,
@@ -594,10 +595,10 @@ const MOCK_MAP = {
     risk_per_share: 400,
     reward_per_share: 1200,
   }),
-  'ASII.JK': withFullDecision({
-    ...MOCK_HOLD_RESPONSE,
+  'ASII.JK': withOverrides(MOCK_HOLD_RESPONSE, {
     request_id: 'mock-asii-hold',
     ticker: 'ASII.JK',
+    market: 'ID',
     llm_decision: 'Hold',
     final_decision: 'Hold',
     decision: 'Hold',
@@ -608,12 +609,13 @@ const MOCK_MAP = {
     volatility_level: 'High',
     volatility_score: 61,
     rebalancing_action: 'No new entry',
-    validation_warnings: [],
+    new_entry_action: 'No new entry',
+    validation_warnings: ['HOLD_TRADE_LEVELS_HIDDEN'],
   }),
-  'GOTO.JK': withFullDecision({
-    ...MOCK_SELL_RESPONSE,
+  'GOTO.JK': withOverrides(MOCK_SELL_RESPONSE, {
     request_id: 'mock-goto-sell',
     ticker: 'GOTO.JK',
+    market: 'ID',
     has_existing_position: false,
     position_quantity: null,
     average_entry_price: null,
@@ -631,28 +633,24 @@ const MOCK_MAP = {
     volatility_score: 91,
     validation_warnings: ['INDONESIA_TICK_SIZE_ROUNDED'],
   }),
-  'UNVR.JK': withFullDecision({
-    ...MOCK_MISSING_PRICE_RESPONSE,
-    request_id: 'mock-unvr-missing-price',
+  'UNVR.JK': withOverrides(MOCK_IDX_RESPONSE, {
+    request_id: 'mock-unvr-buy',
     ticker: 'UNVR.JK',
+    current_price: 2420,
+    price_target: 2960,
+    entry_price: 2420,
+    stop_loss: 2240,
+    take_profit: 2960,
+    risk_per_share: 180,
+    reward_per_share: 540,
     volatility_level: 'High',
     volatility_score: 63,
-    rebalancing_action: 'No new entry',
-    new_entry_action: 'No new entry',
-    data_quality: {
-      ...MOCK_MISSING_PRICE_RESPONSE.data_quality,
-      news: 'partial',
-      warnings: ['Mock IDX missing-price scenario. No synthetic IDR price is shown.'],
-    },
   }),
   ERROR: MOCK_ERROR_RESPONSE,
+  MISSING: MOCK_MISSING_PRICE_RESPONSE,
 };
 
 const MOCK_IDX_CODES = ['BBCA', 'BBRI', 'TLKM', 'BMRI', 'ASII', 'GOTO', 'UNVR'];
-
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
 
 function normalizeMockTicker(ticker) {
   const normalizedTicker = String(ticker || 'NVDA')
@@ -662,16 +660,65 @@ function normalizeMockTicker(ticker) {
   return normalizedTicker;
 }
 
+function normalizePositionNumber(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : value;
+}
+
+function ensureAllowedRebalancing(response) {
+  const positionOnlyActions = new Set([
+    'Exit position',
+    'Trim position',
+    'Reduce exposure',
+    'Hedge or reduce risk',
+  ]);
+
+  if (!response.has_existing_position && positionOnlyActions.has(response.rebalancing_action)) {
+    response.rebalancing_action = 'Avoid new entry';
+    response.position_action = null;
+    response.new_entry_action = 'Avoid new entry';
+    response.validation_warnings = Array.from(
+      new Set([...(response.validation_warnings || []), 'INVALID_REBALANCING_FIXED'])
+    );
+  }
+
+  return response;
+}
+
+function applyResponseDetail(response) {
+  if (response.response_detail === 'summary') {
+    response.investment_thesis = null;
+    response.key_catalysts = [];
+    response.invalidation_conditions = [];
+  }
+
+  if (response.response_detail === 'debug') {
+    response.raw_agent_state = {
+      note: 'Mock debug payload that mirrors the backend raw_agent_state slot.',
+      agents: response.agents_used,
+      data_quality: response.data_quality,
+    };
+  }
+
+  return response;
+}
+
 export function getMockAnalysisResponse(options = {}) {
   const {
     ticker = 'NVDA',
+    market,
+    request_id,
     trade_date,
     time_horizon_months = 1,
     max_debate_rounds = 3,
+    analysis_depth = 'balanced',
+    response_detail = 'full',
     has_existing_position,
     position_quantity = null,
     average_entry_price = null,
   } = options;
+
   const normalizedTicker = normalizeMockTicker(ticker);
   const base =
     MOCK_MAP[normalizedTicker] ||
@@ -683,47 +730,55 @@ export function getMockAnalysisResponse(options = {}) {
     'has_existing_position'
   );
 
+  response.request_id = request_id || response.request_id;
   response.ticker = normalizedTicker;
-  response.market = normalizedTicker.endsWith('.JK') ? 'ID' : 'US';
+  response.market = market || (normalizedTicker.endsWith('.JK') ? 'ID' : 'US');
   response.trade_date = trade_date || response.trade_date;
   response.time_horizon_months = normalizedHorizon;
   response.time_horizon = formatTimeHorizon(normalizedHorizon);
-  response.max_debate_rounds = max_debate_rounds;
+  response.max_debate_rounds = Number(max_debate_rounds);
+  response.analysis_depth = analysis_depth;
+  response.response_detail = response_detail;
+  response.llm_call_budget = analysis_depth === 'fast' ? 5 : analysis_depth === 'deep' ? 12 : 9;
+  response.llm_calls_used = Math.min(response.llm_call_budget, response.agents_used?.length || 0);
   response.has_existing_position = hasExistingProvided
     ? Boolean(has_existing_position)
     : Boolean(response.has_existing_position);
-  response.position_quantity = position_quantity === '' ? null : position_quantity;
-  response.average_entry_price = average_entry_price === '' ? null : average_entry_price;
-
-  const positionOnlyActions = new Set([
-    'Exit position',
-    'Trim position',
-    'Reduce exposure',
-    'Hedge or reduce risk',
-  ]);
-  if (!response.has_existing_position && positionOnlyActions.has(response.rebalancing_action)) {
-    response.rebalancing_action = 'Avoid new entry';
-    response.position_action = null;
-    response.new_entry_action = 'Avoid new entry';
-    response.validation_warnings = Array.from(
-      new Set([...(response.validation_warnings || []), 'INVALID_REBALANCING_FIXED'])
-    );
-  }
-
+  response.position_quantity = normalizePositionNumber(position_quantity);
+  response.average_entry_price = normalizePositionNumber(average_entry_price);
+  response.analysis_created_at = new Date().toISOString();
+  response.data_fetched_at = response.current_price_as_of || response.analysis_created_at;
   response.mock = true;
   response.source = 'frontend/src/mockData.js';
-  response.analysis_created_at = new Date().toISOString();
 
-  if (typeof response.full_decision === 'string') {
-    response.full_decision = response.full_decision.replace(
-      /\*\*Time Horizon\*\*: .*/,
-      `**Time Horizon**: ${response.time_horizon}`
-    );
-  }
+  ensureAllowedRebalancing(response);
+  applyResponseDetail(response);
 
-  if (!response.request_id) {
-    response.request_id = `mock-${normalizedTicker.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-  }
+  response.full_decision = createFullDecision({
+    decision: response.final_decision ?? response.decision,
+    summary: response.executive_summary,
+    thesis: response.investment_thesis,
+    priceTarget: response.price_target,
+    timeHorizon: response.time_horizon,
+  });
 
   return response;
+}
+
+const MOCK_REQUEST_LOOKUP = Object.values(MOCK_MAP).reduce((acc, response) => {
+  if (response?.request_id) acc[response.request_id] = response;
+  return acc;
+}, {});
+
+export function getMockAnalysisResponseByRequestId(requestId) {
+  if (!requestId) return null;
+  const decodedId = decodeURIComponent(String(requestId));
+  const exact = MOCK_REQUEST_LOOKUP[decodedId];
+  if (exact) return getMockAnalysisResponse(exact);
+
+  const tickerMatch = decodedId.match(/^mock-([a-z0-9-]+?)(?:-(?:buy|sell|hold|repaired|\d+).*)?$/i);
+  const guessedTicker = tickerMatch?.[1]?.replace(/-/g, '.').toUpperCase();
+  if (guessedTicker) return getMockAnalysisResponse({ ticker: guessedTicker, request_id: decodedId });
+
+  return null;
 }
