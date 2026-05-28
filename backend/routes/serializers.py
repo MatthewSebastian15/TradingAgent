@@ -10,6 +10,10 @@ from routes.validation import AnalysisRequest
 
 logger = logging.getLogger(__name__)
 
+ACTIONABLE_DECISIONS = {"Buy", "Overweight", "Sell", "Underweight"}
+FIXED_RR = 3.0
+RISK_REWARD_DISPLAY = "1:3"
+
 SUMMARY_FIELDS = {
     "decision",
     "llm_decision",
@@ -231,13 +235,20 @@ def parse_final_result(
         llm_output_fallback="ok",
     )
 
+    trade_plan_valid = bool(getattr(pd_obj, "trade_plan_valid", False))
+    has_valid_actionable_trade = trade_plan_valid and final_decision in ACTIONABLE_DECISIONS
+    risk_reward_ratio = FIXED_RR if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_ratio", None)
+    risk_reward_display = (
+        RISK_REWARD_DISPLAY if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_display", None)
+    )
+
     return {
         "decision": final_decision,
         "llm_decision": getattr(pd_obj, "llm_decision", None) or fallback_rating,
         "final_decision": final_decision,
         "decision_adjusted": bool(getattr(pd_obj, "decision_adjusted", False)),
         "decision_adjusted_reason": getattr(pd_obj, "decision_adjusted_reason", None),
-        "trade_plan_valid": bool(getattr(pd_obj, "trade_plan_valid", False)),
+        "trade_plan_valid": trade_plan_valid,
         "has_existing_position": bool(getattr(pd_obj, "has_existing_position", False)),
         "position_quantity": getattr(pd_obj, "position_quantity", None),
         "average_entry_price": getattr(pd_obj, "average_entry_price", None),
@@ -256,8 +267,8 @@ def parse_final_result(
         "take_profit": getattr(pd_obj, "take_profit", None),
         "risk_per_share": getattr(pd_obj, "risk_per_share", None),
         "reward_per_share": getattr(pd_obj, "reward_per_share", None),
-        "risk_reward_ratio": getattr(pd_obj, "risk_reward_ratio", None),
-        "risk_reward_display": getattr(pd_obj, "risk_reward_display", None),
+        "risk_reward_ratio": risk_reward_ratio,
+        "risk_reward_display": risk_reward_display,
         "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
         "max_drawdown_min_pct": getattr(pd_obj, "max_drawdown_min_pct", None),
         "max_drawdown_max_pct": getattr(pd_obj, "max_drawdown_max_pct", None),

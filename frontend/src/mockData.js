@@ -144,7 +144,7 @@ export const MOCK_RESPONSE = {
   executive_summary:
     'NVDA remains in a strong position because AI infrastructure spending is still concentrated around its GPU and software ecosystem. Demand for accelerated computing stays above available supply, and the company keeps high operating leverage through premium pricing. The backend-valid trade plan is actionable only because current price and risk/reward levels are complete.',
   investment_thesis:
-    'The core thesis is that NVDA remains a leading supplier for high-end AI training and inference workloads. Its CUDA ecosystem, data center GPU roadmap, and customer lock-in create durable advantages. The upside case depends on sustained cloud capex, Blackwell adoption, and broader enterprise AI demand. The downside case is valuation sensitivity if growth expectations cool. The trade plan uses backend current price as the anchor, not a model-invented number. The setup remains valid only while entry, stop loss, and take profit preserve a risk/reward ratio between 1:3 and 1:5.',
+    'The core thesis is that NVDA remains a leading supplier for high-end AI training and inference workloads. Its CUDA ecosystem, data center GPU roadmap, and customer lock-in create durable advantages. The upside case depends on sustained cloud capex, Blackwell adoption, and broader enterprise AI demand. The downside case is valuation sensitivity if growth expectations cool. The trade plan uses backend current price as the anchor, not a model-invented number. The setup remains valid only while entry, stop loss, and take profit preserve the fixed 1:3 risk/reward ratio.',
   key_catalysts: [
     'Sustained AI data center capex from hyperscalers.',
     'Blackwell platform ramp and supply expansion.',
@@ -423,7 +423,7 @@ export const MOCK_REPAIRED_RESPONSE = {
   new_entry_action: 'Add gradually',
   position_size_hint: 'Use standard risk management and avoid oversized position.',
   position_sizing_reason:
-    'Backend validation repaired the original LLM levels by clamping risk/reward to 1:3 and recomputing the take profit from the current price anchor.',
+    'Backend validation repaired the original LLM levels by forcing risk/reward to 1:3 and recomputing the take profit from the current price anchor.',
   executive_summary:
     'META is a repaired Buy mock. The final decision remains Buy, but the backend contract marks the trade levels as recomputed because the original LLM risk/reward was not acceptable.',
   investment_thesis:
@@ -439,7 +439,7 @@ export const MOCK_REPAIRED_RESPONSE = {
     llm_output: 'repaired',
     warnings: ['Mock repaired scenario. Original LLM levels were intentionally invalid.'],
   },
-  validation_warnings: ['RR_CLAMPED_TO_3', 'TAKE_PROFIT_RECOMPUTED', 'PRICE_TARGET_RECOMPUTED'],
+  validation_warnings: ['RR_FORCED_TO_3', 'TAKE_PROFIT_RECOMPUTED', 'PRICE_TARGET_RECOMPUTED'],
   agents_used: AGENTS_USED,
 };
 MOCK_REPAIRED_RESPONSE.full_decision = createFullDecision({

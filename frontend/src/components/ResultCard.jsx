@@ -8,7 +8,7 @@ const WARNING_LABELS = {
   CURRENT_PRICE_MISSING: 'Current price missing',
   LLM_CURRENT_PRICE_IGNORED: 'LLM current price ignored',
   RR_CLAMPED_TO_3: 'Risk/reward clamped to 1:3',
-  RR_CLAMPED_TO_5: 'Risk/reward clamped to 1:5',
+  RR_FORCED_TO_3: 'Risk/reward forced to 1:3',
   TAKE_PROFIT_RECOMPUTED: 'Take profit recomputed',
   STOP_LOSS_RECOMPUTED: 'Stop loss recomputed',
   PRICE_TARGET_RECOMPUTED: 'Price target recomputed',

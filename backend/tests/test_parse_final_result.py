@@ -22,15 +22,15 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
         suggested_allocation_percent=5.0,
         entry_price=100.0,
         stop_loss=92.0,
-        take_profit=116.0,
-        risk_reward_ratio=2.0,
+        take_profit=124.0,
+        risk_reward_ratio=3.0,
         max_drawdown_estimate="8%",
         volatility_level=VolatilityLevel.MEDIUM,
         position_sizing_reason="Moderate conviction.",
         rebalancing_action="Add gradually.",
         key_catalysts=["Earnings"],
         invalidation_conditions=["Breaks support"],
-        price_target=116.0,
+        price_target=124.0,
         time_horizon="3 months",
         current_price=100.0,
         current_price_as_of="2026-05-18",
@@ -75,6 +75,7 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     assert parsed["llm_decision"] == "Buy"
     assert parsed["final_decision"] == "Buy"
     assert parsed["trade_plan_valid"] is True
+    assert parsed["risk_reward_ratio"] == 3.0
     assert parsed["risk_reward_display"] == "1:3"
     assert parsed["risk_per_share"] == 8.0
     assert parsed["reward_per_share"] == 24.0
@@ -82,6 +83,42 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     assert parsed["position_size_hint"] == "Use standard risk management and avoid oversized position."
     assert parsed["data_quality"]["price_data"] == "ok"
     assert parsed["validation_warnings"] == []
+
+
+def test_parse_final_result_forces_valid_trade_rr_to_one_to_three():
+    from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    decision = PortfolioDecision(
+        confidence_score=0.7,
+        rating=PortfolioRating.BUY,
+        executive_summary=(
+            "The rating is Buy because the setup is constructive. "
+            "The strongest data point is backend validation. "
+            "The main risk is execution."
+        ),
+        investment_thesis=(
+            "The company has a defined setup. The stop loss is clear. "
+            "The upside is measurable. The downside is controlled. "
+            "The thesis should be reviewed if the stop breaks."
+        ),
+        entry_price=100.0,
+        stop_loss=95.0,
+        take_profit=125.0,
+        risk_reward_ratio=5.0,
+        risk_reward_display="1:" + "5",
+        risk_per_share=5.0,
+        reward_per_share=25.0,
+        final_decision="Buy",
+        decision="Buy",
+        trade_plan_valid=True,
+    )
+
+    parsed = _parse_final_result("", decision, PortfolioRating, {"last_close_price": 100.0})
+
+    assert parsed["risk_reward_ratio"] == 3.0
+    assert parsed["risk_reward_display"] == "1:3"
 
 
 def test_parse_final_result_does_not_render_full_decision_from_portfolio_object():

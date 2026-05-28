@@ -9,9 +9,8 @@ from typing import Any
 
 from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating, VolatilityLevel
 
-MIN_RR = 3.0
-MAX_RR = 5.0
-DEFAULT_RR = 3.0
+FIXED_RR = 3.0
+RISK_REWARD_DISPLAY = "1:3"
 DEFAULT_DECISION = "Hold"
 DEFAULT_VOLATILITY_LEVEL = "Medium"
 
@@ -97,18 +96,24 @@ def _append_warning(warnings: list[str], warning: str | None) -> None:
         warnings.append(warning)
 
 
-def clamp_rr(value: float | None) -> tuple[float, str | None]:
+def force_fixed_rr(value: float | None) -> tuple[float, str | None]:
+    """Return the only Risk:Reward ratio allowed by the trade contract."""
     try:
         numeric = float(value) if value is not None else None
     except (TypeError, ValueError):
         numeric = None
-    if numeric is None or numeric <= 0:
-        return DEFAULT_RR, "RR_CLAMPED_TO_3"
-    if numeric < MIN_RR:
-        return MIN_RR, "RR_CLAMPED_TO_3"
-    if numeric > MAX_RR:
-        return MAX_RR, "RR_CLAMPED_TO_5"
-    return numeric, None
+    if numeric is not None and abs(numeric - FIXED_RR) < 1e-9:
+        return FIXED_RR, None
+    return FIXED_RR, "RR_FORCED_TO_3"
+
+
+def clamp_rr(value: float | None) -> tuple[float, str | None]:
+    """Backward-compatible wrapper for the old clamp API.
+
+    New analysis output is not clamped to a range anymore; it is forced to
+    Risk:Reward 1:3.
+    """
+    return force_fixed_rr(value)
 
 
 def get_idx_tick_size(price: float) -> int:
@@ -331,7 +336,7 @@ def _normalize_long(decision: PortfolioDecision, current_price: float, ticker: s
         return False
 
     risk = float(entry) - float(stop)
-    target_rr, rr_warning = clamp_rr(getattr(decision, "risk_reward_ratio", None))
+    target_rr, rr_warning = force_fixed_rr(getattr(decision, "risk_reward_ratio", None))
     _append_warning(warnings, rr_warning)
     take_profit = float(entry) + risk * target_rr
     take_profit = _round_price(take_profit, ticker, warnings)
@@ -340,8 +345,7 @@ def _normalize_long(decision: PortfolioDecision, current_price: float, ticker: s
     _append_warning(warnings, "TAKE_PROFIT_RECOMPUTED")
 
     reward = float(take_profit) - float(entry)
-    rr = reward / risk if risk > 0 else 0.0
-    if rr < MIN_RR - 0.05 or rr > MAX_RR + 0.05:
+    if risk <= 0 or reward <= 0:
         return False
 
     price_target = getattr(decision, "price_target", None)
@@ -357,8 +361,8 @@ def _normalize_long(decision: PortfolioDecision, current_price: float, ticker: s
     decision.price_target = price_target
     decision.risk_per_share = round(risk, 4)
     decision.reward_per_share = round(reward, 4)
-    decision.risk_reward_ratio = round(rr, 2)
-    decision.risk_reward_display = f"1:{int(round(rr))}"
+    decision.risk_reward_ratio = FIXED_RR
+    decision.risk_reward_display = RISK_REWARD_DISPLAY
     return True
 
 
@@ -377,7 +381,7 @@ def _normalize_short(decision: PortfolioDecision, current_price: float, ticker: 
         return False
 
     risk = float(stop) - float(entry)
-    target_rr, rr_warning = clamp_rr(getattr(decision, "risk_reward_ratio", None))
+    target_rr, rr_warning = force_fixed_rr(getattr(decision, "risk_reward_ratio", None))
     _append_warning(warnings, rr_warning)
     take_profit = float(entry) - risk * target_rr
     take_profit = _round_price(take_profit, ticker, warnings)
@@ -386,8 +390,7 @@ def _normalize_short(decision: PortfolioDecision, current_price: float, ticker: 
     _append_warning(warnings, "TAKE_PROFIT_RECOMPUTED")
 
     reward = float(entry) - float(take_profit)
-    rr = reward / risk if risk > 0 else 0.0
-    if rr < MIN_RR - 0.05 or rr > MAX_RR + 0.05:
+    if risk <= 0 or reward <= 0:
         return False
 
     price_target = getattr(decision, "price_target", None)
@@ -403,8 +406,8 @@ def _normalize_short(decision: PortfolioDecision, current_price: float, ticker: 
     decision.price_target = price_target
     decision.risk_per_share = round(risk, 4)
     decision.reward_per_share = round(reward, 4)
-    decision.risk_reward_ratio = round(rr, 2)
-    decision.risk_reward_display = f"1:{int(round(rr))}"
+    decision.risk_reward_ratio = FIXED_RR
+    decision.risk_reward_display = RISK_REWARD_DISPLAY
     return True
 
 
