@@ -29,6 +29,15 @@ class VolatilityLevel(str, Enum):
     VERY_HIGH = "Very High"
 
 
+class RebalancingAction(str, Enum):
+    OPEN_NEW_POSITION = "Open new position"
+    ADD_POSITION = "Add position"
+    MAINTAIN_POSITION = "Maintain position"
+    TRIM_POSITION = "Trim position"
+    EXIT_POSITION = "Exit position"
+    AVOID_NEW_ENTRY = "Avoid new entry"
+
+
 class DebateArgument(BaseModel):
     stance: Literal["bull", "bear", "aggressive", "conservative", "neutral"] = Field(
         description="The agent viewpoint that produced this argument."
@@ -191,10 +200,23 @@ class TraderProposal(BaseModel):
         default=None,
         description="Plain-language reason for the suggested allocation and sizing.",
     )
-    rebalancing_action: str | None = Field(
+    rebalancing_action: RebalancingAction | None = Field(
         default=None,
-        description="Concrete action for portfolio rebalancing: add, trim, hold, exit, or watchlist.",
+        description=(
+            "Concrete portfolio action. Exactly one of Open new position, Add position, "
+            "Maintain position, Trim position, Exit position, or Avoid new entry."
+        ),
     )
+
+    @field_validator("rebalancing_action", mode="before")
+    @classmethod
+    def normalize_rebalancing_action(cls, value: object) -> object:
+        if value is None or value == "":
+            return None
+        raw = getattr(value, "value", value)
+        allowed = {item.value for item in RebalancingAction}
+        return raw if raw in allowed else None
+
     key_catalysts: list[str] = Field(
         default_factory=list,
         max_length=6,
@@ -233,7 +255,7 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
     if proposal.position_sizing_reason:
         parts.extend(["", f"**Position Sizing Reason**: {proposal.position_sizing_reason}"])
     if proposal.rebalancing_action:
-        parts.extend(["", f"**Rebalancing Action**: {proposal.rebalancing_action}"])
+        parts.extend(["", f"**Rebalancing Action**: {proposal.rebalancing_action.value}"])
     if proposal.key_catalysts:
         parts.extend(["", "**Key Catalysts**:", *[f"- {item}" for item in proposal.key_catalysts]])
     if proposal.invalidation_conditions:
@@ -347,10 +369,23 @@ class PortfolioDecision(BaseModel):
         default=None,
         description="Reason for final allocation and position size.",
     )
-    rebalancing_action: str | None = Field(
+    rebalancing_action: RebalancingAction | None = Field(
         default=None,
-        description="Final portfolio action: add, trim, hold, exit, or watchlist.",
+        description=(
+            "Final portfolio action. Exactly one of Open new position, Add position, "
+            "Maintain position, Trim position, Exit position, or Avoid new entry. Backend normalizes this again."
+        ),
     )
+
+    @field_validator("rebalancing_action", mode="before")
+    @classmethod
+    def normalize_rebalancing_action(cls, value: object) -> object:
+        if value is None or value == "":
+            return None
+        raw = getattr(value, "value", value)
+        allowed = {item.value for item in RebalancingAction}
+        return raw if raw in allowed else None
+
     key_catalysts: list[str] = Field(
         default_factory=list,
         max_length=8,
@@ -435,7 +470,12 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         ("Volatility Score", decision.volatility_score),
         ("Position Size Hint", decision.position_size_hint),
         ("Position Sizing Reason", decision.position_sizing_reason),
-        ("Rebalancing Action", decision.rebalancing_action),
+        (
+            "Rebalancing Action",
+            decision.rebalancing_action.value
+            if isinstance(decision.rebalancing_action, RebalancingAction)
+            else decision.rebalancing_action,
+        ),
     ]
     for label, value in actionable_fields:
         if value is not None:

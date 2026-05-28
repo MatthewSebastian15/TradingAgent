@@ -15,43 +15,38 @@ DEFAULT_DECISION = "Hold"
 DEFAULT_VOLATILITY_LEVEL = "Medium"
 
 VOLATILITY_LEVELS = {"Low", "Medium", "High", "Very High"}
-ACTIONABLE_DECISIONS = {"Buy", "Overweight", "Sell", "Underweight"}
-LONG_DECISIONS = {"Buy", "Overweight"}
-SHORT_DECISIONS = {"Sell", "Underweight"}
-POSITION_ACTIONS = {"Exit position", "Trim position", "Reduce exposure", "Hedge or reduce risk"}
-
-REBALANCING_BY_DECISION_AND_VOLATILITY = {
-    "Buy": {
-        "Low": ["Accumulate", "Increase exposure"],
-        "Medium": ["Add gradually", "Add on pullback"],
-        "High": ["Buy with tight risk control", "Wait for better entry"],
-        "Very High": ["Wait for better entry"],
-    },
-    "Overweight": {
-        "Low": ["Accumulate", "Increase exposure"],
-        "Medium": ["Add gradually", "Add on pullback"],
-        "High": ["Buy with tight risk control", "Wait for better entry"],
-        "Very High": ["Wait for better entry"],
-    },
-    "Sell": {
-        "Low": ["Trim position", "Sell into strength"],
-        "Medium": ["Reduce exposure", "Trim position"],
-        "High": ["Reduce exposure", "Exit position"],
-        "Very High": ["Exit position", "Avoid new entry"],
-    },
-    "Underweight": {
-        "Low": ["Trim position", "Sell into strength"],
-        "Medium": ["Reduce exposure", "Trim position"],
-        "High": ["Reduce exposure", "Exit position"],
-        "Very High": ["Exit position", "Avoid new entry"],
-    },
-    "Hold": {
-        "Low": ["Hold existing exposure", "Watchlist only"],
-        "Medium": ["Wait and monitor", "Wait for pullback"],
-        "High": ["No new entry", "Review after next catalyst"],
-        "Very High": ["No new entry", "Avoid new entry"],
-    },
+DECISION_ALIASES = {
+    "Buy": "Buy",
+    "Overweight": "Buy",
+    "Hold": "Hold",
+    "Sell": "Sell",
+    "Underweight": "Sell",
 }
+ACTIONABLE_DECISIONS = {"Buy", "Sell"}
+LONG_DECISIONS = {"Buy"}
+SHORT_DECISIONS = {"Sell"}
+REBALANCING_ACTIONS = {
+    "Open new position",
+    "Add position",
+    "Maintain position",
+    "Trim position",
+    "Exit position",
+    "Avoid new entry",
+}
+POSITION_ACTIONS = {"Exit position", "Trim position"}
+LLM_REPAIR_WARNING_CODES = {
+    "LLM_CURRENT_PRICE_IGNORED",
+    "INVALID_VOLATILITY_FIXED",
+    "INVALID_REBALANCING_FIXED",
+    "ENTRY_PRICE_RECOMPUTED",
+    "STOP_LOSS_RECOMPUTED",
+    "TAKE_PROFIT_RECOMPUTED",
+    "PRICE_TARGET_RECOMPUTED",
+    "RR_FORCED_TO_3",
+    "DECISION_DOWNGRADED_TO_HOLD",
+    "TRADE_PLAN_INVALID",
+}
+
 
 POSITION_SIZE_HINTS = {
     "Low": "Normal position size may be acceptable if trade plan is valid.",
@@ -81,6 +76,11 @@ def _rating_from_text(text: str) -> PortfolioRating:
         return PortfolioRating.HOLD
 
 
+def _canonical_decision(value: Any) -> str:
+    raw = _enum_value(value)
+    return DECISION_ALIASES.get(str(raw), DEFAULT_DECISION)
+
+
 def _decision_text(decision: PortfolioDecision) -> str:
     raw = (
         getattr(decision, "final_decision", None)
@@ -88,7 +88,7 @@ def _decision_text(decision: PortfolioDecision) -> str:
         or _enum_value(getattr(decision, "rating", None))
         or DEFAULT_DECISION
     )
-    return raw if raw in REBALANCING_BY_DECISION_AND_VOLATILITY else DEFAULT_DECISION
+    return _canonical_decision(raw)
 
 
 def _append_warning(warnings: list[str], warning: str | None) -> None:
@@ -210,6 +210,56 @@ def calculate_volatility_score(price_data: str | None) -> float | None:
     return round(max(0.0, min(score, 100.0)), 2)
 
 
+def calculate_atr(price_data: str | None, window_size: int = 14) -> float | None:
+    """Return a simple ATR estimate from the collected OHLCV CSV."""
+    rows = _parse_price_rows(price_data)
+    if len(rows) < 2:
+        return None
+    true_ranges: list[float] = []
+    previous_close = rows[0]["close"]
+    for item in rows[1:]:
+        high = item.get("high") or 0.0
+        low = item.get("low") or 0.0
+        close = item["close"]
+        if high <= 0 or low <= 0 or high < low or previous_close <= 0:
+            previous_close = close
+            continue
+        true_ranges.append(max(high - low, abs(high - previous_close), abs(low - previous_close)))
+        previous_close = close
+    if not true_ranges:
+        return None
+    window = true_ranges[-window_size:]
+    atr = sum(window) / len(window)
+    return atr if math.isfinite(atr) and atr > 0 else None
+
+
+def calculate_risk_distance(current_price: float, volatility_level: str, price_data: str | None) -> float:
+    """Calculate deterministic risk distance for the fixed 1:3 trade contract."""
+    fallback_pct = {
+        "Low": 0.03,
+        "Medium": 0.04,
+        "High": 0.05,
+        "Very High": 0.07,
+    }.get(volatility_level, 0.04)
+    fallback_risk = current_price * fallback_pct
+    atr = calculate_atr(price_data)
+    risk = atr if atr is not None else fallback_risk
+    min_risk = current_price * 0.01
+    max_risk = current_price * 0.15
+    return max(min_risk, min(float(risk), max_risk))
+
+
+def _values_differ(left: Any, right: Any, tolerance: float = 1e-6) -> bool:
+    try:
+        return abs(float(left) - float(right)) > tolerance
+    except (TypeError, ValueError):
+        return left is not None
+
+
+def _has_llm_repair_warning(warnings: list[str]) -> bool:
+    return any(code in LLM_REPAIR_WARNING_CODES for code in warnings)
+
+
 def normalize_volatility_level(volatility_score: float | None, raw_level: str | None) -> str:
     if volatility_score is not None:
         if volatility_score < 25:
@@ -226,19 +276,36 @@ def normalize_volatility_level(volatility_score: float | None, raw_level: str | 
 
 def normalize_rebalancing_action(
     decision: str | None,
-    volatility_level: str,
-    action: str | None,
     has_existing_position: bool,
+    trade_plan_actionable: bool,
+    confidence: float | None,
 ) -> str:
-    normalized_decision = decision if decision in REBALANCING_BY_DECISION_AND_VOLATILITY else DEFAULT_DECISION
-    allowed_actions = list(REBALANCING_BY_DECISION_AND_VOLATILITY[normalized_decision][volatility_level])
-    if has_existing_position is False:
-        allowed_actions = [item for item in allowed_actions if item not in POSITION_ACTIONS]
-        if not allowed_actions:
-            allowed_actions = ["Avoid new entry"]
-    if action in allowed_actions:
-        return action
-    return allowed_actions[0]
+    """Return the only rebalancing action allowed by the backend matrix."""
+    normalized_decision = _canonical_decision(decision)
+    try:
+        confidence_value = float(confidence) if confidence is not None else 0.0
+    except (TypeError, ValueError):
+        confidence_value = 0.0
+
+    if not has_existing_position:
+        if normalized_decision == "Buy" and trade_plan_actionable:
+            return "Open new position"
+        return "Avoid new entry"
+
+    if normalized_decision == "Buy":
+        if trade_plan_actionable and confidence_value >= 0.65:
+            return "Add position"
+        return "Maintain position"
+
+    if normalized_decision == "Hold":
+        return "Maintain position"
+
+    if normalized_decision == "Sell":
+        if confidence_value >= 0.65:
+            return "Exit position"
+        return "Trim position"
+
+    return "Maintain position"
 
 
 def _format_number(value: float) -> str:
@@ -301,7 +368,7 @@ def _clear_trade_levels(decision: PortfolioDecision, warnings: list[str], *, add
     decision.max_drawdown_min_pct = None
     decision.max_drawdown_max_pct = None
     decision.trade_plan_valid = False
-    if add_hold_warning and had_trade_level:
+    if add_hold_warning:
         _append_warning(warnings, "HOLD_TRADE_LEVELS_HIDDEN")
 
 
@@ -321,31 +388,44 @@ def _downgrade_to_hold(decision: PortfolioDecision, reason: str, warnings: list[
     _clear_trade_levels(decision, warnings)
 
 
-def _normalize_long(decision: PortfolioDecision, current_price: float, ticker: str | None, warnings: list[str]) -> bool:
-    entry = getattr(decision, "entry_price", None) or current_price
-    entry = _round_price(float(entry), ticker, warnings)
+def _normalize_long(
+    decision: PortfolioDecision,
+    current_price: float,
+    ticker: str | None,
+    warnings: list[str],
+    price_data: str | None,
+    volatility_level: str,
+) -> bool:
+    entry = _round_price(float(current_price), ticker, warnings)
     if entry is None:
         return False
+    if _values_differ(getattr(decision, "entry_price", None), entry):
+        _append_warning(warnings, "ENTRY_PRICE_RECOMPUTED")
 
-    stop = getattr(decision, "stop_loss", None)
+    risk_distance = calculate_risk_distance(float(entry), volatility_level, price_data)
+    stop = _round_price(float(entry) - risk_distance, ticker, warnings)
     if stop is None or float(stop) >= float(entry):
-        stop = float(entry) * 0.95
-        _append_warning(warnings, "STOP_LOSS_RECOMPUTED")
-    stop = _round_price(float(stop), ticker, warnings)
+        tick = get_idx_tick_size(float(entry)) if _is_indonesia_ticker(ticker) else max(float(entry) * 0.01, 0.01)
+        stop = _round_price(float(entry) - tick, ticker, warnings)
     if stop is None or float(stop) >= float(entry):
         return False
+    if _values_differ(getattr(decision, "stop_loss", None), stop):
+        _append_warning(warnings, "STOP_LOSS_RECOMPUTED")
 
     risk = float(entry) - float(stop)
+    if risk <= 0:
+        return False
+
     target_rr, rr_warning = force_fixed_rr(getattr(decision, "risk_reward_ratio", None))
     _append_warning(warnings, rr_warning)
-    take_profit = float(entry) + risk * target_rr
-    take_profit = _round_price(take_profit, ticker, warnings)
+    take_profit = _round_price(float(entry) + risk * target_rr, ticker, warnings)
     if take_profit is None or float(take_profit) <= float(entry):
         return False
-    _append_warning(warnings, "TAKE_PROFIT_RECOMPUTED")
+    if _values_differ(getattr(decision, "take_profit", None), take_profit):
+        _append_warning(warnings, "TAKE_PROFIT_RECOMPUTED")
 
     reward = float(take_profit) - float(entry)
-    if risk <= 0 or reward <= 0:
+    if reward <= 0:
         return False
 
     price_target = getattr(decision, "price_target", None)
@@ -354,6 +434,9 @@ def _normalize_long(decision: PortfolioDecision, current_price: float, ticker: s
         _append_warning(warnings, "PRICE_TARGET_RECOMPUTED")
     else:
         price_target = _round_price(float(price_target), ticker, warnings)
+        if price_target is None or float(price_target) <= float(entry):
+            price_target = take_profit
+            _append_warning(warnings, "PRICE_TARGET_RECOMPUTED")
 
     decision.entry_price = entry
     decision.stop_loss = stop
@@ -366,31 +449,44 @@ def _normalize_long(decision: PortfolioDecision, current_price: float, ticker: s
     return True
 
 
-def _normalize_short(decision: PortfolioDecision, current_price: float, ticker: str | None, warnings: list[str]) -> bool:
-    entry = getattr(decision, "entry_price", None) or current_price
-    entry = _round_price(float(entry), ticker, warnings)
+def _normalize_short(
+    decision: PortfolioDecision,
+    current_price: float,
+    ticker: str | None,
+    warnings: list[str],
+    price_data: str | None,
+    volatility_level: str,
+) -> bool:
+    entry = _round_price(float(current_price), ticker, warnings)
     if entry is None:
         return False
+    if _values_differ(getattr(decision, "entry_price", None), entry):
+        _append_warning(warnings, "ENTRY_PRICE_RECOMPUTED")
 
-    stop = getattr(decision, "stop_loss", None)
+    risk_distance = calculate_risk_distance(float(entry), volatility_level, price_data)
+    stop = _round_price(float(entry) + risk_distance, ticker, warnings)
     if stop is None or float(stop) <= float(entry):
-        stop = float(entry) * 1.05
-        _append_warning(warnings, "STOP_LOSS_RECOMPUTED")
-    stop = _round_price(float(stop), ticker, warnings)
+        tick = get_idx_tick_size(float(entry)) if _is_indonesia_ticker(ticker) else max(float(entry) * 0.01, 0.01)
+        stop = _round_price(float(entry) + tick, ticker, warnings)
     if stop is None or float(stop) <= float(entry):
         return False
+    if _values_differ(getattr(decision, "stop_loss", None), stop):
+        _append_warning(warnings, "STOP_LOSS_RECOMPUTED")
 
     risk = float(stop) - float(entry)
+    if risk <= 0:
+        return False
+
     target_rr, rr_warning = force_fixed_rr(getattr(decision, "risk_reward_ratio", None))
     _append_warning(warnings, rr_warning)
-    take_profit = float(entry) - risk * target_rr
-    take_profit = _round_price(take_profit, ticker, warnings)
-    if take_profit is None or float(take_profit) >= float(entry):
+    take_profit = _round_price(float(entry) - risk * target_rr, ticker, warnings)
+    if take_profit is None or float(take_profit) >= float(entry) or float(take_profit) <= 0:
         return False
-    _append_warning(warnings, "TAKE_PROFIT_RECOMPUTED")
+    if _values_differ(getattr(decision, "take_profit", None), take_profit):
+        _append_warning(warnings, "TAKE_PROFIT_RECOMPUTED")
 
     reward = float(entry) - float(take_profit)
-    if risk <= 0 or reward <= 0:
+    if reward <= 0:
         return False
 
     price_target = getattr(decision, "price_target", None)
@@ -399,6 +495,9 @@ def _normalize_short(decision: PortfolioDecision, current_price: float, ticker: 
         _append_warning(warnings, "PRICE_TARGET_RECOMPUTED")
     else:
         price_target = _round_price(float(price_target), ticker, warnings)
+        if price_target is None or float(price_target) >= float(entry):
+            price_target = take_profit
+            _append_warning(warnings, "PRICE_TARGET_RECOMPUTED")
 
     decision.entry_price = entry
     decision.stop_loss = stop
@@ -410,7 +509,6 @@ def _normalize_short(decision: PortfolioDecision, current_price: float, ticker: 
     decision.risk_reward_display = RISK_REWARD_DISPLAY
     return True
 
-
 def _merge_data_quality(
     base: dict[str, Any] | None,
     *,
@@ -418,14 +516,21 @@ def _merge_data_quality(
     trade_levels: str,
     llm_output: str,
     volatility_data: str,
-) -> dict[str, str]:
-    merged: dict[str, str] = {}
+) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
     for key, value in (base or {}).items():
-        if isinstance(value, str):
+        if isinstance(value, (str, list, dict, bool, int, float)) or value is None:
             merged[key] = value
+
+    if price_ok:
+        existing_price_status = merged.get("price_data")
+        if existing_price_status in {None, "", "missing", "invalid_ticker"}:
+            merged["price_data"] = "ok"
+    else:
+        merged["price_data"] = "missing"
+
     merged.update(
         {
-            "price_data": "ok" if price_ok else "missing",
             "trade_levels": trade_levels,
             "llm_output": llm_output,
             "volatility_data": volatility_data,
@@ -449,8 +554,9 @@ def normalize_trade_levels(
 ) -> PortfolioDecision:
     warnings = list(getattr(decision, "validation_warnings", None) or [])
     raw_llm_current_price = getattr(decision, "current_price", None)
-    llm_decision = getattr(decision, "llm_decision", None) or _decision_text(decision)
-    original_rebalancing = getattr(decision, "rebalancing_action", None)
+    raw_llm_decision = getattr(decision, "llm_decision", None) or _enum_value(getattr(decision, "rating", None)) or _decision_text(decision)
+    llm_decision = str(_enum_value(raw_llm_decision) or DEFAULT_DECISION)
+    original_rebalancing = _enum_value(getattr(decision, "rebalancing_action", None))
     raw_volatility = _enum_value(getattr(decision, "volatility_level", None))
 
     if raw_llm_current_price is not None and current_price is not None:
@@ -484,7 +590,7 @@ def normalize_trade_levels(
     decision.volatility_score = round(score, 2) if score is not None else None
 
     current_price_ok = current_price is not None and float(current_price) > 0
-    final_decision = llm_decision if llm_decision in REBALANCING_BY_DECISION_AND_VOLATILITY else DEFAULT_DECISION
+    final_decision = _canonical_decision(llm_decision)
     _set_decision(decision, final_decision)
 
     if not current_price_ok:
@@ -494,7 +600,12 @@ def normalize_trade_levels(
         else:
             _clear_trade_levels(decision, warnings, add_hold_warning=True)
         decision.position_size_hint = "No new position suggested."
-        decision.rebalancing_action = normalize_rebalancing_action("Hold", normalized_volatility, None, bool(has_existing_position))
+        decision.rebalancing_action = normalize_rebalancing_action(
+            "Hold",
+            bool(has_existing_position),
+            False,
+            getattr(decision, "confidence_score", None),
+        )
         decision.data_quality = _merge_data_quality(
             data_quality or getattr(decision, "data_quality", None),
             price_ok=False,
@@ -505,32 +616,37 @@ def normalize_trade_levels(
         decision.validation_warnings = list(dict.fromkeys(warnings))
         return decision
 
-    normalized_action = normalize_rebalancing_action(
-        final_decision,
-        normalized_volatility,
-        original_rebalancing,
-        bool(has_existing_position),
-    )
-    if normalized_action != original_rebalancing:
-        _append_warning(warnings, "INVALID_REBALANCING_FIXED")
-    decision.rebalancing_action = normalized_action
-
     if final_decision in LONG_DECISIONS:
-        valid = _normalize_long(decision, float(current_price), ticker, warnings)
+        valid = _normalize_long(decision, float(current_price), ticker, warnings, price_data, normalized_volatility)
     elif final_decision in SHORT_DECISIONS:
-        valid = _normalize_short(decision, float(current_price), ticker, warnings)
+        valid = _normalize_short(decision, float(current_price), ticker, warnings, price_data, normalized_volatility)
     else:
         valid = False
+
+    normalized_action = normalize_rebalancing_action(
+        final_decision,
+        bool(has_existing_position),
+        final_decision in ACTIONABLE_DECISIONS and valid,
+        getattr(decision, "confidence_score", None),
+    )
+    if original_rebalancing is not None and normalized_action != original_rebalancing:
+        _append_warning(warnings, "INVALID_REBALANCING_FIXED")
+    decision.rebalancing_action = normalized_action
 
     if final_decision in ACTIONABLE_DECISIONS and valid:
         _ensure_drawdown(decision, normalized_volatility, warnings)
         decision.trade_plan_valid = True
-        trade_quality = "recomputed" if warnings else "ok"
-        llm_output_quality = "repaired" if warnings else "ok"
+        trade_quality = "recomputed"
+        llm_output_quality = "repaired" if _has_llm_repair_warning(warnings) else "ok"
         decision.position_size_hint = POSITION_SIZE_HINTS[normalized_volatility]
     elif final_decision in ACTIONABLE_DECISIONS:
         _downgrade_to_hold(decision, "Invalid or incomplete trade plan", warnings)
-        decision.rebalancing_action = normalize_rebalancing_action("Hold", normalized_volatility, None, bool(has_existing_position))
+        decision.rebalancing_action = normalize_rebalancing_action(
+            "Hold",
+            bool(has_existing_position),
+            False,
+            getattr(decision, "confidence_score", None),
+        )
         decision.position_size_hint = "No new position suggested."
         trade_quality = "invalid"
         llm_output_quality = "downgraded"
@@ -538,8 +654,8 @@ def normalize_trade_levels(
         _clear_trade_levels(decision, warnings, add_hold_warning=True)
         decision.trade_plan_valid = False
         decision.position_size_hint = "No new position suggested."
-        trade_quality = "invalid"
-        llm_output_quality = "ok" if not warnings else "repaired"
+        trade_quality = "hidden"
+        llm_output_quality = "repaired" if _has_llm_repair_warning(warnings) else "ok"
 
     final_decision = decision.final_decision or final_decision
 

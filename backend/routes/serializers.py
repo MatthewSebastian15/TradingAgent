@@ -10,7 +10,7 @@ from routes.validation import AnalysisRequest
 
 logger = logging.getLogger(__name__)
 
-ACTIONABLE_DECISIONS = {"Buy", "Overweight", "Sell", "Underweight"}
+ACTIONABLE_DECISIONS = {"Buy", "Sell"}
 FIXED_RR = 3.0
 RISK_REWARD_DISPLAY = "1:3"
 
@@ -54,6 +54,7 @@ SUMMARY_FIELDS = {
     "invalidation_conditions",
     "data_quality",
     "validation_warnings",
+    "validation_warning_details",
     "analysis_created_at",
     "analysis_depth",
     "time_horizon_months",
@@ -108,6 +109,113 @@ def _coerce_data_quality(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+VALIDATION_WARNING_META: dict[str, dict[str, Any]] = {
+    "HOLD_TRADE_LEVELS_HIDDEN": {"severity": "info", "message": "Trade levels are hidden because recommendation is Hold.", "blocking": False},
+    "NEWS_PARTIAL": {"severity": "warning", "message": "Partial news coverage is available.", "blocking": False},
+    "NEWS_UNAVAILABLE": {"severity": "warning", "message": "No usable news was returned; analysis continues without blocking trade validation.", "blocking": False},
+    "OHLCV_FALLBACK_USED": {"severity": "warning", "message": "Exact OHLCV date was not found; latest available trading day is used.", "blocking": False},
+    "CURRENT_PRICE_MISSING": {"severity": "error", "message": "Current price missing.", "blocking": True},
+    "PRICE_MISSING": {"severity": "error", "message": "Required price data is missing.", "blocking": True},
+    "OHLCV_MISSING": {"severity": "error", "message": "No OHLCV row is available on or before the trade date.", "blocking": True},
+    "TRADE_LEVELS_INVALID": {"severity": "error", "message": "Trade levels are invalid for the current recommendation.", "blocking": True},
+    "TRADE_PLAN_INVALID": {"severity": "error", "message": "Trade plan invalid.", "blocking": True},
+    "DECISION_DOWNGRADED_TO_HOLD": {"severity": "warning", "message": "Decision downgraded to Hold.", "blocking": False},
+    "INVALID_REBALANCING_FIXED": {"severity": "warning", "message": "Invalid rebalancing action fixed.", "blocking": False},
+}
+
+
+def _warning_detail(code: str, message: str | None = None) -> dict[str, Any]:
+    meta = VALIDATION_WARNING_META.get(code, {})
+    return {
+        "code": code,
+        "severity": meta.get("severity", "warning"),
+        "message": message or meta.get("message") or code.replace("_", " ").title(),
+        "blocking": bool(meta.get("blocking", False)),
+    }
+
+
+def _validation_warning_details(warnings: Any) -> list[dict[str, Any]]:
+    if not isinstance(warnings, list):
+        return []
+    details: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for warning in warnings:
+        if isinstance(warning, dict):
+            code = str(warning.get("code") or "WARNING").strip()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            details.append({
+                "code": code,
+                "severity": str(warning.get("severity") or VALIDATION_WARNING_META.get(code, {}).get("severity") or "warning"),
+                "message": str(warning.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code),
+                "blocking": bool(warning.get("blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False))),
+            })
+            continue
+        code = str(warning).strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        details.append(_warning_detail(code))
+    return details
+
+
+def _data_quality_warning_detail_from_message(message: str) -> dict[str, Any]:
+    lowered = message.lower()
+    if "ohlcv_fallback_used" in lowered or "exact ohlcv date" in lowered:
+        return _warning_detail("OHLCV_FALLBACK_USED", message)
+    if "ohlcv_missing" in lowered or ("ohlcv" in lowered and "no available" in lowered):
+        return _warning_detail("OHLCV_MISSING", message)
+    if "news_partial" in lowered or "partial news" in lowered:
+        return _warning_detail("NEWS_PARTIAL", message)
+    if "news_unavailable" in lowered or "no usable" in lowered or "no news" in lowered:
+        return _warning_detail("NEWS_UNAVAILABLE", message)
+    if "price" in lowered and ("missing" in lowered or "unavailable" in lowered):
+        return _warning_detail("PRICE_MISSING", message)
+    return {"code": "DATA_SOURCE_WARNING", "severity": "warning", "message": message, "blocking": False}
+
+
+def _complete_data_quality_warning_details(merged: dict[str, Any]) -> None:
+    details: list[dict[str, Any]] = []
+    existing = merged.get("warning_details")
+    if isinstance(existing, list):
+        for item in existing:
+            if isinstance(item, dict):
+                code = str(item.get("code") or "DATA_SOURCE_WARNING")
+                details.append({
+                    "code": code,
+                    "severity": str(item.get("severity") or VALIDATION_WARNING_META.get(code, {}).get("severity") or "warning"),
+                    "message": str(item.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code),
+                    "blocking": bool(item.get("blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False))),
+                })
+            elif item:
+                details.append(_data_quality_warning_detail_from_message(str(item)))
+    for message in merged.get("warnings") or []:
+        if message:
+            details.append(_data_quality_warning_detail_from_message(str(message)))
+    if merged.get("price_data") in {"missing", "invalid_ticker"}:
+        details.append(_warning_detail("PRICE_MISSING"))
+    elif merged.get("price_data") == "market_closed":
+        details.append(_warning_detail("OHLCV_FALLBACK_USED"))
+    if merged.get("trade_levels") == "invalid":
+        details.append(_warning_detail("TRADE_LEVELS_INVALID"))
+    elif merged.get("trade_levels") == "hidden":
+        details.append(_warning_detail("HOLD_TRADE_LEVELS_HIDDEN"))
+    if merged.get("news") == "partial":
+        details.append(_warning_detail("NEWS_PARTIAL"))
+    elif merged.get("news") in {"unavailable", "missing"}:
+        details.append(_warning_detail("NEWS_UNAVAILABLE"))
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for item in details:
+        key = f"{item.get('code')}::{item.get('message')}"
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    merged["warning_details"] = deduped[:20]
+
+
 def _complete_risk_engine_data_quality(
     value: Any,
     *,
@@ -127,6 +235,7 @@ def _complete_risk_engine_data_quality(
         merged["llm_output"] = "downgraded" if decision_adjusted else llm_output_fallback
     if "volatility_data" not in merged:
         merged["volatility_data"] = "ok" if volatility_score is not None else "missing"
+    _complete_data_quality_warning_details(merged)
     return merged
 
 
@@ -142,7 +251,7 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
         "position_quantity": getattr(pd_obj, "position_quantity", None) if pd_obj is not None else None,
         "average_entry_price": getattr(pd_obj, "average_entry_price", None) if pd_obj is not None else None,
         "position_action": getattr(pd_obj, "position_action", None) if pd_obj is not None else None,
-        "new_entry_action": getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else "Wait and monitor",
+        "new_entry_action": getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else "Avoid new entry",
         **current_price_fields,
         "risk_per_share": None,
         "reward_per_share": None,
@@ -152,6 +261,7 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
         "volatility_score": None,
         "position_size_hint": "No new position suggested.",
         "validation_warnings": [],
+        "validation_warning_details": [],
     }
 
 
@@ -215,7 +325,7 @@ def parse_final_result(
             "max_drawdown_estimate": None,
             "volatility_level": "Medium",
             "position_sizing_reason": None,
-            "rebalancing_action": "Wait and monitor",
+            "rebalancing_action": "Avoid new entry",
             "key_catalysts": [],
             "invalidation_conditions": [],
             **_empty_trade_contract(final_state),
@@ -275,12 +385,13 @@ def parse_final_result(
         "volatility_level": _enum_value(getattr(pd_obj, "volatility_level", None)),
         "volatility_score": getattr(pd_obj, "volatility_score", None),
         "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
-        "rebalancing_action": getattr(pd_obj, "rebalancing_action", None),
+        "rebalancing_action": _enum_value(getattr(pd_obj, "rebalancing_action", None)),
         "position_size_hint": getattr(pd_obj, "position_size_hint", None),
         "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
         "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
         "data_quality": pd_data_quality,
         "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
+        "validation_warning_details": _validation_warning_details(getattr(pd_obj, "validation_warnings", []) or []),
         **{key: value for key, value in common.items() if key != "data_quality"},
     }
 

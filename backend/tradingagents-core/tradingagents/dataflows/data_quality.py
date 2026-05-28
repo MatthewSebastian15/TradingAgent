@@ -5,7 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+class DataQualityWarning(BaseModel):
+    """Structured data-quality warning for API/UI severity rendering."""
+
+    code: str
+    severity: Literal["info", "warning", "error"] = "warning"
+    message: str
+    blocking: bool = False
 
 
 class DataQualityReport(BaseModel):
@@ -13,8 +24,9 @@ class DataQualityReport(BaseModel):
 
     price_data: str = Field(default="missing", description="ok, partial, missing, invalid_ticker, or market_closed")
     fundamentals: str = Field(default="missing", description="ok, partial, or missing")
-    news: str = Field(default="missing", description="ok, partial, or missing")
+    news: str = Field(default="missing", description="ok, partial, unavailable, or missing")
     warnings: list[str] = Field(default_factory=list)
+    warning_details: list[DataQualityWarning] = Field(default_factory=list)
 
     @property
     def is_usable(self) -> bool:

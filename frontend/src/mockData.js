@@ -170,9 +170,9 @@ export const MOCK_RESPONSE = completeResponse({
   max_drawdown_max_pct: 12,
   volatility_level: 'High',
   volatility_score: 72,
-  rebalancing_action: 'Buy with tight risk control',
+  rebalancing_action: 'Open new position',
   position_action: null,
-  new_entry_action: 'Buy with tight risk control',
+  new_entry_action: 'Open new position',
   position_size_hint: 'Use smaller size due to High volatility.',
   position_sizing_reason:
     'Use a smaller staged allocation because volatility is high. Keep the stop loss disciplined and do not add unless the setup keeps a valid 1:3 risk/reward profile.',
@@ -299,9 +299,9 @@ export const MOCK_HOLD_RESPONSE = completeResponse({
   max_drawdown_max_pct: null,
   volatility_level: 'Medium',
   volatility_score: 44,
-  rebalancing_action: 'Wait and monitor',
+  rebalancing_action: 'Avoid new entry',
   position_action: null,
-  new_entry_action: 'Wait and monitor',
+  new_entry_action: 'Avoid new entry',
   position_size_hint: 'No new position suggested.',
   position_sizing_reason: null,
   executive_summary:
@@ -363,9 +363,9 @@ export const MOCK_MISSING_PRICE_RESPONSE = completeResponse({
   max_drawdown_max_pct: null,
   volatility_level: 'Medium',
   volatility_score: 45,
-  rebalancing_action: 'Wait and monitor',
+  rebalancing_action: 'Avoid new entry',
   position_action: null,
-  new_entry_action: 'Wait and monitor',
+  new_entry_action: 'Avoid new entry',
   position_size_hint: 'No new position suggested.',
   position_sizing_reason: null,
   executive_summary:
@@ -425,9 +425,9 @@ export const MOCK_REPAIRED_RESPONSE = completeResponse({
   max_drawdown_max_pct: 10,
   volatility_level: 'Medium',
   volatility_score: 48,
-  rebalancing_action: 'Add gradually',
+  rebalancing_action: 'Open new position',
   position_action: null,
-  new_entry_action: 'Add gradually',
+  new_entry_action: 'Open new position',
   position_size_hint: 'Use standard risk management and avoid oversized position.',
   position_sizing_reason:
     'Backend validation repaired the original LLM levels by forcing risk/reward to 1:3 and recomputing the take profit from the current price anchor.',
@@ -485,9 +485,9 @@ export const MOCK_IDX_RESPONSE = completeResponse({
   max_drawdown_max_pct: 12,
   volatility_level: 'High',
   volatility_score: 72,
-  rebalancing_action: 'Buy with tight risk control',
+  rebalancing_action: 'Open new position',
   position_action: null,
-  new_entry_action: 'Buy with tight risk control',
+  new_entry_action: 'Open new position',
   position_size_hint: 'Use smaller size due to High volatility.',
   position_sizing_reason:
     'Use staged sizing because the stock is high volatility. IDX prices are rounded using exchange tick-size logic in the backend contract.',
@@ -581,7 +581,7 @@ const MOCK_MAP = {
     current_price: 3200,
     volatility_level: 'Medium',
     volatility_score: 38,
-    rebalancing_action: 'Wait and monitor',
+    rebalancing_action: 'Avoid new entry',
     validation_warnings: ['HOLD_TRADE_LEVELS_HIDDEN'],
   }),
   'BMRI.JK': withOverrides(MOCK_IDX_RESPONSE, {
@@ -608,8 +608,8 @@ const MOCK_MAP = {
     current_price: 5700,
     volatility_level: 'High',
     volatility_score: 61,
-    rebalancing_action: 'No new entry',
-    new_entry_action: 'No new entry',
+    rebalancing_action: 'Avoid new entry',
+    new_entry_action: 'Avoid new entry',
     validation_warnings: ['HOLD_TRADE_LEVELS_HIDDEN'],
   }),
   'GOTO.JK': withOverrides(MOCK_SELL_RESPONSE, {
@@ -670,8 +670,6 @@ function ensureAllowedRebalancing(response) {
   const positionOnlyActions = new Set([
     'Exit position',
     'Trim position',
-    'Reduce exposure',
-    'Hedge or reduce risk',
   ]);
 
   if (!response.has_existing_position && positionOnlyActions.has(response.rebalancing_action)) {

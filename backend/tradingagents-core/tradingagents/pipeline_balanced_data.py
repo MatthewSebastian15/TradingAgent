@@ -20,6 +20,29 @@ T = TypeVar("T")
 VALID_TIME_HORIZON_MONTHS = {1, 2, 3}
 
 
+def _quality_warning(code: str, severity: str, message: str, blocking: bool = False) -> dict[str, Any]:
+    return {"code": code, "severity": severity, "message": message, "blocking": blocking}
+
+
+def _warning_detail_from_message(message: str) -> dict[str, Any]:
+    lowered = message.lower()
+    if "exact ohlcv date not found" in lowered or "ohlcv_fallback_used" in lowered:
+        return _quality_warning("OHLCV_FALLBACK_USED", "warning", message, False)
+    if "ohlcv" in lowered and "no available" in lowered:
+        return _quality_warning("OHLCV_MISSING", "error", message, True)
+    if "partial news" in lowered or "news_partial" in lowered:
+        return _quality_warning("NEWS_PARTIAL", "warning", message, False)
+    if "no news" in lowered or "news unavailable" in lowered or "news_unavailable" in lowered:
+        return _quality_warning("NEWS_UNAVAILABLE", "warning", message, False)
+    if "partial fundamentals" in lowered:
+        return _quality_warning("FUNDAMENTALS_PARTIAL", "warning", message, False)
+    if "only" in lowered and "price rows" in lowered:
+        return _quality_warning("PRICE_DATA_PARTIAL", "warning", message, False)
+    if "price_data unavailable" in lowered or "no data found" in lowered:
+        return _quality_warning("PRICE_MISSING", "error", message, True)
+    return _quality_warning("DATA_SOURCE_WARNING", "warning", message, False)
+
+
 def _normalize_time_horizon_months(value: Any = 1) -> int:
     if isinstance(value, bool):
         return 1
@@ -264,10 +287,25 @@ def _classify_price_data(
     if price.status == "missing":
         return "invalid_ticker" if fundamentals.status == "missing" else "missing"
     if trade_date not in price_dates:
+        try:
+            cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
+            available_before_or_on_target = [
+                item for item in price_dates if datetime.strptime(item, "%Y-%m-%d") <= cutoff
+            ]
+        except ValueError:
+            available_before_or_on_target = []
+        if available_before_or_on_target:
+            fallback_date = max(available_before_or_on_target)
+            warnings.append(
+                "OHLCV_FALLBACK_USED - Exact OHLCV date not found; "
+                f"using latest available trading day {fallback_date}."
+            )
+            return "market_closed"
         warnings.append(
-            f"No yfinance OHLCV row found exactly on {trade_date}; market may have been closed or ticker may not trade that day."
+            "OHLCV_MISSING - No available OHLCV row found on or before "
+            f"{trade_date}; current price cannot be validated."
         )
-        return "market_closed"
+        return "missing"
     if len(price_dates) < 10:
         warnings.append(f"Only {len(price_dates)} price rows found in the {price_lookback_days}-day yfinance window.")
         return "partial"
@@ -299,9 +337,10 @@ def _classify_fundamentals(
 
 def _classify_news(company_news: DataField, global_news: DataField, warnings: list[str]) -> str:
     if company_news.status == "missing" and global_news.status == "missing":
-        return "missing"
+        warnings.append("NEWS_UNAVAILABLE - No usable company-specific or global news was returned; analysis continues without blocking trade validation.")
+        return "unavailable"
     if company_news.status == "missing" or global_news.status == "missing":
-        warnings.append("Partial news coverage from yfinance; company-specific or global news is missing.")
+        warnings.append("NEWS_PARTIAL - Partial news coverage from yfinance; company-specific or global news is missing.")
         return "partial"
     return "ok"
 
@@ -319,11 +358,17 @@ def _build_data_quality(
     price_lookback_days: int,
 ) -> DataQualityReport:
     warnings = _warnings_from_fields(all_fields)
+    price_status = _classify_price_data(price, fundamentals, trade_date, price_lookback_days, warnings)
+    fundamentals_status = _classify_fundamentals(fundamentals, balance_sheet, cashflow, income_statement, warnings)
+    news_status = _classify_news(company_news, global_news, warnings)
+    deduped_warnings = list(dict.fromkeys(warnings))[:20]
+    warning_details = [_warning_detail_from_message(message) for message in deduped_warnings]
     return DataQualityReport(
-        price_data=_classify_price_data(price, fundamentals, trade_date, price_lookback_days, warnings),
-        fundamentals=_classify_fundamentals(fundamentals, balance_sheet, cashflow, income_statement, warnings),
-        news=_classify_news(company_news, global_news, warnings),
-        warnings=list(dict.fromkeys(warnings))[:20],
+        price_data=price_status,
+        fundamentals=fundamentals_status,
+        news=news_status,
+        warnings=deduped_warnings,
+        warning_details=warning_details,
     )
 
 

@@ -198,7 +198,7 @@ def test_parse_final_result_fallback_contract_is_non_actionable():
     assert parsed["trade_plan_valid"] is False
     assert parsed["decision"] == "Hold"
     assert parsed["final_decision"] == "Hold"
-    assert parsed["rebalancing_action"] == "Wait and monitor"
+    assert parsed["rebalancing_action"] == "Avoid new entry"
     assert parsed["position_size_hint"] == "No new position suggested."
     assert parsed["decision_adjusted"] is False
     assert parsed["validation_warnings"] == []

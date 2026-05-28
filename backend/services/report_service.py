@@ -191,7 +191,31 @@ def _as_dict(value: Any) -> dict[str, Any]:
 def _as_text_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item).strip() for item in value if str(item).strip()]
+    items: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            code = str(item.get("code") or "").strip()
+            message = str(item.get("message") or "").strip()
+            severity = str(item.get("severity") or "").strip()
+            blocking = item.get("blocking")
+            text = " - ".join(part for part in (code, message) if part)
+            meta = ", ".join(
+                part
+                for part in (
+                    severity if severity else None,
+                    "blocking" if blocking is True else "non-blocking" if blocking is False else None,
+                )
+                if part
+            )
+            if meta:
+                text = f"{text} ({meta})" if text else meta
+            if text:
+                items.append(text)
+            continue
+        text = str(item).strip()
+        if text:
+            items.append(text)
+    return items
 
 
 def _display(value: Any) -> str:
