@@ -173,7 +173,7 @@ class TraderProposal(BaseModel):
     )
     risk_reward_ratio: float | None = Field(
         default=None,
-        description="Expected reward divided by expected risk. Example: 2.0 means 2:1.",
+        description="Fixed reward/risk ratio for valid Buy/Sell setups. Must be 3.0, displayed as 1:3.",
     )
     max_drawdown_estimate: str | None = Field(
         default=None,
@@ -333,7 +333,7 @@ class PortfolioDecision(BaseModel):
     )
     risk_reward_ratio: float | None = Field(
         default=None,
-        description="Final expected reward divided by expected risk.",
+        description="Final fixed reward/risk ratio. Must be 3.0, displayed as 1:3.",
     )
     max_drawdown_estimate: str | None = Field(
         default=None,
@@ -390,7 +390,10 @@ class PortfolioDecision(BaseModel):
     position_action: str | None = Field(default=None)
     new_entry_action: str | None = Field(default=None)
 
-    risk_reward_display: str | None = Field(default=None)
+    risk_reward_display: str | None = Field(
+        default=None,
+        description='Display string for fixed Risk:Reward. Must be "1:3" for valid Buy/Sell trade plans.',
+    )
     risk_per_share: float | None = Field(default=None)
     reward_per_share: float | None = Field(default=None)
 

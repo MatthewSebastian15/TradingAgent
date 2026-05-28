@@ -39,8 +39,9 @@ def make_decision(**overrides) -> PortfolioDecision:
     return PortfolioDecision(**data)
 
 
-def test_buy_with_rr_below_three_is_clamped_to_three():
-    decision = make_decision(risk_reward_ratio=2.0, stop_loss=95.0)
+@pytest.mark.parametrize("raw_rr", [None, 0.0, 2.0, 4.0, 5.0, 7.0])
+def test_buy_always_forces_risk_reward_to_one_to_three(raw_rr):
+    decision = make_decision(risk_reward_ratio=raw_rr, stop_loss=95.0, price_target=130.0)
 
     normalized = normalize_trade_levels(decision, 100.0, ticker="NVDA", current_price_as_of="2026-05-18")
 
@@ -51,30 +52,31 @@ def test_buy_with_rr_below_three_is_clamped_to_three():
     assert normalized.risk_per_share == pytest.approx(5.0)
     assert normalized.reward_per_share == pytest.approx(15.0)
     assert normalized.take_profit == pytest.approx(115.0)
-    assert "RR_CLAMPED_TO_3" in normalized.validation_warnings
+    assert "RR_FORCED_TO_3" in normalized.validation_warnings
 
 
-def test_buy_with_rr_above_five_is_clamped_to_five():
-    decision = make_decision(risk_reward_ratio=7.0, stop_loss=95.0, price_target=130.0)
+def test_buy_with_exact_rr_three_does_not_add_rr_warning():
+    decision = make_decision(risk_reward_ratio=3.0, stop_loss=95.0)
 
     normalized = normalize_trade_levels(decision, 100.0, ticker="NVDA")
 
     assert normalized.final_decision == "Buy"
     assert normalized.trade_plan_valid is True
-    assert normalized.risk_reward_ratio == pytest.approx(5.0)
-    assert normalized.risk_reward_display == "1:5"
-    assert normalized.take_profit == pytest.approx(125.0)
-    assert "RR_CLAMPED_TO_5" in normalized.validation_warnings
+    assert normalized.risk_reward_ratio == pytest.approx(3.0)
+    assert normalized.risk_reward_display == "1:3"
+    assert normalized.take_profit == pytest.approx(115.0)
+    assert "RR_FORCED_TO_3" not in normalized.validation_warnings
 
 
-def test_sell_with_rr_below_three_is_clamped_and_direction_is_short():
+@pytest.mark.parametrize("raw_rr", [2.0, 4.0, 5.0, 7.0])
+def test_sell_always_forces_risk_reward_to_one_to_three(raw_rr):
     decision = make_decision(
         rating=PortfolioRating.SELL,
         decision="Sell",
         entry_price=100.0,
         stop_loss=105.0,
         take_profit=96.0,
-        risk_reward_ratio=2.0,
+        risk_reward_ratio=raw_rr,
         price_target=85.0,
         volatility_level="Very High",
         rebalancing_action="Exit position",
@@ -90,7 +92,9 @@ def test_sell_with_rr_below_three_is_clamped_and_direction_is_short():
     assert normalized.risk_reward_display == "1:3"
     assert normalized.risk_per_share == pytest.approx(5.0)
     assert normalized.reward_per_share == pytest.approx(15.0)
+    assert normalized.take_profit == pytest.approx(85.0)
     assert normalized.rebalancing_action == "Exit position"
+    assert "RR_FORCED_TO_3" in normalized.validation_warnings
 
 
 def test_missing_current_price_downgrades_actionable_decision_to_hold():

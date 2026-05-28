@@ -74,6 +74,14 @@ def test_report_context_hides_trade_plan_for_hold_even_if_levels_exist():
     assert report["decision_adjusted_reason"] == "Invalid risk reward structure"
 
 
+def test_report_context_forces_legacy_ratio_to_one_to_three_for_valid_trade_plan():
+    report = build_report_context(_base_result(risk_reward_display=None, risk_reward_ratio=5.0))
+
+    assert report["show_trade_plan"] is True
+    assert any(row["label"] == "Risk/Reward" and row["value"] == "1:3" for row in report["trade_plan_rows"])
+    assert not any(row["value"] in {"1:" + "4", "1:" + "5"} for row in report["trade_plan_rows"])
+
+
 @pytest.mark.parametrize(
     "payload",
     [

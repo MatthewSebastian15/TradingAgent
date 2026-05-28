@@ -36,6 +36,19 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getAllByText('1:3').length).toBeGreaterThan(0);
   });
 
+
+
+  it('does not render higher RR variants for valid Buy and Sell results', () => {
+    const higherRiskRewardPattern = /1:[45]/;
+    const { rerender } = render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.queryByText(higherRiskRewardPattern)).toBeNull();
+
+    rerender(<ResultCard result={MOCK_SELL_RESPONSE} />);
+
+    expect(screen.queryByText(higherRiskRewardPattern)).toBeNull();
+  });
+
   it('renders Buy risk per share and reward per share', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
@@ -125,7 +138,7 @@ describe('ResultCard risk-engine contract', () => {
     render(<ResultCard result={MOCK_REPAIRED_RESPONSE} />);
 
     expect(screen.getByText('Validation Warnings')).toBeTruthy();
-    expect(screen.getByText('RR_CLAMPED_TO_3 - Risk/reward clamped to 1:3')).toBeTruthy();
+    expect(screen.getByText('RR_FORCED_TO_3 - Risk/reward forced to 1:3')).toBeTruthy();
     expect(screen.getByText('TAKE_PROFIT_RECOMPUTED - Take profit recomputed')).toBeTruthy();
   });
 
