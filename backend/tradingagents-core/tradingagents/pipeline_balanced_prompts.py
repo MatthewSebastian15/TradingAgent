@@ -71,6 +71,12 @@ GLOBAL/MACRO NEWS:
 INSIDER TRANSACTIONS:
 {data.insider_transactions}
 
+NEWS SENTIMENT:
+{data.news_sentiment}
+
+SOCIAL SENTIMENT:
+{data.social_sentiment}
+
 DATA QUALITY:
 {data_quality_json}
 {get_language_instruction()}"""
@@ -107,6 +113,12 @@ CASH FLOW:
 
 INCOME STATEMENT:
 {data.income_statement}
+
+EVENT RISK CONTEXT:
+{data.event_risk}
+
+ANALYST RECOMMENDATION TRENDS (external comparison only, not final decision):
+{data.recommendation_trends}
 
 DATA QUALITY:
 {data_quality_json}

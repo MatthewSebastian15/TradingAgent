@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from .news_aggregator import deduplicate_news as aggregate_deduplicate_news
+from .news_aggregator import normalize_url
+from .news_aggregator import rank_news
 
 from .config import get_config
 from .finnhub_common import FinnhubUnavailableError, handle_finnhub_error, make_api_request, unix_to_iso_datetime
@@ -37,13 +39,6 @@ def classify_event_type(title: str, summary: str = "") -> str:
     return "general"
 
 
-def normalize_url(url: str) -> str:
-    if not url:
-        return ""
-    parts = urlsplit(url.strip())
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), "", ""))
-
-
 def normalize_news_item(item: dict[str, Any], ticker: str | None = None) -> dict[str, Any]:
     title = str(item.get("headline") or item.get("title") or "No title").strip()
     summary = str(item.get("summary") or "").strip()
@@ -67,17 +62,7 @@ def normalize_news_item(item: dict[str, Any], ticker: str | None = None) -> dict
 
 
 def deduplicate_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    seen: set[str] = set()
-    result: list[dict[str, Any]] = []
-    for item in items:
-        title_key = " ".join(str(item.get("title") or "").lower().split())
-        url_key = normalize_url(str(item.get("url") or ""))
-        key = url_key or title_key
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        result.append(item)
-    return result
+    return aggregate_deduplicate_news(items)
 
 
 def _format_items(items: list[dict[str, Any]], label: str, start_date: str, end_date: str) -> str:
@@ -108,7 +93,7 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
         if not isinstance(payload, list):
             raise FinnhubUnavailableError("Company news response is not a list.")
         items = [normalize_news_item(item, ticker=ticker) for item in payload if isinstance(item, dict)]
-        items = deduplicate_news(items)[: _limit(10)]
+        items = rank_news(deduplicate_news(items), ticker=ticker)[: _limit(10)]
         return _format_items(items, ticker, start_date, end_date)
     except Exception as exc:
         return handle_finnhub_error(f"company news for {ticker}", exc, fallback_next="alpha_vantage")
@@ -122,7 +107,7 @@ def get_global_news(curr_date: str, look_back_days: int = 7, limit: int = 10, ca
         if not isinstance(payload, list):
             raise FinnhubUnavailableError("Global news response is not a list.")
         items = [normalize_news_item(item, ticker=None) for item in payload if isinstance(item, dict)]
-        items = deduplicate_news(items)[: max(1, int(limit))]
+        items = rank_news(deduplicate_news(items), ticker=None)[: max(1, int(limit))]
         return _format_items(items, "global markets", start_date, curr_date)
     except Exception as exc:
         return handle_finnhub_error("global news", exc, fallback_next="alpha_vantage")

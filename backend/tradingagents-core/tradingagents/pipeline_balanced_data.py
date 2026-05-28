@@ -12,6 +12,8 @@ from typing import Any, TypeVar
 from tradingagents.dataflows.config import set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
+from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
+from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
 from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 
@@ -259,6 +261,26 @@ def _build_collection_tasks(
             lambda: route_to_vendor("get_insider_transactions", ticker),
             limit=6_000,
         ),
+        "news_sentiment": lambda: _safe_data_field(
+            "news_sentiment",
+            lambda: route_to_vendor("get_news_sentiment", ticker),
+            limit=4_000,
+        ),
+        "social_sentiment": lambda: _safe_data_field(
+            "social_sentiment",
+            lambda: route_to_vendor("get_social_sentiment", ticker, start_news, end),
+            limit=5_000,
+        ),
+        "event_risk": lambda: _safe_data_field(
+            "event_risk",
+            lambda: route_to_vendor("get_earnings_calendar", ticker, trade_date, end),
+            limit=5_000,
+        ),
+        "recommendation_trends": lambda: _safe_data_field(
+            "recommendation_trends",
+            lambda: route_to_vendor("get_recommendation_trends", ticker),
+            limit=4_000,
+        ),
     }
     tasks["company_news"] = lambda: _safe_multi_source_data_field(
         "company_news",
@@ -442,30 +464,46 @@ def _build_data_source_metadata(
     company_news: DataField,
     global_news: DataField,
     insider_transactions: DataField,
+    news_sentiment: DataField,
+    social_sentiment: DataField,
+    event_risk: DataField,
+    recommendation_trends: DataField,
     last_close_price: float | None,
-) -> tuple[dict[str, str], list[str]]:
+    vendor_attempts: dict[str, list[str]] | None = None,
+    request_budget: dict[str, Any] | None = None,
+) -> tuple[dict[str, str], list[str], dict[str, Any]]:
     data_sources = {
+        "quote": "routed:yfinance->finnhub->alpha_vantage",
         "price": _price_source_label(price.value, last_close_price) or "unavailable",
-        "technical": "yfinance:local_calculation or configured fallback",
+        "ohlcv": _source_label(price.value),
+        "technical": "configured_ohlcv:local_calculation",
         "fundamental_profile_metrics": _source_label(fundamentals.value),
         "balance_sheet": _source_label(balance_sheet.value),
         "cashflow": _source_label(cashflow.value),
         "income_statement": _source_label(income_statement.value),
         "company_news": _source_label(company_news.value),
         "global_news": _source_label(global_news.value),
+        "news": "+".join(dict.fromkeys(_detect_sources_from_text(company_news.value) + _detect_sources_from_text(global_news.value))) or "unavailable",
+        "news_sentiment": _source_label(news_sentiment.value),
+        "social_sentiment": _source_label(social_sentiment.value),
+        "event_risk": _source_label(event_risk.value),
+        "recommendation_trends": _source_label(recommendation_trends.value),
         "insider": _source_label(insider_transactions.value, default="disabled_or_unavailable"),
-        "news_sentiment": "finnhub when sentiment tool is called and enabled",
-        "social_sentiment": "finnhub when sentiment tool is called and available",
-        "earnings_calendar": "finnhub when event tool is called and enabled",
-        "recommendation_trends": "finnhub when event tool is called and enabled",
+        "forex": "deferred",
+        "crypto": "deferred",
     }
     limitations = [
         "Finnhub is skipped unless FINNHUB_ENABLED=true and FINNHUB_API_KEY is configured.",
         "Finnhub coverage for Indonesian .JK tickers must be validated per endpoint.",
         "Fallback vendors are used only when earlier vendors return empty, stale, invalid, or unavailable data.",
         "Direct social sentiment can be unavailable for many tickers and must not be invented from news headlines.",
+        "Forex and crypto Finnhub integration are deferred for a later phase.",
     ]
-    return data_sources, limitations
+    runtime_metadata = {
+        "vendor_attempts": vendor_attempts or {},
+        "request_budget": request_budget or {},
+    }
+    return data_sources, limitations, runtime_metadata
 
 
 def collect_market_data(
@@ -476,6 +514,11 @@ def collect_market_data(
 ) -> CollectedData:
     """Collect external data in parallel and classify yfinance data quality."""
     _check_cancel(cancel_check)
+    budget_id, budget = create_budget_from_config(config)
+    attempt_id, attempt_recorder = create_attempt_recorder()
+    config = dict(config)
+    config["_vendor_budget_id"] = budget_id
+    config["_vendor_attempt_recorder_id"] = attempt_id
     set_config(config)
     ticker = normalize_ticker(ticker)
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
@@ -494,6 +537,10 @@ def collect_market_data(
     company_news = results["company_news"]
     global_news = results["global_news"]
     insider_transactions = results["insider_transactions"]
+    news_sentiment = results.get("news_sentiment", DataField.from_text(""))
+    social_sentiment = results.get("social_sentiment", DataField.from_text(""))
+    event_risk = results.get("event_risk", DataField.from_text(""))
+    recommendation_trends = results.get("recommendation_trends", DataField.from_text(""))
     indicator_parts = [results[f"indicator:{indicator}"] for indicator in INDICATOR_NAMES]
     all_fields = [
         price,
@@ -504,6 +551,10 @@ def collect_market_data(
         company_news,
         global_news,
         insider_transactions,
+        news_sentiment,
+        social_sentiment,
+        event_risk,
+        recommendation_trends,
         *indicator_parts,
     ]
     data_quality = _build_data_quality(
@@ -521,7 +572,9 @@ def collect_market_data(
 
     _check_cancel(cancel_check)
     last_close_price, last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
-    data_sources, data_limitations = _build_data_source_metadata(
+    vendor_attempts = attempt_recorder.get_summary()
+    request_budget = budget.get_summary()
+    data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
         price,
         fundamentals,
         balance_sheet,
@@ -530,8 +583,19 @@ def collect_market_data(
         company_news,
         global_news,
         insider_transactions,
+        news_sentiment,
+        social_sentiment,
+        event_risk,
+        recommendation_trends,
         last_close_price,
+        vendor_attempts=vendor_attempts,
+        request_budget=request_budget,
     )
+    try:
+        release_budget(budget_id)
+        release_attempt_recorder(attempt_id)
+    except Exception:
+        pass
     return CollectedData(
         ticker=ticker,
         trade_date=trade_date,
@@ -545,10 +609,16 @@ def collect_market_data(
         company_news=company_news.value,
         global_news=global_news.value,
         insider_transactions=insider_transactions.value,
+        news_sentiment=news_sentiment.value,
+        social_sentiment=social_sentiment.value,
+        event_risk=event_risk.value,
+        recommendation_trends=recommendation_trends.value,
         data_quality=data_quality,
         last_close_price=last_close_price,
         last_close_price_as_of=last_close_price_as_of or trade_date,
         last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
         data_sources=data_sources,
         data_limitations=data_limitations,
+        vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
+        request_budget=runtime_metadata.get("request_budget", {}),
     )

@@ -37,6 +37,7 @@ FEATURE_BY_METHOD = {
     "get_fundamentals": "enable_fundamentals",
     "get_company_profile": "enable_fundamentals",
     "get_basic_financials": "enable_fundamentals",
+    "get_financials": "enable_fundamentals",
     "get_balance_sheet": "enable_fundamentals",
     "get_cashflow": "enable_fundamentals",
     "get_income_statement": "enable_fundamentals",
