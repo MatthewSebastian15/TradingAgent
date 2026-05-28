@@ -28,10 +28,12 @@ load_dotenv(find_dotenv(".env.enterprise", usecwd=True), override=False)
 from cli.announcements import display_announcements, fetch_announcements
 from cli.stats_handler import StatsCallbackHandler
 from cli.utils import (
+    TICKER_INPUT_EXAMPLES,
     ask_anthropic_effort,
     ask_gemini_thinking_config,
     ask_openai_reasoning_effort,
     ask_output_language,
+    normalize_ticker_symbol,
     select_analysts,
     select_deep_thinking_agent,
     select_llm_provider,
@@ -489,7 +491,7 @@ def get_user_selections():
     console.print(
         create_question_box(
             "Step 1: Ticker Symbol",
-            "Enter the exact ticker symbol to analyze, including exchange suffix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK)",
+            f"Enter a supported US or Indonesian ticker to analyze ({TICKER_INPUT_EXAMPLES})",
             "SPY",
         )
     )
@@ -563,8 +565,13 @@ def get_user_selections():
 
 
 def get_ticker():
-    """Get ticker symbol from user input."""
-    return typer.prompt("", default="SPY")
+    """Get and validate a supported US or Indonesian ticker symbol from user input."""
+    while True:
+        raw_ticker = typer.prompt("", default="SPY")
+        try:
+            return normalize_ticker_symbol(raw_ticker)
+        except ValueError as exc:
+            console.print(f"[red]Error: {exc}[/red]")
 
 
 def get_analysis_date():

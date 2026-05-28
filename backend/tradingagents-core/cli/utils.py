@@ -1,3 +1,5 @@
+import re
+
 import questionary
 from rich.console import Console
 
@@ -16,7 +18,76 @@ def get_model_options(provider: str, mode: str):
 
 console = Console()
 
-TICKER_INPUT_EXAMPLES = "Examples: SPY, CNC.TO, 7203.T, 0700.HK"
+TICKER_INPUT_EXAMPLES = "Examples: SPY, NVDA, BBCA, BBRI, BBCA.JK"
+_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$")
+_NON_ID_EXCHANGE_SUFFIX_RE = re.compile(r"\.(?!JK$)[A-Z0-9]{1,5}$")
+_IDX_AUTO_SUFFIX = {
+    "AALI",
+    "ACES",
+    "ADRO",
+    "AKRA",
+    "AMMN",
+    "ANTM",
+    "ARTO",
+    "ASII",
+    "BBCA",
+    "BBNI",
+    "BBRI",
+    "BBTN",
+    "BMRI",
+    "BRIS",
+    "BRPT",
+    "CPIN",
+    "ESSA",
+    "EXCL",
+    "GOTO",
+    "ICBP",
+    "INCO",
+    "INDF",
+    "INKP",
+    "INTP",
+    "ISAT",
+    "ITMG",
+    "KLBF",
+    "MDKA",
+    "MEDC",
+    "PGAS",
+    "PTBA",
+    "SMGR",
+    "TLKM",
+    "UNTR",
+    "UNVR",
+}
+
+
+def normalize_ticker_symbol(ticker: str) -> str:
+    """Normalize CLI ticker input to the supported US/Indonesia scope."""
+
+    cleaned = ticker.strip().upper()
+    if not cleaned:
+        raise ValueError("Please enter a ticker symbol.")
+    if not _TICKER_RE.fullmatch(cleaned):
+        raise ValueError(
+            "Ticker must be a supported US or Indonesian symbol, for example AAPL, NVDA, BBCA, BBRI, TLKM, or BBCA.JK."
+        )
+    if _NON_ID_EXCHANGE_SUFFIX_RE.search(cleaned):
+        raise ValueError(
+            "Only US tickers and Indonesian IDX tickers are supported. Non-ID exchange suffixes are no longer supported."
+        )
+    if "." not in cleaned and cleaned in _IDX_AUTO_SUFFIX:
+        return f"{cleaned}.JK"
+    return cleaned
+
+
+def validate_ticker_input(ticker: str) -> bool | str:
+    """Return True for supported CLI tickers, otherwise a user-facing validation message."""
+
+    try:
+        normalize_ticker_symbol(ticker)
+    except ValueError as exc:
+        return str(exc)
+    return True
+
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -30,7 +101,7 @@ def get_ticker() -> str:
     """Prompt the user to enter a ticker symbol."""
     ticker = questionary.text(
         f"Enter the exact ticker symbol to analyze ({TICKER_INPUT_EXAMPLES}):",
-        validate=lambda x: len(x.strip()) > 0 or "Please enter a valid ticker symbol.",
+        validate=validate_ticker_input,
         style=questionary.Style(
             [
                 ("text", "fg:green"),
@@ -44,11 +115,6 @@ def get_ticker() -> str:
         exit(1)
 
     return normalize_ticker_symbol(ticker)
-
-
-def normalize_ticker_symbol(ticker: str) -> str:
-    """Normalize ticker input while preserving exchange suffixes."""
-    return ticker.strip().upper()
 
 
 def get_analysis_date() -> str:

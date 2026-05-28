@@ -140,6 +140,7 @@ TradingAgent/
 - Python 3.10+
 - Node.js 18+
 - An API key for at least one supported LLM provider (see below)
+- Backend report export dependencies from `backend/requirements.txt`: `jinja2` for HTML templates and `weasyprint` for PDF generation
 
 ---
 
@@ -280,6 +281,15 @@ The mock routes are always available in local dev. In production builds, they re
 
 The React analysis page uses the job API below. The dashboard also calls `/api/status` and `/api/market/quotes`. `/api/analyze` and `/api/analyze/stream` remain available as compatibility endpoints for direct API clients.
 
+Trading analysis is intentionally limited to two market scopes:
+
+| Market | Accepted input | Backend normalization |
+|---|---|---|
+| `US` | US stock symbols such as `AAPL`, `NVDA`, or `SPY` | Kept as submitted after uppercase normalization |
+| `ID` | Indonesian IDX stock codes such as `BBCA`, `BBRI`, `TLKM`, or `BBCA.JK` | Plain IDX codes are normalized to Yahoo Finance `.JK` symbols such as `BBCA.JK` |
+
+Non-ID exchange suffixes such as `.HK`, `.T`, `.DE`, `.L`, `.AX`, and `.TO` are rejected. Global macro/news data may still be used as supporting context for US or Indonesia analysis, but it is not a separate analysis market.
+
 ### GET `/api/status`
 
 Returns backend status metadata used by the dashboard.
@@ -332,8 +342,8 @@ Cancels a running job.
 
 | Field | Rule |
 |---|---|
-| `ticker` | Yahoo Finance-compatible symbol. For Indonesia, submit the plain IDX code such as `BBCA` with `market: "ID"`; the backend stores and queries it as `BBCA.JK`. Use exchange suffixes for other markets when needed, e.g. `700.HK`. |
-| `market` | Optional UI market context: `US`, `ID`, or `GLOBAL`. `ID` forces plain IDX codes to `.JK` in the backend. |
+| `ticker` | Supported US or Indonesian symbol. For Indonesia, submit the plain IDX code such as `BBCA` with `market: "ID"`; the backend stores and queries it as `BBCA.JK`. Non-ID exchange suffixes are no longer supported. |
+| `market` | Optional UI market context: `US` or `ID`. `ID` forces plain IDX codes to `.JK` in the backend. |
 | `trade_date` | `YYYY-MM-DD` |
 | `time_horizon_months` | `1`, `2`, or `3`; defaults to `1` |
 | `max_debate_rounds` | Integer 1 to 5 |
@@ -346,11 +356,14 @@ Cancels a running job.
 {
   "request_id": "...",
   "ticker": "BBCA.JK",
+  "market": "ID",
   "trade_date": "2026-05-18",
   "time_horizon_months": 1,
   "analysis_depth": "balanced",
   "response_detail": "full",
   "decision": "Buy",
+  "final_decision": "Buy",
+  "llm_decision": "Buy",
   "full_decision": "...",
   "executive_summary": "...",
   "investment_thesis": "...",
@@ -358,6 +371,10 @@ Cancels a running job.
   "time_horizon": "1 month",
   "confidence_score": 0.82,
   "suggested_allocation_percent": 5,
+  "current_price": 9200,
+  "current_price_as_of": "2026-05-18",
+  "current_price_source": "yfinance:last_close",
+  "trade_plan_valid": true,
   "entry_price": 9000,
   "stop_loss": 8400,
   "take_profit": 9800,
@@ -378,11 +395,57 @@ Cancels a running job.
     "fundamentals": "partial",
     "news": "ok",
     "warnings": []
-  }
+  },
+  "validation_warnings": []
 }
 ```
 
-### Error codes
+## Export HTML/PDF Report
+
+After an analysis job finishes, the stored result can be exported without rerunning the analysis pipeline. Export reads the existing completed job result from the backend job store, so it does not call the LLM again, does not fetch new market data, and does not spend another analysis budget just to make a document.
+
+The report uses backend-normalized fields from the analysis result, especially `final_decision`, `current_price`, `trade_plan_valid`, `data_quality`, and `validation_warnings`. `decision` is kept only as a compatibility field; report rendering treats `final_decision` as the primary decision.
+
+### HTML Preview
+
+```http
+GET /api/analysis/jobs/{request_id}/report.html
+```
+
+Returns a clean, print-friendly HTML report for the completed analysis result. The frontend opens this endpoint in a new browser tab through the **Preview HTML** action.
+
+### PDF Download
+
+```http
+GET /api/analysis/jobs/{request_id}/report.pdf
+```
+
+Returns a downloadable PDF generated from the same HTML report template. The frontend calls this endpoint through the **Export PDF** action and saves the returned PDF blob using the filename from the response header when available.
+
+### Export rules
+
+- Export uses the stored analysis result for the given `request_id`.
+- Export does not rerun the analysis pipeline.
+- Export does not call the LLM.
+- Export uses `final_decision` as the main report decision.
+- Export uses backend-provided `current_price`; it does not invent price data.
+- Export only supports `US` and `ID` market results.
+- Legacy `GLOBAL` market results and non-ID exchange suffixes are rejected.
+- For `Hold`, the user-facing report does not render actionable trade levels such as Entry, Stop Loss, Take Profit, or Risk/Reward.
+
+### Backend dependencies
+
+The backend uses `jinja2` to render the HTML template and `weasyprint` to generate PDF files. Both dependencies are listed in `backend/requirements.txt`. If PDF generation fails because WeasyPrint or its system libraries are unavailable, the PDF endpoint returns a report generation error.
+
+### Common export errors
+
+| HTTP | Code | Meaning |
+|---:|---|---|
+| 404 | `report_not_found` | The analysis result for `request_id` was not found or has expired from the job store. |
+| 400 | `unsupported_report_market` | The stored result is not a supported `US` or `ID` market result, or the ticker has a non-ID exchange suffix. |
+| 500 | `report_generation_failed` | PDF generation failed. Check backend logs with the API `request_id`. |
+
+## API Error codes
 
 | Code | HTTP / Context | Meaning |
 |---|---|---|
