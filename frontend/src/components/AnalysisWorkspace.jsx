@@ -244,10 +244,12 @@ export default function AnalysisWorkspace({
   resultPathBase = '/analysis',
   lookupResult = null,
   enableReportExport = true,
+  lookupResultFirst = false,
 }) {
   const navigate = useNavigate();
   const { requestId } = useParams();
-  const initialResult = readStoredResult(historyKey, requestId);
+  const shouldLookupBeforeStorage = Boolean(requestId && lookupResult && lookupResultFirst);
+  const initialResult = shouldLookupBeforeStorage ? null : readStoredResult(historyKey, requestId);
   const [result, setResult] = useState(initialResult);
   const [loading, setLoading] = useState(Boolean(requestId && !initialResult));
   const [status, setStatus] = useState(
@@ -258,13 +260,15 @@ export default function AnalysisWorkspace({
   useEffect(() => {
     if (!requestId) return undefined;
 
-    const stored = readStoredResult(historyKey, requestId);
-    if (stored) {
-      setResult(stored);
-      setLoading(false);
-      setStatus('');
-      setAgentProgress(null);
-      return undefined;
+    if (!lookupResultFirst) {
+      const stored = readStoredResult(historyKey, requestId);
+      if (stored) {
+        setResult(stored);
+        setLoading(false);
+        setStatus('');
+        setAgentProgress(null);
+        return undefined;
+      }
     }
 
     if (lookupResult) {
@@ -277,6 +281,15 @@ export default function AnalysisWorkspace({
 
         try {
           const loadedResult = await lookupResult(requestId);
+
+          if (!loadedResult && lookupResultFirst) {
+            const storedFallback = readStoredResult(historyKey, requestId);
+            if (storedFallback) {
+              if (!cancelled) setResult(storedFallback);
+              return;
+            }
+          }
+
           if (!loadedResult) throw new Error(RESULT_EXPIRED_MESSAGE);
 
           const enrichedResult = withAnalysisCreatedAt(loadedResult);
@@ -297,6 +310,15 @@ export default function AnalysisWorkspace({
       return () => {
         cancelled = true;
       };
+    }
+
+    const stored = readStoredResult(historyKey, requestId);
+    if (stored) {
+      setResult(stored);
+      setLoading(false);
+      setStatus('');
+      setAgentProgress(null);
+      return undefined;
     }
 
     const controller = new AbortController();
@@ -342,7 +364,7 @@ export default function AnalysisWorkspace({
 
     loadResult();
     return () => controller.abort();
-  }, [historyKey, lookupResult, requestId]);
+  }, [historyKey, lookupResult, lookupResultFirst, requestId]);
 
   function handleResult(nextResult) {
     if (!nextResult) {
@@ -372,6 +394,7 @@ export default function AnalysisWorkspace({
                 onLoading={setLoading}
                 onStatus={setStatus}
                 onAgentProgress={setAgentProgress}
+                selectedResult={result && !result.error ? result : null}
               />
             </div>
 
@@ -422,7 +445,10 @@ export default function AnalysisWorkspace({
 
           {result && !loading && (
             <div className="p-4 sm:p-6">
-              <ResultCard result={result} enableReportExport={enableReportExport && Boolean(resultPathBase)} />
+              <ResultCard
+                result={result}
+                enableReportExport={enableReportExport && Boolean(resultPathBase)}
+              />
             </div>
           )}
         </div>

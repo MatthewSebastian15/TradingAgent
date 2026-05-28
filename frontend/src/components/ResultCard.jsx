@@ -96,6 +96,16 @@ function getFinalDecision(result) {
   return result.final_decision ?? result.decision ?? result.rating ?? 'Hold';
 }
 
+function getCurrentPrice(result) {
+  if (!result) return null;
+
+  if (Object.prototype.hasOwnProperty.call(result, 'current_price')) {
+    return hasDisplayValue(result.current_price) ? result.current_price : null;
+  }
+
+  return coalesceDisplayValue(result.last_close_price);
+}
+
 function DecisionBadge({ decision }) {
   const cfg = {
     Buy: {
@@ -420,7 +430,7 @@ export default function ResultCard({ result, enableReportExport = true }) {
 
   const summary = result.executive_summary;
   const thesis = result.investment_thesis;
-  const currentPrice = coalesceDisplayValue(result.current_price, result.last_close_price);
+  const currentPrice = getCurrentPrice(result);
   const currentPriceAsOf = coalesceDisplayValue(
     result.current_price_as_of,
     result.last_close_price_as_of
