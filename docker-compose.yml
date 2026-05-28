@@ -26,6 +26,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+    develop:
+      watch:
+        - action: sync
+          path: ./backend 
+          target: /app 
+          ignore:
+            - __pycache__/
+            - .venv/
 
   frontend:
     build:
@@ -43,6 +51,13 @@ services:
     ports:
       - "3000:80"
     restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app
+          ignore:
+            - node_modules/
 
   ollama:
     image: ollama/ollama:latest
