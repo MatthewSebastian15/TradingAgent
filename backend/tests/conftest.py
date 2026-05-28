@@ -16,7 +16,7 @@ _GOOGLE_QUICK_LLM = MODEL_CATALOG["google"]["quick"][0][1]
 _GOOGLE_DEEP_LLM = MODEL_CATALOG["google"]["deep"][0][1]
 
 _DEFAULT_ENV = {
-    "APP_ENV": "test",
+    "APP_ENV": "development",
     "LLM_PROVIDER": "google",
     "DEEP_THINK_LLM": _GOOGLE_DEEP_LLM,
     "QUICK_THINK_LLM": _GOOGLE_QUICK_LLM,

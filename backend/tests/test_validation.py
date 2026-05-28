@@ -182,7 +182,7 @@ def test_google_model_env_values_are_normalized_to_lowercase(monkeypatch):
 
 
 def _restore_test_config(monkeypatch):
-    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("LLM_PROVIDER", "google")
     monkeypatch.setenv("DEEP_THINK_LLM", _GOOGLE_DEEP_LLM)
     monkeypatch.setenv("QUICK_THINK_LLM", _GOOGLE_QUICK_LLM)
@@ -194,39 +194,103 @@ def _restore_test_config(monkeypatch):
     importlib.reload(config)
 
 
-def test_production_defaults_require_api_key_and_same_origin_cors(monkeypatch):
+def test_production_defaults_require_api_key_and_rate_limit(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
+    monkeypatch.setenv("API_KEY", "test-api-key")
     monkeypatch.delenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", raising=False)
-    monkeypatch.delenv("CORS_ORIGINS", raising=False)
-
-    import config
-
-    reloaded = importlib.reload(config)
-    try:
-        assert reloaded.REQUIRE_API_KEY_FOR_RATE_LIMIT is True
-        assert reloaded.CORS_ORIGINS == []
-    finally:
-        _restore_test_config(monkeypatch)
-
-
-def test_missing_app_env_uses_secure_defaults(monkeypatch):
-    monkeypatch.delenv("APP_ENV", raising=False)
-    monkeypatch.delenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", raising=False)
-    monkeypatch.delenv("CORS_ORIGINS", raising=False)
 
     import config
 
     reloaded = importlib.reload(config)
     try:
         assert reloaded.APP_ENV == "production"
+        assert reloaded.IS_PRODUCTION is True
         assert reloaded.REQUIRE_API_KEY_FOR_RATE_LIMIT is True
-        assert reloaded.CORS_ORIGINS == []
+        assert reloaded.CORS_ORIGINS == ["https://app.example.com"]
+    finally:
+        _restore_test_config(monkeypatch)
+
+
+def test_missing_app_env_uses_development_defaults(monkeypatch):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", raising=False)
+    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("API_KEY", raising=False)
+
+    import config
+
+    reloaded = importlib.reload(config)
+    try:
+        assert reloaded.APP_ENV == "development"
+        assert reloaded.IS_DEVELOPMENT is True
+        assert reloaded.REQUIRE_API_KEY_FOR_RATE_LIMIT is False
+        assert reloaded.CORS_ORIGINS == [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ]
+    finally:
+        _restore_test_config(monkeypatch)
+
+
+def test_invalid_app_env_is_rejected(monkeypatch):
+    import config
+
+    monkeypatch.setenv("APP_ENV", "staging")
+
+    try:
+        with pytest.raises(ValueError, match="Invalid APP_ENV"):
+            importlib.reload(config)
+    finally:
+        _restore_test_config(monkeypatch)
+
+
+def test_production_requires_cors_origins(monkeypatch):
+    import config
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+
+    try:
+        with pytest.raises(ValueError, match="CORS_ORIGINS must be explicitly configured"):
+            importlib.reload(config)
+    finally:
+        _restore_test_config(monkeypatch)
+
+
+def test_production_requires_api_key(monkeypatch):
+    import config
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
+    monkeypatch.delenv("API_KEY", raising=False)
+
+    try:
+        with pytest.raises(ValueError, match="API_KEY must be configured in production"):
+            importlib.reload(config)
+    finally:
+        _restore_test_config(monkeypatch)
+
+
+def test_wildcard_cors_is_rejected(monkeypatch):
+    import config
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("CORS_ORIGINS", "*")
+
+    try:
+        with pytest.raises(ValueError, match=r"CORS_ORIGINS='\*' is not allowed"):
+            importlib.reload(config)
     finally:
         _restore_test_config(monkeypatch)
 
 
 def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("API_KEY", "test-api-key")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com, https://admin.example.com")
 
     import config
@@ -240,6 +304,8 @@ def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
 
 def test_production_logs_warning_when_api_key_requirement_is_disabled(monkeypatch, caplog):
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "false")
 
     import config
