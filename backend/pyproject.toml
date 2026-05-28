@@ -5,6 +5,9 @@ pythonpath = [
 ]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "live_api: manual tests that call live vendor APIs",
+]
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]

@@ -57,10 +57,16 @@ class CollectedData:
     insider_transactions: str
     data_quality: DataQualityReport
     last_close_price: float | None
+    news_sentiment: str = ""
+    social_sentiment: str = ""
+    event_risk: str = ""
+    recommendation_trends: str = ""
     last_close_price_as_of: str | None = None
     last_close_price_source: str | None = None
     data_sources: dict[str, str] | None = None
     data_limitations: list[str] | None = None
+    vendor_attempts: dict[str, list[str]] | None = None
+    request_budget: dict[str, Any] | None = None
 
 
 class AnalysisCancelledError(RuntimeError):

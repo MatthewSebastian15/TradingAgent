@@ -209,6 +209,33 @@ def _filter_statement(text: str, statement_hint: str, ticker: str) -> str:
     return _dump(payload)
 
 
+
+def get_financials(ticker: str, freq: str = "annual") -> str:
+    """Return Finnhub /stock/financials as an optional fallback statement payload."""
+    normalized_freq = "annual" if str(freq or "annual").lower().startswith("a") else "quarterly"
+    try:
+        payload = make_api_request(
+            "/stock/financials",
+            {"symbol": ticker, "statement": "bs", "freq": normalized_freq},
+            feature_key="enable_fundamentals",
+        )
+        if not isinstance(payload, dict):
+            raise FinnhubUnavailableError("Financials response is not an object.")
+        metric = payload.get("financials") if isinstance(payload.get("financials"), list) else []
+        if not metric:
+            raise FinnhubUnavailableError("Financials response contains no rows.")
+        return _dump(
+            {
+                "symbol": ticker,
+                "source": "finnhub",
+                "freq": normalized_freq,
+                "financials": metric[:8],
+                "metadata": build_metadata("/stock/financials", is_fallback=True, confidence="medium"),
+            }
+        )
+    except Exception as exc:
+        return handle_finnhub_error(f"financials for {ticker}", exc, fallback_next=None)
+
 def get_balance_sheet(ticker: str, freq: str = "quarterly", curr_date: str | None = None) -> str:
     return _filter_statement(get_financials_reported(ticker, freq, curr_date), "balance", ticker)
 

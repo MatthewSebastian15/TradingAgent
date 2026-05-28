@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from .finnhub_symbol_resolver import get_finnhub_symbol_candidates
 from .finnhub_common import (
     FinnhubUnavailableError,
     build_metadata,
@@ -17,15 +18,7 @@ from .finnhub_common import (
 
 
 def _try_symbols(symbol: str) -> list[str]:
-    cleaned = str(symbol or "").strip().upper()
-    if not cleaned:
-        return []
-    candidates = [cleaned]
-    if cleaned.endswith(".JK"):
-        candidates.append(cleaned.replace(".JK", ""))
-    elif "." not in cleaned and len(cleaned) == 4:
-        candidates.append(f"{cleaned}.JK")
-    return list(dict.fromkeys(candidates))
+    return get_finnhub_symbol_candidates(symbol)
 
 
 def _as_float(value: Any) -> float | None:
@@ -68,7 +61,7 @@ def normalize_quote(symbol: str, payload: dict[str, Any], *, endpoint: str = "/q
     }
 
 
-def get_quote(symbol: str) -> dict[str, Any]:
+def get_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
     """Return a normalized Finnhub quote object."""
     last_error: Exception | None = None
     for candidate in _try_symbols(symbol):
@@ -106,22 +99,95 @@ def _normalize_candles(symbol: str, payload: dict[str, Any], *, start_date: str,
     rows: list[dict[str, Any]] = []
     for index in range(row_count):
         close = _as_float(closes[index])
-        if close is None or close <= 0:
+        date = unix_to_iso_date(timestamps[index])
+        if close is None or close <= 0 or not date:
             continue
         rows.append(
             {
-                "Date": unix_to_iso_date(timestamps[index]),
-                "Open": _as_float(opens[index]),
-                "High": _as_float(highs[index]),
-                "Low": _as_float(lows[index]),
-                "Close": close,
-                "Volume": int(_as_float(volumes[index]) or 0),
+                "date": date,
+                "open": _as_float(opens[index]),
+                "high": _as_float(highs[index]),
+                "low": _as_float(lows[index]),
+                "close": close,
+                "volume": int(_as_float(volumes[index]) or 0),
             }
         )
-    rows = [row for row in rows if row.get("Date")]
     if not rows:
         raise FinnhubUnavailableError(f"No valid candle rows for {symbol} between {start_date} and {end_date}.")
     return rows
+
+
+def _rows_to_csv(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Date": row.get("date"),
+                "Open": row.get("open"),
+                "High": row.get("high"),
+                "Low": row.get("low"),
+                "Close": row.get("close"),
+                "Volume": row.get("volume"),
+            }
+            for row in rows
+        ],
+        columns=["Date", "Open", "High", "Low", "Close", "Volume"],
+    )
+
+
+def get_stock_ohlcv(symbol: str, start_date: str, end_date: str, timeframe: str = "1d") -> dict[str, Any]:
+    """Return normalized object OHLCV while keeping get_stock CSV compatibility intact."""
+    datetime.strptime(start_date, "%Y-%m-%d")
+    datetime.strptime(end_date, "%Y-%m-%d")
+
+    last_error: Exception | None = None
+    for candidate in _try_symbols(symbol):
+        try:
+            payload = make_api_request(
+                "/stock/candle",
+                {
+                    "symbol": candidate,
+                    "resolution": "D",
+                    "from": to_unix_timestamp(start_date),
+                    "to": to_unix_timestamp(end_date),
+                },
+                feature_key="enable_stock_data",
+            )
+            rows = _normalize_candles(candidate, payload, start_date=start_date, end_date=end_date)
+            warnings: list[str] = []
+            if len(rows) < 30:
+                warnings.append("Partial OHLCV history: fewer than 30 candles returned.")
+            return {
+                "symbol": candidate,
+                "source": "finnhub",
+                "timeframe": timeframe,
+                "rows": rows,
+                "metadata": build_metadata(
+                    "/stock/candle",
+                    is_fallback=True,
+                    confidence="high" if len(rows) >= 30 else "medium",
+                    warnings=warnings,
+                    as_of_date=end_date,
+                ),
+            }
+        except Exception as exc:
+            last_error = exc
+            continue
+    return {
+        "symbol": symbol,
+        "source": "finnhub",
+        "timeframe": timeframe,
+        "rows": [],
+        "available": False,
+        "reason": str(last_error or "No valid symbol candidate returned data."),
+        "metadata": build_metadata(
+            "/stock/candle",
+            is_fallback=True,
+            confidence="unavailable",
+            missing_fields=["rows"],
+            warnings=[str(last_error or "No valid symbol candidate returned data.")],
+            as_of_date=end_date,
+        ),
+    }
 
 
 def get_stock(symbol: str, start_date: str, end_date: str) -> str:
@@ -143,7 +209,7 @@ def get_stock(symbol: str, start_date: str, end_date: str) -> str:
                 feature_key="enable_stock_data",
             )
             rows = _normalize_candles(candidate, payload, start_date=start_date, end_date=end_date)
-            df = pd.DataFrame(rows, columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+            df = _rows_to_csv(rows)
             warnings: list[str] = []
             if len(df) < 30:
                 warnings.append("Partial OHLCV history: fewer than 30 candles returned.")
