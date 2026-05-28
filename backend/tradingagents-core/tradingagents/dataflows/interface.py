@@ -27,9 +27,56 @@ from .alpha_vantage import (
     get_news as get_alpha_vantage_news,
 )
 from .alpha_vantage import (
+    get_news_sentiment as get_alpha_vantage_news_sentiment,
+)
+from .alpha_vantage import (
     get_stock as get_alpha_vantage_stock,
 )
 from .alpha_vantage_common import AlphaVantageRateLimitError
+from .finnhub_common import (
+    FinnhubRateLimitError,
+    feature_for_method,
+    is_finnhub_feature_enabled,
+)
+from .finnhub_events import (
+    get_earnings_calendar as get_finnhub_earnings_calendar,
+)
+from .finnhub_events import (
+    get_recommendation_trends as get_finnhub_recommendation_trends,
+)
+from .finnhub_fundamentals import (
+    get_balance_sheet as get_finnhub_balance_sheet,
+)
+from .finnhub_fundamentals import (
+    get_cashflow as get_finnhub_cashflow,
+)
+from .finnhub_fundamentals import (
+    get_fundamentals as get_finnhub_fundamentals,
+)
+from .finnhub_fundamentals import (
+    get_income_statement as get_finnhub_income_statement,
+)
+from .finnhub_news import (
+    get_global_news as get_finnhub_global_news,
+)
+from .finnhub_news import (
+    get_news as get_finnhub_news,
+)
+from .finnhub_sentiment import (
+    get_news_sentiment as get_finnhub_news_sentiment,
+)
+from .finnhub_sentiment import (
+    get_social_sentiment as get_finnhub_social_sentiment,
+)
+from .finnhub_stock import (
+    get_indicator as get_finnhub_indicator,
+)
+from .finnhub_stock import (
+    get_quote as get_finnhub_quote,
+)
+from .finnhub_stock import (
+    get_stock as get_finnhub_stock,
+)
 
 # Configuration and routing logic
 from .config import get_config
@@ -65,18 +112,42 @@ except Exception:  # pragma: no cover - backend wrapper may not be available in 
 # Tools organized by category
 TOOLS_CATEGORIES = {
     "core_stock_apis": {"description": "OHLCV stock price data", "tools": ["get_stock_data"]},
+    "quote_data": {"description": "Current quote data", "tools": ["get_quote"]},
     "technical_indicators": {"description": "Technical analysis indicators", "tools": ["get_indicators"]},
     "fundamental_data": {
         "description": "Company fundamentals",
-        "tools": ["get_fundamentals", "get_balance_sheet", "get_cashflow", "get_income_statement"],
+        "tools": ["get_fundamentals"],
+    },
+    "financial_statements": {
+        "description": "Company financial statements",
+        "tools": ["get_balance_sheet", "get_cashflow", "get_income_statement"],
     },
     "news_data": {
-        "description": "News and insider data",
+        "description": "Company news and insider data",
         "tools": [
             "get_news",
-            "get_global_news",
             "get_insider_transactions",
         ],
+    },
+    "global_news_data": {
+        "description": "Global market and macro news",
+        "tools": ["get_global_news"],
+    },
+    "sentiment_data": {
+        "description": "Structured news sentiment",
+        "tools": ["get_news_sentiment"],
+    },
+    "social_sentiment": {
+        "description": "Direct social sentiment",
+        "tools": ["get_social_sentiment"],
+    },
+    "event_data": {
+        "description": "Earnings and event-risk context",
+        "tools": ["get_earnings_calendar"],
+    },
+    "analyst_rating": {
+        "description": "External analyst recommendation trends",
+        "tools": ["get_recommendation_trends"],
     },
 }
 
@@ -86,6 +157,7 @@ _PERSISTENT_TOOL_CACHE_CONFIG = None
 
 VENDOR_LIST = [
     "yfinance",
+    "finnhub",
     "alpha_vantage",
 ]
 
@@ -93,39 +165,63 @@ VENDOR_LIST = [
 VENDOR_METHODS = {
     # core_stock_apis
     "get_stock_data": {
-        "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
+        "finnhub": get_finnhub_stock,
+        "alpha_vantage": get_alpha_vantage_stock,
+    },
+    "get_quote": {
+        "finnhub": get_finnhub_quote,
     },
     # technical_indicators
     "get_indicators": {
-        "alpha_vantage": get_alpha_vantage_indicator,
         "yfinance": get_stock_stats_indicators_window,
+        "finnhub": get_finnhub_indicator,
+        "alpha_vantage": get_alpha_vantage_indicator,
     },
     # fundamental_data
     "get_fundamentals": {
-        "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
+        "finnhub": get_finnhub_fundamentals,
+        "alpha_vantage": get_alpha_vantage_fundamentals,
     },
     "get_balance_sheet": {
-        "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
+        "alpha_vantage": get_alpha_vantage_balance_sheet,
+        "finnhub": get_finnhub_balance_sheet,
     },
     "get_cashflow": {
-        "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
+        "alpha_vantage": get_alpha_vantage_cashflow,
+        "finnhub": get_finnhub_cashflow,
     },
     "get_income_statement": {
-        "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
+        "alpha_vantage": get_alpha_vantage_income_statement,
+        "finnhub": get_finnhub_income_statement,
     },
     # news_data
     "get_news": {
-        "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
+        "finnhub": get_finnhub_news,
+        "alpha_vantage": get_alpha_vantage_news,
     },
     "get_global_news": {
-        "yfinance": get_global_news_yfinance,
+        "finnhub": get_finnhub_global_news,
         "alpha_vantage": get_alpha_vantage_global_news,
+        "yfinance": get_global_news_yfinance,
+    },
+    "get_news_sentiment": {
+        "finnhub": get_finnhub_news_sentiment,
+        "alpha_vantage": get_alpha_vantage_news_sentiment,
+    },
+    "get_social_sentiment": {
+        "finnhub": get_finnhub_social_sentiment,
+    },
+    "get_earnings_calendar": {
+        "finnhub": get_finnhub_earnings_calendar,
+    },
+    "get_recommendation_trends": {
+        "finnhub": get_finnhub_recommendation_trends,
     },
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
@@ -184,6 +280,11 @@ def _is_unusable_result(result: Any) -> bool:
     if isinstance(result, dict):
         if not result:
             return True
+        if result.get("available") is False:
+            return True
+        quality = result.get("quality")
+        if isinstance(quality, dict) and quality.get("available") is False:
+            return True
         error_keys = {"Error Message", "Information", "Note"}
         if any(key in result for key in error_keys):
             return True
@@ -191,6 +292,20 @@ def _is_unusable_result(result: Any) -> bool:
         if isinstance(feed, list) and not feed:
             return True
     return False
+
+
+def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, str | None]:
+    if vendor != "finnhub":
+        return True, None
+    fallback_methods = {"get_stock_data", "get_quote", "get_indicators"}
+    if method in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_fallback", True)):
+        return False, "Finnhub fallback disabled by DATA_VENDOR_ENABLE_FINNHUB_FALLBACK"
+    if method not in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_enrichment", True)):
+        return False, "Finnhub enrichment disabled by DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT"
+    feature_key = feature_for_method(method)
+    if not is_finnhub_feature_enabled(feature_key):
+        return False, f"Finnhub disabled or feature flag off ({feature_key or 'global'})"
+    return True, None
 
 
 def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: dict) -> Any:
@@ -278,6 +393,10 @@ def route_to_vendor(method: str, *args, **kwargs):
     errors = []
     first_unusable_result = None
     for vendor in _vendor_sequence(method):
+        enabled, disabled_reason = _is_vendor_enabled(method, vendor, config)
+        if not enabled:
+            errors.append(f"{vendor}: {disabled_reason}")
+            continue
         try:
             result = _call_vendor(method, vendor, args, kwargs, config)
             if _is_unusable_result(result):
@@ -286,7 +405,7 @@ def route_to_vendor(method: str, *args, **kwargs):
                 errors.append(f"{vendor}: empty or unusable response")
                 continue
             return result
-        except AlphaVantageRateLimitError as exc:
+        except (AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
             errors.append(f"{vendor}: rate limited: {exc}")
             continue
         except Exception as exc:
@@ -295,6 +414,8 @@ def route_to_vendor(method: str, *args, **kwargs):
 
     if first_unusable_result is not None:
         return first_unusable_result
+    if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends"}:
+        return f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"
 
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")
 
@@ -314,6 +435,10 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
     errors: list[str] = []
     first_unusable: tuple[str, Any] | None = None
     for vendor in _vendor_sequence(method):
+        enabled, disabled_reason = _is_vendor_enabled(method, vendor, config)
+        if not enabled:
+            errors.append(f"{vendor}: {disabled_reason}")
+            continue
         try:
             result = _call_vendor(method, vendor, args, kwargs, config)
             if _is_unusable_result(result):
@@ -322,7 +447,7 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
                 errors.append(f"{vendor}: empty or unusable response")
                 continue
             results[vendor] = result
-        except AlphaVantageRateLimitError as exc:
+        except (AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
             errors.append(f"{vendor}: rate limited: {exc}")
         except Exception as exc:
             errors.append(f"{vendor}: {exc}")
@@ -332,4 +457,6 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
     if first_unusable is not None:
         vendor, result = first_unusable
         return {vendor: result}
+    if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends"}:
+        return {"optional": f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"}
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")

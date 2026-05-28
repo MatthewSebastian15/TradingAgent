@@ -5,6 +5,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
 )
 from tradingagents.agents.utils.news_data_tools import get_global_news, get_news
+from tradingagents.agents.utils.sentiment_data_tools import get_news_sentiment
 
 
 def create_news_analyst(llm):
@@ -15,10 +16,11 @@ def create_news_analyst(llm):
         tools = [
             get_news,
             get_global_news,
+            get_news_sentiment,
         ]
 
         system_message = (
-            "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Use the available tools: get_news(query, start_date, end_date) for company-specific or targeted news searches, and get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
+            "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Use the available tools: get_news(query, start_date, end_date) for company-specific or targeted news searches, get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news, and get_news_sentiment(ticker) for structured news sentiment when available. Use structured news sentiment only as supporting evidence. If structured news sentiment is unavailable, state it clearly. Do not invent sentiment scores. Separate factual news events from sentiment interpretation. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
             + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
             + get_language_instruction()
         )

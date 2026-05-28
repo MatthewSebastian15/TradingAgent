@@ -14,12 +14,14 @@ from tradingagents.agents.utils.fundamental_data_tools import (
     get_fundamentals,
     get_income_statement,
 )
+from tradingagents.agents.utils.event_data_tools import get_earnings_calendar, get_recommendation_trends
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.agents.utils.news_data_tools import (
     get_global_news,
     get_insider_transactions,
     get_news,
 )
+from tradingagents.agents.utils.sentiment_data_tools import get_news_sentiment, get_social_sentiment
 from tradingagents.agents.utils.technical_indicators_tools import get_indicators
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.utils import safe_ticker_component
@@ -170,8 +172,10 @@ class TradingAgentsGraph:
             ),
             "social": ToolNode(
                 [
-                    # News tools for social media analysis
+                    # News and structured sentiment tools for social analysis
                     get_news,
+                    get_news_sentiment,
+                    get_social_sentiment,
                 ]
             ),
             "news": ToolNode(
@@ -179,6 +183,7 @@ class TradingAgentsGraph:
                     # News and insider information
                     get_news,
                     get_global_news,
+                    get_news_sentiment,
                     get_insider_transactions,
                 ]
             ),
@@ -189,6 +194,8 @@ class TradingAgentsGraph:
                     get_balance_sheet,
                     get_cashflow,
                     get_income_statement,
+                    get_earnings_calendar,
+                    get_recommendation_trends,
                 ]
             ),
         }

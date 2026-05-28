@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -105,6 +106,36 @@ def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -
         return DataField.unavailable(label, exc)
 
 
+def _deduplicate_news_sections(parts: list[str]) -> list[str]:
+    """Deduplicate news headings across vendors by normalized Markdown article title."""
+    seen_titles: set[str] = set()
+    deduped_parts: list[str] = []
+    for part in parts:
+        if "news" not in part.lower():
+            deduped_parts.append(part)
+            continue
+        kept_lines: list[str] = []
+        skip_article = False
+        article_has_content = False
+        for line in part.splitlines():
+            heading = re.match(r"^###\s+(.+?)(?:\s+\(source:.*\))?$", line.strip(), flags=re.IGNORECASE)
+            if heading:
+                title_key = " ".join(heading.group(1).lower().split())
+                skip_article = title_key in seen_titles
+                article_has_content = not skip_article
+                if not skip_article:
+                    seen_titles.add(title_key)
+                    kept_lines.append(line)
+                continue
+            if skip_article:
+                continue
+            kept_lines.append(line)
+        rendered = "\n".join(kept_lines).strip()
+        if rendered and (article_has_content or "###" not in part):
+            deduped_parts.append(rendered)
+    return deduped_parts
+
+
 def _safe_multi_source_data_field(label: str, func: Callable[[], dict[str, Any]], limit: int = 12_000) -> DataField:
     """Collect and format every usable vendor payload for high-value fields."""
     try:
@@ -121,6 +152,8 @@ def _safe_multi_source_data_field(label: str, func: Callable[[], dict[str, Any]]
             text = _truncate(value, limit)
             if text.strip():
                 parts.append(f"## Source: {source}\n\n{text}")
+        if "news" in label.lower():
+            parts = _deduplicate_news_sections(parts)
         return DataField.from_text(_truncate("\n\n".join(parts), limit))
     except Exception as exc:
         logger.warning("Balanced pipeline multi-source data call failed for %s: %s", label, exc)
@@ -307,7 +340,7 @@ def _classify_price_data(
         )
         return "missing"
     if len(price_dates) < 10:
-        warnings.append(f"Only {len(price_dates)} price rows found in the {price_lookback_days}-day yfinance window.")
+        warnings.append(f"Only {len(price_dates)} price rows found in the {price_lookback_days}-day configured vendor window.")
         return "partial"
     return "ok"
 
@@ -330,7 +363,7 @@ def _classify_fundamentals(
         return "missing"
     if any(status == "missing" for status in statuses):
         missing_parts = [name for name, item in fields if item.status == "missing"]
-        warnings.append(f"Partial fundamentals from yfinance; missing: {', '.join(missing_parts)}.")
+        warnings.append(f"Partial fundamentals from configured vendors; missing: {', '.join(missing_parts)}.")
         return "partial"
     return "ok"
 
@@ -340,7 +373,7 @@ def _classify_news(company_news: DataField, global_news: DataField, warnings: li
         warnings.append("NEWS_UNAVAILABLE - No usable company-specific or global news was returned; analysis continues without blocking trade validation.")
         return "unavailable"
     if company_news.status == "missing" or global_news.status == "missing":
-        warnings.append("NEWS_PARTIAL - Partial news coverage from yfinance; company-specific or global news is missing.")
+        warnings.append("NEWS_PARTIAL - Partial news coverage from configured vendors; company-specific or global news is missing.")
         return "partial"
     return "ok"
 
@@ -370,6 +403,69 @@ def _build_data_quality(
         warnings=deduped_warnings,
         warning_details=warning_details,
     )
+
+
+def _detect_sources_from_text(text: str) -> list[str]:
+    lowered = (text or "").lower()
+    sources: list[str] = []
+    if "finnhub" in lowered:
+        sources.append("finnhub")
+    if "alpha vantage" in lowered or "alpha_vantage" in lowered:
+        sources.append("alpha_vantage")
+    if "yfinance" in lowered or "stock data for" in lowered or "## global market news" in lowered:
+        sources.append("yfinance")
+    return list(dict.fromkeys(sources))
+
+
+def _source_label(text: str, default: str = "unavailable") -> str:
+    sources = _detect_sources_from_text(text)
+    return "+".join(sources) if sources else default
+
+
+def _price_source_label(price_data: str, last_close_price: float | None) -> str | None:
+    if last_close_price is None:
+        return None
+    sources = _detect_sources_from_text(price_data)
+    if "finnhub" in sources:
+        return "finnhub:stock_candle:last_close"
+    if "alpha_vantage" in sources:
+        return "alpha_vantage:daily:last_close"
+    return "yfinance:last_close"
+
+
+def _build_data_source_metadata(
+    price: DataField,
+    fundamentals: DataField,
+    balance_sheet: DataField,
+    cashflow: DataField,
+    income_statement: DataField,
+    company_news: DataField,
+    global_news: DataField,
+    insider_transactions: DataField,
+    last_close_price: float | None,
+) -> tuple[dict[str, str], list[str]]:
+    data_sources = {
+        "price": _price_source_label(price.value, last_close_price) or "unavailable",
+        "technical": "yfinance:local_calculation or configured fallback",
+        "fundamental_profile_metrics": _source_label(fundamentals.value),
+        "balance_sheet": _source_label(balance_sheet.value),
+        "cashflow": _source_label(cashflow.value),
+        "income_statement": _source_label(income_statement.value),
+        "company_news": _source_label(company_news.value),
+        "global_news": _source_label(global_news.value),
+        "insider": _source_label(insider_transactions.value, default="disabled_or_unavailable"),
+        "news_sentiment": "finnhub when sentiment tool is called and enabled",
+        "social_sentiment": "finnhub when sentiment tool is called and available",
+        "earnings_calendar": "finnhub when event tool is called and enabled",
+        "recommendation_trends": "finnhub when event tool is called and enabled",
+    }
+    limitations = [
+        "Finnhub is skipped unless FINNHUB_ENABLED=true and FINNHUB_API_KEY is configured.",
+        "Finnhub coverage for Indonesian .JK tickers must be validated per endpoint.",
+        "Fallback vendors are used only when earlier vendors return empty, stale, invalid, or unavailable data.",
+        "Direct social sentiment can be unavailable for many tickers and must not be invented from news headlines.",
+    ]
+    return data_sources, limitations
 
 
 def collect_market_data(
@@ -425,6 +521,17 @@ def collect_market_data(
 
     _check_cancel(cancel_check)
     last_close_price, last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
+    data_sources, data_limitations = _build_data_source_metadata(
+        price,
+        fundamentals,
+        balance_sheet,
+        cashflow,
+        income_statement,
+        company_news,
+        global_news,
+        insider_transactions,
+        last_close_price,
+    )
     return CollectedData(
         ticker=ticker,
         trade_date=trade_date,
@@ -441,4 +548,7 @@ def collect_market_data(
         data_quality=data_quality,
         last_close_price=last_close_price,
         last_close_price_as_of=last_close_price_as_of or trade_date,
+        last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
+        data_sources=data_sources,
+        data_limitations=data_limitations,
     )
