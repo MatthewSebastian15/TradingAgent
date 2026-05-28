@@ -269,12 +269,12 @@ export const MOCK_HOLD_RESPONSE = completeResponse({
   ticker: 'AAPL',
   market: 'US',
   trade_date: '2026-05-18',
-  llm_decision: 'Buy',
+  llm_decision: 'Hold',
   final_decision: 'Hold',
   decision: 'Hold',
   rating: 'Hold',
-  decision_adjusted: true,
-  decision_adjusted_reason: 'Invalid risk reward structure',
+  decision_adjusted: false,
+  decision_adjusted_reason: null,
   trade_plan_valid: false,
   has_existing_position: false,
   position_quantity: null,
@@ -305,9 +305,9 @@ export const MOCK_HOLD_RESPONSE = completeResponse({
   position_size_hint: 'No new position suggested.',
   position_sizing_reason: null,
   executive_summary:
-    'AAPL remains a high-quality company, but the backend downgraded the LLM Buy decision because the trade structure did not meet the required risk/reward contract. Current price is still shown so the user has context. The UI should not render entry, stop loss, take profit, or R/R metrics for this Hold result.',
+    'AAPL remains a high-quality company, but the current setup does not offer enough confirmed upside for a new actionable trade. Current price, volatility, and rebalancing context remain visible while entry, stop loss, take profit, and R/R metrics stay hidden for the Hold result.',
   investment_thesis:
-    'The hold thesis reflects a strong company with limited near-term upside. Services revenue, buybacks, and ecosystem retention support downside stability, while AI-driven device upgrades could become a future catalyst. The decision is not a new trade plan. The backend keeps current price, volatility, and rebalancing visible while hiding invalid trade levels.',
+    'The hold thesis reflects a strong company with limited near-term upside. Services revenue, buybacks, and ecosystem retention support downside stability, while AI-driven device upgrades could become a future catalyst. The decision is intentionally not a new trade plan, so the UI keeps current price, volatility, and rebalancing visible while hiding trade levels.',
   key_catalysts: [
     'Services growth remains resilient.',
     'AI features may support a future iPhone upgrade cycle.',
@@ -320,11 +320,11 @@ export const MOCK_HOLD_RESPONSE = completeResponse({
   ],
   data_quality: {
     ...COMMON_QUALITY,
-    trade_levels: 'invalid',
-    llm_output: 'downgraded',
+    trade_levels: 'hidden',
+    llm_output: 'ok',
     warnings: ['Mock neutral scenario. Trade levels intentionally hidden for Hold UI testing.'],
   },
-  validation_warnings: ['DECISION_DOWNGRADED_TO_HOLD', 'TRADE_PLAN_INVALID'],
+  validation_warnings: ['HOLD_TRADE_LEVELS_HIDDEN'],
   agents_used: AGENTS_USED,
 });
 
@@ -776,9 +776,12 @@ export function getMockAnalysisResponseByRequestId(requestId) {
   const exact = MOCK_REQUEST_LOOKUP[decodedId];
   if (exact) return getMockAnalysisResponse(exact);
 
-  const tickerMatch = decodedId.match(/^mock-([a-z0-9-]+?)(?:-(?:buy|sell|hold|repaired|\d+).*)?$/i);
+  const tickerMatch = decodedId.match(
+    /^mock-([a-z0-9-]+?)(?:-(?:buy|sell|hold|repaired|\d+).*)?$/i
+  );
   const guessedTicker = tickerMatch?.[1]?.replace(/-/g, '.').toUpperCase();
-  if (guessedTicker) return getMockAnalysisResponse({ ticker: guessedTicker, request_id: decodedId });
+  if (guessedTicker)
+    return getMockAnalysisResponse({ ticker: guessedTicker, request_id: decodedId });
 
   return null;
 }

@@ -36,8 +36,6 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getAllByText('1:3').length).toBeGreaterThan(0);
   });
 
-
-
   it('does not render higher RR variants for valid Buy and Sell results', () => {
     const higherRiskRewardPattern = /1:[45]/;
     const { rerender } = render(<ResultCard result={MOCK_RESPONSE} />);
@@ -116,8 +114,24 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('MAX DRAWDOWN')).toBeNull();
   });
 
-  it('shows decision adjusted warning and reason', () => {
+  it('does not show decision adjusted warning for a normal Hold', () => {
     render(<ResultCard result={MOCK_HOLD_RESPONSE} />);
+
+    expect(screen.queryByText('DECISION ADJUSTED')).toBeNull();
+    expect(screen.queryByText(/LLM: BUY → FINAL:/)).toBeNull();
+  });
+
+  it('shows decision adjusted warning and reason when backend downgrades a decision', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_HOLD_RESPONSE,
+          llm_decision: 'Buy',
+          decision_adjusted: true,
+          decision_adjusted_reason: 'Invalid risk reward structure',
+        }}
+      />
+    );
 
     expect(screen.getByText('DECISION ADJUSTED')).toBeTruthy();
     expect(screen.getByText('Invalid risk reward structure')).toBeTruthy();

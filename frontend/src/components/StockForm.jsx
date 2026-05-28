@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import {
   buildAnalysisPayload,
@@ -62,6 +62,7 @@ export default function StockForm({
   onStatus,
   onAgentProgress,
   useAnalysisJobHook = useAnalysisJob,
+  selectedResult = null,
 }) {
   const [activeMarket, setActiveMarket] = useState('US');
   const [ticker, setTicker] = useState(MARKETS.US.defaultTicker);
@@ -80,6 +81,45 @@ export default function StockForm({
     onStatus,
     onAgentProgress,
   });
+
+  useEffect(() => {
+    if (!selectedResult || selectedResult.error || running) return;
+
+    const resultMarket = String(selectedResult.market || '').toUpperCase();
+    const resultTicker = String(selectedResult.ticker || '').toUpperCase();
+    const nextMarket =
+      resultMarket in MARKETS ? resultMarket : resultTicker.endsWith('.JK') ? 'ID' : activeMarket;
+
+    setActiveMarket(nextMarket);
+    if (resultTicker) setTicker(normalizeTickerInput(resultTicker, nextMarket));
+    if (selectedResult.trade_date) setDate(selectedResult.trade_date);
+    if (selectedResult.time_horizon_months) {
+      setTimeHorizonMonths(Number(selectedResult.time_horizon_months));
+    }
+    if (selectedResult.max_debate_rounds) setRounds(Number(selectedResult.max_debate_rounds));
+    if (selectedResult.analysis_depth) setDepth(selectedResult.analysis_depth);
+    if (selectedResult.response_detail) setDetail(selectedResult.response_detail);
+
+    const hasPosition = Boolean(selectedResult.has_existing_position);
+    setHasExistingPosition(hasPosition);
+    setPositionQuantity(
+      hasPosition &&
+        selectedResult.position_quantity !== null &&
+        selectedResult.position_quantity !== undefined
+        ? String(selectedResult.position_quantity)
+        : ''
+    );
+    setAverageEntryPrice(
+      hasPosition &&
+        selectedResult.average_entry_price !== null &&
+        selectedResult.average_entry_price !== undefined
+        ? String(selectedResult.average_entry_price)
+        : ''
+    );
+    setError('');
+    // Only resync when the displayed analysis changes; user edits after that remain local.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedResult?.request_id]);
 
   function handleMarketSwitch(marketId) {
     if (running) return;
