@@ -90,9 +90,9 @@ def test_sell_always_forces_risk_reward_to_one_to_three(raw_rr):
     assert normalized.take_profit < normalized.entry_price
     assert normalized.risk_reward_ratio == pytest.approx(3.0)
     assert normalized.risk_reward_display == "1:3"
-    assert normalized.risk_per_share == pytest.approx(5.0)
-    assert normalized.reward_per_share == pytest.approx(15.0)
-    assert normalized.take_profit == pytest.approx(85.0)
+    assert normalized.risk_per_share == pytest.approx(7.0)
+    assert normalized.reward_per_share == pytest.approx(21.0)
+    assert normalized.take_profit == pytest.approx(79.0)
     assert normalized.rebalancing_action == "Exit position"
     assert "RR_FORCED_TO_3" in normalized.validation_warnings
 
@@ -116,13 +116,13 @@ def test_invalid_volatility_and_rebalancing_are_normalized():
     decision = make_decision(
         volatility_level="Moderate",
         volatility_score=None,
-        rebalancing_action="Exit or reduce exposure",
+        rebalancing_action="Exit position",
     )
 
     normalized = normalize_trade_levels(decision, 100.0, ticker="NVDA")
 
     assert normalized.volatility_level == "Medium"
-    assert normalized.rebalancing_action == "Add gradually"
+    assert normalized.rebalancing_action == "Open new position"
     assert "INVALID_VOLATILITY_FIXED" in normalized.validation_warnings
     assert "INVALID_REBALANCING_FIXED" in normalized.validation_warnings
 
@@ -153,7 +153,7 @@ def test_hold_clears_trade_levels_from_user_facing_contract():
         rating=PortfolioRating.HOLD,
         decision="Hold",
         volatility_level="High",
-        rebalancing_action="Accumulate",
+        rebalancing_action="Exit position",
     )
 
     normalized = normalize_trade_levels(decision, 100.0, ticker="AAPL")
@@ -161,7 +161,8 @@ def test_hold_clears_trade_levels_from_user_facing_contract():
     assert normalized.final_decision == "Hold"
     assert normalized.trade_plan_valid is False
     assert normalized.current_price == 100.0
-    assert normalized.rebalancing_action in {"No new entry", "Review after next catalyst"}
+    assert normalized.rebalancing_action == "Avoid new entry"
+    assert normalized.data_quality["trade_levels"] == "hidden"
     assert normalized.entry_price is None
     assert normalized.stop_loss is None
     assert normalized.take_profit is None
@@ -176,7 +177,7 @@ def test_indonesia_ticker_uses_tick_size_rounding():
         risk_reward_ratio=3.0,
         price_target=11601.0,
         volatility_level="High",
-        rebalancing_action="Buy with tight risk control",
+        rebalancing_action="Open new position",
     )
 
     normalized = normalize_trade_levels(decision, 9803.0, ticker="BBCA.JK")
