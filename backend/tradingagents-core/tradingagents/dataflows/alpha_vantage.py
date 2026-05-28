@@ -11,6 +11,7 @@ from .alpha_vantage_news import (
     get_global_news,
     get_insider_transactions,
     get_news,
+    get_news_sentiment,
 )
 from .alpha_vantage_stock import get_stock
 
@@ -23,5 +24,6 @@ __all__ = [
     "get_indicator",
     "get_insider_transactions",
     "get_news",
+    "get_news_sentiment",
     "get_stock",
 ]

@@ -58,6 +58,9 @@ class CollectedData:
     data_quality: DataQualityReport
     last_close_price: float | None
     last_close_price_as_of: str | None = None
+    last_close_price_source: str | None = None
+    data_sources: dict[str, str] | None = None
+    data_limitations: list[str] | None = None
 
 
 class AnalysisCancelledError(RuntimeError):

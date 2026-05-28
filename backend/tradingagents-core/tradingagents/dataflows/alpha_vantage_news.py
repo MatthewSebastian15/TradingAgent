@@ -131,3 +131,28 @@ def get_insider_transactions(symbol: str) -> dict[str, str] | str:
     }
 
     return _make_api_request("INSIDER_TRANSACTIONS", params)
+
+
+def get_news_sentiment(ticker: str) -> str:
+    """Return Alpha Vantage NEWS_SENTIMENT payload as structured fallback text."""
+    params = {
+        "tickers": ticker,
+        "limit": "20",
+    }
+    raw = _make_api_request("NEWS_SENTIMENT", params)
+    payload = _load_news_payload(raw)
+    feed = payload.get("feed") if isinstance(payload, dict) else None
+    if not isinstance(feed, list) or not feed:
+        return f"No structured news sentiment found for {ticker} from Alpha Vantage"
+    return json.dumps(
+        {
+            "symbol": ticker,
+            "source": "alpha_vantage",
+            "available": True,
+            "feed_items": len(feed),
+            "sentiment_source": "NEWS_SENTIMENT",
+            "feed": feed[:10],
+        },
+        indent=2,
+        ensure_ascii=False,
+    )

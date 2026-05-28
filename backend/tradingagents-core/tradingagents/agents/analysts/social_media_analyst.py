@@ -2,6 +2,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from tradingagents.agents.utils.agent_utils import build_instrument_context, get_language_instruction
 from tradingagents.agents.utils.news_data_tools import get_news
+from tradingagents.agents.utils.sentiment_data_tools import get_news_sentiment, get_social_sentiment
 
 
 def create_social_media_analyst(llm):
@@ -11,10 +12,12 @@ def create_social_media_analyst(llm):
 
         tools = [
             get_news,
+            get_news_sentiment,
+            get_social_sentiment,
         ]
 
         system_message = (
-            "You are a social media and company specific news researcher/analyst tasked with analyzing social media posts, recent company news, and public sentiment for a specific company over the past week. You will be given a company's name your objective is to write a comprehensive long report detailing your analysis, insights, and implications for traders and investors on this company's current state after looking at social media and what people are saying about that company, analyzing sentiment data of what people feel each day about the company, and looking at recent company news. Use the get_news(query, start_date, end_date) tool to search for company-specific news and social media discussions. Try to look at all sources possible from social media to sentiment to news. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
+            "You are a social media and company specific news researcher/analyst tasked with analyzing social media posts, recent company news, and public sentiment for a specific company over the past week. You will be given a company's name your objective is to write a comprehensive long report detailing your analysis, insights, and implications for traders and investors on this company's current state after looking at social media and what people are saying about that company, analyzing sentiment data of what people feel each day about the company, and looking at recent company news. Use get_news(query, start_date, end_date) for company-specific news, get_news_sentiment(ticker) for structured news sentiment, and get_social_sentiment(ticker, start_date, end_date) for direct social sentiment when available. If structured social sentiment is unavailable for this ticker, explicitly state that social sentiment data is unavailable. Do not infer social media sentiment only from news headlines. News sentiment can be used as a separate proxy, but must not be labeled as direct social sentiment. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
             + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
             + get_language_instruction()
         )
