@@ -90,10 +90,19 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    # Whitelist only the headers the API actually needs.
-    # Wildcard "*" permits arbitrary custom headers and bypasses
-    # browser preflight protection for sensitive header names.
-    allow_headers=["Content-Type", "x-api-key", "Authorization", "x-session-id"],
+    # Whitelist the headers used by normal JSON requests and the fetch-based
+    # SSE job stream. The events endpoint sends Cache-Control on the browser
+    # request, so omitting it makes CORS preflight fail with 400 before the
+    # stream can be opened.
+    allow_headers=[
+        "Accept",
+        "Cache-Control",
+        "Content-Type",
+        "Last-Event-ID",
+        "x-api-key",
+        "Authorization",
+        "x-session-id",
+    ],
 )
 
 app.add_exception_handler(ApiError, api_error_handler)

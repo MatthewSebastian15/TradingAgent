@@ -179,15 +179,25 @@ function NoticeBox({ title, children, tone = 'amber' }) {
 function DataQuality({
   dq,
   validationWarnings = [],
+  requestWarnings = [],
   tradePlanValid = false,
   isActionable = false,
 }) {
   const warnings = Array.isArray(validationWarnings) ? validationWarnings : [];
   const readableWarnings = warnings.map(formatWarningCode).filter(Boolean);
+  const readableRequestWarnings = Array.isArray(requestWarnings)
+    ? requestWarnings.filter(hasDisplayValue).map(String)
+    : [];
   const tradePlanStatus = getTradePlanStatus(isActionable, tradePlanValid);
   const hasDataQuality = Boolean(dq);
 
-  if (!hasDataQuality && readableWarnings.length === 0 && !tradePlanStatus) return null;
+  if (
+    !hasDataQuality &&
+    readableWarnings.length === 0 &&
+    readableRequestWarnings.length === 0 &&
+    !tradePlanStatus
+  )
+    return null;
 
   const items = [
     { label: 'PRICE', status: dq?.price_data },
@@ -240,6 +250,23 @@ function DataQuality({
               >
                 {warning}
               </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {readableRequestWarnings.length > 0 && (
+        <div className="mt-3">
+          <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-1.5">
+            Request Warnings
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {readableRequestWarnings.map((warning) => (
+              <div
+                key={warning}
+                className="font-mono text-xs px-2.5 py-1 border border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber leading-relaxed"
+              >
+                {warning}
+              </div>
             ))}
           </div>
         </div>
@@ -410,6 +437,7 @@ export default function ResultCard({ result, enableReportExport = true }) {
   const validationWarnings = Array.isArray(result.validation_warnings)
     ? result.validation_warnings
     : [];
+  const requestWarnings = Array.isArray(result.warnings) ? result.warnings : [];
   const agents = result.agents_used || [];
   const budgetExhausted = Boolean(result.budget_exhausted);
   const agentsSkipped = result.agents_skipped || [];
@@ -544,11 +572,12 @@ export default function ResultCard({ result, enableReportExport = true }) {
       {shouldShowHoldMetrics && <HoldMetrics result={result} currentPrice={currentPrice} />}
 
       {/* Data quality */}
-      {(dataQuality || validationWarnings.length > 0) && (
+      {(dataQuality || validationWarnings.length > 0 || requestWarnings.length > 0) && (
         <div className="px-4 py-4 border-b border-bloomberg-border">
           <DataQuality
             dq={dataQuality}
             validationWarnings={validationWarnings}
+            requestWarnings={requestWarnings}
             tradePlanValid={tradePlanValid}
             isActionable={isActionable}
           />
