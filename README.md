@@ -1,35 +1,39 @@
 # TradingAgent
 
-A full-stack web application that wraps the [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents/tree/main) engine with a FastAPI backend and a React frontend. Enter a ticker and a date, nine specialized AI agents collaborate and debate, then deliver a structured trade decision: **Buy / Hold / Sell** with an executive summary, investment thesis, price target, and time horizon.
+TradingAgent is a full-stack application for multi-agent LLM-based stock analysis. The backend uses **FastAPI**, the frontend uses **React/Vite**, and the core engine wraps the TradingAgents framework with a more structured analysis pipeline for personal and development use.
+
+The application receives a stock ticker, market, analysis date, investment horizon, analysis depth, and the user's existing position status. It then fetches market data from the configured vendors, runs several analyst agents, and returns a structured **Buy / Hold / Sell** decision with an executive summary, investment thesis, action plan, risk validation, data quality details, and HTML/PDF export options.
+
+> This application is a research tool, not financial advice. Always validate the data, risk assumptions, and trading decisions independently before taking action.
 
 ![TradingAgent Dashboard](assets/TradingAgent%20Home%20UI.png)
 
 ---
 
-## How It Works
+## How the Pipeline Works
 
-The app runs a data collection step and then a balanced 9-agent LLM pipeline.
+The pipeline collects data first, then continues through the analysis agents.
 
-1. Data Collection fetches yfinance-backed price data, technical indicators, fundamentals, financial statements, company news, macro news, and insider transactions.
-2. Market Analyst reviews price action and technical setup.
-3. News + Social Analyst reviews company news, macro news, sentiment, and insider activity.
-4. Fundamentals Analyst reviews financial statements and ratios.
-5. Bull Researcher builds the upside case.
-6. Bear Researcher builds the downside case.
-7. Research Manager weighs the debate and creates an investment plan.
-8. Trader converts the plan into actionable trade guidance.
-9. Risk Analysts review downside, volatility, sizing, and invalidation triggers.
-10. Portfolio Manager produces the final structured decision.
+1. **Data Collection** retrieves OHLCV, technical indicators, fundamentals, financial statements, news, sentiment, event risk, recommendation trends, insider data, and data source metadata.
+2. **Market Analyst** reads price action and technical indicators.
+3. **News + Social Analyst** reads company news, global/macro news, sentiment, and social signals when available.
+4. **Fundamentals Analyst** reads the company profile, metrics, balance sheet, cash flow, and income statement.
+5. **Bull Researcher** builds the bullish argument.
+6. **Bear Researcher** builds the bearish argument.
+7. **Research Manager** weighs the debate and creates the investment plan.
+8. **Trader** converts the plan into a trade proposal.
+9. **Risk Analysts** test downside risk, volatility, position sizing, and invalidation triggers.
+10. **Portfolio Manager** produces the final backend-validated decision.
 
-The first three analyst LLM calls run in parallel after data collection. Later decision stages run sequentially so each stage can use the output from the prior stage.
+Data collection runs in parallel. The first three analyst stages also run in parallel after data collection completes. The debate, trader, risk, and portfolio manager stages run sequentially so each stage can use the output from the previous agents.
 
 ![Investment Analysis Flow](assets/Investment%20Analysis%20Flow.png)
 
 ---
 
-## Analysis Result Examples
+## Result Examples
 
-The `assets/` folder includes example result screens for each final decision type: **Buy**, **Sell**, and **Hold**.
+The `assets/` folder contains sample results for **Buy**, **Sell**, and **Hold** decisions.
 
 ### Buy
 
@@ -45,38 +49,43 @@ The `assets/` folder includes example result screens for each final decision typ
 
 ---
 
-## Architecture Overview
+## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ React/Vite Frontend                                             │
-│ Port: 3000                                                      │
-│ Routes: /home, /analysis, /analysis.test, redirects             │
-│ Components: StockForm, AgentLog, ResultCard, mock UI            │
+│ Dev port: 3000                                                  │
+│ Routes: /home, /analysis, /analysis/:requestId, /analysis.test  │
+│ UI: US/ID market form, progress log, result card, report export │
 └────────────────────────┬────────────────────────────────────────┘
-                         │ POST /api/analysis/jobs (create job)
-                         │ GET /api/analysis/jobs/{job_id}/events (SSE)
-                         │ DELETE /api/analysis/jobs/{job_id} (cancel)
+                         │ POST /api/analysis/jobs
+                         │ GET  /api/analysis/jobs/{job_id}/events
+                         │ GET  /api/analysis/jobs/{job_id}
+                         │ GET  /api/analysis/{request_id}
+                         │ GET  /api/analysis/jobs/{request_id}/report.html
+                         │ GET  /api/analysis/jobs/{request_id}/report.pdf
+                         │ DELETE /api/analysis/jobs/{job_id}
 ┌────────────────────────▼────────────────────────────────────────┐
 │ FastAPI Backend                                                 │
 │ Port: 8000                                                      │
-│ Validation, request IDs, sanitized errors, rate limiting        │
-│ Job API runs analysis asynchronously and streams job events     │
-│ Legacy REST/SSE endpoints remain available for API clients      │
+│ Validation, CORS whitelist, request ID, sanitized errors        │
+│ Rate limit, body limit, job store, cache, SSE, report service   │
 └────────────────────────┬────────────────────────────────────────┘
-                         │  Python subprocess
+                         │ Python subprocess / process pool
 ┌────────────────────────▼────────────────────────────────────────┐
 │ TradingAgents Core                                              │
-│ yfinance data collection                                        │
 │ Multi-provider LLM clients                                      │
-│ Balanced pipeline with structured Pydantic outputs              │
-│ Final PortfolioDecision response                                │
+│ Vendor router: yfinance / Finnhub / Alpha Vantage               │
+│ Balanced pipeline + structured PortfolioDecision                │
+│ Risk engine: current price validation, fixed R/R 1:3            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+---
+
 ## Project Structure
 
-```
+```text
 TradingAgent/
 ├── README.md
 ├── CHANGELOG.md
@@ -87,60 +96,97 @@ TradingAgent/
 │
 ├── backend/
 │   ├── .env.example
-│   ├── config.py                  # Backend config, provider settings, model catalog, CORS, tunables
-│   ├── errors.py                  # Sanitized API errors
-│   ├── logging_config.py          # Request ID middleware and logging
-│   ├── main.py                    # FastAPI app setup and startup validation
-│   ├── rate_limiter.py            # API-key-aware in-memory rate limiter
-│   ├── requirements.txt           # FastAPI wrapper dependencies
+│   ├── analysis_cache.py              # Result cache, in-flight dedupe, job store, cancellation, persistence
+│   ├── body_limit.py                  # Request body limit middleware
+│   ├── config.py                      # Compatibility facade for modular config
+│   ├── config_defaults.py             # Default backend/dev/prod/rate/cache/vendor settings
+│   ├── config_env.py                  # .env loader and parser helpers
+│   ├── config_llm.py                  # LLM provider/model config builder
+│   ├── config_validation.py           # Startup validation
+│   ├── errors.py                      # Sanitized API error envelope
+│   ├── logging_config.py              # Request ID and logging setup
+│   ├── main.py                        # FastAPI app, middleware, router, health check
+│   ├── persistent_cache.py            # SQLite TTL cache
+│   ├── rate_limiter.py                # API-key/session/IP-aware rate limiter
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
 │   ├── routes/
-│   │   ├── analysis.py            # Job, REST, and SSE analysis endpoints
-│   │   └── validation.py          # Request validation and normalization
-│   ├── tests/                     # FastAPI wrapper tests
+│   │   ├── analysis.py                # Analyze, job API, SSE, status, ticker validation
+│   │   ├── jobs.py                    # Job lifecycle helpers
+│   │   ├── market.py                  # Dashboard quote endpoint
+│   │   ├── pipeline_runner.py         # Worker/subprocess bridge
+│   │   ├── reports.py                 # HTML/PDF report endpoints
+│   │   ├── serializers.py             # Result shaping/API contract
+│   │   ├── sse.py                     # SSE event helpers
+│   │   └── validation.py              # Request validation and ticker normalization
+│   ├── services/
+│   │   └── report_service.py          # Report context, template render, WeasyPrint PDF
+│   ├── static/reports/
+│   │   └── analysis_report.css
+│   ├── templates/reports/
+│   │   └── analysis_report.html
+│   ├── scripts/
+│   │   └── quality.ps1
+│   ├── tests/
 │   └── tradingagents-core/
-│       ├── pyproject.toml         # TradingAgents package dependencies
+│       ├── pyproject.toml
 │       ├── tradingagents/
-│       │   ├── agents/            # Agent prompts, schemas, managers, analysts, researchers, trader
-│       │   ├── dataflows/         # yfinance and Alpha Vantage-related data modules
-│       │   ├── graph/             # Classic graph orchestration
-│       │   ├── llm_clients/       # Google, OpenAI, Anthropic, DeepSeek, Ollama, etc.
-│       │   ├── default_config.py  # Core defaults
-│       │   └── pipeline_balanced.py
+│       │   ├── agents/                # Agent schemas/prompts
+│       │   ├── dataflows/             # yfinance, Alpha Vantage, Finnhub, router, cache, quality
+│       │   ├── graph/                 # Classic graph compatibility
+│       │   ├── llm_clients/           # Google/OpenAI/Anthropic/DeepSeek/OpenRouter/Ollama clients
+│       │   ├── pipeline_balanced*.py  # Balanced pipeline modules
+│       │   ├── trade_levels.py        # Trade level validation and fixed R/R 1:3
+│       │   └── default_config.py
 │       └── tests/
 │
 └── frontend/
-    ├── .env.example              # Copy to .env and fill your values
-    ├── .env                      # Your actual frontend env — not committed
+    ├── .env.example
     ├── index.html
-    ├── nginx.conf                 # Docker nginx proxy for /api
+    ├── nginx.conf
     ├── package.json
     ├── vite.config.js
     └── src/
-        ├── App.jsx                # Frontend routes
-        ├── main.jsx
-        ├── mockData.js            # Sample responses for UI testing
+        ├── App.jsx
+        ├── domain/analysisContract.js # Frontend request/result contract constants
+        ├── hooks/
+        │   ├── useAnalysisJob.js      # Real job API + SSE hook
+        │   └── useMockAnalysisJob.js  # Mock job behavior
         ├── components/
-        │   ├── AnalysisWorkspace.jsx # Shared analysis layout and history sidebar
-        │   ├── AgentLog.jsx       # Live progress via SSE events
+        │   ├── AgentLog.jsx
+        │   ├── AnalysisWorkspace.jsx
+        │   ├── ExportReportButtons.jsx
         │   ├── Navbar.jsx
-        │   ├── ResultCard.jsx     # Structured result display
-        │   ├── StockForm.jsx      # Real analysis form (job API + SSE events)
-        │   └── StockFormMock.jsx  # Mock form (no API call, for UI testing)
-        └── pages/
-            ├── Analysis.jsx       # Main analysis page + history sidebar
-            ├── AnalysisMock.jsx   # UI testing page at /analysis.test
-            ├── Dashboard.jsx      # Landing page
-            └── NotFound.jsx       # 404 fallback
+        │   ├── ResultCard.jsx         # Main result UI, action plan 4x3, data quality
+        │   ├── StockForm.jsx
+        │   └── StockFormMock.jsx
+        ├── pages/
+        │   ├── Analysis.jsx
+        │   ├── AnalysisMock.jsx
+        │   ├── Dashboard.jsx
+        │   └── NotFound.jsx
+        ├── utils/
+        │   ├── api.js
+        │   ├── formatting.js
+        │   ├── mockReport.js
+        │   ├── reportApi.js
+        │   └── sse.js
+        └── mockData.js
 ```
 
 ---
 
 ## Requirements
 
-- Python 3.10+
-- Node.js 18+
-- An API key for at least one supported LLM provider (see below)
-- Backend report export dependencies from `backend/requirements.txt`: `jinja2` for HTML templates and `weasyprint` for PDF generation
+- Python **3.11 is recommended** for the backend, matching `Dockerfile.backend`.
+- Node.js **22 is recommended** for the frontend, matching `Dockerfile.frontend`.
+- At least one LLM API key for the selected provider, unless using local Ollama.
+- For local PDF export without Docker, WeasyPrint requires system dependencies. The Docker backend already installs these dependencies.
+
+Backend report dependencies:
+
+- `jinja2` for HTML templates.
+- `weasyprint` for PDF generation.
 
 ---
 
@@ -148,58 +194,134 @@ TradingAgent/
 
 Set `LLM_PROVIDER` in `backend/.env`.
 
-| Provider | `LLM_PROVIDER` | Required key |
-|---|---|---|
-| Google Gemini | `google` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
-| OpenAI | `openai` | `OPENAI_API_KEY` |
-| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
-| DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` |
-| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` |
-| Ollama | `ollama` | None. Set `OLLAMA_BASE_URL` |
+| Provider | `LLM_PROVIDER` value | Required key | Notes |
+|---|---|---|---|
+| Google Gemini | `google` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Google model names are normalized to lowercase. |
+| OpenAI | `openai` | `OPENAI_API_KEY` | Native OpenAI uses the Responses API. |
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | Supports Claude models from the catalog. |
+| DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` | OpenAI-compatible. The reasoner has fallback behavior when structured output is unavailable. |
+| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | Open model provider with flexible model strings. |
+| Ollama | `ollama` | No API key required | Set `OLLAMA_BASE_URL`. |
 
-Recommended default:
+Minimal configuration example:
 
 ```env
-LLM_PROVIDER=<provider>
-DEEP_THINK_LLM=<provider-model-id>
-QUICK_THINK_LLM=<provider-model-id>
-<PROVIDER_API_KEY>=your_key_here
+LLM_PROVIDER=deepseek
+DEEP_THINK_LLM=deepseek-chat
+QUICK_THINK_LLM=deepseek-chat
+DEEPSEEK_API_KEY=your_api_key_here
 ```
 
-`DEEP_THINK_LLM` is used by heavier stages (Research Manager, Portfolio Manager). `QUICK_THINK_LLM` is used by analyst and debate stages.
+For Ollama:
+
+```env
+LLM_PROVIDER=ollama
+DEEP_THINK_LLM=llama3:latest
+QUICK_THINK_LLM=llama3:latest
+OLLAMA_BASE_URL=http://localhost:11434
+```
 
 ---
 
-## Environment Mode
+## Data Sources and Vendor Routing
 
-TradingAgent defaults to local development/personal use. Production must be selected explicitly.
+TradingAgent uses a vendor router. Vendor order can be configured per data category. The system tries vendors from left to right, then falls back if the first vendor fails, returns empty data, returns stale data, returns invalid data, or is unavailable.
 
-Default local mode:
-
-```env
-APP_ENV=development
-```
-
-Production mode:
+Main defaults in `.env.example`:
 
 ```env
-APP_ENV=production
+DATA_VENDOR_CORE_STOCK_APIS=yfinance,finnhub,alpha_vantage
+DATA_VENDOR_QUOTE_DATA=yfinance,finnhub,alpha_vantage
+DATA_VENDOR_TECHNICAL_INDICATORS=yfinance,finnhub,alpha_vantage
+DATA_VENDOR_FUNDAMENTAL_DATA=yfinance,finnhub,alpha_vantage
+DATA_VENDOR_FINANCIAL_STATEMENTS=yfinance,alpha_vantage,finnhub
+DATA_VENDOR_NEWS_DATA=yfinance,finnhub,alpha_vantage
+DATA_VENDOR_GLOBAL_NEWS_DATA=yfinance,finnhub,alpha_vantage
+DATA_VENDOR_SENTIMENT_DATA=finnhub,alpha_vantage
+DATA_VENDOR_SOCIAL_SENTIMENT=finnhub
+DATA_VENDOR_EVENT_DATA=finnhub
+DATA_VENDOR_ANALYST_RATING=finnhub
+DATA_VENDOR_INSIDER_DATA=finnhub,alpha_vantage,yfinance
 ```
 
-Production requires:
+| Data | Sources used |
+|---|---|
+| Quote/current price | yfinance, Finnhub, Alpha Vantage based on routing. |
+| OHLCV/history | yfinance, Finnhub, Alpha Vantage based on routing. |
+| Technical indicators | Calculated locally from OHLCV using local indicators. |
+| Fundamentals/profile/metrics | yfinance, Finnhub, Alpha Vantage based on routing. |
+| Financial statements | yfinance, Alpha Vantage, Finnhub based on routing. |
+| Company news | yfinance, Finnhub, Alpha Vantage based on routing. |
+| Global/macro news | yfinance, Finnhub, Alpha Vantage based on routing. |
+| News sentiment | Finnhub, Alpha Vantage based on routing. |
+| Social sentiment | Finnhub when available. |
+| Event risk / earnings / recommendation trends | Finnhub when available. |
+| Insider data | Finnhub, Alpha Vantage, yfinance based on routing. |
+| Forex and crypto | Environment variables exist, but the main implementation is still deferred. |
 
-- `CORS_ORIGINS` with explicit frontend origins, not `*`
-- `API_KEY` configured
-- `REQUIRE_API_KEY_FOR_RATE_LIMIT=true`
-- frontend mock route disabled with `VITE_ENABLE_MOCK=false`
+### Finnhub
 
-Development CORS defaults to this local whitelist when `CORS_ORIGINS` is empty:
+Finnhub is skipped when `FINNHUB_API_KEY` is empty or the related feature is disabled. This is intentional so development does not consume quota unintentionally.
+
+Important Finnhub variables:
 
 ```env
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173
+FINNHUB_API_KEY=
+FINNHUB_BASE_URL=https://finnhub.io/api/v1
+FINNHUB_ENABLED=true
+FINNHUB_ENABLE_STOCK_DATA=true
+FINNHUB_ENABLE_FUNDAMENTALS=true
+FINNHUB_ENABLE_NEWS=false
+FINNHUB_ENABLE_SENTIMENT=false
+FINNHUB_ENABLE_EVENTS=false
+FINNHUB_ENABLE_INSIDER=false
+FINNHUB_ENABLE_FOREX=false
+FINNHUB_ENABLE_CRYPTO=false
+FINNHUB_ENABLE_SYMBOL_RESOLVER=true
+FINNHUB_MAX_CALLS_PER_ANALYSIS=12
+DATA_VENDOR_MAX_CALLS_PER_ANALYSIS=40
+DATA_VENDOR_ENABLE_FINNHUB_FALLBACK=true
+DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT=false
 ```
 
-For local commands, backend, frontend, and optional Ollama should bind to `127.0.0.1` by default. Use LAN/public bindings only when you intentionally need them.
+Recommended personal/development settings:
+
+- Keep `DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS=false` to avoid calling multiple vendors for the same news category.
+- Keep `DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT=false` unless the endpoint and Finnhub plan are ready.
+- Enable Finnhub features gradually: stock/fundamentals first, then news/sentiment/event/insider data.
+
+---
+
+## Supported Markets
+
+Trading analysis is limited to two main markets.
+
+| Market | Accepted input | Backend normalization |
+|---|---|---|
+| `US` | `AAPL`, `NVDA`, `MSFT`, `SPY`, and other US tickers | Uppercase, without global suffixes. |
+| `ID` | `BBCA`, `BBRI`, `TLKM`, `BMRI`, or `BBCA.JK` | Plain IDX codes are normalized to `.JK`, for example `BBCA.JK`. |
+
+Important rules:
+
+- `market` may only be `US` or `ID`.
+- `trade_date` must be `YYYY-MM-DD` and cannot be more than 1 day in the future.
+- `time_horizon_months` may only be `1`, `2`, or `3`.
+- `max_debate_rounds` may only be `1` to `5`.
+- `analysis_depth` may only be `fast`, `balanced`, or `deep`.
+- `response_detail` may only be `summary`, `full`, or `debug`.
+- Non-ID exchange suffixes such as `.HK`, `.T`, `.DE`, `.L`, `.AX`, and `.TO` are rejected.
+
+---
+
+## Analysis Depth
+
+| Mode | LLM budget | Behavior |
+|---|---:|---|
+| `fast` | 6 calls | Lower cost. The debate/risk committee may be skipped. If `max_debate_rounds > 1`, a request warning is returned. |
+| `balanced` | 9 calls | Default. Runs the full pipeline with the standard budget. |
+| `deep` | 9 calls | Same call budget, but with more patient retries. Useful when the provider often times out or rate-limits requests. |
+
+`DEEP_THINK_LLM` is used for heavier stages such as Research Manager and Portfolio Manager. `QUICK_THINK_LLM` is used for lighter analyst/debate stages.
 
 ---
 
@@ -219,7 +341,7 @@ cd backend
 python -m venv venv
 ```
 
-Activate:
+Activate the virtual environment:
 
 ```bash
 # Linux/macOS
@@ -236,16 +358,36 @@ pip install -r requirements.txt
 pip install -e tradingagents-core/
 ```
 
-Configure:
+Create the env file:
 
 ```bash
-cp .env.example .env   # Windows: Copy-Item .env.example .env
+# Linux/macOS
+cp .env.example .env
+
+# Windows PowerShell
+Copy-Item .env.example .env
 ```
 
-Edit `backend/.env` and set your provider, model names, and API key. Then start:
+Minimum required values:
+
+```env
+APP_ENV=development
+LLM_PROVIDER=deepseek
+DEEP_THINK_LLM=deepseek-chat
+QUICK_THINK_LLM=deepseek-chat
+DEEPSEEK_API_KEY=your_api_key_here
+```
+
+Run the backend:
 
 ```bash
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8000/health
 ```
 
 ### 3. Frontend
@@ -253,353 +395,328 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```bash
 cd frontend
 npm install
-cp .env.example .env   # Windows: Copy-Item .env.example .env
 ```
 
-Set in `frontend/.env`:
+Create the env file:
+
+```bash
+# Linux/macOS
+cp .env.example .env
+
+# Windows PowerShell
+Copy-Item .env.example .env
+```
+
+Minimum required values:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000
 VITE_ENABLE_MOCK=true
+VITE_CLOCK_TIME_ZONE=Asia/Jakarta
+VITE_CLOCK_LABEL=WIB
 ```
 
-Start:
+Run the frontend:
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open:
+
+```text
+http://localhost:3000
+```
 
 ---
 
 ## Setup With Docker
 
+Create the backend env file:
+
 ```bash
 cp backend/.env.example backend/.env
-# Edit backend/.env and set your provider and API key
+```
+
+Edit `backend/.env`, then fill in the provider, model, and API key.
+
+Run:
+
+```bash
 docker compose up --build
 ```
 
-Frontend: `http://localhost:3000` — Backend: `http://localhost:8000` — Mock UI: `http://localhost:3000/analysis.test`
+Default URLs:
 
-The default Docker dev build uses `VITE_API_BASE_URL=http://localhost:8000` and binds both frontend and backend to localhost. nginx can still proxy `/api/*` when the frontend is built with an empty API base URL.
-If backend API-key enforcement is enabled, set `BACKEND_API_KEY` in your shell to the same value as backend `API_KEY`; nginx injects it server-side and the key is never bundled into browser JavaScript.
+| Service | URL |
+|---|---|
+| Frontend | `http://localhost:3000` |
+| Backend | `http://localhost:8000` |
+| Mock UI | `http://localhost:3000/analysis.test` |
+| Health | `http://localhost:8000/health` |
 
-Optional Ollama:
+Docker development binding:
+
+- Backend binds to `127.0.0.1:8000`.
+- Frontend binds to `127.0.0.1:3000`.
+- Backend cache/results use Docker volumes.
+- Frontend nginx can proxy `/api/*` to the backend.
+
+If backend API key enforcement is enabled, set `BACKEND_API_KEY` in the host shell so nginx can inject `x-api-key` server-side. Do not put the backend API key in `VITE_*`, because all `VITE_*` values are visible in browser devtools.
+
+### Docker + Ollama
 
 ```bash
 docker compose --profile ollama up --build
-docker exec -it tradingagent-ollama ollama pull <local-model-id>
 ```
 
-Production is intentionally a separate override so the default compose file stays development-focused:
+Pull the model:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+docker exec -it tradingagent-ollama ollama pull llama3:latest
 ```
 
-Before using the production override, set `APP_ENV=production`, explicit `CORS_ORIGINS`, and a strong `API_KEY` in `backend/.env`; the backend will reject production startup without them.
+Set the backend env:
+
+```env
+LLM_PROVIDER=ollama
+DEEP_THINK_LLM=llama3:latest
+QUICK_THINK_LLM=llama3:latest
+OLLAMA_BASE_URL=http://ollama:11434
+```
+
+---
+
+## Environment Mode
+
+The default project mode is development/personal use.
+
+```env
+APP_ENV=development
+```
+
+Production must be selected explicitly:
+
+```env
+APP_ENV=production
+```
+
+In production:
+
+- `CORS_ORIGINS` must be explicit and cannot be `*`.
+- `API_KEY` must be set.
+- `REQUIRE_API_KEY_FOR_RATE_LIMIT=true` is recommended/required for secure deployment.
+- `VITE_ENABLE_MOCK=false` is recommended for production builds.
+
+Default development CORS when `CORS_ORIGINS` is empty:
+
+```env
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173
+```
 
 ---
 
 ## Frontend Routes
 
-| Route | Purpose |
+| Route | Function |
 |---|---|
-| `/` | Redirects to `/home` |
-| `/home` | Landing page |
-| `/analysis` | Main analysis page |
-| `/analysis-live` | Redirects to `/analysis` |
-| `/analysis.test` | Mock UI (no backend required) |
-| `/analysis-mock` | Redirects to `/analysis.test` when mock routes are enabled |
+| `/` | Redirects to `/home`. |
+| `/home` | Dashboard/landing page. |
+| `/analysis` | Main analysis page. |
+| `/analysis/:requestId` | Opens a result from local history/backend lookup when available. |
+| `/analysis-live` | Redirects to `/analysis`. |
+| `/analysis.test` | Mock UI without real backend analysis. |
+| `/analysis.test/:requestId` | Mock result lookup. |
+| `/analysis-mock` | Redirects to `/analysis.test` when the mock route is enabled. |
+| `*` | 404 fallback. |
 
-The mock routes are always available in local dev. In production builds, they require `VITE_ENABLE_MOCK=true` at build time.
+The mock route is always available during Vite development. In production builds, the mock route is only available if `VITE_ENABLE_MOCK=true` during build time.
 
 ---
 
 ## API Reference
 
-The React analysis page uses the job API below. The dashboard also calls `/api/status` and `/api/market/quotes`. `/api/analyze` and `/api/analyze/stream` remain available as compatibility endpoints for direct API clients.
+All main application routes use the `/api` prefix, except `/health`.
 
-Trading analysis is intentionally limited to two market scopes:
+### GET `/health`
 
-| Market | Accepted input | Backend normalization |
-|---|---|---|
-| `US` | US stock symbols such as `AAPL`, `NVDA`, or `SPY` | Kept as submitted after uppercase normalization |
-| `ID` | Indonesian IDX stock codes such as `BBCA`, `BBRI`, `TLKM`, or `BBCA.JK` | Plain IDX codes are normalized to Yahoo Finance `.JK` symbols such as `BBCA.JK` |
+Lightweight liveness probe for Docker health checks.
 
-Non-ID exchange suffixes such as `.HK`, `.T`, `.DE`, `.L`, `.AX`, and `.TO` are rejected. Global macro/news data may still be used as supporting context for US or Indonesia analysis, but it is not a separate analysis market.
+Example response:
+
+```json
+{
+  "status": "ok",
+  "provider": "deepseek"
+}
+```
 
 ### GET `/api/status`
 
-Returns backend status metadata used by the dashboard.
+Returns backend status, active model, cache, job store, circuit breaker, and worker timeout information.
 
 ### GET `/api/market/quotes`
 
-Returns lightweight ticker-tape quotes for the dashboard.
+Used by the dashboard for lightweight ticker tape quotes.
 
-Query parameter:
+Query:
 
 | Field | Rule |
 |---|---|
-| `symbols` | Optional comma-separated ticker symbols, capped at 20 symbols |
+| `symbols` | Optional comma-separated symbols, maximum 20 symbols. |
+
+Example:
+
+```http
+GET /api/market/quotes?symbols=BBCA.JK,NVDA,AAPL
+```
+
+### GET `/api/ticker/validate`
+
+Lightweight preflight validation for ticker and market data before the expensive pipeline is executed.
+
+Query:
+
+| Field | Rule |
+|---|---|
+| `ticker` | US or IDX symbol. |
+| `market` | Optional `US` or `ID`. |
+| `trade_date` | `YYYY-MM-DD`. |
 
 ### POST `/api/analysis/jobs`
 
-Creates an analysis job. Returns a `job_id`.
+Creates a cancellable analysis job and immediately returns a `job_id`.
+
+Example request:
 
 ```json
 {
   "ticker": "BBCA",
   "market": "ID",
-  "trade_date": "2026-05-18",
+  "trade_date": "2026-05-29",
   "time_horizon_months": 1,
   "max_debate_rounds": 3,
   "analysis_depth": "balanced",
-  "response_detail": "full"
+  "response_detail": "full",
+  "has_existing_position": false,
+  "position_quantity": null,
+  "average_entry_price": null
+}
+```
+
+Example response:
+
+```json
+{
+  "job_id": "...",
+  "request_id": "...",
+  "status": "queued",
+  "events_url": "/api/analysis/jobs/{job_id}/events"
 }
 ```
 
 ### GET `/api/analysis/jobs/{job_id}/events`
 
-Streams Server-Sent Events for job progress.
+Server-Sent Events stream for job progress.
 
-| Event | Description |
+| Event | Content |
 |---|---|
-| `progress` | Agent started or completed |
-| `result` | Final structured decision |
-| `error` | Sanitized error payload |
+| `job` | Job summary when the stream opens. |
+| `progress` | Agent started/completed events. |
+| `heartbeat` | Keep-alive event when no new progress event is available. |
+| `result` | Final structured result. |
+| `error` | Sanitized error payload. |
 
 ### GET `/api/analysis/jobs/{job_id}`
 
-Returns the current job status, original payload, timestamps, and result or error if the job has finished.
+Returns job status, initial payload, timestamps, result, or error.
+
+### GET `/api/analysis/{request_id}`
+
+Returns a result by `request_id`. This endpoint is useful after a result has been stored in the job store/persistent cache.
 
 ### DELETE `/api/analysis/jobs/{job_id}`
 
 Cancels a running job.
 
-### Input rules
+### DELETE `/api/analysis/{job_id}`
 
-| Field | Rule |
-|---|---|
-| `ticker` | Supported US or Indonesian symbol. For Indonesia, submit the plain IDX code such as `BBCA` with `market: "ID"`; the backend stores and queries it as `BBCA.JK`. Non-ID exchange suffixes are no longer supported. |
-| `market` | Optional UI market context: `US` or `ID`. `ID` forces plain IDX codes to `.JK` in the backend. |
-| `trade_date` | `YYYY-MM-DD` |
-| `time_horizon_months` | `1`, `2`, or `3`; defaults to `1` |
-| `max_debate_rounds` | Integer 1 to 5 |
-| `analysis_depth` | `fast`, `balanced`, or `deep` |
-| `response_detail` | `summary`, `full`, or `debug` |
+Compatibility alias for job cancellation.
 
-### Result shape (key fields)
+### POST `/api/analyze`
 
-```json
-{
-  "request_id": "...",
-  "ticker": "BBCA.JK",
-  "market": "ID",
-  "trade_date": "2026-05-18",
-  "time_horizon_months": 1,
-  "analysis_depth": "balanced",
-  "response_detail": "full",
-  "decision": "Buy",
-  "final_decision": "Buy",
-  "llm_decision": "Buy",
-  "full_decision": "...",
-  "executive_summary": "...",
-  "investment_thesis": "...",
-  "price_target": 9800,
-  "time_horizon": "1 month",
-  "confidence_score": 0.82,
-  "suggested_allocation_percent": 5,
-  "current_price": 9200,
-  "current_price_as_of": "2026-05-18",
-  "current_price_source": "yfinance:last_close",
-  "trade_plan_valid": true,
-  "entry_price": 9000,
-  "stop_loss": 8400,
-  "take_profit": 9800,
-  "risk_reward_ratio": 2.3,
-  "max_drawdown_estimate": "8-12%",
-  "volatility_level": "Medium",
-  "position_sizing_reason": "...",
-  "rebalancing_action": "Add gradually",
-  "key_catalysts": [],
-  "invalidation_conditions": [],
-  "data_fetched_at": "2026-05-18T10:30:00",
-  "llm_call_budget": 9,
-  "llm_calls_used": 9,
-  "budget_exhausted": false,
-  "agents_skipped": [],
-  "data_quality": {
-    "price_data": "ok",
-    "fundamentals": "partial",
-    "news": "ok",
-    "warnings": []
-  },
-  "validation_warnings": []
-}
-```
+Legacy JSON endpoint. Runs the analysis and returns the final result directly after completion.
 
-## Export HTML/PDF Report
+### POST `/api/analyze/stream`
 
-After an analysis job finishes, the stored result can be exported without rerunning the analysis pipeline. Export reads the existing completed job result from the backend job store, so it does not call the LLM again, does not fetch new market data, and does not spend another analysis budget just to make a document.
+Legacy SSE endpoint. Runs the analysis with streamed progress without using the newer job API.
 
-The report uses backend-normalized fields from the analysis result, especially `final_decision`, `current_price`, `trade_plan_valid`, `data_quality`, and `validation_warnings`. `decision` is kept only as a compatibility field; report rendering treats `final_decision` as the primary decision.
+---
 
-### HTML Preview
+## Request Fields
 
-```http
-GET /api/analysis/jobs/{request_id}/report.html
-```
-
-Returns a clean, print-friendly HTML report for the completed analysis result. The frontend opens this endpoint in a new browser tab through the **Preview HTML** action.
-
-### PDF Download
-
-```http
-GET /api/analysis/jobs/{request_id}/report.pdf
-```
-
-Returns a downloadable PDF generated from the same HTML report template. The frontend calls this endpoint through the **Export PDF** action and saves the returned PDF blob using the filename from the response header when available.
-
-### Export rules
-
-- Export uses the stored analysis result for the given `request_id`.
-- Export does not rerun the analysis pipeline.
-- Export does not call the LLM.
-- Export uses `final_decision` as the main report decision.
-- Export uses backend-provided `current_price`; it does not invent price data.
-- Export only supports `US` and `ID` market results.
-- Legacy `GLOBAL` market results and non-ID exchange suffixes are rejected.
-- For `Hold`, the user-facing report does not render actionable trade levels such as Entry, Stop Loss, Take Profit, or Risk/Reward.
-
-### Backend dependencies
-
-The backend uses `jinja2` to render the HTML template and `weasyprint` to generate PDF files. Both dependencies are listed in `backend/requirements.txt`. If PDF generation fails because WeasyPrint or its system libraries are unavailable, the PDF endpoint returns a report generation error.
-
-### Common export errors
-
-| HTTP | Code | Meaning |
-|---:|---|---|
-| 404 | `report_not_found` | The analysis result for `request_id` was not found or has expired from the job store. |
-| 400 | `unsupported_report_market` | The stored result is not a supported `US` or `ID` market result, or the ticker has a non-ID exchange suffix. |
-| 500 | `report_generation_failed` | PDF generation failed. Check backend logs with the API `request_id`. |
-
-## API Error codes
-
-| Code | HTTP / Context | Meaning |
+| Field | Type | Rule |
 |---|---|---|
-| `BAD_REQUEST` | 400 | Invalid ticker, date, or parameters |
-| `REQUEST_BODY_TOO_LARGE` | 413 | Request body exceeds the configured backend limit |
-| `VALIDATION_ERROR` | 422 | Invalid request payload shape |
-| `RATE_LIMITED` | 429 | Too many requests |
-| `PIPELINE_TIMEOUT` | 504 | Analysis exceeded timeout |
-| `PIPELINE_FAILED` | 500 | Internal error — check logs with `request_id` |
-| `HTTP_ERROR` | Varies | FastAPI/Starlette HTTP exception surfaced through the API error envelope |
-| `ANALYSIS_CANCELLED` | Job/SSE event | Analysis was cancelled by the client |
+| `ticker` | string | US ticker or IDX ticker. For `market=ID`, send a plain code such as `BBCA`; the backend stores it as `BBCA.JK`. |
+| `market` | string/null | Optional `US` or `ID`. |
+| `trade_date` | string | Format `YYYY-MM-DD`; maximum 1 day in the future. |
+| `time_horizon_months` | number | `1`, `2`, or `3`. |
+| `max_debate_rounds` | number | Integer from `1` to `5`. |
+| `analysis_depth` | string | `fast`, `balanced`, or `deep`. |
+| `response_detail` | string | `summary`, `full`, or `debug`. |
+| `has_existing_position` | boolean | `true` if the user already has a position. Default `false`. |
+| `position_quantity` | number/null | Existing position quantity. Optional, non-negative. |
+| `average_entry_price` | number/null | Average entry price for the existing position. Optional, non-negative. |
 
 ---
 
 ## Environment Variables
 
-This section mirrors the variables currently present in `backend/.env.example` and `frontend/.env.example`.
-The local `.env` files should use the same keys, with secret values filled in privately.
-
 ### `backend/.env`
 
 | Variable | Required | Description |
 |---|---|---|
-| `APP_ENV` | No | Runtime mode. Defaults to `development`. Use `production` only when explicitly deploying. |
-| `CORS_ORIGINS` | Production yes | Comma-separated explicit frontend origins. Development falls back to local origins when empty. Wildcard `*` is rejected. |
-| `API_KEY` | Production yes | Shared backend API key accepted from `x-api-key` or `Authorization: Bearer ...`. Leave empty only for local development. |
-| `REQUIRE_API_KEY_FOR_RATE_LIMIT` | No | Defaults to `false` in development and `true` in production. |
-| `TRUSTED_PROXY_HOSTS` | No | Direct proxy IP/host allowlist for trusting forwarded client IP headers. Leave empty for local dev without reverse proxy. |
-| `LLM_PROVIDER` | Yes | Provider name: `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, or `ollama` |
-| `DEEP_THINK_LLM` | Yes | Model used by heavier reasoning stages such as Research Manager and Portfolio Manager |
-| `QUICK_THINK_LLM` | Yes | Model used by the faster analyst and debate stages |
-| `GOOGLE_API_KEY` | Google only | Gemini API key. Either this or `GEMINI_API_KEY` is accepted |
-| `GEMINI_API_KEY` | Google only | Alternate Gemini API key variable. Either this or `GOOGLE_API_KEY` is accepted |
-| `OPENAI_API_KEY` | OpenAI only | OpenAI API key |
-| `ANTHROPIC_API_KEY` | Anthropic only | Anthropic API key |
-| `DEEPSEEK_API_KEY` | DeepSeek only | DeepSeek API key |
-| `OPENROUTER_API_KEY` | OpenRouter only | OpenRouter API key |
-| `ALPHA_VANTAGE_API_KEY` | No | Optional Alpha Vantage key for market, news, and fundamental-data enrichment or fallback |
-| `DATA_VENDOR_CORE_STOCK_APIS` | No | Comma-separated vendor order for core stock data. Default: `yfinance,alpha_vantage` |
-| `DATA_VENDOR_TECHNICAL_INDICATORS` | No | Comma-separated vendor order for technical indicators. Default: `yfinance,alpha_vantage` |
-| `DATA_VENDOR_FUNDAMENTAL_DATA` | No | Comma-separated vendor order for fundamentals. Default: `yfinance,alpha_vantage` |
-| `DATA_VENDOR_NEWS_DATA` | No | Comma-separated vendor order for news data. Default: `yfinance,alpha_vantage` |
-| `OLLAMA_BASE_URL` | Ollama only | Local or Docker Ollama URL. Default: `http://localhost:11434` |
-
-Production example:
-
-```env
-APP_ENV=production
-CORS_ORIGINS=https://frontend.domain-anda.com
-API_KEY=isi_api_key_yang_panjang_dan_random
-REQUIRE_API_KEY_FOR_RATE_LIMIT=true
-```
+| `APP_ENV` | No | `development` or `production`. Default is development. |
+| `CORS_ORIGINS` | Required in production | Explicit comma-separated origins. `*` is rejected. |
+| `API_KEY` | Required in production | Backend API key for `x-api-key` or `Authorization: Bearer`. |
+| `REQUIRE_API_KEY_FOR_RATE_LIMIT` | Recommended in production | If true, requests without a key are rejected. |
+| `TRUSTED_PROXY_HOSTS` | No | Reserved for trusted reverse proxies. Default is empty. |
+| `LLM_PROVIDER` | Yes | `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, or `ollama`. |
+| `DEEP_THINK_LLM` | Yes | Model for heavy reasoning stages. |
+| `QUICK_THINK_LLM` | Yes | Model for fast/analyst/debate stages. |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | If Google | Gemini API key. |
+| `OPENAI_API_KEY` | If OpenAI | OpenAI API key. |
+| `ANTHROPIC_API_KEY` | If Anthropic | Anthropic API key. |
+| `DEEPSEEK_API_KEY` | If DeepSeek | DeepSeek API key. |
+| `OPENROUTER_API_KEY` | If OpenRouter | OpenRouter API key. |
+| `OLLAMA_BASE_URL` | If Ollama | Ollama URL. Default `http://localhost:11434`. |
+| `ALPHA_VANTAGE_API_KEY` | No | Optional fallback/enrichment for market/news/fundamental data. |
+| `FINNHUB_API_KEY` | No | Optional Finnhub key. If empty, Finnhub is skipped. |
+| `FINNHUB_ENABLED` | No | Globally enables/disables Finnhub. |
+| `FINNHUB_ENABLE_*` | No | Feature flags per Finnhub endpoint. |
+| `DATA_VENDOR_*` | No | Vendor order per data category. |
+| `DATA_VENDOR_MAX_CALLS_PER_ANALYSIS` | No | Vendor-call budget per analysis. |
+| `DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS` | No | If true, news may be collected from multiple vendors at once. |
+| `DATA_VENDOR_ENABLE_FINNHUB_FALLBACK` | No | Allows Finnhub as a fallback vendor. |
+| `DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT` | No | Allows optional Finnhub enrichment. |
+| `MAX_NEWS_PER_VENDOR` | No | News limit per vendor. |
+| `MAX_TOTAL_NEWS_ITEMS` | No | Total news limit after deduplication. |
+| `NEWS_DEDUP_BY` | No | News dedupe rule, default `url,title`. |
+| `NEWS_MIN_RELEVANCE_SCORE` | No | Minimum news relevance score. |
+| `DEFAULT_INDONESIA_SUFFIX` | No | Default `.JK`. |
+| `DEFAULT_FOREX_EXCHANGE` | No | Default `OANDA`; still deferred. |
+| `DEFAULT_CRYPTO_EXCHANGE` | No | Default `BINANCE`; still deferred. |
+| `DEFAULT_US_EXCHANGE` | No | Default `US`. |
 
 ### `frontend/.env`
 
-| Variable | Default | Description |
+| Variable | Example default | Description |
 |---|---|---|
-| `VITE_API_BASE_URL` | `http://localhost:8000` in dev example | Backend URL. Use `http://localhost:8000` for local dev. Empty uses relative `/api/*`. |
-| `VITE_API_URL` | Empty | Legacy alias kept for old local tooling. Prefer `VITE_API_BASE_URL`. |
-| `VITE_CLOCK_TIME_ZONE` | `Asia/Jakarta` | IANA timezone used by the navbar clock |
-| `VITE_CLOCK_LABEL` | `WIB` | Label shown next to the navbar clock |
-| `VITE_ENABLE_MOCK` | `true` in dev example | Exposes `/analysis.test` in production builds. Local Vite dev exposes it automatically. Set `false` for production. |
-
-Frontend code intentionally does not read or send any API key from Vite environment variables. For shared deployments, inject backend `x-api-key` at a private reverse proxy such as the included nginx container via `BACKEND_API_KEY`.
-
----
-
-## Testing
-
-### Backend
-
-```bash
-cd backend
-pip install -r requirements-dev.txt
-python -m ruff format --check .
-python -m ruff check .
-python -m pytest tests -q
-```
-
-On Windows PowerShell, the backend quality gate can also be run with:
-
-```powershell
-cd backend
-.\scripts\quality.ps1
-```
-
-On Linux/macOS:
-
-```bash
-cd backend
-./scripts/quality.sh
-```
-
-Backend coverage includes ticker validation, date validation, debate round limits, job ownership, request body limits, rate limiting (HTTP 429), SSE progress/replay events, config isolation, AgentLog de-duplication, and result schema shape.
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run quality
-```
-
-The frontend quality gate runs ESLint, Prettier format check, and Vitest once. To run them separately:
-
-```bash
-cd frontend
-npm run lint
-npm run format:check
-npm test -- --run
-```
-
-Frontend coverage includes stream cleanup and UI utility behavior.
+| `VITE_API_BASE_URL` | `http://localhost:8000` | Backend base URL. If empty, the frontend uses relative `/api/*`. |
+| `VITE_API_URL` | Empty | Legacy alias. Use `VITE_API_BASE_URL` for new configuration. |
+| `VITE_CLOCK_TIME_ZONE` | `Asia/Jakarta` | Navbar clock timezone. |
+| `VITE_CLOCK_LABEL` | `WIB` | Navbar clock label. |
+| `VITE_ENABLE_MOCK` | `true` | Enables the mock route in production builds. |
 
 ---
 
@@ -608,8 +725,9 @@ Frontend coverage includes stream cleanup and UI utility behavior.
 - Trading engine: [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)
 - Backend: [FastAPI](https://fastapi.tiangolo.com/) + [sse-starlette](https://github.com/sysid/sse-starlette)
 - Frontend: [React](https://react.dev/) + [Vite](https://vite.dev/)
-- Market data: [yfinance](https://github.com/ranaroussi/yfinance)
-- Pipeline: [LangGraph](https://github.com/langchain-ai/langgraph)
+- Main market data: [yfinance](https://github.com/ranaroussi/yfinance)
+- Optional data vendors: Alpha Vantage and Finnhub
+- Pipeline orchestration: LangGraph-compatible TradingAgents core
 
 ---
 
