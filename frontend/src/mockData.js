@@ -100,8 +100,8 @@ function formatTimeHorizon(months) {
   return `${normalized} Month${normalized > 1 ? 's' : ''}`;
 }
 
-function createFullDecision({ decision, summary, thesis, priceTarget, timeHorizon }) {
-  return `**Rating**: ${decision}\n\n**Executive Summary**: ${summary || 'N/A'}\n\n**Investment Thesis**: ${thesis || 'N/A'}\n\n**Price Target**: ${priceTarget ?? 'N/A'}\n\n**Time Horizon**: ${timeHorizon || 'N/A'}`;
+function createFullDecision({ decision, summary, thesis, timeHorizon }) {
+  return `**Rating**: ${decision}\n\n**Executive Summary**: ${summary || 'N/A'}\n\n**Investment Thesis**: ${thesis || 'N/A'}\n\n**Time Horizon**: ${timeHorizon || 'N/A'}`;
 }
 
 function completeResponse(response) {
@@ -129,7 +129,6 @@ function completeResponse(response) {
         decision: completed.final_decision ?? completed.decision,
         summary: completed.executive_summary,
         thesis: completed.investment_thesis,
-        priceTarget: completed.price_target,
         timeHorizon: completed.time_horizon,
       }),
   };
@@ -756,7 +755,6 @@ export function getMockAnalysisResponse(options = {}) {
     decision: response.final_decision ?? response.decision,
     summary: response.executive_summary,
     thesis: response.investment_thesis,
-    priceTarget: response.price_target,
     timeHorizon: response.time_horizon,
   });
 
