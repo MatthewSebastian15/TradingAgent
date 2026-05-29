@@ -5,6 +5,10 @@ import json
 from .alpha_vantage_common import _make_api_request, format_datetime_for_api
 
 
+def _is_idx_ticker(symbol: str) -> bool:
+    return str(symbol or "").strip().upper().endswith(".JK")
+
+
 def _load_news_payload(raw) -> dict:
     if isinstance(raw, dict):
         return raw
@@ -135,6 +139,18 @@ def get_insider_transactions(symbol: str) -> dict[str, str] | str:
 
 def get_news_sentiment(ticker: str) -> str:
     """Return Alpha Vantage NEWS_SENTIMENT payload as structured fallback text."""
+    if _is_idx_ticker(ticker):
+        return json.dumps(
+            {
+                "available": False,
+                "source": "alpha_vantage",
+                "reason": "Alpha Vantage NEWS_SENTIMENT does not support IDX ticker format.",
+                "blocking": False,
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+
     params = {
         "tickers": ticker,
         "limit": "20",

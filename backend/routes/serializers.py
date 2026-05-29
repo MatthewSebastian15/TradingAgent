@@ -113,6 +113,7 @@ VALIDATION_WARNING_META: dict[str, dict[str, Any]] = {
     "HOLD_TRADE_LEVELS_HIDDEN": {"severity": "info", "message": "Trade levels are hidden because recommendation is Hold.", "blocking": False},
     "NEWS_PARTIAL": {"severity": "warning", "message": "Partial news coverage is available.", "blocking": False},
     "NEWS_UNAVAILABLE": {"severity": "warning", "message": "No usable news was returned; analysis continues without blocking trade validation.", "blocking": False},
+    "DATA_SOURCE_WARNING": {"severity": "warning", "message": "Some optional market data is unavailable. Analysis continues.", "blocking": False},
     "OHLCV_FALLBACK_USED": {"severity": "warning", "message": "Exact OHLCV date was not found; latest available trading day is used.", "blocking": False},
     "CURRENT_PRICE_MISSING": {"severity": "error", "message": "Current price missing.", "blocking": True},
     "PRICE_MISSING": {"severity": "error", "message": "Required price data is missing.", "blocking": True},
@@ -160,7 +161,32 @@ def _validation_warning_details(warnings: Any) -> list[dict[str, Any]]:
     return details
 
 
+def _clean_data_source_message(message: str) -> str:
+    lowered = str(message or "").lower()
+
+    if "request budget exceeded" in lowered:
+        return "Some optional market data was skipped because the request budget was reached. Analysis continues."
+
+    if "invalid ticker format" in lowered and "alpha vantage" in lowered:
+        return "Alpha Vantage does not support this ticker format for the requested optional data. Analysis continues."
+
+    if "finnhub" in lowered and ("auth" in lowered or "plan" in lowered or "api key" in lowered):
+        return "Finnhub optional data is unavailable for the current API key or plan. Analysis continues."
+
+    if "finnhub enrichment disabled" in lowered:
+        return "Some optional Finnhub enrichment was skipped. Analysis continues."
+
+    if "no usable news" in lowered or "news_unavailable" in lowered or "no news found" in lowered:
+        return "No usable news was returned for this ticker. Analysis continues without blocking trade validation."
+
+    if "optional data unavailable" in lowered:
+        return "Some optional vendor enrichment was skipped. Analysis continues."
+
+    return str(message or "Data source warning")
+
+
 def _data_quality_warning_detail_from_message(message: str) -> dict[str, Any]:
+    message = _clean_data_source_message(message)
     lowered = message.lower()
     if "ohlcv_fallback_used" in lowered or "exact ohlcv date" in lowered:
         return _warning_detail("OHLCV_FALLBACK_USED", message)
@@ -182,10 +208,11 @@ def _complete_data_quality_warning_details(merged: dict[str, Any]) -> None:
         for item in existing:
             if isinstance(item, dict):
                 code = str(item.get("code") or "DATA_SOURCE_WARNING")
+                message = _clean_data_source_message(str(item.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code))
                 details.append({
                     "code": code,
                     "severity": str(item.get("severity") or VALIDATION_WARNING_META.get(code, {}).get("severity") or "warning"),
-                    "message": str(item.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code),
+                    "message": message,
                     "blocking": bool(item.get("blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False))),
                 })
             elif item:

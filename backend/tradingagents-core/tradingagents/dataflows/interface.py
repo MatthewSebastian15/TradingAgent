@@ -36,7 +36,7 @@ from .alpha_vantage import (
 from .alpha_vantage import (
     get_stock as get_alpha_vantage_stock,
 )
-from .alpha_vantage_common import AlphaVantageRateLimitError
+from .alpha_vantage_common import AlphaVantagePermanentError, AlphaVantageRateLimitError
 from .finnhub_common import (
     FinnhubRateLimitError,
     feature_for_method,
@@ -312,6 +312,37 @@ VENDOR_METHODS = {
 }
 
 
+TICKER_FIRST_ARG_METHODS = {
+    "get_stock_data",
+    "get_quote",
+    "get_indicators",
+    "get_fundamentals",
+    "get_company_profile",
+    "get_basic_financials",
+    "get_financials",
+    "get_balance_sheet",
+    "get_cashflow",
+    "get_income_statement",
+    "get_news",
+    "get_news_sentiment",
+    "get_social_sentiment",
+    "get_earnings_calendar",
+    "get_recommendation_trends",
+    "get_insider_transactions",
+    "get_insider_sentiment",
+}
+
+
+def _normalize_args_for_vendor(method: str, vendor: str, args: tuple) -> tuple:
+    if method not in TICKER_FIRST_ARG_METHODS or not args:
+        return args
+
+    from tradingagents.dataflows.vendor_symbol import normalize_symbol_for_vendor
+
+    normalized = normalize_symbol_for_vendor(args[0], vendor)
+    return (normalized, *args[1:])
+
+
 def get_category_for_method(method: str) -> str:
     """Get the category that contains the specified method."""
     for category, info in TOOLS_CATEGORIES.items():
@@ -419,7 +450,7 @@ def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, st
     fallback_methods = {"get_stock_data", "get_quote", "get_indicators"}
     if method in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_fallback", True)):
         return False, "Finnhub fallback disabled by DATA_VENDOR_ENABLE_FINNHUB_FALLBACK"
-    if method not in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_enrichment", True)):
+    if method not in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_enrichment", False)):
         return False, "Finnhub enrichment disabled by DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT"
     feature_key = feature_for_method(method)
     if not is_finnhub_feature_enabled(feature_key):
@@ -428,16 +459,19 @@ def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, st
 
 
 def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: dict) -> Any:
-    """Call one concrete vendor with the shared timeout/retry/cache layer."""
+    """Call one concrete vendor with timeout, retry, cache, and budget control."""
+    vendor_args = _normalize_args_for_vendor(method, vendor, args)
+
+    cache = _active_cache(config)
+    cache_key = _cache_key(method, vendor, vendor_args, kwargs)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        _record_attempt(config, method, vendor, "cache_hit")
+        return cached
+
     allowed, blocked_reason = _consume_budget(config, method, vendor)
     if not allowed:
         raise RuntimeError(blocked_reason or "request budget exceeded")
-
-    cache = _active_cache(config)
-    cache_key = _cache_key(method, vendor, args, kwargs)
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
 
     vendor_impl = VENDOR_METHODS[method][vendor]
     impl_func = vendor_impl[0] if isinstance(vendor_impl, list) else vendor_impl
@@ -452,7 +486,7 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
 
     result = call_with_retry(
         lambda: call_with_timeout(
-            lambda: impl_func(*args, **kwargs),
+            lambda: impl_func(*vendor_args, **kwargs),
             timeout_seconds=int(config.get("tool_timeout_seconds", 45)),
             service_name=service_name,
         ),
@@ -462,10 +496,10 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         max_delay=10.0,
         circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
         circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
+        should_retry=lambda exc: not isinstance(exc, AlphaVantagePermanentError),
     )
     cache.set(cache_key, result)
     return result
-
 
 def _active_cache(config: dict):
     """Return the configured tool cache, preferring persistent SQLite when enabled."""
@@ -543,6 +577,10 @@ def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, *
             status = "partial" if quality and quality.get("confidence") in {"low", "medium"} else "success"
             _record_attempt(config, method, vendor, status)
             return result
+        except AlphaVantagePermanentError as exc:
+            errors.append(f"{vendor}: {sanitize_error(exc)}")
+            _record_attempt(config, method, vendor, "unavailable", sanitize_error(exc))
+            continue
         except (AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
             errors.append(f"{vendor}: rate limited: {sanitize_error(exc)}")
             _record_attempt(config, method, vendor, "rate_limited", sanitize_error(exc))
@@ -606,6 +644,9 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
                 continue
             _record_attempt(config, method, vendor, "success")
             results[vendor] = result
+        except AlphaVantagePermanentError as exc:
+            errors.append(f"{vendor}: {sanitize_error(exc)}")
+            _record_attempt(config, method, vendor, "unavailable", sanitize_error(exc))
         except (AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
             errors.append(f"{vendor}: rate limited: {sanitize_error(exc)}")
             _record_attempt(config, method, vendor, "rate_limited", sanitize_error(exc))

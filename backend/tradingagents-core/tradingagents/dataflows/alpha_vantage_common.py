@@ -49,6 +49,12 @@ class AlphaVantageRateLimitError(Exception):
     pass
 
 
+class AlphaVantagePermanentError(Exception):
+    """Raised when Alpha Vantage returns a permanent non-retryable error."""
+
+    pass
+
+
 def _make_api_request(function_name: str, params: dict) -> dict | str:
     """Helper function to make API requests and handle responses.
 
@@ -85,7 +91,10 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
     try:
         response_json = json.loads(response_text)
         if "Error Message" in response_json:
-            raise ValueError(f"Alpha Vantage error: {response_json['Error Message']}")
+            message = str(response_json["Error Message"])
+            if "invalid ticker format" in message.lower():
+                raise AlphaVantagePermanentError(f"Alpha Vantage error: {message}")
+            raise ValueError(f"Alpha Vantage error: {message}")
         if "Note" in response_json:
             note_message = str(response_json["Note"])
             if "call frequency" in note_message.lower() or "rate limit" in note_message.lower():

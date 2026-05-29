@@ -591,6 +591,71 @@ export const MOCK_IDX_RESPONSE = completeMockAnalysis({
   validation_warnings: ['TAKE_PROFIT_RECOMPUTED', 'INDONESIA_TICK_SIZE_ROUNDED'],
 });
 
+export const MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE = completeMockAnalysis({
+  ...MOCK_IDX_RESPONSE,
+  request_id: 'mock-unvr-news-unavailable-sell',
+  ticker: 'UNVR.JK',
+  market: 'ID',
+  llm_decision: 'Sell',
+  final_decision: 'Sell',
+  decision: 'Sell',
+  rating: 'Sell',
+  has_existing_position: false,
+  position_quantity: null,
+  average_entry_price: null,
+  current_price: 2420,
+  entry_price: 2420,
+  stop_loss: 2600,
+  take_profit: 1880,
+  volatility_level: 'High',
+  volatility_score: 63,
+  rebalancing_action: 'Avoid new entry',
+  position_action: null,
+  new_entry_action: 'Avoid new entry',
+  position_size_hint: 'Use smaller size due to High volatility. Avoid oversized new exposure.',
+  executive_summary:
+    'UNVR.JK mock Sell scenario validates that IDX analysis can stay actionable even when optional news and enrichment data are unavailable.',
+  news_report:
+    'Mock news report: no usable news was returned. The trade plan remains valid because news is optional and non-blocking.',
+  data_quality: {
+    trade_plan: 'valid',
+    price_data: 'ok',
+    volatility_data: 'ok',
+    fundamentals: 'ok',
+    news: 'unavailable',
+    trade_levels: 'mock_recomputed',
+    llm_output: 'mock_repaired',
+    warnings: [
+      'NEWS_UNAVAILABLE - No usable news was returned for this ticker. Analysis continues without blocking trade validation.',
+      'DATA_SOURCE_WARNING - Some optional vendor enrichment was skipped. Analysis continues.',
+    ],
+    warning_details: [
+      {
+        code: 'NEWS_UNAVAILABLE',
+        severity: 'warning',
+        message:
+          'No usable news was returned for this ticker. Analysis continues without blocking trade validation.',
+        blocking: false,
+      },
+      {
+        code: 'DATA_SOURCE_WARNING',
+        severity: 'warning',
+        message: 'Some optional vendor enrichment was skipped. Analysis continues.',
+        blocking: false,
+      },
+    ],
+  },
+  validation_warnings: [
+    {
+      code: 'RR_FORCED_TO_3',
+      severity: 'warning',
+      message: 'Risk/reward forced to 1:3.',
+      blocking: false,
+    },
+    'INDONESIA_TICK_SIZE_ROUNDED',
+  ],
+});
+
 export const MOCK_ERROR_RESPONSE = {
   request_id: 'mock-error',
   ticker: 'ERROR',
@@ -680,16 +745,7 @@ const MOCK_MAP = {
     volatility_score: 91,
     validation_warnings: ['INDONESIA_TICK_SIZE_ROUNDED'],
   }),
-  'UNVR.JK': withOverrides(MOCK_IDX_RESPONSE, {
-    request_id: 'mock-unvr-buy',
-    ticker: 'UNVR.JK',
-    current_price: 2420,
-    entry_price: 2420,
-    stop_loss: 2240,
-    take_profit: 2960,
-    volatility_level: 'High',
-    volatility_score: 63,
-  }),
+  'UNVR.JK': MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE,
   ERROR: MOCK_ERROR_RESPONSE,
   MISSING: MOCK_MISSING_PRICE_RESPONSE,
 };
@@ -819,6 +875,7 @@ export const MOCK_RESPONSES_BY_REQUEST_ID = {
   'mock-missing-price': MOCK_MISSING_PRICE_RESPONSE,
   'mock-meta-repaired-buy': MOCK_REPAIRED_RESPONSE,
   'mock-bbca-id-buy': MOCK_IDX_RESPONSE,
+  'mock-unvr-news-unavailable-sell': MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE,
 };
 
 const MOCK_REQUEST_LOOKUP = Object.values(MOCK_MAP).reduce(
