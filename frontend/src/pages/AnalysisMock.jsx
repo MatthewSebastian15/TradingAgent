@@ -12,6 +12,7 @@ export default function AnalysisMock() {
       resultPathBase="/analysis.test"
       lookupResult={getMockAnalysisResponseByRequestId}
       lookupResultFirst
+      mockReportExport
     />
   );
 }

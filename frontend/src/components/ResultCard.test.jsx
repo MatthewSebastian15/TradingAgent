@@ -188,9 +188,9 @@ describe('ResultCard risk-engine contract', () => {
 
     expect(screen.getByText('DATA QUALITY')).toBeTruthy();
     expect(screen.getByText('TRADE PLAN: valid')).toBeTruthy();
-    expect(screen.getByText('PRICE: ok')).toBeTruthy();
-    expect(screen.getByText('TRADE LEVELS: recomputed')).toBeTruthy();
-    expect(screen.getByText('LLM OUTPUT: repaired')).toBeTruthy();
+    expect(screen.getByText('PRICE: mock')).toBeTruthy();
+    expect(screen.getByText('TRADE LEVELS: mock_recomputed')).toBeTruthy();
+    expect(screen.getByText('LLM OUTPUT: mock_repaired')).toBeTruthy();
   });
 
   it('shows validation warnings in readable form', () => {

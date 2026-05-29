@@ -1,19 +1,34 @@
 import React, { useState } from 'react';
 
-import { downloadAnalysisPdf, reportHtmlUrl } from '../utils/reportApi';
+import { downloadAnalysisPdf, openAnalysisHtmlReport } from '../utils/reportApi';
 
-export default function ExportReportButtons({ requestId, disabled = false }) {
+export default function ExportReportButtons({
+  requestId,
+  result = null,
+  disabled = false,
+  mockReport = false,
+}) {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
 
   if (!requestId) return null;
+
+  function handlePreviewHtml() {
+    if (disabled) return;
+    setError('');
+    try {
+      openAnalysisHtmlReport({ requestId, result, mock: mockReport });
+    } catch (ex) {
+      setError(ex.message || 'Failed to open HTML report.');
+    }
+  }
 
   async function handleDownload() {
     if (disabled || downloading) return;
     setError('');
     setDownloading(true);
     try {
-      await downloadAnalysisPdf(requestId);
+      await downloadAnalysisPdf(requestId, { result, mock: mockReport });
     } catch (ex) {
       setError(ex.message || 'Failed to download PDF report.');
     } finally {
@@ -24,14 +39,14 @@ export default function ExportReportButtons({ requestId, disabled = false }) {
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <a
-          href={reportHtmlUrl(requestId)}
-          target="_blank"
-          rel="noreferrer"
-          className="font-mono text-xs border border-bloomberg-border px-2.5 py-1 text-bloomberg-muted hover:text-bloomberg-white hover:border-bloomberg-subtle transition-colors tracking-wider"
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={handlePreviewHtml}
+          className="font-mono text-xs border border-bloomberg-border px-2.5 py-1 text-bloomberg-muted hover:text-bloomberg-white hover:border-bloomberg-subtle disabled:opacity-50 disabled:cursor-not-allowed transition-colors tracking-wider"
         >
           PREVIEW HTML
-        </a>
+        </button>
         <button
           type="button"
           disabled={disabled || downloading}

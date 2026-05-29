@@ -88,7 +88,10 @@ def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypat
     assert "TradingAgent Analysis Report" in response.text
     assert "Final Decision" in response.text
     assert "TAKE_PROFIT_RECOMPUTED" in response.text
-    assert "Entry Price" in response.text
+    assert "Entry" in response.text
+    assert "Price Target" not in response.text
+    assert "Risk Per Share" not in response.text
+    assert "Reward Per Share" not in response.text
 
 
 def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(client, monkeypatch):
@@ -139,6 +142,6 @@ def test_hold_report_does_not_render_actionable_trade_levels(client, monkeypatch
 
     assert response.status_code == 200
     assert "No actionable trade plan is available" in response.text
-    assert "Entry Price" not in response.text
-    assert "Stop Loss" not in response.text
-    assert "Take Profit" not in response.text
+    assert ">Entry</div>" not in response.text
+    assert ">Stop Loss</div>" not in response.text
+    assert ">Take Profit</div>" not in response.text

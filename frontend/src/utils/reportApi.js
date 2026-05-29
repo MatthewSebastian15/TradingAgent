@@ -1,4 +1,5 @@
 import { buildApiUrl, buildAuthHeaders, readHttpError } from './api';
+import { exportMockReportPdf, openMockReportPreview } from './mockReport';
 
 export function reportHtmlUrl(requestId) {
   return buildApiUrl(`/analysis/jobs/${encodeURIComponent(requestId)}/report.html`);
@@ -6,6 +7,16 @@ export function reportHtmlUrl(requestId) {
 
 export function reportPdfUrl(requestId) {
   return buildApiUrl(`/analysis/jobs/${encodeURIComponent(requestId)}/report.pdf`);
+}
+
+export function openAnalysisHtmlReport({ requestId, result, mock = false }) {
+  if (mock) {
+    if (!result) throw new Error('Mock report result is unavailable.');
+    openMockReportPreview(result);
+    return;
+  }
+
+  window.open(reportHtmlUrl(requestId), '_blank', 'noopener,noreferrer');
 }
 
 function filenameFromContentDisposition(headerValue) {
@@ -24,7 +35,13 @@ function filenameFromContentDisposition(headerValue) {
   return asciiMatch?.[1] || null;
 }
 
-export async function downloadAnalysisPdf(requestId) {
+export async function downloadAnalysisPdf(requestId, options = {}) {
+  if (options.mock) {
+    if (!options.result) throw new Error('Mock report result is unavailable.');
+    exportMockReportPdf(options.result);
+    return;
+  }
+
   const response = await fetch(reportPdfUrl(requestId), {
     method: 'GET',
     headers: {

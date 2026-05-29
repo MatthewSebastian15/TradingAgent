@@ -151,3 +151,32 @@ footer {
     padding: 18mm;
   }
 }
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3mm;
+  margin: 4mm 0 7mm;
+}
+
+.metric-card {
+  border: 1px solid #ddd;
+  padding: 8px;
+  min-height: 20mm;
+  page-break-inside: avoid;
+}
+
+.metric-label {
+  display: block;
+  color: #666;
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2mm;
+}
+
+.metric-value {
+  color: #111;
+  font-weight: 700;
+  word-break: break-word;
+}

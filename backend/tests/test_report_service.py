@@ -52,8 +52,22 @@ def test_report_context_uses_final_decision_and_trade_plan_for_valid_buy():
     assert report["final_decision"] == "Buy"
     assert report["llm_decision"] == "Hold"
     assert report["show_trade_plan"] is True
-    assert any(row["label"] == "Entry Price" for row in report["trade_plan_rows"])
-    assert any(row["value"] == "1:3" for row in report["trade_plan_rows"])
+    assert [row["label"] for row in report["trade_plan_rows"]] == [
+        "Current Price",
+        "Entry",
+        "Stop Loss",
+        "Take Profit",
+        "Max Drawdown",
+        "Volatility",
+        "Volatility Score",
+        "Rebalancing",
+        "Position Action",
+        "New Entry Action",
+        "Position Size Hint",
+        "R/R Ratio",
+    ]
+    assert any(row["label"] == "R/R Ratio" and row["value"] == "1:3" for row in report["trade_plan_rows"])
+    assert not any(row["label"] in {"Price Target", "Risk Per Share", "Reward Per Share"} for row in report["trade_plan_rows"])
 
 
 def test_report_context_hides_trade_plan_for_hold_even_if_levels_exist():
@@ -78,7 +92,7 @@ def test_report_context_forces_legacy_ratio_to_one_to_three_for_valid_trade_plan
     report = build_report_context(_base_result(risk_reward_display=None, risk_reward_ratio=5.0))
 
     assert report["show_trade_plan"] is True
-    assert any(row["label"] == "Risk/Reward" and row["value"] == "1:3" for row in report["trade_plan_rows"])
+    assert any(row["label"] == "R/R Ratio" and row["value"] == "1:3" for row in report["trade_plan_rows"])
     assert not any(row["value"] in {"1:" + "4", "1:" + "5"} for row in report["trade_plan_rows"])
 
 
