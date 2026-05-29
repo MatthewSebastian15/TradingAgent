@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import re
 from collections.abc import Callable
@@ -9,7 +10,7 @@ from datetime import datetime, timedelta
 from io import StringIO
 from typing import Any, TypeVar
 
-from tradingagents.dataflows.config import set_config, use_config
+from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
@@ -162,6 +163,59 @@ def _safe_multi_source_data_field(label: str, func: Callable[[], dict[str, Any]]
         return DataField.unavailable(label, exc)
 
 
+def _fetch_news_field(method: str, *args) -> Any:
+    config = get_config()
+    if bool(config.get("data_vendor_enable_multi_source_news", False)):
+        return route_to_all_vendors(method, *args)
+    return route_to_vendor(method, *args)
+
+
+def _safe_news_data_field(label: str, method: str, *args, limit: int = 12_000) -> DataField:
+    config = get_config()
+    if bool(config.get("data_vendor_enable_multi_source_news", False)):
+        return _safe_multi_source_data_field(label, lambda: route_to_all_vendors(method, *args), limit=limit)
+    return _safe_data_field(label, lambda: route_to_vendor(method, *args), limit=limit)
+
+
+def _extract_price_dataframe(price_field: DataField) -> Any:
+    try:
+        import pandas as pd
+
+        lines = [
+            line
+            for line in (price_field.value or "").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        if not lines:
+            return pd.DataFrame()
+        return pd.read_csv(StringIO("\n".join(lines)))
+    except Exception as exc:
+        logger.warning("Failed to parse OHLCV data for local indicators: %s", exc)
+        try:
+            import pandas as pd
+
+            return pd.DataFrame()
+        except Exception:
+            return None
+
+
+def _safe_local_indicator_field(price_field: DataField) -> DataField:
+    try:
+        from tradingagents.dataflows.local_indicators import calculate_local_indicators
+
+        price_df = _extract_price_dataframe(price_field)
+        indicators = calculate_local_indicators(price_df)
+        text = json.dumps(indicators, indent=2, ensure_ascii=False)
+        if indicators.get("available"):
+            return DataField(value=text, status="ok", warning=None)
+        reason = str(indicators.get("reason") or "Indicators unavailable")
+        return DataField(value=text, status="missing", warning=reason)
+    except Exception as exc:
+        message = f"Local indicators unavailable: {exc}"
+        logger.warning(message)
+        return DataField(value=message, status="missing", warning=message)
+
+
 def _extract_last_close_price_and_date(price_data: str, trade_date: str) -> tuple[float | None, str | None]:
     """Parse the last Close value and row date at or before trade_date from yfinance CSV."""
     lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
@@ -282,24 +336,22 @@ def _build_collection_tasks(
             limit=4_000,
         ),
     }
-    tasks["company_news"] = lambda: _safe_multi_source_data_field(
+    tasks["company_news"] = lambda: _safe_news_data_field(
         "company_news",
-        lambda: route_to_all_vendors("get_news", ticker, start_news, end),
+        "get_news",
+        ticker,
+        start_news,
+        end,
         limit=12_000,
     )
-    tasks["global_news"] = lambda: _safe_multi_source_data_field(
+    tasks["global_news"] = lambda: _safe_news_data_field(
         "global_news",
-        lambda: route_to_all_vendors("get_global_news", trade_date, news_lookback_days, 10),
+        "get_global_news",
+        trade_date,
+        news_lookback_days,
+        10,
         limit=8_000,
     )
-    for indicator in INDICATOR_NAMES:
-        tasks[f"indicator:{indicator}"] = lambda indicator=indicator: _safe_data_field(
-            f"indicator:{indicator}",
-            lambda indicator=indicator: route_to_vendor(
-                "get_indicators", ticker, indicator, trade_date, news_lookback_days
-            ),
-            limit=4_000,
-        )
     return tasks
 
 
@@ -541,7 +593,7 @@ def collect_market_data(
     social_sentiment = results.get("social_sentiment", DataField.from_text(""))
     event_risk = results.get("event_risk", DataField.from_text(""))
     recommendation_trends = results.get("recommendation_trends", DataField.from_text(""))
-    indicator_parts = [results[f"indicator:{indicator}"] for indicator in INDICATOR_NAMES]
+    technical_indicators = _safe_local_indicator_field(price)
     all_fields = [
         price,
         fundamentals,
@@ -555,7 +607,7 @@ def collect_market_data(
         social_sentiment,
         event_risk,
         recommendation_trends,
-        *indicator_parts,
+        technical_indicators,
     ]
     data_quality = _build_data_quality(
         trade_date,
@@ -601,7 +653,7 @@ def collect_market_data(
         trade_date=trade_date,
         time_horizon_months=time_horizon_months,
         price_data=price.value,
-        technical_indicators="\n\n".join(part.value for part in indicator_parts),
+        technical_indicators=technical_indicators.value,
         fundamentals=fundamentals.value,
         balance_sheet=balance_sheet.value,
         cashflow=cashflow.value,

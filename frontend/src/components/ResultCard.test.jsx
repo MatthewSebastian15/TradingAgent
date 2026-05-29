@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import ResultCard from './ResultCard';
 import {
   MOCK_HOLD_RESPONSE,
+  MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE,
   MOCK_MISSING_PRICE_RESPONSE,
   MOCK_REPAIRED_RESPONSE,
   MOCK_RESPONSE,
@@ -191,6 +192,18 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('PRICE: mock')).toBeTruthy();
     expect(screen.getByText('TRADE LEVELS: mock_recomputed')).toBeTruthy();
     expect(screen.getByText('LLM OUTPUT: mock_repaired')).toBeTruthy();
+  });
+
+
+  it('renders IDX news unavailable as non-blocking while keeping trade plan valid', () => {
+    render(<ResultCard result={MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE} />);
+
+    expect(screen.getByText('DATA QUALITY')).toBeTruthy();
+    expect(screen.getByText('TRADE PLAN: valid')).toBeTruthy();
+    expect(screen.getByText('NEWS: unavailable')).toBeTruthy();
+    expect(screen.getByText(/No usable news/i)).toBeTruthy();
+    expect(screen.getAllByText(/non-blocking/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('action-plan-metric')).toHaveLength(12);
   });
 
   it('shows validation warnings in readable form', () => {

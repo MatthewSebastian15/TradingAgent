@@ -25,6 +25,7 @@ const WARNING_LABELS = {
   OHLCV_FALLBACK_USED: 'OHLCV fallback used',
   NEWS_PARTIAL: 'News coverage partial',
   NEWS_UNAVAILABLE: 'News unavailable',
+  DATA_SOURCE_WARNING: 'Optional data source warning',
   INDONESIA_TICK_SIZE_ROUNDED: 'Indonesia tick size rounded',
   HOLD_TRADE_LEVELS_HIDDEN: 'Hold trade levels hidden',
 };
@@ -34,6 +35,7 @@ const WARNING_META = {
   OHLCV_FALLBACK_USED: { severity: 'warning', blocking: false },
   NEWS_PARTIAL: { severity: 'warning', blocking: false },
   NEWS_UNAVAILABLE: { severity: 'warning', blocking: false },
+  DATA_SOURCE_WARNING: { severity: 'warning', blocking: false },
   PRICE_MISSING: { severity: 'error', blocking: true },
   OHLCV_MISSING: { severity: 'error', blocking: true },
   CURRENT_PRICE_MISSING: { severity: 'error', blocking: true },
@@ -255,6 +257,15 @@ function NoticeBox({ title, children, tone = 'amber' }) {
   );
 }
 
+function getWarningPriority(warning) {
+  if (!warning) return 99;
+  if (warning.blocking) return 0;
+  if (warning.code === 'PRICE_MISSING' || warning.code === 'OHLCV_MISSING') return 1;
+  if (warning.code === 'TRADE_PLAN_INVALID' || warning.code === 'TRADE_LEVELS_INVALID') return 2;
+  if (warning.code === 'NEWS_UNAVAILABLE' || warning.code === 'NEWS_PARTIAL') return 3;
+  return 4;
+}
+
 function DataQuality({
   dq,
   validationWarnings = [],
@@ -292,7 +303,10 @@ function DataQuality({
       : Array.isArray(dq?.warnings)
         ? dq.warnings
         : [];
-  const dataWarningDetails = dataWarningSource.map(formatWarningDetail).filter(Boolean);
+  const dataWarningDetails = dataWarningSource
+    .map(formatWarningDetail)
+    .filter(Boolean)
+    .sort((a, b) => getWarningPriority(a) - getWarningPriority(b));
 
   const items = [
     { label: 'PRICE', status: dq?.price_data },
@@ -331,7 +345,7 @@ function DataQuality({
             Data Warnings
           </div>
           <div className="flex flex-col gap-1.5">
-            {dataWarningDetails.slice(0, 5).map((warning, i) => (
+            {dataWarningDetails.slice(0, 3).map((warning, i) => (
               <div
                 key={`${warning.code}-${i}`}
                 className={`font-mono text-xs px-2.5 py-1 border leading-relaxed ${getStatusClasses(
