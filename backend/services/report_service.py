@@ -21,6 +21,7 @@ SUPPORTED_REPORT_MARKETS = {"US", "ID"}
 ACTIONABLE_DECISIONS = {"Buy", "Sell", "Overweight", "Underweight"}
 NON_ID_EXCHANGE_SUFFIX_RE = re.compile(r"\.(?!JK$)[A-Z0-9]{1,5}$")
 SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+LEGACY_REPORT_FIELD_RE = re.compile(r"\b(price target|risk per share|reward per share)\b", re.IGNORECASE)
 
 _REPORT_ENV = Environment(
     loader=FileSystemLoader(str(TEMPLATE_DIR)),
@@ -177,6 +178,15 @@ def _clean_text(value: Any) -> str | None:
     return text or None
 
 
+def _strip_legacy_report_fields(value: Any) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+    lines = [line for line in text.splitlines() if not LEGACY_REPORT_FIELD_RE.search(line)]
+    cleaned = "\n".join(lines).strip()
+    return cleaned or None
+
+
 def _coalesce(*values: Any) -> Any:
     for value in values:
         if value is not None and value != "":
@@ -310,23 +320,20 @@ def _decision_rows(result: dict[str, Any], report: dict[str, Any]) -> list[dict[
 
 
 def _trade_plan_rows(result: dict[str, Any], ticker: str, market: str) -> list[dict[str, str]]:
-    price_fields = [
-        ("Current Price", result.get("current_price")),
-        ("Price Target", result.get("price_target")),
-        ("Entry Price", result.get("entry_price")),
-        ("Stop Loss", result.get("stop_loss")),
-        ("Take Profit", result.get("take_profit")),
-        ("Risk Per Share", result.get("risk_per_share")),
-        ("Reward Per Share", result.get("reward_per_share")),
+    return [
+        {"label": "Current Price", "value": _format_price(result.get("current_price"), ticker, market)},
+        {"label": "Entry", "value": _format_price(result.get("entry_price"), ticker, market)},
+        {"label": "Stop Loss", "value": _format_price(result.get("stop_loss"), ticker, market)},
+        {"label": "Take Profit", "value": _format_price(result.get("take_profit"), ticker, market)},
+        _row("Max Drawdown", result.get("max_drawdown_estimate")),
+        _row("Volatility", result.get("volatility_level")),
+        _row("Volatility Score", result.get("volatility_score")),
+        _row("Rebalancing", result.get("rebalancing_action")),
+        _row("Position Action", result.get("position_action")),
+        _row("New Entry Action", result.get("new_entry_action")),
+        _row("Position Size Hint", result.get("position_size_hint")),
+        _row("R/R Ratio", _risk_reward_display(result)),
     ]
-    rows = [{"label": label, "value": _format_price(value, ticker, market)} for label, value in price_fields]
-    rows.extend(
-        [
-            _row("Risk/Reward", _risk_reward_display(result)),
-            _row("Max Drawdown", result.get("max_drawdown_estimate")),
-        ]
-    )
-    return rows
 
 
 def _risk_rows(result: dict[str, Any], *, include_max_drawdown: bool) -> list[dict[str, str]]:
@@ -392,7 +399,7 @@ def _analyst_sections(result: dict[str, Any]) -> list[dict[str, str]]:
     ]
     sections: list[dict[str, str]] = []
     for title, field in fields:
-        body = _clean_text(result.get(field))
+        body = _strip_legacy_report_fields(result.get(field))
         if body:
             sections.append({"title": title, "body": body})
     return sections

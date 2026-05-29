@@ -62,18 +62,16 @@
       </section>
 
       <section class="section">
-        <h2>Price And Trade Plan</h2>
+        <h2>Action Plan</h2>
         {% if report.show_trade_plan %}
-          <table>
-            <tbody>
-              {% for row in report.trade_plan_rows %}
-                <tr>
-                  <th>{{ row.label }}</th>
-                  <td>{{ row.value }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+          <div class="metric-grid metric-grid-4x3">
+            {% for row in report.trade_plan_rows %}
+              <div class="metric-card">
+                <div class="metric-label">{{ row.label }}</div>
+                <div class="metric-value">{{ row.value }}</div>
+              </div>
+            {% endfor %}
+          </div>
         {% else %}
           <p class="muted">No actionable trade plan is available. Final decision: {{ report.final_decision }}.</p>
         {% endif %}

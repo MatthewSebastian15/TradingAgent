@@ -513,7 +513,7 @@ function HoldMetrics({ result, currentPrice }) {
   );
 }
 
-export default function ResultCard({ result, enableReportExport = true }) {
+export default function ResultCard({ result, enableReportExport = true, mockReport = false }) {
   const [thesisExpanded, setThesisExpanded] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
 
@@ -604,7 +604,12 @@ export default function ResultCard({ result, enableReportExport = true }) {
             </span>
           )}
           {enableReportExport && result.request_id && (
-            <ExportReportButtons requestId={result.request_id} disabled={Boolean(result.error)} />
+            <ExportReportButtons
+              requestId={result.request_id}
+              result={result}
+              disabled={Boolean(result.error)}
+              mockReport={mockReport}
+            />
           )}
         </div>
       </div>

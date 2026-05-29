@@ -245,6 +245,7 @@ export default function AnalysisWorkspace({
   lookupResult = null,
   enableReportExport = true,
   lookupResultFirst = false,
+  mockReportExport = false,
 }) {
   const navigate = useNavigate();
   const { requestId } = useParams();
@@ -448,6 +449,7 @@ export default function AnalysisWorkspace({
               <ResultCard
                 result={result}
                 enableReportExport={enableReportExport && Boolean(resultPathBase)}
+                mockReport={mockReportExport}
               />
             </div>
           )}
