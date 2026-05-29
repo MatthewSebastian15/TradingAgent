@@ -47,13 +47,61 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText(higherRiskRewardPattern)).toBeNull();
   });
 
-  it('renders Buy risk per share and reward per share', () => {
+  it('does not render removed action-plan fields', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
-    expect(screen.getAllByText('RISK PER SHARE').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('REWARD PER SHARE').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('$40').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('$120').length).toBeGreaterThan(0);
+    expect(screen.queryByText('PRICE TARGET')).toBeNull();
+    expect(screen.queryByText('RISK PER SHARE')).toBeNull();
+    expect(screen.queryByText('REWARD PER SHARE')).toBeNull();
+  });
+
+  it('does not render removed action-plan fields for Sell result', () => {
+    render(<ResultCard result={MOCK_SELL_RESPONSE} />);
+
+    expect(screen.queryByText('PRICE TARGET')).toBeNull();
+    expect(screen.queryByText('RISK PER SHARE')).toBeNull();
+    expect(screen.queryByText('REWARD PER SHARE')).toBeNull();
+  });
+
+  it('does not render PRICE TARGET in decision hero key metrics', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.queryByText('PRICE TARGET')).toBeNull();
+  });
+
+  it('renders action plan as exactly 12 metrics for a valid Buy result', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.getAllByTestId('action-plan-metric')).toHaveLength(12);
+  });
+
+  it('renders action plan as exactly 12 metrics for a valid Sell result', () => {
+    render(<ResultCard result={MOCK_SELL_RESPONSE} />);
+
+    expect(screen.getAllByTestId('action-plan-metric')).toHaveLength(12);
+  });
+
+  it('renders action plan metrics in the required order', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    const labels = screen
+      .getAllByTestId('action-plan-metric')
+      .map((node) => node.querySelector('div')?.textContent);
+
+    expect(labels).toEqual([
+      'CURRENT PRICE',
+      'ENTRY',
+      'STOP LOSS',
+      'TAKE PROFIT',
+      'MAX DRAWDOWN',
+      'VOLATILITY',
+      'VOLATILITY SCORE',
+      'REBALANCING',
+      'POSITION ACTION',
+      'NEW ENTRY ACTION',
+      'POSITION SIZE HINT',
+      'R/R RATIO',
+    ]);
   });
 
   it('renders a complete Sell action plan when trade_plan_valid is true', () => {
@@ -61,12 +109,9 @@ describe('ResultCard risk-engine contract', () => {
 
     expect(screen.getByText('▼ SELL')).toBeTruthy();
     expect(screen.getAllByText('CURRENT PRICE').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('PRICE TARGET').length).toBeGreaterThan(0);
     expect(screen.getAllByText('ENTRY').length).toBeGreaterThan(0);
     expect(screen.getAllByText('STOP LOSS').length).toBeGreaterThan(0);
     expect(screen.getAllByText('TAKE PROFIT').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('RISK PER SHARE').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('REWARD PER SHARE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('MAX DRAWDOWN').length).toBeGreaterThan(0);
     expect(screen.getAllByText('VOLATILITY').length).toBeGreaterThan(0);
     expect(screen.getAllByText('REBALANCING').length).toBeGreaterThan(0);
@@ -193,5 +238,22 @@ describe('ResultCard risk-engine contract', () => {
 
     expect(screen.getByText('PRICE DATA MISSING')).toBeTruthy();
     expect(screen.queryByText(/NaN/)).toBeNull();
+  });
+
+  it('does not render PRICE TARGET even when backend sends price_target field', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          price_target: 1200,
+          risk_per_share: 40,
+          reward_per_share: 120,
+        }}
+      />
+    );
+
+    expect(screen.queryByText('PRICE TARGET')).toBeNull();
+    expect(screen.queryByText('RISK PER SHARE')).toBeNull();
+    expect(screen.queryByText('REWARD PER SHARE')).toBeNull();
   });
 });

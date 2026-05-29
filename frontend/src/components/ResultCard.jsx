@@ -196,24 +196,36 @@ function DecisionBadge({ decision }) {
   );
 }
 
-function MetricBox({ label, value, highlight, compact = false }) {
-  if (!hasDisplayValue(value)) return null;
+function MetricBox({ label, value, highlight, compact = false, preserveSlot = false, dataTestId }) {
+  if (!preserveSlot && !hasDisplayValue(value)) return null;
+
+  const displayValue = hasDisplayValue(value) ? value : 'N/A';
+  const isEmpty = !hasDisplayValue(value);
 
   const boxPadding = compact ? 'px-3 py-2' : 'p-3';
   const labelSpacing = compact ? 'mb-1' : 'mb-1.5';
   const valueSize = compact ? 'text-xs' : 'text-base';
 
   return (
-    <div className={`border border-bloomberg-border bg-bloomberg-surface ${boxPadding}`}>
+    <div
+      data-testid={dataTestId}
+      className={`border border-bloomberg-border bg-bloomberg-surface ${boxPadding}`}
+    >
       <div
         className={`font-mono text-xs text-bloomberg-muted tracking-wider uppercase ${labelSpacing}`}
       >
         {label}
       </div>
       <div
-        className={`font-mono ${valueSize} font-semibold break-words ${highlight ? 'text-bloomberg-orange' : 'text-bloomberg-white'}`}
+        className={`font-mono ${valueSize} font-semibold break-words ${
+          isEmpty
+            ? 'text-bloomberg-muted'
+            : highlight
+              ? 'text-bloomberg-orange'
+              : 'text-bloomberg-white'
+        }`}
       >
-        {value}
+        {displayValue}
       </div>
     </div>
   );
@@ -373,64 +385,78 @@ function DataQuality({
   );
 }
 
+function getActionPlanMetrics({ result, currentPrice, riskReward }) {
+  return [
+    {
+      label: 'CURRENT PRICE',
+      value: hasDisplayValue(currentPrice) ? formatPrice(currentPrice, result.ticker) : 'N/A',
+      highlight: true,
+    },
+    {
+      label: 'ENTRY',
+      value: hasDisplayValue(result.entry_price) ? formatPrice(result.entry_price, result.ticker) : 'N/A',
+    },
+    {
+      label: 'STOP LOSS',
+      value: hasDisplayValue(result.stop_loss) ? formatPrice(result.stop_loss, result.ticker) : 'N/A',
+    },
+    {
+      label: 'TAKE PROFIT',
+      value: hasDisplayValue(result.take_profit) ? formatPrice(result.take_profit, result.ticker) : 'N/A',
+    },
+    {
+      label: 'MAX DRAWDOWN',
+      value: result.max_drawdown_estimate || 'N/A',
+    },
+    {
+      label: 'VOLATILITY',
+      value: result.volatility_level || 'N/A',
+    },
+    {
+      label: 'VOLATILITY SCORE',
+      value: hasDisplayValue(result.volatility_score) ? result.volatility_score : 'N/A',
+    },
+    {
+      label: 'REBALANCING',
+      value: result.rebalancing_action || 'N/A',
+    },
+    {
+      label: 'POSITION ACTION',
+      value: result.position_action || 'N/A',
+    },
+    {
+      label: 'NEW ENTRY ACTION',
+      value: result.new_entry_action || 'N/A',
+    },
+    {
+      label: 'POSITION SIZE HINT',
+      value: result.position_size_hint || 'N/A',
+    },
+    {
+      label: 'R/R RATIO',
+      value: riskReward || 'N/A',
+      highlight: true,
+    },
+  ];
+}
+
 function ActionableMetrics({ result, currentPrice, riskReward }) {
+  const metrics = getActionPlanMetrics({ result, currentPrice, riskReward });
+
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border">
       <SectionHeader label="ACTION PLAN" />
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
-        {hasDisplayValue(currentPrice) && (
+      <div data-testid="action-plan-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        {metrics.map((metric) => (
           <MetricBox
-            label="CURRENT PRICE"
-            value={formatPrice(currentPrice, result.ticker)}
-            highlight
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            highlight={metric.highlight}
+            preserveSlot
+            dataTestId="action-plan-metric"
           />
-        )}
-        {hasDisplayValue(result.price_target) && (
-          <MetricBox label="PRICE TARGET" value={formatPrice(result.price_target, result.ticker)} />
-        )}
-        {hasDisplayValue(result.entry_price) && (
-          <MetricBox label="ENTRY" value={formatPrice(result.entry_price, result.ticker)} />
-        )}
-        {hasDisplayValue(result.stop_loss) && (
-          <MetricBox label="STOP LOSS" value={formatPrice(result.stop_loss, result.ticker)} />
-        )}
-        {hasDisplayValue(result.take_profit) && (
-          <MetricBox label="TAKE PROFIT" value={formatPrice(result.take_profit, result.ticker)} />
-        )}
-        {hasDisplayValue(result.risk_per_share) && (
-          <MetricBox
-            label="RISK PER SHARE"
-            value={formatPrice(result.risk_per_share, result.ticker)}
-          />
-        )}
-        {hasDisplayValue(result.reward_per_share) && (
-          <MetricBox
-            label="REWARD PER SHARE"
-            value={formatPrice(result.reward_per_share, result.ticker)}
-          />
-        )}
-        {result.max_drawdown_estimate && (
-          <MetricBox label="MAX DRAWDOWN" value={result.max_drawdown_estimate} />
-        )}
-        {result.volatility_level && (
-          <MetricBox label="VOLATILITY" value={result.volatility_level} />
-        )}
-        {hasDisplayValue(result.volatility_score) && (
-          <MetricBox label="VOLATILITY SCORE" value={result.volatility_score} />
-        )}
-        {result.rebalancing_action && (
-          <MetricBox label="REBALANCING" value={result.rebalancing_action} />
-        )}
-        {result.position_action && (
-          <MetricBox label="POSITION ACTION" value={result.position_action} />
-        )}
-        {result.new_entry_action && (
-          <MetricBox label="NEW ENTRY ACTION" value={result.new_entry_action} />
-        )}
-        {result.position_size_hint && (
-          <MetricBox label="POSITION SIZE HINT" value={result.position_size_hint} />
-        )}
-        {riskReward && <MetricBox label="R/R RATIO" value={riskReward} highlight />}
+        ))}
       </div>
       {result.position_sizing_reason && (
         <p className="mt-3 font-mono text-xs text-bloomberg-muted leading-relaxed">
@@ -524,7 +550,6 @@ export default function ResultCard({ result, enableReportExport = true }) {
     result.last_close_price_as_of
   );
   const currentPriceSource = coalesceDisplayValue(result.current_price_source);
-  const priceTarget = shouldShowActionPlan ? coalesceDisplayValue(result.price_target) : null;
   const timeHorizon = formatAnalysisHorizon(result.time_horizon_months, result.time_horizon);
   const confidence = result.confidence_score ?? null;
   const allocation = result.suggested_allocation_percent ?? null;
@@ -611,9 +636,9 @@ export default function ResultCard({ result, enableReportExport = true }) {
           )}
         </div>
 
-        {/* Key metrics */}
+        {/* Key metrics — PRICE TARGET removed */}
         <div className="min-w-0 flex-shrink-0 w-full lg:w-[43rem] max-w-full">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {hasDisplayValue(currentPrice) && (
               <MetricBox
                 label="LAST PRICE"
@@ -622,9 +647,6 @@ export default function ResultCard({ result, enableReportExport = true }) {
               />
             )}
             {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
-            {priceTarget !== null && (
-              <MetricBox label="PRICE TARGET" value={formatPrice(priceTarget, result.ticker)} />
-            )}
             {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
             {confidence !== null && (
               <MetricBox
