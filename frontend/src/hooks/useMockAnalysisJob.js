@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { getMockAnalysisResponse, MOCK_PIPELINE_STEPS } from '../mockData';
-
 function makeMockAbortError() {
   const error = new Error('Analysis cancelled.');
   error.name = 'AbortError';
@@ -64,6 +62,8 @@ export function useMockAnalysisJob({ onResult, onLoading, onStatus, onAgentProgr
       callbacksRef.current.onStatus('Creating analysis job...');
       callbacksRef.current.onResult(null);
       if (callbacksRef.current.onAgentProgress) callbacksRef.current.onAgentProgress(null);
+
+      const { getMockAnalysisResponse, MOCK_PIPELINE_STEPS } = await import('../../dev/mockData');
 
       const jobId = `mock-${String(payload?.ticker || 'analysis')
         .toLowerCase()

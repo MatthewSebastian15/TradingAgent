@@ -9,7 +9,7 @@ import { formatDateTimeLabel, formatPrice } from '../utils/formatting';
 
 const HISTORY_PANEL_MAX_HEIGHT = 560;
 const HISTORY_TTL_DAYS = 30;
-const RESULT_EXPIRED_MESSAGE = 'Result expired, submit ulang';
+const RESULT_EXPIRED_MESSAGE = 'Result expired. Please submit a new analysis.';
 
 const SUPPORTED_HISTORY_MARKETS = new Set(['US', 'ID']);
 const GLOBAL_EXCHANGE_SUFFIX_RE = /\.(?!JK$)[A-Z0-9]{1,5}$/i;
@@ -343,7 +343,7 @@ export default function AnalysisWorkspace({
 
       try {
         const response = await fetch(
-          buildApiUrl(`/analysis/jobs/${encodeURIComponent(requestId)}`),
+          buildApiUrl(`/analysis/${encodeURIComponent(requestId)}`),
           {
             method: 'GET',
             headers: buildAuthHeaders(),

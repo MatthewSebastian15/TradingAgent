@@ -370,7 +370,7 @@ def test_analysis_result_endpoint_looks_up_by_request_id(client, monkeypatch):
             cache_key=_cache_key("MSFT"),
             payload={"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1},
         )
-        await job.complete({"request_id": "request-lookup", "ticker": "MSFT", "decision": "Buy"})
+        await job.complete({"request_id": "request-lookup", "ticker": "MSFT", "trade_date": "2026-05-14", "decision": "Buy"})
 
     asyncio.run(create_completed_job())
 
@@ -381,7 +381,7 @@ def test_analysis_result_endpoint_looks_up_by_request_id(client, monkeypatch):
     assert response.json()["ticker"] == "MSFT"
 
 
-def test_job_lookup_accepts_request_id_for_frontend_fallback(client, monkeypatch):
+def test_job_lookup_rejects_request_id_fallback(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     monkeypatch.setattr("routes.analysis._JOB_STORE", store)
 
@@ -398,9 +398,8 @@ def test_job_lookup_accepts_request_id_for_frontend_fallback(client, monkeypatch
 
     response = client.get("/api/analysis/jobs/request-fallback", headers={"x-session-id": "different-owner"})
 
-    assert response.status_code == 200
-    assert response.json()["request_id"] == "request-fallback"
-    assert response.json()["result"]["decision"] == "Hold"
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "BAD_REQUEST"
 
 
 def test_analysis_result_endpoint_returns_404_for_expired_result(client, monkeypatch):

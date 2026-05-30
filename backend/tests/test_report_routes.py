@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
 
@@ -145,3 +146,100 @@ def test_hold_report_does_not_render_actionable_trade_levels(client, monkeypatch
     assert ">Entry</div>" not in response.text
     assert ">Stop Loss</div>" not in response.text
     assert ">Take Profit</div>" not in response.text
+
+
+def test_html_report_supports_indonesian_utf8_content(client, monkeypatch):
+    store = _store_with_result(
+        _result(
+            request_id="rid-id-utf8",
+            ticker="BBCA.JK",
+            market="ID",
+            executive_summary="Saham Indonesia tetap kuat untuk skenario uji.",
+        )
+    )
+    monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
+
+    response = client.get("/api/analysis/jobs/rid-id-utf8/report.html")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "charset=utf-8" in response.headers["content-type"].lower()
+    assert "BBCA.JK" in response.text
+    assert "Indonesia Stocks" in response.text
+    assert "Saham Indonesia tetap kuat" in response.text
+
+
+def test_pdf_report_returns_clear_error_when_weasyprint_unavailable(monkeypatch):
+    import builtins
+
+    from services.report_service import ReportGenerationError, build_report_context, render_analysis_report_pdf
+
+    report = build_report_context(_result())
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "weasyprint":
+            raise OSError("libpango missing")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    try:
+        render_analysis_report_pdf(report)
+    except ReportGenerationError as exc:
+        assert exc.status_code == 500
+        assert exc.code == "report_generation_failed"
+        assert "PDF export is unavailable" in exc.user_message
+    else:  # pragma: no cover - pytest assertion clarity
+        raise AssertionError("Expected ReportGenerationError")
+
+
+def test_concurrent_html_report_export_for_same_request_id(client, monkeypatch):
+    store = _store_with_result(_result(request_id="rid-concurrent"))
+    monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
+
+    def fetch_report():
+        return client.get("/api/analysis/jobs/rid-concurrent/report.html")
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        responses = list(pool.map(lambda _: fetch_report(), range(8)))
+
+    assert all(response.status_code == 200 for response in responses)
+    assert all("TradingAgent Analysis Report" in response.text for response in responses)
+
+
+def test_report_html_escapes_user_supplied_fields(client, monkeypatch):
+    store = _store_with_result(
+        _result(
+            request_id="rid-xss",
+            ticker="<script>alert(1)</script>",
+            executive_summary="<script>alert(2)</script>",
+        )
+    )
+    monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
+
+    response = client.get("/api/analysis/jobs/rid-xss/report.html")
+
+    assert response.status_code == 200
+    assert "<script>" not in response.text.lower()
+    assert "&lt;script&gt;" in response.text.lower()
+
+
+def test_report_endpoint_returns_404_for_expired_or_unfinished_result(client, monkeypatch):
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
+
+    async def create_unfinished_job():
+        await store.create(
+            owner_id="route-test",
+            request_id="rid-unfinished",
+            cache_key=_cache_key("MSFT"),
+            payload={"ticker": "MSFT", "trade_date": "2026-05-26"},
+        )
+
+    asyncio.run(create_unfinished_job())
+
+    response = client.get("/api/analysis/jobs/rid-unfinished/report.html")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "report_not_found"

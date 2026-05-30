@@ -1,4 +1,4 @@
-// frontend/src/mockData.js
+// frontend/dev/mockData.js
 // Central mock source for /analysis.test.
 // Mock mode mirrors the backend analysis contract so UI, HTML preview, PDF print,
 // direct mock URLs, and history can be debugged without spending API calls.
@@ -197,7 +197,7 @@ function completeMockAnalysis(overrides = {}) {
     budget_exhausted: false,
     agents_skipped: [],
     raw_agent_state: null,
-    source: 'frontend/src/mockData.js',
+    source: 'frontend/dev/mockData.js',
     mock: true,
 
     // Legacy compatibility only. These fields must not be rendered by the UI or reports.
@@ -853,7 +853,7 @@ export function getMockAnalysisResponse(options = {}) {
   response.data_fetched_at = response.current_price_as_of || response.analysis_created_at;
   response.current_price_source = response.current_price_source || 'mock:yfinance:last_close';
   response.mock = true;
-  response.source = 'frontend/src/mockData.js';
+  response.source = 'frontend/dev/mockData.js';
 
   ensureAllowedRebalancing(response);
   applyResponseDetail(response);

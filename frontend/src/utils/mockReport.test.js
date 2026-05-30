@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MOCK_HOLD_RESPONSE, MOCK_RESPONSE } from '../mockData';
+import { MOCK_HOLD_RESPONSE, MOCK_RESPONSE } from '../../dev/mockData';
 import { buildMockActionPlanRows, buildMockReportHtml } from './mockReport';
 
 describe('mockReport', () => {

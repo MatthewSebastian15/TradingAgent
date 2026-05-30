@@ -56,3 +56,35 @@ def test_sqlite_ttl_cache_stats_redacts_full_path(tmp_path):
     cache = SQLiteTTLCache(str(tmp_path / "market_data.sqlite3"), ttl_seconds=60, max_entries=10)
 
     assert cache.stats()["path"] == "market_data.sqlite3"
+
+
+def test_sqlite_ttl_cache_sets_schema_version_on_new_database(tmp_path):
+    cache = SQLiteTTLCache(str(tmp_path / "market_data.sqlite3"), ttl_seconds=60, max_entries=10)
+
+    with sqlite3.connect(cache.db_path) as conn:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+
+    assert cache.stats()["schema_version"] == 1
+
+
+def test_sqlite_ttl_cache_migrates_existing_version_zero_database(tmp_path):
+    db_path = tmp_path / "legacy_market_data.sqlite3"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cache (
+                key TEXT PRIMARY KEY,
+                expires_at REAL NOT NULL,
+                last_accessed_at REAL NOT NULL,
+                value BLOB NOT NULL
+            )
+            """
+        )
+        conn.execute("PRAGMA user_version = 0")
+
+    cache = SQLiteTTLCache(str(db_path), ttl_seconds=60, max_entries=10)
+    cache.set("migrated", {"ok": True})
+
+    with sqlite3.connect(cache.db_path) as conn:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert cache.get("migrated") == {"ok": True}

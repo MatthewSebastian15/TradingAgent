@@ -19,7 +19,6 @@ from routes.validation import AnalysisRequest, normalize_and_validate_analysis_r
 from schemas import (
     AnalysisJobCreateResponse,
     AnalysisJobSummaryResponse,
-    AnalysisLookupResponse,
     AnalysisResponse,
     ApiStatusResponse,
     TickerValidationResponse,
@@ -333,21 +332,17 @@ async def get_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job = await _JOB_STORE.get(job_id, owner_id=lease.identifier)
         if job is None:
-            job = await _JOB_STORE.get_by_request_id(job_id)
-        if job is None:
             raise _job_not_found(job_id)
         return job.public_summary()
 
 
-@router.get("/analysis/{request_id}", response_model=AnalysisResponse | AnalysisJobSummaryResponse | AnalysisLookupResponse, response_model_exclude_none=True)
+@router.get("/analysis/{request_id}", response_model=AnalysisResponse, response_model_exclude_none=True)
 async def get_analysis_result_by_request_id(request_id: str, request: Request):
     async with limit_request(request, request_policy()):
         job = await _JOB_STORE.get_by_request_id(request_id)
-        if job is None:
+        if job is None or job.result is None:
             raise _analysis_result_not_found(request_id)
-        if job.result is not None:
-            return job.result
-        return job.public_summary()
+        return job.result
 
 
 @router.get("/analysis/jobs/{job_id}/events")
@@ -373,9 +368,15 @@ async def cancel_analysis_job(job_id: str, request: Request):
         return job.public_summary()
 
 
-@router.delete("/analysis/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
+@router.delete(
+    "/analysis/{job_id}",
+    response_model=AnalysisJobSummaryResponse,
+    response_model_exclude_none=True,
+    deprecated=True,
+    include_in_schema=False,
+)
 async def cancel_analysis_job_alias(job_id: str, request: Request):
-    """Compatibility alias for cancellation endpoint."""
+    """Deprecated compatibility alias for the canonical job cancellation endpoint."""
     return await cancel_analysis_job(job_id, request)
 
 

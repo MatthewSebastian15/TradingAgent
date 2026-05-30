@@ -10,7 +10,7 @@ import {
   MOCK_REPAIRED_RESPONSE,
   MOCK_RESPONSE,
   MOCK_SELL_RESPONSE,
-} from '../mockData';
+} from '../../dev/mockData';
 
 describe('ResultCard risk-engine contract', () => {
   afterEach(() => cleanup());

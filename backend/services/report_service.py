@@ -57,11 +57,11 @@ class UnsupportedReportMarketError(ApiError):
 
 
 class ReportGenerationError(ApiError):
-    def __init__(self, internal_message: str | None = None) -> None:
+    def __init__(self, message: str | None = None, internal_message: str | None = None) -> None:
         super().__init__(
             500,
             "report_generation_failed",
-            "Failed to generate PDF report.",
+            message or "Failed to generate PDF report.",
             internal_message=internal_message,
         )
 
@@ -150,11 +150,22 @@ def render_analysis_report_pdf(report: dict[str, Any]) -> bytes:
     html = render_analysis_report_html(report)
     try:
         from weasyprint import HTML  # noqa: PLC0415
+    except Exception as exc:  # pragma: no cover - depends on optional OS libraries
+        logger.exception("WeasyPrint is unavailable for analysis report PDF export")
+        raise ReportGenerationError(
+            "PDF export is unavailable because WeasyPrint or its system dependencies are missing. "
+            "Use HTML export or install the required OS libraries.",
+            internal_message=sanitize_message(str(exc)),
+        ) from exc
 
+    try:
         return HTML(string=html, base_url=str(BACKEND_DIR)).write_pdf()
     except Exception as exc:  # pragma: no cover - exact WeasyPrint failures depend on OS libraries
         logger.exception("Failed to generate analysis report PDF")
-        raise ReportGenerationError(sanitize_message(str(exc))) from exc
+        raise ReportGenerationError(
+            "PDF export failed while rendering the report. Use HTML export and check backend logs.",
+            internal_message=sanitize_message(str(exc)),
+        ) from exc
 
 
 def analysis_report_filename(report: dict[str, Any], extension: str) -> str:

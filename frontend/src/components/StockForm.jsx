@@ -160,6 +160,7 @@ export default function StockForm({
       ticker,
       date,
       timeHorizonMonths,
+      rounds,
       analysisDepth,
       responseDetail,
     });

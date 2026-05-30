@@ -57,8 +57,8 @@ def validate_startup_config() -> list[str]:
     if REQUIRE_API_KEY_FOR_RATE_LIMIT and not llm.api_key:
         errors.append("API_KEY is required when REQUIRE_API_KEY_FOR_RATE_LIMIT=true.")
 
-    if ANALYSIS_MODE not in {"balanced", "classic"}:
-        errors.append("ANALYSIS_MODE must be either balanced or classic.")
+    if ANALYSIS_MODE != "balanced":
+        errors.append("ANALYSIS_MODE must be balanced. The API server only supports the balanced pipeline.")
     if DEFAULT_ANALYSIS_DEPTH not in ANALYSIS_DEPTHS:
         errors.append("DEFAULT_ANALYSIS_DEPTH must be one of: fast, balanced, deep.")
 
