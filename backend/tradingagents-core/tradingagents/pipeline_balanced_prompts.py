@@ -311,6 +311,11 @@ For Buy and Sell recommendations, final trade levels must use Risk:Reward exactl
 {_horizon_instruction(time_horizon_text)}
 Set the structured time_horizon field exactly to "{time_horizon_text}".
 
+OUTPUT LENGTH REQUIREMENTS:
+- executive_summary must be 150-200 words in one paragraph. No bullet points.
+- investment_thesis must be 250-350 words as flowing paragraphs. No bullet points and no headers.
+- Do not return short placeholder text. These fields are displayed directly in the analysis dashboard and report.
+
 LAST CLOSE PRICE:
 {last_close_text}
 
