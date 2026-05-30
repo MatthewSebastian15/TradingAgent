@@ -52,3 +52,18 @@ def client() -> TestClient:
     from main import app
 
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def configure_analysis_route_dependencies_for_tests(monkeypatch):
+    from routes.analysis import AnalysisRouteDependencies
+
+    monkeypatch.setattr(
+        "routes.analysis.ROUTE_DEPS",
+        AnalysisRouteDependencies(
+            run_preflight=False,
+            enable_result_cache=False,
+            enable_cache_deduplication=True,
+        ),
+    )
+

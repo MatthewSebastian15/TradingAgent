@@ -94,6 +94,7 @@ async def get_or_start_analysis(
     factory: Callable[[], Any],
     *,
     use_cache: bool,
+    use_in_flight: bool = True,
     result_cache: AnalysisResultCache | None = None,
     in_flight: InFlightRegistry | None = None,
     cache_key_func: Callable[[AnalysisRequest], Any],
@@ -112,6 +113,9 @@ async def get_or_start_analysis(
         if use_cache:
             await result_cache.set(key, fields)
         return fields
+
+    if not use_in_flight:
+        return await cached_factory()
 
     fields, _joined = await in_flight.run(key, cached_factory)
     return fields
@@ -148,12 +152,13 @@ async def start_job(
     result_cache: AnalysisResultCache,
     run_stream_pipeline_func: Callable[..., Awaitable[dict[str, Any]]],
     response_payload_func: Callable[[str, AnalysisRequest, dict], dict],
+    use_cache: bool = True,
 ) -> None:
     progress_queue: asyncio.Queue = asyncio.Queue()
     progress_task = asyncio.create_task(forward_job_progress(job, progress_queue))
     try:
         req = AnalysisRequest(**job.payload)
-        cached = await result_cache.get(job.cache_key)
+        cached = await result_cache.get(job.cache_key) if use_cache else None
         if cached is not None:
             await job.complete(response_payload_func(job.request_id, req, cached))
             return

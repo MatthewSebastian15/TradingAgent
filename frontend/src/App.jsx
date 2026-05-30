@@ -5,11 +5,10 @@ import Analysis from './pages/Analysis';
 import NotFound from './pages/NotFound';
 import './index.css';
 
-const AnalysisMock = lazy(() => import('./pages/AnalysisMock'));
-
-// Mock UI route is available in local Vite dev mode.
-// In production builds, expose it only when VITE_ENABLE_MOCK=true.
-const ENABLE_MOCK_ROUTE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCK === 'true';
+// Mock UI route is opt-in only. Keeping it behind VITE_ENABLE_MOCK prevents
+// development/demo data from leaking into normal Docker builds.
+const ENABLE_MOCK_ROUTE = import.meta.env.VITE_ENABLE_MOCK === 'true';
+const AnalysisMock = ENABLE_MOCK_ROUTE ? lazy(() => import('./pages/AnalysisMock')) : null;
 
 function LoadingScreen() {
   return (
@@ -29,9 +28,9 @@ function App() {
           <Route path="/analysis" element={<Analysis />} />
           <Route path="/analysis/:requestId" element={<Analysis />} />
           <Route path="/analysis-live" element={<Navigate to="/analysis" replace />} />
-          {ENABLE_MOCK_ROUTE && <Route path="/analysis.test" element={<AnalysisMock />} />}
-          {ENABLE_MOCK_ROUTE && <Route path="/analysis.test/:requestId" element={<AnalysisMock />} />}
-          {ENABLE_MOCK_ROUTE && (
+          {ENABLE_MOCK_ROUTE && AnalysisMock && <Route path="/analysis.test" element={<AnalysisMock />} />}
+          {ENABLE_MOCK_ROUTE && AnalysisMock && <Route path="/analysis.test/:requestId" element={<AnalysisMock />} />}
+          {ENABLE_MOCK_ROUTE && AnalysisMock && (
             <Route path="/analysis-mock" element={<Navigate to="/analysis.test" replace />} />
           )}
           <Route path="*" element={<NotFound />} />

@@ -144,6 +144,104 @@ def test_job_create_rejects_oversized_json_body_before_storing_job(client, monke
     assert asyncio.run(store.stats())["jobs"] == 0
 
 
+def test_preflight_stays_enabled_when_pipeline_callable_is_wrapped(monkeypatch):
+    from routes import analysis
+    from routes.validation import AnalysisRequest
+
+    preflight_calls: list[str] = []
+    pipeline_calls = 0
+
+    async def fake_preflight(req: AnalysisRequest) -> None:
+        preflight_calls.append(req.ticker)
+
+    async def renamed_pipeline(req: AnalysisRequest, request_id: str, request=None):
+        nonlocal pipeline_calls
+        pipeline_calls += 1
+        return _mock_result()
+
+    async def decorated_pipeline(*args, **kwargs):
+        return await renamed_pipeline(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "routes.analysis.ROUTE_DEPS",
+        analysis.AnalysisRouteDependencies(
+            run_preflight=True,
+            enable_result_cache=False,
+            enable_cache_deduplication=False,
+        ),
+    )
+    monkeypatch.setattr("routes.analysis._preflight_market_data", fake_preflight)
+    monkeypatch.setattr("routes.analysis._run_pipeline_async", decorated_pipeline)
+
+    req = AnalysisRequest(ticker="AAPL", trade_date="2026-05-14", max_debate_rounds=1)
+    result = asyncio.run(analysis._compute_result_fields(req, "wrapped-preflight-test"))
+
+    assert preflight_calls == ["AAPL"]
+    assert pipeline_calls == 1
+    assert result["decision"] == "Buy"
+
+
+def test_route_result_cache_stays_enabled_when_pipeline_callable_is_wrapped(client, monkeypatch):
+    from routes import analysis
+
+    calls = 0
+
+    async def renamed_pipeline(req, request_id, request=None):
+        nonlocal calls
+        calls += 1
+        return _mock_result()
+
+    async def decorated_pipeline(*args, **kwargs):
+        return await renamed_pipeline(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "routes.analysis.ROUTE_DEPS",
+        analysis.AnalysisRouteDependencies(
+            run_preflight=False,
+            enable_result_cache=True,
+            enable_cache_deduplication=True,
+        ),
+    )
+    monkeypatch.setattr("routes.analysis._run_pipeline_async", decorated_pipeline)
+
+    payload = {"ticker": "CACHE1", "trade_date": "2026-05-14", "max_debate_rounds": 1}
+    headers = {"x-api-key": "wrapped-cache-test-key"}
+
+    first = client.post("/api/analyze", json=payload, headers=headers)
+    second = client.post("/api/analyze", json=payload, headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert calls == 1
+    assert second.json()["cache"] == {"hit": True, "source": "result_cache"}
+
+
+def test_route_cache_and_deduplication_can_be_disabled_explicitly():
+    from routes.analysis import _get_or_start_analysis
+    from routes.validation import AnalysisRequest
+
+    calls = 0
+
+    async def main():
+        nonlocal calls
+        req = AnalysisRequest(ticker="NOCACHE1", trade_date="2026-05-14", max_debate_rounds=1)
+
+        async def factory():
+            nonlocal calls
+            calls += 1
+            return {"decision": "Hold"}
+
+        first = await _get_or_start_analysis(req, factory, use_cache=False, use_deduplication=False)
+        second = await _get_or_start_analysis(req, factory, use_cache=False, use_deduplication=False)
+        return first, second
+
+    first, second = asyncio.run(main())
+
+    assert calls == 2
+    assert first == {"decision": "Hold"}
+    assert second == {"decision": "Hold"}
+
+
 def test_get_or_start_analysis_shares_in_flight_work():
     from routes.analysis import _get_or_start_analysis
     from routes.validation import AnalysisRequest
