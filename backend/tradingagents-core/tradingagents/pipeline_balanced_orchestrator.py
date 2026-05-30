@@ -597,19 +597,22 @@ def run_balanced_pipeline(
                 confidence_score=0.35,
                 rating=PortfolioRating.HOLD,
                 executive_summary=(
-                    f"The final rating for {ticker} is Hold because the balanced pipeline could not generate a fully reliable final model decision. "
-                    "The available market, news, and fundamental data were collected, but the final structured output needs manual review. "
-                    "The biggest risk is acting on incomplete or fallback analysis, and that risk overrides any aggressive trade idea. "
-                    "The recommended action is to avoid new exposure, keep position size at zero for new trades, and wait for a verified analysis before setting a stop-loss. "
-                    f"The selected analysis horizon is {time_horizon_text}, but this fallback result requires review before trading."
+                    f"The final rating for {ticker} is Hold because the balanced pipeline could not generate a fully reliable structured model decision, so the safest conclusion is to protect capital instead of forcing a trade. "
+                    "The system may have collected market, news, social, and fundamental inputs, but the final decision still needs manual review before any money is put at risk, especially when provider quality can vary. "
+                    "The biggest risk is acting on incomplete or fallback analysis, because a weak model response can hide missing prices, stale data, unsupported trade levels, or a broken risk/reward setup. "
+                    "The recommended action is to avoid new exposure, keep allocation at zero for new trades, do not set an artificial entry, and wait for a verified rerun before using a stop-loss or take-profit. "
+                    f"The selected horizon is {time_horizon_text}, but this fallback result should be treated as a safety message, not a real investment recommendation, until the dashboard shows clean validated output."
                 ),
                 investment_thesis=(
-                    f"{ticker} should stay on hold until the analysis can be verified. "
-                    "The system collected price, technical, news, and fundamental data, but the final model output used a fallback. "
-                    "That means the dashboard can still display a safe result, but it should not be treated as a high-confidence investment call. "
-                    "The bull case and bear case require confirmation from a clean model response. "
-                    "The safest action is to avoid adding exposure. "
-                    "A new decision should be generated once the model and data calls complete normally."
+                    f"{ticker} should stay on hold until the analysis can be verified because the final portfolio decision was produced by the fallback path, not by a clean structured model response. "
+                    "In plain terms, the application is saying that it does not have enough reliable final evidence to support a Buy or Sell call. "
+                    "The earlier pipeline may still have gathered price action, technical context, news signals, social sentiment, and fundamental information, but those inputs are not enough when the last decision layer fails or returns something incomplete. "
+                    "A good trade needs more than an interesting story; it needs a current price anchor, a clear entry, a valid stop-loss, a realistic take-profit, and a risk/reward setup that the backend can validate. "
+                    "The bull case is that the collected data may still contain useful clues once the model response is repaired or regenerated, especially if the market trend, analyst debate, and risk committee point in the same direction. "
+                    "The bear case is more important right now because acting on a fallback can create false confidence, especially if data quality flags show missing provider results, partial fundamentals, stale news, or unsupported trade levels. "
+                    "Since the bear case is about process reliability rather than market opinion, it wins the decision. "
+                    "The practical action plan is simple: open no new position, keep suggested allocation at zero, avoid averaging down or chasing momentum, and rerun the analysis after the model and data providers complete normally. "
+                    "Only after a clean result appears should the user consider entry, sizing, stop-loss, and profit-taking rules. Until then, patience is the only useful trade."
                 ),
                 suggested_allocation_percent=0.0,
                 entry_price=None,

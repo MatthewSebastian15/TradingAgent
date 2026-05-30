@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Literal
 
@@ -304,6 +305,25 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
 # ---------------------------------------------------------------------------
 
 
+_WORD_RE = re.compile(r"[^\W_]+(?:[.'-][^\W_]+)*", re.UNICODE)
+
+
+def _word_count(text: str) -> int:
+    return len(_WORD_RE.findall(text or ""))
+
+
+def _validate_word_range(field_name: str, value: str, min_words: int, max_words: int) -> str:
+    text = (value or "").strip()
+    count = _word_count(text)
+
+    if count < min_words or count > max_words:
+        raise ValueError(
+            f"{field_name} must be {min_words}-{max_words} words; got {count} words."
+        )
+
+    return text
+
+
 class PortfolioDecision(BaseModel):
     confidence_score: float = Field(
         ge=0.0,
@@ -318,53 +338,35 @@ class PortfolioDecision(BaseModel):
     )
     executive_summary: str = Field(
         description=(
-            "A single paragraph of EXACTLY 5 sentences summarizing the final decision. "
-            "Sentence 1: state the rating and the single strongest reason for it. "
-            "Sentence 2: cite the most important quantitative data point that supports this view (revenue growth, margin, market share, etc). "
-            "Sentence 3: name the biggest risk or bear argument and explain in plain language why it does NOT override the bull case (or does, if Sell). "
-            "Sentence 4: describe the recommended action, entry strategy, position sizing, and stop-loss level. "
-            "Sentence 5: state the expected time horizon and what specific catalyst will confirm or invalidate the thesis. "
+            "A single paragraph of 150-200 words summarizing the final decision. "
+            "State the rating, strongest reason, key supporting data, biggest risk, "
+            "recommended action, entry strategy, position sizing, stop-loss context, "
+            "time horizon, and the catalyst that will confirm or invalidate the thesis. "
             "Write in plain, everyday language. Avoid jargon. No bullet points."
         ),
     )
 
     @field_validator("executive_summary")
     @classmethod
-    def executive_summary_min_sentences(cls, v: str) -> str:
-        """Reject summaries with fewer than 3 sentences.
-
-        The schema asks for exactly 5, but enforcing a hard minimum of 3
-        catches cases where the LLM returns a single-sentence stub while
-        still allowing slight variation without breaking the pipeline.
-        Sentences are split on period/exclamation/question mark followed
-        by a space or end-of-string, so abbreviations inside a sentence
-        rarely trigger false splits.
-        """
-        import re
-
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])(?:\s|$)", v) if s.strip()]
-        if len(sentences) < 3:
-            raise ValueError(
-                f"executive_summary must contain at least 3 sentences; got {len(sentences)}. "
-                "Expand the summary to meet the minimum requirement."
-            )
-        return v
+    def executive_summary_word_range(cls, v: str) -> str:
+        return _validate_word_range("executive_summary", v, 150, 200)
 
     investment_thesis: str = Field(
         description=(
             "A thorough, easy-to-understand explanation of WHY this trade makes sense. "
-            "Write as if explaining to a smart friend who does not work in finance. "
-            "Structure the text as flowing paragraphs (no bullet points, no headers). "
-            "Cover ALL of the following in order: "
-            "(1) What does this company actually do and why does it matter right now? "
-            "(2) What is the single biggest tailwind pushing the stock higher (or lower)? "
-            "(3) What do the hard numbers say? Quote at least three specific metrics from the analysts' reports. "
-            "(4) What is the bear case and how serious is it really? "
-            "(5) Why does the bull case or bear case win overall? "
-            "(6) What is the specific action plan: when to enter, how much to allocate, where to set the stop-loss, and when to take profit? "
-            "Minimum length: 6 sentences. Use simple words."
+            "Write 250-350 words as flowing paragraphs with no bullet points and no headers. "
+            "Explain what the company does, why it matters now, the biggest tailwind or headwind, "
+            "at least three specific metrics from the analysts' reports, the bear case, "
+            "why the bull or bear case wins overall, and the full action plan including entry, "
+            "allocation, stop-loss, and take-profit. Use simple words."
         ),
     )
+
+    @field_validator("investment_thesis")
+    @classmethod
+    def investment_thesis_word_range(cls, v: str) -> str:
+        return _validate_word_range("investment_thesis", v, 250, 350)
+
     suggested_allocation_percent: float | None = Field(
         default=None,
         ge=0.0,
