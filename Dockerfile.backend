@@ -13,13 +13,14 @@ RUN apt-get update \
 
 RUN pip install --upgrade pip setuptools wheel
 
-COPY backend/requirements.txt /build/requirements.txt
+COPY backend/requirements.txt /build/backend/requirements.txt
+COPY backend/tradingagents-core /build/backend/tradingagents-core
 
-RUN pip wheel --wheel-dir=/wheels -r /build/requirements.txt
+WORKDIR /build/backend
 
-COPY backend/tradingagents-core /build/tradingagents-core
-
-RUN pip wheel --wheel-dir=/wheels /build/tradingagents-core
+RUN grep -vE '^-e[[:space:]]+\./tradingagents-core[[:space:]]*$' requirements.txt > /build/requirements-api.txt \
+    && pip wheel --wheel-dir=/wheels -r /build/requirements-api.txt \
+    && pip wheel --wheel-dir=/wheels ./tradingagents-core
 
 
 FROM python:3.11-slim AS runtime
@@ -46,16 +47,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /wheels /wheels
-COPY backend/requirements.txt /app/backend/requirements.txt
-
-RUN pip install --no-index --find-links=/wheels -r /app/backend/requirements.txt \
-    && pip install --no-index --find-links=/wheels tradingagents \
-    && rm -rf /wheels
-
-COPY backend/tradingagents-core /app/backend/tradingagents-core
 COPY backend /app/backend
 
 WORKDIR /app/backend
+
+RUN pip install --no-index --find-links=/wheels -r requirements.txt \
+    && rm -rf /wheels
 
 EXPOSE 8000
 

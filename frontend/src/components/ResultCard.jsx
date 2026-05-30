@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import ExportReportButtons from './ExportReportButtons';
+import MetricBox from './results/MetricBox';
+import NoticeBox from './results/NoticeBox';
+import SectionHeader from './results/SectionHeader';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
@@ -198,64 +202,9 @@ function DecisionBadge({ decision }) {
   );
 }
 
-function MetricBox({ label, value, highlight, compact = false, preserveSlot = false, dataTestId }) {
-  if (!preserveSlot && !hasDisplayValue(value)) return null;
-
-  const displayValue = hasDisplayValue(value) ? value : 'N/A';
-  const isEmpty = !hasDisplayValue(value);
-
-  const boxPadding = compact ? 'px-3 py-2' : 'p-3';
-  const labelSpacing = compact ? 'mb-1' : 'mb-1.5';
-  const valueSize = compact ? 'text-xs' : 'text-base';
-
-  return (
-    <div
-      data-testid={dataTestId}
-      className={`border border-bloomberg-border bg-bloomberg-surface ${boxPadding}`}
-    >
-      <div
-        className={`font-mono text-xs text-bloomberg-muted tracking-wider uppercase ${labelSpacing}`}
-      >
-        {label}
-      </div>
-      <div
-        className={`font-mono ${valueSize} font-semibold break-words ${
-          isEmpty
-            ? 'text-bloomberg-muted'
-            : highlight
-              ? 'text-bloomberg-orange'
-              : 'text-bloomberg-white'
-        }`}
-      >
-        {displayValue}
-      </div>
-    </div>
-  );
-}
-
-function SectionHeader({ label }) {
-  return (
-    <div className="flex items-center gap-3 mb-3">
-      <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
-        {label}
-      </span>
-      <div className="flex-1 h-px bg-bloomberg-border" />
-    </div>
-  );
-}
-
-function NoticeBox({ title, children, tone = 'amber' }) {
-  const classes =
-    tone === 'red'
-      ? 'border-bloomberg-red bg-bloomberg-red-dim text-bloomberg-red'
-      : 'border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber';
-  return (
-    <div className={`border px-3 py-2 ${classes}`}>
-      <div className="font-mono text-xs font-semibold tracking-wider uppercase">{title}</div>
-      {children && <div className="mt-1 font-mono text-xs leading-relaxed">{children}</div>}
-    </div>
-  );
-}
+DecisionBadge.propTypes = {
+  decision: PropTypes.string,
+};
 
 function getWarningPriority(warning) {
   if (!warning) return 99;
@@ -399,6 +348,15 @@ function DataQuality({
   );
 }
 
+DataQuality.propTypes = {
+  dq: PropTypes.object,
+  validationWarnings: PropTypes.array,
+  validationWarningDetails: PropTypes.array,
+  requestWarnings: PropTypes.array,
+  tradePlanValid: PropTypes.bool,
+  isActionable: PropTypes.bool,
+};
+
 function getActionPlanMetrics({ result, currentPrice, riskReward }) {
   return [
     {
@@ -481,6 +439,12 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
   );
 }
 
+ActionableMetrics.propTypes = {
+  result: PropTypes.object.isRequired,
+  currentPrice: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  riskReward: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+};
+
 function HoldMetrics({ result, currentPrice }) {
   const hasHoldMetrics =
     hasDisplayValue(currentPrice) ||
@@ -526,6 +490,11 @@ function HoldMetrics({ result, currentPrice }) {
     </div>
   );
 }
+
+HoldMetrics.propTypes = {
+  result: PropTypes.object.isRequired,
+  currentPrice: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+};
 
 export default function ResultCard({ result, enableReportExport = true, mockReport = false }) {
   const [thesisExpanded, setThesisExpanded] = useState(false);
@@ -852,3 +821,10 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
     </div>
   );
 }
+
+
+ResultCard.propTypes = {
+  result: PropTypes.object,
+  enableReportExport: PropTypes.bool,
+  mockReport: PropTypes.bool,
+};

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import PropTypes from 'prop-types';
 import { useNavigate, useParams } from 'react-router-dom';
 import AgentLog from './AgentLog';
 import Navbar from './Navbar';
@@ -194,6 +195,12 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
   );
 }
 
+HistoryPanel.propTypes = {
+  currentTicker: PropTypes.string,
+  historyKey: PropTypes.string.isRequired,
+  onSelect: PropTypes.func.isRequired,
+};
+
 function StatusBar({ loading, status }) {
   if (!loading) return null;
   return (
@@ -205,6 +212,11 @@ function StatusBar({ loading, status }) {
     </div>
   );
 }
+
+StatusBar.propTypes = {
+  loading: PropTypes.bool.isRequired,
+  status: PropTypes.string,
+};
 
 function unwrapJobLookupPayload(payload) {
   if (!payload) return null;
@@ -458,3 +470,15 @@ export default function AnalysisWorkspace({
     </div>
   );
 }
+
+
+AnalysisWorkspace.propTypes = {
+  FormComponent: PropTypes.elementType.isRequired,
+  historyKey: PropTypes.string.isRequired,
+  emptyDescription: PropTypes.string.isRequired,
+  resultPathBase: PropTypes.string,
+  lookupResult: PropTypes.func,
+  enableReportExport: PropTypes.bool,
+  lookupResultFirst: PropTypes.bool,
+  mockReportExport: PropTypes.bool,
+};

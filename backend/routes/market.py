@@ -6,10 +6,9 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import JSONResponse
-
 from rate_limiter import limit_request, request_policy
 from routes.validation import normalize_ticker_symbol
+from schemas import MarketQuotesResponse
 
 logger = logging.getLogger(__name__)
 
@@ -72,14 +71,14 @@ async def _fetch_quotes(symbols: list[str]) -> list[dict]:
     return await asyncio.gather(*tasks)
 
 
-@router.get("/market/quotes", tags=["market"])
+@router.get("/market/quotes", tags=["market"], response_model=MarketQuotesResponse)
 async def get_market_quotes(
     request: Request,
     symbols: str = Query(
         default=",".join(_DEFAULT_TICKERS),
         description="Comma-separated list of ticker symbols, e.g. BBCA.JK,NVDA",
     ),
-) -> JSONResponse:
+) -> dict:
     """Return latest price-change data for a list of ticker symbols.
 
     Fetches data from yfinance using ``fast_info`` (single HTTP call per
@@ -94,4 +93,4 @@ async def get_market_quotes(
 
         quotes = await _fetch_quotes(capped)
 
-    return JSONResponse({"quotes": quotes})
+    return {"quotes": quotes}
