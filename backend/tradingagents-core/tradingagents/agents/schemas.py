@@ -71,6 +71,36 @@ class DebateArgument(BaseModel):
     )
 
 
+    @field_validator("risk_flags", mode="before")
+    @classmethod
+    def clamp_risk_flags(cls, value):
+        """Normalize risk flags before max_length validation is applied."""
+        if value is None:
+            return []
+
+        if isinstance(value, str):
+            value = [value]
+
+        if not isinstance(value, list):
+            return []
+
+        cleaned: list[str] = []
+        seen: set[str] = set()
+
+        for item in value:
+            text = str(item).strip()
+            if not text or text in seen:
+                continue
+
+            seen.add(text)
+            cleaned.append(text)
+
+            if len(cleaned) >= 5:
+                break
+
+        return cleaned
+
+
 def render_debate_argument(argument: DebateArgument, label: str) -> str:
     evidence = "\n".join(f"- {item}" for item in argument.evidence)
     risks = "\n".join(f"- {item}" for item in argument.risk_flags)
