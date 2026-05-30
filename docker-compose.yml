@@ -17,6 +17,8 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       XDG_CACHE_HOME: /root/.tradingagents/cache
       YFINANCE_CACHE_DIR: /root/.tradingagents/cache/py-yfinance
+      ANALYSIS_JOB_CACHE_DB_PATH: /root/.tradingagents/cache/analysis_jobs.sqlite3
+      DATA_CACHE_DB_PATH: /root/.tradingagents/cache/market_data.sqlite3
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -44,7 +46,7 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         VITE_API_BASE_URL: /api
-        VITE_ENABLE_MOCK: "false"
+        VITE_ENABLE_MOCK: "true"
     container_name: tradingagent-frontend
     dns:
       - 1.1.1.1

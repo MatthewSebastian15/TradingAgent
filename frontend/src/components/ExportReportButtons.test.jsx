@@ -15,6 +15,16 @@ function mockPdfResponse() {
   });
 }
 
+function mockReportNotFoundResponse() {
+  return new Response(
+    JSON.stringify({ error: { code: 'report_not_found', message: 'Analysis result was not found or has expired.' } }),
+    {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
+}
+
 describe('ExportReportButtons', () => {
   afterEach(() => {
     cleanup();
@@ -22,17 +32,48 @@ describe('ExportReportButtons', () => {
     vi.unstubAllGlobals();
   });
 
-  it('opens backend HTML report URL in real mode', () => {
-    const openMock = vi.spyOn(window, 'open').mockImplementation(() => null);
+  it('opens backend HTML report from a fetched blob in real mode', async () => {
+    const fetchMock = vi.fn(async () => new Response('<html><body>Report</body></html>', { status: 200 }));
+    const openMock = vi.fn(() => ({}));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(window, 'open').mockImplementation(openMock);
+    if (!URL.createObjectURL) URL.createObjectURL = vi.fn();
+    if (!URL.revokeObjectURL) URL.revokeObjectURL = vi.fn();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:backend-report');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
     render(<ExportReportButtons requestId="rid/export 1" />);
     fireEvent.click(screen.getByText('PREVIEW HTML'));
 
-    expect(openMock).toHaveBeenCalledWith(
-      '/api/analysis/jobs/rid%2Fexport%201/report.html',
-      '_blank',
-      'noopener,noreferrer'
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/analysis/jobs/rid%2Fexport%201/report.html');
+    expect(fetchMock.mock.calls[0][1].headers.Accept).toBe('text/html');
+    await waitFor(() =>
+      expect(openMock).toHaveBeenCalledWith('blob:backend-report', '_blank', 'noopener,noreferrer')
     );
+  });
+
+  it('falls back to payload HTML preview when the request_id report is expired', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockReportNotFoundResponse())
+      .mockResolvedValueOnce(new Response('<html><body>Fallback Report</body></html>', { status: 200 }));
+    const openMock = vi.fn(() => ({}));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(window, 'open').mockImplementation(openMock);
+    if (!URL.createObjectURL) URL.createObjectURL = vi.fn();
+    if (!URL.revokeObjectURL) URL.revokeObjectURL = vi.fn();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fallback-report');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    render(<ExportReportButtons requestId="expired-request" result={MOCK_RESPONSE} />);
+    fireEvent.click(screen.getByText('PREVIEW HTML'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/report.html');
+    expect(fetchMock.mock.calls[1][1].method).toBe('POST');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).ticker).toBe(MOCK_RESPONSE.ticker);
+    expect(openMock).toHaveBeenCalledWith('blob:fallback-report', '_blank', 'noopener,noreferrer');
   });
 
   it('downloads PDF through the report endpoint in real mode', async () => {
@@ -50,6 +91,24 @@ describe('ExportReportButtons', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock.mock.calls[0][0]).toBe('/api/analysis/jobs/rid-report-1/report.pdf');
     expect(fetchMock.mock.calls[0][1].headers.Accept).toBe('application/pdf');
+  });
+
+  it('falls back to payload PDF export when the request_id report is expired', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(mockReportNotFoundResponse()).mockResolvedValueOnce(mockPdfResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    if (!URL.createObjectURL) URL.createObjectURL = vi.fn();
+    if (!URL.revokeObjectURL) URL.revokeObjectURL = vi.fn();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fallback-pdf');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    render(<ExportReportButtons requestId="expired-request" result={MOCK_RESPONSE} />);
+    fireEvent.click(screen.getByText('EXPORT PDF'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/report.pdf');
+    expect(fetchMock.mock.calls[1][1].method).toBe('POST');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).ticker).toBe(MOCK_RESPONSE.ticker);
   });
 
   it('opens mock HTML report without backend report URL', () => {

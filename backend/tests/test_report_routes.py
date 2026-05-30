@@ -109,6 +109,28 @@ def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(clien
     assert response.content.startswith(b"%PDF")
 
 
+
+
+def test_post_html_report_renders_from_payload(client):
+    response = client.post("/api/analysis/report.html", json=_result())
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "TradingAgent Analysis Report" in response.text
+    assert "NVDA" in response.text
+
+
+def test_post_pdf_report_renders_from_payload(client, monkeypatch):
+    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+
+    response = client.post("/api/analysis/report.pdf", json=_result())
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF")
+
+
 def test_report_endpoint_returns_404_for_missing_request_id(client):
     response = client.get("/api/analysis/jobs/missing-request/report.html")
 
