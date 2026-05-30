@@ -13,11 +13,11 @@ export default function ExportReportButtons({
 
   if (!requestId) return null;
 
-  function handlePreviewHtml() {
+  async function handlePreviewHtml() {
     if (disabled) return;
     setError('');
     try {
-      openAnalysisHtmlReport({ requestId, result, mock: mockReport });
+      await openAnalysisHtmlReport({ requestId, result, mock: mockReport });
     } catch (ex) {
       setError(ex.message || 'Failed to open HTML report.');
     }

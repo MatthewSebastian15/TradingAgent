@@ -127,17 +127,23 @@ MAX_CONCURRENT_LLM_CALLS = 3
 # Cache
 CACHE_TTL_SECONDS = env_int("CACHE_TTL_SECONDS", 900, min_value=1)
 CACHE_MAX_ENTRIES = env_int("CACHE_MAX_ENTRIES", 512, min_value=1)
-ANALYSIS_RESULT_CACHE_TTL_SECONDS = 60 * 60 * 8
-ANALYSIS_RESULT_CACHE_MAX_ENTRIES = 256
-ANALYSIS_JOB_TTL_SECONDS = 60 * 60 * 8
-ANALYSIS_JOB_MAX_ENTRIES = 256
+ANALYSIS_RESULT_CACHE_TTL_SECONDS = env_int("ANALYSIS_RESULT_CACHE_TTL_SECONDS", 60 * 60 * 8, min_value=60)
+ANALYSIS_RESULT_CACHE_MAX_ENTRIES = env_int("ANALYSIS_RESULT_CACHE_MAX_ENTRIES", 256, min_value=1)
+ANALYSIS_JOB_TTL_SECONDS = env_int("ANALYSIS_JOB_TTL_SECONDS", 60 * 60 * 8, min_value=60)
+ANALYSIS_JOB_MAX_ENTRIES = env_int("ANALYSIS_JOB_MAX_ENTRIES", 256, min_value=1)
 ANALYSIS_JOB_MAX_ACTIVE = min(env_int("ANALYSIS_JOB_MAX_ACTIVE", 32, min_value=1), ANALYSIS_JOB_MAX_ENTRIES)
 ANALYSIS_JOB_EVENT_REPLAY_LIMIT = env_int("ANALYSIS_JOB_EVENT_REPLAY_LIMIT", 500, min_value=1)
-ANALYSIS_JOB_CACHE_DB_PATH = str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3")
+ANALYSIS_JOB_CACHE_DB_PATH = env(
+    "ANALYSIS_JOB_CACHE_DB_PATH",
+    str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3"),
+)
 DATA_CACHE_BACKEND = "sqlite"
-DATA_CACHE_DB_PATH = str(BASE_DIR / ".cache" / "market_data.sqlite3")
-DATA_CACHE_TTL_SECONDS = CACHE_TTL_SECONDS
-DATA_CACHE_MAX_ENTRIES = CACHE_MAX_ENTRIES
+DATA_CACHE_DB_PATH = env(
+    "DATA_CACHE_DB_PATH",
+    str(BASE_DIR / ".cache" / "market_data.sqlite3"),
+)
+DATA_CACHE_TTL_SECONDS = env_int("DATA_CACHE_TTL_SECONDS", CACHE_TTL_SECONDS, min_value=1)
+DATA_CACHE_MAX_ENTRIES = env_int("DATA_CACHE_MAX_ENTRIES", CACHE_MAX_ENTRIES, min_value=1)
 
 # Market-data vendor order. The router tries vendors from left to right and
 # falls back when a provider errors or returns an empty/unusable payload.
