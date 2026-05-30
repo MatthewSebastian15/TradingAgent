@@ -58,6 +58,25 @@ from tradingagents.trade_levels import normalize_trade_levels
 logger = logging.getLogger(__name__)
 
 
+def _limit_unique_text_items(items: list[str], limit: int = 5) -> list[str]:
+    """Return a de-duplicated, trimmed list that is safe for bounded schemas."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+
+    for item in items or []:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+
+        seen.add(text)
+        cleaned.append(text)
+
+        if len(cleaned) >= limit:
+            break
+
+    return cleaned
+
+
 def _build_initial_analyst_reports(
     ticker: str,
     trade_date: str,
@@ -238,9 +257,10 @@ def run_balanced_pipeline(
             thesis=f"Fast mode keeps downside assumptions conservative for {ticker} because no separate bear debate was run.",
             evidence=["Risk is inferred from analyst report risk sections.", "Data quality warnings are preserved."],
             counterargument="Balanced/deep mode should be used before high-conviction trades.",
-            risk_flags=list(dict.fromkeys(market_report.risks + news_social_report.risks + fundamentals_report.risks))[
-                :6
-            ],
+            risk_flags=_limit_unique_text_items(
+                market_report.risks + news_social_report.risks + fundamentals_report.risks,
+                limit=5,
+            ),
             confidence=0.45,
             consensus_signal=False,
         )
