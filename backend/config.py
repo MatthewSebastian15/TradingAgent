@@ -43,6 +43,7 @@ class _BackendSettingsShim:
     max_risk_discuss_rounds = MAX_RISK_DISCUSS_ROUNDS
     analysis_mode = ANALYSIS_MODE
     default_analysis_depth = DEFAULT_ANALYSIS_DEPTH
+    analysis_depth_config = ANALYSIS_DEPTH_CONFIG
     analysis_depth_llm_budgets = ANALYSIS_DEPTH_LLM_BUDGETS
     max_gemini_calls = MAX_GEMINI_CALLS
     request_rate_limit_per_minute = REQUEST_RATE_LIMIT_PER_MINUTE

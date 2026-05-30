@@ -16,6 +16,14 @@ from rate_limiter import limit_request, request_policy, stream_policy
 from routes import jobs, pipeline_runner, serializers, sse
 from routes.sse import EventSourceResponse
 from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
+from schemas import (
+    AnalysisJobCreateResponse,
+    AnalysisJobSummaryResponse,
+    AnalysisLookupResponse,
+    AnalysisResponse,
+    ApiStatusResponse,
+    TickerValidationResponse,
+)
 
 router = APIRouter()
 
@@ -275,7 +283,7 @@ async def analyze_stream(req: AnalysisRequest, request: Request):
     return EventSourceResponse(_stream_progress_and_result(request, req, request_id, rate_limit_lease))
 
 
-@router.post("/analyze")
+@router.post("/analyze", response_model=AnalysisResponse, response_model_exclude_none=True)
 async def analyze(req: AnalysisRequest, request: Request):
     """Standard JSON endpoint with final-result cache and in-flight de-duplication."""
     req = normalize_and_validate_analysis_request(req)
@@ -284,7 +292,7 @@ async def analyze(req: AnalysisRequest, request: Request):
     return await _execute_analysis(request, req, request_id, request_policy())
 
 
-@router.post("/analysis/jobs")
+@router.post("/analysis/jobs", response_model=AnalysisJobCreateResponse)
 async def create_analysis_job(req: AnalysisRequest, request: Request):
     """Create a cancellable analysis job and return its job_id immediately."""
     req = normalize_and_validate_analysis_request(req)
@@ -320,7 +328,7 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
     }
 
 
-@router.get("/analysis/jobs/{job_id}")
+@router.get("/analysis/jobs/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
 async def get_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job = await _JOB_STORE.get(job_id, owner_id=lease.identifier)
@@ -331,7 +339,7 @@ async def get_analysis_job(job_id: str, request: Request):
         return job.public_summary()
 
 
-@router.get("/analysis/{request_id}")
+@router.get("/analysis/{request_id}", response_model=AnalysisResponse | AnalysisJobSummaryResponse | AnalysisLookupResponse, response_model_exclude_none=True)
 async def get_analysis_result_by_request_id(request_id: str, request: Request):
     async with limit_request(request, request_policy()):
         job = await _JOB_STORE.get_by_request_id(request_id)
@@ -356,7 +364,7 @@ async def analysis_job_events(job_id: str, request: Request):
     return EventSourceResponse(_stream_job_events_with_lease(request, job, rate_limit_lease))
 
 
-@router.delete("/analysis/jobs/{job_id}")
+@router.delete("/analysis/jobs/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
 async def cancel_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job = await _JOB_STORE.cancel(job_id, owner_id=lease.identifier)
@@ -365,13 +373,13 @@ async def cancel_analysis_job(job_id: str, request: Request):
         return job.public_summary()
 
 
-@router.delete("/analysis/{job_id}")
+@router.delete("/analysis/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
 async def cancel_analysis_job_alias(job_id: str, request: Request):
     """Compatibility alias for cancellation endpoint."""
     return await cancel_analysis_job(job_id, request)
 
 
-@router.get("/ticker/validate")
+@router.get("/ticker/validate", response_model=TickerValidationResponse)
 async def validate_ticker(ticker: str, trade_date: str, request: Request, market: str | None = None):
     req = normalize_and_validate_analysis_request(
         AnalysisRequest(
@@ -393,7 +401,7 @@ async def validate_ticker(ticker: str, trade_date: str, request: Request, market
     }
 
 
-@router.get("/status")
+@router.get("/status", response_model=ApiStatusResponse)
 async def api_status(request: Request):
     async with limit_request(request, request_policy()):
         return await _api_status_payload()

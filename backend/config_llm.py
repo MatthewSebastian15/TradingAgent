@@ -8,6 +8,7 @@ from typing import Any
 from tradingagents.llm_clients import model_catalog as llm_model_catalog
 
 from config_defaults import (
+    ANALYSIS_DEPTH_CONFIG,
     ANALYSIS_DEPTH_LLM_BUDGETS,
     ANALYSIS_DEPTHS,
     ANALYSIS_MODE,
@@ -72,6 +73,7 @@ class LLMSettings:
         analysis_depth: str = DEFAULT_ANALYSIS_DEPTH,
         response_detail: str = "full",
     ) -> dict[str, Any]:
+        depth_config = ANALYSIS_DEPTH_CONFIG.get(analysis_depth, ANALYSIS_DEPTH_CONFIG[DEFAULT_ANALYSIS_DEPTH])
         retries = LLM_RETRIES_BY_DEPTH.get(analysis_depth, LLM_MAX_RETRIES)
         budget = ANALYSIS_DEPTH_LLM_BUDGETS.get(analysis_depth, MAX_GEMINI_CALLS)
         return {
@@ -104,6 +106,9 @@ class LLMSettings:
             "max_risk_discuss_rounds": MAX_RISK_DISCUSS_ROUNDS,
             "analysis_mode": ANALYSIS_MODE,
             "analysis_depth": analysis_depth,
+            "analysis_depth_config": dict(depth_config),
+            "analysis_depth_debate_rounds": depth_config["debate_rounds"],
+            "analysis_depth_risk_rounds": depth_config["risk_rounds"],
             "response_detail": response_detail,
             "max_gemini_calls": budget,
         }
@@ -128,7 +133,12 @@ def build_tradingagents_config(
 
     config = DEFAULT_CONFIG.copy()
     config.update(llm.tradingagents_overrides(analysis_depth=depth, response_detail=response_detail))
-    if max_debate_rounds is not None:
-        config["max_debate_rounds"] = max_debate_rounds
-        config["max_risk_discuss_rounds"] = max_debate_rounds
+    depth_config = config.get("analysis_depth_config", {})
+    depth_debate_rounds = int(depth_config.get("debate_rounds") or 1)
+    depth_risk_rounds = int(depth_config.get("risk_rounds") or 1)
+    requested_rounds = int(max_debate_rounds) if max_debate_rounds is not None else DEFAULT_MAX_DEBATE_ROUNDS
+    effective_rounds = max(requested_rounds, depth_debate_rounds) if depth == "deep" else requested_rounds
+    config["max_debate_rounds"] = effective_rounds
+    config["max_risk_discuss_rounds"] = max(effective_rounds, depth_risk_rounds) if depth == "deep" else effective_rounds
+    config["requested_max_debate_rounds"] = requested_rounds
     return config

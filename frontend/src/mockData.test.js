@@ -30,6 +30,7 @@ describe('mockData', () => {
       'mock-missing-price',
       'mock-meta-repaired-buy',
       'mock-bbca-id-buy',
+      'mock-unvr-news-unavailable-sell',
     ]);
   });
 

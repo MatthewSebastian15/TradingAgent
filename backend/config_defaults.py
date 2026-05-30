@@ -71,12 +71,31 @@ DEFAULT_ANALYSIS_DEPTH = "balanced"
 ANALYSIS_DEPTHS: tuple[str, ...] = ("fast", "balanced", "deep")
 RESPONSE_DETAILS: tuple[str, ...] = ("summary", "full", "debug")
 
-# Actual LLM call budgets enforced inside the balanced pipeline.
-# Fast mode skips the debate/risk committee and keeps a final PM call.
+# Analysis depth controls both the LLM budget and the intended debate depth.
+# Fast skips debate/risk committee, balanced runs the standard flow, and deep
+# has enough budget for extra debate/risk passes when the pipeline supports them.
+ANALYSIS_DEPTH_CONFIG: dict[str, dict[str, int]] = {
+    "fast": {
+        "llm_budget": 6,
+        "llm_retries": 1,
+        "debate_rounds": 1,
+        "risk_rounds": 1,
+    },
+    "balanced": {
+        "llm_budget": 9,
+        "llm_retries": 2,
+        "debate_rounds": 2,
+        "risk_rounds": 2,
+    },
+    "deep": {
+        "llm_budget": 12,
+        "llm_retries": 3,
+        "debate_rounds": 3,
+        "risk_rounds": 3,
+    },
+}
 ANALYSIS_DEPTH_LLM_BUDGETS: dict[str, int] = {
-    "fast": 6,
-    "balanced": 9,
-    "deep": 9,
+    depth: cfg["llm_budget"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()
 }
 MAX_GEMINI_CALLS = ANALYSIS_DEPTH_LLM_BUDGETS[DEFAULT_ANALYSIS_DEPTH]
 
@@ -98,9 +117,7 @@ LLM_TIMEOUT_SECONDS = env_int("LLM_TIMEOUT_SECONDS", 60, min_value=1)
 LLM_MAX_RETRIES = env_int("LLM_MAX_RETRIES", 2, min_value=1)
 PROVIDER_SDK_MAX_RETRIES = env_int("PROVIDER_SDK_MAX_RETRIES", 0, min_value=0)
 LLM_RETRIES_BY_DEPTH: dict[str, int] = {
-    "fast": 1,
-    "balanced": 2,
-    "deep": 3,
+    depth: cfg["llm_retries"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()
 }
 LLM_RETRY_BASE_DELAY = 1.5
 LLM_RETRY_MAX_DELAY = 30
