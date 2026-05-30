@@ -248,7 +248,7 @@ describe('AnalysisWorkspace history storage', () => {
 
     expect(await screen.findByText('MSFT')).toBeTruthy();
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/analysis/jobs/request-backend'),
+      expect.stringContaining('/analysis/request-backend'),
       expect.any(Object)
     );
     expect(localStorage.getItem('analysis-history-test:result:request-backend')).toBeTruthy();
@@ -273,7 +273,7 @@ describe('AnalysisWorkspace history storage', () => {
 
     renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/request-expired');
 
-    expect(await screen.findByText('Result expired, submit ulang')).toBeTruthy();
+    expect(await screen.findByText('Result expired. Please submit a new analysis.')).toBeTruthy();
   });
 
   it('removes global recent analyses from localStorage history', () => {

@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+SCHEMA_VERSION = 1
+
 _WRITE_LOCKS: dict[Path, threading.RLock] = {}
 _WRITE_LOCKS_GUARD = threading.Lock()
 
@@ -78,12 +80,14 @@ class SQLiteTTLCache:
     def stats(self) -> dict[str, int | str]:
         with self._connect() as conn:
             count = conn.execute("SELECT COUNT(*) FROM cache WHERE expires_at > ?", (time.time(),)).fetchone()[0]
+            schema_version = self._get_schema_version(conn)
         return {
             "backend": "sqlite",
             "path": self.db_path.name,
             "entries": int(count),
             "ttl_seconds": int(self.ttl_seconds),
             "max_entries": int(self.max_entries),
+            "schema_version": int(schema_version),
         }
 
     def _connect(self) -> sqlite3.Connection:
@@ -94,6 +98,16 @@ class SQLiteTTLCache:
     def _ensure_schema(self) -> None:
         with self._write_lock, self._connect() as conn:
             conn.execute("PRAGMA journal_mode = WAL")
+            self._migrate(conn)
+
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        version = self._get_schema_version(conn)
+        if version > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"SQLite cache schema version {version} is newer than supported version {SCHEMA_VERSION}."
+            )
+
+        if version < 1:
             conn.execute(
                 """
                     CREATE TABLE IF NOT EXISTS cache (
@@ -106,6 +120,15 @@ class SQLiteTTLCache:
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache (expires_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_last_accessed_at ON cache (last_accessed_at)")
+            self._set_schema_version(conn, 1)
+
+    @staticmethod
+    def _get_schema_version(conn: sqlite3.Connection) -> int:
+        return int(conn.execute("PRAGMA user_version").fetchone()[0])
+
+    @staticmethod
+    def _set_schema_version(conn: sqlite3.Connection, version: int) -> None:
+        conn.execute(f"PRAGMA user_version = {int(version)}")
 
     def _evict(self, conn: sqlite3.Connection) -> None:
         now = time.time()

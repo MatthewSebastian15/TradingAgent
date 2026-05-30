@@ -1,4 +1,6 @@
 export const DEFAULT_DEBATE_ROUNDS = 3;
+export const MIN_DEBATE_ROUNDS = 1;
+export const MAX_DEBATE_ROUNDS = 5;
 
 export const MARKETS = {
   US: {
@@ -92,6 +94,7 @@ export function validateAnalysisInput({
   ticker,
   date,
   timeHorizonMonths,
+  rounds,
   analysisDepth,
   responseDetail,
 }) {
@@ -104,6 +107,14 @@ export function validateAnalysisInput({
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date must be YYYY-MM-DD';
   if (!HORIZON_VALUES.has(Number(timeHorizonMonths))) return 'Invalid analysis horizon.';
+  const debateRounds = Number(rounds);
+  if (
+    !Number.isInteger(debateRounds) ||
+    debateRounds < MIN_DEBATE_ROUNDS ||
+    debateRounds > MAX_DEBATE_ROUNDS
+  ) {
+    return `Max debate rounds must be an integer between ${MIN_DEBATE_ROUNDS} and ${MAX_DEBATE_ROUNDS}.`;
+  }
   if (!ANALYSIS_DEPTHS.has(analysisDepth)) return 'Invalid analysis depth.';
   if (!RESPONSE_DETAILS.has(responseDetail)) return 'Invalid response detail.';
   return '';

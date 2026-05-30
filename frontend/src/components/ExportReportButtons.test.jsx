@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ExportReportButtons from './ExportReportButtons';
-import { MOCK_RESPONSE } from '../mockData';
+import { MOCK_RESPONSE } from '../../dev/mockData';
 
 function mockPdfResponse() {
   return new Response(new Blob(['%PDF-1.4']), {
