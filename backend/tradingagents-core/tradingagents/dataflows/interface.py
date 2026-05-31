@@ -98,6 +98,9 @@ from .y_finance import (
     get_cashflow as get_yfinance_cashflow,
 )
 from .y_finance import (
+    get_company_profile as get_yfinance_company_profile,
+)
+from .y_finance import (
     get_fundamentals as get_yfinance_fundamentals,
 )
 from .y_finance import (
@@ -185,8 +188,8 @@ TOOLS_CATEGORIES = {
     "quote_data": {"description": "Current quote data", "tools": ["get_quote"]},
     "technical_indicators": {"description": "Technical analysis indicators", "tools": ["get_indicators"]},
     "fundamental_data": {
-        "description": "Company fundamentals",
-        "tools": ["get_fundamentals"],
+        "description": "Company fundamentals and profile data",
+        "tools": ["get_fundamentals", "get_company_profile"],
     },
     "financial_statements": {
         "description": "Company financial statements",
@@ -261,6 +264,9 @@ VENDOR_METHODS = {
         "yfinance": get_yfinance_fundamentals,
         "finnhub": get_finnhub_fundamentals,
         "alpha_vantage": get_alpha_vantage_fundamentals,
+    },
+    "get_company_profile": {
+        "yfinance": get_yfinance_company_profile,
     },
     "get_balance_sheet": {
         "yfinance": get_yfinance_balance_sheet,

@@ -40,6 +40,15 @@ def _base_result(**overrides):
         },
         "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
         "executive_summary": "Summary text.",
+        "company_profile": {
+            "available": True,
+            "ticker": "NVDA",
+            "name": "NVIDIA Corporation",
+            "sector": "Technology",
+            "industry": "Semiconductors",
+            "description": "Accelerated computing platform company.",
+            "executives": [{"name": "Executive One", "title": "CEO"}],
+        },
         "financial_highlights": {
             "title": "Key Financial Highlights",
             "periods": [
@@ -119,6 +128,28 @@ def test_html_report_succeeds_without_financial_highlights():
 
     assert "TradingAgent Analysis Report" in html
     assert "Key Financial Highlights" not in html
+
+
+def test_html_report_renders_company_profile():
+    report = build_report_context(_base_result())
+    html = render_analysis_report_html(report)
+
+    assert report["company_profile_rows"][0] == {
+        "label": "Company Name",
+        "value": "NVIDIA Corporation",
+    }
+    assert report["company_profile_executives"] == [{"name": "Executive One", "title": "CEO"}]
+    assert "Company Profile" in html
+    assert "Accelerated computing platform company." in html
+    assert "Executive One" in html
+
+
+def test_html_report_hides_unavailable_company_profile():
+    html = render_analysis_report_html(
+        build_report_context(_base_result(company_profile={"available": False, "ticker": "NVDA"}))
+    )
+
+    assert "Company Profile" not in html
 
 
 def test_report_context_hides_trade_plan_for_hold_even_if_levels_exist():

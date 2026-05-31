@@ -216,6 +216,27 @@ def test_parse_final_result_preserves_financial_highlights():
     assert parsed["financial_highlights"] == financial_highlights
 
 
+def test_summary_shape_keeps_company_profile():
+    from routes.serializers import shape_result
+
+    company_profile = {"available": True, "ticker": "BBCA.JK", "name": "PT Bank Central Asia Tbk"}
+
+    shaped = shape_result({"decision": "Hold", "company_profile": company_profile}, "summary")
+
+    assert shaped["company_profile"] == company_profile
+
+
+def test_parse_final_result_preserves_company_profile():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    company_profile = {"available": False, "ticker": "AAPL", "warning": "offline"}
+    parsed = _parse_final_result("", None, PortfolioRating, {"company_profile": company_profile})
+
+    assert parsed["company_profile"] == company_profile
+
+
 def test_parse_final_result_fallback_contract_is_non_actionable():
     from tradingagents.agents.schemas import PortfolioRating
 

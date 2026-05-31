@@ -24,6 +24,11 @@ describe('mockData', () => {
       'FY26Q1',
     ]);
     expect(result.financial_highlights.rows).toHaveLength(12);
+    expect(result.company_profile).toMatchObject({
+      available: true,
+      ticker: 'NVDA',
+      name: 'NVIDIA Corporation',
+    });
   });
 
   it('supports required direct mock routes', () => {

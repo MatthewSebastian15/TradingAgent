@@ -26,6 +26,7 @@ def test_analysis_summary_contract_includes_risk_engine_fields():
         "max_drawdown_min_pct",
         "max_drawdown_max_pct",
         "financial_highlights",
+        "company_profile",
     }
 
     assert expected_fields.issubset(SUMMARY_FIELDS)

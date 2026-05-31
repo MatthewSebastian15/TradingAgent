@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import ResultCard from './ResultCard';
@@ -29,6 +29,38 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
     expect(screen.getByText('FY26Q1')).toBeTruthy();
     expect(screen.getByText('Revenue')).toBeTruthy();
+  });
+
+  it('uses Analisis as the default tab and opens the Profile tab', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.getByText('Analisis')).toBeTruthy();
+    expect(screen.getByText('EXECUTIVE SUMMARY')).toBeTruthy();
+    expect(screen.getByText('Chart & Price').disabled).toBe(true);
+    expect(screen.getByText('News').disabled).toBe(true);
+    expect(screen.queryByText('COMPANY PROFILE')).toBeNull();
+
+    fireEvent.click(screen.getByText('Profile'));
+
+    expect(screen.getByText('COMPANY PROFILE')).toBeTruthy();
+    expect(screen.getByText('NVIDIA Corporation')).toBeTruthy();
+    expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
+  });
+
+  it('renders Profile empty state when company profile is unavailable', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          company_profile: { available: false, ticker: 'NVDA', warning: 'Profile fetch failed.' },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Profile'));
+
+    expect(screen.getByText('PROFILE UNAVAILABLE')).toBeTruthy();
+    expect(screen.getByText('Profile fetch failed.')).toBeTruthy();
   });
 
   it('renders Last Price for a Buy result', () => {
