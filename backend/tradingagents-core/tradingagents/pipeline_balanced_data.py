@@ -353,17 +353,20 @@ def _build_price_chart(
             if start_cutoff is not None and row_date < start_cutoff:
                 continue
 
-            close = _safe_float(row.get("Close") or row.get("Adj Close"))
-            if close is None:
+            open_price = _safe_float(row.get("Open"))
+            high_price = _safe_float(row.get("High"))
+            low_price = _safe_float(row.get("Low"))
+            close_price = _safe_float(row.get("Close") or row.get("Adj Close"))
+            if any(value is None for value in [open_price, high_price, low_price, close_price]):
                 continue
 
             points.append(
                 {
                     "date": row_date.strftime("%Y-%m-%d"),
-                    "open": _safe_float(row.get("Open")),
-                    "high": _safe_float(row.get("High")),
-                    "low": _safe_float(row.get("Low")),
-                    "close": close,
+                    "open": open_price,
+                    "high": max(high_price, open_price, close_price, low_price),
+                    "low": min(low_price, open_price, close_price, high_price),
+                    "close": close_price,
                     "volume": _safe_int(row.get("Volume")),
                 }
             )

@@ -3,7 +3,8 @@ import { formatPrice } from '../../../utils/formatting';
 import MetricBox from '../MetricBox';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
-import PriceLineChart from './PriceLineChart';
+import CandlestickPriceChart from './CandlestickPriceChart';
+import { formatCompactNumber, normalizePricePoints } from './priceChartUtils';
 import VolumeChart from './VolumeChart';
 
 function hasValue(value) {
@@ -11,21 +12,26 @@ function hasValue(value) {
 }
 
 function formatPercent(value) {
-  if (!hasValue(value)) return 'N/A';
-  return `${Number(value).toFixed(2)}%`;
+  const number = Number(value);
+  if (!hasValue(value) || !Number.isFinite(number)) return 'N/A';
+  return `${number.toFixed(2)}%`;
+}
+
+function displayPrice(value, ticker) {
+  return formatPrice(value, ticker) || 'N/A';
 }
 
 export default function ChartPriceTab({ result }) {
   const chart = result?.price_chart || {};
-  const points = Array.isArray(chart.points) ? chart.points : [];
+  const points = normalizePricePoints(chart.points);
   const stats = chart.stats || {};
-  const ticker = result?.ticker;
+  const ticker = chart.ticker || result?.ticker;
 
-  if (!chart.available || points.length === 0) {
+  if (chart.available !== true || points.length < 2) {
     return (
       <div className="px-4 py-4 border-b border-bloomberg-border">
         <NoticeBox title="CHART DATA UNAVAILABLE" tone="amber">
-          {chart.warning || 'Price chart data is not available for this analysis.'}
+          {chart.warning || 'Valid OHLC price chart data is not available for this analysis.'}
         </NoticeBox>
       </div>
     );
@@ -37,7 +43,7 @@ export default function ChartPriceTab({ result }) {
         <SectionHeader label="CHART & PRICE" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <MetricBox label="WINDOW" value={chart.window_label || 'N/A'} highlight />
-          <MetricBox label="POINTS" value={stats.point_count || points.length} />
+          <MetricBox label="POINTS" value={points.length} />
           <MetricBox label="SOURCE" value={chart.source || 'N/A'} />
           <MetricBox label="CHANGE" value={formatPercent(stats.change_percent)} highlight />
         </div>
@@ -45,9 +51,9 @@ export default function ChartPriceTab({ result }) {
 
       <section>
         <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-2">
-          Close Price
+          OHLC Candlestick
         </div>
-        <PriceLineChart points={points} />
+        <CandlestickPriceChart points={points} ticker={ticker} />
       </section>
 
       <section>
@@ -60,14 +66,17 @@ export default function ChartPriceTab({ result }) {
       <section>
         <SectionHeader label="PRICE STATISTICS" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <MetricBox label="START PRICE" value={formatPrice(stats.start_price, ticker)} />
-          <MetricBox label="END PRICE" value={formatPrice(stats.end_price, ticker)} />
-          <MetricBox label="HIGH" value={formatPrice(stats.high, ticker)} />
-          <MetricBox label="LOW" value={formatPrice(stats.low, ticker)} />
-          <MetricBox label="AVG CLOSE" value={formatPrice(stats.average_close, ticker)} />
-          <MetricBox label="AVG VOLUME" value={stats.average_volume || 'N/A'} />
+          <MetricBox label="START PRICE" value={displayPrice(stats.start_price, ticker)} />
+          <MetricBox label="END PRICE" value={displayPrice(stats.end_price, ticker)} />
+          <MetricBox label="HIGH" value={displayPrice(stats.high, ticker)} />
+          <MetricBox label="LOW" value={displayPrice(stats.low, ticker)} />
+          <MetricBox label="AVG CLOSE" value={displayPrice(stats.average_close, ticker)} />
+          <MetricBox label="AVG VOLUME" value={formatCompactNumber(stats.average_volume)} />
           <MetricBox label="TRADE DATE" value={chart.trade_date || result.trade_date || 'N/A'} />
-          <MetricBox label="LOOKBACK" value={`${chart.lookback_days || 'N/A'} days`} />
+          <MetricBox
+            label="LOOKBACK"
+            value={`${hasValue(chart.lookback_days) ? chart.lookback_days : 'N/A'} days`}
+          />
         </div>
       </section>
     </div>

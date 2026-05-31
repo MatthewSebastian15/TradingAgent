@@ -70,6 +70,40 @@ Date,Open,High,Low,Close,Volume
     }
 
 
+def test_build_price_chart_filters_incomplete_rows_and_sanitizes_high_low():
+    price_data = """# Stock data for TEST
+Date,Open,High,Low,Close,Volume
+2026-05-18,10,9,12,11,1000
+2026-05-19,,12,10,11.25,1100
+2026-05-20,11,13,10,12,1200
+"""
+
+    chart = _build_price_chart("TEST", "2026-05-30", price_data, 1, source="yfinance")
+
+    assert chart["available"] is True
+    assert chart["points"] == [
+        {
+            "date": "2026-05-18",
+            "open": 10.0,
+            "high": 12.0,
+            "low": 9.0,
+            "close": 11.0,
+            "volume": 1000,
+        },
+        {
+            "date": "2026-05-20",
+            "open": 11.0,
+            "high": 13.0,
+            "low": 10.0,
+            "close": 12.0,
+            "volume": 1200,
+        },
+    ]
+    assert chart["stats"]["point_count"] == 2
+    assert chart["stats"]["high"] == 13.0
+    assert chart["stats"]["low"] == 9.0
+
+
 @pytest.mark.parametrize(("months", "lookback_days"), [(1, 60), (2, 90), (3, 120)])
 def test_build_price_chart_uses_horizon_lookback_and_returns_empty_state(months, lookback_days):
     chart = _build_price_chart("TEST", "2026-05-30", "", months)

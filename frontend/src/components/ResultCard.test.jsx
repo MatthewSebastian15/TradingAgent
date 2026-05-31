@@ -53,7 +53,7 @@ describe('ResultCard risk-engine contract', () => {
     fireEvent.click(screen.getByText('Chart & Price'));
 
     expect(screen.getByText('CHART & PRICE')).toBeTruthy();
-    expect(screen.getByText('Close Price')).toBeTruthy();
+    expect(screen.getByText('OHLC Candlestick')).toBeTruthy();
     expect(screen.getByText('Volume')).toBeTruthy();
     expect(screen.getByText('PRICE STATISTICS')).toBeTruthy();
     expect(screen.getByText('News').disabled).toBe(true);
@@ -74,6 +74,30 @@ describe('ResultCard risk-engine contract', () => {
 
     expect(screen.getByText('CHART DATA UNAVAILABLE')).toBeTruthy();
     expect(screen.getByText('Chart fetch failed.')).toBeTruthy();
+  });
+
+  it('renders Chart & Price empty state when fewer than two valid OHLC points remain', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          price_chart: {
+            available: true,
+            points: [
+              { date: '2026-05-17', open: 10, high: 12, low: 9, close: 11, volume: 100 },
+              { date: '2026-05-18', open: null, high: 13, low: 10, close: 12, volume: 200 },
+            ],
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.getByText('CHART DATA UNAVAILABLE')).toBeTruthy();
+    expect(
+      screen.getByText('Valid OHLC price chart data is not available for this analysis.')
+    ).toBeTruthy();
   });
 
   it('renders Profile empty state when company profile is unavailable', () => {
