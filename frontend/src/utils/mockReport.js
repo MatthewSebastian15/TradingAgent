@@ -1,4 +1,5 @@
 import { formatPrice } from './formatting';
+import { MOCK_REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 
 const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
 const LEGACY_REPORT_FIELD_PATTERN = /\b(price target|risk per share|reward per share)\b/i;
@@ -15,7 +16,8 @@ function hasValue(value) {
 function display(value) {
   if (!hasValue(value)) return 'N/A';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (typeof value === 'number') return Number.isInteger(value) ? value.toLocaleString() : String(value);
+  if (typeof value === 'number')
+    return Number.isInteger(value) ? value.toLocaleString() : String(value);
   return String(value);
 }
 
@@ -134,6 +136,7 @@ export function buildMockReportContext(result = {}) {
     trade_date: display(result.trade_date),
     analysis_created_at: display(result.analysis_created_at || result.saved_at),
     generated_at: new Date().toISOString(),
+    disclaimer: MOCK_REPORT_DISCLAIMER,
     current_price: result.current_price,
     current_price_display: price(result.current_price, result),
     current_price_as_of: display(result.current_price_as_of || result.last_close_price_as_of),
@@ -154,8 +157,18 @@ export function buildMockReportContext(result = {}) {
       row('Trade Plan Valid', tradePlanValid),
       row('Has Existing Position', Boolean(result.has_existing_position)),
       row('Time Horizon', result.time_horizon),
-      row('Confidence', hasValue(result.confidence_score) ? `${Math.round(Number(result.confidence_score) * 100)}%` : null),
-      row('Suggested Allocation', hasValue(result.suggested_allocation_percent) ? `${result.suggested_allocation_percent}%` : null),
+      row(
+        'Confidence',
+        hasValue(result.confidence_score)
+          ? `${Math.round(Number(result.confidence_score) * 100)}%`
+          : null
+      ),
+      row(
+        'Suggested Allocation',
+        hasValue(result.suggested_allocation_percent)
+          ? `${result.suggested_allocation_percent}%`
+          : null
+      ),
     ],
     action_plan_rows: showTradePlan ? buildMockActionPlanRows(result) : [],
     risk_rows: buildRiskRows(result, showTradePlan),
@@ -274,7 +287,18 @@ export function renderMockReportHtml(report) {
       .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
       .section, .analyst-note { break-inside: avoid; }
       .analyst-note p { white-space: pre-wrap; }
-      .disclaimer { color: #4b5563; font-size: 12px; }
+      .disclaimer {
+        margin-top: 28px;
+        padding: 16px;
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        color: #4b5563;
+        font-size: 12px;
+        line-height: 1.55;
+        break-inside: avoid;
+      }
+      .disclaimer h2 { margin-top: 0; }
+      .disclaimer p { white-space: pre-line; margin-bottom: 0; }
       footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #d1d5db; color: #6b7280; font-size: 12px; }
       @media print {
         body { background: #ffffff; }
@@ -354,7 +378,7 @@ export function renderMockReportHtml(report) {
 
       <section class="section disclaimer">
         <h2>Disclaimer</h2>
-        <p>This mock report is generated for UI, HTML preview, and browser print-PDF debugging only. It is not financial advice and does not use live market data, external providers, or LLM calls.</p>
+        <p>${escapeHtml(report.disclaimer)}</p>
       </section>
 
       <footer>TradingAgent mock report · ${escapeHtml(report.ticker)} · ${escapeHtml(report.request_id)}</footer>

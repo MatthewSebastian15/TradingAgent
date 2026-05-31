@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from errors import ApiError, sanitize_message
 from routes import jobs
+from services.report_disclaimer import REPORT_DISCLAIMER
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +114,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "trade_date": _clean_text(result.get("trade_date")),
         "generated_at": _format_datetime(datetime.now(timezone.utc).isoformat()),
         "analysis_created_at": _format_datetime(result.get("analysis_created_at")),
+        "disclaimer": REPORT_DISCLAIMER,
         "current_price": current_price,
         "current_price_display": _format_price(current_price, ticker, market),
         "current_price_as_of": _display(result.get("current_price_as_of") or result.get("last_close_price_as_of")),

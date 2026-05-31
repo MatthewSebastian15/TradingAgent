@@ -4,6 +4,7 @@ import ExportReportButtons from './ExportReportButtons';
 import MetricBox from './results/MetricBox';
 import NoticeBox from './results/NoticeBox';
 import SectionHeader from './results/SectionHeader';
+import { REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
@@ -99,7 +100,8 @@ function getDataQualityTone(label, status) {
   if (status === 'hidden' || status === 'fallback') return 'info';
   if (status === 'invalid' || status === 'missing' || status === 'invalid_ticker') return 'error';
   if (label === 'NEWS' && status === 'unavailable') return 'warning';
-  if (status === 'partial' || status === 'market_closed' || status === 'unavailable') return 'warning';
+  if (status === 'partial' || status === 'market_closed' || status === 'unavailable')
+    return 'warning';
   return 'neutral';
 }
 
@@ -366,15 +368,21 @@ function getActionPlanMetrics({ result, currentPrice, riskReward }) {
     },
     {
       label: 'ENTRY',
-      value: hasDisplayValue(result.entry_price) ? formatPrice(result.entry_price, result.ticker) : 'N/A',
+      value: hasDisplayValue(result.entry_price)
+        ? formatPrice(result.entry_price, result.ticker)
+        : 'N/A',
     },
     {
       label: 'STOP LOSS',
-      value: hasDisplayValue(result.stop_loss) ? formatPrice(result.stop_loss, result.ticker) : 'N/A',
+      value: hasDisplayValue(result.stop_loss)
+        ? formatPrice(result.stop_loss, result.ticker)
+        : 'N/A',
     },
     {
       label: 'TAKE PROFIT',
-      value: hasDisplayValue(result.take_profit) ? formatPrice(result.take_profit, result.ticker) : 'N/A',
+      value: hasDisplayValue(result.take_profit)
+        ? formatPrice(result.take_profit, result.ticker)
+        : 'N/A',
     },
     {
       label: 'MAX DRAWDOWN',
@@ -418,7 +426,10 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border">
       <SectionHeader label="ACTION PLAN" />
-      <div data-testid="action-plan-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div
+        data-testid="action-plan-grid"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2"
+      >
         {metrics.map((metric) => (
           <MetricBox
             key={metric.label}
@@ -495,6 +506,17 @@ HoldMetrics.propTypes = {
   result: PropTypes.object.isRequired,
   currentPrice: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
 };
+
+function ReportDisclaimer() {
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border bg-black bg-opacity-20">
+      <SectionHeader label="DISCLAIMER" />
+      <p className="font-mono text-[11px] text-bloomberg-muted leading-relaxed whitespace-pre-line">
+        {REPORT_DISCLAIMER}
+      </p>
+    </div>
+  );
+}
 
 export default function ResultCard({ result, enableReportExport = true, mockReport = false }) {
   const [thesisExpanded, setThesisExpanded] = useState(false);
@@ -802,6 +824,8 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
         </div>
       )}
 
+      <ReportDisclaimer />
+
       {/* Raw JSON debug */}
       {canShowRaw && (
         <div className="px-4 py-3">
@@ -821,7 +845,6 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
     </div>
   );
 }
-
 
 ResultCard.propTypes = {
   result: PropTypes.object,
