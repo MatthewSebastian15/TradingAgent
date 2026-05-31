@@ -195,3 +195,29 @@ footer {
   font-weight: 700;
   word-break: break-word;
 }
+
+.financial-highlights {
+  page-break-inside: auto;
+  overflow-x: auto;
+}
+
+.financial-highlights-table {
+  font-size: 8.5pt;
+  white-space: nowrap;
+}
+
+.financial-highlights-table th,
+.financial-highlights-table td {
+  padding: 5px 6px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.financial-highlights-table th:first-child,
+.financial-highlights-table td:first-child {
+  text-align: left;
+}
+
+.financial-highlights-table th:first-child {
+  width: auto;
+}

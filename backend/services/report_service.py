@@ -132,6 +132,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "data_quality_rows": _data_quality_rows(data_quality),
         "data_quality_warnings": _as_text_list(data_quality.get("warnings")) if data_quality else [],
         "analyst_sections": _analyst_sections(result),
+        "financial_highlights": _financial_highlights(result.get("financial_highlights")),
         "show_trade_plan": is_actionable_trade_plan,
     }
 
@@ -396,6 +397,20 @@ def _data_quality_rows(data_quality: dict[str, Any]) -> list[dict[str, str]]:
         "news",
     ]
     return [_row(key.replace("_", " ").title(), data_quality.get(key)) for key in keys if key in data_quality]
+
+
+def _financial_highlights(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    periods = [period for period in value.get("periods", []) if isinstance(period, dict) and period.get("key")]
+    rows = [row for row in value.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)]
+    if not periods or not rows:
+        return None
+    return {
+        "title": _clean_text(value.get("title")) or "Key Financial Highlights",
+        "periods": periods,
+        "rows": rows,
+    }
 
 
 def _analyst_sections(result: dict[str, Any]) -> list[dict[str, str]]:

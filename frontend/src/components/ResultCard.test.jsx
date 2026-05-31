@@ -23,6 +23,14 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText(/may contain errors/i)).toBeTruthy();
   });
 
+  it('renders financial highlights after the existing summary content', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
+    expect(screen.getByText('FY26Q1')).toBeTruthy();
+    expect(screen.getByText('Revenue')).toBeTruthy();
+  });
+
   it('renders Last Price for a Buy result', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 

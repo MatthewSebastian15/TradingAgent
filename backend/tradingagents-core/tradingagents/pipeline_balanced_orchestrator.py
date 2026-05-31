@@ -698,6 +698,7 @@ def run_balanced_pipeline(
         "data_limitations": data.data_limitations or [],
         "vendor_attempts": data.vendor_attempts or {},
         "request_budget": data.request_budget or {},
+        "financial_highlights": data.financial_highlights,
         "data_fetched_at": data_fetched_at,
         "last_close_price": data.last_close_price,
         "last_close_price_as_of": data.last_close_price_as_of or trade_date,

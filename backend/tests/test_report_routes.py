@@ -58,6 +58,11 @@ def _result(**overrides):
         },
         "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
         "executive_summary": "A concise test summary.",
+        "financial_highlights": {
+            "title": "Key Financial Highlights",
+            "periods": [{"key": "FY26Q1", "label": "FY26Q1"}],
+            "rows": [{"key": "revenue", "label": "Revenue", "values": {"FY26Q1": {"display": "N/A"}}}],
+        },
     }
     result.update(overrides)
     return result
@@ -92,6 +97,8 @@ def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypat
     assert "Entry" in response.text
     assert "automated AI-assisted analysis engine" in response.text
     assert "may contain errors" in response.text
+    assert "Key Financial Highlights" in response.text
+    assert "FY26Q1" in response.text
     assert "Price Target" not in response.text
     assert "Risk Per Share" not in response.text
     assert "Reward Per Share" not in response.text

@@ -185,6 +185,7 @@ export function buildMockReportContext(result = {}) {
     key_catalysts: arrayOfText(result.key_catalysts),
     invalidation_conditions: arrayOfText(result.invalidation_conditions),
     analyst_sections: buildAnalystSections(result),
+    financial_highlights: result.financial_highlights || null,
   };
 }
 
@@ -229,6 +230,40 @@ function renderAnalystSections(sections) {
         </article>`
       )
       .join('')}
+  </section>`;
+}
+
+function renderFinancialHighlights(financialHighlights) {
+  const periods = financialHighlights?.periods;
+  const rows = financialHighlights?.rows;
+  if (!Array.isArray(periods) || !periods.length || !Array.isArray(rows) || !rows.length) {
+    return '';
+  }
+  return `<section class="section financial-highlights">
+    <h2>${escapeHtml(financialHighlights.title || 'Key Financial Highlights')}</h2>
+    <table class="financial-highlights-table">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map(
+            (item) => `<tr>
+              <td>${escapeHtml(item.label)}</td>
+              ${periods
+                .map((period) => {
+                  const cell = item.values?.[period.key];
+                  return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display)}</td>`;
+                })
+                .join('')}
+            </tr>`
+          )
+          .join('')}
+      </tbody>
+    </table>
   </section>`;
 }
 
@@ -277,6 +312,10 @@ export function renderMockReportHtml(report) {
       table { width: 100%; border-collapse: collapse; margin: 8px 0 18px; }
       th, td { border: 1px solid #d1d5db; padding: 9px 10px; vertical-align: top; }
       th { width: 32%; background: #f3f4f6; text-align: left; }
+      .financial-highlights-table { font-size: 12px; }
+      .financial-highlights-table th, .financial-highlights-table td { padding: 7px; text-align: right; white-space: nowrap; }
+      .financial-highlights-table th:first-child, .financial-highlights-table td:first-child { text-align: left; }
+      .financial-highlights-table th:first-child { width: auto; }
       .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0 18px; }
       .metric-card { border: 1px solid #d1d5db; padding: 12px; min-height: 78px; break-inside: avoid; }
       .metric-value { font-weight: 700; color: #111827; word-break: break-word; }
@@ -336,6 +375,8 @@ export function renderMockReportHtml(report) {
         <h2>Executive Summary</h2>
         <p>${escapeHtml(report.executive_summary)}</p>
       </section>
+
+      ${renderFinancialHighlights(report.financial_highlights)}
 
       <section class="section">
         <h2>Decision Summary</h2>

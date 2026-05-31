@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  getMockAnalysisResponseByRequestId,
-  MOCK_RESPONSES_BY_REQUEST_ID,
-} from './mockData';
+import { getMockAnalysisResponseByRequestId, MOCK_RESPONSES_BY_REQUEST_ID } from '../dev/mockData';
 
 describe('mockData', () => {
   it('returns complete mock result by request id', () => {
@@ -20,6 +17,13 @@ describe('mockData', () => {
     });
     expect(result.agents_used.length).toBeGreaterThan(0);
     expect(result.data_quality.warnings[0]).toContain('Mock data only');
+    expect(result.financial_highlights.periods.map((period) => period.key)).toEqual([
+      'FY23',
+      'FY24',
+      'FY25',
+      'FY26Q1',
+    ]);
+    expect(result.financial_highlights.rows).toHaveLength(12);
   });
 
   it('supports required direct mock routes', () => {

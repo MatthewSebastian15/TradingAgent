@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import ExportReportButtons from './ExportReportButtons';
+import FinancialHighlightsTable from './results/FinancialHighlightsTable';
 import MetricBox from './results/MetricBox';
 import NoticeBox from './results/NoticeBox';
 import SectionHeader from './results/SectionHeader';
@@ -805,6 +806,8 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
           </button>
         </div>
       )}
+
+      <FinancialHighlightsTable financialHighlights={result.financial_highlights} />
 
       {/* Agents used */}
       {agents.length > 0 && (
