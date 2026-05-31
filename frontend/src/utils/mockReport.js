@@ -84,6 +84,24 @@ function buildCompanyProfileExecutives(profile) {
     .map((item) => ({ name: display(item.name), title: display(item.title) }));
 }
 
+function buildPriceChartRows(chart, result) {
+  if (!chart?.available) return [];
+  const stats = chart.stats || {};
+  return [
+    row('Window', chart.window_label),
+    row('Source', chart.source),
+    row('Lookback Days', chart.lookback_days),
+    row('Start Price', price(stats.start_price, result)),
+    row('End Price', price(stats.end_price, result)),
+    row('Change %', stats.change_percent),
+    row('High', price(stats.high, result)),
+    row('Low', price(stats.low, result)),
+    row('Average Close', price(stats.average_close, result)),
+    row('Average Volume', stats.average_volume),
+    row('Point Count', stats.point_count),
+  ];
+}
+
 export function buildMockActionPlanRows(result) {
   return [
     row('Current Price', price(result?.current_price, result)),
@@ -210,6 +228,7 @@ export function buildMockReportContext(result = {}) {
     company_profile: result.company_profile || {},
     company_profile_rows: buildCompanyProfileRows(result.company_profile),
     company_profile_executives: buildCompanyProfileExecutives(result.company_profile),
+    price_chart_rows: buildPriceChartRows(result.price_chart, result),
   };
 }
 
@@ -313,6 +332,14 @@ function renderCompanyProfile(profile, rows, executives) {
           </table>`
         : ''
     }
+  </section>`;
+}
+
+function renderPriceChartSummary(rows) {
+  if (!rows.length) return '';
+  return `<section class="section">
+    <h2>Chart &amp; Price Summary</h2>
+    <table><tbody>${renderRows(rows)}</tbody></table>
   </section>`;
 }
 
@@ -430,6 +457,8 @@ export function renderMockReportHtml(report) {
         report.company_profile_rows,
         report.company_profile_executives
       )}
+
+      ${renderPriceChartSummary(report.price_chart_rows)}
 
       ${renderFinancialHighlights(report.financial_highlights)}
 

@@ -404,6 +404,69 @@ function formatTimeHorizon(months) {
   return `${normalized} Month${normalized > 1 ? 's' : ''}`;
 }
 
+function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', months = 1 } = {}) {
+  const lookbackDays = normalizeTimeHorizonMonths(months) * 30 + 30;
+  const points = [];
+  const end = new Date(`${tradeDate}T00:00:00Z`);
+  let price = ticker.endsWith('.JK') ? 9000 : 900;
+
+  for (let i = lookbackDays - 1; i >= 0; i -= 1) {
+    const date = new Date(end);
+    date.setUTCDate(end.getUTCDate() - i);
+    price += i % 5 === 0 ? 35 : i % 3 === 0 ? -20 : 15;
+
+    points.push({
+      date: date.toISOString().slice(0, 10),
+      open: price - 20,
+      high: price + 50,
+      low: price - 60,
+      close: price,
+      volume: 70000000 + ((lookbackDays - i) % 10) * 2500000,
+    });
+  }
+
+  const closes = points.map((item) => item.close);
+  const volumes = points.map((item) => item.volume);
+  const startPrice = closes[0];
+  const endPrice = closes[closes.length - 1];
+  const change = endPrice - startPrice;
+
+  return {
+    available: true,
+    source: 'mock:yfinance',
+    ticker,
+    trade_date: tradeDate,
+    window_label: `${normalizeTimeHorizonMonths(months)} Month${normalizeTimeHorizonMonths(months) > 1 ? 's' : ''} Analysis / ${lookbackDays}D Price Window`,
+    lookback_days: lookbackDays,
+    points,
+    stats: {
+      start_price: startPrice,
+      end_price: endPrice,
+      change,
+      change_percent: Number(((change / startPrice) * 100).toFixed(2)),
+      high: Math.max(...points.map((item) => item.high)),
+      low: Math.min(...points.map((item) => item.low)),
+      average_close: Number(
+        (closes.reduce((sum, value) => sum + value, 0) / closes.length).toFixed(2)
+      ),
+      average_volume: Math.round(volumes.reduce((sum, value) => sum + value, 0) / volumes.length),
+      point_count: points.length,
+    },
+  };
+}
+
+function syncMockPriceChart(chart, options) {
+  const fallback = createMockPriceChart(options);
+  if (
+    chart?.ticker === fallback.ticker &&
+    chart?.trade_date === fallback.trade_date &&
+    chart?.lookback_days === fallback.lookback_days
+  ) {
+    return chart;
+  }
+  return fallback;
+}
+
 function createFullDecision({ decision, summary, thesis, timeHorizon }) {
   return `**Rating**: ${decision || 'Hold'}\n\n**Executive Summary**: ${summary || 'N/A'}\n\n**Investment Thesis**: ${thesis || 'N/A'}\n\n**Time Horizon**: ${timeHorizon || 'N/A'}`;
 }
@@ -507,6 +570,11 @@ function completeMockAnalysis(overrides = {}) {
     ...result,
     ...overrides,
     company_profile: overrides.company_profile || result.company_profile,
+    price_chart: syncMockPriceChart(overrides.price_chart || result.price_chart, {
+      ticker: overrides.ticker || result.ticker || 'BBCA.JK',
+      tradeDate: overrides.trade_date || result.trade_date || '2026-05-30',
+      months: overrides.time_horizon_months || result.time_horizon_months || 1,
+    }),
     data_quality: normalizeDataQuality(overrides.data_quality || result.data_quality),
   };
 
@@ -1135,6 +1203,11 @@ export function getMockAnalysisResponse(options = {}) {
   response.saved_at = response.analysis_created_at;
   response.data_fetched_at = response.current_price_as_of || response.analysis_created_at;
   response.current_price_source = response.current_price_source || 'mock:yfinance:last_close';
+  response.price_chart = syncMockPriceChart(response.price_chart, {
+    ticker: response.ticker,
+    tradeDate: response.trade_date,
+    months: normalizedHorizon,
+  });
   response.mock = true;
   response.source = 'frontend/dev/mockData.js';
 

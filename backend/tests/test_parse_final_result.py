@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 
-
 def _valid_executive_summary() -> str:
     return (
         "The final rating is Hold because the available evidence is balanced and the setup does not justify forcing a new position before confirmation improves. "
@@ -235,6 +234,27 @@ def test_parse_final_result_preserves_company_profile():
     parsed = _parse_final_result("", None, PortfolioRating, {"company_profile": company_profile})
 
     assert parsed["company_profile"] == company_profile
+
+
+def test_summary_shape_keeps_price_chart():
+    from routes.serializers import shape_result
+
+    price_chart = {"available": True, "ticker": "BBCA.JK", "points": [{"date": "2026-05-18", "close": 100.0}]}
+
+    shaped = shape_result({"decision": "Hold", "price_chart": price_chart}, "summary")
+
+    assert shaped["price_chart"] == price_chart
+
+
+def test_parse_final_result_preserves_price_chart():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    price_chart = {"available": False, "ticker": "AAPL", "warning": "offline"}
+    parsed = _parse_final_result("", None, PortfolioRating, {"price_chart": price_chart})
+
+    assert parsed["price_chart"] == price_chart
 
 
 def test_parse_final_result_fallback_contract_is_non_actionable():

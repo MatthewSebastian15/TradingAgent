@@ -75,6 +75,22 @@
         </section>
       {% endif %}
 
+      {% if report.price_chart_rows %}
+        <section class="section">
+          <h2>Chart &amp; Price Summary</h2>
+          <table class="metric-table">
+            <tbody>
+              {% for row in report.price_chart_rows %}
+                <tr>
+                  <th>{{ row.label }}</th>
+                  <td>{{ row.value }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+      {% endif %}
+
       <section class="section">
         <h2>Executive Summary</h2>
         <table>

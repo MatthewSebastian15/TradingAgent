@@ -67,6 +67,7 @@ function compactReportPayload(result) {
     'validation_warning_details',
     'financial_highlights',
     'company_profile',
+    'price_chart',
     'market_report',
     'sentiment_report',
     'news_report',

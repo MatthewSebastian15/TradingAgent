@@ -80,4 +80,12 @@ describe('mockReport', () => {
     expect(html).toContain('Business Description');
     expect(html).toContain('Key Executives');
   });
+
+  it('renders static Chart & Price summary in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Chart &amp; Price Summary');
+    expect(html).toContain('Lookback Days');
+    expect(html).toContain('Average Volume');
+  });
 });

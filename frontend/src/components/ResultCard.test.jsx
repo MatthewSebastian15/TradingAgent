@@ -36,7 +36,7 @@ describe('ResultCard risk-engine contract', () => {
 
     expect(screen.getByText('Analisis')).toBeTruthy();
     expect(screen.getByText('EXECUTIVE SUMMARY')).toBeTruthy();
-    expect(screen.getByText('Chart & Price').disabled).toBe(true);
+    expect(screen.getByText('Chart & Price').disabled).toBe(false);
     expect(screen.getByText('News').disabled).toBe(true);
     expect(screen.queryByText('COMPANY PROFILE')).toBeNull();
 
@@ -45,6 +45,35 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('COMPANY PROFILE')).toBeTruthy();
     expect(screen.getByText('NVIDIA Corporation')).toBeTruthy();
     expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
+  });
+
+  it('opens the Chart & Price tab and keeps News disabled', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.getByText('CHART & PRICE')).toBeTruthy();
+    expect(screen.getByText('Close Price')).toBeTruthy();
+    expect(screen.getByText('Volume')).toBeTruthy();
+    expect(screen.getByText('PRICE STATISTICS')).toBeTruthy();
+    expect(screen.getByText('News').disabled).toBe(true);
+    expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
+  });
+
+  it('renders Chart & Price empty state when chart data is unavailable', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          price_chart: { available: false, warning: 'Chart fetch failed.' },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.getByText('CHART DATA UNAVAILABLE')).toBeTruthy();
+    expect(screen.getByText('Chart fetch failed.')).toBeTruthy();
   });
 
   it('renders Profile empty state when company profile is unavailable', () => {

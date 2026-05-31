@@ -136,6 +136,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "company_profile": _as_dict(result.get("company_profile")),
         "company_profile_rows": _company_profile_rows(result),
         "company_profile_executives": _company_profile_executives(result),
+        "price_chart_rows": _price_chart_rows(result, ticker, market),
         "show_trade_plan": is_actionable_trade_plan,
     }
 
@@ -433,6 +434,27 @@ def _company_profile_executives(result: dict[str, Any]) -> list[dict[str, str]]:
             "title": _display(item.get("title")),
         })
     return rows
+
+
+def _price_chart_rows(result: dict[str, Any], ticker: str, market: str) -> list[dict[str, str]]:
+    chart = _as_dict(result.get("price_chart"))
+    if not chart or not chart.get("available"):
+        return []
+
+    stats = _as_dict(chart.get("stats"))
+    return [
+        {"label": "Window", "value": _display(chart.get("window_label"))},
+        {"label": "Source", "value": _display(chart.get("source"))},
+        {"label": "Lookback Days", "value": _display(chart.get("lookback_days"))},
+        {"label": "Start Price", "value": _format_price(stats.get("start_price"), ticker, market)},
+        {"label": "End Price", "value": _format_price(stats.get("end_price"), ticker, market)},
+        {"label": "Change %", "value": _display(stats.get("change_percent"))},
+        {"label": "High", "value": _format_price(stats.get("high"), ticker, market)},
+        {"label": "Low", "value": _format_price(stats.get("low"), ticker, market)},
+        {"label": "Average Close", "value": _format_price(stats.get("average_close"), ticker, market)},
+        {"label": "Average Volume", "value": _display(stats.get("average_volume"))},
+        {"label": "Point Count", "value": _display(stats.get("point_count"))},
+    ]
 
 
 def _financial_highlights(value: Any) -> dict[str, Any] | None:
