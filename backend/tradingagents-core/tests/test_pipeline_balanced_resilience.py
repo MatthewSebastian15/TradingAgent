@@ -12,6 +12,7 @@ from tradingagents.pipeline_balanced import (
     _extract_last_close_price,
     _invoke_once,
 )
+from tradingagents.pipeline_balanced_data import _build_price_chart
 from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout, get_timeout_stats
 
 
@@ -40,6 +41,44 @@ Date,Open,High,Low,Close,Volume
 """
 
     assert _extract_last_close_price(price_data, "2026-05-20") == 11.25
+
+
+def test_build_price_chart_filters_window_and_calculates_stats():
+    price_data = """# Stock data for TEST
+Date,Open,High,Low,Close,Volume
+2026-03-01,8,9,7,8.5,500
+2026-05-18,10,11,9,10.5,1000
+2026-05-19,11,12,10,11.25,1100
+2026-05-31,12,13,11,12.5,1200
+"""
+
+    chart = _build_price_chart("TEST", "2026-05-30", price_data, 1, source="yfinance")
+
+    assert chart["available"] is True
+    assert chart["lookback_days"] == 60
+    assert [point["date"] for point in chart["points"]] == ["2026-05-18", "2026-05-19"]
+    assert chart["stats"] == {
+        "start_price": 10.5,
+        "end_price": 11.25,
+        "change": 0.75,
+        "change_percent": 7.14,
+        "high": 12.0,
+        "low": 9.0,
+        "average_close": 10.88,
+        "average_volume": 1050,
+        "point_count": 2,
+    }
+
+
+@pytest.mark.parametrize(("months", "lookback_days"), [(1, 60), (2, 90), (3, 120)])
+def test_build_price_chart_uses_horizon_lookback_and_returns_empty_state(months, lookback_days):
+    chart = _build_price_chart("TEST", "2026-05-30", "", months)
+
+    assert chart["available"] is False
+    assert chart["lookback_days"] == lookback_days
+    assert chart["points"] == []
+    assert chart["stats"] == {}
+    assert chart["warning"] == "Price chart data is unavailable."
 
 
 def test_date_window_scales_with_time_horizon():

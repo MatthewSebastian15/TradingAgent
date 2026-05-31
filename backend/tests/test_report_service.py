@@ -49,6 +49,25 @@ def _base_result(**overrides):
             "description": "Accelerated computing platform company.",
             "executives": [{"name": "Executive One", "title": "CEO"}],
         },
+        "price_chart": {
+            "available": True,
+            "source": "yfinance",
+            "ticker": "NVDA",
+            "trade_date": "2026-05-26",
+            "window_label": "1 Month Analysis / 60D Price Window",
+            "lookback_days": 60,
+            "points": [{"date": "2026-05-26", "close": 920.15, "volume": 1000}],
+            "stats": {
+                "start_price": 900.0,
+                "end_price": 920.15,
+                "change_percent": 2.24,
+                "high": 930.0,
+                "low": 880.0,
+                "average_close": 910.25,
+                "average_volume": 1000,
+                "point_count": 2,
+            },
+        },
         "financial_highlights": {
             "title": "Key Financial Highlights",
             "periods": [
@@ -150,6 +169,26 @@ def test_html_report_hides_unavailable_company_profile():
     )
 
     assert "Company Profile" not in html
+
+
+def test_html_report_renders_price_chart_summary():
+    report = build_report_context(_base_result())
+    html = render_analysis_report_html(report)
+
+    assert report["price_chart_rows"][0] == {
+        "label": "Window",
+        "value": "1 Month Analysis / 60D Price Window",
+    }
+    assert "Chart &amp; Price Summary" in html
+    assert "Average Volume" in html
+
+
+def test_html_report_hides_unavailable_price_chart_summary():
+    html = render_analysis_report_html(
+        build_report_context(_base_result(price_chart={"available": False, "ticker": "NVDA"}))
+    )
+
+    assert "Chart &amp; Price Summary" not in html
 
 
 def test_report_context_hides_trade_plan_for_hold_even_if_levels_exist():

@@ -704,6 +704,7 @@ def run_balanced_pipeline(
             "ticker": ticker,
             "warning": "Company profile was not collected.",
         },
+        "price_chart": data.price_chart or {},
         "data_fetched_at": data_fetched_at,
         "last_close_price": data.last_close_price,
         "last_close_price_as_of": data.last_close_price_as_of or trade_date,

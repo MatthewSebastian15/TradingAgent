@@ -29,6 +29,13 @@ describe('mockData', () => {
       ticker: 'NVDA',
       name: 'NVIDIA Corporation',
     });
+    expect(result.price_chart).toMatchObject({
+      available: true,
+      ticker: 'NVDA',
+      trade_date: '2026-05-18',
+      lookback_days: 120,
+    });
+    expect(result.price_chart.points).toHaveLength(120);
   });
 
   it('supports required direct mock routes', () => {

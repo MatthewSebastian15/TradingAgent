@@ -81,6 +81,27 @@ class CompanyProfile(ApiSchema):
     warning: str | None = None
 
 
+class PriceChartPoint(ApiSchema):
+    date: str
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
+    volume: int | None = None
+
+
+class PriceChart(ApiSchema):
+    available: bool = False
+    source: str | None = None
+    ticker: str | None = None
+    trade_date: str | None = None
+    window_label: str | None = None
+    lookback_days: int | None = None
+    points: list[PriceChartPoint] = Field(default_factory=list)
+    stats: dict[str, Any] = Field(default_factory=dict)
+    warning: str | None = None
+
+
 class AnalysisResponse(ApiSchema):
     request_id: str
     ticker: str
@@ -96,6 +117,7 @@ class AnalysisResponse(ApiSchema):
     time_horizon_months: int | None = None
     financial_highlights: FinancialHighlightsResponse | None = None
     company_profile: CompanyProfile | dict[str, Any] | None = None
+    price_chart: PriceChart | dict[str, Any] | None = None
 
 
 class AnalysisJobCreateResponse(ApiSchema):

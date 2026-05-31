@@ -270,6 +270,143 @@ def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
     return price
 
 
+def _safe_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", "")
+    if not text:
+        return None
+    try:
+        number = float(text)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number and number not in {float("inf"), float("-inf")} else None
+
+
+def _safe_int(value: Any) -> int | None:
+    number = _safe_float(value)
+    if number is None:
+        return None
+    try:
+        return int(number)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _build_price_chart(
+    ticker: str,
+    trade_date: str,
+    price_data: str,
+    time_horizon_months: int,
+    source: str | None = None,
+) -> dict[str, Any]:
+    """Build frontend-ready OHLCV chart data from collected CSV price data."""
+    months = _normalize_time_horizon_months(time_horizon_months)
+    lookback_days = _price_lookback_days(months)
+    window_label = f"{months} Month{'s' if months > 1 else ''} Analysis / {lookback_days}D Price Window"
+
+    base_payload: dict[str, Any] = {
+        "available": False,
+        "source": source or "unavailable",
+        "ticker": ticker,
+        "trade_date": trade_date,
+        "window_label": window_label,
+        "lookback_days": lookback_days,
+        "points": [],
+        "stats": {},
+    }
+
+    lines = [
+        line
+        for line in (price_data or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not lines:
+        return {**base_payload, "warning": "Price chart data is unavailable."}
+
+    try:
+        cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
+        start_cutoff = cutoff - timedelta(days=lookback_days)
+    except ValueError:
+        cutoff = None
+        start_cutoff = None
+
+    points: list[dict[str, Any]] = []
+
+    try:
+        reader = csv.DictReader(StringIO("\n".join(lines)))
+        for row in reader:
+            if not row:
+                continue
+
+            date_raw = (row.get("Date") or row.get("") or next(iter(row.values()), "") or "").strip()
+            if not date_raw:
+                continue
+
+            try:
+                row_date = datetime.strptime(date_raw[:10], "%Y-%m-%d")
+            except ValueError:
+                continue
+
+            if cutoff is not None and row_date > cutoff:
+                continue
+            if start_cutoff is not None and row_date < start_cutoff:
+                continue
+
+            close = _safe_float(row.get("Close") or row.get("Adj Close"))
+            if close is None:
+                continue
+
+            points.append(
+                {
+                    "date": row_date.strftime("%Y-%m-%d"),
+                    "open": _safe_float(row.get("Open")),
+                    "high": _safe_float(row.get("High")),
+                    "low": _safe_float(row.get("Low")),
+                    "close": close,
+                    "volume": _safe_int(row.get("Volume")),
+                }
+            )
+    except Exception as exc:
+        logger.warning("Failed to build price chart for %s: %s", ticker, exc)
+        return {**base_payload, "warning": "Price chart data could not be parsed."}
+
+    points = sorted(points, key=lambda item: item["date"])
+
+    if not points:
+        return {**base_payload, "warning": "No usable price rows were available for the selected window."}
+
+    closes = [float(item["close"]) for item in points if item.get("close") is not None]
+    highs = [float(item["high"]) for item in points if item.get("high") is not None]
+    lows = [float(item["low"]) for item in points if item.get("low") is not None]
+    volumes = [int(item["volume"]) for item in points if item.get("volume") is not None]
+
+    start_price = closes[0] if closes else None
+    end_price = closes[-1] if closes else None
+    change = end_price - start_price if start_price is not None and end_price is not None else None
+    change_percent = (change / start_price * 100) if change is not None and start_price else None
+
+    stats = {
+        "start_price": start_price,
+        "end_price": end_price,
+        "change": change,
+        "change_percent": round(change_percent, 2) if change_percent is not None else None,
+        "high": max(highs) if highs else None,
+        "low": min(lows) if lows else None,
+        "average_close": round(sum(closes) / len(closes), 2) if closes else None,
+        "average_volume": round(sum(volumes) / len(volumes)) if volumes else None,
+        "point_count": len(points),
+    }
+
+    return {
+        **base_payload,
+        "available": True,
+        "source": source or "yfinance",
+        "points": points,
+        "stats": stats,
+    }
+
+
 def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, str, str]:
     current = datetime.strptime(trade_date, "%Y-%m-%d")
     start_price = (current - timedelta(days=_price_lookback_days(time_horizon_months))).strftime("%Y-%m-%d")
@@ -657,6 +794,13 @@ def collect_market_data(
 
     _check_cancel(cancel_check)
     last_close_price, last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
+    price_chart = _build_price_chart(
+        ticker=ticker,
+        trade_date=trade_date,
+        price_data=price.value,
+        time_horizon_months=time_horizon_months,
+        source=_price_source_label(price.value, last_close_price) or "yfinance",
+    )
     vendor_attempts = attempt_recorder.get_summary()
     request_budget = budget.get_summary()
     data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
@@ -718,6 +862,7 @@ def collect_market_data(
         last_close_price_as_of=last_close_price_as_of or trade_date,
         last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
         company_profile=company_profile,
+        price_chart=price_chart,
         data_sources=data_sources,
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
