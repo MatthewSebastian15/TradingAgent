@@ -53,4 +53,13 @@ describe('mockReport', () => {
     expect(html).not.toContain('<div class="metric-label">Stop Loss</div>');
     expect(html).not.toContain('<div class="metric-label">Take Profit</div>');
   });
+
+  it('renders the mock report disclaimer in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_HOLD_RESPONSE);
+
+    expect(html).toContain('Disclaimer');
+    expect(html).toContain('mock analysis report');
+    expect(html).toContain('dummy data');
+    expect(html).toContain('Do not use mock report output');
+  });
 });

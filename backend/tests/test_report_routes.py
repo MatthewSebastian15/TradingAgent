@@ -90,6 +90,8 @@ def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypat
     assert "Final Decision" in response.text
     assert "TAKE_PROFIT_RECOMPUTED" in response.text
     assert "Entry" in response.text
+    assert "automated AI-assisted analysis engine" in response.text
+    assert "may contain errors" in response.text
     assert "Price Target" not in response.text
     assert "Risk Per Share" not in response.text
     assert "Reward Per Share" not in response.text
@@ -97,8 +99,12 @@ def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypat
 
 def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(client, monkeypatch):
     store = _store_with_result(_result(ticker="BBCA.JK", market="ID", request_id="rid-report-pdf"))
+    rendered_report = {}
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
-    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+    monkeypatch.setattr(
+        "routes.reports.render_analysis_report_pdf",
+        lambda report: rendered_report.update(report) or b"%PDF-1.4\nmock",
+    )
 
     response = client.get("/api/analysis/jobs/rid-report-pdf/report.pdf")
 
@@ -107,6 +113,7 @@ def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(clien
     assert "attachment" in response.headers["content-disposition"]
     assert "TradingAgent_BBCA.JK_2026-05-26.pdf" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
+    assert "automated AI-assisted analysis engine" in rendered_report["disclaimer"]
 
 
 

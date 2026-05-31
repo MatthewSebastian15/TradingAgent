@@ -15,6 +15,14 @@ import {
 describe('ResultCard risk-engine contract', () => {
   afterEach(() => cleanup());
 
+  it('renders the report disclaimer in the analysis result card', () => {
+    render(<ResultCard result={MOCK_HOLD_RESPONSE} />);
+
+    expect(screen.getByText('DISCLAIMER')).toBeTruthy();
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+    expect(screen.getByText(/may contain errors/i)).toBeTruthy();
+  });
+
   it('renders Last Price for a Buy result', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
@@ -193,7 +201,6 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('TRADE LEVELS: mock_recomputed')).toBeTruthy();
     expect(screen.getByText('LLM OUTPUT: mock_repaired')).toBeTruthy();
   });
-
 
   it('renders IDX news unavailable as non-blocking while keeping trade plan valid', () => {
     render(<ResultCard result={MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE} />);
