@@ -25,6 +25,42 @@ class ErrorEnvelope(ApiSchema):
     details: dict[str, Any] | None = None
 
 
+class FinancialHighlightPeriod(ApiSchema):
+    key: str
+    label: str
+    type: Literal["annual", "quarter"]
+    year: int
+    quarter: int | None = None
+
+
+class FinancialHighlightCell(ApiSchema):
+    value: float | None = None
+    display: str
+    status: Literal["reported", "calculated", "estimated", "unavailable"]
+    source_vendor: str | None = None
+    source_field: str | None = None
+    formula: str | None = None
+
+
+class FinancialHighlightRow(ApiSchema):
+    key: str
+    label: str
+    unit: str
+    values: dict[str, FinancialHighlightCell]
+
+
+class FinancialHighlightsResponse(ApiSchema):
+    title: str
+    currency: str | None = None
+    scale: str
+    analysis_date: str
+    period_logic: str = "analysis_quarter"
+    periods: list[FinancialHighlightPeriod]
+    rows: list[FinancialHighlightRow]
+    notes: list[str] = Field(default_factory=list)
+    data_quality: dict[str, Any] = Field(default_factory=dict)
+
+
 class AnalysisResponse(ApiSchema):
     request_id: str
     ticker: str
@@ -38,6 +74,7 @@ class AnalysisResponse(ApiSchema):
     average_entry_price: float | None = None
     agents_used: list[str] = Field(default_factory=list)
     time_horizon_months: int | None = None
+    financial_highlights: FinancialHighlightsResponse | None = None
 
 
 class AnalysisJobCreateResponse(ApiSchema):

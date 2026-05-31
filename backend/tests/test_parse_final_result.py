@@ -192,6 +192,30 @@ def test_summary_shape_keeps_investment_thesis():
     assert "raw_agent_state" not in shaped
 
 
+def test_summary_shape_keeps_financial_highlights():
+    from routes.serializers import shape_result
+
+    financial_highlights = {
+        "periods": [{"key": "FY25", "label": "FY25"}],
+        "rows": [{"key": "revenue", "values": {"FY25": {"display": "100.0"}}}],
+    }
+
+    shaped = shape_result({"decision": "Hold", "financial_highlights": financial_highlights}, "summary")
+
+    assert shaped["financial_highlights"] == financial_highlights
+
+
+def test_parse_final_result_preserves_financial_highlights():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    financial_highlights = {"periods": [{"key": "FY25"}], "rows": []}
+    parsed = _parse_final_result("", None, PortfolioRating, {"financial_highlights": financial_highlights})
+
+    assert parsed["financial_highlights"] == financial_highlights
+
+
 def test_parse_final_result_fallback_contract_is_non_actionable():
     from tradingagents.agents.schemas import PortfolioRating
 

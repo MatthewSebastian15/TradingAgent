@@ -40,6 +40,24 @@ def _base_result(**overrides):
         },
         "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
         "executive_summary": "Summary text.",
+        "financial_highlights": {
+            "title": "Key Financial Highlights",
+            "periods": [
+                {"key": "FY25", "label": "FY25", "type": "annual", "year": 2025, "quarter": None},
+                {"key": "FY26Q1", "label": "FY26Q1", "type": "quarter", "year": 2026, "quarter": 1},
+            ],
+            "rows": [
+                {
+                    "key": "revenue",
+                    "label": "Revenue",
+                    "unit": "USD Bn",
+                    "values": {
+                        "FY25": {"display": "100.0", "status": "reported"},
+                        "FY26Q1": {"display": "N/A", "status": "unavailable"},
+                    },
+                }
+            ],
+        },
     }
     result.update(overrides)
     return result
@@ -84,6 +102,23 @@ def test_html_report_renders_disclaimer():
     assert "Disclaimer" in html
     assert "automated AI-assisted analysis engine" in html
     assert "may contain errors" in html
+
+
+def test_html_report_renders_dynamic_financial_highlights():
+    html = render_analysis_report_html(build_report_context(_base_result()))
+
+    assert "Key Financial Highlights" in html
+    assert html.count("Key Financial Highlights") == 1
+    assert "FY26Q1" in html
+    assert "Revenue" in html
+    assert "N/A" in html
+
+
+def test_html_report_succeeds_without_financial_highlights():
+    html = render_analysis_report_html(build_report_context(_base_result(financial_highlights=None)))
+
+    assert "TradingAgent Analysis Report" in html
+    assert "Key Financial Highlights" not in html
 
 
 def test_report_context_hides_trade_plan_for_hold_even_if_levels_exist():

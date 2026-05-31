@@ -62,4 +62,13 @@ describe('mockReport', () => {
     expect(html).toContain('dummy data');
     expect(html).toContain('Do not use mock report output');
   });
+
+  it('renders static financial highlights in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Key Financial Highlights');
+    expect(html).toContain('FY26Q1');
+    expect(html).toContain('Revenue');
+    expect(html).toContain('N/A');
+  });
 });

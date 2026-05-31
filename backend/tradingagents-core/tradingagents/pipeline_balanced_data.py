@@ -16,6 +16,8 @@ from tradingagents.dataflows.interface import route_to_all_vendors, route_to_ven
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
 from tradingagents.dataflows.y_finance import normalize_ticker
+from tradingagents.financial_highlights.builder import build_financial_highlights
+from tradingagents.financial_highlights.models import to_dict as financial_highlights_to_dict
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 
 logger = logging.getLogger(__name__)
@@ -580,12 +582,30 @@ def collect_market_data(
 
     tasks = _build_collection_tasks(ticker, trade_date, start_price, start_news, end, news_lookback_days)
     results = _run_collection_tasks(tasks, config, cancel_check)
+    annual_statement_results = _run_collection_tasks(
+        {
+            "annual_balance_sheet": lambda: _safe_data_field(
+                "annual_balance_sheet",
+                lambda: route_to_vendor("get_balance_sheet", ticker, "annual", trade_date),
+                limit=10_000,
+            ),
+            "annual_income_statement": lambda: _safe_data_field(
+                "annual_income_statement",
+                lambda: route_to_vendor("get_income_statement", ticker, "annual", trade_date),
+                limit=10_000,
+            ),
+        },
+        config,
+        cancel_check,
+    )
 
     price = results["price_data"]
     fundamentals = results["fundamentals"]
     balance_sheet = results["balance_sheet"]
     cashflow = results["cashflow"]
     income_statement = results["income_statement"]
+    annual_balance_sheet = annual_statement_results["annual_balance_sheet"]
+    annual_income_statement = annual_statement_results["annual_income_statement"]
     company_news = results["company_news"]
     global_news = results["global_news"]
     insider_transactions = results["insider_transactions"]
@@ -643,6 +663,21 @@ def collect_market_data(
         vendor_attempts=vendor_attempts,
         request_budget=request_budget,
     )
+    financial_highlights = None
+    try:
+        financial_highlights = financial_highlights_to_dict(
+            build_financial_highlights(
+                ticker=ticker,
+                analysis_date=trade_date,
+                fundamentals=fundamentals.value,
+                income_statement={"quarterly": income_statement.value, "annual": annual_income_statement.value},
+                balance_sheet={"quarterly": balance_sheet.value, "annual": annual_balance_sheet.value},
+                cashflow=cashflow.value,
+                price_data=price.value,
+            )
+        )
+    except Exception:
+        logger.exception("Failed to build financial highlights for %s", ticker)
     try:
         release_budget(budget_id)
         release_attempt_recorder(attempt_id)
@@ -673,4 +708,5 @@ def collect_market_data(
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
         request_budget=runtime_metadata.get("request_budget", {}),
+        financial_highlights=financial_highlights,
     )

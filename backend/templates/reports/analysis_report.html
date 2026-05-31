@@ -47,6 +47,33 @@
         </table>
       </section>
 
+      {% if report.financial_highlights and report.financial_highlights.rows %}
+        <section class="section financial-highlights">
+          <h2>{{ report.financial_highlights.title }}</h2>
+          <table class="financial-highlights-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                {% for period in report.financial_highlights.periods %}
+                  <th>{{ period.label }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in report.financial_highlights.rows %}
+                <tr>
+                  <td>{{ row.label }}</td>
+                  {% for period in report.financial_highlights.periods %}
+                    {% set cell = row['values'].get(period.key) %}
+                    <td>{{ cell.display if cell else 'N/A' }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+      {% endif %}
+
       <section class="section">
         <h2>Decision Summary</h2>
         <table>

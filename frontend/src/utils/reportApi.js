@@ -65,6 +65,7 @@ function compactReportPayload(result) {
     'data_quality',
     'validation_warnings',
     'validation_warning_details',
+    'financial_highlights',
     'market_report',
     'sentiment_report',
     'news_report',
@@ -203,7 +204,8 @@ async function fetchPdfByPayload(result) {
 async function downloadPdfResponse(response, fallbackFilename) {
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
-  const filename = filenameFromContentDisposition(response.headers.get('Content-Disposition')) || fallbackFilename;
+  const filename =
+    filenameFromContentDisposition(response.headers.get('Content-Disposition')) || fallbackFilename;
 
   const link = document.createElement('a');
   link.href = url;
