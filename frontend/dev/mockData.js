@@ -408,21 +408,30 @@ function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', mo
   const lookbackDays = normalizeTimeHorizonMonths(months) * 30 + 30;
   const points = [];
   const end = new Date(`${tradeDate}T00:00:00Z`);
-  let price = ticker.endsWith('.JK') ? 9000 : 900;
+  let previousClose = ticker.endsWith('.JK') ? 9000 : 900;
 
   for (let i = lookbackDays - 1; i >= 0; i -= 1) {
     const date = new Date(end);
     date.setUTCDate(end.getUTCDate() - i);
-    price += i % 5 === 0 ? 35 : i % 3 === 0 ? -20 : 15;
+    const sequence = lookbackDays - i;
+    const scale = ticker.endsWith('.JK') ? 1 : 0.1;
+    const direction = sequence % 7 === 0 || sequence % 11 === 0 ? -1 : 1;
+    const bodyMove = direction * (20 + (sequence % 6) * 8) * scale;
+    const open = previousClose + (sequence % 3 === 0 ? -12 : 10) * scale;
+    const close = open + bodyMove;
+    const high = Math.max(open, close) + (35 + (sequence % 4) * 8) * scale;
+    const low = Math.min(open, close) - (35 + (sequence % 5) * 7) * scale;
 
     points.push({
       date: date.toISOString().slice(0, 10),
-      open: price - 20,
-      high: price + 50,
-      low: price - 60,
-      close: price,
-      volume: 70000000 + ((lookbackDays - i) % 10) * 2500000,
+      open,
+      high,
+      low,
+      close,
+      volume: 70000000 + (sequence % 10) * 2500000,
     });
+
+    previousClose = close;
   }
 
   const closes = points.map((item) => item.close);

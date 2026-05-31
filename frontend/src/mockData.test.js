@@ -36,6 +36,14 @@ describe('mockData', () => {
       lookback_days: 120,
     });
     expect(result.price_chart.points).toHaveLength(120);
+    expect(result.price_chart.points.some((point) => point.close >= point.open)).toBe(true);
+    expect(result.price_chart.points.some((point) => point.close < point.open)).toBe(true);
+    expect(result.price_chart.stats.high).toBe(
+      Math.max(...result.price_chart.points.map((point) => point.high))
+    );
+    expect(result.price_chart.stats.low).toBe(
+      Math.min(...result.price_chart.points.map((point) => point.low))
+    );
   });
 
   it('supports required direct mock routes', () => {
