@@ -133,6 +133,9 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "data_quality_warnings": _as_text_list(data_quality.get("warnings")) if data_quality else [],
         "analyst_sections": _analyst_sections(result),
         "financial_highlights": _financial_highlights(result.get("financial_highlights")),
+        "company_profile": _as_dict(result.get("company_profile")),
+        "company_profile_rows": _company_profile_rows(result),
+        "company_profile_executives": _company_profile_executives(result),
         "show_trade_plan": is_actionable_trade_plan,
     }
 
@@ -397,6 +400,39 @@ def _data_quality_rows(data_quality: dict[str, Any]) -> list[dict[str, str]]:
         "news",
     ]
     return [_row(key.replace("_", " ").title(), data_quality.get(key)) for key in keys if key in data_quality]
+
+
+def _company_profile_rows(result: dict[str, Any]) -> list[dict[str, str]]:
+    profile = _as_dict(result.get("company_profile"))
+    if not profile or not profile.get("available"):
+        return []
+
+    return [
+        {"label": "Company Name", "value": _display(profile.get("name"))},
+        {"label": "Sector", "value": _display(profile.get("sector"))},
+        {"label": "Industry", "value": _display(profile.get("industry"))},
+        {"label": "Address", "value": _display(profile.get("address"))},
+        {"label": "Phone", "value": _display(profile.get("phone"))},
+        {"label": "Website", "value": _display(profile.get("website"))},
+        {"label": "Full Time Employees", "value": _display(profile.get("full_time_employees"))},
+    ]
+
+
+def _company_profile_executives(result: dict[str, Any]) -> list[dict[str, str]]:
+    profile = _as_dict(result.get("company_profile"))
+    executives = profile.get("executives") if profile else []
+    if not isinstance(executives, list):
+        return []
+
+    rows = []
+    for item in executives[:10]:
+        if not isinstance(item, dict):
+            continue
+        rows.append({
+            "name": _display(item.get("name")),
+            "title": _display(item.get("title")),
+        })
+    return rows
 
 
 def _financial_highlights(value: Any) -> dict[str, Any] | None:

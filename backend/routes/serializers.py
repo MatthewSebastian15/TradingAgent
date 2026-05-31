@@ -63,6 +63,7 @@ SUMMARY_FIELDS = {
     "budget_exhausted",
     "agents_skipped",
     "financial_highlights",
+    "company_profile",
 }
 
 AGENT_SEQUENCE = [
@@ -326,6 +327,7 @@ def parse_final_result(
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
         "financial_highlights": final_state.get("financial_highlights"),
+        "company_profile": final_state.get("company_profile") or {},
         "data_quality": _complete_risk_engine_data_quality(
             data_quality
             or {

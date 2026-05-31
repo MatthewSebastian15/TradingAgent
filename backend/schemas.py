@@ -61,6 +61,26 @@ class FinancialHighlightsResponse(ApiSchema):
     data_quality: dict[str, Any] = Field(default_factory=dict)
 
 
+class CompanyExecutive(ApiSchema):
+    name: str
+    title: str | None = None
+
+
+class CompanyProfile(ApiSchema):
+    available: bool = False
+    ticker: str | None = None
+    name: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    website: str | None = None
+    full_time_employees: int | None = None
+    description: str | None = None
+    executives: list[CompanyExecutive] = Field(default_factory=list)
+    warning: str | None = None
+
+
 class AnalysisResponse(ApiSchema):
     request_id: str
     ticker: str
@@ -75,6 +95,7 @@ class AnalysisResponse(ApiSchema):
     agents_used: list[str] = Field(default_factory=list)
     time_horizon_months: int | None = None
     financial_highlights: FinancialHighlightsResponse | None = None
+    company_profile: CompanyProfile | dict[str, Any] | None = None
 
 
 class AnalysisJobCreateResponse(ApiSchema):

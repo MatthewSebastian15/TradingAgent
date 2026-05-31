@@ -33,6 +33,48 @@
         </div>
       {% endif %}
 
+      {% if report.company_profile_rows %}
+        <section class="section">
+          <h2>Company Profile</h2>
+
+          <table class="metric-table">
+            <tbody>
+              {% for row in report.company_profile_rows %}
+                <tr>
+                  <th>{{ row.label }}</th>
+                  <td>{{ row.value }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          {% if report.company_profile.description %}
+            <h3>Business Description</h3>
+            <p>{{ report.company_profile.description }}</p>
+          {% endif %}
+
+          {% if report.company_profile_executives %}
+            <h3>Key Executives</h3>
+            <table class="metric-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Title</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for executive in report.company_profile_executives %}
+                  <tr>
+                    <td>{{ executive.name }}</td>
+                    <td>{{ executive.title }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+        </section>
+      {% endif %}
+
       <section class="section">
         <h2>Executive Summary</h2>
         <table>

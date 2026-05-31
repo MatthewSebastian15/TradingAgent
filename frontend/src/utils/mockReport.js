@@ -63,6 +63,27 @@ function row(label, value) {
   return { label, value: display(value) };
 }
 
+function buildCompanyProfileRows(profile) {
+  if (!profile?.available) return [];
+  return [
+    row('Company Name', profile.name),
+    row('Sector', profile.sector),
+    row('Industry', profile.industry),
+    row('Address', profile.address),
+    row('Phone', profile.phone),
+    row('Website', profile.website),
+    row('Full Time Employees', profile.full_time_employees),
+  ];
+}
+
+function buildCompanyProfileExecutives(profile) {
+  if (!Array.isArray(profile?.executives)) return [];
+  return profile.executives
+    .slice(0, 10)
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => ({ name: display(item.name), title: display(item.title) }));
+}
+
 export function buildMockActionPlanRows(result) {
   return [
     row('Current Price', price(result?.current_price, result)),
@@ -186,6 +207,9 @@ export function buildMockReportContext(result = {}) {
     invalidation_conditions: arrayOfText(result.invalidation_conditions),
     analyst_sections: buildAnalystSections(result),
     financial_highlights: result.financial_highlights || null,
+    company_profile: result.company_profile || {},
+    company_profile_rows: buildCompanyProfileRows(result.company_profile),
+    company_profile_executives: buildCompanyProfileExecutives(result.company_profile),
   };
 }
 
@@ -264,6 +288,31 @@ function renderFinancialHighlights(financialHighlights) {
           .join('')}
       </tbody>
     </table>
+  </section>`;
+}
+
+function renderCompanyProfile(profile, rows, executives) {
+  if (!rows.length) return '';
+  return `<section class="section">
+    <h2>Company Profile</h2>
+    <table><tbody>${renderRows(rows)}</tbody></table>
+    ${profile.description ? `<h3>Business Description</h3><p>${escapeHtml(profile.description)}</p>` : ''}
+    ${
+      executives.length
+        ? `<h3>Key Executives</h3>
+          <table>
+            <thead><tr><th>Name</th><th>Title</th></tr></thead>
+            <tbody>
+              ${executives
+                .map(
+                  (executive) =>
+                    `<tr><td>${escapeHtml(executive.name)}</td><td>${escapeHtml(executive.title)}</td></tr>`
+                )
+                .join('')}
+            </tbody>
+          </table>`
+        : ''
+    }
   </section>`;
 }
 
@@ -375,6 +424,12 @@ export function renderMockReportHtml(report) {
         <h2>Executive Summary</h2>
         <p>${escapeHtml(report.executive_summary)}</p>
       </section>
+
+      ${renderCompanyProfile(
+        report.company_profile,
+        report.company_profile_rows,
+        report.company_profile_executives
+      )}
 
       ${renderFinancialHighlights(report.financial_highlights)}
 

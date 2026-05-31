@@ -71,4 +71,13 @@ describe('mockReport', () => {
     expect(html).toContain('Revenue');
     expect(html).toContain('N/A');
   });
+
+  it('renders static company profile in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Company Profile');
+    expect(html).toContain('NVIDIA Corporation');
+    expect(html).toContain('Business Description');
+    expect(html).toContain('Key Executives');
+  });
 });

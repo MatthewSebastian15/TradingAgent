@@ -36,6 +36,43 @@ const COMMON_MOCK_QUALITY = {
   warnings: ['Mock data only. No backend, provider, or LLM call was executed.'],
 };
 
+const MOCK_COMPANY_PROFILE = {
+  available: true,
+  ticker: 'NVDA',
+  name: 'NVIDIA Corporation',
+  sector: 'Technology',
+  industry: 'Semiconductors',
+  address: '2788 San Tomas Expressway, Santa Clara, CA, United States',
+  phone: '408 486 2000',
+  website: 'https://www.nvidia.com',
+  full_time_employees: 36000,
+  description:
+    'NVIDIA Corporation provides accelerated computing platforms, graphics processors, networking products, and software for data center, gaming, professional visualization, and automotive markets.',
+  executives: [
+    { name: 'Mr. Jen-Hsun Huang', title: 'President, CEO & Director' },
+    { name: 'Ms. Colette M. Kress', title: 'Executive VP & CFO' },
+  ],
+};
+
+const MOCK_IDX_COMPANY_PROFILE = {
+  available: true,
+  ticker: 'BBCA.JK',
+  name: 'PT Bank Central Asia Tbk',
+  sector: 'Financial Services',
+  industry: 'Banks - Regional',
+  address: 'Menara BCA, Grand Indonesia, Jl. M.H. Thamrin No. 1, Jakarta, 10310, Indonesia',
+  phone: '62 21 2358 8000',
+  website: 'https://www.bca.co.id',
+  full_time_employees: 27682,
+  description:
+    'PT Bank Central Asia Tbk provides commercial banking and other financial services. The company offers deposits, loans, credit cards, investment products, and transaction banking services.',
+  executives: [
+    { name: 'Mr. Gregory Hendra Lembong', title: 'President Director' },
+    { name: 'Mr. Armand Wahyudi Hartono', title: 'Deputy President Director' },
+    { name: 'Mr. John Kosasih', title: 'Commercial & SME Banking Director' },
+  ],
+};
+
 export const MOCK_FINANCIAL_HIGHLIGHTS = {
   title: 'Key Financial Highlights',
   currency: 'USD',
@@ -447,6 +484,7 @@ function completeMockAnalysis(overrides = {}) {
 
     data_quality: COMMON_MOCK_QUALITY,
     financial_highlights: MOCK_FINANCIAL_HIGHLIGHTS,
+    company_profile: MOCK_COMPANY_PROFILE,
     validation_warnings: [],
     agents_used: AGENTS_USED,
     llm_calls_used: 0,
@@ -468,6 +506,7 @@ function completeMockAnalysis(overrides = {}) {
   const completed = {
     ...result,
     ...overrides,
+    company_profile: overrides.company_profile || result.company_profile,
     data_quality: normalizeDataQuality(overrides.data_quality || result.data_quality),
   };
 
@@ -803,6 +842,7 @@ export const MOCK_IDX_RESPONSE = completeMockAnalysis({
   position_size_hint: 'Use smaller size due to High volatility.',
   position_sizing_reason:
     'Use staged sizing because the stock is high volatility. IDX prices are rounded using exchange tick-size logic in the backend contract.',
+  company_profile: MOCK_IDX_COMPANY_PROFILE,
   executive_summary: `BBCA.JK is rated Buy because the IDX mock uses a defensive large-cap bank profile with steady profitability, strong liquidity, and a complete tick-size-rounded trade plan. The strongest support is the validated structure: current price and entry are 9800, stop loss is 9300, take profit is 11300, volatility is High at 72, allocation is 8 percent, and risk/reward is exactly 1:3 after local rounding. The biggest risk is macro pressure from rates, consumption, liquidity, or credit costs, but the mock bank profile still favors controlled exposure because asset quality and deposit strength remain supportive. The recommended action is to open a staged position, use smaller sizing despite the 8 percent allocation limit, respect the stop, and avoid averaging down. The horizon is 3 Months, and the thesis is confirmed by stable net interest margin and loan growth, or invalidated by rising credit costs or a break below support. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   market_report:
     'Mock market report: BBCA.JK remains a high-liquidity IDX large cap with a valid 1:3 trade structure.',

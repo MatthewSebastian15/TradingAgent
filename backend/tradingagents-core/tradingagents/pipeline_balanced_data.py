@@ -179,6 +179,18 @@ def _safe_news_data_field(label: str, method: str, *args, limit: int = 12_000) -
     return _safe_data_field(label, lambda: route_to_vendor(method, *args), limit=limit)
 
 
+def _safe_company_profile(ticker: str, trade_date: str) -> dict[str, Any]:
+    try:
+        return route_to_vendor("get_company_profile", ticker, trade_date)
+    except Exception as exc:
+        logger.warning("company_profile fetch failed for %s: %s", ticker, exc)
+        return {
+            "available": False,
+            "ticker": ticker,
+            "warning": str(exc),
+        }
+
+
 def _extract_price_dataframe(price_field: DataField) -> Any:
     try:
         import pandas as pd
@@ -606,6 +618,7 @@ def collect_market_data(
     income_statement = results["income_statement"]
     annual_balance_sheet = annual_statement_results["annual_balance_sheet"]
     annual_income_statement = annual_statement_results["annual_income_statement"]
+    company_profile = _safe_company_profile(ticker, trade_date)
     company_news = results["company_news"]
     global_news = results["global_news"]
     insider_transactions = results["insider_transactions"]
@@ -704,6 +717,7 @@ def collect_market_data(
         last_close_price=last_close_price,
         last_close_price_as_of=last_close_price_as_of or trade_date,
         last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
+        company_profile=company_profile,
         data_sources=data_sources,
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),

@@ -5,6 +5,8 @@ import FinancialHighlightsTable from './results/FinancialHighlightsTable';
 import MetricBox from './results/MetricBox';
 import NoticeBox from './results/NoticeBox';
 import SectionHeader from './results/SectionHeader';
+import ProfileTab from './results/tabs/ProfileTab';
+import ResultTabs from './results/tabs/ResultTabs';
 import { REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
@@ -522,6 +524,8 @@ function ReportDisclaimer() {
 export default function ResultCard({ result, enableReportExport = true, mockReport = false }) {
   const [thesisExpanded, setThesisExpanded] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
+  const [activeTab, setActiveTab] = useState('analisis');
+  const disabledTabs = ['chart_price', 'news'];
 
   if (!result) return null;
 
@@ -620,231 +624,246 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
         </div>
       </div>
 
-      {/* Decision hero */}
-      <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
-        <div>
-          <div className={`font-display text-5xl font-bold tracking-wider ${decisionColor}`}>
-            {formatTickerLabel(result.ticker)}
-          </div>
-          <div className="mt-3">
-            <DecisionBadge decision={finalDecision} />
-          </div>
-          {finalDecision && (
-            <div className="mt-2 font-mono text-xs text-bloomberg-muted tracking-wider">
-              RECOMMENDATION: {finalDecision.toUpperCase()}
-            </div>
-          )}
-          {currentPriceSource && (
-            <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
-              SOURCE: <span className="text-bloomberg-white">{currentPriceSource}</span>
-            </div>
-          )}
-          {result.llm_decision && result.llm_decision !== finalDecision && (
-            <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
-              LLM: {String(result.llm_decision).toUpperCase()} → FINAL:{' '}
-              {String(finalDecision).toUpperCase()}
-            </div>
-          )}
-        </div>
+      <ResultTabs activeTab={activeTab} onTabChange={setActiveTab} disabledTabs={disabledTabs} />
 
-        {/* Key metrics — PRICE TARGET removed */}
-        <div className="min-w-0 flex-shrink-0 w-full lg:w-[43rem] max-w-full">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {hasDisplayValue(currentPrice) && (
-              <MetricBox
-                label="LAST PRICE"
-                value={formatPrice(currentPrice, result.ticker)}
-                highlight
-              />
-            )}
-            {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
-            {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
-            {confidence !== null && (
-              <MetricBox
-                label="CONFIDENCE"
-                value={
-                  typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : confidence
-                }
-              />
-            )}
-            {allocation !== null && (
-              <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
-            )}
+      {activeTab === 'analisis' && (
+        <>
+          {/* Decision hero */}
+          <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
+            <div>
+              <div className={`font-display text-5xl font-bold tracking-wider ${decisionColor}`}>
+                {formatTickerLabel(result.ticker)}
+              </div>
+              <div className="mt-3">
+                <DecisionBadge decision={finalDecision} />
+              </div>
+              {finalDecision && (
+                <div className="mt-2 font-mono text-xs text-bloomberg-muted tracking-wider">
+                  RECOMMENDATION: {finalDecision.toUpperCase()}
+                </div>
+              )}
+              {currentPriceSource && (
+                <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
+                  SOURCE: <span className="text-bloomberg-white">{currentPriceSource}</span>
+                </div>
+              )}
+              {result.llm_decision && result.llm_decision !== finalDecision && (
+                <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
+                  LLM: {String(result.llm_decision).toUpperCase()} → FINAL:{' '}
+                  {String(finalDecision).toUpperCase()}
+                </div>
+              )}
+            </div>
+
+            {/* Key metrics — PRICE TARGET removed */}
+            <div className="min-w-0 flex-shrink-0 w-full lg:w-[43rem] max-w-full">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {hasDisplayValue(currentPrice) && (
+                  <MetricBox
+                    label="LAST PRICE"
+                    value={formatPrice(currentPrice, result.ticker)}
+                    highlight
+                  />
+                )}
+                {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
+                {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
+                {confidence !== null && (
+                  <MetricBox
+                    label="CONFIDENCE"
+                    value={
+                      typeof confidence === 'number'
+                        ? `${Math.round(confidence * 100)}%`
+                        : confidence
+                    }
+                  />
+                )}
+                {allocation !== null && (
+                  <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {!hasDisplayValue(currentPrice) && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <NoticeBox title="PRICE DATA MISSING" tone="red">
-            Last price is unavailable, so no synthetic price is shown.
-          </NoticeBox>
-        </div>
-      )}
-
-      {(result.decision_adjusted || (isActionable && !tradePlanValid)) && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          {result.decision_adjusted && (
-            <NoticeBox title="DECISION ADJUSTED">
-              {result.decision_adjusted_reason || 'Backend validation changed the final decision.'}
-            </NoticeBox>
-          )}
-          {isActionable && !tradePlanValid && (
-            <div className={result.decision_adjusted ? 'mt-3' : ''}>
-              <NoticeBox title="TRADE PLAN NOT VALID" tone="red">
-                Backend validation did not approve a complete actionable trade plan.
+          {!hasDisplayValue(currentPrice) && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <NoticeBox title="PRICE DATA MISSING" tone="red">
+                Last price is unavailable, so no synthetic price is shown.
               </NoticeBox>
             </div>
           )}
-        </div>
-      )}
 
-      {shouldShowActionPlan && (
-        <ActionableMetrics result={result} currentPrice={currentPrice} riskReward={riskReward} />
-      )}
-
-      {shouldShowHoldMetrics && <HoldMetrics result={result} currentPrice={currentPrice} />}
-
-      {/* Data quality */}
-      {(dataQuality || validationWarnings.length > 0 || requestWarnings.length > 0) && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <DataQuality
-            dq={dataQuality}
-            validationWarnings={validationWarnings}
-            validationWarningDetails={validationWarningDetails}
-            requestWarnings={requestWarnings}
-            tradePlanValid={tradePlanValid}
-            isActionable={isActionable}
-          />
-        </div>
-      )}
-
-      {budgetExhausted && (
-        <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
-          <SectionHeader label="PIPELINE LIMIT" />
-          <p className="font-mono text-xs text-bloomberg-amber leading-relaxed">
-            LLM call budget exhausted before all stages completed. Treat this analysis as
-            incomplete.
-          </p>
-          {agentsSkipped.length > 0 && (
-            <div className="mt-2 font-mono text-xs text-bloomberg-muted">
-              SKIPPED: {agentsSkipped.join(', ')}
+          {(result.decision_adjusted || (isActionable && !tradePlanValid)) && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              {result.decision_adjusted && (
+                <NoticeBox title="DECISION ADJUSTED">
+                  {result.decision_adjusted_reason ||
+                    'Backend validation changed the final decision.'}
+                </NoticeBox>
+              )}
+              {isActionable && !tradePlanValid && (
+                <div className={result.decision_adjusted ? 'mt-3' : ''}>
+                  <NoticeBox title="TRADE PLAN NOT VALID" tone="red">
+                    Backend validation did not approve a complete actionable trade plan.
+                  </NoticeBox>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Catalysts + Invalidations */}
-      {(catalysts.length > 0 || invalidations.length > 0) && (
-        <div className="px-4 py-4 border-b border-bloomberg-border grid grid-cols-2 gap-4">
-          {catalysts.length > 0 && (
-            <div>
-              <SectionHeader label="KEY CATALYSTS" />
-              <ul className="flex flex-col gap-1.5">
-                {catalysts.map((c, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="font-mono text-xs text-bloomberg-green flex-shrink-0 mt-0.5">
-                      +
-                    </span>
-                    <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                      {c}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+          {shouldShowActionPlan && (
+            <ActionableMetrics
+              result={result}
+              currentPrice={currentPrice}
+              riskReward={riskReward}
+            />
+          )}
+
+          {shouldShowHoldMetrics && <HoldMetrics result={result} currentPrice={currentPrice} />}
+
+          {/* Data quality */}
+          {(dataQuality || validationWarnings.length > 0 || requestWarnings.length > 0) && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <DataQuality
+                dq={dataQuality}
+                validationWarnings={validationWarnings}
+                validationWarningDetails={validationWarningDetails}
+                requestWarnings={requestWarnings}
+                tradePlanValid={tradePlanValid}
+                isActionable={isActionable}
+              />
             </div>
           )}
-          {invalidations.length > 0 && (
-            <div>
-              <SectionHeader label="INVALIDATION CONDITIONS" />
-              <ul className="flex flex-col gap-1.5">
-                {invalidations.map((inv, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="font-mono text-xs text-bloomberg-red flex-shrink-0 mt-0.5">
-                      ✕
-                    </span>
-                    <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                      {inv}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+
+          {budgetExhausted && (
+            <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
+              <SectionHeader label="PIPELINE LIMIT" />
+              <p className="font-mono text-xs text-bloomberg-amber leading-relaxed">
+                LLM call budget exhausted before all stages completed. Treat this analysis as
+                incomplete.
+              </p>
+              {agentsSkipped.length > 0 && (
+                <div className="mt-2 font-mono text-xs text-bloomberg-muted">
+                  SKIPPED: {agentsSkipped.join(', ')}
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Executive Summary */}
-      {summary && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <SectionHeader label="EXECUTIVE SUMMARY" />
-          <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-            {parseBold(summary)}
-          </p>
-        </div>
-      )}
+          {/* Catalysts + Invalidations */}
+          {(catalysts.length > 0 || invalidations.length > 0) && (
+            <div className="px-4 py-4 border-b border-bloomberg-border grid grid-cols-2 gap-4">
+              {catalysts.length > 0 && (
+                <div>
+                  <SectionHeader label="KEY CATALYSTS" />
+                  <ul className="flex flex-col gap-1.5">
+                    {catalysts.map((c, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="font-mono text-xs text-bloomberg-green flex-shrink-0 mt-0.5">
+                          +
+                        </span>
+                        <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                          {c}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {invalidations.length > 0 && (
+                <div>
+                  <SectionHeader label="INVALIDATION CONDITIONS" />
+                  <ul className="flex flex-col gap-1.5">
+                    {invalidations.map((inv, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="font-mono text-xs text-bloomberg-red flex-shrink-0 mt-0.5">
+                          ✕
+                        </span>
+                        <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                          {inv}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
-      {/* Investment Thesis */}
-      {thesis && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <SectionHeader label="INVESTMENT THESIS" />
-          <div
-            className={`overflow-hidden transition-all duration-300 ${thesisExpanded ? '' : 'max-h-24'} relative`}
-          >
-            <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-              {parseBold(thesis)}
-            </p>
-            {!thesisExpanded && (
-              <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-bloomberg-card to-transparent" />
-            )}
-          </div>
-          <button
-            onClick={() => setThesisExpanded(!thesisExpanded)}
-            className="mt-2 font-mono text-xs text-bloomberg-orange hover:text-orange-300 transition-colors tracking-wider"
-          >
-            {thesisExpanded ? '↑ COLLAPSE' : '↓ EXPAND FULL THESIS'}
-          </button>
-        </div>
-      )}
+          {/* Executive Summary */}
+          {summary && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <SectionHeader label="EXECUTIVE SUMMARY" />
+              <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                {parseBold(summary)}
+              </p>
+            </div>
+          )}
 
-      <FinancialHighlightsTable financialHighlights={result.financial_highlights} />
-
-      {/* Agents used */}
-      {agents.length > 0 && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <SectionHeader label="AGENT PIPELINE" />
-          <div className="flex flex-wrap gap-1.5">
-            {agents.map((a, i) => (
-              <span
-                key={i}
-                className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted"
+          {/* Investment Thesis */}
+          {thesis && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <SectionHeader label="INVESTMENT THESIS" />
+              <div
+                className={`overflow-hidden transition-all duration-300 ${thesisExpanded ? '' : 'max-h-24'} relative`}
               >
-                <span className="text-bloomberg-green mr-1.5">✓</span>
-                {a}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <ReportDisclaimer />
-
-      {/* Raw JSON debug */}
-      {canShowRaw && (
-        <div className="px-4 py-3">
-          <button
-            onClick={() => setShowRaw(!showRaw)}
-            className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white tracking-wider transition-colors"
-          >
-            {showRaw ? '▲ HIDE' : '▼ RAW JSON'} (DEBUG)
-          </button>
-          {showRaw && (
-            <pre className="mt-3 bg-black border border-bloomberg-border p-3 text-xs font-mono text-bloomberg-muted overflow-x-auto leading-relaxed whitespace-pre-wrap">
-              {JSON.stringify(result, null, 2)}
-            </pre>
+                <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                  {parseBold(thesis)}
+                </p>
+                {!thesisExpanded && (
+                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-bloomberg-card to-transparent" />
+                )}
+              </div>
+              <button
+                onClick={() => setThesisExpanded(!thesisExpanded)}
+                className="mt-2 font-mono text-xs text-bloomberg-orange hover:text-orange-300 transition-colors tracking-wider"
+              >
+                {thesisExpanded ? '↑ COLLAPSE' : '↓ EXPAND FULL THESIS'}
+              </button>
+            </div>
           )}
-        </div>
+
+          <FinancialHighlightsTable financialHighlights={result.financial_highlights} />
+
+          {/* Agents used */}
+          {agents.length > 0 && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <SectionHeader label="AGENT PIPELINE" />
+              <div className="flex flex-wrap gap-1.5">
+                {agents.map((a, i) => (
+                  <span
+                    key={i}
+                    className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted"
+                  >
+                    <span className="text-bloomberg-green mr-1.5">✓</span>
+                    {a}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <ReportDisclaimer />
+
+          {/* Raw JSON debug */}
+          {canShowRaw && (
+            <div className="px-4 py-3">
+              <button
+                onClick={() => setShowRaw(!showRaw)}
+                className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white tracking-wider transition-colors"
+              >
+                {showRaw ? '▲ HIDE' : '▼ RAW JSON'} (DEBUG)
+              </button>
+              {showRaw && (
+                <pre className="mt-3 bg-black border border-bloomberg-border p-3 text-xs font-mono text-bloomberg-muted overflow-x-auto leading-relaxed whitespace-pre-wrap">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+        </>
       )}
+
+      {activeTab === 'profile' && <ProfileTab profile={result.company_profile} />}
     </div>
   );
 }

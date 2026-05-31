@@ -63,6 +63,7 @@ class CollectedData:
     recommendation_trends: str = ""
     last_close_price_as_of: str | None = None
     last_close_price_source: str | None = None
+    company_profile: dict[str, Any] | None = None
     data_sources: dict[str, str] | None = None
     data_limitations: list[str] | None = None
     vendor_attempts: dict[str, list[str]] | None = None

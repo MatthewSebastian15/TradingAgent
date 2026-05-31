@@ -86,3 +86,18 @@ def test_request_budget_stops_extra_calls():
     assert budget.can_call("finnhub") is True
     budget.record_call("finnhub", "get_quote")
     assert budget.can_call("finnhub") is False
+
+
+def test_company_profile_routes_to_yfinance(monkeypatch):
+    from tradingagents.dataflows import interface
+
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS,
+        "get_company_profile",
+        {"yfinance": lambda ticker, _curr_date=None: {"available": True, "ticker": ticker}},
+    )
+
+    with use_config(BASE_CONFIG):
+        result = route_to_vendor("get_company_profile", "BBCA.JK")
+
+    assert result == {"available": True, "ticker": "BBCA.JK"}
