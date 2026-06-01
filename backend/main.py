@@ -11,7 +11,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from body_limit import RequestBodyLimitMiddleware
-from config import APP_NAME, CORS_ORIGINS, REQUEST_BODY_MAX_BYTES, llm, validate_startup_config
+from config import APP_NAME, CORS_ORIGINS, IS_DEVELOPMENT, REQUEST_BODY_MAX_BYTES, llm, validate_startup_config
 from errors import (
     ApiError,
     api_error_handler,
@@ -23,7 +23,9 @@ from logging_config import RequestIdMiddleware, configure_logging
 from routes.analysis import router as analysis_router
 from routes.analysis import shutdown_executor
 from routes.market import router as market_router
+from routes.news import include_news_routes
 from routes.reports import router as reports_router
+from routes.session import router as session_router
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -101,7 +103,7 @@ app.add_middleware(
         "Last-Event-ID",
         "x-api-key",
         "Authorization",
-        "x-session-id",
+        "x-owner-token",
     ],
 )
 
@@ -112,7 +114,9 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(analysis_router, prefix="/api")
 app.include_router(market_router, prefix="/api")
+include_news_routes(app, prefix="/api", is_development=IS_DEVELOPMENT)
 app.include_router(reports_router, prefix="/api")
+app.include_router(session_router, prefix="/api")
 
 
 @app.get("/health", tags=["ops"])

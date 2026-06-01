@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
-from config_env import BASE_DIR, env, env_bool, env_int
+from config_env import BASE_DIR, env, env_bool, env_float, env_int
 
 logger = logging.getLogger("config")
 
@@ -71,12 +71,31 @@ DEFAULT_ANALYSIS_DEPTH = "balanced"
 ANALYSIS_DEPTHS: tuple[str, ...] = ("fast", "balanced", "deep")
 RESPONSE_DETAILS: tuple[str, ...] = ("summary", "full", "debug")
 
-# Actual LLM call budgets enforced inside the balanced pipeline.
-# Fast mode skips the debate/risk committee and keeps a final PM call.
+# Analysis depth controls both the LLM budget and the intended debate depth.
+# Fast skips debate/risk committee, balanced runs the standard flow, and deep
+# has enough budget for extra debate/risk passes when the pipeline supports them.
+ANALYSIS_DEPTH_CONFIG: dict[str, dict[str, int]] = {
+    "fast": {
+        "llm_budget": 6,
+        "llm_retries": 1,
+        "debate_rounds": 1,
+        "risk_rounds": 1,
+    },
+    "balanced": {
+        "llm_budget": 9,
+        "llm_retries": 2,
+        "debate_rounds": 2,
+        "risk_rounds": 2,
+    },
+    "deep": {
+        "llm_budget": 12,
+        "llm_retries": 3,
+        "debate_rounds": 3,
+        "risk_rounds": 3,
+    },
+}
 ANALYSIS_DEPTH_LLM_BUDGETS: dict[str, int] = {
-    "fast": 6,
-    "balanced": 9,
-    "deep": 9,
+    depth: cfg["llm_budget"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()
 }
 MAX_GEMINI_CALLS = ANALYSIS_DEPTH_LLM_BUDGETS[DEFAULT_ANALYSIS_DEPTH]
 
@@ -90,7 +109,7 @@ REQUIRE_API_KEY_FOR_RATE_LIMIT = env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", IS_P
 if IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
     logger.warning(
         "APP_ENV=production but REQUIRE_API_KEY_FOR_RATE_LIMIT is disabled; "
-        "anonymous clients will be accepted and rate-limited by IP only."
+        "proxy requests without an API key will be accepted. Browser owner tokens are still required."
     )
 
 # LLM resilience
@@ -98,9 +117,7 @@ LLM_TIMEOUT_SECONDS = env_int("LLM_TIMEOUT_SECONDS", 60, min_value=1)
 LLM_MAX_RETRIES = env_int("LLM_MAX_RETRIES", 2, min_value=1)
 PROVIDER_SDK_MAX_RETRIES = env_int("PROVIDER_SDK_MAX_RETRIES", 0, min_value=0)
 LLM_RETRIES_BY_DEPTH: dict[str, int] = {
-    "fast": 1,
-    "balanced": 2,
-    "deep": 3,
+    depth: cfg["llm_retries"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()
 }
 LLM_RETRY_BASE_DELAY = 1.5
 LLM_RETRY_MAX_DELAY = 30
@@ -110,24 +127,63 @@ MAX_CONCURRENT_LLM_CALLS = 3
 # Cache
 CACHE_TTL_SECONDS = env_int("CACHE_TTL_SECONDS", 900, min_value=1)
 CACHE_MAX_ENTRIES = env_int("CACHE_MAX_ENTRIES", 512, min_value=1)
-ANALYSIS_RESULT_CACHE_TTL_SECONDS = 60 * 60 * 8
-ANALYSIS_RESULT_CACHE_MAX_ENTRIES = 256
-ANALYSIS_JOB_TTL_SECONDS = 60 * 60 * 8
-ANALYSIS_JOB_MAX_ENTRIES = 256
+ANALYSIS_RESULT_CACHE_TTL_SECONDS = env_int("ANALYSIS_RESULT_CACHE_TTL_SECONDS", 60 * 60 * 8, min_value=60)
+ANALYSIS_RESULT_CACHE_MAX_ENTRIES = env_int("ANALYSIS_RESULT_CACHE_MAX_ENTRIES", 256, min_value=1)
+ANALYSIS_JOB_TTL_SECONDS = env_int("ANALYSIS_JOB_TTL_SECONDS", 60 * 60 * 8, min_value=60)
+ANALYSIS_JOB_MAX_ENTRIES = env_int("ANALYSIS_JOB_MAX_ENTRIES", 256, min_value=1)
 ANALYSIS_JOB_MAX_ACTIVE = min(env_int("ANALYSIS_JOB_MAX_ACTIVE", 32, min_value=1), ANALYSIS_JOB_MAX_ENTRIES)
 ANALYSIS_JOB_EVENT_REPLAY_LIMIT = env_int("ANALYSIS_JOB_EVENT_REPLAY_LIMIT", 500, min_value=1)
-ANALYSIS_JOB_CACHE_DB_PATH = str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3")
+ANALYSIS_JOB_CACHE_DB_PATH = env(
+    "ANALYSIS_JOB_CACHE_DB_PATH",
+    str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3"),
+)
+OWNER_SESSION_SECRET = env("OWNER_SESSION_SECRET", "")
+if IS_PRODUCTION and not OWNER_SESSION_SECRET:
+    raise ValueError("OWNER_SESSION_SECRET must be configured in production.")
+OWNER_SESSION_TTL_SECONDS = env_int("OWNER_SESSION_TTL_SECONDS", ANALYSIS_JOB_TTL_SECONDS, min_value=60)
 DATA_CACHE_BACKEND = "sqlite"
-DATA_CACHE_DB_PATH = str(BASE_DIR / ".cache" / "market_data.sqlite3")
-DATA_CACHE_TTL_SECONDS = CACHE_TTL_SECONDS
-DATA_CACHE_MAX_ENTRIES = CACHE_MAX_ENTRIES
+DATA_CACHE_DB_PATH = env(
+    "DATA_CACHE_DB_PATH",
+    str(BASE_DIR / ".cache" / "market_data.sqlite3"),
+)
+DATA_CACHE_TTL_SECONDS = env_int("DATA_CACHE_TTL_SECONDS", CACHE_TTL_SECONDS, min_value=1)
+DATA_CACHE_MAX_ENTRIES = env_int("DATA_CACHE_MAX_ENTRIES", CACHE_MAX_ENTRIES, min_value=1)
 
 # Market-data vendor order. The router tries vendors from left to right and
 # falls back when a provider errors or returns an empty/unusable payload.
 DATA_VENDOR_CORE_STOCK_APIS = env("DATA_VENDOR_CORE_STOCK_APIS", "yfinance,alpha_vantage")
 DATA_VENDOR_TECHNICAL_INDICATORS = env("DATA_VENDOR_TECHNICAL_INDICATORS", "yfinance,alpha_vantage")
 DATA_VENDOR_FUNDAMENTAL_DATA = env("DATA_VENDOR_FUNDAMENTAL_DATA", "yfinance,alpha_vantage")
-DATA_VENDOR_NEWS_DATA = env("DATA_VENDOR_NEWS_DATA", "yfinance,alpha_vantage")
+DATA_VENDOR_NEWS_DATA = env("DATA_VENDOR_NEWS_DATA", "marketaux,newsdata,yfinance,alpha_vantage")
+DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE = env_float(
+    "DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE",
+    0.35,
+    min_value=0,
+    max_value=1,
+)
+
+# Structured news providers
+MARKETAUX_API_KEY = env("MARKETAUX_API_KEY", "")
+NEWSDATA_API_KEY = env("NEWSDATA_API_KEY", "")
+NEWS_PROVIDER_PRIORITY = env("NEWS_PROVIDER_PRIORITY", "marketaux,newsdata")
+NEWS_ENABLED_PROVIDERS = env("NEWS_ENABLED_PROVIDERS", "marketaux,newsdata")
+NEWS_DEFAULT_WINDOW_DAYS = env_int("NEWS_DEFAULT_WINDOW_DAYS", 30, min_value=1)
+NEWS_MAX_ARTICLES_PER_PROVIDER = env_int("NEWS_MAX_ARTICLES_PER_PROVIDER", 10, min_value=1)
+NEWS_MAX_ARTICLES_FOR_PROMPT = env_int("NEWS_MAX_ARTICLES_FOR_PROMPT", 5, min_value=1)
+NEWS_MAX_ARTICLES_FOR_UI = env_int("NEWS_MAX_ARTICLES_FOR_UI", 20, min_value=1)
+NEWS_MIN_RELEVANCE_SCORE = env_int("NEWS_MIN_RELEVANCE_SCORE", 50, min_value=0)
+NEWS_PROMPT_MIN_RELEVANCE_SCORE = env_int("NEWS_PROMPT_MIN_RELEVANCE_SCORE", 65, min_value=0)
+NEWS_CACHE_ENABLED = env_bool("NEWS_CACHE_ENABLED", True)
+NEWS_CACHE_TTL_MINUTES = env_int("NEWS_CACHE_TTL_MINUTES", 360, min_value=1)
+NEWS_CACHE_DB_PATH = env("NEWS_CACHE_DB_PATH", str(BASE_DIR / ".cache" / "news_data.sqlite3"))
+NEWS_CACHE_MAX_ENTRIES = env_int("NEWS_CACHE_MAX_ENTRIES", 512, min_value=1)
+NEWS_DEBUG_RAW_RESPONSE = env_bool("NEWS_DEBUG_RAW_RESPONSE", False)
+NEWS_LOG_PROVIDER_REQUESTS = env_bool("NEWS_LOG_PROVIDER_REQUESTS", True)
+NEWS_VENDOR_TIMEOUT_SECONDS = env_int("NEWS_VENDOR_TIMEOUT_SECONDS", 15, min_value=1)
+NEWS_VENDOR_MAX_RETRIES = env_int("NEWS_VENDOR_MAX_RETRIES", 2, min_value=0)
+NEWS_FETCH_SECONDARY_ALWAYS = env_bool("NEWS_FETCH_SECONDARY_ALWAYS", False)
+NEWS_SECONDARY_FETCH_THRESHOLD = env_int("NEWS_SECONDARY_FETCH_THRESHOLD", 5, min_value=1)
+NEWS_ENABLE_YFINANCE_FALLBACK = env_bool("NEWS_ENABLE_YFINANCE_FALLBACK", True)
 
 # Circuit breaker
 CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5

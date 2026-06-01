@@ -29,25 +29,25 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
     if (!mountedRef.current) throw abortError();
   }, []);
 
-  const cancelCurrentJob = useCallback(({ keepalive = false } = {}) => {
+  const cancelCurrentJob = useCallback(async ({ keepalive = false } = {}) => {
     const jobId = jobIdRef.current;
     if (!jobId) return Promise.resolve();
 
     const controller = keepalive ? null : new AbortController();
     const timeoutId = controller ? window.setTimeout(() => controller.abort(), 3000) : null;
 
-    return fetch(buildApiUrl(`/analysis/jobs/${jobId}`), {
-      method: 'DELETE',
-      headers: buildAuthHeaders(),
-      signal: controller?.signal,
-      keepalive,
-    })
-      .catch(() => {
-        // Abort still closes the client stream; backend cancellation is best-effort.
-      })
-      .finally(() => {
-        if (timeoutId) window.clearTimeout(timeoutId);
+    try {
+      await fetch(buildApiUrl(`/analysis/jobs/${jobId}`), {
+        method: 'DELETE',
+        headers: await buildAuthHeaders(),
+        signal: controller?.signal,
+        keepalive,
       });
+    } catch {
+      // Abort still closes the client stream; backend cancellation is best-effort.
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    }
   }, []);
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
     if (event.type === 'job') {
       emitStatus(`Job status: ${(event.payload.status || 'queued').toUpperCase()}`);
       if (event.payload.result) {
-        emitResult(event.payload.result);
+        emitResult({ job_id: jobIdRef.current, ...event.payload.result });
         return true;
       }
       if (event.payload.error) {
@@ -96,7 +96,7 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
       if (emitAgentProgress) emitAgentProgress(event.payload);
     }
     if (event.type === 'result') {
-      emitResult(event.payload);
+      emitResult({ job_id: jobIdRef.current, ...event.payload });
       return true;
     }
     if (event.type === 'error') {
@@ -115,7 +115,7 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
 
       const createRes = await fetch(buildApiUrl('/analysis/jobs'), {
         method: 'POST',
-        headers: buildHeaders(),
+        headers: await buildHeaders(),
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
@@ -130,7 +130,7 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
       const streamRes = await fetch(buildApiUrl(`/analysis/jobs/${job.job_id}/events`), {
         method: 'GET',
         headers: {
-          ...buildAuthHeaders(),
+          ...(await buildAuthHeaders()),
           Accept: 'text/event-stream',
           'Cache-Control': 'no-cache',
         },

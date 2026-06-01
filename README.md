@@ -55,15 +55,15 @@ The `assets/` folder contains sample results for **Buy**, **Sell**, and **Hold**
 ┌─────────────────────────────────────────────────────────────────┐
 │ React/Vite Frontend                                             │
 │ Dev port: 3000                                                  │
-│ Routes: /home, /analysis, /analysis/:requestId, /analysis.test  │
+│ Routes: /home, /analysis, /analysis/:requestId                  │
 │ UI: US/ID market form, progress log, result card, report export │
 └────────────────────────┬────────────────────────────────────────┘
                          │ POST /api/analysis/jobs
                          │ GET  /api/analysis/jobs/{job_id}/events
                          │ GET  /api/analysis/jobs/{job_id}
                          │ GET  /api/analysis/{request_id}
-                         │ GET  /api/analysis/jobs/{request_id}/report.html
-                         │ GET  /api/analysis/jobs/{request_id}/report.pdf
+                         │ GET  /api/analysis/jobs/{job_id}/report.html
+                         │ GET  /api/analysis/jobs/{job_id}/report.pdf
                          │ DELETE /api/analysis/jobs/{job_id}
 ┌────────────────────────▼────────────────────────────────────────┐
 │ FastAPI Backend                                                 │
@@ -171,7 +171,8 @@ TradingAgent/
         │   ├── mockReport.js
         │   ├── reportApi.js
         │   └── sse.js
-        └── mockData.js
+    dev/
+        └── mockData.js             # Dev-only fixture loaded only when VITE_ENABLE_MOCK=true
 ```
 
 ---
@@ -464,6 +465,8 @@ Docker development binding:
 
 If backend API key enforcement is enabled, set `BACKEND_API_KEY` in the host shell so nginx can inject `x-api-key` server-side. Do not put the backend API key in `VITE_*`, because all `VITE_*` values are visible in browser devtools.
 
+The browser calls `POST /api/session` through nginx and stores the signed `x-owner-token` value in `sessionStorage`. The shared nginx `x-api-key` authenticates the proxy service only. It does not identify the browser owner.
+
 ### Docker + Ollama
 
 ```bash
@@ -629,19 +632,17 @@ Server-Sent Events stream for job progress.
 
 ### GET `/api/analysis/jobs/{job_id}`
 
-Returns job status, initial payload, timestamps, result, or error.
+Canonical endpoint for job status. It accepts only a real `job_id` and returns job metadata, the initial payload, timestamps, result, or error.
 
 ### GET `/api/analysis/{request_id}`
 
-Returns a result by `request_id`. This endpoint is useful after a result has been stored in the job store/persistent cache.
+Canonical endpoint for a completed final result. It accepts only a `request_id` and returns `404` until the job has a stored result.
 
 ### DELETE `/api/analysis/jobs/{job_id}`
 
-Cancels a running job.
+Canonical endpoint for cancelling a running job.
 
-### DELETE `/api/analysis/{job_id}`
-
-Compatibility alias for job cancellation.
+The old `DELETE /api/analysis/{job_id}` alias is kept only for backward compatibility and is hidden from OpenAPI docs.
 
 ### POST `/api/analyze`
 
@@ -680,6 +681,8 @@ Legacy SSE endpoint. Runs the analysis with streamed progress without using the 
 | `CORS_ORIGINS` | Required in production | Explicit comma-separated origins. `*` is rejected. |
 | `API_KEY` | Required in production | Backend API key for `x-api-key` or `Authorization: Bearer`. |
 | `REQUIRE_API_KEY_FOR_RATE_LIMIT` | Recommended in production | If true, requests without a key are rejected. |
+| `OWNER_SESSION_SECRET` | Required in production | HMAC secret for signed browser owner sessions. |
+| `OWNER_SESSION_TTL_SECONDS` | No | Owner session TTL. Defaults to `ANALYSIS_JOB_TTL_SECONDS`. |
 | `TRUSTED_PROXY_HOSTS` | No | Reserved for trusted reverse proxies. Default is empty. |
 | `LLM_PROVIDER` | Yes | `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, or `ollama`. |
 | `DEEP_THINK_LLM` | Yes | Model for heavy reasoning stages. |

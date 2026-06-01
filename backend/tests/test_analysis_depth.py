@@ -66,16 +66,19 @@ def _collected_data(trade_date: str = "2026-05-18") -> pipeline.CollectedData:
         ),
         (
             "deep",
-            9,
+            12,
             [
                 "Market Analyst",
                 "News + Social Analyst",
                 "Fundamentals Analyst",
                 "Bull Researcher",
                 "Bear Researcher",
+                "Bull Researcher R2",
+                "Bear Researcher R2",
                 "Research Manager",
                 "Trader",
                 "Risk Committee",
+                "Risk Committee R2",
                 "Portfolio Manager",
             ],
         ),
@@ -110,4 +113,5 @@ def test_analysis_depth_controls_llm_agent_calls(depth, expected_budget, expecte
     assert result["analysis_depth"] == depth
     assert result["balanced_gemini_request_budget"] == expected_budget
     assert result["balanced_gemini_calls_used"] == expected_budget
+    assert result["analysis_depth_config"]["llm_budget"] == expected_budget
     assert result["agents_skipped"] == []

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MOCK_HOLD_RESPONSE, MOCK_RESPONSE } from '../mockData';
+import { MOCK_HOLD_RESPONSE, MOCK_RESPONSE } from '../../dev/mockData';
 import { buildMockActionPlanRows, buildMockReportHtml } from './mockReport';
 
 describe('mockReport', () => {
@@ -52,5 +52,62 @@ describe('mockReport', () => {
     expect(html).not.toContain('<div class="metric-label">Entry</div>');
     expect(html).not.toContain('<div class="metric-label">Stop Loss</div>');
     expect(html).not.toContain('<div class="metric-label">Take Profit</div>');
+  });
+
+  it('renders the mock report disclaimer in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_HOLD_RESPONSE);
+
+    expect(html).toContain('Disclaimer');
+    expect(html).toContain('mock analysis report');
+    expect(html).toContain('dummy data');
+    expect(html).toContain('Do not use mock report output');
+  });
+
+  it('renders static financial highlights in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Key Financial Highlights');
+    expect(html).toContain('FY26Q1');
+    expect(html).toContain('Revenue');
+    expect(html).toContain('N/A');
+  });
+
+  it('renders static company profile in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Company Profile');
+    expect(html).toContain('NVIDIA Corporation');
+    expect(html).toContain('Business Description');
+    expect(html).toContain('Key Executives');
+  });
+
+  it('renders static Chart & Price summary in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Chart &amp; Price Summary');
+    expect(html).toContain('Lookback Days');
+    expect(html).toContain('Average Volume');
+  });
+
+  it('renders static Related News items in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Related News');
+    expect(html).toContain('NVDA earnings outlook remains constructive');
+    expect(html).toContain('Open original source');
+  });
+
+  it('renders Related News text without a link for an unsafe URL', () => {
+    const html = buildMockReportHtml({
+      ...MOCK_RESPONSE,
+      related_news: {
+        available: true,
+        items: [{ title: 'Unsafe mock URL', url: 'javascript:alert(1)' }],
+      },
+    });
+
+    expect(html).toContain('Unsafe mock URL');
+    expect(html).not.toContain('javascript:');
+    expect(html).not.toContain('Open original source');
   });
 });

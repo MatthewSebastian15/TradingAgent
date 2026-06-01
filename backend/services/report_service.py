@@ -5,11 +5,13 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from errors import ApiError, sanitize_message
 from routes import jobs
+from services.report_disclaimer import REPORT_DISCLAIMER
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +34,12 @@ _REPORT_ENV = Environment(
 
 
 class ReportNotFoundError(ApiError):
-    def __init__(self, request_id: str) -> None:
+    def __init__(self, resource_id: str) -> None:
         super().__init__(
             404,
             "report_not_found",
             "Analysis result was not found or has expired.",
-            details={"request_id": request_id},
+            details={"resource_id": resource_id},
         )
 
 
@@ -57,19 +59,28 @@ class UnsupportedReportMarketError(ApiError):
 
 
 class ReportGenerationError(ApiError):
-    def __init__(self, internal_message: str | None = None) -> None:
+    def __init__(self, message: str | None = None, internal_message: str | None = None) -> None:
         super().__init__(
             500,
             "report_generation_failed",
-            "Failed to generate PDF report.",
+            message or "Failed to generate PDF report.",
             internal_message=internal_message,
         )
 
 
-async def get_analysis_result_for_report(request_id: str) -> dict[str, Any]:
-    """Return a completed analysis payload by request_id without rerunning analysis."""
+async def get_analysis_result_for_report(job_id: str, *, owner_id: str) -> dict[str, Any]:
+    """Return a completed analysis payload by canonical job_id."""
 
-    job = await jobs.JOB_STORE.get_by_request_id(request_id)
+    job = await jobs.JOB_STORE.get(job_id, owner_id=owner_id)
+    if job is None or not isinstance(job.result, dict):
+        raise ReportNotFoundError(job_id)
+    return dict(job.result)
+
+
+async def get_analysis_result_for_report_by_request_id(request_id: str, *, owner_id: str) -> dict[str, Any]:
+    """Return a completed analysis payload through the migration alias."""
+
+    job = await jobs.JOB_STORE.get_by_request_id(request_id, owner_id=owner_id)
     if job is None or not isinstance(job.result, dict):
         raise ReportNotFoundError(request_id)
     return dict(job.result)
@@ -113,6 +124,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "trade_date": _clean_text(result.get("trade_date")),
         "generated_at": _format_datetime(datetime.now(timezone.utc).isoformat()),
         "analysis_created_at": _format_datetime(result.get("analysis_created_at")),
+        "disclaimer": REPORT_DISCLAIMER,
         "current_price": current_price,
         "current_price_display": _format_price(current_price, ticker, market),
         "current_price_as_of": _display(result.get("current_price_as_of") or result.get("last_close_price_as_of")),
@@ -130,6 +142,16 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "data_quality_rows": _data_quality_rows(data_quality),
         "data_quality_warnings": _as_text_list(data_quality.get("warnings")) if data_quality else [],
         "analyst_sections": _analyst_sections(result),
+        "financial_highlights": _financial_highlights(result.get("financial_highlights")),
+        "company_profile": _as_dict(result.get("company_profile")),
+        "company_profile_rows": _company_profile_rows(result),
+        "company_profile_executives": _company_profile_executives(result),
+        "price_chart_rows": _price_chart_rows(result, ticker, market),
+        "related_news": _as_dict(result.get("related_news")),
+        "related_news_items": _related_news_items(result),
+        "news": _news_context(result),
+        "news_articles": _news_articles(result),
+        "news_provider_rows": _news_provider_rows(result),
         "show_trade_plan": is_actionable_trade_plan,
     }
 
@@ -150,11 +172,22 @@ def render_analysis_report_pdf(report: dict[str, Any]) -> bytes:
     html = render_analysis_report_html(report)
     try:
         from weasyprint import HTML  # noqa: PLC0415
+    except Exception as exc:  # pragma: no cover - depends on optional OS libraries
+        logger.exception("WeasyPrint is unavailable for analysis report PDF export")
+        raise ReportGenerationError(
+            "PDF export is unavailable because WeasyPrint or its system dependencies are missing. "
+            "Use HTML export or install the required OS libraries.",
+            internal_message=sanitize_message(str(exc)),
+        ) from exc
 
+    try:
         return HTML(string=html, base_url=str(BACKEND_DIR)).write_pdf()
     except Exception as exc:  # pragma: no cover - exact WeasyPrint failures depend on OS libraries
         logger.exception("Failed to generate analysis report PDF")
-        raise ReportGenerationError(sanitize_message(str(exc))) from exc
+        raise ReportGenerationError(
+            "PDF export failed while rendering the report. Use HTML export and check backend logs.",
+            internal_message=sanitize_message(str(exc)),
+        ) from exc
 
 
 def analysis_report_filename(report: dict[str, Any], extension: str) -> str:
@@ -383,6 +416,142 @@ def _data_quality_rows(data_quality: dict[str, Any]) -> list[dict[str, str]]:
         "news",
     ]
     return [_row(key.replace("_", " ").title(), data_quality.get(key)) for key in keys if key in data_quality]
+
+
+def _company_profile_rows(result: dict[str, Any]) -> list[dict[str, str]]:
+    profile = _as_dict(result.get("company_profile"))
+    if not profile or not profile.get("available"):
+        return []
+
+    return [
+        {"label": "Company Name", "value": _display(profile.get("name"))},
+        {"label": "Sector", "value": _display(profile.get("sector"))},
+        {"label": "Industry", "value": _display(profile.get("industry"))},
+        {"label": "Address", "value": _display(profile.get("address"))},
+        {"label": "Phone", "value": _display(profile.get("phone"))},
+        {"label": "Website", "value": _display(profile.get("website"))},
+        {"label": "Full Time Employees", "value": _display(profile.get("full_time_employees"))},
+    ]
+
+
+def _company_profile_executives(result: dict[str, Any]) -> list[dict[str, str]]:
+    profile = _as_dict(result.get("company_profile"))
+    executives = profile.get("executives") if profile else []
+    if not isinstance(executives, list):
+        return []
+
+    rows = []
+    for item in executives[:10]:
+        if not isinstance(item, dict):
+            continue
+        rows.append({
+            "name": _display(item.get("name")),
+            "title": _display(item.get("title")),
+        })
+    return rows
+
+
+def _price_chart_rows(result: dict[str, Any], ticker: str, market: str) -> list[dict[str, str]]:
+    chart = _as_dict(result.get("price_chart"))
+    if not chart or not chart.get("available"):
+        return []
+
+    stats = _as_dict(chart.get("stats"))
+    return [
+        {"label": "Window", "value": _display(chart.get("window_label"))},
+        {"label": "Source", "value": _display(chart.get("source"))},
+        {"label": "Lookback Days", "value": _display(chart.get("lookback_days"))},
+        {"label": "Start Price", "value": _format_price(stats.get("start_price"), ticker, market)},
+        {"label": "End Price", "value": _format_price(stats.get("end_price"), ticker, market)},
+        {"label": "Change %", "value": _display(stats.get("change_percent"))},
+        {"label": "High", "value": _format_price(stats.get("high"), ticker, market)},
+        {"label": "Low", "value": _format_price(stats.get("low"), ticker, market)},
+        {"label": "Average Close", "value": _format_price(stats.get("average_close"), ticker, market)},
+        {"label": "Average Volume", "value": _display(stats.get("average_volume"))},
+        {"label": "Point Count", "value": _display(stats.get("point_count"))},
+    ]
+
+
+def _related_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
+    related_news = _as_dict(result.get("related_news"))
+    raw_items = related_news.get("items") if related_news else []
+    if not isinstance(raw_items, list):
+        return []
+
+    items: list[dict[str, Any]] = []
+    for item in raw_items[:8]:
+        if not isinstance(item, dict):
+            continue
+
+        title = _clean_text(item.get("title"))
+        if not title:
+            continue
+
+        items.append(
+            {
+                "title": title,
+                "publisher": _display(item.get("publisher")),
+                "published_at": _display(item.get("published_at")),
+                "source": _display(item.get("source")),
+                "event_type": _display(item.get("event_type")),
+                "summary": _display(item.get("summary")),
+                "relevance_reason": _display(item.get("relevance_reason")),
+                "url": _safe_external_http_url(item.get("url")),
+            }
+        )
+    return items
+
+
+def _safe_external_http_url(value: Any) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+    try:
+        parts = urlsplit(text)
+        hostname = parts.hostname
+        _ = parts.port
+    except ValueError:
+        return None
+    return text if parts.scheme.lower() in {"http", "https"} and hostname else None
+
+
+def _financial_highlights(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    periods = [period for period in value.get("periods", []) if isinstance(period, dict) and period.get("key")]
+    rows = [row for row in value.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)]
+    if not periods or not rows:
+        return None
+    return {
+        "title": _clean_text(value.get("title")) or "Key Financial Highlights",
+        "periods": periods,
+        "rows": rows,
+    }
+
+
+def _news_context(result: dict[str, Any]) -> dict[str, Any]:
+    return _as_dict(result.get("news") or result.get("news_context"))
+
+
+def _news_articles(result: dict[str, Any]) -> list[dict[str, Any]]:
+    articles = _news_context(result).get("articles")
+    if not isinstance(articles, list):
+        return []
+    items = []
+    for article in articles:
+        if not isinstance(article, dict) or not article.get("title"):
+            continue
+        item = dict(article)
+        item["url"] = _safe_external_http_url(article.get("url"))
+        items.append(item)
+    return items
+
+
+def _news_provider_rows(result: dict[str, Any]) -> list[dict[str, str]]:
+    statuses = _news_context(result).get("provider_status")
+    if not isinstance(statuses, dict):
+        return []
+    return [{"label": str(provider), "value": _display(status)} for provider, status in statuses.items()]
 
 
 def _analyst_sections(result: dict[str, Any]) -> list[dict[str, str]]:

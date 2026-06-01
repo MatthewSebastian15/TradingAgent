@@ -9,6 +9,7 @@ from datetime import datetime
 import pytest
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
+from owner_session import issue_owner_session, owner_identifier_from_token
 
 
 def _mock_result() -> dict:
@@ -144,6 +145,104 @@ def test_job_create_rejects_oversized_json_body_before_storing_job(client, monke
     assert asyncio.run(store.stats())["jobs"] == 0
 
 
+def test_preflight_stays_enabled_when_pipeline_callable_is_wrapped(monkeypatch):
+    from routes import analysis
+    from routes.validation import AnalysisRequest
+
+    preflight_calls: list[str] = []
+    pipeline_calls = 0
+
+    async def fake_preflight(req: AnalysisRequest) -> None:
+        preflight_calls.append(req.ticker)
+
+    async def renamed_pipeline(req: AnalysisRequest, request_id: str, request=None):
+        nonlocal pipeline_calls
+        pipeline_calls += 1
+        return _mock_result()
+
+    async def decorated_pipeline(*args, **kwargs):
+        return await renamed_pipeline(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "routes.analysis.ROUTE_DEPS",
+        analysis.AnalysisRouteDependencies(
+            run_preflight=True,
+            enable_result_cache=False,
+            enable_cache_deduplication=False,
+        ),
+    )
+    monkeypatch.setattr("routes.analysis._preflight_market_data", fake_preflight)
+    monkeypatch.setattr("routes.analysis._run_pipeline_async", decorated_pipeline)
+
+    req = AnalysisRequest(ticker="AAPL", trade_date="2026-05-14", max_debate_rounds=1)
+    result = asyncio.run(analysis._compute_result_fields(req, "wrapped-preflight-test"))
+
+    assert preflight_calls == ["AAPL"]
+    assert pipeline_calls == 1
+    assert result["decision"] == "Buy"
+
+
+def test_route_result_cache_stays_enabled_when_pipeline_callable_is_wrapped(client, monkeypatch):
+    from routes import analysis
+
+    calls = 0
+
+    async def renamed_pipeline(req, request_id, request=None):
+        nonlocal calls
+        calls += 1
+        return _mock_result()
+
+    async def decorated_pipeline(*args, **kwargs):
+        return await renamed_pipeline(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "routes.analysis.ROUTE_DEPS",
+        analysis.AnalysisRouteDependencies(
+            run_preflight=False,
+            enable_result_cache=True,
+            enable_cache_deduplication=True,
+        ),
+    )
+    monkeypatch.setattr("routes.analysis._run_pipeline_async", decorated_pipeline)
+
+    payload = {"ticker": "CACHE1", "trade_date": "2026-05-14", "max_debate_rounds": 1}
+    headers = {"x-api-key": "wrapped-cache-test-key"}
+
+    first = client.post("/api/analyze", json=payload, headers=headers)
+    second = client.post("/api/analyze", json=payload, headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert calls == 1
+    assert second.json()["cache"] == {"hit": True, "source": "result_cache"}
+
+
+def test_route_cache_and_deduplication_can_be_disabled_explicitly():
+    from routes.analysis import _get_or_start_analysis
+    from routes.validation import AnalysisRequest
+
+    calls = 0
+
+    async def main():
+        nonlocal calls
+        req = AnalysisRequest(ticker="NOCACHE1", trade_date="2026-05-14", max_debate_rounds=1)
+
+        async def factory():
+            nonlocal calls
+            calls += 1
+            return {"decision": "Hold"}
+
+        first = await _get_or_start_analysis(req, factory, use_cache=False, use_deduplication=False)
+        second = await _get_or_start_analysis(req, factory, use_cache=False, use_deduplication=False)
+        return first, second
+
+    first, second = asyncio.run(main())
+
+    assert calls == 2
+    assert first == {"decision": "Hold"}
+    assert second == {"decision": "Hold"}
+
+
 def test_get_or_start_analysis_shares_in_flight_work():
     from routes.analysis import _get_or_start_analysis
     from routes.validation import AnalysisRequest
@@ -240,8 +339,11 @@ def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
 
     payload = {"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1}
-    owner_headers = {"x-api-key": "job-owner-key"}
-    other_headers = {"x-api-key": "different-job-owner-key"}
+    shared_proxy_headers = {"x-api-key": "shared-proxy-key"}
+    owner_token = client.post("/api/session", headers=shared_proxy_headers).json()["owner_token"]
+    other_token = client.post("/api/session", headers=shared_proxy_headers).json()["owner_token"]
+    owner_headers = {**shared_proxy_headers, "x-owner-token": owner_token}
+    other_headers = {**shared_proxy_headers, "x-owner-token": other_token}
 
     create_response = client.post("/api/analysis/jobs", json=payload, headers=owner_headers)
     assert create_response.status_code == 200
@@ -264,26 +366,32 @@ def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
 def test_analysis_result_endpoint_looks_up_by_request_id(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    owner_token = issue_owner_session()["owner_token"]
+    other_token = issue_owner_session()["owner_token"]
 
     async def create_completed_job():
         job = await store.create(
-            owner_id="owner-1",
+            owner_id=owner_identifier_from_token(owner_token),
             request_id="request-lookup",
             cache_key=_cache_key("MSFT"),
             payload={"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1},
         )
-        await job.complete({"request_id": "request-lookup", "ticker": "MSFT", "decision": "Buy"})
+        await job.complete(
+            {"request_id": "request-lookup", "ticker": "MSFT", "trade_date": "2026-05-14", "decision": "Buy"}
+        )
 
     asyncio.run(create_completed_job())
 
-    response = client.get("/api/analysis/request-lookup", headers={"x-session-id": "different-owner"})
+    response = client.get("/api/analysis/request-lookup", headers={"x-owner-token": owner_token})
+    wrong_owner_response = client.get("/api/analysis/request-lookup", headers={"x-owner-token": other_token})
 
     assert response.status_code == 200
     assert response.json()["request_id"] == "request-lookup"
     assert response.json()["ticker"] == "MSFT"
+    assert wrong_owner_response.status_code == 404
 
 
-def test_job_lookup_accepts_request_id_for_frontend_fallback(client, monkeypatch):
+def test_job_lookup_rejects_request_id_fallback(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     monkeypatch.setattr("routes.analysis._JOB_STORE", store)
 
@@ -298,11 +406,10 @@ def test_job_lookup_accepts_request_id_for_frontend_fallback(client, monkeypatch
 
     asyncio.run(create_completed_job())
 
-    response = client.get("/api/analysis/jobs/request-fallback", headers={"x-session-id": "different-owner"})
+    response = client.get("/api/analysis/jobs/request-fallback")
 
-    assert response.status_code == 200
-    assert response.json()["request_id"] == "request-fallback"
-    assert response.json()["result"]["decision"] == "Hold"
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "BAD_REQUEST"
 
 
 def test_analysis_result_endpoint_returns_404_for_expired_result(client, monkeypatch):

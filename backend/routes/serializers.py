@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from analysis_cache import AnalysisCacheKey
@@ -62,6 +62,12 @@ SUMMARY_FIELDS = {
     "llm_calls_used",
     "budget_exhausted",
     "agents_skipped",
+    "financial_highlights",
+    "company_profile",
+    "price_chart",
+    "related_news",
+    "news",
+    "news_context",
 }
 
 AGENT_SEQUENCE = [
@@ -76,6 +82,10 @@ AGENT_SEQUENCE = [
     ("risk_analysts", "Risk Analysts", "Running or skipping risk debate..."),
     ("portfolio_manager", "Portfolio Manager", "Synthesizing all inputs into the final decision..."),
 ]
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _enum_value(value: Any) -> Any:
@@ -315,11 +325,17 @@ def parse_final_result(
     common = {
         "analysis_depth": final_state.get("analysis_depth", DEFAULT_ANALYSIS_DEPTH),
         "time_horizon_months": final_state.get("time_horizon_months"),
-        "data_fetched_at": final_state.get("data_fetched_at") or datetime.utcnow().isoformat(),
+        "data_fetched_at": final_state.get("data_fetched_at") or _utc_now_iso(),
         "llm_call_budget": final_state.get("balanced_gemini_request_budget"),
         "llm_calls_used": final_state.get("balanced_gemini_calls_used"),
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
+        "financial_highlights": final_state.get("financial_highlights"),
+        "company_profile": final_state.get("company_profile") or {},
+        "price_chart": final_state.get("price_chart") or {},
+        "related_news": final_state.get("related_news") or {},
+        "news": final_state.get("news") or final_state.get("news_context") or {},
+        "news_context": final_state.get("news_context") or final_state.get("news") or {},
         "data_quality": _complete_risk_engine_data_quality(
             data_quality
             or {
@@ -452,7 +468,7 @@ def shape_result(result_fields: dict[str, Any], response_detail: str) -> dict[st
 
 def with_data_fetched_at(result_fields: dict[str, Any]) -> dict[str, Any]:
     stamped = dict(result_fields)
-    stamped.setdefault("data_fetched_at", datetime.utcnow().isoformat())
+    stamped.setdefault("data_fetched_at", _utc_now_iso())
     return stamped
 
 
@@ -470,7 +486,7 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
         "ticker": req.ticker,
         "market": req.market,
         "trade_date": req.trade_date,
-        "analysis_created_at": datetime.utcnow().isoformat(),
+        "analysis_created_at": _utc_now_iso(),
         "analysis_depth": req.analysis_depth,
         "response_detail": req.response_detail,
         "has_existing_position": bool(req.has_existing_position) if req.has_existing_position is not None else False,

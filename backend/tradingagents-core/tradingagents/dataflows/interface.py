@@ -87,6 +87,8 @@ from .finnhub_stock import (
 from .finnhub_stock import (
     get_stock as get_finnhub_stock,
 )
+from .marketaux_news import get_news as get_marketaux_news
+from .newsdata_news import get_news as get_newsdata_news
 
 # Configuration and routing logic
 from .config import get_config
@@ -96,6 +98,9 @@ from .y_finance import (
 )
 from .y_finance import (
     get_cashflow as get_yfinance_cashflow,
+)
+from .y_finance import (
+    get_company_profile as get_yfinance_company_profile,
 )
 from .y_finance import (
     get_fundamentals as get_yfinance_fundamentals,
@@ -185,8 +190,8 @@ TOOLS_CATEGORIES = {
     "quote_data": {"description": "Current quote data", "tools": ["get_quote"]},
     "technical_indicators": {"description": "Technical analysis indicators", "tools": ["get_indicators"]},
     "fundamental_data": {
-        "description": "Company fundamentals",
-        "tools": ["get_fundamentals"],
+        "description": "Company fundamentals and profile data",
+        "tools": ["get_fundamentals", "get_company_profile"],
     },
     "financial_statements": {
         "description": "Company financial statements",
@@ -232,6 +237,8 @@ _PERSISTENT_TOOL_CACHE = None
 _PERSISTENT_TOOL_CACHE_CONFIG = None
 
 VENDOR_LIST = [
+    "marketaux",
+    "newsdata",
     "yfinance",
     "finnhub",
     "alpha_vantage",
@@ -262,6 +269,9 @@ VENDOR_METHODS = {
         "finnhub": get_finnhub_fundamentals,
         "alpha_vantage": get_alpha_vantage_fundamentals,
     },
+    "get_company_profile": {
+        "yfinance": get_yfinance_company_profile,
+    },
     "get_balance_sheet": {
         "yfinance": get_yfinance_balance_sheet,
         "alpha_vantage": get_alpha_vantage_balance_sheet,
@@ -279,6 +289,8 @@ VENDOR_METHODS = {
     },
     # news_data
     "get_news": {
+        "marketaux": get_marketaux_news,
+        "newsdata": get_newsdata_news,
         "yfinance": get_news_yfinance,
         "finnhub": get_finnhub_news,
         "alpha_vantage": get_alpha_vantage_news,

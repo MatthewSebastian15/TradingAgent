@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TypeVar
 
 from tradingagents.dataflows.data_quality import DataQualityReport
@@ -15,6 +15,7 @@ T = TypeVar("T")
 
 AGENT_LABELS = {
     "data_collection": "Data Collection",
+    "news_fetch": "News Providers",
     "data_quality": "Data Quality",
     "market_analyst": "Market Analyst",
     "news_analyst": "News + Social Analyst",
@@ -38,7 +39,7 @@ def _emit_progress(callback: ProgressCallback | None, agent_id: str, status: str
                 "agent_name": AGENT_LABELS.get(agent_id, agent_id.replace("_", " ").title()),
                 "status": status,
                 "status_message": message,
-                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
             }
         )
     except Exception as exc:
@@ -59,7 +60,7 @@ def _emit_data_quality(callback: ProgressCallback | None, report: DataQualityRep
                 "status": "completed",
                 "status_message": message,
                 "data_quality": report.model_dump(),
-                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
             }
         )
     except Exception as exc:

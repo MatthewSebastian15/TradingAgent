@@ -3,7 +3,7 @@ import os
 import threading
 from collections import OrderedDict
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 import pandas as pd
 from dateutil.relativedelta import relativedelta
@@ -355,6 +355,76 @@ def get_fundamentals(
 
     except Exception as e:
         return f"Error retrieving fundamentals for {ticker}: {str(e)}"
+
+
+def _clean_profile_text(value: Any, max_length: int | None = None) -> str | None:
+    if value is None:
+        return None
+    text = " ".join(str(value).split())
+    if not text:
+        return None
+    if max_length and len(text) > max_length:
+        return text[: max_length - 3].rstrip() + "..."
+    return text
+
+
+def get_company_profile(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    curr_date: Annotated[str, "current date, not used for yfinance"] = None,
+) -> dict:
+    """Get frontend-ready company profile data from yfinance."""
+    try:
+        ticker = normalize_ticker(ticker)
+        ticker_obj = _get_ticker(ticker)
+        info = yf_retry(lambda: ticker_obj.info)
+
+        if not info:
+            return {
+                "available": False,
+                "ticker": ticker,
+                "warning": f"No company profile data found for symbol '{ticker}'",
+            }
+
+        address_parts = []
+        for field in ["address1", "address2", "city", "state", "zip", "country"]:
+            value = _clean_profile_text(info.get(field))
+            if value:
+                address_parts.append(value)
+
+        executives = []
+        officers = info.get("companyOfficers")
+        if isinstance(officers, list):
+            for officer in officers[:10]:
+                if not isinstance(officer, dict):
+                    continue
+                name = _clean_profile_text(officer.get("name"))
+                title = _clean_profile_text(officer.get("title"))
+                if name:
+                    executives.append({"name": name, "title": title or "N/A"})
+
+        profile = {
+            "available": True,
+            "ticker": ticker,
+            "name": _clean_profile_text(info.get("longName") or info.get("shortName")),
+            "sector": _clean_profile_text(info.get("sector")),
+            "industry": _clean_profile_text(info.get("industry")),
+            "address": ", ".join(address_parts) if address_parts else None,
+            "phone": _clean_profile_text(info.get("phone")),
+            "website": _clean_profile_text(info.get("website") or info.get("ir_website")),
+            "full_time_employees": info.get("fullTimeEmployees"),
+            "description": _clean_profile_text(info.get("longBusinessSummary"), max_length=2000),
+            "executives": executives,
+        }
+
+        return {key: value for key, value in profile.items() if value not in (None, "")}
+
+    except Exception as exc:
+        logger.warning("Error retrieving company profile for %s: %s", ticker, exc)
+        return {
+            "available": False,
+            "ticker": ticker,
+            "warning": f"Error retrieving company profile: {str(exc)}",
+        }
 
 
 def get_balance_sheet(

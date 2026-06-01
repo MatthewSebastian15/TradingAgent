@@ -134,7 +134,7 @@ def run_pipeline(
     )
 
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
-    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from tradingagents.pipeline_balanced import run_balanced_pipeline
 
     worker_logger = logging.getLogger(__name__)
     worker_logger.info(
@@ -160,25 +160,21 @@ def run_pipeline(
     )
     config["time_horizon_months"] = time_horizon_months
 
-    if config.get("analysis_mode", "balanced") == "balanced":
-        from tradingagents.pipeline_balanced import run_balanced_pipeline
+    if is_cancelled():
+        raise RuntimeError("Analysis was cancelled by the client.")
 
-        final_state = run_balanced_pipeline(
-            ticker,
-            trade_date,
-            config,
-            cancel_check=is_cancelled,
-            has_existing_position=has_existing_position,
-            position_quantity=position_quantity,
-            average_entry_price=average_entry_price,
-        )
-    else:
-        if is_cancelled():
-            raise RuntimeError("Analysis was cancelled by the client.")
-        ta = TradingAgentsGraph(debug=False, config=config)
-        final_state, _ = ta.propagate(ticker, trade_date)
-        if is_cancelled():
-            raise RuntimeError("Analysis was cancelled by the client.")
+    final_state = run_balanced_pipeline(
+        ticker,
+        trade_date,
+        config,
+        cancel_check=is_cancelled,
+        has_existing_position=has_existing_position,
+        position_quantity=position_quantity,
+        average_entry_price=average_entry_price,
+    )
+
+    if is_cancelled():
+        raise RuntimeError("Analysis was cancelled by the client.")
 
     worker_logger.info(
         "Pipeline worker completed",
@@ -211,7 +207,7 @@ def run_pipeline_with_progress(
 ) -> dict:
     """Run pipeline in-process so SSE can receive real callback events."""
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
-    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from tradingagents.pipeline_balanced import run_balanced_pipeline
 
     config = build_tradingagents_config(
         max_debate_rounds=max_debate_rounds,
@@ -220,40 +216,16 @@ def run_pipeline_with_progress(
     )
     config["time_horizon_months"] = time_horizon_months
 
-    if config.get("analysis_mode", "balanced") == "balanced":
-        from tradingagents.pipeline_balanced import run_balanced_pipeline
-
-        final_state = run_balanced_pipeline(
-            ticker,
-            trade_date,
-            config,
-            progress_callback=progress_callback,
-            cancel_check=cancel_check,
-            has_existing_position=has_existing_position,
-            position_quantity=position_quantity,
-            average_entry_price=average_entry_price,
-        )
-    else:
-        if progress_callback:
-            progress_callback(
-                {
-                    "agent_id": "classic_graph",
-                    "agent_name": "Classic TradingAgents Graph",
-                    "status": "started",
-                    "status_message": "Classic graph pipeline is running...",
-                }
-            )
-        ta = TradingAgentsGraph(debug=False, config=config)
-        final_state, _ = ta.propagate(ticker, trade_date)
-        if progress_callback:
-            progress_callback(
-                {
-                    "agent_id": "classic_graph",
-                    "agent_name": "Classic TradingAgents Graph",
-                    "status": "completed",
-                    "status_message": "Classic graph pipeline completed.",
-                }
-            )
+    final_state = run_balanced_pipeline(
+        ticker,
+        trade_date,
+        config,
+        progress_callback=progress_callback,
+        cancel_check=cancel_check,
+        has_existing_position=has_existing_position,
+        position_quantity=position_quantity,
+        average_entry_price=average_entry_price,
+    )
 
     full_decision: str = final_state.get("final_trade_decision", "")
     pd_obj: PortfolioDecision | None = final_state.get("portfolio_decision")

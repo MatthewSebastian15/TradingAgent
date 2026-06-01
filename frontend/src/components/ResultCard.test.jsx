@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import ResultCard from './ResultCard';
@@ -10,10 +10,152 @@ import {
   MOCK_REPAIRED_RESPONSE,
   MOCK_RESPONSE,
   MOCK_SELL_RESPONSE,
-} from '../mockData';
+} from '../../dev/mockData';
 
 describe('ResultCard risk-engine contract', () => {
   afterEach(() => cleanup());
+
+  it('renders the report disclaimer in the analysis result card', () => {
+    render(<ResultCard result={MOCK_HOLD_RESPONSE} />);
+
+    expect(screen.getByText('DISCLAIMER')).toBeTruthy();
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+    expect(screen.getByText(/may contain errors/i)).toBeTruthy();
+  });
+
+  it('renders financial highlights after the existing summary content', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
+    expect(screen.getByText('FY26Q1')).toBeTruthy();
+    expect(screen.getByText('Revenue')).toBeTruthy();
+  });
+
+  it('uses Analisis as the default tab and opens the Profile tab', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.getByText('Analisis')).toBeTruthy();
+    expect(screen.getByText('EXECUTIVE SUMMARY')).toBeTruthy();
+    expect(screen.getByText('Chart & Price').disabled).toBe(false);
+    expect(screen.getByText('News').disabled).toBe(false);
+    expect(screen.queryByText('COMPANY PROFILE')).toBeNull();
+
+    fireEvent.click(screen.getByText('Profile'));
+
+    expect(screen.getByText('COMPANY PROFILE')).toBeTruthy();
+    expect(screen.getByText('NVIDIA Corporation')).toBeTruthy();
+    expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
+  });
+
+  it('opens the Chart & Price tab and keeps News available', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.getByText('CHART & PRICE')).toBeTruthy();
+    expect(screen.getByText('OHLC Candlestick')).toBeTruthy();
+    expect(screen.getByText('Volume')).toBeTruthy();
+    expect(screen.getByText('PRICE STATISTICS')).toBeTruthy();
+    expect(screen.getByText('News').disabled).toBe(false);
+    expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
+  });
+
+  it('opens the News tab and renders related vendor articles with a safe original link', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('News'));
+
+    expect(screen.getByText('NEWS')).toBeTruthy();
+    expect(screen.getByText(/NVDA earnings outlook remains constructive/i)).toBeTruthy();
+    expect(screen.getByText('Publisher: Mock Market Wire')).toBeTruthy();
+    const link = screen.getAllByText('OPEN ORIGINAL SOURCE')[0];
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('renders the News empty state when provider coverage is unavailable', () => {
+    render(<ResultCard result={MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('News'));
+
+    expect(screen.getByText('NEWS UNAVAILABLE')).toBeTruthy();
+    expect(screen.getByText('Related news is unavailable.')).toBeTruthy();
+  });
+
+  it('does not render a clickable News source for an unsafe URL', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          related_news: {
+            available: true,
+            items: [{ title: 'Unsafe vendor URL', url: 'javascript:alert(1)' }],
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('News'));
+
+    expect(screen.getByText('Unsafe vendor URL')).toBeTruthy();
+    expect(screen.queryByText('OPEN ORIGINAL SOURCE')).toBeNull();
+  });
+
+  it('renders Chart & Price empty state when chart data is unavailable', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          price_chart: { available: false, warning: 'Chart fetch failed.' },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.getByText('CHART DATA UNAVAILABLE')).toBeTruthy();
+    expect(screen.getByText('Chart fetch failed.')).toBeTruthy();
+  });
+
+  it('renders Chart & Price empty state when fewer than two valid OHLC points remain', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          price_chart: {
+            available: true,
+            points: [
+              { date: '2026-05-17', open: 10, high: 12, low: 9, close: 11, volume: 100 },
+              { date: '2026-05-18', open: null, high: 13, low: 10, close: 12, volume: 200 },
+            ],
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.getByText('CHART DATA UNAVAILABLE')).toBeTruthy();
+    expect(
+      screen.getByText('Valid OHLC price chart data is not available for this analysis.')
+    ).toBeTruthy();
+  });
+
+  it('renders Profile empty state when company profile is unavailable', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          company_profile: { available: false, ticker: 'NVDA', warning: 'Profile fetch failed.' },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Profile'));
+
+    expect(screen.getByText('PROFILE UNAVAILABLE')).toBeTruthy();
+    expect(screen.getByText('Profile fetch failed.')).toBeTruthy();
+  });
 
   it('renders Last Price for a Buy result', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
@@ -193,7 +335,6 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('TRADE LEVELS: mock_recomputed')).toBeTruthy();
     expect(screen.getByText('LLM OUTPUT: mock_repaired')).toBeTruthy();
   });
-
 
   it('renders IDX news unavailable as non-blocking while keeping trade plan valid', () => {
     render(<ResultCard result={MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE} />);

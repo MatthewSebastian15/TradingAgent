@@ -6,7 +6,7 @@ import queue
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from tradingagents.agents.schemas import (
@@ -56,6 +56,25 @@ from tradingagents.pipeline_balanced_types import (
 from tradingagents.trade_levels import normalize_trade_levels
 
 logger = logging.getLogger(__name__)
+
+
+def _limit_unique_text_items(items: list[str], limit: int = 5) -> list[str]:
+    """Return a de-duplicated, trimmed list that is safe for bounded schemas."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+
+    for item in items or []:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+
+        seen.add(text)
+        cleaned.append(text)
+
+        if len(cleaned) >= limit:
+            break
+
+    return cleaned
 
 
 def _build_initial_analyst_reports(
@@ -183,9 +202,15 @@ def run_balanced_pipeline(
     set_config(config)
     quick_llm, deep_llm = _create_llms(config)
     analysis_depth = str(config.get("analysis_depth", "balanced")).lower()
+    depth_config = dict(config.get("analysis_depth_config") or {})
+    depth_debate_rounds = max(1, int(depth_config.get("debate_rounds") or config.get("analysis_depth_debate_rounds") or 1))
+    depth_risk_rounds = max(1, int(depth_config.get("risk_rounds") or config.get("analysis_depth_risk_rounds") or 1))
+    extra_debate_rounds = max(0, depth_debate_rounds - 2) if analysis_depth == "deep" else 0
+    extra_risk_rounds = max(0, depth_risk_rounds - 2) if analysis_depth == "deep" else 0
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
     time_horizon_text = _time_horizon_label(time_horizon_months)
     llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
+    _emit_progress(progress_callback, "news_fetch", "started", "Fetching normalized company news from configured providers...")
     data = _run_tracked(
         progress_callback,
         "data_collection",
@@ -193,7 +218,13 @@ def run_balanced_pipeline(
         lambda: collect_market_data(ticker, trade_date, config, cancel_check=cancel_check),
         cancel_check=cancel_check,
     )
-    data_fetched_at = datetime.utcnow().isoformat()
+    _emit_progress(
+        progress_callback,
+        "news_fetch",
+        "completed",
+        f"Normalized company news ready: {(data.news_context or {}).get('articles_found', 0)} article(s).",
+    )
+    data_fetched_at = datetime.now(timezone.utc).isoformat()
     data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
     last_close_text = f"{data.last_close_price:.2f}" if data.last_close_price is not None else "Unavailable"
     _emit_data_quality(progress_callback, data.data_quality)
@@ -214,6 +245,8 @@ def run_balanced_pipeline(
     market_md = _report_to_markdown(market_report)
     news_social_md = _report_to_markdown(news_social_report)
     fundamentals_md = _report_to_markdown(fundamentals_report)
+
+    debate_history: list[str] = []
 
     if analysis_depth == "fast":
         _emit_progress(progress_callback, "bull_researcher", "completed", "Bull debate skipped in fast mode.")
@@ -238,12 +271,17 @@ def run_balanced_pipeline(
             thesis=f"Fast mode keeps downside assumptions conservative for {ticker} because no separate bear debate was run.",
             evidence=["Risk is inferred from analyst report risk sections.", "Data quality warnings are preserved."],
             counterargument="Balanced/deep mode should be used before high-conviction trades.",
-            risk_flags=list(dict.fromkeys(market_report.risks + news_social_report.risks + fundamentals_report.risks))[
-                :6
-            ],
+            risk_flags=_limit_unique_text_items(
+                market_report.risks + news_social_report.risks + fundamentals_report.risks,
+                limit=5,
+            ),
             confidence=0.45,
             consensus_signal=False,
         )
+        debate_history.extend([
+            render_debate_argument(bull, "Bull Researcher"),
+            render_debate_argument(bear, "Bear Researcher"),
+        ])
     else:
         bull = _run_tracked(
             progress_callback,
@@ -313,13 +351,84 @@ def run_balanced_pipeline(
                 cancel_check,
             ),
         )
-
-    debate_md = "\n\n".join(
-        [
+        debate_history.extend([
             render_debate_argument(bull, "Bull Researcher"),
             render_debate_argument(bear, "Bear Researcher"),
-        ]
-    )
+        ])
+
+        for round_number in range(2, extra_debate_rounds + 2):
+            bull = _run_tracked(
+                progress_callback,
+                "bull_researcher",
+                f"Deep mode bull review round {round_number} is refining the upside case...",
+                lambda: _invoke_once(
+                    quick_llm,
+                    DebateArgument,
+                    bull_prompt(
+                        ticker,
+                        trade_date,
+                        time_horizon_text,
+                        data_quality_json,
+                        market_md,
+                        news_social_md,
+                        fundamentals_md,
+                    ) + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
+                    DebateArgument(
+                        stance="bull",
+                        thesis=f"Deep mode could not generate an additional bullish refinement for {ticker}.",
+                        evidence=[
+                            "Prior analyst reports remain available.",
+                            "The prior debate remains available for review.",
+                        ],
+                        counterargument="No extra bullish refinement was generated.",
+                        risk_flags=["Deep debate fallback used."],
+                        confidence=0.35,
+                        consensus_signal=False,
+                    ),
+                    f"Bull Researcher R{round_number}",
+                    llm_budget,
+                    cancel_check,
+                ),
+            )
+            debate_history.append(render_debate_argument(bull, f"Bull Researcher R{round_number}"))
+
+            bear = _run_tracked(
+                progress_callback,
+                "bear_researcher",
+                f"Deep mode bear review round {round_number} is challenging the refined thesis...",
+                lambda: _invoke_once(
+                    quick_llm,
+                    DebateArgument,
+                    bear_prompt(
+                        ticker,
+                        trade_date,
+                        time_horizon_text,
+                        data_quality_json,
+                        market_md,
+                        news_social_md,
+                        fundamentals_md,
+                        bull,
+                    ) + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
+                    DebateArgument(
+                        stance="bear",
+                        thesis=f"Deep mode could not generate an additional bearish refinement for {ticker}.",
+                        evidence=[
+                            "Prior analyst reports remain available.",
+                            "The prior debate remains available for review.",
+                        ],
+                        counterargument="No extra bearish refinement was generated.",
+                        risk_flags=["Deep debate fallback used."],
+                        confidence=0.35,
+                        consensus_signal=False,
+                    ),
+                    f"Bear Researcher R{round_number}",
+                    llm_budget,
+                    cancel_check,
+                ),
+            )
+            debate_history.append(render_debate_argument(bear, f"Bear Researcher R{round_number}"))
+
+    debate_md = "\n\n".join(debate_history)
 
     research_plan = _run_tracked(
         progress_callback,
@@ -439,6 +548,41 @@ def run_balanced_pipeline(
                 cancel_check,
             ),
         )
+        for round_number in range(2, extra_risk_rounds + 2):
+            prior_risk_md = _risk_to_markdown(risk_report)
+            risk_report = _run_tracked(
+                progress_callback,
+                "risk_analysts",
+                f"Deep mode risk review round {round_number} is stress-testing the trade plan...",
+                lambda: _invoke_once(
+                    quick_llm,
+                    RiskCommitteeReport,
+                    risk_committee_prompt(
+                        ticker,
+                        trade_date,
+                        time_horizon_text,
+                        market_md,
+                        news_social_md,
+                        fundamentals_md,
+                        debate_md + f"\n\nPrior risk review:\n{prior_risk_md}",
+                        investment_plan,
+                        trader_plan,
+                        data_quality_json,
+                    ),
+                    RiskCommitteeReport(
+                        overall_risk_level="High",
+                        aggressive_view="Deep mode could not generate an extra aggressive risk review.",
+                        neutral_view="Use the previous risk committee output until this deep review is verified.",
+                        conservative_view="Avoid increasing exposure when the deep risk review falls back.",
+                        key_risks=["Deep risk review fallback used."],
+                        mitigation_plan="Keep the previous risk controls and manually verify sizing.",
+                        confidence=0.35,
+                    ),
+                    f"Risk Committee R{round_number}",
+                    llm_budget,
+                    cancel_check,
+                ),
+            )
     risk_md = _risk_to_markdown(risk_report)
 
     portfolio_decision = _run_tracked(
@@ -466,19 +610,22 @@ def run_balanced_pipeline(
                 confidence_score=0.35,
                 rating=PortfolioRating.HOLD,
                 executive_summary=(
-                    f"The final rating for {ticker} is Hold because the balanced pipeline could not generate a fully reliable final model decision. "
-                    "The available market, news, and fundamental data were collected, but the final structured output needs manual review. "
-                    "The biggest risk is acting on incomplete or fallback analysis, and that risk overrides any aggressive trade idea. "
-                    "The recommended action is to avoid new exposure, keep position size at zero for new trades, and wait for a verified analysis before setting a stop-loss. "
-                    f"The selected analysis horizon is {time_horizon_text}, but this fallback result requires review before trading."
+                    f"The final rating for {ticker} is Hold because the balanced pipeline could not generate a fully reliable structured model decision, so the safest conclusion is to protect capital instead of forcing a trade. "
+                    "The system may have collected market, news, social, and fundamental inputs, but the final decision still needs manual review before any money is put at risk, especially when provider quality can vary. "
+                    "The biggest risk is acting on incomplete or fallback analysis, because a weak model response can hide missing prices, stale data, unsupported trade levels, or a broken risk/reward setup. "
+                    "The recommended action is to avoid new exposure, keep allocation at zero for new trades, do not set an artificial entry, and wait for a verified rerun before using a stop-loss or take-profit. "
+                    f"The selected horizon is {time_horizon_text}, but this fallback result should be treated as a safety message, not a real investment recommendation, until the dashboard shows clean validated output."
                 ),
                 investment_thesis=(
-                    f"{ticker} should stay on hold until the analysis can be verified. "
-                    "The system collected price, technical, news, and fundamental data, but the final model output used a fallback. "
-                    "That means the dashboard can still display a safe result, but it should not be treated as a high-confidence investment call. "
-                    "The bull case and bear case require confirmation from a clean model response. "
-                    "The safest action is to avoid adding exposure. "
-                    "A new decision should be generated once the model and data calls complete normally."
+                    f"{ticker} should stay on hold until the analysis can be verified because the final portfolio decision was produced by the fallback path, not by a clean structured model response. "
+                    "In plain terms, the application is saying that it does not have enough reliable final evidence to support a Buy or Sell call. "
+                    "The earlier pipeline may still have gathered price action, technical context, news signals, social sentiment, and fundamental information, but those inputs are not enough when the last decision layer fails or returns something incomplete. "
+                    "A good trade needs more than an interesting story; it needs a current price anchor, a clear entry, a valid stop-loss, a realistic take-profit, and a risk/reward setup that the backend can validate. "
+                    "The bull case is that the collected data may still contain useful clues once the model response is repaired or regenerated, especially if the market trend, analyst debate, and risk committee point in the same direction. "
+                    "The bear case is more important right now because acting on a fallback can create false confidence, especially if data quality flags show missing provider results, partial fundamentals, stale news, or unsupported trade levels. "
+                    "Since the bear case is about process reliability rather than market opinion, it wins the decision. "
+                    "The practical action plan is simple: open no new position, keep suggested allocation at zero, avoid averaging down or chasing momentum, and rerun the analysis after the model and data providers complete normally. "
+                    "Only after a clean result appears should the user consider entry, sizing, stop-loss, and profit-taking rules. Until then, patience is the only useful trade."
                 ),
                 suggested_allocation_percent=0.0,
                 entry_price=None,
@@ -546,7 +693,7 @@ def run_balanced_pipeline(
             "bear_history": render_debate_argument(bear, "Bear Researcher"),
             "history": debate_md,
             "judge_decision": investment_plan,
-            "count": 2,
+            "count": len(debate_history),
         },
         "investment_plan": investment_plan,
         "trader_investment_plan": trader_plan,
@@ -556,7 +703,7 @@ def run_balanced_pipeline(
             "conservative_history": risk_report.conservative_view,
             "history": risk_md,
             "judge_decision": risk_md,
-            "count": 3,
+            "count": 3 + (3 * extra_risk_rounds),
         },
         "portfolio_decision": portfolio_decision,
         "data_quality": data.data_quality.model_dump(),
@@ -564,10 +711,23 @@ def run_balanced_pipeline(
         "data_limitations": data.data_limitations or [],
         "vendor_attempts": data.vendor_attempts or {},
         "request_budget": data.request_budget or {},
+        "financial_highlights": data.financial_highlights,
+        "company_profile": data.company_profile or {
+            "available": False,
+            "ticker": ticker,
+            "warning": "Company profile was not collected.",
+        },
+        "price_chart": data.price_chart or {},
+        "related_news": data.related_news or {},
+        "news": data.news_context or {},
+        "news_context": data.news_context or {},
         "data_fetched_at": data_fetched_at,
         "last_close_price": data.last_close_price,
         "last_close_price_as_of": data.last_close_price_as_of or trade_date,
         "analysis_depth": analysis_depth,
+        "analysis_depth_config": depth_config,
+        "analysis_depth_debate_rounds": depth_debate_rounds,
+        "analysis_depth_risk_rounds": depth_risk_rounds,
         "balanced_gemini_request_budget": llm_budget.limit,
         "balanced_gemini_calls_used": budget_snapshot["used"],
         "budget_exhausted": budget_snapshot["budget_exhausted"],
