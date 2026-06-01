@@ -12,6 +12,7 @@ from tradingagents.pipeline_balanced import (
     _extract_last_close_price,
     _invoke_once,
 )
+from tradingagents.pipeline_balanced_data import _build_price_chart, _build_related_news, _parse_markdown_news_items
 from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout, get_timeout_stats
 
 
@@ -40,6 +41,185 @@ Date,Open,High,Low,Close,Volume
 """
 
     assert _extract_last_close_price(price_data, "2026-05-20") == 11.25
+
+
+def test_build_price_chart_filters_window_and_calculates_stats():
+    price_data = """# Stock data for TEST
+Date,Open,High,Low,Close,Volume
+2026-03-01,8,9,7,8.5,500
+2026-05-18,10,11,9,10.5,1000
+2026-05-19,11,12,10,11.25,1100
+2026-05-31,12,13,11,12.5,1200
+"""
+
+    chart = _build_price_chart("TEST", "2026-05-30", price_data, 1, source="yfinance")
+
+    assert chart["available"] is True
+    assert chart["lookback_days"] == 60
+    assert [point["date"] for point in chart["points"]] == ["2026-05-18", "2026-05-19"]
+    assert chart["stats"] == {
+        "start_price": 10.5,
+        "end_price": 11.25,
+        "change": 0.75,
+        "change_percent": 7.14,
+        "high": 12.0,
+        "low": 9.0,
+        "average_close": 10.88,
+        "average_volume": 1050,
+        "point_count": 2,
+    }
+
+
+def test_build_price_chart_filters_incomplete_rows_and_sanitizes_high_low():
+    price_data = """# Stock data for TEST
+Date,Open,High,Low,Close,Volume
+2026-05-18,10,9,12,11,1000
+2026-05-19,,12,10,11.25,1100
+2026-05-20,11,13,10,12,1200
+"""
+
+    chart = _build_price_chart("TEST", "2026-05-30", price_data, 1, source="yfinance")
+
+    assert chart["available"] is True
+    assert chart["points"] == [
+        {
+            "date": "2026-05-18",
+            "open": 10.0,
+            "high": 12.0,
+            "low": 9.0,
+            "close": 11.0,
+            "volume": 1000,
+        },
+        {
+            "date": "2026-05-20",
+            "open": 11.0,
+            "high": 13.0,
+            "low": 10.0,
+            "close": 12.0,
+            "volume": 1200,
+        },
+    ]
+    assert chart["stats"]["point_count"] == 2
+    assert chart["stats"]["high"] == 13.0
+    assert chart["stats"]["low"] == 9.0
+
+
+@pytest.mark.parametrize(("months", "lookback_days"), [(1, 60), (2, 90), (3, 120)])
+def test_build_price_chart_uses_horizon_lookback_and_returns_empty_state(months, lookback_days):
+    chart = _build_price_chart("TEST", "2026-05-30", "", months)
+
+    assert chart["available"] is False
+    assert chart["lookback_days"] == lookback_days
+    assert chart["points"] == []
+    assert chart["stats"] == {}
+    assert chart["warning"] == "Price chart data is unavailable."
+
+
+def test_parse_markdown_news_items_extracts_vendor_fields_and_skips_missing_url():
+    news = """## Source: finnhub
+### BBCA reports strong earnings (source: Reuters)
+Published: 2026-05-29T10:30:00Z
+Event Type: earnings
+Short vendor summary.
+Link: https://example.com/bbca-earnings?utm_source=test
+
+### BBCA article without source link (source: Example)
+This item must be skipped.
+"""
+
+    items = _parse_markdown_news_items(news, default_source="company_news", ticker="BBCA.JK")
+
+    assert items == [
+        {
+            "title": "BBCA reports strong earnings",
+            "publisher": "Reuters",
+            "published_at": "2026-05-29T10:30:00Z",
+            "url": "https://example.com/bbca-earnings?utm_source=test",
+            "summary": "Short vendor summary.",
+            "source": "finnhub",
+            "event_type": "earnings",
+            "related_ticker": "BBCA.JK",
+            "normalized_url": "https://example.com/bbca-earnings",
+            "relevance_reason": (
+                "This article is tagged as earnings news and may affect the analysis context for BBCA.JK."
+            ),
+        }
+    ]
+
+
+def test_build_related_news_deduplicates_limits_and_truncates_vendor_items():
+    titles = [
+        "BBCA earnings beat expectations",
+        "BBCA announces dividend plan",
+        "BBCA expands digital banking services",
+        "BBCA reports stable loan growth",
+        "BBCA opens a new regional office",
+        "BBCA updates capital expenditure guidance",
+        "BBCA appoints a new finance director",
+        "BBCA reviews consumer lending strategy",
+        "BBCA launches a merchant payment feature",
+        "BBCA schedules its annual shareholder meeting",
+    ]
+    articles = []
+    for index, title in enumerate(titles):
+        articles.append(
+            {
+                "provider": "marketaux",
+                "ticker": "BBCA.JK",
+                "title": title,
+                "url": f"https://example.com/news-{index}",
+                "summary": "A" * 500,
+                "source": "Example",
+                "published_at": f"2026-05-{20 + index:02d}T10:00:00Z",
+                "relevance_score": 90 - index,
+            }
+        )
+    articles.append({**articles[0], "url": "https://example.com/news-0?utm_source=duplicate"})
+    articles.append(
+        {
+            "provider": "marketaux",
+            "ticker": "BBCA.JK",
+            "title": "Invalid URL article",
+            "url": "javascript:alert(1)",
+        }
+    )
+
+    related_news = _build_related_news(
+        ticker="BBCA.JK",
+        trade_date="2026-05-30",
+        time_horizon_months=1,
+        company_news="",
+        global_news="",
+        news_context={"articles": articles},
+    )
+
+    assert related_news["available"] is True
+    assert related_news["lookback_days"] == 30
+    assert len(related_news["items"]) == 8
+    assert len({item["normalized_url"] for item in related_news["items"]}) == 8
+    assert all(len(item["summary"]) <= 350 for item in related_news["items"])
+    assert all(item["url"].startswith("https://") for item in related_news["items"])
+
+
+def test_build_related_news_returns_empty_state_when_news_is_missing():
+    related_news = _build_related_news(
+        ticker="AAPL",
+        trade_date="2026-05-30",
+        time_horizon_months=1,
+        company_news="",
+        global_news="",
+    )
+
+    assert related_news == {
+        "available": False,
+        "ticker": "AAPL",
+        "trade_date": "2026-05-30",
+        "lookback_days": 30,
+        "source": "unavailable",
+        "summary": "No usable related news was returned for this analysis.",
+        "items": [],
+        "warning": "Related news is unavailable.",
+    }
 
 
 def test_date_window_scales_with_time_horizon():
@@ -185,6 +365,12 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
     from tradingagents.dataflows import interface
 
     attempts = []
+    price_csv = "\n".join(
+        [
+            "Date,Open,High,Low,Close,Volume",
+            "2026-05-01,10,11,9,10.5,1000",
+        ]
+    )
 
     monkeypatch.setattr(
         interface,
@@ -199,7 +385,7 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
         },
     )
     monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance")
-    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", lambda *args, **kwargs: "ok")
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", lambda *args, **kwargs: price_csv)
     monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
 
     def fake_retry(func, **kwargs):
@@ -208,7 +394,7 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
 
     monkeypatch.setattr(interface, "call_with_retry", fake_retry)
 
-    assert interface.route_to_vendor("get_stock_data", "AAPL", "2026-05-01", "2026-05-02") == "ok"
+    assert interface.route_to_vendor("get_stock_data", "AAPL", "2026-05-01", "2026-05-02") == price_csv
     assert attempts == [1]
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import sys
 from types import SimpleNamespace
 
@@ -35,6 +36,23 @@ BASE_CONFIG = {
     "tool_max_retries": 1,
     "tool_timeout_seconds": 5,
     "finnhub": {"enabled": True, "api_key": "test", "enable_stock_data": True},
+}
+
+_DATA_VENDOR_ENV_BY_CATEGORY = {
+    "core_stock_apis": "DATA_VENDOR_CORE_STOCK_APIS",
+    "quote_data": "DATA_VENDOR_QUOTE_DATA",
+    "technical_indicators": "DATA_VENDOR_TECHNICAL_INDICATORS",
+    "fundamental_data": "DATA_VENDOR_FUNDAMENTAL_DATA",
+    "financial_statements": "DATA_VENDOR_FINANCIAL_STATEMENTS",
+    "news_data": "DATA_VENDOR_NEWS_DATA",
+    "global_news_data": "DATA_VENDOR_GLOBAL_NEWS_DATA",
+    "sentiment_data": "DATA_VENDOR_SENTIMENT_DATA",
+    "social_sentiment": "DATA_VENDOR_SOCIAL_SENTIMENT",
+    "event_data": "DATA_VENDOR_EVENT_DATA",
+    "analyst_rating": "DATA_VENDOR_ANALYST_RATING",
+    "insider_data": "DATA_VENDOR_INSIDER_DATA",
+    "forex_data": "DATA_VENDOR_FOREX_DATA",
+    "crypto_data": "DATA_VENDOR_CRYPTO_DATA",
 }
 
 
@@ -86,3 +104,61 @@ def test_request_budget_stops_extra_calls():
     assert budget.can_call("finnhub") is True
     budget.record_call("finnhub", "get_quote")
     assert budget.can_call("finnhub") is False
+
+
+def test_company_profile_routes_to_yfinance(monkeypatch):
+    from tradingagents.dataflows import interface
+
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS,
+        "get_company_profile",
+        {"yfinance": lambda ticker, _curr_date=None: {"available": True, "ticker": ticker}},
+    )
+
+    with use_config(BASE_CONFIG):
+        result = route_to_vendor("get_company_profile", "BBCA.JK")
+
+    assert result == {"available": True, "ticker": "BBCA.JK"}
+
+
+def test_build_config_preserves_environment_vendor_order_for_every_category(monkeypatch):
+    from tradingagents import default_config
+
+    import config
+
+    expected = {
+        category: f"primary_{category},fallback_{category}"
+        for category in _DATA_VENDOR_ENV_BY_CATEGORY
+    }
+
+    try:
+        with monkeypatch.context() as env:
+            for category, env_name in _DATA_VENDOR_ENV_BY_CATEGORY.items():
+                env.setenv(env_name, expected[category])
+            importlib.reload(default_config)
+            reloaded_config = importlib.reload(config)
+
+            assert reloaded_config.build_tradingagents_config()["data_vendors"] == expected
+    finally:
+        importlib.reload(default_config)
+        importlib.reload(config)
+
+
+def test_news_relevance_thresholds_use_separate_environment_keys(monkeypatch):
+    from tradingagents import default_config
+
+    import config
+
+    try:
+        with monkeypatch.context() as env:
+            env.setenv("NEWS_MIN_RELEVANCE_SCORE", "72")
+            env.setenv("DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE", "0.42")
+            importlib.reload(default_config)
+            reloaded_config = importlib.reload(config)
+            built_config = reloaded_config.build_tradingagents_config()
+
+            assert built_config["news"]["min_relevance_score"] == 72
+            assert built_config["news_min_relevance_score"] == pytest.approx(0.42)
+    finally:
+        importlib.reload(default_config)
+        importlib.reload(config)

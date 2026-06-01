@@ -1,4 +1,4 @@
-"""API-key aware in-memory rate limiting with automatic state cleanup."""
+"""Owner-session aware in-memory rate limiting with automatic state cleanup."""
 
 from __future__ import annotations
 
@@ -19,7 +19,8 @@ from config import (
     STREAM_RATE_LIMIT_PER_MINUTE,
     llm,
 )
-from errors import RateLimitError
+from errors import AuthenticationError, RateLimitError
+from owner_session import owner_identifier_from_token
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -86,23 +87,8 @@ def _evict_stale_entries(now: float, limiter_state: RateLimiterState) -> None:
         del limiter_state.states[key]
 
 
-def get_client_identifier(request: Request) -> str:
-    """Derive a stable, opaque identifier for the caller.
-
-    Priority:
-      1. x-api-key header
-      2. Authorization: Bearer <token>
-      3. Fallback: direct client IP (not x-forwarded-for, which can be spoofed)
-
-    When *REQUIRE_API_KEY_FOR_RATE_LIMIT* is True and neither key nor bearer
-    token is present, a *RateLimitError* is raised immediately.
-
-    The fallback deliberately ignores x-forwarded-for and x-real-ip to prevent
-    clients from spoofing those headers to bypass per-IP limits.  If the
-    server sits behind a trusted reverse proxy that strips and re-injects those
-    headers you can re-enable them, but that is a deployment-level decision, not
-    a default.
-    """
+def validate_service_credential(request: Request) -> str:
+    """Validate the reverse-proxy credential without using it as owner scope."""
     api_key = request.headers.get("x-api-key", "").strip()
     auth = request.headers.get("authorization", "")
     if not api_key and auth.lower().startswith("bearer "):
@@ -111,29 +97,29 @@ def get_client_identifier(request: Request) -> str:
     configured_api_key = llm.api_key
     if configured_api_key:
         if not api_key:
-            raise RateLimitError("Missing API key. Send x-api-key or Authorization: Bearer <key>.")
+            raise AuthenticationError("Missing API key. Send x-api-key or Authorization: Bearer <key>.")
         if not hmac.compare_digest(api_key, configured_api_key):
-            raise RateLimitError("Invalid API key.")
-        return f"api_key:{_hash(api_key)}"
+            raise AuthenticationError("Invalid API key.")
+        return f"service:{_hash(api_key)}"
 
     if api_key:
         if REQUIRE_API_KEY_FOR_RATE_LIMIT:
-            raise RateLimitError("Server API key is not configured.")
-        return f"api_key:{_hash(api_key)}"
+            raise AuthenticationError("Server API key is not configured.")
+        return f"service:{_hash(api_key)}"
 
     if REQUIRE_API_KEY_FOR_RATE_LIMIT:
-        raise RateLimitError("Missing API key. Send x-api-key or Authorization: Bearer <key>.")
+        raise AuthenticationError("Missing API key. Send x-api-key or Authorization: Bearer <key>.")
 
-    # x-session-id is sent by the frontend on every request within the same
-    # browser tab. This guarantees POST /jobs and GET /jobs/{id}/events always
-    # resolve to the same owner_id, so job lookup never fails due to mismatch.
-    session_id = request.headers.get("x-session-id", "").strip()
-    if session_id:
-        return f"session:{_hash(session_id)}"
+    return "service:development"
 
-    # Use only the direct TCP peer address — it cannot be forged by the client.
-    client_host = request.client.host if request.client else "unknown-client"
-    return f"ip:{_hash(client_host)}"
+
+def get_client_identifier(request: Request) -> str:
+    """Return the signed browser owner scope used for resources and quotas."""
+    validate_service_credential(request)
+    owner_token = request.headers.get("x-owner-token", "").strip()
+    if not owner_token:
+        raise AuthenticationError("Missing owner session token. Call POST /api/session first.")
+    return owner_identifier_from_token(owner_token)
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +164,7 @@ class RateLimitLease:
 
             if state.active >= self.policy.max_concurrent:
                 raise RateLimitError(
-                    "Too many analyses are already running for this API key.",
+                    "Too many analyses are already running for this owner session.",
                     details={
                         "scope": self.policy.scope,
                         "max_concurrent": self.policy.max_concurrent,

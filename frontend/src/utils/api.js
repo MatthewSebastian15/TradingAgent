@@ -1,16 +1,9 @@
 const API_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+const OWNER_TOKEN_KEY = '_ta_owner_token';
+const OWNER_TOKEN_EXPIRES_AT_KEY = '_ta_owner_token_expires_at';
+const OWNER_TOKEN_REFRESH_SKEW_SECONDS = 30;
 
-// Generate a stable session ID for this browser tab.
-// This ensures POST /jobs and GET /jobs/{id}/events share the same
-// client identifier in the backend rate limiter, so owner_id matches.
-function getSessionId() {
-  let id = sessionStorage.getItem('_ta_session_id');
-  if (!id) {
-    id = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    sessionStorage.setItem('_ta_session_id', id);
-  }
-  return id;
-}
+let ownerTokenPromise = null;
 
 export function buildApiUrl(path) {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
@@ -20,16 +13,63 @@ export function buildApiUrl(path) {
   return `${cleanBase}/api${cleanPath}`;
 }
 
-export function buildHeaders() {
+function readStoredOwnerToken() {
+  const token = sessionStorage.getItem(OWNER_TOKEN_KEY);
+  const expiresAt = Number(sessionStorage.getItem(OWNER_TOKEN_EXPIRES_AT_KEY));
+  const now = Math.floor(Date.now() / 1000);
+
+  if (!token) return null;
+  if (Number.isFinite(expiresAt) && expiresAt > now + OWNER_TOKEN_REFRESH_SKEW_SECONDS) {
+    return token;
+  }
+
+  sessionStorage.removeItem(OWNER_TOKEN_KEY);
+  sessionStorage.removeItem(OWNER_TOKEN_EXPIRES_AT_KEY);
+  return null;
+}
+
+async function bootstrapOwnerToken() {
+  const response = await fetch(buildApiUrl('/session'), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) throw new Error(await readHttpError(response));
+
+  const session = await response.json();
+  if (!session.owner_token || !session.expires_at) {
+    throw new Error('Backend owner session response is invalid.');
+  }
+
+  sessionStorage.setItem(OWNER_TOKEN_KEY, session.owner_token);
+  sessionStorage.setItem(OWNER_TOKEN_EXPIRES_AT_KEY, String(session.expires_at));
+  return session.owner_token;
+}
+
+export async function getOwnerToken() {
+  const storedToken = readStoredOwnerToken();
+  if (storedToken) return storedToken;
+
+  if (!ownerTokenPromise) {
+    ownerTokenPromise = bootstrapOwnerToken().finally(() => {
+      ownerTokenPromise = null;
+    });
+  }
+  return ownerTokenPromise;
+}
+
+export async function buildHeaders() {
   return {
     'Content-Type': 'application/json',
-    'x-session-id': getSessionId(),
+    ...(await buildAuthHeaders()),
   };
 }
 
-export function buildAuthHeaders() {
+export async function buildAuthHeaders() {
   return {
-    'x-session-id': getSessionId(),
+    'x-owner-token': await getOwnerToken(),
   };
 }
 

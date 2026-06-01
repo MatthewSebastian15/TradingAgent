@@ -78,25 +78,28 @@ async def run_stream_pipeline(
     cache_key_func: Callable[[AnalysisRequest], Any],
     shape_result_func: Callable[[dict[str, Any], str], dict[str, Any]],
     with_data_fetched_at_func: Callable[[dict[str, Any]], dict[str, Any]],
+    write_result_cache: bool = True,
+    run_preflight: bool = True,
 ) -> dict[str, Any]:
     """Run a progress-capable pipeline and cache its final result."""
     loop = asyncio.get_running_loop()
 
-    await queue.put(
-        {
-            "type": "progress",
-            "payload": {
-                "request_id": request_id,
-                "ticker": req.ticker,
-                "trade_date": req.trade_date,
-                "agent_id": "data_collection",
-                "agent_name": "Data Collection",
-                "status": "started",
-                "status_message": "Preparing market data preflight...",
-            },
-        }
-    )
-    await preflight_market_data_func(req)
+    if run_preflight:
+        await queue.put(
+            {
+                "type": "progress",
+                "payload": {
+                    "request_id": request_id,
+                    "ticker": req.ticker,
+                    "trade_date": req.trade_date,
+                    "agent_id": "data_collection",
+                    "agent_name": "Data Collection",
+                    "status": "started",
+                    "status_message": "Preparing market data preflight...",
+                },
+            }
+        )
+        await preflight_market_data_func(req)
 
     manager = await get_cancel_manager_func()
     progress_queue = manager.Queue()
@@ -177,7 +180,8 @@ async def run_stream_pipeline(
 
     fields = with_data_fetched_at_func(fields)
     shaped = shape_result_func(fields, req.response_detail)
-    await result_cache.set(cache_key_func(req), shaped)
+    if write_result_cache:
+        await result_cache.set(cache_key_func(req), shaped)
     return shaped
 
 
@@ -193,6 +197,7 @@ async def stream_progress_and_result(
     run_stream_pipeline_func: Callable[..., Awaitable[dict[str, Any]]],
     get_or_start_analysis_func: Callable[..., Awaitable[dict[str, Any]]],
     use_cache: bool,
+    use_deduplication: bool = True,
 ):
     """Yield cached result, real progress events, heartbeats, then result."""
     key = cache_key_func(req)
@@ -223,7 +228,12 @@ async def stream_progress_and_result(
                 async def factory() -> dict[str, Any]:
                     return await run_stream_pipeline_func(req, request_id, queue, cancel_event)
 
-                result_fields = await get_or_start_analysis_func(req, factory, use_cache=use_cache)
+                result_fields = await get_or_start_analysis_func(
+                    req,
+                    factory,
+                    use_cache=use_cache,
+                    use_deduplication=use_deduplication,
+                )
                 await queue.put({"type": "result", "payload": response_payload_func(request_id, req, result_fields)})
             except TimeoutError:
                 await queue.put(sse_error(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)))

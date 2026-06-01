@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import PropTypes from 'prop-types';
 
 import {
   buildAnalysisPayload,
@@ -35,6 +36,17 @@ function MarketTab({ id, market, active, disabled, onClick }) {
   );
 }
 
+MarketTab.propTypes = {
+  id: PropTypes.string.isRequired,
+  market: PropTypes.shape({
+    flag: PropTypes.string.isRequired,
+    label: PropTypes.string.isRequired,
+  }).isRequired,
+  active: PropTypes.bool.isRequired,
+  disabled: PropTypes.bool,
+  onClick: PropTypes.func.isRequired,
+};
+
 function TickerChip({ label, active, onClick, disabled }) {
   return (
     <button
@@ -55,6 +67,13 @@ function TickerChip({ label, active, onClick, disabled }) {
     </button>
   );
 }
+
+TickerChip.propTypes = {
+  label: PropTypes.string.isRequired,
+  active: PropTypes.bool,
+  onClick: PropTypes.func.isRequired,
+  disabled: PropTypes.bool,
+};
 
 export default function StockForm({
   onResult,
@@ -141,6 +160,7 @@ export default function StockForm({
       ticker,
       date,
       timeHorizonMonths,
+      rounds,
       analysisDepth,
       responseDetail,
     });
@@ -471,3 +491,13 @@ export default function StockForm({
     </form>
   );
 }
+
+
+StockForm.propTypes = {
+  onResult: PropTypes.func.isRequired,
+  onLoading: PropTypes.func.isRequired,
+  onStatus: PropTypes.func.isRequired,
+  onAgentProgress: PropTypes.func.isRequired,
+  useAnalysisJobHook: PropTypes.func,
+  selectedResult: PropTypes.object,
+};

@@ -8,6 +8,7 @@ from typing import Any
 from tradingagents.llm_clients import model_catalog as llm_model_catalog
 
 from config_defaults import (
+    ANALYSIS_DEPTH_CONFIG,
     ANALYSIS_DEPTH_LLM_BUDGETS,
     ANALYSIS_DEPTHS,
     ANALYSIS_MODE,
@@ -22,6 +23,7 @@ from config_defaults import (
     DATA_VENDOR_CORE_STOCK_APIS,
     DATA_VENDOR_FUNDAMENTAL_DATA,
     DATA_VENDOR_NEWS_DATA,
+    DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE,
     DATA_VENDOR_TECHNICAL_INDICATORS,
     DEFAULT_ANALYSIS_DEPTH,
     DEFAULT_MAX_DEBATE_ROUNDS,
@@ -31,9 +33,30 @@ from config_defaults import (
     LLM_RETRY_BASE_DELAY,
     LLM_RETRY_MAX_DELAY,
     LLM_TIMEOUT_SECONDS,
+    MARKETAUX_API_KEY,
     MAX_CONCURRENT_LLM_CALLS,
     MAX_GEMINI_CALLS,
     MAX_RISK_DISCUSS_ROUNDS,
+    NEWS_CACHE_DB_PATH,
+    NEWS_CACHE_ENABLED,
+    NEWS_CACHE_MAX_ENTRIES,
+    NEWS_CACHE_TTL_MINUTES,
+    NEWS_DEBUG_RAW_RESPONSE,
+    NEWS_DEFAULT_WINDOW_DAYS,
+    NEWS_ENABLE_YFINANCE_FALLBACK,
+    NEWS_ENABLED_PROVIDERS,
+    NEWS_FETCH_SECONDARY_ALWAYS,
+    NEWS_LOG_PROVIDER_REQUESTS,
+    NEWS_MAX_ARTICLES_FOR_PROMPT,
+    NEWS_MAX_ARTICLES_FOR_UI,
+    NEWS_MAX_ARTICLES_PER_PROVIDER,
+    NEWS_MIN_RELEVANCE_SCORE,
+    NEWS_PROMPT_MIN_RELEVANCE_SCORE,
+    NEWS_PROVIDER_PRIORITY,
+    NEWS_SECONDARY_FETCH_THRESHOLD,
+    NEWS_VENDOR_MAX_RETRIES,
+    NEWS_VENDOR_TIMEOUT_SECONDS,
+    NEWSDATA_API_KEY,
     PROVIDER_SDK_MAX_RETRIES,
     RESPONSE_DETAILS,
 )
@@ -72,6 +95,7 @@ class LLMSettings:
         analysis_depth: str = DEFAULT_ANALYSIS_DEPTH,
         response_detail: str = "full",
     ) -> dict[str, Any]:
+        depth_config = ANALYSIS_DEPTH_CONFIG.get(analysis_depth, ANALYSIS_DEPTH_CONFIG[DEFAULT_ANALYSIS_DEPTH])
         retries = LLM_RETRIES_BY_DEPTH.get(analysis_depth, LLM_MAX_RETRIES)
         budget = ANALYSIS_DEPTH_LLM_BUDGETS.get(analysis_depth, MAX_GEMINI_CALLS)
         return {
@@ -100,10 +124,37 @@ class LLMSettings:
                 "fundamental_data": DATA_VENDOR_FUNDAMENTAL_DATA,
                 "news_data": DATA_VENDOR_NEWS_DATA,
             },
+            "news_min_relevance_score": DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE,
+            "news": {
+                "marketaux_api_key": MARKETAUX_API_KEY,
+                "newsdata_api_key": NEWSDATA_API_KEY,
+                "provider_priority": NEWS_PROVIDER_PRIORITY,
+                "enabled_providers": NEWS_ENABLED_PROVIDERS,
+                "default_window_days": NEWS_DEFAULT_WINDOW_DAYS,
+                "max_articles_per_provider": NEWS_MAX_ARTICLES_PER_PROVIDER,
+                "max_articles_for_prompt": NEWS_MAX_ARTICLES_FOR_PROMPT,
+                "max_articles_for_ui": NEWS_MAX_ARTICLES_FOR_UI,
+                "min_relevance_score": NEWS_MIN_RELEVANCE_SCORE,
+                "prompt_min_relevance_score": NEWS_PROMPT_MIN_RELEVANCE_SCORE,
+                "cache_enabled": NEWS_CACHE_ENABLED,
+                "cache_ttl_minutes": NEWS_CACHE_TTL_MINUTES,
+                "cache_db_path": NEWS_CACHE_DB_PATH,
+                "cache_max_entries": NEWS_CACHE_MAX_ENTRIES,
+                "debug_raw_response": NEWS_DEBUG_RAW_RESPONSE,
+                "log_provider_requests": NEWS_LOG_PROVIDER_REQUESTS,
+                "vendor_timeout_seconds": NEWS_VENDOR_TIMEOUT_SECONDS,
+                "vendor_max_retries": NEWS_VENDOR_MAX_RETRIES,
+                "fetch_secondary_always": NEWS_FETCH_SECONDARY_ALWAYS,
+                "secondary_fetch_threshold": NEWS_SECONDARY_FETCH_THRESHOLD,
+                "enable_yfinance_fallback": NEWS_ENABLE_YFINANCE_FALLBACK,
+            },
             "max_debate_rounds": DEFAULT_MAX_DEBATE_ROUNDS,
             "max_risk_discuss_rounds": MAX_RISK_DISCUSS_ROUNDS,
             "analysis_mode": ANALYSIS_MODE,
             "analysis_depth": analysis_depth,
+            "analysis_depth_config": dict(depth_config),
+            "analysis_depth_debate_rounds": depth_config["debate_rounds"],
+            "analysis_depth_risk_rounds": depth_config["risk_rounds"],
             "response_detail": response_detail,
             "max_gemini_calls": budget,
         }
@@ -127,8 +178,19 @@ def build_tradingagents_config(
         response_detail = "full"
 
     config = DEFAULT_CONFIG.copy()
-    config.update(llm.tradingagents_overrides(analysis_depth=depth, response_detail=response_detail))
-    if max_debate_rounds is not None:
-        config["max_debate_rounds"] = max_debate_rounds
-        config["max_risk_discuss_rounds"] = max_debate_rounds
+    overrides = llm.tradingagents_overrides(analysis_depth=depth, response_detail=response_detail)
+    data_vendors = {
+        **config.get("data_vendors", {}),
+        **overrides.get("data_vendors", {}),
+    }
+    config.update(overrides)
+    config["data_vendors"] = data_vendors
+    depth_config = config.get("analysis_depth_config", {})
+    depth_debate_rounds = int(depth_config.get("debate_rounds") or 1)
+    depth_risk_rounds = int(depth_config.get("risk_rounds") or 1)
+    requested_rounds = int(max_debate_rounds) if max_debate_rounds is not None else DEFAULT_MAX_DEBATE_ROUNDS
+    effective_rounds = max(requested_rounds, depth_debate_rounds) if depth == "deep" else requested_rounds
+    config["max_debate_rounds"] = effective_rounds
+    config["max_risk_discuss_rounds"] = max(effective_rounds, depth_risk_rounds) if depth == "deep" else effective_rounds
+    config["requested_max_debate_rounds"] = requested_rounds
     return config

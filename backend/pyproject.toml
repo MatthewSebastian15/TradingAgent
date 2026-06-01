@@ -9,7 +9,13 @@ markers = [
     "live_api: manual tests that call live vendor APIs",
 ]
 filterwarnings = [
-    "ignore::DeprecationWarning",
+    "error::DeprecationWarning:backend.*",
+    "error::DeprecationWarning:routes.*",
+    "error::DeprecationWarning:services.*",
+    "error::DeprecationWarning:tradingagents.*",
+    "ignore::DeprecationWarning:pydantic.*",
+    "ignore::DeprecationWarning:httpx.*",
+    "ignore::DeprecationWarning:starlette.*",
 ]
 
 [tool.ruff]

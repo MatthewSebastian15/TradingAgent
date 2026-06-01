@@ -1,4 +1,6 @@
 import { formatPrice } from './formatting';
+import { safeExternalUrl } from './url';
+import { MOCK_REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 
 const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
 const LEGACY_REPORT_FIELD_PATTERN = /\b(price target|risk per share|reward per share)\b/i;
@@ -15,7 +17,8 @@ function hasValue(value) {
 function display(value) {
   if (!hasValue(value)) return 'N/A';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (typeof value === 'number') return Number.isInteger(value) ? value.toLocaleString() : String(value);
+  if (typeof value === 'number')
+    return Number.isInteger(value) ? value.toLocaleString() : String(value);
   return String(value);
 }
 
@@ -59,6 +62,62 @@ function price(value, result) {
 
 function row(label, value) {
   return { label, value: display(value) };
+}
+
+function buildCompanyProfileRows(profile) {
+  if (!profile?.available) return [];
+  return [
+    row('Company Name', profile.name),
+    row('Sector', profile.sector),
+    row('Industry', profile.industry),
+    row('Address', profile.address),
+    row('Phone', profile.phone),
+    row('Website', profile.website),
+    row('Full Time Employees', profile.full_time_employees),
+  ];
+}
+
+function buildCompanyProfileExecutives(profile) {
+  if (!Array.isArray(profile?.executives)) return [];
+  return profile.executives
+    .slice(0, 10)
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => ({ name: display(item.name), title: display(item.title) }));
+}
+
+function buildPriceChartRows(chart, result) {
+  if (!chart?.available) return [];
+  const stats = chart.stats || {};
+  return [
+    row('Window', chart.window_label),
+    row('Source', chart.source),
+    row('Lookback Days', chart.lookback_days),
+    row('Start Price', price(stats.start_price, result)),
+    row('End Price', price(stats.end_price, result)),
+    row('Change %', stats.change_percent),
+    row('High', price(stats.high, result)),
+    row('Low', price(stats.low, result)),
+    row('Average Close', price(stats.average_close, result)),
+    row('Average Volume', stats.average_volume),
+    row('Point Count', stats.point_count),
+  ];
+}
+
+function buildRelatedNewsItems(relatedNews) {
+  if (!Array.isArray(relatedNews?.items)) return [];
+  return relatedNews.items
+    .slice(0, 8)
+    .filter((item) => item && typeof item === 'object' && item.title)
+    .map((item) => ({
+      title: display(item.title),
+      publisher: display(item.publisher),
+      published_at: display(item.published_at),
+      source: display(item.source),
+      event_type: display(item.event_type),
+      summary: display(item.summary),
+      relevance_reason: display(item.relevance_reason),
+      url: safeExternalUrl(item.url),
+    }));
 }
 
 export function buildMockActionPlanRows(result) {
@@ -134,6 +193,7 @@ export function buildMockReportContext(result = {}) {
     trade_date: display(result.trade_date),
     analysis_created_at: display(result.analysis_created_at || result.saved_at),
     generated_at: new Date().toISOString(),
+    disclaimer: MOCK_REPORT_DISCLAIMER,
     current_price: result.current_price,
     current_price_display: price(result.current_price, result),
     current_price_as_of: display(result.current_price_as_of || result.last_close_price_as_of),
@@ -154,8 +214,18 @@ export function buildMockReportContext(result = {}) {
       row('Trade Plan Valid', tradePlanValid),
       row('Has Existing Position', Boolean(result.has_existing_position)),
       row('Time Horizon', result.time_horizon),
-      row('Confidence', hasValue(result.confidence_score) ? `${Math.round(Number(result.confidence_score) * 100)}%` : null),
-      row('Suggested Allocation', hasValue(result.suggested_allocation_percent) ? `${result.suggested_allocation_percent}%` : null),
+      row(
+        'Confidence',
+        hasValue(result.confidence_score)
+          ? `${Math.round(Number(result.confidence_score) * 100)}%`
+          : null
+      ),
+      row(
+        'Suggested Allocation',
+        hasValue(result.suggested_allocation_percent)
+          ? `${result.suggested_allocation_percent}%`
+          : null
+      ),
     ],
     action_plan_rows: showTradePlan ? buildMockActionPlanRows(result) : [],
     risk_rows: buildRiskRows(result, showTradePlan),
@@ -172,6 +242,13 @@ export function buildMockReportContext(result = {}) {
     key_catalysts: arrayOfText(result.key_catalysts),
     invalidation_conditions: arrayOfText(result.invalidation_conditions),
     analyst_sections: buildAnalystSections(result),
+    financial_highlights: result.financial_highlights || null,
+    company_profile: result.company_profile || {},
+    company_profile_rows: buildCompanyProfileRows(result.company_profile),
+    company_profile_executives: buildCompanyProfileExecutives(result.company_profile),
+    price_chart_rows: buildPriceChartRows(result.price_chart, result),
+    related_news: result.related_news || {},
+    related_news_items: buildRelatedNewsItems(result.related_news),
   };
 }
 
@@ -216,6 +293,94 @@ function renderAnalystSections(sections) {
         </article>`
       )
       .join('')}
+  </section>`;
+}
+
+function renderFinancialHighlights(financialHighlights) {
+  const periods = financialHighlights?.periods;
+  const rows = financialHighlights?.rows;
+  if (!Array.isArray(periods) || !periods.length || !Array.isArray(rows) || !rows.length) {
+    return '';
+  }
+  return `<section class="section financial-highlights">
+    <h2>${escapeHtml(financialHighlights.title || 'Key Financial Highlights')}</h2>
+    <table class="financial-highlights-table">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map(
+            (item) => `<tr>
+              <td>${escapeHtml(item.label)}</td>
+              ${periods
+                .map((period) => {
+                  const cell = item.values?.[period.key];
+                  return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display)}</td>`;
+                })
+                .join('')}
+            </tr>`
+          )
+          .join('')}
+      </tbody>
+    </table>
+  </section>`;
+}
+
+function renderCompanyProfile(profile, rows, executives) {
+  if (!rows.length) return '';
+  return `<section class="section">
+    <h2>Company Profile</h2>
+    <table><tbody>${renderRows(rows)}</tbody></table>
+    ${profile.description ? `<h3>Business Description</h3><p>${escapeHtml(profile.description)}</p>` : ''}
+    ${
+      executives.length
+        ? `<h3>Key Executives</h3>
+          <table>
+            <thead><tr><th>Name</th><th>Title</th></tr></thead>
+            <tbody>
+              ${executives
+                .map(
+                  (executive) =>
+                    `<tr><td>${escapeHtml(executive.name)}</td><td>${escapeHtml(executive.title)}</td></tr>`
+                )
+                .join('')}
+            </tbody>
+          </table>`
+        : ''
+    }
+  </section>`;
+}
+
+function renderPriceChartSummary(rows) {
+  if (!rows.length) return '';
+  return `<section class="section">
+    <h2>Chart &amp; Price Summary</h2>
+    <table><tbody>${renderRows(rows)}</tbody></table>
+  </section>`;
+}
+
+function renderRelatedNews(relatedNews, items) {
+  if (!items.length) return '';
+  return `<section class="section">
+    <h2>Related News</h2>
+    ${relatedNews.summary ? `<p>${escapeHtml(relatedNews.summary)}</p>` : ''}
+    <div class="news-list">
+      ${items
+        .map(
+          (item) => `<article class="news-item">
+            <h3>${escapeHtml(item.title)}</h3>
+            <p class="muted">Publisher: ${escapeHtml(item.publisher)} | Published: ${escapeHtml(item.published_at)} | Source: ${escapeHtml(item.source)} | Event: ${escapeHtml(item.event_type)}</p>
+            ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
+            ${item.relevance_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.relevance_reason)}</p>` : ''}
+            ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
+          </article>`
+        )
+        .join('')}
+    </div>
   </section>`;
 }
 
@@ -264,6 +429,10 @@ export function renderMockReportHtml(report) {
       table { width: 100%; border-collapse: collapse; margin: 8px 0 18px; }
       th, td { border: 1px solid #d1d5db; padding: 9px 10px; vertical-align: top; }
       th { width: 32%; background: #f3f4f6; text-align: left; }
+      .financial-highlights-table { font-size: 12px; }
+      .financial-highlights-table th, .financial-highlights-table td { padding: 7px; text-align: right; white-space: nowrap; }
+      .financial-highlights-table th:first-child, .financial-highlights-table td:first-child { text-align: left; }
+      .financial-highlights-table th:first-child { width: auto; }
       .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0 18px; }
       .metric-card { border: 1px solid #d1d5db; padding: 12px; min-height: 78px; break-inside: avoid; }
       .metric-value { font-weight: 700; color: #111827; word-break: break-word; }
@@ -274,7 +443,22 @@ export function renderMockReportHtml(report) {
       .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
       .section, .analyst-note { break-inside: avoid; }
       .analyst-note p { white-space: pre-wrap; }
-      .disclaimer { color: #4b5563; font-size: 12px; }
+      .news-list { display: grid; gap: 12px; }
+      .news-item { border: 1px solid #d1d5db; padding: 12px; break-inside: avoid; }
+      .news-item h3 { margin: 0 0 6px; font-size: 13px; }
+      .news-item p { margin: 4px 0; }
+      .disclaimer {
+        margin-top: 28px;
+        padding: 16px;
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        color: #4b5563;
+        font-size: 12px;
+        line-height: 1.55;
+        break-inside: avoid;
+      }
+      .disclaimer h2 { margin-top: 0; }
+      .disclaimer p { white-space: pre-line; margin-bottom: 0; }
       footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #d1d5db; color: #6b7280; font-size: 12px; }
       @media print {
         body { background: #ffffff; }
@@ -312,6 +496,18 @@ export function renderMockReportHtml(report) {
         <h2>Executive Summary</h2>
         <p>${escapeHtml(report.executive_summary)}</p>
       </section>
+
+      ${renderCompanyProfile(
+        report.company_profile,
+        report.company_profile_rows,
+        report.company_profile_executives
+      )}
+
+      ${renderPriceChartSummary(report.price_chart_rows)}
+
+      ${renderRelatedNews(report.related_news, report.related_news_items)}
+
+      ${renderFinancialHighlights(report.financial_highlights)}
 
       <section class="section">
         <h2>Decision Summary</h2>
@@ -354,7 +550,7 @@ export function renderMockReportHtml(report) {
 
       <section class="section disclaimer">
         <h2>Disclaimer</h2>
-        <p>This mock report is generated for UI, HTML preview, and browser print-PDF debugging only. It is not financial advice and does not use live market data, external providers, or LLM calls.</p>
+        <p>${escapeHtml(report.disclaimer)}</p>
       </section>
 
       <footer>TradingAgent mock report · ${escapeHtml(report.ticker)} · ${escapeHtml(report.request_id)}</footer>

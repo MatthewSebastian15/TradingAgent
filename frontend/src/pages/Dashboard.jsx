@@ -90,7 +90,7 @@ function useTickerQuotes() {
         const res = await fetch(
           buildApiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols)}`),
           {
-            headers: buildAuthHeaders(),
+            headers: await buildAuthHeaders(),
           }
         );
 
@@ -236,7 +236,7 @@ export default function Dashboard() {
     async function checkBackendStatus() {
       try {
         const response = await fetch(buildApiUrl('/status'), {
-          headers: buildAuthHeaders(),
+          headers: await buildAuthHeaders(),
           signal: controller.signal,
         });
 

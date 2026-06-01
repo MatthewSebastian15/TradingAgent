@@ -1,6 +1,35 @@
 from __future__ import annotations
 
 
+def _valid_executive_summary() -> str:
+    return (
+        "The final rating is Hold because the available evidence is balanced and the setup does not justify forcing a new position before confirmation improves. "
+        "The strongest support comes from stable price behavior, controlled downside assumptions, and a risk plan that keeps capital protected while the next catalyst develops. "
+        "The biggest risk is incomplete data or weak confirmation, because either problem could turn a neutral setup into a poor trade. "
+        "The recommended action is to keep allocation modest, avoid adding size, wait for a cleaner entry, and only use a stop-loss after price data confirms the setup. "
+        "The expected horizon is short to medium term, and the thesis should be confirmed by stronger trend evidence or invalidated by a break below support. "
+        "It also names the rating, support, risk, action plan, sizing posture, stop context, time horizon, and invalidation logic so the object behaves like a real portfolio manager response. "
+        "The wording is deliberately reusable so schema validation remains stable across parse, memory, and trade-level tests without changing assertions."
+    )
+
+
+def _valid_investment_thesis() -> str:
+    return (
+        "The investment thesis is intentionally cautious because the available evidence supports patience more than immediate action. "
+        "The company remains relevant in its market, but the current setup needs stronger confirmation before it deserves a larger allocation. "
+        "The most useful signals are stable price behavior, controlled risk assumptions, and a trade plan that avoids oversized exposure while waiting for the next catalyst. "
+        "Those signals are helpful, but they are not strong enough to justify a high-conviction Buy without cleaner momentum, better data quality, and a more attractive entry point. "
+        "The bear case is that weak confirmation, stale inputs, or sudden volatility could quickly damage the risk/reward profile. "
+        "That bear case matters because a trade can be directionally reasonable and still be poor if the entry is late or the stop-loss is not respected. "
+        "The balanced conclusion is to wait, keep allocation limited, and require stronger evidence before increasing exposure. "
+        "The action plan is to avoid chasing price, use a smaller position only if the setup improves, define the stop-loss before entry, and take profit only when the validated risk/reward target is reached. "
+        "If the next catalyst confirms stronger demand and price stability, the thesis can be upgraded; if support breaks, the idea should be rejected. "
+        "This helper also keeps tests readable by using one reusable narrative instead of scattering short invalid placeholders across unrelated assertions. "
+        "The exact company is not important here; what matters is that schema validation, parsing, serialization, and trade-level normalization all receive text that matches the production contract. "
+        "The longer body also proves rendered reports can carry realistic paragraphs without collapsing around short placeholder text."
+    )
+
+
 def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating, VolatilityLevel
 
@@ -9,16 +38,8 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     decision = PortfolioDecision(
         confidence_score=0.7,
         rating=PortfolioRating.BUY,
-        executive_summary=(
-            "The rating is Buy because the setup is constructive. "
-            "The strongest data point is improving price action. "
-            "The main risk is execution, so position size should stay controlled."
-        ),
-        investment_thesis=(
-            "The company has a clear setup. The trend is supportive. "
-            "The risk is defined. The allocation is moderate. "
-            "The upside case is better than the downside case. The thesis should be reviewed after earnings."
-        ),
+        executive_summary=_valid_executive_summary(),
+        investment_thesis=_valid_investment_thesis(),
         suggested_allocation_percent=5.0,
         entry_price=100.0,
         stop_loss=92.0,
@@ -93,16 +114,8 @@ def test_parse_final_result_forces_valid_trade_rr_to_one_to_three():
     decision = PortfolioDecision(
         confidence_score=0.7,
         rating=PortfolioRating.BUY,
-        executive_summary=(
-            "The rating is Buy because the setup is constructive. "
-            "The strongest data point is backend validation. "
-            "The main risk is execution."
-        ),
-        investment_thesis=(
-            "The company has a defined setup. The stop loss is clear. "
-            "The upside is measurable. The downside is controlled. "
-            "The thesis should be reviewed if the stop breaks."
-        ),
+        executive_summary=_valid_executive_summary(),
+        investment_thesis=_valid_investment_thesis(),
         entry_price=100.0,
         stop_loss=95.0,
         take_profit=125.0,
@@ -129,16 +142,8 @@ def test_parse_final_result_does_not_render_full_decision_from_portfolio_object(
     decision = PortfolioDecision(
         confidence_score=0.4,
         rating=PortfolioRating.HOLD,
-        executive_summary=(
-            "The rating is Hold because evidence is mixed. "
-            "The strongest data point is stable price action. "
-            "The main risk is limited upside."
-        ),
-        investment_thesis=(
-            "The company is stable. The setup is not urgent. "
-            "The risk is manageable. The allocation should stay low. "
-            "The upside and downside are balanced. The thesis should be reviewed later."
-        ),
+        executive_summary=_valid_executive_summary(),
+        investment_thesis=_valid_investment_thesis(),
     )
 
     parsed = _parse_final_result("", decision, PortfolioRating, {})
@@ -186,6 +191,120 @@ def test_summary_shape_keeps_investment_thesis():
     assert "raw_agent_state" not in shaped
 
 
+def test_summary_shape_keeps_financial_highlights():
+    from routes.serializers import shape_result
+
+    financial_highlights = {
+        "periods": [{"key": "FY25", "label": "FY25"}],
+        "rows": [{"key": "revenue", "values": {"FY25": {"display": "100.0"}}}],
+    }
+
+    shaped = shape_result({"decision": "Hold", "financial_highlights": financial_highlights}, "summary")
+
+    assert shaped["financial_highlights"] == financial_highlights
+
+
+def test_parse_final_result_preserves_financial_highlights():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    financial_highlights = {"periods": [{"key": "FY25"}], "rows": []}
+    parsed = _parse_final_result("", None, PortfolioRating, {"financial_highlights": financial_highlights})
+
+    assert parsed["financial_highlights"] == financial_highlights
+
+
+def test_summary_shape_keeps_company_profile():
+    from routes.serializers import shape_result
+
+    company_profile = {"available": True, "ticker": "BBCA.JK", "name": "PT Bank Central Asia Tbk"}
+
+    shaped = shape_result({"decision": "Hold", "company_profile": company_profile}, "summary")
+
+    assert shaped["company_profile"] == company_profile
+
+
+def test_parse_final_result_preserves_company_profile():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    company_profile = {"available": False, "ticker": "AAPL", "warning": "offline"}
+    parsed = _parse_final_result("", None, PortfolioRating, {"company_profile": company_profile})
+
+    assert parsed["company_profile"] == company_profile
+
+
+def test_summary_shape_keeps_price_chart():
+    from routes.serializers import shape_result
+
+    price_chart = {"available": True, "ticker": "BBCA.JK", "points": [{"date": "2026-05-18", "close": 100.0}]}
+
+    shaped = shape_result({"decision": "Hold", "price_chart": price_chart}, "summary")
+
+    assert shaped["price_chart"] == price_chart
+
+
+def test_parse_final_result_preserves_price_chart():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    price_chart = {"available": False, "ticker": "AAPL", "warning": "offline"}
+    parsed = _parse_final_result("", None, PortfolioRating, {"price_chart": price_chart})
+
+    assert parsed["price_chart"] == price_chart
+
+
+def test_summary_shape_keeps_related_news():
+    from routes.serializers import shape_result
+
+    related_news = {
+        "available": True,
+        "ticker": "BBCA.JK",
+        "items": [{"title": "Headline", "url": "https://example.com/news"}],
+    }
+
+    shaped = shape_result({"decision": "Hold", "related_news": related_news}, "summary")
+
+    assert shaped["related_news"] == related_news
+
+
+def test_parse_final_result_preserves_related_news():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    related_news = {"available": False, "ticker": "AAPL", "items": [], "warning": "offline"}
+    parsed = _parse_final_result("", None, PortfolioRating, {"related_news": related_news})
+
+    assert parsed["related_news"] == related_news
+
+
+def test_summary_shape_keeps_news_context():
+    from routes.serializers import shape_result
+
+    news = {"ticker": "BBCA.JK", "articles": [{"provider": "marketaux", "title": "Headline"}]}
+
+    shaped = shape_result({"decision": "Hold", "news": news, "news_context": news}, "summary")
+
+    assert shaped["news"] == news
+    assert shaped["news_context"] == news
+
+
+def test_parse_final_result_preserves_news_context():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    news = {"ticker": "BBCA.JK", "articles": [{"provider": "marketaux", "title": "Headline"}]}
+    parsed = _parse_final_result("", None, PortfolioRating, {"news": news})
+
+    assert parsed["news"] == news
+    assert parsed["news_context"] == news
+
+
 def test_parse_final_result_fallback_contract_is_non_actionable():
     from tradingagents.agents.schemas import PortfolioRating
 
@@ -216,16 +335,8 @@ def test_parse_final_result_completes_legacy_data_quality_contract():
     decision = PortfolioDecision(
         confidence_score=0.6,
         rating=PortfolioRating.HOLD,
-        executive_summary=(
-            "The rating is Hold because the setup is balanced. "
-            "The strongest data point is stable price action. "
-            "The main risk is weak confirmation."
-        ),
-        investment_thesis=(
-            "The company is stable. The setup needs patience. "
-            "The risk is not severe. The reward is not compelling. "
-            "No new trade is needed. The thesis can be reviewed later."
-        ),
+        executive_summary=_valid_executive_summary(),
+        investment_thesis=_valid_investment_thesis(),
         data_quality={"price_data": "ok", "fundamentals": "partial", "news": "missing"},
     )
 

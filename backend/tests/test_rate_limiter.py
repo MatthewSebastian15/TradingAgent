@@ -127,8 +127,8 @@ def test_configured_api_key_must_match(client, monkeypatch):
     rejected = client.post("/api/analyze", json=payload, headers={"x-api-key": "wrong-key"})
     accepted = client.post("/api/analyze", json=payload, headers={"x-api-key": "expected-key"})
 
-    assert rejected.status_code == 429
-    assert rejected.json()["error"]["code"] == "RATE_LIMITED"
+    assert rejected.status_code == 401
+    assert rejected.json()["error"]["code"] == "UNAUTHORIZED"
     assert rejected.json()["error"]["message"] == "Invalid API key."
     assert accepted.status_code == 200
 
@@ -144,7 +144,7 @@ def test_job_create_rejects_invalid_api_key_before_storing_job(client, monkeypat
         headers={"x-api-key": "wrong-key"},
     )
 
-    assert response.status_code == 429
+    assert response.status_code == 401
     assert response.json()["error"]["message"] == "Invalid API key."
     assert asyncio.run(store.stats())["jobs"] == 0
 
@@ -190,6 +190,33 @@ def test_status_endpoint_is_rate_limited(client, monkeypatch):
     assert first.status_code == 200
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "RATE_LIMITED"
+
+
+def test_shared_proxy_key_uses_separate_owner_session_quotas(client, monkeypatch):
+    monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="shared-proxy-key"))
+    monkeypatch.setattr(
+        "routes.analysis.request_policy",
+        lambda: RateLimitPolicy(scope="owner-session-limit-test", max_per_minute=1, max_concurrent=1),
+    )
+
+    proxy_headers = {"x-api-key": "shared-proxy-key"}
+    owner_a = client.post("/api/session", headers=proxy_headers).json()["owner_token"]
+    owner_b = client.post("/api/session", headers=proxy_headers).json()["owner_token"]
+
+    first_a = client.get("/api/status", headers={**proxy_headers, "x-owner-token": owner_a})
+    first_b = client.get("/api/status", headers={**proxy_headers, "x-owner-token": owner_b})
+    second_a = client.get("/api/status", headers={**proxy_headers, "x-owner-token": owner_a})
+
+    assert first_a.status_code == 200
+    assert first_b.status_code == 200
+    assert second_a.status_code == 429
+
+
+def test_owner_scoped_endpoint_rejects_missing_owner_token(client):
+    response = client.get("/api/status", headers={"x-owner-token": ""})
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHORIZED"
 
 
 def test_market_quotes_endpoint_is_rate_limited(client, monkeypatch):

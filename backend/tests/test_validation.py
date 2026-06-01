@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib
 import logging
+from collections import Counter
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 from tradingagents.llm_clients.model_catalog import (
@@ -16,6 +18,58 @@ from routes.validation import AnalysisRequest, normalize_and_validate_analysis_r
 
 _GOOGLE_QUICK_LLM = MODEL_CATALOG["google"]["quick"][0][1]
 _GOOGLE_DEEP_LLM = MODEL_CATALOG["google"]["deep"][0][1]
+
+
+def test_env_example_does_not_define_duplicate_keys():
+    env_example = Path(__file__).resolve().parents[1] / ".env.example"
+    keys = [
+        line.split("=", 1)[0].strip()
+        for line in env_example.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#") and "=" in line
+    ]
+
+    duplicates = sorted(key for key, count in Counter(keys).items() if count > 1)
+
+    assert duplicates == []
+
+
+def test_invalid_boolean_environment_value_is_rejected(monkeypatch):
+    from config_env import env_bool
+
+    monkeypatch.setenv("TEST_BOOLEAN_VALUE", "sometimes")
+
+    with pytest.raises(ValueError, match="TEST_BOOLEAN_VALUE"):
+        env_bool("TEST_BOOLEAN_VALUE", False)
+
+
+def test_invalid_integer_environment_value_is_rejected(monkeypatch):
+    from config_env import env_int
+
+    monkeypatch.setenv("TEST_INTEGER_VALUE", "1.5")
+
+    with pytest.raises(ValueError, match="TEST_INTEGER_VALUE"):
+        env_int("TEST_INTEGER_VALUE", 1, min_value=1)
+
+
+def test_out_of_range_float_environment_value_is_rejected(monkeypatch):
+    from config_env import env_float
+
+    monkeypatch.setenv("TEST_FLOAT_VALUE", "1.5")
+
+    with pytest.raises(ValueError, match="TEST_FLOAT_VALUE"):
+        env_float("TEST_FLOAT_VALUE", 0.35, min_value=0, max_value=1)
+
+
+def test_startup_rejects_invalid_data_vendor_news_relevance_score(monkeypatch):
+    import config
+
+    try:
+        with monkeypatch.context() as env:
+            env.setenv("DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE", "1.5")
+            with pytest.raises(ValueError, match="DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE"):
+                importlib.reload(config)
+    finally:
+        importlib.reload(config)
 
 
 def test_ticker_bbcajk_is_valid():
@@ -187,6 +241,7 @@ def _restore_test_config(monkeypatch):
     monkeypatch.setenv("DEEP_THINK_LLM", _GOOGLE_DEEP_LLM)
     monkeypatch.setenv("QUICK_THINK_LLM", _GOOGLE_QUICK_LLM)
     monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "false")
+    monkeypatch.delenv("OWNER_SESSION_SECRET", raising=False)
     monkeypatch.delenv("CORS_ORIGINS", raising=False)
 
     import config
@@ -198,6 +253,7 @@ def test_production_defaults_require_api_key_and_rate_limit(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("OWNER_SESSION_SECRET", "test-owner-session-secret")
     monkeypatch.delenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", raising=False)
 
     import config
@@ -275,6 +331,21 @@ def test_production_requires_api_key(monkeypatch):
         _restore_test_config(monkeypatch)
 
 
+def test_production_requires_owner_session_secret(monkeypatch):
+    import config
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
+    monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.delenv("OWNER_SESSION_SECRET", raising=False)
+
+    try:
+        with pytest.raises(ValueError, match="OWNER_SESSION_SECRET must be configured in production"):
+            importlib.reload(config)
+    finally:
+        _restore_test_config(monkeypatch)
+
+
 def test_wildcard_cors_is_rejected(monkeypatch):
     import config
 
@@ -291,6 +362,7 @@ def test_wildcard_cors_is_rejected(monkeypatch):
 def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("OWNER_SESSION_SECRET", "test-owner-session-secret")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com, https://admin.example.com")
 
     import config
@@ -305,6 +377,7 @@ def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
 def test_production_logs_warning_when_api_key_requirement_is_disabled(monkeypatch, caplog):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("OWNER_SESSION_SECRET", "test-owner-session-secret")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "false")
 
@@ -347,4 +420,3 @@ def test_hk_suffix_ticker_is_rejected():
 
     assert exc_info.value.status_code == 400
     assert "ticker" in exc_info.value.details["fields"]
-

@@ -9,13 +9,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from io import StringIO
 from typing import Any, TypeVar
+from urllib.parse import urlsplit
 
 from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
+from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_url, rank_news
+from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
 from tradingagents.dataflows.y_finance import normalize_ticker
+from tradingagents.financial_highlights.builder import build_financial_highlights
+from tradingagents.financial_highlights.models import to_dict as financial_highlights_to_dict
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 
 logger = logging.getLogger(__name__)
@@ -177,6 +182,254 @@ def _safe_news_data_field(label: str, method: str, *args, limit: int = 12_000) -
     return _safe_data_field(label, lambda: route_to_vendor(method, *args), limit=limit)
 
 
+def _safe_structured_company_news(
+    ticker: str,
+    trade_date: str,
+    window_days: int,
+    holder: dict[str, Any],
+    *,
+    limit: int = 12_000,
+) -> DataField:
+    try:
+        context = NewsService().fetch_news(ticker, as_of_date=trade_date, window_days=window_days)
+        holder.update(context)
+        return DataField.from_text(_truncate(format_news_for_prompt(context), limit))
+    except Exception as exc:
+        logger.warning("Structured company news fetch failed for %s: %s", ticker, exc)
+        holder.update(
+            {
+                "enabled": True,
+                "ticker": ticker,
+                "window_days": window_days,
+                "providers_used": [],
+                "provider_status": {"service": "unknown_error"},
+                "articles_found": 0,
+                "articles_used_in_prompt": 0,
+                "articles": [],
+                "empty_reason": "News providers are temporarily unavailable.",
+            }
+        )
+        return DataField.unavailable("company_news", exc)
+
+
+def _detect_current_news_source(line: str, fallback: str = "unknown") -> str:
+    match = re.match(r"^##\s+Source:\s*(.+)$", line.strip(), flags=re.IGNORECASE)
+    if match:
+        return match.group(1).strip().lower().replace(" ", "_") or fallback
+
+    lowered = line.lower()
+    if "marketaux" in lowered:
+        return "marketaux"
+    if "newsdata" in lowered:
+        return "newsdata"
+    if "finnhub" in lowered:
+        return "finnhub"
+    if "alpha vantage" in lowered or "alpha_vantage" in lowered:
+        return "alpha_vantage"
+    if "yfinance" in lowered:
+        return "yfinance"
+    return fallback
+
+
+def _clean_news_summary(text: str, limit: int = 350) -> str:
+    cleaned = " ".join(str(text or "").split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 3].rstrip() + "..."
+
+
+def _usable_news_url(value: Any) -> str | None:
+    url = str(value or "").strip()
+    if not url:
+        return None
+    parts = urlsplit(url)
+    if parts.scheme.lower() not in {"http", "https"} or not parts.netloc:
+        return None
+    return url
+
+
+def _news_relevance_reason(item: dict[str, Any], ticker: str) -> str:
+    event_type = str(item.get("event_type") or "general")
+    source = str(item.get("source") or "vendor")
+    if event_type != "general":
+        return f"This article is tagged as {event_type} news and may affect the analysis context for {ticker}."
+    return f"This article was returned by {source} as related market news for the selected analysis window."
+
+
+def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -> list[dict[str, Any]]:
+    """Parse vendor-formatted Markdown news into structured article dictionaries."""
+    items: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    summary_lines: list[str] = []
+    current_source = default_source
+
+    def flush_current() -> None:
+        nonlocal current, summary_lines
+        if not current:
+            return
+
+        url = _usable_news_url(current.get("url"))
+        current["url"] = url
+        current["summary"] = _clean_news_summary("\n".join(summary_lines).strip())
+        current["normalized_url"] = normalize_url(url)
+        current["related_ticker"] = current.get("related_ticker") or ticker
+        current["event_type"] = current.get("event_type") or "general"
+        current["relevance_reason"] = _news_relevance_reason(current, ticker)
+
+        if current.get("title") and url:
+            items.append(current)
+
+        current = None
+        summary_lines = []
+
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if line.startswith("## "):
+            current_source = _detect_current_news_source(line, fallback=current_source or default_source)
+            continue
+
+        heading = re.match(r"^###\s+(.+?)(?:\s+\(source:\s*(.*?)\))?$", line, flags=re.IGNORECASE)
+        if heading:
+            flush_current()
+            current = {
+                "title": heading.group(1).strip(),
+                "publisher": (heading.group(2) or "Unknown").strip(),
+                "published_at": None,
+                "url": None,
+                "summary": "",
+                "source": current_source or default_source,
+                "event_type": "general",
+                "related_ticker": ticker,
+            }
+            continue
+
+        if current is None:
+            continue
+
+        lowered = line.lower()
+        if lowered.startswith("published:"):
+            current["published_at"] = line.split(":", 1)[1].strip()
+            continue
+        if lowered.startswith("event type:"):
+            current["event_type"] = line.split(":", 1)[1].strip() or "general"
+            continue
+        if lowered.startswith("provider:"):
+            current["source"] = line.split(":", 1)[1].split("|", 1)[0].strip() or current["source"]
+            continue
+        if lowered.startswith("link:"):
+            current["url"] = line.split(":", 1)[1].strip()
+            continue
+        if lowered.startswith("relevant tickers:"):
+            continue
+
+        summary_lines.append(line)
+
+    flush_current()
+    return items
+
+
+def _related_news_items_from_context(news_context: dict[str, Any] | None, ticker: str) -> list[dict[str, Any]]:
+    articles = news_context.get("articles") if isinstance(news_context, dict) else []
+    if not isinstance(articles, list):
+        return []
+
+    items: list[dict[str, Any]] = []
+    for article in articles:
+        if not isinstance(article, dict):
+            continue
+
+        url = _usable_news_url(article.get("url"))
+        title = str(article.get("title") or "").strip()
+        if not title or not url:
+            continue
+
+        source = str(article.get("provider") or article.get("source") or "vendor")
+        item = {
+            "title": title,
+            "publisher": article.get("source") or article.get("publisher") or "Unknown",
+            "published_at": article.get("published_at"),
+            "url": url,
+            "normalized_url": normalize_url(url),
+            "summary": _clean_news_summary(article.get("summary") or ""),
+            "source": source,
+            "event_type": article.get("event_type") or "general",
+            "related_ticker": article.get("ticker") or ticker,
+            "relevance_score": article.get("relevance_score") or 0,
+        }
+        item["relevance_reason"] = _news_relevance_reason(item, ticker)
+        items.append(item)
+    return items
+
+
+def _build_related_news(
+    ticker: str,
+    trade_date: str,
+    time_horizon_months: int,
+    company_news: str,
+    global_news: str,
+    source_label: str | None = None,
+    news_context: dict[str, Any] | None = None,
+    limit: int = 8,
+) -> dict[str, Any]:
+    months = _normalize_time_horizon_months(time_horizon_months)
+    lookback_days = _horizon_days(months)
+    max_items = max(1, min(int(limit or 8), 8))
+
+    base_payload: dict[str, Any] = {
+        "available": False,
+        "ticker": ticker,
+        "trade_date": trade_date,
+        "lookback_days": lookback_days,
+        "source": source_label or "unavailable",
+        "summary": "No usable related news was returned for this analysis.",
+        "items": [],
+    }
+
+    structured_items = _related_news_items_from_context(news_context, ticker)
+    company_items = _parse_markdown_news_items(company_news, default_source="company_news", ticker=ticker)
+    global_items = _parse_markdown_news_items(global_news, default_source="global_news", ticker=ticker)
+    merged = structured_items + company_items + global_items
+
+    if not merged:
+        return {**base_payload, "warning": "Related news is unavailable."}
+
+    try:
+        ranked = rank_news(deduplicate_news(merged), ticker=ticker)[:max_items]
+    except Exception as exc:
+        logger.warning("Failed to rank related news for %s: %s", ticker, exc)
+        ranked = merged[:max_items]
+
+    if not ranked:
+        return {**base_payload, "warning": "Related news is unavailable after deduplication."}
+
+    source = source_label or "+".join(
+        dict.fromkeys(str(item.get("source") or "unknown") for item in ranked)
+    )
+
+    return {
+        **base_payload,
+        "available": True,
+        "source": source,
+        "summary": f"Top {len(ranked)} related news items collected from configured vendors for this analysis window.",
+        "items": ranked,
+    }
+
+
+def _safe_company_profile(ticker: str, trade_date: str) -> dict[str, Any]:
+    try:
+        return route_to_vendor("get_company_profile", ticker, trade_date)
+    except Exception as exc:
+        logger.warning("company_profile fetch failed for %s: %s", ticker, exc)
+        return {
+            "available": False,
+            "ticker": ticker,
+            "warning": str(exc),
+        }
+
+
 def _extract_price_dataframe(price_field: DataField) -> Any:
     try:
         import pandas as pd
@@ -256,6 +509,146 @@ def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
     return price
 
 
+def _safe_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", "")
+    if not text:
+        return None
+    try:
+        number = float(text)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number and number not in {float("inf"), float("-inf")} else None
+
+
+def _safe_int(value: Any) -> int | None:
+    number = _safe_float(value)
+    if number is None:
+        return None
+    try:
+        return int(number)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _build_price_chart(
+    ticker: str,
+    trade_date: str,
+    price_data: str,
+    time_horizon_months: int,
+    source: str | None = None,
+) -> dict[str, Any]:
+    """Build frontend-ready OHLCV chart data from collected CSV price data."""
+    months = _normalize_time_horizon_months(time_horizon_months)
+    lookback_days = _price_lookback_days(months)
+    window_label = f"{months} Month{'s' if months > 1 else ''} Analysis / {lookback_days}D Price Window"
+
+    base_payload: dict[str, Any] = {
+        "available": False,
+        "source": source or "unavailable",
+        "ticker": ticker,
+        "trade_date": trade_date,
+        "window_label": window_label,
+        "lookback_days": lookback_days,
+        "points": [],
+        "stats": {},
+    }
+
+    lines = [
+        line
+        for line in (price_data or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not lines:
+        return {**base_payload, "warning": "Price chart data is unavailable."}
+
+    try:
+        cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
+        start_cutoff = cutoff - timedelta(days=lookback_days)
+    except ValueError:
+        cutoff = None
+        start_cutoff = None
+
+    points: list[dict[str, Any]] = []
+
+    try:
+        reader = csv.DictReader(StringIO("\n".join(lines)))
+        for row in reader:
+            if not row:
+                continue
+
+            date_raw = (row.get("Date") or row.get("") or next(iter(row.values()), "") or "").strip()
+            if not date_raw:
+                continue
+
+            try:
+                row_date = datetime.strptime(date_raw[:10], "%Y-%m-%d")
+            except ValueError:
+                continue
+
+            if cutoff is not None and row_date > cutoff:
+                continue
+            if start_cutoff is not None and row_date < start_cutoff:
+                continue
+
+            open_price = _safe_float(row.get("Open"))
+            high_price = _safe_float(row.get("High"))
+            low_price = _safe_float(row.get("Low"))
+            close_price = _safe_float(row.get("Close") or row.get("Adj Close"))
+            if any(value is None for value in [open_price, high_price, low_price, close_price]):
+                continue
+
+            points.append(
+                {
+                    "date": row_date.strftime("%Y-%m-%d"),
+                    "open": open_price,
+                    "high": max(high_price, open_price, close_price, low_price),
+                    "low": min(low_price, open_price, close_price, high_price),
+                    "close": close_price,
+                    "volume": _safe_int(row.get("Volume")),
+                }
+            )
+    except Exception as exc:
+        logger.warning("Failed to build price chart for %s: %s", ticker, exc)
+        return {**base_payload, "warning": "Price chart data could not be parsed."}
+
+    points = sorted(points, key=lambda item: item["date"])
+
+    if not points:
+        return {**base_payload, "warning": "No usable price rows were available for the selected window."}
+
+    closes = [float(item["close"]) for item in points if item.get("close") is not None]
+    highs = [float(item["high"]) for item in points if item.get("high") is not None]
+    lows = [float(item["low"]) for item in points if item.get("low") is not None]
+    volumes = [int(item["volume"]) for item in points if item.get("volume") is not None]
+
+    start_price = closes[0] if closes else None
+    end_price = closes[-1] if closes else None
+    change = end_price - start_price if start_price is not None and end_price is not None else None
+    change_percent = (change / start_price * 100) if change is not None and start_price else None
+
+    stats = {
+        "start_price": start_price,
+        "end_price": end_price,
+        "change": change,
+        "change_percent": round(change_percent, 2) if change_percent is not None else None,
+        "high": max(highs) if highs else None,
+        "low": min(lows) if lows else None,
+        "average_close": round(sum(closes) / len(closes), 2) if closes else None,
+        "average_volume": round(sum(volumes) / len(volumes)) if volumes else None,
+        "point_count": len(points),
+    }
+
+    return {
+        **base_payload,
+        "available": True,
+        "source": source or "yfinance",
+        "points": points,
+        "stats": stats,
+    }
+
+
 def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, str, str]:
     current = datetime.strptime(trade_date, "%Y-%m-%d")
     start_price = (current - timedelta(days=_price_lookback_days(time_horizon_months))).strftime("%Y-%m-%d")
@@ -283,7 +676,9 @@ def _build_collection_tasks(
     start_news: str,
     end: str,
     news_lookback_days: int,
+    news_context_holder: dict[str, Any] | None = None,
 ) -> dict[str, Callable[[], DataField]]:
+    news_context_holder = news_context_holder if news_context_holder is not None else {}
     tasks: dict[str, Callable[[], DataField]] = {
         "price_data": lambda: _safe_data_field(
             "price_data",
@@ -336,12 +731,11 @@ def _build_collection_tasks(
             limit=4_000,
         ),
     }
-    tasks["company_news"] = lambda: _safe_news_data_field(
-        "company_news",
-        "get_news",
+    tasks["company_news"] = lambda: _safe_structured_company_news(
         ticker,
-        start_news,
-        end,
+        trade_date,
+        news_lookback_days,
+        news_context_holder,
         limit=12_000,
     )
     tasks["global_news"] = lambda: _safe_news_data_field(
@@ -482,6 +876,10 @@ def _build_data_quality(
 def _detect_sources_from_text(text: str) -> list[str]:
     lowered = (text or "").lower()
     sources: list[str] = []
+    if "marketaux" in lowered:
+        sources.append("marketaux")
+    if "newsdata" in lowered:
+        sources.append("newsdata")
     if "finnhub" in lowered:
         sources.append("finnhub")
     if "alpha vantage" in lowered or "alpha_vantage" in lowered:
@@ -578,14 +976,42 @@ def collect_market_data(
     price_lookback = _price_lookback_days(time_horizon_months)
     start_price, start_news, end = _date_window(trade_date, time_horizon_months)
 
-    tasks = _build_collection_tasks(ticker, trade_date, start_price, start_news, end, news_lookback_days)
+    news_context: dict[str, Any] = {}
+    tasks = _build_collection_tasks(
+        ticker,
+        trade_date,
+        start_price,
+        start_news,
+        end,
+        news_lookback_days,
+        news_context_holder=news_context,
+    )
     results = _run_collection_tasks(tasks, config, cancel_check)
+    annual_statement_results = _run_collection_tasks(
+        {
+            "annual_balance_sheet": lambda: _safe_data_field(
+                "annual_balance_sheet",
+                lambda: route_to_vendor("get_balance_sheet", ticker, "annual", trade_date),
+                limit=10_000,
+            ),
+            "annual_income_statement": lambda: _safe_data_field(
+                "annual_income_statement",
+                lambda: route_to_vendor("get_income_statement", ticker, "annual", trade_date),
+                limit=10_000,
+            ),
+        },
+        config,
+        cancel_check,
+    )
 
     price = results["price_data"]
     fundamentals = results["fundamentals"]
     balance_sheet = results["balance_sheet"]
     cashflow = results["cashflow"]
     income_statement = results["income_statement"]
+    annual_balance_sheet = annual_statement_results["annual_balance_sheet"]
+    annual_income_statement = annual_statement_results["annual_income_statement"]
+    company_profile = _safe_company_profile(ticker, trade_date)
     company_news = results["company_news"]
     global_news = results["global_news"]
     insider_transactions = results["insider_transactions"]
@@ -624,6 +1050,13 @@ def collect_market_data(
 
     _check_cancel(cancel_check)
     last_close_price, last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
+    price_chart = _build_price_chart(
+        ticker=ticker,
+        trade_date=trade_date,
+        price_data=price.value,
+        time_horizon_months=time_horizon_months,
+        source=_price_source_label(price.value, last_close_price) or "yfinance",
+    )
     vendor_attempts = attempt_recorder.get_summary()
     request_budget = budget.get_summary()
     data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
@@ -643,6 +1076,31 @@ def collect_market_data(
         vendor_attempts=vendor_attempts,
         request_budget=request_budget,
     )
+    related_news = _build_related_news(
+        ticker=ticker,
+        trade_date=trade_date,
+        time_horizon_months=time_horizon_months,
+        company_news=company_news.value,
+        global_news=global_news.value,
+        source_label=data_sources.get("news"),
+        news_context=news_context,
+        limit=8,
+    )
+    financial_highlights = None
+    try:
+        financial_highlights = financial_highlights_to_dict(
+            build_financial_highlights(
+                ticker=ticker,
+                analysis_date=trade_date,
+                fundamentals=fundamentals.value,
+                income_statement={"quarterly": income_statement.value, "annual": annual_income_statement.value},
+                balance_sheet={"quarterly": balance_sheet.value, "annual": annual_balance_sheet.value},
+                cashflow=cashflow.value,
+                price_data=price.value,
+            )
+        )
+    except Exception:
+        logger.exception("Failed to build financial highlights for %s", ticker)
     try:
         release_budget(budget_id)
         release_attempt_recorder(attempt_id)
@@ -669,8 +1127,13 @@ def collect_market_data(
         last_close_price=last_close_price,
         last_close_price_as_of=last_close_price_as_of or trade_date,
         last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
+        company_profile=company_profile,
+        price_chart=price_chart,
+        news_context=news_context,
+        related_news=related_news,
         data_sources=data_sources,
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
         request_budget=runtime_metadata.get("request_budget", {}),
+        financial_highlights=financial_highlights,
     )

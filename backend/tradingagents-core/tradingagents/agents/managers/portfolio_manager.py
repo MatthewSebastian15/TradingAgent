@@ -69,14 +69,9 @@ def create_portfolio_manager(llm):
 
 **Output requirements:**
 
-Executive Summary: Write EXACTLY 5 sentences in one paragraph. No bullet points.
-- Sentence 1: State the rating and the single strongest reason for it.
-- Sentence 2: Cite the most important quantitative data point that supports this view.
-- Sentence 3: Name the biggest risk and explain why it does NOT change the decision (or does, if Sell).
-- Sentence 4: Describe the recommended entry strategy, position sizing, and stop-loss level.
-- Sentence 5: State the time horizon and the catalyst that will confirm or invalidate the thesis.
+Executive Summary: Write 150-200 words in one paragraph. No bullet points. Summarize the final rating, strongest reason, key quantitative support, biggest risk, recommended action, entry strategy, sizing, stop-loss context, time horizon, and confirmation or invalidation catalyst.
 
-Investment Thesis: Write at minimum 6 sentences as flowing paragraphs (no bullet points, no headers). Explain in plain, everyday language as if talking to a smart friend who does not work in finance. Cover: what the company does and why it matters now, the biggest tailwind or headwind, at least three specific numbers from the analysts' reports, the bear case and how serious it is, why one side wins the argument, and the full action plan (entry, sizing, stop-loss, profit-taking). Avoid unexplained jargon.
+Investment Thesis: Write 250-350 words as flowing paragraphs. No bullet points and no headers. Explain what the company does, why it matters now, the biggest tailwind or headwind, at least three specific numbers from the analysts' reports, the bear case, why one side wins, and the full action plan including entry, sizing, stop-loss, and profit-taking. Avoid unexplained jargon.
 
 Return a confidence_score from 0.0 to 1.0. Lower it when reports are incomplete, risk controls are weak, or debate evidence is mixed.
 

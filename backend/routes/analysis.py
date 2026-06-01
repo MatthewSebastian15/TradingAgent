@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from dataclasses import dataclass
+from inspect import Parameter, signature
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -14,6 +16,13 @@ from rate_limiter import limit_request, request_policy, stream_policy
 from routes import jobs, pipeline_runner, serializers, sse
 from routes.sse import EventSourceResponse
 from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
+from schemas import (
+    AnalysisJobCreateResponse,
+    AnalysisJobSummaryResponse,
+    AnalysisResponse,
+    ApiStatusResponse,
+    TickerValidationResponse,
+)
 
 router = APIRouter()
 
@@ -31,6 +40,22 @@ _log_request_accepted = serializers.log_request_accepted
 
 _sse_event = sse.sse_event
 _sse_error = sse.sse_error
+
+
+@dataclass(frozen=True)
+class AnalysisRouteDependencies:
+    """Explicit feature switches for analysis routes.
+
+    These flags avoid inferring runtime behavior from callable names/modules,
+    which breaks under decorators, monkeypatching, and refactors.
+    """
+
+    run_preflight: bool = True
+    enable_result_cache: bool = True
+    enable_cache_deduplication: bool = True
+
+
+ROUTE_DEPS = AnalysisRouteDependencies()
 
 
 def _run_pipeline(*args, **kwargs):
@@ -98,12 +123,18 @@ async def _preflight_market_data(req: AnalysisRequest) -> None:
     )
 
 
-def _is_default_callable(func: Callable[..., Any], name: str) -> bool:
-    return getattr(func, "__module__", "") == __name__ and getattr(func, "__name__", "") == name
+def _callable_accepts_request_argument(func: Callable[..., Any]) -> bool:
+    try:
+        params = signature(func).parameters
+    except (TypeError, ValueError):
+        return True
+    if "request" in params:
+        return True
+    return any(param.kind == Parameter.VAR_KEYWORD for param in params.values())
 
 
 async def _call_run_pipeline_async(req: AnalysisRequest, request_id: str, request: Request | None) -> dict[str, Any]:
-    if _is_default_callable(_run_pipeline_async, "_run_pipeline_async"):
+    if _callable_accepts_request_argument(_run_pipeline_async):
         return await _run_pipeline_async(req, request_id, request=request)
     return await _run_pipeline_async(req, request_id)
 
@@ -111,7 +142,7 @@ async def _call_run_pipeline_async(req: AnalysisRequest, request_id: str, reques
 async def _compute_result_fields(
     req: AnalysisRequest, request_id: str, request: Request | None = None
 ) -> dict[str, Any]:
-    if _is_default_callable(_run_pipeline_async, "_run_pipeline_async"):
+    if ROUTE_DEPS.run_preflight:
         await _preflight_market_data(req)
     result_fields = await _call_run_pipeline_async(req, request_id, request)
     result_fields = _with_data_fetched_at(result_fields)
@@ -123,11 +154,13 @@ async def _get_or_start_analysis(
     factory: Callable[[], Any],
     *,
     use_cache: bool,
+    use_deduplication: bool = True,
 ) -> dict[str, Any]:
     return await jobs.get_or_start_analysis(
         req,
         factory,
         use_cache=use_cache,
+        use_in_flight=use_deduplication,
         result_cache=_RESULT_CACHE,
         in_flight=_IN_FLIGHT,
         cache_key_func=_cache_key,
@@ -141,13 +174,17 @@ async def _execute_analysis(
     policy,
 ) -> dict:
     """Run cached/deduplicated JSON analysis."""
-    use_cache = _is_default_callable(_run_pipeline_async, "_run_pipeline_async")
     async with limit_request(request, policy):
 
         async def factory() -> dict[str, Any]:
             return await _compute_result_fields(req, request_id, request)
 
-        fields = await _get_or_start_analysis(req, factory, use_cache=use_cache)
+        fields = await _get_or_start_analysis(
+            req,
+            factory,
+            use_cache=ROUTE_DEPS.enable_result_cache,
+            use_deduplication=ROUTE_DEPS.enable_cache_deduplication,
+        )
         return _response_payload(request_id, req, fields)
 
 
@@ -170,6 +207,8 @@ async def _run_stream_pipeline(
         cache_key_func=_cache_key,
         shape_result_func=_shape_result,
         with_data_fetched_at_func=_with_data_fetched_at,
+        write_result_cache=ROUTE_DEPS.enable_result_cache,
+        run_preflight=ROUTE_DEPS.run_preflight,
     )
 
 
@@ -179,9 +218,6 @@ async def _stream_progress_and_result(
     request_id: str,
     rate_limit_lease=None,
 ):
-    use_cache = _is_default_callable(
-        _run_pipeline_with_progress, "_run_pipeline_with_progress"
-    ) and _is_default_callable(_run_stream_pipeline, "_run_stream_pipeline")
     async for event in sse.stream_progress_and_result(
         request,
         req,
@@ -192,7 +228,8 @@ async def _stream_progress_and_result(
         response_payload_func=_response_payload,
         run_stream_pipeline_func=_run_stream_pipeline,
         get_or_start_analysis_func=_get_or_start_analysis,
-        use_cache=use_cache,
+        use_cache=ROUTE_DEPS.enable_result_cache,
+        use_deduplication=ROUTE_DEPS.enable_cache_deduplication,
     ):
         yield event
 
@@ -220,6 +257,7 @@ async def _start_job(job, rate_limit_lease) -> None:
         result_cache=_RESULT_CACHE,
         run_stream_pipeline_func=_run_stream_pipeline,
         response_payload_func=_response_payload,
+        use_cache=ROUTE_DEPS.enable_result_cache,
     )
 
 
@@ -244,7 +282,7 @@ async def analyze_stream(req: AnalysisRequest, request: Request):
     return EventSourceResponse(_stream_progress_and_result(request, req, request_id, rate_limit_lease))
 
 
-@router.post("/analyze")
+@router.post("/analyze", response_model=AnalysisResponse, response_model_exclude_none=True)
 async def analyze(req: AnalysisRequest, request: Request):
     """Standard JSON endpoint with final-result cache and in-flight de-duplication."""
     req = normalize_and_validate_analysis_request(req)
@@ -253,7 +291,7 @@ async def analyze(req: AnalysisRequest, request: Request):
     return await _execute_analysis(request, req, request_id, request_policy())
 
 
-@router.post("/analysis/jobs")
+@router.post("/analysis/jobs", response_model=AnalysisJobCreateResponse)
 async def create_analysis_job(req: AnalysisRequest, request: Request):
     """Create a cancellable analysis job and return its job_id immediately."""
     req = normalize_and_validate_analysis_request(req)
@@ -289,26 +327,28 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
     }
 
 
-@router.get("/analysis/jobs/{job_id}")
+@router.get("/analysis/jobs/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
 async def get_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job = await _JOB_STORE.get(job_id, owner_id=lease.identifier)
-        if job is None:
-            job = await _JOB_STORE.get_by_request_id(job_id)
         if job is None:
             raise _job_not_found(job_id)
         return job.public_summary()
 
 
-@router.get("/analysis/{request_id}")
+@router.get(
+    "/analysis/{request_id}",
+    response_model=AnalysisResponse,
+    response_model_exclude_none=True,
+    deprecated=True,
+    include_in_schema=False,
+)
 async def get_analysis_result_by_request_id(request_id: str, request: Request):
-    async with limit_request(request, request_policy()):
-        job = await _JOB_STORE.get_by_request_id(request_id)
-        if job is None:
+    async with limit_request(request, request_policy()) as lease:
+        job = await _JOB_STORE.get_by_request_id(request_id, owner_id=lease.identifier)
+        if job is None or job.result is None:
             raise _analysis_result_not_found(request_id)
-        if job.result is not None:
-            return job.result
-        return job.public_summary()
+        return job.result
 
 
 @router.get("/analysis/jobs/{job_id}/events")
@@ -325,7 +365,7 @@ async def analysis_job_events(job_id: str, request: Request):
     return EventSourceResponse(_stream_job_events_with_lease(request, job, rate_limit_lease))
 
 
-@router.delete("/analysis/jobs/{job_id}")
+@router.delete("/analysis/jobs/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
 async def cancel_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job = await _JOB_STORE.cancel(job_id, owner_id=lease.identifier)
@@ -334,13 +374,19 @@ async def cancel_analysis_job(job_id: str, request: Request):
         return job.public_summary()
 
 
-@router.delete("/analysis/{job_id}")
+@router.delete(
+    "/analysis/{job_id}",
+    response_model=AnalysisJobSummaryResponse,
+    response_model_exclude_none=True,
+    deprecated=True,
+    include_in_schema=False,
+)
 async def cancel_analysis_job_alias(job_id: str, request: Request):
-    """Compatibility alias for cancellation endpoint."""
+    """Deprecated compatibility alias for the canonical job cancellation endpoint."""
     return await cancel_analysis_job(job_id, request)
 
 
-@router.get("/ticker/validate")
+@router.get("/ticker/validate", response_model=TickerValidationResponse)
 async def validate_ticker(ticker: str, trade_date: str, request: Request, market: str | None = None):
     req = normalize_and_validate_analysis_request(
         AnalysisRequest(
@@ -362,7 +408,7 @@ async def validate_ticker(ticker: str, trade_date: str, request: Request, market
     }
 
 
-@router.get("/status")
+@router.get("/status", response_model=ApiStatusResponse)
 async def api_status(request: Request):
     async with limit_request(request, request_policy()):
         return await _api_status_payload()

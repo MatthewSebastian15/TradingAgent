@@ -37,6 +37,11 @@ _DEFAULT_ENV = {
 for key, value in _DEFAULT_ENV.items():
     os.environ.setdefault(key, value)
 
+from owner_session import issue_owner_session  # noqa: E402
+
+_TEST_OWNER_ID = "0" * 32
+_TEST_OWNER_TOKEN = issue_owner_session(owner_id=_TEST_OWNER_ID)["owner_token"]
+
 
 @pytest.fixture(autouse=True)
 def clear_rate_limiter_state():
@@ -51,4 +56,18 @@ def clear_rate_limiter_state():
 def client() -> TestClient:
     from main import app
 
-    return TestClient(app)
+    return TestClient(app, headers={"x-owner-token": _TEST_OWNER_TOKEN})
+
+
+@pytest.fixture(autouse=True)
+def configure_analysis_route_dependencies_for_tests(monkeypatch):
+    from routes.analysis import AnalysisRouteDependencies
+
+    monkeypatch.setattr(
+        "routes.analysis.ROUTE_DEPS",
+        AnalysisRouteDependencies(
+            run_preflight=False,
+            enable_result_cache=False,
+            enable_cache_deduplication=True,
+        ),
+    )

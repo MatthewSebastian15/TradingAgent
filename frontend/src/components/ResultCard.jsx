@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import ExportReportButtons from './ExportReportButtons';
+import FinancialHighlightsTable from './results/FinancialHighlightsTable';
+import MetricBox from './results/MetricBox';
+import NoticeBox from './results/NoticeBox';
+import SectionHeader from './results/SectionHeader';
+import ChartPriceTab from './results/tabs/ChartPriceTab';
+import NewsTab from './results/tabs/NewsTab';
+import ProfileTab from './results/tabs/ProfileTab';
+import ResultTabs from './results/tabs/ResultTabs';
+import { REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
@@ -95,7 +105,8 @@ function getDataQualityTone(label, status) {
   if (status === 'hidden' || status === 'fallback') return 'info';
   if (status === 'invalid' || status === 'missing' || status === 'invalid_ticker') return 'error';
   if (label === 'NEWS' && status === 'unavailable') return 'warning';
-  if (status === 'partial' || status === 'market_closed' || status === 'unavailable') return 'warning';
+  if (status === 'partial' || status === 'market_closed' || status === 'unavailable')
+    return 'warning';
   return 'neutral';
 }
 
@@ -198,64 +209,9 @@ function DecisionBadge({ decision }) {
   );
 }
 
-function MetricBox({ label, value, highlight, compact = false, preserveSlot = false, dataTestId }) {
-  if (!preserveSlot && !hasDisplayValue(value)) return null;
-
-  const displayValue = hasDisplayValue(value) ? value : 'N/A';
-  const isEmpty = !hasDisplayValue(value);
-
-  const boxPadding = compact ? 'px-3 py-2' : 'p-3';
-  const labelSpacing = compact ? 'mb-1' : 'mb-1.5';
-  const valueSize = compact ? 'text-xs' : 'text-base';
-
-  return (
-    <div
-      data-testid={dataTestId}
-      className={`border border-bloomberg-border bg-bloomberg-surface ${boxPadding}`}
-    >
-      <div
-        className={`font-mono text-xs text-bloomberg-muted tracking-wider uppercase ${labelSpacing}`}
-      >
-        {label}
-      </div>
-      <div
-        className={`font-mono ${valueSize} font-semibold break-words ${
-          isEmpty
-            ? 'text-bloomberg-muted'
-            : highlight
-              ? 'text-bloomberg-orange'
-              : 'text-bloomberg-white'
-        }`}
-      >
-        {displayValue}
-      </div>
-    </div>
-  );
-}
-
-function SectionHeader({ label }) {
-  return (
-    <div className="flex items-center gap-3 mb-3">
-      <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
-        {label}
-      </span>
-      <div className="flex-1 h-px bg-bloomberg-border" />
-    </div>
-  );
-}
-
-function NoticeBox({ title, children, tone = 'amber' }) {
-  const classes =
-    tone === 'red'
-      ? 'border-bloomberg-red bg-bloomberg-red-dim text-bloomberg-red'
-      : 'border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber';
-  return (
-    <div className={`border px-3 py-2 ${classes}`}>
-      <div className="font-mono text-xs font-semibold tracking-wider uppercase">{title}</div>
-      {children && <div className="mt-1 font-mono text-xs leading-relaxed">{children}</div>}
-    </div>
-  );
-}
+DecisionBadge.propTypes = {
+  decision: PropTypes.string,
+};
 
 function getWarningPriority(warning) {
   if (!warning) return 99;
@@ -399,6 +355,15 @@ function DataQuality({
   );
 }
 
+DataQuality.propTypes = {
+  dq: PropTypes.object,
+  validationWarnings: PropTypes.array,
+  validationWarningDetails: PropTypes.array,
+  requestWarnings: PropTypes.array,
+  tradePlanValid: PropTypes.bool,
+  isActionable: PropTypes.bool,
+};
+
 function getActionPlanMetrics({ result, currentPrice, riskReward }) {
   return [
     {
@@ -408,15 +373,21 @@ function getActionPlanMetrics({ result, currentPrice, riskReward }) {
     },
     {
       label: 'ENTRY',
-      value: hasDisplayValue(result.entry_price) ? formatPrice(result.entry_price, result.ticker) : 'N/A',
+      value: hasDisplayValue(result.entry_price)
+        ? formatPrice(result.entry_price, result.ticker)
+        : 'N/A',
     },
     {
       label: 'STOP LOSS',
-      value: hasDisplayValue(result.stop_loss) ? formatPrice(result.stop_loss, result.ticker) : 'N/A',
+      value: hasDisplayValue(result.stop_loss)
+        ? formatPrice(result.stop_loss, result.ticker)
+        : 'N/A',
     },
     {
       label: 'TAKE PROFIT',
-      value: hasDisplayValue(result.take_profit) ? formatPrice(result.take_profit, result.ticker) : 'N/A',
+      value: hasDisplayValue(result.take_profit)
+        ? formatPrice(result.take_profit, result.ticker)
+        : 'N/A',
     },
     {
       label: 'MAX DRAWDOWN',
@@ -460,7 +431,10 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border">
       <SectionHeader label="ACTION PLAN" />
-      <div data-testid="action-plan-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div
+        data-testid="action-plan-grid"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2"
+      >
         {metrics.map((metric) => (
           <MetricBox
             key={metric.label}
@@ -480,6 +454,12 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
     </div>
   );
 }
+
+ActionableMetrics.propTypes = {
+  result: PropTypes.object.isRequired,
+  currentPrice: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  riskReward: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+};
 
 function HoldMetrics({ result, currentPrice }) {
   const hasHoldMetrics =
@@ -527,9 +507,27 @@ function HoldMetrics({ result, currentPrice }) {
   );
 }
 
+HoldMetrics.propTypes = {
+  result: PropTypes.object.isRequired,
+  currentPrice: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+};
+
+function ReportDisclaimer() {
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border bg-black bg-opacity-20">
+      <SectionHeader label="DISCLAIMER" />
+      <p className="font-mono text-[11px] text-bloomberg-muted leading-relaxed whitespace-pre-line">
+        {REPORT_DISCLAIMER}
+      </p>
+    </div>
+  );
+}
+
 export default function ResultCard({ result, enableReportExport = true, mockReport = false }) {
   const [thesisExpanded, setThesisExpanded] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
+  const [activeTab, setActiveTab] = useState('analisis');
+  const disabledTabs = [];
 
   if (!result) return null;
 
@@ -617,9 +615,9 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
               Created: {createdAtLabel}
             </span>
           )}
-          {enableReportExport && result.request_id && (
+          {enableReportExport && (result.job_id || result.request_id) && (
             <ExportReportButtons
-              requestId={result.request_id}
+              resourceId={result.job_id || result.request_id}
               result={result}
               disabled={Boolean(result.error)}
               mockReport={mockReport}
@@ -628,227 +626,256 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
         </div>
       </div>
 
-      {/* Decision hero */}
-      <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
-        <div>
-          <div className={`font-display text-5xl font-bold tracking-wider ${decisionColor}`}>
-            {formatTickerLabel(result.ticker)}
-          </div>
-          <div className="mt-3">
-            <DecisionBadge decision={finalDecision} />
-          </div>
-          {finalDecision && (
-            <div className="mt-2 font-mono text-xs text-bloomberg-muted tracking-wider">
-              RECOMMENDATION: {finalDecision.toUpperCase()}
-            </div>
-          )}
-          {currentPriceSource && (
-            <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
-              SOURCE: <span className="text-bloomberg-white">{currentPriceSource}</span>
-            </div>
-          )}
-          {result.llm_decision && result.llm_decision !== finalDecision && (
-            <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
-              LLM: {String(result.llm_decision).toUpperCase()} → FINAL:{' '}
-              {String(finalDecision).toUpperCase()}
-            </div>
-          )}
-        </div>
+      <ResultTabs activeTab={activeTab} onTabChange={setActiveTab} disabledTabs={disabledTabs} />
 
-        {/* Key metrics — PRICE TARGET removed */}
-        <div className="min-w-0 flex-shrink-0 w-full lg:w-[43rem] max-w-full">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {hasDisplayValue(currentPrice) && (
-              <MetricBox
-                label="LAST PRICE"
-                value={formatPrice(currentPrice, result.ticker)}
-                highlight
-              />
-            )}
-            {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
-            {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
-            {confidence !== null && (
-              <MetricBox
-                label="CONFIDENCE"
-                value={
-                  typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : confidence
-                }
-              />
-            )}
-            {allocation !== null && (
-              <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
-            )}
+      {activeTab === 'analisis' && (
+        <>
+          {/* Decision hero */}
+          <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
+            <div>
+              <div className={`font-display text-5xl font-bold tracking-wider ${decisionColor}`}>
+                {formatTickerLabel(result.ticker)}
+              </div>
+              <div className="mt-3">
+                <DecisionBadge decision={finalDecision} />
+              </div>
+              {finalDecision && (
+                <div className="mt-2 font-mono text-xs text-bloomberg-muted tracking-wider">
+                  RECOMMENDATION: {finalDecision.toUpperCase()}
+                </div>
+              )}
+              {currentPriceSource && (
+                <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
+                  SOURCE: <span className="text-bloomberg-white">{currentPriceSource}</span>
+                </div>
+              )}
+              {result.llm_decision && result.llm_decision !== finalDecision && (
+                <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
+                  LLM: {String(result.llm_decision).toUpperCase()} → FINAL:{' '}
+                  {String(finalDecision).toUpperCase()}
+                </div>
+              )}
+            </div>
+
+            {/* Key metrics — PRICE TARGET removed */}
+            <div className="min-w-0 flex-shrink-0 w-full lg:w-[43rem] max-w-full">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {hasDisplayValue(currentPrice) && (
+                  <MetricBox
+                    label="LAST PRICE"
+                    value={formatPrice(currentPrice, result.ticker)}
+                    highlight
+                  />
+                )}
+                {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
+                {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
+                {confidence !== null && (
+                  <MetricBox
+                    label="CONFIDENCE"
+                    value={
+                      typeof confidence === 'number'
+                        ? `${Math.round(confidence * 100)}%`
+                        : confidence
+                    }
+                  />
+                )}
+                {allocation !== null && (
+                  <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {!hasDisplayValue(currentPrice) && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <NoticeBox title="PRICE DATA MISSING" tone="red">
-            Last price is unavailable, so no synthetic price is shown.
-          </NoticeBox>
-        </div>
-      )}
-
-      {(result.decision_adjusted || (isActionable && !tradePlanValid)) && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          {result.decision_adjusted && (
-            <NoticeBox title="DECISION ADJUSTED">
-              {result.decision_adjusted_reason || 'Backend validation changed the final decision.'}
-            </NoticeBox>
-          )}
-          {isActionable && !tradePlanValid && (
-            <div className={result.decision_adjusted ? 'mt-3' : ''}>
-              <NoticeBox title="TRADE PLAN NOT VALID" tone="red">
-                Backend validation did not approve a complete actionable trade plan.
+          {!hasDisplayValue(currentPrice) && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <NoticeBox title="PRICE DATA MISSING" tone="red">
+                Last price is unavailable, so no synthetic price is shown.
               </NoticeBox>
             </div>
           )}
-        </div>
-      )}
 
-      {shouldShowActionPlan && (
-        <ActionableMetrics result={result} currentPrice={currentPrice} riskReward={riskReward} />
-      )}
-
-      {shouldShowHoldMetrics && <HoldMetrics result={result} currentPrice={currentPrice} />}
-
-      {/* Data quality */}
-      {(dataQuality || validationWarnings.length > 0 || requestWarnings.length > 0) && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <DataQuality
-            dq={dataQuality}
-            validationWarnings={validationWarnings}
-            validationWarningDetails={validationWarningDetails}
-            requestWarnings={requestWarnings}
-            tradePlanValid={tradePlanValid}
-            isActionable={isActionable}
-          />
-        </div>
-      )}
-
-      {budgetExhausted && (
-        <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
-          <SectionHeader label="PIPELINE LIMIT" />
-          <p className="font-mono text-xs text-bloomberg-amber leading-relaxed">
-            LLM call budget exhausted before all stages completed. Treat this analysis as
-            incomplete.
-          </p>
-          {agentsSkipped.length > 0 && (
-            <div className="mt-2 font-mono text-xs text-bloomberg-muted">
-              SKIPPED: {agentsSkipped.join(', ')}
+          {(result.decision_adjusted || (isActionable && !tradePlanValid)) && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              {result.decision_adjusted && (
+                <NoticeBox title="DECISION ADJUSTED">
+                  {result.decision_adjusted_reason ||
+                    'Backend validation changed the final decision.'}
+                </NoticeBox>
+              )}
+              {isActionable && !tradePlanValid && (
+                <div className={result.decision_adjusted ? 'mt-3' : ''}>
+                  <NoticeBox title="TRADE PLAN NOT VALID" tone="red">
+                    Backend validation did not approve a complete actionable trade plan.
+                  </NoticeBox>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Catalysts + Invalidations */}
-      {(catalysts.length > 0 || invalidations.length > 0) && (
-        <div className="px-4 py-4 border-b border-bloomberg-border grid grid-cols-2 gap-4">
-          {catalysts.length > 0 && (
-            <div>
-              <SectionHeader label="KEY CATALYSTS" />
-              <ul className="flex flex-col gap-1.5">
-                {catalysts.map((c, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="font-mono text-xs text-bloomberg-green flex-shrink-0 mt-0.5">
-                      +
-                    </span>
-                    <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                      {c}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+          {shouldShowActionPlan && (
+            <ActionableMetrics
+              result={result}
+              currentPrice={currentPrice}
+              riskReward={riskReward}
+            />
+          )}
+
+          {shouldShowHoldMetrics && <HoldMetrics result={result} currentPrice={currentPrice} />}
+
+          {/* Data quality */}
+          {(dataQuality || validationWarnings.length > 0 || requestWarnings.length > 0) && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <DataQuality
+                dq={dataQuality}
+                validationWarnings={validationWarnings}
+                validationWarningDetails={validationWarningDetails}
+                requestWarnings={requestWarnings}
+                tradePlanValid={tradePlanValid}
+                isActionable={isActionable}
+              />
             </div>
           )}
-          {invalidations.length > 0 && (
-            <div>
-              <SectionHeader label="INVALIDATION CONDITIONS" />
-              <ul className="flex flex-col gap-1.5">
-                {invalidations.map((inv, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="font-mono text-xs text-bloomberg-red flex-shrink-0 mt-0.5">
-                      ✕
-                    </span>
-                    <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                      {inv}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+
+          {budgetExhausted && (
+            <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
+              <SectionHeader label="PIPELINE LIMIT" />
+              <p className="font-mono text-xs text-bloomberg-amber leading-relaxed">
+                LLM call budget exhausted before all stages completed. Treat this analysis as
+                incomplete.
+              </p>
+              {agentsSkipped.length > 0 && (
+                <div className="mt-2 font-mono text-xs text-bloomberg-muted">
+                  SKIPPED: {agentsSkipped.join(', ')}
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Executive Summary */}
-      {summary && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <SectionHeader label="EXECUTIVE SUMMARY" />
-          <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-            {parseBold(summary)}
-          </p>
-        </div>
-      )}
+          {/* Catalysts + Invalidations */}
+          {(catalysts.length > 0 || invalidations.length > 0) && (
+            <div className="px-4 py-4 border-b border-bloomberg-border grid grid-cols-2 gap-4">
+              {catalysts.length > 0 && (
+                <div>
+                  <SectionHeader label="KEY CATALYSTS" />
+                  <ul className="flex flex-col gap-1.5">
+                    {catalysts.map((c, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="font-mono text-xs text-bloomberg-green flex-shrink-0 mt-0.5">
+                          +
+                        </span>
+                        <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                          {c}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {invalidations.length > 0 && (
+                <div>
+                  <SectionHeader label="INVALIDATION CONDITIONS" />
+                  <ul className="flex flex-col gap-1.5">
+                    {invalidations.map((inv, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="font-mono text-xs text-bloomberg-red flex-shrink-0 mt-0.5">
+                          ✕
+                        </span>
+                        <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                          {inv}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
-      {/* Investment Thesis */}
-      {thesis && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <SectionHeader label="INVESTMENT THESIS" />
-          <div
-            className={`overflow-hidden transition-all duration-300 ${thesisExpanded ? '' : 'max-h-24'} relative`}
-          >
-            <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-              {parseBold(thesis)}
-            </p>
-            {!thesisExpanded && (
-              <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-bloomberg-card to-transparent" />
-            )}
-          </div>
-          <button
-            onClick={() => setThesisExpanded(!thesisExpanded)}
-            className="mt-2 font-mono text-xs text-bloomberg-orange hover:text-orange-300 transition-colors tracking-wider"
-          >
-            {thesisExpanded ? '↑ COLLAPSE' : '↓ EXPAND FULL THESIS'}
-          </button>
-        </div>
-      )}
+          {/* Executive Summary */}
+          {summary && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <SectionHeader label="EXECUTIVE SUMMARY" />
+              <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                {parseBold(summary)}
+              </p>
+            </div>
+          )}
 
-      {/* Agents used */}
-      {agents.length > 0 && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <SectionHeader label="AGENT PIPELINE" />
-          <div className="flex flex-wrap gap-1.5">
-            {agents.map((a, i) => (
-              <span
-                key={i}
-                className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted"
+          {/* Investment Thesis */}
+          {thesis && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <SectionHeader label="INVESTMENT THESIS" />
+              <div
+                className={`overflow-hidden transition-all duration-300 ${thesisExpanded ? '' : 'max-h-24'} relative`}
               >
-                <span className="text-bloomberg-green mr-1.5">✓</span>
-                {a}
-              </span>
-            ))}
-          </div>
-        </div>
+                <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                  {parseBold(thesis)}
+                </p>
+                {!thesisExpanded && (
+                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-bloomberg-card to-transparent" />
+                )}
+              </div>
+              <button
+                onClick={() => setThesisExpanded(!thesisExpanded)}
+                className="mt-2 font-mono text-xs text-bloomberg-orange hover:text-orange-300 transition-colors tracking-wider"
+              >
+                {thesisExpanded ? '↑ COLLAPSE' : '↓ EXPAND FULL THESIS'}
+              </button>
+            </div>
+          )}
+
+          <FinancialHighlightsTable financialHighlights={result.financial_highlights} />
+
+          {/* Agents used */}
+          {agents.length > 0 && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <SectionHeader label="AGENT PIPELINE" />
+              <div className="flex flex-wrap gap-1.5">
+                {agents.map((a, i) => (
+                  <span
+                    key={i}
+                    className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted"
+                  >
+                    <span className="text-bloomberg-green mr-1.5">✓</span>
+                    {a}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <ReportDisclaimer />
+
+          {/* Raw JSON debug */}
+          {canShowRaw && (
+            <div className="px-4 py-3">
+              <button
+                onClick={() => setShowRaw(!showRaw)}
+                className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white tracking-wider transition-colors"
+              >
+                {showRaw ? '▲ HIDE' : '▼ RAW JSON'} (DEBUG)
+              </button>
+              {showRaw && (
+                <pre className="mt-3 bg-black border border-bloomberg-border p-3 text-xs font-mono text-bloomberg-muted overflow-x-auto leading-relaxed whitespace-pre-wrap">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Raw JSON debug */}
-      {canShowRaw && (
-        <div className="px-4 py-3">
-          <button
-            onClick={() => setShowRaw(!showRaw)}
-            className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white tracking-wider transition-colors"
-          >
-            {showRaw ? '▲ HIDE' : '▼ RAW JSON'} (DEBUG)
-          </button>
-          {showRaw && (
-            <pre className="mt-3 bg-black border border-bloomberg-border p-3 text-xs font-mono text-bloomberg-muted overflow-x-auto leading-relaxed whitespace-pre-wrap">
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          )}
-        </div>
-      )}
+      {activeTab === 'profile' && <ProfileTab profile={result.company_profile} />}
+
+      {activeTab === 'chart_price' && <ChartPriceTab result={result} />}
+
+      {activeTab === 'news' && <NewsTab result={result} />}
     </div>
   );
 }
+
+ResultCard.propTypes = {
+  result: PropTypes.object,
+  enableReportExport: PropTypes.bool,
+  mockReport: PropTypes.bool,
+};
