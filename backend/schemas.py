@@ -102,6 +102,30 @@ class PriceChart(ApiSchema):
     warning: str | None = None
 
 
+class RelatedNewsItem(ApiSchema):
+    title: str
+    publisher: str | None = None
+    published_at: str | None = None
+    url: str | None = None
+    normalized_url: str | None = None
+    summary: str | None = None
+    source: str | None = None
+    event_type: str | None = None
+    related_ticker: str | None = None
+    relevance_reason: str | None = None
+
+
+class RelatedNews(ApiSchema):
+    available: bool = False
+    ticker: str | None = None
+    trade_date: str | None = None
+    lookback_days: int | None = None
+    source: str | None = None
+    summary: str | None = None
+    items: list[RelatedNewsItem] = Field(default_factory=list)
+    warning: str | None = None
+
+
 class NewsEntity(ApiSchema):
     symbol: str | None = None
     name: str | None = None
@@ -162,6 +186,7 @@ class AnalysisResponse(ApiSchema):
     financial_highlights: FinancialHighlightsResponse | None = None
     company_profile: CompanyProfile | dict[str, Any] | None = None
     price_chart: PriceChart | dict[str, Any] | None = None
+    related_news: RelatedNews | dict[str, Any] | None = None
     news: NewsResponse | dict[str, Any] | None = None
     news_context: NewsResponse | dict[str, Any] | None = None
 

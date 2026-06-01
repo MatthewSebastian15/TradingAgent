@@ -102,6 +102,33 @@ function buildPriceChartRows(chart, result) {
   ];
 }
 
+function safeExternalUrl(value) {
+  if (!hasValue(value)) return null;
+  try {
+    const url = new URL(String(value));
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildRelatedNewsItems(relatedNews) {
+  if (!Array.isArray(relatedNews?.items)) return [];
+  return relatedNews.items
+    .slice(0, 8)
+    .filter((item) => item && typeof item === 'object' && item.title && safeExternalUrl(item.url))
+    .map((item) => ({
+      title: display(item.title),
+      publisher: display(item.publisher),
+      published_at: display(item.published_at),
+      source: display(item.source),
+      event_type: display(item.event_type),
+      summary: display(item.summary),
+      relevance_reason: display(item.relevance_reason),
+      url: safeExternalUrl(item.url),
+    }));
+}
+
 export function buildMockActionPlanRows(result) {
   return [
     row('Current Price', price(result?.current_price, result)),
@@ -229,6 +256,8 @@ export function buildMockReportContext(result = {}) {
     company_profile_rows: buildCompanyProfileRows(result.company_profile),
     company_profile_executives: buildCompanyProfileExecutives(result.company_profile),
     price_chart_rows: buildPriceChartRows(result.price_chart, result),
+    related_news: result.related_news || {},
+    related_news_items: buildRelatedNewsItems(result.related_news),
   };
 }
 
@@ -343,6 +372,27 @@ function renderPriceChartSummary(rows) {
   </section>`;
 }
 
+function renderRelatedNews(relatedNews, items) {
+  if (!items.length) return '';
+  return `<section class="section">
+    <h2>Related News</h2>
+    ${relatedNews.summary ? `<p>${escapeHtml(relatedNews.summary)}</p>` : ''}
+    <div class="news-list">
+      ${items
+        .map(
+          (item) => `<article class="news-item">
+            <h3>${escapeHtml(item.title)}</h3>
+            <p class="muted">Publisher: ${escapeHtml(item.publisher)} | Published: ${escapeHtml(item.published_at)} | Source: ${escapeHtml(item.source)} | Event: ${escapeHtml(item.event_type)}</p>
+            ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
+            ${item.relevance_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.relevance_reason)}</p>` : ''}
+            <p><a href="${escapeHtml(item.url)}">Open original source</a></p>
+          </article>`
+        )
+        .join('')}
+    </div>
+  </section>`;
+}
+
 export function renderMockReportHtml(report) {
   return `<!doctype html>
 <html lang="en">
@@ -402,6 +452,10 @@ export function renderMockReportHtml(report) {
       .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
       .section, .analyst-note { break-inside: avoid; }
       .analyst-note p { white-space: pre-wrap; }
+      .news-list { display: grid; gap: 12px; }
+      .news-item { border: 1px solid #d1d5db; padding: 12px; break-inside: avoid; }
+      .news-item h3 { margin: 0 0 6px; font-size: 13px; }
+      .news-item p { margin: 4px 0; }
       .disclaimer {
         margin-top: 28px;
         padding: 16px;
@@ -459,6 +513,8 @@ export function renderMockReportHtml(report) {
       )}
 
       ${renderPriceChartSummary(report.price_chart_rows)}
+
+      ${renderRelatedNews(report.related_news, report.related_news_items)}
 
       ${renderFinancialHighlights(report.financial_highlights)}
 

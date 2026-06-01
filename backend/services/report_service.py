@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -137,6 +138,8 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "company_profile_rows": _company_profile_rows(result),
         "company_profile_executives": _company_profile_executives(result),
         "price_chart_rows": _price_chart_rows(result, ticker, market),
+        "related_news": _as_dict(result.get("related_news")),
+        "related_news_items": _related_news_items(result),
         "news": _news_context(result),
         "news_articles": _news_articles(result),
         "news_provider_rows": _news_provider_rows(result),
@@ -458,6 +461,42 @@ def _price_chart_rows(result: dict[str, Any], ticker: str, market: str) -> list[
         {"label": "Average Volume", "value": _display(stats.get("average_volume"))},
         {"label": "Point Count", "value": _display(stats.get("point_count"))},
     ]
+
+
+def _related_news_items(result: dict[str, Any]) -> list[dict[str, str]]:
+    related_news = _as_dict(result.get("related_news"))
+    raw_items = related_news.get("items") if related_news else []
+    if not isinstance(raw_items, list):
+        return []
+
+    items: list[dict[str, str]] = []
+    for item in raw_items[:8]:
+        if not isinstance(item, dict):
+            continue
+
+        title = _clean_text(item.get("title"))
+        url = _clean_text(item.get("url"))
+        if not title or not url or not _is_external_http_url(url):
+            continue
+
+        items.append(
+            {
+                "title": title,
+                "publisher": _display(item.get("publisher")),
+                "published_at": _display(item.get("published_at")),
+                "source": _display(item.get("source")),
+                "event_type": _display(item.get("event_type")),
+                "summary": _display(item.get("summary")),
+                "relevance_reason": _display(item.get("relevance_reason")),
+                "url": url,
+            }
+        )
+    return items
+
+
+def _is_external_http_url(value: str) -> bool:
+    parts = urlsplit(value)
+    return parts.scheme.lower() in {"http", "https"} and bool(parts.netloc)
 
 
 def _financial_highlights(value: Any) -> dict[str, Any] | None:

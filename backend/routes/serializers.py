@@ -65,6 +65,7 @@ SUMMARY_FIELDS = {
     "financial_highlights",
     "company_profile",
     "price_chart",
+    "related_news",
     "news",
     "news_context",
 }
@@ -332,6 +333,7 @@ def parse_final_result(
         "financial_highlights": final_state.get("financial_highlights"),
         "company_profile": final_state.get("company_profile") or {},
         "price_chart": final_state.get("price_chart") or {},
+        "related_news": final_state.get("related_news") or {},
         "news": final_state.get("news") or final_state.get("news_context") or {},
         "news_context": final_state.get("news_context") or final_state.get("news") or {},
         "data_quality": _complete_risk_engine_data_quality(

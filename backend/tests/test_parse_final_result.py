@@ -257,6 +257,31 @@ def test_parse_final_result_preserves_price_chart():
     assert parsed["price_chart"] == price_chart
 
 
+def test_summary_shape_keeps_related_news():
+    from routes.serializers import shape_result
+
+    related_news = {
+        "available": True,
+        "ticker": "BBCA.JK",
+        "items": [{"title": "Headline", "url": "https://example.com/news"}],
+    }
+
+    shaped = shape_result({"decision": "Hold", "related_news": related_news}, "summary")
+
+    assert shaped["related_news"] == related_news
+
+
+def test_parse_final_result_preserves_related_news():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    related_news = {"available": False, "ticker": "AAPL", "items": [], "warning": "offline"}
+    parsed = _parse_final_result("", None, PortfolioRating, {"related_news": related_news})
+
+    assert parsed["related_news"] == related_news
+
+
 def test_summary_shape_keeps_news_context():
     from routes.serializers import shape_result
 

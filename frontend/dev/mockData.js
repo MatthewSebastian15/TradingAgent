@@ -554,6 +554,81 @@ function syncMockNews(news, ticker) {
   return payload;
 }
 
+function createMockRelatedNews({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', months = 1 } = {}) {
+  const lookbackDays = normalizeTimeHorizonMonths(months) * 30;
+
+  return {
+    available: true,
+    ticker,
+    trade_date: tradeDate,
+    lookback_days: lookbackDays,
+    source: 'mock:yfinance+finnhub+alpha_vantage',
+    summary: `Top mock related news for ${ticker}. These items are used only to test News tab layout, links, export behavior, and empty-state handling.`,
+    items: [
+      {
+        title: `${ticker} earnings outlook remains constructive in mock coverage`,
+        publisher: 'Mock Market Wire',
+        published_at: '2026-05-29T10:00:00Z',
+        url: 'https://example.com/mock-news-1',
+        normalized_url: 'https://example.com/mock-news-1',
+        summary: 'Mock article summary used to validate news card layout and source link behavior.',
+        source: 'mock',
+        event_type: 'earnings',
+        related_ticker: ticker,
+        relevance_reason: 'Related to earnings and demand assumptions used in the mock analysis.',
+      },
+      {
+        title: `Sector sentiment supports ${ticker} in mock scenario`,
+        publisher: 'Mock Finance Daily',
+        published_at: '2026-05-28T09:30:00Z',
+        url: 'https://example.com/mock-news-2',
+        normalized_url: 'https://example.com/mock-news-2',
+        summary: 'Mock sector article used to test broader market context rendering.',
+        source: 'mock',
+        event_type: 'sector',
+        related_ticker: ticker,
+        relevance_reason: 'Related to sector sentiment and market context in the mock analysis.',
+      },
+      {
+        title: `${ticker} risk factors remain visible in mock monitoring`,
+        publisher: 'Mock Risk Journal',
+        published_at: '2026-05-27T08:15:00Z',
+        url: 'https://example.com/mock-news-3',
+        normalized_url: 'https://example.com/mock-news-3',
+        summary: 'Mock risk-focused article used to validate balanced news coverage.',
+        source: 'mock',
+        event_type: 'general',
+        related_ticker: ticker,
+        relevance_reason: 'Related to invalidation and risk monitoring in the mock analysis.',
+      },
+    ],
+  };
+}
+
+function syncMockRelatedNews(relatedNews, options) {
+  const fallback = createMockRelatedNews(options);
+  if (!relatedNews) return fallback;
+
+  if (!relatedNews.available) {
+    return {
+      ...relatedNews,
+      ticker: fallback.ticker,
+      trade_date: fallback.trade_date,
+      lookback_days: fallback.lookback_days,
+      items: [],
+    };
+  }
+
+  if (
+    relatedNews.ticker === fallback.ticker &&
+    relatedNews.trade_date === fallback.trade_date &&
+    relatedNews.lookback_days === fallback.lookback_days
+  ) {
+    return relatedNews;
+  }
+  return fallback;
+}
+
 function normalizeDataQuality(overrides = {}) {
   return {
     ...COMMON_MOCK_QUALITY,
@@ -651,6 +726,11 @@ function completeMockAnalysis(overrides = {}) {
     company_profile: overrides.company_profile || result.company_profile,
     news: syncMockNews(overrides.news || result.news, overrides.ticker || result.ticker),
     price_chart: syncMockPriceChart(overrides.price_chart || result.price_chart, {
+      ticker: overrides.ticker || result.ticker || 'BBCA.JK',
+      tradeDate: overrides.trade_date || result.trade_date || '2026-05-30',
+      months: overrides.time_horizon_months || result.time_horizon_months || 1,
+    }),
+    related_news: syncMockRelatedNews(overrides.related_news || result.related_news, {
       ticker: overrides.ticker || result.ticker || 'BBCA.JK',
       tradeDate: overrides.trade_date || result.trade_date || '2026-05-30',
       months: overrides.time_horizon_months || result.time_horizon_months || 1,
@@ -1067,6 +1147,16 @@ export const MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE = completeMockAnalysis({
     articles: [],
     empty_reason: 'No relevant company-specific news was found.',
     cache: { hit: false },
+  },
+  related_news: {
+    available: false,
+    ticker: 'UNVR.JK',
+    trade_date: '2026-05-18',
+    lookback_days: 30,
+    source: 'unavailable',
+    summary: 'No usable related news was returned for this analysis.',
+    items: [],
+    warning: 'Related news is unavailable.',
   },
   data_quality: {
     trade_plan: 'valid',

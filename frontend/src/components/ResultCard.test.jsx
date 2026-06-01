@@ -60,15 +60,17 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
   });
 
-  it('opens the News tab and renders normalized provider articles', () => {
+  it('opens the News tab and renders related vendor articles with a safe original link', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
     fireEvent.click(screen.getByText('News'));
 
-    expect(screen.getByText('MARKET NEWS CONTEXT')).toBeTruthy();
-    expect(screen.getByText('marketaux: success')).toBeTruthy();
-    expect(screen.getByText('newsdata: success')).toBeTruthy();
-    expect(screen.getByText(/Mock earnings coverage supports/i)).toBeTruthy();
+    expect(screen.getByText('NEWS')).toBeTruthy();
+    expect(screen.getByText(/NVDA earnings outlook remains constructive/i)).toBeTruthy();
+    expect(screen.getByText('Publisher: Mock Market Wire')).toBeTruthy();
+    const link = screen.getAllByText('OPEN ORIGINAL SOURCE')[0];
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
   it('renders the News empty state when provider coverage is unavailable', () => {
@@ -77,7 +79,26 @@ describe('ResultCard risk-engine contract', () => {
     fireEvent.click(screen.getByText('News'));
 
     expect(screen.getByText('NEWS UNAVAILABLE')).toBeTruthy();
-    expect(screen.getByText('No relevant company-specific news was found.')).toBeTruthy();
+    expect(screen.getByText('Related news is unavailable.')).toBeTruthy();
+  });
+
+  it('does not render a clickable News source for an unsafe URL', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          related_news: {
+            available: true,
+            items: [{ title: 'Unsafe vendor URL', url: 'javascript:alert(1)' }],
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('News'));
+
+    expect(screen.getByText('Unsafe vendor URL')).toBeTruthy();
+    expect(screen.queryByText('OPEN ORIGINAL SOURCE')).toBeNull();
   });
 
   it('renders Chart & Price empty state when chart data is unavailable', () => {

@@ -53,6 +53,13 @@ describe('mockData', () => {
       'marketaux',
       'newsdata',
     ]);
+    expect(result.related_news).toMatchObject({
+      available: true,
+      ticker: 'NVDA',
+      trade_date: '2026-05-18',
+      lookback_days: 90,
+    });
+    expect(result.related_news.items).toHaveLength(3);
   });
 
   it('supports required direct mock routes', () => {

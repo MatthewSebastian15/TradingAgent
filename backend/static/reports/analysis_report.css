@@ -135,6 +135,26 @@ li {
   word-break: break-all;
 }
 
+.news-list {
+  display: grid;
+  gap: 12px;
+}
+
+.news-item {
+  border: 1px solid #d0d0d0;
+  padding: 12px;
+  break-inside: avoid;
+}
+
+.news-item h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.news-item p {
+  margin: 4px 0;
+}
+
 .muted {
   color: #555;
 }

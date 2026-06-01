@@ -28,6 +28,7 @@ def test_analysis_summary_contract_includes_risk_engine_fields():
         "financial_highlights",
         "company_profile",
         "price_chart",
+        "related_news",
         "news",
         "news_context",
     }
