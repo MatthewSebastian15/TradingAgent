@@ -23,6 +23,7 @@ from config_defaults import (
     DATA_VENDOR_CORE_STOCK_APIS,
     DATA_VENDOR_FUNDAMENTAL_DATA,
     DATA_VENDOR_NEWS_DATA,
+    DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE,
     DATA_VENDOR_TECHNICAL_INDICATORS,
     DEFAULT_ANALYSIS_DEPTH,
     DEFAULT_MAX_DEBATE_ROUNDS,
@@ -123,6 +124,7 @@ class LLMSettings:
                 "fundamental_data": DATA_VENDOR_FUNDAMENTAL_DATA,
                 "news_data": DATA_VENDOR_NEWS_DATA,
             },
+            "news_min_relevance_score": DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE,
             "news": {
                 "marketaux_api_key": MARKETAUX_API_KEY,
                 "newsdata_api_key": NEWSDATA_API_KEY,
@@ -176,7 +178,13 @@ def build_tradingagents_config(
         response_detail = "full"
 
     config = DEFAULT_CONFIG.copy()
-    config.update(llm.tradingagents_overrides(analysis_depth=depth, response_detail=response_detail))
+    overrides = llm.tradingagents_overrides(analysis_depth=depth, response_detail=response_detail)
+    data_vendors = {
+        **config.get("data_vendors", {}),
+        **overrides.get("data_vendors", {}),
+    }
+    config.update(overrides)
+    config["data_vendors"] = data_vendors
     depth_config = config.get("analysis_depth_config", {})
     depth_debate_rounds = int(depth_config.get("debate_rounds") or 1)
     depth_risk_rounds = int(depth_config.get("risk_rounds") or 1)

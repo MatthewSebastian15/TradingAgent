@@ -13,6 +13,13 @@ try {
     Invoke-Checked python -m ruff format --check .
     Invoke-Checked python -m ruff check .
     Invoke-Checked python -m pytest tests -q
+    Push-Location (Join-Path $BackendRoot "tradingagents-core")
+    try {
+        Invoke-Checked python -m pytest tests -q
+    }
+    finally {
+        Pop-Location
+    }
 }
 finally {
     Pop-Location
