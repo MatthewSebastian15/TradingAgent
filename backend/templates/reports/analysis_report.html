@@ -91,7 +91,35 @@
         </section>
       {% endif %}
 
-      {% if report.news %}
+      {% if report.related_news_items %}
+        <section class="section">
+          <h2>Related News</h2>
+
+          {% if report.related_news.summary %}
+            <p>{{ report.related_news.summary }}</p>
+          {% endif %}
+
+          <div class="news-list">
+            {% for item in report.related_news_items %}
+              <article class="news-item">
+                <h3>{{ item.title }}</h3>
+                <p class="muted">
+                  Publisher: {{ item.publisher }} | Published: {{ item.published_at }} | Source: {{ item.source }} | Event: {{ item.event_type }}
+                </p>
+                {% if item.summary and item.summary != 'N/A' %}
+                  <p>{{ item.summary }}</p>
+                {% endif %}
+                {% if item.relevance_reason and item.relevance_reason != 'N/A' %}
+                  <p><strong>Why it matters:</strong> {{ item.relevance_reason }}</p>
+                {% endif %}
+                <p><a href="{{ item.url }}">Open original source</a></p>
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+
+      {% if report.news and not report.related_news_items %}
         <section class="section">
           <h2>Market News Context</h2>
           {% if report.news_provider_rows %}

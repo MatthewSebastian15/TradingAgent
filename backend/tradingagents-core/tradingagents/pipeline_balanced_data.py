@@ -9,10 +9,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from io import StringIO
 from typing import Any, TypeVar
+from urllib.parse import urlsplit
 
 from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
+from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_url, rank_news
 from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
@@ -208,6 +210,212 @@ def _safe_structured_company_news(
             }
         )
         return DataField.unavailable("company_news", exc)
+
+
+def _detect_current_news_source(line: str, fallback: str = "unknown") -> str:
+    match = re.match(r"^##\s+Source:\s*(.+)$", line.strip(), flags=re.IGNORECASE)
+    if match:
+        return match.group(1).strip().lower().replace(" ", "_") or fallback
+
+    lowered = line.lower()
+    if "marketaux" in lowered:
+        return "marketaux"
+    if "newsdata" in lowered:
+        return "newsdata"
+    if "finnhub" in lowered:
+        return "finnhub"
+    if "alpha vantage" in lowered or "alpha_vantage" in lowered:
+        return "alpha_vantage"
+    if "yfinance" in lowered:
+        return "yfinance"
+    return fallback
+
+
+def _clean_news_summary(text: str, limit: int = 350) -> str:
+    cleaned = " ".join(str(text or "").split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 3].rstrip() + "..."
+
+
+def _usable_news_url(value: Any) -> str | None:
+    url = str(value or "").strip()
+    if not url:
+        return None
+    parts = urlsplit(url)
+    if parts.scheme.lower() not in {"http", "https"} or not parts.netloc:
+        return None
+    return url
+
+
+def _news_relevance_reason(item: dict[str, Any], ticker: str) -> str:
+    event_type = str(item.get("event_type") or "general")
+    source = str(item.get("source") or "vendor")
+    if event_type != "general":
+        return f"This article is tagged as {event_type} news and may affect the analysis context for {ticker}."
+    return f"This article was returned by {source} as related market news for the selected analysis window."
+
+
+def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -> list[dict[str, Any]]:
+    """Parse vendor-formatted Markdown news into structured article dictionaries."""
+    items: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    summary_lines: list[str] = []
+    current_source = default_source
+
+    def flush_current() -> None:
+        nonlocal current, summary_lines
+        if not current:
+            return
+
+        url = _usable_news_url(current.get("url"))
+        current["url"] = url
+        current["summary"] = _clean_news_summary("\n".join(summary_lines).strip())
+        current["normalized_url"] = normalize_url(url)
+        current["related_ticker"] = current.get("related_ticker") or ticker
+        current["event_type"] = current.get("event_type") or "general"
+        current["relevance_reason"] = _news_relevance_reason(current, ticker)
+
+        if current.get("title") and url:
+            items.append(current)
+
+        current = None
+        summary_lines = []
+
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if line.startswith("## "):
+            current_source = _detect_current_news_source(line, fallback=current_source or default_source)
+            continue
+
+        heading = re.match(r"^###\s+(.+?)(?:\s+\(source:\s*(.*?)\))?$", line, flags=re.IGNORECASE)
+        if heading:
+            flush_current()
+            current = {
+                "title": heading.group(1).strip(),
+                "publisher": (heading.group(2) or "Unknown").strip(),
+                "published_at": None,
+                "url": None,
+                "summary": "",
+                "source": current_source or default_source,
+                "event_type": "general",
+                "related_ticker": ticker,
+            }
+            continue
+
+        if current is None:
+            continue
+
+        lowered = line.lower()
+        if lowered.startswith("published:"):
+            current["published_at"] = line.split(":", 1)[1].strip()
+            continue
+        if lowered.startswith("event type:"):
+            current["event_type"] = line.split(":", 1)[1].strip() or "general"
+            continue
+        if lowered.startswith("provider:"):
+            current["source"] = line.split(":", 1)[1].split("|", 1)[0].strip() or current["source"]
+            continue
+        if lowered.startswith("link:"):
+            current["url"] = line.split(":", 1)[1].strip()
+            continue
+        if lowered.startswith("relevant tickers:"):
+            continue
+
+        summary_lines.append(line)
+
+    flush_current()
+    return items
+
+
+def _related_news_items_from_context(news_context: dict[str, Any] | None, ticker: str) -> list[dict[str, Any]]:
+    articles = news_context.get("articles") if isinstance(news_context, dict) else []
+    if not isinstance(articles, list):
+        return []
+
+    items: list[dict[str, Any]] = []
+    for article in articles:
+        if not isinstance(article, dict):
+            continue
+
+        url = _usable_news_url(article.get("url"))
+        title = str(article.get("title") or "").strip()
+        if not title or not url:
+            continue
+
+        source = str(article.get("provider") or article.get("source") or "vendor")
+        item = {
+            "title": title,
+            "publisher": article.get("source") or article.get("publisher") or "Unknown",
+            "published_at": article.get("published_at"),
+            "url": url,
+            "normalized_url": normalize_url(url),
+            "summary": _clean_news_summary(article.get("summary") or ""),
+            "source": source,
+            "event_type": article.get("event_type") or "general",
+            "related_ticker": article.get("ticker") or ticker,
+            "relevance_score": article.get("relevance_score") or 0,
+        }
+        item["relevance_reason"] = _news_relevance_reason(item, ticker)
+        items.append(item)
+    return items
+
+
+def _build_related_news(
+    ticker: str,
+    trade_date: str,
+    time_horizon_months: int,
+    company_news: str,
+    global_news: str,
+    source_label: str | None = None,
+    news_context: dict[str, Any] | None = None,
+    limit: int = 8,
+) -> dict[str, Any]:
+    months = _normalize_time_horizon_months(time_horizon_months)
+    lookback_days = _horizon_days(months)
+    max_items = max(1, min(int(limit or 8), 8))
+
+    base_payload: dict[str, Any] = {
+        "available": False,
+        "ticker": ticker,
+        "trade_date": trade_date,
+        "lookback_days": lookback_days,
+        "source": source_label or "unavailable",
+        "summary": "No usable related news was returned for this analysis.",
+        "items": [],
+    }
+
+    structured_items = _related_news_items_from_context(news_context, ticker)
+    company_items = _parse_markdown_news_items(company_news, default_source="company_news", ticker=ticker)
+    global_items = _parse_markdown_news_items(global_news, default_source="global_news", ticker=ticker)
+    merged = structured_items + company_items + global_items
+
+    if not merged:
+        return {**base_payload, "warning": "Related news is unavailable."}
+
+    try:
+        ranked = rank_news(deduplicate_news(merged), ticker=ticker)[:max_items]
+    except Exception as exc:
+        logger.warning("Failed to rank related news for %s: %s", ticker, exc)
+        ranked = merged[:max_items]
+
+    if not ranked:
+        return {**base_payload, "warning": "Related news is unavailable after deduplication."}
+
+    source = source_label or "+".join(
+        dict.fromkeys(str(item.get("source") or "unknown") for item in ranked)
+    )
+
+    return {
+        **base_payload,
+        "available": True,
+        "source": source,
+        "summary": f"Top {len(ranked)} related news items collected from configured vendors for this analysis window.",
+        "items": ranked,
+    }
 
 
 def _safe_company_profile(ticker: str, trade_date: str) -> dict[str, Any]:
@@ -868,6 +1076,16 @@ def collect_market_data(
         vendor_attempts=vendor_attempts,
         request_budget=request_budget,
     )
+    related_news = _build_related_news(
+        ticker=ticker,
+        trade_date=trade_date,
+        time_horizon_months=time_horizon_months,
+        company_news=company_news.value,
+        global_news=global_news.value,
+        source_label=data_sources.get("news"),
+        news_context=news_context,
+        limit=8,
+    )
     financial_highlights = None
     try:
         financial_highlights = financial_highlights_to_dict(
@@ -912,6 +1130,7 @@ def collect_market_data(
         company_profile=company_profile,
         price_chart=price_chart,
         news_context=news_context,
+        related_news=related_news,
         data_sources=data_sources,
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),

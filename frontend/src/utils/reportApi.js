@@ -68,6 +68,7 @@ function compactReportPayload(result) {
     'financial_highlights',
     'company_profile',
     'price_chart',
+    'related_news',
     'market_report',
     'sentiment_report',
     'news_report',

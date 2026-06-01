@@ -191,6 +191,43 @@ def test_html_report_hides_unavailable_price_chart_summary():
     assert "Chart &amp; Price Summary" not in html
 
 
+def test_html_report_renders_related_news_with_original_vendor_links_only():
+    related_news = {
+        "available": True,
+        "summary": "Top related news.",
+        "items": [
+            {
+                "title": "NVIDIA earnings remain resilient",
+                "publisher": "Reuters",
+                "published_at": "2026-05-25T09:30:00Z",
+                "source": "marketaux",
+                "event_type": "earnings",
+                "summary": "Selected vendor article.",
+                "relevance_reason": "Related to earnings assumptions.",
+                "url": "https://example.com/nvda",
+            },
+            {
+                "title": "Missing original source",
+                "url": None,
+            },
+            {
+                "title": "Unsafe original source",
+                "url": "javascript:alert(1)",
+            },
+        ],
+    }
+
+    report = build_report_context(_base_result(related_news=related_news))
+    html = render_analysis_report_html(report)
+
+    assert len(report["related_news_items"]) == 1
+    assert "Related News" in html
+    assert "NVIDIA earnings remain resilient" in html
+    assert "Open original source" in html
+    assert "Missing original source" not in html
+    assert "Unsafe original source" not in html
+
+
 def test_html_report_renders_same_normalized_news_payload():
     news = {
         "ticker": "NVDA",

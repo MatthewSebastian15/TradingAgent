@@ -88,4 +88,12 @@ describe('mockReport', () => {
     expect(html).toContain('Lookback Days');
     expect(html).toContain('Average Volume');
   });
+
+  it('renders static Related News items in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Related News');
+    expect(html).toContain('NVDA earnings outlook remains constructive');
+    expect(html).toContain('Open original source');
+  });
 });

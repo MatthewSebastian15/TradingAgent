@@ -869,7 +869,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
 
       {activeTab === 'chart_price' && <ChartPriceTab result={result} />}
 
-      {activeTab === 'news' && <NewsTab news={result.news || result.news_context} />}
+      {activeTab === 'news' && <NewsTab result={result} />}
     </div>
   );
 }

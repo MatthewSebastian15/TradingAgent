@@ -718,6 +718,7 @@ def run_balanced_pipeline(
             "warning": "Company profile was not collected.",
         },
         "price_chart": data.price_chart or {},
+        "related_news": data.related_news or {},
         "news": data.news_context or {},
         "news_context": data.news_context or {},
         "data_fetched_at": data_fetched_at,
