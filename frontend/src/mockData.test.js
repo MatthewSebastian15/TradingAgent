@@ -44,6 +44,15 @@ describe('mockData', () => {
     expect(result.price_chart.stats.low).toBe(
       Math.min(...result.price_chart.points.map((point) => point.low))
     );
+    expect(result.news).toMatchObject({
+      enabled: true,
+      ticker: 'NVDA',
+      articles_found: 2,
+    });
+    expect(result.news.articles.map((article) => article.provider)).toEqual([
+      'marketaux',
+      'newsdata',
+    ]);
   });
 
   it('supports required direct mock routes', () => {

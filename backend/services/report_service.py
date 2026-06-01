@@ -137,6 +137,9 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "company_profile_rows": _company_profile_rows(result),
         "company_profile_executives": _company_profile_executives(result),
         "price_chart_rows": _price_chart_rows(result, ticker, market),
+        "news": _news_context(result),
+        "news_articles": _news_articles(result),
+        "news_provider_rows": _news_provider_rows(result),
         "show_trade_plan": is_actionable_trade_plan,
     }
 
@@ -469,6 +472,24 @@ def _financial_highlights(value: Any) -> dict[str, Any] | None:
         "periods": periods,
         "rows": rows,
     }
+
+
+def _news_context(result: dict[str, Any]) -> dict[str, Any]:
+    return _as_dict(result.get("news") or result.get("news_context"))
+
+
+def _news_articles(result: dict[str, Any]) -> list[dict[str, Any]]:
+    articles = _news_context(result).get("articles")
+    if not isinstance(articles, list):
+        return []
+    return [dict(article) for article in articles if isinstance(article, dict) and article.get("title")]
+
+
+def _news_provider_rows(result: dict[str, Any]) -> list[dict[str, str]]:
+    statuses = _news_context(result).get("provider_status")
+    if not isinstance(statuses, dict):
+        return []
+    return [{"label": str(provider), "value": _display(status)} for provider, status in statuses.items()]
 
 
 def _analyst_sections(result: dict[str, Any]) -> list[dict[str, str]]:

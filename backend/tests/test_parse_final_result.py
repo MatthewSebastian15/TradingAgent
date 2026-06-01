@@ -257,6 +257,29 @@ def test_parse_final_result_preserves_price_chart():
     assert parsed["price_chart"] == price_chart
 
 
+def test_summary_shape_keeps_news_context():
+    from routes.serializers import shape_result
+
+    news = {"ticker": "BBCA.JK", "articles": [{"provider": "marketaux", "title": "Headline"}]}
+
+    shaped = shape_result({"decision": "Hold", "news": news, "news_context": news}, "summary")
+
+    assert shaped["news"] == news
+    assert shaped["news_context"] == news
+
+
+def test_parse_final_result_preserves_news_context():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    news = {"ticker": "BBCA.JK", "articles": [{"provider": "marketaux", "title": "Headline"}]}
+    parsed = _parse_final_result("", None, PortfolioRating, {"news": news})
+
+    assert parsed["news"] == news
+    assert parsed["news_context"] == news
+
+
 def test_parse_final_result_fallback_contract_is_non_actionable():
     from tradingagents.agents.schemas import PortfolioRating
 

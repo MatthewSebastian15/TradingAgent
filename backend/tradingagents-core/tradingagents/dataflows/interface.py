@@ -87,6 +87,8 @@ from .finnhub_stock import (
 from .finnhub_stock import (
     get_stock as get_finnhub_stock,
 )
+from .marketaux_news import get_news as get_marketaux_news
+from .newsdata_news import get_news as get_newsdata_news
 
 # Configuration and routing logic
 from .config import get_config
@@ -235,6 +237,8 @@ _PERSISTENT_TOOL_CACHE = None
 _PERSISTENT_TOOL_CACHE_CONFIG = None
 
 VENDOR_LIST = [
+    "marketaux",
+    "newsdata",
     "yfinance",
     "finnhub",
     "alpha_vantage",
@@ -285,6 +289,8 @@ VENDOR_METHODS = {
     },
     # news_data
     "get_news": {
+        "marketaux": get_marketaux_news,
+        "newsdata": get_newsdata_news,
         "yfinance": get_news_yfinance,
         "finnhub": get_finnhub_news,
         "alpha_vantage": get_alpha_vantage_news,

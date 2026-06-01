@@ -191,6 +191,31 @@ def test_html_report_hides_unavailable_price_chart_summary():
     assert "Chart &amp; Price Summary" not in html
 
 
+def test_html_report_renders_same_normalized_news_payload():
+    news = {
+        "ticker": "NVDA",
+        "provider_status": {"marketaux": "success", "newsdata": "rate_limited"},
+        "articles": [
+            {
+                "provider": "marketaux",
+                "title": "NVIDIA earnings remain resilient",
+                "summary": "Selected normalized article.",
+                "url": "https://example.com/nvda",
+                "source": "example.com",
+                "published_at": "2026-05-25T09:30:00Z",
+                "relevance_score": 92,
+            }
+        ],
+    }
+
+    html = render_analysis_report_html(build_report_context(_base_result(news=news)))
+
+    assert "Market News Context" in html
+    assert "NVIDIA earnings remain resilient" in html
+    assert "newsdata" in html
+    assert "rate_limited" in html
+
+
 def test_report_context_hides_trade_plan_for_hold_even_if_levels_exist():
     report = build_report_context(
         _base_result(

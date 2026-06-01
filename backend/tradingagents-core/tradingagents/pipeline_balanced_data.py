@@ -13,6 +13,7 @@ from typing import Any, TypeVar
 from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
+from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
 from tradingagents.dataflows.y_finance import normalize_ticker
@@ -177,6 +178,36 @@ def _safe_news_data_field(label: str, method: str, *args, limit: int = 12_000) -
     if bool(config.get("data_vendor_enable_multi_source_news", False)):
         return _safe_multi_source_data_field(label, lambda: route_to_all_vendors(method, *args), limit=limit)
     return _safe_data_field(label, lambda: route_to_vendor(method, *args), limit=limit)
+
+
+def _safe_structured_company_news(
+    ticker: str,
+    trade_date: str,
+    window_days: int,
+    holder: dict[str, Any],
+    *,
+    limit: int = 12_000,
+) -> DataField:
+    try:
+        context = NewsService().fetch_news(ticker, as_of_date=trade_date, window_days=window_days)
+        holder.update(context)
+        return DataField.from_text(_truncate(format_news_for_prompt(context), limit))
+    except Exception as exc:
+        logger.warning("Structured company news fetch failed for %s: %s", ticker, exc)
+        holder.update(
+            {
+                "enabled": True,
+                "ticker": ticker,
+                "window_days": window_days,
+                "providers_used": [],
+                "provider_status": {"service": "unknown_error"},
+                "articles_found": 0,
+                "articles_used_in_prompt": 0,
+                "articles": [],
+                "empty_reason": "News providers are temporarily unavailable.",
+            }
+        )
+        return DataField.unavailable("company_news", exc)
 
 
 def _safe_company_profile(ticker: str, trade_date: str) -> dict[str, Any]:
@@ -437,7 +468,9 @@ def _build_collection_tasks(
     start_news: str,
     end: str,
     news_lookback_days: int,
+    news_context_holder: dict[str, Any] | None = None,
 ) -> dict[str, Callable[[], DataField]]:
+    news_context_holder = news_context_holder if news_context_holder is not None else {}
     tasks: dict[str, Callable[[], DataField]] = {
         "price_data": lambda: _safe_data_field(
             "price_data",
@@ -490,12 +523,11 @@ def _build_collection_tasks(
             limit=4_000,
         ),
     }
-    tasks["company_news"] = lambda: _safe_news_data_field(
-        "company_news",
-        "get_news",
+    tasks["company_news"] = lambda: _safe_structured_company_news(
         ticker,
-        start_news,
-        end,
+        trade_date,
+        news_lookback_days,
+        news_context_holder,
         limit=12_000,
     )
     tasks["global_news"] = lambda: _safe_news_data_field(
@@ -636,6 +668,10 @@ def _build_data_quality(
 def _detect_sources_from_text(text: str) -> list[str]:
     lowered = (text or "").lower()
     sources: list[str] = []
+    if "marketaux" in lowered:
+        sources.append("marketaux")
+    if "newsdata" in lowered:
+        sources.append("newsdata")
     if "finnhub" in lowered:
         sources.append("finnhub")
     if "alpha vantage" in lowered or "alpha_vantage" in lowered:
@@ -732,7 +768,16 @@ def collect_market_data(
     price_lookback = _price_lookback_days(time_horizon_months)
     start_price, start_news, end = _date_window(trade_date, time_horizon_months)
 
-    tasks = _build_collection_tasks(ticker, trade_date, start_price, start_news, end, news_lookback_days)
+    news_context: dict[str, Any] = {}
+    tasks = _build_collection_tasks(
+        ticker,
+        trade_date,
+        start_price,
+        start_news,
+        end,
+        news_lookback_days,
+        news_context_holder=news_context,
+    )
     results = _run_collection_tasks(tasks, config, cancel_check)
     annual_statement_results = _run_collection_tasks(
         {
@@ -866,6 +911,7 @@ def collect_market_data(
         last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
         company_profile=company_profile,
         price_chart=price_chart,
+        news_context=news_context,
         data_sources=data_sources,
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),

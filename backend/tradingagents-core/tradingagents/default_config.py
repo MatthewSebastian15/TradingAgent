@@ -7,6 +7,13 @@ def _env(name: str) -> str:
     return os.getenv(name, "").strip()
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = _env(name)
+    if not value:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
 DEFAULT_CONFIG = {
     "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
     "results_dir": os.path.join(_TRADINGAGENTS_HOME, "logs"),
@@ -82,13 +89,36 @@ DEFAULT_CONFIG = {
         "symbol_cache_ttl_seconds": int(_env("FINNHUB_SYMBOL_CACHE_TTL_SECONDS") or "2592000"),
         "max_calls_per_analysis": int(_env("FINNHUB_MAX_CALLS_PER_ANALYSIS") or "12"),
     },
+    "news": {
+        "marketaux_api_key": _env("MARKETAUX_API_KEY"),
+        "newsdata_api_key": _env("NEWSDATA_API_KEY"),
+        "provider_priority": _env("NEWS_PROVIDER_PRIORITY") or "marketaux,newsdata",
+        "enabled_providers": _env("NEWS_ENABLED_PROVIDERS") or "marketaux,newsdata",
+        "default_window_days": int(_env("NEWS_DEFAULT_WINDOW_DAYS") or "30"),
+        "max_articles_per_provider": int(_env("NEWS_MAX_ARTICLES_PER_PROVIDER") or "10"),
+        "max_articles_for_prompt": int(_env("NEWS_MAX_ARTICLES_FOR_PROMPT") or "5"),
+        "max_articles_for_ui": int(_env("NEWS_MAX_ARTICLES_FOR_UI") or "20"),
+        "min_relevance_score": float(_env("NEWS_MIN_RELEVANCE_SCORE") or "50"),
+        "prompt_min_relevance_score": float(_env("NEWS_PROMPT_MIN_RELEVANCE_SCORE") or "65"),
+        "cache_enabled": _env_bool("NEWS_CACHE_ENABLED", True),
+        "cache_ttl_minutes": int(_env("NEWS_CACHE_TTL_MINUTES") or "360"),
+        "cache_db_path": _env("NEWS_CACHE_DB_PATH") or ".cache/news_data.sqlite3",
+        "cache_max_entries": int(_env("NEWS_CACHE_MAX_ENTRIES") or "512"),
+        "debug_raw_response": _env_bool("NEWS_DEBUG_RAW_RESPONSE", False),
+        "log_provider_requests": _env_bool("NEWS_LOG_PROVIDER_REQUESTS", True),
+        "vendor_timeout_seconds": int(_env("NEWS_VENDOR_TIMEOUT_SECONDS") or "15"),
+        "vendor_max_retries": int(_env("NEWS_VENDOR_MAX_RETRIES") or "2"),
+        "fetch_secondary_always": _env_bool("NEWS_FETCH_SECONDARY_ALWAYS", False),
+        "secondary_fetch_threshold": int(_env("NEWS_SECONDARY_FETCH_THRESHOLD") or "5"),
+        "enable_yfinance_fallback": _env_bool("NEWS_ENABLE_YFINANCE_FALLBACK", True),
+    },
     "data_vendors": {
         "core_stock_apis": _env("DATA_VENDOR_CORE_STOCK_APIS") or "yfinance,finnhub,alpha_vantage",
         "quote_data": _env("DATA_VENDOR_QUOTE_DATA") or "yfinance,finnhub,alpha_vantage",
         "technical_indicators": _env("DATA_VENDOR_TECHNICAL_INDICATORS") or "yfinance,finnhub,alpha_vantage",
         "fundamental_data": _env("DATA_VENDOR_FUNDAMENTAL_DATA") or "yfinance,finnhub,alpha_vantage",
         "financial_statements": _env("DATA_VENDOR_FINANCIAL_STATEMENTS") or "yfinance,alpha_vantage,finnhub",
-        "news_data": _env("DATA_VENDOR_NEWS_DATA") or "yfinance,finnhub,alpha_vantage",
+        "news_data": _env("DATA_VENDOR_NEWS_DATA") or "marketaux,newsdata,yfinance,finnhub,alpha_vantage",
         "global_news_data": _env("DATA_VENDOR_GLOBAL_NEWS_DATA") or "yfinance,finnhub,alpha_vantage",
         "sentiment_data": _env("DATA_VENDOR_SENTIMENT_DATA") or "finnhub,alpha_vantage",
         "social_sentiment": _env("DATA_VENDOR_SOCIAL_SENTIMENT") or "finnhub",

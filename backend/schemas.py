@@ -102,6 +102,50 @@ class PriceChart(ApiSchema):
     warning: str | None = None
 
 
+class NewsEntity(ApiSchema):
+    symbol: str | None = None
+    name: str | None = None
+    exchange: str | None = None
+    country: str | None = None
+    entity_type: str | None = None
+    industry: str | None = None
+    match_score: float | None = None
+    sentiment_score: float | None = None
+
+
+class NewsArticle(ApiSchema):
+    provider: str
+    ticker: str
+    title: str
+    url: str
+    summary: str | None = None
+    image_url: str | None = None
+    source: str | None = None
+    source_domain: str | None = None
+    published_at: str | None = None
+    sentiment_label: str | None = None
+    sentiment_score: float | None = None
+    relevance_score: float = 0
+    relevance_reasons: list[str] = Field(default_factory=list)
+    entities: list[NewsEntity] = Field(default_factory=list)
+
+
+class NewsResponse(ApiSchema):
+    enabled: bool = True
+    ticker: str
+    company_name: str | None = None
+    window_days: int = 30
+    providers_used: list[str] = Field(default_factory=list)
+    provider_status: dict[str, str] = Field(default_factory=dict)
+    provider_health: dict[str, Any] = Field(default_factory=dict)
+    articles_found: int = 0
+    articles_used_in_prompt: int = 0
+    average_sentiment: str | None = None
+    articles: list[NewsArticle] = Field(default_factory=list)
+    empty_reason: str | None = None
+    cache: dict[str, Any] = Field(default_factory=dict)
+
+
 class AnalysisResponse(ApiSchema):
     request_id: str
     ticker: str
@@ -118,6 +162,8 @@ class AnalysisResponse(ApiSchema):
     financial_highlights: FinancialHighlightsResponse | None = None
     company_profile: CompanyProfile | dict[str, Any] | None = None
     price_chart: PriceChart | dict[str, Any] | None = None
+    news: NewsResponse | dict[str, Any] | None = None
+    news_context: NewsResponse | dict[str, Any] | None = None
 
 
 class AnalysisJobCreateResponse(ApiSchema):

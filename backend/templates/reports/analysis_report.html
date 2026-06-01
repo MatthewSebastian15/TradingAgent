@@ -91,6 +91,42 @@
         </section>
       {% endif %}
 
+      {% if report.news %}
+        <section class="section">
+          <h2>Market News Context</h2>
+          {% if report.news_provider_rows %}
+            <table class="metric-table">
+              <tbody>
+                {% for row in report.news_provider_rows %}
+                  <tr>
+                    <th>{{ row.label }}</th>
+                    <td>{{ row.value }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+
+          {% if report.news_articles %}
+            {% for article in report.news_articles %}
+              <article class="news-article">
+                <h3>{{ article.title }}</h3>
+                <p class="muted">
+                  {{ article.source or 'Unknown source' }}
+                  {% if article.published_at %} | {{ article.published_at }}{% endif %}
+                  | {{ article.provider }}
+                  | relevance {{ article.relevance_score }}
+                </p>
+                {% if article.summary %}<p>{{ article.summary }}</p>{% endif %}
+                {% if article.url %}<p><a href="{{ article.url }}">{{ article.url }}</a></p>{% endif %}
+              </article>
+            {% endfor %}
+          {% else %}
+            <p class="muted">{{ report.news.empty_reason or 'No relevant company-specific news was found.' }}</p>
+          {% endif %}
+        </section>
+      {% endif %}
+
       <section class="section">
         <h2>Executive Summary</h2>
         <table>

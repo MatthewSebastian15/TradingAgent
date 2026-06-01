@@ -124,6 +124,17 @@ li {
   white-space: pre-wrap;
 }
 
+.news-article {
+  page-break-inside: avoid;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 3mm;
+}
+
+.news-article a {
+  color: #1d4ed8;
+  word-break: break-all;
+}
+
 .muted {
   color: #555;
 }

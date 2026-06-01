@@ -210,12 +210,19 @@ def run_balanced_pipeline(
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
     time_horizon_text = _time_horizon_label(time_horizon_months)
     llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
+    _emit_progress(progress_callback, "news_fetch", "started", "Fetching normalized company news from configured providers...")
     data = _run_tracked(
         progress_callback,
         "data_collection",
         "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
         lambda: collect_market_data(ticker, trade_date, config, cancel_check=cancel_check),
         cancel_check=cancel_check,
+    )
+    _emit_progress(
+        progress_callback,
+        "news_fetch",
+        "completed",
+        f"Normalized company news ready: {(data.news_context or {}).get('articles_found', 0)} article(s).",
     )
     data_fetched_at = datetime.now(timezone.utc).isoformat()
     data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
@@ -369,7 +376,10 @@ def run_balanced_pipeline(
                     DebateArgument(
                         stance="bull",
                         thesis=f"Deep mode could not generate an additional bullish refinement for {ticker}.",
-                        evidence=["Prior analyst and debate reports remain available."],
+                        evidence=[
+                            "Prior analyst reports remain available.",
+                            "The prior debate remains available for review.",
+                        ],
                         counterargument="No extra bullish refinement was generated.",
                         risk_flags=["Deep debate fallback used."],
                         confidence=0.35,
@@ -402,7 +412,10 @@ def run_balanced_pipeline(
                     DebateArgument(
                         stance="bear",
                         thesis=f"Deep mode could not generate an additional bearish refinement for {ticker}.",
-                        evidence=["Prior analyst and debate reports remain available."],
+                        evidence=[
+                            "Prior analyst reports remain available.",
+                            "The prior debate remains available for review.",
+                        ],
                         counterargument="No extra bearish refinement was generated.",
                         risk_flags=["Deep debate fallback used."],
                         confidence=0.35,
@@ -705,6 +718,8 @@ def run_balanced_pipeline(
             "warning": "Company profile was not collected.",
         },
         "price_chart": data.price_chart or {},
+        "news": data.news_context or {},
+        "news_context": data.news_context or {},
         "data_fetched_at": data_fetched_at,
         "last_close_price": data.last_close_price,
         "last_close_price_as_of": data.last_close_price_as_of or trade_date,
