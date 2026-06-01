@@ -198,6 +198,11 @@ class AnalysisJobCreateResponse(ApiSchema):
     events_url: str
 
 
+class OwnerSessionResponse(ApiSchema):
+    owner_token: str
+    expires_at: int
+
+
 class AnalysisJobSummaryResponse(ApiSchema):
     job_id: str
     request_id: str

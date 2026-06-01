@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from owner_session import issue_owner_session
 from routes.news import include_news_routes
 
 
@@ -49,7 +50,7 @@ def test_debug_news_endpoint_rejects_unknown_provider(client):
 def _news_client(*, is_development: bool) -> TestClient:
     app = FastAPI()
     include_news_routes(app, prefix="/api", is_development=is_development)
-    return TestClient(app)
+    return TestClient(app, headers={"x-owner-token": issue_owner_session()["owner_token"]})
 
 
 def test_debug_news_endpoint_is_not_registered_in_production():

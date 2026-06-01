@@ -1,12 +1,12 @@
 import { buildApiUrl, buildAuthHeaders, buildHeaders, readHttpError } from './api';
 import { exportMockReportPdf, openMockReportPreview } from './mockReport';
 
-export function reportHtmlUrl(requestId) {
-  return buildApiUrl(`/analysis/jobs/${encodeURIComponent(requestId)}/report.html`);
+export function reportHtmlUrl(resourceId) {
+  return buildApiUrl(`/analysis/jobs/${encodeURIComponent(resourceId)}/report.html`);
 }
 
-export function reportPdfUrl(requestId) {
-  return buildApiUrl(`/analysis/jobs/${encodeURIComponent(requestId)}/report.pdf`);
+export function reportPdfUrl(resourceId) {
+  return buildApiUrl(`/analysis/jobs/${encodeURIComponent(resourceId)}/report.pdf`);
 }
 
 function reportHtmlPayloadUrl() {
@@ -84,11 +84,11 @@ function compactReportPayload(result) {
   }, {});
 }
 
-async function fetchReportHtmlByRequestId(requestId) {
-  const response = await fetch(reportHtmlUrl(requestId), {
+async function fetchReportHtmlByResourceId(resourceId) {
+  const response = await fetch(reportHtmlUrl(resourceId), {
     method: 'GET',
     headers: {
-      ...buildAuthHeaders(),
+      ...(await buildAuthHeaders()),
       Accept: 'text/html',
     },
   });
@@ -107,7 +107,7 @@ async function fetchReportHtmlByPayload(result) {
   const response = await fetch(reportHtmlPayloadUrl(), {
     method: 'POST',
     headers: {
-      ...buildHeaders(),
+      ...(await buildHeaders()),
       Accept: 'text/html',
     },
     body: JSON.stringify(payload),
@@ -132,7 +132,7 @@ function openHtmlBlob(html) {
   }
 }
 
-export async function openAnalysisHtmlReport({ requestId, result, mock = false }) {
+export async function openAnalysisHtmlReport({ resourceId, result, mock = false }) {
   if (mock) {
     if (!result) throw new Error('Mock report result is unavailable.');
     openMockReportPreview(result);
@@ -140,7 +140,7 @@ export async function openAnalysisHtmlReport({ requestId, result, mock = false }
   }
 
   try {
-    const html = await fetchReportHtmlByRequestId(requestId);
+    const html = await fetchReportHtmlByResourceId(resourceId);
     openHtmlBlob(html);
   } catch (error) {
     if (!result || !isReportNotFound(error.message)) {
@@ -168,11 +168,11 @@ function filenameFromContentDisposition(headerValue) {
   return asciiMatch?.[1] || null;
 }
 
-async function fetchPdfByRequestId(requestId) {
-  const response = await fetch(reportPdfUrl(requestId), {
+async function fetchPdfByResourceId(resourceId) {
+  const response = await fetch(reportPdfUrl(resourceId), {
     method: 'GET',
     headers: {
-      ...buildAuthHeaders(),
+      ...(await buildAuthHeaders()),
       Accept: 'application/pdf',
     },
   });
@@ -191,7 +191,7 @@ async function fetchPdfByPayload(result) {
   const response = await fetch(reportPdfPayloadUrl(), {
     method: 'POST',
     headers: {
-      ...buildHeaders(),
+      ...(await buildHeaders()),
       Accept: 'application/pdf',
     },
     body: JSON.stringify(payload),
@@ -219,7 +219,7 @@ async function downloadPdfResponse(response, fallbackFilename) {
   URL.revokeObjectURL(url);
 }
 
-export async function downloadAnalysisPdf(requestId, options = {}) {
+export async function downloadAnalysisPdf(resourceId, options = {}) {
   if (options.mock) {
     if (!options.result) throw new Error('Mock report result is unavailable.');
     exportMockReportPdf(options.result);
@@ -227,14 +227,14 @@ export async function downloadAnalysisPdf(requestId, options = {}) {
   }
 
   try {
-    const response = await fetchPdfByRequestId(requestId);
-    await downloadPdfResponse(response, `TradingAgent_${requestId}.pdf`);
+    const response = await fetchPdfByResourceId(resourceId);
+    await downloadPdfResponse(response, `TradingAgent_${resourceId}.pdf`);
   } catch (error) {
     if (!options.result || !isReportNotFound(error.message)) {
       throw error;
     }
 
     const response = await fetchPdfByPayload(options.result);
-    await downloadPdfResponse(response, `TradingAgent_${requestId}.pdf`);
+    await downloadPdfResponse(response, `TradingAgent_${resourceId}.pdf`);
   }
 }

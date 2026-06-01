@@ -26,8 +26,9 @@ def test_request_id_header_is_sanitized(client):
     assert re.fullmatch(r"[a-f0-9]{12}", response.headers["x-request-id"])
 
 
-def test_valid_request_id_header_is_preserved(client):
+def test_caller_request_id_header_is_replaced_by_server_trace_id(client):
     response = client.get("/health", headers={"x-request-id": "dev-request_01:trace"})
 
     assert response.status_code == 200
-    assert response.headers["x-request-id"] == "dev-request_01:trace"
+    assert response.headers["x-request-id"] != "dev-request_01:trace"
+    assert len(response.headers["x-request-id"]) == 12

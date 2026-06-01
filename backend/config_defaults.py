@@ -109,7 +109,7 @@ REQUIRE_API_KEY_FOR_RATE_LIMIT = env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", IS_P
 if IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
     logger.warning(
         "APP_ENV=production but REQUIRE_API_KEY_FOR_RATE_LIMIT is disabled; "
-        "anonymous clients will be accepted and rate-limited by IP only."
+        "proxy requests without an API key will be accepted. Browser owner tokens are still required."
     )
 
 # LLM resilience
@@ -137,6 +137,10 @@ ANALYSIS_JOB_CACHE_DB_PATH = env(
     "ANALYSIS_JOB_CACHE_DB_PATH",
     str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3"),
 )
+OWNER_SESSION_SECRET = env("OWNER_SESSION_SECRET", "")
+if IS_PRODUCTION and not OWNER_SESSION_SECRET:
+    raise ValueError("OWNER_SESSION_SECRET must be configured in production.")
+OWNER_SESSION_TTL_SECONDS = env_int("OWNER_SESSION_TTL_SECONDS", ANALYSIS_JOB_TTL_SECONDS, min_value=60)
 DATA_CACHE_BACKEND = "sqlite"
 DATA_CACHE_DB_PATH = env(
     "DATA_CACHE_DB_PATH",

@@ -160,7 +160,7 @@ async def start_job(
         req = AnalysisRequest(**job.payload)
         cached = await result_cache.get(job.cache_key) if use_cache else None
         if cached is not None:
-            await job.complete(response_payload_func(job.request_id, req, cached))
+            await job.complete({**response_payload_func(job.request_id, req, cached), "job_id": job.id})
             return
 
         if not await job.mark_running():
@@ -170,7 +170,7 @@ async def start_job(
         await wait_for_job_progress(progress_queue)
         if job.cancel_event.is_set():
             raise asyncio.CancelledError()
-        await job.complete(response_payload_func(job.request_id, req, fields))
+        await job.complete({**response_payload_func(job.request_id, req, fields), "job_id": job.id})
     except asyncio.CancelledError:
         await wait_for_job_progress(progress_queue)
         await job.cancel(

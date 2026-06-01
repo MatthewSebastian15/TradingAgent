@@ -336,10 +336,16 @@ async def get_analysis_job(job_id: str, request: Request):
         return job.public_summary()
 
 
-@router.get("/analysis/{request_id}", response_model=AnalysisResponse, response_model_exclude_none=True)
+@router.get(
+    "/analysis/{request_id}",
+    response_model=AnalysisResponse,
+    response_model_exclude_none=True,
+    deprecated=True,
+    include_in_schema=False,
+)
 async def get_analysis_result_by_request_id(request_id: str, request: Request):
-    async with limit_request(request, request_policy()):
-        job = await _JOB_STORE.get_by_request_id(request_id)
+    async with limit_request(request, request_policy()) as lease:
+        job = await _JOB_STORE.get_by_request_id(request_id, owner_id=lease.identifier)
         if job is None or job.result is None:
             raise _analysis_result_not_found(request_id)
         return job.result

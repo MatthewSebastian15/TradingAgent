@@ -615,9 +615,9 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
               Created: {createdAtLabel}
             </span>
           )}
-          {enableReportExport && result.request_id && (
+          {enableReportExport && (result.job_id || result.request_id) && (
             <ExportReportButtons
-              requestId={result.request_id}
+              resourceId={result.job_id || result.request_id}
               result={result}
               disabled={Boolean(result.error)}
               mockReport={mockReport}
