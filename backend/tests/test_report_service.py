@@ -191,7 +191,7 @@ def test_html_report_hides_unavailable_price_chart_summary():
     assert "Chart &amp; Price Summary" not in html
 
 
-def test_html_report_renders_related_news_with_original_vendor_links_only():
+def test_html_report_renders_related_news_with_safe_original_vendor_links_only():
     related_news = {
         "available": True,
         "summary": "Top related news.",
@@ -220,12 +220,40 @@ def test_html_report_renders_related_news_with_original_vendor_links_only():
     report = build_report_context(_base_result(related_news=related_news))
     html = render_analysis_report_html(report)
 
-    assert len(report["related_news_items"]) == 1
+    assert len(report["related_news_items"]) == 3
     assert "Related News" in html
     assert "NVIDIA earnings remain resilient" in html
     assert "Open original source" in html
-    assert "Missing original source" not in html
-    assert "Unsafe original source" not in html
+    assert "Missing original source" in html
+    assert "Unsafe original source" in html
+    assert "javascript:" not in html
+
+
+@pytest.mark.parametrize(
+    "unsafe_url",
+    [
+        "javascript:alert(document.domain)",
+        "data:text/html,<script>alert(1)</script>",
+        "https:///missing-host",
+    ],
+)
+def test_html_report_renders_normalized_news_text_without_unsafe_link(unsafe_url):
+    news = {
+        "articles": [
+            {
+                "provider": "marketaux",
+                "title": "Unsafe vendor article",
+                "url": unsafe_url,
+            }
+        ],
+    }
+
+    report = build_report_context(_base_result(news=news))
+    html = render_analysis_report_html(report)
+
+    assert report["news_articles"][0]["url"] is None
+    assert "Unsafe vendor article" in html
+    assert unsafe_url not in html
 
 
 def test_html_report_renders_same_normalized_news_payload():

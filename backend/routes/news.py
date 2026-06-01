@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, FastAPI, Query, Request
 
 from config import build_tradingagents_config
 from errors import BadRequestError
@@ -12,6 +12,7 @@ from routes.validation import normalize_ticker_symbol
 from schemas import NewsResponse
 
 router = APIRouter(tags=["news"])
+debug_router = APIRouter(tags=["news"])
 _SUPPORTED_DEBUG_PROVIDERS = {"marketaux", "newsdata"}
 
 
@@ -52,7 +53,7 @@ async def get_news(
         return await asyncio.to_thread(_fetch_news, normalized_ticker, window_days=window_days, limit=limit)
 
 
-@router.get("/debug/news/{ticker}")
+@debug_router.get("/debug/news/{ticker}")
 async def debug_news(
     ticker: str,
     request: Request,
@@ -78,3 +79,9 @@ async def debug_news(
             debug=True,
             include_raw=include_raw,
         )
+
+
+def include_news_routes(app: FastAPI, *, prefix: str, is_development: bool) -> None:
+    app.include_router(router, prefix=prefix)
+    if is_development:
+        app.include_router(debug_router, prefix=prefix)

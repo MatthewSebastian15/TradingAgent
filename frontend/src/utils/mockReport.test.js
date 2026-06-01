@@ -96,4 +96,18 @@ describe('mockReport', () => {
     expect(html).toContain('NVDA earnings outlook remains constructive');
     expect(html).toContain('Open original source');
   });
+
+  it('renders Related News text without a link for an unsafe URL', () => {
+    const html = buildMockReportHtml({
+      ...MOCK_RESPONSE,
+      related_news: {
+        available: true,
+        items: [{ title: 'Unsafe mock URL', url: 'javascript:alert(1)' }],
+      },
+    });
+
+    expect(html).toContain('Unsafe mock URL');
+    expect(html).not.toContain('javascript:');
+    expect(html).not.toContain('Open original source');
+  });
 });

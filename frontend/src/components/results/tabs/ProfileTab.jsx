@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { safeExternalUrl } from '../../../utils/url';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 
@@ -32,6 +33,7 @@ export default function ProfileTab({ profile }) {
   }
 
   const executives = Array.isArray(profile.executives) ? profile.executives : [];
+  const websiteUrl = safeExternalUrl(profile.website);
 
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border space-y-5">
@@ -54,16 +56,18 @@ export default function ProfileTab({ profile }) {
           <ProfileField
             label="Website"
             value={
-              profile.website ? (
+              websiteUrl ? (
                 <a
-                  href={profile.website}
+                  href={websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-bloomberg-orange hover:text-orange-300"
                 >
                   {profile.website}
                 </a>
-              ) : null
+              ) : (
+                profile.website
+              )
             }
           />
         </div>

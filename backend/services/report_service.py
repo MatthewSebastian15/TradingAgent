@@ -463,20 +463,19 @@ def _price_chart_rows(result: dict[str, Any], ticker: str, market: str) -> list[
     ]
 
 
-def _related_news_items(result: dict[str, Any]) -> list[dict[str, str]]:
+def _related_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
     related_news = _as_dict(result.get("related_news"))
     raw_items = related_news.get("items") if related_news else []
     if not isinstance(raw_items, list):
         return []
 
-    items: list[dict[str, str]] = []
+    items: list[dict[str, Any]] = []
     for item in raw_items[:8]:
         if not isinstance(item, dict):
             continue
 
         title = _clean_text(item.get("title"))
-        url = _clean_text(item.get("url"))
-        if not title or not url or not _is_external_http_url(url):
+        if not title:
             continue
 
         items.append(
@@ -488,15 +487,23 @@ def _related_news_items(result: dict[str, Any]) -> list[dict[str, str]]:
                 "event_type": _display(item.get("event_type")),
                 "summary": _display(item.get("summary")),
                 "relevance_reason": _display(item.get("relevance_reason")),
-                "url": url,
+                "url": _safe_external_http_url(item.get("url")),
             }
         )
     return items
 
 
-def _is_external_http_url(value: str) -> bool:
-    parts = urlsplit(value)
-    return parts.scheme.lower() in {"http", "https"} and bool(parts.netloc)
+def _safe_external_http_url(value: Any) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+    try:
+        parts = urlsplit(text)
+        hostname = parts.hostname
+        _ = parts.port
+    except ValueError:
+        return None
+    return text if parts.scheme.lower() in {"http", "https"} and hostname else None
 
 
 def _financial_highlights(value: Any) -> dict[str, Any] | None:
@@ -521,7 +528,14 @@ def _news_articles(result: dict[str, Any]) -> list[dict[str, Any]]:
     articles = _news_context(result).get("articles")
     if not isinstance(articles, list):
         return []
-    return [dict(article) for article in articles if isinstance(article, dict) and article.get("title")]
+    items = []
+    for article in articles:
+        if not isinstance(article, dict) or not article.get("title"):
+            continue
+        item = dict(article)
+        item["url"] = _safe_external_http_url(article.get("url"))
+        items.append(item)
+    return items
 
 
 def _news_provider_rows(result: dict[str, Any]) -> list[dict[str, str]]:
