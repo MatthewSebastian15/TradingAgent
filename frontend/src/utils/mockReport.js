@@ -1,4 +1,5 @@
 import { formatPrice } from './formatting';
+import { safeExternalUrl } from './url';
 import { MOCK_REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 
 const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
@@ -102,21 +103,11 @@ function buildPriceChartRows(chart, result) {
   ];
 }
 
-function safeExternalUrl(value) {
-  if (!hasValue(value)) return null;
-  try {
-    const url = new URL(String(value));
-    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
-  } catch {
-    return null;
-  }
-}
-
 function buildRelatedNewsItems(relatedNews) {
   if (!Array.isArray(relatedNews?.items)) return [];
   return relatedNews.items
     .slice(0, 8)
-    .filter((item) => item && typeof item === 'object' && item.title && safeExternalUrl(item.url))
+    .filter((item) => item && typeof item === 'object' && item.title)
     .map((item) => ({
       title: display(item.title),
       publisher: display(item.publisher),
@@ -385,7 +376,7 @@ function renderRelatedNews(relatedNews, items) {
             <p class="muted">Publisher: ${escapeHtml(item.publisher)} | Published: ${escapeHtml(item.published_at)} | Source: ${escapeHtml(item.source)} | Event: ${escapeHtml(item.event_type)}</p>
             ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
             ${item.relevance_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.relevance_reason)}</p>` : ''}
-            <p><a href="${escapeHtml(item.url)}">Open original source</a></p>
+            ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
           </article>`
         )
         .join('')}

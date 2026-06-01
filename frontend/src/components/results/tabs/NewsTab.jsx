@@ -1,5 +1,6 @@
 import PropTypes from 'prop-types';
 
+import { safeExternalUrl } from '../../../utils/url';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 
@@ -12,18 +13,8 @@ function formatDate(value) {
   return text;
 }
 
-function safeUrl(value) {
-  if (!value) return null;
-  try {
-    const url = new URL(String(value));
-    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
-  } catch {
-    return null;
-  }
-}
-
 function NewsCard({ item, index }) {
-  const url = safeUrl(item.url);
+  const url = safeExternalUrl(item.url);
 
   return (
     <article className="border border-bloomberg-border bg-black px-4 py-3">

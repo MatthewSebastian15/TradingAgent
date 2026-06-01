@@ -112,7 +112,7 @@
                 {% if item.relevance_reason and item.relevance_reason != 'N/A' %}
                   <p><strong>Why it matters:</strong> {{ item.relevance_reason }}</p>
                 {% endif %}
-                <p><a href="{{ item.url }}">Open original source</a></p>
+                {% if item.url %}<p><a href="{{ item.url }}">Open original source</a></p>{% endif %}
               </article>
             {% endfor %}
           </div>
