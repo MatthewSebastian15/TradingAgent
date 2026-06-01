@@ -1,6 +1,6 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ExportReportButtons from './ExportReportButtons';
 import { MOCK_RESPONSE } from '../../dev/mockData';
@@ -26,8 +26,14 @@ function mockReportNotFoundResponse() {
 }
 
 describe('ExportReportButtons', () => {
+  beforeEach(() => {
+    sessionStorage.setItem('_ta_owner_token', 'test-owner-token');
+    sessionStorage.setItem('_ta_owner_token_expires_at', String(Math.floor(Date.now() / 1000) + 3600));
+  });
+
   afterEach(() => {
     cleanup();
+    sessionStorage.clear();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -42,7 +48,7 @@ describe('ExportReportButtons', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:backend-report');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
-    render(<ExportReportButtons requestId="rid/export 1" />);
+    render(<ExportReportButtons resourceId="rid/export 1" />);
     fireEvent.click(screen.getByText('PREVIEW HTML'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -66,7 +72,7 @@ describe('ExportReportButtons', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fallback-report');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
-    render(<ExportReportButtons requestId="expired-request" result={MOCK_RESPONSE} />);
+    render(<ExportReportButtons resourceId="expired-request" result={MOCK_RESPONSE} />);
     fireEvent.click(screen.getByText('PREVIEW HTML'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -85,7 +91,7 @@ describe('ExportReportButtons', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-    render(<ExportReportButtons requestId="rid-report-1" />);
+    render(<ExportReportButtons resourceId="rid-report-1" />);
     fireEvent.click(screen.getByText('EXPORT PDF'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -102,7 +108,7 @@ describe('ExportReportButtons', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-    render(<ExportReportButtons requestId="expired-request" result={MOCK_RESPONSE} />);
+    render(<ExportReportButtons resourceId="expired-request" result={MOCK_RESPONSE} />);
     fireEvent.click(screen.getByText('EXPORT PDF'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -123,7 +129,7 @@ describe('ExportReportButtons', () => {
 
     render(
       <ExportReportButtons
-        requestId="mock-nvda-buy"
+        resourceId="mock-nvda-buy"
         result={MOCK_RESPONSE}
         mockReport
       />
@@ -150,7 +156,7 @@ describe('ExportReportButtons', () => {
 
     render(
       <ExportReportButtons
-        requestId="mock-nvda-buy"
+        resourceId="mock-nvda-buy"
         result={MOCK_RESPONSE}
         mockReport
       />

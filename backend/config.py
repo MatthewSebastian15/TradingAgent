@@ -75,6 +75,8 @@ from config_defaults import (
     MAX_CONCURRENT_STREAMS_PER_KEY,
     MAX_GEMINI_CALLS,
     MAX_RISK_DISCUSS_ROUNDS,
+    OWNER_SESSION_SECRET,
+    OWNER_SESSION_TTL_SECONDS,
     PIPELINE_TIMEOUT_SECONDS,
     PREFLIGHT_TIMEOUT_SECONDS,
     PROCESS_POOL_MAX_TASKS_PER_CHILD,
@@ -136,6 +138,8 @@ class _BackendSettingsShim:
     analysis_result_cache_max_entries = ANALYSIS_RESULT_CACHE_MAX_ENTRIES
     analysis_job_ttl_seconds = ANALYSIS_JOB_TTL_SECONDS
     analysis_job_cache_db_path = ANALYSIS_JOB_CACHE_DB_PATH
+    owner_session_secret = OWNER_SESSION_SECRET
+    owner_session_ttl_seconds = OWNER_SESSION_TTL_SECONDS
     data_vendor_core_stock_apis = DATA_VENDOR_CORE_STOCK_APIS
     data_vendor_technical_indicators = DATA_VENDOR_TECHNICAL_INDICATORS
     data_vendor_fundamental_data = DATA_VENDOR_FUNDAMENTAL_DATA

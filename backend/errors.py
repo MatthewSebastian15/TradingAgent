@@ -74,6 +74,11 @@ class BadRequestError(ApiError):
         super().__init__(400, "BAD_REQUEST", message, details)
 
 
+class AuthenticationError(ApiError):
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
+        super().__init__(401, "UNAUTHORIZED", message, details)
+
+
 class NotFoundError(ApiError):
     def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         super().__init__(404, "NOT_FOUND", message, details)

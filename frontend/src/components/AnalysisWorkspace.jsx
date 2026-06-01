@@ -220,7 +220,7 @@ StatusBar.propTypes = {
 
 function unwrapJobLookupPayload(payload) {
   if (!payload) return null;
-  if (payload.result) return payload.result;
+  if (payload.result) return { job_id: payload.job_id, ...payload.result };
   if (payload.error) {
     const errorPayload = payload.error.error || payload.error.message || payload.error;
     const message = typeof errorPayload === 'string' ? errorPayload : errorPayload.message;
@@ -244,9 +244,26 @@ async function readLookupError(response) {
   return message;
 }
 
-function resultPath(basePath, requestId) {
-  if (!basePath || !requestId) return null;
-  return `${basePath.replace(/\/+$/, '')}/${encodeURIComponent(requestId)}`;
+function resultPath(basePath, resourceId) {
+  if (!basePath || !resourceId) return null;
+  return `${basePath.replace(/\/+$/, '')}/${encodeURIComponent(resourceId)}`;
+}
+
+async function fetchResultLookup(resourceId, signal) {
+  const headers = await buildAuthHeaders();
+  const options = {
+    method: 'GET',
+    headers,
+    signal,
+  };
+  const encodedResourceId = encodeURIComponent(resourceId);
+  const canonicalResponse = await fetch(buildApiUrl(`/analysis/jobs/${encodedResourceId}`), options);
+
+  if (canonicalResponse.ok || ![400, 404].includes(canonicalResponse.status)) {
+    return canonicalResponse;
+  }
+
+  return fetch(buildApiUrl(`/analysis/${encodedResourceId}`), options);
 }
 
 export default function AnalysisWorkspace({
@@ -260,21 +277,21 @@ export default function AnalysisWorkspace({
   mockReportExport = false,
 }) {
   const navigate = useNavigate();
-  const { requestId } = useParams();
-  const shouldLookupBeforeStorage = Boolean(requestId && lookupResult && lookupResultFirst);
-  const initialResult = shouldLookupBeforeStorage ? null : readStoredResult(historyKey, requestId);
+  const { resourceId } = useParams();
+  const shouldLookupBeforeStorage = Boolean(resourceId && lookupResult && lookupResultFirst);
+  const initialResult = shouldLookupBeforeStorage ? null : readStoredResult(historyKey, resourceId);
   const [result, setResult] = useState(initialResult);
-  const [loading, setLoading] = useState(Boolean(requestId && !initialResult));
+  const [loading, setLoading] = useState(Boolean(resourceId && !initialResult));
   const [status, setStatus] = useState(
-    requestId && !initialResult ? 'Loading saved analysis...' : ''
+    resourceId && !initialResult ? 'Loading saved analysis...' : ''
   );
   const [agentProgress, setAgentProgress] = useState(null);
 
   useEffect(() => {
-    if (!requestId) return undefined;
+    if (!resourceId) return undefined;
 
     if (!lookupResultFirst) {
-      const stored = readStoredResult(historyKey, requestId);
+      const stored = readStoredResult(historyKey, resourceId);
       if (stored) {
         setResult(stored);
         setLoading(false);
@@ -293,10 +310,10 @@ export default function AnalysisWorkspace({
         setAgentProgress(null);
 
         try {
-          const loadedResult = await lookupResult(requestId);
+          const loadedResult = await lookupResult(resourceId);
 
           if (!loadedResult && lookupResultFirst) {
-            const storedFallback = readStoredResult(historyKey, requestId);
+            const storedFallback = readStoredResult(historyKey, resourceId);
             if (storedFallback) {
               if (!cancelled) setResult(storedFallback);
               return;
@@ -325,7 +342,7 @@ export default function AnalysisWorkspace({
       };
     }
 
-    const stored = readStoredResult(historyKey, requestId);
+    const stored = readStoredResult(historyKey, resourceId);
     if (stored) {
       setResult(stored);
       setLoading(false);
@@ -342,14 +359,7 @@ export default function AnalysisWorkspace({
       setAgentProgress(null);
 
       try {
-        const response = await fetch(
-          buildApiUrl(`/analysis/${encodeURIComponent(requestId)}`),
-          {
-            method: 'GET',
-            headers: buildAuthHeaders(),
-            signal: controller.signal,
-          }
-        );
+        const response = await fetchResultLookup(resourceId, controller.signal);
 
         if (!response.ok) {
           throw new Error(await readLookupError(response));
@@ -377,7 +387,7 @@ export default function AnalysisWorkspace({
 
     loadResult();
     return () => controller.abort();
-  }, [historyKey, lookupResult, lookupResultFirst, requestId]);
+  }, [historyKey, lookupResult, lookupResultFirst, resourceId]);
 
   function handleResult(nextResult) {
     if (!nextResult) {
@@ -390,7 +400,7 @@ export default function AnalysisWorkspace({
     setResult(enrichedResult);
     saveToHistory(historyKey, enrichedResult);
 
-    const nextPath = resultPath(resultPathBase, enrichedResult?.request_id);
+    const nextPath = resultPath(resultPathBase, enrichedResult?.job_id || enrichedResult?.request_id);
     if (nextPath) navigate(nextPath);
   }
 
@@ -418,7 +428,7 @@ export default function AnalysisWorkspace({
                 onSelect={(item) => {
                   setResult(item);
                   setLoading(false);
-                  const nextPath = resultPath(resultPathBase, item?.request_id);
+                  const nextPath = resultPath(resultPathBase, item?.job_id || item?.request_id);
                   if (nextPath) navigate(nextPath);
                 }}
               />

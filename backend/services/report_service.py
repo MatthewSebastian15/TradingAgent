@@ -34,12 +34,12 @@ _REPORT_ENV = Environment(
 
 
 class ReportNotFoundError(ApiError):
-    def __init__(self, request_id: str) -> None:
+    def __init__(self, resource_id: str) -> None:
         super().__init__(
             404,
             "report_not_found",
             "Analysis result was not found or has expired.",
-            details={"request_id": request_id},
+            details={"resource_id": resource_id},
         )
 
 
@@ -68,10 +68,19 @@ class ReportGenerationError(ApiError):
         )
 
 
-async def get_analysis_result_for_report(request_id: str) -> dict[str, Any]:
-    """Return a completed analysis payload by request_id without rerunning analysis."""
+async def get_analysis_result_for_report(job_id: str, *, owner_id: str) -> dict[str, Any]:
+    """Return a completed analysis payload by canonical job_id."""
 
-    job = await jobs.JOB_STORE.get_by_request_id(request_id)
+    job = await jobs.JOB_STORE.get(job_id, owner_id=owner_id)
+    if job is None or not isinstance(job.result, dict):
+        raise ReportNotFoundError(job_id)
+    return dict(job.result)
+
+
+async def get_analysis_result_for_report_by_request_id(request_id: str, *, owner_id: str) -> dict[str, Any]:
+    """Return a completed analysis payload through the migration alias."""
+
+    job = await jobs.JOB_STORE.get_by_request_id(request_id, owner_id=owner_id)
     if job is None or not isinstance(job.result, dict):
         raise ReportNotFoundError(request_id)
     return dict(job.result)

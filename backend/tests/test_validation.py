@@ -187,6 +187,7 @@ def _restore_test_config(monkeypatch):
     monkeypatch.setenv("DEEP_THINK_LLM", _GOOGLE_DEEP_LLM)
     monkeypatch.setenv("QUICK_THINK_LLM", _GOOGLE_QUICK_LLM)
     monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "false")
+    monkeypatch.delenv("OWNER_SESSION_SECRET", raising=False)
     monkeypatch.delenv("CORS_ORIGINS", raising=False)
 
     import config
@@ -198,6 +199,7 @@ def test_production_defaults_require_api_key_and_rate_limit(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("OWNER_SESSION_SECRET", "test-owner-session-secret")
     monkeypatch.delenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", raising=False)
 
     import config
@@ -275,6 +277,21 @@ def test_production_requires_api_key(monkeypatch):
         _restore_test_config(monkeypatch)
 
 
+def test_production_requires_owner_session_secret(monkeypatch):
+    import config
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
+    monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.delenv("OWNER_SESSION_SECRET", raising=False)
+
+    try:
+        with pytest.raises(ValueError, match="OWNER_SESSION_SECRET must be configured in production"):
+            importlib.reload(config)
+    finally:
+        _restore_test_config(monkeypatch)
+
+
 def test_wildcard_cors_is_rejected(monkeypatch):
     import config
 
@@ -291,6 +308,7 @@ def test_wildcard_cors_is_rejected(monkeypatch):
 def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("OWNER_SESSION_SECRET", "test-owner-session-secret")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com, https://admin.example.com")
 
     import config
@@ -305,6 +323,7 @@ def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
 def test_production_logs_warning_when_api_key_requirement_is_disabled(monkeypatch, caplog):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("OWNER_SESSION_SECRET", "test-owner-session-secret")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "false")
 
@@ -347,4 +366,3 @@ def test_hk_suffix_ticker_is_rejected():
 
     assert exc_info.value.status_code == 400
     assert "ticker" in exc_info.value.details["fields"]
-

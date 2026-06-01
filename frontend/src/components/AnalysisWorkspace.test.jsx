@@ -1,7 +1,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AnalysisWorkspace from './AnalysisWorkspace';
 
@@ -29,7 +29,7 @@ function renderWorkspace(
           }
         />
         <Route
-          path="/analysis/:requestId"
+          path="/analysis/:resourceId"
           element={
             <AnalysisWorkspace
               FormComponent={FormComponent}
@@ -45,9 +45,15 @@ function renderWorkspace(
 }
 
 describe('AnalysisWorkspace history storage', () => {
+  beforeEach(() => {
+    sessionStorage.setItem('_ta_owner_token', 'test-owner-token');
+    sessionStorage.setItem('_ta_owner_token_expires_at', String(Math.floor(Date.now() / 1000) + 3600));
+  });
+
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -171,13 +177,14 @@ describe('AnalysisWorkspace history storage', () => {
     });
   });
 
-  it('navigates to the request URL when a result arrives', async () => {
+  it('navigates to the canonical job URL when a result arrives', async () => {
     function FullForm({ onResult }) {
       return (
         <button
           type="button"
           onClick={() =>
             onResult({
+              job_id: 'job-nav',
               request_id: 'request-nav',
               ticker: 'AAPL',
               trade_date: '2026-05-14',
@@ -195,7 +202,7 @@ describe('AnalysisWorkspace history storage', () => {
     fireEvent.click(screen.getByRole('button', { name: /emit full/i }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('location').textContent).toBe('/analysis/request-nav');
+      expect(screen.getByTestId('location').textContent).toBe('/analysis/job-nav');
     });
   });
 
@@ -244,11 +251,11 @@ describe('AnalysisWorkspace history storage', () => {
       return null;
     }
 
-    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/request-backend');
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/job-1');
 
     expect(await screen.findByText('MSFT')).toBeTruthy();
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/analysis/request-backend'),
+      expect.stringContaining('/analysis/jobs/job-1'),
       expect.any(Object)
     );
     expect(localStorage.getItem('analysis-history-test:result:request-backend')).toBeTruthy();

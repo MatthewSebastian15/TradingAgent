@@ -25,6 +25,7 @@ from routes.analysis import shutdown_executor
 from routes.market import router as market_router
 from routes.news import include_news_routes
 from routes.reports import router as reports_router
+from routes.session import router as session_router
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ app.add_middleware(
         "Last-Event-ID",
         "x-api-key",
         "Authorization",
-        "x-session-id",
+        "x-owner-token",
     ],
 )
 
@@ -115,6 +116,7 @@ app.include_router(analysis_router, prefix="/api")
 app.include_router(market_router, prefix="/api")
 include_news_routes(app, prefix="/api", is_development=IS_DEVELOPMENT)
 app.include_router(reports_router, prefix="/api")
+app.include_router(session_router, prefix="/api")
 
 
 @app.get("/health", tags=["ops"])

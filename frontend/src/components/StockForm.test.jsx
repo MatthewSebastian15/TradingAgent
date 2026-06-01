@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import StockForm from './StockForm';
 import StockFormMock from './StockFormMock';
@@ -15,8 +15,14 @@ function callbacks() {
 }
 
 describe('StockForm cleanup', () => {
+  beforeEach(() => {
+    sessionStorage.setItem('_ta_owner_token', 'test-owner-token');
+    sessionStorage.setItem('_ta_owner_token_expires_at', String(Math.floor(Date.now() / 1000) + 3600));
+  });
+
   afterEach(() => {
     cleanup();
+    sessionStorage.clear();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });

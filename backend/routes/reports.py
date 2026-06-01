@@ -11,6 +11,7 @@ from services.report_service import (
     analysis_report_filename,
     build_report_context,
     get_analysis_result_for_report,
+    get_analysis_result_for_report_by_request_id,
     render_analysis_report_html,
     render_analysis_report_pdf,
 )
@@ -39,23 +40,39 @@ def _pdf_response_from_result(result: dict[str, Any]) -> Response:
     )
 
 
-@router.get("/analysis/{request_id}/report.html", response_class=HTMLResponse)
-@router.get("/analysis/jobs/{request_id}/report.html", response_class=HTMLResponse)
-async def get_analysis_report_html(request_id: str, request: Request) -> HTMLResponse:
+@router.get("/analysis/jobs/{job_id}/report.html", response_class=HTMLResponse)
+async def get_analysis_report_html(job_id: str, request: Request) -> HTMLResponse:
     """Preview an existing completed analysis result as a professional HTML report."""
 
-    async with limit_request(request, request_policy()):
-        result = await get_analysis_result_for_report(request_id)
+    async with limit_request(request, request_policy()) as lease:
+        result = await get_analysis_result_for_report(job_id, owner_id=lease.identifier)
         return _html_response_from_result(result)
 
 
-@router.get("/analysis/{request_id}/report.pdf")
-@router.get("/analysis/jobs/{request_id}/report.pdf")
-async def get_analysis_report_pdf(request_id: str, request: Request) -> Response:
+@router.get("/analysis/jobs/{job_id}/report.pdf")
+async def get_analysis_report_pdf(job_id: str, request: Request) -> Response:
     """Download an existing completed analysis result as a PDF report."""
 
-    async with limit_request(request, request_policy()):
-        result = await get_analysis_result_for_report(request_id)
+    async with limit_request(request, request_policy()) as lease:
+        result = await get_analysis_result_for_report(job_id, owner_id=lease.identifier)
+        return _pdf_response_from_result(result)
+
+
+@router.get("/analysis/{request_id}/report.html", response_class=HTMLResponse, deprecated=True, include_in_schema=False)
+async def get_analysis_report_html_alias(request_id: str, request: Request) -> HTMLResponse:
+    """Preview a report through the owner-checked request_id migration alias."""
+
+    async with limit_request(request, request_policy()) as lease:
+        result = await get_analysis_result_for_report_by_request_id(request_id, owner_id=lease.identifier)
+        return _html_response_from_result(result)
+
+
+@router.get("/analysis/{request_id}/report.pdf", deprecated=True, include_in_schema=False)
+async def get_analysis_report_pdf_alias(request_id: str, request: Request) -> Response:
+    """Download a report through the owner-checked request_id migration alias."""
+
+    async with limit_request(request, request_policy()) as lease:
+        result = await get_analysis_result_for_report_by_request_id(request_id, owner_id=lease.identifier)
         return _pdf_response_from_result(result)
 
 

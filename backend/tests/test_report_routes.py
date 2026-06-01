@@ -4,6 +4,9 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
+from owner_session import issue_owner_session, owner_identifier
+
+_TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
 
 def _cache_key(ticker: str = "NVDA") -> AnalysisCacheKey:
@@ -68,26 +71,26 @@ def _result(**overrides):
     return result
 
 
-def _store_with_result(result: dict) -> AnalysisJobStore:
+def _store_with_result(result: dict) -> tuple[AnalysisJobStore, str]:
     async def main():
         store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
         job = await store.create(
-            owner_id="route-test",
+            owner_id=_TEST_OWNER_IDENTIFIER,
             request_id=result["request_id"],
             cache_key=_cache_key(result.get("ticker", "NVDA")),
             payload={"ticker": result.get("ticker", "NVDA"), "trade_date": result.get("trade_date", "2026-05-26")},
         )
         await job.complete(result)
-        return store
+        return store, job.id
 
     return asyncio.run(main())
 
 
 def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypatch):
-    store = _store_with_result(_result())
+    store, job_id = _store_with_result(_result())
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
 
-    response = client.get("/api/analysis/jobs/rid-report-1/report.html")
+    response = client.get(f"/api/analysis/jobs/{job_id}/report.html")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
@@ -105,7 +108,7 @@ def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypat
 
 
 def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(client, monkeypatch):
-    store = _store_with_result(_result(ticker="BBCA.JK", market="ID", request_id="rid-report-pdf"))
+    store, job_id = _store_with_result(_result(ticker="BBCA.JK", market="ID", request_id="rid-report-pdf"))
     rendered_report = {}
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
     monkeypatch.setattr(
@@ -113,7 +116,7 @@ def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(clien
         lambda report: rendered_report.update(report) or b"%PDF-1.4\nmock",
     )
 
-    response = client.get("/api/analysis/jobs/rid-report-pdf/report.pdf")
+    response = client.get(f"/api/analysis/jobs/{job_id}/report.pdf")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
@@ -121,8 +124,6 @@ def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(clien
     assert "TradingAgent_BBCA.JK_2026-05-26.pdf" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
     assert "automated AI-assisted analysis engine" in rendered_report["disclaimer"]
-
-
 
 
 def test_post_html_report_renders_from_payload(client):
@@ -152,18 +153,33 @@ def test_report_endpoint_returns_404_for_missing_request_id(client):
     assert response.json()["error"]["code"] == "report_not_found"
 
 
+def test_report_endpoints_are_bound_to_owner(client, monkeypatch):
+    store, job_id = _store_with_result(_result(request_id="rid-owner-report"))
+    monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
+    other_token = issue_owner_session()["owner_token"]
+    other_headers = {"x-owner-token": other_token}
+
+    canonical = client.get(f"/api/analysis/jobs/{job_id}/report.html")
+    wrong_canonical = client.get(f"/api/analysis/jobs/{job_id}/report.html", headers=other_headers)
+    wrong_alias = client.get("/api/analysis/rid-owner-report/report.html", headers=other_headers)
+
+    assert canonical.status_code == 200
+    assert wrong_canonical.status_code == 404
+    assert wrong_alias.status_code == 404
+
+
 def test_report_endpoint_rejects_global_legacy_result(client, monkeypatch):
-    store = _store_with_result(_result(request_id="rid-global", market="GLOBAL", ticker="700.HK"))
+    store, job_id = _store_with_result(_result(request_id="rid-global", market="GLOBAL", ticker="700.HK"))
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
 
-    response = client.get("/api/analysis/jobs/rid-global/report.html")
+    response = client.get(f"/api/analysis/jobs/{job_id}/report.html")
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "unsupported_report_market"
 
 
 def test_hold_report_does_not_render_actionable_trade_levels(client, monkeypatch):
-    store = _store_with_result(
+    store, job_id = _store_with_result(
         _result(
             request_id="rid-hold",
             final_decision="Hold",
@@ -175,7 +191,7 @@ def test_hold_report_does_not_render_actionable_trade_levels(client, monkeypatch
     )
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
 
-    response = client.get("/api/analysis/jobs/rid-hold/report.html")
+    response = client.get(f"/api/analysis/jobs/{job_id}/report.html")
 
     assert response.status_code == 200
     assert "No actionable trade plan is available" in response.text
@@ -185,7 +201,7 @@ def test_hold_report_does_not_render_actionable_trade_levels(client, monkeypatch
 
 
 def test_html_report_supports_indonesian_utf8_content(client, monkeypatch):
-    store = _store_with_result(
+    store, job_id = _store_with_result(
         _result(
             request_id="rid-id-utf8",
             ticker="BBCA.JK",
@@ -195,7 +211,7 @@ def test_html_report_supports_indonesian_utf8_content(client, monkeypatch):
     )
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
 
-    response = client.get("/api/analysis/jobs/rid-id-utf8/report.html")
+    response = client.get(f"/api/analysis/jobs/{job_id}/report.html")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
@@ -231,11 +247,11 @@ def test_pdf_report_returns_clear_error_when_weasyprint_unavailable(monkeypatch)
 
 
 def test_concurrent_html_report_export_for_same_request_id(client, monkeypatch):
-    store = _store_with_result(_result(request_id="rid-concurrent"))
+    store, job_id = _store_with_result(_result(request_id="rid-concurrent"))
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
 
     def fetch_report():
-        return client.get("/api/analysis/jobs/rid-concurrent/report.html")
+        return client.get(f"/api/analysis/jobs/{job_id}/report.html")
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         responses = list(pool.map(lambda _: fetch_report(), range(8)))
@@ -245,7 +261,7 @@ def test_concurrent_html_report_export_for_same_request_id(client, monkeypatch):
 
 
 def test_report_html_escapes_user_supplied_fields(client, monkeypatch):
-    store = _store_with_result(
+    store, job_id = _store_with_result(
         _result(
             request_id="rid-xss",
             ticker="<script>alert(1)</script>",
@@ -254,7 +270,7 @@ def test_report_html_escapes_user_supplied_fields(client, monkeypatch):
     )
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
 
-    response = client.get("/api/analysis/jobs/rid-xss/report.html")
+    response = client.get(f"/api/analysis/jobs/{job_id}/report.html")
 
     assert response.status_code == 200
     assert "<script>" not in response.text.lower()
@@ -266,16 +282,17 @@ def test_report_endpoint_returns_404_for_expired_or_unfinished_result(client, mo
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
 
     async def create_unfinished_job():
-        await store.create(
-            owner_id="route-test",
+        job = await store.create(
+            owner_id=_TEST_OWNER_IDENTIFIER,
             request_id="rid-unfinished",
             cache_key=_cache_key("MSFT"),
             payload={"ticker": "MSFT", "trade_date": "2026-05-26"},
         )
+        return job.id
 
-    asyncio.run(create_unfinished_job())
+    job_id = asyncio.run(create_unfinished_job())
 
-    response = client.get("/api/analysis/jobs/rid-unfinished/report.html")
+    response = client.get(f"/api/analysis/jobs/{job_id}/report.html")
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "report_not_found"

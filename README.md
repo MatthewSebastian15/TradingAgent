@@ -62,8 +62,8 @@ The `assets/` folder contains sample results for **Buy**, **Sell**, and **Hold**
                          │ GET  /api/analysis/jobs/{job_id}/events
                          │ GET  /api/analysis/jobs/{job_id}
                          │ GET  /api/analysis/{request_id}
-                         │ GET  /api/analysis/jobs/{request_id}/report.html
-                         │ GET  /api/analysis/jobs/{request_id}/report.pdf
+                         │ GET  /api/analysis/jobs/{job_id}/report.html
+                         │ GET  /api/analysis/jobs/{job_id}/report.pdf
                          │ DELETE /api/analysis/jobs/{job_id}
 ┌────────────────────────▼────────────────────────────────────────┐
 │ FastAPI Backend                                                 │
@@ -465,6 +465,8 @@ Docker development binding:
 
 If backend API key enforcement is enabled, set `BACKEND_API_KEY` in the host shell so nginx can inject `x-api-key` server-side. Do not put the backend API key in `VITE_*`, because all `VITE_*` values are visible in browser devtools.
 
+The browser calls `POST /api/session` through nginx and stores the signed `x-owner-token` value in `sessionStorage`. The shared nginx `x-api-key` authenticates the proxy service only. It does not identify the browser owner.
+
 ### Docker + Ollama
 
 ```bash
@@ -679,6 +681,8 @@ Legacy SSE endpoint. Runs the analysis with streamed progress without using the 
 | `CORS_ORIGINS` | Required in production | Explicit comma-separated origins. `*` is rejected. |
 | `API_KEY` | Required in production | Backend API key for `x-api-key` or `Authorization: Bearer`. |
 | `REQUIRE_API_KEY_FOR_RATE_LIMIT` | Recommended in production | If true, requests without a key are rejected. |
+| `OWNER_SESSION_SECRET` | Required in production | HMAC secret for signed browser owner sessions. |
+| `OWNER_SESSION_TTL_SECONDS` | No | Owner session TTL. Defaults to `ANALYSIS_JOB_TTL_SECONDS`. |
 | `TRUSTED_PROXY_HOSTS` | No | Reserved for trusted reverse proxies. Default is empty. |
 | `LLM_PROVIDER` | Yes | `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, or `ollama`. |
 | `DEEP_THINK_LLM` | Yes | Model for heavy reasoning stages. |
