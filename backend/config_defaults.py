@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
-from config_env import BASE_DIR, env, env_bool, env_int
+from config_env import BASE_DIR, env, env_bool, env_float, env_int
 
 logger = logging.getLogger("config")
 
@@ -155,6 +155,12 @@ DATA_VENDOR_CORE_STOCK_APIS = env("DATA_VENDOR_CORE_STOCK_APIS", "yfinance,alpha
 DATA_VENDOR_TECHNICAL_INDICATORS = env("DATA_VENDOR_TECHNICAL_INDICATORS", "yfinance,alpha_vantage")
 DATA_VENDOR_FUNDAMENTAL_DATA = env("DATA_VENDOR_FUNDAMENTAL_DATA", "yfinance,alpha_vantage")
 DATA_VENDOR_NEWS_DATA = env("DATA_VENDOR_NEWS_DATA", "marketaux,newsdata,yfinance,alpha_vantage")
+DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE = env_float(
+    "DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE",
+    0.35,
+    min_value=0,
+    max_value=1,
+)
 
 # Structured news providers
 MARKETAUX_API_KEY = env("MARKETAUX_API_KEY", "")

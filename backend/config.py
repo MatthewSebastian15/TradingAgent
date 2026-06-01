@@ -54,6 +54,7 @@ from config_defaults import (
     DATA_VENDOR_CORE_STOCK_APIS,
     DATA_VENDOR_FUNDAMENTAL_DATA,
     DATA_VENDOR_NEWS_DATA,
+    DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE,
     DATA_VENDOR_TECHNICAL_INDICATORS,
     DEBATE_CONFIDENCE_GAP,
     DEBATE_CONSENSUS_THRESHOLD,
@@ -144,6 +145,7 @@ class _BackendSettingsShim:
     data_vendor_technical_indicators = DATA_VENDOR_TECHNICAL_INDICATORS
     data_vendor_fundamental_data = DATA_VENDOR_FUNDAMENTAL_DATA
     data_vendor_news_data = DATA_VENDOR_NEWS_DATA
+    data_vendor_news_min_relevance_score = DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE
 
     @property
     def llm_provider(self):

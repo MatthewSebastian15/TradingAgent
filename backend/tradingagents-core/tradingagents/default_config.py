@@ -138,7 +138,7 @@ DEFAULT_CONFIG = {
     "max_news_per_vendor": int(_env("MAX_NEWS_PER_VENDOR") or "10"),
     "max_total_news_items": int(_env("MAX_TOTAL_NEWS_ITEMS") or "25"),
     "news_dedup_by": _env("NEWS_DEDUP_BY") or "url,title",
-    "news_min_relevance_score": float(_env("NEWS_MIN_RELEVANCE_SCORE") or "0.35"),
+    "news_min_relevance_score": float(_env("DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE") or "0.35"),
     "default_indonesia_suffix": _env("DEFAULT_INDONESIA_SUFFIX") or ".JK",
     "default_forex_exchange": _env("DEFAULT_FOREX_EXCHANGE") or "OANDA",
     "default_crypto_exchange": _env("DEFAULT_CRYPTO_EXCHANGE") or "BINANCE",

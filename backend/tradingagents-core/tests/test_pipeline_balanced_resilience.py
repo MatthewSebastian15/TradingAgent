@@ -365,6 +365,12 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
     from tradingagents.dataflows import interface
 
     attempts = []
+    price_csv = "\n".join(
+        [
+            "Date,Open,High,Low,Close,Volume",
+            "2026-05-01,10,11,9,10.5,1000",
+        ]
+    )
 
     monkeypatch.setattr(
         interface,
@@ -379,7 +385,7 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
         },
     )
     monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance")
-    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", lambda *args, **kwargs: "ok")
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", lambda *args, **kwargs: price_csv)
     monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
 
     def fake_retry(func, **kwargs):
@@ -388,7 +394,7 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
 
     monkeypatch.setattr(interface, "call_with_retry", fake_retry)
 
-    assert interface.route_to_vendor("get_stock_data", "AAPL", "2026-05-01", "2026-05-02") == "ok"
+    assert interface.route_to_vendor("get_stock_data", "AAPL", "2026-05-01", "2026-05-02") == price_csv
     assert attempts == [1]
 
 
