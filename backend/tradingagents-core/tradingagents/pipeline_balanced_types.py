@@ -65,6 +65,7 @@ class CollectedData:
     last_close_price_source: str | None = None
     company_profile: dict[str, Any] | None = None
     price_chart: dict[str, Any] | None = None
+    news_context: dict[str, Any] | None = None
     related_news: dict[str, Any] | None = None
     data_sources: dict[str, str] | None = None
     data_limitations: list[str] | None = None

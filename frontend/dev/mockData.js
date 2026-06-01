@@ -73,6 +73,59 @@ const MOCK_IDX_COMPANY_PROFILE = {
   ],
 };
 
+const MOCK_NEWS_CONTEXT = {
+  enabled: true,
+  ticker: 'NVDA',
+  company_name: 'NVIDIA Corporation',
+  window_days: 30,
+  providers_used: ['marketaux', 'newsdata'],
+  provider_status: {
+    marketaux: 'success',
+    newsdata: 'success',
+  },
+  articles_found: 2,
+  articles_used_in_prompt: 2,
+  average_sentiment: 'neutral_positive',
+  articles: [
+    {
+      provider: 'marketaux',
+      provider_article_id: 'mock-marketaux-1',
+      ticker: 'NVDA',
+      company_name: 'NVIDIA Corporation',
+      title: 'Mock earnings coverage supports a measured large-cap outlook',
+      summary:
+        'Synthetic MarketAux article used to verify normalized news rendering without spending vendor quota.',
+      url: 'https://example.com/mock-marketaux-news',
+      source: 'example-finance.test',
+      published_at: '2026-05-17T09:30:00Z',
+      sentiment_label: 'positive',
+      sentiment_score: 0.32,
+      relevance_score: 92,
+      relevance_reasons: ['exact_entity_symbol', 'company_name_in_title'],
+      entities: [{ symbol: 'NVDA', name: 'NVIDIA Corporation', match_score: 88.4 }],
+    },
+    {
+      provider: 'newsdata',
+      provider_article_id: 'mock-newsdata-1',
+      ticker: 'NVDA',
+      company_name: 'NVIDIA Corporation',
+      title: 'Mock market report tracks sector demand and valuation risk',
+      summary:
+        'Synthetic NewsData.io fallback article used to verify provider badges, summaries, and links.',
+      url: 'https://example.com/mock-newsdata-news',
+      source: 'example-market.test',
+      published_at: '2026-05-16T08:00:00Z',
+      sentiment_label: 'neutral',
+      sentiment_score: 0.04,
+      relevance_score: 76,
+      relevance_reasons: ['company_alias_in_summary'],
+      entities: [{ symbol: 'NVDA', name: 'NVIDIA Corporation' }],
+    },
+  ],
+  empty_reason: null,
+  cache: { hit: false },
+};
+
 export const MOCK_FINANCIAL_HIGHLIGHTS = {
   title: 'Key Financial Highlights',
   currency: 'USD',
@@ -485,6 +538,22 @@ function cloneMock(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function syncMockNews(news, ticker) {
+  const payload = cloneMock(news || MOCK_NEWS_CONTEXT);
+  payload.ticker = ticker;
+  payload.articles = Array.isArray(payload.articles)
+    ? payload.articles.map((article) => ({
+        ...article,
+        ticker,
+        entities: Array.isArray(article.entities)
+          ? article.entities.map((entity) => ({ ...entity, symbol: ticker }))
+          : [],
+      }))
+    : [];
+  payload.articles_found = payload.articles.length;
+  return payload;
+}
+
 function normalizeDataQuality(overrides = {}) {
   return {
     ...COMMON_MOCK_QUALITY,
@@ -557,6 +626,7 @@ function completeMockAnalysis(overrides = {}) {
     data_quality: COMMON_MOCK_QUALITY,
     financial_highlights: MOCK_FINANCIAL_HIGHLIGHTS,
     company_profile: MOCK_COMPANY_PROFILE,
+    news: MOCK_NEWS_CONTEXT,
     validation_warnings: [],
     agents_used: AGENTS_USED,
     llm_calls_used: 0,
@@ -579,6 +649,7 @@ function completeMockAnalysis(overrides = {}) {
     ...result,
     ...overrides,
     company_profile: overrides.company_profile || result.company_profile,
+    news: syncMockNews(overrides.news || result.news, overrides.ticker || result.ticker),
     price_chart: syncMockPriceChart(overrides.price_chart || result.price_chart, {
       ticker: overrides.ticker || result.ticker || 'BBCA.JK',
       tradeDate: overrides.trade_date || result.trade_date || '2026-05-30',
@@ -979,6 +1050,24 @@ export const MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE = completeMockAnalysis({
   investment_thesis: `UNVR.JK is presented as a consumer staples company with well-known brands, but this mock focuses on how the dashboard behaves when optional news enrichment is unavailable. The business matters now because staples names can look defensive, yet weak growth, margin pressure, or changing consumer demand can still produce poor stock performance. The main headwind in this scenario is uncertainty: price and trade validation are available, but news coverage is missing, so the final decision must stay conservative rather than pretending the information set is complete. The key numbers are current price at 2420, stop loss at 2600, take profit at 1880, volatility score at 63, and allocation effectively kept at zero for new exposure. The bear case says the stock should be avoided because the downside plan is valid and the unavailable news block reduces confidence in any bullish recovery story. The bull case is that consumer staples demand could stabilize and a missing provider result might simply be a data issue, not a business problem. The bear case wins because process reliability and price weakness matter more than a possible hidden catalyst. The action plan is to avoid new entry, keep the warning badges visible, respect 2600 as invalidation if tested, use 1880 only as the risk/reward target, and rerun analysis when news coverage returns. This longer mock narrative also verifies that the analysis card, saved result, recent analysis entry, HTML preview, and PDF export can carry a realistic paragraph without changing the underlying data shape. It keeps the same fields a real backend response would send, so debugging can focus on mapping, formatting, and validation behavior instead of wondering whether missing text is a rendering bug or just another avoidable contract mismatch.`,
   news_report:
     'Mock news report: no usable news was returned. The trade plan remains valid because news is optional and non-blocking.',
+  news: {
+    enabled: true,
+    ticker: 'UNVR.JK',
+    company_name: 'Unilever Indonesia',
+    window_days: 30,
+    providers_used: [],
+    provider_status: {
+      marketaux: 'unavailable',
+      newsdata: 'rate_limited',
+      yfinance: 'unavailable',
+    },
+    articles_found: 0,
+    articles_used_in_prompt: 0,
+    average_sentiment: null,
+    articles: [],
+    empty_reason: 'No relevant company-specific news was found.',
+    cache: { hit: false },
+  },
   data_quality: {
     trade_plan: 'valid',
     price_data: 'ok',
@@ -1217,6 +1306,7 @@ export function getMockAnalysisResponse(options = {}) {
     tradeDate: response.trade_date,
     months: normalizedHorizon,
   });
+  response.news = syncMockNews(response.news, response.ticker);
   response.mock = true;
   response.source = 'frontend/dev/mockData.js';
 

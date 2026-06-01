@@ -28,6 +28,8 @@ def test_analysis_summary_contract_includes_risk_engine_fields():
         "financial_highlights",
         "company_profile",
         "price_chart",
+        "news",
+        "news_context",
     }
 
     assert expected_fields.issubset(SUMMARY_FIELDS)

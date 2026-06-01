@@ -37,7 +37,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('Analisis')).toBeTruthy();
     expect(screen.getByText('EXECUTIVE SUMMARY')).toBeTruthy();
     expect(screen.getByText('Chart & Price').disabled).toBe(false);
-    expect(screen.getByText('News').disabled).toBe(true);
+    expect(screen.getByText('News').disabled).toBe(false);
     expect(screen.queryByText('COMPANY PROFILE')).toBeNull();
 
     fireEvent.click(screen.getByText('Profile'));
@@ -47,7 +47,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
   });
 
-  it('opens the Chart & Price tab and keeps News disabled', () => {
+  it('opens the Chart & Price tab and keeps News available', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
     fireEvent.click(screen.getByText('Chart & Price'));
@@ -56,8 +56,28 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('OHLC Candlestick')).toBeTruthy();
     expect(screen.getByText('Volume')).toBeTruthy();
     expect(screen.getByText('PRICE STATISTICS')).toBeTruthy();
-    expect(screen.getByText('News').disabled).toBe(true);
+    expect(screen.getByText('News').disabled).toBe(false);
     expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
+  });
+
+  it('opens the News tab and renders normalized provider articles', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('News'));
+
+    expect(screen.getByText('MARKET NEWS CONTEXT')).toBeTruthy();
+    expect(screen.getByText('marketaux: success')).toBeTruthy();
+    expect(screen.getByText('newsdata: success')).toBeTruthy();
+    expect(screen.getByText(/Mock earnings coverage supports/i)).toBeTruthy();
+  });
+
+  it('renders the News empty state when provider coverage is unavailable', () => {
+    render(<ResultCard result={MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('News'));
+
+    expect(screen.getByText('NEWS UNAVAILABLE')).toBeTruthy();
+    expect(screen.getByText('No relevant company-specific news was found.')).toBeTruthy();
   });
 
   it('renders Chart & Price empty state when chart data is unavailable', () => {

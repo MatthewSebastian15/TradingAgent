@@ -6,6 +6,7 @@ import MetricBox from './results/MetricBox';
 import NoticeBox from './results/NoticeBox';
 import SectionHeader from './results/SectionHeader';
 import ChartPriceTab from './results/tabs/ChartPriceTab';
+import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
 import ResultTabs from './results/tabs/ResultTabs';
 import { REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
@@ -526,7 +527,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
   const [thesisExpanded, setThesisExpanded] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [activeTab, setActiveTab] = useState('analisis');
-  const disabledTabs = ['news'];
+  const disabledTabs = [];
 
   if (!result) return null;
 
@@ -867,6 +868,8 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
       {activeTab === 'profile' && <ProfileTab profile={result.company_profile} />}
 
       {activeTab === 'chart_price' && <ChartPriceTab result={result} />}
+
+      {activeTab === 'news' && <NewsTab news={result.news || result.news_context} />}
     </div>
   );
 }

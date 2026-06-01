@@ -15,6 +15,7 @@ T = TypeVar("T")
 
 AGENT_LABELS = {
     "data_collection": "Data Collection",
+    "news_fetch": "News Providers",
     "data_quality": "Data Quality",
     "market_analyst": "Market Analyst",
     "news_analyst": "News + Social Analyst",
