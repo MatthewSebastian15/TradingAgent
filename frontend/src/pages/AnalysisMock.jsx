@@ -15,7 +15,6 @@ export default function AnalysisMock() {
       emptyDescription="Select a market tab, configure parameters on the left, and execute analysis to receive a structured trade decision."
       resultPathBase="/analysis.test"
       lookupResult={lookupMockResult}
-      lookupResultFirst
       mockReportExport
     />
   );

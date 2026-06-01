@@ -13,7 +13,8 @@ function LocationProbe() {
 function renderWorkspace(
   FormComponent,
   historyKey = 'analysis-history-test',
-  initialEntry = '/analysis'
+  initialEntry = '/analysis',
+  workspaceProps = {}
 ) {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
@@ -25,6 +26,7 @@ function renderWorkspace(
               FormComponent={FormComponent}
               historyKey={historyKey}
               emptyDescription="Empty"
+              {...workspaceProps}
             />
           }
         />
@@ -35,6 +37,7 @@ function renderWorkspace(
               FormComponent={FormComponent}
               historyKey={historyKey}
               emptyDescription="Empty"
+              {...workspaceProps}
             />
           }
         />
@@ -44,10 +47,67 @@ function renderWorkspace(
   );
 }
 
+function historySummary(overrides = {}) {
+  return {
+    schema_version: 2,
+    job_id: null,
+    request_id: null,
+    ticker: null,
+    market: null,
+    trade_date: null,
+    status: 'completed',
+    decision: null,
+    time_horizon_months: null,
+    analysis_created_at: null,
+    saved_at: expect.any(String),
+    ...overrides,
+  };
+}
+
+function completedJobResponse({
+  jobId = 'job-1',
+  requestId = 'request-backend',
+  ticker = 'MSFT',
+  result = {},
+} = {}) {
+  return new Response(
+    JSON.stringify({
+      job_id: jobId,
+      request_id: requestId,
+      status: 'completed',
+      result: {
+        request_id: requestId,
+        ticker,
+        market: 'US',
+        trade_date: '2026-05-14',
+        decision: 'Buy',
+        time_horizon_months: 1,
+        ...result,
+      },
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } }
+  );
+}
+
+function notFoundResponse() {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Analysis result was not found.',
+      },
+    }),
+    { status: 404, headers: { 'Content-Type': 'application/json' } }
+  );
+}
+
 describe('AnalysisWorkspace history storage', () => {
   beforeEach(() => {
     sessionStorage.setItem('_ta_owner_token', 'test-owner-token');
-    sessionStorage.setItem('_ta_owner_token_expires_at', String(Math.floor(Date.now() / 1000) + 3600));
+    sessionStorage.setItem(
+      '_ta_owner_token_expires_at',
+      String(Math.floor(Date.now() / 1000) + 3600)
+    );
   });
 
   afterEach(() => {
@@ -57,17 +117,25 @@ describe('AnalysisWorkspace history storage', () => {
     vi.restoreAllMocks();
   });
 
-  it('persists full debug responses by request_id', () => {
+  it('stores only version 2 summary fields for debug responses', () => {
     function DebugForm({ onResult }) {
       return (
         <button
           type="button"
           onClick={() =>
             onResult({
+              job_id: 'job-debug',
               request_id: 'debug-request',
               ticker: 'AAPL',
+              market: 'US',
               trade_date: '2026-05-14',
+              status: 'completed',
+              decision: 'Buy',
+              time_horizon_months: 2,
+              position_quantity: 10,
+              average_entry_price: 150,
               response_detail: 'debug',
+              executive_summary: 'Summary',
               raw_agent_state: { internal: true },
             })
           }
@@ -77,68 +145,30 @@ describe('AnalysisWorkspace history storage', () => {
       );
     }
 
-    renderWorkspace(DebugForm);
+    renderWorkspace(DebugForm, 'analysis-history-test', '/analysis', { resultPathBase: null });
     fireEvent.click(screen.getByRole('button', { name: /emit debug/i }));
 
     const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
-    const storedById = JSON.parse(
-      localStorage.getItem('analysis-history-test:result:debug-request')
-    );
-    expect(stored).toHaveLength(1);
-    expect(stored[0]).toMatchObject({
-      request_id: 'debug-request',
-      response_detail: 'debug',
-      raw_agent_state: { internal: true },
-    });
-    expect(storedById).toMatchObject({
-      request_id: 'debug-request',
-      response_detail: 'debug',
-      raw_agent_state: { internal: true },
-    });
+    expect(stored).toEqual([
+      historySummary({
+        job_id: 'job-debug',
+        request_id: 'debug-request',
+        ticker: 'AAPL',
+        market: 'US',
+        trade_date: '2026-05-14',
+        decision: 'Buy',
+        time_horizon_months: 2,
+        analysis_created_at: expect.any(String),
+      }),
+    ]);
+    expect(localStorage.getItem('analysis-history-test:result:debug-request')).toBeNull();
+    expect(stored[0]).not.toHaveProperty('position_quantity');
+    expect(stored[0]).not.toHaveProperty('average_entry_price');
+    expect(stored[0]).not.toHaveProperty('raw_agent_state');
+    expect(stored[0]).not.toHaveProperty('executive_summary');
   });
 
-  it('persists the full non-debug response', () => {
-    function FullForm({ onResult }) {
-      return (
-        <button
-          type="button"
-          onClick={() =>
-            onResult({
-              request_id: 'full-request',
-              ticker: 'AAPL',
-              trade_date: '2026-05-14',
-              response_detail: 'full',
-              decision: 'Buy',
-              executive_summary: 'Summary',
-              investment_thesis: 'Long thesis should be stored',
-              raw_agent_state: { internal: true },
-            })
-          }
-        >
-          Emit full
-        </button>
-      );
-    }
-
-    renderWorkspace(FullForm);
-    fireEvent.click(screen.getByRole('button', { name: /emit full/i }));
-
-    const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
-    expect(stored).toHaveLength(1);
-    expect(stored[0]).toMatchObject({
-      request_id: 'full-request',
-      ticker: 'AAPL',
-      trade_date: '2026-05-14',
-      response_detail: 'full',
-      decision: 'Buy',
-      executive_summary: 'Summary',
-      investment_thesis: 'Long thesis should be stored',
-      analysis_created_at: expect.any(String),
-      raw_agent_state: { internal: true },
-    });
-  });
-
-  it('persists every response without a hard history cap', () => {
+  it('persists every summary without a hard history cap', () => {
     function BatchForm({ onResult }) {
       return (
         <button
@@ -146,8 +176,10 @@ describe('AnalysisWorkspace history storage', () => {
           onClick={() => {
             for (let i = 0; i < 12; i += 1) {
               onResult({
+                job_id: `job-${i}`,
                 request_id: `request-${i}`,
                 ticker: `T${i}`,
+                market: 'US',
                 trade_date: `2026-05-${String(i + 1).padStart(2, '0')}`,
                 response_detail: 'summary',
                 decision: 'Hold',
@@ -160,17 +192,21 @@ describe('AnalysisWorkspace history storage', () => {
       );
     }
 
-    renderWorkspace(BatchForm);
+    renderWorkspace(BatchForm, 'analysis-history-test', '/analysis', { resultPathBase: null });
     fireEvent.click(screen.getByRole('button', { name: /emit batch/i }));
 
     const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
     expect(stored).toHaveLength(12);
     expect(stored[0]).toMatchObject({
+      schema_version: 2,
+      job_id: 'job-11',
       request_id: 'request-11',
       ticker: 'T11',
       trade_date: '2026-05-12',
     });
     expect(stored[11]).toMatchObject({
+      schema_version: 2,
+      job_id: 'job-0',
       request_id: 'request-0',
       ticker: 'T0',
       trade_date: '2026-05-01',
@@ -178,6 +214,10 @@ describe('AnalysisWorkspace history storage', () => {
   });
 
   it('navigates to the canonical job URL when a result arrives', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      completedJobResponse({ jobId: 'job-nav', requestId: 'request-nav', ticker: 'AAPL' })
+    );
+
     function FullForm({ onResult }) {
       return (
         <button
@@ -187,6 +227,7 @@ describe('AnalysisWorkspace history storage', () => {
               job_id: 'job-nav',
               request_id: 'request-nav',
               ticker: 'AAPL',
+              market: 'US',
               trade_date: '2026-05-14',
               response_detail: 'full',
               decision: 'Buy',
@@ -206,45 +247,65 @@ describe('AnalysisWorkspace history storage', () => {
     });
   });
 
-  it('loads a direct request URL from localStorage', async () => {
+  it('migrates old history entries and removes legacy payload keys', () => {
     localStorage.setItem(
-      'analysis-history-test:result:request-local',
-      JSON.stringify({
-        request_id: 'request-local',
-        ticker: 'AAPL',
-        trade_date: '2026-05-14',
-        response_detail: 'full',
-        decision: 'Buy',
-        saved_at: new Date().toISOString(),
-      })
+      'analysis-history-test',
+      JSON.stringify([
+        {
+          request_id: 'legacy-request',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-14',
+          decision: 'Buy',
+          saved_at: '2026-05-14T10:00:00.000Z',
+          position_quantity: 10,
+          average_entry_price: 150,
+          raw_agent_state: { internal: true },
+        },
+      ])
+    );
+    localStorage.setItem(
+      'analysis-history-test:result:legacy-request',
+      JSON.stringify({ raw_agent_state: { internal: true } })
     );
 
     function EmptyForm() {
       return null;
     }
 
-    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/request-local');
+    renderWorkspace(EmptyForm);
 
-    expect(await screen.findByText('AAPL')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('analysis-history-test'))).toEqual([
+      historySummary({
+        request_id: 'legacy-request',
+        ticker: 'AAPL',
+        market: 'US',
+        trade_date: '2026-05-14',
+        decision: 'Buy',
+        saved_at: '2026-05-14T10:00:00.000Z',
+      }),
+    ]);
+    expect(localStorage.getItem('analysis-history-test:result:legacy-request')).toBeNull();
   });
 
-  it('falls back to the backend when localStorage misses', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          job_id: 'job-1',
-          request_id: 'request-backend',
-          status: 'completed',
-          result: {
-            request_id: 'request-backend',
-            ticker: 'MSFT',
-            trade_date: '2026-05-14',
-            response_detail: 'full',
-            decision: 'Buy',
-          },
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
+  it('loads a direct URL from the backend and ignores legacy local payloads', async () => {
+    localStorage.setItem(
+      'analysis-history-test:result:job-1',
+      JSON.stringify({
+        job_id: 'job-1',
+        request_id: 'request-local',
+        ticker: 'AAPL',
+        raw_agent_state: { internal: true },
+      })
+    );
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      completedJobResponse({
+        result: {
+          position_quantity: 20,
+          average_entry_price: 200,
+          raw_agent_state: { internal: true },
+        },
+      })
     );
 
     function EmptyForm() {
@@ -258,21 +319,46 @@ describe('AnalysisWorkspace history storage', () => {
       expect.stringContaining('/analysis/jobs/job-1'),
       expect.any(Object)
     );
-    expect(localStorage.getItem('analysis-history-test:result:request-backend')).toBeTruthy();
+    expect(localStorage.getItem('analysis-history-test:result:job-1')).toBeNull();
+
+    const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
+    expect(stored).toEqual([
+      historySummary({
+        job_id: 'job-1',
+        request_id: 'request-backend',
+        ticker: 'MSFT',
+        market: 'US',
+        trade_date: '2026-05-14',
+        decision: 'Buy',
+        time_horizon_months: 1,
+        analysis_created_at: expect.any(String),
+      }),
+    ]);
+    expect(stored[0]).not.toHaveProperty('position_quantity');
+    expect(stored[0]).not.toHaveProperty('average_entry_price');
+    expect(stored[0]).not.toHaveProperty('raw_agent_state');
+  });
+
+  it('fetches the backend again after a browser reload', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => completedJobResponse());
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/job-1');
+    expect(await screen.findByText('MSFT')).toBeTruthy();
+    cleanup();
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/job-1');
+    expect(await screen.findByText('MSFT')).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('shows an expired message when backend lookup misses', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Analysis result was not found.',
-          },
-        }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
-      )
-    );
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => notFoundResponse());
 
     function EmptyForm() {
       return null;
@@ -318,7 +404,7 @@ describe('AnalysisWorkspace history storage', () => {
       return null;
     }
 
-    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis');
+    renderWorkspace(EmptyForm);
 
     expect(screen.queryByText('700.HK')).toBeNull();
     expect(screen.getByText('AAPL')).toBeTruthy();
@@ -326,5 +412,42 @@ describe('AnalysisWorkspace history storage', () => {
 
     const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
     expect(stored.map((item) => item.request_id)).toEqual(['us-request', 'id-request']);
+    expect(stored.every((item) => item.schema_version === 2)).toBe(true);
+  });
+
+  it('clears summary history and legacy payload keys from the browser', () => {
+    localStorage.setItem(
+      'analysis-history-test',
+      JSON.stringify([
+        {
+          schema_version: 2,
+          job_id: 'job-clear',
+          request_id: 'request-clear',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-14',
+          status: 'completed',
+          decision: 'Buy',
+          time_horizon_months: 1,
+          analysis_created_at: '2026-05-14T10:00:00.000Z',
+          saved_at: '2026-05-14T10:00:00.000Z',
+        },
+      ])
+    );
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm);
+    localStorage.setItem(
+      'analysis-history-test:result:request-clear',
+      JSON.stringify({ raw_agent_state: { internal: true } })
+    );
+    fireEvent.click(screen.getByRole('button', { name: /clear history/i }));
+
+    expect(localStorage.getItem('analysis-history-test')).toBeNull();
+    expect(localStorage.getItem('analysis-history-test:result:request-clear')).toBeNull();
+    expect(screen.queryByText('AAPL')).toBeNull();
   });
 });

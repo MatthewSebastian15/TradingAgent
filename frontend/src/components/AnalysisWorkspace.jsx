@@ -5,9 +5,10 @@ import AgentLog from './AgentLog';
 import Navbar from './Navbar';
 import ResultCard from './ResultCard';
 import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
-import { formatDateTimeLabel, formatPrice } from '../utils/formatting';
+import { formatDateTimeLabel } from '../utils/formatting';
 
 const HISTORY_PANEL_MAX_HEIGHT = 560;
+const HISTORY_SCHEMA_VERSION = 2;
 const HISTORY_TTL_DAYS = 30;
 const RESULT_EXPIRED_MESSAGE = 'Result expired. Please submit a new analysis.';
 
@@ -35,70 +36,105 @@ function isSupportedHistoryEntry(entry) {
   return entry && !isExpired(entry) && !isGlobalHistoryEntry(entry);
 }
 
-function resultStorageKey(historyKey, requestId) {
-  return `${historyKey}:result:${requestId}`;
+function legacyResultStoragePrefix(historyKey) {
+  return `${historyKey}:result:`;
 }
 
-function removeStoredResult(historyKey, entry) {
-  if (!entry?.request_id) return;
+function removeLegacyStoredResults(historyKey) {
   try {
-    localStorage.removeItem(resultStorageKey(historyKey, entry.request_id));
+    const prefix = legacyResultStoragePrefix(historyKey);
+    const keys = [];
+
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+
+    keys.forEach((key) => localStorage.removeItem(key));
   } catch {
     // Storage can be unavailable in private browsing or when quota is exceeded.
   }
 }
 
+function textOrNull(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function historyResourceId(entry) {
+  return textOrNull(entry?.job_id) || textOrNull(entry?.request_id);
+}
+
+function isSameHistoryEntry(left, right) {
+  return Boolean(
+    (left?.job_id && right?.job_id && left.job_id === right.job_id) ||
+    (left?.request_id && right?.request_id && left.request_id === right.request_id)
+  );
+}
+
+function toHistorySummary(entry) {
+  if (!isSupportedHistoryEntry(entry) || !historyResourceId(entry)) return null;
+
+  const horizon = Number(entry.time_horizon_months);
+
+  return {
+    schema_version: HISTORY_SCHEMA_VERSION,
+    job_id: textOrNull(entry.job_id),
+    request_id: textOrNull(entry.request_id),
+    ticker: textOrNull(entry.ticker),
+    market: textOrNull(entry.market),
+    trade_date: textOrNull(entry.trade_date),
+    status: textOrNull(entry.status) || 'completed',
+    decision: textOrNull(entry.decision),
+    time_horizon_months: [1, 2, 3].includes(horizon) ? horizon : null,
+    analysis_created_at: textOrNull(entry.analysis_created_at),
+    saved_at: textOrNull(entry.saved_at) || new Date().toISOString(),
+  };
+}
+
 function readHistory(historyKey) {
   try {
+    removeLegacyStoredResults(historyKey);
     const raw = localStorage.getItem(historyKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) {
+      localStorage.removeItem(historyKey);
+      return [];
+    }
 
-    const clean = parsed.filter(isSupportedHistoryEntry);
-    const removed = parsed.filter((entry) => entry && !isSupportedHistoryEntry(entry));
-
-    removed.forEach((entry) => removeStoredResult(historyKey, entry));
-    if (clean.length !== parsed.length) {
+    const clean = parsed.map(toHistorySummary).filter(Boolean);
+    if (JSON.stringify(clean) !== JSON.stringify(parsed)) {
       localStorage.setItem(historyKey, JSON.stringify(clean));
     }
 
     return clean;
   } catch {
+    try {
+      localStorage.removeItem(historyKey);
+    } catch {
+      // Storage can be unavailable in private browsing or when quota is exceeded.
+    }
     return [];
   }
 }
 
 function writeHistory(historyKey, entries) {
   try {
-    const clean = entries.filter(isSupportedHistoryEntry);
-    localStorage.setItem(historyKey, JSON.stringify(clean));
+    const clean = entries.map(toHistorySummary).filter(Boolean);
+    if (clean.length) {
+      localStorage.setItem(historyKey, JSON.stringify(clean));
+    } else {
+      localStorage.removeItem(historyKey);
+    }
   } catch {
     // Storage can be unavailable in private browsing or when quota is exceeded.
   }
 }
 
-function readStoredResult(historyKey, requestId) {
-  if (!requestId) return null;
-
+function clearHistory(historyKey) {
   try {
-    const raw = localStorage.getItem(resultStorageKey(historyKey, requestId));
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && isSupportedHistoryEntry(parsed)) return parsed;
-      localStorage.removeItem(resultStorageKey(historyKey, requestId));
-    }
-  } catch {
-    // Fall through to the history array for older saved results.
-  }
-
-  return readHistory(historyKey).find((entry) => entry?.request_id === requestId) || null;
-}
-
-function writeStoredResult(historyKey, entry) {
-  if (!entry?.request_id) return;
-  try {
-    localStorage.setItem(resultStorageKey(historyKey, entry.request_id), JSON.stringify(entry));
+    removeLegacyStoredResults(historyKey);
+    localStorage.removeItem(historyKey);
   } catch {
     // Storage can be unavailable in private browsing or when quota is exceeded.
   }
@@ -110,13 +146,17 @@ function withAnalysisCreatedAt(result) {
 }
 
 function saveToHistory(historyKey, result) {
-  if (!result || result.error || !result.request_id || !isSupportedHistoryEntry(result)) return;
+  if (!result || result.error) return;
 
-  const storedResult = { ...result, saved_at: result.saved_at || new Date().toISOString() };
+  const summary = toHistorySummary({
+    ...result,
+    saved_at: result.saved_at || new Date().toISOString(),
+  });
+  if (!summary) return;
+
   const history = readHistory(historyKey);
-  const deduped = history.filter((item) => item.request_id !== storedResult.request_id);
-  writeStoredResult(historyKey, storedResult);
-  writeHistory(historyKey, [storedResult, ...deduped]);
+  const deduped = history.filter((item) => !isSameHistoryEntry(item, summary));
+  writeHistory(historyKey, [summary, ...deduped]);
 }
 
 function decisionStyle(decision) {
@@ -133,12 +173,12 @@ function formatHistoryHorizon(months) {
   return `${value}M`;
 }
 
-function HistoryPanel({ currentTicker, historyKey, onSelect }) {
+function HistoryPanel({ currentResourceId, historyKey, onSelect }) {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
     setHistory(readHistory(historyKey));
-  }, [historyKey, currentTicker]);
+  }, [historyKey, currentResourceId]);
 
   if (!history.length) return null;
 
@@ -148,14 +188,28 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
         <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
           RECENT ANALYSES
         </span>
-        <span className="font-mono text-xs text-bloomberg-muted">{history.length}</span>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-xs text-bloomberg-muted">{history.length}</span>
+          <button
+            type="button"
+            onClick={() => {
+              clearHistory(historyKey);
+              setHistory([]);
+            }}
+            className="font-mono text-[10px] text-bloomberg-muted tracking-wider hover:text-bloomberg-white"
+          >
+            CLEAR HISTORY
+          </button>
+        </div>
       </div>
       <div className="overflow-y-auto" style={{ maxHeight: HISTORY_PANEL_MAX_HEIGHT }}>
         {history.map((item, index) => {
           const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
           return (
             <button
-              key={item.request_id || `${item.ticker || 'item'}-${item.trade_date || index}`}
+              key={
+                historyResourceId(item) || `${item.ticker || 'item'}-${item.trade_date || index}`
+              }
               onClick={() => onSelect(item)}
               className="w-full flex flex-col gap-3 px-4 py-3 border-b border-bloomberg-border last:border-b-0 hover:bg-bloomberg-surface transition-colors duration-150 text-left sm:flex-row sm:items-center sm:justify-between"
             >
@@ -176,11 +230,6 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
                 )}
               </div>
               <div className="flex items-center gap-3 self-stretch justify-between sm:self-auto sm:justify-end">
-                {item.price_target && (
-                  <span className="font-mono text-xs text-bloomberg-muted">
-                    {formatPrice(item.price_target, item.ticker)}
-                  </span>
-                )}
                 <span
                   className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(item.decision)}`}
                 >
@@ -196,7 +245,7 @@ function HistoryPanel({ currentTicker, historyKey, onSelect }) {
 }
 
 HistoryPanel.propTypes = {
-  currentTicker: PropTypes.string,
+  currentResourceId: PropTypes.string,
   historyKey: PropTypes.string.isRequired,
   onSelect: PropTypes.func.isRequired,
 };
@@ -257,7 +306,10 @@ async function fetchResultLookup(resourceId, signal) {
     signal,
   };
   const encodedResourceId = encodeURIComponent(resourceId);
-  const canonicalResponse = await fetch(buildApiUrl(`/analysis/jobs/${encodedResourceId}`), options);
+  const canonicalResponse = await fetch(
+    buildApiUrl(`/analysis/jobs/${encodedResourceId}`),
+    options
+  );
 
   if (canonicalResponse.ok || ![400, 404].includes(canonicalResponse.status)) {
     return canonicalResponse;
@@ -273,53 +325,29 @@ export default function AnalysisWorkspace({
   resultPathBase = '/analysis',
   lookupResult = null,
   enableReportExport = true,
-  lookupResultFirst = false,
   mockReportExport = false,
 }) {
   const navigate = useNavigate();
   const { resourceId } = useParams();
-  const shouldLookupBeforeStorage = Boolean(resourceId && lookupResult && lookupResultFirst);
-  const initialResult = shouldLookupBeforeStorage ? null : readStoredResult(historyKey, resourceId);
-  const [result, setResult] = useState(initialResult);
-  const [loading, setLoading] = useState(Boolean(resourceId && !initialResult));
-  const [status, setStatus] = useState(
-    resourceId && !initialResult ? 'Loading saved analysis...' : ''
-  );
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(Boolean(resourceId));
+  const [status, setStatus] = useState(resourceId ? 'Loading saved analysis...' : '');
   const [agentProgress, setAgentProgress] = useState(null);
 
   useEffect(() => {
     if (!resourceId) return undefined;
 
-    if (!lookupResultFirst) {
-      const stored = readStoredResult(historyKey, resourceId);
-      if (stored) {
-        setResult(stored);
-        setLoading(false);
-        setStatus('');
-        setAgentProgress(null);
-        return undefined;
-      }
-    }
-
     if (lookupResult) {
       let cancelled = false;
 
-      async function loadMockResult() {
+      async function loadLookupResult() {
+        setResult(null);
         setLoading(true);
         setStatus('Loading saved analysis...');
         setAgentProgress(null);
 
         try {
           const loadedResult = await lookupResult(resourceId);
-
-          if (!loadedResult && lookupResultFirst) {
-            const storedFallback = readStoredResult(historyKey, resourceId);
-            if (storedFallback) {
-              if (!cancelled) setResult(storedFallback);
-              return;
-            }
-          }
-
           if (!loadedResult) throw new Error(RESULT_EXPIRED_MESSAGE);
 
           const enrichedResult = withAnalysisCreatedAt(loadedResult);
@@ -336,24 +364,16 @@ export default function AnalysisWorkspace({
         }
       }
 
-      loadMockResult();
+      loadLookupResult();
       return () => {
         cancelled = true;
       };
     }
 
-    const stored = readStoredResult(historyKey, resourceId);
-    if (stored) {
-      setResult(stored);
-      setLoading(false);
-      setStatus('');
-      setAgentProgress(null);
-      return undefined;
-    }
-
     const controller = new AbortController();
 
     async function loadResult() {
+      setResult(null);
       setLoading(true);
       setStatus('Loading saved analysis...');
       setAgentProgress(null);
@@ -387,7 +407,7 @@ export default function AnalysisWorkspace({
 
     loadResult();
     return () => controller.abort();
-  }, [historyKey, lookupResult, lookupResultFirst, resourceId]);
+  }, [historyKey, lookupResult, resourceId]);
 
   function handleResult(nextResult) {
     if (!nextResult) {
@@ -400,7 +420,10 @@ export default function AnalysisWorkspace({
     setResult(enrichedResult);
     saveToHistory(historyKey, enrichedResult);
 
-    const nextPath = resultPath(resultPathBase, enrichedResult?.job_id || enrichedResult?.request_id);
+    const nextPath = resultPath(
+      resultPathBase,
+      enrichedResult?.job_id || enrichedResult?.request_id
+    );
     if (nextPath) navigate(nextPath);
   }
 
@@ -423,12 +446,10 @@ export default function AnalysisWorkspace({
 
             <div className="p-4">
               <HistoryPanel
-                currentTicker={result?.ticker}
+                currentResourceId={historyResourceId(result)}
                 historyKey={historyKey}
                 onSelect={(item) => {
-                  setResult(item);
-                  setLoading(false);
-                  const nextPath = resultPath(resultPathBase, item?.job_id || item?.request_id);
+                  const nextPath = resultPath(resultPathBase, historyResourceId(item));
                   if (nextPath) navigate(nextPath);
                 }}
               />
@@ -481,7 +502,6 @@ export default function AnalysisWorkspace({
   );
 }
 
-
 AnalysisWorkspace.propTypes = {
   FormComponent: PropTypes.elementType.isRequired,
   historyKey: PropTypes.string.isRequired,
@@ -489,6 +509,5 @@ AnalysisWorkspace.propTypes = {
   resultPathBase: PropTypes.string,
   lookupResult: PropTypes.func,
   enableReportExport: PropTypes.bool,
-  lookupResultFirst: PropTypes.bool,
   mockReportExport: PropTypes.bool,
 };
