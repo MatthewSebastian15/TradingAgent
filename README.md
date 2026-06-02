@@ -55,13 +55,14 @@ The `assets/` folder contains sample results for **Buy**, **Sell**, and **Hold**
 ┌─────────────────────────────────────────────────────────────────┐
 │ React/Vite Frontend                                             │
 │ Dev port: 3000                                                  │
-│ Routes: /home, /analysis, /analysis/:requestId                  │
+│ Routes: /home, /analysis, /analysis/:jobId                      │
 │ UI: US/ID market form, progress log, result card, report export │
 └────────────────────────┬────────────────────────────────────────┘
+                         │ POST /api/session
                          │ POST /api/analysis/jobs
                          │ GET  /api/analysis/jobs/{job_id}/events
                          │ GET  /api/analysis/jobs/{job_id}
-                         │ GET  /api/analysis/{request_id}
+                         │ GET  /api/analysis/{request_id} (deprecated alias)
                          │ GET  /api/analysis/jobs/{job_id}/report.html
                          │ GET  /api/analysis/jobs/{job_id}/report.pdf
                          │ DELETE /api/analysis/jobs/{job_id}
@@ -88,7 +89,6 @@ The `assets/` folder contains sample results for **Buy**, **Sell**, and **Hold**
 ```text
 TradingAgent/
 ├── README.md
-├── CHANGELOG.md
 ├── docker-compose.yml
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
@@ -179,7 +179,7 @@ TradingAgent/
 
 ## Requirements
 
-- Python **3.11 is recommended** for the backend, matching `Dockerfile.backend`.
+- Python **3.10, 3.11, and 3.12** are supported. Python **3.11 is recommended** for the backend and used by `Dockerfile.backend`.
 - Node.js **22 is recommended** for the frontend, matching `Dockerfile.frontend`.
 - At least one LLM API key for the selected provider, unless using local Ollama.
 - For local PDF export without Docker, WeasyPrint requires system dependencies. The Docker backend already installs these dependencies.
@@ -236,7 +236,7 @@ DATA_VENDOR_QUOTE_DATA=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_TECHNICAL_INDICATORS=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_FUNDAMENTAL_DATA=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_FINANCIAL_STATEMENTS=yfinance,alpha_vantage,finnhub
-DATA_VENDOR_NEWS_DATA=yfinance,finnhub,alpha_vantage
+DATA_VENDOR_NEWS_DATA=marketaux,newsdata,yfinance,finnhub,alpha_vantage
 DATA_VENDOR_GLOBAL_NEWS_DATA=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_SENTIMENT_DATA=finnhub,alpha_vantage
 DATA_VENDOR_SOCIAL_SENTIMENT=finnhub
@@ -252,7 +252,7 @@ DATA_VENDOR_INSIDER_DATA=finnhub,alpha_vantage,yfinance
 | Technical indicators | Calculated locally from OHLCV using local indicators. |
 | Fundamentals/profile/metrics | yfinance, Finnhub, Alpha Vantage based on routing. |
 | Financial statements | yfinance, Alpha Vantage, Finnhub based on routing. |
-| Company news | yfinance, Finnhub, Alpha Vantage based on routing. |
+| Company news | MarketAux, NewsData.io, yfinance, Finnhub, Alpha Vantage based on routing. |
 | Global/macro news | yfinance, Finnhub, Alpha Vantage based on routing. |
 | News sentiment | Finnhub, Alpha Vantage based on routing. |
 | Social sentiment | Finnhub when available. |
@@ -320,7 +320,7 @@ Important rules:
 |---|---:|---|
 | `fast` | 6 calls | Lower cost. The debate/risk committee may be skipped. If `max_debate_rounds > 1`, a request warning is returned. |
 | `balanced` | 9 calls | Default. Runs the full pipeline with the standard budget. |
-| `deep` | 9 calls | Same call budget, but with more patient retries. Useful when the provider often times out or rate-limits requests. |
+| `deep` | 12 calls | Higher budget with more debate rounds and more patient retries. Useful for deeper analysis when the provider capacity allows it. |
 
 `DEEP_THINK_LLM` is used for heavier stages such as Research Manager and Portfolio Manager. `QUICK_THINK_LLM` is used for lighter analyst/debate stages.
 
@@ -447,14 +447,21 @@ Run:
 docker compose up --build
 ```
 
+The main Compose build disables the mock UI. Use the mock overlay only when you need UI fixture data:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build
+```
+
 Default URLs:
 
 | Service | URL |
 |---|---|
 | Frontend | `http://localhost:3000` |
 | Backend | `http://localhost:8000` |
-| Mock UI | `http://localhost:3000/analysis.test` |
 | Health | `http://localhost:8000/health` |
+
+The mock overlay adds `http://localhost:3000/analysis.test`.
 
 Docker development binding:
 
@@ -468,6 +475,8 @@ If backend API key enforcement is enabled, set `BACKEND_API_KEY` in the host she
 The browser calls `POST /api/session` through nginx and stores the signed `x-owner-token` value in `sessionStorage`. The shared nginx `x-api-key` authenticates the proxy service only. It does not identify the browser owner.
 
 ### Docker + Ollama
+
+Compose pins the Ollama image to `ollama/ollama:0.24.0`.
 
 ```bash
 docker compose --profile ollama up --build
@@ -509,7 +518,7 @@ In production:
 - `CORS_ORIGINS` must be explicit and cannot be `*`.
 - `API_KEY` must be set.
 - `REQUIRE_API_KEY_FOR_RATE_LIMIT=true` is recommended/required for secure deployment.
-- `VITE_ENABLE_MOCK=false` is recommended for production builds.
+- `VITE_ENABLE_MOCK=false` is used by the main Compose build.
 
 Default development CORS when `CORS_ORIGINS` is empty:
 
@@ -526,14 +535,14 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,h
 | `/` | Redirects to `/home`. |
 | `/home` | Dashboard/landing page. |
 | `/analysis` | Main analysis page. |
-| `/analysis/:requestId` | Opens a result from local history/backend lookup when available. |
+| `/analysis/:jobId` | Opens a result from local history/backend lookup when available. |
 | `/analysis-live` | Redirects to `/analysis`. |
 | `/analysis.test` | Mock UI without real backend analysis. |
-| `/analysis.test/:requestId` | Mock result lookup. |
+| `/analysis.test/:resourceId` | Mock result lookup. |
 | `/analysis-mock` | Redirects to `/analysis.test` when the mock route is enabled. |
 | `*` | 404 fallback. |
 
-The mock route is always available during Vite development. In production builds, the mock route is only available if `VITE_ENABLE_MOCK=true` during build time.
+Mock routes are opt-in. The main Compose build uses `VITE_ENABLE_MOCK=false`. The mock overlay uses `VITE_ENABLE_MOCK=true`.
 
 ---
 
@@ -553,6 +562,10 @@ Example response:
   "provider": "deepseek"
 }
 ```
+
+### POST `/api/session`
+
+Creates a signed browser owner session after service authentication. The frontend stores the returned token in `sessionStorage` and sends it as `x-owner-token`.
 
 ### GET `/api/status`
 
@@ -636,7 +649,7 @@ Canonical endpoint for job status. It accepts only a real `job_id` and returns j
 
 ### GET `/api/analysis/{request_id}`
 
-Canonical endpoint for a completed final result. It accepts only a `request_id` and returns `404` until the job has a stored result.
+Deprecated migration alias for a completed final result. New clients must use `GET /api/analysis/jobs/{job_id}`. The alias still checks the signed browser owner session.
 
 ### DELETE `/api/analysis/jobs/{job_id}`
 
@@ -684,6 +697,12 @@ Legacy SSE endpoint. Runs the analysis with streamed progress without using the 
 | `OWNER_SESSION_SECRET` | Required in production | HMAC secret for signed browser owner sessions. |
 | `OWNER_SESSION_TTL_SECONDS` | No | Owner session TTL. Defaults to `ANALYSIS_JOB_TTL_SECONDS`. |
 | `TRUSTED_PROXY_HOSTS` | No | Reserved for trusted reverse proxies. Default is empty. |
+| `PIPELINE_TIMEOUT_SECONDS` / `PREFLIGHT_TIMEOUT_SECONDS` | No | Pipeline and ticker preflight timeouts. |
+| `PROCESS_POOL_*` / `DATA_COLLECTION_WORKERS` / `ANALYST_PARALLEL_WORKERS` / `DEFAULT_MAX_DEBATE_ROUNDS` | No | Worker and debate limits for backend analysis. |
+| `REQUEST_RATE_LIMIT_PER_MINUTE` / `STREAM_RATE_LIMIT_PER_MINUTE` / `MAX_CONCURRENT_*` / `REQUEST_BODY_MAX_BYTES` | No | Request, stream, concurrency, and body-size limits. |
+| `CACHE_*` / `ANALYSIS_RESULT_CACHE_*` / `ANALYSIS_JOB_*` / `DATA_CACHE_*` | No | Result, job, and market-data cache settings. |
+| `LLM_TIMEOUT_SECONDS` / `LLM_MAX_RETRIES` / `PROVIDER_SDK_MAX_RETRIES` / `TOOL_*` | No | LLM and tool resilience settings. |
+| `XDG_CACHE_HOME` / `YFINANCE_CACHE_DIR` / `YFINANCE_TICKER_CACHE_MAX_ENTRIES` / `TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS` | No | Runtime cache paths, yfinance ticker cache size, and abandoned timeout-call limit. |
 | `LLM_PROVIDER` | Yes | `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, or `ollama`. |
 | `DEEP_THINK_LLM` | Yes | Model for heavy reasoning stages. |
 | `QUICK_THINK_LLM` | Yes | Model for fast/analyst/debate stages. |
@@ -715,11 +734,13 @@ Legacy SSE endpoint. Runs the analysis with streamed progress without using the 
 
 | Variable | Example default | Description |
 |---|---|---|
-| `VITE_API_BASE_URL` | `http://localhost:8000` | Backend base URL. If empty, the frontend uses relative `/api/*`. |
+| `VITE_API_BASE_URL` | `/api` | Backend base URL. Docker/Nginx uses relative `/api/*`. |
 | `VITE_API_URL` | Empty | Legacy alias. Use `VITE_API_BASE_URL` for new configuration. |
+| `VITE_DEV_HOST` | `127.0.0.1` | Vite development and preview host. |
+| `VITE_DEV_PORT` | `3000` | Vite development and preview port. |
 | `VITE_CLOCK_TIME_ZONE` | `Asia/Jakarta` | Navbar clock timezone. |
 | `VITE_CLOCK_LABEL` | `WIB` | Navbar clock label. |
-| `VITE_ENABLE_MOCK` | `true` | Enables the mock route in production builds. |
+| `VITE_ENABLE_MOCK` | `false` | Enables mock routes when explicitly set to `true` before build or local Vite startup. |
 
 ---
 
