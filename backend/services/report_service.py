@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import UTC, datetime
@@ -11,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from errors import ApiError, sanitize_message
 from routes import jobs
+from services.analysis_repository import get_analysis_repository
 from services.report_disclaimer import REPORT_DISCLAIMER
 
 logger = logging.getLogger(__name__)
@@ -72,18 +74,32 @@ async def get_analysis_result_for_report(job_id: str, *, owner_id: str) -> dict[
     """Return a completed analysis payload by canonical job_id."""
 
     job = await jobs.JOB_STORE.get(job_id, owner_id=owner_id)
-    if job is None or not isinstance(job.result, dict):
+    if job is not None and isinstance(job.result, dict):
+        return dict(job.result)
+    if await jobs.JOB_STORE.get(job_id) is not None:
         raise ReportNotFoundError(job_id)
-    return dict(job.result)
+
+    repository = get_analysis_repository()
+    result = await asyncio.to_thread(repository.get_analysis_by_job_id, job_id)
+    if isinstance(result, dict):
+        return result
+    raise ReportNotFoundError(job_id)
 
 
 async def get_analysis_result_for_report_by_request_id(request_id: str, *, owner_id: str) -> dict[str, Any]:
     """Return a completed analysis payload through the migration alias."""
 
     job = await jobs.JOB_STORE.get_by_request_id(request_id, owner_id=owner_id)
-    if job is None or not isinstance(job.result, dict):
+    if job is not None and isinstance(job.result, dict):
+        return dict(job.result)
+    if await jobs.JOB_STORE.get_by_request_id(request_id) is not None:
         raise ReportNotFoundError(request_id)
-    return dict(job.result)
+
+    repository = get_analysis_repository()
+    result = await asyncio.to_thread(repository.get_analysis, request_id)
+    if isinstance(result, dict):
+        return result
+    raise ReportNotFoundError(request_id)
 
 
 def validate_report_scope(result: dict[str, Any]) -> None:

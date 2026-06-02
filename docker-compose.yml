@@ -18,6 +18,7 @@ services:
       XDG_CACHE_HOME: /root/.tradingagents/cache
       YFINANCE_CACHE_DIR: /root/.tradingagents/cache/py-yfinance
       ANALYSIS_JOB_CACHE_DB_PATH: /root/.tradingagents/cache/analysis_jobs.sqlite3
+      ANALYSIS_DB_PATH: /root/.tradingagents/cache/analysis_history.sqlite3
       DATA_CACHE_DB_PATH: /root/.tradingagents/cache/market_data.sqlite3
     ports:
       - "127.0.0.1:8000:8000"

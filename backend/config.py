@@ -28,6 +28,9 @@ from config_defaults import (
     ANALYSIS_DEPTH_CONFIG,
     ANALYSIS_DEPTH_LLM_BUDGETS,
     ANALYSIS_DEPTHS,
+    ANALYSIS_DB_PATH,
+    ANALYSIS_HISTORY_DEFAULT_LIMIT,
+    ANALYSIS_HISTORY_MAX_ROWS,
     ANALYSIS_JOB_CACHE_DB_PATH,
     ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
     ANALYSIS_JOB_MAX_ACTIVE,
@@ -137,6 +140,9 @@ class _BackendSettingsShim:
     cache_max_entries = CACHE_MAX_ENTRIES
     analysis_result_cache_ttl_seconds = ANALYSIS_RESULT_CACHE_TTL_SECONDS
     analysis_result_cache_max_entries = ANALYSIS_RESULT_CACHE_MAX_ENTRIES
+    analysis_db_path = ANALYSIS_DB_PATH
+    analysis_history_max_rows = ANALYSIS_HISTORY_MAX_ROWS
+    analysis_history_default_limit = ANALYSIS_HISTORY_DEFAULT_LIMIT
     analysis_job_ttl_seconds = ANALYSIS_JOB_TTL_SECONDS
     analysis_job_cache_db_path = ANALYSIS_JOB_CACHE_DB_PATH
     owner_session_secret = OWNER_SESSION_SECRET

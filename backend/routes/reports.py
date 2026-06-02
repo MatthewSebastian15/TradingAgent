@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any
 from urllib.parse import quote
 
@@ -7,6 +9,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
 from rate_limiter import limit_request, request_policy
+from services.analysis_repository import get_analysis_repository
 from services.report_service import (
     analysis_report_filename,
     build_report_context,
@@ -17,6 +20,22 @@ from services.report_service import (
 )
 
 router = APIRouter(tags=["reports"])
+logger = logging.getLogger(__name__)
+
+
+async def _mark_exported_best_effort(result: dict[str, Any], export_type: str) -> None:
+    request_id = str(result.get("request_id") or "").strip()
+    if not request_id:
+        return
+    try:
+        repository = get_analysis_repository()
+        await asyncio.to_thread(repository.mark_exported, request_id, export_type)
+    except Exception:
+        logger.error(
+            "Failed to record analysis report export",
+            extra={"event": "analysis_report_audit_failed", "request_id": request_id, "export_type": export_type},
+            exc_info=True,
+        )
 
 
 def _html_response_from_result(result: dict[str, Any]) -> HTMLResponse:
@@ -46,7 +65,9 @@ async def get_analysis_report_html(job_id: str, request: Request) -> HTMLRespons
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report(job_id, owner_id=lease.identifier)
-        return _html_response_from_result(result)
+        response = _html_response_from_result(result)
+        await _mark_exported_best_effort(result, "html")
+        return response
 
 
 @router.get("/analysis/jobs/{job_id}/report.pdf")
@@ -55,7 +76,9 @@ async def get_analysis_report_pdf(job_id: str, request: Request) -> Response:
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report(job_id, owner_id=lease.identifier)
-        return _pdf_response_from_result(result)
+        response = _pdf_response_from_result(result)
+        await _mark_exported_best_effort(result, "pdf")
+        return response
 
 
 @router.get("/analysis/{request_id}/report.html", response_class=HTMLResponse, deprecated=True, include_in_schema=False)
@@ -64,7 +87,9 @@ async def get_analysis_report_html_alias(request_id: str, request: Request) -> H
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report_by_request_id(request_id, owner_id=lease.identifier)
-        return _html_response_from_result(result)
+        response = _html_response_from_result(result)
+        await _mark_exported_best_effort(result, "html")
+        return response
 
 
 @router.get("/analysis/{request_id}/report.pdf", deprecated=True, include_in_schema=False)
@@ -73,7 +98,9 @@ async def get_analysis_report_pdf_alias(request_id: str, request: Request) -> Re
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report_by_request_id(request_id, owner_id=lease.identifier)
-        return _pdf_response_from_result(result)
+        response = _pdf_response_from_result(result)
+        await _mark_exported_best_effort(result, "pdf")
+        return response
 
 
 @router.post("/analysis/report.html", response_class=HTMLResponse)
@@ -85,7 +112,10 @@ async def post_analysis_report_html(result: dict[str, Any], request: Request) ->
     """
 
     async with limit_request(request, request_policy()):
-        return _html_response_from_result(dict(result))
+        result = dict(result)
+        response = _html_response_from_result(result)
+        await _mark_exported_best_effort(result, "html")
+        return response
 
 
 @router.post("/analysis/report.pdf")
@@ -93,4 +123,7 @@ async def post_analysis_report_pdf(result: dict[str, Any], request: Request) -> 
     """Download a PDF report from an analysis payload supplied by the client."""
 
     async with limit_request(request, request_policy()):
-        return _pdf_response_from_result(dict(result))
+        result = dict(result)
+        response = _pdf_response_from_result(result)
+        await _mark_exported_best_effort(result, "pdf")
+        return response

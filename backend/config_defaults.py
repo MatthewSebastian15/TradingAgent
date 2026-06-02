@@ -127,6 +127,12 @@ ANALYSIS_JOB_CACHE_DB_PATH = env(
     "ANALYSIS_JOB_CACHE_DB_PATH",
     str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3"),
 )
+ANALYSIS_DB_PATH = env(
+    "ANALYSIS_DB_PATH",
+    str(BASE_DIR / ".cache" / "analysis_history.sqlite3"),
+)
+ANALYSIS_HISTORY_MAX_ROWS = env_int("ANALYSIS_HISTORY_MAX_ROWS", 1000, min_value=1)
+ANALYSIS_HISTORY_DEFAULT_LIMIT = env_int("ANALYSIS_HISTORY_DEFAULT_LIMIT", 25, min_value=1)
 OWNER_SESSION_SECRET = env("OWNER_SESSION_SECRET", "")
 if IS_PRODUCTION and not OWNER_SESSION_SECRET:
     raise ValueError("OWNER_SESSION_SECRET must be configured in production.")

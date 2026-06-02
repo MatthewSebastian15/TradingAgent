@@ -22,6 +22,7 @@ from errors import (
 from logging_config import RequestIdMiddleware, configure_logging
 from routes.analysis import router as analysis_router
 from routes.analysis import shutdown_executor
+from routes.analysis_history import router as analysis_history_router
 from routes.market import router as market_router
 from routes.news import include_news_routes
 from routes.reports import router as reports_router
@@ -112,6 +113,7 @@ app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
+app.include_router(analysis_history_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
 app.include_router(market_router, prefix="/api")
 include_news_routes(app, prefix="/api", is_development=IS_DEVELOPMENT)

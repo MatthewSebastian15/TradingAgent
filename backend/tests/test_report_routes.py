@@ -146,6 +146,51 @@ def test_post_pdf_report_renders_from_payload(client, monkeypatch):
     assert response.content.startswith(b"%PDF")
 
 
+def test_html_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, analysis_repository):
+    result = _result(request_id="rid-history-html")
+    analysis_repository.save_analysis(result=result, job_id="job-history-html")
+    monkeypatch.setattr(
+        "services.report_service.jobs.JOB_STORE",
+        AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10),
+    )
+
+    response = client.get("/api/analysis/jobs/job-history-html/report.html")
+
+    assert response.status_code == 200
+    assert "TradingAgent Analysis Report" in response.text
+    assert analysis_repository.list_analyses()[0]["exported_html_at"]
+
+
+def test_pdf_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, analysis_repository):
+    result = _result(request_id="rid-history-pdf")
+    analysis_repository.save_analysis(result=result, job_id="job-history-pdf")
+    monkeypatch.setattr(
+        "services.report_service.jobs.JOB_STORE",
+        AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10),
+    )
+    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+
+    response = client.get("/api/analysis/jobs/job-history-pdf/report.pdf")
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"%PDF")
+    assert analysis_repository.list_analyses()[0]["exported_pdf_at"]
+
+
+def test_request_id_report_alias_falls_back_to_sqlite(client, monkeypatch, analysis_repository):
+    result = _result(request_id="rid-history-alias")
+    analysis_repository.save_analysis(result=result)
+    monkeypatch.setattr(
+        "services.report_service.jobs.JOB_STORE",
+        AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10),
+    )
+
+    response = client.get("/api/analysis/rid-history-alias/report.html")
+
+    assert response.status_code == 200
+    assert "TradingAgent Analysis Report" in response.text
+
+
 def test_report_endpoint_returns_404_for_missing_request_id(client):
     response = client.get("/api/analysis/jobs/missing-request/report.html")
 

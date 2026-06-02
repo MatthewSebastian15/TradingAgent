@@ -5,6 +5,7 @@ import AgentLog from './AgentLog';
 import Navbar from './Navbar';
 import ResultCard from './ResultCard';
 import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
+import { clearAnalysisHistory, fetchAnalysisHistory } from '../utils/analysisHistoryApi';
 import { formatDateTimeLabel } from '../utils/formatting';
 
 const HISTORY_PANEL_MAX_HEIGHT = 560;
@@ -61,7 +62,7 @@ function textOrNull(value) {
 }
 
 function historyResourceId(entry) {
-  return textOrNull(entry?.job_id) || textOrNull(entry?.request_id);
+  return textOrNull(entry?.request_id) || textOrNull(entry?.job_id);
 }
 
 function isSameHistoryEntry(left, right) {
@@ -159,6 +160,18 @@ function saveToHistory(historyKey, result) {
   writeHistory(historyKey, [summary, ...deduped]);
 }
 
+function normalizeBackendHistory(entries) {
+  return entries
+    .map((entry) =>
+      toHistorySummary({
+        ...entry,
+        analysis_created_at: entry.analysis_created_at || entry.created_at,
+        saved_at: entry.updated_at || entry.created_at,
+      })
+    )
+    .filter(Boolean);
+}
+
 function decisionStyle(decision) {
   if (decision === 'Buy' || decision === 'Overweight')
     return 'text-bloomberg-green border-bloomberg-green';
@@ -173,12 +186,51 @@ function formatHistoryHorizon(months) {
   return `${value}M`;
 }
 
-function HistoryPanel({ currentResourceId, historyKey, onSelect }) {
+function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, onSelect }) {
   const [history, setHistory] = useState([]);
+  const [clearError, setClearError] = useState('');
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
-    setHistory(readHistory(historyKey));
-  }, [historyKey, currentResourceId]);
+    if (!backendHistoryEnabled) {
+      setHistory(readHistory(historyKey));
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    async function loadHistory() {
+      try {
+        const items = normalizeBackendHistory(
+          await fetchAnalysisHistory({ limit: 25, signal: controller.signal })
+        );
+        if (controller.signal.aborted) return;
+        writeHistory(historyKey, items);
+        setHistory(items);
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        setHistory(readHistory(historyKey));
+      }
+    }
+
+    loadHistory();
+    return () => controller.abort();
+  }, [backendHistoryEnabled, historyKey, currentResourceId]);
+
+  async function handleClearHistory() {
+    if (clearing) return;
+    setClearError('');
+    setClearing(true);
+    try {
+      if (backendHistoryEnabled) await clearAnalysisHistory();
+      clearHistory(historyKey);
+      setHistory([]);
+    } catch (error) {
+      setClearError(error.message || 'Failed to clear analysis history.');
+    } finally {
+      setClearing(false);
+    }
+  }
 
   if (!history.length) return null;
 
@@ -192,16 +244,19 @@ function HistoryPanel({ currentResourceId, historyKey, onSelect }) {
           <span className="font-mono text-xs text-bloomberg-muted">{history.length}</span>
           <button
             type="button"
-            onClick={() => {
-              clearHistory(historyKey);
-              setHistory([]);
-            }}
+            disabled={clearing}
+            onClick={handleClearHistory}
             className="font-mono text-[10px] text-bloomberg-muted tracking-wider hover:text-bloomberg-white"
           >
-            CLEAR HISTORY
+            {clearing ? 'CLEARING...' : 'CLEAR HISTORY'}
           </button>
         </div>
       </div>
+      {clearError && (
+        <div className="border-b border-bloomberg-border px-4 py-2 font-mono text-[10px] text-bloomberg-red">
+          {clearError}
+        </div>
+      )}
       <div className="overflow-y-auto" style={{ maxHeight: HISTORY_PANEL_MAX_HEIGHT }}>
         {history.map((item, index) => {
           const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
@@ -245,6 +300,7 @@ function HistoryPanel({ currentResourceId, historyKey, onSelect }) {
 }
 
 HistoryPanel.propTypes = {
+  backendHistoryEnabled: PropTypes.bool.isRequired,
   currentResourceId: PropTypes.string,
   historyKey: PropTypes.string.isRequired,
   onSelect: PropTypes.func.isRequired,
@@ -315,7 +371,12 @@ async function fetchResultLookup(resourceId, signal) {
     return canonicalResponse;
   }
 
-  return fetch(buildApiUrl(`/analysis/${encodedResourceId}`), options);
+  const aliasResponse = await fetch(buildApiUrl(`/analysis/${encodedResourceId}`), options);
+  if (aliasResponse.ok || ![400, 404].includes(aliasResponse.status)) {
+    return aliasResponse;
+  }
+
+  return fetch(buildApiUrl(`/analysis/history/${encodedResourceId}`), options);
 }
 
 export default function AnalysisWorkspace({
@@ -324,6 +385,7 @@ export default function AnalysisWorkspace({
   emptyDescription,
   resultPathBase = '/analysis',
   lookupResult = null,
+  backendHistoryEnabled = true,
   enableReportExport = true,
   mockReportExport = false,
 }) {
@@ -446,6 +508,7 @@ export default function AnalysisWorkspace({
 
             <div className="p-4">
               <HistoryPanel
+                backendHistoryEnabled={backendHistoryEnabled}
                 currentResourceId={historyResourceId(result)}
                 historyKey={historyKey}
                 onSelect={(item) => {
@@ -508,6 +571,7 @@ AnalysisWorkspace.propTypes = {
   emptyDescription: PropTypes.string.isRequired,
   resultPathBase: PropTypes.string,
   lookupResult: PropTypes.func,
+  backendHistoryEnabled: PropTypes.bool,
   enableReportExport: PropTypes.bool,
   mockReportExport: PropTypes.bool,
 };

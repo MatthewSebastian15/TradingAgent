@@ -153,6 +153,7 @@ async def start_job(
     run_stream_pipeline_func: Callable[..., Awaitable[dict[str, Any]]],
     response_payload_func: Callable[[str, AnalysisRequest, dict], dict],
     use_cache: bool = True,
+    persist_result_func: Callable[[dict[str, Any], AnalysisRequest, str | None], Awaitable[None]] | None = None,
 ) -> None:
     progress_queue: asyncio.Queue = asyncio.Queue()
     progress_task = asyncio.create_task(forward_job_progress(job, progress_queue))
@@ -160,7 +161,10 @@ async def start_job(
         req = AnalysisRequest(**job.payload)
         cached = await result_cache.get(job.cache_key) if use_cache else None
         if cached is not None:
-            await job.complete({**response_payload_func(job.request_id, req, cached), "job_id": job.id})
+            payload = {**response_payload_func(job.request_id, req, cached), "job_id": job.id}
+            await job.complete(payload)
+            if persist_result_func is not None:
+                await persist_result_func(payload, req, job.id)
             return
 
         if not await job.mark_running():
@@ -170,7 +174,10 @@ async def start_job(
         await wait_for_job_progress(progress_queue)
         if job.cancel_event.is_set():
             raise asyncio.CancelledError()
-        await job.complete({**response_payload_func(job.request_id, req, fields), "job_id": job.id})
+        payload = {**response_payload_func(job.request_id, req, fields), "job_id": job.id}
+        await job.complete(payload)
+        if persist_result_func is not None:
+            await persist_result_func(payload, req, job.id)
     except asyncio.CancelledError:
         await wait_for_job_progress(progress_queue)
         await job.cancel(

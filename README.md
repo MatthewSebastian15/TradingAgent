@@ -63,6 +63,8 @@ The `assets/` folder contains sample results for **Buy**, **Sell**, and **Hold**
                          │ GET  /api/analysis/jobs/{job_id}/events
                          │ GET  /api/analysis/jobs/{job_id}
                          │ GET  /api/analysis/{request_id} (deprecated alias)
+                         │ GET  /api/analysis/history
+                         │ GET  /api/analysis/history/{request_id}
                          │ GET  /api/analysis/jobs/{job_id}/report.html
                          │ GET  /api/analysis/jobs/{job_id}/report.pdf
                          │ DELETE /api/analysis/jobs/{job_id}
@@ -112,6 +114,7 @@ TradingAgent/
 │   ├── requirements-dev.txt
 │   ├── routes/
 │   │   ├── analysis.py                # Analyze, job API, SSE, status, ticker validation
+│   │   ├── analysis_history.py        # Permanent SQLite history endpoints
 │   │   ├── jobs.py                    # Job lifecycle helpers
 │   │   ├── market.py                  # Dashboard quote endpoint
 │   │   ├── pipeline_runner.py         # Worker/subprocess bridge
@@ -120,13 +123,15 @@ TradingAgent/
 │   │   ├── sse.py                     # SSE event helpers
 │   │   └── validation.py              # Request validation and ticker normalization
 │   ├── services/
+│   │   ├── analysis_repository.py     # Permanent SQLite analysis snapshots
 │   │   └── report_service.py          # Report context, template render, WeasyPrint PDF
 │   ├── static/reports/
 │   │   └── analysis_report.css
 │   ├── templates/reports/
 │   │   └── analysis_report.html
 │   ├── scripts/
-│   │   └── quality.ps1
+│   │   ├── quality.ps1
+│   │   └── seed_mock_analysis.py      # Seed one report/history debug snapshot
 │   ├── tests/
 │   └── tradingagents-core/
 │       ├── pyproject.toml
@@ -474,6 +479,23 @@ If backend API key enforcement is enabled, set `BACKEND_API_KEY` in the host she
 
 The browser calls `POST /api/session` through nginx and stores the signed `x-owner-token` value in `sessionStorage`. The shared nginx `x-api-key` authenticates the proxy service only. It does not identify the browser owner.
 
+### SQLite Analysis History
+
+Completed analyses are stored as full JSON snapshots in SQLite. The Recent Analyses panel reads SQLite first and uses browser `localStorage` summaries only when the backend is unavailable.
+
+The default local path is `backend/.cache/analysis_history.sqlite3`. Docker sets `ANALYSIS_DB_PATH=/root/.tradingagents/cache/analysis_history.sqlite3`, which uses the existing `tradingagent-cache` volume.
+
+History is global for this personal app. Any valid owner session can view the same snapshots. The `CLEAR HISTORY` button deletes all SQLite history rows and local fallback summaries.
+
+Stored results are historical snapshots. They are not live market recommendations. HTML preview and PDF export use the saved snapshot without fetching new market data or running the pipeline again.
+
+Seed one static development snapshot without calling a provider or LLM:
+
+```bash
+cd backend
+python scripts/seed_mock_analysis.py
+```
+
 ### Docker + Ollama
 
 Compose pins the Ollama image to `ollama/ollama:0.24.0`.
@@ -657,6 +679,31 @@ Canonical endpoint for cancelling a running job.
 
 The old `DELETE /api/analysis/{job_id}` alias is kept only for backward compatibility and is hidden from OpenAPI docs.
 
+### GET `/api/analysis/history`
+
+Returns recent completed analysis snapshots from SQLite. The list contains compact metadata. It does not return the full result JSON.
+
+Optional query fields:
+
+| Field | Rule |
+|---|---|
+| `ticker` | Filters one normalized ticker. |
+| `limit` | Number of rows from `1` to `100`. Defaults to `25`. |
+
+History is global for this personal app. Any valid owner session can read the same stored snapshots.
+
+### GET `/api/analysis/history/{request_id}`
+
+Returns one full stored analysis snapshot without running the pipeline again.
+
+### DELETE `/api/analysis/history/{request_id}`
+
+Deletes one stored analysis snapshot.
+
+### DELETE `/api/analysis/history`
+
+Deletes all stored analysis snapshots. The frontend `CLEAR HISTORY` button uses this endpoint.
+
 ### POST `/api/analyze`
 
 Legacy JSON endpoint. Runs the analysis and returns the final result directly after completion.
@@ -700,6 +747,7 @@ Legacy SSE endpoint. Runs the analysis with streamed progress without using the 
 | `PROCESS_POOL_*` / `DATA_COLLECTION_WORKERS` / `ANALYST_PARALLEL_WORKERS` / `DEFAULT_MAX_DEBATE_ROUNDS` | No | Worker and debate limits for backend analysis. |
 | `REQUEST_RATE_LIMIT_PER_MINUTE` / `STREAM_RATE_LIMIT_PER_MINUTE` / `MAX_CONCURRENT_*` / `REQUEST_BODY_MAX_BYTES` | No | Request, stream, concurrency, and body-size limits. |
 | `CACHE_*` / `ANALYSIS_RESULT_CACHE_*` / `ANALYSIS_JOB_*` / `DATA_CACHE_*` | No | Result, job, and market-data cache settings. |
+| `ANALYSIS_DB_PATH` / `ANALYSIS_HISTORY_MAX_ROWS` / `ANALYSIS_HISTORY_DEFAULT_LIMIT` | No | Permanent SQLite snapshot path, retained row cap, and default history list size. |
 | `LLM_TIMEOUT_SECONDS` / `LLM_MAX_RETRIES` / `PROVIDER_SDK_MAX_RETRIES` / `TOOL_*` | No | LLM and tool resilience settings. |
 | `XDG_CACHE_HOME` / `YFINANCE_CACHE_DIR` / `YFINANCE_TICKER_CACHE_MAX_ENTRIES` / `TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS` | No | Runtime cache paths, yfinance ticker cache size, and abandoned timeout-call limit. |
 | `LLM_PROVIDER` | Yes | `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, or `ollama`. |
