@@ -13,6 +13,9 @@ from .alpha_vantage import (
     get_cashflow as get_alpha_vantage_cashflow,
 )
 from .alpha_vantage import (
+    get_company_profile as get_alpha_vantage_company_profile,
+)
+from .alpha_vantage import (
     get_fundamentals as get_alpha_vantage_fundamentals,
 )
 from .alpha_vantage import (
@@ -64,6 +67,9 @@ from .finnhub_fundamentals import (
 )
 from .finnhub_fundamentals import (
     get_cashflow as get_finnhub_cashflow,
+)
+from .finnhub_fundamentals import (
+    get_company_profile as get_finnhub_company_profile,
 )
 from .finnhub_fundamentals import (
     get_fundamentals as get_finnhub_fundamentals,
@@ -291,6 +297,8 @@ VENDOR_METHODS = {
     },
     "get_company_profile": {
         "yfinance": get_yfinance_company_profile,
+        "finnhub": get_finnhub_company_profile,
+        "alpha_vantage": get_alpha_vantage_company_profile,
     },
     "get_balance_sheet": {
         "yfinance": get_yfinance_balance_sheet,

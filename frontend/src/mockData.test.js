@@ -23,11 +23,20 @@ describe('mockData', () => {
       'FY25',
       'FY26Q1',
     ]);
-    expect(result.financial_highlights.rows).toHaveLength(12);
+    expect(result.financial_highlights.rows).toHaveLength(13);
+    expect(result.financial_highlights.sections).toHaveLength(5);
+    expect(result.financial_highlights.point_in_time[0]).toMatchObject({
+      key: 'market_cap',
+      unit: 'USD Mn',
+    });
     expect(result.company_profile).toMatchObject({
       available: true,
       ticker: 'NVDA',
-      name: 'NVIDIA Corporation',
+      company_name: 'NVIDIA Corporation',
+    });
+    expect(result.analysis_overview).toMatchObject({
+      recommendation: 'Buy',
+      confidence: 'High',
     });
     expect(result.price_chart).toMatchObject({
       available: true,

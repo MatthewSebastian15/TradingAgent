@@ -14,9 +14,18 @@ describe('FinancialHighlightsTable', () => {
     );
 
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
-    expect(screen.getByText('FY23')).toBeTruthy();
-    expect(screen.getByText('FY26Q1')).toBeTruthy();
+    expect(screen.getAllByText('FY23').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('FY26Q1').length).toBeGreaterThan(0);
     expect(screen.getByText('Revenue')).toBeTruthy();
+    expect(screen.getByText('Latest Market Snapshot')).toBeTruthy();
+    expect(screen.getByText('Market & Scale')).toBeTruthy();
+    expect(screen.getByText('Growth')).toBeTruthy();
+    expect(screen.getByText('Profitability')).toBeTruthy();
+    expect(screen.getByText('Per Share & Balance Sheet')).toBeTruthy();
+    expect(screen.getByText('Dividends')).toBeTruthy();
+    expect(screen.getByText(/Currency: USD \(US Dollar\)/)).toBeTruthy();
+    expect(screen.getByText('126.00%')).toBeTruthy();
+    expect(screen.getByText('0.45x')).toBeTruthy();
     expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
     expect(
       Array.from(container.querySelectorAll('tbody tr td:first-child')).map(
@@ -24,17 +33,18 @@ describe('FinancialHighlightsTable', () => {
       )
     ).toEqual([
       'Revenue',
-      'Revenue Growth (%)',
       'EBITDA',
-      'EBITDA Margin (%)',
       'Net Profit',
+      'Revenue Growth (%)',
       'Net Profit Growth (%)',
-      'Net Profit Margin (%)',
+      'EBITDA Margin (%)',
+      'Net Profit Margin / Profit Margin (%)',
       'ROE (%)',
       'EPS',
       'BVPS',
       'DER',
       'Dividend Yield (%)',
+      'Payout Ratio (%)',
     ]);
   });
 

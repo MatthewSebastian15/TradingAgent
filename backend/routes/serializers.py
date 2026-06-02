@@ -50,6 +50,7 @@ SUMMARY_FIELDS = {
     "volatility_score",
     "rebalancing_action",
     "position_size_hint",
+    "key_reasons",
     "key_catalysts",
     "invalidation_conditions",
     "data_quality",
@@ -68,6 +69,7 @@ SUMMARY_FIELDS = {
     "related_news",
     "news",
     "news_context",
+    "analysis_overview",
 }
 
 AGENT_SEQUENCE = [
@@ -324,6 +326,55 @@ def _complete_risk_engine_data_quality(
     return merged
 
 
+def _confidence_label(value: Any) -> str:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return "Low"
+    if score >= 0.75:
+        return "High"
+    if score >= 0.5:
+        return "Medium"
+    return "Low"
+
+
+def _analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
+    key_reasons = payload.get("key_reasons") or payload.get("key_catalysts") or []
+    volatility = payload.get("volatility_level") or "N/A"
+    risk_reason = (
+        payload.get("decision_adjusted_reason")
+        or payload.get("position_sizing_reason")
+        or f"Volatility level is {volatility}."
+    )
+    return {
+        "recommendation": payload.get("final_decision") or payload.get("decision") or "Hold",
+        "confidence": _confidence_label(payload.get("confidence_score")),
+        "executive_summary": payload.get("executive_summary"),
+        "investment_thesis": payload.get("investment_thesis"),
+        "key_reasons": list(key_reasons) if isinstance(key_reasons, list) else [],
+        "action_plan": {
+            "current_price": payload.get("current_price"),
+            "entry": payload.get("entry_price"),
+            "stop_loss": payload.get("stop_loss"),
+            "take_profit": payload.get("take_profit"),
+            "max_drawdown": payload.get("max_drawdown_estimate"),
+            "volatility": payload.get("volatility_level"),
+            "position_action": payload.get("position_action") or payload.get("new_entry_action"),
+            "position_size_hint": payload.get("position_size_hint"),
+            "risk_reward_ratio": payload.get("risk_reward_ratio"),
+            "risk_reward_display": payload.get("risk_reward_display"),
+        },
+        "risk_summary": {
+            "overall_risk": str(volatility).lower(),
+            "short_reason": risk_reason,
+        },
+    }
+
+
+def _with_analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
+    return {**payload, "analysis_overview": _analysis_overview(payload)}
+
+
 def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
     current_price_fields = _get_current_price_fields(final_state, pd_obj)
     return {
@@ -400,28 +451,31 @@ def parse_final_result(
     }
 
     if pd_obj is None:
-        return {
-            "decision": "Hold",
-            "full_decision": full_decision,
-            "executive_summary": None,
-            "investment_thesis": None,
-            "price_target": None,
-            "time_horizon": configured_time_horizon,
-            "confidence_score": None,
-            "suggested_allocation_percent": None,
-            "entry_price": None,
-            "stop_loss": None,
-            "take_profit": None,
-            "risk_reward_ratio": None,
-            "max_drawdown_estimate": None,
-            "volatility_level": "Medium",
-            "position_sizing_reason": None,
-            "rebalancing_action": "Avoid new entry",
-            "key_catalysts": [],
-            "invalidation_conditions": [],
-            **_empty_trade_contract(final_state),
-            **common,
-        }
+        return _with_analysis_overview(
+            {
+                "decision": "Hold",
+                "full_decision": full_decision,
+                "executive_summary": None,
+                "investment_thesis": None,
+                "price_target": None,
+                "time_horizon": configured_time_horizon,
+                "confidence_score": None,
+                "suggested_allocation_percent": None,
+                "entry_price": None,
+                "stop_loss": None,
+                "take_profit": None,
+                "risk_reward_ratio": None,
+                "max_drawdown_estimate": None,
+                "volatility_level": "Medium",
+                "position_sizing_reason": None,
+                "rebalancing_action": "Avoid new entry",
+                "key_catalysts": [],
+                "key_reasons": [],
+                "invalidation_conditions": [],
+                **_empty_trade_contract(final_state),
+                **common,
+            }
+        )
 
     rating = getattr(pd_obj, "rating", None)
     fallback_rating = _enum_value(rating)
@@ -443,48 +497,51 @@ def parse_final_result(
         RISK_REWARD_DISPLAY if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_display", None)
     )
 
-    return {
-        "decision": final_decision,
-        "llm_decision": getattr(pd_obj, "llm_decision", None) or fallback_rating,
-        "final_decision": final_decision,
-        "decision_adjusted": bool(getattr(pd_obj, "decision_adjusted", False)),
-        "decision_adjusted_reason": getattr(pd_obj, "decision_adjusted_reason", None),
-        "trade_plan_valid": trade_plan_valid,
-        "has_existing_position": bool(getattr(pd_obj, "has_existing_position", False)),
-        "position_quantity": getattr(pd_obj, "position_quantity", None),
-        "average_entry_price": getattr(pd_obj, "average_entry_price", None),
-        "position_action": getattr(pd_obj, "position_action", None),
-        "new_entry_action": getattr(pd_obj, "new_entry_action", None),
-        **current_price_fields,
-        "full_decision": full_decision,
-        "executive_summary": getattr(pd_obj, "executive_summary", None),
-        "investment_thesis": getattr(pd_obj, "investment_thesis", None),
-        "price_target": getattr(pd_obj, "price_target", None),
-        "time_horizon": configured_time_horizon or getattr(pd_obj, "time_horizon", None),
-        "confidence_score": getattr(pd_obj, "confidence_score", None),
-        "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
-        "entry_price": getattr(pd_obj, "entry_price", None),
-        "stop_loss": getattr(pd_obj, "stop_loss", None),
-        "take_profit": getattr(pd_obj, "take_profit", None),
-        "risk_per_share": getattr(pd_obj, "risk_per_share", None),
-        "reward_per_share": getattr(pd_obj, "reward_per_share", None),
-        "risk_reward_ratio": risk_reward_ratio,
-        "risk_reward_display": risk_reward_display,
-        "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
-        "max_drawdown_min_pct": getattr(pd_obj, "max_drawdown_min_pct", None),
-        "max_drawdown_max_pct": getattr(pd_obj, "max_drawdown_max_pct", None),
-        "volatility_level": _enum_value(getattr(pd_obj, "volatility_level", None)),
-        "volatility_score": getattr(pd_obj, "volatility_score", None),
-        "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
-        "rebalancing_action": _enum_value(getattr(pd_obj, "rebalancing_action", None)),
-        "position_size_hint": getattr(pd_obj, "position_size_hint", None),
-        "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
-        "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
-        "data_quality": pd_data_quality,
-        "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
-        "validation_warning_details": _validation_warning_details(getattr(pd_obj, "validation_warnings", []) or []),
-        **{key: value for key, value in common.items() if key != "data_quality"},
-    }
+    return _with_analysis_overview(
+        {
+            "decision": final_decision,
+            "llm_decision": getattr(pd_obj, "llm_decision", None) or fallback_rating,
+            "final_decision": final_decision,
+            "decision_adjusted": bool(getattr(pd_obj, "decision_adjusted", False)),
+            "decision_adjusted_reason": getattr(pd_obj, "decision_adjusted_reason", None),
+            "trade_plan_valid": trade_plan_valid,
+            "has_existing_position": bool(getattr(pd_obj, "has_existing_position", False)),
+            "position_quantity": getattr(pd_obj, "position_quantity", None),
+            "average_entry_price": getattr(pd_obj, "average_entry_price", None),
+            "position_action": getattr(pd_obj, "position_action", None),
+            "new_entry_action": getattr(pd_obj, "new_entry_action", None),
+            **current_price_fields,
+            "full_decision": full_decision,
+            "executive_summary": getattr(pd_obj, "executive_summary", None),
+            "investment_thesis": getattr(pd_obj, "investment_thesis", None),
+            "price_target": getattr(pd_obj, "price_target", None),
+            "time_horizon": configured_time_horizon or getattr(pd_obj, "time_horizon", None),
+            "confidence_score": getattr(pd_obj, "confidence_score", None),
+            "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
+            "entry_price": getattr(pd_obj, "entry_price", None),
+            "stop_loss": getattr(pd_obj, "stop_loss", None),
+            "take_profit": getattr(pd_obj, "take_profit", None),
+            "risk_per_share": getattr(pd_obj, "risk_per_share", None),
+            "reward_per_share": getattr(pd_obj, "reward_per_share", None),
+            "risk_reward_ratio": risk_reward_ratio,
+            "risk_reward_display": risk_reward_display,
+            "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
+            "max_drawdown_min_pct": getattr(pd_obj, "max_drawdown_min_pct", None),
+            "max_drawdown_max_pct": getattr(pd_obj, "max_drawdown_max_pct", None),
+            "volatility_level": _enum_value(getattr(pd_obj, "volatility_level", None)),
+            "volatility_score": getattr(pd_obj, "volatility_score", None),
+            "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
+            "rebalancing_action": _enum_value(getattr(pd_obj, "rebalancing_action", None)),
+            "position_size_hint": getattr(pd_obj, "position_size_hint", None),
+            "key_reasons": getattr(pd_obj, "key_reasons", []) or [],
+            "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
+            "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
+            "data_quality": pd_data_quality,
+            "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
+            "validation_warning_details": _validation_warning_details(getattr(pd_obj, "validation_warnings", []) or []),
+            **{key: value for key, value in common.items() if key != "data_quality"},
+        }
+    )
 
 
 def cache_key(req: AnalysisRequest) -> AnalysisCacheKey:

@@ -148,6 +148,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "llm_decision": _display(llm_decision),
         "final_decision": final_decision,
         "decision": final_decision,
+        "executive_summary": _display(result.get("executive_summary")),
         "decision_adjusted": bool(result.get("decision_adjusted")),
         "decision_adjusted_reason": _display(result.get("decision_adjusted_reason")),
         "trade_plan_valid": trade_plan_valid,
@@ -324,6 +325,26 @@ def _format_price(value: Any, ticker: str, market: str) -> str:
     return f"${number:,.2f}".rstrip("0").rstrip(".")
 
 
+def _format_market_cap(value: Any, currency: Any) -> str:
+    if value is None or value == "":
+        return "N/A"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if number != number or number in {float("inf"), float("-inf")}:
+        return "N/A"
+
+    currency_code = str(currency or "").upper()
+    if not currency_code:
+        return _format_number(number)
+
+    is_idr = currency_code == "IDR"
+    divisor = 1_000_000_000 if is_idr else 1_000_000
+    scale = "Bn" if is_idr else "Mn"
+    return f"{number / divisor:,.1f} {currency_code} {scale}"
+
+
 def _format_percent(value: Any) -> str:
     if value is None or value == "":
         return "N/A"
@@ -439,20 +460,33 @@ def _company_profile_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     if not profile or not profile.get("available"):
         return []
 
+    ticker = str(profile.get("ticker") or result.get("ticker") or "")
+    market = str(result.get("market") or "")
+    currency = profile.get("currency")
     return [
-        {"label": "Company Name", "value": _display(profile.get("name"))},
+        {"label": "Company Name", "value": _display(profile.get("company_name") or profile.get("name"))},
+        {"label": "Ticker", "value": _display(profile.get("ticker"))},
+        {"label": "Exchange", "value": _display(profile.get("exchange"))},
+        {"label": "Currency", "value": _display(profile.get("currency"))},
+        {"label": "Country", "value": _display(profile.get("country"))},
         {"label": "Sector", "value": _display(profile.get("sector"))},
         {"label": "Industry", "value": _display(profile.get("industry"))},
-        {"label": "Address", "value": _display(profile.get("address"))},
-        {"label": "Phone", "value": _display(profile.get("phone"))},
         {"label": "Website", "value": _display(profile.get("website"))},
-        {"label": "Full Time Employees", "value": _display(profile.get("full_time_employees"))},
+        {"label": "Market Cap", "value": _format_market_cap(profile.get("market_cap"), currency)},
+        {"label": "Shares Outstanding", "value": _format_number(profile.get("shares_outstanding"))},
+        {"label": "Current Price", "value": _format_price(profile.get("current_price"), ticker, market)},
+        {"label": "Fiscal Year End", "value": _display(profile.get("fiscal_year_end"))},
+        {
+            "label": "Employee Count",
+            "value": _display(profile.get("employee_count") or profile.get("full_time_employees")),
+        },
+        {"label": "Profile Data Quality", "value": _display(_as_dict(profile.get("data_quality")).get("status"))},
     ]
 
 
 def _company_profile_executives(result: dict[str, Any]) -> list[dict[str, str]]:
     profile = _as_dict(result.get("company_profile"))
-    executives = profile.get("executives") if profile else []
+    executives = profile.get("officers") or profile.get("executives") if profile else []
     if not isinstance(executives, list):
         return []
 
@@ -540,9 +574,23 @@ def _financial_highlights(value: Any) -> dict[str, Any] | None:
     rows = [row for row in value.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)]
     if not periods or not rows:
         return None
+    sections = []
+    for section in value.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        section_rows = [
+            row for row in section.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)
+        ]
+        if section_rows:
+            sections.append({**section, "rows": section_rows})
+    if not sections:
+        sections = [{"key": "legacy", "title": None, "rows": rows}]
     return {
         "title": _clean_text(value.get("title")) or "Key Financial Highlights",
+        "unit_note": _clean_text(value.get("unit_note")),
         "periods": periods,
+        "point_in_time": [item for item in value.get("point_in_time", []) if isinstance(item, dict)],
+        "sections": sections,
         "rows": rows,
     }
 

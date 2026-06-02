@@ -33,178 +33,24 @@
         </div>
       {% endif %}
 
-      {% if report.company_profile_rows %}
-        <section class="section">
-          <h2>Company Profile</h2>
-
-          <table class="metric-table">
-            <tbody>
-              {% for row in report.company_profile_rows %}
-                <tr>
-                  <th>{{ row.label }}</th>
-                  <td>{{ row.value }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-
-          {% if report.company_profile.description %}
-            <h3>Business Description</h3>
-            <p>{{ report.company_profile.description }}</p>
-          {% endif %}
-
-          {% if report.company_profile_executives %}
-            <h3>Key Executives</h3>
-            <table class="metric-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Title</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for executive in report.company_profile_executives %}
-                  <tr>
-                    <td>{{ executive.name }}</td>
-                    <td>{{ executive.title }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          {% endif %}
-        </section>
-      {% endif %}
-
-      {% if report.price_chart_rows %}
-        <section class="section">
-          <h2>Chart &amp; Price Summary</h2>
-          <table class="metric-table">
-            <tbody>
-              {% for row in report.price_chart_rows %}
-                <tr>
-                  <th>{{ row.label }}</th>
-                  <td>{{ row.value }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </section>
-      {% endif %}
-
-      {% if report.related_news_items %}
-        <section class="section">
-          <h2>Related News</h2>
-
-          {% if report.related_news.summary %}
-            <p>{{ report.related_news.summary }}</p>
-          {% endif %}
-
-          <div class="news-list">
-            {% for item in report.related_news_items %}
-              <article class="news-item">
-                <h3>{{ item.title }}</h3>
-                <p class="muted">
-                  Publisher: {{ item.publisher }} | Published: {{ item.published_at }} | Source: {{ item.source }} | Event: {{ item.event_type }}
-                </p>
-                {% if item.summary and item.summary != 'N/A' %}
-                  <p>{{ item.summary }}</p>
-                {% endif %}
-                {% if item.relevance_reason and item.relevance_reason != 'N/A' %}
-                  <p><strong>Why it matters:</strong> {{ item.relevance_reason }}</p>
-                {% endif %}
-                {% if item.url %}<p><a href="{{ item.url }}">Open original source</a></p>{% endif %}
-              </article>
-            {% endfor %}
-          </div>
-        </section>
-      {% endif %}
-
-      {% if report.news and not report.related_news_items %}
-        <section class="section">
-          <h2>Market News Context</h2>
-          {% if report.news_provider_rows %}
-            <table class="metric-table">
-              <tbody>
-                {% for row in report.news_provider_rows %}
-                  <tr>
-                    <th>{{ row.label }}</th>
-                    <td>{{ row.value }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          {% endif %}
-
-          {% if report.news_articles %}
-            {% for article in report.news_articles %}
-              <article class="news-article">
-                <h3>{{ article.title }}</h3>
-                <p class="muted">
-                  {{ article.source or 'Unknown source' }}
-                  {% if article.published_at %} | {{ article.published_at }}{% endif %}
-                  | {{ article.provider }}
-                  | relevance {{ article.relevance_score }}
-                </p>
-                {% if article.summary %}<p>{{ article.summary }}</p>{% endif %}
-                {% if article.url %}<p><a href="{{ article.url }}">{{ article.url }}</a></p>{% endif %}
-              </article>
-            {% endfor %}
-          {% else %}
-            <p class="muted">{{ report.news.empty_reason or 'No relevant company-specific news was found.' }}</p>
-          {% endif %}
-        </section>
-      {% endif %}
-
       <section class="section">
         <h2>Executive Summary</h2>
+        <p>{{ report.executive_summary }}</p>
         <table>
           <tbody>
             {% for row in report.executive_rows %}
-              <tr>
-                <th>{{ row.label }}</th>
-                <td>{{ row.value }}</td>
-              </tr>
+              <tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </section>
 
-      {% if report.financial_highlights and report.financial_highlights.rows %}
-        <section class="section financial-highlights">
-          <h2>{{ report.financial_highlights.title }}</h2>
-          <table class="financial-highlights-table">
-            <thead>
-              <tr>
-                <th>Metric</th>
-                {% for period in report.financial_highlights.periods %}
-                  <th>{{ period.label }}</th>
-                {% endfor %}
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in report.financial_highlights.rows %}
-                <tr>
-                  <td>{{ row.label }}</td>
-                  {% for period in report.financial_highlights.periods %}
-                    {% set cell = row['values'].get(period.key) %}
-                    <td>{{ cell.display if cell else 'N/A' }}</td>
-                  {% endfor %}
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </section>
-      {% endif %}
-
       <section class="section">
-        <h2>Decision Summary</h2>
+        <h2>Final Recommendation</h2>
         <table>
           <tbody>
             {% for row in report.decision_rows %}
-              <tr>
-                <th>{{ row.label }}</th>
-                <td>{{ row.value }}</td>
-              </tr>
+              <tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -226,49 +72,139 @@
         {% endif %}
       </section>
 
-      <section class="section">
-        <h2>Risk And Volatility</h2>
-        <table>
-          <tbody>
-            {% for row in report.risk_rows %}
-              <tr>
-                <th>{{ row.label }}</th>
-                <td>{{ row.value }}</td>
-              </tr>
+      {% if report.company_profile_rows %}
+        <section class="section">
+          <h2>Company Profile</h2>
+          <table class="metric-table">
+            <tbody>
+              {% for row in report.company_profile_rows %}
+                <tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% if report.company_profile.business_summary or report.company_profile.description %}
+            <h3>Business Description</h3>
+            <p>{{ report.company_profile.business_summary or report.company_profile.description }}</p>
+          {% endif %}
+          {% if report.company_profile_executives %}
+            <h3>Key Executives</h3>
+            <table class="metric-table">
+              <thead><tr><th>Name</th><th>Title</th></tr></thead>
+              <tbody>
+                {% for executive in report.company_profile_executives %}
+                  <tr><td>{{ executive.name }}</td><td>{{ executive.title }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+        </section>
+      {% endif %}
+
+      {% if report.financial_highlights and report.financial_highlights.rows %}
+        <section class="section financial-highlights">
+          <h2>{{ report.financial_highlights.title }}</h2>
+          {% if report.financial_highlights.unit_note %}
+            <p class="muted">{{ report.financial_highlights.unit_note }}</p>
+          {% endif %}
+          {% if report.financial_highlights.point_in_time %}
+            <h3>Latest Market Snapshot</h3>
+            <table class="metric-table">
+              <tbody>
+                {% for item in report.financial_highlights.point_in_time %}
+                  <tr>
+                    <th>{{ item.label }}</th>
+                    <td>{{ 'N/A' if item.status == 'unavailable' else item.display }} {{ item.unit }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+          {% for section in report.financial_highlights.sections %}
+            {% if section.title %}<h3>{{ section.title }}</h3>{% endif %}
+            <table class="financial-highlights-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  {% for period in report.financial_highlights.periods %}<th>{{ period.label }}</th>{% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in section.rows %}
+                  <tr>
+                    <td>{{ row.label }}</td>
+                    {% for period in report.financial_highlights.periods %}
+                      {% set cell = row['values'].get(period.key) %}
+                      <td>{{ cell.display if cell else 'N/A' }}</td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      {% if report.price_chart_rows %}
+        <section class="section">
+          <h2>Chart &amp; Price Summary</h2>
+          <table class="metric-table"><tbody>
+            {% for row in report.price_chart_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+          </tbody></table>
+        </section>
+      {% endif %}
+
+      {% if report.related_news_items %}
+        <section class="section">
+          <h2>Related News</h2>
+          {% if report.related_news.summary %}<p>{{ report.related_news.summary }}</p>{% endif %}
+          <div class="news-list">
+            {% for item in report.related_news_items %}
+              <article class="news-item">
+                <h3>{{ item.title }}</h3>
+                <p class="muted">Publisher: {{ item.publisher }} | Published: {{ item.published_at }} | Source: {{ item.source }} | Event: {{ item.event_type }}</p>
+                {% if item.summary and item.summary != 'N/A' %}<p>{{ item.summary }}</p>{% endif %}
+                {% if item.relevance_reason and item.relevance_reason != 'N/A' %}<p><strong>Why it matters:</strong> {{ item.relevance_reason }}</p>{% endif %}
+                {% if item.url %}<p><a href="{{ item.url }}">Open original source</a></p>{% endif %}
+              </article>
             {% endfor %}
-          </tbody>
-        </table>
-      </section>
+          </div>
+        </section>
+      {% elif report.news %}
+        <section class="section">
+          <h2>Market News Context</h2>
+          {% if report.news_provider_rows %}
+            <table class="metric-table"><tbody>
+              {% for row in report.news_provider_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+            </tbody></table>
+          {% endif %}
+          {% for article in report.news_articles %}
+            <article class="news-article">
+              <h3>{{ article.title }}</h3>
+              <p class="muted">{{ article.source or 'Unknown source' }} | {{ article.provider }}</p>
+              {% if article.summary %}<p>{{ article.summary }}</p>{% endif %}
+              {% if article.url %}<p><a href="{{ article.url }}">{{ article.url }}</a></p>{% endif %}
+            </article>
+          {% endfor %}
+        </section>
+      {% endif %}
 
       <section class="section">
-        <h2>Data Quality And Validation</h2>
-        <table>
-          <tbody>
-            {% for row in report.validation_rows %}
-              <tr>
-                <th>{{ row.label }}</th>
-                <td>{{ row.value }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-
+        <h2>Risk / Data Quality</h2>
+        <h3>Risk And Volatility</h3>
+        <table><tbody>
+          {% for row in report.risk_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+        </tbody></table>
+        <h3>Data Quality And Validation</h3>
+        <table><tbody>
+          {% for row in report.validation_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+        </tbody></table>
         {% if report.validation_warnings %}
           <h3>Validation Warnings</h3>
-          <ul>
-            {% for warning in report.validation_warnings %}
-              <li>{{ warning }}</li>
-            {% endfor %}
-          </ul>
+          <ul>{% for warning in report.validation_warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
         {% endif %}
-
         {% if report.data_quality_warnings %}
           <h3>Data Quality Notes</h3>
-          <ul>
-            {% for warning in report.data_quality_warnings %}
-              <li>{{ warning }}</li>
-            {% endfor %}
-          </ul>
+          <ul>{% for warning in report.data_quality_warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
         {% endif %}
       </section>
 
@@ -276,10 +212,7 @@
         <section class="section page-break-soft">
           <h2>Analyst Notes</h2>
           {% for section in report.analyst_sections %}
-            <article class="analyst-note">
-              <h3>{{ section.title }}</h3>
-              <p>{{ section.body }}</p>
-            </article>
+            <article class="analyst-note"><h3>{{ section.title }}</h3><p>{{ section.body }}</p></article>
           {% endfor %}
         </section>
       {% endif %}
@@ -289,9 +222,7 @@
         <p>{{ report.disclaimer }}</p>
       </section>
 
-      <footer>
-        TradingAgent report · {{ report.ticker }} · {{ report.request_id }}
-      </footer>
+      <footer>TradingAgent report | {{ report.ticker }} | {{ report.request_id }}</footer>
     </main>
   </body>
 </html>

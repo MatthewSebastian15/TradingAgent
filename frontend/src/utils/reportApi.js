@@ -60,6 +60,8 @@ function compactReportPayload(result) {
     'position_size_hint',
     'executive_summary',
     'investment_thesis',
+    'analysis_overview',
+    'key_reasons',
     'key_catalysts',
     'invalidation_conditions',
     'data_quality',

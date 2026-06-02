@@ -118,6 +118,7 @@ def _merge_value(
     *,
     source_vendor: str,
     source_field: str,
+    source_unit: str | None = None,
 ) -> None:
     number = _number(value)
     if not period_key or not field or number is None:
@@ -129,6 +130,7 @@ def _merge_value(
         "value": number,
         "source_vendor": source_vendor,
         "source_field": source_field,
+        "source_unit": source_unit,
     }
     if source_vendor not in normalized["sources_used"]:
         normalized["sources_used"].append(source_vendor)
@@ -178,6 +180,9 @@ def _parse_direct_period_mapping(
                 value = raw_value.get("value")
                 source_vendor = str(raw_value.get("source_vendor") or vendor)
                 source_field = str(raw_value.get("source_field") or raw_field)
+                source_unit = str(raw_value.get("source_unit") or raw_value.get("unit") or "raw")
+            else:
+                source_unit = "raw"
             _merge_value(
                 normalized,
                 period_key,
@@ -185,6 +190,7 @@ def _parse_direct_period_mapping(
                 value,
                 source_vendor=source_vendor,
                 source_field=source_field,
+                source_unit=source_unit,
             )
     return True
 

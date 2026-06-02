@@ -23,11 +23,13 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText(/may contain errors/i)).toBeTruthy();
   });
 
-  it('renders financial highlights after the existing summary content', () => {
+  it('renders financial highlights only inside Fundamental', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
+    expect(screen.queryByText('Key Financial Highlights')).toBeNull();
+    fireEvent.click(screen.getByText('Fundamental'));
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
-    expect(screen.getByText('FY26Q1')).toBeTruthy();
+    expect(screen.getAllByText('FY26Q1').length).toBeGreaterThan(0);
     expect(screen.getByText('Revenue')).toBeTruthy();
   });
 
@@ -40,7 +42,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('News').disabled).toBe(false);
     expect(screen.queryByText('COMPANY PROFILE')).toBeNull();
 
-    fireEvent.click(screen.getByText('Profile'));
+    fireEvent.click(screen.getByText('Profil'));
 
     expect(screen.getByText('COMPANY PROFILE')).toBeTruthy();
     expect(screen.getByText('NVIDIA Corporation')).toBeTruthy();
@@ -151,7 +153,7 @@ describe('ResultCard risk-engine contract', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Profile'));
+    fireEvent.click(screen.getByText('Profil'));
 
     expect(screen.getByText('PROFILE UNAVAILABLE')).toBeTruthy();
     expect(screen.getByText('Profile fetch failed.')).toBeTruthy();
@@ -329,6 +331,7 @@ describe('ResultCard risk-engine contract', () => {
   it('shows data quality badges and trade plan status', () => {
     render(<ResultCard result={MOCK_REPAIRED_RESPONSE} />);
 
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
     expect(screen.getByText('DATA QUALITY')).toBeTruthy();
     expect(screen.getByText('TRADE PLAN: valid')).toBeTruthy();
     expect(screen.getByText('PRICE: mock')).toBeTruthy();
@@ -339,17 +342,19 @@ describe('ResultCard risk-engine contract', () => {
   it('renders IDX news unavailable as non-blocking while keeping trade plan valid', () => {
     render(<ResultCard result={MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE} />);
 
+    expect(screen.getAllByTestId('action-plan-metric')).toHaveLength(12);
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
     expect(screen.getByText('DATA QUALITY')).toBeTruthy();
     expect(screen.getByText('TRADE PLAN: valid')).toBeTruthy();
     expect(screen.getByText('NEWS: unavailable')).toBeTruthy();
     expect(screen.getByText(/No usable news/i)).toBeTruthy();
     expect(screen.getAllByText(/non-blocking/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByTestId('action-plan-metric')).toHaveLength(12);
   });
 
   it('shows validation warnings in readable form', () => {
     render(<ResultCard result={MOCK_REPAIRED_RESPONSE} />);
 
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
     expect(screen.getByText('Validation Warnings')).toBeTruthy();
     expect(screen.getByText('RR_FORCED_TO_3 - Risk/reward forced to 1:3')).toBeTruthy();
     expect(screen.getByText('TAKE_PROFIT_RECOMPUTED - Take profit recomputed')).toBeTruthy();
@@ -359,6 +364,7 @@ describe('ResultCard risk-engine contract', () => {
     render(<ResultCard result={{ ...MOCK_RESPONSE, trade_plan_valid: false }} />);
 
     expect(screen.getByText('TRADE PLAN NOT VALID')).toBeTruthy();
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
     expect(screen.getByText('TRADE PLAN: not valid')).toBeTruthy();
     expect(screen.queryByText('ACTION PLAN')).toBeNull();
     expect(screen.queryByText('ENTRY')).toBeNull();
@@ -368,6 +374,7 @@ describe('ResultCard risk-engine contract', () => {
     render(<ResultCard result={MOCK_MISSING_PRICE_RESPONSE} />);
 
     expect(screen.getByText('PRICE DATA MISSING')).toBeTruthy();
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
     expect(screen.getByText('PRICE: missing')).toBeTruthy();
     expect(screen.getByText('CURRENT_PRICE_MISSING - Current price missing')).toBeTruthy();
     expect(screen.queryByText(/NaN/)).toBeNull();

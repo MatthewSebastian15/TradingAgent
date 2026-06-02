@@ -11,6 +11,7 @@ from io import StringIO
 from typing import Any, TypeVar
 from urllib.parse import urlsplit
 
+from tradingagents.company_profile.builder import build_company_profile
 from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
@@ -418,7 +419,15 @@ def _build_related_news(
 
 def _safe_company_profile(ticker: str, trade_date: str) -> dict[str, Any]:
     try:
-        return route_to_vendor("get_company_profile", ticker, trade_date)
+        return build_company_profile(
+            ticker=ticker,
+            fetch_vendor=lambda vendor: route_to_vendor(
+                "get_company_profile",
+                ticker,
+                trade_date,
+                vendor_order=[vendor],
+            ),
+        )
     except Exception as exc:
         logger.warning("company_profile fetch failed for %s: %s", ticker, exc)
         return {
@@ -1099,6 +1108,7 @@ def collect_market_data(
                 balance_sheet={"quarterly": balance_sheet.value, "annual": annual_balance_sheet.value},
                 cashflow=cashflow.value,
                 price_data=price.value,
+                company_profile=company_profile,
             )
         )
     except Exception:

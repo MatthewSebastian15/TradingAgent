@@ -50,6 +50,7 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
         position_sizing_reason="Moderate conviction.",
         rebalancing_action="Add gradually.",
         key_catalysts=["Earnings"],
+        key_reasons=["Validated earnings growth"],
         invalidation_conditions=["Breaks support"],
         price_target=124.0,
         time_horizon="3 months",
@@ -102,6 +103,10 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     assert parsed["reward_per_share"] == 24.0
     assert parsed["volatility_score"] == 44.0
     assert parsed["position_size_hint"] == "Use standard risk management and avoid oversized position."
+    assert parsed["analysis_overview"]["recommendation"] == "Buy"
+    assert parsed["analysis_overview"]["confidence"] == "Medium"
+    assert parsed["analysis_overview"]["key_reasons"] == ["Validated earnings growth"]
+    assert parsed["analysis_overview"]["action_plan"]["risk_reward_ratio"] == 3.0
     assert parsed["data_quality"]["price_data"] == "ok"
     assert parsed["validation_warnings"] == []
 

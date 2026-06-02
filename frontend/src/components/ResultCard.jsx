@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import ExportReportButtons from './ExportReportButtons';
-import FinancialHighlightsTable from './results/FinancialHighlightsTable';
 import MetricBox from './results/MetricBox';
 import NoticeBox from './results/NoticeBox';
 import SectionHeader from './results/SectionHeader';
 import ChartPriceTab from './results/tabs/ChartPriceTab';
+import FundamentalTab from './results/tabs/FundamentalTab';
 import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
 import ResultTabs from './results/tabs/ResultTabs';
@@ -554,8 +554,9 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
   const shouldShowActionPlan = isActionable && tradePlanValid;
   const shouldShowHoldMetrics = !shouldShowActionPlan;
 
-  const summary = result.executive_summary;
-  const thesis = result.investment_thesis;
+  const analysisOverview = result.analysis_overview || {};
+  const summary = analysisOverview.executive_summary || result.executive_summary;
+  const thesis = analysisOverview.investment_thesis || result.investment_thesis;
   const currentPrice = getCurrentPrice(result);
   const currentPriceAsOf = coalesceDisplayValue(
     result.current_price_as_of,
@@ -567,7 +568,9 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
   const allocation = result.suggested_allocation_percent ?? null;
   const riskReward = formatRiskReward(result);
   const catalysts = result.key_catalysts || [];
+  const keyReasons = analysisOverview.key_reasons || result.key_reasons || catalysts;
   const invalidations = result.invalidation_conditions || [];
+  const riskSummary = analysisOverview.risk_summary || null;
   const dataQuality = result.data_quality || null;
   const validationWarnings = Array.isArray(result.validation_warnings)
     ? result.validation_warnings
@@ -722,20 +725,6 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
 
           {shouldShowHoldMetrics && <HoldMetrics result={result} currentPrice={currentPrice} />}
 
-          {/* Data quality */}
-          {(dataQuality || validationWarnings.length > 0 || requestWarnings.length > 0) && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <DataQuality
-                dq={dataQuality}
-                validationWarnings={validationWarnings}
-                validationWarningDetails={validationWarningDetails}
-                requestWarnings={requestWarnings}
-                tradePlanValid={tradePlanValid}
-                isActionable={isActionable}
-              />
-            </div>
-          )}
-
           {budgetExhausted && (
             <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
               <SectionHeader label="PIPELINE LIMIT" />
@@ -801,6 +790,28 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
             </div>
           )}
 
+          {keyReasons.length > 0 && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <SectionHeader label="KEY REASONS" />
+              <ul className="flex flex-col gap-1.5">
+                {keyReasons.map((reason, index) => (
+                  <li key={`${reason}-${index}`} className="font-mono text-xs text-bloomberg-muted">
+                    + {reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {riskSummary && (
+            <div className="px-4 py-4 border-b border-bloomberg-border">
+              <SectionHeader label="MINI RISK SUMMARY" />
+              <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                {riskSummary.overall_risk || 'N/A'}: {riskSummary.short_reason || 'N/A'}
+              </p>
+            </div>
+          )}
+
           {/* Investment Thesis */}
           {thesis && (
             <div className="px-4 py-4 border-b border-bloomberg-border">
@@ -823,8 +834,6 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
               </button>
             </div>
           )}
-
-          <FinancialHighlightsTable financialHighlights={result.financial_highlights} />
 
           {/* Agents used */}
           {agents.length > 0 && (
@@ -867,9 +876,26 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
 
       {activeTab === 'profile' && <ProfileTab profile={result.company_profile} />}
 
+      {activeTab === 'fundamental' && (
+        <FundamentalTab financialHighlights={result.financial_highlights} />
+      )}
+
       {activeTab === 'chart_price' && <ChartPriceTab result={result} />}
 
       {activeTab === 'news' && <NewsTab result={result} />}
+
+      {activeTab === 'risk_data_quality' && (
+        <div className="px-4 py-4 border-b border-bloomberg-border">
+          <DataQuality
+            dq={dataQuality}
+            validationWarnings={validationWarnings}
+            validationWarningDetails={validationWarningDetails}
+            requestWarnings={requestWarnings}
+            tradePlanValid={tradePlanValid}
+            isActionable={isActionable}
+          />
+        </div>
+      )}
     </div>
   );
 }
