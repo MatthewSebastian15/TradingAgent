@@ -26,6 +26,7 @@ function renderWorkspace(
               FormComponent={FormComponent}
               historyKey={historyKey}
               emptyDescription="Empty"
+              backendHistoryEnabled={false}
               {...workspaceProps}
             />
           }
@@ -37,6 +38,7 @@ function renderWorkspace(
               FormComponent={FormComponent}
               historyKey={historyKey}
               emptyDescription="Empty"
+              backendHistoryEnabled={false}
               {...workspaceProps}
             />
           }
@@ -449,5 +451,219 @@ describe('AnalysisWorkspace history storage', () => {
     expect(localStorage.getItem('analysis-history-test')).toBeNull();
     expect(localStorage.getItem('analysis-history-test:result:request-clear')).toBeNull();
     expect(screen.queryByText('AAPL')).toBeNull();
+  });
+
+  it('loads recent analyses from the backend and caches summaries locally', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      expect(url).toContain('/analysis/history?limit=25');
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              job_id: 'job-db',
+              request_id: 'request-db',
+              ticker: 'MSFT',
+              market: 'US',
+              trade_date: '2026-05-28',
+              decision: 'Buy',
+              time_horizon_months: 1,
+              analysis_created_at: '2026-05-28T08:00:00.000Z',
+              updated_at: '2026-05-28T08:01:00.000Z',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    });
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
+      backendHistoryEnabled: true,
+    });
+
+    expect(await screen.findByText('MSFT')).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(localStorage.getItem('analysis-history-test'))).toEqual([
+      historySummary({
+        job_id: 'job-db',
+        request_id: 'request-db',
+        ticker: 'MSFT',
+        market: 'US',
+        trade_date: '2026-05-28',
+        decision: 'Buy',
+        time_horizon_months: 1,
+        analysis_created_at: '2026-05-28T08:00:00.000Z',
+        saved_at: '2026-05-28T08:01:00.000Z',
+      }),
+    ]);
+  });
+
+  it('opens a backend history item by request id through the history detail fallback', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (url.includes('/analysis/history?')) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                job_id: 'job-global',
+                request_id: 'request-global',
+                ticker: 'MSFT',
+                market: 'US',
+                trade_date: '2026-05-28',
+                decision: 'Buy',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/analysis/jobs/request-global')) {
+        return new Response(JSON.stringify({ error: { message: 'Job not found' } }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/analysis/request-global')) {
+        return notFoundResponse();
+      }
+      if (url.endsWith('/analysis/history/request-global')) {
+        return new Response(
+          JSON.stringify({
+            job_id: 'job-global',
+            request_id: 'request-global',
+            ticker: 'MSFT',
+            market: 'US',
+            trade_date: '2026-05-28',
+            decision: 'Buy',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
+      backendHistoryEnabled: true,
+    });
+
+    fireEvent.click(await screen.findByText('MSFT'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe('/analysis/request-global');
+    });
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([url]) => url.endsWith('/analysis/history/request-global'))
+      ).toBe(true);
+    });
+  });
+
+  it('falls back to localStorage summaries when backend history fails', async () => {
+    localStorage.setItem(
+      'analysis-history-test',
+      JSON.stringify([
+        {
+          request_id: 'request-local-fallback',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-28',
+          decision: 'Hold',
+          saved_at: new Date().toISOString(),
+        },
+      ])
+    );
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Backend unavailable'));
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
+      backendHistoryEnabled: true,
+    });
+
+    expect(await screen.findByText('AAPL')).toBeTruthy();
+  });
+
+  it('clears backend and local history together', async () => {
+    localStorage.setItem(
+      'analysis-history-test',
+      JSON.stringify([
+        {
+          request_id: 'request-clear-db',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-28',
+          decision: 'Buy',
+          saved_at: new Date().toISOString(),
+        },
+      ])
+    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new Error('Use local fallback'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ deleted: true, deleted_count: 1 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
+      backendHistoryEnabled: true,
+    });
+
+    expect(await screen.findByText('AAPL')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /clear history/i }));
+
+    await waitFor(() => expect(localStorage.getItem('analysis-history-test')).toBeNull());
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/history');
+    expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
+    expect(screen.queryByText('AAPL')).toBeNull();
+  });
+
+  it('keeps visible history and shows an error when backend clear fails', async () => {
+    localStorage.setItem(
+      'analysis-history-test',
+      JSON.stringify([
+        {
+          request_id: 'request-clear-failed',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-28',
+          decision: 'Buy',
+          saved_at: new Date().toISOString(),
+        },
+      ])
+    );
+    vi.spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new Error('Use local fallback'))
+      .mockRejectedValueOnce(new Error('Database unavailable'));
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
+      backendHistoryEnabled: true,
+    });
+
+    expect(await screen.findByText('AAPL')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /clear history/i }));
+
+    expect(await screen.findByText('Database unavailable')).toBeTruthy();
+    expect(localStorage.getItem('analysis-history-test')).not.toBeNull();
+    expect(screen.getByText('AAPL')).toBeTruthy();
   });
 });

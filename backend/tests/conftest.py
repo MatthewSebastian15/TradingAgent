@@ -52,6 +52,15 @@ def clear_rate_limiter_state():
     reset_rate_limiter_for_tests()
 
 
+@pytest.fixture(autouse=True)
+def analysis_repository(tmp_path):
+    from services.analysis_repository import AnalysisRepository, install_analysis_repository
+
+    repository = AnalysisRepository(str(tmp_path / "analysis_history.sqlite3"), max_rows=1000)
+    install_analysis_repository(repository)
+    return repository
+
+
 @pytest.fixture()
 def client() -> TestClient:
     from main import app
