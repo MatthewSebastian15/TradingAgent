@@ -113,7 +113,9 @@ def test_report_context_uses_final_decision_and_trade_plan_for_valid_buy():
         "R/R Ratio",
     ]
     assert any(row["label"] == "R/R Ratio" and row["value"] == "1:3" for row in report["trade_plan_rows"])
-    assert not any(row["label"] in {"Price Target", "Risk Per Share", "Reward Per Share"} for row in report["trade_plan_rows"])
+    assert not any(
+        row["label"] in {"Price Target", "Risk Per Share", "Reward Per Share"} for row in report["trade_plan_rows"]
+    )
 
 
 def test_report_context_contains_disclaimer():

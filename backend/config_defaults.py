@@ -14,10 +14,7 @@ APP_NAME = "TradingAgents API"
 APP_ENV = env("APP_ENV", "development").lower().strip()
 
 if APP_ENV not in {"development", "production"}:
-    raise ValueError(
-        f"Invalid APP_ENV={APP_ENV!r}. "
-        "Allowed values: development, production."
-    )
+    raise ValueError(f"Invalid APP_ENV={APP_ENV!r}. Allowed values: development, production.")
 
 IS_PRODUCTION = APP_ENV == "production"
 IS_DEVELOPMENT = APP_ENV == "development"
@@ -45,10 +42,7 @@ else:
     CORS_ORIGINS = []
 
 if "*" in CORS_ORIGINS:
-    raise ValueError(
-        "CORS_ORIGINS='*' is not allowed. "
-        "Use explicit origins instead."
-    )
+    raise ValueError("CORS_ORIGINS='*' is not allowed. Use explicit origins instead.")
 
 if IS_PRODUCTION and not CORS_ORIGINS:
     raise ValueError("CORS_ORIGINS must be explicitly configured in production.")
@@ -94,9 +88,7 @@ ANALYSIS_DEPTH_CONFIG: dict[str, dict[str, int]] = {
         "risk_rounds": 3,
     },
 }
-ANALYSIS_DEPTH_LLM_BUDGETS: dict[str, int] = {
-    depth: cfg["llm_budget"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()
-}
+ANALYSIS_DEPTH_LLM_BUDGETS: dict[str, int] = {depth: cfg["llm_budget"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()}
 MAX_GEMINI_CALLS = ANALYSIS_DEPTH_LLM_BUDGETS[DEFAULT_ANALYSIS_DEPTH]
 
 # Rate limiting
@@ -116,9 +108,7 @@ if IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
 LLM_TIMEOUT_SECONDS = env_int("LLM_TIMEOUT_SECONDS", 60, min_value=1)
 LLM_MAX_RETRIES = env_int("LLM_MAX_RETRIES", 2, min_value=1)
 PROVIDER_SDK_MAX_RETRIES = env_int("PROVIDER_SDK_MAX_RETRIES", 0, min_value=0)
-LLM_RETRIES_BY_DEPTH: dict[str, int] = {
-    depth: cfg["llm_retries"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()
-}
+LLM_RETRIES_BY_DEPTH: dict[str, int] = {depth: cfg["llm_retries"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()}
 LLM_RETRY_BASE_DELAY = 1.5
 LLM_RETRY_MAX_DELAY = 30
 LLM_429_MAX_WAIT_SECONDS = 20

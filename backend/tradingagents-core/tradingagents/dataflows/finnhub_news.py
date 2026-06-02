@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any
-from .news_aggregator import deduplicate_news as aggregate_deduplicate_news
-from .news_aggregator import normalize_url
-from .news_aggregator import rank_news
 
 from .config import get_config
 from .finnhub_common import FinnhubUnavailableError, handle_finnhub_error, make_api_request, unix_to_iso_datetime
+from .news_aggregator import deduplicate_news as aggregate_deduplicate_news
+from .news_aggregator import rank_news
 
 EVENT_KEYWORDS = {
     "earnings": ["earnings", "revenue", "profit", "net income"],
@@ -69,7 +68,12 @@ def _format_items(items: list[dict[str, Any]], label: str, start_date: str, end_
     if not items:
         return f"No news found for {label} between {start_date} and {end_date}"
 
-    lines = [f"## Finnhub News for {label}, from {start_date} to {end_date}:", "", "Source metadata: finnhub:/company-news or finnhub:/news", ""]
+    lines = [
+        f"## Finnhub News for {label}, from {start_date} to {end_date}:",
+        "",
+        "Source metadata: finnhub:/company-news or finnhub:/news",
+        "",
+    ]
     for item in items:
         lines.append(f"### {item['title']} (source: {item['publisher']})")
         if item.get("published_at"):

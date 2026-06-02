@@ -369,13 +369,9 @@ export default function Dashboard() {
                   { val: '5', label: 'OUTPUTS' },
                 ].map(({ val, label }) => (
                   <div key={label} className="border border-bloomberg-border p-2">
-                    <div className="font-mono text-lg font-bold text-bloomberg-orange">
-                      {val}
-                    </div>
+                    <div className="font-mono text-lg font-bold text-bloomberg-orange">{val}</div>
 
-                    <div className="font-mono text-xs text-bloomberg-muted">
-                      {label}
-                    </div>
+                    <div className="font-mono text-xs text-bloomberg-muted">{label}</div>
                   </div>
                 ))}
               </div>
@@ -417,13 +413,9 @@ export default function Dashboard() {
                   key={label}
                   className="flex flex-col gap-1 py-1.5 border-b border-bloomberg-border last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <span className="font-mono text-xs text-bloomberg-muted">
-                    {label}
-                  </span>
+                  <span className="font-mono text-xs text-bloomberg-muted">{label}</span>
 
-                  <span className={`font-mono text-xs ${color} sm:text-right`}>
-                    {val}
-                  </span>
+                  <span className={`font-mono text-xs ${color} sm:text-right`}>{val}</span>
                 </div>
               ))}
             </div>
@@ -442,12 +434,7 @@ export default function Dashboard() {
               </div>
 
               {AGENTS.map((agent, index) => (
-                <AgentRow
-                  key={agent.short}
-                  agent={agent}
-                  index={index}
-                  visible={visible}
-                />
+                <AgentRow key={agent.short} agent={agent} index={index} visible={visible} />
               ))}
 
               <div className="px-4 py-3 border-t border-bloomberg-border bg-bloomberg-surface">
@@ -507,9 +494,7 @@ export default function Dashboard() {
                       {format}
                     </div>
 
-                    <div className="font-mono text-xs text-bloomberg-muted">
-                      {ex}
-                    </div>
+                    <div className="font-mono text-xs text-bloomberg-muted">{ex}</div>
                   </div>
                 ))}
               </div>

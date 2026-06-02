@@ -405,9 +405,7 @@ def _build_related_news(
     if not ranked:
         return {**base_payload, "warning": "Related news is unavailable after deduplication."}
 
-    source = source_label or "+".join(
-        dict.fromkeys(str(item.get("source") or "unknown") for item in ranked)
-    )
+    source = source_label or "+".join(dict.fromkeys(str(item.get("source") or "unknown") for item in ranked))
 
     return {
         **base_payload,
@@ -555,11 +553,7 @@ def _build_price_chart(
         "stats": {},
     }
 
-    lines = [
-        line
-        for line in (price_data or "").splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
+    lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if not lines:
         return {**base_payload, "warning": "Price chart data is unavailable."}
 
@@ -798,8 +792,7 @@ def _classify_price_data(
         if available_before_or_on_target:
             fallback_date = max(available_before_or_on_target)
             warnings.append(
-                "OHLCV_FALLBACK_USED - Exact OHLCV date not found; "
-                f"using latest available trading day {fallback_date}."
+                f"OHLCV_FALLBACK_USED - Exact OHLCV date not found; using latest available trading day {fallback_date}."
             )
             return "market_closed"
         warnings.append(
@@ -808,7 +801,9 @@ def _classify_price_data(
         )
         return "missing"
     if len(price_dates) < 10:
-        warnings.append(f"Only {len(price_dates)} price rows found in the {price_lookback_days}-day configured vendor window.")
+        warnings.append(
+            f"Only {len(price_dates)} price rows found in the {price_lookback_days}-day configured vendor window."
+        )
         return "partial"
     return "ok"
 
@@ -838,10 +833,14 @@ def _classify_fundamentals(
 
 def _classify_news(company_news: DataField, global_news: DataField, warnings: list[str]) -> str:
     if company_news.status == "missing" and global_news.status == "missing":
-        warnings.append("NEWS_UNAVAILABLE - No usable company-specific or global news was returned; analysis continues without blocking trade validation.")
+        warnings.append(
+            "NEWS_UNAVAILABLE - No usable company-specific or global news was returned; analysis continues without blocking trade validation."
+        )
         return "unavailable"
     if company_news.status == "missing" or global_news.status == "missing":
-        warnings.append("NEWS_PARTIAL - Partial news coverage from configured vendors; company-specific or global news is missing.")
+        warnings.append(
+            "NEWS_PARTIAL - Partial news coverage from configured vendors; company-specific or global news is missing."
+        )
         return "partial"
     return "ok"
 
@@ -933,7 +932,10 @@ def _build_data_source_metadata(
         "income_statement": _source_label(income_statement.value),
         "company_news": _source_label(company_news.value),
         "global_news": _source_label(global_news.value),
-        "news": "+".join(dict.fromkeys(_detect_sources_from_text(company_news.value) + _detect_sources_from_text(global_news.value))) or "unavailable",
+        "news": "+".join(
+            dict.fromkeys(_detect_sources_from_text(company_news.value) + _detect_sources_from_text(global_news.value))
+        )
+        or "unavailable",
         "news_sentiment": _source_label(news_sentiment.value),
         "social_sentiment": _source_label(social_sentiment.value),
         "event_risk": _source_label(event_risk.value),

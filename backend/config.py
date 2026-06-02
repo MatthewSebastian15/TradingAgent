@@ -12,7 +12,7 @@ test reloads deterministic when environment variables change.
 
 from __future__ import annotations
 
-# ruff: noqa: E402,I001
+# ruff: noqa: E402,F401,I001
 
 import importlib
 import sys

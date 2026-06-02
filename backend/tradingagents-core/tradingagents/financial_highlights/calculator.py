@@ -91,15 +91,11 @@ def _build_period_cells(period: FinancialPeriod, normalized: dict[str, Any]) -> 
         previous_revenue,
     )
     net_profit_growth = safe_divide(
-        net_profit - previous_net_profit
-        if net_profit is not None and previous_net_profit is not None
-        else None,
+        net_profit - previous_net_profit if net_profit is not None and previous_net_profit is not None else None,
         previous_net_profit,
     )
     average_equity = (
-        (total_equity + previous_equity) / 2
-        if total_equity is not None and previous_equity is not None
-        else None
+        (total_equity + previous_equity) / 2 if total_equity is not None and previous_equity is not None else None
     )
 
     eps_record = _record(normalized, key, "eps")
@@ -183,21 +179,11 @@ def build_metric_rows(
         for key, label, unit in definitions
     ]
 
-    missing_metrics = [
-        row.key
-        for row in rows
-        if all(cell.status == "unavailable" for cell in row.values.values())
-    ]
+    missing_metrics = [row.key for row in rows if all(cell.status == "unavailable" for cell in row.values.values())]
     missing_periods = [
-        period.key
-        for period in periods
-        if all(row.values[period.key].status == "unavailable" for row in rows)
+        period.key for period in periods if all(row.values[period.key].status == "unavailable" for row in rows)
     ]
-    available_count = sum(
-        cell.status != "unavailable"
-        for row in rows
-        for cell in row.values.values()
-    )
+    available_count = sum(cell.status != "unavailable" for row in rows for cell in row.values.values())
     total_count = len(rows) * len(periods)
     status = "unavailable" if available_count == 0 else "complete" if available_count == total_count else "partial"
 

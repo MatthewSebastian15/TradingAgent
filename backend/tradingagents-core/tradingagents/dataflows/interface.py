@@ -37,6 +37,17 @@ from .alpha_vantage import (
     get_stock as get_alpha_vantage_stock,
 )
 from .alpha_vantage_common import AlphaVantagePermanentError, AlphaVantageRateLimitError
+
+# Configuration and routing logic
+from .config import get_config
+from .data_quality import (
+    looks_missing,
+    validate_fundamentals,
+    validate_news,
+    validate_ohlcv,
+    validate_quote,
+    validate_sentiment,
+)
 from .finnhub_common import (
     FinnhubRateLimitError,
     feature_for_method,
@@ -89,10 +100,8 @@ from .finnhub_stock import (
 )
 from .marketaux_news import get_news as get_marketaux_news
 from .newsdata_news import get_news as get_newsdata_news
-
-# Configuration and routing logic
-from .config import get_config
-from .data_quality import looks_missing, validate_fundamentals, validate_news, validate_ohlcv, validate_quote, validate_sentiment
+from .vendor_budget import get_budget
+from .vendor_router import get_attempt_recorder, sanitize_error
 from .y_finance import (
     get_balance_sheet as get_yfinance_balance_sheet,
 )
@@ -117,8 +126,6 @@ from .y_finance import (
     get_stock_stats_indicators_window,
     get_YFin_data_online,
 )
-from .vendor_budget import get_budget
-from .vendor_router import get_attempt_recorder, sanitize_error
 from .yfinance_news import get_global_news_yfinance, get_news_yfinance
 
 try:
@@ -167,7 +174,17 @@ def _parse_last_quote_from_csv(raw: str, symbol: str, source: str) -> dict[str, 
         "high": as_float(last.get("High")),
         "low": as_float(last.get("Low")),
         "timestamp": str(last.get("Date")) if "Date" in last else None,
-        "metadata": {"source": source, "quality": validate_quote({"current_price": current, "previous_close": previous_close, "source": source, "timestamp": str(last.get("Date")) if "Date" in last else None})},
+        "metadata": {
+            "source": source,
+            "quality": validate_quote(
+                {
+                    "current_price": current,
+                    "previous_close": previous_close,
+                    "source": source,
+                    "timestamp": str(last.get("Date")) if "Date" in last else None,
+                }
+            ),
+        },
     }
 
 
@@ -181,8 +198,11 @@ def get_yfinance_quote(symbol: str, curr_date: str | None = None) -> dict[str, A
 def get_alpha_vantage_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
     end_dt = datetime.strptime(curr_date, "%Y-%m-%d") if curr_date else datetime.now()
     start_dt = end_dt - timedelta(days=10)
-    raw = get_alpha_vantage_stock(symbol, start_dt.strftime("%Y-%m-%d"), (end_dt + timedelta(days=1)).strftime("%Y-%m-%d"))
+    raw = get_alpha_vantage_stock(
+        symbol, start_dt.strftime("%Y-%m-%d"), (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+    )
     return _parse_last_quote_from_csv(raw, symbol, "alpha_vantage")
+
 
 # Tools organized by category
 TOOLS_CATEGORIES = {
@@ -419,7 +439,6 @@ def _is_unusable_result(result: Any) -> bool:
     return False
 
 
-
 def _quality_for_result(method: str, result: Any) -> dict[str, Any] | None:
     validators = {
         "get_quote": validate_quote,
@@ -455,6 +474,7 @@ def _consume_budget(config: dict, method: str, vendor: str) -> tuple[bool, str |
         return False, reason
     budget.record_call(vendor, method)
     return True, None
+
 
 def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, str | None]:
     if vendor != "finnhub":
@@ -513,6 +533,7 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
     cache.set(cache_key, result)
     return result
 
+
 def _active_cache(config: dict):
     """Return the configured tool cache, preferring persistent SQLite when enabled."""
     global _PERSISTENT_TOOL_CACHE, _PERSISTENT_TOOL_CACHE_CONFIG
@@ -561,7 +582,7 @@ def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, *
 
     errors = []
     first_unusable_result = None
-    for vendor in (vendor_order or _vendor_sequence(method)):
+    for vendor in vendor_order or _vendor_sequence(method):
         if vendor not in VENDOR_METHODS[method]:
             _record_attempt(config, method, vendor, "unsupported")
             continue

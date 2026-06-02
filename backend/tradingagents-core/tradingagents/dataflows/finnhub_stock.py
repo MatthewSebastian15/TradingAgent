@@ -6,7 +6,6 @@ from typing import Any
 
 import pandas as pd
 
-from .finnhub_symbol_resolver import get_finnhub_symbol_candidates
 from .finnhub_common import (
     FinnhubUnavailableError,
     build_metadata,
@@ -15,6 +14,7 @@ from .finnhub_common import (
     to_unix_timestamp,
     unix_to_iso_date,
 )
+from .finnhub_symbol_resolver import get_finnhub_symbol_candidates
 
 
 def _try_symbols(symbol: str) -> list[str]:
@@ -214,7 +214,7 @@ def get_stock(symbol: str, start_date: str, end_date: str) -> str:
             if len(df) < 30:
                 warnings.append("Partial OHLCV history: fewer than 30 candles returned.")
             header = f"# Finnhub daily stock data for {candidate} from {start_date} to {end_date}\n"
-            header += f"# Source: finnhub:/stock/candle\n"
+            header += "# Source: finnhub:/stock/candle\n"
             header += f"# Total records: {len(df)}\n"
             if warnings:
                 header += "# Warnings: " + " | ".join(warnings) + "\n"
@@ -301,10 +301,7 @@ def get_indicator(symbol: str, indicator: str, curr_date: str, look_back_days: i
     lines = []
     for _, row in recent.iterrows():
         value = row.get("value")
-        if pd.isna(value):
-            rendered = "N/A"
-        else:
-            rendered = f"{float(value):.4f}"
+        rendered = "N/A" if pd.isna(value) else f"{float(value):.4f}"
         lines.append(f"{row['Date'].strftime('%Y-%m-%d')}: {rendered}")
     if not lines:
         return f"Finnhub unavailable: indicator {indicator} for {symbol} - no rows in requested window."

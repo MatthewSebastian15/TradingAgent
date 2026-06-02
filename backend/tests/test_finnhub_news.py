@@ -30,7 +30,10 @@ def test_news_rank_by_recency():
 
 
 def test_get_news_success_normalizes_items(monkeypatch):
-    monkeypatch.setattr("tradingagents.dataflows.finnhub_news.make_api_request", lambda *a, **k: [{"headline": "AAPL earnings", "datetime": 1779840000, "source": "Wire"}])
+    monkeypatch.setattr(
+        "tradingagents.dataflows.finnhub_news.make_api_request",
+        lambda *a, **k: [{"headline": "AAPL earnings", "datetime": 1779840000, "source": "Wire"}],
+    )
     text = get_news("AAPL", "2026-05-01", "2026-05-28")
     assert "AAPL earnings" in text
     assert "Event type: earnings" in text

@@ -28,9 +28,7 @@ class VendorBudget:
             if self.max_total_calls and self.total_calls >= self.max_total_calls:
                 return False
             vendor_limit = self.per_vendor_limits.get(vendor)
-            if vendor_limit is not None and vendor_limit and self.vendor_calls.get(vendor, 0) >= vendor_limit:
-                return False
-            return True
+            return not (vendor_limit is not None and vendor_limit and self.vendor_calls.get(vendor, 0) >= vendor_limit)
 
     def record_call(self, vendor: str, method: str) -> None:
         vendor = str(vendor)

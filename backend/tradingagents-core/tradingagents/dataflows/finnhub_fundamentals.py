@@ -95,7 +95,9 @@ def get_basic_financials(ticker: str) -> str:
             "52_week_high": (_first_metric(metric, "52WeekHigh"), "latest"),
             "52_week_low": (_first_metric(metric, "52WeekLow"), "latest"),
         }
-        normalized = {key: _sourced(value, period) for key, (value, period) in mappings.items() if _sourced(value, period)}
+        normalized = {
+            key: _sourced(value, period) for key, (value, period) in mappings.items() if _sourced(value, period)
+        }
         if not normalized:
             raise FinnhubUnavailableError("No selected basic financial metrics were available.")
         return _dump(
@@ -148,7 +150,9 @@ def get_fundamentals(ticker: str, curr_date: str | None = None) -> str:
             "/stock/profile2+/stock/metric",
             is_enrichment=True,
             confidence="high" if profile_payload and metrics_payload else "medium",
-            missing_fields=[] if profile_payload and metrics_payload else ["profile" if not profile_payload else "metrics"],
+            missing_fields=[]
+            if profile_payload and metrics_payload
+            else ["profile" if not profile_payload else "metrics"],
         ),
     }
     return _dump(payload)
@@ -209,7 +213,6 @@ def _filter_statement(text: str, statement_hint: str, ticker: str) -> str:
     return _dump(payload)
 
 
-
 def get_financials(ticker: str, freq: str = "annual") -> str:
     """Return Finnhub /stock/financials as an optional fallback statement payload."""
     normalized_freq = "annual" if str(freq or "annual").lower().startswith("a") else "quarterly"
@@ -235,6 +238,7 @@ def get_financials(ticker: str, freq: str = "annual") -> str:
         )
     except Exception as exc:
         return handle_finnhub_error(f"financials for {ticker}", exc, fallback_next=None)
+
 
 def get_balance_sheet(ticker: str, freq: str = "quarterly", curr_date: str | None = None) -> str:
     return _filter_statement(get_financials_reported(ticker, freq, curr_date), "balance", ticker)

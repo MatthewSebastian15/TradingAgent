@@ -17,7 +17,9 @@ function mockPdfResponse() {
 
 function mockReportNotFoundResponse() {
   return new Response(
-    JSON.stringify({ error: { code: 'report_not_found', message: 'Analysis result was not found or has expired.' } }),
+    JSON.stringify({
+      error: { code: 'report_not_found', message: 'Analysis result was not found or has expired.' },
+    }),
     {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
@@ -28,7 +30,10 @@ function mockReportNotFoundResponse() {
 describe('ExportReportButtons', () => {
   beforeEach(() => {
     sessionStorage.setItem('_ta_owner_token', 'test-owner-token');
-    sessionStorage.setItem('_ta_owner_token_expires_at', String(Math.floor(Date.now() / 1000) + 3600));
+    sessionStorage.setItem(
+      '_ta_owner_token_expires_at',
+      String(Math.floor(Date.now() / 1000) + 3600)
+    );
   });
 
   afterEach(() => {
@@ -39,7 +44,9 @@ describe('ExportReportButtons', () => {
   });
 
   it('opens backend HTML report from a fetched blob in real mode', async () => {
-    const fetchMock = vi.fn(async () => new Response('<html><body>Report</body></html>', { status: 200 }));
+    const fetchMock = vi.fn(
+      async () => new Response('<html><body>Report</body></html>', { status: 200 })
+    );
     const openMock = vi.fn(() => ({}));
     vi.stubGlobal('fetch', fetchMock);
     vi.spyOn(window, 'open').mockImplementation(openMock);
@@ -63,7 +70,9 @@ describe('ExportReportButtons', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(mockReportNotFoundResponse())
-      .mockResolvedValueOnce(new Response('<html><body>Fallback Report</body></html>', { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response('<html><body>Fallback Report</body></html>', { status: 200 })
+      );
     const openMock = vi.fn(() => ({}));
     vi.stubGlobal('fetch', fetchMock);
     vi.spyOn(window, 'open').mockImplementation(openMock);
@@ -100,7 +109,10 @@ describe('ExportReportButtons', () => {
   });
 
   it('falls back to payload PDF export when the request_id report is expired', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(mockReportNotFoundResponse()).mockResolvedValueOnce(mockPdfResponse());
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockReportNotFoundResponse())
+      .mockResolvedValueOnce(mockPdfResponse());
     vi.stubGlobal('fetch', fetchMock);
     if (!URL.createObjectURL) URL.createObjectURL = vi.fn();
     if (!URL.revokeObjectURL) URL.revokeObjectURL = vi.fn();
@@ -127,13 +139,7 @@ describe('ExportReportButtons', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-report');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
-    render(
-      <ExportReportButtons
-        resourceId="mock-nvda-buy"
-        result={MOCK_RESPONSE}
-        mockReport
-      />
-    );
+    render(<ExportReportButtons resourceId="mock-nvda-buy" result={MOCK_RESPONSE} mockReport />);
     fireEvent.click(screen.getByText('PREVIEW HTML'));
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -154,13 +160,7 @@ describe('ExportReportButtons', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.spyOn(window, 'open').mockImplementation(() => printWindow);
 
-    render(
-      <ExportReportButtons
-        resourceId="mock-nvda-buy"
-        result={MOCK_RESPONSE}
-        mockReport
-      />
-    );
+    render(<ExportReportButtons resourceId="mock-nvda-buy" result={MOCK_RESPONSE} mockReport />);
     fireEvent.click(screen.getByText('EXPORT PDF'));
 
     await waitFor(() => expect(printWindow.print).toHaveBeenCalledTimes(1));

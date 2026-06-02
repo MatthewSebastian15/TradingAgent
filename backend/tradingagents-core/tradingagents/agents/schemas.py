@@ -71,7 +71,6 @@ class DebateArgument(BaseModel):
         description="True when another round is unlikely to materially change the debate.",
     )
 
-
     @field_validator("risk_flags", mode="before")
     @classmethod
     def clamp_risk_flags(cls, value):
@@ -317,9 +316,7 @@ def _validate_word_range(field_name: str, value: str, min_words: int, max_words:
     count = _word_count(text)
 
     if count < min_words or count > max_words:
-        raise ValueError(
-            f"{field_name} must be {min_words}-{max_words} words; got {count} words."
-        )
+        raise ValueError(f"{field_name} must be {min_words}-{max_words} words; got {count} words.")
 
     return text
 

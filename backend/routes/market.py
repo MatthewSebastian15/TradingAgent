@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, Query, Request
+
 from rate_limiter import limit_request, request_policy
 from routes.validation import normalize_ticker_symbol
 from schemas import MarketQuotesResponse

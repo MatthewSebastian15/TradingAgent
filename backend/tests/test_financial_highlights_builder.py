@@ -20,12 +20,36 @@ def _vendor_payloads():
                 "FY26Q1": {"revenue": 40_000_000_000, "ebitda": 8_000_000_000, "net_profit": 4_000_000_000},
             },
             "balance_sheet": {
-                "FY22": {"total_equity": 50_000_000_000, "total_debt": 10_000_000_000, "shares_outstanding": 1_000_000_000},
-                "FY23": {"total_equity": 55_000_000_000, "total_debt": 11_000_000_000, "shares_outstanding": 1_000_000_000},
-                "FY24": {"total_equity": 60_000_000_000, "total_debt": 12_000_000_000, "shares_outstanding": 1_000_000_000},
-                "FY25": {"total_equity": 66_000_000_000, "total_debt": 13_200_000_000, "shares_outstanding": 1_000_000_000},
-                "FY25Q1": {"total_equity": 62_000_000_000, "total_debt": 12_400_000_000, "shares_outstanding": 1_000_000_000},
-                "FY26Q1": {"total_equity": 70_000_000_000, "total_debt": 14_000_000_000, "shares_outstanding": 1_000_000_000},
+                "FY22": {
+                    "total_equity": 50_000_000_000,
+                    "total_debt": 10_000_000_000,
+                    "shares_outstanding": 1_000_000_000,
+                },
+                "FY23": {
+                    "total_equity": 55_000_000_000,
+                    "total_debt": 11_000_000_000,
+                    "shares_outstanding": 1_000_000_000,
+                },
+                "FY24": {
+                    "total_equity": 60_000_000_000,
+                    "total_debt": 12_000_000_000,
+                    "shares_outstanding": 1_000_000_000,
+                },
+                "FY25": {
+                    "total_equity": 66_000_000_000,
+                    "total_debt": 13_200_000_000,
+                    "shares_outstanding": 1_000_000_000,
+                },
+                "FY25Q1": {
+                    "total_equity": 62_000_000_000,
+                    "total_debt": 12_400_000_000,
+                    "shares_outstanding": 1_000_000_000,
+                },
+                "FY26Q1": {
+                    "total_equity": 70_000_000_000,
+                    "total_debt": 14_000_000_000,
+                    "shares_outstanding": 1_000_000_000,
+                },
             },
             "dividends": {
                 "FY26Q1": {"dividend_per_share": 2.0, "reference_price": 100.0},
@@ -97,9 +121,7 @@ def test_builder_parses_annual_and_quarterly_yfinance_statement_bundle():
             "# Financial statement frequency: annual\n"
             ",2023-12-31,2024-12-31,2025-12-31\n"
             "Total Revenue,120000000000,132000000000,150000000000",
-            "# Financial statement frequency: quarterly\n"
-            ",2026-03-31\n"
-            "Total Revenue,40000000000",
+            "# Financial statement frequency: quarterly\n,2026-03-31\nTotal Revenue,40000000000",
         ]
     )
 

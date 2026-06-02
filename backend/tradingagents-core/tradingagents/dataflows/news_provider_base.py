@@ -47,7 +47,9 @@ class BaseNewsProvider:
         self.timeout_seconds = max(1, int(timeout_seconds))
         self.max_retries = max(0, int(max_retries))
 
-    def _request_json(self, params: dict[str, Any], *, strategy: str, include_raw: bool) -> tuple[Any | None, dict[str, Any]]:
+    def _request_json(
+        self, params: dict[str, Any], *, strategy: str, include_raw: bool
+    ) -> tuple[Any | None, dict[str, Any]]:
         safe_params = sanitize_params(params)
         attempt: dict[str, Any] = {"strategy": strategy, "request_params": safe_params}
         delays = [0.5, 1.5]

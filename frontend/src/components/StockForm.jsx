@@ -492,7 +492,6 @@ export default function StockForm({
   );
 }
 
-
 StockForm.propTypes = {
   onResult: PropTypes.func.isRequired,
   onLoading: PropTypes.func.isRequired,

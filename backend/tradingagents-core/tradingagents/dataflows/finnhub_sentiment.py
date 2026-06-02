@@ -26,7 +26,9 @@ def get_news_sentiment(ticker: str) -> str:
         sentiment = payload.get("sentiment") if isinstance(payload.get("sentiment"), dict) else {}
         sector = payload.get("sectorAverageBullishPercent") or payload.get("sectorAverageNewsScore")
         normalized = {
-            "buzz_score": _as_float((payload.get("buzz") or {}).get("buzz")) if isinstance(payload.get("buzz"), dict) else None,
+            "buzz_score": _as_float((payload.get("buzz") or {}).get("buzz"))
+            if isinstance(payload.get("buzz"), dict)
+            else None,
             "company_news_score": _as_float(sentiment.get("companyNewsScore")),
             "bullish_percent": _as_float(sentiment.get("bullishPercent")),
             "bearish_percent": _as_float(sentiment.get("bearishPercent")),

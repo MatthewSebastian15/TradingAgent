@@ -6,7 +6,6 @@ from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 from tradingagents.trade_levels import normalize_trade_levels
 
 
-
 def _valid_executive_summary() -> str:
     return (
         "The final rating is Hold because the available evidence is balanced and the setup does not justify forcing a new position before confirmation improves. "
