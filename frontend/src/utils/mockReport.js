@@ -64,22 +64,70 @@ function row(label, value) {
   return { label, value: display(value) };
 }
 
+function numberOrNull(value) {
+  if (!hasValue(value)) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function profileMarketCap(value, currency) {
+  const number = numberOrNull(value);
+  if (number === null) return 'N/A';
+
+  const currencyCode = String(currency || '').toUpperCase();
+  if (!currencyCode) return display(number);
+
+  const isIdr = currencyCode === 'IDR';
+  const divisor = isIdr ? 1_000_000_000 : 1_000_000;
+  return `${(number / divisor).toLocaleString('en-US', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} ${currencyCode} ${isIdr ? 'Bn' : 'Mn'}`;
+}
+
+function profileNumber(value) {
+  const number = numberOrNull(value);
+  return number === null ? 'N/A' : number.toLocaleString('en-US');
+}
+
+function profileCurrentPrice(value, profile) {
+  const number = numberOrNull(value);
+  if (number === null) return 'N/A';
+
+  const currencyCode = String(profile?.currency || '').toUpperCase();
+  if (currencyCode === 'IDR') return `Rp ${number.toLocaleString('en-US')}`;
+  if (profile?.ticker) return formatPrice(number, profile.ticker) || 'N/A';
+  if (!currencyCode) return display(number);
+  return `${currencyCode} ${number.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 function buildCompanyProfileRows(profile) {
   if (!profile?.available) return [];
   return [
-    row('Company Name', profile.name),
+    row('Company Name', profile.company_name || profile.name),
+    row('Ticker', profile.ticker),
+    row('Exchange', profile.exchange),
+    row('Currency', profile.currency),
+    row('Country', profile.country),
     row('Sector', profile.sector),
     row('Industry', profile.industry),
-    row('Address', profile.address),
-    row('Phone', profile.phone),
     row('Website', profile.website),
-    row('Full Time Employees', profile.full_time_employees),
+    row('Market Cap', profileMarketCap(profile.market_cap, profile.currency)),
+    row('Shares Outstanding', profileNumber(profile.shares_outstanding)),
+    row('Current Price', profileCurrentPrice(profile.current_price, profile)),
+    row('Fiscal Year End', profile.fiscal_year_end),
+    row('Employee Count', profile.employee_count ?? profile.full_time_employees),
+    row('Profile Data Quality', profile.data_quality?.status),
   ];
 }
 
 function buildCompanyProfileExecutives(profile) {
-  if (!Array.isArray(profile?.executives)) return [];
-  return profile.executives
+  const officers = Array.isArray(profile?.officers) ? profile.officers : profile?.executives;
+  if (!Array.isArray(officers)) return [];
+  return officers
     .slice(0, 10)
     .filter((item) => item && typeof item === 'object')
     .map((item) => ({ name: display(item.name), title: display(item.title) }));
@@ -298,35 +346,60 @@ function renderAnalystSections(sections) {
 
 function renderFinancialHighlights(financialHighlights) {
   const periods = financialHighlights?.periods;
-  const rows = financialHighlights?.rows;
-  if (!Array.isArray(periods) || !periods.length || !Array.isArray(rows) || !rows.length) {
+  const sections = Array.isArray(financialHighlights?.sections)
+    ? financialHighlights.sections
+    : [{ key: 'legacy', title: null, rows: financialHighlights?.rows }];
+  const hasRows = sections.some((section) => Array.isArray(section.rows) && section.rows.length);
+  if (!Array.isArray(periods) || !periods.length || !hasRows) {
     return '';
   }
+  const snapshot = Array.isArray(financialHighlights.point_in_time)
+    ? financialHighlights.point_in_time
+    : [];
+  const renderTable = (rows) => `<table class="financial-highlights-table">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>
+      ${rows
+        .map(
+          (item) => `<tr>
+            <td>${escapeHtml(item.label)}</td>
+            ${periods
+              .map((period) => {
+                const cell = item.values?.[period.key];
+                return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display)}</td>`;
+              })
+              .join('')}
+          </tr>`
+        )
+        .join('')}
+    </tbody>
+  </table>`;
   return `<section class="section financial-highlights">
     <h2>${escapeHtml(financialHighlights.title || 'Key Financial Highlights')}</h2>
-    <table class="financial-highlights-table">
-      <thead>
-        <tr>
-          <th>Metric</th>
-          ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
-        </tr>
-      </thead>
-      <tbody>
-        ${rows
-          .map(
-            (item) => `<tr>
-              <td>${escapeHtml(item.label)}</td>
-              ${periods
-                .map((period) => {
-                  const cell = item.values?.[period.key];
-                  return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display)}</td>`;
-                })
-                .join('')}
-            </tr>`
-          )
-          .join('')}
-      </tbody>
-    </table>
+    ${financialHighlights.unit_note ? `<p class="muted">${escapeHtml(financialHighlights.unit_note)}</p>` : ''}
+    ${
+      snapshot.length
+        ? `<h3>Latest Market Snapshot</h3>
+          <table><tbody>${snapshot
+            .map(
+              (item) =>
+                `<tr><th>${escapeHtml(item.label)}</th><td>${escapeHtml(item.status === 'unavailable' ? 'N/A' : `${item.display} ${item.unit}`)}</td></tr>`
+            )
+            .join('')}</tbody></table>`
+        : ''
+    }
+    ${sections
+      .filter((section) => section.rows?.length)
+      .map(
+        (section) =>
+          `${section.title ? `<h3>${escapeHtml(section.title)}</h3>` : ''}${renderTable(section.rows)}`
+      )
+      .join('')}
   </section>`;
 }
 
@@ -335,7 +408,7 @@ function renderCompanyProfile(profile, rows, executives) {
   return `<section class="section">
     <h2>Company Profile</h2>
     <table><tbody>${renderRows(rows)}</tbody></table>
-    ${profile.description ? `<h3>Business Description</h3><p>${escapeHtml(profile.description)}</p>` : ''}
+    ${profile.business_summary || profile.description ? `<h3>Business Description</h3><p>${escapeHtml(profile.business_summary || profile.description)}</p>` : ''}
     ${
       executives.length
         ? `<h3>Key Executives</h3>
@@ -497,20 +570,8 @@ export function renderMockReportHtml(report) {
         <p>${escapeHtml(report.executive_summary)}</p>
       </section>
 
-      ${renderCompanyProfile(
-        report.company_profile,
-        report.company_profile_rows,
-        report.company_profile_executives
-      )}
-
-      ${renderPriceChartSummary(report.price_chart_rows)}
-
-      ${renderRelatedNews(report.related_news, report.related_news_items)}
-
-      ${renderFinancialHighlights(report.financial_highlights)}
-
       <section class="section">
-        <h2>Decision Summary</h2>
+        <h2>Final Recommendation</h2>
         <table><tbody>${renderRows(report.decision_rows)}</tbody></table>
       </section>
 
@@ -522,6 +583,18 @@ export function renderMockReportHtml(report) {
             : `<p class="muted">No actionable trade plan is available. Final decision: ${escapeHtml(report.final_decision)}.</p>`
         }
       </section>
+
+      ${renderCompanyProfile(
+        report.company_profile,
+        report.company_profile_rows,
+        report.company_profile_executives
+      )}
+
+      ${renderFinancialHighlights(report.financial_highlights)}
+
+      ${renderPriceChartSummary(report.price_chart_rows)}
+
+      ${renderRelatedNews(report.related_news, report.related_news_items)}
 
       <section class="section">
         <h2>Risk And Volatility</h2>

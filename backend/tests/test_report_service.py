@@ -70,6 +70,7 @@ def _base_result(**overrides):
         },
         "financial_highlights": {
             "title": "Key Financial Highlights",
+            "unit_note": "Currency: USD (US Dollar) | Amount figures: in millions (USD Mn) | Percent metrics: shown with %",
             "periods": [
                 {"key": "FY25", "label": "FY25", "type": "annual", "year": 2025, "quarter": None},
                 {"key": "FY26Q1", "label": "FY26Q1", "type": "quarter", "year": 2026, "quarter": 1},
@@ -83,6 +84,32 @@ def _base_result(**overrides):
                         "FY25": {"display": "100.0", "status": "reported"},
                         "FY26Q1": {"display": "N/A", "status": "unavailable"},
                     },
+                }
+            ],
+            "point_in_time": [
+                {
+                    "key": "market_cap",
+                    "label": "Market Cap",
+                    "display": "2,300,000.0",
+                    "unit": "USD Mn",
+                    "status": "reported",
+                }
+            ],
+            "sections": [
+                {
+                    "key": "market_scale",
+                    "title": "Market & Scale",
+                    "rows": [
+                        {
+                            "key": "revenue",
+                            "label": "Revenue",
+                            "unit": "USD Mn",
+                            "values": {
+                                "FY25": {"display": "100.0", "status": "reported"},
+                                "FY26Q1": {"display": "N/A", "status": "unavailable"},
+                            },
+                        }
+                    ],
                 }
             ],
         },
@@ -142,6 +169,9 @@ def test_html_report_renders_dynamic_financial_highlights():
     assert "FY26Q1" in html
     assert "Revenue" in html
     assert "N/A" in html
+    assert "Currency: USD (US Dollar)" in html
+    assert "Latest Market Snapshot" in html
+    assert "Market &amp; Scale" in html
 
 
 def test_html_report_succeeds_without_financial_highlights():
@@ -163,6 +193,24 @@ def test_html_report_renders_company_profile():
     assert "Company Profile" in html
     assert "Accelerated computing platform company." in html
     assert "Executive One" in html
+
+
+def test_html_report_formats_canonical_company_profile_metrics():
+    company_profile = {
+        "available": True,
+        "ticker": "BBCA.JK",
+        "company_name": "PT Bank Central Asia Tbk",
+        "currency": "IDR",
+        "market_cap": 1_205_000_000_000_000,
+        "shares_outstanding": 123_275_050_000,
+        "current_price": 9_800,
+    }
+
+    report = build_report_context(_base_result(ticker="BBCA.JK", market="ID", company_profile=company_profile))
+
+    assert {"label": "Market Cap", "value": "1,205,000.0 IDR Bn"} in report["company_profile_rows"]
+    assert {"label": "Shares Outstanding", "value": "123,275,050,000"} in report["company_profile_rows"]
+    assert {"label": "Current Price", "value": "Rp 9,800"} in report["company_profile_rows"]
 
 
 def test_html_report_hides_unavailable_company_profile():

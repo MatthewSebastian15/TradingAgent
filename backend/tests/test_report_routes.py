@@ -61,10 +61,28 @@ def _result(**overrides):
         },
         "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
         "executive_summary": "A concise test summary.",
+        "company_profile": {
+            "available": True,
+            "ticker": "NVDA",
+            "company_name": "NVIDIA Corporation",
+            "currency": "USD",
+            "market_cap": 2_300_000_000_000,
+            "shares_outstanding": 24_400_000_000,
+            "current_price": 920,
+        },
         "financial_highlights": {
             "title": "Key Financial Highlights",
+            "unit_note": "Currency: USD (US Dollar) | Amount figures: in millions (USD Mn)",
             "periods": [{"key": "FY26Q1", "label": "FY26Q1"}],
             "rows": [{"key": "revenue", "label": "Revenue", "values": {"FY26Q1": {"display": "N/A"}}}],
+            "point_in_time": [{"key": "market_cap", "label": "Market Cap", "display": "2,300,000.0", "unit": "USD Mn"}],
+            "sections": [
+                {
+                    "key": "market_scale",
+                    "title": "Market & Scale",
+                    "rows": [{"key": "revenue", "label": "Revenue", "values": {"FY26Q1": {"display": "N/A"}}}],
+                }
+            ],
         },
     }
     result.update(overrides)
@@ -124,6 +142,8 @@ def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(clien
     assert "TradingAgent_BBCA.JK_2026-05-26.pdf" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
     assert "automated AI-assisted analysis engine" in rendered_report["disclaimer"]
+    assert rendered_report["company_profile_rows"][0]["value"] == "NVIDIA Corporation"
+    assert rendered_report["financial_highlights"]["sections"][0]["title"] == "Market & Scale"
 
 
 def test_post_html_report_renders_from_payload(client):
@@ -143,6 +163,18 @@ def test_post_pdf_report_renders_from_payload(client, monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert "attachment" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF")
+
+
+def test_post_pdf_report_succeeds_without_profile_or_financial_highlights(client, monkeypatch):
+    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+
+    response = client.post(
+        "/api/analysis/report.pdf",
+        json=_result(company_profile=None, financial_highlights=None),
+    )
+
+    assert response.status_code == 200
     assert response.content.startswith(b"%PDF")
 
 

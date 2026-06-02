@@ -46,16 +46,42 @@ class FinancialHighlightRow(ApiSchema):
     key: str
     label: str
     unit: str
+    format_type: Literal["currency_scaled", "per_share", "percent", "ratio", "number"] | None = None
+    section_key: str | None = None
     values: dict[str, FinancialHighlightCell]
+
+
+class FinancialHighlightSection(ApiSchema):
+    key: str
+    title: str
+    description: str | None = None
+    rows: list[FinancialHighlightRow] = Field(default_factory=list)
+
+
+class FinancialPointInTimeMetric(ApiSchema):
+    key: str
+    label: str
+    value: float | None = None
+    display: str
+    unit: str
+    as_of: str | None = None
+    status: Literal["reported", "calculated", "estimated", "unavailable"]
+    source_vendor: str | None = None
+    source_field: str | None = None
 
 
 class FinancialHighlightsResponse(ApiSchema):
     title: str
     currency: str | None = None
     scale: str
+    currency_label: str | None = None
+    scale_label: str | None = None
+    unit_note: str | None = None
     analysis_date: str
     period_logic: str = "analysis_quarter"
     periods: list[FinancialHighlightPeriod]
+    point_in_time: list[FinancialPointInTimeMetric] = Field(default_factory=list)
+    sections: list[FinancialHighlightSection] = Field(default_factory=list)
     rows: list[FinancialHighlightRow]
     notes: list[str] = Field(default_factory=list)
     data_quality: dict[str, Any] = Field(default_factory=dict)
@@ -69,16 +95,50 @@ class CompanyExecutive(ApiSchema):
 class CompanyProfile(ApiSchema):
     available: bool = False
     ticker: str | None = None
-    name: str | None = None
+    company_name: str | None = None
+    exchange: str | None = None
+    currency: str | None = None
+    country: str | None = None
     sector: str | None = None
     industry: str | None = None
-    address: str | None = None
-    phone: str | None = None
+    business_summary: str | None = None
     website: str | None = None
-    full_time_employees: int | None = None
-    description: str | None = None
-    executives: list[CompanyExecutive] = Field(default_factory=list)
+    market_cap: float | None = None
+    shares_outstanding: float | None = None
+    current_price: float | None = None
+    fiscal_year_end: str | None = None
+    employee_count: int | None = None
+    officers: list[CompanyExecutive] = Field(default_factory=list)
+    data_quality: dict[str, Any] = Field(default_factory=dict)
     warning: str | None = None
+
+
+class AnalysisOverviewActionPlan(ApiSchema):
+    current_price: float | None = None
+    entry: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    max_drawdown: str | None = None
+    volatility: str | None = None
+    position_action: str | None = None
+    position_size_hint: str | None = None
+    risk_reward_ratio: float | None = None
+    risk_reward_display: str | None = None
+
+
+class AnalysisOverviewRiskSummary(ApiSchema):
+    overall_risk: str
+    short_reason: str
+
+
+class AnalysisOverview(ApiSchema):
+    recommendation: str
+    confidence: Literal["High", "Medium", "Low"]
+    executive_summary: str | None = None
+    investment_thesis: str | None = None
+    key_reasons: list[str] = Field(default_factory=list)
+    action_plan: AnalysisOverviewActionPlan
+    risk_summary: AnalysisOverviewRiskSummary
 
 
 class PriceChartPoint(ApiSchema):
@@ -183,6 +243,7 @@ class AnalysisResponse(ApiSchema):
     average_entry_price: float | None = None
     agents_used: list[str] = Field(default_factory=list)
     time_horizon_months: int | None = None
+    analysis_overview: AnalysisOverview | dict[str, Any] | None = None
     financial_highlights: FinancialHighlightsResponse | None = None
     company_profile: CompanyProfile | dict[str, Any] | None = None
     price_chart: PriceChart | dict[str, Any] | None = None

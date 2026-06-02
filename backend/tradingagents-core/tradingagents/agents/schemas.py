@@ -420,6 +420,11 @@ class PortfolioDecision(BaseModel):
         max_length=8,
         description="Key catalysts that support the final recommendation.",
     )
+    key_reasons: list[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Primary reasons supporting the final recommendation.",
+    )
     invalidation_conditions: list[str] = Field(
         default_factory=list,
         max_length=8,
@@ -511,6 +516,8 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
             parts.extend(["", f"**{label}**: {value}"])
     if decision.key_catalysts:
         parts.extend(["", "**Key Catalysts**:", *[f"- {item}" for item in decision.key_catalysts]])
+    if decision.key_reasons:
+        parts.extend(["", "**Key Reasons**:", *[f"- {item}" for item in decision.key_reasons]])
     if decision.invalidation_conditions:
         parts.extend(["", "**Invalidation Conditions**:", *[f"- {item}" for item in decision.invalidation_conditions]])
     if decision.price_target is not None:

@@ -27,7 +27,8 @@ def _sourced(value: Any, period: str = "ttm") -> dict[str, Any] | None:
     return {"value": value, "source": "finnhub", "period": period}
 
 
-def get_company_profile(ticker: str) -> str:
+def get_company_profile(ticker: str, curr_date: str | None = None) -> str:
+    del curr_date
     try:
         payload = make_api_request("/stock/profile2", {"symbol": ticker}, feature_key="enable_fundamentals")
         if not isinstance(payload, dict) or not payload:

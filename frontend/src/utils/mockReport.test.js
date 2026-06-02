@@ -70,6 +70,9 @@ describe('mockReport', () => {
     expect(html).toContain('FY26Q1');
     expect(html).toContain('Revenue');
     expect(html).toContain('N/A');
+    expect(html).toContain('Currency: USD (US Dollar)');
+    expect(html).toContain('Latest Market Snapshot');
+    expect(html).toContain('Market &amp; Scale');
   });
 
   it('renders static company profile in mock HTML output', () => {
@@ -79,6 +82,8 @@ describe('mockReport', () => {
     expect(html).toContain('NVIDIA Corporation');
     expect(html).toContain('Business Description');
     expect(html).toContain('Key Executives');
+    expect(html).toContain('2,300,000.0 USD Mn');
+    expect(html).toContain('$940');
   });
 
   it('renders static Chart & Price summary in mock HTML output', () => {

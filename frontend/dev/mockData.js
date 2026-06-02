@@ -39,38 +39,50 @@ const COMMON_MOCK_QUALITY = {
 const MOCK_COMPANY_PROFILE = {
   available: true,
   ticker: 'NVDA',
-  name: 'NVIDIA Corporation',
+  company_name: 'NVIDIA Corporation',
+  exchange: 'NASDAQ',
+  currency: 'USD',
+  country: 'United States',
   sector: 'Technology',
   industry: 'Semiconductors',
-  address: '2788 San Tomas Expressway, Santa Clara, CA, United States',
-  phone: '408 486 2000',
   website: 'https://www.nvidia.com',
-  full_time_employees: 36000,
-  description:
+  market_cap: 2300000000000,
+  shares_outstanding: 24400000000,
+  current_price: 940,
+  fiscal_year_end: 'January',
+  employee_count: 36000,
+  business_summary:
     'NVIDIA Corporation provides accelerated computing platforms, graphics processors, networking products, and software for data center, gaming, professional visualization, and automotive markets.',
-  executives: [
+  officers: [
     { name: 'Mr. Jen-Hsun Huang', title: 'President, CEO & Director' },
     { name: 'Ms. Colette M. Kress', title: 'Executive VP & CFO' },
   ],
+  data_quality: { status: 'complete', missing_fields: [], sources_used: ['mock'] },
 };
 
 const MOCK_IDX_COMPANY_PROFILE = {
   available: true,
   ticker: 'BBCA.JK',
-  name: 'PT Bank Central Asia Tbk',
+  company_name: 'PT Bank Central Asia Tbk',
+  exchange: 'IDX',
+  currency: 'IDR',
+  country: 'Indonesia',
   sector: 'Financial Services',
   industry: 'Banks - Regional',
-  address: 'Menara BCA, Grand Indonesia, Jl. M.H. Thamrin No. 1, Jakarta, 10310, Indonesia',
-  phone: '62 21 2358 8000',
   website: 'https://www.bca.co.id',
-  full_time_employees: 27682,
-  description:
+  market_cap: 1205000000000000,
+  shares_outstanding: 123275050000,
+  current_price: 9800,
+  fiscal_year_end: 'December',
+  employee_count: 27682,
+  business_summary:
     'PT Bank Central Asia Tbk provides commercial banking and other financial services. The company offers deposits, loans, credit cards, investment products, and transaction banking services.',
-  executives: [
+  officers: [
     { name: 'Mr. Gregory Hendra Lembong', title: 'President Director' },
     { name: 'Mr. Armand Wahyudi Hartono', title: 'Deputy President Director' },
     { name: 'Mr. John Kosasih', title: 'Commercial & SME Banking Director' },
   ],
+  data_quality: { status: 'complete', missing_fields: [], sources_used: ['mock'] },
 };
 
 const MOCK_NEWS_CONTEXT = {
@@ -126,7 +138,7 @@ const MOCK_NEWS_CONTEXT = {
   cache: { hit: false },
 };
 
-export const MOCK_FINANCIAL_HIGHLIGHTS = {
+const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
   title: 'Key Financial Highlights',
   currency: 'USD',
   scale: 'billion',
@@ -384,6 +396,119 @@ export const MOCK_FINANCIAL_HIGHLIGHTS = {
   },
 };
 
+const FINANCIAL_SECTIONS = [
+  ['market_scale', 'Market & Scale', ['revenue', 'ebitda', 'net_profit']],
+  ['growth', 'Growth', ['revenue_growth', 'net_profit_growth']],
+  ['profitability', 'Profitability', ['ebitda_margin', 'net_profit_margin', 'roe']],
+  ['per_share_balance_sheet', 'Per Share & Balance Sheet', ['eps', 'bvps', 'der']],
+  ['dividends', 'Dividends', ['dividend_yield', 'payout_ratio']],
+];
+
+function createMockFinancialHighlights({ currency = 'USD', currencyLabel = 'US Dollar' } = {}) {
+  const payload = JSON.parse(JSON.stringify(MOCK_FINANCIAL_HIGHLIGHTS_BASE));
+  const isIdr = currency === 'IDR';
+  const scale = isIdr ? 'billion' : 'million';
+  const scaleLabel = `${currency} ${isIdr ? 'Bn' : 'Mn'}`;
+  const sectionByMetric = Object.fromEntries(
+    FINANCIAL_SECTIONS.flatMap(([sectionKey, _title, keys]) => keys.map((key) => [key, sectionKey]))
+  );
+  const percentKeys = new Set([
+    'revenue_growth',
+    'ebitda_margin',
+    'net_profit_growth',
+    'net_profit_margin',
+    'roe',
+    'dividend_yield',
+    'payout_ratio',
+  ]);
+  const currencyKeys = new Set(['revenue', 'ebitda', 'net_profit']);
+
+  payload.rows.push({
+    key: 'payout_ratio',
+    label: 'Payout Ratio (%)',
+    unit: '%',
+    values: Object.fromEntries(
+      payload.periods.map((period) => [
+        period.key,
+        { value: null, display: 'N/A', status: 'unavailable' },
+      ])
+    ),
+  });
+
+  payload.rows = payload.rows.map((row) => {
+    const formatType = currencyKeys.has(row.key)
+      ? 'currency_scaled'
+      : percentKeys.has(row.key)
+        ? 'percent'
+        : row.key === 'der'
+          ? 'ratio'
+          : 'per_share';
+    const unit =
+      formatType === 'currency_scaled'
+        ? scaleLabel
+        : formatType === 'per_share'
+          ? `${currency}/share`
+          : formatType === 'ratio'
+            ? 'x'
+            : '%';
+    const values = Object.fromEntries(
+      Object.entries(row.values).map(([period, cell]) => {
+        if (cell.status === 'unavailable' || cell.value == null) return [period, cell];
+        const value =
+          formatType === 'currency_scaled' ? Number(cell.value) * 1000 : Number(cell.value);
+        const display =
+          formatType === 'currency_scaled'
+            ? value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+            : formatType === 'percent'
+              ? `${value.toFixed(2)}%`
+              : formatType === 'ratio'
+                ? `${value.toFixed(2)}x`
+                : value.toFixed(2);
+        return [period, { ...cell, value, display }];
+      })
+    );
+    return {
+      ...row,
+      label: row.key === 'net_profit_margin' ? 'Net Profit Margin / Profit Margin (%)' : row.label,
+      unit,
+      format_type: formatType,
+      section_key: sectionByMetric[row.key],
+      values,
+    };
+  });
+  payload.currency = currency;
+  payload.currency_label = currencyLabel;
+  payload.scale = scale;
+  payload.scale_label = scaleLabel;
+  payload.unit_note = `Currency: ${currency} (${currencyLabel}) | Amount figures: in ${scale}s (${scaleLabel}) | Per-share values: ${currency}/share | Percent metrics: shown with % | DER: ratio (x)`;
+  payload.point_in_time = [
+    {
+      key: 'market_cap',
+      label: 'Market Cap',
+      value: isIdr ? 1205000 : 2300000,
+      display: isIdr ? '1,205,000.0' : '2,300,000.0',
+      unit: scaleLabel,
+      as_of: payload.analysis_date,
+      status: 'reported',
+      source_vendor: 'mock',
+      source_field: 'market_cap',
+    },
+  ];
+  payload.sections = FINANCIAL_SECTIONS.map(([key, title, rowKeys]) => ({
+    key,
+    title,
+    rows: rowKeys.map((rowKey) => payload.rows.find((row) => row.key === rowKey)),
+  }));
+  payload.data_quality.missing_metrics = ['payout_ratio'];
+  return payload;
+}
+
+export const MOCK_FINANCIAL_HIGHLIGHTS = createMockFinancialHighlights();
+const MOCK_IDX_FINANCIAL_HIGHLIGHTS = createMockFinancialHighlights({
+  currency: 'IDR',
+  currencyLabel: 'Indonesian Rupiah',
+});
+
 export const MOCK_PIPELINE_STEPS = [
   {
     agent_id: 'data_collection',
@@ -637,6 +762,42 @@ function normalizeDataQuality(overrides = {}) {
   };
 }
 
+function confidenceLabel(value) {
+  const score = Number(value);
+  if (score >= 0.75) return 'High';
+  if (score >= 0.5) return 'Medium';
+  return 'Low';
+}
+
+function createMockAnalysisOverview(result) {
+  return {
+    recommendation: result.final_decision || result.decision || 'Hold',
+    confidence: confidenceLabel(result.confidence_score),
+    executive_summary: result.executive_summary,
+    investment_thesis: result.investment_thesis,
+    key_reasons: result.key_reasons || result.key_catalysts || [],
+    action_plan: {
+      current_price: result.current_price,
+      entry: result.entry_price,
+      stop_loss: result.stop_loss,
+      take_profit: result.take_profit,
+      max_drawdown: result.max_drawdown_estimate,
+      volatility: result.volatility_level,
+      position_action: result.position_action || result.new_entry_action,
+      position_size_hint: result.position_size_hint,
+      risk_reward_ratio: result.risk_reward_ratio,
+      risk_reward_display: result.risk_reward_display,
+    },
+    risk_summary: {
+      overall_risk: String(result.volatility_level || 'N/A').toLowerCase(),
+      short_reason:
+        result.decision_adjusted_reason ||
+        result.position_sizing_reason ||
+        `Volatility level is ${result.volatility_level || 'N/A'}.`,
+    },
+  };
+}
+
 function completeMockAnalysis(overrides = {}) {
   const result = {
     request_id: 'mock-nvda-buy',
@@ -696,6 +857,7 @@ function completeMockAnalysis(overrides = {}) {
     full_decision: null,
 
     key_catalysts: ['Mock catalyst 1', 'Mock catalyst 2'],
+    key_reasons: ['Validated trade plan', 'Complete dashboard contract', 'Visible risk controls'],
     invalidation_conditions: ['Mock invalidation 1', 'Mock invalidation 2'],
 
     data_quality: COMMON_MOCK_QUALITY,
@@ -740,6 +902,7 @@ function completeMockAnalysis(overrides = {}) {
 
   return {
     ...completed,
+    analysis_overview: createMockAnalysisOverview(completed),
     full_decision:
       completed.full_decision ||
       createFullDecision({
@@ -1071,6 +1234,7 @@ export const MOCK_IDX_RESPONSE = completeMockAnalysis({
   position_sizing_reason:
     'Use staged sizing because the stock is high volatility. IDX prices are rounded using exchange tick-size logic in the backend contract.',
   company_profile: MOCK_IDX_COMPANY_PROFILE,
+  financial_highlights: MOCK_IDX_FINANCIAL_HIGHLIGHTS,
   executive_summary: `BBCA.JK is rated Buy because the IDX mock uses a defensive large-cap bank profile with steady profitability, strong liquidity, and a complete tick-size-rounded trade plan. The strongest support is the validated structure: current price and entry are 9800, stop loss is 9300, take profit is 11300, volatility is High at 72, allocation is 8 percent, and risk/reward is exactly 1:3 after local rounding. The biggest risk is macro pressure from rates, consumption, liquidity, or credit costs, but the mock bank profile still favors controlled exposure because asset quality and deposit strength remain supportive. The recommended action is to open a staged position, use smaller sizing despite the 8 percent allocation limit, respect the stop, and avoid averaging down. The horizon is 3 Months, and the thesis is confirmed by stable net interest margin and loan growth, or invalidated by rising credit costs or a break below support. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   market_report:
     'Mock market report: BBCA.JK remains a high-liquidity IDX large cap with a valid 1:3 trade structure.',

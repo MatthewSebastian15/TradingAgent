@@ -3,15 +3,56 @@ import { safeExternalUrl } from '../../../utils/url';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 
-function ProfileField({ label, value }) {
-  if (value === null || value === undefined || value === '') return null;
+function display(value) {
+  return value === null || value === undefined || value === '' ? 'N/A' : value;
+}
 
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatNumber(value) {
+  const number = numberOrNull(value);
+  return number === null ? 'N/A' : number.toLocaleString('en-US');
+}
+
+function formatMarketCap(value, currency) {
+  const number = numberOrNull(value);
+  if (number === null) return 'N/A';
+
+  const currencyCode = String(currency || '').toUpperCase();
+  if (!currencyCode) return formatNumber(number);
+
+  const isIdr = currencyCode === 'IDR';
+  const divisor = isIdr ? 1_000_000_000 : 1_000_000;
+  return `${(number / divisor).toLocaleString('en-US', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} ${currencyCode} ${isIdr ? 'Bn' : 'Mn'}`;
+}
+
+function formatCurrentPrice(value, currency) {
+  const number = numberOrNull(value);
+  if (number === null) return 'N/A';
+
+  const currencyCode = String(currency || '').toUpperCase();
+  if (currencyCode === 'IDR') return `Rp ${number.toLocaleString('en-US')}`;
+  if (!currencyCode) return formatNumber(number);
+  return `${currencyCode} ${number.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function ProfileField({ label, value }) {
   return (
     <div className="border border-bloomberg-border bg-black px-3 py-2">
       <div className="font-mono text-[10px] text-bloomberg-muted uppercase tracking-wider mb-1">
         {label}
       </div>
-      <div className="font-mono text-xs text-bloomberg-white break-words">{value}</div>
+      <div className="font-mono text-xs text-bloomberg-white break-words">{display(value)}</div>
     </div>
   );
 }
@@ -32,7 +73,14 @@ export default function ProfileTab({ profile }) {
     );
   }
 
-  const executives = Array.isArray(profile.executives) ? profile.executives : [];
+  const officers = Array.isArray(profile.officers)
+    ? profile.officers
+    : Array.isArray(profile.executives)
+      ? profile.executives
+      : [];
+  const companyName = profile.company_name || profile.name;
+  const businessSummary = profile.business_summary || profile.description;
+  const employeeCount = profile.employee_count ?? profile.full_time_employees;
   const websiteUrl = safeExternalUrl(profile.website);
 
   return (
@@ -40,19 +88,27 @@ export default function ProfileTab({ profile }) {
       <section>
         <SectionHeader label="COMPANY PROFILE" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <ProfileField label="Company Name" value={profile.name} />
+          <ProfileField label="Company Name" value={companyName} />
+          <ProfileField label="Ticker" value={profile.ticker} />
+          <ProfileField label="Exchange" value={profile.exchange} />
+          <ProfileField label="Currency" value={profile.currency} />
+          <ProfileField label="Country" value={profile.country} />
           <ProfileField label="Sector" value={profile.sector} />
           <ProfileField label="Industry" value={profile.industry} />
           <ProfileField
-            label="Employees"
-            value={
-              profile.full_time_employees != null
-                ? Number(profile.full_time_employees).toLocaleString()
-                : null
-            }
+            label="Market Cap"
+            value={formatMarketCap(profile.market_cap, profile.currency)}
           />
-          <ProfileField label="Address" value={profile.address} />
-          <ProfileField label="Phone" value={profile.phone} />
+          <ProfileField
+            label="Shares Outstanding"
+            value={formatNumber(profile.shares_outstanding)}
+          />
+          <ProfileField
+            label="Current Price"
+            value={formatCurrentPrice(profile.current_price, profile.currency)}
+          />
+          <ProfileField label="Fiscal Year End" value={profile.fiscal_year_end} />
+          <ProfileField label="Employees" value={formatNumber(employeeCount)} />
           <ProfileField
             label="Website"
             value={
@@ -66,23 +122,24 @@ export default function ProfileTab({ profile }) {
                   {profile.website}
                 </a>
               ) : (
-                profile.website
+                display(profile.website)
               )
             }
           />
         </div>
+        <div className="mt-2 font-mono text-[11px] text-bloomberg-muted">
+          Profile data: {profile.data_quality?.status || 'N/A'}
+        </div>
       </section>
 
-      {profile.description && (
-        <section>
-          <SectionHeader label="BUSINESS DESCRIPTION" />
-          <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-            {profile.description}
-          </p>
-        </section>
-      )}
+      <section>
+        <SectionHeader label="BUSINESS DESCRIPTION" />
+        <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+          {display(businessSummary)}
+        </p>
+      </section>
 
-      {executives.length > 0 && (
+      {officers.length > 0 && (
         <section>
           <SectionHeader label="KEY EXECUTIVES" />
           <div className="overflow-x-auto border border-bloomberg-border">
@@ -94,13 +151,13 @@ export default function ProfileTab({ profile }) {
                 </tr>
               </thead>
               <tbody>
-                {executives.slice(0, 10).map((executive, index) => (
+                {officers.slice(0, 10).map((officer, index) => (
                   <tr
-                    key={`${executive.name || 'executive'}-${index}`}
+                    key={`${officer.name || 'executive'}-${index}`}
                     className="border-t border-bloomberg-border"
                   >
-                    <td className="px-3 py-2 text-bloomberg-white">{executive.name || 'N/A'}</td>
-                    <td className="px-3 py-2 text-bloomberg-muted">{executive.title || 'N/A'}</td>
+                    <td className="px-3 py-2 text-bloomberg-white">{officer.name || 'N/A'}</td>
+                    <td className="px-3 py-2 text-bloomberg-muted">{officer.title || 'N/A'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -113,23 +170,5 @@ export default function ProfileTab({ profile }) {
 }
 
 ProfileTab.propTypes = {
-  profile: PropTypes.shape({
-    available: PropTypes.bool,
-    ticker: PropTypes.string,
-    name: PropTypes.string,
-    sector: PropTypes.string,
-    industry: PropTypes.string,
-    address: PropTypes.string,
-    phone: PropTypes.string,
-    website: PropTypes.string,
-    full_time_employees: PropTypes.number,
-    description: PropTypes.string,
-    executives: PropTypes.arrayOf(
-      PropTypes.shape({
-        name: PropTypes.string,
-        title: PropTypes.string,
-      })
-    ),
-    warning: PropTypes.string,
-  }),
+  profile: PropTypes.object,
 };
