@@ -4,7 +4,10 @@ from tradingagents.dataflows.finnhub_stock import get_quote, get_stock, get_stoc
 
 
 def test_get_quote_success_normalizes_fields(monkeypatch):
-    monkeypatch.setattr("tradingagents.dataflows.finnhub_stock.make_api_request", lambda *a, **k: {"c": 100, "pc": 95, "o": 97, "h": 101, "l": 96, "t": 1})
+    monkeypatch.setattr(
+        "tradingagents.dataflows.finnhub_stock.make_api_request",
+        lambda *a, **k: {"c": 100, "pc": 95, "o": 97, "h": 101, "l": 96, "t": 1},
+    )
     quote = get_quote("AAPL")
     assert quote["current_price"] == 100
     assert quote["source"] == "finnhub"
@@ -19,7 +22,9 @@ def test_get_quote_zero_current_price_unavailable(monkeypatch):
 
 
 def test_get_quote_missing_previous_close_partial_confidence(monkeypatch):
-    monkeypatch.setattr("tradingagents.dataflows.finnhub_stock.make_api_request", lambda *a, **k: {"c": 100, "pc": None})
+    monkeypatch.setattr(
+        "tradingagents.dataflows.finnhub_stock.make_api_request", lambda *a, **k: {"c": 100, "pc": None}
+    )
     quote = get_quote("AAPL")
     assert quote["metadata"]["quality"]["confidence"] == "medium"
 

@@ -50,9 +50,7 @@ FIELD_ALIASES = {
 }
 
 NORMALIZED_ALIAS_MAP = {
-    re.sub(r"[^a-z0-9]", "", alias.lower()): field
-    for field, aliases in FIELD_ALIASES.items()
-    for alias in aliases
+    re.sub(r"[^a-z0-9]", "", alias.lower()): field for field, aliases in FIELD_ALIASES.items() for alias in aliases
 }
 
 
@@ -201,11 +199,7 @@ def _parse_tabular_statement(
         payload = payload.to_csv()
     if not isinstance(payload, str) or "," not in payload:
         return False
-    rows = [
-        line
-        for line in payload.splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
+    rows = [line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if len(rows) < 2:
         return False
     try:

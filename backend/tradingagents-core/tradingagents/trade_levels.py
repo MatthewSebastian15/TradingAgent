@@ -7,7 +7,7 @@ from io import StringIO
 from statistics import pstdev
 from typing import Any
 
-from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating, VolatilityLevel
+from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 
 FIXED_RR = 3.0
 RISK_REWARD_DISPLAY = "1:3"
@@ -340,22 +340,6 @@ def _ensure_drawdown(decision: PortfolioDecision, volatility_level: str, warning
 
 
 def _clear_trade_levels(decision: PortfolioDecision, warnings: list[str], *, add_hold_warning: bool = False) -> None:
-    had_trade_level = any(
-        getattr(decision, field, None) is not None
-        for field in (
-            "price_target",
-            "entry_price",
-            "stop_loss",
-            "take_profit",
-            "risk_reward_ratio",
-            "risk_reward_display",
-            "risk_per_share",
-            "reward_per_share",
-            "max_drawdown_estimate",
-            "max_drawdown_min_pct",
-            "max_drawdown_max_pct",
-        )
-    )
     decision.price_target = None
     decision.entry_price = None
     decision.stop_loss = None
@@ -509,6 +493,7 @@ def _normalize_short(
     decision.risk_reward_display = RISK_REWARD_DISPLAY
     return True
 
+
 def _merge_data_quality(
     base: dict[str, Any] | None,
     *,
@@ -554,7 +539,11 @@ def normalize_trade_levels(
 ) -> PortfolioDecision:
     warnings = list(getattr(decision, "validation_warnings", None) or [])
     raw_llm_current_price = getattr(decision, "current_price", None)
-    raw_llm_decision = getattr(decision, "llm_decision", None) or _enum_value(getattr(decision, "rating", None)) or _decision_text(decision)
+    raw_llm_decision = (
+        getattr(decision, "llm_decision", None)
+        or _enum_value(getattr(decision, "rating", None))
+        or _decision_text(decision)
+    )
     llm_decision = str(_enum_value(raw_llm_decision) or DEFAULT_DECISION)
     original_rebalancing = _enum_value(getattr(decision, "rebalancing_action", None))
     raw_volatility = _enum_value(getattr(decision, "volatility_level", None))
@@ -664,7 +653,9 @@ def normalize_trade_levels(
         decision.new_entry_action = decision.rebalancing_action
     elif has_existing_position:
         decision.position_action = decision.rebalancing_action
-        decision.new_entry_action = "Wait for better entry" if final_decision in ACTIONABLE_DECISIONS else "No new entry"
+        decision.new_entry_action = (
+            "Wait for better entry" if final_decision in ACTIONABLE_DECISIONS else "No new entry"
+        )
     else:
         decision.position_action = None
         decision.new_entry_action = decision.rebalancing_action

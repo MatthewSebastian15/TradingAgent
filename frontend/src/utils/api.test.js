@@ -10,11 +10,12 @@ describe('owner session API', () => {
 
   it('bootstraps one signed owner token per browser tab', async () => {
     const expiresAt = Math.floor(Date.now() / 1000) + 3600;
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ owner_token: 'signed-owner-token', expires_at: expiresAt }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ owner_token: 'signed-owner-token', expires_at: expiresAt }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
     );
     vi.stubGlobal('fetch', fetchMock);
 

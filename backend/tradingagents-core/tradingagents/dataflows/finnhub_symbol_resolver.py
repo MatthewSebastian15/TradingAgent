@@ -25,14 +25,18 @@ def resolve_stock_symbol(symbol: str) -> ResolvedStockSymbol:
 
     if any(token in cleaned for token in ("/", ":")):
         # Forex/crypto intentionally stay out of scope for this phase.
-        return ResolvedStockSymbol(original=symbol, yfinance=cleaned, finnhub_candidates=(cleaned,), market="unsupported_non_stock")
+        return ResolvedStockSymbol(
+            original=symbol, yfinance=cleaned, finnhub_candidates=(cleaned,), market="unsupported_non_stock"
+        )
 
     if cleaned.endswith(".JK"):
         base = cleaned[:-3]
         return ResolvedStockSymbol(original=symbol, yfinance=cleaned, finnhub_candidates=(cleaned, base), market="ID")
 
     if "." not in cleaned and len(cleaned) == 4:
-        return ResolvedStockSymbol(original=symbol, yfinance=f"{cleaned}.JK", finnhub_candidates=(f"{cleaned}.JK", cleaned), market="ID")
+        return ResolvedStockSymbol(
+            original=symbol, yfinance=f"{cleaned}.JK", finnhub_candidates=(f"{cleaned}.JK", cleaned), market="ID"
+        )
 
     return ResolvedStockSymbol(original=symbol, yfinance=cleaned, finnhub_candidates=(cleaned,), market="US")
 

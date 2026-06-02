@@ -72,9 +72,7 @@ def is_finnhub_feature_enabled(feature_key: str | None = None) -> bool:
         return False
     if not str(config.get("api_key") or "").strip():
         return False
-    if feature_key and not bool(config.get(feature_key, True)):
-        return False
-    return True
+    return not feature_key or bool(config.get(feature_key, True))
 
 
 def feature_for_method(method_name: str) -> str | None:

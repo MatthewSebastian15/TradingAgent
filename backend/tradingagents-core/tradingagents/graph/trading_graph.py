@@ -8,13 +8,13 @@ from typing import Any
 from langgraph.prebuilt import ToolNode
 
 from tradingagents.agents.utils.core_stock_tools import get_stock_data
+from tradingagents.agents.utils.event_data_tools import get_earnings_calendar, get_recommendation_trends
 from tradingagents.agents.utils.fundamental_data_tools import (
     get_balance_sheet,
     get_cashflow,
     get_fundamentals,
     get_income_statement,
 )
-from tradingagents.agents.utils.event_data_tools import get_earnings_calendar, get_recommendation_trends
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.agents.utils.news_data_tools import (
     get_global_news,

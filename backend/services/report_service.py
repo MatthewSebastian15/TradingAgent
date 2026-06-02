@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -122,7 +122,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "market": market,
         "market_label": "US Stocks" if market == "US" else "Indonesia Stocks",
         "trade_date": _clean_text(result.get("trade_date")),
-        "generated_at": _format_datetime(datetime.now(timezone.utc).isoformat()),
+        "generated_at": _format_datetime(datetime.now(UTC).isoformat()),
         "analysis_created_at": _format_datetime(result.get("analysis_created_at")),
         "disclaimer": REPORT_DISCLAIMER,
         "current_price": current_price,
@@ -287,7 +287,7 @@ def _format_number(value: Any) -> str:
         number = float(value)
     except (TypeError, ValueError):
         return _display(value) if value is not None else "N/A"
-    if not number == number or number in {float("inf"), float("-inf")}:
+    if number != number or number in {float("inf"), float("-inf")}:
         return "N/A"
     if number.is_integer():
         return f"{number:,.0f}"
@@ -301,7 +301,7 @@ def _format_price(value: Any, ticker: str, market: str) -> str:
         number = float(value)
     except (TypeError, ValueError):
         return str(value)
-    if not number == number or number in {float("inf"), float("-inf")}:
+    if number != number or number in {float("inf"), float("-inf")}:
         return "N/A"
     if market == "ID" or ticker.endswith(".JK"):
         return f"Rp {number:,.0f}"
@@ -444,10 +444,12 @@ def _company_profile_executives(result: dict[str, Any]) -> list[dict[str, str]]:
     for item in executives[:10]:
         if not isinstance(item, dict):
             continue
-        rows.append({
-            "name": _display(item.get("name")),
-            "title": _display(item.get("title")),
-        })
+        rows.append(
+            {
+                "name": _display(item.get("name")),
+                "title": _display(item.get("title")),
+            }
+        )
     return rows
 
 

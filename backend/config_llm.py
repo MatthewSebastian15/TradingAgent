@@ -191,6 +191,8 @@ def build_tradingagents_config(
     requested_rounds = int(max_debate_rounds) if max_debate_rounds is not None else DEFAULT_MAX_DEBATE_ROUNDS
     effective_rounds = max(requested_rounds, depth_debate_rounds) if depth == "deep" else requested_rounds
     config["max_debate_rounds"] = effective_rounds
-    config["max_risk_discuss_rounds"] = max(effective_rounds, depth_risk_rounds) if depth == "deep" else effective_rounds
+    config["max_risk_discuss_rounds"] = (
+        max(effective_rounds, depth_risk_rounds) if depth == "deep" else effective_rounds
+    )
     config["requested_max_debate_rounds"] = requested_rounds
     return config

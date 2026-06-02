@@ -17,7 +17,10 @@ function callbacks() {
 describe('StockForm cleanup', () => {
   beforeEach(() => {
     sessionStorage.setItem('_ta_owner_token', 'test-owner-token');
-    sessionStorage.setItem('_ta_owner_token_expires_at', String(Math.floor(Date.now() / 1000) + 3600));
+    sessionStorage.setItem(
+      '_ta_owner_token_expires_at',
+      String(Math.floor(Date.now() / 1000) + 3600)
+    );
   });
 
   afterEach(() => {
@@ -188,7 +191,6 @@ describe('StockForm cleanup', () => {
     });
   });
 
-
   it('sends existing-position context when user checks the position box', async () => {
     const props = callbacks();
     const encoder = new TextEncoder();
@@ -206,9 +208,7 @@ describe('StockForm cleanup', () => {
           body: new ReadableStream({
             start(controller) {
               controller.enqueue(
-                encoder.encode(
-                  'event: result\n' + 'data: {"ticker":"NVDA","decision":"Hold"}\n\n'
-                )
+                encoder.encode('event: result\n' + 'data: {"ticker":"NVDA","decision":"Hold"}\n\n')
               );
               controller.close();
             },

@@ -89,7 +89,11 @@ class MarketAuxProvider(BaseNewsProvider):
 
         articles: list[NormalizedNewsArticle] = []
         for item in payload["data"]:
-            if not isinstance(item, dict) or not str(item.get("title") or "").strip() or not str(item.get("url") or "").strip():
+            if (
+                not isinstance(item, dict)
+                or not str(item.get("title") or "").strip()
+                or not str(item.get("url") or "").strip()
+            ):
                 continue
             entities = [_normalize_entity(entity) for entity in item.get("entities", []) if isinstance(entity, dict)]
             scores = [entity.sentiment_score for entity in entities if entity.sentiment_score is not None]
@@ -154,7 +158,9 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
     )
     profile = resolve_news_ticker(ticker)
     window_days = max(1, (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days)
-    result = provider.fetch_news(profile, as_of_date=end_date, window_days=window_days, limit=int(config.get("max_articles_per_provider", 10)))
+    result = provider.fetch_news(
+        profile, as_of_date=end_date, window_days=window_days, limit=int(config.get("max_articles_per_provider", 10))
+    )
     return _format_provider_result(result, ticker, start_date, end_date)
 
 

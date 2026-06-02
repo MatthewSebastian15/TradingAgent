@@ -79,7 +79,9 @@ DEFAULT_CONFIG = {
         "ohlcv_cache_ttl_seconds": int(_env("FINNHUB_OHLCV_CACHE_TTL_SECONDS") or "21600"),
         "profile_cache_ttl_seconds": int(_env("FINNHUB_PROFILE_CACHE_TTL_SECONDS") or "604800"),
         "metrics_cache_ttl_seconds": int(_env("FINNHUB_METRICS_CACHE_TTL_SECONDS") or "604800"),
-        "financial_statement_cache_ttl_seconds": int(_env("FINNHUB_FINANCIAL_STATEMENT_CACHE_TTL_SECONDS") or "2592000"),
+        "financial_statement_cache_ttl_seconds": int(
+            _env("FINNHUB_FINANCIAL_STATEMENT_CACHE_TTL_SECONDS") or "2592000"
+        ),
         "news_cache_ttl_seconds": int(_env("FINNHUB_NEWS_CACHE_TTL_SECONDS") or "3600"),
         "sentiment_cache_ttl_seconds": int(_env("FINNHUB_SENTIMENT_CACHE_TTL_SECONDS") or "3600"),
         "event_cache_ttl_seconds": int(_env("FINNHUB_EVENT_CACHE_TTL_SECONDS") or "43200"),
@@ -130,11 +132,14 @@ DEFAULT_CONFIG = {
     },
     "data_vendor_max_calls_per_analysis": int(_env("DATA_VENDOR_MAX_CALLS_PER_ANALYSIS") or "40"),
     "data_vendor_enable_multi_source_news": (_env("DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS") or "false").lower() == "true",
-    "data_vendor_enable_multi_source_price": (_env("DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE") or "false").lower() == "true",
+    "data_vendor_enable_multi_source_price": (_env("DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE") or "false").lower()
+    == "true",
     "data_vendor_enable_finnhub_fallback": (_env("DATA_VENDOR_ENABLE_FINNHUB_FALLBACK") or "true").lower() == "true",
-    "data_vendor_enable_finnhub_enrichment": (_env("DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT") or "false").lower() == "true",
+    "data_vendor_enable_finnhub_enrichment": (_env("DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT") or "false").lower()
+    == "true",
     "data_vendor_require_source_metadata": (_env("DATA_VENDOR_REQUIRE_SOURCE_METADATA") or "true").lower() == "true",
-    "data_vendor_return_partial_on_failure": (_env("DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE") or "true").lower() == "true",
+    "data_vendor_return_partial_on_failure": (_env("DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE") or "true").lower()
+    == "true",
     "max_news_per_vendor": int(_env("MAX_NEWS_PER_VENDOR") or "10"),
     "max_total_news_items": int(_env("MAX_TOTAL_NEWS_ITEMS") or "25"),
     "news_dedup_by": _env("NEWS_DEDUP_BY") or "url,title",

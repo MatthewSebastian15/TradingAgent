@@ -13,8 +13,6 @@ from tradingagents.graph.reflection import Reflector
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 
 
-
-
 def _valid_executive_summary(opening: str | None = None) -> str:
     first_sentence = opening or (
         "The final rating is Hold because the available evidence is balanced and the setup does not justify forcing a new position before confirmation improves."
@@ -31,7 +29,10 @@ def _valid_executive_summary(opening: str | None = None) -> str:
 
 
 def _valid_investment_thesis(opening: str | None = None) -> str:
-    first_sentence = opening or "The investment thesis is intentionally cautious because the available evidence supports patience more than immediate action."
+    first_sentence = (
+        opening
+        or "The investment thesis is intentionally cautious because the available evidence supports patience more than immediate action."
+    )
     return (
         f"{first_sentence} "
         "The company remains relevant in its market, but the current setup needs stronger confirmation before it deserves a larger allocation. "
@@ -46,6 +47,7 @@ def _valid_investment_thesis(opening: str | None = None) -> str:
         "The exact company is not important here; what matters is that schema validation, parsing, serialization, and trade-level normalization all receive text that matches the production contract. "
         "The longer body also proves rendered reports can carry realistic paragraphs without collapsing around short placeholder text."
     )
+
 
 DECISION_BUY = "Rating: Buy\nEnter at $189-192, 6% portfolio cap."
 DECISION_OVERWEIGHT = (
@@ -667,7 +669,9 @@ class TestPortfolioManagerInjection:
             confidence_score=0.72,
             rating=PortfolioRating.OVERWEIGHT,
             executive_summary=_valid_executive_summary("Build position gradually over the next two weeks."),
-            investment_thesis=_valid_investment_thesis("AI capex cycle remains intact; institutional flows constructive."),
+            investment_thesis=_valid_investment_thesis(
+                "AI capex cycle remains intact; institutional flows constructive."
+            ),
             price_target=215.0,
             time_horizon="3-6 months",
         )
