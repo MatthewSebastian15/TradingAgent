@@ -696,7 +696,6 @@ Legacy SSE endpoint. Runs the analysis with streamed progress without using the 
 | `REQUIRE_API_KEY_FOR_RATE_LIMIT` | Recommended in production | If true, requests without a key are rejected. |
 | `OWNER_SESSION_SECRET` | Required in production | HMAC secret for signed browser owner sessions. |
 | `OWNER_SESSION_TTL_SECONDS` | No | Owner session TTL. Defaults to `ANALYSIS_JOB_TTL_SECONDS`. |
-| `TRUSTED_PROXY_HOSTS` | No | Reserved for trusted reverse proxies. Default is empty. |
 | `PIPELINE_TIMEOUT_SECONDS` / `PREFLIGHT_TIMEOUT_SECONDS` | No | Pipeline and ticker preflight timeouts. |
 | `PROCESS_POOL_*` / `DATA_COLLECTION_WORKERS` / `ANALYST_PARALLEL_WORKERS` / `DEFAULT_MAX_DEBATE_ROUNDS` | No | Worker and debate limits for backend analysis. |
 | `REQUEST_RATE_LIMIT_PER_MINUTE` / `STREAM_RATE_LIMIT_PER_MINUTE` / `MAX_CONCURRENT_*` / `REQUEST_BODY_MAX_BYTES` | No | Request, stream, concurrency, and body-size limits. |
