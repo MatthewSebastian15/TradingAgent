@@ -63,6 +63,21 @@ def safe_divide(numerator: float | None, denominator: float | None) -> float | N
     return numerator / denominator
 
 
+def safe_percent(numerator: float | None, denominator: float | None) -> float | None:
+    ratio = safe_divide(numerator, denominator)
+    return ratio * 100 if ratio is not None else None
+
+
+def safe_growth_percent(current: float | None, previous: float | None) -> float | None:
+    if current is None or previous in (None, 0):
+        return None
+    return ((current - previous) / previous) * 100
+
+
+def calculate_payout_ratio(dividend_per_share: float | None, eps: float | None) -> float | None:
+    return safe_percent(dividend_per_share, eps)
+
+
 def _unavailable_cell() -> FinancialCell:
     return FinancialCell(value=None, display="N/A", status="unavailable")
 
@@ -144,15 +159,8 @@ def _build_period_cells(
     shares_outstanding = _number(normalized, key, "shares_outstanding")
     dividend_per_share = _number(normalized, key, "dividend_per_share")
     reference_price = _number(normalized, key, "reference_price")
-    eps_value = _number(normalized, key, "eps") or safe_divide(net_profit, shares_outstanding)
-    revenue_growth = safe_divide(
-        revenue - previous_revenue if revenue is not None and previous_revenue is not None else None,
-        previous_revenue,
-    )
-    net_profit_growth = safe_divide(
-        net_profit - previous_net_profit if net_profit is not None and previous_net_profit is not None else None,
-        previous_net_profit,
-    )
+    reported_eps = _number(normalized, key, "eps")
+    eps_value = reported_eps if reported_eps is not None else safe_divide(net_profit, shares_outstanding)
     average_equity = (
         (total_equity + previous_equity) / 2 if total_equity is not None and previous_equity is not None else None
     )
@@ -166,9 +174,7 @@ def _build_period_cells(
     )
     if dividend_yield_cell.status == "unavailable":
         dividend_yield_cell = _calculated_cell(
-            safe_divide(dividend_per_share, reference_price) * 100
-            if safe_divide(dividend_per_share, reference_price) is not None
-            else None,
+            safe_percent(dividend_per_share, reference_price),
             "Dividend per Share / Reference Price * 100",
             format_type="percent",
         )
@@ -179,7 +185,7 @@ def _build_period_cells(
             scale_divisor=scale_divisor,
         ),
         "revenue_growth": _calculated_cell(
-            revenue_growth * 100 if revenue_growth is not None else None,
+            safe_growth_percent(revenue, previous_revenue),
             "(Revenue current - Revenue previous) / Revenue previous * 100",
             format_type="percent",
         ),
@@ -189,7 +195,7 @@ def _build_period_cells(
             scale_divisor=scale_divisor,
         ),
         "ebitda_margin": _calculated_cell(
-            safe_divide(ebitda, revenue) * 100 if safe_divide(ebitda, revenue) is not None else None,
+            safe_percent(ebitda, revenue),
             "EBITDA / Revenue * 100",
             format_type="percent",
         ),
@@ -199,20 +205,18 @@ def _build_period_cells(
             scale_divisor=scale_divisor,
         ),
         "net_profit_growth": _calculated_cell(
-            net_profit_growth * 100 if net_profit_growth is not None else None,
+            safe_growth_percent(net_profit, previous_net_profit),
             "(Net Profit current - Net Profit previous) / Net Profit previous * 100",
             format_type="percent",
         ),
         "net_profit_margin": _calculated_cell(
-            safe_divide(net_profit, revenue) * 100 if safe_divide(net_profit, revenue) is not None else None,
+            safe_percent(net_profit, revenue),
             "Net Profit / Revenue * 100",
             format_type="percent",
         ),
         "roe": _calculated_cell(
-            safe_divide(net_profit, average_equity) * 100
-            if safe_divide(net_profit, average_equity) is not None
-            else None,
-            "Net Profit / Average Equity * 100",
+            safe_percent(net_profit, average_equity if average_equity is not None else total_equity),
+            "Net Profit / Average Equity * 100; fallback to Total Equity when average is unavailable",
             format_type="percent",
         ),
         "eps": eps_cell,
@@ -226,9 +230,7 @@ def _build_period_cells(
         ),
         "dividend_yield": dividend_yield_cell,
         "payout_ratio": _calculated_cell(
-            safe_divide(dividend_per_share, eps_value) * 100
-            if safe_divide(dividend_per_share, eps_value) is not None
-            else None,
+            calculate_payout_ratio(dividend_per_share, eps_value),
             "Dividend per Share / EPS * 100",
             format_type="percent",
         ),

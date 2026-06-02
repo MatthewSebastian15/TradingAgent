@@ -291,6 +291,14 @@ export function buildMockReportContext(result = {}) {
     invalidation_conditions: arrayOfText(result.invalidation_conditions),
     analyst_sections: buildAnalystSections(result),
     financial_highlights: result.financial_highlights || null,
+    financial_trends: result.financial_trends || null,
+    valuation_multiples: result.valuation_multiples || null,
+    fair_value_range: result.fair_value_range || null,
+    scenario_analysis: result.scenario_analysis || null,
+    quality_of_earnings: result.quality_of_earnings || null,
+    balance_sheet_risk: result.balance_sheet_risk || null,
+    dividend_quality: result.dividend_quality || null,
+    peer_comparison: result.peer_comparison || null,
     company_profile: result.company_profile || {},
     company_profile_rows: buildCompanyProfileRows(result.company_profile),
     company_profile_executives: buildCompanyProfileExecutives(result.company_profile),
@@ -400,6 +408,115 @@ function renderFinancialHighlights(financialHighlights) {
           `${section.title ? `<h3>${escapeHtml(section.title)}</h3>` : ''}${renderTable(section.rows)}`
       )
       .join('')}
+  </section>`;
+}
+
+function metricDetailDisplay(detail) {
+  if (!detail || detail.status === 'unavailable') return 'N/A';
+  return detail.status === 'estimated' ? `${detail.display || 'N/A'} EST` : detail.display || 'N/A';
+}
+
+function renderFundamentalQuality(payload) {
+  const quality = payload?.data_quality;
+  if (!quality || quality.status === 'complete') return '';
+  const notes = [...(quality.fallback_used || []), ...(quality.warnings || [])];
+  return `<div class="warning"><strong>Data quality: ${escapeHtml(quality.status || 'N/A')}</strong>
+    ${notes.length ? renderList(notes) : '<p>Some values are unavailable. Missing values are shown as N/A.</p>'}
+  </div>`;
+}
+
+function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
+  if (!payload?.metric_details) return '';
+  return `<section class="section">
+    <h2>${escapeHtml(title)}</h2>
+    ${summary}
+    <table><tbody>${renderRows(
+      metrics.map(([key, label]) => row(label, metricDetailDisplay(payload.metric_details[key])))
+    )}</tbody></table>
+    ${renderFundamentalQuality(payload)}
+  </section>`;
+}
+
+function renderFinancialTrends(payload) {
+  if (!payload?.periods?.length || !payload?.metric_details) return '';
+  const metrics = [
+    ['revenue', 'Revenue'],
+    ['revenue_growth_percent', 'Revenue Growth'],
+    ['ebitda', 'EBITDA'],
+    ['ebitda_margin_percent', 'EBITDA Margin'],
+    ['net_profit', 'Net Profit'],
+    ['net_profit_growth_percent', 'Net Profit Growth'],
+    ['net_profit_margin_percent', 'Net Profit Margin'],
+    ['roe_percent', 'ROE'],
+    ['eps', 'EPS'],
+    ['bvps', 'BVPS'],
+    ['der', 'DER'],
+  ];
+  return `<section class="section">
+    <h2>Financial Trend Analysis</h2>
+    ${payload.unit_note ? `<p class="muted">${escapeHtml(payload.unit_note)}</p>` : ''}
+    <table class="financial-highlights-table">
+      <thead><tr><th>Metric</th>${payload.periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}</tr></thead>
+      <tbody>${metrics
+        .map(
+          ([key, label]) =>
+            `<tr><td>${escapeHtml(label)}</td>${(payload.metric_details[key] || [])
+              .map((detail) => `<td>${escapeHtml(metricDetailDisplay(detail))}</td>`)
+              .join('')}</tr>`
+        )
+        .join('')}</tbody>
+    </table>
+    ${renderFundamentalQuality(payload)}
+  </section>`;
+}
+
+function renderScenarioAnalysis(payload) {
+  if (!payload) return '';
+  const rows = ['bear', 'base', 'bull'].map((key) => ({ scenario: key, ...(payload[key] || {}) }));
+  return `<section class="section">
+    <h2>Bull / Base / Bear Scenario</h2>
+    <table>
+      <thead><tr><th>Scenario</th><th>Fair Value</th><th>Upside / Downside</th><th>Growth</th><th>Margin</th><th>Multiple</th><th>Assumption</th></tr></thead>
+      <tbody>${rows
+        .map(
+          (item) => `<tr>
+            <td>${escapeHtml(item.scenario)}</td>
+            <td>${escapeHtml(item.fair_value_display)}</td>
+            <td>${escapeHtml(item.upside_downside_display)}</td>
+            <td>${escapeHtml(hasValue(item.revenue_growth_assumption_percent) ? `${item.revenue_growth_assumption_percent}%` : null)}</td>
+            <td>${escapeHtml(hasValue(item.margin_assumption_percent) ? `${item.margin_assumption_percent}%` : null)}</td>
+            <td>${escapeHtml(item.valuation_multiple)}</td>
+            <td>${escapeHtml(item.assumption)}</td>
+          </tr>`
+        )
+        .join('')}</tbody>
+    </table>
+    ${renderFundamentalQuality(payload)}
+  </section>`;
+}
+
+function renderPeerComparison(payload) {
+  if (!payload?.metrics?.length) return '';
+  return `<section class="section">
+    <h2>Peer Comparison</h2>
+    <table>
+      <thead><tr><th>Ticker</th><th>Company</th><th>P/E</th><th>P/BV</th><th>ROE</th><th>Net Margin</th><th>DER</th><th>Dividend Yield</th></tr></thead>
+      <tbody>${payload.metrics
+        .map(
+          (item) => `<tr>
+            <td>${escapeHtml(item.ticker)}</td>
+            <td>${escapeHtml(item.company_name)}</td>
+            <td>${escapeHtml(item.pe)}</td>
+            <td>${escapeHtml(item.pbv)}</td>
+            <td>${escapeHtml(hasValue(item.roe_percent) ? `${item.roe_percent}%` : null)}</td>
+            <td>${escapeHtml(hasValue(item.net_profit_margin_percent) ? `${item.net_profit_margin_percent}%` : null)}</td>
+            <td>${escapeHtml(item.der)}</td>
+            <td>${escapeHtml(hasValue(item.dividend_yield_percent) ? `${item.dividend_yield_percent}%` : null)}</td>
+          </tr>`
+        )
+        .join('')}</tbody>
+    </table>
+    ${renderFundamentalQuality(payload)}
   </section>`;
 }
 
@@ -591,6 +708,65 @@ export function renderMockReportHtml(report) {
       )}
 
       ${renderFinancialHighlights(report.financial_highlights)}
+
+      ${renderFinancialTrends(report.financial_trends)}
+
+      ${renderFundamentalMetricSection(
+        'Valuation Multiples',
+        report.valuation_multiples,
+        [
+          ['market_cap', 'Market Cap'],
+          ['enterprise_value', 'Enterprise Value'],
+          ['pe', 'P/E'],
+          ['pbv', 'P/BV'],
+          ['ps', 'P/S'],
+          ['ev_ebitda', 'EV/EBITDA'],
+        ],
+        report.valuation_multiples?.interpretation
+          ? `<p>Label: ${escapeHtml(report.valuation_multiples.interpretation.valuation_label)}. ${escapeHtml(report.valuation_multiples.interpretation.main_reason)}</p>`
+          : ''
+      )}
+
+      ${renderFundamentalMetricSection(
+        'Fair Value Range',
+        report.fair_value_range,
+        [
+          ['current_price', 'Current Price'],
+          ['bear', 'Bear Fair Value'],
+          ['base', 'Base Fair Value'],
+          ['bull', 'Bull Fair Value'],
+          ['bear_upside_percent', 'Bear Upside / Downside'],
+          ['base_upside_percent', 'Base Upside / Downside'],
+          ['bull_upside_percent', 'Bull Upside / Downside'],
+        ],
+        report.fair_value_range
+          ? `<p>Primary method: ${escapeHtml(report.fair_value_range.primary_method)}</p>`
+          : ''
+      )}
+
+      ${renderScenarioAnalysis(report.scenario_analysis)}
+
+      ${renderFundamentalMetricSection('Quality of Earnings', report.quality_of_earnings, [
+        ['cfo_to_net_income', 'CFO / Net Income'],
+        ['free_cash_flow', 'Free Cash Flow'],
+        ['capex_intensity_percent', 'Capex Intensity'],
+      ])}
+
+      ${renderFundamentalMetricSection('Balance Sheet Risk', report.balance_sheet_risk, [
+        ['der', 'DER'],
+        ['net_debt', 'Net Debt'],
+        ['debt_to_ebitda', 'Debt / EBITDA'],
+        ['cash_ratio', 'Cash Ratio'],
+        ['equity_ratio', 'Equity Ratio'],
+      ])}
+
+      ${renderFundamentalMetricSection('Dividend Quality', report.dividend_quality, [
+        ['dividend_yield_percent', 'Dividend Yield'],
+        ['payout_ratio_percent', 'Payout Ratio'],
+        ['fcf_coverage', 'FCF Coverage'],
+      ])}
+
+      ${renderPeerComparison(report.peer_comparison)}
 
       ${renderPriceChartSummary(report.price_chart_rows)}
 

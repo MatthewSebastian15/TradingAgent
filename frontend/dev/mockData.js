@@ -509,6 +509,368 @@ const MOCK_IDX_FINANCIAL_HIGHLIGHTS = createMockFinancialHighlights({
   currencyLabel: 'Indonesian Rupiah',
 });
 
+function mockMetric(value, display, formula, status = 'calculated') {
+  return { value, display, status: value == null ? 'unavailable' : status, formula };
+}
+
+function createMockFundamentalAnalysis({
+  currency = 'USD',
+  currentPrice = 920,
+  financialSector = false,
+  highlights = MOCK_FINANCIAL_HIGHLIGHTS,
+  primaryTicker = 'NVDA',
+  peerTicker = 'AMD',
+  peerName = 'Advanced Micro Devices, Inc.',
+} = {}) {
+  const isIdr = currency === 'IDR';
+  const primaryMethod = financialSector ? 'P/BV' : 'EV/EBITDA';
+  const fairValues = isIdr ? [8400, 10500, 12600] : [760, 940, 1120];
+  const upside = fairValues.map((value) =>
+    Number((((value - currentPrice) / currentPrice) * 100).toFixed(2))
+  );
+  const quality = { status: 'complete', missing_fields: [], fallback_used: [], warnings: [] };
+  const partialQuality = {
+    status: 'partial',
+    missing_fields: ['FY26Q1 net_profit_growth_percent'],
+    fallback_used: [],
+    warnings: ['Latest quarterly growth comparison is unavailable.'],
+  };
+  const fairValueDetails = {
+    current_price: mockMetric(
+      currentPrice,
+      `${currency} ${currentPrice.toLocaleString()}`,
+      'Last close price'
+    ),
+    bear: mockMetric(
+      fairValues[0],
+      `${currency} ${fairValues[0].toLocaleString()}`,
+      `${primaryMethod} bear policy`
+    ),
+    base: mockMetric(
+      fairValues[1],
+      `${currency} ${fairValues[1].toLocaleString()}`,
+      `${primaryMethod} base policy`
+    ),
+    bull: mockMetric(
+      fairValues[2],
+      `${currency} ${fairValues[2].toLocaleString()}`,
+      `${primaryMethod} bull policy`
+    ),
+    bear_upside_percent: mockMetric(
+      upside[0],
+      `${upside[0]}%`,
+      '(Bear Fair Value - Current Price) / Current Price * 100'
+    ),
+    base_upside_percent: mockMetric(
+      upside[1],
+      `${upside[1]}%`,
+      '(Base Fair Value - Current Price) / Current Price * 100'
+    ),
+    bull_upside_percent: mockMetric(
+      upside[2],
+      `${upside[2]}%`,
+      '(Bull Fair Value - Current Price) / Current Price * 100'
+    ),
+  };
+  const scenarioDetails = Object.fromEntries(
+    ['bear', 'base', 'bull'].map((key, index) => {
+      const growth = 12 + index * 3;
+      const margin = 42 + index * 2;
+      return [
+        key,
+        {
+          fair_value: fairValueDetails[key],
+          upside_downside_percent: fairValueDetails[`${key}_upside_percent`],
+          revenue_growth_assumption_percent: mockMetric(
+            growth,
+            `${growth}%`,
+            'Latest revenue growth adjusted for scenario'
+          ),
+          margin_assumption_percent: mockMetric(
+            margin,
+            `${margin}%`,
+            'Latest net profit margin adjusted for scenario'
+          ),
+        },
+      ];
+    })
+  );
+  const trendMapping = {
+    revenue: 'revenue',
+    revenue_growth_percent: 'revenue_growth',
+    ebitda: 'ebitda',
+    ebitda_margin_percent: 'ebitda_margin',
+    net_profit: 'net_profit',
+    net_profit_growth_percent: 'net_profit_growth',
+    net_profit_margin_percent: 'net_profit_margin',
+    roe_percent: 'roe',
+    eps: 'eps',
+    bvps: 'bvps',
+    der: 'der',
+  };
+  const trendDetails = Object.fromEntries(
+    Object.entries(trendMapping).map(([key, rowKey]) => [
+      key,
+      highlights.periods.map((period) => {
+        const cell = highlights.rows.find((row) => row.key === rowKey)?.values?.[period.key] || {
+          value: null,
+          display: 'N/A',
+          status: 'unavailable',
+        };
+        return { ...cell, formula: cell.formula || 'Financial highlight period value' };
+      }),
+    ])
+  );
+  const valuationDetails = isIdr
+    ? {
+        market_cap: mockMetric(
+          1205000000000000,
+          '1,205,000.0 IDR Bn',
+          'Current Price * Shares Outstanding'
+        ),
+        enterprise_value: mockMetric(
+          1240000000000000,
+          '1,240,000.0 IDR Bn',
+          'Market Cap + Total Debt - Cash'
+        ),
+        pe: mockMetric(19.4, '19.40x', 'Market Cap / Net Profit'),
+        pbv: mockMetric(4.2, '4.20x', 'Market Cap / Total Equity'),
+        ps: mockMetric(7.1, '7.10x', 'Market Cap / Revenue'),
+        ev_ebitda: mockMetric(16.8, '16.80x', 'Enterprise Value / EBITDA'),
+      }
+    : {
+        market_cap: mockMetric(
+          2244800000000,
+          '2,244,800.0 USD Mn',
+          'Current Price * Shares Outstanding'
+        ),
+        enterprise_value: mockMetric(
+          2260000000000,
+          '2,260,000.0 USD Mn',
+          'Market Cap + Total Debt - Cash'
+        ),
+        pe: mockMetric(44.5, '44.50x', 'Market Cap / Net Profit'),
+        pbv: mockMetric(38.2, '38.20x', 'Market Cap / Total Equity'),
+        ps: mockMetric(20.1, '20.10x', 'Market Cap / Revenue'),
+        ev_ebitda: mockMetric(30.4, '30.40x', 'Enterprise Value / EBITDA'),
+      };
+  const earningsDetails = {
+    cfo_to_net_income: mockMetric(
+      isIdr ? 1.08 : 1.22,
+      isIdr ? '1.08x' : '1.22x',
+      'Operating Cash Flow / Net Income'
+    ),
+    free_cash_flow: mockMetric(
+      isIdr ? 52000000000000 : 65000000000,
+      isIdr ? '52,000.0 IDR Bn' : '65,000.0 USD Mn',
+      'Operating Cash Flow - Capex'
+    ),
+    capex_intensity_percent: mockMetric(
+      isIdr ? 2.1 : 4.8,
+      isIdr ? '2.10%' : '4.80%',
+      'Capex / Revenue * 100'
+    ),
+  };
+  const balanceSheetDetails = {
+    der: mockMetric(isIdr ? 0.62 : 0.35, isIdr ? '0.62x' : '0.35x', 'Total Debt / Total Equity'),
+    net_debt: mockMetric(
+      isIdr ? 35000000000000 : -12000000000,
+      isIdr ? '35,000.0 IDR Bn' : '-12,000.0 USD Mn',
+      'Total Debt - Cash'
+    ),
+    debt_to_ebitda: mockMetric(
+      isIdr ? 1.6 : 0.42,
+      isIdr ? '1.60x' : '0.42x',
+      'Total Debt / EBITDA'
+    ),
+    cash_ratio: mockMetric(
+      isIdr ? 0.19 : 1.32,
+      isIdr ? '0.19x' : '1.32x',
+      'Cash / Current Liabilities'
+    ),
+    equity_ratio: mockMetric(
+      isIdr ? 0.14 : 0.58,
+      isIdr ? '0.14x' : '0.58x',
+      'Total Equity / Total Assets'
+    ),
+  };
+  const dividendDetails = {
+    dividend_yield_percent: mockMetric(
+      isIdr ? 2.7 : 0.04,
+      isIdr ? '2.70%' : '0.04%',
+      'Dividend per Share / Current Price * 100'
+    ),
+    payout_ratio_percent: mockMetric(
+      isIdr ? 48 : 1.8,
+      isIdr ? '48.00%' : '1.80%',
+      'Dividend per Share / EPS * 100'
+    ),
+    fcf_coverage: mockMetric(
+      isIdr ? 2.2 : 18.5,
+      isIdr ? '2.20x' : '18.50x',
+      'Free Cash Flow / Dividend Paid'
+    ),
+  };
+  const financialWarnings = financialSector
+    ? [
+        'Generic DER risk level is not applied to financial-sector companies. Use sector-specific review.',
+      ]
+    : [];
+
+  return {
+    financial_trends: {
+      currency,
+      scale: highlights.scale,
+      scale_label: highlights.scale_label,
+      unit_note: highlights.unit_note,
+      periods: highlights.periods,
+      metrics: Object.fromEntries(
+        Object.entries(trendDetails).map(([key, cells]) => [key, cells.map((cell) => cell.value)])
+      ),
+      metric_details: trendDetails,
+      summary: {
+        growth_trend: 'improving',
+        margin_trend: 'stable',
+        profitability_trend: 'improving',
+        leverage_trend: 'stable',
+      },
+      data_quality: partialQuality,
+    },
+    valuation_multiples: {
+      currency,
+      ...Object.fromEntries(
+        Object.entries(valuationDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: valuationDetails,
+      interpretation: {
+        valuation_label: financialSector ? 'expensive' : 'expensive',
+        primary_method: primaryMethod,
+        main_reason: `${primaryMethod} is compared with the documented base policy multiple.`,
+      },
+      data_quality: quality,
+    },
+    fair_value_range: {
+      currency,
+      ...Object.fromEntries(
+        Object.entries(fairValueDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: fairValueDetails,
+      method: 'multiple-based valuation',
+      primary_method: primaryMethod,
+      assumptions: [`Base case uses the documented ${primaryMethod} policy multiple.`],
+      data_quality: quality,
+    },
+    scenario_analysis: {
+      currency,
+      bear: {
+        fair_value: fairValues[0],
+        fair_value_display: fairValueDetails.bear.display,
+        upside_downside_percent: upside[0],
+        upside_downside_display: `${upside[0]}%`,
+        revenue_growth_assumption_percent: 12,
+        margin_assumption_percent: 42,
+        valuation_multiple: financialSector ? '1.0x P/BV' : '6.0x EV/EBITDA',
+        assumption: 'Lower growth and multiple compression',
+      },
+      base: {
+        fair_value: fairValues[1],
+        fair_value_display: fairValueDetails.base.display,
+        upside_downside_percent: upside[1],
+        upside_downside_display: `${upside[1]}%`,
+        revenue_growth_assumption_percent: 15,
+        margin_assumption_percent: 44,
+        valuation_multiple: financialSector ? '1.5x P/BV' : '8.0x EV/EBITDA',
+        assumption: 'Current operating profile and base policy multiple',
+      },
+      bull: {
+        fair_value: fairValues[2],
+        fair_value_display: fairValueDetails.bull.display,
+        upside_downside_percent: upside[2],
+        upside_downside_display: `${upside[2]}%`,
+        revenue_growth_assumption_percent: 18,
+        margin_assumption_percent: 46,
+        valuation_multiple: financialSector ? '2.0x P/BV' : '10.0x EV/EBITDA',
+        assumption: 'Higher growth and multiple expansion',
+      },
+      metric_details: scenarioDetails,
+      data_quality: quality,
+    },
+    quality_of_earnings: {
+      ...Object.fromEntries(
+        Object.entries(earningsDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: earningsDetails,
+      accrual_risk: 'low',
+      rating: 'healthy',
+      notes: ['Operating cash flow covers reported net income.'],
+      data_quality: quality,
+    },
+    balance_sheet_risk: {
+      ...Object.fromEntries(
+        Object.entries(balanceSheetDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: balanceSheetDetails,
+      risk_level: financialSector ? 'N/A' : 'low',
+      risk_flags: financialWarnings.length ? financialWarnings : ['Leverage remains manageable.'],
+      data_quality: {
+        ...quality,
+        status: financialWarnings.length ? 'partial' : 'complete',
+        warnings: financialWarnings,
+      },
+    },
+    dividend_quality: {
+      ...Object.fromEntries(
+        Object.entries(dividendDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: dividendDetails,
+      sustainability: 'sustainable',
+      notes: ['Dividend quality uses reported dividend data.'],
+      data_quality: quality,
+    },
+    peer_comparison: {
+      primary_ticker: primaryTicker,
+      peers: [peerTicker],
+      metrics: [
+        {
+          ticker: primaryTicker,
+          company_name: financialSector ? 'PT Bank Central Asia Tbk' : 'NVIDIA Corporation',
+          pe: valuationDetails.pe.display,
+          pbv: valuationDetails.pbv.display,
+          roe_percent: financialSector ? 24.5 : 89.3,
+          net_profit_margin_percent: financialSector ? 45.1 : 55.2,
+          der: balanceSheetDetails.der.display,
+          dividend_yield_percent: dividendDetails.dividend_yield_percent.value,
+        },
+        {
+          ticker: peerTicker,
+          company_name: peerName,
+          pe: '31.20x',
+          pbv: '4.10x',
+          roe_percent: 18.4,
+          net_profit_margin_percent: 16.8,
+          der: '0.28x',
+          dividend_yield_percent: 1.2,
+        },
+      ],
+      ranking_summary: {
+        valuation: 'Primary ticker trades above its peer on the selected policy multiple.',
+      },
+      data_quality: quality,
+    },
+  };
+}
+
+export const MOCK_FUNDAMENTAL_ANALYSIS = createMockFundamentalAnalysis();
+const MOCK_IDX_FUNDAMENTAL_ANALYSIS = createMockFundamentalAnalysis({
+  currency: 'IDR',
+  currentPrice: 9800,
+  financialSector: true,
+  highlights: MOCK_IDX_FINANCIAL_HIGHLIGHTS,
+  primaryTicker: 'BBCA.JK',
+  peerTicker: 'BBRI.JK',
+  peerName: 'PT Bank Rakyat Indonesia (Persero) Tbk',
+});
+
 export const MOCK_PIPELINE_STEPS = [
   {
     agent_id: 'data_collection',
@@ -862,6 +1224,7 @@ function completeMockAnalysis(overrides = {}) {
 
     data_quality: COMMON_MOCK_QUALITY,
     financial_highlights: MOCK_FINANCIAL_HIGHLIGHTS,
+    ...MOCK_FUNDAMENTAL_ANALYSIS,
     company_profile: MOCK_COMPANY_PROFILE,
     news: MOCK_NEWS_CONTEXT,
     validation_warnings: [],
@@ -1235,6 +1598,7 @@ export const MOCK_IDX_RESPONSE = completeMockAnalysis({
     'Use staged sizing because the stock is high volatility. IDX prices are rounded using exchange tick-size logic in the backend contract.',
   company_profile: MOCK_IDX_COMPANY_PROFILE,
   financial_highlights: MOCK_IDX_FINANCIAL_HIGHLIGHTS,
+  ...MOCK_IDX_FUNDAMENTAL_ANALYSIS,
   executive_summary: `BBCA.JK is rated Buy because the IDX mock uses a defensive large-cap bank profile with steady profitability, strong liquidity, and a complete tick-size-rounded trade plan. The strongest support is the validated structure: current price and entry are 9800, stop loss is 9300, take profit is 11300, volatility is High at 72, allocation is 8 percent, and risk/reward is exactly 1:3 after local rounding. The biggest risk is macro pressure from rates, consumption, liquidity, or credit costs, but the mock bank profile still favors controlled exposure because asset quality and deposit strength remain supportive. The recommended action is to open a staged position, use smaller sizing despite the 8 percent allocation limit, respect the stop, and avoid averaging down. The horizon is 3 Months, and the thesis is confirmed by stable net interest margin and loan growth, or invalidated by rising credit costs or a break below support. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   market_report:
     'Mock market report: BBCA.JK remains a high-liquidity IDX large cap with a valid 1:3 trade structure.',

@@ -29,6 +29,13 @@ describe('mockData', () => {
       key: 'market_cap',
       unit: 'USD Mn',
     });
+    expect(result.valuation_multiples.interpretation.primary_method).toBe('EV/EBITDA');
+    expect(result.fair_value_range.metric_details.base.display).toBe('USD 940');
+    expect(result.scenario_analysis.base.upside_downside_display).toBe('2.17%');
+    expect(result.quality_of_earnings.rating).toBe('healthy');
+    expect(result.balance_sheet_risk.risk_level).toBe('low');
+    expect(result.dividend_quality.sustainability).toBe('sustainable');
+    expect(result.peer_comparison.metrics).toHaveLength(2);
     expect(result.company_profile).toMatchObject({
       available: true,
       ticker: 'NVDA',

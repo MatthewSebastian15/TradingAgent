@@ -255,3 +255,35 @@ def test_builder_respects_direct_source_units_without_double_conversion():
     )
 
     assert _rows(highlights)["revenue"].values["FY25"].value == 150.0
+
+
+def test_builder_uses_last_close_on_or_before_analysis_date_for_dividend_yield():
+    highlights = build_financial_highlights(
+        ticker="TEST",
+        analysis_date="2026-01-15",
+        dividends={"FY25": {"dividend_per_share": 1}},
+        price_data=(
+            "Date,Open,High,Low,Close,Volume\n"
+            "2026-01-14,9,11,8,10,100\n"
+            "2026-01-16,18,22,17,20,200"
+        ),
+    )
+
+    assert _rows(highlights)["dividend_yield"].values["FY25"].value == 10
+
+
+def test_builder_preserves_reported_zero_eps():
+    highlights = build_financial_highlights(
+        ticker="TEST",
+        analysis_date="2026-01-15",
+        vendor_payloads={
+            "yfinance": {
+                "income_statement": {"FY25": {"net_profit": 100, "eps": 0}},
+                "balance_sheet": {"FY25": {"shares_outstanding": 100}},
+            }
+        },
+    )
+    eps = _rows(highlights)["eps"].values["FY25"]
+
+    assert eps.value == 0
+    assert eps.status == "reported"
