@@ -220,6 +220,31 @@ def test_parse_final_result_preserves_financial_highlights():
     assert parsed["financial_highlights"] == financial_highlights
 
 
+def test_summary_and_parse_final_result_preserve_phase_2_fundamentals():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+    from routes.serializers import shape_result
+
+    fundamentals = {
+        "financial_trends": {"periods": [{"key": "FY25"}]},
+        "valuation_multiples": {"pe": 10},
+        "fair_value_range": {"base": 100},
+        "scenario_analysis": {"base": {"fair_value": 100}},
+        "quality_of_earnings": {"rating": "healthy"},
+        "balance_sheet_risk": {"risk_level": "low"},
+        "dividend_quality": {"sustainability": "sustainable"},
+        "peer_comparison": {"metrics": [{"ticker": "NVDA"}]},
+    }
+
+    shaped = shape_result({"decision": "Hold", **fundamentals}, "summary")
+    parsed = _parse_final_result("", None, PortfolioRating, fundamentals)
+
+    for key, value in fundamentals.items():
+        assert shaped[key] == value
+        assert parsed[key] == value
+
+
 def test_summary_shape_keeps_company_profile():
     from routes.serializers import shape_result
 

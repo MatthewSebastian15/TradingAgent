@@ -32,6 +32,7 @@ def build_financial_highlights(
         balance_sheet=balance_sheet,
         cashflow=cashflow,
         price_data=price_data,
+        analysis_date=analysis_date,
         dividends=dividends,
         vendor_payloads=vendor_payloads,
     )

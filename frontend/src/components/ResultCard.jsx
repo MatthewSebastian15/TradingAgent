@@ -877,7 +877,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
       {activeTab === 'profile' && <ProfileTab profile={result.company_profile} />}
 
       {activeTab === 'fundamental' && (
-        <FundamentalTab financialHighlights={result.financial_highlights} />
+        <FundamentalTab financialHighlights={result.financial_highlights} result={result} />
       )}
 
       {activeTab === 'chart_price' && <ChartPriceTab result={result} />}

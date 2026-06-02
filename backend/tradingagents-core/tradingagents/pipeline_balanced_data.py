@@ -22,6 +22,7 @@ from tradingagents.dataflows.vendor_router import create_attempt_recorder, relea
 from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.financial_highlights.builder import build_financial_highlights
 from tradingagents.financial_highlights.models import to_dict as financial_highlights_to_dict
+from tradingagents.fundamentals.builder import build_fundamental_analysis
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 
 logger = logging.getLogger(__name__)
@@ -1010,6 +1011,11 @@ def collect_market_data(
                 lambda: route_to_vendor("get_income_statement", ticker, "annual", trade_date),
                 limit=10_000,
             ),
+            "annual_cashflow": lambda: _safe_data_field(
+                "annual_cashflow",
+                lambda: route_to_vendor("get_cashflow", ticker, "annual", trade_date),
+                limit=10_000,
+            ),
         },
         config,
         cancel_check,
@@ -1022,6 +1028,7 @@ def collect_market_data(
     income_statement = results["income_statement"]
     annual_balance_sheet = annual_statement_results["annual_balance_sheet"]
     annual_income_statement = annual_statement_results["annual_income_statement"]
+    annual_cashflow = annual_statement_results["annual_cashflow"]
     company_profile = _safe_company_profile(ticker, trade_date)
     company_news = results["company_news"]
     global_news = results["global_news"]
@@ -1106,13 +1113,28 @@ def collect_market_data(
                 fundamentals=fundamentals.value,
                 income_statement={"quarterly": income_statement.value, "annual": annual_income_statement.value},
                 balance_sheet={"quarterly": balance_sheet.value, "annual": annual_balance_sheet.value},
-                cashflow=cashflow.value,
+                cashflow={"quarterly": cashflow.value, "annual": annual_cashflow.value},
                 price_data=price.value,
                 company_profile=company_profile,
             )
         )
     except Exception:
         logger.exception("Failed to build financial highlights for %s", ticker)
+    fundamental_analysis = None
+    try:
+        fundamental_analysis = build_fundamental_analysis(
+            ticker=ticker,
+            analysis_date=trade_date,
+            financial_highlights=financial_highlights,
+            fundamentals=fundamentals.value,
+            income_statement={"quarterly": income_statement.value, "annual": annual_income_statement.value},
+            balance_sheet={"quarterly": balance_sheet.value, "annual": annual_balance_sheet.value},
+            cashflow={"quarterly": cashflow.value, "annual": annual_cashflow.value},
+            company_profile=company_profile,
+            current_price=last_close_price,
+        )
+    except Exception:
+        logger.exception("Failed to build deterministic fundamental analysis for %s", ticker)
     try:
         release_budget(budget_id)
         release_attempt_recorder(attempt_id)
@@ -1148,4 +1170,5 @@ def collect_market_data(
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
         request_budget=runtime_metadata.get("request_budget", {}),
         financial_highlights=financial_highlights,
+        fundamental_analysis=fundamental_analysis,
     )

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from tradingagents.agents.schemas import DebateArgument, render_debate_argument
 from tradingagents.agents.utils.agent_utils import get_language_instruction
 from tradingagents.pipeline_balanced_types import CollectedData
@@ -119,6 +121,9 @@ EVENT RISK CONTEXT:
 
 ANALYST RECOMMENDATION TRENDS (external comparison only, not final decision):
 {data.recommendation_trends}
+
+DETERMINISTIC FUNDAMENTAL CALCULATIONS:
+{json.dumps(data.fundamental_analysis or {}, indent=2)}
 
 DATA QUALITY:
 {data_quality_json}

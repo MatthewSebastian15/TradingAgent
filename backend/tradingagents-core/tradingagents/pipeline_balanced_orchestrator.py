@@ -722,6 +722,7 @@ def run_balanced_pipeline(
         "vendor_attempts": data.vendor_attempts or {},
         "request_budget": data.request_budget or {},
         "financial_highlights": data.financial_highlights,
+        **(data.fundamental_analysis or {}),
         "company_profile": data.company_profile
         or {
             "available": False,

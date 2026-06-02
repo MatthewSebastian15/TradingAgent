@@ -160,6 +160,14 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "data_quality_warnings": _as_text_list(data_quality.get("warnings")) if data_quality else [],
         "analyst_sections": _analyst_sections(result),
         "financial_highlights": _financial_highlights(result.get("financial_highlights")),
+        "financial_trends": _as_dict(result.get("financial_trends")),
+        "valuation_multiples": _as_dict(result.get("valuation_multiples")),
+        "fair_value_range": _as_dict(result.get("fair_value_range")),
+        "scenario_analysis": _as_dict(result.get("scenario_analysis")),
+        "quality_of_earnings": _as_dict(result.get("quality_of_earnings")),
+        "balance_sheet_risk": _as_dict(result.get("balance_sheet_risk")),
+        "dividend_quality": _as_dict(result.get("dividend_quality")),
+        "peer_comparison": _as_dict(result.get("peer_comparison")),
         "company_profile": _as_dict(result.get("company_profile")),
         "company_profile_rows": _company_profile_rows(result),
         "company_profile_executives": _company_profile_executives(result),
@@ -177,6 +185,68 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
     report["trade_plan_rows"] = _trade_plan_rows(result, ticker, market) if is_actionable_trade_plan else []
     report["risk_rows"] = _risk_rows(result, include_max_drawdown=is_actionable_trade_plan)
     report["validation_rows"] = _validation_rows(result, report)
+    report["financial_trend_rows"] = _financial_trend_rows(report["financial_trends"])
+    report["valuation_rows"] = _metric_detail_rows(
+        report["valuation_multiples"],
+        [
+            ("market_cap", "Market Cap"),
+            ("enterprise_value", "Enterprise Value"),
+            ("pe", "P/E"),
+            ("pbv", "P/BV"),
+            ("ps", "P/S"),
+            ("ev_ebitda", "EV/EBITDA"),
+        ],
+    )
+    report["fair_value_rows"] = _metric_detail_rows(
+        report["fair_value_range"],
+        [
+            ("current_price", "Current Price"),
+            ("bear", "Bear Fair Value"),
+            ("base", "Base Fair Value"),
+            ("bull", "Bull Fair Value"),
+            ("bear_upside_percent", "Bear Upside / Downside"),
+            ("base_upside_percent", "Base Upside / Downside"),
+            ("bull_upside_percent", "Bull Upside / Downside"),
+        ],
+    )
+    report["scenario_rows"] = _scenario_rows(report["scenario_analysis"])
+    report["quality_of_earnings_rows"] = [
+        *_metric_detail_rows(
+            report["quality_of_earnings"],
+            [
+                ("cfo_to_net_income", "CFO / Net Income"),
+                ("free_cash_flow", "Free Cash Flow"),
+                ("capex_intensity_percent", "Capex Intensity"),
+            ],
+        ),
+        _row("Accrual Risk", report["quality_of_earnings"].get("accrual_risk")),
+        _row("Rating", report["quality_of_earnings"].get("rating")),
+    ]
+    report["balance_sheet_risk_rows"] = [
+        *_metric_detail_rows(
+            report["balance_sheet_risk"],
+            [
+                ("der", "DER"),
+                ("net_debt", "Net Debt"),
+                ("debt_to_ebitda", "Debt / EBITDA"),
+                ("cash_ratio", "Cash Ratio"),
+                ("equity_ratio", "Equity Ratio"),
+            ],
+        ),
+        _row("Risk Level", report["balance_sheet_risk"].get("risk_level")),
+    ]
+    report["dividend_quality_rows"] = [
+        *_metric_detail_rows(
+            report["dividend_quality"],
+            [
+                ("dividend_yield_percent", "Dividend Yield"),
+                ("payout_ratio_percent", "Payout Ratio"),
+                ("fcf_coverage", "FCF Coverage"),
+            ],
+        ),
+        _row("Sustainability", report["dividend_quality"].get("sustainability")),
+    ]
+    report["peer_comparison_rows"] = _peer_comparison_rows(report["peer_comparison"])
     return report
 
 
@@ -593,6 +663,90 @@ def _financial_highlights(value: Any) -> dict[str, Any] | None:
         "sections": sections,
         "rows": rows,
     }
+
+
+def _metric_detail_rows(value: Any, definitions: list[tuple[str, str]]) -> list[dict[str, str]]:
+    payload = _as_dict(value)
+    details = _as_dict(payload.get("metric_details"))
+    if not payload:
+        return []
+    return [
+        {"label": label, "value": _metric_detail_display(details.get(key), payload.get(key))}
+        for key, label in definitions
+    ]
+
+
+def _metric_detail_display(value: Any, fallback: Any = None) -> str:
+    detail = _as_dict(value)
+    displayed = _display(detail.get("display") or fallback)
+    return f"{displayed} EST" if detail.get("status") == "estimated" and displayed != "N/A" else displayed
+
+
+def _financial_trend_rows(value: Any) -> list[dict[str, Any]]:
+    payload = _as_dict(value)
+    details = _as_dict(payload.get("metric_details"))
+    definitions = [
+        ("revenue", "Revenue"),
+        ("revenue_growth_percent", "Revenue Growth"),
+        ("ebitda", "EBITDA"),
+        ("ebitda_margin_percent", "EBITDA Margin"),
+        ("net_profit", "Net Profit"),
+        ("net_profit_growth_percent", "Net Profit Growth"),
+        ("net_profit_margin_percent", "Net Profit Margin"),
+        ("roe_percent", "ROE"),
+        ("eps", "EPS"),
+        ("bvps", "BVPS"),
+        ("der", "DER"),
+    ]
+    return [
+        {
+            "label": label,
+            "values": [_metric_detail_display(cell) for cell in details.get(key, [])],
+        }
+        for key, label in definitions
+        if isinstance(details.get(key), list)
+    ]
+
+
+def _scenario_rows(value: Any) -> list[dict[str, str]]:
+    payload = _as_dict(value)
+    rows = []
+    for case in ("bear", "base", "bull"):
+        item = _as_dict(payload.get(case))
+        if item:
+            rows.append(
+                {
+                    "scenario": case.title(),
+                    "fair_value": _display(item.get("fair_value_display") or item.get("fair_value")),
+                    "upside": _display(item.get("upside_downside_display") or item.get("upside_downside_percent")),
+                    "growth": _format_percent(item.get("revenue_growth_assumption_percent")),
+                    "margin": _format_percent(item.get("margin_assumption_percent")),
+                    "multiple": _display(item.get("valuation_multiple")),
+                    "assumption": _display(item.get("assumption")),
+                }
+            )
+    return rows
+
+
+def _peer_comparison_rows(value: Any) -> list[dict[str, str]]:
+    payload = _as_dict(value)
+    rows = []
+    for item in payload.get("metrics") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "ticker": _display(item.get("ticker")),
+                "company_name": _display(item.get("company_name")),
+                "pe": _display(item.get("pe")),
+                "pbv": _display(item.get("pbv")),
+                "roe": _format_percent(item.get("roe_percent")),
+                "margin": _format_percent(item.get("net_profit_margin_percent")),
+                "der": _display(item.get("der")),
+                "dividend_yield": _format_percent(item.get("dividend_yield_percent")),
+            }
+        )
+    return rows
 
 
 def _news_context(result: dict[str, Any]) -> dict[str, Any]:

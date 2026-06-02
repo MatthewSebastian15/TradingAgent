@@ -245,6 +245,14 @@ class AnalysisResponse(ApiSchema):
     time_horizon_months: int | None = None
     analysis_overview: AnalysisOverview | dict[str, Any] | None = None
     financial_highlights: FinancialHighlightsResponse | None = None
+    financial_trends: dict[str, Any] | None = None
+    valuation_multiples: dict[str, Any] | None = None
+    fair_value_range: dict[str, Any] | None = None
+    scenario_analysis: dict[str, Any] | None = None
+    quality_of_earnings: dict[str, Any] | None = None
+    balance_sheet_risk: dict[str, Any] | None = None
+    dividend_quality: dict[str, Any] | None = None
+    peer_comparison: dict[str, Any] | None = None
     company_profile: CompanyProfile | dict[str, Any] | None = None
     price_chart: PriceChart | dict[str, Any] | None = None
     related_news: RelatedNews | dict[str, Any] | None = None

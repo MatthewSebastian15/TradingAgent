@@ -181,6 +181,65 @@ def test_html_report_succeeds_without_financial_highlights():
     assert "Key Financial Highlights" not in html
 
 
+def test_html_report_renders_phase_2_fundamental_sections_and_optional_peers():
+    metric = {"value": 10, "display": "10.00x", "status": "calculated", "formula": "Mock formula"}
+    quality = {"status": "complete", "missing_fields": [], "fallback_used": [], "warnings": []}
+    report = build_report_context(
+        _base_result(
+            financial_trends={
+                "periods": [{"key": "FY25", "label": "FY25"}],
+                "metric_details": {"revenue": [{"display": "100.0", "status": "reported"}]},
+                "data_quality": quality,
+            },
+            valuation_multiples={
+                "metric_details": {"pe": metric},
+                "interpretation": {"valuation_label": "fair", "main_reason": "Policy comparison."},
+                "data_quality": quality,
+            },
+            fair_value_range={
+                "primary_method": "P/E",
+                "metric_details": {"base": {"value": 100, "display": "USD 100.00", "status": "calculated"}},
+                "data_quality": quality,
+            },
+            scenario_analysis={
+                "bear": {
+                    "fair_value_display": "USD 80.00",
+                    "upside_downside_display": "-20.00%",
+                    "valuation_multiple": "10.0x P/E",
+                    "assumption": "Lower growth",
+                }
+            },
+            quality_of_earnings={"metric_details": {"cfo_to_net_income": metric}, "data_quality": quality},
+            balance_sheet_risk={"metric_details": {"der": metric}, "data_quality": quality},
+            dividend_quality={"metric_details": {"dividend_yield_percent": metric}, "data_quality": quality},
+            peer_comparison={
+                "metrics": [{"ticker": "NVDA", "company_name": "NVIDIA Corporation", "pe": "10.00x"}],
+                "data_quality": quality,
+            },
+        )
+    )
+    html = render_analysis_report_html(report)
+
+    for heading in (
+        "Financial Trend Analysis",
+        "Valuation Multiples",
+        "Fair Value Range",
+        "Bull / Base / Bear Scenario",
+        "Quality of Earnings",
+        "Balance Sheet Risk",
+        "Dividend Quality",
+        "Peer Comparison",
+    ):
+        assert heading in html
+    assert report["peer_comparison_rows"][0]["ticker"] == "NVDA"
+
+
+def test_html_report_hides_peer_comparison_without_payload():
+    html = render_analysis_report_html(build_report_context(_base_result(peer_comparison=None)))
+
+    assert "Peer Comparison" not in html
+
+
 def test_html_report_renders_company_profile():
     report = build_report_context(_base_result())
     html = render_analysis_report_html(report)

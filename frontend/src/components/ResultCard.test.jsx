@@ -30,7 +30,24 @@ describe('ResultCard risk-engine contract', () => {
     fireEvent.click(screen.getByText('Fundamental'));
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
     expect(screen.getAllByText('FY26Q1').length).toBeGreaterThan(0);
-    expect(screen.getByText('Revenue')).toBeTruthy();
+    expect(screen.getAllByText('Revenue').length).toBeGreaterThan(0);
+  });
+
+  it('renders Phase 2 fundamental sections and hides Peer Comparison without a payload', () => {
+    const { rerender } = render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('Fundamental'));
+    expect(screen.getByText('FINANCIAL TREND ANALYSIS')).toBeTruthy();
+    expect(screen.getByText('VALUATION MULTIPLES')).toBeTruthy();
+    expect(screen.getByText('FAIR VALUE RANGE')).toBeTruthy();
+    expect(screen.getByText('BULL / BASE / BEAR SCENARIO')).toBeTruthy();
+    expect(screen.getByText('QUALITY OF EARNINGS')).toBeTruthy();
+    expect(screen.getByText('BALANCE SHEET RISK')).toBeTruthy();
+    expect(screen.getByText('DIVIDEND QUALITY')).toBeTruthy();
+    expect(screen.getByText('PEER COMPARISON')).toBeTruthy();
+
+    rerender(<ResultCard result={{ ...MOCK_RESPONSE, peer_comparison: null }} />);
+    expect(screen.queryByText('PEER COMPARISON')).toBeNull();
   });
 
   it('uses Analisis as the default tab and opens the Profile tab', () => {
