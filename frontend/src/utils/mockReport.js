@@ -143,10 +143,18 @@ function buildPriceChartRows(chart, result) {
     row('Lookback Days', chart.lookback_days),
     row('Start Price', price(stats.start_price, result)),
     row('End Price', price(stats.end_price, result)),
-    row('Period Return', hasValue(summary.period_return_percent) ? `${summary.period_return_percent}%` : stats.change_percent),
+    row(
+      'Period Return',
+      hasValue(summary.period_return_percent)
+        ? `${summary.period_return_percent}%`
+        : stats.change_percent
+    ),
     row('Period High', price(summary.period_high ?? stats.high, result)),
     row('Period Low', price(summary.period_low ?? stats.low, result)),
-    row('Max Drawdown', hasValue(summary.max_drawdown_percent) ? `${summary.max_drawdown_percent}%` : null),
+    row(
+      'Max Drawdown',
+      hasValue(summary.max_drawdown_percent) ? `${summary.max_drawdown_percent}%` : null
+    ),
     row('Average Close', price(stats.average_close, result)),
     row('Average Volume', summary.average_volume ?? stats.average_volume),
     row('Latest Volume', summary.latest_volume),
@@ -368,6 +376,7 @@ export function buildMockReportContext(result = {}) {
     ],
     validation_warnings: validationWarnings,
     data_quality_warnings: dataQualityWarnings,
+    risk_data_quality: result.risk_data_quality || {},
     key_catalysts: arrayOfText(result.key_catalysts),
     invalidation_conditions: arrayOfText(result.invalidation_conditions),
     analyst_sections: buildAnalystSections(result),
@@ -716,6 +725,168 @@ function renderAnalystConsensus(rows) {
   </section>`;
 }
 
+function valuePercent(value) {
+  if (!hasValue(value)) return 'N/A';
+  const text = String(value);
+  return text.endsWith('%') ? text : `${text}%`;
+}
+
+function tableFromObjects(columns, rows) {
+  if (!Array.isArray(rows) || !rows.length) return '<p class="muted">N/A</p>';
+  return `<table>
+    <thead><tr>${columns.map(([_key, label]) => `<th>${escapeHtml(label)}</th>`).join('')}</tr></thead>
+    <tbody>${rows
+      .map(
+        (item) =>
+          `<tr>${columns.map(([key]) => `<td>${escapeHtml(Array.isArray(item?.[key]) ? item[key].join(', ') : item?.[key])}</td>`).join('')}</tr>`
+      )
+      .join('')}</tbody>
+  </table>`;
+}
+
+function renderRiskDataQuality(report) {
+  const payload = report.risk_data_quality || {};
+  if (!Object.keys(payload).length) return '';
+  const summary = payload.risk_summary || {};
+  const balance = payload.balance_sheet_risk_summary || {};
+  const market = payload.market_risk || {};
+  const riskReturn = payload.risk_adjusted_return || {};
+  const monitor = payload.thesis_monitor || {};
+  const quality = payload.data_quality || {};
+  const breakdown = quality.score_breakdown || {};
+  const vendorRows = Object.entries(payload.vendor_status || {}).map(([vendor, item]) => ({
+    vendor,
+    status: item.status,
+    used_for: item.used_for,
+    missing_fields: item.missing_fields,
+  }));
+
+  return `
+    <section class="section">
+      <h2>Risk Summary</h2>
+      <table><tbody>${renderRows([
+        row('Overall Risk', summary.overall_risk),
+        row('Risk Score', summary.risk_score),
+        row('Main Risks', (summary.main_risks || []).join(', ')),
+        row('Risk Flags', (summary.risk_flags || []).join(', ')),
+        row('Explanation', summary.risk_explanation),
+      ])}</tbody></table>
+      <h3>Balance Sheet Risk Summary</h3>
+      <table><tbody>${renderRows([
+        row('DER', balance.der),
+        row('Net Debt', balance.net_debt),
+        row('Debt / EBITDA', balance.debt_to_ebitda),
+        row('Cash Ratio', balance.cash_ratio),
+        row('Risk Level', balance.risk_level),
+        row('Interpretation', balance.interpretation),
+      ])}</tbody></table>
+      ${
+        payload.catalyst_risk?.length
+          ? `<h3>Catalyst Risk</h3>${tableFromObjects(
+              [
+                ['type', 'Type'],
+                ['label', 'Label'],
+                ['impact', 'Impact'],
+                ['date', 'Date'],
+                ['source', 'Source'],
+                ['reason', 'Reason'],
+              ],
+              payload.catalyst_risk
+            )}`
+          : ''
+      }
+    </section>
+    <section class="section">
+      <h2>Market Risk</h2>
+      <table><tbody>${renderRows([
+        row('Volatility', valuePercent(market.volatility_percent)),
+        row('Max Drawdown', valuePercent(market.max_drawdown_percent)),
+        row('ATR', market.atr),
+        row('Price Range', valuePercent(market.price_range_percent)),
+        row('Risk Bucket', market.risk_bucket),
+      ])}</tbody></table>
+      ${renderList(market.notes || [])}
+    </section>
+    <section class="section">
+      <h2>Risk-Adjusted Return</h2>
+      <table><tbody>${renderRows([
+        row('Upside', valuePercent(riskReturn.upside_percent)),
+        row('Downside', valuePercent(riskReturn.downside_percent)),
+        row('Risk/Reward', riskReturn.risk_reward_ratio),
+        row('Expected Return', riskReturn.expected_return_label),
+      ])}</tbody></table>
+      ${renderList(riskReturn.notes || [])}
+    </section>
+    <section class="section">
+      <h2>Thesis Monitor</h2>
+      <table><tbody>${renderRows([row('Overall Thesis Status', monitor.overall_thesis_status)])}</tbody></table>
+      ${tableFromObjects(
+        [
+          ['category', 'Category'],
+          ['condition', 'Condition'],
+          ['status', 'Status'],
+          ['reason', 'Reason'],
+        ],
+        monitor.checklist || []
+      )}
+    </section>
+    <section class="section">
+      <h2>Source Confidence &amp; Data Quality</h2>
+      <table><tbody>${renderRows([
+        row('Score', quality.score),
+        row('Confidence', quality.confidence),
+        row('Summary', quality.summary),
+        row('Price Data', breakdown.price_data),
+        row('Financial Data', breakdown.financial_data),
+        row('Valuation Data', breakdown.valuation_data),
+        row('News Data', breakdown.news_data),
+        row('Vendor Success', breakdown.vendor_success),
+        row('Freshness', breakdown.freshness),
+      ])}</tbody></table>
+      <h3>Vendor Status</h3>
+      ${tableFromObjects(
+        [
+          ['vendor', 'Vendor'],
+          ['status', 'Status'],
+          ['used_for', 'Used For'],
+          ['missing_fields', 'Missing Fields'],
+        ],
+        vendorRows
+      )}
+      <h3>Missing Fields</h3>
+      ${tableFromObjects(
+        [
+          ['module', 'Module'],
+          ['field', 'Field'],
+          ['impact', 'Impact'],
+          ['fallback_available', 'Fallback Available'],
+        ],
+        payload.missing_fields || []
+      )}
+      <h3>Fallback Used</h3>
+      ${tableFromObjects(
+        [
+          ['field', 'Field'],
+          ['method', 'Method'],
+          ['confidence', 'Confidence'],
+        ],
+        payload.fallback_used || []
+      )}
+      <h3>Stale Data Warning</h3>
+      ${tableFromObjects(
+        [
+          ['module', 'Module'],
+          ['field', 'Field'],
+          ['warning', 'Warning'],
+          ['severity', 'Severity'],
+        ],
+        payload.stale_data_warning || []
+      )}
+      <h3>Calculation Notes</h3>
+      ${renderList(payload.calculation_notes || [])}
+    </section>`;
+}
+
 function renderRelatedNews(relatedNews, items) {
   if (!items.length) return '';
   return `<section class="section">
@@ -853,10 +1024,7 @@ export function renderMockReportHtml(report) {
       <section class="section">
         <h2>Final Recommendation</h2>
         <table><tbody>${renderRows(report.decision_rows)}</tbody></table>
-      </section>
-
-      <section class="section">
-        <h2>Action Plan</h2>
+        <h3>Action Plan</h3>
         ${
           report.show_trade_plan
             ? renderMetricGrid(report.action_plan_rows)
@@ -943,17 +1111,7 @@ export function renderMockReportHtml(report) {
 
       ${renderRelatedNews(report.related_news, report.related_news_items)}
 
-      <section class="section">
-        <h2>Risk And Volatility</h2>
-        <table><tbody>${renderRows(report.risk_rows)}</tbody></table>
-      </section>
-
-      <section class="section">
-        <h2>Data Quality And Validation</h2>
-        <table><tbody>${renderRows(report.validation_rows)}</tbody></table>
-        ${report.validation_warnings.length ? `<h3>Validation Warnings</h3>${renderList(report.validation_warnings)}` : ''}
-        ${report.data_quality_warnings.length ? `<h3>Data Quality Notes</h3>${renderList(report.data_quality_warnings)}` : ''}
-      </section>
+      ${renderRiskDataQuality(report)}
 
       <section class="section two-column">
         <div>

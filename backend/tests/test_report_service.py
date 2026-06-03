@@ -38,6 +38,89 @@ def _base_result(**overrides):
             "llm_output": "repaired",
             "volatility_data": "ok",
         },
+        "risk_data_quality": {
+            "risk_summary": {
+                "overall_risk": "moderate",
+                "risk_score": 58,
+                "main_risks": ["Moderate volatility"],
+                "risk_flags": ["Use disciplined entry levels"],
+                "risk_explanation": "Risk is manageable but should be monitored.",
+            },
+            "balance_sheet_risk_summary": {
+                "der": "0.5x",
+                "net_debt": "USD 1,000 Mn",
+                "debt_to_ebitda": "1.2x",
+                "cash_ratio": "0.4x",
+                "risk_level": "low",
+                "interpretation": "Leverage appears manageable.",
+            },
+            "market_risk": {
+                "volatility_percent": 24.5,
+                "max_drawdown_percent": -12.8,
+                "atr": 12.5,
+                "price_range_percent": 14.6,
+                "risk_bucket": "medium",
+                "notes": ["Volatility is moderate for the selected window."],
+            },
+            "risk_adjusted_return": {
+                "upside_percent": 13.04,
+                "downside_percent": -4.35,
+                "risk_reward_ratio": "3.0x",
+                "expected_return_label": "attractive",
+                "notes": ["Upside is around three times the downside anchor."],
+            },
+            "thesis_monitor": {
+                "overall_thesis_status": "valid",
+                "checklist": [
+                    {
+                        "category": "Price",
+                        "condition": "Price breaks stop loss",
+                        "status": "valid",
+                        "reason": "Current price remains above stop loss.",
+                    }
+                ],
+            },
+            "catalyst_risk": [
+                {
+                    "type": "earnings",
+                    "label": "Upcoming earnings risk",
+                    "impact": "medium",
+                    "date": "2026-06-20",
+                    "source": "Finnhub",
+                    "reason": "Upcoming event may increase short-term volatility.",
+                }
+            ],
+            "data_quality": {
+                "score": 86,
+                "confidence": "high",
+                "summary": "Most critical financial, price, and news data were available.",
+                "score_breakdown": {
+                    "price_data": 95,
+                    "financial_data": 85,
+                    "valuation_data": 80,
+                    "news_data": 75,
+                    "vendor_success": 90,
+                    "freshness": 88,
+                },
+            },
+            "vendor_status": {
+                "yfinance": {"status": "success", "used_for": ["price"], "missing_fields": []},
+                "newsdata": {"status": "rate_limited", "used_for": [], "missing_fields": ["news"]},
+            },
+            "missing_fields": [
+                {
+                    "module": "financial_highlights",
+                    "field": "payout_ratio",
+                    "impact": "low",
+                    "fallback_available": False,
+                }
+            ],
+            "fallback_used": [
+                {"field": "market_cap", "method": "price_times_shares_outstanding", "confidence": "high"}
+            ],
+            "stale_data_warning": [],
+            "calculation_notes": ["Risk/reward ratio = expected upside / expected downside"],
+        },
         "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
         "executive_summary": "Summary text.",
         "company_profile": {
@@ -154,7 +237,10 @@ def _base_result(**overrides):
                     "source": "Finnhub",
                 }
             ],
-            "summary": {"overall_catalyst_bias": "positive", "main_message": "Positive catalysts outweigh current negative catalysts."},
+            "summary": {
+                "overall_catalyst_bias": "positive",
+                "main_message": "Positive catalysts outweigh current negative catalysts.",
+            },
         },
         "analyst_consensus": {
             "available": True,
@@ -406,6 +492,24 @@ def test_html_report_renders_phase_3_chart_and_news_summaries():
     assert "News Impact Summary" in html
     assert "Catalyst Tracker" in html
     assert "Analyst Recommendation Trend" in html
+
+
+def test_html_report_renders_phase_4_risk_data_quality_sections():
+    report = build_report_context(_base_result())
+    html = render_analysis_report_html(report)
+
+    assert report["risk_summary_rows"]
+    assert report["market_risk_rows"]
+    assert report["risk_adjusted_return_rows"]
+    assert report["thesis_monitor_rows"]
+    assert report["vendor_status_rows"]
+    assert "Risk Summary" in html
+    assert "Market Risk" in html
+    assert "Risk-Adjusted Return" in html
+    assert "Thesis Monitor" in html
+    assert "Source Confidence &amp; Data Quality" in html
+    assert "Vendor Status" in html
+    assert "Calculation Notes" in html
 
 
 def test_html_report_hides_unavailable_price_chart_summary():

@@ -65,10 +65,7 @@
             {% endfor %}
           </tbody>
         </table>
-      </section>
-
-      <section class="section">
-        <h2>Action Plan</h2>
+        <h3>Action Plan</h3>
         {% if report.show_trade_plan %}
           <div class="metric-grid metric-grid-4x3">
             {% for row in report.trade_plan_rows %}
@@ -337,16 +334,121 @@
         </section>
       {% endif %}
 
+      {% if report.risk_summary_rows %}
+        <section class="section">
+          <h2>Risk Summary</h2>
+          <table class="metric-table"><tbody>
+            {% for row in report.risk_summary_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+          </tbody></table>
+          {% if report.balance_sheet_risk_summary_rows %}
+            <h3>Balance Sheet Risk Summary</h3>
+            <table class="metric-table"><tbody>
+              {% for row in report.balance_sheet_risk_summary_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+            </tbody></table>
+          {% endif %}
+          {% if report.catalyst_risk_rows %}
+            <h3>Catalyst Risk</h3>
+            <table class="metric-table">
+              <thead><tr><th>Type</th><th>Label</th><th>Impact</th><th>Date</th><th>Source</th><th>Reason</th></tr></thead>
+              <tbody>
+                {% for row in report.catalyst_risk_rows %}
+                  <tr><td>{{ row.type }}</td><td>{{ row.label }}</td><td>{{ row.impact }}</td><td>{{ row.date }}</td><td>{{ row.source }}</td><td>{{ row.reason }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+        </section>
+      {% endif %}
+
+      {% if report.market_risk_rows %}
+        <section class="section">
+          <h2>Market Risk</h2>
+          <table class="metric-table"><tbody>
+            {% for row in report.market_risk_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+          </tbody></table>
+          {% if report.market_risk_notes %}<ul>{% for note in report.market_risk_notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
+        </section>
+      {% endif %}
+
+      {% if report.risk_adjusted_return_rows %}
+        <section class="section">
+          <h2>Risk-Adjusted Return</h2>
+          <table class="metric-table"><tbody>
+            {% for row in report.risk_adjusted_return_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+          </tbody></table>
+          {% if report.risk_adjusted_return_notes %}<ul>{% for note in report.risk_adjusted_return_notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
+        </section>
+      {% endif %}
+
+      {% if report.thesis_monitor_rows %}
+        <section class="section">
+          <h2>Thesis Monitor</h2>
+          <table class="metric-table">
+            <thead><tr><th>Category</th><th>Condition</th><th>Status</th><th>Reason</th></tr></thead>
+            <tbody>
+              {% for row in report.thesis_monitor_rows %}
+                <tr><td>{{ row.category }}</td><td>{{ row.condition }}</td><td>{{ row.status }}</td><td>{{ row.reason }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+      {% endif %}
+
       <section class="section">
-        <h2>Risk / Data Quality</h2>
-        <h3>Risk And Volatility</h3>
-        <table><tbody>
-          {% for row in report.risk_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
-        </tbody></table>
-        <h3>Data Quality And Validation</h3>
-        <table><tbody>
-          {% for row in report.validation_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
-        </tbody></table>
+        <h2>Source Confidence &amp; Data Quality</h2>
+        {% if report.source_quality_rows %}
+          <table class="metric-table"><tbody>
+            {% for row in report.source_quality_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+          </tbody></table>
+        {% endif %}
+        {% if report.vendor_status_rows %}
+          <h3>Vendor Status</h3>
+          <table class="metric-table">
+            <thead><tr><th>Vendor</th><th>Status</th><th>Used For</th><th>Missing Fields</th></tr></thead>
+            <tbody>
+              {% for row in report.vendor_status_rows %}
+                <tr><td>{{ row.vendor }}</td><td>{{ row.status }}</td><td>{{ row.used_for }}</td><td>{{ row.missing_fields }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+        {% if report.missing_fields_rows %}
+          <h3>Missing Fields</h3>
+          <table class="metric-table">
+            <thead><tr><th>Module</th><th>Field</th><th>Impact</th><th>Fallback Available</th></tr></thead>
+            <tbody>
+              {% for row in report.missing_fields_rows %}
+                <tr><td>{{ row.module }}</td><td>{{ row.field }}</td><td>{{ row.impact }}</td><td>{{ row.fallback_available }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+        {% if report.fallback_used_rows %}
+          <h3>Fallback Used</h3>
+          <table class="metric-table">
+            <thead><tr><th>Field</th><th>Method</th><th>Confidence</th></tr></thead>
+            <tbody>
+              {% for row in report.fallback_used_rows %}
+                <tr><td>{{ row.field }}</td><td>{{ row.method }}</td><td>{{ row.confidence }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+        {% if report.stale_warning_rows %}
+          <h3>Stale Data Warning</h3>
+          <table class="metric-table">
+            <thead><tr><th>Module</th><th>Field</th><th>Warning</th><th>Severity</th></tr></thead>
+            <tbody>
+              {% for row in report.stale_warning_rows %}
+                <tr><td>{{ row.module }}</td><td>{{ row.field }}</td><td>{{ row.warning }}</td><td>{{ row.severity }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+        {% if report.calculation_notes %}
+          <h3>Calculation Notes</h3>
+          <ul>{% for note in report.calculation_notes %}<li>{{ note }}</li>{% endfor %}</ul>
+        {% endif %}
         {% if report.validation_warnings %}
           <h3>Validation Warnings</h3>
           <ul>{% for warning in report.validation_warnings %}<li>{{ warning }}</li>{% endfor %}</ul>

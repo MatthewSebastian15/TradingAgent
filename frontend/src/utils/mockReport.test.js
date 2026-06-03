@@ -118,6 +118,18 @@ describe('mockReport', () => {
     expect(html).toContain('Analyst Recommendation Trend');
   });
 
+  it('renders Phase 4 risk data quality sections in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Risk Summary');
+    expect(html).toContain('Market Risk');
+    expect(html).toContain('Risk-Adjusted Return');
+    expect(html).toContain('Thesis Monitor');
+    expect(html).toContain('Source Confidence &amp; Data Quality');
+    expect(html).toContain('Vendor Status');
+    expect(html).toContain('Calculation Notes');
+  });
+
   it('renders static Related News items in mock HTML output', () => {
     const html = buildMockReportHtml(MOCK_RESPONSE);
 

@@ -45,6 +45,7 @@ def test_analysis_summary_contract_includes_risk_engine_fields():
         "news",
         "news_context",
         "analysis_overview",
+        "risk_data_quality",
     }
 
     assert expected_fields.issubset(SUMMARY_FIELDS)
