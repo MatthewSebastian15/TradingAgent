@@ -7,7 +7,7 @@ from io import StringIO
 from statistics import pstdev
 from typing import Any
 
-from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating, VolatilityLevel
+from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 
 FIXED_RR = 3.0
 RISK_REWARD_DISPLAY = "1:3"
@@ -33,7 +33,7 @@ REBALANCING_ACTIONS = {
     "Exit position",
     "Avoid new entry",
 }
-POSITION_ACTIONS = {"Exit position", "Trim position"}
+EXISTING_POSITION_ACTIONS = {"Add position", "Maintain position", "Trim position", "Exit position"}
 LLM_REPAIR_WARNING_CODES = {
     "LLM_CURRENT_PRICE_IGNORED",
     "INVALID_VOLATILITY_FIXED",
@@ -45,14 +45,6 @@ LLM_REPAIR_WARNING_CODES = {
     "RR_FORCED_TO_3",
     "DECISION_DOWNGRADED_TO_HOLD",
     "TRADE_PLAN_INVALID",
-}
-
-
-POSITION_SIZE_HINTS = {
-    "Low": "Normal position size may be acceptable if trade plan is valid.",
-    "Medium": "Use standard risk management and avoid oversized position.",
-    "High": "Use smaller size due to High volatility.",
-    "Very High": "Avoid aggressive sizing. Consider no new entry or very small size only.",
 }
 
 DRAWDOWN_BY_VOLATILITY = {
@@ -308,6 +300,155 @@ def normalize_rebalancing_action(
     return "Maintain position"
 
 
+def resolve_existing_position(
+    has_existing_position: bool | None,
+    position_quantity: float | None,
+) -> bool:
+    """Resolve final existing-position status from request flag and quantity."""
+    if position_quantity is not None:
+        try:
+            quantity = float(position_quantity)
+        except (TypeError, ValueError):
+            return bool(has_existing_position)
+
+        if quantity > 0:
+            return True
+        if quantity == 0:
+            return False
+
+        return bool(has_existing_position)
+
+    return bool(has_existing_position)
+
+
+def _append_position_resolution_warnings(
+    warnings: list[str],
+    *,
+    has_existing_position: bool | None,
+    position_quantity: float | None,
+    resolved_has_existing_position: bool,
+) -> None:
+    if position_quantity is None:
+        return
+    try:
+        quantity = float(position_quantity)
+    except (TypeError, ValueError):
+        _append_warning(warnings, "POSITION_QUANTITY_INVALID")
+        if resolved_has_existing_position != bool(has_existing_position):
+            _append_warning(warnings, "POSITION_FLAG_CONFLICT_FIXED")
+        return
+
+    if quantity < 0:
+        _append_warning(warnings, "POSITION_QUANTITY_INVALID")
+        return
+
+    if resolved_has_existing_position != bool(has_existing_position):
+        _append_warning(warnings, "POSITION_FLAG_CONFLICT_FIXED")
+
+
+def build_position_action(
+    has_existing_position: bool,
+    rebalancing_action: str | None,
+) -> str | None:
+    """Return position action only when the user already owns the position."""
+    if not has_existing_position:
+        return None
+
+    if rebalancing_action in EXISTING_POSITION_ACTIONS:
+        return rebalancing_action
+
+    return "Maintain position"
+
+
+def build_new_entry_action(
+    *,
+    has_existing_position: bool,
+    final_decision: str | None,
+    rebalancing_action: str | None,
+    trade_plan_valid: bool,
+    current_price_ok: bool,
+) -> str:
+    """Return user-facing new-entry instruction synced with existing position."""
+    if not current_price_ok:
+        return "No new entry until price data is valid"
+
+    normalized_decision = _canonical_decision(final_decision)
+
+    if has_existing_position:
+        if rebalancing_action == "Add position":
+            return "No separate new entry; add only to existing position"
+        if rebalancing_action == "Maintain position":
+            return "No new entry; maintain existing position"
+        if rebalancing_action == "Trim position":
+            return "No new entry; reduce existing exposure"
+        if rebalancing_action == "Exit position":
+            return "No new entry; exit existing position"
+        return "No new entry; maintain existing position"
+
+    if normalized_decision == "Buy" and trade_plan_valid:
+        return "Allowed with validated entry"
+    if normalized_decision == "Buy":
+        return "Wait for better entry"
+    if normalized_decision == "Sell":
+        return "Avoid new entry"
+    return "No new entry"
+
+
+def build_position_size_hint(
+    *,
+    has_existing_position: bool,
+    final_decision: str | None,
+    rebalancing_action: str | None,
+    volatility_level: str,
+    trade_plan_valid: bool,
+    current_price_ok: bool,
+) -> str:
+    """Return position-size guidance that matches user position context."""
+    if not current_price_ok:
+        if has_existing_position:
+            return "Maintain current position size until valid price data is available."
+        return "No new position suggested until valid price data is available."
+
+    normalized_decision = _canonical_decision(final_decision)
+
+    if has_existing_position:
+        if rebalancing_action == "Add position":
+            return {
+                "Low": "Add to existing position gradually; normal add size may be acceptable.",
+                "Medium": "Add gradually using standard risk limits.",
+                "High": "Add only small size due to high volatility.",
+                "Very High": "Avoid aggressive add; use very small add only if conviction remains strong.",
+            }.get(volatility_level, "Add gradually using standard risk limits.")
+
+        if rebalancing_action == "Maintain position":
+            return "Maintain current position size; no additional exposure suggested."
+
+        if rebalancing_action == "Trim position":
+            return {
+                "Low": "Trim part of the position to reduce exposure.",
+                "Medium": "Trim part of the position to reduce exposure.",
+                "High": "Trim position more conservatively due to elevated volatility.",
+                "Very High": "Reduce exposure aggressively or prepare full exit if risk worsens.",
+            }.get(volatility_level, "Trim part of the position to reduce exposure.")
+
+        if rebalancing_action == "Exit position":
+            return "Exit existing position; no new exposure suggested."
+
+        return "Maintain current position size; no additional exposure suggested."
+
+    if normalized_decision == "Buy" and trade_plan_valid:
+        return {
+            "Low": "New entry may use normal starter size if the trade plan is valid.",
+            "Medium": "Use standard starter size and avoid oversized entry.",
+            "High": "Use smaller starter size due to high volatility.",
+            "Very High": "Use very small starter size only, or avoid entry if risk is not acceptable.",
+        }.get(volatility_level, "Use standard starter size and avoid oversized entry.")
+
+    if normalized_decision == "Buy":
+        return "No new position suggested until the trade plan is valid."
+    return "No new position suggested."
+
+
 def _format_number(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:g}"
 
@@ -340,22 +481,6 @@ def _ensure_drawdown(decision: PortfolioDecision, volatility_level: str, warning
 
 
 def _clear_trade_levels(decision: PortfolioDecision, warnings: list[str], *, add_hold_warning: bool = False) -> None:
-    had_trade_level = any(
-        getattr(decision, field, None) is not None
-        for field in (
-            "price_target",
-            "entry_price",
-            "stop_loss",
-            "take_profit",
-            "risk_reward_ratio",
-            "risk_reward_display",
-            "risk_per_share",
-            "reward_per_share",
-            "max_drawdown_estimate",
-            "max_drawdown_min_pct",
-            "max_drawdown_max_pct",
-        )
-    )
     decision.price_target = None
     decision.entry_price = None
     decision.stop_loss = None
@@ -509,6 +634,7 @@ def _normalize_short(
     decision.risk_reward_display = RISK_REWARD_DISPLAY
     return True
 
+
 def _merge_data_quality(
     base: dict[str, Any] | None,
     *,
@@ -554,10 +680,21 @@ def normalize_trade_levels(
 ) -> PortfolioDecision:
     warnings = list(getattr(decision, "validation_warnings", None) or [])
     raw_llm_current_price = getattr(decision, "current_price", None)
-    raw_llm_decision = getattr(decision, "llm_decision", None) or _enum_value(getattr(decision, "rating", None)) or _decision_text(decision)
+    raw_llm_decision = (
+        getattr(decision, "llm_decision", None)
+        or _enum_value(getattr(decision, "rating", None))
+        or _decision_text(decision)
+    )
     llm_decision = str(_enum_value(raw_llm_decision) or DEFAULT_DECISION)
     original_rebalancing = _enum_value(getattr(decision, "rebalancing_action", None))
     raw_volatility = _enum_value(getattr(decision, "volatility_level", None))
+    resolved_has_existing_position = resolve_existing_position(has_existing_position, position_quantity)
+    _append_position_resolution_warnings(
+        warnings,
+        has_existing_position=has_existing_position,
+        position_quantity=position_quantity,
+        resolved_has_existing_position=resolved_has_existing_position,
+    )
 
     if raw_llm_current_price is not None and current_price is not None:
         try:
@@ -583,7 +720,7 @@ def normalize_trade_levels(
     decision.current_price = float(current_price) if current_price is not None else None
     decision.current_price_as_of = current_price_as_of
     decision.current_price_source = current_price_source if current_price is not None else None
-    decision.has_existing_position = bool(has_existing_position)
+    decision.has_existing_position = resolved_has_existing_position
     decision.position_quantity = position_quantity
     decision.average_entry_price = average_entry_price
     decision.volatility_level = normalized_volatility
@@ -591,6 +728,7 @@ def normalize_trade_levels(
 
     current_price_ok = current_price is not None and float(current_price) > 0
     final_decision = _canonical_decision(llm_decision)
+    action_decision_context = final_decision
     _set_decision(decision, final_decision)
 
     if not current_price_ok:
@@ -599,12 +737,30 @@ def normalize_trade_levels(
             _downgrade_to_hold(decision, "Missing current price", warnings)
         else:
             _clear_trade_levels(decision, warnings, add_hold_warning=True)
-        decision.position_size_hint = "No new position suggested."
         decision.rebalancing_action = normalize_rebalancing_action(
             "Hold",
-            bool(has_existing_position),
+            resolved_has_existing_position,
             False,
             getattr(decision, "confidence_score", None),
+        )
+        decision.position_action = build_position_action(
+            resolved_has_existing_position,
+            decision.rebalancing_action,
+        )
+        decision.new_entry_action = build_new_entry_action(
+            has_existing_position=resolved_has_existing_position,
+            final_decision="Hold",
+            rebalancing_action=decision.rebalancing_action,
+            trade_plan_valid=False,
+            current_price_ok=False,
+        )
+        decision.position_size_hint = build_position_size_hint(
+            has_existing_position=resolved_has_existing_position,
+            final_decision="Hold",
+            rebalancing_action=decision.rebalancing_action,
+            volatility_level=normalized_volatility,
+            trade_plan_valid=False,
+            current_price_ok=False,
         )
         decision.data_quality = _merge_data_quality(
             data_quality or getattr(decision, "data_quality", None),
@@ -625,7 +781,7 @@ def normalize_trade_levels(
 
     normalized_action = normalize_rebalancing_action(
         final_decision,
-        bool(has_existing_position),
+        resolved_has_existing_position,
         final_decision in ACTIONABLE_DECISIONS and valid,
         getattr(decision, "confidence_score", None),
     )
@@ -638,36 +794,43 @@ def normalize_trade_levels(
         decision.trade_plan_valid = True
         trade_quality = "recomputed"
         llm_output_quality = "repaired" if _has_llm_repair_warning(warnings) else "ok"
-        decision.position_size_hint = POSITION_SIZE_HINTS[normalized_volatility]
     elif final_decision in ACTIONABLE_DECISIONS:
         _downgrade_to_hold(decision, "Invalid or incomplete trade plan", warnings)
         decision.rebalancing_action = normalize_rebalancing_action(
             "Hold",
-            bool(has_existing_position),
+            resolved_has_existing_position,
             False,
             getattr(decision, "confidence_score", None),
         )
-        decision.position_size_hint = "No new position suggested."
         trade_quality = "invalid"
         llm_output_quality = "downgraded"
     else:
         _clear_trade_levels(decision, warnings, add_hold_warning=True)
         decision.trade_plan_valid = False
-        decision.position_size_hint = "No new position suggested."
         trade_quality = "hidden"
         llm_output_quality = "repaired" if _has_llm_repair_warning(warnings) else "ok"
 
     final_decision = decision.final_decision or final_decision
-
-    if final_decision in SHORT_DECISIONS and not has_existing_position:
-        decision.position_action = None
-        decision.new_entry_action = decision.rebalancing_action
-    elif has_existing_position:
-        decision.position_action = decision.rebalancing_action
-        decision.new_entry_action = "Wait for better entry" if final_decision in ACTIONABLE_DECISIONS else "No new entry"
-    else:
-        decision.position_action = None
-        decision.new_entry_action = decision.rebalancing_action
+    trade_plan_valid = bool(getattr(decision, "trade_plan_valid", False))
+    decision.position_action = build_position_action(
+        resolved_has_existing_position,
+        decision.rebalancing_action,
+    )
+    decision.new_entry_action = build_new_entry_action(
+        has_existing_position=resolved_has_existing_position,
+        final_decision=action_decision_context,
+        rebalancing_action=decision.rebalancing_action,
+        trade_plan_valid=trade_plan_valid,
+        current_price_ok=True,
+    )
+    decision.position_size_hint = build_position_size_hint(
+        has_existing_position=resolved_has_existing_position,
+        final_decision=action_decision_context,
+        rebalancing_action=decision.rebalancing_action,
+        volatility_level=normalized_volatility,
+        trade_plan_valid=trade_plan_valid,
+        current_price_ok=True,
+    )
 
     if getattr(decision, "decision_adjusted", False):
         llm_output_quality = "downgraded"

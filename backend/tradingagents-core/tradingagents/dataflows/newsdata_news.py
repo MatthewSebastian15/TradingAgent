@@ -51,7 +51,9 @@ class NewsDataProvider(BaseNewsProvider):
             attempts.append(attempt)
             status = str(attempt.get("status") or "unknown_error")
             if payload is not None:
-                articles.extend(self._normalize_response(payload, ticker_profile, strategy=strategy, include_raw=include_raw))
+                articles.extend(
+                    self._normalize_response(payload, ticker_profile, strategy=strategy, include_raw=include_raw)
+                )
                 if articles:
                     status = "success"
                     break
@@ -78,7 +80,11 @@ class NewsDataProvider(BaseNewsProvider):
 
         articles: list[NormalizedNewsArticle] = []
         for item in payload["results"]:
-            if not isinstance(item, dict) or not str(item.get("title") or "").strip() or not str(item.get("link") or "").strip():
+            if (
+                not isinstance(item, dict)
+                or not str(item.get("title") or "").strip()
+                or not str(item.get("link") or "").strip()
+            ):
                 continue
             sentiment_score = _float_or_none(item.get("sentiment_stats") or item.get("sentiment_score"))
             sentiment_label = str(item.get("sentiment") or "").strip().lower() or map_sentiment_label(sentiment_score)
@@ -99,7 +105,9 @@ class NewsDataProvider(BaseNewsProvider):
                     image_url=item.get("image_url"),
                     source=item.get("source_name") or item.get("source_id"),
                     source_domain=item.get("source_url"),
-                    author=", ".join(item.get("creator", [])) if isinstance(item.get("creator"), list) else item.get("creator"),
+                    author=", ".join(item.get("creator", []))
+                    if isinstance(item.get("creator"), list)
+                    else item.get("creator"),
                     language=item.get("language"),
                     country=_first_string(item.get("country")),
                     published_at=item.get("pubDate") or item.get("pubDateTZ"),
@@ -142,7 +150,9 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
     )
     profile = resolve_news_ticker(ticker)
     window_days = max(1, (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days)
-    result = provider.fetch_news(profile, as_of_date=end_date, window_days=window_days, limit=int(config.get("max_articles_per_provider", 10)))
+    result = provider.fetch_news(
+        profile, as_of_date=end_date, window_days=window_days, limit=int(config.get("max_articles_per_provider", 10))
+    )
     return _format_provider_result(result, ticker, start_date, end_date)
 
 

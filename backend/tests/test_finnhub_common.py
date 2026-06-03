@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from tradingagents.dataflows.config import use_config
 from tradingagents.dataflows.finnhub_common import (
     FinnhubConfigError,
@@ -12,7 +11,6 @@ from tradingagents.dataflows.finnhub_common import (
     unavailable_response,
     unix_to_iso_date,
 )
-
 
 BASE_CONFIG = {
     "finnhub": {
@@ -41,35 +39,33 @@ class FakeResponse:
 
 
 def test_finnhub_disabled_returns_config_error():
-    with use_config({"finnhub": {"enabled": False, "api_key": "test"}}):
-        with pytest.raises(FinnhubConfigError):
-            make_api_request("/quote", {"symbol": "AAPL"})
+    with use_config({"finnhub": {"enabled": False, "api_key": "test"}}), pytest.raises(FinnhubConfigError):
+        make_api_request("/quote", {"symbol": "AAPL"})
 
 
 def test_missing_api_key_returns_config_error():
-    with use_config({"finnhub": {"enabled": True, "api_key": ""}}):
-        with pytest.raises(FinnhubConfigError):
-            make_api_request("/quote", {"symbol": "AAPL"})
+    with use_config({"finnhub": {"enabled": True, "api_key": ""}}), pytest.raises(FinnhubConfigError):
+        make_api_request("/quote", {"symbol": "AAPL"})
 
 
 def test_make_api_request_success(monkeypatch):
-    monkeypatch.setattr("tradingagents.dataflows.finnhub_common.requests.get", lambda *a, **k: FakeResponse(200, {"c": 10}))
+    monkeypatch.setattr(
+        "tradingagents.dataflows.finnhub_common.requests.get", lambda *a, **k: FakeResponse(200, {"c": 10})
+    )
     with use_config(BASE_CONFIG):
         assert make_api_request("/quote", {"symbol": "AAPL"}) == {"c": 10}
 
 
 def test_make_api_request_401_no_retry(monkeypatch):
     monkeypatch.setattr("tradingagents.dataflows.finnhub_common.requests.get", lambda *a, **k: FakeResponse(401, {}))
-    with use_config(BASE_CONFIG):
-        with pytest.raises(FinnhubConfigError):
-            make_api_request("/quote", {"symbol": "AAPL"})
+    with use_config(BASE_CONFIG), pytest.raises(FinnhubConfigError):
+        make_api_request("/quote", {"symbol": "AAPL"})
 
 
 def test_make_api_request_429_rate_limit(monkeypatch):
     monkeypatch.setattr("tradingagents.dataflows.finnhub_common.requests.get", lambda *a, **k: FakeResponse(429, {}))
-    with use_config(BASE_CONFIG):
-        with pytest.raises(FinnhubRateLimitError):
-            make_api_request("/quote", {"symbol": "AAPL"})
+    with use_config(BASE_CONFIG), pytest.raises(FinnhubRateLimitError):
+        make_api_request("/quote", {"symbol": "AAPL"})
 
 
 def test_to_unix_timestamp_and_unix_to_iso_date():

@@ -3,14 +3,13 @@ import PropTypes from 'prop-types';
 import {
   AXIS_COLOR,
   buildXAxisTicks,
-  DOWN_COLOR,
   formatCompactNumber,
   getNiceStep,
   GRID_COLOR,
-  isUpCandle,
+  movementColor,
+  movementLabel,
   normalizePricePoints,
   TEXT_COLOR,
-  UP_COLOR,
 } from './priceChartUtils';
 
 const WIDTH = 1000;
@@ -22,8 +21,14 @@ const PADDING = {
   left: 16,
 };
 
-function VolumeTooltip({ point }) {
-  const up = isUpCandle(point);
+function VolumeTooltip({ point, previousPoint }) {
+  const direction = movementLabel(point, previousPoint);
+  const up = direction === 'UP';
+  const directionClass = up
+    ? 'text-right text-green-400'
+    : direction === 'DOWN'
+      ? 'text-right text-red-400'
+      : 'text-right text-bloomberg-muted';
 
   return (
     <div
@@ -35,9 +40,7 @@ function VolumeTooltip({ point }) {
         <span className="text-bloomberg-muted">Volume</span>
         <span className="text-right text-white">{formatCompactNumber(point.volume)}</span>
         <span className="text-bloomberg-muted">Direction</span>
-        <span className={up ? 'text-right text-green-400' : 'text-right text-red-400'}>
-          {up ? 'UP' : 'DOWN'}
-        </span>
+        <span className={directionClass}>{direction}</span>
       </div>
     </div>
   );
@@ -45,6 +48,7 @@ function VolumeTooltip({ point }) {
 
 VolumeTooltip.propTypes = {
   point: PropTypes.object.isRequired,
+  previousPoint: PropTypes.object,
 };
 
 export default function VolumeChart({ points }) {
@@ -108,7 +112,7 @@ export default function VolumeChart({ points }) {
 
   return (
     <div className="relative h-56 border border-bloomberg-border bg-black p-3">
-      {hoverPoint && <VolumeTooltip point={hoverPoint} />}
+      {hoverPoint && <VolumeTooltip point={hoverPoint} previousPoint={chart.points[hoverIndex - 1]} />}
       <svg
         role="img"
         aria-label="Trading volume chart"
@@ -155,6 +159,7 @@ export default function VolumeChart({ points }) {
           const volume = point.volume || 0;
           const y = volumeToY(volume);
           const height = HEIGHT - PADDING.bottom - y;
+          const direction = movementLabel(point, chart.points[index - 1]);
           return (
             <rect
               key={`${point.date}-${index}`}
@@ -162,10 +167,10 @@ export default function VolumeChart({ points }) {
               y={y}
               width={barWidth}
               height={height}
-              fill={isUpCandle(point) ? UP_COLOR : DOWN_COLOR}
+              fill={movementColor(point, chart.points[index - 1])}
               opacity="0.8"
             >
-              <title>{`${point.date}: ${formatCompactNumber(point.volume)} ${isUpCandle(point) ? 'UP' : 'DOWN'}`}</title>
+              <title>{`${point.date}: ${formatCompactNumber(point.volume)} ${direction}`}</title>
             </rect>
           );
         })}

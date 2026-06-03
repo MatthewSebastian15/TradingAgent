@@ -197,6 +197,7 @@ async def stream_progress_and_result(
     run_stream_pipeline_func: Callable[..., Awaitable[dict[str, Any]]],
     get_or_start_analysis_func: Callable[..., Awaitable[dict[str, Any]]],
     use_cache: bool,
+    persist_result_func: Callable[[dict[str, Any], AnalysisRequest, str | None], Awaitable[None]] | None = None,
     use_deduplication: bool = True,
 ):
     """Yield cached result, real progress events, heartbeats, then result."""
@@ -204,6 +205,9 @@ async def stream_progress_and_result(
     cached = await result_cache.get(key) if use_cache else None
     try:
         if cached is not None:
+            payload = response_payload_func(request_id, req, cached)
+            if persist_result_func is not None:
+                await persist_result_func(payload, req, None)
             yield sse_event(
                 "progress",
                 {
@@ -216,7 +220,7 @@ async def stream_progress_and_result(
                     "status_message": "Returning cached analysis result.",
                 },
             )
-            yield sse_event("result", response_payload_func(request_id, req, cached))
+            yield sse_event("result", payload)
             return
 
         queue: asyncio.Queue[dict] = asyncio.Queue()
@@ -234,7 +238,10 @@ async def stream_progress_and_result(
                     use_cache=use_cache,
                     use_deduplication=use_deduplication,
                 )
-                await queue.put({"type": "result", "payload": response_payload_func(request_id, req, result_fields)})
+                payload = response_payload_func(request_id, req, result_fields)
+                if persist_result_func is not None:
+                    await persist_result_func(payload, req, None)
+                await queue.put({"type": "result", "payload": payload})
             except TimeoutError:
                 await queue.put(sse_error(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)))
             except asyncio.CancelledError as exc:

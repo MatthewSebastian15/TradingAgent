@@ -33,4 +33,28 @@ describe('ProfileTab', () => {
       expect(container.querySelector('a')).toBeNull();
     }
   );
+
+  it('renders canonical fields and N/A for missing values', () => {
+    render(
+      <ProfileTab
+        profile={{
+          available: true,
+          ticker: 'BBCA.JK',
+          company_name: 'PT Bank Central Asia Tbk',
+          currency: 'IDR',
+          market_cap: 1205000000000000,
+          shares_outstanding: 123275050000,
+          current_price: 9800,
+          data_quality: { status: 'partial' },
+        }}
+      />
+    );
+
+    expect(screen.getByText('PT Bank Central Asia Tbk')).toBeTruthy();
+    expect(screen.getByText('Profile data: partial')).toBeTruthy();
+    expect(screen.getByText('1,205,000.0 IDR Bn')).toBeTruthy();
+    expect(screen.getByText('123,275,050,000')).toBeTruthy();
+    expect(screen.getByText('Rp 9,800')).toBeTruthy();
+    expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
+  });
 });

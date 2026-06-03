@@ -23,11 +23,27 @@ describe('mockData', () => {
       'FY25',
       'FY26Q1',
     ]);
-    expect(result.financial_highlights.rows).toHaveLength(12);
+    expect(result.financial_highlights.rows).toHaveLength(13);
+    expect(result.financial_highlights.sections).toHaveLength(5);
+    expect(result.financial_highlights.point_in_time[0]).toMatchObject({
+      key: 'market_cap',
+      unit: 'USD Mn',
+    });
+    expect(result.valuation_multiples.interpretation.primary_method).toBe('EV/EBITDA');
+    expect(result.fair_value_range.metric_details.base.display).toBe('USD 940');
+    expect(result.scenario_analysis.base.upside_downside_display).toBe('2.17%');
+    expect(result.quality_of_earnings.rating).toBe('healthy');
+    expect(result.balance_sheet_risk.risk_level).toBe('low');
+    expect(result.dividend_quality.sustainability).toBe('sustainable');
+    expect(result.peer_comparison.metrics).toHaveLength(2);
     expect(result.company_profile).toMatchObject({
       available: true,
       ticker: 'NVDA',
-      name: 'NVIDIA Corporation',
+      company_name: 'NVIDIA Corporation',
+    });
+    expect(result.analysis_overview).toMatchObject({
+      recommendation: 'Buy',
+      confidence: 'High',
     });
     expect(result.price_chart).toMatchObject({
       available: true,
@@ -36,6 +52,9 @@ describe('mockData', () => {
       lookback_days: 120,
     });
     expect(result.price_chart.points).toHaveLength(120);
+    expect(result.price_chart.data).toHaveLength(120);
+    expect(result.price_chart.points[0]).toHaveProperty('adjusted_close');
+    expect(result.price_performance).toHaveProperty('period_return_percent');
     expect(result.price_chart.points.some((point) => point.close >= point.open)).toBe(true);
     expect(result.price_chart.points.some((point) => point.close < point.open)).toBe(true);
     expect(result.price_chart.stats.high).toBe(
@@ -60,6 +79,39 @@ describe('mockData', () => {
       lookback_days: 90,
     });
     expect(result.related_news.items).toHaveLength(3);
+    expect(result.technical_entry).toMatchObject({
+      available: true,
+    });
+    expect(result.news_impact).toMatchObject({
+      available: true,
+      overall_sentiment: 'positive',
+    });
+    expect(result.news_impact.high_impact_news.length).toBeGreaterThan(0);
+    expect(result.catalyst_tracker.positive_catalysts.length).toBeGreaterThan(0);
+    expect(result.analyst_consensus).toMatchObject({
+      available: true,
+      total: 18,
+    });
+    expect(result.risk_data_quality).toMatchObject({
+      risk_summary: {
+        overall_risk: 'moderate',
+      },
+      data_quality: {
+        confidence: 'high',
+      },
+    });
+    expect(result.risk_data_quality.vendor_status.yfinance.status).toBe('success');
+    expect(result.risk_data_quality.missing_fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          module: 'financial_highlights',
+          field: 'payout_ratio',
+        }),
+      ])
+    );
+    expect(result.risk_data_quality.calculation_notes).toContain(
+      'Risk/reward ratio = expected upside / expected downside'
+    );
   });
 
   it('supports required direct mock routes', () => {

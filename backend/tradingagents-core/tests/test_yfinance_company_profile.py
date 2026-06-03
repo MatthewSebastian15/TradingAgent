@@ -50,13 +50,16 @@ def test_safe_company_profile_keeps_pipeline_running_on_vendor_error(monkeypatch
     monkeypatch.setattr(
         pipeline_balanced_data,
         "route_to_vendor",
-        lambda *_args: (_ for _ in ()).throw(RuntimeError("provider down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("provider down")),
     )
 
     profile = pipeline_balanced_data._safe_company_profile("BBCA.JK", "2026-05-31")
 
-    assert profile == {
-        "available": False,
-        "ticker": "BBCA.JK",
-        "warning": "provider down",
-    }
+    assert profile["available"] is False
+    assert profile["ticker"] == "BBCA.JK"
+    assert profile["data_quality"]["status"] == "unavailable"
+    assert profile["data_quality"]["warnings"] == [
+        "yfinance: provider down",
+        "finnhub: provider down",
+        "alpha_vantage: provider down",
+    ]

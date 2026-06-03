@@ -39,38 +39,50 @@ const COMMON_MOCK_QUALITY = {
 const MOCK_COMPANY_PROFILE = {
   available: true,
   ticker: 'NVDA',
-  name: 'NVIDIA Corporation',
+  company_name: 'NVIDIA Corporation',
+  exchange: 'NASDAQ',
+  currency: 'USD',
+  country: 'United States',
   sector: 'Technology',
   industry: 'Semiconductors',
-  address: '2788 San Tomas Expressway, Santa Clara, CA, United States',
-  phone: '408 486 2000',
   website: 'https://www.nvidia.com',
-  full_time_employees: 36000,
-  description:
+  market_cap: 2300000000000,
+  shares_outstanding: 24400000000,
+  current_price: 940,
+  fiscal_year_end: 'January',
+  employee_count: 36000,
+  business_summary:
     'NVIDIA Corporation provides accelerated computing platforms, graphics processors, networking products, and software for data center, gaming, professional visualization, and automotive markets.',
-  executives: [
+  officers: [
     { name: 'Mr. Jen-Hsun Huang', title: 'President, CEO & Director' },
     { name: 'Ms. Colette M. Kress', title: 'Executive VP & CFO' },
   ],
+  data_quality: { status: 'complete', missing_fields: [], sources_used: ['mock'] },
 };
 
 const MOCK_IDX_COMPANY_PROFILE = {
   available: true,
   ticker: 'BBCA.JK',
-  name: 'PT Bank Central Asia Tbk',
+  company_name: 'PT Bank Central Asia Tbk',
+  exchange: 'IDX',
+  currency: 'IDR',
+  country: 'Indonesia',
   sector: 'Financial Services',
   industry: 'Banks - Regional',
-  address: 'Menara BCA, Grand Indonesia, Jl. M.H. Thamrin No. 1, Jakarta, 10310, Indonesia',
-  phone: '62 21 2358 8000',
   website: 'https://www.bca.co.id',
-  full_time_employees: 27682,
-  description:
+  market_cap: 1205000000000000,
+  shares_outstanding: 123275050000,
+  current_price: 9800,
+  fiscal_year_end: 'December',
+  employee_count: 27682,
+  business_summary:
     'PT Bank Central Asia Tbk provides commercial banking and other financial services. The company offers deposits, loans, credit cards, investment products, and transaction banking services.',
-  executives: [
+  officers: [
     { name: 'Mr. Gregory Hendra Lembong', title: 'President Director' },
     { name: 'Mr. Armand Wahyudi Hartono', title: 'Deputy President Director' },
     { name: 'Mr. John Kosasih', title: 'Commercial & SME Banking Director' },
   ],
+  data_quality: { status: 'complete', missing_fields: [], sources_used: ['mock'] },
 };
 
 const MOCK_NEWS_CONTEXT = {
@@ -126,7 +138,7 @@ const MOCK_NEWS_CONTEXT = {
   cache: { hit: false },
 };
 
-export const MOCK_FINANCIAL_HIGHLIGHTS = {
+const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
   title: 'Key Financial Highlights',
   currency: 'USD',
   scale: 'billion',
@@ -384,6 +396,481 @@ export const MOCK_FINANCIAL_HIGHLIGHTS = {
   },
 };
 
+const FINANCIAL_SECTIONS = [
+  ['market_scale', 'Market & Scale', ['revenue', 'ebitda', 'net_profit']],
+  ['growth', 'Growth', ['revenue_growth', 'net_profit_growth']],
+  ['profitability', 'Profitability', ['ebitda_margin', 'net_profit_margin', 'roe']],
+  ['per_share_balance_sheet', 'Per Share & Balance Sheet', ['eps', 'bvps', 'der']],
+  ['dividends', 'Dividends', ['dividend_yield', 'payout_ratio']],
+];
+
+function createMockFinancialHighlights({ currency = 'USD', currencyLabel = 'US Dollar' } = {}) {
+  const payload = JSON.parse(JSON.stringify(MOCK_FINANCIAL_HIGHLIGHTS_BASE));
+  const isIdr = currency === 'IDR';
+  const scale = isIdr ? 'billion' : 'million';
+  const scaleLabel = `${currency} ${isIdr ? 'Bn' : 'Mn'}`;
+  const sectionByMetric = Object.fromEntries(
+    FINANCIAL_SECTIONS.flatMap(([sectionKey, _title, keys]) => keys.map((key) => [key, sectionKey]))
+  );
+  const percentKeys = new Set([
+    'revenue_growth',
+    'ebitda_margin',
+    'net_profit_growth',
+    'net_profit_margin',
+    'roe',
+    'dividend_yield',
+    'payout_ratio',
+  ]);
+  const currencyKeys = new Set(['revenue', 'ebitda', 'net_profit']);
+
+  payload.rows.push({
+    key: 'payout_ratio',
+    label: 'Payout Ratio (%)',
+    unit: '%',
+    values: Object.fromEntries(
+      payload.periods.map((period) => [
+        period.key,
+        { value: null, display: 'N/A', status: 'unavailable' },
+      ])
+    ),
+  });
+
+  payload.rows = payload.rows.map((row) => {
+    const formatType = currencyKeys.has(row.key)
+      ? 'currency_scaled'
+      : percentKeys.has(row.key)
+        ? 'percent'
+        : row.key === 'der'
+          ? 'ratio'
+          : 'per_share';
+    const unit =
+      formatType === 'currency_scaled'
+        ? scaleLabel
+        : formatType === 'per_share'
+          ? `${currency}/share`
+          : formatType === 'ratio'
+            ? 'x'
+            : '%';
+    const values = Object.fromEntries(
+      Object.entries(row.values).map(([period, cell]) => {
+        if (cell.status === 'unavailable' || cell.value == null) return [period, cell];
+        const value =
+          formatType === 'currency_scaled' ? Number(cell.value) * 1000 : Number(cell.value);
+        const display =
+          formatType === 'currency_scaled'
+            ? value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+            : formatType === 'percent'
+              ? `${value.toFixed(2)}%`
+              : formatType === 'ratio'
+                ? `${value.toFixed(2)}x`
+                : value.toFixed(2);
+        return [period, { ...cell, value, display }];
+      })
+    );
+    return {
+      ...row,
+      label: row.key === 'net_profit_margin' ? 'Net Profit Margin / Profit Margin (%)' : row.label,
+      unit,
+      format_type: formatType,
+      section_key: sectionByMetric[row.key],
+      values,
+    };
+  });
+  payload.currency = currency;
+  payload.currency_label = currencyLabel;
+  payload.scale = scale;
+  payload.scale_label = scaleLabel;
+  payload.unit_note = `Currency: ${currency} (${currencyLabel}) | Amount figures: in ${scale}s (${scaleLabel}) | Per-share values: ${currency}/share | Percent metrics: shown with % | DER: ratio (x)`;
+  payload.point_in_time = [
+    {
+      key: 'market_cap',
+      label: 'Market Cap',
+      value: isIdr ? 1205000 : 2300000,
+      display: isIdr ? '1,205,000.0' : '2,300,000.0',
+      unit: scaleLabel,
+      as_of: payload.analysis_date,
+      status: 'reported',
+      source_vendor: 'mock',
+      source_field: 'market_cap',
+    },
+  ];
+  payload.sections = FINANCIAL_SECTIONS.map(([key, title, rowKeys]) => ({
+    key,
+    title,
+    rows: rowKeys.map((rowKey) => payload.rows.find((row) => row.key === rowKey)),
+  }));
+  payload.data_quality.missing_metrics = ['payout_ratio'];
+  return payload;
+}
+
+export const MOCK_FINANCIAL_HIGHLIGHTS = createMockFinancialHighlights();
+const MOCK_IDX_FINANCIAL_HIGHLIGHTS = createMockFinancialHighlights({
+  currency: 'IDR',
+  currencyLabel: 'Indonesian Rupiah',
+});
+
+function mockMetric(value, display, formula, status = 'calculated') {
+  return { value, display, status: value == null ? 'unavailable' : status, formula };
+}
+
+function createMockFundamentalAnalysis({
+  currency = 'USD',
+  currentPrice = 920,
+  financialSector = false,
+  highlights = MOCK_FINANCIAL_HIGHLIGHTS,
+  primaryTicker = 'NVDA',
+  peerTicker = 'AMD',
+  peerName = 'Advanced Micro Devices, Inc.',
+} = {}) {
+  const isIdr = currency === 'IDR';
+  const primaryMethod = financialSector ? 'P/BV' : 'EV/EBITDA';
+  const fairValues = isIdr ? [8400, 10500, 12600] : [760, 940, 1120];
+  const upside = fairValues.map((value) =>
+    Number((((value - currentPrice) / currentPrice) * 100).toFixed(2))
+  );
+  const quality = { status: 'complete', missing_fields: [], fallback_used: [], warnings: [] };
+  const partialQuality = {
+    status: 'partial',
+    missing_fields: ['FY26Q1 net_profit_growth_percent'],
+    fallback_used: [],
+    warnings: ['Latest quarterly growth comparison is unavailable.'],
+  };
+  const fairValueDetails = {
+    current_price: mockMetric(
+      currentPrice,
+      `${currency} ${currentPrice.toLocaleString()}`,
+      'Last close price'
+    ),
+    bear: mockMetric(
+      fairValues[0],
+      `${currency} ${fairValues[0].toLocaleString()}`,
+      `${primaryMethod} bear policy`
+    ),
+    base: mockMetric(
+      fairValues[1],
+      `${currency} ${fairValues[1].toLocaleString()}`,
+      `${primaryMethod} base policy`
+    ),
+    bull: mockMetric(
+      fairValues[2],
+      `${currency} ${fairValues[2].toLocaleString()}`,
+      `${primaryMethod} bull policy`
+    ),
+    bear_upside_percent: mockMetric(
+      upside[0],
+      `${upside[0]}%`,
+      '(Bear Fair Value - Current Price) / Current Price * 100'
+    ),
+    base_upside_percent: mockMetric(
+      upside[1],
+      `${upside[1]}%`,
+      '(Base Fair Value - Current Price) / Current Price * 100'
+    ),
+    bull_upside_percent: mockMetric(
+      upside[2],
+      `${upside[2]}%`,
+      '(Bull Fair Value - Current Price) / Current Price * 100'
+    ),
+  };
+  const scenarioDetails = Object.fromEntries(
+    ['bear', 'base', 'bull'].map((key, index) => {
+      const growth = 12 + index * 3;
+      const margin = 42 + index * 2;
+      return [
+        key,
+        {
+          fair_value: fairValueDetails[key],
+          upside_downside_percent: fairValueDetails[`${key}_upside_percent`],
+          revenue_growth_assumption_percent: mockMetric(
+            growth,
+            `${growth}%`,
+            'Latest revenue growth adjusted for scenario'
+          ),
+          margin_assumption_percent: mockMetric(
+            margin,
+            `${margin}%`,
+            'Latest net profit margin adjusted for scenario'
+          ),
+        },
+      ];
+    })
+  );
+  const trendMapping = {
+    revenue: 'revenue',
+    revenue_growth_percent: 'revenue_growth',
+    ebitda: 'ebitda',
+    ebitda_margin_percent: 'ebitda_margin',
+    net_profit: 'net_profit',
+    net_profit_growth_percent: 'net_profit_growth',
+    net_profit_margin_percent: 'net_profit_margin',
+    roe_percent: 'roe',
+    eps: 'eps',
+    bvps: 'bvps',
+    der: 'der',
+  };
+  const trendDetails = Object.fromEntries(
+    Object.entries(trendMapping).map(([key, rowKey]) => [
+      key,
+      highlights.periods.map((period) => {
+        const cell = highlights.rows.find((row) => row.key === rowKey)?.values?.[period.key] || {
+          value: null,
+          display: 'N/A',
+          status: 'unavailable',
+        };
+        return { ...cell, formula: cell.formula || 'Financial highlight period value' };
+      }),
+    ])
+  );
+  const valuationDetails = isIdr
+    ? {
+        market_cap: mockMetric(
+          1205000000000000,
+          '1,205,000.0 IDR Bn',
+          'Current Price * Shares Outstanding'
+        ),
+        enterprise_value: mockMetric(
+          1240000000000000,
+          '1,240,000.0 IDR Bn',
+          'Market Cap + Total Debt - Cash'
+        ),
+        pe: mockMetric(19.4, '19.40x', 'Market Cap / Net Profit'),
+        pbv: mockMetric(4.2, '4.20x', 'Market Cap / Total Equity'),
+        ps: mockMetric(7.1, '7.10x', 'Market Cap / Revenue'),
+        ev_ebitda: mockMetric(16.8, '16.80x', 'Enterprise Value / EBITDA'),
+      }
+    : {
+        market_cap: mockMetric(
+          2244800000000,
+          '2,244,800.0 USD Mn',
+          'Current Price * Shares Outstanding'
+        ),
+        enterprise_value: mockMetric(
+          2260000000000,
+          '2,260,000.0 USD Mn',
+          'Market Cap + Total Debt - Cash'
+        ),
+        pe: mockMetric(44.5, '44.50x', 'Market Cap / Net Profit'),
+        pbv: mockMetric(38.2, '38.20x', 'Market Cap / Total Equity'),
+        ps: mockMetric(20.1, '20.10x', 'Market Cap / Revenue'),
+        ev_ebitda: mockMetric(30.4, '30.40x', 'Enterprise Value / EBITDA'),
+      };
+  const earningsDetails = {
+    cfo_to_net_income: mockMetric(
+      isIdr ? 1.08 : 1.22,
+      isIdr ? '1.08x' : '1.22x',
+      'Operating Cash Flow / Net Income'
+    ),
+    free_cash_flow: mockMetric(
+      isIdr ? 52000000000000 : 65000000000,
+      isIdr ? '52,000.0 IDR Bn' : '65,000.0 USD Mn',
+      'Operating Cash Flow - Capex'
+    ),
+    capex_intensity_percent: mockMetric(
+      isIdr ? 2.1 : 4.8,
+      isIdr ? '2.10%' : '4.80%',
+      'Capex / Revenue * 100'
+    ),
+  };
+  const balanceSheetDetails = {
+    der: mockMetric(isIdr ? 0.62 : 0.35, isIdr ? '0.62x' : '0.35x', 'Total Debt / Total Equity'),
+    net_debt: mockMetric(
+      isIdr ? 35000000000000 : -12000000000,
+      isIdr ? '35,000.0 IDR Bn' : '-12,000.0 USD Mn',
+      'Total Debt - Cash'
+    ),
+    debt_to_ebitda: mockMetric(
+      isIdr ? 1.6 : 0.42,
+      isIdr ? '1.60x' : '0.42x',
+      'Total Debt / EBITDA'
+    ),
+    cash_ratio: mockMetric(
+      isIdr ? 0.19 : 1.32,
+      isIdr ? '0.19x' : '1.32x',
+      'Cash / Current Liabilities'
+    ),
+    equity_ratio: mockMetric(
+      isIdr ? 0.14 : 0.58,
+      isIdr ? '0.14x' : '0.58x',
+      'Total Equity / Total Assets'
+    ),
+  };
+  const dividendDetails = {
+    dividend_yield_percent: mockMetric(
+      isIdr ? 2.7 : 0.04,
+      isIdr ? '2.70%' : '0.04%',
+      'Dividend per Share / Current Price * 100'
+    ),
+    payout_ratio_percent: mockMetric(
+      isIdr ? 48 : 1.8,
+      isIdr ? '48.00%' : '1.80%',
+      'Dividend per Share / EPS * 100'
+    ),
+    fcf_coverage: mockMetric(
+      isIdr ? 2.2 : 18.5,
+      isIdr ? '2.20x' : '18.50x',
+      'Free Cash Flow / Dividend Paid'
+    ),
+  };
+  const financialWarnings = financialSector
+    ? [
+        'Generic DER risk level is not applied to financial-sector companies. Use sector-specific review.',
+      ]
+    : [];
+
+  return {
+    financial_trends: {
+      currency,
+      scale: highlights.scale,
+      scale_label: highlights.scale_label,
+      unit_note: highlights.unit_note,
+      periods: highlights.periods,
+      metrics: Object.fromEntries(
+        Object.entries(trendDetails).map(([key, cells]) => [key, cells.map((cell) => cell.value)])
+      ),
+      metric_details: trendDetails,
+      summary: {
+        growth_trend: 'improving',
+        margin_trend: 'stable',
+        profitability_trend: 'improving',
+        leverage_trend: 'stable',
+      },
+      data_quality: partialQuality,
+    },
+    valuation_multiples: {
+      currency,
+      ...Object.fromEntries(
+        Object.entries(valuationDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: valuationDetails,
+      interpretation: {
+        valuation_label: financialSector ? 'expensive' : 'expensive',
+        primary_method: primaryMethod,
+        main_reason: `${primaryMethod} is compared with the documented base policy multiple.`,
+      },
+      data_quality: quality,
+    },
+    fair_value_range: {
+      currency,
+      ...Object.fromEntries(
+        Object.entries(fairValueDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: fairValueDetails,
+      method: 'multiple-based valuation',
+      primary_method: primaryMethod,
+      assumptions: [`Base case uses the documented ${primaryMethod} policy multiple.`],
+      data_quality: quality,
+    },
+    scenario_analysis: {
+      currency,
+      bear: {
+        fair_value: fairValues[0],
+        fair_value_display: fairValueDetails.bear.display,
+        upside_downside_percent: upside[0],
+        upside_downside_display: `${upside[0]}%`,
+        revenue_growth_assumption_percent: 12,
+        margin_assumption_percent: 42,
+        valuation_multiple: financialSector ? '1.0x P/BV' : '6.0x EV/EBITDA',
+        assumption: 'Lower growth and multiple compression',
+      },
+      base: {
+        fair_value: fairValues[1],
+        fair_value_display: fairValueDetails.base.display,
+        upside_downside_percent: upside[1],
+        upside_downside_display: `${upside[1]}%`,
+        revenue_growth_assumption_percent: 15,
+        margin_assumption_percent: 44,
+        valuation_multiple: financialSector ? '1.5x P/BV' : '8.0x EV/EBITDA',
+        assumption: 'Current operating profile and base policy multiple',
+      },
+      bull: {
+        fair_value: fairValues[2],
+        fair_value_display: fairValueDetails.bull.display,
+        upside_downside_percent: upside[2],
+        upside_downside_display: `${upside[2]}%`,
+        revenue_growth_assumption_percent: 18,
+        margin_assumption_percent: 46,
+        valuation_multiple: financialSector ? '2.0x P/BV' : '10.0x EV/EBITDA',
+        assumption: 'Higher growth and multiple expansion',
+      },
+      metric_details: scenarioDetails,
+      data_quality: quality,
+    },
+    quality_of_earnings: {
+      ...Object.fromEntries(
+        Object.entries(earningsDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: earningsDetails,
+      accrual_risk: 'low',
+      rating: 'healthy',
+      notes: ['Operating cash flow covers reported net income.'],
+      data_quality: quality,
+    },
+    balance_sheet_risk: {
+      ...Object.fromEntries(
+        Object.entries(balanceSheetDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: balanceSheetDetails,
+      risk_level: financialSector ? 'N/A' : 'low',
+      risk_flags: financialWarnings.length ? financialWarnings : ['Leverage remains manageable.'],
+      data_quality: {
+        ...quality,
+        status: financialWarnings.length ? 'partial' : 'complete',
+        warnings: financialWarnings,
+      },
+    },
+    dividend_quality: {
+      ...Object.fromEntries(
+        Object.entries(dividendDetails).map(([key, item]) => [key, item.value])
+      ),
+      metric_details: dividendDetails,
+      sustainability: 'sustainable',
+      notes: ['Dividend quality uses reported dividend data.'],
+      data_quality: quality,
+    },
+    peer_comparison: {
+      primary_ticker: primaryTicker,
+      peers: [peerTicker],
+      metrics: [
+        {
+          ticker: primaryTicker,
+          company_name: financialSector ? 'PT Bank Central Asia Tbk' : 'NVIDIA Corporation',
+          pe: valuationDetails.pe.display,
+          pbv: valuationDetails.pbv.display,
+          roe_percent: financialSector ? 24.5 : 89.3,
+          net_profit_margin_percent: financialSector ? 45.1 : 55.2,
+          der: balanceSheetDetails.der.display,
+          dividend_yield_percent: dividendDetails.dividend_yield_percent.value,
+        },
+        {
+          ticker: peerTicker,
+          company_name: peerName,
+          pe: '31.20x',
+          pbv: '4.10x',
+          roe_percent: 18.4,
+          net_profit_margin_percent: 16.8,
+          der: '0.28x',
+          dividend_yield_percent: 1.2,
+        },
+      ],
+      ranking_summary: {
+        valuation: 'Primary ticker trades above its peer on the selected policy multiple.',
+      },
+      data_quality: quality,
+    },
+  };
+}
+
+export const MOCK_FUNDAMENTAL_ANALYSIS = createMockFundamentalAnalysis();
+const MOCK_IDX_FUNDAMENTAL_ANALYSIS = createMockFundamentalAnalysis({
+  currency: 'IDR',
+  currentPrice: 9800,
+  financialSector: true,
+  highlights: MOCK_IDX_FINANCIAL_HIGHLIGHTS,
+  primaryTicker: 'BBCA.JK',
+  peerTicker: 'BBRI.JK',
+  peerName: 'PT Bank Rakyat Indonesia (Persero) Tbk',
+});
+
 export const MOCK_PIPELINE_STEPS = [
   {
     agent_id: 'data_collection',
@@ -481,6 +968,7 @@ function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', mo
       high,
       low,
       close,
+      adjusted_close: close,
       volume: 70000000 + (sequence % 10) * 2500000,
     });
 
@@ -492,27 +980,60 @@ function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', mo
   const startPrice = closes[0];
   const endPrice = closes[closes.length - 1];
   const change = endPrice - startPrice;
+  const averageVolume = Math.round(volumes.reduce((sum, value) => sum + value, 0) / volumes.length);
+  const latestVolume = volumes[volumes.length - 1];
+  const periodReturn = Number(((change / startPrice) * 100).toFixed(2));
+  let peak = closes[0];
+  let maxDrawdown = 0;
+  closes.forEach((close) => {
+    if (close > peak) peak = close;
+    maxDrawdown = Math.min(maxDrawdown, ((close - peak) / peak) * 100);
+  });
+  const summary = {
+    period_return_percent: periodReturn,
+    period_high: Math.max(...points.map((item) => item.high)),
+    period_low: Math.min(...points.map((item) => item.low)),
+    max_drawdown_percent: Number(maxDrawdown.toFixed(2)),
+    average_volume: averageVolume,
+    latest_volume: latestVolume,
+    latest_close: endPrice,
+    volume_trend:
+      latestVolume >= averageVolume * 1.1
+        ? 'above_average'
+        : latestVolume <= averageVolume * 0.9
+          ? 'below_average'
+          : 'average',
+    performance_label: periodReturn > 0 ? 'positive' : periodReturn < 0 ? 'negative' : 'flat',
+  };
 
   return {
     available: true,
     source: 'mock:yfinance',
     ticker,
     trade_date: tradeDate,
+    currency: ticker.endsWith('.JK') ? 'IDR' : 'USD',
+    window: `${normalizeTimeHorizonMonths(months)}M`,
     window_label: `${normalizeTimeHorizonMonths(months)} Month${normalizeTimeHorizonMonths(months) > 1 ? 's' : ''} Analysis / ${lookbackDays}D Price Window`,
     lookback_days: lookbackDays,
     points,
+    data: points,
     stats: {
       start_price: startPrice,
       end_price: endPrice,
       change,
-      change_percent: Number(((change / startPrice) * 100).toFixed(2)),
+      change_percent: periodReturn,
       high: Math.max(...points.map((item) => item.high)),
       low: Math.min(...points.map((item) => item.low)),
       average_close: Number(
         (closes.reduce((sum, value) => sum + value, 0) / closes.length).toFixed(2)
       ),
-      average_volume: Math.round(volumes.reduce((sum, value) => sum + value, 0) / volumes.length),
+      average_volume: averageVolume,
       point_count: points.length,
+    },
+    summary,
+    data_quality: {
+      status: 'complete',
+      missing_fields: [],
     },
   };
 }
@@ -629,11 +1150,522 @@ function syncMockRelatedNews(relatedNews, options) {
   return fallback;
 }
 
+function average(values) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+function simpleSma(values, windowSize) {
+  if (values.length < windowSize) return null;
+  return average(values.slice(-windowSize));
+}
+
+function simpleRsi(closes, windowSize = 14) {
+  if (closes.length <= windowSize) return null;
+  const changes = closes.slice(1).map((close, index) => close - closes[index]);
+  const recent = changes.slice(-windowSize);
+  const gains = recent.map((value) => Math.max(value, 0));
+  const losses = recent.map((value) => Math.abs(Math.min(value, 0)));
+  const avgGain = average(gains);
+  const avgLoss = average(losses);
+  if (!avgLoss) return avgGain ? 100 : 50;
+  const rs = avgGain / avgLoss;
+  return 100 - 100 / (1 + rs);
+}
+
+function emaSeries(values, span) {
+  if (!values.length) return [];
+  const alpha = 2 / (span + 1);
+  return values.reduce((series, value, index) => {
+    if (index === 0) return [value];
+    return [...series, value * alpha + series[index - 1] * (1 - alpha)];
+  }, []);
+}
+
+function createMockTechnicalEntry(chart) {
+  const points = Array.isArray(chart?.data) ? chart.data : chart?.points;
+  if (!Array.isArray(points) || points.length < 30) {
+    return {
+      available: false,
+      entry_quality: 'N/A',
+      trend: 'N/A',
+      rsi: null,
+      rsi_signal: 'N/A',
+      macd: null,
+      macd_signal_value: null,
+      macd_signal: 'N/A',
+      atr: null,
+      sma_20: null,
+      sma_50: null,
+      sma_200: null,
+      support: null,
+      resistance: null,
+      volume_trend: 'N/A',
+      reasons: ['At least 30 usable OHLCV rows are required for technical entry quality.'],
+      data_quality: { status: 'insufficient', missing_fields: ['ohlcv_history'] },
+    };
+  }
+
+  const closes = points.map((point) => Number(point.close));
+  const latestClose = closes[closes.length - 1];
+  const sma20 = simpleSma(closes, 20);
+  const sma50 = simpleSma(closes, 50);
+  const sma200 = simpleSma(closes, 200);
+  const rsi = simpleRsi(closes);
+  const ema12 = emaSeries(closes, 12);
+  const ema26 = emaSeries(closes, 26);
+  const macdValues = ema12.map((value, index) => value - ema26[index]);
+  const macdSignalValues = emaSeries(macdValues, 9);
+  const macd = macdValues.at(-1);
+  const macdSignalValue = macdSignalValues.at(-1);
+  const recent = points.slice(-20);
+  const support = Math.min(...recent.map((point) => point.low));
+  const resistance = Math.max(...recent.map((point) => point.high));
+  const trueRanges = points
+    .slice(1)
+    .map((point, index) =>
+      Math.max(
+        point.high - point.low,
+        Math.abs(point.high - points[index].close),
+        Math.abs(point.low - points[index].close)
+      )
+    );
+  const atr = average(trueRanges.slice(-14));
+  const trend =
+    sma20 && sma50 && latestClose > sma20 && sma20 > sma50
+      ? 'uptrend'
+      : sma20 && sma50 && latestClose < sma20 && sma20 < sma50
+        ? 'downtrend'
+        : 'sideways';
+  const rsiSignal = rsi >= 70 ? 'overbought' : rsi <= 30 ? 'oversold' : 'neutral';
+  const macdSignal =
+    macd > macdSignalValue ? 'bullish' : macd < macdSignalValue ? 'bearish' : 'neutral';
+  const entryQuality =
+    trend === 'downtrend' || rsiSignal === 'overbought'
+      ? 'risky'
+      : trend === 'uptrend' && rsi < 65 && macdSignal === 'bullish'
+        ? 'good'
+        : 'neutral';
+
+  return {
+    available: true,
+    entry_quality: entryQuality,
+    trend,
+    rsi: Number(rsi.toFixed(2)),
+    rsi_signal: rsiSignal,
+    macd: Number(macd.toFixed(2)),
+    macd_signal_value: Number(macdSignalValue.toFixed(2)),
+    macd_signal: macdSignal,
+    atr: Number(atr.toFixed(2)),
+    sma_20: Number(sma20.toFixed(2)),
+    sma_50: sma50 ? Number(sma50.toFixed(2)) : null,
+    sma_200: sma200 ? Number(sma200.toFixed(2)) : null,
+    support: Number(support.toFixed(2)),
+    resistance: Number(resistance.toFixed(2)),
+    volume_trend: chart.summary?.volume_trend || 'average',
+    reasons: [
+      latestClose > sma20
+        ? 'Price is above the 20-day moving average.'
+        : 'Price is below the 20-day moving average.',
+      `RSI is ${rsiSignal}.`,
+      `MACD signal is ${macdSignal}.`,
+      `Latest volume is ${(chart.summary?.volume_trend || 'average').replace(/_/g, ' ')}.`,
+    ],
+    data_quality: {
+      status: sma200 ? 'complete' : 'partial',
+      missing_fields: sma200 ? [] : ['sma_200'],
+    },
+  };
+}
+
+function createMockNewsImpact({ relatedNews, news, ticker }) {
+  const relatedItems = Array.isArray(relatedNews?.items) ? relatedNews.items : [];
+  const contextItems = Array.isArray(news?.articles) ? news.articles : [];
+  const merged = [...relatedItems, ...contextItems].filter((item) => item?.title && item?.url);
+  const seen = new Set();
+  const deduped = merged.filter((item) => {
+    const key = String(item.normalized_url || item.url || item.title).replace(/\?.*$/, '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (!deduped.length) {
+    return {
+      available: false,
+      overall_sentiment: 'neutral',
+      sentiment_score: 50,
+      high_impact_news: [],
+      full_news_list: [],
+      news_count: 0,
+      deduplicated_count: 0,
+      data_quality: { status: 'unavailable', sources_used: [] },
+    };
+  }
+
+  const scored = deduped.map((item, index) => {
+    const sentiment = index % 3 === 2 ? 'negative' : 'positive';
+    const impactScore = index === 0 ? 86 : index === 2 ? 78 : 62;
+    return {
+      title: item.title,
+      source: item.source || item.provider || 'mock',
+      published_at: item.published_at || '2026-05-29',
+      sentiment,
+      impact: impactScore >= 70 ? 'high' : 'medium',
+      impact_score: impactScore,
+      relevance_score: item.relevance_score || 82 - index * 4,
+      recency_score: 85 - index * 5,
+      materiality_score: index === 0 ? 90 : 70,
+      materiality_category: item.event_type || (index === 2 ? 'regulatory' : 'earnings'),
+      summary: item.summary || `Mock impact summary for ${ticker}.`,
+      url: item.url,
+      normalized_url: item.normalized_url || item.url,
+    };
+  });
+
+  return {
+    available: true,
+    overall_sentiment:
+      scored.filter((item) => item.sentiment === 'positive').length >=
+      scored.filter((item) => item.sentiment === 'negative').length
+        ? 'positive'
+        : 'negative',
+    sentiment_score: 68,
+    high_impact_news: scored.filter((item) => item.impact === 'high').slice(0, 5),
+    full_news_list: scored,
+    news_count: merged.length,
+    deduplicated_count: scored.length,
+    data_quality: {
+      status: 'complete',
+      sources_used: [...new Set(scored.map((item) => item.source))],
+    },
+  };
+}
+
+function createMockCatalystTracker(newsImpact) {
+  const positive = (newsImpact.full_news_list || [])
+    .filter((item) => item.sentiment === 'positive' && item.impact !== 'low')
+    .slice(0, 3)
+    .map((item) => ({
+      type: item.materiality_category || 'sentiment',
+      label: `Positive ${(item.materiality_category || 'sentiment').replace(/_/g, ' ')} catalyst`,
+      impact: item.impact,
+      source: item.source,
+      date: item.published_at,
+      related_news_title: item.title,
+    }));
+  const negative = (newsImpact.full_news_list || [])
+    .filter((item) => item.sentiment === 'negative' && item.impact !== 'low')
+    .slice(0, 3)
+    .map((item) => ({
+      type: item.materiality_category || 'sentiment',
+      label: `Negative ${(item.materiality_category || 'sentiment').replace(/_/g, ' ')} catalyst`,
+      impact: item.impact,
+      source: item.source,
+      date: item.published_at,
+      related_news_title: item.title,
+    }));
+
+  return {
+    positive_catalysts: positive,
+    negative_catalysts: negative,
+    upcoming_events: newsImpact.available
+      ? [
+          {
+            type: 'earnings',
+            label: 'Upcoming quarterly earnings',
+            date: '2026-06-20',
+            source: 'Finnhub',
+            risk_level: 'medium',
+          },
+        ]
+      : [],
+    summary: {
+      overall_catalyst_bias: positive.length > negative.length ? 'positive' : 'neutral',
+      main_message:
+        positive.length > negative.length
+          ? 'Positive mock catalysts outweigh current negative catalysts.'
+          : 'Positive and negative mock catalysts are balanced.',
+    },
+  };
+}
+
+function createMockAnalystConsensus(ticker) {
+  if (String(ticker || '').startsWith('UNVR')) {
+    return {
+      available: false,
+      period: null,
+      strong_buy: 0,
+      buy: 0,
+      hold: 0,
+      sell: 0,
+      strong_sell: 0,
+      total: 0,
+      consensus_label: 'N/A',
+      trend: 'N/A',
+      data_quality: { status: 'unavailable', source: 'Finnhub' },
+    };
+  }
+  return {
+    available: true,
+    period: '2026-05',
+    strong_buy: 4,
+    buy: 8,
+    hold: 5,
+    sell: 1,
+    strong_sell: 0,
+    total: 18,
+    consensus_label: 'positive',
+    trend: 'improving',
+    data_quality: { status: 'complete', source: 'Finnhub' },
+  };
+}
+
+function createMockPhase3(completed, overrides) {
+  const pricePerformance = overrides.price_performance || completed.price_chart?.summary || {};
+  const technicalEntry =
+    overrides.technical_entry || createMockTechnicalEntry(completed.price_chart || {});
+  const newsImpact =
+    overrides.news_impact ||
+    createMockNewsImpact({
+      relatedNews: completed.related_news,
+      news: completed.news,
+      ticker: completed.ticker,
+    });
+  const catalystTracker = overrides.catalyst_tracker || createMockCatalystTracker(newsImpact);
+  const analystConsensus =
+    overrides.analyst_consensus || createMockAnalystConsensus(completed.ticker);
+
+  return {
+    price_performance: pricePerformance,
+    technical_entry: technicalEntry,
+    news_impact: newsImpact,
+    catalyst_tracker: catalystTracker,
+    analyst_consensus: analystConsensus,
+  };
+}
+
 function normalizeDataQuality(overrides = {}) {
   return {
     ...COMMON_MOCK_QUALITY,
     ...overrides,
     warnings: overrides.warnings || COMMON_MOCK_QUALITY.warnings,
+  };
+}
+
+function confidenceLabel(value) {
+  const score = Number(value);
+  if (score >= 0.75) return 'High';
+  if (score >= 0.5) return 'Medium';
+  return 'Low';
+}
+
+function createMockAnalysisOverview(result) {
+  return {
+    recommendation: result.final_decision || result.decision || 'Hold',
+    confidence: confidenceLabel(result.confidence_score),
+    executive_summary: result.executive_summary,
+    investment_thesis: result.investment_thesis,
+    key_reasons: result.key_reasons || result.key_catalysts || [],
+    action_plan: {
+      current_price: result.current_price,
+      entry: result.entry_price,
+      stop_loss: result.stop_loss,
+      take_profit: result.take_profit,
+      max_drawdown: result.max_drawdown_estimate,
+      volatility: result.volatility_level,
+      position_action: result.position_action || result.new_entry_action,
+      position_size_hint: result.position_size_hint,
+      risk_reward_ratio: result.risk_reward_ratio,
+      risk_reward_display: result.risk_reward_display,
+    },
+    risk_summary: {
+      overall_risk: String(result.volatility_level || 'N/A').toLowerCase(),
+      short_reason:
+        result.decision_adjusted_reason ||
+        result.position_sizing_reason ||
+        `Volatility level is ${result.volatility_level || 'N/A'}.`,
+    },
+  };
+}
+
+function createMockRiskDataQuality(result) {
+  const currentPrice = Number(result.current_price || 0);
+  const takeProfit = Number(result.take_profit || 0);
+  const stopLoss = Number(result.stop_loss || 0);
+  const upside =
+    currentPrice > 0 && takeProfit > 0 ? ((takeProfit - currentPrice) / currentPrice) * 100 : null;
+  const downside =
+    currentPrice > 0 && stopLoss > 0 ? ((stopLoss - currentPrice) / currentPrice) * 100 : null;
+  const ratio = upside !== null && downside ? Math.abs(upside) / Math.abs(downside) : null;
+  const newsUnavailable = result.data_quality?.news === 'unavailable';
+  const confidenceScore = newsUnavailable ? 68 : 86;
+  const missingFields = [
+    {
+      module: 'financial_highlights',
+      field: 'payout_ratio',
+      impact: 'low',
+      fallback_available: false,
+    },
+  ];
+  if (newsUnavailable) {
+    missingFields.push({
+      module: 'news_impact',
+      field: 'news',
+      impact: 'medium',
+      fallback_available: false,
+    });
+  }
+
+  return {
+    risk_summary: {
+      overall_risk: result.volatility_level === 'High' ? 'moderate' : 'low',
+      risk_score: result.volatility_level === 'High' ? 58 : 34,
+      main_risks: newsUnavailable
+        ? ['High volatility', 'News coverage unavailable', 'Partial data quality']
+        : ['High volatility', 'Valuation sensitivity', 'Mock data quality'],
+      risk_flags: [
+        'Use disciplined stop loss',
+        'Monitor catalyst and vendor status',
+        'Avoid oversized entry during volatility spikes',
+      ],
+      risk_explanation:
+        'Mock risk combines balance sheet, market, technical, news, and data quality signals.',
+    },
+    balance_sheet_risk_summary: {
+      der: result.balance_sheet_risk?.metric_details?.der?.display || 'N/A',
+      net_debt: result.balance_sheet_risk?.metric_details?.net_debt?.display || 'N/A',
+      debt_to_ebitda: result.balance_sheet_risk?.metric_details?.debt_to_ebitda?.display || 'N/A',
+      cash_ratio: result.balance_sheet_risk?.metric_details?.cash_ratio?.display || 'N/A',
+      risk_level: result.balance_sheet_risk?.risk_level || 'N/A',
+      interpretation:
+        'Leverage appears manageable in mock data, but debt trend should still be monitored.',
+    },
+    market_risk: {
+      volatility_percent: result.volatility_level === 'High' ? 32.4 : 18.6,
+      max_drawdown_percent: result.price_performance?.max_drawdown_percent ?? -12.8,
+      atr: result.technical_entry?.atr ?? null,
+      price_range_percent: 14.6,
+      risk_bucket: result.volatility_level === 'High' ? 'medium' : 'low',
+      notes: [
+        'Volatility is calculated from mock OHLCV history.',
+        'Max drawdown uses the selected mock price window.',
+      ],
+    },
+    risk_adjusted_return: {
+      upside_percent: upside === null ? null : Number(upside.toFixed(2)),
+      downside_percent: downside === null ? null : Number(downside.toFixed(2)),
+      risk_reward_ratio: ratio === null ? 'N/A' : `${ratio.toFixed(1)}x`,
+      expected_return_label: ratio >= 1.5 && upside > 0 ? 'attractive' : 'balanced',
+      notes: ['Upside and downside use the validated mock action plan.'],
+    },
+    thesis_monitor: {
+      overall_thesis_status: newsUnavailable ? 'valid_with_watch_items' : 'valid',
+      checklist: [
+        {
+          category: 'Financial',
+          condition: 'Revenue growth turns negative',
+          status: 'valid',
+          reason: 'Mock revenue growth remains positive.',
+        },
+        {
+          category: 'Price',
+          condition: 'Price breaks stop loss',
+          status: 'valid',
+          reason: 'Current price remains above stop loss.',
+        },
+        {
+          category: 'News',
+          condition: 'Major negative catalyst appears',
+          status: newsUnavailable ? 'unknown' : 'valid',
+          reason: newsUnavailable
+            ? 'News coverage is unavailable in this mock scenario.'
+            : 'No high-impact negative news dominates the mock set.',
+        },
+        {
+          category: 'Data',
+          condition: 'Important fields missing or vendor confidence low',
+          status: confidenceScore >= 80 ? 'valid' : 'watch',
+          reason: `Data quality score is ${confidenceScore}.`,
+        },
+      ],
+    },
+    catalyst_risk: [
+      ...(result.catalyst_tracker?.negative_catalysts || []).map((item) => ({
+        type: item.type || 'sentiment',
+        label: item.label || 'Negative catalyst',
+        impact: item.impact || 'medium',
+        date: item.date,
+        source: item.source || 'mock',
+        reason: item.related_news_title || 'Negative catalyst detected in mock news.',
+      })),
+      ...(result.catalyst_tracker?.upcoming_events || []).map((item) => ({
+        type: item.type || 'event',
+        label: item.label || 'Upcoming event risk',
+        impact: item.risk_level || 'medium',
+        date: item.date,
+        source: item.source || 'mock',
+        reason: 'Upcoming mock event may increase short-term volatility.',
+      })),
+    ],
+    data_quality: {
+      score: confidenceScore,
+      confidence: confidenceScore >= 80 ? 'high' : 'medium',
+      summary: newsUnavailable
+        ? 'Core mock data is available, but news coverage is unavailable.'
+        : 'Most critical mock financial, price, and news data are available.',
+      score_breakdown: {
+        price_data: 95,
+        financial_data: 82,
+        valuation_data: 88,
+        news_data: newsUnavailable ? 20 : 85,
+        vendor_success: newsUnavailable ? 60 : 95,
+        freshness: 90,
+      },
+    },
+    vendor_status: {
+      yfinance: {
+        status: 'success',
+        used_for: ['price', 'profile', 'financials'],
+        missing_fields: [],
+      },
+      alpha_vantage: {
+        status: 'skipped',
+        used_for: [],
+        missing_fields: [],
+      },
+      finnhub: {
+        status: newsUnavailable ? 'unavailable' : 'success',
+        used_for: newsUnavailable ? [] : ['profile', 'analyst_consensus', 'news'],
+        missing_fields: newsUnavailable ? ['news'] : [],
+      },
+      marketaux: {
+        status: newsUnavailable ? 'unavailable' : 'success',
+        used_for: newsUnavailable ? [] : ['news'],
+        missing_fields: newsUnavailable ? ['news'] : [],
+      },
+      newsdata: {
+        status: newsUnavailable ? 'rate_limited' : 'success',
+        used_for: newsUnavailable ? [] : ['news'],
+        missing_fields: newsUnavailable ? ['news'] : [],
+      },
+    },
+    missing_fields: missingFields,
+    fallback_used: [
+      {
+        field: 'market_cap',
+        method: 'price_times_shares_outstanding',
+        confidence: 'high',
+      },
+    ],
+    stale_data_warning: [],
+    calculation_notes: [
+      'Revenue Growth = (current revenue - previous revenue) / previous revenue',
+      'DER = total debt / total equity',
+      'FCF = operating cash flow - capital expenditure',
+      'Enterprise Value = market cap + total debt - cash',
+      'Risk/reward ratio = expected upside / expected downside',
+      'Max Drawdown = largest peak-to-trough decline',
+    ],
   };
 }
 
@@ -675,9 +1707,9 @@ function completeMockAnalysis(overrides = {}) {
     volatility_score: 72,
 
     rebalancing_action: 'Open new position',
-    position_action: 'Open new position',
-    new_entry_action: 'Allowed with staged entry',
-    position_size_hint: 'Use smaller size due to High volatility.',
+    position_action: null,
+    new_entry_action: 'Allowed with validated entry',
+    position_size_hint: 'Use smaller starter size due to high volatility.',
     position_sizing_reason: 'Use staged allocation because volatility is high.',
 
     confidence_score: 0.84,
@@ -696,10 +1728,12 @@ function completeMockAnalysis(overrides = {}) {
     full_decision: null,
 
     key_catalysts: ['Mock catalyst 1', 'Mock catalyst 2'],
+    key_reasons: ['Validated trade plan', 'Complete dashboard contract', 'Visible risk controls'],
     invalidation_conditions: ['Mock invalidation 1', 'Mock invalidation 2'],
 
     data_quality: COMMON_MOCK_QUALITY,
     financial_highlights: MOCK_FINANCIAL_HIGHLIGHTS,
+    ...MOCK_FUNDAMENTAL_ANALYSIS,
     company_profile: MOCK_COMPANY_PROFILE,
     news: MOCK_NEWS_CONTEXT,
     validation_warnings: [],
@@ -737,16 +1771,27 @@ function completeMockAnalysis(overrides = {}) {
     }),
     data_quality: normalizeDataQuality(overrides.data_quality || result.data_quality),
   };
+  const completedWithPhase3 = {
+    ...completed,
+    ...createMockPhase3(completed, overrides),
+  };
+  const completedWithRiskDataQuality = {
+    ...completedWithPhase3,
+    risk_data_quality:
+      overrides.risk_data_quality || createMockRiskDataQuality(completedWithPhase3),
+  };
 
   return {
-    ...completed,
+    ...completedWithRiskDataQuality,
+    analysis_overview: createMockAnalysisOverview(completedWithRiskDataQuality),
     full_decision:
-      completed.full_decision ||
+      completedWithRiskDataQuality.full_decision ||
       createFullDecision({
-        decision: completed.final_decision ?? completed.decision,
-        summary: completed.executive_summary,
-        thesis: completed.investment_thesis,
-        timeHorizon: completed.time_horizon,
+        decision:
+          completedWithRiskDataQuality.final_decision ?? completedWithRiskDataQuality.decision,
+        summary: completedWithRiskDataQuality.executive_summary,
+        thesis: completedWithRiskDataQuality.investment_thesis,
+        timeHorizon: completedWithRiskDataQuality.time_horizon,
       }),
   };
 }
@@ -770,9 +1815,9 @@ export const MOCK_BUY_RESPONSE = completeMockAnalysis({
   volatility_level: 'High',
   volatility_score: 72,
   rebalancing_action: 'Open new position',
-  position_action: 'Open new position',
-  new_entry_action: 'Allowed with staged entry',
-  position_size_hint: 'Use smaller size due to High volatility.',
+  position_action: null,
+  new_entry_action: 'Allowed with validated entry',
+  position_size_hint: 'Use smaller starter size due to high volatility.',
   position_sizing_reason:
     'Use a smaller staged allocation because volatility is high. Keep the stop loss disciplined and do not add unless the setup keeps a valid 1:3 risk/reward profile.',
   executive_summary: `NVDA is rated Buy because AI infrastructure spending still centers on its GPU, networking, and software ecosystem, giving the company the clearest mock upside setup in this dashboard. The strongest support is the complete action plan: current price and entry are both 920, stop loss is 880, take profit is 1040, volatility is High at 72, and the trade keeps a fixed 1:3 risk/reward profile. The biggest risk is valuation pressure if hyperscaler spending slows or Blackwell demand disappoints, but the mock evidence still favors controlled exposure because demand, margin quality, and platform lock-in remain supportive. The recommended action is to open a staged 6 percent position, respect the stop loss, avoid adding below invalidation, and take profit only at the execution target. The horizon is 3 Months, and the thesis is confirmed by sustained AI capex, supply expansion, and strong data center momentum, or invalidated by heavy-volume weakness below the stop.`,
@@ -838,8 +1883,8 @@ export const MOCK_SELL_RESPONSE = completeMockAnalysis({
   volatility_score: 88,
   rebalancing_action: 'Exit position',
   position_action: 'Exit position',
-  new_entry_action: 'Wait for better entry',
-  position_size_hint: 'Avoid aggressive sizing. Consider no new entry or very small size only.',
+  new_entry_action: 'No new entry; exit existing position',
+  position_size_hint: 'Exit existing position; no new exposure suggested.',
   position_sizing_reason:
     'Existing exposure can be exited because the user already has a position and volatility is very high. New exposure is not suggested.',
   executive_summary: `TSLA is rated Sell because the mock setup shows near-term downside pressure from margin compression, intense EV price competition, and uncertain timing for robotaxi or software monetization. The strongest support is the complete downside plan: current price and entry are both 185, stop loss is 195, take profit is 155, volatility is Very High at 88, and the trade is constrained to a valid 1:3 risk/reward structure. The biggest risk to the Sell call is a sharp rebound from delivery strength, energy storage growth, or credible FSD revenue, but the current evidence still favors reducing exposure because the core auto business remains under pressure. The recommended action is to exit the existing position, avoid new exposure, keep allocation at zero, and respect the stop if a short-style plan is being tested. The horizon is 1 Month, and the thesis is confirmed by continued weakness below momentum levels or invalidated by a recovery above the stop with improving volume.`,
@@ -896,7 +1941,7 @@ export const MOCK_HOLD_RESPONSE = completeMockAnalysis({
   volatility_score: 44,
   rebalancing_action: 'Avoid new entry',
   position_action: null,
-  new_entry_action: 'Avoid new entry',
+  new_entry_action: 'No new entry',
   position_size_hint: 'No new position suggested.',
   position_sizing_reason: null,
   executive_summary: `AAPL is rated Hold because the company remains high quality, but the mock setup does not show enough confirmed upside to justify a new actionable trade. The strongest support is the non-actionable contract itself: current price is 190, volatility is Medium at 44, allocation is zero, and entry, stop loss, take profit, and risk/reward are intentionally hidden because the result is not a Buy or Sell. The biggest risk is that users may force a trade in a stable but range-bound stock, and that risk supports patience rather than fake precision. The recommended action is to avoid new entry, keep the stock on the watchlist, and wait for better risk/reward before defining trade levels. The horizon is 2 Months, and the thesis is confirmed by stronger services growth, AI device demand, or cleaner momentum, while it is invalidated by slowing iPhone demand or App Store pressure. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
@@ -960,8 +2005,8 @@ export const MOCK_MISSING_PRICE_RESPONSE = completeMockAnalysis({
   volatility_score: 45,
   rebalancing_action: 'Avoid new entry',
   position_action: null,
-  new_entry_action: 'Avoid new entry',
-  position_size_hint: 'No new position suggested.',
+  new_entry_action: 'No new entry until price data is valid',
+  position_size_hint: 'No new position suggested until valid price data is available.',
   position_sizing_reason: null,
   executive_summary: `MSFT is rated Hold in this missing-price mock because the system cannot verify a current price, and a dashboard should never invent trade levels just to look complete. The strongest support is the validation result itself: current price, entry, stop loss, take profit, and risk/reward are all null, allocation is zero, volatility is Medium at 45, and the original Buy-style idea is downgraded for safety. The biggest risk is false confidence, because a good company story becomes unusable when the execution anchor is missing. The recommended action is to avoid new entry, show the missing price warning, keep position sizing at zero, and wait for market data to recover before any stop-loss or take-profit is displayed. The horizon is 1 Month, and the thesis is confirmed only when a provider returns a fresh price, while it is invalidated if the ticker remains unavailable or stale. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   market_report:
@@ -1012,9 +2057,9 @@ export const MOCK_REPAIRED_RESPONSE = completeMockAnalysis({
   volatility_level: 'Medium',
   volatility_score: 48,
   rebalancing_action: 'Open new position',
-  position_action: 'Open new position',
-  new_entry_action: 'Allowed with staged entry',
-  position_size_hint: 'Use standard risk management and avoid oversized position.',
+  position_action: null,
+  new_entry_action: 'Allowed with validated entry',
+  position_size_hint: 'Use standard starter size and avoid oversized entry.',
   position_sizing_reason:
     'Mock validation repaired the original levels by forcing risk/reward to 1:3 and recomputing take profit from the current price anchor.',
   executive_summary: `META is rated Buy because the repaired mock confirms that an originally imperfect LLM-style trade can become actionable after backend validation recomputes the levels into the required structure. The strongest support is the corrected plan: current price and entry are both 510, stop loss is 485, take profit is 585, volatility is Medium at 48, allocation is 5 percent, and the final risk/reward is forced to 1:3. The biggest risk is trusting unrepaired model output, but that risk is reduced here because the warning codes clearly show the levels were fixed before display. The recommended action is to open a standard staged position, use only the repaired stop and target, and avoid oversized exposure. The horizon is 2 Months, and the thesis is confirmed by resilient ads, stronger engagement from AI products, and disciplined execution, or invalidated by ad pricing weakness below the stop. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
@@ -1065,12 +2110,14 @@ export const MOCK_IDX_RESPONSE = completeMockAnalysis({
   volatility_level: 'High',
   volatility_score: 72,
   rebalancing_action: 'Open new position',
-  position_action: 'Open new position',
-  new_entry_action: 'Allowed with staged entry',
-  position_size_hint: 'Use smaller size due to High volatility.',
+  position_action: null,
+  new_entry_action: 'Allowed with validated entry',
+  position_size_hint: 'Use smaller starter size due to high volatility.',
   position_sizing_reason:
     'Use staged sizing because the stock is high volatility. IDX prices are rounded using exchange tick-size logic in the backend contract.',
   company_profile: MOCK_IDX_COMPANY_PROFILE,
+  financial_highlights: MOCK_IDX_FINANCIAL_HIGHLIGHTS,
+  ...MOCK_IDX_FUNDAMENTAL_ANALYSIS,
   executive_summary: `BBCA.JK is rated Buy because the IDX mock uses a defensive large-cap bank profile with steady profitability, strong liquidity, and a complete tick-size-rounded trade plan. The strongest support is the validated structure: current price and entry are 9800, stop loss is 9300, take profit is 11300, volatility is High at 72, allocation is 8 percent, and risk/reward is exactly 1:3 after local rounding. The biggest risk is macro pressure from rates, consumption, liquidity, or credit costs, but the mock bank profile still favors controlled exposure because asset quality and deposit strength remain supportive. The recommended action is to open a staged position, use smaller sizing despite the 8 percent allocation limit, respect the stop, and avoid averaging down. The horizon is 3 Months, and the thesis is confirmed by stable net interest margin and loan growth, or invalidated by rising credit costs or a break below support. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   market_report:
     'Mock market report: BBCA.JK remains a high-liquidity IDX large cap with a valid 1:3 trade structure.',
@@ -1106,6 +2153,7 @@ export const MOCK_IDX_RESPONSE = completeMockAnalysis({
 
 export const MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE = completeMockAnalysis({
   ...MOCK_IDX_RESPONSE,
+  risk_data_quality: null,
   request_id: 'mock-unvr-news-unavailable-sell',
   ticker: 'UNVR.JK',
   market: 'ID',
@@ -1125,7 +2173,7 @@ export const MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE = completeMockAnalysis({
   rebalancing_action: 'Avoid new entry',
   position_action: null,
   new_entry_action: 'Avoid new entry',
-  position_size_hint: 'Use smaller size due to High volatility. Avoid oversized new exposure.',
+  position_size_hint: 'No new position suggested.',
   executive_summary: `UNVR.JK is rated Sell because this mock tests an IDX scenario where optional news data is unavailable, yet the remaining price, volatility, and fundamental contract still supports a defensive avoid-entry decision. The strongest support is the downside setup: current price and entry are 2420, stop loss is 2600, take profit is 1880, volatility is High at 63, and warning details clearly mark news as unavailable without blocking validation. The biggest risk to the Sell view is that missing news could hide a positive catalyst, but the safer choice is still to avoid new exposure when enrichment data is incomplete. The recommended action is no new position, no aggressive sizing, and strict respect for the stop if the sell-style plan is reviewed. The horizon follows the mock request, and the thesis is confirmed by continued weakness or invalidated by recovery above the stop with better provider coverage. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   investment_thesis: `UNVR.JK is presented as a consumer staples company with well-known brands, but this mock focuses on how the dashboard behaves when optional news enrichment is unavailable. The business matters now because staples names can look defensive, yet weak growth, margin pressure, or changing consumer demand can still produce poor stock performance. The main headwind in this scenario is uncertainty: price and trade validation are available, but news coverage is missing, so the final decision must stay conservative rather than pretending the information set is complete. The key numbers are current price at 2420, stop loss at 2600, take profit at 1880, volatility score at 63, and allocation effectively kept at zero for new exposure. The bear case says the stock should be avoided because the downside plan is valid and the unavailable news block reduces confidence in any bullish recovery story. The bull case is that consumer staples demand could stabilize and a missing provider result might simply be a data issue, not a business problem. The bear case wins because process reliability and price weakness matter more than a possible hidden catalyst. The action plan is to avoid new entry, keep the warning badges visible, respect 2600 as invalidation if tested, use 1880 only as the risk/reward target, and rerun analysis when news coverage returns. This longer mock narrative also verifies that the analysis card, saved result, recent analysis entry, HTML preview, and PDF export can carry a realistic paragraph without changing the underlying data shape. It keeps the same fields a real backend response would send, so debugging can focus on mapping, formatting, and validation behavior instead of wondering whether missing text is a rendering bug or just another avoidable contract mismatch.`,
   news_report:
@@ -1148,6 +2196,11 @@ export const MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE = completeMockAnalysis({
     empty_reason: 'No relevant company-specific news was found.',
     cache: { hit: false },
   },
+  price_performance: null,
+  technical_entry: null,
+  news_impact: null,
+  catalyst_tracker: null,
+  analyst_consensus: null,
   related_news: {
     available: false,
     ticker: 'UNVR.JK',
@@ -1263,7 +2316,7 @@ const MOCK_MAP = {
     volatility_level: 'High',
     volatility_score: 61,
     rebalancing_action: 'Avoid new entry',
-    new_entry_action: 'Avoid new entry',
+    new_entry_action: 'No new entry',
     validation_warnings: ['HOLD_TRADE_LEVELS_HIDDEN'],
   }),
   'GOTO.JK': withOverrides(MOCK_SELL_RESPONSE, {
@@ -1280,6 +2333,7 @@ const MOCK_MAP = {
     rebalancing_action: 'Avoid new entry',
     position_action: null,
     new_entry_action: 'Avoid new entry',
+    position_size_hint: 'No new position suggested.',
     volatility_level: 'Very High',
     volatility_score: 91,
     validation_warnings: ['INDONESIA_TICK_SIZE_ROUNDED'],

@@ -56,7 +56,9 @@ export default function ExportReportButtons({
           {downloading ? 'EXPORTING...' : 'EXPORT PDF'}
         </button>
       </div>
-      {error && <div className="max-w-xs text-right font-mono text-[10px] text-bloomberg-red">{error}</div>}
+      {error && (
+        <div className="max-w-xs text-right font-mono text-[10px] text-bloomberg-red">{error}</div>
+      )}
     </div>
   );
 }

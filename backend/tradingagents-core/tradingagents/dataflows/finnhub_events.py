@@ -55,10 +55,14 @@ def get_earnings_calendar(ticker: str, start_date: str, end_date: str) -> str:
                     "next_earnings_date": next_date,
                     "days_to_earnings": days,
                     "risk_level": risk_level,
-                    "reason": "Upcoming earnings proximity can increase gap risk." if next_date else "No upcoming earnings date returned in the requested window.",
+                    "reason": "Upcoming earnings proximity can increase gap risk."
+                    if next_date
+                    else "No upcoming earnings date returned in the requested window.",
                 },
                 "earnings_calendar": rows[:12],
-                "metadata": build_metadata("/calendar/earnings", is_enrichment=True, confidence="medium" if rows else "low"),
+                "metadata": build_metadata(
+                    "/calendar/earnings", is_enrichment=True, confidence="medium" if rows else "low"
+                ),
             }
         )
     except Exception as exc:
@@ -93,7 +97,9 @@ def get_recommendation_trends(ticker: str) -> str:
                 "source": "finnhub",
                 "recommendation_trends": payload[:12],
                 "usage_note": "Use as external comparison only; never as the final trading decision by itself.",
-                "metadata": build_metadata("/stock/recommendation", is_enrichment=True, confidence="medium" if payload else "low"),
+                "metadata": build_metadata(
+                    "/stock/recommendation", is_enrichment=True, confidence="medium" if payload else "low"
+                ),
             }
         )
     except Exception as exc:

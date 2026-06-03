@@ -64,22 +64,70 @@ function row(label, value) {
   return { label, value: display(value) };
 }
 
+function numberOrNull(value) {
+  if (!hasValue(value)) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function profileMarketCap(value, currency) {
+  const number = numberOrNull(value);
+  if (number === null) return 'N/A';
+
+  const currencyCode = String(currency || '').toUpperCase();
+  if (!currencyCode) return display(number);
+
+  const isIdr = currencyCode === 'IDR';
+  const divisor = isIdr ? 1_000_000_000 : 1_000_000;
+  return `${(number / divisor).toLocaleString('en-US', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} ${currencyCode} ${isIdr ? 'Bn' : 'Mn'}`;
+}
+
+function profileNumber(value) {
+  const number = numberOrNull(value);
+  return number === null ? 'N/A' : number.toLocaleString('en-US');
+}
+
+function profileCurrentPrice(value, profile) {
+  const number = numberOrNull(value);
+  if (number === null) return 'N/A';
+
+  const currencyCode = String(profile?.currency || '').toUpperCase();
+  if (currencyCode === 'IDR') return `Rp ${number.toLocaleString('en-US')}`;
+  if (profile?.ticker) return formatPrice(number, profile.ticker) || 'N/A';
+  if (!currencyCode) return display(number);
+  return `${currencyCode} ${number.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 function buildCompanyProfileRows(profile) {
   if (!profile?.available) return [];
   return [
-    row('Company Name', profile.name),
+    row('Company Name', profile.company_name || profile.name),
+    row('Ticker', profile.ticker),
+    row('Exchange', profile.exchange),
+    row('Currency', profile.currency),
+    row('Country', profile.country),
     row('Sector', profile.sector),
     row('Industry', profile.industry),
-    row('Address', profile.address),
-    row('Phone', profile.phone),
     row('Website', profile.website),
-    row('Full Time Employees', profile.full_time_employees),
+    row('Market Cap', profileMarketCap(profile.market_cap, profile.currency)),
+    row('Shares Outstanding', profileNumber(profile.shares_outstanding)),
+    row('Current Price', profileCurrentPrice(profile.current_price, profile)),
+    row('Fiscal Year End', profile.fiscal_year_end),
+    row('Employee Count', profile.employee_count ?? profile.full_time_employees),
+    row('Profile Data Quality', profile.data_quality?.status),
   ];
 }
 
 function buildCompanyProfileExecutives(profile) {
-  if (!Array.isArray(profile?.executives)) return [];
-  return profile.executives
+  const officers = Array.isArray(profile?.officers) ? profile.officers : profile?.executives;
+  if (!Array.isArray(officers)) return [];
+  return officers
     .slice(0, 10)
     .filter((item) => item && typeof item === 'object')
     .map((item) => ({ name: display(item.name), title: display(item.title) }));
@@ -88,18 +136,50 @@ function buildCompanyProfileExecutives(profile) {
 function buildPriceChartRows(chart, result) {
   if (!chart?.available) return [];
   const stats = chart.stats || {};
+  const summary = result?.price_performance || chart.summary || {};
   return [
     row('Window', chart.window_label),
     row('Source', chart.source),
     row('Lookback Days', chart.lookback_days),
     row('Start Price', price(stats.start_price, result)),
     row('End Price', price(stats.end_price, result)),
-    row('Change %', stats.change_percent),
-    row('High', price(stats.high, result)),
-    row('Low', price(stats.low, result)),
+    row(
+      'Period Return',
+      hasValue(summary.period_return_percent)
+        ? `${summary.period_return_percent}%`
+        : stats.change_percent
+    ),
+    row('Period High', price(summary.period_high ?? stats.high, result)),
+    row('Period Low', price(summary.period_low ?? stats.low, result)),
+    row(
+      'Max Drawdown',
+      hasValue(summary.max_drawdown_percent) ? `${summary.max_drawdown_percent}%` : null
+    ),
     row('Average Close', price(stats.average_close, result)),
-    row('Average Volume', stats.average_volume),
+    row('Average Volume', summary.average_volume ?? stats.average_volume),
+    row('Latest Volume', summary.latest_volume),
+    row('Volume Trend', summary.volume_trend),
     row('Point Count', stats.point_count),
+  ];
+}
+
+function buildTechnicalEntryRows(technical, result) {
+  if (!technical || typeof technical !== 'object') return [];
+  return [
+    row('Entry Quality', technical.entry_quality),
+    row('Trend', technical.trend),
+    row('RSI', technical.rsi),
+    row('RSI Signal', technical.rsi_signal),
+    row('MACD', technical.macd),
+    row('MACD Signal Value', technical.macd_signal_value),
+    row('MACD Signal', technical.macd_signal),
+    row('ATR', price(technical.atr, result)),
+    row('SMA 20', price(technical.sma_20, result)),
+    row('SMA 50', price(technical.sma_50, result)),
+    row('SMA 200', price(technical.sma_200, result)),
+    row('Support', price(technical.support, result)),
+    row('Resistance', price(technical.resistance, result)),
+    row('Volume Trend', technical.volume_trend),
   ];
 }
 
@@ -118,6 +198,63 @@ function buildRelatedNewsItems(relatedNews) {
       relevance_reason: display(item.relevance_reason),
       url: safeExternalUrl(item.url),
     }));
+}
+
+function buildHighImpactNewsItems(newsImpact) {
+  if (!Array.isArray(newsImpact?.high_impact_news)) return [];
+  return newsImpact.high_impact_news
+    .slice(0, 5)
+    .filter((item) => item && typeof item === 'object' && item.title)
+    .map((item) => ({
+      title: display(item.title),
+      source: display(item.source),
+      published_at: display(item.published_at),
+      sentiment: display(item.sentiment),
+      impact: display(item.impact),
+      impact_score: display(item.impact_score),
+      summary: display(item.summary),
+      url: safeExternalUrl(item.url),
+    }));
+}
+
+function buildNewsImpactRows(newsImpact) {
+  if (!newsImpact || typeof newsImpact !== 'object') return [];
+  return [
+    row('Overall Sentiment', newsImpact.overall_sentiment),
+    row('Sentiment Score', newsImpact.sentiment_score),
+    row('High Impact Count', newsImpact.high_impact_news?.length || 0),
+    row('News Count', newsImpact.news_count),
+    row('Deduplicated Count', newsImpact.deduplicated_count),
+    row('Sources Used', (newsImpact.data_quality?.sources_used || []).join(', ')),
+  ];
+}
+
+function buildCatalystItems(tracker, key) {
+  const items = tracker?.[key];
+  if (!Array.isArray(items)) return [];
+  return items.slice(0, 5).map((item) => ({
+    type: display(item.type),
+    label: display(item.label),
+    impact: display(item.impact || item.risk_level),
+    source: display(item.source),
+    date: display(item.date),
+    related_news_title: display(item.related_news_title),
+  }));
+}
+
+function buildAnalystConsensusRows(consensus) {
+  if (!consensus?.available) return [];
+  return [
+    row('Period', consensus.period),
+    row('Strong Buy', consensus.strong_buy),
+    row('Buy', consensus.buy),
+    row('Hold', consensus.hold),
+    row('Sell', consensus.sell),
+    row('Strong Sell', consensus.strong_sell),
+    row('Total', consensus.total),
+    row('Consensus Label', consensus.consensus_label),
+    row('Trend', consensus.trend),
+  ];
 }
 
 export function buildMockActionPlanRows(result) {
@@ -239,14 +376,32 @@ export function buildMockReportContext(result = {}) {
     ],
     validation_warnings: validationWarnings,
     data_quality_warnings: dataQualityWarnings,
+    risk_data_quality: result.risk_data_quality || {},
     key_catalysts: arrayOfText(result.key_catalysts),
     invalidation_conditions: arrayOfText(result.invalidation_conditions),
     analyst_sections: buildAnalystSections(result),
     financial_highlights: result.financial_highlights || null,
+    financial_trends: result.financial_trends || null,
+    valuation_multiples: result.valuation_multiples || null,
+    fair_value_range: result.fair_value_range || null,
+    scenario_analysis: result.scenario_analysis || null,
+    quality_of_earnings: result.quality_of_earnings || null,
+    balance_sheet_risk: result.balance_sheet_risk || null,
+    dividend_quality: result.dividend_quality || null,
+    peer_comparison: result.peer_comparison || null,
     company_profile: result.company_profile || {},
     company_profile_rows: buildCompanyProfileRows(result.company_profile),
     company_profile_executives: buildCompanyProfileExecutives(result.company_profile),
     price_chart_rows: buildPriceChartRows(result.price_chart, result),
+    technical_entry_rows: buildTechnicalEntryRows(result.technical_entry, result),
+    news_impact: result.news_impact || {},
+    news_impact_rows: buildNewsImpactRows(result.news_impact),
+    high_impact_news_items: buildHighImpactNewsItems(result.news_impact),
+    catalyst_tracker: result.catalyst_tracker || {},
+    positive_catalysts: buildCatalystItems(result.catalyst_tracker, 'positive_catalysts'),
+    negative_catalysts: buildCatalystItems(result.catalyst_tracker, 'negative_catalysts'),
+    upcoming_events: buildCatalystItems(result.catalyst_tracker, 'upcoming_events'),
+    analyst_consensus_rows: buildAnalystConsensusRows(result.analyst_consensus),
     related_news: result.related_news || {},
     related_news_items: buildRelatedNewsItems(result.related_news),
   };
@@ -298,35 +453,169 @@ function renderAnalystSections(sections) {
 
 function renderFinancialHighlights(financialHighlights) {
   const periods = financialHighlights?.periods;
-  const rows = financialHighlights?.rows;
-  if (!Array.isArray(periods) || !periods.length || !Array.isArray(rows) || !rows.length) {
+  const sections = Array.isArray(financialHighlights?.sections)
+    ? financialHighlights.sections
+    : [{ key: 'legacy', title: null, rows: financialHighlights?.rows }];
+  const hasRows = sections.some((section) => Array.isArray(section.rows) && section.rows.length);
+  if (!Array.isArray(periods) || !periods.length || !hasRows) {
     return '';
   }
+  const snapshot = Array.isArray(financialHighlights.point_in_time)
+    ? financialHighlights.point_in_time
+    : [];
+  const renderTable = (rows) => `<table class="financial-highlights-table">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>
+      ${rows
+        .map(
+          (item) => `<tr>
+            <td>${escapeHtml(item.label)}</td>
+            ${periods
+              .map((period) => {
+                const cell = item.values?.[period.key];
+                return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display)}</td>`;
+              })
+              .join('')}
+          </tr>`
+        )
+        .join('')}
+    </tbody>
+  </table>`;
   return `<section class="section financial-highlights">
     <h2>${escapeHtml(financialHighlights.title || 'Key Financial Highlights')}</h2>
+    ${financialHighlights.unit_note ? `<p class="muted">${escapeHtml(financialHighlights.unit_note)}</p>` : ''}
+    ${
+      snapshot.length
+        ? `<h3>Latest Market Snapshot</h3>
+          <table><tbody>${snapshot
+            .map(
+              (item) =>
+                `<tr><th>${escapeHtml(item.label)}</th><td>${escapeHtml(item.status === 'unavailable' ? 'N/A' : `${item.display} ${item.unit}`)}</td></tr>`
+            )
+            .join('')}</tbody></table>`
+        : ''
+    }
+    ${sections
+      .filter((section) => section.rows?.length)
+      .map(
+        (section) =>
+          `${section.title ? `<h3>${escapeHtml(section.title)}</h3>` : ''}${renderTable(section.rows)}`
+      )
+      .join('')}
+  </section>`;
+}
+
+function metricDetailDisplay(detail) {
+  if (!detail || detail.status === 'unavailable') return 'N/A';
+  return detail.status === 'estimated' ? `${detail.display || 'N/A'} EST` : detail.display || 'N/A';
+}
+
+function renderFundamentalQuality(payload) {
+  const quality = payload?.data_quality;
+  if (!quality || quality.status === 'complete') return '';
+  const notes = [...(quality.fallback_used || []), ...(quality.warnings || [])];
+  return `<div class="warning"><strong>Data quality: ${escapeHtml(quality.status || 'N/A')}</strong>
+    ${notes.length ? renderList(notes) : '<p>Some values are unavailable. Missing values are shown as N/A.</p>'}
+  </div>`;
+}
+
+function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
+  if (!payload?.metric_details) return '';
+  return `<section class="section">
+    <h2>${escapeHtml(title)}</h2>
+    ${summary}
+    <table><tbody>${renderRows(
+      metrics.map(([key, label]) => row(label, metricDetailDisplay(payload.metric_details[key])))
+    )}</tbody></table>
+    ${renderFundamentalQuality(payload)}
+  </section>`;
+}
+
+function renderFinancialTrends(payload) {
+  if (!payload?.periods?.length || !payload?.metric_details) return '';
+  const metrics = [
+    ['revenue', 'Revenue'],
+    ['revenue_growth_percent', 'Revenue Growth'],
+    ['ebitda', 'EBITDA'],
+    ['ebitda_margin_percent', 'EBITDA Margin'],
+    ['net_profit', 'Net Profit'],
+    ['net_profit_growth_percent', 'Net Profit Growth'],
+    ['net_profit_margin_percent', 'Net Profit Margin'],
+    ['roe_percent', 'ROE'],
+    ['eps', 'EPS'],
+    ['bvps', 'BVPS'],
+    ['der', 'DER'],
+  ];
+  return `<section class="section">
+    <h2>Financial Trend Analysis</h2>
+    ${payload.unit_note ? `<p class="muted">${escapeHtml(payload.unit_note)}</p>` : ''}
     <table class="financial-highlights-table">
-      <thead>
-        <tr>
-          <th>Metric</th>
-          ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
-        </tr>
-      </thead>
-      <tbody>
-        ${rows
-          .map(
-            (item) => `<tr>
-              <td>${escapeHtml(item.label)}</td>
-              ${periods
-                .map((period) => {
-                  const cell = item.values?.[period.key];
-                  return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display)}</td>`;
-                })
-                .join('')}
-            </tr>`
-          )
-          .join('')}
-      </tbody>
+      <thead><tr><th>Metric</th>${payload.periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}</tr></thead>
+      <tbody>${metrics
+        .map(
+          ([key, label]) =>
+            `<tr><td>${escapeHtml(label)}</td>${(payload.metric_details[key] || [])
+              .map((detail) => `<td>${escapeHtml(metricDetailDisplay(detail))}</td>`)
+              .join('')}</tr>`
+        )
+        .join('')}</tbody>
     </table>
+    ${renderFundamentalQuality(payload)}
+  </section>`;
+}
+
+function renderScenarioAnalysis(payload) {
+  if (!payload) return '';
+  const rows = ['bear', 'base', 'bull'].map((key) => ({ scenario: key, ...(payload[key] || {}) }));
+  return `<section class="section">
+    <h2>Bull / Base / Bear Scenario</h2>
+    <table>
+      <thead><tr><th>Scenario</th><th>Fair Value</th><th>Upside / Downside</th><th>Growth</th><th>Margin</th><th>Multiple</th><th>Assumption</th></tr></thead>
+      <tbody>${rows
+        .map(
+          (item) => `<tr>
+            <td>${escapeHtml(item.scenario)}</td>
+            <td>${escapeHtml(item.fair_value_display)}</td>
+            <td>${escapeHtml(item.upside_downside_display)}</td>
+            <td>${escapeHtml(hasValue(item.revenue_growth_assumption_percent) ? `${item.revenue_growth_assumption_percent}%` : null)}</td>
+            <td>${escapeHtml(hasValue(item.margin_assumption_percent) ? `${item.margin_assumption_percent}%` : null)}</td>
+            <td>${escapeHtml(item.valuation_multiple)}</td>
+            <td>${escapeHtml(item.assumption)}</td>
+          </tr>`
+        )
+        .join('')}</tbody>
+    </table>
+    ${renderFundamentalQuality(payload)}
+  </section>`;
+}
+
+function renderPeerComparison(payload) {
+  if (!payload?.metrics?.length) return '';
+  return `<section class="section">
+    <h2>Peer Comparison</h2>
+    <table>
+      <thead><tr><th>Ticker</th><th>Company</th><th>P/E</th><th>P/BV</th><th>ROE</th><th>Net Margin</th><th>DER</th><th>Dividend Yield</th></tr></thead>
+      <tbody>${payload.metrics
+        .map(
+          (item) => `<tr>
+            <td>${escapeHtml(item.ticker)}</td>
+            <td>${escapeHtml(item.company_name)}</td>
+            <td>${escapeHtml(item.pe)}</td>
+            <td>${escapeHtml(item.pbv)}</td>
+            <td>${escapeHtml(hasValue(item.roe_percent) ? `${item.roe_percent}%` : null)}</td>
+            <td>${escapeHtml(hasValue(item.net_profit_margin_percent) ? `${item.net_profit_margin_percent}%` : null)}</td>
+            <td>${escapeHtml(item.der)}</td>
+            <td>${escapeHtml(hasValue(item.dividend_yield_percent) ? `${item.dividend_yield_percent}%` : null)}</td>
+          </tr>`
+        )
+        .join('')}</tbody>
+    </table>
+    ${renderFundamentalQuality(payload)}
   </section>`;
 }
 
@@ -335,7 +624,7 @@ function renderCompanyProfile(profile, rows, executives) {
   return `<section class="section">
     <h2>Company Profile</h2>
     <table><tbody>${renderRows(rows)}</tbody></table>
-    ${profile.description ? `<h3>Business Description</h3><p>${escapeHtml(profile.description)}</p>` : ''}
+    ${profile.business_summary || profile.description ? `<h3>Business Description</h3><p>${escapeHtml(profile.business_summary || profile.description)}</p>` : ''}
     ${
       executives.length
         ? `<h3>Key Executives</h3>
@@ -361,6 +650,241 @@ function renderPriceChartSummary(rows) {
     <h2>Chart &amp; Price Summary</h2>
     <table><tbody>${renderRows(rows)}</tbody></table>
   </section>`;
+}
+
+function renderTechnicalEntry(rows) {
+  if (!rows.length) return '';
+  return `<section class="section">
+    <h2>Technical Entry Quality</h2>
+    <table><tbody>${renderRows(rows)}</tbody></table>
+  </section>`;
+}
+
+function renderNewsImpact(report) {
+  if (!report.news_impact_rows.length) return '';
+  return `<section class="section">
+    <h2>News Impact Summary</h2>
+    <table><tbody>${renderRows(report.news_impact_rows)}</tbody></table>
+    ${
+      report.high_impact_news_items.length
+        ? `<h3>High Impact News</h3>
+          <div class="news-list">
+            ${report.high_impact_news_items
+              .map(
+                (item) => `<article class="news-item">
+                  <h3>${escapeHtml(item.title)}</h3>
+                  <p class="muted">Source: ${escapeHtml(item.source)} | Published: ${escapeHtml(item.published_at)} | Sentiment: ${escapeHtml(item.sentiment)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)}</p>
+                  ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
+                  ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
+                </article>`
+              )
+              .join('')}
+          </div>`
+        : ''
+    }
+  </section>`;
+}
+
+function renderCatalystList(title, items) {
+  if (!items.length) return '';
+  return `<h3>${escapeHtml(title)}</h3>
+    <ul>${items
+      .map(
+        (item) =>
+          `<li>${escapeHtml(item.label)} | ${escapeHtml(item.impact)} | ${escapeHtml(item.source)} | ${escapeHtml(item.date)}</li>`
+      )
+      .join('')}</ul>`;
+}
+
+function renderCatalystTracker(report) {
+  if (
+    !report.positive_catalysts.length &&
+    !report.negative_catalysts.length &&
+    !report.upcoming_events.length
+  ) {
+    return '';
+  }
+  return `<section class="section">
+    <h2>Catalyst Tracker</h2>
+    ${
+      report.catalyst_tracker?.summary?.main_message
+        ? `<p>${escapeHtml(report.catalyst_tracker.summary.main_message)}</p>`
+        : ''
+    }
+    ${renderCatalystList('Positive Catalysts', report.positive_catalysts)}
+    ${renderCatalystList('Negative Catalysts', report.negative_catalysts)}
+    ${renderCatalystList('Upcoming Events', report.upcoming_events)}
+  </section>`;
+}
+
+function renderAnalystConsensus(rows) {
+  if (!rows.length) return '';
+  return `<section class="section">
+    <h2>Analyst Recommendation Trend</h2>
+    <table><tbody>${renderRows(rows)}</tbody></table>
+  </section>`;
+}
+
+function valuePercent(value) {
+  if (!hasValue(value)) return 'N/A';
+  const text = String(value);
+  return text.endsWith('%') ? text : `${text}%`;
+}
+
+function tableFromObjects(columns, rows) {
+  if (!Array.isArray(rows) || !rows.length) return '<p class="muted">N/A</p>';
+  return `<table>
+    <thead><tr>${columns.map(([_key, label]) => `<th>${escapeHtml(label)}</th>`).join('')}</tr></thead>
+    <tbody>${rows
+      .map(
+        (item) =>
+          `<tr>${columns.map(([key]) => `<td>${escapeHtml(Array.isArray(item?.[key]) ? item[key].join(', ') : item?.[key])}</td>`).join('')}</tr>`
+      )
+      .join('')}</tbody>
+  </table>`;
+}
+
+function renderRiskDataQuality(report) {
+  const payload = report.risk_data_quality || {};
+  if (!Object.keys(payload).length) return '';
+  const summary = payload.risk_summary || {};
+  const balance = payload.balance_sheet_risk_summary || {};
+  const market = payload.market_risk || {};
+  const riskReturn = payload.risk_adjusted_return || {};
+  const monitor = payload.thesis_monitor || {};
+  const quality = payload.data_quality || {};
+  const breakdown = quality.score_breakdown || {};
+  const vendorRows = Object.entries(payload.vendor_status || {}).map(([vendor, item]) => ({
+    vendor,
+    status: item.status,
+    used_for: item.used_for,
+    missing_fields: item.missing_fields,
+  }));
+
+  return `
+    <section class="section">
+      <h2>Risk Summary</h2>
+      <table><tbody>${renderRows([
+        row('Overall Risk', summary.overall_risk),
+        row('Risk Score', summary.risk_score),
+        row('Main Risks', (summary.main_risks || []).join(', ')),
+        row('Risk Flags', (summary.risk_flags || []).join(', ')),
+        row('Explanation', summary.risk_explanation),
+      ])}</tbody></table>
+      <h3>Balance Sheet Risk Summary</h3>
+      <table><tbody>${renderRows([
+        row('DER', balance.der),
+        row('Net Debt', balance.net_debt),
+        row('Debt / EBITDA', balance.debt_to_ebitda),
+        row('Cash Ratio', balance.cash_ratio),
+        row('Risk Level', balance.risk_level),
+        row('Interpretation', balance.interpretation),
+      ])}</tbody></table>
+      ${
+        payload.catalyst_risk?.length
+          ? `<h3>Catalyst Risk</h3>${tableFromObjects(
+              [
+                ['type', 'Type'],
+                ['label', 'Label'],
+                ['impact', 'Impact'],
+                ['date', 'Date'],
+                ['source', 'Source'],
+                ['reason', 'Reason'],
+              ],
+              payload.catalyst_risk
+            )}`
+          : ''
+      }
+    </section>
+    <section class="section">
+      <h2>Market Risk</h2>
+      <table><tbody>${renderRows([
+        row('Volatility', valuePercent(market.volatility_percent)),
+        row('Max Drawdown', valuePercent(market.max_drawdown_percent)),
+        row('ATR', market.atr),
+        row('Price Range', valuePercent(market.price_range_percent)),
+        row('Risk Bucket', market.risk_bucket),
+      ])}</tbody></table>
+      ${renderList(market.notes || [])}
+    </section>
+    <section class="section">
+      <h2>Risk-Adjusted Return</h2>
+      <table><tbody>${renderRows([
+        row('Upside', valuePercent(riskReturn.upside_percent)),
+        row('Downside', valuePercent(riskReturn.downside_percent)),
+        row('Risk/Reward', riskReturn.risk_reward_ratio),
+        row('Expected Return', riskReturn.expected_return_label),
+      ])}</tbody></table>
+      ${renderList(riskReturn.notes || [])}
+    </section>
+    <section class="section">
+      <h2>Thesis Monitor</h2>
+      <table><tbody>${renderRows([row('Overall Thesis Status', monitor.overall_thesis_status)])}</tbody></table>
+      ${tableFromObjects(
+        [
+          ['category', 'Category'],
+          ['condition', 'Condition'],
+          ['status', 'Status'],
+          ['reason', 'Reason'],
+        ],
+        monitor.checklist || []
+      )}
+    </section>
+    <section class="section">
+      <h2>Source Confidence &amp; Data Quality</h2>
+      <table><tbody>${renderRows([
+        row('Score', quality.score),
+        row('Confidence', quality.confidence),
+        row('Summary', quality.summary),
+        row('Price Data', breakdown.price_data),
+        row('Financial Data', breakdown.financial_data),
+        row('Valuation Data', breakdown.valuation_data),
+        row('News Data', breakdown.news_data),
+        row('Vendor Success', breakdown.vendor_success),
+        row('Freshness', breakdown.freshness),
+      ])}</tbody></table>
+      <h3>Vendor Status</h3>
+      ${tableFromObjects(
+        [
+          ['vendor', 'Vendor'],
+          ['status', 'Status'],
+          ['used_for', 'Used For'],
+          ['missing_fields', 'Missing Fields'],
+        ],
+        vendorRows
+      )}
+      <h3>Missing Fields</h3>
+      ${tableFromObjects(
+        [
+          ['module', 'Module'],
+          ['field', 'Field'],
+          ['impact', 'Impact'],
+          ['fallback_available', 'Fallback Available'],
+        ],
+        payload.missing_fields || []
+      )}
+      <h3>Fallback Used</h3>
+      ${tableFromObjects(
+        [
+          ['field', 'Field'],
+          ['method', 'Method'],
+          ['confidence', 'Confidence'],
+        ],
+        payload.fallback_used || []
+      )}
+      <h3>Stale Data Warning</h3>
+      ${tableFromObjects(
+        [
+          ['module', 'Module'],
+          ['field', 'Field'],
+          ['warning', 'Warning'],
+          ['severity', 'Severity'],
+        ],
+        payload.stale_data_warning || []
+      )}
+      <h3>Calculation Notes</h3>
+      ${renderList(payload.calculation_notes || [])}
+    </section>`;
 }
 
 function renderRelatedNews(relatedNews, items) {
@@ -497,25 +1021,10 @@ export function renderMockReportHtml(report) {
         <p>${escapeHtml(report.executive_summary)}</p>
       </section>
 
-      ${renderCompanyProfile(
-        report.company_profile,
-        report.company_profile_rows,
-        report.company_profile_executives
-      )}
-
-      ${renderPriceChartSummary(report.price_chart_rows)}
-
-      ${renderRelatedNews(report.related_news, report.related_news_items)}
-
-      ${renderFinancialHighlights(report.financial_highlights)}
-
       <section class="section">
-        <h2>Decision Summary</h2>
+        <h2>Final Recommendation</h2>
         <table><tbody>${renderRows(report.decision_rows)}</tbody></table>
-      </section>
-
-      <section class="section">
-        <h2>Action Plan</h2>
+        <h3>Action Plan</h3>
         ${
           report.show_trade_plan
             ? renderMetricGrid(report.action_plan_rows)
@@ -523,17 +1032,86 @@ export function renderMockReportHtml(report) {
         }
       </section>
 
-      <section class="section">
-        <h2>Risk And Volatility</h2>
-        <table><tbody>${renderRows(report.risk_rows)}</tbody></table>
-      </section>
+      ${renderCompanyProfile(
+        report.company_profile,
+        report.company_profile_rows,
+        report.company_profile_executives
+      )}
 
-      <section class="section">
-        <h2>Data Quality And Validation</h2>
-        <table><tbody>${renderRows(report.validation_rows)}</tbody></table>
-        ${report.validation_warnings.length ? `<h3>Validation Warnings</h3>${renderList(report.validation_warnings)}` : ''}
-        ${report.data_quality_warnings.length ? `<h3>Data Quality Notes</h3>${renderList(report.data_quality_warnings)}` : ''}
-      </section>
+      ${renderFinancialHighlights(report.financial_highlights)}
+
+      ${renderFinancialTrends(report.financial_trends)}
+
+      ${renderFundamentalMetricSection(
+        'Valuation Multiples',
+        report.valuation_multiples,
+        [
+          ['market_cap', 'Market Cap'],
+          ['enterprise_value', 'Enterprise Value'],
+          ['pe', 'P/E'],
+          ['pbv', 'P/BV'],
+          ['ps', 'P/S'],
+          ['ev_ebitda', 'EV/EBITDA'],
+        ],
+        report.valuation_multiples?.interpretation
+          ? `<p>Label: ${escapeHtml(report.valuation_multiples.interpretation.valuation_label)}. ${escapeHtml(report.valuation_multiples.interpretation.main_reason)}</p>`
+          : ''
+      )}
+
+      ${renderFundamentalMetricSection(
+        'Fair Value Range',
+        report.fair_value_range,
+        [
+          ['current_price', 'Current Price'],
+          ['bear', 'Bear Fair Value'],
+          ['base', 'Base Fair Value'],
+          ['bull', 'Bull Fair Value'],
+          ['bear_upside_percent', 'Bear Upside / Downside'],
+          ['base_upside_percent', 'Base Upside / Downside'],
+          ['bull_upside_percent', 'Bull Upside / Downside'],
+        ],
+        report.fair_value_range
+          ? `<p>Primary method: ${escapeHtml(report.fair_value_range.primary_method)}</p>`
+          : ''
+      )}
+
+      ${renderScenarioAnalysis(report.scenario_analysis)}
+
+      ${renderFundamentalMetricSection('Quality of Earnings', report.quality_of_earnings, [
+        ['cfo_to_net_income', 'CFO / Net Income'],
+        ['free_cash_flow', 'Free Cash Flow'],
+        ['capex_intensity_percent', 'Capex Intensity'],
+      ])}
+
+      ${renderFundamentalMetricSection('Balance Sheet Risk', report.balance_sheet_risk, [
+        ['der', 'DER'],
+        ['net_debt', 'Net Debt'],
+        ['debt_to_ebitda', 'Debt / EBITDA'],
+        ['cash_ratio', 'Cash Ratio'],
+        ['equity_ratio', 'Equity Ratio'],
+      ])}
+
+      ${renderFundamentalMetricSection('Dividend Quality', report.dividend_quality, [
+        ['dividend_yield_percent', 'Dividend Yield'],
+        ['payout_ratio_percent', 'Payout Ratio'],
+        ['fcf_coverage', 'FCF Coverage'],
+      ])}
+
+      ${renderPeerComparison(report.peer_comparison)}
+
+      ${renderPriceChartSummary(report.price_chart_rows)}
+
+      ${renderTechnicalEntry(report.technical_entry_rows)}
+
+      ${renderNewsImpact(report)}
+
+      ${renderCatalystTracker(report)}
+
+      ${renderAnalystConsensus(report.analyst_consensus_rows)}
+
+      ${renderRelatedNews(report.related_news, report.related_news_items)}
+
+      ${renderRiskDataQuality(report)}
 
       <section class="section two-column">
         <div>

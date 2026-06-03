@@ -65,13 +65,20 @@ class CollectedData:
     last_close_price_source: str | None = None
     company_profile: dict[str, Any] | None = None
     price_chart: dict[str, Any] | None = None
+    price_performance: dict[str, Any] | None = None
+    technical_entry: dict[str, Any] | None = None
     news_context: dict[str, Any] | None = None
     related_news: dict[str, Any] | None = None
+    news_impact: dict[str, Any] | None = None
+    catalyst_tracker: dict[str, Any] | None = None
+    analyst_consensus: dict[str, Any] | None = None
     data_sources: dict[str, str] | None = None
     data_limitations: list[str] | None = None
     vendor_attempts: dict[str, list[str]] | None = None
     request_budget: dict[str, Any] | None = None
     financial_highlights: dict[str, Any] | None = None
+    fundamental_analysis: dict[str, Any] | None = None
+    prompt_context: dict[str, Any] | None = None
 
 
 class AnalysisCancelledError(RuntimeError):

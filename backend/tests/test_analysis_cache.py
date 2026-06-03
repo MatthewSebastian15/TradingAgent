@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 
 import pytest
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobLimitError, AnalysisJobStore, AnalysisResultCache
 from persistent_cache import SQLiteTTLCache
+
+
+class _NoValuesDict(dict):
+    def values(self):
+        raise AssertionError("request ID lookup must not scan the job registry")
 
 
 def _cache_key(ticker: str) -> AnalysisCacheKey:
@@ -71,6 +77,61 @@ def test_job_store_rejects_jobs_over_active_cap():
 
         assert exc_info.value.max_active_jobs == 1
         assert (await store.stats())["active"] == 1
+
+    asyncio.run(main())
+
+
+def test_job_store_indexes_request_id_without_scanning_registry():
+    async def main():
+        store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+        job = await store.create(
+            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+        )
+
+        assert store._job_ids_by_request_id == {"request-1": job.id}
+
+        store._jobs = _NoValuesDict(store._jobs)
+
+        assert await store.get_by_request_id("request-1") is job
+
+    asyncio.run(main())
+
+
+def test_job_store_cleanup_removes_request_id_index():
+    async def main():
+        store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+        job = await store.create(
+            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+        )
+        await job.complete({"request_id": "request-1", "decision": "Buy"})
+        job.updated_at = time.time() - 61
+
+        await store.cleanup()
+
+        assert job.id not in store._jobs
+        assert "request-1" not in store._job_ids_by_request_id
+        assert await store.get_by_request_id("request-1") is None
+
+    asyncio.run(main())
+
+
+def test_job_store_eviction_removes_only_evicted_request_id_index():
+    async def main():
+        store = AnalysisJobStore(ttl_seconds=60, max_entries=1, max_active_jobs=10)
+        evicted = await store.create(
+            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+        )
+        await evicted.complete({"request_id": "request-1", "decision": "Buy"})
+
+        kept = await store.create(
+            owner_id="owner-1", request_id="request-2", cache_key=_cache_key("BBRI.JK"), payload={"ticker": "BBRI.JK"}
+        )
+
+        assert evicted.id not in store._jobs
+        assert "request-1" not in store._job_ids_by_request_id
+        assert store._job_ids_by_request_id == {"request-2": kept.id}
+        assert await store.get_by_request_id("request-1") is None
+        assert await store.get_by_request_id("request-2") is kept
 
     asyncio.run(main())
 
@@ -145,6 +206,7 @@ def test_job_store_loads_persisted_completed_jobs_by_request_id(tmp_path):
         assert loaded_by_request.id == job.id
         assert loaded_by_request.result["decision"] == "Buy"
         assert loaded_by_request.done_event.is_set()
+        assert second_store._job_ids_by_request_id == {"request-1": job.id}
         assert loaded_by_job is not None
         assert loaded_by_job.request_id == "request-1"
 

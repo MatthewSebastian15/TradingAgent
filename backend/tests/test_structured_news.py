@@ -135,8 +135,12 @@ def test_news_service_skips_secondary_when_primary_is_sufficient(monkeypatch):
         def fetch_news(self, *_args, **_kwargs):
             raise AssertionError("Secondary provider should be skipped.")
 
-    monkeypatch.setattr("tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: PrimaryProvider())
-    monkeypatch.setattr("tradingagents.dataflows.news_service.NewsDataProvider", lambda *_args, **_kwargs: SecondaryProvider())
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: PrimaryProvider()
+    )
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service.NewsDataProvider", lambda *_args, **_kwargs: SecondaryProvider()
+    )
 
     result = NewsService(
         {
@@ -195,8 +199,12 @@ def test_news_service_deduplicates_and_filters_low_relevance(monkeypatch):
             selected = [article for article in articles if article.provider == self.provider]
             return ProviderFetchResult(provider=self.provider, status="success", articles=selected)
 
-    monkeypatch.setattr("tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: Provider("marketaux"))
-    monkeypatch.setattr("tradingagents.dataflows.news_service.NewsDataProvider", lambda *_args, **_kwargs: Provider("newsdata"))
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: Provider("marketaux")
+    )
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service.NewsDataProvider", lambda *_args, **_kwargs: Provider("newsdata")
+    )
 
     result = NewsService(
         {

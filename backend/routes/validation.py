@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
 from config import ANALYSIS_DEPTHS, DEFAULT_ANALYSIS_DEPTH, DEFAULT_MAX_DEBATE_ROUNDS, RESPONSE_DETAILS
 from errors import BadRequestError
 
@@ -66,6 +67,7 @@ def normalize_ticker(ticker: str) -> str:
     if cleaned in _IDX_AUTO_SUFFIX:
         return f"{cleaned}.JK"
     return cleaned
+
 
 AnalysisDepth = Literal["fast", "balanced", "deep"]
 ResponseDetail = Literal["summary", "full", "debug"]
@@ -152,7 +154,9 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     elif market == "ID" and not _IDX_TICKER_RE.fullmatch(ticker):
         errors["ticker"] = "IDX ticker must be submitted as a plain stock code, for example BBCA or UNVR."
     elif is_non_id_exchange_ticker(ticker):
-        errors["ticker"] = "Only US tickers and Indonesian IDX tickers are supported. Global exchange suffixes are no longer supported."
+        errors["ticker"] = (
+            "Only US tickers and Indonesian IDX tickers are supported. Global exchange suffixes are no longer supported."
+        )
 
     if not isinstance(trade_date, str):
         errors["trade_date"] = "Trade date must use YYYY-MM-DD format."
