@@ -496,6 +496,26 @@ async def _api_status_payload():
         tool_cache = {"backend": "unavailable", "error": sanitize_message(str(exc))}
 
     try:
+        from tradingagents.llm_cache.exact_cache import get_exact_llm_cache
+
+        from config_llm import build_tradingagents_config
+
+        llm_cache_config = build_tradingagents_config()
+        exact_cache = get_exact_llm_cache(llm_cache_config)
+        llm_cache = {
+            "exact_cache": exact_cache.stats() if exact_cache is not None else {"enabled": False},
+            "semantic_cache": {
+                "enabled": bool(llm_cache_config.get("llm_semantic_cache_enabled", False)),
+                "ttl_seconds": int(llm_cache_config.get("llm_semantic_cache_ttl_seconds") or 3600),
+                "max_entries": int(llm_cache_config.get("llm_semantic_cache_max_entries") or 2048),
+                "threshold": float(llm_cache_config.get("llm_semantic_cache_similarity_threshold") or 0.97),
+                "targets": str(llm_cache_config.get("llm_semantic_cache_targets") or ""),
+            },
+        }
+    except Exception as exc:  # pragma: no cover
+        llm_cache = {"backend": "unavailable", "error": sanitize_message(str(exc))}
+
+    try:
         from tradingagents.utils_resilience import get_circuit_states, get_timeout_stats
 
         circuits = get_circuit_states()
@@ -520,6 +540,7 @@ async def _api_status_payload():
         "in_flight": inflight_stats,
         "jobs": job_stats,
         "tool_cache": tool_cache,
+        "llm_cache": llm_cache,
         "circuits": circuits,
         "timeout_workers": timeout_workers,
     }

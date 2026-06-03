@@ -29,6 +29,7 @@ from tradingagents.financial_highlights.builder import build_financial_highlight
 from tradingagents.financial_highlights.models import to_dict as financial_highlights_to_dict
 from tradingagents.fundamentals.builder import build_fundamental_analysis
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
+from tradingagents.prompt_context import build_prompt_context
 from tradingagents.technical.entry_quality import build_technical_entry
 
 logger = logging.getLogger(__name__)
@@ -1240,7 +1241,7 @@ def collect_market_data(
         release_attempt_recorder(attempt_id)
     except Exception:
         pass
-    return CollectedData(
+    collected = CollectedData(
         ticker=ticker,
         trade_date=trade_date,
         time_horizon_months=time_horizon_months,
@@ -1277,3 +1278,5 @@ def collect_market_data(
         financial_highlights=financial_highlights,
         fundamental_analysis=fundamental_analysis,
     )
+    collected.prompt_context = build_prompt_context(collected)
+    return collected

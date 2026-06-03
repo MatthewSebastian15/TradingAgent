@@ -69,10 +69,20 @@ from config_defaults import (
     IS_DEVELOPMENT,
     IS_PRODUCTION,
     LLM_429_MAX_WAIT_SECONDS,
+    LLM_EXACT_CACHE_DB_PATH,
+    LLM_EXACT_CACHE_ENABLED,
+    LLM_EXACT_CACHE_MAX_ENTRIES,
+    LLM_EXACT_CACHE_TTL_SECONDS,
     LLM_MAX_RETRIES,
     LLM_RETRIES_BY_DEPTH,
     LLM_RETRY_BASE_DELAY,
     LLM_RETRY_MAX_DELAY,
+    LLM_SEMANTIC_CACHE_DB_PATH,
+    LLM_SEMANTIC_CACHE_ENABLED,
+    LLM_SEMANTIC_CACHE_MAX_ENTRIES,
+    LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD,
+    LLM_SEMANTIC_CACHE_TARGETS,
+    LLM_SEMANTIC_CACHE_TTL_SECONDS,
     LLM_TIMEOUT_SECONDS,
     MAX_CONCURRENT_LLM_CALLS,
     MAX_CONCURRENT_REQUESTS_PER_KEY,
@@ -138,6 +148,16 @@ class _BackendSettingsShim:
     max_concurrent_llm_calls = MAX_CONCURRENT_LLM_CALLS
     cache_ttl_seconds = CACHE_TTL_SECONDS
     cache_max_entries = CACHE_MAX_ENTRIES
+    llm_exact_cache_enabled = LLM_EXACT_CACHE_ENABLED
+    llm_exact_cache_ttl_seconds = LLM_EXACT_CACHE_TTL_SECONDS
+    llm_exact_cache_max_entries = LLM_EXACT_CACHE_MAX_ENTRIES
+    llm_exact_cache_db_path = LLM_EXACT_CACHE_DB_PATH
+    llm_semantic_cache_enabled = LLM_SEMANTIC_CACHE_ENABLED
+    llm_semantic_cache_ttl_seconds = LLM_SEMANTIC_CACHE_TTL_SECONDS
+    llm_semantic_cache_max_entries = LLM_SEMANTIC_CACHE_MAX_ENTRIES
+    llm_semantic_cache_db_path = LLM_SEMANTIC_CACHE_DB_PATH
+    llm_semantic_cache_similarity_threshold = LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD
+    llm_semantic_cache_targets = LLM_SEMANTIC_CACHE_TARGETS
     analysis_result_cache_ttl_seconds = ANALYSIS_RESULT_CACHE_TTL_SECONDS
     analysis_result_cache_max_entries = ANALYSIS_RESULT_CACHE_MAX_ENTRIES
     analysis_db_path = ANALYSIS_DB_PATH

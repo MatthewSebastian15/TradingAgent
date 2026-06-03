@@ -1,10 +1,35 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from tradingagents.agents.schemas import DebateArgument, render_debate_argument
 from tradingagents.agents.utils.agent_utils import get_language_instruction
 from tradingagents.pipeline_balanced_types import CollectedData
+
+STATIC_DATA_QUALITY_RULES = """
+[STATIC DATA QUALITY RULES]
+- Review all supplied data quality fields before writing conclusions.
+- If a field is partial or missing, explicitly state the limitation.
+- Lower confidence when critical evidence is stale, partial, missing, or internally inconsistent.
+- Never invent unavailable financial metrics, price levels, sentiment, or catalysts.
+""".strip()
+
+STATIC_ANALYST_OUTPUT_RULES = """
+[STATIC OUTPUT RULES]
+- Return only evidence supported by the supplied context.
+- Prefer concise, decision-useful analysis over long prose.
+- Include specific metrics only when they are present in the supplied context.
+- Keep confidence calibrated to data quality.
+""".strip()
+
+STATIC_TRADING_RULES = """
+[STATIC TRADING RULES]
+- The selected holding horizon controls entry, stop-loss, take-profit, allocation, and risk controls.
+- Do not silently change the horizon.
+- A trade setup is invalid when entry, stop-loss, or take-profit is unsupported by supplied evidence.
+- Risk/reward must be internally consistent when provided.
+""".strip()
 
 
 def _horizon_instruction(time_horizon_text: str) -> str:
@@ -12,7 +37,48 @@ def _horizon_instruction(time_horizon_text: str) -> str:
 ANALYSIS HORIZON:
 The selected analysis horizon is exactly {time_horizon_text}.
 All conclusions, confidence, catalysts, entry price, stop loss, take profit, allocation, and risk controls must fit this holding period.
-Do not invent a different horizon such as "short term", "3-6 months", or "6-12 months"."""
+Do not invent a different horizon such as "short term", "3-6 months", or "6-12 months"."""  # noqa: E501
+
+
+def _dynamic_request_block(ticker: str, trade_date: str, time_horizon_text: str) -> str:
+    return f"""
+[DYNAMIC REQUEST]
+Ticker: {ticker}
+Trade date: {trade_date}
+Analysis horizon: {time_horizon_text}
+All conclusions, confidence, catalysts, entry price, stop loss, take profit, allocation, and risk controls must fit this holding period.
+Do not invent a different horizon such as "short term", "3-6 months", or "6-12 months".
+""".strip()
+
+
+def _prompt_json(value: Any, max_chars: int = 9000) -> str:
+    text = json.dumps(value or {}, indent=2, ensure_ascii=False, default=str)
+    if len(text) > max_chars:
+        return text[:max_chars].rstrip() + "\n[TRUNCATED_FOR_PROMPT]"
+    return text
+
+
+def _get_context(data: CollectedData, key: str) -> dict[str, Any]:
+    if isinstance(data.prompt_context, dict):
+        value = data.prompt_context.get(key)
+        if isinstance(value, dict):
+            return value
+
+    try:
+        from tradingagents.prompt_context import build_prompt_context
+
+        data.prompt_context = build_prompt_context(data)
+        value = data.prompt_context.get(key) if isinstance(data.prompt_context, dict) else None
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def _language_block() -> str:
+    instruction = get_language_instruction().strip()
+    if not instruction:
+        return ""
+    return f"[DYNAMIC OUTPUT LANGUAGE]\n{instruction}"
 
 
 def market_analyst_prompt(
@@ -22,28 +88,29 @@ def market_analyst_prompt(
     data_quality_json: str,
     time_horizon_text: str,
 ) -> str:
+    market_context = _prompt_json(_get_context(data, "market"), max_chars=9000)
     return f"""
-You are the Market Analyst for {ticker} on {trade_date}.
-Use only the supplied price and technical data. Produce a practical technical/market report.
-Focus on trend, momentum, volatility, volume, support/resistance, and what the setup implies.
-{_horizon_instruction(time_horizon_text)}
+[STATIC ROLE]
+You are the Market Analyst.
+Use only the supplied compact market context. Produce a practical technical and market report.
+Focus on trend, momentum, volatility, volume, support, resistance, and what the setup implies.
 
-DATA QUALITY INSTRUCTION:
-Review the DATA QUALITY block below before writing your report.
-If any field shows status "partial" or "missing", explicitly state that limitation
-in your report and lower your confidence score accordingly. Do not present conclusions
-as certain when the underlying data is incomplete.
+{STATIC_DATA_QUALITY_RULES}
 
-PRICE DATA:
-{data.price_data}
+{STATIC_ANALYST_OUTPUT_RULES}
 
-TECHNICAL INDICATORS:
-{data.technical_indicators}
+{STATIC_TRADING_RULES}
 
-DATA QUALITY:
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
+
+{_language_block()}
+
+[DYNAMIC COMPACT MARKET CONTEXT]
+{market_context}
+
+[DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
-{get_language_instruction()}"""
-
+""".strip()
 
 def news_social_prompt(
     ticker: str,
@@ -52,36 +119,32 @@ def news_social_prompt(
     data_quality_json: str,
     time_horizon_text: str,
 ) -> str:
+    news_context = _prompt_json(_get_context(data, "news_social"), max_chars=8000)
     return f"""
-You are the combined News and Social Sentiment Analyst for {ticker} on {trade_date}.
-Use the company news, macro news, and insider activity. Produce a sentiment and catalyst report.
-Separate company-specific catalysts from broad market/macroeconomic pressure.
-{_horizon_instruction(time_horizon_text)}
+[STATIC ROLE]
+You are the combined News and Social Sentiment Analyst.
+Use only the supplied compact news and sentiment context. Produce a sentiment and catalyst report.
+Separate company-specific catalysts from broad market and macroeconomic pressure.
 
-DATA QUALITY INSTRUCTION:
-Review the DATA QUALITY block below before writing your report.
-If news shows status "partial" or "missing", explicitly state that the sentiment assessment
-is limited. Do not assert market sentiment with confidence when news data is incomplete.
-Lower your confidence score when news data coverage is partial or missing.
+{STATIC_DATA_QUALITY_RULES}
 
-COMPANY NEWS:
-{data.company_news}
+{STATIC_ANALYST_OUTPUT_RULES}
 
-GLOBAL/MACRO NEWS:
-{data.global_news}
+[STATIC SENTIMENT RULES]
+- If news coverage is partial or missing, state that sentiment assessment is limited.
+- Do not assert market sentiment with confidence when news data is incomplete.
+- Separate article evidence, insider activity, social sentiment, and analyst consensus.
 
-INSIDER TRANSACTIONS:
-{data.insider_transactions}
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
-NEWS SENTIMENT:
-{data.news_sentiment}
+{_language_block()}
 
-SOCIAL SENTIMENT:
-{data.social_sentiment}
+[DYNAMIC COMPACT NEWS AND SOCIAL CONTEXT]
+{news_context}
 
-DATA QUALITY:
+[DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
-{get_language_instruction()}"""
+""".strip()
 
 
 def fundamentals_prompt(
@@ -91,43 +154,33 @@ def fundamentals_prompt(
     data_quality_json: str,
     time_horizon_text: str,
 ) -> str:
+    fundamentals_context = _prompt_json(_get_context(data, "fundamentals"), max_chars=10000)
     return f"""
-You are the Fundamentals Analyst for {ticker} on {trade_date}.
-Use only the supplied company fundamentals and financial statements.
+[STATIC ROLE]
+You are the Fundamentals Analyst.
+Use only the supplied compact fundamentals context and deterministic calculations.
 Focus on revenue quality, profitability, balance sheet strength, cash flow, valuation signals, and financial risk.
-Quote specific metrics when available.
-{_horizon_instruction(time_horizon_text)}
 
-DATA QUALITY INSTRUCTION:
-Review the DATA QUALITY block below before writing your report.
-If fundamentals show status "partial" or "missing", explicitly name which statements
-are unavailable, state that your analysis is limited to what is present, and lower
-your confidence score to reflect the gap. Do not extrapolate from absent data.
+{STATIC_DATA_QUALITY_RULES}
 
-FUNDAMENTALS:
-{data.fundamentals}
+{STATIC_ANALYST_OUTPUT_RULES}
 
-BALANCE SHEET:
-{data.balance_sheet}
+[STATIC FUNDAMENTALS RULES]
+- Quote specific metrics only when supplied.
+- Use financial highlights and deterministic calculations before raw statement samples.
+- If statements are unavailable, name the missing statements and lower confidence.
+- Do not extrapolate from absent financial data.
 
-CASH FLOW:
-{data.cashflow}
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
-INCOME STATEMENT:
-{data.income_statement}
+{_language_block()}
 
-EVENT RISK CONTEXT:
-{data.event_risk}
+[DYNAMIC COMPACT FUNDAMENTALS CONTEXT]
+{fundamentals_context}
 
-ANALYST RECOMMENDATION TRENDS (external comparison only, not final decision):
-{data.recommendation_trends}
-
-DETERMINISTIC FUNDAMENTAL CALCULATIONS:
-{json.dumps(data.fundamental_analysis or {}, indent=2)}
-
-DATA QUALITY:
+[DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
-{get_language_instruction()}"""
+""".strip()
 
 
 def bull_prompt(
@@ -140,24 +193,35 @@ def bull_prompt(
     fundamentals_md: str,
 ) -> str:
     return f"""
-    You are the Bull Researcher for {ticker} on {trade_date}.
-    Build the strongest bullish case from the analyst reports. Do not ignore risks, but argue why upside outweighs downside.
-    {_horizon_instruction(time_horizon_text)}
-    If DATA QUALITY shows any field as "partial" or "missing", acknowledge this as a risk_flag
-    and lower your confidence score accordingly. Do not present bullish claims as certain when data is incomplete.
+[STATIC ROLE]
+You are the Bull Researcher.
+Build the strongest bullish case from the analyst reports. Do not ignore risks, but argue why upside outweighs downside.
 
-    DATA QUALITY:
-    {data_quality_json}
+{STATIC_DATA_QUALITY_RULES}
 
-    MARKET REPORT:
-    {market_md}
+{STATIC_ANALYST_OUTPUT_RULES}
 
-    NEWS/SOCIAL REPORT:
-    {news_social_md}
+[STATIC BULL CASE RULES]
+- Use only the analyst reports supplied below.
+- Acknowledge data quality limitations as risk flags.
+- Keep bullish claims proportional to the evidence.
 
-    FUNDAMENTALS REPORT:
-    {fundamentals_md}
-    {get_language_instruction()}"""
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
+
+{_language_block()}
+
+[DYNAMIC DATA QUALITY JSON]
+{data_quality_json}
+
+[DYNAMIC MARKET REPORT]
+{market_md}
+
+[DYNAMIC NEWS AND SOCIAL REPORT]
+{news_social_md}
+
+[DYNAMIC FUNDAMENTALS REPORT]
+{fundamentals_md}
+""".strip()
 
 
 def bear_prompt(
@@ -171,27 +235,38 @@ def bear_prompt(
     bull: DebateArgument,
 ) -> str:
     return f"""
-    You are the Bear Researcher for {ticker} on {trade_date}.
-    Build the strongest bearish case from the analyst reports. Be specific about downside, missing data, valuation risk, execution risk, and market risk.
-    {_horizon_instruction(time_horizon_text)}
-    If DATA QUALITY shows any field as "partial" or "missing", treat this as a direct risk factor
-    and include it as a risk_flag. Incomplete data weakens any high-conviction bull case.
+[STATIC ROLE]
+You are the Bear Researcher.
+Build the strongest bearish case from the analyst reports. Be specific about downside, missing data, valuation risk, execution risk, and market risk.
 
-    DATA QUALITY:
-    {data_quality_json}
+{STATIC_DATA_QUALITY_RULES}
 
-    MARKET REPORT:
-    {market_md}
+{STATIC_ANALYST_OUTPUT_RULES}
 
-    NEWS/SOCIAL REPORT:
-    {news_social_md}
+[STATIC BEAR CASE RULES]
+- Use incomplete data as a direct risk factor.
+- Challenge the bull case with evidence, not generic caution.
+- Explain where the bull case depends on weak or missing evidence.
 
-    FUNDAMENTALS REPORT:
-    {fundamentals_md}
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
-    BULL CASE TO CHALLENGE:
-    {render_debate_argument(bull, "Bull Researcher")}
-    {get_language_instruction()}"""
+{_language_block()}
+
+[DYNAMIC DATA QUALITY JSON]
+{data_quality_json}
+
+[DYNAMIC MARKET REPORT]
+{market_md}
+
+[DYNAMIC NEWS AND SOCIAL REPORT]
+{news_social_md}
+
+[DYNAMIC FUNDAMENTALS REPORT]
+{fundamentals_md}
+
+[DYNAMIC BULL CASE TO CHALLENGE]
+{render_debate_argument(bull, "Bull Researcher")}
+""".strip()
 
 
 def research_manager_prompt(
@@ -205,26 +280,37 @@ def research_manager_prompt(
     data_quality_json: str,
 ) -> str:
     return f"""
-You are the Research Manager for {ticker} on {trade_date}.
-Weigh the analyst reports and the bull/bear debate. Produce one investment plan.
+[STATIC ROLE]
+You are the Research Manager.
+Weigh analyst reports and the bull/bear debate. Produce one investment plan.
 Commit to Buy, Overweight, Hold, Underweight, or Sell based on evidence quality.
-{_horizon_instruction(time_horizon_text)}
 
-MARKET REPORT:
+{STATIC_DATA_QUALITY_RULES}
+
+{STATIC_ANALYST_OUTPUT_RULES}
+
+[STATIC RESEARCH MANAGER RULES]
+- Avoid false certainty when the evidence is partial.
+- State the final recommendation, rationale, confidence, and practical actions.
+- Prefer Hold or reduced conviction when critical evidence is missing.
+
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
+
+[DYNAMIC MARKET REPORT]
 {market_md}
 
-NEWS/SOCIAL REPORT:
+[DYNAMIC NEWS AND SOCIAL REPORT]
 {news_social_md}
 
-FUNDAMENTALS REPORT:
+[DYNAMIC FUNDAMENTALS REPORT]
 {fundamentals_md}
 
-BULL/BEAR DEBATE:
+[DYNAMIC BULL AND BEAR DEBATE]
 {debate_md}
 
-DATA QUALITY:
+[DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
-"""
+""".strip()
 
 
 def trader_prompt(
@@ -236,21 +322,41 @@ def trader_prompt(
     data_quality_json: str,
 ) -> str:
     return f"""
-You are the Trader for {ticker} on {trade_date}.
-Translate the research manager plan into a trade proposal.
-Use the market report for entry/stop context. Provide practical sizing guidance. Return suggested_allocation_percent, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_catalysts, and invalidation_conditions when data supports them. Backend validation is the final source of entry_price, stop_loss, take_profit, risk_reward_ratio, risk_reward_display, and actionability.
-For Buy and Sell recommendations, any proposed trade levels must use Risk:Reward exactly 1:3. In numeric fields, risk_reward_ratio means reward divided by risk, so the only valid value is 3.0. Do not use any higher Risk:Reward variant. For Buy, stop_loss must be below entry_price and take_profit must be entry_price + ((entry_price - stop_loss) * 3). For Sell, stop_loss must be above entry_price and take_profit must be entry_price - ((stop_loss - entry_price) * 3). For Buy and Sell, risk_reward_display must be "1:3". Use price_target as an analyst/fair target and take_profit as the trade execution target. If a setup cannot support a valid 1:3 Risk:Reward structure, recommend Hold, Wait for better entry, or Avoid new entry instead of forcing a weak Buy/Sell. Do not invent current_price. Allowed volatility_level values are only Low, Medium, High, or Very High. Allowed rebalancing_action values are only Open new position, Add position, Maintain position, Trim position, Exit position, or Avoid new entry.
-{_horizon_instruction(time_horizon_text)}
+[STATIC ROLE]
+You are the Trader.
+Translate the research manager plan into practical trade execution guidance.
+Use the market report for entry and stop context.
 
-MARKET REPORT:
+{STATIC_DATA_QUALITY_RULES}
+
+{STATIC_TRADING_RULES}
+
+[STATIC TRADE VALIDATION RULES]
+- Return suggested_allocation_percent, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_catalysts, and invalidation_conditions when data supports them.
+- Backend validation is the final source of entry_price, stop_loss, take_profit, risk_reward_ratio, risk_reward_display, and actionability.
+- For Buy and Sell recommendations, any proposed trade levels must use Risk:Reward exactly 1:3.
+- In numeric fields, risk_reward_ratio means reward divided by risk, so the only valid value is 3.0.
+- Do not use any higher Risk:Reward variant.
+- For Buy, stop_loss must be below entry_price and take_profit must be entry_price + ((entry_price - stop_loss) * 3).
+- For Sell, stop_loss must be above entry_price and take_profit must be entry_price - ((stop_loss - entry_price) * 3).
+- For Buy and Sell, risk_reward_display must be "1:3".
+- Use price_target as an analyst or fair target and take_profit as the trade execution target.
+- If a setup cannot support a valid 1:3 Risk:Reward structure, recommend Hold, Wait for better entry, or Avoid new entry.
+- Do not invent current_price.
+- Allowed volatility_level values are only Low, Medium, High, or Very High.
+- Allowed rebalancing_action values are only Open new position, Add position, Maintain position, Trim position, Exit position, or Avoid new entry.
+
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
+
+[DYNAMIC MARKET REPORT]
 {market_md}
 
-RESEARCH PLAN:
+[DYNAMIC RESEARCH PLAN]
 {investment_plan}
 
-DATA QUALITY:
+[DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
-"""
+""".strip()
 
 
 def risk_committee_prompt(
@@ -266,30 +372,43 @@ def risk_committee_prompt(
     data_quality_json: str,
 ) -> str:
     return f"""
-    You are a combined Risk Committee for {ticker} on {trade_date}.
-    Simulate three perspectives in one call: aggressive, neutral, and conservative.
-    Evaluate the trader proposal, downside risk, invalidation triggers, position sizing, stop-loss logic, liquidity, volatility, and headline risk.
-    {_horizon_instruction(time_horizon_text)}
+[STATIC ROLE]
+You are a combined Risk Committee.
+Simulate three perspectives in one call: aggressive, neutral, and conservative.
+Evaluate the trader proposal, downside risk, invalidation triggers, position sizing, stop-loss logic, liquidity, volatility, and headline risk.
 
-    ANALYST REPORTS:
-    {market_md}
+{STATIC_DATA_QUALITY_RULES}
 
-    {news_social_md}
+{STATIC_TRADING_RULES}
 
-    {fundamentals_md}
+[STATIC RISK COMMITTEE RULES]
+- Stress-test the trade plan against downside, volatility, liquidity, and headline risk.
+- Flag unsupported sizing, unsupported trade levels, and weak invalidation logic.
+- Keep mitigation practical and tied to the selected horizon.
 
-    DEBATE:
-    {debate_md}
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
-    RESEARCH PLAN:
-    {investment_plan}
+[DYNAMIC MARKET REPORT]
+{market_md}
 
-    TRADER PROPOSAL:
-    {trader_plan}
+[DYNAMIC NEWS AND SOCIAL REPORT]
+{news_social_md}
 
-    DATA QUALITY:
-    {data_quality_json}
-    """
+[DYNAMIC FUNDAMENTALS REPORT]
+{fundamentals_md}
+
+[DYNAMIC DEBATE]
+{debate_md}
+
+[DYNAMIC RESEARCH PLAN]
+{investment_plan}
+
+[DYNAMIC TRADER PROPOSAL]
+{trader_plan}
+
+[DYNAMIC DATA QUALITY JSON]
+{data_quality_json}
+""".strip()
 
 
 def portfolio_manager_prompt(
@@ -307,44 +426,68 @@ def portfolio_manager_prompt(
     data_quality_json: str,
 ) -> str:
     return f"""
-You are the Portfolio Manager for {ticker} on {trade_date}.
+[STATIC ROLE]
+You are the Portfolio Manager.
 Make the final decision using every prior report. The final answer must be usable by a frontend investment dashboard.
-Keep language simple and practical. Include an action plan, risk controls, price target when data supports it, and time horizon. Return all actionable dashboard fields: suggested_allocation_percent, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_reasons, key_catalysts, and invalidation_conditions. Use key_reasons for the primary reasons supporting the recommendation. Backend validation is the final source of entry_price, stop_loss, take_profit, risk_reward_ratio, risk_reward_display, and actionability. Reduce confidence and allocation when data_quality has partial, unavailable, or missing inputs.
-Use LAST CLOSE PRICE as the current market price anchor in reasoning only. If LAST CLOSE PRICE is unavailable or data quality is not usable, leave unsupported price fields null instead of inventing numbers. Do not invent current_price.
-For Buy and Sell, max_drawdown_estimate, volatility_level, rebalancing_action, and risk_reward_ratio should be non-null when the data supports an actionable decision; backend validation will recompute final execution levels. For Buy, stop_loss must be below entry_price and take_profit above entry_price. For Sell, stop_loss must be above entry_price and take_profit below entry_price. For Hold, include only current_price, volatility_level, and rebalancing_action for user-facing display.
-For Buy and Sell recommendations, final trade levels must use Risk:Reward exactly 1:3. In numeric fields, risk_reward_ratio means reward divided by risk, so the only valid value is 3.0. Do not use any higher Risk:Reward variant. For Buy, take_profit must be entry_price + ((entry_price - stop_loss) * 3). For Sell, take_profit must be entry_price - ((stop_loss - entry_price) * 3). For Buy and Sell, risk_reward_display must be "1:3". If a setup cannot support a valid 1:3 Risk:Reward structure, recommend Hold, Wait for better entry, or Avoid new entry instead of forcing a weak Buy/Sell. Use price_target as the analyst/fair target. Use take_profit as the trade execution target based on risk/reward. Allowed volatility_level values only: Low, Medium, High, Very High. Allowed rebalancing_action values only: Open new position, Add position, Maintain position, Trim position, Exit position, Avoid new entry. Use Hold when no safe actionable setup exists.
-{_horizon_instruction(time_horizon_text)}
-Set the structured time_horizon field exactly to "{time_horizon_text}".
+Keep language simple and practical. Include an action plan, risk controls, price target when data supports it, and time horizon.
 
-OUTPUT LENGTH REQUIREMENTS:
+{STATIC_DATA_QUALITY_RULES}
+
+{STATIC_TRADING_RULES}
+
+[STATIC PORTFOLIO DECISION RULES]
+- Return all actionable dashboard fields: suggested_allocation_percent, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_reasons, key_catalysts, and invalidation_conditions.
+- Use key_reasons for the primary reasons supporting the recommendation.
+- Backend validation is the final source of entry_price, stop_loss, take_profit, risk_reward_ratio, risk_reward_display, and actionability.
+- Reduce confidence and allocation when data_quality has partial, unavailable, or missing inputs.
+- Use LAST CLOSE PRICE as the current market price anchor in reasoning only.
+- If LAST CLOSE PRICE is unavailable or data quality is not usable, leave unsupported price fields null instead of inventing numbers.
+- Do not invent current_price.
+- For Buy and Sell, max_drawdown_estimate, volatility_level, rebalancing_action, and risk_reward_ratio should be non-null when the data supports an actionable decision.
+- For Buy, stop_loss must be below entry_price and take_profit above entry_price.
+- For Sell, stop_loss must be above entry_price and take_profit below entry_price.
+- For Hold, include only current_price, volatility_level, and rebalancing_action for user-facing display.
+- For Buy and Sell recommendations, final trade levels must use Risk:Reward exactly 1:3.
+- In numeric fields, risk_reward_ratio means reward divided by risk, so the only valid value is 3.0.
+- For Buy, take_profit must be entry_price + ((entry_price - stop_loss) * 3).
+- For Sell, take_profit must be entry_price - ((stop_loss - entry_price) * 3).
+- For Buy and Sell, risk_reward_display must be "1:3".
+- If a setup cannot support a valid 1:3 Risk:Reward structure, recommend Hold, Wait for better entry, or Avoid new entry.
+- Use price_target as the analyst or fair target. Use take_profit as the trade execution target based on risk/reward.
+- Allowed volatility_level values only: Low, Medium, High, Very High.
+- Allowed rebalancing_action values only: Open new position, Add position, Maintain position, Trim position, Exit position, Avoid new entry.
+- Use Hold when no safe actionable setup exists.
 - executive_summary must be 150-200 words in one paragraph. No bullet points.
 - investment_thesis must be 250-350 words as flowing paragraphs. No bullet points and no headers.
 - Do not return short placeholder text. These fields are displayed directly in the analysis dashboard and report.
 
-LAST CLOSE PRICE:
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
+Set the structured time_horizon field exactly to "{time_horizon_text}".
+
+[DYNAMIC LAST CLOSE PRICE]
 {last_close_text}
 
-MARKET REPORT:
+[DYNAMIC MARKET REPORT]
 {market_md}
 
-NEWS/SOCIAL REPORT:
+[DYNAMIC NEWS AND SOCIAL REPORT]
 {news_social_md}
 
-FUNDAMENTALS REPORT:
+[DYNAMIC FUNDAMENTALS REPORT]
 {fundamentals_md}
 
-BULL/BEAR DEBATE:
+[DYNAMIC BULL AND BEAR DEBATE]
 {debate_md}
 
-RESEARCH PLAN:
+[DYNAMIC RESEARCH PLAN]
 {investment_plan}
 
-TRADER PROPOSAL:
+[DYNAMIC TRADER PROPOSAL]
 {trader_plan}
 
-RISK COMMITTEE REPORT:
+[DYNAMIC RISK COMMITTEE REPORT]
 {risk_md}
 
-DATA QUALITY:
+[DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
-"""
+""".strip()

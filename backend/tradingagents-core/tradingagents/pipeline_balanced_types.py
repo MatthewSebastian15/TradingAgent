@@ -78,6 +78,7 @@ class CollectedData:
     request_budget: dict[str, Any] | None = None
     financial_highlights: dict[str, Any] | None = None
     fundamental_analysis: dict[str, Any] | None = None
+    prompt_context: dict[str, Any] | None = None
 
 
 class AnalysisCancelledError(RuntimeError):

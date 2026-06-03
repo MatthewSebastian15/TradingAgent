@@ -426,5 +426,6 @@ class ApiStatusResponse(ApiSchema):
     in_flight: dict[str, Any] = Field(default_factory=dict)
     jobs: dict[str, Any] = Field(default_factory=dict)
     tool_cache: dict[str, Any] = Field(default_factory=dict)
+    llm_cache: dict[str, Any] = Field(default_factory=dict)
     circuits: dict[str, Any] = Field(default_factory=dict)
     timeout_workers: dict[str, Any] = Field(default_factory=dict)

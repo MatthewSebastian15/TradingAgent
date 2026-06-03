@@ -4,14 +4,16 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from tradingagents.llm_cache.exact_cache import get_exact_llm_cache
 
 from body_limit import RequestBodyLimitMiddleware
-from config import APP_NAME, CORS_ORIGINS, IS_DEVELOPMENT, REQUEST_BODY_MAX_BYTES, llm, validate_startup_config
+from config import APP_ENV, APP_NAME, CORS_ORIGINS, IS_DEVELOPMENT, REQUEST_BODY_MAX_BYTES, llm, validate_startup_config
+from config_llm import build_tradingagents_config
 from errors import (
     ApiError,
     api_error_handler,
@@ -125,3 +127,22 @@ app.include_router(session_router, prefix="/api")
 async def health_check() -> dict:
     """Lightweight liveness probe for Docker healthcheck and load balancers."""
     return {"status": "ok", "provider": llm.provider}
+
+
+@app.get("/api/debug/llm-cache", tags=["debug"])
+async def get_llm_cache_stats() -> dict:
+    if APP_ENV != "development":
+        raise HTTPException(status_code=404, detail="Not found")
+
+    config = build_tradingagents_config()
+    exact_cache = get_exact_llm_cache(config)
+    return {
+        "exact_cache": exact_cache.stats() if exact_cache is not None else {"enabled": False},
+        "semantic_cache": {
+            "enabled": bool(config.get("llm_semantic_cache_enabled", False)),
+            "ttl_seconds": int(config.get("llm_semantic_cache_ttl_seconds") or 3600),
+            "max_entries": int(config.get("llm_semantic_cache_max_entries") or 2048),
+            "threshold": float(config.get("llm_semantic_cache_similarity_threshold") or 0.97),
+            "targets": str(config.get("llm_semantic_cache_targets") or ""),
+        },
+    }
