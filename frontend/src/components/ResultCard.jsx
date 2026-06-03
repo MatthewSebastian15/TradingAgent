@@ -8,82 +8,27 @@ import ChartPriceTab from './results/tabs/ChartPriceTab';
 import FundamentalTab from './results/tabs/FundamentalTab';
 import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
+import RiskDataQualityTab from './results/tabs/RiskDataQualityTab';
 import ResultTabs from './results/tabs/ResultTabs';
 import { REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
 
-const WARNING_LABELS = {
-  CURRENT_PRICE_MISSING: 'Current price missing',
-  LLM_CURRENT_PRICE_IGNORED: 'LLM current price ignored',
-  ENTRY_PRICE_RECOMPUTED: 'Entry price recomputed from current price',
-  RR_CLAMPED_TO_3: 'Risk/reward clamped to 1:3',
-  RR_FORCED_TO_3: 'Risk/reward forced to 1:3',
-  TAKE_PROFIT_RECOMPUTED: 'Take profit recomputed',
-  STOP_LOSS_RECOMPUTED: 'Stop loss recomputed',
-  PRICE_TARGET_RECOMPUTED: 'Price target recomputed',
-  MAX_DRAWDOWN_RECOMPUTED: 'Max drawdown recomputed',
-  INVALID_VOLATILITY_FIXED: 'Invalid volatility fixed',
-  INVALID_REBALANCING_FIXED: 'Invalid rebalancing fixed',
-  DECISION_DOWNGRADED_TO_HOLD: 'Decision downgraded to Hold',
-  TRADE_PLAN_INVALID: 'Trade plan invalid',
-  TRADE_LEVELS_INVALID: 'Trade levels invalid',
-  PRICE_DATA_INVALID: 'Price data invalid',
-  PRICE_MISSING: 'Price data missing',
-  OHLCV_MISSING: 'OHLCV missing',
-  OHLCV_FALLBACK_USED: 'OHLCV fallback used',
-  NEWS_PARTIAL: 'News coverage partial',
-  NEWS_UNAVAILABLE: 'News unavailable',
-  DATA_SOURCE_WARNING: 'Optional data source warning',
-  INDONESIA_TICK_SIZE_ROUNDED: 'Indonesia tick size rounded',
-  HOLD_TRADE_LEVELS_HIDDEN: 'Hold trade levels hidden',
-};
-
-const WARNING_META = {
-  HOLD_TRADE_LEVELS_HIDDEN: { severity: 'info', blocking: false },
-  OHLCV_FALLBACK_USED: { severity: 'warning', blocking: false },
-  NEWS_PARTIAL: { severity: 'warning', blocking: false },
-  NEWS_UNAVAILABLE: { severity: 'warning', blocking: false },
-  DATA_SOURCE_WARNING: { severity: 'warning', blocking: false },
-  PRICE_MISSING: { severity: 'error', blocking: true },
-  OHLCV_MISSING: { severity: 'error', blocking: true },
-  CURRENT_PRICE_MISSING: { severity: 'error', blocking: true },
-  TRADE_LEVELS_INVALID: { severity: 'error', blocking: true },
-  TRADE_PLAN_INVALID: { severity: 'error', blocking: true },
-};
-
-function normalizeWarningDetail(warning) {
+function formatWarningDetail(warning) {
   if (!hasDisplayValue(warning)) return null;
   if (typeof warning === 'object' && warning !== null) {
     const code = String(warning.code || 'WARNING').trim();
-    if (!code) return null;
-    const meta = WARNING_META[code] || {};
     return {
       code,
-      severity: warning.severity || meta.severity || 'warning',
-      blocking: Boolean(warning.blocking ?? meta.blocking ?? false),
-      label: warning.message || WARNING_LABELS[code] || code,
+      severity: warning.severity || 'warning',
+      blocking: Boolean(warning.blocking),
+      label: warning.message || code,
+      text: warning.message ? `${code} - ${warning.message}` : code,
     };
   }
   const code = String(warning).trim();
-  if (!code) return null;
-  const meta = WARNING_META[code] || {};
-  return {
-    code,
-    severity: meta.severity || 'warning',
-    blocking: Boolean(meta.blocking || false),
-    label: WARNING_LABELS[code] || code,
-  };
-}
-
-function formatWarningDetail(warning) {
-  const detail = normalizeWarningDetail(warning);
-  if (!detail) return null;
-  return {
-    ...detail,
-    text: detail.label === detail.code ? detail.code : `${detail.code} - ${detail.label}`,
-  };
+  return { code, severity: 'warning', blocking: false, label: code, text: code };
 }
 
 function getTradePlanStatus(isActionable, tradePlanValid) {
@@ -571,14 +516,6 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
   const keyReasons = analysisOverview.key_reasons || result.key_reasons || catalysts;
   const invalidations = result.invalidation_conditions || [];
   const riskSummary = analysisOverview.risk_summary || null;
-  const dataQuality = result.data_quality || null;
-  const validationWarnings = Array.isArray(result.validation_warnings)
-    ? result.validation_warnings
-    : [];
-  const validationWarningDetails = Array.isArray(result.validation_warning_details)
-    ? result.validation_warning_details
-    : [];
-  const requestWarnings = Array.isArray(result.warnings) ? result.warnings : [];
   const agents = result.agents_used || [];
   const budgetExhausted = Boolean(result.budget_exhausted);
   const agentsSkipped = result.agents_skipped || [];
@@ -884,18 +821,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
 
       {activeTab === 'news' && <NewsTab result={result} />}
 
-      {activeTab === 'risk_data_quality' && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
-          <DataQuality
-            dq={dataQuality}
-            validationWarnings={validationWarnings}
-            validationWarningDetails={validationWarningDetails}
-            requestWarnings={requestWarnings}
-            tradePlanValid={tradePlanValid}
-            isActionable={isActionable}
-          />
-        </div>
-      )}
+      {activeTab === 'risk_data_quality' && <RiskDataQualityTab result={result} />}
     </div>
   );
 }

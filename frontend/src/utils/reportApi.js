@@ -65,6 +65,7 @@ function compactReportPayload(result) {
     'key_catalysts',
     'invalidation_conditions',
     'data_quality',
+    'risk_data_quality',
     'validation_warnings',
     'validation_warning_details',
     'financial_highlights',

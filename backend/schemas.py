@@ -366,6 +366,7 @@ class AnalysisResponse(ApiSchema):
     analyst_consensus: AnalystConsensus | dict[str, Any] | None = None
     news: NewsResponse | dict[str, Any] | None = None
     news_context: NewsResponse | dict[str, Any] | None = None
+    risk_data_quality: dict[str, Any] | None = None
 
 
 class AnalysisJobCreateResponse(ApiSchema):

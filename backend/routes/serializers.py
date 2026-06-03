@@ -83,6 +83,7 @@ SUMMARY_FIELDS = {
     "news",
     "news_context",
     "analysis_overview",
+    "risk_data_quality",
 }
 
 AGENT_SEQUENCE = [
@@ -388,6 +389,21 @@ def _with_analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
     return {**payload, "analysis_overview": _analysis_overview(payload)}
 
 
+def _with_analysis_overview_and_risk_data_quality(
+    payload: dict[str, Any],
+    final_state: dict[str, Any],
+) -> dict[str, Any]:
+    enriched = _with_analysis_overview(payload)
+    try:
+        from tradingagents.risk import build_risk_data_quality  # noqa: PLC0415
+
+        enriched["risk_data_quality"] = build_risk_data_quality(enriched, final_state)
+    except Exception:
+        logger.exception("Failed to build risk_data_quality response contract")
+        enriched["risk_data_quality"] = {}
+    return enriched
+
+
 def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
     current_price_fields = _get_current_price_fields(final_state, pd_obj)
     return {
@@ -477,7 +493,7 @@ def parse_final_result(
     }
 
     if pd_obj is None:
-        return _with_analysis_overview(
+        return _with_analysis_overview_and_risk_data_quality(
             {
                 "decision": "Hold",
                 "full_decision": full_decision,
@@ -500,7 +516,8 @@ def parse_final_result(
                 "invalidation_conditions": [],
                 **_empty_trade_contract(final_state),
                 **common,
-            }
+            },
+            final_state,
         )
 
     rating = getattr(pd_obj, "rating", None)
@@ -523,7 +540,7 @@ def parse_final_result(
         RISK_REWARD_DISPLAY if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_display", None)
     )
 
-    return _with_analysis_overview(
+    return _with_analysis_overview_and_risk_data_quality(
         {
             "decision": final_decision,
             "llm_decision": getattr(pd_obj, "llm_decision", None) or fallback_rating,
@@ -566,7 +583,8 @@ def parse_final_result(
             "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
             "validation_warning_details": _validation_warning_details(getattr(pd_obj, "validation_warnings", []) or []),
             **{key: value for key, value in common.items() if key != "data_quality"},
-        }
+        },
+        final_state,
     )
 
 

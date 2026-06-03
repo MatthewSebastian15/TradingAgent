@@ -92,6 +92,26 @@ describe('mockData', () => {
       available: true,
       total: 18,
     });
+    expect(result.risk_data_quality).toMatchObject({
+      risk_summary: {
+        overall_risk: 'moderate',
+      },
+      data_quality: {
+        confidence: 'high',
+      },
+    });
+    expect(result.risk_data_quality.vendor_status.yfinance.status).toBe('success');
+    expect(result.risk_data_quality.missing_fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          module: 'financial_highlights',
+          field: 'payout_ratio',
+        }),
+      ])
+    );
+    expect(result.risk_data_quality.calculation_notes).toContain(
+      'Risk/reward ratio = expected upside / expected downside'
+    );
   });
 
   it('supports required direct mock routes', () => {
