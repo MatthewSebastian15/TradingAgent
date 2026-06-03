@@ -180,6 +180,16 @@ VALIDATION_WARNING_META: dict[str, dict[str, Any]] = {
         "message": "Invalid rebalancing action fixed.",
         "blocking": False,
     },
+    "POSITION_FLAG_CONFLICT_FIXED": {
+        "severity": "warning",
+        "message": "Existing position flag was corrected from position quantity.",
+        "blocking": False,
+    },
+    "POSITION_QUANTITY_INVALID": {
+        "severity": "warning",
+        "message": "Position quantity is invalid for a long-only portfolio.",
+        "blocking": False,
+    },
 }
 
 
@@ -406,17 +416,31 @@ def _with_analysis_overview_and_risk_data_quality(
 
 def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
     current_price_fields = _get_current_price_fields(final_state, pd_obj)
+    has_pos = bool(getattr(pd_obj, "has_existing_position", False)) if pd_obj is not None else False
+    position_action = getattr(pd_obj, "position_action", None) if pd_obj is not None else None
+    if not has_pos:
+        position_action = None
+    new_entry_action = getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else None
+    if not new_entry_action:
+        new_entry_action = "No new entry; maintain existing position" if has_pos else "No new entry"
+    position_size_hint = getattr(pd_obj, "position_size_hint", None) if pd_obj is not None else None
+    if not position_size_hint:
+        position_size_hint = (
+            "Maintain current position size; no additional exposure suggested."
+            if has_pos
+            else "No new position suggested."
+        )
     return {
         "llm_decision": None,
         "final_decision": "Hold",
         "decision_adjusted": False,
         "decision_adjusted_reason": None,
         "trade_plan_valid": False,
-        "has_existing_position": bool(getattr(pd_obj, "has_existing_position", False)) if pd_obj is not None else False,
+        "has_existing_position": has_pos,
         "position_quantity": getattr(pd_obj, "position_quantity", None) if pd_obj is not None else None,
         "average_entry_price": getattr(pd_obj, "average_entry_price", None) if pd_obj is not None else None,
-        "position_action": getattr(pd_obj, "position_action", None) if pd_obj is not None else None,
-        "new_entry_action": getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else "Avoid new entry",
+        "position_action": position_action,
+        "new_entry_action": new_entry_action,
         **current_price_fields,
         "risk_per_share": None,
         "reward_per_share": None,
@@ -424,7 +448,7 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
         "max_drawdown_min_pct": None,
         "max_drawdown_max_pct": None,
         "volatility_score": None,
-        "position_size_hint": "No new position suggested.",
+        "position_size_hint": position_size_hint,
         "validation_warnings": [],
         "validation_warning_details": [],
     }
@@ -539,6 +563,25 @@ def parse_final_result(
     risk_reward_display = (
         RISK_REWARD_DISPLAY if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_display", None)
     )
+    has_existing_position_value = bool(getattr(pd_obj, "has_existing_position", False))
+    position_action_value = getattr(pd_obj, "position_action", None)
+    if not has_existing_position_value:
+        position_action_value = None
+    new_entry_action_value = getattr(pd_obj, "new_entry_action", None)
+    if not new_entry_action_value:
+        new_entry_action_value = (
+            "No new entry; maintain existing position" if has_existing_position_value else "No new entry"
+        )
+    rebalancing_action_value = _enum_value(getattr(pd_obj, "rebalancing_action", None))
+    if not rebalancing_action_value:
+        rebalancing_action_value = "Maintain position" if has_existing_position_value else "Avoid new entry"
+    position_size_hint_value = getattr(pd_obj, "position_size_hint", None)
+    if not position_size_hint_value:
+        position_size_hint_value = (
+            "Maintain current position size; no additional exposure suggested."
+            if has_existing_position_value
+            else "No new position suggested."
+        )
 
     return _with_analysis_overview_and_risk_data_quality(
         {
@@ -548,11 +591,11 @@ def parse_final_result(
             "decision_adjusted": bool(getattr(pd_obj, "decision_adjusted", False)),
             "decision_adjusted_reason": getattr(pd_obj, "decision_adjusted_reason", None),
             "trade_plan_valid": trade_plan_valid,
-            "has_existing_position": bool(getattr(pd_obj, "has_existing_position", False)),
+            "has_existing_position": has_existing_position_value,
             "position_quantity": getattr(pd_obj, "position_quantity", None),
             "average_entry_price": getattr(pd_obj, "average_entry_price", None),
-            "position_action": getattr(pd_obj, "position_action", None),
-            "new_entry_action": getattr(pd_obj, "new_entry_action", None),
+            "position_action": position_action_value,
+            "new_entry_action": new_entry_action_value,
             **current_price_fields,
             "full_decision": full_decision,
             "executive_summary": getattr(pd_obj, "executive_summary", None),
@@ -574,8 +617,8 @@ def parse_final_result(
             "volatility_level": _enum_value(getattr(pd_obj, "volatility_level", None)),
             "volatility_score": getattr(pd_obj, "volatility_score", None),
             "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
-            "rebalancing_action": _enum_value(getattr(pd_obj, "rebalancing_action", None)),
-            "position_size_hint": getattr(pd_obj, "position_size_hint", None),
+            "rebalancing_action": rebalancing_action_value,
+            "position_size_hint": position_size_hint_value,
             "key_reasons": getattr(pd_obj, "key_reasons", []) or [],
             "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
             "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],

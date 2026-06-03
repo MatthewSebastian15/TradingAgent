@@ -453,11 +453,26 @@ class PortfolioDecision(BaseModel):
     decision_adjusted_reason: str | None = Field(default=None)
 
     trade_plan_valid: bool = Field(default=False)
-    has_existing_position: bool = Field(default=False)
-    position_quantity: float | None = Field(default=None)
-    average_entry_price: float | None = Field(default=None)
-    position_action: str | None = Field(default=None)
-    new_entry_action: str | None = Field(default=None)
+    has_existing_position: bool = Field(
+        default=False,
+        description="Resolved final flag that indicates whether the user already owns this long position.",
+    )
+    position_quantity: float | None = Field(
+        default=None,
+        description="User's current position quantity when provided. Backend uses explicit quantity to resolve position context.",
+    )
+    average_entry_price: float | None = Field(
+        default=None,
+        description="User's average entry price for the existing position when available.",
+    )
+    position_action: str | None = Field(
+        default=None,
+        description="Action for an existing position only. Null when the user has no position.",
+    )
+    new_entry_action: str | None = Field(
+        default=None,
+        description="Instruction for opening new exposure. For existing positions, this must not imply a separate new trade.",
+    )
 
     risk_reward_display: str | None = Field(
         default=None,
@@ -467,7 +482,10 @@ class PortfolioDecision(BaseModel):
     reward_per_share: float | None = Field(default=None)
 
     volatility_score: float | None = Field(default=None)
-    position_size_hint: str | None = Field(default=None)
+    position_size_hint: str | None = Field(
+        default=None,
+        description="Contextual sizing guidance for new entry, add, maintain, trim, or exit actions.",
+    )
 
     max_drawdown_min_pct: float | None = Field(default=None)
     max_drawdown_max_pct: float | None = Field(default=None)

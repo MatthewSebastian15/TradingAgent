@@ -191,6 +191,327 @@ def test_hold_clears_trade_levels_from_user_facing_contract():
     assert normalized.risk_reward_display is None
 
 
+def test_no_existing_position_buy_valid_opens_new_position():
+    decision = make_decision(
+        rating=PortfolioRating.BUY,
+        decision="Buy",
+        entry_price=100.0,
+        stop_loss=95.0,
+        take_profit=115.0,
+        risk_reward_ratio=3.0,
+        confidence_score=0.8,
+        volatility_level="Medium",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=False,
+        position_quantity=None,
+    )
+
+    assert normalized.has_existing_position is False
+    assert normalized.rebalancing_action == "Open new position"
+    assert normalized.position_action is None
+    assert normalized.new_entry_action == "Allowed with validated entry"
+    assert normalized.position_size_hint == "Use standard starter size and avoid oversized entry."
+
+
+def test_no_existing_position_hold_avoids_new_entry():
+    decision = make_decision(
+        rating=PortfolioRating.HOLD,
+        decision="Hold",
+        confidence_score=0.6,
+        volatility_level="Medium",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=False,
+    )
+
+    assert normalized.has_existing_position is False
+    assert normalized.rebalancing_action == "Avoid new entry"
+    assert normalized.position_action is None
+    assert normalized.new_entry_action == "No new entry"
+    assert normalized.position_size_hint == "No new position suggested."
+
+
+def test_no_existing_position_sell_avoids_new_entry_not_exit():
+    decision = make_decision(
+        rating=PortfolioRating.SELL,
+        decision="Sell",
+        entry_price=100.0,
+        stop_loss=105.0,
+        take_profit=85.0,
+        risk_reward_ratio=3.0,
+        confidence_score=0.9,
+        volatility_level="High",
+        rebalancing_action="Exit position",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=False,
+    )
+
+    assert normalized.has_existing_position is False
+    assert normalized.rebalancing_action == "Avoid new entry"
+    assert normalized.position_action is None
+    assert normalized.new_entry_action == "Avoid new entry"
+    assert normalized.position_size_hint == "No new position suggested."
+    assert "INVALID_REBALANCING_FIXED" in normalized.validation_warnings
+
+
+def test_existing_position_buy_valid_adds_position():
+    decision = make_decision(
+        rating=PortfolioRating.BUY,
+        decision="Buy",
+        entry_price=100.0,
+        stop_loss=95.0,
+        take_profit=115.0,
+        risk_reward_ratio=3.0,
+        confidence_score=0.8,
+        volatility_level="Low",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=True,
+        position_quantity=100,
+        average_entry_price=92.0,
+    )
+
+    assert normalized.has_existing_position is True
+    assert normalized.rebalancing_action == "Add position"
+    assert normalized.position_action == "Add position"
+    assert normalized.new_entry_action == "No separate new entry; add only to existing position"
+    assert normalized.position_size_hint == "Add to existing position gradually; normal add size may be acceptable."
+
+
+def test_existing_position_buy_low_confidence_maintains_position():
+    decision = make_decision(
+        rating=PortfolioRating.BUY,
+        decision="Buy",
+        entry_price=100.0,
+        stop_loss=95.0,
+        take_profit=115.0,
+        risk_reward_ratio=3.0,
+        confidence_score=0.5,
+        volatility_level="Medium",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=True,
+        position_quantity=100,
+    )
+
+    assert normalized.has_existing_position is True
+    assert normalized.rebalancing_action == "Maintain position"
+    assert normalized.position_action == "Maintain position"
+    assert normalized.new_entry_action == "No new entry; maintain existing position"
+    assert normalized.position_size_hint == "Maintain current position size; no additional exposure suggested."
+
+
+def test_existing_position_hold_maintains_position():
+    decision = make_decision(
+        rating=PortfolioRating.HOLD,
+        decision="Hold",
+        confidence_score=0.6,
+        volatility_level="Medium",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=True,
+        position_quantity=100,
+    )
+
+    assert normalized.has_existing_position is True
+    assert normalized.rebalancing_action == "Maintain position"
+    assert normalized.position_action == "Maintain position"
+    assert normalized.new_entry_action == "No new entry; maintain existing position"
+    assert normalized.position_size_hint == "Maintain current position size; no additional exposure suggested."
+
+
+def test_existing_position_sell_high_confidence_exits_position():
+    decision = make_decision(
+        rating=PortfolioRating.SELL,
+        decision="Sell",
+        entry_price=100.0,
+        stop_loss=105.0,
+        take_profit=85.0,
+        risk_reward_ratio=3.0,
+        confidence_score=0.8,
+        volatility_level="High",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=True,
+        position_quantity=100,
+    )
+
+    assert normalized.has_existing_position is True
+    assert normalized.rebalancing_action == "Exit position"
+    assert normalized.position_action == "Exit position"
+    assert normalized.new_entry_action == "No new entry; exit existing position"
+    assert normalized.position_size_hint == "Exit existing position; no new exposure suggested."
+
+
+def test_existing_position_sell_low_confidence_trims_position():
+    decision = make_decision(
+        rating=PortfolioRating.SELL,
+        decision="Sell",
+        entry_price=100.0,
+        stop_loss=105.0,
+        take_profit=85.0,
+        risk_reward_ratio=3.0,
+        confidence_score=0.5,
+        volatility_level="Very High",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=True,
+        position_quantity=100,
+    )
+
+    assert normalized.has_existing_position is True
+    assert normalized.rebalancing_action == "Trim position"
+    assert normalized.position_action == "Trim position"
+    assert normalized.new_entry_action == "No new entry; reduce existing exposure"
+    assert normalized.position_size_hint == "Reduce exposure aggressively or prepare full exit if risk worsens."
+
+
+def test_position_quantity_overrides_false_existing_position_flag():
+    decision = make_decision(
+        rating=PortfolioRating.HOLD,
+        decision="Hold",
+        volatility_level="Medium",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=False,
+        position_quantity=100,
+    )
+
+    assert normalized.has_existing_position is True
+    assert normalized.rebalancing_action == "Maintain position"
+    assert normalized.position_action == "Maintain position"
+    assert normalized.new_entry_action == "No new entry; maintain existing position"
+    assert "POSITION_FLAG_CONFLICT_FIXED" in normalized.validation_warnings
+
+
+def test_zero_position_quantity_overrides_true_existing_position_flag():
+    decision = make_decision(
+        rating=PortfolioRating.HOLD,
+        decision="Hold",
+        volatility_level="Medium",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=True,
+        position_quantity=0,
+    )
+
+    assert normalized.has_existing_position is False
+    assert normalized.rebalancing_action == "Avoid new entry"
+    assert normalized.position_action is None
+    assert normalized.new_entry_action == "No new entry"
+    assert "POSITION_FLAG_CONFLICT_FIXED" in normalized.validation_warnings
+
+
+def test_negative_position_quantity_falls_back_to_flag_with_warning():
+    decision = make_decision(
+        rating=PortfolioRating.HOLD,
+        decision="Hold",
+        volatility_level="Medium",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        100.0,
+        ticker="BBCA",
+        has_existing_position=True,
+        position_quantity=-10,
+    )
+
+    assert normalized.has_existing_position is True
+    assert normalized.rebalancing_action == "Maintain position"
+    assert normalized.position_action == "Maintain position"
+    assert "POSITION_QUANTITY_INVALID" in normalized.validation_warnings
+
+
+def test_missing_price_no_position_sets_safe_new_entry_fields():
+    decision = make_decision(
+        rating=PortfolioRating.BUY,
+        decision="Buy",
+        confidence_score=0.8,
+        volatility_level="Medium",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        None,
+        ticker="BBCA",
+        has_existing_position=False,
+    )
+
+    assert normalized.final_decision == "Hold"
+    assert normalized.has_existing_position is False
+    assert normalized.rebalancing_action == "Avoid new entry"
+    assert normalized.position_action is None
+    assert normalized.new_entry_action == "No new entry until price data is valid"
+    assert normalized.position_size_hint == "No new position suggested until valid price data is available."
+
+
+def test_missing_price_existing_position_maintains_position_fields():
+    decision = make_decision(
+        rating=PortfolioRating.BUY,
+        decision="Buy",
+        confidence_score=0.8,
+        volatility_level="Medium",
+    )
+
+    normalized = normalize_trade_levels(
+        decision,
+        None,
+        ticker="BBCA",
+        has_existing_position=True,
+        position_quantity=100,
+    )
+
+    assert normalized.final_decision == "Hold"
+    assert normalized.has_existing_position is True
+    assert normalized.rebalancing_action == "Maintain position"
+    assert normalized.position_action == "Maintain position"
+    assert normalized.new_entry_action == "No new entry until price data is valid"
+    assert normalized.position_size_hint == "Maintain current position size until valid price data is available."
+
+
 def test_indonesia_ticker_uses_tick_size_rounding():
     decision = make_decision(
         entry_price=9803.0,
