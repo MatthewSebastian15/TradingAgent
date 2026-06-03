@@ -136,18 +136,42 @@ function buildCompanyProfileExecutives(profile) {
 function buildPriceChartRows(chart, result) {
   if (!chart?.available) return [];
   const stats = chart.stats || {};
+  const summary = result?.price_performance || chart.summary || {};
   return [
     row('Window', chart.window_label),
     row('Source', chart.source),
     row('Lookback Days', chart.lookback_days),
     row('Start Price', price(stats.start_price, result)),
     row('End Price', price(stats.end_price, result)),
-    row('Change %', stats.change_percent),
-    row('High', price(stats.high, result)),
-    row('Low', price(stats.low, result)),
+    row('Period Return', hasValue(summary.period_return_percent) ? `${summary.period_return_percent}%` : stats.change_percent),
+    row('Period High', price(summary.period_high ?? stats.high, result)),
+    row('Period Low', price(summary.period_low ?? stats.low, result)),
+    row('Max Drawdown', hasValue(summary.max_drawdown_percent) ? `${summary.max_drawdown_percent}%` : null),
     row('Average Close', price(stats.average_close, result)),
-    row('Average Volume', stats.average_volume),
+    row('Average Volume', summary.average_volume ?? stats.average_volume),
+    row('Latest Volume', summary.latest_volume),
+    row('Volume Trend', summary.volume_trend),
     row('Point Count', stats.point_count),
+  ];
+}
+
+function buildTechnicalEntryRows(technical, result) {
+  if (!technical || typeof technical !== 'object') return [];
+  return [
+    row('Entry Quality', technical.entry_quality),
+    row('Trend', technical.trend),
+    row('RSI', technical.rsi),
+    row('RSI Signal', technical.rsi_signal),
+    row('MACD', technical.macd),
+    row('MACD Signal Value', technical.macd_signal_value),
+    row('MACD Signal', technical.macd_signal),
+    row('ATR', price(technical.atr, result)),
+    row('SMA 20', price(technical.sma_20, result)),
+    row('SMA 50', price(technical.sma_50, result)),
+    row('SMA 200', price(technical.sma_200, result)),
+    row('Support', price(technical.support, result)),
+    row('Resistance', price(technical.resistance, result)),
+    row('Volume Trend', technical.volume_trend),
   ];
 }
 
@@ -166,6 +190,63 @@ function buildRelatedNewsItems(relatedNews) {
       relevance_reason: display(item.relevance_reason),
       url: safeExternalUrl(item.url),
     }));
+}
+
+function buildHighImpactNewsItems(newsImpact) {
+  if (!Array.isArray(newsImpact?.high_impact_news)) return [];
+  return newsImpact.high_impact_news
+    .slice(0, 5)
+    .filter((item) => item && typeof item === 'object' && item.title)
+    .map((item) => ({
+      title: display(item.title),
+      source: display(item.source),
+      published_at: display(item.published_at),
+      sentiment: display(item.sentiment),
+      impact: display(item.impact),
+      impact_score: display(item.impact_score),
+      summary: display(item.summary),
+      url: safeExternalUrl(item.url),
+    }));
+}
+
+function buildNewsImpactRows(newsImpact) {
+  if (!newsImpact || typeof newsImpact !== 'object') return [];
+  return [
+    row('Overall Sentiment', newsImpact.overall_sentiment),
+    row('Sentiment Score', newsImpact.sentiment_score),
+    row('High Impact Count', newsImpact.high_impact_news?.length || 0),
+    row('News Count', newsImpact.news_count),
+    row('Deduplicated Count', newsImpact.deduplicated_count),
+    row('Sources Used', (newsImpact.data_quality?.sources_used || []).join(', ')),
+  ];
+}
+
+function buildCatalystItems(tracker, key) {
+  const items = tracker?.[key];
+  if (!Array.isArray(items)) return [];
+  return items.slice(0, 5).map((item) => ({
+    type: display(item.type),
+    label: display(item.label),
+    impact: display(item.impact || item.risk_level),
+    source: display(item.source),
+    date: display(item.date),
+    related_news_title: display(item.related_news_title),
+  }));
+}
+
+function buildAnalystConsensusRows(consensus) {
+  if (!consensus?.available) return [];
+  return [
+    row('Period', consensus.period),
+    row('Strong Buy', consensus.strong_buy),
+    row('Buy', consensus.buy),
+    row('Hold', consensus.hold),
+    row('Sell', consensus.sell),
+    row('Strong Sell', consensus.strong_sell),
+    row('Total', consensus.total),
+    row('Consensus Label', consensus.consensus_label),
+    row('Trend', consensus.trend),
+  ];
 }
 
 export function buildMockActionPlanRows(result) {
@@ -303,6 +384,15 @@ export function buildMockReportContext(result = {}) {
     company_profile_rows: buildCompanyProfileRows(result.company_profile),
     company_profile_executives: buildCompanyProfileExecutives(result.company_profile),
     price_chart_rows: buildPriceChartRows(result.price_chart, result),
+    technical_entry_rows: buildTechnicalEntryRows(result.technical_entry, result),
+    news_impact: result.news_impact || {},
+    news_impact_rows: buildNewsImpactRows(result.news_impact),
+    high_impact_news_items: buildHighImpactNewsItems(result.news_impact),
+    catalyst_tracker: result.catalyst_tracker || {},
+    positive_catalysts: buildCatalystItems(result.catalyst_tracker, 'positive_catalysts'),
+    negative_catalysts: buildCatalystItems(result.catalyst_tracker, 'negative_catalysts'),
+    upcoming_events: buildCatalystItems(result.catalyst_tracker, 'upcoming_events'),
+    analyst_consensus_rows: buildAnalystConsensusRows(result.analyst_consensus),
     related_news: result.related_news || {},
     related_news_items: buildRelatedNewsItems(result.related_news),
   };
@@ -553,6 +643,79 @@ function renderPriceChartSummary(rows) {
   </section>`;
 }
 
+function renderTechnicalEntry(rows) {
+  if (!rows.length) return '';
+  return `<section class="section">
+    <h2>Technical Entry Quality</h2>
+    <table><tbody>${renderRows(rows)}</tbody></table>
+  </section>`;
+}
+
+function renderNewsImpact(report) {
+  if (!report.news_impact_rows.length) return '';
+  return `<section class="section">
+    <h2>News Impact Summary</h2>
+    <table><tbody>${renderRows(report.news_impact_rows)}</tbody></table>
+    ${
+      report.high_impact_news_items.length
+        ? `<h3>High Impact News</h3>
+          <div class="news-list">
+            ${report.high_impact_news_items
+              .map(
+                (item) => `<article class="news-item">
+                  <h3>${escapeHtml(item.title)}</h3>
+                  <p class="muted">Source: ${escapeHtml(item.source)} | Published: ${escapeHtml(item.published_at)} | Sentiment: ${escapeHtml(item.sentiment)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)}</p>
+                  ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
+                  ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
+                </article>`
+              )
+              .join('')}
+          </div>`
+        : ''
+    }
+  </section>`;
+}
+
+function renderCatalystList(title, items) {
+  if (!items.length) return '';
+  return `<h3>${escapeHtml(title)}</h3>
+    <ul>${items
+      .map(
+        (item) =>
+          `<li>${escapeHtml(item.label)} | ${escapeHtml(item.impact)} | ${escapeHtml(item.source)} | ${escapeHtml(item.date)}</li>`
+      )
+      .join('')}</ul>`;
+}
+
+function renderCatalystTracker(report) {
+  if (
+    !report.positive_catalysts.length &&
+    !report.negative_catalysts.length &&
+    !report.upcoming_events.length
+  ) {
+    return '';
+  }
+  return `<section class="section">
+    <h2>Catalyst Tracker</h2>
+    ${
+      report.catalyst_tracker?.summary?.main_message
+        ? `<p>${escapeHtml(report.catalyst_tracker.summary.main_message)}</p>`
+        : ''
+    }
+    ${renderCatalystList('Positive Catalysts', report.positive_catalysts)}
+    ${renderCatalystList('Negative Catalysts', report.negative_catalysts)}
+    ${renderCatalystList('Upcoming Events', report.upcoming_events)}
+  </section>`;
+}
+
+function renderAnalystConsensus(rows) {
+  if (!rows.length) return '';
+  return `<section class="section">
+    <h2>Analyst Recommendation Trend</h2>
+    <table><tbody>${renderRows(rows)}</tbody></table>
+  </section>`;
+}
+
 function renderRelatedNews(relatedNews, items) {
   if (!items.length) return '';
   return `<section class="section">
@@ -769,6 +932,14 @@ export function renderMockReportHtml(report) {
       ${renderPeerComparison(report.peer_comparison)}
 
       ${renderPriceChartSummary(report.price_chart_rows)}
+
+      ${renderTechnicalEntry(report.technical_entry_rows)}
+
+      ${renderNewsImpact(report)}
+
+      ${renderCatalystTracker(report)}
+
+      ${renderAnalystConsensus(report.analyst_consensus_rows)}
 
       ${renderRelatedNews(report.related_news, report.related_news_items)}
 

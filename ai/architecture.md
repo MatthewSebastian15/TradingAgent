@@ -45,7 +45,7 @@ modifying any agent, route, or frontend hook.
 │    yfinance + Finnhub + Alpha Vantage + MarketAux           │
 │                                                             │
 │  Analyst Stage (parallel)                                   │
-│    MarketAnalyst  NewsAnalyst  FundamentalsAnalyst           │
+│    MarketAnalyst  NewsAnalyst  FundamentalsAnalyst          │
 │                                                             │
 │  Debate Stage (sequential)                                  │
 │    BullResearcher → BearResearcher → ResearchManager        │

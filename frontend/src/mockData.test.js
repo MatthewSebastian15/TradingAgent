@@ -52,6 +52,9 @@ describe('mockData', () => {
       lookback_days: 120,
     });
     expect(result.price_chart.points).toHaveLength(120);
+    expect(result.price_chart.data).toHaveLength(120);
+    expect(result.price_chart.points[0]).toHaveProperty('adjusted_close');
+    expect(result.price_performance).toHaveProperty('period_return_percent');
     expect(result.price_chart.points.some((point) => point.close >= point.open)).toBe(true);
     expect(result.price_chart.points.some((point) => point.close < point.open)).toBe(true);
     expect(result.price_chart.stats.high).toBe(
@@ -76,6 +79,19 @@ describe('mockData', () => {
       lookback_days: 90,
     });
     expect(result.related_news.items).toHaveLength(3);
+    expect(result.technical_entry).toMatchObject({
+      available: true,
+    });
+    expect(result.news_impact).toMatchObject({
+      available: true,
+      overall_sentiment: 'positive',
+    });
+    expect(result.news_impact.high_impact_news.length).toBeGreaterThan(0);
+    expect(result.catalyst_tracker.positive_catalysts.length).toBeGreaterThan(0);
+    expect(result.analyst_consensus).toMatchObject({
+      available: true,
+      total: 18,
+    });
   });
 
   it('supports required direct mock routes', () => {

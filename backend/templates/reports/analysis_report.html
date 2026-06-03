@@ -243,6 +243,65 @@
         </section>
       {% endif %}
 
+      {% if report.technical_entry_rows %}
+        <section class="section">
+          <h2>Technical Entry Quality</h2>
+          <table class="metric-table"><tbody>
+            {% for row in report.technical_entry_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+          </tbody></table>
+        </section>
+      {% endif %}
+
+      {% if report.news_impact_rows %}
+        <section class="section">
+          <h2>News Impact Summary</h2>
+          <table class="metric-table"><tbody>
+            {% for row in report.news_impact_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+          </tbody></table>
+          {% if report.high_impact_news_items %}
+            <h3>High Impact News</h3>
+            <div class="news-list">
+              {% for item in report.high_impact_news_items %}
+                <article class="news-item">
+                  <h3>{{ item.title }}</h3>
+                  <p class="muted">Source: {{ item.source }} | Published: {{ item.published_at }} | Sentiment: {{ item.sentiment }} | Impact: {{ item.impact }} | Score: {{ item.impact_score }}</p>
+                  {% if item.summary and item.summary != 'N/A' %}<p>{{ item.summary }}</p>{% endif %}
+                  {% if item.url %}<p><a href="{{ item.url }}">Open original source</a></p>{% endif %}
+                </article>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </section>
+      {% endif %}
+
+      {% if report.positive_catalysts or report.negative_catalysts or report.upcoming_events %}
+        <section class="section">
+          <h2>Catalyst Tracker</h2>
+          {% if report.catalyst_tracker.summary.main_message %}<p>{{ report.catalyst_tracker.summary.main_message }}</p>{% endif %}
+          {% if report.positive_catalysts %}
+            <h3>Positive Catalysts</h3>
+            <ul>{% for item in report.positive_catalysts %}<li>{{ item.label }} | {{ item.impact }} | {{ item.source }} | {{ item.date }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if report.negative_catalysts %}
+            <h3>Negative Catalysts</h3>
+            <ul>{% for item in report.negative_catalysts %}<li>{{ item.label }} | {{ item.impact }} | {{ item.source }} | {{ item.date }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if report.upcoming_events %}
+            <h3>Upcoming Events</h3>
+            <ul>{% for item in report.upcoming_events %}<li>{{ item.label }} | {{ item.source }} | {{ item.date }}</li>{% endfor %}</ul>
+          {% endif %}
+        </section>
+      {% endif %}
+
+      {% if report.analyst_consensus_rows %}
+        <section class="section">
+          <h2>Analyst Recommendation Trend</h2>
+          <table class="metric-table"><tbody>
+            {% for row in report.analyst_consensus_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
+          </tbody></table>
+        </section>
+      {% endif %}
+
       {% if report.related_news_items %}
         <section class="section">
           <h2>Related News</h2>

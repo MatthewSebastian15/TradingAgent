@@ -85,8 +85,8 @@ describe('ResultCard risk-engine contract', () => {
     fireEvent.click(screen.getByText('News'));
 
     expect(screen.getByText('NEWS')).toBeTruthy();
-    expect(screen.getByText(/NVDA earnings outlook remains constructive/i)).toBeTruthy();
-    expect(screen.getByText('Publisher: Mock Market Wire')).toBeTruthy();
+    expect(screen.getAllByText(/NVDA earnings outlook remains constructive/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Impact: HIGH/i).length).toBeGreaterThan(0);
     const link = screen.getAllByText('OPEN ORIGINAL SOURCE')[0];
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
@@ -110,6 +110,19 @@ describe('ResultCard risk-engine contract', () => {
             available: true,
             items: [{ title: 'Unsafe vendor URL', url: 'javascript:alert(1)' }],
           },
+          news_impact: {
+            available: false,
+            high_impact_news: [],
+            full_news_list: [],
+            data_quality: { status: 'unavailable', sources_used: [] },
+          },
+          catalyst_tracker: {
+            positive_catalysts: [],
+            negative_catalysts: [],
+            upcoming_events: [],
+            summary: {},
+          },
+          analyst_consensus: { available: false },
         }}
       />
     );
@@ -158,6 +171,30 @@ describe('ResultCard risk-engine contract', () => {
     expect(
       screen.getByText('Valid OHLC price chart data is not available for this analysis.')
     ).toBeTruthy();
+  });
+
+  it('renders Phase 3 price performance and technical entry sections', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.getByText('PRICE PERFORMANCE')).toBeTruthy();
+    expect(screen.getByText('TECHNICAL ENTRY QUALITY')).toBeTruthy();
+    expect(screen.getByText('ENTRY QUALITY')).toBeTruthy();
+    expect(screen.getByText('RSI SIGNAL')).toBeTruthy();
+    expect(screen.getByText('SUPPORT')).toBeTruthy();
+    expect(screen.getByText('RESISTANCE')).toBeTruthy();
+  });
+
+  it('renders Phase 3 news impact, catalyst, and analyst consensus sections', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('News'));
+
+    expect(screen.getByText('HIGH-IMPACT NEWS')).toBeTruthy();
+    expect(screen.getByText('POSITIVE CATALYSTS')).toBeTruthy();
+    expect(screen.getByText('ANALYST RECOMMENDATION TREND')).toBeTruthy();
+    expect(screen.getByText('FULL NEWS LIST')).toBeTruthy();
   });
 
   it('renders Profile empty state when company profile is unavailable', () => {

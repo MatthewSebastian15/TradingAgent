@@ -147,7 +147,20 @@ class PriceChartPoint(ApiSchema):
     high: float | None = None
     low: float | None = None
     close: float | None = None
+    adjusted_close: float | None = None
     volume: int | None = None
+
+
+class PricePerformance(ApiSchema):
+    period_return_percent: float | None = None
+    period_high: float | None = None
+    period_low: float | None = None
+    max_drawdown_percent: float | None = None
+    average_volume: float | None = None
+    latest_volume: float | None = None
+    latest_close: float | None = None
+    volume_trend: str | None = None
+    performance_label: str | None = None
 
 
 class PriceChart(ApiSchema):
@@ -155,11 +168,36 @@ class PriceChart(ApiSchema):
     source: str | None = None
     ticker: str | None = None
     trade_date: str | None = None
+    currency: str | None = None
+    window: str | None = None
     window_label: str | None = None
     lookback_days: int | None = None
     points: list[PriceChartPoint] = Field(default_factory=list)
+    data: list[PriceChartPoint] = Field(default_factory=list)
     stats: dict[str, Any] = Field(default_factory=dict)
+    summary: PricePerformance | dict[str, Any] | None = None
+    data_quality: dict[str, Any] = Field(default_factory=dict)
     warning: str | None = None
+
+
+class TechnicalEntry(ApiSchema):
+    available: bool = False
+    entry_quality: str | None = None
+    trend: str | None = None
+    rsi: float | None = None
+    rsi_signal: str | None = None
+    macd: float | None = None
+    macd_signal_value: float | None = None
+    macd_signal: str | None = None
+    atr: float | None = None
+    sma_20: float | None = None
+    sma_50: float | None = None
+    sma_200: float | None = None
+    support: float | None = None
+    resistance: float | None = None
+    volume_trend: str | None = None
+    reasons: list[str] = Field(default_factory=list)
+    data_quality: dict[str, Any] = Field(default_factory=dict)
 
 
 class RelatedNewsItem(ApiSchema):
@@ -230,6 +268,71 @@ class NewsResponse(ApiSchema):
     cache: dict[str, Any] = Field(default_factory=dict)
 
 
+class NewsImpactItem(ApiSchema):
+    title: str
+    source: str | None = None
+    published_at: str | None = None
+    sentiment: str | None = None
+    impact: str | None = None
+    impact_score: float | None = None
+    relevance_score: float | None = None
+    recency_score: float | None = None
+    materiality_score: float | None = None
+    materiality_category: str | None = None
+    summary: str | None = None
+    url: str | None = None
+    normalized_url: str | None = None
+
+
+class NewsImpact(ApiSchema):
+    available: bool = False
+    overall_sentiment: str | None = None
+    sentiment_score: float | None = None
+    high_impact_news: list[NewsImpactItem] = Field(default_factory=list)
+    full_news_list: list[NewsImpactItem] = Field(default_factory=list)
+    news_count: int = 0
+    deduplicated_count: int = 0
+    data_quality: dict[str, Any] = Field(default_factory=dict)
+
+
+class CatalystItem(ApiSchema):
+    type: str | None = None
+    label: str | None = None
+    impact: str | None = None
+    source: str | None = None
+    date: str | None = None
+    related_news_title: str | None = None
+
+
+class UpcomingEvent(ApiSchema):
+    type: str | None = None
+    label: str | None = None
+    date: str | None = None
+    source: str | None = None
+    risk_level: str | None = None
+
+
+class CatalystTracker(ApiSchema):
+    positive_catalysts: list[CatalystItem] = Field(default_factory=list)
+    negative_catalysts: list[CatalystItem] = Field(default_factory=list)
+    upcoming_events: list[UpcomingEvent] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalystConsensus(ApiSchema):
+    available: bool = False
+    period: str | None = None
+    strong_buy: int = 0
+    buy: int = 0
+    hold: int = 0
+    sell: int = 0
+    strong_sell: int = 0
+    total: int = 0
+    consensus_label: str | None = None
+    trend: str | None = None
+    data_quality: dict[str, Any] = Field(default_factory=dict)
+
+
 class AnalysisResponse(ApiSchema):
     request_id: str
     ticker: str
@@ -255,7 +358,12 @@ class AnalysisResponse(ApiSchema):
     peer_comparison: dict[str, Any] | None = None
     company_profile: CompanyProfile | dict[str, Any] | None = None
     price_chart: PriceChart | dict[str, Any] | None = None
+    price_performance: PricePerformance | dict[str, Any] | None = None
+    technical_entry: TechnicalEntry | dict[str, Any] | None = None
     related_news: RelatedNews | dict[str, Any] | None = None
+    news_impact: NewsImpact | dict[str, Any] | None = None
+    catalyst_tracker: CatalystTracker | dict[str, Any] | None = None
+    analyst_consensus: AnalystConsensus | dict[str, Any] | None = None
     news: NewsResponse | dict[str, Any] | None = None
     news_context: NewsResponse | dict[str, Any] | None = None
 

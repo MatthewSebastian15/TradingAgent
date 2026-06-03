@@ -4,6 +4,11 @@ import time
 import pytest
 
 from tradingagents.dataflows.config import get_config, set_config
+from tradingagents.dataflows.news_intelligence import (
+    build_analyst_consensus,
+    build_catalyst_tracker,
+    build_news_impact,
+)
 from tradingagents.dataflows.stockstats_utils import yf_retry
 from tradingagents.pipeline_balanced import (
     AnalystReport,
@@ -13,6 +18,7 @@ from tradingagents.pipeline_balanced import (
     _invoke_once,
 )
 from tradingagents.pipeline_balanced_data import _build_price_chart, _build_related_news, _parse_markdown_news_items
+from tradingagents.technical.entry_quality import build_technical_entry
 from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout, get_timeout_stats
 
 
@@ -57,6 +63,8 @@ Date,Open,High,Low,Close,Volume
     assert chart["available"] is True
     assert chart["lookback_days"] == 60
     assert [point["date"] for point in chart["points"]] == ["2026-05-18", "2026-05-19"]
+    assert chart["data"] == chart["points"]
+    assert chart["points"][0]["adjusted_close"] == 10.5
     assert chart["stats"] == {
         "start_price": 10.5,
         "end_price": 11.25,
@@ -67,6 +75,17 @@ Date,Open,High,Low,Close,Volume
         "average_close": 10.88,
         "average_volume": 1050,
         "point_count": 2,
+    }
+    assert chart["summary"] == {
+        "period_return_percent": 7.14,
+        "period_high": 12.0,
+        "period_low": 9.0,
+        "max_drawdown_percent": 0.0,
+        "average_volume": 1050,
+        "latest_volume": 1100,
+        "latest_close": 11.25,
+        "volume_trend": "average",
+        "performance_label": "positive",
     }
 
 
@@ -88,6 +107,7 @@ Date,Open,High,Low,Close,Volume
             "high": 12.0,
             "low": 9.0,
             "close": 11.0,
+            "adjusted_close": 11.0,
             "volume": 1000,
         },
         {
@@ -96,6 +116,7 @@ Date,Open,High,Low,Close,Volume
             "high": 13.0,
             "low": 10.0,
             "close": 12.0,
+            "adjusted_close": 12.0,
             "volume": 1200,
         },
     ]
@@ -111,8 +132,114 @@ def test_build_price_chart_uses_horizon_lookback_and_returns_empty_state(months,
     assert chart["available"] is False
     assert chart["lookback_days"] == lookback_days
     assert chart["points"] == []
+    assert chart["data"] == []
     assert chart["stats"] == {}
+    assert chart["summary"] == {}
     assert chart["warning"] == "Price chart data is unavailable."
+
+
+def test_build_technical_entry_calculates_indicators_and_support_resistance():
+    rows = []
+    for index in range(60):
+        close = 100 + index
+        month = 4 if index < 30 else 5
+        day = index + 1 if index < 30 else index - 29
+        rows.append(
+            {
+                "date": f"2026-{month:02d}-{day:02d}",
+                "open": close - 0.5,
+                "high": close + 2,
+                "low": close - 2,
+                "close": close,
+                "adjusted_close": close,
+                "volume": 1_000 + index * 10,
+            }
+        )
+
+    technical = build_technical_entry(rows, current_price=159)
+
+    assert technical["available"] is True
+    assert technical["sma_20"] == 149.5
+    assert technical["sma_50"] == 134.5
+    assert technical["sma_200"] is None
+    assert technical["rsi"] == 100.0
+    assert technical["macd_signal"] == "bullish"
+    assert technical["support"] == 138.0
+    assert technical["resistance"] == 161.0
+    assert technical["data_quality"]["status"] == "partial"
+
+
+def test_build_technical_entry_handles_insufficient_data():
+    technical = build_technical_entry([{"date": "2026-05-01", "close": 10, "open": 10, "high": 11, "low": 9}])
+
+    assert technical["available"] is False
+    assert technical["entry_quality"] == "N/A"
+    assert "ohlcv_history" in technical["data_quality"]["missing_fields"]
+
+
+def test_news_impact_deduplicates_scores_and_catalyst_classifier():
+    related_news = {
+        "items": [
+            {
+                "title": "BBCA earnings beat expectations",
+                "url": "https://example.com/news?utm_source=x",
+                "source": "MarketAux",
+                "published_at": "2026-05-29T10:00:00Z",
+                "summary": "Revenue and profit growth were strong.",
+                "event_type": "earnings",
+                "relevance_score": 90,
+            },
+            {
+                "title": "BBCA earnings beat expectations",
+                "url": "https://example.com/news",
+                "source": "NewsData",
+                "published_at": "2026-05-29T10:00:00Z",
+            },
+            {
+                "title": "BBCA faces regulatory probe",
+                "url": "https://example.com/probe",
+                "source": "Finnhub",
+                "published_at": "2026-05-28",
+                "summary": "A regulatory investigation could pressure sentiment.",
+                "event_type": "regulatory",
+                "relevance_score": 88,
+            },
+        ]
+    }
+
+    impact = build_news_impact("BBCA.JK", "2026-05-30", related_news=related_news)
+    tracker = build_catalyst_tracker(
+        impact,
+        '{"event_risk":{"next_earnings_date":"2026-06-20","risk_level":"medium"},"earnings_calendar":[]}',
+    )
+
+    assert impact["available"] is True
+    assert impact["news_count"] == 3
+    assert impact["deduplicated_count"] == 2
+    assert impact["high_impact_news"][0]["impact"] == "high"
+    assert tracker["positive_catalysts"]
+    assert tracker["negative_catalysts"]
+    assert tracker["upcoming_events"][0]["date"] == "2026-06-20"
+
+
+def test_analyst_consensus_handles_available_and_empty_finnhub_payload():
+    payload = """
+    {
+      "recommendation_trends": [
+        {"period":"2026-05","strongBuy":4,"buy":8,"hold":5,"sell":1,"strongSell":0},
+        {"period":"2026-04","strongBuy":3,"buy":7,"hold":6,"sell":2,"strongSell":0}
+      ]
+    }
+    """
+
+    consensus = build_analyst_consensus(payload)
+    empty = build_analyst_consensus('{"recommendation_trends":[]}')
+
+    assert consensus["available"] is True
+    assert consensus["total"] == 18
+    assert consensus["consensus_label"] == "positive"
+    assert consensus["trend"] == "improving"
+    assert empty["available"] is False
 
 
 def test_parse_markdown_news_items_extracts_vendor_fields_and_skips_missing_url():

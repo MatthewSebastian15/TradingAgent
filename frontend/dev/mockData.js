@@ -968,6 +968,7 @@ function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', mo
       high,
       low,
       close,
+      adjusted_close: close,
       volume: 70000000 + (sequence % 10) * 2500000,
     });
 
@@ -979,27 +980,60 @@ function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', mo
   const startPrice = closes[0];
   const endPrice = closes[closes.length - 1];
   const change = endPrice - startPrice;
+  const averageVolume = Math.round(volumes.reduce((sum, value) => sum + value, 0) / volumes.length);
+  const latestVolume = volumes[volumes.length - 1];
+  const periodReturn = Number(((change / startPrice) * 100).toFixed(2));
+  let peak = closes[0];
+  let maxDrawdown = 0;
+  closes.forEach((close) => {
+    if (close > peak) peak = close;
+    maxDrawdown = Math.min(maxDrawdown, ((close - peak) / peak) * 100);
+  });
+  const summary = {
+    period_return_percent: periodReturn,
+    period_high: Math.max(...points.map((item) => item.high)),
+    period_low: Math.min(...points.map((item) => item.low)),
+    max_drawdown_percent: Number(maxDrawdown.toFixed(2)),
+    average_volume: averageVolume,
+    latest_volume: latestVolume,
+    latest_close: endPrice,
+    volume_trend:
+      latestVolume >= averageVolume * 1.1
+        ? 'above_average'
+        : latestVolume <= averageVolume * 0.9
+          ? 'below_average'
+          : 'average',
+    performance_label: periodReturn > 0 ? 'positive' : periodReturn < 0 ? 'negative' : 'flat',
+  };
 
   return {
     available: true,
     source: 'mock:yfinance',
     ticker,
     trade_date: tradeDate,
+    currency: ticker.endsWith('.JK') ? 'IDR' : 'USD',
+    window: `${normalizeTimeHorizonMonths(months)}M`,
     window_label: `${normalizeTimeHorizonMonths(months)} Month${normalizeTimeHorizonMonths(months) > 1 ? 's' : ''} Analysis / ${lookbackDays}D Price Window`,
     lookback_days: lookbackDays,
     points,
+    data: points,
     stats: {
       start_price: startPrice,
       end_price: endPrice,
       change,
-      change_percent: Number(((change / startPrice) * 100).toFixed(2)),
+      change_percent: periodReturn,
       high: Math.max(...points.map((item) => item.high)),
       low: Math.min(...points.map((item) => item.low)),
       average_close: Number(
         (closes.reduce((sum, value) => sum + value, 0) / closes.length).toFixed(2)
       ),
-      average_volume: Math.round(volumes.reduce((sum, value) => sum + value, 0) / volumes.length),
+      average_volume: averageVolume,
       point_count: points.length,
+    },
+    summary,
+    data_quality: {
+      status: 'complete',
+      missing_fields: [],
     },
   };
 }
@@ -1114,6 +1148,297 @@ function syncMockRelatedNews(relatedNews, options) {
     return relatedNews;
   }
   return fallback;
+}
+
+function average(values) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+function simpleSma(values, windowSize) {
+  if (values.length < windowSize) return null;
+  return average(values.slice(-windowSize));
+}
+
+function simpleRsi(closes, windowSize = 14) {
+  if (closes.length <= windowSize) return null;
+  const changes = closes.slice(1).map((close, index) => close - closes[index]);
+  const recent = changes.slice(-windowSize);
+  const gains = recent.map((value) => Math.max(value, 0));
+  const losses = recent.map((value) => Math.abs(Math.min(value, 0)));
+  const avgGain = average(gains);
+  const avgLoss = average(losses);
+  if (!avgLoss) return avgGain ? 100 : 50;
+  const rs = avgGain / avgLoss;
+  return 100 - 100 / (1 + rs);
+}
+
+function emaSeries(values, span) {
+  if (!values.length) return [];
+  const alpha = 2 / (span + 1);
+  return values.reduce((series, value, index) => {
+    if (index === 0) return [value];
+    return [...series, value * alpha + series[index - 1] * (1 - alpha)];
+  }, []);
+}
+
+function createMockTechnicalEntry(chart) {
+  const points = Array.isArray(chart?.data) ? chart.data : chart?.points;
+  if (!Array.isArray(points) || points.length < 30) {
+    return {
+      available: false,
+      entry_quality: 'N/A',
+      trend: 'N/A',
+      rsi: null,
+      rsi_signal: 'N/A',
+      macd: null,
+      macd_signal_value: null,
+      macd_signal: 'N/A',
+      atr: null,
+      sma_20: null,
+      sma_50: null,
+      sma_200: null,
+      support: null,
+      resistance: null,
+      volume_trend: 'N/A',
+      reasons: ['At least 30 usable OHLCV rows are required for technical entry quality.'],
+      data_quality: { status: 'insufficient', missing_fields: ['ohlcv_history'] },
+    };
+  }
+
+  const closes = points.map((point) => Number(point.close));
+  const latestClose = closes[closes.length - 1];
+  const sma20 = simpleSma(closes, 20);
+  const sma50 = simpleSma(closes, 50);
+  const sma200 = simpleSma(closes, 200);
+  const rsi = simpleRsi(closes);
+  const ema12 = emaSeries(closes, 12);
+  const ema26 = emaSeries(closes, 26);
+  const macdValues = ema12.map((value, index) => value - ema26[index]);
+  const macdSignalValues = emaSeries(macdValues, 9);
+  const macd = macdValues.at(-1);
+  const macdSignalValue = macdSignalValues.at(-1);
+  const recent = points.slice(-20);
+  const support = Math.min(...recent.map((point) => point.low));
+  const resistance = Math.max(...recent.map((point) => point.high));
+  const trueRanges = points.slice(1).map((point, index) =>
+    Math.max(
+      point.high - point.low,
+      Math.abs(point.high - points[index].close),
+      Math.abs(point.low - points[index].close)
+    )
+  );
+  const atr = average(trueRanges.slice(-14));
+  const trend =
+    sma20 && sma50 && latestClose > sma20 && sma20 > sma50
+      ? 'uptrend'
+      : sma20 && sma50 && latestClose < sma20 && sma20 < sma50
+        ? 'downtrend'
+        : 'sideways';
+  const rsiSignal = rsi >= 70 ? 'overbought' : rsi <= 30 ? 'oversold' : 'neutral';
+  const macdSignal = macd > macdSignalValue ? 'bullish' : macd < macdSignalValue ? 'bearish' : 'neutral';
+  const entryQuality =
+    trend === 'downtrend' || rsiSignal === 'overbought'
+      ? 'risky'
+      : trend === 'uptrend' && rsi < 65 && macdSignal === 'bullish'
+        ? 'good'
+        : 'neutral';
+
+  return {
+    available: true,
+    entry_quality: entryQuality,
+    trend,
+    rsi: Number(rsi.toFixed(2)),
+    rsi_signal: rsiSignal,
+    macd: Number(macd.toFixed(2)),
+    macd_signal_value: Number(macdSignalValue.toFixed(2)),
+    macd_signal: macdSignal,
+    atr: Number(atr.toFixed(2)),
+    sma_20: Number(sma20.toFixed(2)),
+    sma_50: sma50 ? Number(sma50.toFixed(2)) : null,
+    sma_200: sma200 ? Number(sma200.toFixed(2)) : null,
+    support: Number(support.toFixed(2)),
+    resistance: Number(resistance.toFixed(2)),
+    volume_trend: chart.summary?.volume_trend || 'average',
+    reasons: [
+      latestClose > sma20
+        ? 'Price is above the 20-day moving average.'
+        : 'Price is below the 20-day moving average.',
+      `RSI is ${rsiSignal}.`,
+      `MACD signal is ${macdSignal}.`,
+      `Latest volume is ${(chart.summary?.volume_trend || 'average').replace(/_/g, ' ')}.`,
+    ],
+    data_quality: {
+      status: sma200 ? 'complete' : 'partial',
+      missing_fields: sma200 ? [] : ['sma_200'],
+    },
+  };
+}
+
+function createMockNewsImpact({ relatedNews, news, ticker }) {
+  const relatedItems = Array.isArray(relatedNews?.items) ? relatedNews.items : [];
+  const contextItems = Array.isArray(news?.articles) ? news.articles : [];
+  const merged = [...relatedItems, ...contextItems].filter((item) => item?.title && item?.url);
+  const seen = new Set();
+  const deduped = merged.filter((item) => {
+    const key = String(item.normalized_url || item.url || item.title).replace(/\?.*$/, '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (!deduped.length) {
+    return {
+      available: false,
+      overall_sentiment: 'neutral',
+      sentiment_score: 50,
+      high_impact_news: [],
+      full_news_list: [],
+      news_count: 0,
+      deduplicated_count: 0,
+      data_quality: { status: 'unavailable', sources_used: [] },
+    };
+  }
+
+  const scored = deduped.map((item, index) => {
+    const sentiment = index % 3 === 2 ? 'negative' : 'positive';
+    const impactScore = index === 0 ? 86 : index === 2 ? 78 : 62;
+    return {
+      title: item.title,
+      source: item.source || item.provider || 'mock',
+      published_at: item.published_at || '2026-05-29',
+      sentiment,
+      impact: impactScore >= 70 ? 'high' : 'medium',
+      impact_score: impactScore,
+      relevance_score: item.relevance_score || 82 - index * 4,
+      recency_score: 85 - index * 5,
+      materiality_score: index === 0 ? 90 : 70,
+      materiality_category: item.event_type || (index === 2 ? 'regulatory' : 'earnings'),
+      summary: item.summary || `Mock impact summary for ${ticker}.`,
+      url: item.url,
+      normalized_url: item.normalized_url || item.url,
+    };
+  });
+
+  return {
+    available: true,
+    overall_sentiment: scored.filter((item) => item.sentiment === 'positive').length >=
+      scored.filter((item) => item.sentiment === 'negative').length
+      ? 'positive'
+      : 'negative',
+    sentiment_score: 68,
+    high_impact_news: scored.filter((item) => item.impact === 'high').slice(0, 5),
+    full_news_list: scored,
+    news_count: merged.length,
+    deduplicated_count: scored.length,
+    data_quality: {
+      status: 'complete',
+      sources_used: [...new Set(scored.map((item) => item.source))],
+    },
+  };
+}
+
+function createMockCatalystTracker(newsImpact) {
+  const positive = (newsImpact.full_news_list || [])
+    .filter((item) => item.sentiment === 'positive' && item.impact !== 'low')
+    .slice(0, 3)
+    .map((item) => ({
+      type: item.materiality_category || 'sentiment',
+      label: `Positive ${(item.materiality_category || 'sentiment').replace(/_/g, ' ')} catalyst`,
+      impact: item.impact,
+      source: item.source,
+      date: item.published_at,
+      related_news_title: item.title,
+    }));
+  const negative = (newsImpact.full_news_list || [])
+    .filter((item) => item.sentiment === 'negative' && item.impact !== 'low')
+    .slice(0, 3)
+    .map((item) => ({
+      type: item.materiality_category || 'sentiment',
+      label: `Negative ${(item.materiality_category || 'sentiment').replace(/_/g, ' ')} catalyst`,
+      impact: item.impact,
+      source: item.source,
+      date: item.published_at,
+      related_news_title: item.title,
+    }));
+
+  return {
+    positive_catalysts: positive,
+    negative_catalysts: negative,
+    upcoming_events: newsImpact.available
+      ? [
+          {
+            type: 'earnings',
+            label: 'Upcoming quarterly earnings',
+            date: '2026-06-20',
+            source: 'Finnhub',
+            risk_level: 'medium',
+          },
+        ]
+      : [],
+    summary: {
+      overall_catalyst_bias: positive.length > negative.length ? 'positive' : 'neutral',
+      main_message:
+        positive.length > negative.length
+          ? 'Positive mock catalysts outweigh current negative catalysts.'
+          : 'Positive and negative mock catalysts are balanced.',
+    },
+  };
+}
+
+function createMockAnalystConsensus(ticker) {
+  if (String(ticker || '').startsWith('UNVR')) {
+    return {
+      available: false,
+      period: null,
+      strong_buy: 0,
+      buy: 0,
+      hold: 0,
+      sell: 0,
+      strong_sell: 0,
+      total: 0,
+      consensus_label: 'N/A',
+      trend: 'N/A',
+      data_quality: { status: 'unavailable', source: 'Finnhub' },
+    };
+  }
+  return {
+    available: true,
+    period: '2026-05',
+    strong_buy: 4,
+    buy: 8,
+    hold: 5,
+    sell: 1,
+    strong_sell: 0,
+    total: 18,
+    consensus_label: 'positive',
+    trend: 'improving',
+    data_quality: { status: 'complete', source: 'Finnhub' },
+  };
+}
+
+function createMockPhase3(completed, overrides) {
+  const pricePerformance = overrides.price_performance || completed.price_chart?.summary || {};
+  const technicalEntry =
+    overrides.technical_entry || createMockTechnicalEntry(completed.price_chart || {});
+  const newsImpact =
+    overrides.news_impact ||
+    createMockNewsImpact({
+      relatedNews: completed.related_news,
+      news: completed.news,
+      ticker: completed.ticker,
+    });
+  const catalystTracker =
+    overrides.catalyst_tracker || createMockCatalystTracker(newsImpact);
+  const analystConsensus =
+    overrides.analyst_consensus || createMockAnalystConsensus(completed.ticker);
+
+  return {
+    price_performance: pricePerformance,
+    technical_entry: technicalEntry,
+    news_impact: newsImpact,
+    catalyst_tracker: catalystTracker,
+    analyst_consensus: analystConsensus,
+  };
 }
 
 function normalizeDataQuality(overrides = {}) {
@@ -1262,17 +1587,21 @@ function completeMockAnalysis(overrides = {}) {
     }),
     data_quality: normalizeDataQuality(overrides.data_quality || result.data_quality),
   };
+  const completedWithPhase3 = {
+    ...completed,
+    ...createMockPhase3(completed, overrides),
+  };
 
   return {
-    ...completed,
-    analysis_overview: createMockAnalysisOverview(completed),
+    ...completedWithPhase3,
+    analysis_overview: createMockAnalysisOverview(completedWithPhase3),
     full_decision:
-      completed.full_decision ||
+      completedWithPhase3.full_decision ||
       createFullDecision({
-        decision: completed.final_decision ?? completed.decision,
-        summary: completed.executive_summary,
-        thesis: completed.investment_thesis,
-        timeHorizon: completed.time_horizon,
+        decision: completedWithPhase3.final_decision ?? completedWithPhase3.decision,
+        summary: completedWithPhase3.executive_summary,
+        thesis: completedWithPhase3.investment_thesis,
+        timeHorizon: completedWithPhase3.time_horizon,
       }),
   };
 }
@@ -1676,6 +2005,11 @@ export const MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE = completeMockAnalysis({
     empty_reason: 'No relevant company-specific news was found.',
     cache: { hit: false },
   },
+  price_performance: null,
+  technical_entry: null,
+  news_impact: null,
+  catalyst_tracker: null,
+  analyst_consensus: null,
   related_news: {
     available: false,
     ticker: 'UNVR.JK',
