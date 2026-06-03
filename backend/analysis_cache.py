@@ -343,6 +343,7 @@ class AnalysisJobStore:
         self.max_event_history = max(1, int(max_event_history))
         self.persistent_cache = persistent_cache
         self._jobs: dict[str, AnalysisJob] = {}
+        self._job_ids_by_request_id: dict[str, str] = {}
         self._lock = asyncio.Lock()
 
     async def create(
@@ -363,7 +364,7 @@ class AnalysisJobStore:
                 max_event_history=self.max_event_history,
                 persist_callback=self._persist_terminal_job,
             )
-            self._jobs[job.id] = job
+            self._register_job_locked(job)
             await self._evict_locked()
         return job
 
@@ -380,7 +381,8 @@ class AnalysisJobStore:
 
     async def get_by_request_id(self, request_id: str, *, owner_id: str | None = None) -> AnalysisJob | None:
         async with self._lock:
-            job = next((item for item in self._jobs.values() if item.request_id == request_id), None)
+            job_id = self._job_ids_by_request_id.get(request_id)
+            job = self._jobs.get(job_id) if job_id is not None else None
         if job is None:
             job = await self._load_persisted_job("request_id", request_id)
         if job is None:
@@ -412,7 +414,7 @@ class AnalysisJobStore:
                 if job.updated_at < cutoff and job.status in {"completed", "failed", "cancelled"}
             ]
             for job_id in stale:
-                self._jobs.pop(job_id, None)
+                self._remove_job_locked(job_id)
             await self._evict_locked()
 
     async def stats(self) -> dict[str, int]:
@@ -434,6 +436,18 @@ class AnalysisJobStore:
     def _active_job_count_locked(self) -> int:
         return sum(1 for job in self._jobs.values() if job.status in {"queued", "running"})
 
+    def _register_job_locked(self, job: AnalysisJob) -> None:
+        existing = self._jobs.get(job.id)
+        if existing is not None and self._job_ids_by_request_id.get(existing.request_id) == job.id:
+            self._job_ids_by_request_id.pop(existing.request_id, None)
+        self._jobs[job.id] = job
+        self._job_ids_by_request_id[job.request_id] = job.id
+
+    def _remove_job_locked(self, job_id: str) -> None:
+        job = self._jobs.pop(job_id, None)
+        if job is not None and self._job_ids_by_request_id.get(job.request_id) == job_id:
+            self._job_ids_by_request_id.pop(job.request_id, None)
+
     async def _evict_locked(self) -> None:
         if len(self._jobs) <= self.max_entries:
             return
@@ -442,7 +456,7 @@ class AnalysisJobStore:
             if len(self._jobs) <= self.max_entries:
                 break
             if job.status in {"completed", "failed", "cancelled"}:
-                self._jobs.pop(job.id, None)
+                self._remove_job_locked(job.id)
 
     async def _persist_terminal_job(self, job: AnalysisJob) -> None:
         if self.persistent_cache is None or job.status not in TERMINAL_ANALYSIS_STATUSES:
@@ -466,7 +480,7 @@ class AnalysisJobStore:
             return None
 
         async with self._lock:
-            self._jobs[job.id] = job
+            self._register_job_locked(job)
             await self._evict_locked()
         return job
 

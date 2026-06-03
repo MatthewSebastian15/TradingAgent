@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from analysis_cache import AnalysisCacheKey
@@ -50,6 +50,7 @@ SUMMARY_FIELDS = {
     "volatility_score",
     "rebalancing_action",
     "position_size_hint",
+    "key_reasons",
     "key_catalysts",
     "invalidation_conditions",
     "data_quality",
@@ -63,11 +64,26 @@ SUMMARY_FIELDS = {
     "budget_exhausted",
     "agents_skipped",
     "financial_highlights",
+    "financial_trends",
+    "valuation_multiples",
+    "fair_value_range",
+    "scenario_analysis",
+    "quality_of_earnings",
+    "balance_sheet_risk",
+    "dividend_quality",
+    "peer_comparison",
     "company_profile",
     "price_chart",
+    "price_performance",
+    "technical_entry",
     "related_news",
+    "news_impact",
+    "catalyst_tracker",
+    "analyst_consensus",
     "news",
     "news_context",
+    "analysis_overview",
+    "risk_data_quality",
 }
 
 AGENT_SEQUENCE = [
@@ -85,7 +101,7 @@ AGENT_SEQUENCE = [
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _enum_value(value: Any) -> Any:
@@ -120,18 +136,60 @@ def _coerce_data_quality(value: Any) -> dict[str, Any]:
 
 
 VALIDATION_WARNING_META: dict[str, dict[str, Any]] = {
-    "HOLD_TRADE_LEVELS_HIDDEN": {"severity": "info", "message": "Trade levels are hidden because recommendation is Hold.", "blocking": False},
+    "HOLD_TRADE_LEVELS_HIDDEN": {
+        "severity": "info",
+        "message": "Trade levels are hidden because recommendation is Hold.",
+        "blocking": False,
+    },
     "NEWS_PARTIAL": {"severity": "warning", "message": "Partial news coverage is available.", "blocking": False},
-    "NEWS_UNAVAILABLE": {"severity": "warning", "message": "No usable news was returned; analysis continues without blocking trade validation.", "blocking": False},
-    "DATA_SOURCE_WARNING": {"severity": "warning", "message": "Some optional market data is unavailable. Analysis continues.", "blocking": False},
-    "OHLCV_FALLBACK_USED": {"severity": "warning", "message": "Exact OHLCV date was not found; latest available trading day is used.", "blocking": False},
+    "NEWS_UNAVAILABLE": {
+        "severity": "warning",
+        "message": "No usable news was returned; analysis continues without blocking trade validation.",
+        "blocking": False,
+    },
+    "DATA_SOURCE_WARNING": {
+        "severity": "warning",
+        "message": "Some optional market data is unavailable. Analysis continues.",
+        "blocking": False,
+    },
+    "OHLCV_FALLBACK_USED": {
+        "severity": "warning",
+        "message": "Exact OHLCV date was not found; latest available trading day is used.",
+        "blocking": False,
+    },
     "CURRENT_PRICE_MISSING": {"severity": "error", "message": "Current price missing.", "blocking": True},
     "PRICE_MISSING": {"severity": "error", "message": "Required price data is missing.", "blocking": True},
-    "OHLCV_MISSING": {"severity": "error", "message": "No OHLCV row is available on or before the trade date.", "blocking": True},
-    "TRADE_LEVELS_INVALID": {"severity": "error", "message": "Trade levels are invalid for the current recommendation.", "blocking": True},
+    "OHLCV_MISSING": {
+        "severity": "error",
+        "message": "No OHLCV row is available on or before the trade date.",
+        "blocking": True,
+    },
+    "TRADE_LEVELS_INVALID": {
+        "severity": "error",
+        "message": "Trade levels are invalid for the current recommendation.",
+        "blocking": True,
+    },
     "TRADE_PLAN_INVALID": {"severity": "error", "message": "Trade plan invalid.", "blocking": True},
-    "DECISION_DOWNGRADED_TO_HOLD": {"severity": "warning", "message": "Decision downgraded to Hold.", "blocking": False},
-    "INVALID_REBALANCING_FIXED": {"severity": "warning", "message": "Invalid rebalancing action fixed.", "blocking": False},
+    "DECISION_DOWNGRADED_TO_HOLD": {
+        "severity": "warning",
+        "message": "Decision downgraded to Hold.",
+        "blocking": False,
+    },
+    "INVALID_REBALANCING_FIXED": {
+        "severity": "warning",
+        "message": "Invalid rebalancing action fixed.",
+        "blocking": False,
+    },
+    "POSITION_FLAG_CONFLICT_FIXED": {
+        "severity": "warning",
+        "message": "Existing position flag was corrected from position quantity.",
+        "blocking": False,
+    },
+    "POSITION_QUANTITY_INVALID": {
+        "severity": "warning",
+        "message": "Position quantity is invalid for a long-only portfolio.",
+        "blocking": False,
+    },
 }
 
 
@@ -156,12 +214,20 @@ def _validation_warning_details(warnings: Any) -> list[dict[str, Any]]:
             if not code or code in seen:
                 continue
             seen.add(code)
-            details.append({
-                "code": code,
-                "severity": str(warning.get("severity") or VALIDATION_WARNING_META.get(code, {}).get("severity") or "warning"),
-                "message": str(warning.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code),
-                "blocking": bool(warning.get("blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False))),
-            })
+            details.append(
+                {
+                    "code": code,
+                    "severity": str(
+                        warning.get("severity") or VALIDATION_WARNING_META.get(code, {}).get("severity") or "warning"
+                    ),
+                    "message": str(
+                        warning.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code
+                    ),
+                    "blocking": bool(
+                        warning.get("blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False))
+                    ),
+                }
+            )
             continue
         code = str(warning).strip()
         if not code or code in seen:
@@ -218,13 +284,21 @@ def _complete_data_quality_warning_details(merged: dict[str, Any]) -> None:
         for item in existing:
             if isinstance(item, dict):
                 code = str(item.get("code") or "DATA_SOURCE_WARNING")
-                message = _clean_data_source_message(str(item.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code))
-                details.append({
-                    "code": code,
-                    "severity": str(item.get("severity") or VALIDATION_WARNING_META.get(code, {}).get("severity") or "warning"),
-                    "message": message,
-                    "blocking": bool(item.get("blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False))),
-                })
+                message = _clean_data_source_message(
+                    str(item.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code)
+                )
+                details.append(
+                    {
+                        "code": code,
+                        "severity": str(
+                            item.get("severity") or VALIDATION_WARNING_META.get(code, {}).get("severity") or "warning"
+                        ),
+                        "message": message,
+                        "blocking": bool(
+                            item.get("blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False))
+                        ),
+                    }
+                )
             elif item:
                 details.append(_data_quality_warning_detail_from_message(str(item)))
     for message in merged.get("warnings") or []:
@@ -276,19 +350,97 @@ def _complete_risk_engine_data_quality(
     return merged
 
 
+def _confidence_label(value: Any) -> str:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return "Low"
+    if score >= 0.75:
+        return "High"
+    if score >= 0.5:
+        return "Medium"
+    return "Low"
+
+
+def _analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
+    key_reasons = payload.get("key_reasons") or payload.get("key_catalysts") or []
+    volatility = payload.get("volatility_level") or "N/A"
+    risk_reason = (
+        payload.get("decision_adjusted_reason")
+        or payload.get("position_sizing_reason")
+        or f"Volatility level is {volatility}."
+    )
+    return {
+        "recommendation": payload.get("final_decision") or payload.get("decision") or "Hold",
+        "confidence": _confidence_label(payload.get("confidence_score")),
+        "executive_summary": payload.get("executive_summary"),
+        "investment_thesis": payload.get("investment_thesis"),
+        "key_reasons": list(key_reasons) if isinstance(key_reasons, list) else [],
+        "action_plan": {
+            "current_price": payload.get("current_price"),
+            "entry": payload.get("entry_price"),
+            "stop_loss": payload.get("stop_loss"),
+            "take_profit": payload.get("take_profit"),
+            "max_drawdown": payload.get("max_drawdown_estimate"),
+            "volatility": payload.get("volatility_level"),
+            "position_action": payload.get("position_action") or payload.get("new_entry_action"),
+            "position_size_hint": payload.get("position_size_hint"),
+            "risk_reward_ratio": payload.get("risk_reward_ratio"),
+            "risk_reward_display": payload.get("risk_reward_display"),
+        },
+        "risk_summary": {
+            "overall_risk": str(volatility).lower(),
+            "short_reason": risk_reason,
+        },
+    }
+
+
+def _with_analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
+    return {**payload, "analysis_overview": _analysis_overview(payload)}
+
+
+def _with_analysis_overview_and_risk_data_quality(
+    payload: dict[str, Any],
+    final_state: dict[str, Any],
+) -> dict[str, Any]:
+    enriched = _with_analysis_overview(payload)
+    try:
+        from tradingagents.risk import build_risk_data_quality  # noqa: PLC0415
+
+        enriched["risk_data_quality"] = build_risk_data_quality(enriched, final_state)
+    except Exception:
+        logger.exception("Failed to build risk_data_quality response contract")
+        enriched["risk_data_quality"] = {}
+    return enriched
+
+
 def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
     current_price_fields = _get_current_price_fields(final_state, pd_obj)
+    has_pos = bool(getattr(pd_obj, "has_existing_position", False)) if pd_obj is not None else False
+    position_action = getattr(pd_obj, "position_action", None) if pd_obj is not None else None
+    if not has_pos:
+        position_action = None
+    new_entry_action = getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else None
+    if not new_entry_action:
+        new_entry_action = "No new entry; maintain existing position" if has_pos else "No new entry"
+    position_size_hint = getattr(pd_obj, "position_size_hint", None) if pd_obj is not None else None
+    if not position_size_hint:
+        position_size_hint = (
+            "Maintain current position size; no additional exposure suggested."
+            if has_pos
+            else "No new position suggested."
+        )
     return {
         "llm_decision": None,
         "final_decision": "Hold",
         "decision_adjusted": False,
         "decision_adjusted_reason": None,
         "trade_plan_valid": False,
-        "has_existing_position": bool(getattr(pd_obj, "has_existing_position", False)) if pd_obj is not None else False,
+        "has_existing_position": has_pos,
         "position_quantity": getattr(pd_obj, "position_quantity", None) if pd_obj is not None else None,
         "average_entry_price": getattr(pd_obj, "average_entry_price", None) if pd_obj is not None else None,
-        "position_action": getattr(pd_obj, "position_action", None) if pd_obj is not None else None,
-        "new_entry_action": getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else "Avoid new entry",
+        "position_action": position_action,
+        "new_entry_action": new_entry_action,
         **current_price_fields,
         "risk_per_share": None,
         "reward_per_share": None,
@@ -296,7 +448,7 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
         "max_drawdown_min_pct": None,
         "max_drawdown_max_pct": None,
         "volatility_score": None,
-        "position_size_hint": "No new position suggested.",
+        "position_size_hint": position_size_hint,
         "validation_warnings": [],
         "validation_warning_details": [],
     }
@@ -331,9 +483,22 @@ def parse_final_result(
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
         "financial_highlights": final_state.get("financial_highlights"),
+        "financial_trends": final_state.get("financial_trends"),
+        "valuation_multiples": final_state.get("valuation_multiples"),
+        "fair_value_range": final_state.get("fair_value_range"),
+        "scenario_analysis": final_state.get("scenario_analysis"),
+        "quality_of_earnings": final_state.get("quality_of_earnings"),
+        "balance_sheet_risk": final_state.get("balance_sheet_risk"),
+        "dividend_quality": final_state.get("dividend_quality"),
+        "peer_comparison": final_state.get("peer_comparison"),
         "company_profile": final_state.get("company_profile") or {},
         "price_chart": final_state.get("price_chart") or {},
+        "price_performance": final_state.get("price_performance") or {},
+        "technical_entry": final_state.get("technical_entry") or {},
         "related_news": final_state.get("related_news") or {},
+        "news_impact": final_state.get("news_impact") or {},
+        "catalyst_tracker": final_state.get("catalyst_tracker") or {},
+        "analyst_consensus": final_state.get("analyst_consensus") or {},
         "news": final_state.get("news") or final_state.get("news_context") or {},
         "news_context": final_state.get("news_context") or final_state.get("news") or {},
         "data_quality": _complete_risk_engine_data_quality(
@@ -352,28 +517,32 @@ def parse_final_result(
     }
 
     if pd_obj is None:
-        return {
-            "decision": "Hold",
-            "full_decision": full_decision,
-            "executive_summary": None,
-            "investment_thesis": None,
-            "price_target": None,
-            "time_horizon": configured_time_horizon,
-            "confidence_score": None,
-            "suggested_allocation_percent": None,
-            "entry_price": None,
-            "stop_loss": None,
-            "take_profit": None,
-            "risk_reward_ratio": None,
-            "max_drawdown_estimate": None,
-            "volatility_level": "Medium",
-            "position_sizing_reason": None,
-            "rebalancing_action": "Avoid new entry",
-            "key_catalysts": [],
-            "invalidation_conditions": [],
-            **_empty_trade_contract(final_state),
-            **common,
-        }
+        return _with_analysis_overview_and_risk_data_quality(
+            {
+                "decision": "Hold",
+                "full_decision": full_decision,
+                "executive_summary": None,
+                "investment_thesis": None,
+                "price_target": None,
+                "time_horizon": configured_time_horizon,
+                "confidence_score": None,
+                "suggested_allocation_percent": None,
+                "entry_price": None,
+                "stop_loss": None,
+                "take_profit": None,
+                "risk_reward_ratio": None,
+                "max_drawdown_estimate": None,
+                "volatility_level": "Medium",
+                "position_sizing_reason": None,
+                "rebalancing_action": "Avoid new entry",
+                "key_catalysts": [],
+                "key_reasons": [],
+                "invalidation_conditions": [],
+                **_empty_trade_contract(final_state),
+                **common,
+            },
+            final_state,
+        )
 
     rating = getattr(pd_obj, "rating", None)
     fallback_rating = _enum_value(rating)
@@ -394,49 +563,72 @@ def parse_final_result(
     risk_reward_display = (
         RISK_REWARD_DISPLAY if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_display", None)
     )
+    has_existing_position_value = bool(getattr(pd_obj, "has_existing_position", False))
+    position_action_value = getattr(pd_obj, "position_action", None)
+    if not has_existing_position_value:
+        position_action_value = None
+    new_entry_action_value = getattr(pd_obj, "new_entry_action", None)
+    if not new_entry_action_value:
+        new_entry_action_value = (
+            "No new entry; maintain existing position" if has_existing_position_value else "No new entry"
+        )
+    rebalancing_action_value = _enum_value(getattr(pd_obj, "rebalancing_action", None))
+    if not rebalancing_action_value:
+        rebalancing_action_value = "Maintain position" if has_existing_position_value else "Avoid new entry"
+    position_size_hint_value = getattr(pd_obj, "position_size_hint", None)
+    if not position_size_hint_value:
+        position_size_hint_value = (
+            "Maintain current position size; no additional exposure suggested."
+            if has_existing_position_value
+            else "No new position suggested."
+        )
 
-    return {
-        "decision": final_decision,
-        "llm_decision": getattr(pd_obj, "llm_decision", None) or fallback_rating,
-        "final_decision": final_decision,
-        "decision_adjusted": bool(getattr(pd_obj, "decision_adjusted", False)),
-        "decision_adjusted_reason": getattr(pd_obj, "decision_adjusted_reason", None),
-        "trade_plan_valid": trade_plan_valid,
-        "has_existing_position": bool(getattr(pd_obj, "has_existing_position", False)),
-        "position_quantity": getattr(pd_obj, "position_quantity", None),
-        "average_entry_price": getattr(pd_obj, "average_entry_price", None),
-        "position_action": getattr(pd_obj, "position_action", None),
-        "new_entry_action": getattr(pd_obj, "new_entry_action", None),
-        **current_price_fields,
-        "full_decision": full_decision,
-        "executive_summary": getattr(pd_obj, "executive_summary", None),
-        "investment_thesis": getattr(pd_obj, "investment_thesis", None),
-        "price_target": getattr(pd_obj, "price_target", None),
-        "time_horizon": configured_time_horizon or getattr(pd_obj, "time_horizon", None),
-        "confidence_score": getattr(pd_obj, "confidence_score", None),
-        "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
-        "entry_price": getattr(pd_obj, "entry_price", None),
-        "stop_loss": getattr(pd_obj, "stop_loss", None),
-        "take_profit": getattr(pd_obj, "take_profit", None),
-        "risk_per_share": getattr(pd_obj, "risk_per_share", None),
-        "reward_per_share": getattr(pd_obj, "reward_per_share", None),
-        "risk_reward_ratio": risk_reward_ratio,
-        "risk_reward_display": risk_reward_display,
-        "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
-        "max_drawdown_min_pct": getattr(pd_obj, "max_drawdown_min_pct", None),
-        "max_drawdown_max_pct": getattr(pd_obj, "max_drawdown_max_pct", None),
-        "volatility_level": _enum_value(getattr(pd_obj, "volatility_level", None)),
-        "volatility_score": getattr(pd_obj, "volatility_score", None),
-        "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
-        "rebalancing_action": _enum_value(getattr(pd_obj, "rebalancing_action", None)),
-        "position_size_hint": getattr(pd_obj, "position_size_hint", None),
-        "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
-        "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
-        "data_quality": pd_data_quality,
-        "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
-        "validation_warning_details": _validation_warning_details(getattr(pd_obj, "validation_warnings", []) or []),
-        **{key: value for key, value in common.items() if key != "data_quality"},
-    }
+    return _with_analysis_overview_and_risk_data_quality(
+        {
+            "decision": final_decision,
+            "llm_decision": getattr(pd_obj, "llm_decision", None) or fallback_rating,
+            "final_decision": final_decision,
+            "decision_adjusted": bool(getattr(pd_obj, "decision_adjusted", False)),
+            "decision_adjusted_reason": getattr(pd_obj, "decision_adjusted_reason", None),
+            "trade_plan_valid": trade_plan_valid,
+            "has_existing_position": has_existing_position_value,
+            "position_quantity": getattr(pd_obj, "position_quantity", None),
+            "average_entry_price": getattr(pd_obj, "average_entry_price", None),
+            "position_action": position_action_value,
+            "new_entry_action": new_entry_action_value,
+            **current_price_fields,
+            "full_decision": full_decision,
+            "executive_summary": getattr(pd_obj, "executive_summary", None),
+            "investment_thesis": getattr(pd_obj, "investment_thesis", None),
+            "price_target": getattr(pd_obj, "price_target", None),
+            "time_horizon": configured_time_horizon or getattr(pd_obj, "time_horizon", None),
+            "confidence_score": getattr(pd_obj, "confidence_score", None),
+            "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
+            "entry_price": getattr(pd_obj, "entry_price", None),
+            "stop_loss": getattr(pd_obj, "stop_loss", None),
+            "take_profit": getattr(pd_obj, "take_profit", None),
+            "risk_per_share": getattr(pd_obj, "risk_per_share", None),
+            "reward_per_share": getattr(pd_obj, "reward_per_share", None),
+            "risk_reward_ratio": risk_reward_ratio,
+            "risk_reward_display": risk_reward_display,
+            "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
+            "max_drawdown_min_pct": getattr(pd_obj, "max_drawdown_min_pct", None),
+            "max_drawdown_max_pct": getattr(pd_obj, "max_drawdown_max_pct", None),
+            "volatility_level": _enum_value(getattr(pd_obj, "volatility_level", None)),
+            "volatility_score": getattr(pd_obj, "volatility_score", None),
+            "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
+            "rebalancing_action": rebalancing_action_value,
+            "position_size_hint": position_size_hint_value,
+            "key_reasons": getattr(pd_obj, "key_reasons", []) or [],
+            "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
+            "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
+            "data_quality": pd_data_quality,
+            "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
+            "validation_warning_details": _validation_warning_details(getattr(pd_obj, "validation_warnings", []) or []),
+            **{key: value for key, value in common.items() if key != "data_quality"},
+        },
+        final_state,
+    )
 
 
 def cache_key(req: AnalysisRequest) -> AnalysisCacheKey:

@@ -60,6 +60,11 @@ def get_fundamentals(ticker: str, curr_date: str = None) -> str:
     return _dump_payload(payload)
 
 
+def get_company_profile(ticker: str, curr_date: str = None) -> str:
+    """Return Alpha Vantage OVERVIEW data for profile fallback normalization."""
+    return get_fundamentals(ticker, curr_date)
+
+
 def get_balance_sheet(ticker: str, freq: str = "quarterly", curr_date: str = None):
     """Retrieve balance sheet data for a given ticker symbol using Alpha Vantage."""
     result = _filter_reports_by_date(

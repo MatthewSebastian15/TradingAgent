@@ -71,7 +71,6 @@ class DebateArgument(BaseModel):
         description="True when another round is unlikely to materially change the debate.",
     )
 
-
     @field_validator("risk_flags", mode="before")
     @classmethod
     def clamp_risk_flags(cls, value):
@@ -317,9 +316,7 @@ def _validate_word_range(field_name: str, value: str, min_words: int, max_words:
     count = _word_count(text)
 
     if count < min_words or count > max_words:
-        raise ValueError(
-            f"{field_name} must be {min_words}-{max_words} words; got {count} words."
-        )
+        raise ValueError(f"{field_name} must be {min_words}-{max_words} words; got {count} words.")
 
     return text
 
@@ -423,6 +420,11 @@ class PortfolioDecision(BaseModel):
         max_length=8,
         description="Key catalysts that support the final recommendation.",
     )
+    key_reasons: list[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Primary reasons supporting the final recommendation.",
+    )
     invalidation_conditions: list[str] = Field(
         default_factory=list,
         max_length=8,
@@ -451,11 +453,26 @@ class PortfolioDecision(BaseModel):
     decision_adjusted_reason: str | None = Field(default=None)
 
     trade_plan_valid: bool = Field(default=False)
-    has_existing_position: bool = Field(default=False)
-    position_quantity: float | None = Field(default=None)
-    average_entry_price: float | None = Field(default=None)
-    position_action: str | None = Field(default=None)
-    new_entry_action: str | None = Field(default=None)
+    has_existing_position: bool = Field(
+        default=False,
+        description="Resolved final flag that indicates whether the user already owns this long position.",
+    )
+    position_quantity: float | None = Field(
+        default=None,
+        description="User's current position quantity when provided. Backend uses explicit quantity to resolve position context.",
+    )
+    average_entry_price: float | None = Field(
+        default=None,
+        description="User's average entry price for the existing position when available.",
+    )
+    position_action: str | None = Field(
+        default=None,
+        description="Action for an existing position only. Null when the user has no position.",
+    )
+    new_entry_action: str | None = Field(
+        default=None,
+        description="Instruction for opening new exposure. For existing positions, this must not imply a separate new trade.",
+    )
 
     risk_reward_display: str | None = Field(
         default=None,
@@ -465,7 +482,10 @@ class PortfolioDecision(BaseModel):
     reward_per_share: float | None = Field(default=None)
 
     volatility_score: float | None = Field(default=None)
-    position_size_hint: str | None = Field(default=None)
+    position_size_hint: str | None = Field(
+        default=None,
+        description="Contextual sizing guidance for new entry, add, maintain, trim, or exit actions.",
+    )
 
     max_drawdown_min_pct: float | None = Field(default=None)
     max_drawdown_max_pct: float | None = Field(default=None)
@@ -514,6 +534,8 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
             parts.extend(["", f"**{label}**: {value}"])
     if decision.key_catalysts:
         parts.extend(["", "**Key Catalysts**:", *[f"- {item}" for item in decision.key_catalysts]])
+    if decision.key_reasons:
+        parts.extend(["", "**Key Reasons**:", *[f"- {item}" for item in decision.key_reasons]])
     if decision.invalidation_conditions:
         parts.extend(["", "**Invalidation Conditions**:", *[f"- {item}" for item in decision.invalidation_conditions]])
     if decision.price_target is not None:

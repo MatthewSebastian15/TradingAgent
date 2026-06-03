@@ -105,15 +105,18 @@ export function useMockAnalysisJob({ onResult, onLoading, onStatus, onAgentProgr
         }, completeAt);
       });
 
-      schedule(() => {
-        const result = getMockAnalysisResponse({ ...payload, request_id: jobId });
-        callbacksRef.current.onResult(result);
-        callbacksRef.current.onLoading(false);
-        callbacksRef.current.onStatus('');
-        if (callbacksRef.current.onAgentProgress) callbacksRef.current.onAgentProgress(null);
-        setRunning(false);
-        clearTimers();
-      }, startOffset + MOCK_PIPELINE_STEPS.length * stepGap + 280);
+      schedule(
+        () => {
+          const result = getMockAnalysisResponse({ ...payload, request_id: jobId });
+          callbacksRef.current.onResult(result);
+          callbacksRef.current.onLoading(false);
+          callbacksRef.current.onStatus('');
+          if (callbacksRef.current.onAgentProgress) callbacksRef.current.onAgentProgress(null);
+          setRunning(false);
+          clearTimers();
+        },
+        startOffset + MOCK_PIPELINE_STEPS.length * stepGap + 280
+      );
     },
     [clearTimers, schedule]
   );

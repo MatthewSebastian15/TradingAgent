@@ -75,6 +75,45 @@ def test_analyze_accepts_valid_request_and_returns_result(client, monkeypatch):
     assert body["data_quality"]["price_data"] == "ok"
 
 
+def test_analyze_persists_completed_result(client, monkeypatch, analysis_repository):
+    async def fake_run_pipeline_async(req, request_id):
+        return _mock_result()
+
+    monkeypatch.setattr("routes.analysis._run_pipeline_async", fake_run_pipeline_async)
+
+    response = client.post(
+        "/api/analyze",
+        json={"ticker": "AAPL", "market": "US", "trade_date": "2026-05-14", "max_debate_rounds": 1},
+    )
+
+    assert response.status_code == 200
+    stored = analysis_repository.get_analysis(response.json()["request_id"])
+    assert stored is not None
+    assert stored["request_id"] == response.json()["request_id"]
+    assert stored["ticker"] == "AAPL"
+    assert stored["decision"] == response.json()["decision"]
+
+
+def test_analyze_returns_result_when_history_write_fails(client, monkeypatch):
+    async def fake_run_pipeline_async(req, request_id):
+        return _mock_result()
+
+    class BrokenRepository:
+        def save_analysis(self, **kwargs):
+            raise OSError("history database unavailable")
+
+    monkeypatch.setattr("routes.analysis._run_pipeline_async", fake_run_pipeline_async)
+    monkeypatch.setattr("routes.analysis.get_analysis_repository", lambda: BrokenRepository())
+
+    response = client.post(
+        "/api/analyze",
+        json={"ticker": "AAPL", "market": "US", "trade_date": "2026-05-14", "max_debate_rounds": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ticker"] == "AAPL"
+
+
 def test_analyze_fast_mode_warns_when_debate_rounds_are_ignored(client, monkeypatch):
     async def fake_run_pipeline_async(req, request_id):
         return _mock_result()
@@ -420,6 +459,39 @@ def test_analysis_result_endpoint_returns_404_for_expired_result(client, monkeyp
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_analysis_result_endpoint_falls_back_to_history_repository(client, monkeypatch, analysis_repository):
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    result = {"request_id": "history-request", "ticker": "MSFT", "market": "US", "trade_date": "2026-05-14"}
+    analysis_repository.save_analysis(result=result)
+
+    response = client.get("/api/analysis/history-request")
+
+    assert response.status_code == 200
+    assert response.json()["request_id"] == "history-request"
+    assert response.json()["ticker"] == "MSFT"
+    assert response.json()["trade_date"] == "2026-05-14"
+
+
+def test_analysis_job_endpoint_falls_back_to_history_repository(client, monkeypatch, analysis_repository):
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    result = {"request_id": "history-job-request", "ticker": "MSFT", "market": "US", "trade_date": "2026-05-14"}
+    analysis_repository.save_analysis(
+        result=result,
+        request_payload={"ticker": "MSFT", "trade_date": "2026-05-14"},
+        job_id="history-job",
+    )
+
+    response = client.get("/api/analysis/jobs/history-job")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "history-job"
+    assert response.json()["request_id"] == "history-job-request"
+    assert response.json()["status"] == "completed"
+    assert response.json()["result"] == result
 
 
 def test_market_quotes_rejects_invalid_ticker_before_fetch(client, monkeypatch):

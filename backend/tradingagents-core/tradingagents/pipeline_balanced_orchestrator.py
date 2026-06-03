@@ -203,14 +203,18 @@ def run_balanced_pipeline(
     quick_llm, deep_llm = _create_llms(config)
     analysis_depth = str(config.get("analysis_depth", "balanced")).lower()
     depth_config = dict(config.get("analysis_depth_config") or {})
-    depth_debate_rounds = max(1, int(depth_config.get("debate_rounds") or config.get("analysis_depth_debate_rounds") or 1))
+    depth_debate_rounds = max(
+        1, int(depth_config.get("debate_rounds") or config.get("analysis_depth_debate_rounds") or 1)
+    )
     depth_risk_rounds = max(1, int(depth_config.get("risk_rounds") or config.get("analysis_depth_risk_rounds") or 1))
     extra_debate_rounds = max(0, depth_debate_rounds - 2) if analysis_depth == "deep" else 0
     extra_risk_rounds = max(0, depth_risk_rounds - 2) if analysis_depth == "deep" else 0
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
     time_horizon_text = _time_horizon_label(time_horizon_months)
     llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
-    _emit_progress(progress_callback, "news_fetch", "started", "Fetching normalized company news from configured providers...")
+    _emit_progress(
+        progress_callback, "news_fetch", "started", "Fetching normalized company news from configured providers..."
+    )
     data = _run_tracked(
         progress_callback,
         "data_collection",
@@ -278,10 +282,12 @@ def run_balanced_pipeline(
             confidence=0.45,
             consensus_signal=False,
         )
-        debate_history.extend([
-            render_debate_argument(bull, "Bull Researcher"),
-            render_debate_argument(bear, "Bear Researcher"),
-        ])
+        debate_history.extend(
+            [
+                render_debate_argument(bull, "Bull Researcher"),
+                render_debate_argument(bear, "Bear Researcher"),
+            ]
+        )
     else:
         bull = _run_tracked(
             progress_callback,
@@ -351,17 +357,19 @@ def run_balanced_pipeline(
                 cancel_check,
             ),
         )
-        debate_history.extend([
-            render_debate_argument(bull, "Bull Researcher"),
-            render_debate_argument(bear, "Bear Researcher"),
-        ])
+        debate_history.extend(
+            [
+                render_debate_argument(bull, "Bull Researcher"),
+                render_debate_argument(bear, "Bear Researcher"),
+            ]
+        )
 
         for round_number in range(2, extra_debate_rounds + 2):
             bull = _run_tracked(
                 progress_callback,
                 "bull_researcher",
                 f"Deep mode bull review round {round_number} is refining the upside case...",
-                lambda: _invoke_once(
+                lambda round_number=round_number: _invoke_once(
                     quick_llm,
                     DebateArgument,
                     bull_prompt(
@@ -372,7 +380,8 @@ def run_balanced_pipeline(
                         market_md,
                         news_social_md,
                         fundamentals_md,
-                    ) + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
+                    )
+                    + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
                     DebateArgument(
                         stance="bull",
                         thesis=f"Deep mode could not generate an additional bullish refinement for {ticker}.",
@@ -396,7 +405,7 @@ def run_balanced_pipeline(
                 progress_callback,
                 "bear_researcher",
                 f"Deep mode bear review round {round_number} is challenging the refined thesis...",
-                lambda: _invoke_once(
+                lambda bull=bull, round_number=round_number: _invoke_once(
                     quick_llm,
                     DebateArgument,
                     bear_prompt(
@@ -408,7 +417,8 @@ def run_balanced_pipeline(
                         news_social_md,
                         fundamentals_md,
                         bull,
-                    ) + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
+                    )
+                    + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
                     DebateArgument(
                         stance="bear",
                         thesis=f"Deep mode could not generate an additional bearish refinement for {ticker}.",
@@ -554,7 +564,7 @@ def run_balanced_pipeline(
                 progress_callback,
                 "risk_analysts",
                 f"Deep mode risk review round {round_number} is stress-testing the trade plan...",
-                lambda: _invoke_once(
+                lambda prior_risk_md=prior_risk_md, round_number=round_number: _invoke_once(
                     quick_llm,
                     RiskCommitteeReport,
                     risk_committee_prompt(
@@ -712,13 +722,20 @@ def run_balanced_pipeline(
         "vendor_attempts": data.vendor_attempts or {},
         "request_budget": data.request_budget or {},
         "financial_highlights": data.financial_highlights,
-        "company_profile": data.company_profile or {
+        **(data.fundamental_analysis or {}),
+        "company_profile": data.company_profile
+        or {
             "available": False,
             "ticker": ticker,
             "warning": "Company profile was not collected.",
         },
         "price_chart": data.price_chart or {},
+        "price_performance": data.price_performance or {},
+        "technical_entry": data.technical_entry or {},
         "related_news": data.related_news or {},
+        "news_impact": data.news_impact or {},
+        "catalyst_tracker": data.catalyst_tracker or {},
+        "analyst_consensus": data.analyst_consensus or {},
         "news": data.news_context or {},
         "news_context": data.news_context or {},
         "data_fetched_at": data_fetched_at,

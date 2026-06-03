@@ -124,13 +124,11 @@ def run_pipeline(
     cancel_event: Any | None = None,
 ) -> dict:
     """Run the full TradingAgents pipeline in a subprocess."""
-    has_existing_position, position_quantity, average_entry_price, cancel_event = (
-        _coerce_pipeline_position_args(
-            has_existing_position,
-            position_quantity,
-            average_entry_price,
-            cancel_event,
-        )
+    has_existing_position, position_quantity, average_entry_price, cancel_event = _coerce_pipeline_position_args(
+        has_existing_position,
+        position_quantity,
+        average_entry_price,
+        cancel_event,
     )
 
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating

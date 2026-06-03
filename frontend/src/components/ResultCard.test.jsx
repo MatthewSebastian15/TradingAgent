@@ -23,12 +23,31 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText(/may contain errors/i)).toBeTruthy();
   });
 
-  it('renders financial highlights after the existing summary content', () => {
+  it('renders financial highlights only inside Fundamental', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
+    expect(screen.queryByText('Key Financial Highlights')).toBeNull();
+    fireEvent.click(screen.getByText('Fundamental'));
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
-    expect(screen.getByText('FY26Q1')).toBeTruthy();
-    expect(screen.getByText('Revenue')).toBeTruthy();
+    expect(screen.getAllByText('FY26Q1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Revenue').length).toBeGreaterThan(0);
+  });
+
+  it('renders Phase 2 fundamental sections and hides Peer Comparison without a payload', () => {
+    const { rerender } = render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('Fundamental'));
+    expect(screen.getByText('FINANCIAL TREND ANALYSIS')).toBeTruthy();
+    expect(screen.getByText('VALUATION MULTIPLES')).toBeTruthy();
+    expect(screen.getByText('FAIR VALUE RANGE')).toBeTruthy();
+    expect(screen.getByText('BULL / BASE / BEAR SCENARIO')).toBeTruthy();
+    expect(screen.getByText('QUALITY OF EARNINGS')).toBeTruthy();
+    expect(screen.getByText('BALANCE SHEET RISK')).toBeTruthy();
+    expect(screen.getByText('DIVIDEND QUALITY')).toBeTruthy();
+    expect(screen.getByText('PEER COMPARISON')).toBeTruthy();
+
+    rerender(<ResultCard result={{ ...MOCK_RESPONSE, peer_comparison: null }} />);
+    expect(screen.queryByText('PEER COMPARISON')).toBeNull();
   });
 
   it('uses Analisis as the default tab and opens the Profile tab', () => {
@@ -40,7 +59,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('News').disabled).toBe(false);
     expect(screen.queryByText('COMPANY PROFILE')).toBeNull();
 
-    fireEvent.click(screen.getByText('Profile'));
+    fireEvent.click(screen.getByText('Profil'));
 
     expect(screen.getByText('COMPANY PROFILE')).toBeTruthy();
     expect(screen.getByText('NVIDIA Corporation')).toBeTruthy();
@@ -66,8 +85,10 @@ describe('ResultCard risk-engine contract', () => {
     fireEvent.click(screen.getByText('News'));
 
     expect(screen.getByText('NEWS')).toBeTruthy();
-    expect(screen.getByText(/NVDA earnings outlook remains constructive/i)).toBeTruthy();
-    expect(screen.getByText('Publisher: Mock Market Wire')).toBeTruthy();
+    expect(
+      screen.getAllByText(/NVDA earnings outlook remains constructive/i).length
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Impact: HIGH/i).length).toBeGreaterThan(0);
     const link = screen.getAllByText('OPEN ORIGINAL SOURCE')[0];
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
@@ -91,6 +112,19 @@ describe('ResultCard risk-engine contract', () => {
             available: true,
             items: [{ title: 'Unsafe vendor URL', url: 'javascript:alert(1)' }],
           },
+          news_impact: {
+            available: false,
+            high_impact_news: [],
+            full_news_list: [],
+            data_quality: { status: 'unavailable', sources_used: [] },
+          },
+          catalyst_tracker: {
+            positive_catalysts: [],
+            negative_catalysts: [],
+            upcoming_events: [],
+            summary: {},
+          },
+          analyst_consensus: { available: false },
         }}
       />
     );
@@ -141,6 +175,30 @@ describe('ResultCard risk-engine contract', () => {
     ).toBeTruthy();
   });
 
+  it('renders Phase 3 price performance and technical entry sections', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.getByText('PRICE PERFORMANCE')).toBeTruthy();
+    expect(screen.getByText('TECHNICAL ENTRY QUALITY')).toBeTruthy();
+    expect(screen.getByText('ENTRY QUALITY')).toBeTruthy();
+    expect(screen.getByText('RSI SIGNAL')).toBeTruthy();
+    expect(screen.getByText('SUPPORT')).toBeTruthy();
+    expect(screen.getByText('RESISTANCE')).toBeTruthy();
+  });
+
+  it('renders Phase 3 news impact, catalyst, and analyst consensus sections', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('News'));
+
+    expect(screen.getByText('HIGH-IMPACT NEWS')).toBeTruthy();
+    expect(screen.getByText('POSITIVE CATALYSTS')).toBeTruthy();
+    expect(screen.getByText('ANALYST RECOMMENDATION TREND')).toBeTruthy();
+    expect(screen.getByText('FULL NEWS LIST')).toBeTruthy();
+  });
+
   it('renders Profile empty state when company profile is unavailable', () => {
     render(
       <ResultCard
@@ -151,7 +209,7 @@ describe('ResultCard risk-engine contract', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Profile'));
+    fireEvent.click(screen.getByText('Profil'));
 
     expect(screen.getByText('PROFILE UNAVAILABLE')).toBeTruthy();
     expect(screen.getByText('Profile fetch failed.')).toBeTruthy();
@@ -326,40 +384,42 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText(/LLM: BUY → FINAL:/)).toBeTruthy();
   });
 
-  it('shows data quality badges and trade plan status', () => {
+  it('shows Phase 4 data quality score and vendor status', () => {
     render(<ResultCard result={MOCK_REPAIRED_RESPONSE} />);
 
-    expect(screen.getByText('DATA QUALITY')).toBeTruthy();
-    expect(screen.getByText('TRADE PLAN: valid')).toBeTruthy();
-    expect(screen.getByText('PRICE: mock')).toBeTruthy();
-    expect(screen.getByText('TRADE LEVELS: mock_recomputed')).toBeTruthy();
-    expect(screen.getByText('LLM OUTPUT: mock_repaired')).toBeTruthy();
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
+    expect(screen.getByText('DATA QUALITY SCORE')).toBeTruthy();
+    expect(screen.getByText('VENDOR STATUS')).toBeTruthy();
+    expect(screen.getByText('CALCULATION NOTES')).toBeTruthy();
+    expect(screen.getByText('yfinance')).toBeTruthy();
   });
 
   it('renders IDX news unavailable as non-blocking while keeping trade plan valid', () => {
     render(<ResultCard result={MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE} />);
 
-    expect(screen.getByText('DATA QUALITY')).toBeTruthy();
-    expect(screen.getByText('TRADE PLAN: valid')).toBeTruthy();
-    expect(screen.getByText('NEWS: unavailable')).toBeTruthy();
-    expect(screen.getByText(/No usable news/i)).toBeTruthy();
-    expect(screen.getAllByText(/non-blocking/i).length).toBeGreaterThan(0);
     expect(screen.getAllByTestId('action-plan-metric')).toHaveLength(12);
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
+    expect(screen.getByText('DATA QUALITY SCORE')).toBeTruthy();
+    expect(screen.getByText('VENDOR STATUS')).toBeTruthy();
+    expect(screen.getAllByText('rate_limited').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/news coverage is unavailable/i).length).toBeGreaterThan(0);
   });
 
-  it('shows validation warnings in readable form', () => {
+  it('shows thesis monitor checklist in risk tab', () => {
     render(<ResultCard result={MOCK_REPAIRED_RESPONSE} />);
 
-    expect(screen.getByText('Validation Warnings')).toBeTruthy();
-    expect(screen.getByText('RR_FORCED_TO_3 - Risk/reward forced to 1:3')).toBeTruthy();
-    expect(screen.getByText('TAKE_PROFIT_RECOMPUTED - Take profit recomputed')).toBeTruthy();
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
+    expect(screen.getByText('THESIS INVALIDATION CHECKLIST')).toBeTruthy();
+    expect(screen.getByText('Revenue growth turns negative')).toBeTruthy();
+    expect(screen.getByText('Price breaks stop loss')).toBeTruthy();
   });
 
   it('does not render action plan for invalid actionable trade plan', () => {
     render(<ResultCard result={{ ...MOCK_RESPONSE, trade_plan_valid: false }} />);
 
     expect(screen.getByText('TRADE PLAN NOT VALID')).toBeTruthy();
-    expect(screen.getByText('TRADE PLAN: not valid')).toBeTruthy();
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
+    expect(screen.getByText('RISK SUMMARY')).toBeTruthy();
     expect(screen.queryByText('ACTION PLAN')).toBeNull();
     expect(screen.queryByText('ENTRY')).toBeNull();
   });
@@ -368,11 +428,19 @@ describe('ResultCard risk-engine contract', () => {
     render(<ResultCard result={MOCK_MISSING_PRICE_RESPONSE} />);
 
     expect(screen.getByText('PRICE DATA MISSING')).toBeTruthy();
-    expect(screen.getByText('PRICE: missing')).toBeTruthy();
-    expect(screen.getByText('CURRENT_PRICE_MISSING - Current price missing')).toBeTruthy();
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
+    expect(screen.getByText('RISK SUMMARY')).toBeTruthy();
+    expect(screen.getByText('RISK-ADJUSTED RETURN')).toBeTruthy();
     expect(screen.queryByText(/NaN/)).toBeNull();
     expect(screen.queryByText('ACTION PLAN')).toBeNull();
     expect(screen.queryByText('ENTRY')).toBeNull();
+  });
+
+  it('shows a friendly empty state when risk_data_quality is missing', () => {
+    render(<ResultCard result={{ ...MOCK_RESPONSE, risk_data_quality: null }} />);
+
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
+    expect(screen.getByText('RISK DATA QUALITY UNAVAILABLE')).toBeTruthy();
   });
 
   it('does not crash when backend sends invalid optional fields', () => {

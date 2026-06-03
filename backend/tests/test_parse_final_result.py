@@ -48,8 +48,14 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
         max_drawdown_estimate="8%",
         volatility_level=VolatilityLevel.MEDIUM,
         position_sizing_reason="Moderate conviction.",
-        rebalancing_action="Add gradually.",
+        rebalancing_action="Open new position",
+        has_existing_position=False,
+        position_quantity=None,
+        average_entry_price=None,
+        position_action=None,
+        new_entry_action="Allowed with validated entry",
         key_catalysts=["Earnings"],
+        key_reasons=["Validated earnings growth"],
         invalidation_conditions=["Breaks support"],
         price_target=124.0,
         time_horizon="3 months",
@@ -64,7 +70,7 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
         reward_per_share=24.0,
         risk_reward_display="1:3",
         volatility_score=44.0,
-        position_size_hint="Use standard risk management and avoid oversized position.",
+        position_size_hint="Use standard starter size and avoid oversized entry.",
         max_drawdown_min_pct=8.0,
         max_drawdown_max_pct=12.0,
         data_quality={"price_data": "ok", "trade_levels": "ok", "llm_output": "ok", "volatility_data": "ok"},
@@ -101,7 +107,11 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     assert parsed["risk_per_share"] == 8.0
     assert parsed["reward_per_share"] == 24.0
     assert parsed["volatility_score"] == 44.0
-    assert parsed["position_size_hint"] == "Use standard risk management and avoid oversized position."
+    assert parsed["position_size_hint"] == "Use standard starter size and avoid oversized entry."
+    assert parsed["analysis_overview"]["recommendation"] == "Buy"
+    assert parsed["analysis_overview"]["confidence"] == "Medium"
+    assert parsed["analysis_overview"]["key_reasons"] == ["Validated earnings growth"]
+    assert parsed["analysis_overview"]["action_plan"]["risk_reward_ratio"] == 3.0
     assert parsed["data_quality"]["price_data"] == "ok"
     assert parsed["validation_warnings"] == []
 
@@ -213,6 +223,31 @@ def test_parse_final_result_preserves_financial_highlights():
     parsed = _parse_final_result("", None, PortfolioRating, {"financial_highlights": financial_highlights})
 
     assert parsed["financial_highlights"] == financial_highlights
+
+
+def test_summary_and_parse_final_result_preserve_phase_2_fundamentals():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+    from routes.serializers import shape_result
+
+    fundamentals = {
+        "financial_trends": {"periods": [{"key": "FY25"}]},
+        "valuation_multiples": {"pe": 10},
+        "fair_value_range": {"base": 100},
+        "scenario_analysis": {"base": {"fair_value": 100}},
+        "quality_of_earnings": {"rating": "healthy"},
+        "balance_sheet_risk": {"risk_level": "low"},
+        "dividend_quality": {"sustainability": "sustainable"},
+        "peer_comparison": {"metrics": [{"ticker": "NVDA"}]},
+    }
+
+    shaped = shape_result({"decision": "Hold", **fundamentals}, "summary")
+    parsed = _parse_final_result("", None, PortfolioRating, fundamentals)
+
+    for key, value in fundamentals.items():
+        assert shaped[key] == value
+        assert parsed[key] == value
 
 
 def test_summary_shape_keeps_company_profile():

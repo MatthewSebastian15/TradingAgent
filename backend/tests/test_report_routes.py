@@ -51,8 +51,12 @@ def _result(**overrides):
         "max_drawdown_estimate": "8-12%",
         "volatility_level": "High",
         "volatility_score": 78,
-        "rebalancing_action": "Buy with tight risk control",
-        "position_size_hint": "Use smaller size due to High volatility.",
+        "position_quantity": None,
+        "average_entry_price": None,
+        "rebalancing_action": "Open new position",
+        "position_action": None,
+        "new_entry_action": "Allowed with validated entry",
+        "position_size_hint": "Use smaller starter size due to high volatility.",
         "data_quality": {
             "price_data": "ok",
             "trade_levels": "recomputed",
@@ -61,10 +65,28 @@ def _result(**overrides):
         },
         "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
         "executive_summary": "A concise test summary.",
+        "company_profile": {
+            "available": True,
+            "ticker": "NVDA",
+            "company_name": "NVIDIA Corporation",
+            "currency": "USD",
+            "market_cap": 2_300_000_000_000,
+            "shares_outstanding": 24_400_000_000,
+            "current_price": 920,
+        },
         "financial_highlights": {
             "title": "Key Financial Highlights",
+            "unit_note": "Currency: USD (US Dollar) | Amount figures: in millions (USD Mn)",
             "periods": [{"key": "FY26Q1", "label": "FY26Q1"}],
             "rows": [{"key": "revenue", "label": "Revenue", "values": {"FY26Q1": {"display": "N/A"}}}],
+            "point_in_time": [{"key": "market_cap", "label": "Market Cap", "display": "2,300,000.0", "unit": "USD Mn"}],
+            "sections": [
+                {
+                    "key": "market_scale",
+                    "title": "Market & Scale",
+                    "rows": [{"key": "revenue", "label": "Revenue", "values": {"FY26Q1": {"display": "N/A"}}}],
+                }
+            ],
         },
     }
     result.update(overrides)
@@ -124,6 +146,8 @@ def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(clien
     assert "TradingAgent_BBCA.JK_2026-05-26.pdf" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
     assert "automated AI-assisted analysis engine" in rendered_report["disclaimer"]
+    assert rendered_report["company_profile_rows"][0]["value"] == "NVIDIA Corporation"
+    assert rendered_report["financial_highlights"]["sections"][0]["title"] == "Market & Scale"
 
 
 def test_post_html_report_renders_from_payload(client):
@@ -144,6 +168,63 @@ def test_post_pdf_report_renders_from_payload(client, monkeypatch):
     assert response.headers["content-type"] == "application/pdf"
     assert "attachment" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
+
+
+def test_post_pdf_report_succeeds_without_profile_or_financial_highlights(client, monkeypatch):
+    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+
+    response = client.post(
+        "/api/analysis/report.pdf",
+        json=_result(company_profile=None, financial_highlights=None),
+    )
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"%PDF")
+
+
+def test_html_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, analysis_repository):
+    result = _result(request_id="rid-history-html")
+    analysis_repository.save_analysis(result=result, job_id="job-history-html")
+    monkeypatch.setattr(
+        "services.report_service.jobs.JOB_STORE",
+        AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10),
+    )
+
+    response = client.get("/api/analysis/jobs/job-history-html/report.html")
+
+    assert response.status_code == 200
+    assert "TradingAgent Analysis Report" in response.text
+    assert analysis_repository.list_analyses()[0]["exported_html_at"]
+
+
+def test_pdf_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, analysis_repository):
+    result = _result(request_id="rid-history-pdf")
+    analysis_repository.save_analysis(result=result, job_id="job-history-pdf")
+    monkeypatch.setattr(
+        "services.report_service.jobs.JOB_STORE",
+        AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10),
+    )
+    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+
+    response = client.get("/api/analysis/jobs/job-history-pdf/report.pdf")
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"%PDF")
+    assert analysis_repository.list_analyses()[0]["exported_pdf_at"]
+
+
+def test_request_id_report_alias_falls_back_to_sqlite(client, monkeypatch, analysis_repository):
+    result = _result(request_id="rid-history-alias")
+    analysis_repository.save_analysis(result=result)
+    monkeypatch.setattr(
+        "services.report_service.jobs.JOB_STORE",
+        AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10),
+    )
+
+    response = client.get("/api/analysis/rid-history-alias/report.html")
+
+    assert response.status_code == 200
+    assert "TradingAgent Analysis Report" in response.text
 
 
 def test_report_endpoint_returns_404_for_missing_request_id(client):

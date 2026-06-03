@@ -99,7 +99,9 @@ def rank_news(items: list[dict[str, Any]], ticker: str | None = None) -> list[di
     return sorted(items, key=score, reverse=True)
 
 
-def aggregate_news(vendor_items: dict[str, list[dict[str, Any]]], ticker: str | None = None, limit: int = 25) -> list[dict[str, Any]]:
+def aggregate_news(
+    vendor_items: dict[str, list[dict[str, Any]]], ticker: str | None = None, limit: int = 25
+) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
     for vendor, items in vendor_items.items():
         for item in items:

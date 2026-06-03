@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from inspect import Parameter, signature
 from typing import Any
 
@@ -23,8 +25,10 @@ from schemas import (
     ApiStatusResponse,
     TickerValidationResponse,
 )
+from services.analysis_repository import get_analysis_repository
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _RESULT_CACHE = jobs.RESULT_CACHE
 _IN_FLIGHT = jobs.IN_FLIGHT
@@ -56,6 +60,59 @@ class AnalysisRouteDependencies:
 
 
 ROUTE_DEPS = AnalysisRouteDependencies()
+
+
+async def _save_analysis_result_async(
+    result: dict[str, Any],
+    req: AnalysisRequest,
+    job_id: str | None = None,
+) -> None:
+    """Persist a completed result without making analysis delivery depend on SQLite."""
+
+    if not isinstance(result, dict) or result.get("error"):
+        return
+    try:
+        repository = get_analysis_repository()
+        await asyncio.to_thread(
+            repository.save_analysis,
+            result=result,
+            request_payload=req.model_dump(),
+            job_id=job_id,
+        )
+    except Exception:
+        logger.error(
+            "Failed to persist completed analysis result",
+            extra={
+                "event": "analysis_history_save_failed",
+                "request_id": result.get("request_id"),
+                "job_id": job_id,
+            },
+            exc_info=True,
+        )
+
+
+def _timestamp_from_iso(value: str | None) -> float:
+    try:
+        return datetime.fromisoformat(str(value)).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
+async def _completed_job_summary_from_history(job_id: str) -> dict[str, Any] | None:
+    repository = get_analysis_repository()
+    record = await asyncio.to_thread(repository.get_analysis_record_by_job_id, job_id)
+    if record is None:
+        return None
+    return {
+        "job_id": job_id,
+        "request_id": record["request_id"],
+        "status": "completed",
+        "created_at": _timestamp_from_iso(record.get("created_at")),
+        "updated_at": _timestamp_from_iso(record.get("updated_at")),
+        "payload": record.get("request_payload") or {},
+        "result": record["result"],
+        "error": None,
+    }
 
 
 def _run_pipeline(*args, **kwargs):
@@ -185,7 +242,9 @@ async def _execute_analysis(
             use_cache=ROUTE_DEPS.enable_result_cache,
             use_deduplication=ROUTE_DEPS.enable_cache_deduplication,
         )
-        return _response_payload(request_id, req, fields)
+        payload = _response_payload(request_id, req, fields)
+        await _save_analysis_result_async(payload, req)
+        return payload
 
 
 async def _run_stream_pipeline(
@@ -228,6 +287,7 @@ async def _stream_progress_and_result(
         response_payload_func=_response_payload,
         run_stream_pipeline_func=_run_stream_pipeline,
         get_or_start_analysis_func=_get_or_start_analysis,
+        persist_result_func=_save_analysis_result_async,
         use_cache=ROUTE_DEPS.enable_result_cache,
         use_deduplication=ROUTE_DEPS.enable_cache_deduplication,
     ):
@@ -257,6 +317,7 @@ async def _start_job(job, rate_limit_lease) -> None:
         result_cache=_RESULT_CACHE,
         run_stream_pipeline_func=_run_stream_pipeline,
         response_payload_func=_response_payload,
+        persist_result_func=_save_analysis_result_async,
         use_cache=ROUTE_DEPS.enable_result_cache,
     )
 
@@ -332,7 +393,12 @@ async def get_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job = await _JOB_STORE.get(job_id, owner_id=lease.identifier)
         if job is None:
-            raise _job_not_found(job_id)
+            if await _JOB_STORE.get(job_id) is not None:
+                raise _job_not_found(job_id)
+            history_summary = await _completed_job_summary_from_history(job_id)
+            if history_summary is None:
+                raise _job_not_found(job_id)
+            return history_summary
         return job.public_summary()
 
 
@@ -346,9 +412,16 @@ async def get_analysis_job(job_id: str, request: Request):
 async def get_analysis_result_by_request_id(request_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job = await _JOB_STORE.get_by_request_id(request_id, owner_id=lease.identifier)
-        if job is None or job.result is None:
+        if job is not None and job.result is not None:
+            return job.result
+        if await _JOB_STORE.get_by_request_id(request_id) is not None:
             raise _analysis_result_not_found(request_id)
-        return job.result
+
+        repository = get_analysis_repository()
+        result = await asyncio.to_thread(repository.get_analysis, request_id)
+        if result is None:
+            raise _analysis_result_not_found(request_id)
+        return result
 
 
 @router.get("/analysis/jobs/{job_id}/events")
@@ -423,6 +496,26 @@ async def _api_status_payload():
         tool_cache = {"backend": "unavailable", "error": sanitize_message(str(exc))}
 
     try:
+        from tradingagents.llm_cache.exact_cache import get_exact_llm_cache
+
+        from config_llm import build_tradingagents_config
+
+        llm_cache_config = build_tradingagents_config()
+        exact_cache = get_exact_llm_cache(llm_cache_config)
+        llm_cache = {
+            "exact_cache": exact_cache.stats() if exact_cache is not None else {"enabled": False},
+            "semantic_cache": {
+                "enabled": bool(llm_cache_config.get("llm_semantic_cache_enabled", False)),
+                "ttl_seconds": int(llm_cache_config.get("llm_semantic_cache_ttl_seconds") or 3600),
+                "max_entries": int(llm_cache_config.get("llm_semantic_cache_max_entries") or 2048),
+                "threshold": float(llm_cache_config.get("llm_semantic_cache_similarity_threshold") or 0.97),
+                "targets": str(llm_cache_config.get("llm_semantic_cache_targets") or ""),
+            },
+        }
+    except Exception as exc:  # pragma: no cover
+        llm_cache = {"backend": "unavailable", "error": sanitize_message(str(exc))}
+
+    try:
         from tradingagents.utils_resilience import get_circuit_states, get_timeout_stats
 
         circuits = get_circuit_states()
@@ -447,6 +540,7 @@ async def _api_status_payload():
         "in_flight": inflight_stats,
         "jobs": job_stats,
         "tool_cache": tool_cache,
+        "llm_cache": llm_cache,
         "circuits": circuits,
         "timeout_workers": timeout_workers,
     }

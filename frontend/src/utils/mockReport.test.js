@@ -70,6 +70,24 @@ describe('mockReport', () => {
     expect(html).toContain('FY26Q1');
     expect(html).toContain('Revenue');
     expect(html).toContain('N/A');
+    expect(html).toContain('Currency: USD (US Dollar)');
+    expect(html).toContain('Latest Market Snapshot');
+    expect(html).toContain('Market &amp; Scale');
+  });
+
+  it('renders Phase 2 fundamental sections and hides Peer Comparison without a payload', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+    const withoutPeer = buildMockReportHtml({ ...MOCK_RESPONSE, peer_comparison: null });
+
+    expect(html).toContain('Financial Trend Analysis');
+    expect(html).toContain('Valuation Multiples');
+    expect(html).toContain('Fair Value Range');
+    expect(html).toContain('Bull / Base / Bear Scenario');
+    expect(html).toContain('Quality of Earnings');
+    expect(html).toContain('Balance Sheet Risk');
+    expect(html).toContain('Dividend Quality');
+    expect(html).toContain('Peer Comparison');
+    expect(withoutPeer).not.toContain('Peer Comparison');
   });
 
   it('renders static company profile in mock HTML output', () => {
@@ -79,6 +97,8 @@ describe('mockReport', () => {
     expect(html).toContain('NVIDIA Corporation');
     expect(html).toContain('Business Description');
     expect(html).toContain('Key Executives');
+    expect(html).toContain('2,300,000.0 USD Mn');
+    expect(html).toContain('$940');
   });
 
   it('renders static Chart & Price summary in mock HTML output', () => {
@@ -87,6 +107,27 @@ describe('mockReport', () => {
     expect(html).toContain('Chart &amp; Price Summary');
     expect(html).toContain('Lookback Days');
     expect(html).toContain('Average Volume');
+  });
+
+  it('renders Phase 3 summaries in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Technical Entry Quality');
+    expect(html).toContain('News Impact Summary');
+    expect(html).toContain('Catalyst Tracker');
+    expect(html).toContain('Analyst Recommendation Trend');
+  });
+
+  it('renders Phase 4 risk data quality sections in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Risk Summary');
+    expect(html).toContain('Market Risk');
+    expect(html).toContain('Risk-Adjusted Return');
+    expect(html).toContain('Thesis Monitor');
+    expect(html).toContain('Source Confidence &amp; Data Quality');
+    expect(html).toContain('Vendor Status');
+    expect(html).toContain('Calculation Notes');
   });
 
   it('renders static Related News items in mock HTML output', () => {
@@ -104,6 +145,19 @@ describe('mockReport', () => {
         available: true,
         items: [{ title: 'Unsafe mock URL', url: 'javascript:alert(1)' }],
       },
+      news_impact: {
+        available: false,
+        high_impact_news: [],
+        full_news_list: [],
+        data_quality: { status: 'unavailable', sources_used: [] },
+      },
+      catalyst_tracker: {
+        positive_catalysts: [],
+        negative_catalysts: [],
+        upcoming_events: [],
+        summary: {},
+      },
+      analyst_consensus: { available: false },
     });
 
     expect(html).toContain('Unsafe mock URL');

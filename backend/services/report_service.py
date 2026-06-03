@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -11,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from errors import ApiError, sanitize_message
 from routes import jobs
+from services.analysis_repository import get_analysis_repository
 from services.report_disclaimer import REPORT_DISCLAIMER
 
 logger = logging.getLogger(__name__)
@@ -72,18 +74,32 @@ async def get_analysis_result_for_report(job_id: str, *, owner_id: str) -> dict[
     """Return a completed analysis payload by canonical job_id."""
 
     job = await jobs.JOB_STORE.get(job_id, owner_id=owner_id)
-    if job is None or not isinstance(job.result, dict):
+    if job is not None and isinstance(job.result, dict):
+        return dict(job.result)
+    if await jobs.JOB_STORE.get(job_id) is not None:
         raise ReportNotFoundError(job_id)
-    return dict(job.result)
+
+    repository = get_analysis_repository()
+    result = await asyncio.to_thread(repository.get_analysis_by_job_id, job_id)
+    if isinstance(result, dict):
+        return result
+    raise ReportNotFoundError(job_id)
 
 
 async def get_analysis_result_for_report_by_request_id(request_id: str, *, owner_id: str) -> dict[str, Any]:
     """Return a completed analysis payload through the migration alias."""
 
     job = await jobs.JOB_STORE.get_by_request_id(request_id, owner_id=owner_id)
-    if job is None or not isinstance(job.result, dict):
+    if job is not None and isinstance(job.result, dict):
+        return dict(job.result)
+    if await jobs.JOB_STORE.get_by_request_id(request_id) is not None:
         raise ReportNotFoundError(request_id)
-    return dict(job.result)
+
+    repository = get_analysis_repository()
+    result = await asyncio.to_thread(repository.get_analysis, request_id)
+    if isinstance(result, dict):
+        return result
+    raise ReportNotFoundError(request_id)
 
 
 def validate_report_scope(result: dict[str, Any]) -> None:
@@ -122,7 +138,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "market": market,
         "market_label": "US Stocks" if market == "US" else "Indonesia Stocks",
         "trade_date": _clean_text(result.get("trade_date")),
-        "generated_at": _format_datetime(datetime.now(timezone.utc).isoformat()),
+        "generated_at": _format_datetime(datetime.now(UTC).isoformat()),
         "analysis_created_at": _format_datetime(result.get("analysis_created_at")),
         "disclaimer": REPORT_DISCLAIMER,
         "current_price": current_price,
@@ -132,6 +148,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "llm_decision": _display(llm_decision),
         "final_decision": final_decision,
         "decision": final_decision,
+        "executive_summary": _display(result.get("executive_summary")),
         "decision_adjusted": bool(result.get("decision_adjusted")),
         "decision_adjusted_reason": _display(result.get("decision_adjusted_reason")),
         "trade_plan_valid": trade_plan_valid,
@@ -139,14 +156,32 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "is_actionable_trade_plan": is_actionable_trade_plan,
         "validation_warnings": validation_warnings,
         "data_quality": data_quality,
+        "risk_data_quality": _as_dict(result.get("risk_data_quality")),
         "data_quality_rows": _data_quality_rows(data_quality),
         "data_quality_warnings": _as_text_list(data_quality.get("warnings")) if data_quality else [],
         "analyst_sections": _analyst_sections(result),
         "financial_highlights": _financial_highlights(result.get("financial_highlights")),
+        "financial_trends": _as_dict(result.get("financial_trends")),
+        "valuation_multiples": _as_dict(result.get("valuation_multiples")),
+        "fair_value_range": _as_dict(result.get("fair_value_range")),
+        "scenario_analysis": _as_dict(result.get("scenario_analysis")),
+        "quality_of_earnings": _as_dict(result.get("quality_of_earnings")),
+        "balance_sheet_risk": _as_dict(result.get("balance_sheet_risk")),
+        "dividend_quality": _as_dict(result.get("dividend_quality")),
+        "peer_comparison": _as_dict(result.get("peer_comparison")),
         "company_profile": _as_dict(result.get("company_profile")),
         "company_profile_rows": _company_profile_rows(result),
         "company_profile_executives": _company_profile_executives(result),
         "price_chart_rows": _price_chart_rows(result, ticker, market),
+        "technical_entry_rows": _technical_entry_rows(result, ticker, market),
+        "news_impact": _as_dict(result.get("news_impact")),
+        "news_impact_rows": _news_impact_rows(result),
+        "high_impact_news_items": _high_impact_news_items(result),
+        "catalyst_tracker": _as_dict(result.get("catalyst_tracker")),
+        "positive_catalysts": _catalyst_items(result, "positive_catalysts"),
+        "negative_catalysts": _catalyst_items(result, "negative_catalysts"),
+        "upcoming_events": _catalyst_items(result, "upcoming_events"),
+        "analyst_consensus_rows": _analyst_consensus_rows(result),
         "related_news": _as_dict(result.get("related_news")),
         "related_news_items": _related_news_items(result),
         "news": _news_context(result),
@@ -160,6 +195,113 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
     report["trade_plan_rows"] = _trade_plan_rows(result, ticker, market) if is_actionable_trade_plan else []
     report["risk_rows"] = _risk_rows(result, include_max_drawdown=is_actionable_trade_plan)
     report["validation_rows"] = _validation_rows(result, report)
+    report["risk_summary_rows"] = _risk_summary_rows(report["risk_data_quality"])
+    report["balance_sheet_risk_summary_rows"] = _simple_payload_rows(
+        _as_dict(report["risk_data_quality"].get("balance_sheet_risk_summary")),
+        [
+            ("der", "DER"),
+            ("net_debt", "Net Debt"),
+            ("debt_to_ebitda", "Debt / EBITDA"),
+            ("cash_ratio", "Cash Ratio"),
+            ("risk_level", "Risk Level"),
+            ("interpretation", "Interpretation"),
+        ],
+    )
+    report["market_risk_rows"] = _simple_payload_rows(
+        _as_dict(report["risk_data_quality"].get("market_risk")),
+        [
+            ("volatility_percent", "Volatility"),
+            ("max_drawdown_percent", "Max Drawdown"),
+            ("atr", "ATR"),
+            ("price_range_percent", "Price Range"),
+            ("risk_bucket", "Risk Bucket"),
+        ],
+        percent_keys={"volatility_percent", "max_drawdown_percent", "price_range_percent"},
+    )
+    report["market_risk_notes"] = _as_text_list(_as_dict(report["risk_data_quality"].get("market_risk")).get("notes"))
+    report["risk_adjusted_return_rows"] = _simple_payload_rows(
+        _as_dict(report["risk_data_quality"].get("risk_adjusted_return")),
+        [
+            ("upside_percent", "Upside"),
+            ("downside_percent", "Downside"),
+            ("risk_reward_ratio", "Risk/Reward"),
+            ("expected_return_label", "Expected Return"),
+        ],
+        percent_keys={"upside_percent", "downside_percent"},
+    )
+    report["risk_adjusted_return_notes"] = _as_text_list(
+        _as_dict(report["risk_data_quality"].get("risk_adjusted_return")).get("notes")
+    )
+    report["thesis_monitor_rows"] = _thesis_monitor_rows(report["risk_data_quality"])
+    report["catalyst_risk_rows"] = _catalyst_risk_rows(report["risk_data_quality"])
+    report["source_quality_rows"] = _source_quality_rows(report["risk_data_quality"], report["validation_rows"])
+    report["vendor_status_rows"] = _vendor_status_rows(report["risk_data_quality"])
+    report["missing_fields_rows"] = _list_payload_rows(report["risk_data_quality"], "missing_fields")
+    report["fallback_used_rows"] = _list_payload_rows(report["risk_data_quality"], "fallback_used")
+    report["stale_warning_rows"] = _list_payload_rows(report["risk_data_quality"], "stale_data_warning")
+    report["calculation_notes"] = _as_text_list(report["risk_data_quality"].get("calculation_notes"))
+    report["financial_trend_rows"] = _financial_trend_rows(report["financial_trends"])
+    report["valuation_rows"] = _metric_detail_rows(
+        report["valuation_multiples"],
+        [
+            ("market_cap", "Market Cap"),
+            ("enterprise_value", "Enterprise Value"),
+            ("pe", "P/E"),
+            ("pbv", "P/BV"),
+            ("ps", "P/S"),
+            ("ev_ebitda", "EV/EBITDA"),
+        ],
+    )
+    report["fair_value_rows"] = _metric_detail_rows(
+        report["fair_value_range"],
+        [
+            ("current_price", "Current Price"),
+            ("bear", "Bear Fair Value"),
+            ("base", "Base Fair Value"),
+            ("bull", "Bull Fair Value"),
+            ("bear_upside_percent", "Bear Upside / Downside"),
+            ("base_upside_percent", "Base Upside / Downside"),
+            ("bull_upside_percent", "Bull Upside / Downside"),
+        ],
+    )
+    report["scenario_rows"] = _scenario_rows(report["scenario_analysis"])
+    report["quality_of_earnings_rows"] = [
+        *_metric_detail_rows(
+            report["quality_of_earnings"],
+            [
+                ("cfo_to_net_income", "CFO / Net Income"),
+                ("free_cash_flow", "Free Cash Flow"),
+                ("capex_intensity_percent", "Capex Intensity"),
+            ],
+        ),
+        _row("Accrual Risk", report["quality_of_earnings"].get("accrual_risk")),
+        _row("Rating", report["quality_of_earnings"].get("rating")),
+    ]
+    report["balance_sheet_risk_rows"] = [
+        *_metric_detail_rows(
+            report["balance_sheet_risk"],
+            [
+                ("der", "DER"),
+                ("net_debt", "Net Debt"),
+                ("debt_to_ebitda", "Debt / EBITDA"),
+                ("cash_ratio", "Cash Ratio"),
+                ("equity_ratio", "Equity Ratio"),
+            ],
+        ),
+        _row("Risk Level", report["balance_sheet_risk"].get("risk_level")),
+    ]
+    report["dividend_quality_rows"] = [
+        *_metric_detail_rows(
+            report["dividend_quality"],
+            [
+                ("dividend_yield_percent", "Dividend Yield"),
+                ("payout_ratio_percent", "Payout Ratio"),
+                ("fcf_coverage", "FCF Coverage"),
+            ],
+        ),
+        _row("Sustainability", report["dividend_quality"].get("sustainability")),
+    ]
+    report["peer_comparison_rows"] = _peer_comparison_rows(report["peer_comparison"])
     return report
 
 
@@ -231,6 +373,10 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
 def _as_text_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -287,7 +433,7 @@ def _format_number(value: Any) -> str:
         number = float(value)
     except (TypeError, ValueError):
         return _display(value) if value is not None else "N/A"
-    if not number == number or number in {float("inf"), float("-inf")}:
+    if number != number or number in {float("inf"), float("-inf")}:
         return "N/A"
     if number.is_integer():
         return f"{number:,.0f}"
@@ -301,11 +447,31 @@ def _format_price(value: Any, ticker: str, market: str) -> str:
         number = float(value)
     except (TypeError, ValueError):
         return str(value)
-    if not number == number or number in {float("inf"), float("-inf")}:
+    if number != number or number in {float("inf"), float("-inf")}:
         return "N/A"
     if market == "ID" or ticker.endswith(".JK"):
         return f"Rp {number:,.0f}"
     return f"${number:,.2f}".rstrip("0").rstrip(".")
+
+
+def _format_market_cap(value: Any, currency: Any) -> str:
+    if value is None or value == "":
+        return "N/A"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if number != number or number in {float("inf"), float("-inf")}:
+        return "N/A"
+
+    currency_code = str(currency or "").upper()
+    if not currency_code:
+        return _format_number(number)
+
+    is_idr = currency_code == "IDR"
+    divisor = 1_000_000_000 if is_idr else 1_000_000
+    scale = "Bn" if is_idr else "Mn"
+    return f"{number / divisor:,.1f} {currency_code} {scale}"
 
 
 def _format_percent(value: Any) -> str:
@@ -418,25 +584,157 @@ def _data_quality_rows(data_quality: dict[str, Any]) -> list[dict[str, str]]:
     return [_row(key.replace("_", " ").title(), data_quality.get(key)) for key in keys if key in data_quality]
 
 
+def _value_with_percent(value: Any, is_percent: bool) -> Any:
+    if not is_percent:
+        return value
+    if value is None or value == "":
+        return value
+    text = str(value)
+    return text if text.endswith("%") else f"{text}%"
+
+
+def _simple_payload_rows(
+    payload: dict[str, Any],
+    definitions: list[tuple[str, str]],
+    *,
+    percent_keys: set[str] | None = None,
+) -> list[dict[str, str]]:
+    if not payload:
+        return []
+    percent_fields = percent_keys or set()
+    return [_row(label, _value_with_percent(payload.get(key), key in percent_fields)) for key, label in definitions]
+
+
+def _risk_summary_rows(risk_data_quality: dict[str, Any]) -> list[dict[str, str]]:
+    summary = _as_dict(risk_data_quality.get("risk_summary"))
+    if not summary:
+        return []
+    return [
+        _row("Overall Risk", summary.get("overall_risk")),
+        _row("Risk Score", summary.get("risk_score")),
+        _row("Main Risks", ", ".join(_as_text_list(summary.get("main_risks"))) or "N/A"),
+        _row("Risk Flags", ", ".join(_as_text_list(summary.get("risk_flags"))) or "N/A"),
+        _row("Explanation", summary.get("risk_explanation")),
+    ]
+
+
+def _thesis_monitor_rows(risk_data_quality: dict[str, Any]) -> list[dict[str, str]]:
+    monitor = _as_dict(risk_data_quality.get("thesis_monitor"))
+    rows: list[dict[str, str]] = []
+    if monitor.get("overall_thesis_status"):
+        rows.append(
+            {
+                "category": "Overall",
+                "condition": "Thesis status",
+                "status": _display(monitor.get("overall_thesis_status")),
+                "reason": "Aggregated from invalidation checklist.",
+            }
+        )
+    for item in _as_list(monitor.get("checklist")):
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "category": _display(item.get("category")),
+                "condition": _display(item.get("condition")),
+                "status": _display(item.get("status")),
+                "reason": _display(item.get("reason")),
+            }
+        )
+    return rows
+
+
+def _catalyst_risk_rows(risk_data_quality: dict[str, Any]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for item in _as_list(risk_data_quality.get("catalyst_risk")):
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "type": _display(item.get("type")),
+                "label": _display(item.get("label")),
+                "impact": _display(item.get("impact")),
+                "date": _display(item.get("date")),
+                "source": _display(item.get("source")),
+                "reason": _display(item.get("reason")),
+            }
+        )
+    return rows
+
+
+def _source_quality_rows(
+    risk_data_quality: dict[str, Any], fallback_rows: list[dict[str, str]]
+) -> list[dict[str, str]]:
+    quality = _as_dict(risk_data_quality.get("data_quality"))
+    if not quality:
+        return fallback_rows
+    rows = [
+        _row("Score", quality.get("score")),
+        _row("Confidence", quality.get("confidence")),
+        _row("Summary", quality.get("summary")),
+    ]
+    breakdown = _as_dict(quality.get("score_breakdown"))
+    rows.extend(_row(key.replace("_", " ").title(), value) for key, value in breakdown.items())
+    return rows
+
+
+def _vendor_status_rows(risk_data_quality: dict[str, Any]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for vendor, payload in _as_dict(risk_data_quality.get("vendor_status")).items():
+        item = _as_dict(payload)
+        rows.append(
+            {
+                "vendor": _display(vendor),
+                "status": _display(item.get("status")),
+                "used_for": ", ".join(_as_text_list(item.get("used_for"))) or "N/A",
+                "missing_fields": ", ".join(_as_text_list(item.get("missing_fields"))) or "N/A",
+            }
+        )
+    return rows
+
+
+def _list_payload_rows(risk_data_quality: dict[str, Any], key: str) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for item in _as_list(risk_data_quality.get(key)):
+        if isinstance(item, dict):
+            rows.append({str(field): _display(value) for field, value in item.items()})
+        elif item:
+            rows.append({"value": _display(item)})
+    return rows
+
+
 def _company_profile_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     profile = _as_dict(result.get("company_profile"))
     if not profile or not profile.get("available"):
         return []
 
+    ticker = str(profile.get("ticker") or result.get("ticker") or "")
+    market = str(result.get("market") or "")
+    currency = profile.get("currency")
     return [
-        {"label": "Company Name", "value": _display(profile.get("name"))},
+        {"label": "Company Name", "value": _display(profile.get("company_name") or profile.get("name"))},
+        {"label": "Ticker", "value": _display(profile.get("ticker"))},
+        {"label": "Exchange", "value": _display(profile.get("exchange"))},
+        {"label": "Currency", "value": _display(profile.get("currency"))},
+        {"label": "Country", "value": _display(profile.get("country"))},
         {"label": "Sector", "value": _display(profile.get("sector"))},
         {"label": "Industry", "value": _display(profile.get("industry"))},
-        {"label": "Address", "value": _display(profile.get("address"))},
-        {"label": "Phone", "value": _display(profile.get("phone"))},
         {"label": "Website", "value": _display(profile.get("website"))},
-        {"label": "Full Time Employees", "value": _display(profile.get("full_time_employees"))},
+        {"label": "Market Cap", "value": _format_market_cap(profile.get("market_cap"), currency)},
+        {"label": "Shares Outstanding", "value": _format_number(profile.get("shares_outstanding"))},
+        {"label": "Current Price", "value": _format_price(profile.get("current_price"), ticker, market)},
+        {"label": "Fiscal Year End", "value": _display(profile.get("fiscal_year_end"))},
+        {
+            "label": "Employee Count",
+            "value": _display(profile.get("employee_count") or profile.get("full_time_employees")),
+        },
+        {"label": "Profile Data Quality", "value": _display(_as_dict(profile.get("data_quality")).get("status"))},
     ]
 
 
 def _company_profile_executives(result: dict[str, Any]) -> list[dict[str, str]]:
     profile = _as_dict(result.get("company_profile"))
-    executives = profile.get("executives") if profile else []
+    executives = profile.get("officers") or profile.get("executives") if profile else []
     if not isinstance(executives, list):
         return []
 
@@ -444,10 +742,12 @@ def _company_profile_executives(result: dict[str, Any]) -> list[dict[str, str]]:
     for item in executives[:10]:
         if not isinstance(item, dict):
             continue
-        rows.append({
-            "name": _display(item.get("name")),
-            "title": _display(item.get("title")),
-        })
+        rows.append(
+            {
+                "name": _display(item.get("name")),
+                "title": _display(item.get("title")),
+            }
+        )
     return rows
 
 
@@ -457,18 +757,128 @@ def _price_chart_rows(result: dict[str, Any], ticker: str, market: str) -> list[
         return []
 
     stats = _as_dict(chart.get("stats"))
+    summary = _as_dict(result.get("price_performance")) or _as_dict(chart.get("summary"))
     return [
         {"label": "Window", "value": _display(chart.get("window_label"))},
         {"label": "Source", "value": _display(chart.get("source"))},
         {"label": "Lookback Days", "value": _display(chart.get("lookback_days"))},
         {"label": "Start Price", "value": _format_price(stats.get("start_price"), ticker, market)},
         {"label": "End Price", "value": _format_price(stats.get("end_price"), ticker, market)},
-        {"label": "Change %", "value": _display(stats.get("change_percent"))},
-        {"label": "High", "value": _format_price(stats.get("high"), ticker, market)},
-        {"label": "Low", "value": _format_price(stats.get("low"), ticker, market)},
+        {
+            "label": "Period Return",
+            "value": _format_percent(summary.get("period_return_percent") or stats.get("change_percent")),
+        },
+        {
+            "label": "Period High",
+            "value": _format_price(summary.get("period_high") or stats.get("high"), ticker, market),
+        },
+        {"label": "Period Low", "value": _format_price(summary.get("period_low") or stats.get("low"), ticker, market)},
+        {"label": "Max Drawdown", "value": _format_percent(summary.get("max_drawdown_percent"))},
         {"label": "Average Close", "value": _format_price(stats.get("average_close"), ticker, market)},
-        {"label": "Average Volume", "value": _display(stats.get("average_volume"))},
+        {"label": "Average Volume", "value": _display(summary.get("average_volume") or stats.get("average_volume"))},
+        {"label": "Latest Volume", "value": _display(summary.get("latest_volume"))},
+        {"label": "Volume Trend", "value": _display(summary.get("volume_trend"))},
         {"label": "Point Count", "value": _display(stats.get("point_count"))},
+    ]
+
+
+def _technical_entry_rows(result: dict[str, Any], ticker: str, market: str) -> list[dict[str, str]]:
+    technical = _as_dict(result.get("technical_entry"))
+    if not technical:
+        return []
+    return [
+        _row("Entry Quality", technical.get("entry_quality")),
+        _row("Trend", technical.get("trend")),
+        _row("RSI", technical.get("rsi")),
+        _row("RSI Signal", technical.get("rsi_signal")),
+        _row("MACD", technical.get("macd")),
+        _row("MACD Signal Value", technical.get("macd_signal_value")),
+        _row("MACD Signal", technical.get("macd_signal")),
+        {"label": "ATR", "value": _format_price(technical.get("atr"), ticker, market)},
+        {"label": "SMA 20", "value": _format_price(technical.get("sma_20"), ticker, market)},
+        {"label": "SMA 50", "value": _format_price(technical.get("sma_50"), ticker, market)},
+        {"label": "SMA 200", "value": _format_price(technical.get("sma_200"), ticker, market)},
+        {"label": "Support", "value": _format_price(technical.get("support"), ticker, market)},
+        {"label": "Resistance", "value": _format_price(technical.get("resistance"), ticker, market)},
+        _row("Volume Trend", technical.get("volume_trend")),
+    ]
+
+
+def _news_impact_rows(result: dict[str, Any]) -> list[dict[str, str]]:
+    impact = _as_dict(result.get("news_impact"))
+    if not impact:
+        return []
+    quality = _as_dict(impact.get("data_quality"))
+    return [
+        _row("Overall Sentiment", impact.get("overall_sentiment")),
+        _row("Sentiment Score", impact.get("sentiment_score")),
+        _row("High Impact Count", len(impact.get("high_impact_news") or [])),
+        _row("News Count", impact.get("news_count")),
+        _row("Deduplicated Count", impact.get("deduplicated_count")),
+        _row("Sources Used", ", ".join(str(item) for item in quality.get("sources_used", []))),
+    ]
+
+
+def _high_impact_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
+    impact = _as_dict(result.get("news_impact"))
+    raw_items = impact.get("high_impact_news") if impact else []
+    if not isinstance(raw_items, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in raw_items[:5]:
+        if not isinstance(item, dict) or not item.get("title"):
+            continue
+        items.append(
+            {
+                "title": _display(item.get("title")),
+                "source": _display(item.get("source")),
+                "published_at": _display(item.get("published_at")),
+                "sentiment": _display(item.get("sentiment")),
+                "impact": _display(item.get("impact")),
+                "impact_score": _display(item.get("impact_score")),
+                "summary": _display(item.get("summary")),
+                "url": _safe_external_http_url(item.get("url")),
+            }
+        )
+    return items
+
+
+def _catalyst_items(result: dict[str, Any], key: str) -> list[dict[str, str]]:
+    tracker = _as_dict(result.get("catalyst_tracker"))
+    raw_items = tracker.get(key) if tracker else []
+    if not isinstance(raw_items, list):
+        return []
+    items: list[dict[str, str]] = []
+    for item in raw_items[:5]:
+        if not isinstance(item, dict):
+            continue
+        items.append(
+            {
+                "type": _display(item.get("type")),
+                "label": _display(item.get("label")),
+                "impact": _display(item.get("impact") or item.get("risk_level")),
+                "source": _display(item.get("source")),
+                "date": _display(item.get("date")),
+                "related_news_title": _display(item.get("related_news_title")),
+            }
+        )
+    return items
+
+
+def _analyst_consensus_rows(result: dict[str, Any]) -> list[dict[str, str]]:
+    consensus = _as_dict(result.get("analyst_consensus"))
+    if not consensus or not consensus.get("available"):
+        return []
+    return [
+        _row("Period", consensus.get("period")),
+        _row("Strong Buy", consensus.get("strong_buy")),
+        _row("Buy", consensus.get("buy")),
+        _row("Hold", consensus.get("hold")),
+        _row("Sell", consensus.get("sell")),
+        _row("Strong Sell", consensus.get("strong_sell")),
+        _row("Total", consensus.get("total")),
+        _row("Consensus Label", consensus.get("consensus_label")),
+        _row("Trend", consensus.get("trend")),
     ]
 
 
@@ -522,11 +932,109 @@ def _financial_highlights(value: Any) -> dict[str, Any] | None:
     rows = [row for row in value.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)]
     if not periods or not rows:
         return None
+    sections = []
+    for section in value.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        section_rows = [
+            row for row in section.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)
+        ]
+        if section_rows:
+            sections.append({**section, "rows": section_rows})
+    if not sections:
+        sections = [{"key": "legacy", "title": None, "rows": rows}]
     return {
         "title": _clean_text(value.get("title")) or "Key Financial Highlights",
+        "unit_note": _clean_text(value.get("unit_note")),
         "periods": periods,
+        "point_in_time": [item for item in value.get("point_in_time", []) if isinstance(item, dict)],
+        "sections": sections,
         "rows": rows,
     }
+
+
+def _metric_detail_rows(value: Any, definitions: list[tuple[str, str]]) -> list[dict[str, str]]:
+    payload = _as_dict(value)
+    details = _as_dict(payload.get("metric_details"))
+    if not payload:
+        return []
+    return [
+        {"label": label, "value": _metric_detail_display(details.get(key), payload.get(key))}
+        for key, label in definitions
+    ]
+
+
+def _metric_detail_display(value: Any, fallback: Any = None) -> str:
+    detail = _as_dict(value)
+    displayed = _display(detail.get("display") or fallback)
+    return f"{displayed} EST" if detail.get("status") == "estimated" and displayed != "N/A" else displayed
+
+
+def _financial_trend_rows(value: Any) -> list[dict[str, Any]]:
+    payload = _as_dict(value)
+    details = _as_dict(payload.get("metric_details"))
+    definitions = [
+        ("revenue", "Revenue"),
+        ("revenue_growth_percent", "Revenue Growth"),
+        ("ebitda", "EBITDA"),
+        ("ebitda_margin_percent", "EBITDA Margin"),
+        ("net_profit", "Net Profit"),
+        ("net_profit_growth_percent", "Net Profit Growth"),
+        ("net_profit_margin_percent", "Net Profit Margin"),
+        ("roe_percent", "ROE"),
+        ("eps", "EPS"),
+        ("bvps", "BVPS"),
+        ("der", "DER"),
+    ]
+    return [
+        {
+            "label": label,
+            "values": [_metric_detail_display(cell) for cell in details.get(key, [])],
+        }
+        for key, label in definitions
+        if isinstance(details.get(key), list)
+    ]
+
+
+def _scenario_rows(value: Any) -> list[dict[str, str]]:
+    payload = _as_dict(value)
+    rows = []
+    for case in ("bear", "base", "bull"):
+        item = _as_dict(payload.get(case))
+        if item:
+            rows.append(
+                {
+                    "scenario": case.title(),
+                    "fair_value": _display(item.get("fair_value_display") or item.get("fair_value")),
+                    "upside": _display(item.get("upside_downside_display") or item.get("upside_downside_percent")),
+                    "growth": _format_percent(item.get("revenue_growth_assumption_percent")),
+                    "margin": _format_percent(item.get("margin_assumption_percent")),
+                    "multiple": _display(item.get("valuation_multiple")),
+                    "assumption": _display(item.get("assumption")),
+                }
+            )
+    return rows
+
+
+def _peer_comparison_rows(value: Any) -> list[dict[str, str]]:
+    payload = _as_dict(value)
+    rows = []
+    for item in payload.get("metrics") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "ticker": _display(item.get("ticker")),
+                "company_name": _display(item.get("company_name")),
+                "pe": _display(item.get("pe")),
+                "pbv": _display(item.get("pbv")),
+                "roe": _format_percent(item.get("roe_percent")),
+                "margin": _format_percent(item.get("net_profit_margin_percent")),
+                "der": _display(item.get("der")),
+                "dividend_yield": _format_percent(item.get("dividend_yield_percent")),
+            }
+        )
+    return rows
 
 
 def _news_context(result: dict[str, Any]) -> dict[str, Any]:

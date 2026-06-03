@@ -6,14 +6,13 @@ import {
   buildXAxisTicks,
   buildYAxisTicks,
   CROSSHAIR_COLOR,
-  DOWN_COLOR,
   formatCompactNumber,
   GRID_COLOR,
   isUpCandle,
   LAST_PRICE_COLOR,
+  movementColor,
   normalizePricePoints,
   TEXT_COLOR,
-  UP_COLOR,
 } from './priceChartUtils';
 
 const WIDTH = 1000;
@@ -54,6 +53,8 @@ function CandlestickTooltip({ point, ticker }) {
         <span className="text-right text-white">{displayPrice(point.low, ticker)}</span>
         <span className="text-bloomberg-muted">Close</span>
         <span className="text-right text-white">{displayPrice(point.close, ticker)}</span>
+        <span className="text-bloomberg-muted">Adjusted Close</span>
+        <span className="text-right text-white">{displayPrice(point.adjusted_close, ticker)}</span>
         <span className="text-bloomberg-muted">Range</span>
         <span className="text-right text-white">
           {displayPrice(point.high - point.low, ticker)}
@@ -193,7 +194,7 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
           const rawBodyHeight = Math.abs(closeY - openY);
           const bodyHeight = Math.max(rawBodyHeight, 2);
           const bodyY = Math.min(openY, closeY) - (bodyHeight - rawBodyHeight) / 2;
-          const color = isUpCandle(point) ? UP_COLOR : DOWN_COLOR;
+          const color = movementColor(point, chart.points[index - 1]);
 
           return (
             <g key={`${point.date}-${index}`}>
@@ -212,7 +213,7 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
                 fill={color}
                 stroke={color}
               >
-                <title>{`${point.date}: O ${point.open}, H ${point.high}, L ${point.low}, C ${point.close}, V ${point.volume ?? 'N/A'}`}</title>
+                <title>{`${point.date}: O ${point.open}, H ${point.high}, L ${point.low}, C ${point.close}, Adj ${point.adjusted_close ?? 'N/A'}, V ${point.volume ?? 'N/A'}`}</title>
               </rect>
             </g>
           );

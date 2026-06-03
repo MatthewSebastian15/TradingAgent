@@ -3,7 +3,13 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it } from 'vitest';
 
 import CandlestickPriceChart from './CandlestickPriceChart';
-import { buildXAxisTicks, DOWN_COLOR, normalizePricePoints, UP_COLOR } from './priceChartUtils';
+import {
+  buildXAxisTicks,
+  DOWN_COLOR,
+  NEUTRAL_COLOR,
+  normalizePricePoints,
+  UP_COLOR,
+} from './priceChartUtils';
 import VolumeChart from './VolumeChart';
 
 const POINTS = [
@@ -39,8 +45,24 @@ describe('CandlestickPriceChart', () => {
     ]);
 
     expect(points).toEqual([
-      { date: '2026-01-01', open: 10, high: 11, low: 9, close: 10, volume: 100 },
-      { date: '2026-01-02', open: 12, high: 13, low: 9, close: 10, volume: 200 },
+      {
+        date: '2026-01-01',
+        open: 10,
+        high: 11,
+        low: 9,
+        close: 10,
+        adjusted_close: 10,
+        volume: 100,
+      },
+      {
+        date: '2026-01-02',
+        open: 12,
+        high: 13,
+        low: 9,
+        close: 10,
+        adjusted_close: 10,
+        volume: 200,
+      },
     ]);
   });
 
@@ -69,7 +91,7 @@ describe('CandlestickPriceChart', () => {
     expect(bodies.map((body) => body.getAttribute('fill'))).toEqual([
       UP_COLOR,
       DOWN_COLOR,
-      UP_COLOR,
+      NEUTRAL_COLOR,
     ]);
     expect(Number(bodies[2].getAttribute('height'))).toBeGreaterThanOrEqual(2);
   });
@@ -87,6 +109,7 @@ describe('CandlestickPriceChart', () => {
     expect(within(tooltip).getByText('High')).toBeTruthy();
     expect(within(tooltip).getByText('Low')).toBeTruthy();
     expect(within(tooltip).getByText('Close')).toBeTruthy();
+    expect(within(tooltip).getByText('Adjusted Close')).toBeTruthy();
     expect(within(tooltip).getByText('Range')).toBeTruthy();
     expect(within(tooltip).getByText('Change')).toBeTruthy();
     expect(within(tooltip).getByText('Change %')).toBeTruthy();
@@ -103,7 +126,11 @@ describe('VolumeChart', () => {
     mockChartRect(chart, 1000, 220);
 
     const bars = Array.from(container.querySelectorAll('rect'));
-    expect(bars.map((bar) => bar.getAttribute('fill'))).toEqual([UP_COLOR, DOWN_COLOR, UP_COLOR]);
+    expect(bars.map((bar) => bar.getAttribute('fill'))).toEqual([
+      UP_COLOR,
+      DOWN_COLOR,
+      NEUTRAL_COLOR,
+    ]);
 
     fireEvent.mouseMove(chart, { clientX: 466, clientY: 100 });
 

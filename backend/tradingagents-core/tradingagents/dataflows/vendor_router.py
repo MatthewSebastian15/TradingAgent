@@ -6,7 +6,6 @@ import uuid
 from collections import defaultdict
 from typing import Any
 
-
 _SECRET_PATTERNS = [
     re.compile(r"token=([^&\s]+)", re.IGNORECASE),
     re.compile(r"apikey=([^&\s]+)", re.IGNORECASE),

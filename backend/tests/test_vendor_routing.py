@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
 import importlib
 import sys
 from types import SimpleNamespace
 
+
 class _YFRateLimitError(Exception):
     pass
+
 
 yf_module = SimpleNamespace(Ticker=lambda *a, **k: None)
 yf_exceptions = SimpleNamespace(YFRateLimitError=_YFRateLimitError)
@@ -13,11 +16,11 @@ sys.modules.setdefault("yfinance", yf_module)
 sys.modules.setdefault("yfinance.exceptions", yf_exceptions)
 sys.modules.setdefault("stockstats", SimpleNamespace(wrap=lambda df: df))
 
+import pytest
 from tradingagents.dataflows.config import use_config
 from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.vendor_budget import VendorBudget
 from tradingagents.dataflows.vendor_router import VendorAttemptRecorder
-import pytest
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +33,10 @@ def clear_interface_cache():
 
 
 BASE_CONFIG = {
-    "data_vendors": {"quote_data": "yfinance,finnhub,alpha_vantage", "core_stock_apis": "yfinance,finnhub,alpha_vantage"},
+    "data_vendors": {
+        "quote_data": "yfinance,finnhub,alpha_vantage",
+        "core_stock_apis": "yfinance,finnhub,alpha_vantage",
+    },
     "data_vendor_enable_finnhub_fallback": True,
     "data_vendor_enable_finnhub_enrichment": True,
     "tool_max_retries": 1,
@@ -61,8 +67,7 @@ def _quote(source: str, price: float = 10) -> dict:
 
 
 def test_vendor_attempts_records_success_and_failure(monkeypatch):
-    from tradingagents.dataflows import interface
-    from tradingagents.dataflows import vendor_router
+    from tradingagents.dataflows import interface, vendor_router
 
     recorder = VendorAttemptRecorder()
     monkeypatch.setattr(vendor_router, "get_attempt_recorder", lambda _id: recorder)
@@ -93,7 +98,9 @@ def test_yfinance_empty_finnhub_fallback_called(monkeypatch):
 def test_all_vendors_failed_returns_clear_error(monkeypatch):
     from tradingagents.dataflows import interface
 
-    monkeypatch.setitem(interface.VENDOR_METHODS, "get_quote", {"yfinance": lambda *a, **k: {"available": False, "source": "yfinance"}})
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS, "get_quote", {"yfinance": lambda *a, **k: {"available": False, "source": "yfinance"}}
+    )
     with use_config(BASE_CONFIG):
         result = route_to_vendor("get_quote", "AAPL", "2026-05-28")
     assert result["available"] is False
@@ -126,10 +133,7 @@ def test_build_config_preserves_environment_vendor_order_for_every_category(monk
 
     import config
 
-    expected = {
-        category: f"primary_{category},fallback_{category}"
-        for category in _DATA_VENDOR_ENV_BY_CATEGORY
-    }
+    expected = {category: f"primary_{category},fallback_{category}" for category in _DATA_VENDOR_ENV_BY_CATEGORY}
 
     try:
         with monkeypatch.context() as env:

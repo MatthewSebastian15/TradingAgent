@@ -25,7 +25,13 @@ def _stream_result() -> dict:
         "max_drawdown_estimate": 0.07,
         "volatility_level": "medium",
         "position_sizing_reason": "Mock position sizing",
-        "rebalancing_action": "Hold current allocation",
+        "has_existing_position": False,
+        "position_quantity": None,
+        "average_entry_price": None,
+        "rebalancing_action": "Open new position",
+        "position_action": None,
+        "new_entry_action": "Allowed with validated entry",
+        "position_size_hint": "Use standard starter size and avoid oversized entry.",
         "key_catalysts": ["volume"],
         "invalidation_conditions": ["support break"],
         "data_quality": {"price_data": "ok", "fundamentals": "partial", "news": "missing", "warnings": []},
@@ -64,7 +70,7 @@ def _analysis_cache_key(response_detail: str = "full") -> AnalysisCacheKey:
     )
 
 
-def test_sse_sends_progress_and_final_result(client, monkeypatch):
+def test_sse_sends_progress_and_final_result(client, monkeypatch, analysis_repository):
     async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
         await queue.put(
             {
@@ -101,9 +107,10 @@ def test_sse_sends_progress_and_final_result(client, monkeypatch):
     assert result_payload["ticker"] == "AAPL"
     assert result_payload["decision"] == "Buy"
     assert result_payload["data_quality"]["price_data"] == "ok"
+    assert analysis_repository.get_analysis(result_payload["request_id"])["ticker"] == "AAPL"
 
 
-def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch):
+def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch, analysis_repository):
     async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
         await queue.put(
             {
@@ -146,6 +153,7 @@ def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch):
     assert [name for name, _ in second] == ["job", "progress", "result"]
     assert first[1][1]["agent_id"] == "market_analyst"
     assert second[2][1]["decision"] == "Buy"
+    assert analysis_repository.get_analysis_by_job_id(job_id)["ticker"] == "AAPL"
 
 
 def test_job_event_stream_is_not_gzipped(client, monkeypatch):

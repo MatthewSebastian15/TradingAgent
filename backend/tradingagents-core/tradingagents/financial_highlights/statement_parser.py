@@ -34,6 +34,47 @@ FIELD_ALIASES = {
         "totalequity",
     ),
     "total_debt": ("total debt", "totaldebt", "shortLongTermDebtTotal"),
+    "cash": (
+        "cash cash equivalents and short term investments",
+        "cashcashequivalentsandshortterminvestments",
+        "cash and cash equivalents",
+        "cashandcashequivalents",
+        "cash and short term investments",
+        "cashandshortterminvestments",
+        "cashAndCashEquivalentsAtCarryingValue",
+        "cash",
+    ),
+    "current_liabilities": ("current liabilities", "currentliabilities", "totalCurrentLiabilities"),
+    "total_liabilities": (
+        "total liabilities net minority interest",
+        "totalliabilitiesnetminorityinterest",
+        "total liabilities",
+        "totalliabilities",
+        "totalLiabilities",
+    ),
+    "total_assets": ("total assets", "totalassets", "totalAssets"),
+    "operating_income": ("operating income", "operatingincome", "operatingIncome"),
+    "operating_cash_flow": (
+        "operating cash flow",
+        "operatingcashflow",
+        "total cash from operating activities",
+        "totalcashfromoperatingactivities",
+        "operatingCashflow",
+    ),
+    "capex": (
+        "capital expenditure",
+        "capitalexpenditure",
+        "capital expenditures",
+        "capitalexpenditures",
+        "capitalExpenditures",
+    ),
+    "dividend_paid": (
+        "cash dividends paid",
+        "cashdividendspaid",
+        "dividends paid",
+        "dividendspaid",
+        "dividendPayout",
+    ),
     "shares_outstanding": (
         "ordinary shares number",
         "ordinarysharesnumber",
@@ -50,9 +91,7 @@ FIELD_ALIASES = {
 }
 
 NORMALIZED_ALIAS_MAP = {
-    re.sub(r"[^a-z0-9]", "", alias.lower()): field
-    for field, aliases in FIELD_ALIASES.items()
-    for alias in aliases
+    re.sub(r"[^a-z0-9]", "", alias.lower()): field for field, aliases in FIELD_ALIASES.items() for alias in aliases
 }
 
 
@@ -120,10 +159,13 @@ def _merge_value(
     *,
     source_vendor: str,
     source_field: str,
+    source_unit: str | None = None,
 ) -> None:
     number = _number(value)
     if not period_key or not field or number is None:
         return
+    if field in {"capex", "dividend_paid"}:
+        number = abs(number)
     period_values = normalized["periods"].setdefault(period_key, {})
     if field in period_values:
         return
@@ -131,6 +173,7 @@ def _merge_value(
         "value": number,
         "source_vendor": source_vendor,
         "source_field": source_field,
+        "source_unit": source_unit,
     }
     if source_vendor not in normalized["sources_used"]:
         normalized["sources_used"].append(source_vendor)
@@ -180,6 +223,9 @@ def _parse_direct_period_mapping(
                 value = raw_value.get("value")
                 source_vendor = str(raw_value.get("source_vendor") or vendor)
                 source_field = str(raw_value.get("source_field") or raw_field)
+                source_unit = str(raw_value.get("source_unit") or raw_value.get("unit") or "raw")
+            else:
+                source_unit = "raw"
             _merge_value(
                 normalized,
                 period_key,
@@ -187,6 +233,7 @@ def _parse_direct_period_mapping(
                 value,
                 source_vendor=source_vendor,
                 source_field=source_field,
+                source_unit=source_unit,
             )
     return True
 
@@ -201,11 +248,7 @@ def _parse_tabular_statement(
         payload = payload.to_csv()
     if not isinstance(payload, str) or "," not in payload:
         return False
-    rows = [
-        line
-        for line in payload.splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
+    rows = [line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if len(rows) < 2:
         return False
     try:
@@ -378,6 +421,70 @@ def _currency_from_payload(payload: Any) -> str | None:
     return str(currency).upper() if currency else None
 
 
+def _last_close_on_or_before(price_data: Any, analysis_date: Any) -> float | None:
+    if hasattr(price_data, "to_csv"):
+        price_data = price_data.to_csv()
+    if not isinstance(price_data, str) or "," not in price_data:
+        return None
+    lines = [line for line in price_data.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if len(lines) < 2:
+        return None
+    try:
+        rows = csv.DictReader(StringIO("\n".join(lines)))
+        field_map = {re.sub(r"[^a-z0-9]", "", field.lower()): field for field in rows.fieldnames or []}
+    except csv.Error:
+        return None
+    date_field = next((field_map[key] for key in ("date", "datetime", "timestamp") if key in field_map), None)
+    close_field = field_map.get("close")
+    if not date_field or not close_field:
+        return None
+    try:
+        cutoff = datetime.fromisoformat(str(analysis_date)[:10]).date()
+    except (TypeError, ValueError):
+        cutoff = None
+    last_date = None
+    last_close = None
+    for row in rows:
+        try:
+            row_date = datetime.fromisoformat(str(row.get(date_field) or "")[:10]).date()
+        except ValueError:
+            continue
+        close = _number(row.get(close_field))
+        if close is None or (cutoff is not None and row_date > cutoff):
+            continue
+        if last_date is None or row_date >= last_date:
+            last_date = row_date
+            last_close = close
+    return last_close
+
+
+def _add_reference_price(
+    normalized: dict[str, Any],
+    periods: list[FinancialPeriod],
+    price_data: Any,
+    analysis_date: Any,
+) -> None:
+    reference_price = _last_close_on_or_before(price_data, analysis_date)
+    if reference_price is None or not periods:
+        return
+    target_period = next(
+        (
+            period
+            for period in reversed(periods)
+            if normalized.get("periods", {}).get(period.key, {}).get("dividend_per_share")
+        ),
+        periods[-1],
+    )
+    _merge_value(
+        normalized,
+        target_period.key,
+        "reference_price",
+        reference_price,
+        source_vendor="price_data",
+        source_field="last_close_on_or_before_analysis_date",
+    )
+
+
 def parse_vendor_financials(
     *,
     ticker: str,
@@ -387,10 +494,10 @@ def parse_vendor_financials(
     balance_sheet: Any | None = None,
     cashflow: Any | None = None,
     price_data: Any | None = None,
+    analysis_date: Any | None = None,
     dividends: Any | None = None,
     vendor_payloads: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    del periods, price_data
     normalized = _new_normalized()
     grouped: dict[str, list[tuple[Any, str | None]]] = {vendor: [] for vendor in VENDOR_PRIORITY}
 
@@ -412,4 +519,5 @@ def parse_vendor_financials(
         for payload, frequency in grouped.get(vendor, []):
             _parse_statement(payload, normalized, vendor, frequency)
 
+    _add_reference_price(normalized, periods, price_data, analysis_date)
     return normalized

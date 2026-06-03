@@ -14,10 +14,7 @@ APP_NAME = "TradingAgents API"
 APP_ENV = env("APP_ENV", "development").lower().strip()
 
 if APP_ENV not in {"development", "production"}:
-    raise ValueError(
-        f"Invalid APP_ENV={APP_ENV!r}. "
-        "Allowed values: development, production."
-    )
+    raise ValueError(f"Invalid APP_ENV={APP_ENV!r}. Allowed values: development, production.")
 
 IS_PRODUCTION = APP_ENV == "production"
 IS_DEVELOPMENT = APP_ENV == "development"
@@ -45,10 +42,7 @@ else:
     CORS_ORIGINS = []
 
 if "*" in CORS_ORIGINS:
-    raise ValueError(
-        "CORS_ORIGINS='*' is not allowed. "
-        "Use explicit origins instead."
-    )
+    raise ValueError("CORS_ORIGINS='*' is not allowed. Use explicit origins instead.")
 
 if IS_PRODUCTION and not CORS_ORIGINS:
     raise ValueError("CORS_ORIGINS must be explicitly configured in production.")
@@ -94,9 +88,7 @@ ANALYSIS_DEPTH_CONFIG: dict[str, dict[str, int]] = {
         "risk_rounds": 3,
     },
 }
-ANALYSIS_DEPTH_LLM_BUDGETS: dict[str, int] = {
-    depth: cfg["llm_budget"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()
-}
+ANALYSIS_DEPTH_LLM_BUDGETS: dict[str, int] = {depth: cfg["llm_budget"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()}
 MAX_GEMINI_CALLS = ANALYSIS_DEPTH_LLM_BUDGETS[DEFAULT_ANALYSIS_DEPTH]
 
 # Rate limiting
@@ -116,9 +108,7 @@ if IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
 LLM_TIMEOUT_SECONDS = env_int("LLM_TIMEOUT_SECONDS", 60, min_value=1)
 LLM_MAX_RETRIES = env_int("LLM_MAX_RETRIES", 2, min_value=1)
 PROVIDER_SDK_MAX_RETRIES = env_int("PROVIDER_SDK_MAX_RETRIES", 0, min_value=0)
-LLM_RETRIES_BY_DEPTH: dict[str, int] = {
-    depth: cfg["llm_retries"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()
-}
+LLM_RETRIES_BY_DEPTH: dict[str, int] = {depth: cfg["llm_retries"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()}
 LLM_RETRY_BASE_DELAY = 1.5
 LLM_RETRY_MAX_DELAY = 30
 LLM_429_MAX_WAIT_SECONDS = 20
@@ -127,6 +117,27 @@ MAX_CONCURRENT_LLM_CALLS = 3
 # Cache
 CACHE_TTL_SECONDS = env_int("CACHE_TTL_SECONDS", 900, min_value=1)
 CACHE_MAX_ENTRIES = env_int("CACHE_MAX_ENTRIES", 512, min_value=1)
+LLM_EXACT_CACHE_ENABLED = env_bool("LLM_EXACT_CACHE_ENABLED", True)
+LLM_EXACT_CACHE_TTL_SECONDS = env_int("LLM_EXACT_CACHE_TTL_SECONDS", 1800, min_value=60)
+LLM_EXACT_CACHE_MAX_ENTRIES = env_int("LLM_EXACT_CACHE_MAX_ENTRIES", 1024, min_value=1)
+LLM_EXACT_CACHE_DB_PATH = env(
+    "LLM_EXACT_CACHE_DB_PATH",
+    str(BASE_DIR / ".cache" / "llm_exact_cache.sqlite3"),
+)
+LLM_SEMANTIC_CACHE_ENABLED = env_bool("LLM_SEMANTIC_CACHE_ENABLED", False)
+LLM_SEMANTIC_CACHE_TTL_SECONDS = env_int("LLM_SEMANTIC_CACHE_TTL_SECONDS", 3600, min_value=60)
+LLM_SEMANTIC_CACHE_MAX_ENTRIES = env_int("LLM_SEMANTIC_CACHE_MAX_ENTRIES", 2048, min_value=1)
+LLM_SEMANTIC_CACHE_DB_PATH = env(
+    "LLM_SEMANTIC_CACHE_DB_PATH",
+    str(BASE_DIR / ".cache" / "llm_semantic_cache.sqlite3"),
+)
+LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD = env_float(
+    "LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD",
+    0.97,
+    min_value=0.0,
+    max_value=1.0,
+)
+LLM_SEMANTIC_CACHE_TARGETS = env("LLM_SEMANTIC_CACHE_TARGETS", "news_summary,company_profile")
 ANALYSIS_RESULT_CACHE_TTL_SECONDS = env_int("ANALYSIS_RESULT_CACHE_TTL_SECONDS", 60 * 60 * 8, min_value=60)
 ANALYSIS_RESULT_CACHE_MAX_ENTRIES = env_int("ANALYSIS_RESULT_CACHE_MAX_ENTRIES", 256, min_value=1)
 ANALYSIS_JOB_TTL_SECONDS = env_int("ANALYSIS_JOB_TTL_SECONDS", 60 * 60 * 8, min_value=60)
@@ -137,6 +148,12 @@ ANALYSIS_JOB_CACHE_DB_PATH = env(
     "ANALYSIS_JOB_CACHE_DB_PATH",
     str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3"),
 )
+ANALYSIS_DB_PATH = env(
+    "ANALYSIS_DB_PATH",
+    str(BASE_DIR / ".cache" / "analysis_history.sqlite3"),
+)
+ANALYSIS_HISTORY_MAX_ROWS = env_int("ANALYSIS_HISTORY_MAX_ROWS", 1000, min_value=1)
+ANALYSIS_HISTORY_DEFAULT_LIMIT = env_int("ANALYSIS_HISTORY_DEFAULT_LIMIT", 25, min_value=1)
 OWNER_SESSION_SECRET = env("OWNER_SESSION_SECRET", "")
 if IS_PRODUCTION and not OWNER_SESSION_SECRET:
     raise ValueError("OWNER_SESSION_SECRET must be configured in production.")

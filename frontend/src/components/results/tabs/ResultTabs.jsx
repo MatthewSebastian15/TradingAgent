@@ -2,9 +2,11 @@ import PropTypes from 'prop-types';
 
 const TABS = [
   { id: 'analisis', label: 'Analisis' },
-  { id: 'profile', label: 'Profile' },
+  { id: 'profile', label: 'Profil' },
+  { id: 'fundamental', label: 'Fundamental' },
   { id: 'chart_price', label: 'Chart & Price' },
   { id: 'news', label: 'News' },
+  { id: 'risk_data_quality', label: 'Risk / Data Quality' },
 ];
 
 export default function ResultTabs({ activeTab, onTabChange, disabledTabs = [] }) {
