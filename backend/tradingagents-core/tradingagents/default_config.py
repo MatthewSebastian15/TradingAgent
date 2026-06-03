@@ -39,6 +39,16 @@ DEFAULT_CONFIG = {
     # Cache
     "cache_ttl_seconds": 900,
     "cache_max_entries": 512,
+    "llm_exact_cache_enabled": _env_bool("LLM_EXACT_CACHE_ENABLED", True),
+    "llm_exact_cache_ttl_seconds": int(_env("LLM_EXACT_CACHE_TTL_SECONDS") or "1800"),
+    "llm_exact_cache_max_entries": int(_env("LLM_EXACT_CACHE_MAX_ENTRIES") or "1024"),
+    "llm_exact_cache_db_path": _env("LLM_EXACT_CACHE_DB_PATH") or ".cache/llm_exact_cache.sqlite3",
+    "llm_semantic_cache_enabled": _env_bool("LLM_SEMANTIC_CACHE_ENABLED", False),
+    "llm_semantic_cache_ttl_seconds": int(_env("LLM_SEMANTIC_CACHE_TTL_SECONDS") or "3600"),
+    "llm_semantic_cache_max_entries": int(_env("LLM_SEMANTIC_CACHE_MAX_ENTRIES") or "2048"),
+    "llm_semantic_cache_db_path": _env("LLM_SEMANTIC_CACHE_DB_PATH") or ".cache/llm_semantic_cache.sqlite3",
+    "llm_semantic_cache_similarity_threshold": float(_env("LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD") or "0.97"),
+    "llm_semantic_cache_targets": _env("LLM_SEMANTIC_CACHE_TARGETS") or "news_summary,company_profile",
     # Pipeline
     "parallel_analysts": True,
     "analysis_mode": "balanced",
