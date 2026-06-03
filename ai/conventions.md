@@ -1,173 +1,485 @@
 # Coding Conventions
 
-Rules every AI assistant must follow when modifying this codebase. These are
-not preferences, they are existing patterns in the code. Deviating from them
-creates inconsistency that makes future changes harder.
+Terakhir disinkronkan: 2026-06-03.
 
----
+Ikuti aturan ini saat mengubah repo. Aturan ini mengikuti pola kode yang aktif,
+bukan preferensi umum.
 
-## Git Commits
+## Git
 
-Use Conventional Commits format. Every commit message must follow this pattern:
+Gunakan Conventional Commits.
 
-```
+Format:
+
+```text
 <type>(<scope>): <short description>
-
-[optional body]
 ```
 
-Types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `perf`, `style`
+Type yang dipakai:
 
-Examples:
+```text
+feat, fix, chore, docs, test, refactor, perf, style
+```
+
+Contoh:
+
 ```bash
-git commit -m "feat(backend): add time horizon validation for 1-3 month range"
-git commit -m "fix(frontend): correct SSE reconnect logic in useAnalysisJob"
-git commit -m "test(backend): add coverage for IDX ticker normalization edge cases"
-git commit -m "chore: update tradingagents-core to 0.2.5"
-git commit -m "docs: add Ollama setup guide to setup.md"
+git commit -m "fix(api): correct analysis job cancellation response"
+git commit -m "docs(ai): sync API routes with current backend"
+git commit -m "test(frontend): cover SSE result handling"
 ```
 
-Always stage specific files, not `git add .`, unless every changed file belongs
-to the same logical unit of work.
+Stage file spesifik. Jangan pakai `git add .` kecuali semua file berubah dalam
+satu unit kerja yang sama.
 
----
+## Bahasa dan Dokumentasi
 
-## Python (Backend + Core)
+- Pakai bahasa jelas dan langsung.
+- Tulis kalimat pendek.
+- Pakai istilah yang sama dengan kode.
+- Jika dokumen membahas endpoint, port, env, atau route, ambil dari file kode
+  dan `.env.example`, bukan dari ingatan.
+- Hindari klaim "support" untuk fitur yang belum benar-benar ada di route atau
+  pipeline.
+- Saat menulis dokumen repo `.md`, markdown boleh dipakai karena file memang
+  markdown.
 
-### General Rules
-- Python 3.10+ syntax. Use `X | Y` union types, not `Optional[X]` or `Union[X, Y]`.
-- Add `from __future__ import annotations` at the top of every new file.
-- Type hints on all function signatures. No `Any` unless genuinely unavoidable.
-- Docstrings on all public functions and classes. One-line for simple helpers,
-  multi-line for anything that has side effects or non-obvious behavior.
-- Line length: 120 characters (matches `pyproject.toml` ruff config).
+## Python Backend
+
+### Version dan Style
+
+| Area | Rule |
+|---|---|
+| Backend Docker | Python 3.11. |
+| Core package | `>=3.10,<3.13`. |
+| New file | Tambahkan `from __future__ import annotations`. |
+| Type hints | Wajib untuk signature fungsi baru. |
+| Union | Pakai `X | Y`, bukan `Optional[X]` atau `Union[X, Y]`. |
+| Line length | 120 char sesuai ruff config. |
+| Formatting | Ruff format, double quotes. |
 
 ### Imports
-- Standard library first, then third-party, then local. Separate groups with a
-  blank line.
-- Import from `config.py` for all runtime config. Never read `os.environ`
-  directly in routes or services.
-- Import from `tradingagents.xxx` (not `backend.tradingagents.xxx`).
 
-### Error Handling
-- Use custom exception classes from `backend/errors.py`:
-  - `BadRequestError` for invalid input (maps to HTTP 400)
-  - `NotFoundError` for missing resources (maps to HTTP 404)
-  - `RateLimitError` for rate limit exceeded (maps to HTTP 429)
-  - `ApiError` for generic backend errors (maps to HTTP 500)
-- Never raise bare `Exception`. Always use the right typed error.
-- Never let stack traces or internal paths reach the HTTP response.
-  The `unhandled_exception_handler` in `main.py` sanitizes them.
+Urutan import:
 
-### Pydantic Models
-- Response models go in `backend/schemas.py`.
-- Request/input models go in `backend/routes/validation.py`.
-- Always inherit from `ApiSchema` for response models (it sets `extra="allow"`).
-- Never set `extra="forbid"` on response models. The pipeline adds fields over time.
+1. Standard library
+2. Third-party
+3. Local module
 
-### Testing
-- Test files go in `backend/tests/` or `backend/tradingagents-core/tests/`.
-- Use `pytest` markers: `@pytest.mark.unit`, `@pytest.mark.integration`,
-  `@pytest.mark.smoke`.
-- Mock external API calls in unit tests. Never call yfinance, Finnhub, or any
-  LLM in a unit test.
-- Test file naming: `test_<module_name>.py`.
+Gunakan blank line antar group.
 
----
+Rule khusus:
 
-## React / Frontend
+- Route dan service import runtime config dari `config.py`.
+- Jangan baca `os.environ` langsung di route atau service.
+- Import engine sebagai `from tradingagents...`.
+- Jangan import sebagai `from backend.tradingagents...`.
+
+### Config
+
+Source of truth:
+
+| Scope | File |
+|---|---|
+| Env parsing | `backend/config_env.py` |
+| Defaults | `backend/config_defaults.py` |
+| LLM config | `backend/config_llm.py` |
+| Startup validation | `backend/config_validation.py` |
+| Public facade | `backend/config.py` |
+
+Jika menambah env backend:
+
+1. Tambahkan parser/default di config module yang tepat.
+2. Export lewat `backend/config.py` jika route/service perlu memakai.
+3. Tambahkan ke `backend/.env.example`.
+4. Update `ai/setup.md`.
+5. Jika keputusan teknisnya penting, update `ai/decisions.md`.
+6. Tambahkan test config jika ada validation atau behavior baru.
+
+### Errors
+
+Gunakan exception typed dari `backend/errors.py`.
+
+| Error class | HTTP | Untuk |
+|---|---:|---|
+| `BadRequestError` | 400 | Input invalid, preflight gagal, job tidak valid. |
+| `AuthenticationError` | 401 | API key atau owner token invalid. |
+| `NotFoundError` | 404 | Resource tidak ada. |
+| `RateLimitError` | 429 | Limit request/stream/concurrency. |
+| `PipelineTimeoutError` | 504 | Pipeline timeout. |
+| `PipelineExecutionError` | 500 | Pipeline gagal. |
+
+Jangan kirim stack trace, path filesystem, atau secret ke HTTP response. Error
+handler sudah melakukan sanitasi. Jangan bypass handler itu.
+
+### Pydantic
+
+- Response model ada di `backend/schemas.py`.
+- Request model analisis ada di `backend/routes/validation.py`.
+- Response schema harus inherit dari `ApiSchema`.
+- `ApiSchema` memakai `extra="allow"`.
+- Jangan set `extra="forbid"` pada response model pipeline.
+- Jika menambah field final result, update frontend mirror yang membaca field itu.
+
+### API Contract
+
+Saat mengubah request atau response analisis, cek file ini sekaligus:
+
+| File | Alasan |
+|---|---|
+| `backend/routes/validation.py` | Validasi request. |
+| `backend/schemas.py` | Kontrak response publik. |
+| `backend/routes/serializers.py` | Shaping final result. |
+| `frontend/src/domain/analysisContract.js` | Frontend validation dan payload builder. |
+| `frontend/src/components/ResultCard.jsx` | Rendering final result. |
+| `frontend/src/utils/reportApi.js` | Payload report fallback. |
+| `backend/tests/test_analysis_contract_snapshot.py` | Snapshot kontrak backend. |
+| `frontend/src/domain/analysisContract.test.js` | Kontrak frontend. |
+
+### Testing Backend
+
+Test backend ada di:
+
+```text
+backend/tests/
+backend/tradingagents-core/tests/
+```
+
+Marker:
+
+```text
+unit, integration, smoke, live_api
+```
+
+Rules:
+
+- Unit test tidak boleh memanggil yfinance, Finnhub, MarketAux, NewsData, Alpha
+  Vantage, atau LLM live.
+- Mock external call.
+- Test route pakai TestClient atau async client sesuai pola existing.
+- Test file bernama `test_<module>.py`.
+- Jika mengubah sanitizer atau error, test response tidak membocorkan secret.
+
+Command utama:
+
+```bash
+cd backend
+pytest tests/ -m "not integration and not live_api" -v
+python -m ruff check .
+python -m ruff format --check .
+```
+
+Core tests:
+
+```bash
+cd backend/tradingagents-core
+pytest tests/ -m "not integration and not live_api" -v
+```
+
+## Frontend
 
 ### Component Rules
-- Functional components only. No class components.
-- Every component that accepts props must declare `PropTypes`. No exceptions.
-  ```jsx
-  import PropTypes from 'prop-types';
-  MyComponent.propTypes = { value: PropTypes.string.isRequired };
-  ```
-- Hooks must start with `use`. Custom hooks go in `frontend/src/hooks/`.
-- No inline styles. Use Tailwind utility classes.
-- No hardcoded colors. Use the Bloomberg design token classes from `tailwind.config.js`:
-  `bloomberg-bg`, `bloomberg-text`, `bloomberg-accent`, `bloomberg-muted`, etc.
+
+- Pakai functional component.
+- Component yang menerima props harus punya `PropTypes`.
+- Custom hook harus diawali `use`.
+- Jangan pakai class component.
+- Jangan pakai inline style kecuali ukuran dinamis kecil yang sudah jadi pola
+  existing, contoh max height atau transition delay.
+- Pakai Tailwind utility class.
+- Pakai token warna dari `frontend/tailwind.config.js`.
+
+Token warna:
+
+```text
+bloomberg-bg
+bloomberg-surface
+bloomberg-card
+bloomberg-border
+bloomberg-border-light
+bloomberg-orange
+bloomberg-orange-dim
+bloomberg-green
+bloomberg-green-dim
+bloomberg-red
+bloomberg-red-dim
+bloomberg-amber
+bloomberg-amber-dim
+bloomberg-blue
+bloomberg-blue-dim
+bloomberg-cyan
+bloomberg-white
+bloomberg-muted
+bloomberg-subtle
+```
 
 ### File Organization
-- Page-level components go in `frontend/src/pages/`.
-- Shared components go in `frontend/src/components/`.
-- Result card sub-components go in `frontend/src/components/results/`.
-- Tab components go in `frontend/src/components/results/tabs/`.
-- Utilities go in `frontend/src/utils/`.
-- Constants (static strings, disclaimers) go in `frontend/src/constants/`.
 
-### Environment Variables
-- Always use `VITE_` prefix. Never use `REACT_APP_` prefix.
-- Access via `import.meta.env.VITE_XXX`. Never via `process.env`.
-- Document every new variable in `frontend/.env.example`.
+| Jenis | Folder |
+|---|---|
+| Page | `frontend/src/pages/` |
+| Shared component | `frontend/src/components/` |
+| Result subcomponent | `frontend/src/components/results/` |
+| Result tab | `frontend/src/components/results/tabs/` |
+| Hook | `frontend/src/hooks/` |
+| Utility | `frontend/src/utils/` |
+| Domain contract | `frontend/src/domain/` |
+| Constant | `frontend/src/constants/` |
+| Dev mock fixture | `frontend/dev/` |
+
+### API URL
+
+Primary env saat ini adalah `VITE_API_BASE_URL`.
+
+| Mode | Value |
+|---|---|
+| Local Vite | `VITE_API_BASE_URL=http://localhost:8000` |
+| Docker/nginx | `VITE_API_BASE_URL=/api` |
+| Legacy | `VITE_API_URL` boleh dipakai hanya sebagai fallback lama. |
+
+Rules:
+
+- Jangan hardcode backend URL di component.
+- Pakai `buildApiUrl()` dari `frontend/src/utils/api.js`.
+- Jangan pakai `process.env`.
+- Pakai `import.meta.env.VITE_*`.
+- Semua env browser harus diawali `VITE_`.
+- Jangan taruh `API_KEY` backend ke `VITE_*`. Browser bisa melihat semua
+  variable `VITE_*`.
+
+### Owner Token
+
+Frontend harus memakai helper ini:
+
+| Helper | Fungsi |
+|---|---|
+| `getOwnerToken()` | Ambil token dari sessionStorage atau `POST /api/session`. |
+| `buildAuthHeaders()` | Header `x-owner-token`. |
+| `buildHeaders()` | Header JSON plus auth. |
+| `readHttpError()` | Parse error envelope backend. |
+
+Jangan membuat fetch manual yang lupa `x-owner-token` untuk endpoint protected.
+
+### SSE
+
+Frontend memakai `fetch()` stream, bukan native `EventSource`, karena harus
+mengirim header `x-owner-token`.
+
+Files:
+
+| File | Fungsi |
+|---|---|
+| `frontend/src/hooks/useAnalysisJob.js` | Create job, stream SSE, cancel job. |
+| `frontend/src/utils/sse.js` | Parse SSE block. |
+| `backend/routes/sse.py` | Format event. |
+| `backend/routes/jobs.py` | Stream job events. |
+
+Event yang harus tetap sinkron:
+
+```text
+job
+progress
+heartbeat
+result
+error
+```
+
+Jangan ubah format payload progress tanpa update `AgentLog`, tests, dan docs.
 
 ### Mock Data
-- Mock data lives in `frontend/dev/mockData.js` and `frontend/src/utils/mockReport.js`.
-- Never import mock data in production components.
-- The mock route (`/analysis.test`) is gated by `VITE_ENABLE_MOCK=true`.
-- `StockFormMock.jsx` is a dev-only component. Do not import it from production paths.
 
-### API Contract Sync
-When `backend/schemas.py` changes, `frontend/src/domain/analysisContract.js`
-must be updated to match. These two files must stay in sync. Verify both when
-touching the analysis result shape.
+- Mock route hanya aktif saat `VITE_ENABLE_MOCK=true`.
+- `AnalysisMock.jsx`, `StockFormMock.jsx`, dan `useMockAnalysisJob.js` hanya
+  untuk mock route.
+- Fixture dev ada di `frontend/dev/mockData.js`.
+- Report mock helper ada di `frontend/src/utils/mockReport.js`.
+- Jangan import mock fixture dari production path.
 
-### Testing
-- Test files sit next to the component: `MyComponent.test.jsx`.
-- Use Vitest + Testing Library. No Enzyme.
-- Test what the user sees, not implementation details.
-- Mock `fetch` and SSE in tests. Never make real network calls in tests.
+### Testing Frontend
 
----
+Rules:
 
-## Environment and Configuration
+- Test file boleh colocated dengan component, contoh `ResultCard.test.jsx`.
+- Pakai Vitest dan Testing Library.
+- Test behavior user, bukan implementation detail.
+- Mock fetch dan SSE.
+- Jangan buat network call nyata.
 
-### `.env` Files
-- `backend/.env.example` is the canonical reference for all backend variables.
-- `frontend/.env.example` is the canonical reference for all frontend variables.
-- Never commit `.env` to git.
-- When adding a new variable, add it to both `.env.example` and `decisions.md`.
+Command:
 
-### Secrets
-- API keys go in `.env` only. Never hardcode in source files.
-- The `OWNER_SESSION_SECRET` must be a strong random string in production.
-  Leave blank for local dev only.
+```bash
+cd frontend
+npm test -- --run
+npm run lint
+npm run format:check
+npm run quality
+```
 
-### CORS
-- `CORS_ORIGINS` in `.env` controls allowed origins.
-- Default dev value: `http://localhost:3000,http://localhost:5173,...`
-- `APP_ENV=development` is required for local dev. `APP_ENV=production` restricts
-  several behaviors including error detail verbosity.
+## API dan Endpoint
 
----
+Endpoint canonical analisis:
 
-## Naming Conventions
+```text
+POST   /api/session
+POST   /api/analysis/jobs
+GET    /api/analysis/jobs/{job_id}/events
+GET    /api/analysis/jobs/{job_id}
+DELETE /api/analysis/jobs/{job_id}
+```
 
-| Context | Convention | Example |
+Endpoint legacy:
+
+```text
+POST   /api/analyze
+POST   /api/analyze/stream
+GET    /api/analysis/{request_id}
+DELETE /api/analysis/{job_id}
+```
+
+Jangan gunakan endpoint legacy untuk fitur frontend baru.
+
+Endpoint yang tidak ada di kode saat ini:
+
+```text
+GET  /api/analyze/status
+POST /api/analyze/cancel/{job_id}
+GET  /api/market/quote/{ticker}
+GET  /api/reports/{job_id}.html
+GET  /api/reports/{job_id}.pdf
+GET  /api/session
+POST /api/session/refresh
+```
+
+Jangan dokumentasikan endpoint di atas sebagai endpoint aktif.
+
+## Market dan Ticker
+
+Backend hanya mendukung:
+
+```text
+US
+ID
+```
+
+Rules:
+
+- `market` harus `US`, `ID`, atau `null`.
+- IDX plain code akan dinormalisasi ke `.JK`.
+- Non-ID exchange suffix ditolak.
+- `trade_date` format `YYYY-MM-DD`.
+- `trade_date` tidak boleh lebih dari 1 hari di masa depan.
+- `time_horizon_months` hanya `1`, `2`, atau `3`.
+- `max_debate_rounds` hanya `1` sampai `5`.
+- `analysis_depth` hanya `fast`, `balanced`, atau `deep`.
+- `response_detail` hanya `summary`, `full`, atau `debug`.
+
+Jika memperluas market, update:
+
+```text
+backend/routes/validation.py
+frontend/src/domain/analysisContract.js
+frontend/src/components/StockForm.jsx
+frontend/src/pages/Dashboard.jsx
+backend/tests/test_validation.py
+frontend/src/domain/analysisContract.test.js
+ai/api.md
+ai/setup.md
+```
+
+## Reports dan Disclaimer
+
+Report endpoints:
+
+```text
+GET  /api/analysis/jobs/{job_id}/report.html
+GET  /api/analysis/jobs/{job_id}/report.pdf
+POST /api/analysis/report.html
+POST /api/analysis/report.pdf
+```
+
+Rules:
+
+- Jangan hapus disclaimer dari `backend/services/report_disclaimer.py`.
+- Jangan hilangkan disclaimer dari user-facing report.
+- Jika menambah field report, update compact payload di
+  `frontend/src/utils/reportApi.js`.
+- Jika mengubah template, cek HTML dan PDF.
+
+## Docker
+
+Rules:
+
+- Backend Docker expose port 8000.
+- Frontend Docker expose port 80 dan host map 3000.
+- Nginx proxy `/api/` ke `http://backend:8000/api/`.
+- Nginx menyisipkan `x-api-key` dari env `BACKEND_API_KEY`.
+- Jangan memakai `VITE_*` untuk secret backend.
+- `docker-compose.mock.yml` hanya untuk mengaktifkan mock route.
+
+Files:
+
+```text
+docker-compose.yml
+docker-compose.mock.yml
+Dockerfile.backend
+Dockerfile.frontend
+frontend/nginx.conf
+```
+
+## Environment Files
+
+Files yang boleh jadi template:
+
+```text
+backend/.env.example
+frontend/.env.example
+backtest/.env.backtest.example
+```
+
+Files yang tidak boleh commit:
+
+```text
+.env
+.env.*
+backend/.env
+frontend/.env
+backtest/.env.backtest
+*.sqlite3
+*.db
+backend/.cache/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+```
+
+Jangan buka atau salin secret dari `.env` nyata kecuali user jelas meminta dan
+tujuannya aman. Pakai `.env.example` sebagai referensi.
+
+## Naming
+
+| Area | Convention | Example |
 |---|---|---|
-| Python files | `snake_case` | `pipeline_runner.py` |
-| Python classes | `PascalCase` | `AnalysisRequest` |
-| Python functions | `snake_case` | `normalize_ticker` |
-| React components | `PascalCase.jsx` | `ResultCard.jsx` |
-| React hooks | `camelCase.js` | `useAnalysisJob.js` |
-| React utils | `camelCase.js` | `analysisContract.js` |
-| CSS classes | Tailwind only | `text-bloomberg-accent` |
-| Env vars (backend) | `UPPER_SNAKE_CASE` | `LLM_PROVIDER` |
-| Env vars (frontend) | `VITE_UPPER_SNAKE_CASE` | `VITE_API_URL` |
+| Python file | `snake_case.py` | `pipeline_runner.py` |
+| Python class | `PascalCase` | `AnalysisRequest` |
+| Python function | `snake_case` | `normalize_ticker` |
+| React component | `PascalCase.jsx` | `ResultCard.jsx` |
+| Hook | `camelCase.js`, diawali `use` | `useAnalysisJob.js` |
+| Utility JS | `camelCase.js` | `analysisHistoryApi.js` |
+| Backend env | `UPPER_SNAKE_CASE` | `LLM_PROVIDER` |
+| Frontend env | `VITE_UPPER_SNAKE_CASE` | `VITE_API_BASE_URL` |
 
----
+## Jangan Dilakukan
 
-## What Not to Do
-
-- Do not add new dependencies without checking if existing ones cover the need.
-- Do not add `console.log` or `print` statements in production code paths.
-  Use the logging module (backend) or structured log events.
-- Do not bypass the validation layer in `routes/validation.py`. All analysis
-  requests must pass through `normalize_and_validate_analysis_request`.
-- Do not hardcode the backend URL in frontend components. Always use
-  `import.meta.env.VITE_API_URL` via `frontend/src/utils/api.js`.
-- Do not remove the `disclaimer` from any user-facing output or report.
-  TradingAgent is a research tool, not financial advice.
-- Do not change the SSE event format without updating both `routes/sse.py`
-  and `frontend/src/hooks/useAnalysisJob.js`.
+- Jangan hardcode API URL di React component.
+- Jangan gunakan `VITE_API_URL` sebagai primary env baru. Pakai
+  `VITE_API_BASE_URL`.
+- Jangan bypass `normalize_and_validate_analysis_request()`.
+- Jangan mengubah SSE event tanpa update backend, frontend, test, dan docs.
+- Jangan menghapus `SkipSseCompressionMiddleware`.
+- Jangan mengubah `ApiSchema.extra="allow"`.
+- Jangan menambah dependency sebelum mengecek dependency existing.
+- Jangan menambah `print()` atau `console.log()` di production path.
+- Jangan commit secret, `.env`, cache, SQLite, build output, atau node_modules.
+- Jangan menjalankan live vendor/LLM test sebagai unit test.
+- Jangan mengklaim global market support selama backend masih menolak suffix
+  non-ID.
