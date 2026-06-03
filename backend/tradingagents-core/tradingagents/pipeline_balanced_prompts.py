@@ -456,6 +456,10 @@ Keep language simple and practical. Include an action plan, risk controls, price
 - Use price_target as the analyst or fair target. Use take_profit as the trade execution target based on risk/reward.
 - Allowed volatility_level values only: Low, Medium, High, Very High.
 - Allowed rebalancing_action values only: Open new position, Add position, Maintain position, Trim position, Exit position, Avoid new entry.
+- When has_existing_position is true, do not recommend Open new position as the portfolio action. Use Add position, Maintain position, Trim position, or Exit position.
+- When has_existing_position is false, do not recommend Add position, Maintain position, Trim position, or Exit position. Use Open new position only for valid Buy setups and Avoid new entry otherwise.
+- NEW ENTRY ACTION must describe whether a new exposure should be opened. For existing positions, it must not imply a separate new trade. It should describe add-only, maintain, trim, or exit context.
+- Backend validation remains the final source of truth for position action fields.
 - Use Hold when no safe actionable setup exists.
 - executive_summary must be 150-200 words in one paragraph. No bullet points.
 - investment_thesis must be 250-350 words as flowing paragraphs. No bullet points and no headers.
