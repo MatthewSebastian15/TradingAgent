@@ -172,6 +172,15 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "company_profile_rows": _company_profile_rows(result),
         "company_profile_executives": _company_profile_executives(result),
         "price_chart_rows": _price_chart_rows(result, ticker, market),
+        "technical_entry_rows": _technical_entry_rows(result, ticker, market),
+        "news_impact": _as_dict(result.get("news_impact")),
+        "news_impact_rows": _news_impact_rows(result),
+        "high_impact_news_items": _high_impact_news_items(result),
+        "catalyst_tracker": _as_dict(result.get("catalyst_tracker")),
+        "positive_catalysts": _catalyst_items(result, "positive_catalysts"),
+        "negative_catalysts": _catalyst_items(result, "negative_catalysts"),
+        "upcoming_events": _catalyst_items(result, "upcoming_events"),
+        "analyst_consensus_rows": _analyst_consensus_rows(result),
         "related_news": _as_dict(result.get("related_news")),
         "related_news_items": _related_news_items(result),
         "news": _news_context(result),
@@ -579,18 +588,122 @@ def _price_chart_rows(result: dict[str, Any], ticker: str, market: str) -> list[
         return []
 
     stats = _as_dict(chart.get("stats"))
+    summary = _as_dict(result.get("price_performance")) or _as_dict(chart.get("summary"))
     return [
         {"label": "Window", "value": _display(chart.get("window_label"))},
         {"label": "Source", "value": _display(chart.get("source"))},
         {"label": "Lookback Days", "value": _display(chart.get("lookback_days"))},
         {"label": "Start Price", "value": _format_price(stats.get("start_price"), ticker, market)},
         {"label": "End Price", "value": _format_price(stats.get("end_price"), ticker, market)},
-        {"label": "Change %", "value": _display(stats.get("change_percent"))},
-        {"label": "High", "value": _format_price(stats.get("high"), ticker, market)},
-        {"label": "Low", "value": _format_price(stats.get("low"), ticker, market)},
+        {"label": "Period Return", "value": _format_percent(summary.get("period_return_percent") or stats.get("change_percent"))},
+        {"label": "Period High", "value": _format_price(summary.get("period_high") or stats.get("high"), ticker, market)},
+        {"label": "Period Low", "value": _format_price(summary.get("period_low") or stats.get("low"), ticker, market)},
+        {"label": "Max Drawdown", "value": _format_percent(summary.get("max_drawdown_percent"))},
         {"label": "Average Close", "value": _format_price(stats.get("average_close"), ticker, market)},
-        {"label": "Average Volume", "value": _display(stats.get("average_volume"))},
+        {"label": "Average Volume", "value": _display(summary.get("average_volume") or stats.get("average_volume"))},
+        {"label": "Latest Volume", "value": _display(summary.get("latest_volume"))},
+        {"label": "Volume Trend", "value": _display(summary.get("volume_trend"))},
         {"label": "Point Count", "value": _display(stats.get("point_count"))},
+    ]
+
+
+def _technical_entry_rows(result: dict[str, Any], ticker: str, market: str) -> list[dict[str, str]]:
+    technical = _as_dict(result.get("technical_entry"))
+    if not technical:
+        return []
+    return [
+        _row("Entry Quality", technical.get("entry_quality")),
+        _row("Trend", technical.get("trend")),
+        _row("RSI", technical.get("rsi")),
+        _row("RSI Signal", technical.get("rsi_signal")),
+        _row("MACD", technical.get("macd")),
+        _row("MACD Signal Value", technical.get("macd_signal_value")),
+        _row("MACD Signal", technical.get("macd_signal")),
+        {"label": "ATR", "value": _format_price(technical.get("atr"), ticker, market)},
+        {"label": "SMA 20", "value": _format_price(technical.get("sma_20"), ticker, market)},
+        {"label": "SMA 50", "value": _format_price(technical.get("sma_50"), ticker, market)},
+        {"label": "SMA 200", "value": _format_price(technical.get("sma_200"), ticker, market)},
+        {"label": "Support", "value": _format_price(technical.get("support"), ticker, market)},
+        {"label": "Resistance", "value": _format_price(technical.get("resistance"), ticker, market)},
+        _row("Volume Trend", technical.get("volume_trend")),
+    ]
+
+
+def _news_impact_rows(result: dict[str, Any]) -> list[dict[str, str]]:
+    impact = _as_dict(result.get("news_impact"))
+    if not impact:
+        return []
+    quality = _as_dict(impact.get("data_quality"))
+    return [
+        _row("Overall Sentiment", impact.get("overall_sentiment")),
+        _row("Sentiment Score", impact.get("sentiment_score")),
+        _row("High Impact Count", len(impact.get("high_impact_news") or [])),
+        _row("News Count", impact.get("news_count")),
+        _row("Deduplicated Count", impact.get("deduplicated_count")),
+        _row("Sources Used", ", ".join(str(item) for item in quality.get("sources_used", []))),
+    ]
+
+
+def _high_impact_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
+    impact = _as_dict(result.get("news_impact"))
+    raw_items = impact.get("high_impact_news") if impact else []
+    if not isinstance(raw_items, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in raw_items[:5]:
+        if not isinstance(item, dict) or not item.get("title"):
+            continue
+        items.append(
+            {
+                "title": _display(item.get("title")),
+                "source": _display(item.get("source")),
+                "published_at": _display(item.get("published_at")),
+                "sentiment": _display(item.get("sentiment")),
+                "impact": _display(item.get("impact")),
+                "impact_score": _display(item.get("impact_score")),
+                "summary": _display(item.get("summary")),
+                "url": _safe_external_http_url(item.get("url")),
+            }
+        )
+    return items
+
+
+def _catalyst_items(result: dict[str, Any], key: str) -> list[dict[str, str]]:
+    tracker = _as_dict(result.get("catalyst_tracker"))
+    raw_items = tracker.get(key) if tracker else []
+    if not isinstance(raw_items, list):
+        return []
+    items: list[dict[str, str]] = []
+    for item in raw_items[:5]:
+        if not isinstance(item, dict):
+            continue
+        items.append(
+            {
+                "type": _display(item.get("type")),
+                "label": _display(item.get("label")),
+                "impact": _display(item.get("impact") or item.get("risk_level")),
+                "source": _display(item.get("source")),
+                "date": _display(item.get("date")),
+                "related_news_title": _display(item.get("related_news_title")),
+            }
+        )
+    return items
+
+
+def _analyst_consensus_rows(result: dict[str, Any]) -> list[dict[str, str]]:
+    consensus = _as_dict(result.get("analyst_consensus"))
+    if not consensus or not consensus.get("available"):
+        return []
+    return [
+        _row("Period", consensus.get("period")),
+        _row("Strong Buy", consensus.get("strong_buy")),
+        _row("Buy", consensus.get("buy")),
+        _row("Hold", consensus.get("hold")),
+        _row("Sell", consensus.get("sell")),
+        _row("Strong Sell", consensus.get("strong_sell")),
+        _row("Total", consensus.get("total")),
+        _row("Consensus Label", consensus.get("consensus_label")),
+        _row("Trend", consensus.get("trend")),
     ]
 
 

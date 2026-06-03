@@ -1,5 +1,6 @@
 export const UP_COLOR = '#00c853';
 export const DOWN_COLOR = '#ff3b30';
+export const NEUTRAL_COLOR = '#8a8f98';
 export const GRID_COLOR = 'rgba(255, 255, 255, 0.08)';
 export const AXIS_COLOR = 'rgba(255, 255, 255, 0.18)';
 export const TEXT_COLOR = '#8a8f98';
@@ -48,6 +49,7 @@ export function normalizePricePoint(point) {
   if ([open, high, low, close].some((value) => value === null)) return null;
 
   const volume = toNumber(point.volume);
+  const adjustedClose = toNumber(point.adjusted_close);
 
   return {
     ...point,
@@ -56,6 +58,7 @@ export function normalizePricePoint(point) {
     high: Math.max(high, open, close, low),
     low: Math.min(low, open, close, high),
     close,
+    adjusted_close: adjustedClose !== null ? adjustedClose : close,
     volume: volume !== null && volume >= 0 ? volume : null,
   };
 }
@@ -121,6 +124,21 @@ export function buildYAxisTicks(minValue, maxValue, targetTickCount = 6) {
   return ticks.reverse();
 }
 
-export function isUpCandle(point) {
-  return point.close >= point.open;
+export function isUpCandle(point, previousPoint = null) {
+  const reference = previousPoint?.close ?? point.open;
+  return point.close >= reference;
+}
+
+export function movementColor(point, previousPoint = null) {
+  const reference = previousPoint?.close ?? point.open;
+  if (point.close > reference) return UP_COLOR;
+  if (point.close < reference) return DOWN_COLOR;
+  return NEUTRAL_COLOR;
+}
+
+export function movementLabel(point, previousPoint = null) {
+  const reference = previousPoint?.close ?? point.open;
+  if (point.close > reference) return 'UP';
+  if (point.close < reference) return 'DOWN';
+  return 'FLAT';
 }

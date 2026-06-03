@@ -16,6 +16,11 @@ from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
 from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_url, rank_news
+from tradingagents.dataflows.news_intelligence import (
+    build_analyst_consensus,
+    build_catalyst_tracker,
+    build_news_impact,
+)
 from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
@@ -24,6 +29,7 @@ from tradingagents.financial_highlights.builder import build_financial_highlight
 from tradingagents.financial_highlights.models import to_dict as financial_highlights_to_dict
 from tradingagents.fundamentals.builder import build_fundamental_analysis
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
+from tradingagents.technical.entry_quality import build_technical_entry
 
 logger = logging.getLogger(__name__)
 
@@ -540,6 +546,54 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+def _currency_for_ticker(ticker: str) -> str:
+    normalized = str(ticker or "").upper()
+    if normalized.endswith(".JK"):
+        return "IDR"
+    if normalized.endswith(".HK"):
+        return "HKD"
+    if normalized.endswith(".T"):
+        return "JPY"
+    if normalized.endswith(".DE"):
+        return "EUR"
+    if normalized.endswith(".L"):
+        return "GBP"
+    return "USD"
+
+
+def _max_drawdown_percent(closes: list[float]) -> float | None:
+    if len(closes) < 2:
+        return None
+    peak = closes[0]
+    max_drawdown = 0.0
+    for close in closes:
+        if close > peak:
+            peak = close
+        if peak:
+            max_drawdown = min(max_drawdown, ((close - peak) / peak) * 100)
+    return round(max_drawdown, 2)
+
+
+def _volume_trend_label(latest_volume: int | None, average_volume: int | None) -> str:
+    if latest_volume is None or average_volume is None or average_volume <= 0:
+        return "N/A"
+    if latest_volume >= average_volume * 1.1:
+        return "above_average"
+    if latest_volume <= average_volume * 0.9:
+        return "below_average"
+    return "average"
+
+
+def _performance_label(period_return_percent: float | None) -> str:
+    if period_return_percent is None:
+        return "N/A"
+    if period_return_percent > 0:
+        return "positive"
+    if period_return_percent < 0:
+        return "negative"
+    return "flat"
+
+
 def _build_price_chart(
     ticker: str,
     trade_date: str,
@@ -551,16 +605,23 @@ def _build_price_chart(
     months = _normalize_time_horizon_months(time_horizon_months)
     lookback_days = _price_lookback_days(months)
     window_label = f"{months} Month{'s' if months > 1 else ''} Analysis / {lookback_days}D Price Window"
+    window = f"{months}M"
+    currency = _currency_for_ticker(ticker)
 
     base_payload: dict[str, Any] = {
         "available": False,
         "source": source or "unavailable",
         "ticker": ticker,
         "trade_date": trade_date,
+        "currency": currency,
+        "window": window,
         "window_label": window_label,
         "lookback_days": lookback_days,
         "points": [],
+        "data": [],
         "stats": {},
+        "summary": {},
+        "data_quality": {"status": "unavailable", "missing_fields": ["ohlcv"]},
     }
 
     lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
@@ -600,6 +661,7 @@ def _build_price_chart(
             high_price = _safe_float(row.get("High"))
             low_price = _safe_float(row.get("Low"))
             close_price = _safe_float(row.get("Close") or row.get("Adj Close"))
+            adjusted_close = _safe_float(row.get("Adj Close") or row.get("Adjusted Close") or close_price)
             if any(value is None for value in [open_price, high_price, low_price, close_price]):
                 continue
 
@@ -610,6 +672,7 @@ def _build_price_chart(
                     "high": max(high_price, open_price, close_price, low_price),
                     "low": min(low_price, open_price, close_price, high_price),
                     "close": close_price,
+                    "adjusted_close": adjusted_close if adjusted_close is not None else close_price,
                     "volume": _safe_int(row.get("Volume")),
                 }
             )
@@ -631,25 +694,48 @@ def _build_price_chart(
     end_price = closes[-1] if closes else None
     change = end_price - start_price if start_price is not None and end_price is not None else None
     change_percent = (change / start_price * 100) if change is not None and start_price else None
+    average_volume = round(sum(volumes) / len(volumes)) if volumes else None
+    latest_volume = volumes[-1] if volumes else None
+    period_return_percent = round(change_percent, 2) if change_percent is not None else None
 
     stats = {
         "start_price": start_price,
         "end_price": end_price,
         "change": change,
-        "change_percent": round(change_percent, 2) if change_percent is not None else None,
+        "change_percent": period_return_percent,
         "high": max(highs) if highs else None,
         "low": min(lows) if lows else None,
         "average_close": round(sum(closes) / len(closes), 2) if closes else None,
-        "average_volume": round(sum(volumes) / len(volumes)) if volumes else None,
+        "average_volume": average_volume,
         "point_count": len(points),
     }
+    summary = {
+        "period_return_percent": period_return_percent,
+        "period_high": max(highs) if highs else None,
+        "period_low": min(lows) if lows else None,
+        "max_drawdown_percent": _max_drawdown_percent(closes),
+        "average_volume": average_volume,
+        "latest_volume": latest_volume,
+        "latest_close": end_price,
+        "volume_trend": _volume_trend_label(latest_volume, average_volume),
+        "performance_label": _performance_label(period_return_percent),
+    }
+    missing_fields = []
+    if not volumes:
+        missing_fields.append("volume")
 
     return {
         **base_payload,
         "available": True,
         "source": source or "yfinance",
         "points": points,
+        "data": points,
         "stats": stats,
+        "summary": summary,
+        "data_quality": {
+            "status": "complete" if not missing_fields else "partial",
+            "missing_fields": missing_fields,
+        },
     }
 
 
@@ -1075,6 +1161,12 @@ def collect_market_data(
         time_horizon_months=time_horizon_months,
         source=_price_source_label(price.value, last_close_price) or "yfinance",
     )
+    price_performance = dict(price_chart.get("summary") or {}) if isinstance(price_chart, dict) else {}
+    technical_entry = build_technical_entry(
+        price_chart.get("data") or price_chart.get("points") or price.value,
+        current_price=last_close_price,
+        config={"time_horizon_months": time_horizon_months},
+    )
     vendor_attempts = attempt_recorder.get_summary()
     request_budget = budget.get_summary()
     data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
@@ -1104,6 +1196,14 @@ def collect_market_data(
         news_context=news_context,
         limit=8,
     )
+    news_impact = build_news_impact(
+        ticker=ticker,
+        trade_date=trade_date,
+        related_news=related_news,
+        news_context=news_context,
+    )
+    catalyst_tracker = build_catalyst_tracker(news_impact, event_risk.value)
+    analyst_consensus = build_analyst_consensus(recommendation_trends.value)
     financial_highlights = None
     try:
         financial_highlights = financial_highlights_to_dict(
@@ -1163,8 +1263,13 @@ def collect_market_data(
         last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
         company_profile=company_profile,
         price_chart=price_chart,
+        price_performance=price_performance,
+        technical_entry=technical_entry,
         news_context=news_context,
         related_news=related_news,
+        news_impact=news_impact,
+        catalyst_tracker=catalyst_tracker,
+        analyst_consensus=analyst_consensus,
         data_sources=data_sources,
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),

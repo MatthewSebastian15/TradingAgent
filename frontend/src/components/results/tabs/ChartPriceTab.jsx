@@ -21,10 +21,17 @@ function displayPrice(value, ticker) {
   return formatPrice(value, ticker) || 'N/A';
 }
 
+function displayLabel(value) {
+  if (!hasValue(value)) return 'N/A';
+  return String(value).replace(/_/g, ' ').toUpperCase();
+}
+
 export default function ChartPriceTab({ result }) {
   const chart = result?.price_chart || {};
   const points = normalizePricePoints(chart.points);
   const stats = chart.stats || {};
+  const performance = result?.price_performance || chart.summary || {};
+  const technical = result?.technical_entry || {};
   const ticker = chart.ticker || result?.ticker;
 
   if (chart.available !== true || points.length < 2) {
@@ -78,6 +85,75 @@ export default function ChartPriceTab({ result }) {
             value={`${hasValue(chart.lookback_days) ? chart.lookback_days : 'N/A'} days`}
           />
         </div>
+      </section>
+
+      <section>
+        <SectionHeader label="PRICE PERFORMANCE" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <MetricBox
+            label="PERIOD RETURN"
+            value={formatPercent(performance.period_return_percent ?? stats.change_percent)}
+            highlight
+          />
+          <MetricBox
+            label="PERIOD HIGH"
+            value={displayPrice(performance.period_high ?? stats.high, ticker)}
+          />
+          <MetricBox
+            label="PERIOD LOW"
+            value={displayPrice(performance.period_low ?? stats.low, ticker)}
+          />
+          <MetricBox
+            label="MAX DRAWDOWN"
+            value={formatPercent(performance.max_drawdown_percent)}
+          />
+          <MetricBox
+            label="LATEST CLOSE"
+            value={displayPrice(performance.latest_close ?? stats.end_price, ticker)}
+          />
+          <MetricBox
+            label="AVERAGE VOLUME"
+            value={formatCompactNumber(performance.average_volume ?? stats.average_volume)}
+          />
+          <MetricBox
+            label="LATEST VOLUME"
+            value={formatCompactNumber(performance.latest_volume)}
+          />
+          <MetricBox label="VOLUME TREND" value={displayLabel(performance.volume_trend)} />
+        </div>
+      </section>
+
+      <section>
+        <SectionHeader label="TECHNICAL ENTRY QUALITY" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <MetricBox label="ENTRY QUALITY" value={displayLabel(technical.entry_quality)} highlight />
+          <MetricBox label="TREND" value={displayLabel(technical.trend)} />
+          <MetricBox label="RSI" value={hasValue(technical.rsi) ? Number(technical.rsi).toFixed(2) : 'N/A'} />
+          <MetricBox label="RSI SIGNAL" value={displayLabel(technical.rsi_signal)} />
+          <MetricBox label="MACD" value={hasValue(technical.macd) ? Number(technical.macd).toFixed(2) : 'N/A'} />
+          <MetricBox
+            label="MACD SIGNAL"
+            value={displayLabel(technical.macd_signal)}
+          />
+          <MetricBox label="ATR" value={displayPrice(technical.atr, ticker)} />
+          <MetricBox label="SMA 20" value={displayPrice(technical.sma_20, ticker)} />
+          <MetricBox label="SMA 50" value={displayPrice(technical.sma_50, ticker)} />
+          <MetricBox label="SMA 200" value={displayPrice(technical.sma_200, ticker)} />
+          <MetricBox label="SUPPORT" value={displayPrice(technical.support, ticker)} />
+          <MetricBox label="RESISTANCE" value={displayPrice(technical.resistance, ticker)} />
+        </div>
+        {Array.isArray(technical.reasons) && technical.reasons.length > 0 && (
+          <ul className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-2">
+            {technical.reasons.slice(0, 6).map((reason, index) => (
+              <li
+                key={`${reason}-${index}`}
+                className="border border-bloomberg-border bg-black px-3 py-2 font-mono text-xs text-bloomberg-muted leading-relaxed"
+              >
+                {reason}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

@@ -54,9 +54,12 @@ def _base_result(**overrides):
             "source": "yfinance",
             "ticker": "NVDA",
             "trade_date": "2026-05-26",
+            "currency": "USD",
+            "window": "1M",
             "window_label": "1 Month Analysis / 60D Price Window",
             "lookback_days": 60,
-            "points": [{"date": "2026-05-26", "close": 920.15, "volume": 1000}],
+            "points": [{"date": "2026-05-26", "close": 920.15, "adjusted_close": 920.15, "volume": 1000}],
+            "data": [{"date": "2026-05-26", "close": 920.15, "adjusted_close": 920.15, "volume": 1000}],
             "stats": {
                 "start_price": 900.0,
                 "end_price": 920.15,
@@ -67,6 +70,104 @@ def _base_result(**overrides):
                 "average_volume": 1000,
                 "point_count": 2,
             },
+            "summary": {
+                "period_return_percent": 2.24,
+                "period_high": 930.0,
+                "period_low": 880.0,
+                "max_drawdown_percent": -4.1,
+                "average_volume": 1000,
+                "latest_volume": 1100,
+                "latest_close": 920.15,
+                "volume_trend": "above_average",
+                "performance_label": "positive",
+            },
+            "data_quality": {"status": "complete", "missing_fields": []},
+        },
+        "price_performance": {
+            "period_return_percent": 2.24,
+            "period_high": 930.0,
+            "period_low": 880.0,
+            "max_drawdown_percent": -4.1,
+            "average_volume": 1000,
+            "latest_volume": 1100,
+            "latest_close": 920.15,
+            "volume_trend": "above_average",
+            "performance_label": "positive",
+        },
+        "technical_entry": {
+            "available": True,
+            "entry_quality": "neutral",
+            "trend": "uptrend",
+            "rsi": 58.2,
+            "rsi_signal": "neutral",
+            "macd": 4.5,
+            "macd_signal_value": 3.8,
+            "macd_signal": "bullish",
+            "atr": 12.5,
+            "sma_20": 910.0,
+            "sma_50": 890.0,
+            "sma_200": None,
+            "support": 880.0,
+            "resistance": 940.0,
+            "volume_trend": "above_average",
+            "reasons": ["Price is above the 20-day moving average."],
+            "data_quality": {"status": "partial", "missing_fields": ["sma_200"]},
+        },
+        "news_impact": {
+            "available": True,
+            "overall_sentiment": "positive",
+            "sentiment_score": 68,
+            "high_impact_news": [
+                {
+                    "title": "NVIDIA earnings remain resilient",
+                    "source": "MarketAux",
+                    "published_at": "2026-05-25",
+                    "sentiment": "positive",
+                    "impact": "high",
+                    "impact_score": 84,
+                    "summary": "Selected vendor article.",
+                    "url": "https://example.com/nvda",
+                }
+            ],
+            "full_news_list": [],
+            "news_count": 2,
+            "deduplicated_count": 1,
+            "data_quality": {"status": "complete", "sources_used": ["MarketAux"]},
+        },
+        "catalyst_tracker": {
+            "positive_catalysts": [
+                {
+                    "type": "earnings",
+                    "label": "Positive earnings catalyst",
+                    "impact": "high",
+                    "source": "MarketAux",
+                    "date": "2026-05-25",
+                    "related_news_title": "NVIDIA earnings remain resilient",
+                }
+            ],
+            "negative_catalysts": [],
+            "upcoming_events": [
+                {
+                    "type": "earnings",
+                    "label": "Upcoming quarterly earnings",
+                    "date": "2026-06-20",
+                    "source": "Finnhub",
+                }
+            ],
+            "summary": {"overall_catalyst_bias": "positive", "main_message": "Positive catalysts outweigh current negative catalysts."},
+        },
+        "analyst_consensus": {
+            "available": True,
+            "period": "2026-05",
+            "strong_buy": 4,
+            "buy": 8,
+            "hold": 5,
+            "sell": 1,
+            "strong_sell": 0,
+            "total": 18,
+            "consensus_label": "positive",
+            "trend": "improving",
+            "data_quality": {"status": "complete", "source": "Finnhub"},
         },
         "financial_highlights": {
             "title": "Key Financial Highlights",
@@ -290,6 +391,21 @@ def test_html_report_renders_price_chart_summary():
     }
     assert "Chart &amp; Price Summary" in html
     assert "Average Volume" in html
+
+
+def test_html_report_renders_phase_3_chart_and_news_summaries():
+    report = build_report_context(_base_result())
+    html = render_analysis_report_html(report)
+
+    assert report["technical_entry_rows"]
+    assert report["news_impact_rows"]
+    assert report["high_impact_news_items"][0]["title"] == "NVIDIA earnings remain resilient"
+    assert report["positive_catalysts"][0]["label"] == "Positive earnings catalyst"
+    assert report["analyst_consensus_rows"]
+    assert "Technical Entry Quality" in html
+    assert "News Impact Summary" in html
+    assert "Catalyst Tracker" in html
+    assert "Analyst Recommendation Trend" in html
 
 
 def test_html_report_hides_unavailable_price_chart_summary():

@@ -109,6 +109,15 @@ describe('mockReport', () => {
     expect(html).toContain('Average Volume');
   });
 
+  it('renders Phase 3 summaries in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Technical Entry Quality');
+    expect(html).toContain('News Impact Summary');
+    expect(html).toContain('Catalyst Tracker');
+    expect(html).toContain('Analyst Recommendation Trend');
+  });
+
   it('renders static Related News items in mock HTML output', () => {
     const html = buildMockReportHtml(MOCK_RESPONSE);
 
@@ -124,6 +133,19 @@ describe('mockReport', () => {
         available: true,
         items: [{ title: 'Unsafe mock URL', url: 'javascript:alert(1)' }],
       },
+      news_impact: {
+        available: false,
+        high_impact_news: [],
+        full_news_list: [],
+        data_quality: { status: 'unavailable', sources_used: [] },
+      },
+      catalyst_tracker: {
+        positive_catalysts: [],
+        negative_catalysts: [],
+        upcoming_events: [],
+        summary: {},
+      },
+      analyst_consensus: { available: false },
     });
 
     expect(html).toContain('Unsafe mock URL');
