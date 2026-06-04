@@ -1420,6 +1420,104 @@ function createMockAnalystConsensus(ticker) {
   };
 }
 
+function confidencePercent(value) {
+  const score = Number(value);
+  if (!Number.isFinite(score)) return null;
+  return Math.max(0, Math.min(100, Math.round(score <= 1 ? score * 100 : score)));
+}
+
+function confidenceTier(value) {
+  const score = confidencePercent(value);
+  if (score === null || score < 40) return 'very_low';
+  if (score < 55) return 'low';
+  if (score < 70) return 'moderate';
+  if (score < 85) return 'high';
+  return 'very_high';
+}
+
+function displaySignalForMock(result) {
+  const raw = String(result.final_decision || result.decision || result.rating || 'Hold').toUpperCase();
+  const normalized = raw === 'OVERWEIGHT' ? 'BUY' : raw === 'UNDERWEIGHT' ? 'SELL' : raw;
+  if (result.has_existing_position) {
+    if (normalized === 'BUY') return 'HOLD';
+    if (normalized === 'SELL') return 'SELL';
+    return normalized === 'REDUCE' ? 'REDUCE' : 'HOLD';
+  }
+  if (normalized === 'BUY') return 'BUY';
+  if (normalized === 'SELL') return 'WAIT';
+  return 'WAIT';
+}
+
+function createMockConfidenceBreakdown(result) {
+  const overall = confidencePercent(result.confidence_score) ?? 70;
+  const riskScore = Math.max(0, Math.min(100, 100 - Number(result.volatility_score || 45)));
+  const newsUnavailable = result.data_quality?.news === 'unavailable';
+  return {
+    price_momentum: result.final_decision === 'Sell' ? 35 : result.final_decision === 'Hold' ? 55 : 74,
+    fundamental_quality: result.financial_highlights?.data_quality?.status === 'partial' ? 58 : 78,
+    news_sentiment: newsUnavailable ? 30 : result.final_decision === 'Sell' ? 38 : 66,
+    risk_level_score: riskScore,
+    data_quality: newsUnavailable ? 64 : 85,
+    overall,
+  };
+}
+
+function createMockDataFreshness(result) {
+  const latestArticleDate = result.news?.articles?.[0]?.published_at?.slice(0, 10) || '2026-05-17';
+  const periods = Array.isArray(result.financial_highlights?.periods) ? result.financial_highlights.periods : [];
+  const latestPeriod = periods.length ? periods[periods.length - 1] : {};
+  return {
+    price: {
+      timestamp: result.price_timestamp || result.current_price_as_of || result.trade_date,
+      type: result.market_status === 'open' ? 'intraday' : 'previous_close',
+      freshness_status: 'fresh',
+    },
+    financials: {
+      period: latestPeriod.label || latestPeriod.key || 'FY26Q1',
+      period_end_date: latestPeriod.period_end_date || '2026-03-31',
+      freshness_status: 'fresh',
+    },
+    news: {
+      lookback_days: result.news?.window_days || 30,
+      articles_count: result.news?.articles_found ?? result.news?.articles?.length ?? 0,
+      latest_article_date: latestArticleDate,
+      freshness_status: result.data_quality?.news === 'unavailable' ? 'unknown' : 'fresh',
+    },
+    macro: {
+      description: 'Latest available from mock provider',
+      freshness_status: 'unknown',
+    },
+  };
+}
+
+function createMockTabStatus(result, dataFreshness) {
+  const hasStaleFreshness = Object.values(dataFreshness || {}).some((item) => ['stale', 'outdated'].includes(String(item?.freshness_status || '').toLowerCase()));
+  return {
+    analysis: 'ok',
+    profile: 'ok',
+    fundamental: result.financial_highlights?.data_quality?.status === 'partial' ? 'partial' : 'ok',
+    chart_price: result.current_price ? 'ok' : 'error',
+    news: result.data_quality?.news === 'unavailable' ? 'partial' : 'ok',
+    risk_data_quality: hasStaleFreshness ? 'warning' : 'ok',
+  };
+}
+
+function createMockAnalysisParams(result) {
+  return {
+    ticker: String(result.ticker || '').replace(/\.JK$/i, ''),
+    normalized_ticker: result.ticker,
+    market: result.market,
+    horizon: `${result.time_horizon_months || 1}M`,
+    trade_date: result.trade_date,
+    debate_rounds: 3,
+    analysis_depth: ['fast', 'balanced', 'deep'].includes(result.analysis_depth) ? result.analysis_depth : 'balanced',
+    response_detail: result.response_detail || 'full',
+    has_existing_position: Boolean(result.has_existing_position),
+    position_quantity: result.position_quantity ?? null,
+    average_entry_price: result.average_entry_price ?? null,
+  };
+}
+
 function createMockPhase3(completed, overrides) {
   const pricePerformance = overrides.price_performance || completed.price_chart?.summary || {};
   const technicalEntry =
@@ -1434,6 +1532,8 @@ function createMockPhase3(completed, overrides) {
   const catalystTracker = overrides.catalyst_tracker || createMockCatalystTracker(newsImpact);
   const analystConsensus =
     overrides.analyst_consensus || createMockAnalystConsensus(completed.ticker);
+  const dataFreshness = overrides.data_freshness || createMockDataFreshness(completed);
+  const displaySignal = overrides.display_signal || displaySignalForMock(completed);
 
   return {
     price_performance: pricePerformance,
@@ -1441,6 +1541,20 @@ function createMockPhase3(completed, overrides) {
     news_impact: newsImpact,
     catalyst_tracker: catalystTracker,
     analyst_consensus: analystConsensus,
+    raw_ai_signal: overrides.raw_ai_signal || completed.final_decision || completed.decision || 'Hold',
+    display_signal: displaySignal,
+    signal_context:
+      overrides.signal_context ||
+      (completed.has_existing_position
+        ? `Existing-position context converted raw signal to ${displaySignal}.`
+        : `No-position context converted raw signal to ${displaySignal}.`),
+    confidence_label: overrides.confidence_label || confidenceLabel(completed.confidence_score),
+    confidence_tier: overrides.confidence_tier || confidenceTier(completed.confidence_score),
+    confidence_breakdown:
+      overrides.confidence_breakdown || createMockConfidenceBreakdown(completed),
+    data_freshness: dataFreshness,
+    tab_status: overrides.tab_status || createMockTabStatus(completed, dataFreshness),
+    analysis_params: overrides.analysis_params || createMockAnalysisParams(completed),
   };
 }
 

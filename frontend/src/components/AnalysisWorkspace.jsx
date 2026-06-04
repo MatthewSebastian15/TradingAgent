@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAnalysisJob } from '../hooks/useAnalysisJob';
 import AgentLog from './AgentLog';
 import Navbar from './Navbar';
 import ResultCard from './ResultCard';
@@ -61,6 +62,26 @@ function textOrNull(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function normalizeHistoryConfidence(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const percent = numeric <= 1 ? numeric * 100 : numeric;
+  return Math.max(0, Math.min(100, Math.round(percent)));
+}
+
+function confidenceScoreStyle(tier) {
+  return (
+    {
+      very_low: 'text-bloomberg-red',
+      low: 'text-bloomberg-amber',
+      moderate: 'text-bloomberg-orange',
+      high: 'text-lime-300',
+      very_high: 'text-bloomberg-green',
+    }[tier] || 'text-bloomberg-muted'
+  );
+}
+
 function historyResourceId(entry) {
   return textOrNull(entry?.request_id) || textOrNull(entry?.job_id);
 }
@@ -86,6 +107,9 @@ function toHistorySummary(entry) {
     trade_date: textOrNull(entry.trade_date),
     status: textOrNull(entry.status) || 'completed',
     decision: textOrNull(entry.decision),
+    display_signal: textOrNull(entry.display_signal) || textOrNull(entry.final_decision) || textOrNull(entry.decision),
+    confidence_score: normalizeHistoryConfidence(entry.confidence_score),
+    confidence_tier: textOrNull(entry.confidence_tier),
     time_horizon_months: [1, 2, 3].includes(horizon) ? horizon : null,
     analysis_created_at: textOrNull(entry.analysis_created_at),
     saved_at: textOrNull(entry.saved_at) || new Date().toISOString(),
@@ -260,6 +284,8 @@ function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, on
       <div className="overflow-y-auto" style={{ maxHeight: HISTORY_PANEL_MAX_HEIGHT }}>
         {history.map((item, index) => {
           const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
+          const displaySignal = item.display_signal || item.decision;
+          const confidenceScore = item.confidence_score !== null && item.confidence_score !== undefined ? `${item.confidence_score}%` : '—';
           return (
             <button
               key={
@@ -286,9 +312,12 @@ function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, on
               </div>
               <div className="flex items-center gap-3 self-stretch justify-between sm:self-auto sm:justify-end">
                 <span
-                  className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(item.decision)}`}
+                  className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(displaySignal)}`}
                 >
-                  {(item.decision || 'N/A').toUpperCase()}
+                  {(displaySignal || 'N/A').toUpperCase()}
+                </span>
+                <span className={`font-mono text-xs font-semibold ${confidenceScoreStyle(item.confidence_tier)}`}>
+                  {confidenceScore}
                 </span>
               </div>
             </button>
@@ -489,6 +518,13 @@ export default function AnalysisWorkspace({
     if (nextPath) navigate(nextPath);
   }
 
+  const rerunJob = useAnalysisJob({
+    onResult: handleResult,
+    onLoading: setLoading,
+    onStatus: setStatus,
+    onAgentProgress: setAgentProgress,
+  });
+
   return (
     <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
@@ -556,6 +592,8 @@ export default function AnalysisWorkspace({
                 result={result}
                 enableReportExport={enableReportExport && Boolean(resultPathBase)}
                 mockReport={mockReportExport}
+                onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
+                rerunRunning={rerunJob.running || loading}
               />
             </div>
           )}

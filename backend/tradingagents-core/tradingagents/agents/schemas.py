@@ -341,11 +341,31 @@ def _validate_word_range(field_name: str, value: str, min_words: int, max_words:
     return text
 
 
+class ConfidenceBreakdown(BaseModel):
+    price_momentum: int = Field(ge=0, le=100, description="Price momentum score, 0-100.")
+    fundamental_quality: int = Field(ge=0, le=100, description="Fundamental quality score, 0-100.")
+    news_sentiment: int = Field(ge=0, le=100, description="News sentiment score, 0-100.")
+    risk_level_score: int = Field(
+        ge=0,
+        le=100,
+        description="Risk score where lower portfolio risk produces a higher score, 0-100.",
+    )
+    data_quality: int = Field(ge=0, le=100, description="Input data quality score, 0-100.")
+    overall: int = Field(ge=0, le=100, description="Weighted overall confidence score, 0-100.")
+
+
 class PortfolioDecision(BaseModel):
     confidence_score: float = Field(
         ge=0.0,
         le=1.0,
         description="Final confidence score for the recommendation after validation and debate synthesis.",
+    )
+    confidence_breakdown: ConfidenceBreakdown | None = Field(
+        default=None,
+        description=(
+            "Structured 0-100 score breakdown for price momentum, fundamental quality, "
+            "news sentiment, risk level, data quality, and weighted overall confidence."
+        ),
     )
     rating: PortfolioRating = Field(
         description=(
@@ -521,6 +541,21 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         "",
         f"**Investment Thesis**: {decision.investment_thesis}",
     ]
+    if decision.confidence_breakdown is not None:
+        breakdown = decision.confidence_breakdown
+        parts.extend(
+            [
+                "",
+                "**Confidence Breakdown**:",
+                f"- Price Momentum: {breakdown.price_momentum}/100",
+                f"- Fundamental Quality: {breakdown.fundamental_quality}/100",
+                f"- News Sentiment: {breakdown.news_sentiment}/100",
+                f"- Risk Level: {breakdown.risk_level_score}/100",
+                f"- Data Quality: {breakdown.data_quality}/100",
+                f"- Overall: {breakdown.overall}/100",
+            ]
+        )
+
     actionable_fields = [
         (
             "Suggested Allocation",

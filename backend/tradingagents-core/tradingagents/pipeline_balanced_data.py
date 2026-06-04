@@ -1055,9 +1055,98 @@ def _last_fundamental_period(financial_highlights: dict[str, Any] | None) -> tup
         return None, None
     latest = periods[-1] if isinstance(periods[-1], dict) else {}
     label = latest.get("label") or latest.get("key")
-    period_end_date = latest.get("period_end_date") or latest.get("end_date")
+    period_end_date = latest.get("period_end_date") or latest.get("end_date") or _period_end_from_label(label)
     return (str(label) if label else None, str(period_end_date) if period_end_date else None)
 
+
+
+def _parse_metadata_datetime(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            return datetime.fromisoformat(text[:10])
+        except ValueError:
+            return None
+
+
+def _metadata_days_old(value: Any) -> int | None:
+    parsed = _parse_metadata_datetime(value)
+    if parsed is None:
+        return None
+    return max(0, (datetime.utcnow().date() - parsed.date()).days)
+
+
+def _freshness_status_from_value(value: Any) -> str:
+    age_days = _metadata_days_old(value)
+    if age_days is None:
+        return "unknown"
+    if age_days < 30:
+        return "fresh"
+    if age_days <= 90:
+        return "stale"
+    return "outdated"
+
+
+def _period_end_from_label(label: Any) -> str | None:
+    text = str(label or "").strip().upper().replace(" ", "")
+    if not text:
+        return None
+    match = re.search(r"FY(\d{2,4})Q([1-4])", text)
+    if match:
+        year = int(match.group(1))
+        if year < 100:
+            year += 2000
+        quarter_end = {"1": "03-31", "2": "06-30", "3": "09-30", "4": "12-31"}[match.group(2)]
+        return f"{year}-{quarter_end}"
+    match = re.search(r"FY(\d{2,4})", text)
+    if match:
+        year = int(match.group(1))
+        if year < 100:
+            year += 2000
+        return f"{year}-12-31"
+    return None
+
+
+def _build_data_freshness_metadata(data_sources: dict[str, Any], *, market_status: str | None = None) -> dict[str, Any]:
+    price = data_sources.get("price") if isinstance(data_sources.get("price"), dict) else {}
+    fundamentals = data_sources.get("fundamentals") if isinstance(data_sources.get("fundamentals"), dict) else {}
+    news = data_sources.get("news") if isinstance(data_sources.get("news"), dict) else {}
+    macro = data_sources.get("macro") if isinstance(data_sources.get("macro"), dict) else {}
+
+    price_timestamp = price.get("timestamp")
+    price_type = "intraday" if str(market_status or "").lower() == "open" and not price.get("is_fallback") else price.get("method") or "latest_available"
+    period = fundamentals.get("last_period")
+    period_end_date = fundamentals.get("period_end_date") or _period_end_from_label(period)
+    latest_article_date = news.get("latest_article_date")
+
+    return {
+        "price": {
+            "timestamp": price_timestamp,
+            "type": price_type,
+            "freshness_status": _freshness_status_from_value(price_timestamp),
+        },
+        "financials": {
+            "period": period,
+            "period_end_date": period_end_date,
+            "freshness_status": _freshness_status_from_value(period_end_date),
+        },
+        "news": {
+            "lookback_days": news.get("lookback_days"),
+            "articles_count": news.get("articles_found") or 0,
+            "latest_article_date": latest_article_date,
+            "freshness_status": _freshness_status_from_value(latest_article_date),
+        },
+        "macro": {
+            "description": macro.get("description") or "Latest available from provider",
+            "freshness_status": "unknown",
+        },
+    }
 
 def _build_structured_data_sources(
     raw_sources: dict[str, str],
@@ -1370,6 +1459,10 @@ def collect_market_data(
         news_lookback_days=news_lookback_days,
         financial_highlights=financial_highlights,
     )
+    data_freshness = _build_data_freshness_metadata(
+        data_sources,
+        market_status=None,
+    )
     try:
         release_budget(budget_id)
         release_attempt_recorder(attempt_id)
@@ -1411,6 +1504,7 @@ def collect_market_data(
         catalyst_tracker=catalyst_tracker,
         analyst_consensus=analyst_consensus,
         data_sources=data_sources,
+        data_freshness=data_freshness,
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
         request_budget=runtime_metadata.get("request_budget", {}),
