@@ -27,41 +27,21 @@ const PIPELINE_AGENTS = [
 const MOCK_ANALYSIS_CREATED_AT = '2026-05-18T09:00:00.000Z';
 
 
-export function resolveDisplaySignal(rawAiSignal, hasExistingPosition) {
+export function resolveDisplaySignal(rawAiSignal, hasExistingPosition, rebalancingAction = null) {
   const signal = String(rawAiSignal || 'HOLD').toUpperCase().trim();
+  const action = String(rebalancingAction || '').trim();
 
   if (!hasExistingPosition) {
-    if (signal === 'BUY') return 'BUY';
-    return 'WAIT';
+    return signal === 'BUY' && action === 'Open new position' ? 'BUY' : 'WAIT';
   }
 
-  if (signal === 'BUY') return 'HOLD';
-  if (signal === 'HOLD') return 'HOLD';
-  if (signal === 'SELL' || signal === 'AVOID') return 'SELL';
-  return 'REDUCE';
+  if (action === 'Trim position') return 'REDUCE';
+  if (action === 'Exit position') return 'SELL';
+  if (signal === 'SELL') return 'SELL';
+  return 'HOLD';
 }
 
 export const MOCK_ANALYSIS_SCENARIOS = {
-  PTRO_WAIT_NO_POSITION: {
-    id: 'mock-ptro-wait-no-position',
-    request_id: 'mock-ptro-wait-no-position',
-    input_ticker: 'PTRO',
-    normalized_ticker: 'PTRO.JK',
-    has_existing_position: false,
-    raw_ai_signal: 'HOLD',
-    display_signal: 'WAIT',
-    signal_context: 'User has no existing position. AI signal HOLD translated to WAIT.',
-  },
-  PTRO_REDUCE_EXISTING_POSITION: {
-    id: 'mock-ptro-reduce-existing-position',
-    request_id: 'mock-ptro-reduce-existing-position',
-    input_ticker: 'PTRO',
-    normalized_ticker: 'PTRO.JK',
-    has_existing_position: true,
-    raw_ai_signal: 'NEUTRAL',
-    display_signal: 'REDUCE',
-    signal_context: 'User has an existing position. AI signal NEUTRAL translated to REDUCE.',
-  },
   BBCA_BUY_NO_POSITION: {
     id: 'mock-bbca-buy-no-position',
     request_id: 'mock-bbca-buy-no-position',
@@ -70,6 +50,9 @@ export const MOCK_ANALYSIS_SCENARIOS = {
     has_existing_position: false,
     raw_ai_signal: 'BUY',
     display_signal: 'BUY',
+    rebalancing_action: 'Open new position',
+    new_entry_action: 'Allowed with validated entry',
+    position_size_hint: 'Use smaller starter size due to high volatility.',
     signal_context: 'User has no existing position. AI signal BUY remains BUY.',
   },
   BBRI_HOLD_EXISTING_POSITION: {
@@ -78,9 +61,12 @@ export const MOCK_ANALYSIS_SCENARIOS = {
     input_ticker: 'BBRI',
     normalized_ticker: 'BBRI.JK',
     has_existing_position: true,
-    raw_ai_signal: 'BUY',
+    raw_ai_signal: 'HOLD',
     display_signal: 'HOLD',
-    signal_context: 'User has an existing position. AI signal BUY translated to HOLD.',
+    rebalancing_action: 'Maintain position',
+    new_entry_action: 'No new entry; maintain existing position',
+    position_size_hint: 'Maintain current position size; no additional exposure suggested.',
+    signal_context: 'User has an existing position. AI signal HOLD remains HOLD.',
   },
   TLKM_SELL_EXISTING_POSITION: {
     id: 'mock-tlkm-sell-existing-position',
@@ -90,41 +76,93 @@ export const MOCK_ANALYSIS_SCENARIOS = {
     has_existing_position: true,
     raw_ai_signal: 'SELL',
     display_signal: 'SELL',
+    rebalancing_action: 'Exit position',
+    new_entry_action: 'No new entry; exit existing position',
+    position_size_hint: 'Exit existing position; no new exposure suggested.',
     signal_context: 'User has an existing position. AI signal SELL remains SELL.',
+  },
+  PTRO_WAIT_NO_POSITION: {
+    id: 'mock-ptro-wait-no-position',
+    request_id: 'mock-ptro-wait-no-position',
+    input_ticker: 'PTRO',
+    normalized_ticker: 'PTRO.JK',
+    has_existing_position: false,
+    raw_ai_signal: 'HOLD',
+    display_signal: 'WAIT',
+    rebalancing_action: 'No position to rebalance',
+    new_entry_action: 'Wait for valid entry setup',
+    position_size_hint: '0% allocation until setup improves.',
+    signal_context: 'User has no existing position. AI signal HOLD translated to WAIT.',
+  },
+  TPIA_REDUCE_EXISTING_POSITION: {
+    id: 'mock-tpia-reduce-existing-position',
+    request_id: 'mock-tpia-reduce-existing-position',
+    input_ticker: 'TPIA',
+    normalized_ticker: 'TPIA.JK',
+    has_existing_position: true,
+    raw_ai_signal: 'SELL',
+    display_signal: 'REDUCE',
+    rebalancing_action: 'Trim position',
+    new_entry_action: 'Do not add; reduce existing exposure',
+    position_size_hint: 'Reduce position size gradually; no new exposure suggested.',
+    signal_context: 'User has an existing position. Trim position translated to REDUCE.',
   },
 };
 
+const MOCK_ACTION_COPY_BY_SIGNAL = {
+  BUY: {
+    rebalancing_action: 'Open new position',
+    position_action: null,
+    new_entry_action: 'Allowed with validated entry',
+    position_size_hint: 'Use smaller starter size due to high volatility.',
+  },
+  HOLD: {
+    rebalancing_action: 'Maintain position',
+    position_action: 'Maintain position',
+    new_entry_action: 'No new entry; maintain existing position',
+    position_size_hint: 'Maintain current position size; no additional exposure suggested.',
+  },
+  SELL: {
+    rebalancing_action: 'Exit position',
+    position_action: 'Exit position',
+    new_entry_action: 'No new entry; exit existing position',
+    position_size_hint: 'Exit existing position; no new exposure suggested.',
+  },
+  WAIT: {
+    rebalancing_action: 'No position to rebalance',
+    position_action: null,
+    new_entry_action: 'Wait for valid entry setup',
+    position_size_hint: '0% allocation until setup improves.',
+  },
+  REDUCE: {
+    rebalancing_action: 'Trim position',
+    position_action: 'Trim position',
+    new_entry_action: 'Do not add; reduce existing exposure',
+    position_size_hint: 'Reduce position size gradually; no new exposure suggested.',
+  },
+};
+
+function applyMockActionCopy(response) {
+  const displaySignal = response.display_signal || 'WAIT';
+  const copy = MOCK_ACTION_COPY_BY_SIGNAL[displaySignal];
+  if (!copy) return response;
+
+  response.rebalancing_action = copy.rebalancing_action;
+  response.position_action = response.has_existing_position ? copy.position_action : null;
+  response.new_entry_action = copy.new_entry_action;
+  response.position_size_hint = copy.position_size_hint;
+  response.action_status = displaySignal;
+
+  return response;
+}
+
 export const MOCK_RECENT_ANALYSES = [
-  {
-    id: 'mock-ptro-wait-no-position',
-    request_id: 'mock-ptro-wait-no-position',
-    ticker: 'PTRO.JK',
-    created_at: '2026-06-03T14:00:00+07:00',
-    saved_at: '2026-06-03T14:00:00+07:00',
-    horizon: '1M',
-    time_horizon_months: 1,
-    display_signal: 'WAIT',
-    confidence_score: 55,
-    confidence_tier: 'low',
-  },
-  {
-    id: 'mock-ptro-reduce-existing-position',
-    request_id: 'mock-ptro-reduce-existing-position',
-    ticker: 'PTRO.JK',
-    created_at: '2026-06-03T13:30:00+07:00',
-    saved_at: '2026-06-03T13:30:00+07:00',
-    horizon: '1M',
-    time_horizon_months: 1,
-    display_signal: 'REDUCE',
-    confidence_score: 61,
-    confidence_tier: 'low',
-  },
   {
     id: 'mock-bbca-buy-no-position',
     request_id: 'mock-bbca-buy-no-position',
     ticker: 'BBCA.JK',
-    created_at: '2026-06-02T15:10:00+07:00',
-    saved_at: '2026-06-02T15:10:00+07:00',
+    created_at: '2026-06-04T12:15:00+07:00',
+    saved_at: '2026-06-04T12:15:00+07:00',
     horizon: '1M',
     time_horizon_months: 1,
     display_signal: 'BUY',
@@ -135,8 +173,8 @@ export const MOCK_RECENT_ANALYSES = [
     id: 'mock-bbri-hold-existing-position',
     request_id: 'mock-bbri-hold-existing-position',
     ticker: 'BBRI.JK',
-    created_at: '2026-06-02T11:20:00+07:00',
-    saved_at: '2026-06-02T11:20:00+07:00',
+    created_at: '2026-06-04T12:10:00+07:00',
+    saved_at: '2026-06-04T12:10:00+07:00',
     horizon: '1M',
     time_horizon_months: 1,
     display_signal: 'HOLD',
@@ -147,13 +185,37 @@ export const MOCK_RECENT_ANALYSES = [
     id: 'mock-tlkm-sell-existing-position',
     request_id: 'mock-tlkm-sell-existing-position',
     ticker: 'TLKM.JK',
-    created_at: '2026-06-01T10:40:00+07:00',
-    saved_at: '2026-06-01T10:40:00+07:00',
+    created_at: '2026-06-04T12:05:00+07:00',
+    saved_at: '2026-06-04T12:05:00+07:00',
     horizon: '1M',
     time_horizon_months: 1,
     display_signal: 'SELL',
     confidence_score: 46,
     confidence_tier: 'very_low',
+  },
+  {
+    id: 'mock-ptro-wait-no-position',
+    request_id: 'mock-ptro-wait-no-position',
+    ticker: 'PTRO.JK',
+    created_at: '2026-06-04T12:00:00+07:00',
+    saved_at: '2026-06-04T12:00:00+07:00',
+    horizon: '1M',
+    time_horizon_months: 1,
+    display_signal: 'WAIT',
+    confidence_score: 55,
+    confidence_tier: 'low',
+  },
+  {
+    id: 'mock-tpia-reduce-existing-position',
+    request_id: 'mock-tpia-reduce-existing-position',
+    ticker: 'TPIA.JK',
+    created_at: '2026-06-04T11:55:00+07:00',
+    saved_at: '2026-06-04T11:55:00+07:00',
+    horizon: '1M',
+    time_horizon_months: 1,
+    display_signal: 'REDUCE',
+    confidence_score: 55,
+    confidence_tier: 'low',
   },
 ];
 
@@ -1586,7 +1648,11 @@ function displaySignalForMock(result) {
   const rawAiSignal = normalizeRawAiSignal(
     result.raw_ai_signal || result.final_decision || result.decision || result.rating
   );
-  return resolveDisplaySignal(rawAiSignal, Boolean(result.has_existing_position));
+  return resolveDisplaySignal(
+    rawAiSignal,
+    Boolean(result.has_existing_position),
+    result.rebalancing_action
+  );
 }
 
 function createMockConfidenceBreakdown(result) {
@@ -2065,7 +2131,9 @@ function createMockProductionContract(result, overrides = {}) {
   const rawAiSignal = normalizeRawAiSignal(
     overrides.raw_ai_signal || result.raw_ai_signal || result.final_decision || result.decision || result.rating
   );
-  const displaySignal = overrides.display_signal || resolveDisplaySignal(rawAiSignal, result.has_existing_position);
+  const displaySignal =
+    overrides.display_signal ||
+    resolveDisplaySignal(rawAiSignal, result.has_existing_position, result.rebalancing_action);
   const pipeline = overrides.agent_pipeline || result.agent_pipeline || createMockAgentPipeline(result);
   const dataFreshness = overrides.data_freshness || result.data_freshness || createMockDataFreshness(result);
 
@@ -2405,10 +2473,10 @@ export const MOCK_HOLD_RESPONSE = completeMockAnalysis({
   max_drawdown_max_pct: null,
   volatility_level: 'Medium',
   volatility_score: 44,
-  rebalancing_action: 'Avoid new entry',
+  rebalancing_action: 'No position to rebalance',
   position_action: null,
-  new_entry_action: 'No new entry',
-  position_size_hint: 'No new position suggested.',
+  new_entry_action: 'Wait for valid entry setup',
+  position_size_hint: '0% allocation until setup improves.',
   position_sizing_reason: null,
   executive_summary: `AAPL is rated Hold because the company remains high quality, but the mock setup does not show enough confirmed upside to justify a new actionable trade. The strongest support is the non-actionable contract itself: current price is 190, volatility is Medium at 44, allocation is zero, and entry, stop loss, take profit, and risk/reward are intentionally hidden because the result is not a Buy or Sell. The biggest risk is that users may force a trade in a stable but range-bound stock, and that risk supports patience rather than fake precision. The recommended action is to avoid new entry, keep the stock on the watchlist, and wait for better risk/reward before defining trade levels. The horizon is 2 Months, and the thesis is confirmed by stronger services growth, AI device demand, or cleaner momentum, while it is invalidated by slowing iPhone demand or App Store pressure. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   market_report:
@@ -2469,10 +2537,10 @@ export const MOCK_MISSING_PRICE_RESPONSE = completeMockAnalysis({
   max_drawdown_max_pct: null,
   volatility_level: 'Medium',
   volatility_score: 45,
-  rebalancing_action: 'Avoid new entry',
+  rebalancing_action: 'No position to rebalance',
   position_action: null,
-  new_entry_action: 'No new entry until price data is valid',
-  position_size_hint: 'No new position suggested until valid price data is available.',
+  new_entry_action: 'Wait until valid price data is available',
+  position_size_hint: '0% allocation until valid price data is available.',
   position_sizing_reason: null,
   executive_summary: `MSFT is rated Hold in this missing-price mock because the system cannot verify a current price, and a dashboard should never invent trade levels just to look complete. The strongest support is the validation result itself: current price, entry, stop loss, take profit, and risk/reward are all null, allocation is zero, volatility is Medium at 45, and the original Buy-style idea is downgraded for safety. The biggest risk is false confidence, because a good company story becomes unusable when the execution anchor is missing. The recommended action is to avoid new entry, show the missing price warning, keep position sizing at zero, and wait for market data to recover before any stop-loss or take-profit is displayed. The horizon is 1 Month, and the thesis is confirmed only when a provider returns a fresh price, while it is invalidated if the ticker remains unavailable or stale. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   market_report:
@@ -2636,10 +2704,10 @@ export const MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE = completeMockAnalysis({
   take_profit: 1880,
   volatility_level: 'High',
   volatility_score: 63,
-  rebalancing_action: 'Avoid new entry',
+  rebalancing_action: 'No position to rebalance',
   position_action: null,
-  new_entry_action: 'Avoid new entry',
-  position_size_hint: 'No new position suggested.',
+  new_entry_action: 'Avoid entry; wait for risk to normalize',
+  position_size_hint: '0% allocation; stay on watchlist only until risk normalizes.',
   executive_summary: `UNVR.JK is rated Sell because this mock tests an IDX scenario where optional news data is unavailable, yet the remaining price, volatility, and fundamental contract still supports a defensive avoid-entry decision. The strongest support is the downside setup: current price and entry are 2420, stop loss is 2600, take profit is 1880, volatility is High at 63, and warning details clearly mark news as unavailable without blocking validation. The biggest risk to the Sell view is that missing news could hide a positive catalyst, but the safer choice is still to avoid new exposure when enrichment data is incomplete. The recommended action is no new position, no aggressive sizing, and strict respect for the stop if the sell-style plan is reviewed. The horizon follows the mock request, and the thesis is confirmed by continued weakness or invalidated by recovery above the stop with better provider coverage. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   investment_thesis: `UNVR.JK is presented as a consumer staples company with well-known brands, but this mock focuses on how the dashboard behaves when optional news enrichment is unavailable. The business matters now because staples names can look defensive, yet weak growth, margin pressure, or changing consumer demand can still produce poor stock performance. The main headwind in this scenario is uncertainty: price and trade validation are available, but news coverage is missing, so the final decision must stay conservative rather than pretending the information set is complete. The key numbers are current price at 2420, stop loss at 2600, take profit at 1880, volatility score at 63, and allocation effectively kept at zero for new exposure. The bear case says the stock should be avoided because the downside plan is valid and the unavailable news block reduces confidence in any bullish recovery story. The bull case is that consumer staples demand could stabilize and a missing provider result might simply be a data issue, not a business problem. The bear case wins because process reliability and price weakness matter more than a possible hidden catalyst. The action plan is to avoid new entry, keep the warning badges visible, respect 2600 as invalidation if tested, use 1880 only as the risk/reward target, and rerun analysis when news coverage returns. This longer mock narrative also verifies that the analysis card, saved result, recent analysis entry, HTML preview, and PDF export can carry a realistic paragraph without changing the underlying data shape. It keeps the same fields a real backend response would send, so debugging can focus on mapping, formatting, and validation behavior instead of wondering whether missing text is a rendering bug or just another avoidable contract mismatch.`,
   news_report:
@@ -2847,6 +2915,20 @@ const MOCK_PTRO_COMPANY_PROFILE = {
   officers: [{ name: 'Mock Management Team', title: 'Executive Management' }],
 };
 
+const MOCK_TPIA_COMPANY_PROFILE = {
+  ...MOCK_IDX_COMPANY_PROFILE,
+  ticker: 'TPIA.JK',
+  company_name: 'Chandra Asri Pacific Tbk',
+  sector: 'Basic Materials',
+  industry: 'Chemicals',
+  website: 'https://www.chandra-asri.com',
+  market_cap: 112000000000000,
+  current_price: 1400,
+  business_summary:
+    'Chandra Asri Pacific Tbk is represented in this mock analysis as an Indonesian petrochemical and basic materials company with cyclicality, commodity spread risk, and execution-sensitive earnings quality.',
+  officers: [{ name: 'Mock Management Team', title: 'Executive Management' }],
+};
+
 const PTRO_SUMMARY = `The current recommendation is WAIT because the stock shows elevated price momentum but does not yet offer a clean risk-reward setup for a new entry. The signal reflects the fact that the user has no existing position, so a neutral raw AI signal is translated into a practical instruction to stay on the sidelines until the setup improves. Recent price action has been strong but uneven, with short-term gains appearing partly supported by momentum rather than a fully confirmed improvement in fundamentals. The stock is trading near a key resistance area, while volatility remains high enough to make chasing the move unattractive. A better entry would require either a pullback toward support or a breakout supported by stronger volume and cleaner market confirmation. Fundamentally, the company has a reasonable operating base, but the available mock financial data still shows partial completeness in quarterly cashflow and margin detail. Revenue growth is improving, although profitability quality remains mixed and should not be treated as fully confirmed without updated financial reports. Balance sheet risk is manageable but not low enough to justify aggressive position sizing. The main risks are elevated volatility, incomplete quarterly data, and the possibility that recent price strength is speculative rather than fundamentally supported. For now, the correct action is to wait, monitor the support zone, and avoid opening a new position unless the risk-reward profile becomes more attractive.`;
 
 const PTRO_THESIS = `PT Petrosea Tbk is represented in this mock analysis as an Indonesian listed company with exposure to mining services, engineering, and project execution. The business profile gives the stock sensitivity to commodity activity, infrastructure spending, and contract execution quality. Its market position can be attractive when project pipelines are expanding, but earnings visibility may fluctuate because revenue depends on contract timing and operating discipline. Recent price movement has been strong enough to attract trader attention, but the move should not automatically be treated as fundamentally confirmed. The stock trades near a resistance zone, while the nearest support remains meaningfully below the current price. That creates an unfavorable entry profile for users without an existing position, especially when volatility is classified as very high. Momentum may continue in the short term, but the mock setup assumes the current level does not provide enough margin of safety for a fresh entry. From a fundamental perspective, revenue trend is improving, but profitability and cashflow quality require careful confirmation. The mock data marks fundamentals as partial because quarterly cashflow information is not fully available. This means the analysis should avoid overconfidence and should clearly communicate that some conclusions depend on incomplete provider data. Balance sheet quality is acceptable in the scenario, but not strong enough to offset the risk of buying after a sharp move. Technically, the important levels are current price around Rp 4,800, nearest support near Rp 4,400, and nearest resistance around Rp 5,000. A suggested stop loss sits near Rp 4,320, while the invalidation level is near Rp 4,350. These levels imply that upside must improve before a new entry becomes attractive. The key macro risk is tighter liquidity or weaker risk appetite across Indonesian equities. The sector risk is a slowdown in commodity-related activity or weaker mining service demand. The company-specific risk is execution weakness, margin pressure, or delayed contract contribution. Final positioning is therefore WAIT for users without an existing position and REDUCE for users who already hold the stock but face weakening confirmation. The view would improve if price breaks resistance with stronger volume and updated fundamentals confirm better earnings quality. The view would deteriorate if price breaks below the invalidation level or if fresh financial data shows weaker margins and cashflow.`;
@@ -2855,8 +2937,8 @@ function buildPtroScenarioResponse(scenarioKey) {
   const scenario = MOCK_ANALYSIS_SCENARIOS[scenarioKey];
   const hasPosition = scenario.has_existing_position;
   const rawSignal = scenario.raw_ai_signal;
-  const displaySignal = resolveDisplaySignal(rawSignal, hasPosition);
-  const positionAction = displaySignal === 'REDUCE' ? 'Trim position' : null;
+  const displaySignal = resolveDisplaySignal(rawSignal, hasPosition, scenario.rebalancing_action);
+  const positionAction = hasPosition ? scenario.rebalancing_action : null;
   return withOverrides(MOCK_IDX_RESPONSE, {
     ...scenario,
     request_id: scenario.request_id,
@@ -2887,11 +2969,11 @@ function buildPtroScenarioResponse(scenarioKey) {
     average_entry_price: hasPosition ? 4500 : null,
     trade_plan_valid: false,
     entry_price: null,
-    stop_loss: displaySignal === 'REDUCE' ? 4320 : null,
+    stop_loss: null,
     take_profit: null,
     risk_reward_ratio: null,
     risk_reward_display: 'Not attractive',
-    confidence_score: displaySignal === 'REDUCE' ? 61 : 55,
+    confidence_score: 55,
     confidence_label: 'Low Conviction',
     confidence_tier: 'low',
     volatility_level: 'Very High',
@@ -2899,16 +2981,10 @@ function buildPtroScenarioResponse(scenarioKey) {
     volatility_classification: 'Very High',
     volatility_lookback_days: 20,
     volatility_scale: '0-100',
-    rebalancing_action: displaySignal === 'REDUCE' ? 'Trim position' : 'Avoid new entry',
+    rebalancing_action: scenario.rebalancing_action,
     position_action: positionAction,
-    new_entry_action:
-      displaySignal === 'REDUCE'
-        ? 'Do not add. Reduce exposure if price fails to reclaim resistance.'
-        : 'Wait for a cleaner entry near support before opening a new position.',
-    position_size_hint:
-      displaySignal === 'REDUCE'
-        ? 'Trim existing exposure; no new position is suggested until confirmation improves.'
-        : 'No new position is suggested until risk/reward improves.',
+    new_entry_action: scenario.new_entry_action,
+    position_size_hint: scenario.position_size_hint,
     action_status: displaySignal,
     mini_risk_summary:
       'Very High. Maintain strict risk control due to elevated volatility, partial quarterly financial data, and unfavorable risk-reward for new entry.',
@@ -2994,12 +3070,11 @@ function buildPtroScenarioResponse(scenarioKey) {
 }
 
 export const MOCK_PTRO_WAIT_RESPONSE = buildPtroScenarioResponse('PTRO_WAIT_NO_POSITION');
-export const MOCK_PTRO_REDUCE_RESPONSE = buildPtroScenarioResponse('PTRO_REDUCE_EXISTING_POSITION');
 export const MOCK_BBCA_BUY_SCENARIO_RESPONSE = withOverrides(MOCK_IDX_RESPONSE, {
   ...MOCK_ANALYSIS_SCENARIOS.BBCA_BUY_NO_POSITION,
   ticker: 'BBCA.JK',
   raw_ai_signal: 'BUY',
-  display_signal: resolveDisplaySignal('BUY', false),
+  display_signal: resolveDisplaySignal('BUY', false, 'Open new position'),
   signal_context: MOCK_ANALYSIS_SCENARIOS.BBCA_BUY_NO_POSITION.signal_context,
 });
 export const MOCK_BBRI_HOLD_SCENARIO_RESPONSE = withOverrides(MOCK_IDX_RESPONSE, {
@@ -3008,8 +3083,8 @@ export const MOCK_BBRI_HOLD_SCENARIO_RESPONSE = withOverrides(MOCK_IDX_RESPONSE,
   current_price: 5500,
   last_price: 5500,
   company_profile: MOCK_BBRI_COMPANY_PROFILE,
-  raw_ai_signal: 'BUY',
-  display_signal: resolveDisplaySignal('BUY', true),
+  raw_ai_signal: 'HOLD',
+  display_signal: resolveDisplaySignal('HOLD', true, 'Maintain position'),
   signal_context: MOCK_ANALYSIS_SCENARIOS.BBRI_HOLD_EXISTING_POSITION.signal_context,
   has_existing_position: true,
   position_quantity: 1000,
@@ -3023,11 +3098,51 @@ export const MOCK_TLKM_SELL_SCENARIO_RESPONSE = withOverrides(MOCK_SELL_RESPONSE
   current_price: 3200,
   last_price: 3200,
   raw_ai_signal: 'SELL',
-  display_signal: resolveDisplaySignal('SELL', true),
+  display_signal: resolveDisplaySignal('SELL', true, 'Exit position'),
   signal_context: MOCK_ANALYSIS_SCENARIOS.TLKM_SELL_EXISTING_POSITION.signal_context,
   has_existing_position: true,
   position_quantity: 1000,
   average_entry_price: 3500,
+});
+
+export const MOCK_TPIA_REDUCE_SCENARIO_RESPONSE = withOverrides(MOCK_SELL_RESPONSE, {
+  ...MOCK_ANALYSIS_SCENARIOS.TPIA_REDUCE_EXISTING_POSITION,
+  ticker: 'TPIA.JK',
+  market: 'ID',
+  company_profile: MOCK_TPIA_COMPANY_PROFILE,
+  current_price: 1400,
+  last_price: 1400,
+  current_price_as_of: '2026-06-04T11:55:00+07:00',
+  price_timestamp: '2026-06-04T11:55:00+07:00',
+  price_source: 'mock:intraday',
+  current_price_source: 'mock:intraday',
+  price_currency: 'IDR',
+  currency: 'IDR',
+  has_existing_position: true,
+  position_quantity: 1000,
+  average_entry_price: 1670,
+  raw_ai_signal: 'SELL',
+  display_signal: resolveDisplaySignal('SELL', true, 'Trim position'),
+  signal_context: MOCK_ANALYSIS_SCENARIOS.TPIA_REDUCE_EXISTING_POSITION.signal_context,
+  final_decision: 'Sell',
+  decision: 'Sell',
+  rating: 'Sell',
+  trade_plan_valid: true,
+  entry_price: null,
+  stop_loss: 1370,
+  take_profit: null,
+  risk_reward_ratio: null,
+  risk_reward_display: 'Not attractive',
+  confidence_score: 55,
+  confidence_label: 'Low Conviction',
+  confidence_tier: 'low',
+  volatility_level: 'Very High',
+  volatility_score: 100,
+  volatility_classification: 'Very High',
+  rebalancing_action: 'Trim position',
+  position_action: 'Trim position',
+  new_entry_action: 'Do not add; reduce existing exposure',
+  position_size_hint: 'Reduce position size gradually; no new exposure suggested.',
 });
 
 const MOCK_MAP = {
@@ -3035,6 +3150,7 @@ const MOCK_MAP = {
   AAPL: MOCK_HOLD_RESPONSE,
   TSLA: MOCK_SELL_RESPONSE,
   'PTRO.JK': MOCK_PTRO_WAIT_RESPONSE,
+  'TPIA.JK': MOCK_TPIA_REDUCE_SCENARIO_RESPONSE,
   'BBCA.JK': MOCK_BBCA_BUY_SCENARIO_RESPONSE,
   'BBRI.JK': MOCK_BBRI_HOLD_SCENARIO_RESPONSE,
   'TLKM.JK': MOCK_TLKM_SELL_SCENARIO_RESPONSE,
@@ -3068,8 +3184,8 @@ const MOCK_MAP = {
     current_price: 5700,
     volatility_level: 'High',
     volatility_score: 61,
-    rebalancing_action: 'Avoid new entry',
-    new_entry_action: 'No new entry',
+    rebalancing_action: 'No position to rebalance',
+    new_entry_action: 'Wait for valid entry setup',
     validation_warnings: ['HOLD_TRADE_LEVELS_HIDDEN'],
   }),
   'GOTO.JK': withOverrides(MOCK_SELL_RESPONSE, {
@@ -3083,10 +3199,10 @@ const MOCK_MAP = {
     entry_price: 70,
     stop_loss: 77,
     take_profit: 49,
-    rebalancing_action: 'Avoid new entry',
+    rebalancing_action: 'No position to rebalance',
     position_action: null,
-    new_entry_action: 'Avoid new entry',
-    position_size_hint: 'No new position suggested.',
+    new_entry_action: 'Avoid entry; wait for risk to normalize',
+    position_size_hint: '0% allocation; stay on watchlist only until risk normalizes.',
     volatility_level: 'Very High',
     volatility_score: 91,
     validation_warnings: ['INDONESIA_TICK_SIZE_ROUNDED'],
@@ -3096,7 +3212,7 @@ const MOCK_MAP = {
   MISSING: MOCK_MISSING_PRICE_RESPONSE,
 };
 
-const MOCK_IDX_CODES = ['BBCA', 'BBRI', 'TLKM', 'PTRO', 'BMRI', 'ASII', 'GOTO', 'UNVR'];
+const MOCK_IDX_CODES = ['BBCA', 'BBRI', 'TLKM', 'PTRO', 'TPIA', 'BMRI', 'ASII', 'GOTO', 'UNVR'];
 
 function normalizeMockTicker(ticker) {
   const normalizedTicker = String(ticker || 'NVDA')
@@ -3116,9 +3232,10 @@ function ensureAllowedRebalancing(response) {
   const positionOnlyActions = new Set(['Exit position', 'Trim position']);
 
   if (!response.has_existing_position && positionOnlyActions.has(response.rebalancing_action)) {
-    response.rebalancing_action = 'Avoid new entry';
+    response.rebalancing_action = 'No position to rebalance';
     response.position_action = null;
-    response.new_entry_action = 'Avoid new entry';
+    response.new_entry_action = 'Wait for valid entry setup';
+    response.position_size_hint = '0% allocation until setup improves.';
     response.validation_warnings = Array.from(
       new Set([...(response.validation_warnings || []), 'INVALID_REBALANCING_FIXED'])
     );
@@ -3164,7 +3281,6 @@ export function getMockAnalysisResponse(options = {}) {
     has_existing_position,
     position_quantity = null,
     average_entry_price = null,
-    mock_signal = null,
   } = options;
 
   const normalizedTicker = normalizeMockTicker(ticker);
@@ -3173,18 +3289,9 @@ export function getMockAnalysisResponse(options = {}) {
     options,
     'has_existing_position'
   );
-  const requestedHasPosition = hasExistingProvided ? Boolean(has_existing_position) : null;
-  const requestedMockSignal = String(mock_signal || '').trim().toLowerCase();
   let base =
     MOCK_MAP[normalizedTicker] ||
     (normalizedTicker.endsWith('.JK') ? MOCK_IDX_RESPONSE : MOCK_BUY_RESPONSE);
-
-  if (
-    normalizedTicker === 'PTRO.JK' &&
-    (requestedMockSignal === 'neutral' || requestedHasPosition === true)
-  ) {
-    base = MOCK_PTRO_REDUCE_RESPONSE;
-  }
 
   const response = cloneMock(base);
 
@@ -3230,20 +3337,33 @@ export function getMockAnalysisResponse(options = {}) {
   response.mock = true;
   response.source = 'frontend/dev/mockData.js';
 
-  ensureAllowedRebalancing(response);
-  applyResponseDetail(response);
-
   const rawAiSignal = normalizeRawAiSignal(
     response.raw_ai_signal || response.final_decision || response.decision || response.rating
   );
-  const displaySignal = resolveDisplaySignal(rawAiSignal, response.has_existing_position);
+  const displaySignal = resolveDisplaySignal(
+    rawAiSignal,
+    response.has_existing_position,
+    response.rebalancing_action
+  );
+  response.raw_ai_signal = rawAiSignal;
+  response.display_signal = displaySignal;
+  response.signal_context = signalContextForMock(
+    rawAiSignal,
+    response.has_existing_position,
+    displaySignal
+  );
+
+  applyMockActionCopy(response);
+  ensureAllowedRebalancing(response);
+  applyResponseDetail(response);
+
   const freshDataFreshness = createMockDataFreshness(response);
   Object.assign(
     response,
     createMockProductionContract(response, {
-      raw_ai_signal: rawAiSignal,
-      display_signal: displaySignal,
-      signal_context: signalContextForMock(rawAiSignal, response.has_existing_position, displaySignal),
+      raw_ai_signal: response.raw_ai_signal,
+      display_signal: response.display_signal,
+      signal_context: response.signal_context,
       data_freshness: freshDataFreshness,
       analysis_params: createMockAnalysisParams(response),
       tab_status: createMockTabStatus(response, freshDataFreshness),
@@ -3270,7 +3390,7 @@ export const MOCK_RESPONSES_BY_REQUEST_ID = {
   'mock-bbca-id-buy': MOCK_IDX_RESPONSE,
   'mock-unvr-news-unavailable-sell': MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE,
   'mock-ptro-wait-no-position': MOCK_PTRO_WAIT_RESPONSE,
-  'mock-ptro-reduce-existing-position': MOCK_PTRO_REDUCE_RESPONSE,
+  'mock-tpia-reduce-existing-position': MOCK_TPIA_REDUCE_SCENARIO_RESPONSE,
   'mock-bbca-buy-no-position': MOCK_BBCA_BUY_SCENARIO_RESPONSE,
   'mock-bbri-hold-existing-position': MOCK_BBRI_HOLD_SCENARIO_RESPONSE,
   'mock-tlkm-sell-existing-position': MOCK_TLKM_SELL_SCENARIO_RESPONSE,

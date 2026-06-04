@@ -37,6 +37,7 @@ class RebalancingAction(str, Enum):
     TRIM_POSITION = "Trim position"
     EXIT_POSITION = "Exit position"
     AVOID_NEW_ENTRY = "Avoid new entry"
+    NO_POSITION_TO_REBALANCE = "No position to rebalance"
 
 
 class DebateArgument(BaseModel):
@@ -234,7 +235,7 @@ class TraderProposal(BaseModel):
         default=None,
         description=(
             "Concrete portfolio action. Exactly one of Open new position, Add position, "
-            "Maintain position, Trim position, Exit position, or Avoid new entry."
+            "Maintain position, Trim position, Exit position, Avoid new entry, or No position to rebalance."
         ),
     )
 
@@ -440,7 +441,7 @@ class PortfolioDecision(BaseModel):
         default=None,
         description=(
             "Final portfolio action. Exactly one of Open new position, Add position, "
-            "Maintain position, Trim position, Exit position, or Avoid new entry. Backend normalizes this again."
+            "Maintain position, Trim position, Exit position, Avoid new entry, or No position to rebalance. Backend normalizes this again."
         ),
     )
 

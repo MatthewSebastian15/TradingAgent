@@ -274,6 +274,19 @@ export function buildMockActionPlanRows(result) {
   ];
 }
 
+function buildMockStatusActionRows(result) {
+  return [
+    row('Current Price', price(result?.current_price ?? result?.last_price, result)),
+    row('Volatility', result?.volatility_level),
+    row('Volatility Score', result?.volatility_score),
+    row('Rebalancing', result?.rebalancing_action),
+    row('Position Action', result?.position_action),
+    row('New Entry Action', result?.new_entry_action),
+    row('Position Size Hint', result?.position_size_hint),
+    row('R/R Ratio', riskRewardDisplay(result)),
+  ];
+}
+
 function buildRiskRows(result, includeTradePlanRisk) {
   const rows = [
     row('Volatility Level', result?.volatility_level),
@@ -492,6 +505,7 @@ export function buildMockReportContext(result = {}) {
     agent_pipeline_rows: buildAgentPipelineRows(result.agent_pipeline),
     total_pipeline_seconds: result.total_pipeline_seconds,
     action_plan_rows: showTradePlan ? buildMockActionPlanRows(result) : [],
+    status_action_rows: showTradePlan ? [] : buildMockStatusActionRows(result),
     risk_rows: buildRiskRows(result, showTradePlan),
     validation_rows: [
       row('Current Price Source', result.current_price_source),
@@ -1157,7 +1171,7 @@ export function renderMockReportHtml(report) {
         ${
           report.show_trade_plan
             ? renderMetricGrid(report.action_plan_rows)
-            : `<p class="muted">No actionable trade plan is available. Final decision: ${escapeHtml(report.final_decision)}.</p>`
+            : `<p class="muted">No actionable trade plan is available. Final decision: ${escapeHtml(report.final_decision)}.</p>${renderMetricGrid(report.status_action_rows)}`
         }
       </section>
 

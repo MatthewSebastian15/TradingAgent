@@ -7,9 +7,11 @@ import {
   MOCK_HOLD_RESPONSE,
   MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE,
   MOCK_MISSING_PRICE_RESPONSE,
+  MOCK_PTRO_WAIT_RESPONSE,
   MOCK_REPAIRED_RESPONSE,
   MOCK_RESPONSE,
   MOCK_SELL_RESPONSE,
+  MOCK_TPIA_REDUCE_SCENARIO_RESPONSE,
 } from '../../dev/mockData';
 
 describe('ResultCard risk-engine contract', () => {
@@ -323,6 +325,24 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getAllByText('1:3').length).toBeGreaterThan(0);
   });
 
+  it('renders WAIT wording for no-position mock scenario', () => {
+    render(<ResultCard result={MOCK_PTRO_WAIT_RESPONSE} />);
+
+    expect(screen.getByText('◇ WAIT')).toBeTruthy();
+    expect(screen.getByText('No position to rebalance')).toBeTruthy();
+    expect(screen.getByText('Wait for valid entry setup')).toBeTruthy();
+    expect(screen.getByText('0% allocation until setup improves.')).toBeTruthy();
+  });
+
+  it('renders REDUCE wording for existing-position mock scenario', () => {
+    render(<ResultCard result={MOCK_TPIA_REDUCE_SCENARIO_RESPONSE} />);
+
+    expect(screen.getByText('◒ REDUCE')).toBeTruthy();
+    expect(screen.getAllByText('Trim position').length).toBeGreaterThan(0);
+    expect(screen.getByText('Do not add; reduce existing exposure')).toBeTruthy();
+    expect(screen.getByText('Reduce position size gradually; no new exposure suggested.')).toBeTruthy();
+  });
+
   it('keeps Hold result limited to status metrics', () => {
     render(<ResultCard result={MOCK_HOLD_RESPONSE} />);
 
@@ -454,6 +474,7 @@ describe('ResultCard risk-engine contract', () => {
           result={{
             ...MOCK_RESPONSE,
             current_price: Number.NaN,
+            last_price: Number.NaN,
             price_target: Number.NaN,
             validation_warnings: 'not-an-array',
             data_quality: null,

@@ -13,7 +13,7 @@ export const MARKETS = {
     label: 'INDONESIA',
     flag: '\uD83C\uDDEE\uD83C\uDDE9',
     defaultTicker: 'BBCA',
-    tickers: ['BBCA', 'BBRI', 'TLKM', 'BMRI', 'ASII', 'GOTO', 'UNVR'],
+    tickers: ['BBCA', 'BBRI', 'TLKM', 'PTRO', 'TPIA', 'BMRI', 'ASII', 'GOTO', 'UNVR'],
   },
 };
 

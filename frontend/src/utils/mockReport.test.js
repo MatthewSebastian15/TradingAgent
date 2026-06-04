@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MOCK_HOLD_RESPONSE, MOCK_PTRO_REDUCE_RESPONSE, MOCK_PTRO_WAIT_RESPONSE, MOCK_RESPONSE } from '../../dev/mockData';
+import { MOCK_HOLD_RESPONSE, MOCK_PTRO_WAIT_RESPONSE, MOCK_RESPONSE, MOCK_TPIA_REDUCE_SCENARIO_RESPONSE } from '../../dev/mockData';
 import { buildMockActionPlanRows, buildMockReportHtml } from './mockReport';
 
 describe('mockReport', () => {
@@ -42,10 +42,12 @@ describe('mockReport', () => {
 
   it('renders full mock contract sections for WAIT and REDUCE signals', () => {
     const waitHtml = buildMockReportHtml(MOCK_PTRO_WAIT_RESPONSE);
-    const reduceHtml = buildMockReportHtml(MOCK_PTRO_REDUCE_RESPONSE);
+    const reduceHtml = buildMockReportHtml(MOCK_TPIA_REDUCE_SCENARIO_RESPONSE);
 
     expect(waitHtml).toContain('PTRO.JK');
     expect(waitHtml).toContain('WAIT');
+    expect(waitHtml).toContain('No position to rebalance');
+    expect(waitHtml).toContain('Wait for valid entry setup');
     expect(waitHtml).toContain('Confidence Breakdown');
     expect(waitHtml).toContain('Low Conviction');
     expect(waitHtml).toContain('Volatility Metadata');
@@ -54,8 +56,10 @@ describe('mockReport', () => {
     expect(waitHtml).toContain('Data Sources');
     expect(waitHtml).toContain('Data Freshness');
     expect(waitHtml).toContain('Yahoo Finance');
+    expect(reduceHtml).toContain('TPIA.JK');
     expect(reduceHtml).toContain('REDUCE');
-    expect(reduceHtml).toContain('NEUTRAL');
+    expect(reduceHtml).toContain('Trim position');
+    expect(reduceHtml).toContain('Do not add; reduce existing exposure');
   });
 
   it('renders Hold report without fake trade levels', () => {
