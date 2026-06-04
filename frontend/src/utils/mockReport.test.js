@@ -112,7 +112,10 @@ describe('mockReport', () => {
     const html = buildMockReportHtml(MOCK_RESPONSE);
 
     expect(html).toContain('Key Financial Highlights');
+    expect(html).toContain('FY22');
     expect(html).toContain('FY26Q1');
+    expect(html).toContain('<th>Unit</th>');
+    expect(html).toContain('USD Mn');
     expect(html).toContain('Revenue');
     expect(html).toContain('N/A');
     expect(html).toContain('Currency: USD (US Dollar)');
@@ -125,6 +128,7 @@ describe('mockReport', () => {
     const withoutPeer = buildMockReportHtml({ ...MOCK_RESPONSE, peer_comparison: null });
 
     expect(html).toContain('Financial Trend Analysis');
+    expect(html).toContain('<th>Unit</th>');
     expect(html).toContain('Valuation Multiples');
     expect(html).toContain('Fair Value Range');
     expect(html).toContain('Bull / Base / Bear Scenario');

@@ -627,6 +627,7 @@ function renderFinancialHighlights(financialHighlights) {
     <thead>
       <tr>
         <th>Metric</th>
+        <th>Unit</th>
         ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
       </tr>
     </thead>
@@ -635,10 +636,11 @@ function renderFinancialHighlights(financialHighlights) {
         .map(
           (item) => `<tr>
             <td>${escapeHtml(item.label)}</td>
+            <td>${escapeHtml(item.unit || '-')}</td>
             ${periods
               .map((period) => {
                 const cell = item.values?.[period.key];
-                return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display)}</td>`;
+                return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display || 'N/A')}</td>`;
               })
               .join('')}
           </tr>`
@@ -699,28 +701,30 @@ function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
 function renderFinancialTrends(payload) {
   if (!payload?.periods?.length || !payload?.metric_details) return '';
   const metrics = [
-    ['revenue', 'Revenue'],
-    ['revenue_growth_percent', 'Revenue Growth'],
-    ['ebitda', 'EBITDA'],
-    ['ebitda_margin_percent', 'EBITDA Margin'],
-    ['net_profit', 'Net Profit'],
-    ['net_profit_growth_percent', 'Net Profit Growth'],
-    ['net_profit_margin_percent', 'Net Profit Margin'],
-    ['roe_percent', 'ROE'],
-    ['eps', 'EPS'],
-    ['bvps', 'BVPS'],
-    ['der', 'DER'],
+    ['revenue', 'Revenue', payload.scale_label || ''],
+    ['revenue_growth_percent', 'Revenue Growth', '%'],
+    ['ebitda', 'EBITDA', payload.scale_label || ''],
+    ['ebitda_margin_percent', 'EBITDA Margin', '%'],
+    ['net_profit', 'Net Profit', payload.scale_label || ''],
+    ['net_profit_growth_percent', 'Net Profit Growth', '%'],
+    ['net_profit_margin_percent', 'Net Profit Margin', '%'],
+    ['roe_percent', 'ROE', '%'],
+    ['eps', 'EPS', `${payload.currency || ''}/share`],
+    ['bvps', 'BVPS', `${payload.currency || ''}/share`],
+    ['der', 'DER', 'x'],
   ];
   return `<section class="section">
     <h2>Financial Trend Analysis</h2>
     ${payload.unit_note ? `<p class="muted">${escapeHtml(payload.unit_note)}</p>` : ''}
     <table class="financial-highlights-table">
-      <thead><tr><th>Metric</th>${payload.periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}</tr></thead>
+      <thead><tr><th>Metric</th><th>Unit</th>${payload.periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}</tr></thead>
       <tbody>${metrics
         .map(
-          ([key, label]) =>
-            `<tr><td>${escapeHtml(label)}</td>${(payload.metric_details[key] || [])
-              .map((detail) => `<td>${escapeHtml(metricDetailDisplay(detail))}</td>`)
+          ([key, label, unit]) =>
+            `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(unit || '-')}</td>${payload.periods
+              .map((period, index) =>
+                `<td>${escapeHtml(metricDetailDisplay(payload.metric_details[key]?.[index]))}</td>`
+              )
               .join('')}</tr>`
         )
         .join('')}</tbody>

@@ -5,6 +5,9 @@ from datetime import date, datetime
 from .models import FinancialPeriod
 
 
+FUNDAMENTAL_HISTORY_START_YEAR = 2022
+
+
 def parse_analysis_date(value: str | date | None) -> date:
     if isinstance(value, datetime):
         return value.date()
@@ -38,9 +41,7 @@ def resolve_financial_highlight_periods(analysis_date: str | date | None) -> lis
     year = current.year
     quarter = get_calendar_quarter(current.month)
 
-    if quarter == 1:
-        return [_annual_period(item) for item in [year - 4, year - 3, year - 2, year - 1]]
-
-    periods = [_annual_period(item) for item in [year - 3, year - 2, year - 1]]
-    periods.extend(_quarter_period(year, item) for item in range(1, quarter))
+    periods = [_annual_period(item) for item in range(FUNDAMENTAL_HISTORY_START_YEAR, year)]
+    if quarter > 1:
+        periods.extend(_quarter_period(year, item) for item in range(1, quarter))
     return periods
