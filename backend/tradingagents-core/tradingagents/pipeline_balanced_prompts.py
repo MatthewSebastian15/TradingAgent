@@ -438,6 +438,10 @@ Keep language simple and practical. Include an action plan, risk controls, price
 [STATIC PORTFOLIO DECISION RULES]
 - Return all actionable dashboard fields: suggested_allocation_percent, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_reasons, key_catalysts, and invalidation_conditions.
 - Use key_reasons for the primary reasons supporting the recommendation.
+- Write key_reasons so they can be combined into one coherent dashboard paragraph.
+- The final Key Reasons paragraph must be 75-125 words, practical, non-repetitive, and directly tied to the recommendation.
+- Do not output vague reasons such as "market conditions" unless the specific condition is explained.
+- Do not make key_reasons a short bullet-only checklist. Each item should read like a sentence fragment that can be merged into a paragraph.
 - Backend validation is the final source of entry_price, stop_loss, take_profit, risk_reward_ratio, risk_reward_display, and actionability.
 - Reduce confidence and allocation when data_quality has partial, unavailable, or missing inputs.
 - Use LAST CLOSE PRICE as the current market price anchor in reasoning only.

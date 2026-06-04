@@ -77,6 +77,7 @@ SUMMARY_FIELDS = {
     "rebalancing_action",
     "position_size_hint",
     "key_reasons",
+    "key_reasons_paragraph",
     "key_catalysts",
     "invalidation_conditions",
     "data_quality",
@@ -517,6 +518,52 @@ def _sanitize_text_list(value: Any) -> list[Any]:
     return [sanitize_text(item) if isinstance(item, str) else item for item in value]
 
 
+def _normalize_inline_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def _truncate_words(text: str, max_words: int = 125) -> str:
+    words = [word for word in _normalize_inline_text(text).split(" ") if word]
+    if len(words) <= max_words:
+        return " ".join(words)
+    return f"{' '.join(words[:max_words])}.".replace("..", ".")
+
+
+def _as_reason_items(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [_normalize_inline_text(item) for item in value if _normalize_inline_text(item)]
+    text = _normalize_inline_text(value)
+    return [text] if text else []
+
+
+def _build_key_reasons_paragraph(payload: dict[str, Any]) -> str:
+    overview = payload.get("analysis_overview") if isinstance(payload.get("analysis_overview"), dict) else {}
+
+    direct = _normalize_inline_text(
+        overview.get("key_reasons_paragraph") or payload.get("key_reasons_paragraph")
+    )
+    if direct:
+        return _truncate_words(direct, 125)
+
+    items: list[str] = []
+    items.extend(_as_reason_items(overview.get("key_reasons") or payload.get("key_reasons")))
+    items.extend(_as_reason_items(payload.get("key_catalysts")))
+    items.extend(_as_reason_items(payload.get("mini_risk_summary")))
+    items.extend(_as_reason_items(payload.get("decision_adjusted_reason")))
+
+    unique_items = list(dict.fromkeys(item for item in items if item))
+    if not unique_items:
+        return ""
+
+    paragraph = ". ".join(unique_items)
+    if not paragraph.endswith("."):
+        paragraph = f"{paragraph}."
+
+    return _truncate_words(paragraph, 125)
+
+
 def _volatility_classification(score: Any) -> str | None:
     try:
         numeric = float(score)
@@ -547,6 +594,7 @@ def _attach_phase1_fields(payload: dict[str, Any], final_state: dict[str, Any]) 
         "position_action",
         "new_entry_action",
         "position_size_hint",
+        "key_reasons_paragraph",
     ]
     for field in text_fields:
         if field in enriched and isinstance(enriched[field], str):
@@ -618,6 +666,7 @@ def _analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
         "executive_summary": payload.get("executive_summary"),
         "investment_thesis": payload.get("investment_thesis"),
         "key_reasons": list(key_reasons) if isinstance(key_reasons, list) else [],
+        "key_reasons_paragraph": payload.get("key_reasons_paragraph") or _build_key_reasons_paragraph(payload),
         "action_plan": {
             "current_price": payload.get("current_price"),
             "entry": payload.get("entry_price"),
@@ -921,7 +970,9 @@ def _build_tab_status(payload: dict[str, Any]) -> dict[str, str]:
 
 
 def _with_analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
-    return {**payload, "analysis_overview": _analysis_overview(payload)}
+    key_reasons_paragraph = _build_key_reasons_paragraph(payload)
+    enriched = {**payload, "key_reasons_paragraph": key_reasons_paragraph}
+    return {**enriched, "analysis_overview": _analysis_overview(enriched)}
 
 
 def _with_analysis_overview_and_risk_data_quality(
@@ -1161,6 +1212,7 @@ def parse_final_result(
             "rebalancing_action": rebalancing_action_value,
             "position_size_hint": position_size_hint_value,
             "key_reasons": getattr(pd_obj, "key_reasons", []) or [],
+            "key_reasons_paragraph": getattr(pd_obj, "key_reasons_paragraph", None),
             "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
             "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
             "data_quality": pd_data_quality,

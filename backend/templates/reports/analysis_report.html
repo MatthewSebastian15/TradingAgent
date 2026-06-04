@@ -56,6 +56,13 @@
         </table>
       </section>
 
+      {% if report.key_reasons_paragraph and report.key_reasons_paragraph != 'N/A' %}
+        <section class="section">
+          <h2>Key Reasons</h2>
+          <p>{{ report.key_reasons_paragraph }}</p>
+        </section>
+      {% endif %}
+
       <section class="section">
         <h2>Final Recommendation</h2>
         <table>

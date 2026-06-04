@@ -96,6 +96,7 @@ function compactReportPayload(result) {
     'investment_thesis',
     'analysis_overview',
     'key_reasons',
+    'key_reasons_paragraph',
     'key_catalysts',
     'invalidation_conditions',
     'data_quality',

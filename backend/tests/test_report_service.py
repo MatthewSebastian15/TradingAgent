@@ -6,6 +6,10 @@ from errors import ApiError
 from services.report_service import build_report_context, render_analysis_report_html, validate_report_scope
 
 
+def _count_words(text: str) -> int:
+    return len([word for word in text.split() if word])
+
+
 def _base_result(**overrides):
     result = {
         "request_id": "report-test-1",
@@ -127,6 +131,18 @@ def _base_result(**overrides):
             "calculation_notes": ["Risk/reward ratio = expected upside / expected downside"],
         },
         "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
+        "key_reasons_paragraph": (
+            "The recommendation is supported by improving earnings visibility, resilient margin structure, disciplined balance sheet quality, and a more balanced risk reward setup. "
+            "Price momentum remains constructive, but the model still requires confirmation from fresh market data and reliable vendor inputs before increasing conviction. "
+            "News flow and catalyst quality should be monitored because valuation sensitivity can reduce upside if earnings delivery weakens. "
+            "Position sizing should remain controlled until volatility, liquidity, thesis confirmation, entry discipline, and source reliability improve together."
+        ),
+        "key_reasons": [
+            "Improving earnings visibility supports the final recommendation.",
+            "Risk reward is more balanced when current price data and technical confirmation are available.",
+            "Position sizing should remain controlled because volatility and data quality still affect conviction.",
+        ],
+        "key_catalysts": ["News flow and catalyst quality should be monitored for confirmation."],
         "executive_summary": "Summary text.",
         "company_profile": {
             "available": True,
@@ -351,6 +367,25 @@ def test_html_report_renders_disclaimer():
     assert "Disclaimer" in html
     assert "automated AI-assisted analysis engine" in html
     assert "may contain errors" in html
+    assert html.rfind("Disclaimer") > html.find("Executive Summary")
+
+
+def test_report_context_contains_key_reasons_paragraph():
+    report = build_report_context(_base_result())
+
+    assert "key_reasons_paragraph" in report
+    assert report["key_reasons_paragraph"]
+    assert _count_words(report["key_reasons_paragraph"]) >= 75
+    assert _count_words(report["key_reasons_paragraph"]) <= 125
+
+
+def test_html_report_renders_key_reasons_as_paragraph():
+    html = render_analysis_report_html(build_report_context(_base_result()))
+
+    assert "Key Reasons" in html
+    assert "<h2>Key Reasons</h2>" in html
+    key_reason_section = html.split("Key Reasons", 1)[1].split("</section>", 1)[0]
+    assert "<ul" not in key_reason_section
 
 
 def test_html_report_renders_dynamic_financial_highlights():

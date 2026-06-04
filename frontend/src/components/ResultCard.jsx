@@ -204,28 +204,45 @@ function wordCount(text) {
   return String(text || '').trim().split(/\s+/).filter(Boolean).length;
 }
 
-function formatTechnicalPrice(value, result) {
-  if (!hasDisplayValue(value)) return '—';
-  return formatPrice(value, result.normalized_ticker || result.ticker, result.price_currency || result.currency) || '—';
+function normalizeInlineText(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/\s+/g, ' ').trim();
 }
 
-function formatEntryRange(levels, result) {
-  const low = levels?.entry_range_low;
-  const high = levels?.entry_range_high;
-  if (!hasDisplayValue(low) && !hasDisplayValue(high)) return '—';
-  if (hasDisplayValue(low) && hasDisplayValue(high) && Number(low) !== Number(high)) {
-    return `${formatTechnicalPrice(low, result)} - ${formatTechnicalPrice(high, result)}`;
+function truncateKeyReasonWords(text, maxWords = 125) {
+  const words = normalizeInlineText(text).split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(' ');
+  return `${words.slice(0, maxWords).join(' ')}.`.replace(/\.\.$/, '.');
+}
+
+function normalizeReasonItems(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeInlineText(item)).filter(Boolean);
   }
-  return formatTechnicalPrice(hasDisplayValue(low) ? low : high, result);
+
+  const text = normalizeInlineText(value);
+  return text ? [text] : [];
 }
 
-function riskRewardTone(value) {
-  const text = String(value || '').trim().toLowerCase();
-  if (!text) return 'text-bloomberg-muted';
-  if (text.includes('not attractive')) return 'text-bloomberg-red';
-  if (/^1\s*:/.test(text)) return 'text-bloomberg-green';
-  return 'text-bloomberg-white';
+function buildKeyReasonsParagraph({ paragraph, reasons, catalysts, miniRiskSummary, decisionReason }) {
+  const directParagraph = normalizeInlineText(paragraph);
+  if (directParagraph) return truncateKeyReasonWords(directParagraph, 125);
+
+  const items = [
+    ...normalizeReasonItems(reasons),
+    ...normalizeReasonItems(catalysts),
+    normalizeInlineText(miniRiskSummary),
+    normalizeInlineText(decisionReason),
+  ].filter(Boolean);
+
+  const uniqueItems = Array.from(new Set(items));
+  const joined = uniqueItems.join('. ');
+  if (!joined) return '';
+
+  const normalized = joined.endsWith('.') ? joined : `${joined}.`;
+  return truncateKeyReasonWords(normalized, 125);
 }
+
 
 function formatDataSourcePriceLabel(result) {
   const priceSource = result.data_sources?.price;
@@ -664,50 +681,6 @@ ExpandableTextSection.propTypes = {
   expandLabel: PropTypes.string.isRequired,
 };
 
-function KeyLevels({ levels, result }) {
-  if (!levels) return null;
-
-  if (levels.technical_levels_available === false) {
-    return (
-      <div className="px-4 py-4 border-b border-bloomberg-border">
-        <SectionHeader label="KEY LEVELS" />
-        <p className="font-mono text-xs text-bloomberg-muted">
-          Technical levels could not be calculated for this analysis.
-        </p>
-      </div>
-    );
-  }
-
-  const rows = [
-    ['Current Price', formatTechnicalPrice(levels.current_price, result)],
-    ['Nearest Support', formatTechnicalPrice(levels.nearest_support, result)],
-    ['Nearest Resistance', formatTechnicalPrice(levels.nearest_resistance, result)],
-    ['Suggested Stop Loss', formatTechnicalPrice(levels.suggested_stop_loss, result)],
-    ['Invalidation Level', formatTechnicalPrice(levels.invalidation_level, result)],
-    ['Entry Range', formatEntryRange(levels, result)],
-    ['Risk / Reward', levels.risk_reward_ratio || '—', riskRewardTone(levels.risk_reward_ratio)],
-  ];
-
-  return (
-    <div className="px-4 py-4 border-b border-bloomberg-border">
-      <SectionHeader label="KEY LEVELS" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 font-mono text-xs">
-        {rows.map(([label, value, tone]) => (
-          <React.Fragment key={label}>
-            <div className="text-bloomberg-muted">{label}</div>
-            <div className={`text-right sm:text-left ${tone || 'text-bloomberg-white'}`}>{value}</div>
-          </React.Fragment>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-KeyLevels.propTypes = {
-  levels: PropTypes.object,
-  result: PropTypes.object.isRequired,
-};
-
 function pipelineStatusMeta(status) {
   const normalized = String(status || 'ok').toLowerCase();
   if (normalized === 'partial') return { icon: '⚠', classes: 'text-bloomberg-amber' };
@@ -846,10 +819,16 @@ export default function ResultCard({
   const allocation = result.suggested_allocation_percent ?? null;
   const riskReward = formatRiskReward(result);
   const catalysts = result.key_catalysts || [];
-  const keyReasons = analysisOverview.key_reasons || result.key_reasons || catalysts;
   const invalidations = result.invalidation_conditions || [];
   const riskSummary = analysisOverview.risk_summary || null;
   const miniRiskSummary = result.mini_risk_summary;
+  const keyReasonsParagraph = buildKeyReasonsParagraph({
+    paragraph: analysisOverview.key_reasons_paragraph || result.key_reasons_paragraph,
+    reasons: analysisOverview.key_reasons || result.key_reasons,
+    catalysts,
+    miniRiskSummary,
+    decisionReason: result.decision_adjusted_reason,
+  });
   const signalPositionLabel = result.has_existing_position ? 'Existing position' : 'No existing position';
   const agents = result.agents_used || [];
   const budgetExhausted = Boolean(result.budget_exhausted);
@@ -1031,8 +1010,6 @@ export default function ResultCard({
 
           {shouldShowHoldMetrics && <HoldMetrics result={displayResult} currentPrice={currentPrice} />}
 
-          {result.technical_levels && <KeyLevels levels={result.technical_levels} result={displayResult} />}
-
           {budgetExhausted && (
             <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
               <SectionHeader label="PIPELINE LIMIT" />
@@ -1098,16 +1075,12 @@ export default function ResultCard({
             expandLabel="Read More"
           />
 
-          {keyReasons.length > 0 && (
+          {keyReasonsParagraph && (
             <div className="px-4 py-4 border-b border-bloomberg-border">
               <SectionHeader label="KEY REASONS" />
-              <ul className="flex flex-col gap-1.5">
-                {keyReasons.map((reason, index) => (
-                  <li key={`${reason}-${index}`} className="font-mono text-xs text-bloomberg-muted">
-                    + {reason}
-                  </li>
-                ))}
-              </ul>
+              <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                {keyReasonsParagraph}
+              </p>
             </div>
           )}
 
