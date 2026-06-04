@@ -36,6 +36,14 @@ SUMMARY_FIELDS = {
     "price_source",
     "price_timestamp",
     "price_is_fallback",
+    "currency",
+    "exchange",
+    "normalized_ticker",
+    "input_ticker",
+    "total_pipeline_seconds",
+    "agent_pipeline",
+    "technical_levels",
+    "data_sources",
     "market_status",
     "raw_ai_signal",
     "display_signal",
@@ -727,6 +735,10 @@ def parse_final_result(
         "analyst_consensus": final_state.get("analyst_consensus") or {},
         "news": final_state.get("news") or final_state.get("news_context") or {},
         "news_context": final_state.get("news_context") or final_state.get("news") or {},
+        "data_sources": final_state.get("data_sources") or {},
+        "technical_levels": final_state.get("technical_levels") or {},
+        "agent_pipeline": final_state.get("agent_pipeline") or [],
+        "total_pipeline_seconds": final_state.get("total_pipeline_seconds"),
         "data_quality": _complete_risk_engine_data_quality(
             data_quality
             or {
@@ -899,9 +911,18 @@ def request_warnings(req: AnalysisRequest) -> list[str]:
 
 
 def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict) -> dict:
+    input_ticker = req.input_ticker or req.ticker
+    normalized_ticker = req.ticker
+    exchange = "IDX" if str(normalized_ticker).upper().endswith(".JK") or req.market == "ID" else "US" if req.market == "US" else None
+    currency = "IDR" if exchange == "IDX" else "USD" if exchange == "US" else result_fields.get("price_currency")
+
     payload = {
         "request_id": request_id,
-        "ticker": req.ticker,
+        "input_ticker": input_ticker,
+        "normalized_ticker": normalized_ticker,
+        "exchange": exchange,
+        "currency": currency,
+        "ticker": normalized_ticker,
         "market": req.market,
         "trade_date": req.trade_date,
         "analysis_created_at": _utc_now_iso(),

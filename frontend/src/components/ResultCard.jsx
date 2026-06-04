@@ -191,6 +191,59 @@ function formatPriceAsOf(result, fallbackValue) {
   return label;
 }
 
+function truncateWords(text, limit) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= limit) return String(text || '').trim();
+  return `${words.slice(0, limit).join(' ')}…`;
+}
+
+function wordCount(text) {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function formatTechnicalPrice(value, result) {
+  if (!hasDisplayValue(value)) return '—';
+  return formatPrice(value, result.normalized_ticker || result.ticker, result.price_currency || result.currency) || '—';
+}
+
+function formatEntryRange(levels, result) {
+  const low = levels?.entry_range_low;
+  const high = levels?.entry_range_high;
+  if (!hasDisplayValue(low) && !hasDisplayValue(high)) return '—';
+  if (hasDisplayValue(low) && hasDisplayValue(high) && Number(low) !== Number(high)) {
+    return `${formatTechnicalPrice(low, result)} - ${formatTechnicalPrice(high, result)}`;
+  }
+  return formatTechnicalPrice(hasDisplayValue(low) ? low : high, result);
+}
+
+function riskRewardTone(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return 'text-bloomberg-muted';
+  if (text.includes('not attractive')) return 'text-bloomberg-red';
+  if (/^1\s*:/.test(text)) return 'text-bloomberg-green';
+  return 'text-bloomberg-white';
+}
+
+function formatDataSourcePriceLabel(result) {
+  const priceSource = result.data_sources?.price;
+  if (priceSource?.provider) {
+    const timestamp = priceSource.timestamp || result.price_timestamp || result.current_price_as_of;
+    const dateLabel = formatWibPriceTimestamp(timestamp, !priceSource.is_fallback);
+    const fallback = priceSource.is_fallback ? '⚠  ' : '';
+    const fallbackText = priceSource.is_fallback ? ' (previous close fallback)' : '';
+    return `${fallback}Price: ${priceSource.provider}${fallbackText}${dateLabel ? ` · ${dateLabel}` : ''}`;
+  }
+
+  const source = coalesceDisplayValue(result.price_source, result.current_price_source);
+  if (!source) return null;
+  const provider = String(source).toLowerCase().includes('yfinance') ? 'Yahoo Finance' : String(source);
+  const timestamp = result.price_timestamp || result.current_price_as_of;
+  const dateLabel = formatWibPriceTimestamp(timestamp, !result.price_is_fallback);
+  const fallback = result.price_is_fallback ? '⚠  ' : '';
+  const fallbackText = result.price_is_fallback ? ' (previous close fallback)' : '';
+  return `${fallback}Price: ${provider}${fallbackText}${dateLabel ? ` · ${dateLabel}` : ''}`;
+}
+
 function formatVolatilityValue(result) {
   if (!hasDisplayValue(result.volatility_score)) return null;
   const score = typeof result.volatility_score === 'number' ? result.volatility_score.toFixed(2).replace(/\.00$/, '') : result.volatility_score;
@@ -399,25 +452,25 @@ function getActionPlanMetrics({ result, currentPrice, riskReward }) {
   return [
     {
       label: 'CURRENT PRICE',
-      value: hasDisplayValue(currentPrice) ? formatPrice(currentPrice, result.ticker, result.price_currency) : 'N/A',
+      value: hasDisplayValue(currentPrice) ? formatPrice(currentPrice, result.ticker, result.price_currency || result.currency) : 'N/A',
       highlight: true,
     },
     {
       label: 'ENTRY',
       value: hasDisplayValue(result.entry_price)
-        ? formatPrice(result.entry_price, result.ticker, result.price_currency)
+        ? formatPrice(result.entry_price, result.ticker, result.price_currency || result.currency)
         : 'N/A',
     },
     {
       label: 'STOP LOSS',
       value: hasDisplayValue(result.stop_loss)
-        ? formatPrice(result.stop_loss, result.ticker, result.price_currency)
+        ? formatPrice(result.stop_loss, result.ticker, result.price_currency || result.currency)
         : 'N/A',
     },
     {
       label: 'TAKE PROFIT',
       value: hasDisplayValue(result.take_profit)
-        ? formatPrice(result.take_profit, result.ticker, result.price_currency)
+        ? formatPrice(result.take_profit, result.ticker, result.price_currency || result.currency)
         : 'N/A',
     },
     {
@@ -518,7 +571,7 @@ function HoldMetrics({ result, currentPrice }) {
         {hasDisplayValue(currentPrice) && (
           <MetricBox
             label="CURRENT PRICE"
-            value={formatPrice(currentPrice, result.ticker, result.price_currency)}
+            value={formatPrice(currentPrice, result.ticker, result.price_currency || result.currency)}
             highlight
           />
         )}
@@ -558,6 +611,178 @@ HoldMetrics.propTypes = {
   currentPrice: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
 };
 
+function ExpandableTextSection({
+  label,
+  text,
+  expanded,
+  onToggle,
+  collapsedWords,
+  expandedMaxClass,
+  expandLabel,
+}) {
+  if (!hasDisplayValue(text)) return null;
+
+  const needsToggle = wordCount(text) > collapsedWords;
+  const visibleText = expanded || !needsToggle ? text : truncateWords(text, collapsedWords);
+
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border">
+      <SectionHeader label={label} />
+      <div
+        className={`relative ${expanded ? `${expandedMaxClass} overflow-y-auto pr-2` : 'overflow-hidden'}`}
+      >
+        <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+          {parseBold(visibleText)}
+        </p>
+        {!expanded && needsToggle && (
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-bloomberg-card to-transparent" />
+        )}
+      </div>
+      {needsToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mt-2 font-mono text-xs text-bloomberg-orange hover:text-orange-300 transition-colors tracking-wider"
+        >
+          {expanded ? 'Collapse' : expandLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+ExpandableTextSection.propTypes = {
+  label: PropTypes.string.isRequired,
+  text: PropTypes.string,
+  expanded: PropTypes.bool.isRequired,
+  onToggle: PropTypes.func.isRequired,
+  collapsedWords: PropTypes.number.isRequired,
+  expandedMaxClass: PropTypes.string.isRequired,
+  expandLabel: PropTypes.string.isRequired,
+};
+
+function KeyLevels({ levels, result }) {
+  if (!levels) return null;
+
+  if (levels.technical_levels_available === false) {
+    return (
+      <div className="px-4 py-4 border-b border-bloomberg-border">
+        <SectionHeader label="KEY LEVELS" />
+        <p className="font-mono text-xs text-bloomberg-muted">
+          Technical levels could not be calculated for this analysis.
+        </p>
+      </div>
+    );
+  }
+
+  const rows = [
+    ['Current Price', formatTechnicalPrice(levels.current_price, result)],
+    ['Nearest Support', formatTechnicalPrice(levels.nearest_support, result)],
+    ['Nearest Resistance', formatTechnicalPrice(levels.nearest_resistance, result)],
+    ['Suggested Stop Loss', formatTechnicalPrice(levels.suggested_stop_loss, result)],
+    ['Invalidation Level', formatTechnicalPrice(levels.invalidation_level, result)],
+    ['Entry Range', formatEntryRange(levels, result)],
+    ['Risk / Reward', levels.risk_reward_ratio || '—', riskRewardTone(levels.risk_reward_ratio)],
+  ];
+
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border">
+      <SectionHeader label="KEY LEVELS" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 font-mono text-xs">
+        {rows.map(([label, value, tone]) => (
+          <React.Fragment key={label}>
+            <div className="text-bloomberg-muted">{label}</div>
+            <div className={`text-right sm:text-left ${tone || 'text-bloomberg-white'}`}>{value}</div>
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+KeyLevels.propTypes = {
+  levels: PropTypes.object,
+  result: PropTypes.object.isRequired,
+};
+
+function pipelineStatusMeta(status) {
+  const normalized = String(status || 'ok').toLowerCase();
+  if (normalized === 'partial') return { icon: '⚠', classes: 'text-bloomberg-amber' };
+  if (normalized === 'fallback') return { icon: 'ℹ', classes: 'text-bloomberg-orange' };
+  if (normalized === 'error') return { icon: '✗', classes: 'text-bloomberg-red' };
+  return { icon: '✓', classes: 'text-bloomberg-green' };
+}
+
+function AgentPipeline({ pipeline = [], agents = [], totalSeconds }) {
+  const [expandedRows, setExpandedRows] = useState({});
+
+  if (Array.isArray(pipeline) && pipeline.length > 0) {
+    return (
+      <div className="px-4 py-4 border-b border-bloomberg-border">
+        <SectionHeader label="AGENT PIPELINE" />
+        <div className="flex flex-col gap-1.5">
+          {pipeline.map((agent) => {
+            const statusMeta = pipelineStatusMeta(agent.status);
+            const warning = agent.warning;
+            const rowKey = agent.name;
+            return (
+              <button
+                type="button"
+                key={rowKey}
+                onClick={() => warning && setExpandedRows((prev) => ({ ...prev, [rowKey]: !prev[rowKey] }))}
+                className="text-left border border-bloomberg-border px-2.5 py-2 bg-black bg-opacity-10 hover:bg-bloomberg-surface transition-colors"
+              >
+                <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center font-mono text-xs">
+                  <span className="text-bloomberg-muted">{agent.name}</span>
+                  <span className={statusMeta.classes}>{statusMeta.icon}</span>
+                  <span className="text-bloomberg-white">
+                    {hasDisplayValue(agent.duration_seconds) ? `${Number(agent.duration_seconds).toFixed(1)}s` : '—'}
+                  </span>
+                </div>
+                {warning && (
+                  <div className="mt-1 font-mono text-[11px] text-bloomberg-amber">
+                    {expandedRows[rowKey] ? warning : 'Warning available'}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {hasDisplayValue(totalSeconds) && (
+          <div className="mt-3 font-mono text-xs text-bloomberg-white">
+            Total pipeline time: {Number(totalSeconds).toFixed(1)}s
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!agents.length) return null;
+
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border">
+      <SectionHeader label="AGENT PIPELINE" />
+      <div className="flex flex-wrap gap-1.5">
+        {agents.map((agent, index) => (
+          <span
+            key={`${agent}-${index}`}
+            className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted"
+          >
+            <span className="text-bloomberg-green mr-1.5">✓</span>
+            {agent}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+AgentPipeline.propTypes = {
+  pipeline: PropTypes.array,
+  agents: PropTypes.array,
+  totalSeconds: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+};
+
 function ReportDisclaimer() {
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border bg-black bg-opacity-20">
@@ -570,6 +795,7 @@ function ReportDisclaimer() {
 }
 
 export default function ResultCard({ result, enableReportExport = true, mockReport = false }) {
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [thesisExpanded, setThesisExpanded] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [activeTab, setActiveTab] = useState('analisis');
@@ -594,6 +820,8 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
     );
   }
 
+  const displayTicker = result.normalized_ticker || result.ticker;
+  const displayResult = { ...result, ticker: displayTicker };
   const finalDecision = getFinalDecision(result);
   const rawAiSignal = normalizeSignal(result.raw_ai_signal || result.llm_decision || result.final_decision || result.decision);
   const isActionable = ACTIONABLE_DECISIONS.has(finalDecision);
@@ -612,7 +840,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
   );
   const priceAsOfLabel = formatPriceAsOf(result, currentPriceAsOf);
   const priceTimestampLabel = formatWibPriceTimestamp(currentPriceAsOf);
-  const currentPriceSource = coalesceDisplayValue(result.price_source, result.current_price_source);
+  const currentPriceSource = formatDataSourcePriceLabel(result);
   const timeHorizon = formatAnalysisHorizon(result.time_horizon_months, result.time_horizon);
   const confidence = result.confidence_score ?? null;
   const confidenceDisplay = formatConfidenceDisplay(confidence, result.confidence_label);
@@ -666,7 +894,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
           {enableReportExport && (result.job_id || result.request_id) && (
             <ExportReportButtons
               resourceId={result.job_id || result.request_id}
-              result={result}
+              result={displayResult}
               disabled={Boolean(result.error)}
               mockReport={mockReport}
             />
@@ -682,7 +910,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
           <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
             <div>
               <div className={`font-display text-5xl font-bold tracking-wider ${decisionColor}`}>
-                {formatTickerLabel(result.ticker)}
+                {formatTickerLabel(displayTicker)}
               </div>
               <div className="mt-3">
                 <DecisionBadge decision={finalDecision} />
@@ -699,7 +927,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
               )}
               {currentPriceSource && (
                 <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
-                  SOURCE: <span className="text-bloomberg-white">{currentPriceSource}</span>
+                  <span className="text-bloomberg-white">{currentPriceSource}</span>
                 </div>
               )}
               {rawAiSignal && rawAiSignal !== finalDecision && (
@@ -715,7 +943,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
                 {hasDisplayValue(currentPrice) && (
                   <MetricBox
                     label="LAST PRICE"
-                    value={formatPrice(currentPrice, result.ticker, result.price_currency)}
+                    value={formatPrice(currentPrice, displayTicker, result.price_currency || result.currency)}
                     subValue={result.price_is_fallback || !priceTimestampLabel ? null : `as of ${priceTimestampLabel}`}
                     highlight
                   />
@@ -770,13 +998,15 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
 
           {shouldShowActionPlan && (
             <ActionableMetrics
-              result={result}
+              result={displayResult}
               currentPrice={currentPrice}
               riskReward={riskReward}
             />
           )}
 
-          {shouldShowHoldMetrics && <HoldMetrics result={result} currentPrice={currentPrice} />}
+          {shouldShowHoldMetrics && <HoldMetrics result={displayResult} currentPrice={currentPrice} />}
+
+          {result.technical_levels && <KeyLevels levels={result.technical_levels} result={displayResult} />}
 
           {budgetExhausted && (
             <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
@@ -833,15 +1063,15 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
             </div>
           )}
 
-          {/* Executive Summary */}
-          {summary && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="EXECUTIVE SUMMARY" />
-              <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                {parseBold(summary)}
-              </p>
-            </div>
-          )}
+          <ExpandableTextSection
+            label="EXECUTIVE SUMMARY"
+            text={summary}
+            expanded={summaryExpanded}
+            onToggle={() => setSummaryExpanded(!summaryExpanded)}
+            collapsedWords={100}
+            expandedMaxClass="max-h-[300px]"
+            expandLabel="Read More"
+          />
 
           {keyReasons.length > 0 && (
             <div className="px-4 py-4 border-b border-bloomberg-border">
@@ -865,46 +1095,21 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
             </div>
           )}
 
-          {/* Investment Thesis */}
-          {thesis && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="INVESTMENT THESIS" />
-              <div
-                className={`overflow-hidden transition-all duration-300 ${thesisExpanded ? '' : 'max-h-24'} relative`}
-              >
-                <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                  {parseBold(thesis)}
-                </p>
-                {!thesisExpanded && (
-                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-bloomberg-card to-transparent" />
-                )}
-              </div>
-              <button
-                onClick={() => setThesisExpanded(!thesisExpanded)}
-                className="mt-2 font-mono text-xs text-bloomberg-orange hover:text-orange-300 transition-colors tracking-wider"
-              >
-                {thesisExpanded ? '↑ COLLAPSE' : '↓ EXPAND FULL THESIS'}
-              </button>
-            </div>
-          )}
+          <ExpandableTextSection
+            label="INVESTMENT THESIS"
+            text={thesis}
+            expanded={thesisExpanded}
+            onToggle={() => setThesisExpanded(!thesisExpanded)}
+            collapsedWords={150}
+            expandedMaxClass="max-h-[500px]"
+            expandLabel="Read Full Thesis"
+          />
 
-          {/* Agents used */}
-          {agents.length > 0 && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="AGENT PIPELINE" />
-              <div className="flex flex-wrap gap-1.5">
-                {agents.map((a, i) => (
-                  <span
-                    key={i}
-                    className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted"
-                  >
-                    <span className="text-bloomberg-green mr-1.5">✓</span>
-                    {a}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          <AgentPipeline
+            pipeline={result.agent_pipeline}
+            agents={agents}
+            totalSeconds={result.total_pipeline_seconds}
+          />
 
           <ReportDisclaimer />
 

@@ -17,9 +17,7 @@ export function formatPrice(price, ticker = '', currency = '') {
 
 export function formatTickerLabel(ticker = '') {
   if (ticker === null || ticker === undefined) return '';
-  const normalizedTicker = String(ticker).trim().toUpperCase();
-  if (normalizedTicker.endsWith('.JK')) return normalizedTicker.slice(0, -3);
-  return String(ticker).trim();
+  return String(ticker).trim().toUpperCase();
 }
 
 export function formatDateTimeLabel(value) {
