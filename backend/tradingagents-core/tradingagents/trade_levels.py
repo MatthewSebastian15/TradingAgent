@@ -173,33 +173,15 @@ def calculate_volatility_score(price_data: str | None) -> float | None:
     window = rows[-20:]
     closes = [item["close"] for item in window]
     returns = [(closes[i] / closes[i - 1]) - 1 for i in range(1, len(closes)) if closes[i - 1] > 0]
-    return_std_pct = pstdev(returns) * 100 if len(returns) >= 2 else 0.0
+    if len(returns) < 2:
+        return None
 
-    ranges_pct = []
-    for item in window:
-        high = item.get("high") or 0.0
-        low = item.get("low") or 0.0
-        close = item["close"]
-        if high > 0 and low > 0 and high >= low and close > 0:
-            ranges_pct.append(((high - low) / close) * 100)
-    avg_range_pct = sum(ranges_pct) / len(ranges_pct) if ranges_pct else 0.0
+    annual_volatility = pstdev(returns) * math.sqrt(252)
+    if not math.isfinite(annual_volatility):
+        return None
 
-    last_close = closes[-1]
-    range_20d_pct = ((max(closes) - min(closes)) / last_close) * 100 if last_close > 0 else 0.0
-
-    volumes = [item.get("volume") or 0.0 for item in window if (item.get("volume") or 0.0) > 0]
-    if len(volumes) >= 5:
-        avg_volume = sum(volumes[:-1]) / max(len(volumes[:-1]), 1)
-        volume_spike = volumes[-1] / avg_volume if avg_volume > 0 else 1.0
-    else:
-        volume_spike = 1.0
-
-    atr_score = min(avg_range_pct * 9.0, 100.0)
-    return_std_score = min(return_std_pct * 18.0, 100.0)
-    range_score = min(range_20d_pct * 3.0, 100.0)
-    volume_spike_score = min(max((volume_spike - 1.0) * 35.0, 0.0), 100.0)
-    score = atr_score * 0.35 + return_std_score * 0.25 + range_score * 0.20 + volume_spike_score * 0.20
-    return round(max(0.0, min(score, 100.0)), 2)
+    score = min(max(annual_volatility * 100, 0.0), 100.0)
+    return round(score, 2)
 
 
 def calculate_atr(price_data: str | None, window_size: int = 14) -> float | None:

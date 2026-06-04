@@ -42,6 +42,12 @@ _request_warnings = serializers.request_warnings
 _response_payload = serializers.response_payload
 _log_request_accepted = serializers.log_request_accepted
 
+# Public aliases kept in this route module for tests and route-level callers.
+resolve_display_signal = serializers.resolve_display_signal
+get_confidence_label = serializers.get_confidence_label
+sanitize_text = serializers.sanitize_text
+get_market_status = serializers.get_market_status
+
 _sse_event = sse.sse_event
 _sse_error = sse.sse_error
 

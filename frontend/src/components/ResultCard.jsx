@@ -13,7 +13,7 @@ import ResultTabs from './results/tabs/ResultTabs';
 import { REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
-const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
+const ACTIONABLE_DECISIONS = new Set(['BUY', 'SELL', 'Buy', 'Overweight', 'Sell', 'Underweight']);
 
 function formatWarningDetail(warning) {
   if (!hasDisplayValue(warning)) return null;
@@ -107,13 +107,24 @@ function formatRiskReward(result) {
     : result.risk_reward_ratio;
 }
 
+function normalizeSignal(signal) {
+  const normalized = String(signal || 'HOLD').trim().toUpperCase();
+  if (normalized === 'OVERWEIGHT') return 'BUY';
+  if (normalized === 'UNDERWEIGHT' || normalized === 'AVOID') return 'SELL';
+  if (['BUY', 'HOLD', 'WAIT', 'REDUCE', 'SELL'].includes(normalized)) return normalized;
+  return 'HOLD';
+}
+
 function getFinalDecision(result) {
-  return result.final_decision ?? result.decision ?? result.rating ?? 'Hold';
+  return normalizeSignal(result.display_signal ?? result.final_decision ?? result.decision ?? result.rating);
 }
 
 function getCurrentPrice(result) {
   if (!result) return null;
 
+  if (Object.prototype.hasOwnProperty.call(result, 'last_price')) {
+    return hasDisplayValue(result.last_price) ? result.last_price : null;
+  }
   if (Object.prototype.hasOwnProperty.call(result, 'current_price')) {
     return hasDisplayValue(result.current_price) ? result.current_price : null;
   }
@@ -121,30 +132,105 @@ function getCurrentPrice(result) {
   return coalesceDisplayValue(result.last_close_price);
 }
 
+function normalizeConfidencePercent(value) {
+  if (!hasDisplayValue(value)) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value;
+  return numeric <= 1 ? Math.round(numeric * 100) : Math.round(numeric);
+}
+
+function formatConfidenceDisplay(score, label) {
+  const percent = normalizeConfidencePercent(score);
+  if (!hasDisplayValue(percent)) return null;
+  const scoreText = typeof percent === 'number' ? `${percent}%` : percent;
+  return label ? `${scoreText} — ${label}` : scoreText;
+}
+
+function confidenceTone(tier) {
+  return (
+    {
+      very_low: 'red',
+      low: 'yellow',
+      moderate: 'orange',
+      high: 'lime',
+      very_high: 'green',
+    }[tier] || undefined
+  );
+}
+
+function formatWibPriceTimestamp(value, includeTime = true) {
+  if (!hasDisplayValue(value)) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(date)
+    .reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+
+  const dateText = `${parts.year}-${parts.month}-${parts.day}`;
+  return includeTime ? `${dateText}  ${parts.hour}:${parts.minute} WIB` : dateText;
+}
+
+function formatPriceAsOf(result, fallbackValue) {
+  const timestamp = result.price_timestamp || fallbackValue;
+  if (!hasDisplayValue(timestamp)) return null;
+  if (result.price_is_fallback) {
+    return `${formatWibPriceTimestamp(timestamp, false)}  (Previous Close — Fallback)`;
+  }
+  const label = formatWibPriceTimestamp(timestamp, true);
+  if (result.market_status === 'open') return `${label}  (Intraday)`;
+  if (result.market_status === 'closed') return `${label}  (Closing Price)`;
+  return label;
+}
+
+function formatVolatilityValue(result) {
+  if (!hasDisplayValue(result.volatility_score)) return null;
+  const score = typeof result.volatility_score === 'number' ? result.volatility_score.toFixed(2).replace(/\.00$/, '') : result.volatility_score;
+  return `${score} / 100`;
+}
+
+function volatilitySubValue(result) {
+  const classification = result.volatility_classification;
+  const lookback = result.volatility_lookback_days;
+  if (classification && lookback) return `${classification} · ${lookback}-day lookback`;
+  if (classification) return classification;
+  if (lookback) return `${lookback}-day lookback`;
+  return null;
+}
+
 function DecisionBadge({ decision }) {
+  const signal = normalizeSignal(decision);
   const cfg = {
-    Buy: {
+    BUY: {
       classes: 'bg-bloomberg-green-dim border-bloomberg-green text-bloomberg-green',
       label: '▲ BUY',
     },
-    Sell: {
+    SELL: {
       classes: 'bg-bloomberg-red-dim border-bloomberg-red text-bloomberg-red',
       label: '▼ SELL',
     },
-    Hold: {
+    HOLD: {
       classes: 'bg-bloomberg-amber-dim border-bloomberg-amber text-bloomberg-amber',
       label: '◆ HOLD',
     },
-    Overweight: {
-      classes: 'bg-bloomberg-green-dim border-bloomberg-green text-bloomberg-green',
-      label: '▲ OVERWEIGHT',
+    WAIT: {
+      classes: 'bg-bloomberg-surface border-bloomberg-border text-bloomberg-muted',
+      label: '◇ WAIT',
     },
-    Underweight: {
-      classes: 'bg-bloomberg-red-dim border-bloomberg-red text-bloomberg-red',
-      label: '▼ UNDERWEIGHT',
+    REDUCE: {
+      classes: 'bg-bloomberg-amber-dim border-bloomberg-amber text-bloomberg-amber',
+      label: '◒ REDUCE',
     },
   };
-  const c = cfg[decision] || cfg.Hold;
+  const c = cfg[signal] || cfg.HOLD;
   return (
     <span
       className={`inline-block border px-4 py-1.5 font-mono text-sm font-bold tracking-widest ${c.classes}`}
@@ -313,25 +399,25 @@ function getActionPlanMetrics({ result, currentPrice, riskReward }) {
   return [
     {
       label: 'CURRENT PRICE',
-      value: hasDisplayValue(currentPrice) ? formatPrice(currentPrice, result.ticker) : 'N/A',
+      value: hasDisplayValue(currentPrice) ? formatPrice(currentPrice, result.ticker, result.price_currency) : 'N/A',
       highlight: true,
     },
     {
       label: 'ENTRY',
       value: hasDisplayValue(result.entry_price)
-        ? formatPrice(result.entry_price, result.ticker)
+        ? formatPrice(result.entry_price, result.ticker, result.price_currency)
         : 'N/A',
     },
     {
       label: 'STOP LOSS',
       value: hasDisplayValue(result.stop_loss)
-        ? formatPrice(result.stop_loss, result.ticker)
+        ? formatPrice(result.stop_loss, result.ticker, result.price_currency)
         : 'N/A',
     },
     {
       label: 'TAKE PROFIT',
       value: hasDisplayValue(result.take_profit)
-        ? formatPrice(result.take_profit, result.ticker)
+        ? formatPrice(result.take_profit, result.ticker, result.price_currency)
         : 'N/A',
     },
     {
@@ -344,7 +430,11 @@ function getActionPlanMetrics({ result, currentPrice, riskReward }) {
     },
     {
       label: 'VOLATILITY SCORE',
-      value: hasDisplayValue(result.volatility_score) ? result.volatility_score : 'N/A',
+      value: formatVolatilityValue(result) || 'N/A',
+      subValue: volatilitySubValue(result),
+      tooltip:
+        result.volatility_method ||
+        'Calculated from annualized daily return volatility, normalized to 0–100 scale. Higher score means higher price swings.',
     },
     {
       label: 'REBALANCING',
@@ -386,6 +476,9 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
             label={metric.label}
             value={metric.value}
             highlight={metric.highlight}
+            subValue={metric.subValue}
+            tooltip={metric.tooltip}
+            tone={metric.tone}
             preserveSlot
             dataTestId="action-plan-metric"
           />
@@ -425,7 +518,7 @@ function HoldMetrics({ result, currentPrice }) {
         {hasDisplayValue(currentPrice) && (
           <MetricBox
             label="CURRENT PRICE"
-            value={formatPrice(currentPrice, result.ticker)}
+            value={formatPrice(currentPrice, result.ticker, result.price_currency)}
             highlight
           />
         )}
@@ -433,7 +526,15 @@ function HoldMetrics({ result, currentPrice }) {
           <MetricBox label="VOLATILITY" value={result.volatility_level} />
         )}
         {hasDisplayValue(result.volatility_score) && (
-          <MetricBox label="VOLATILITY SCORE" value={result.volatility_score} />
+          <MetricBox
+            label="VOLATILITY SCORE"
+            value={formatVolatilityValue(result)}
+            subValue={volatilitySubValue(result)}
+            tooltip={
+              result.volatility_method ||
+              'Calculated from annualized daily return volatility, normalized to 0–100 scale. Higher score means higher price swings.'
+            }
+          />
         )}
         {result.rebalancing_action && (
           <MetricBox label="REBALANCING" value={result.rebalancing_action} />
@@ -494,6 +595,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
   }
 
   const finalDecision = getFinalDecision(result);
+  const rawAiSignal = normalizeSignal(result.raw_ai_signal || result.llm_decision || result.final_decision || result.decision);
   const isActionable = ACTIONABLE_DECISIONS.has(finalDecision);
   const tradePlanValid = Boolean(result.trade_plan_valid);
   const shouldShowActionPlan = isActionable && tradePlanValid;
@@ -504,18 +606,24 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
   const thesis = analysisOverview.investment_thesis || result.investment_thesis;
   const currentPrice = getCurrentPrice(result);
   const currentPriceAsOf = coalesceDisplayValue(
+    result.price_timestamp,
     result.current_price_as_of,
     result.last_close_price_as_of
   );
-  const currentPriceSource = coalesceDisplayValue(result.current_price_source);
+  const priceAsOfLabel = formatPriceAsOf(result, currentPriceAsOf);
+  const priceTimestampLabel = formatWibPriceTimestamp(currentPriceAsOf);
+  const currentPriceSource = coalesceDisplayValue(result.price_source, result.current_price_source);
   const timeHorizon = formatAnalysisHorizon(result.time_horizon_months, result.time_horizon);
   const confidence = result.confidence_score ?? null;
+  const confidenceDisplay = formatConfidenceDisplay(confidence, result.confidence_label);
   const allocation = result.suggested_allocation_percent ?? null;
   const riskReward = formatRiskReward(result);
   const catalysts = result.key_catalysts || [];
   const keyReasons = analysisOverview.key_reasons || result.key_reasons || catalysts;
   const invalidations = result.invalidation_conditions || [];
   const riskSummary = analysisOverview.risk_summary || null;
+  const miniRiskSummary = result.mini_risk_summary;
+  const signalPositionLabel = result.has_existing_position ? 'Existing position' : 'No existing position';
   const agents = result.agents_used || [];
   const budgetExhausted = Boolean(result.budget_exhausted);
   const agentsSkipped = result.agents_skipped || [];
@@ -524,11 +632,11 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
 
   const decisionColor =
     {
-      Buy: 'text-bloomberg-green',
-      Overweight: 'text-bloomberg-green',
-      Sell: 'text-bloomberg-red',
-      Underweight: 'text-bloomberg-red',
-      Hold: 'text-bloomberg-amber',
+      BUY: 'text-bloomberg-green',
+      SELL: 'text-bloomberg-red',
+      HOLD: 'text-bloomberg-amber',
+      WAIT: 'text-bloomberg-muted',
+      REDUCE: 'text-bloomberg-amber',
     }[finalDecision] || 'text-bloomberg-white';
 
   return (
@@ -581,7 +689,12 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
               </div>
               {finalDecision && (
                 <div className="mt-2 font-mono text-xs text-bloomberg-muted tracking-wider">
-                  RECOMMENDATION: {finalDecision.toUpperCase()}
+                  RECOMMENDATION: {String(finalDecision).toUpperCase()}
+                </div>
+              )}
+              {finalDecision && (
+                <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider">
+                  Signal adapted · {signalPositionLabel} · Raw AI signal: {rawAiSignal}
                 </div>
               )}
               {currentPriceSource && (
@@ -589,10 +702,9 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
                   SOURCE: <span className="text-bloomberg-white">{currentPriceSource}</span>
                 </div>
               )}
-              {result.llm_decision && result.llm_decision !== finalDecision && (
+              {rawAiSignal && rawAiSignal !== finalDecision && (
                 <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
-                  LLM: {String(result.llm_decision).toUpperCase()} → FINAL:{' '}
-                  {String(finalDecision).toUpperCase()}
+                  LLM: {rawAiSignal} → FINAL: {String(finalDecision).toUpperCase()}
                 </div>
               )}
             </div>
@@ -603,26 +715,30 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
                 {hasDisplayValue(currentPrice) && (
                   <MetricBox
                     label="LAST PRICE"
-                    value={formatPrice(currentPrice, result.ticker)}
+                    value={formatPrice(currentPrice, result.ticker, result.price_currency)}
+                    subValue={result.price_is_fallback || !priceTimestampLabel ? null : `as of ${priceTimestampLabel}`}
                     highlight
                   />
                 )}
-                {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
+                {priceAsOfLabel && <MetricBox label="PRICE AS OF" value={priceAsOfLabel} />}
                 {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
-                {confidence !== null && (
+                {confidenceDisplay && (
                   <MetricBox
                     label="CONFIDENCE"
-                    value={
-                      typeof confidence === 'number'
-                        ? `${Math.round(confidence * 100)}%`
-                        : confidence
-                    }
+                    value={confidenceDisplay}
+                    tone={confidenceTone(result.confidence_tier)}
+                    tooltip="Score reflects combined signal strength from all 9 agents."
                   />
                 )}
                 {allocation !== null && (
                   <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
                 )}
               </div>
+              {result.price_is_fallback && (
+                <div className="mt-2 font-mono text-[11px] text-bloomberg-amber leading-relaxed">
+                  ⚠ Harga tidak tersedia saat analisis dibuat. Menampilkan harga penutupan terakhir.
+                </div>
+              )}
             </div>
           </div>
 
@@ -740,11 +856,11 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
             </div>
           )}
 
-          {riskSummary && (
+          {(miniRiskSummary || riskSummary) && (
             <div className="px-4 py-4 border-b border-bloomberg-border">
               <SectionHeader label="MINI RISK SUMMARY" />
               <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                {riskSummary.overall_risk || 'N/A'}: {riskSummary.short_reason || 'N/A'}
+                {miniRiskSummary || `${riskSummary.overall_risk || 'N/A'}: ${riskSummary.short_reason || 'N/A'}`}
               </p>
             </div>
           )}

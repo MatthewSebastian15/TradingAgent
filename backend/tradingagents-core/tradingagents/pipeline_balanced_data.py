@@ -24,7 +24,7 @@ from tradingagents.dataflows.news_intelligence import (
 from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
-from tradingagents.dataflows.y_finance import normalize_ticker
+from tradingagents.dataflows.y_finance import calculate_volatility, fetch_current_price, normalize_ticker
 from tradingagents.financial_highlights.builder import build_financial_highlights
 from tradingagents.financial_highlights.models import to_dict as financial_highlights_to_dict
 from tradingagents.fundamentals.builder import build_fundamental_analysis
@@ -1075,6 +1075,9 @@ def collect_market_data(
     price_lookback = _price_lookback_days(time_horizon_months)
     start_price, start_news, end = _date_window(trade_date, time_horizon_months)
 
+    current_price_snapshot = fetch_current_price(ticker)
+    volatility_metadata = calculate_volatility(ticker, lookback_days=20)
+
     news_context: dict[str, Any] = {}
     tasks = _build_collection_tasks(
         ticker,
@@ -1154,13 +1157,30 @@ def collect_market_data(
     )
 
     _check_cancel(cancel_check)
-    last_close_price, last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
+    historical_last_close_price, historical_last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
+    current_price = _safe_float(current_price_snapshot.get("price"))
+    price_is_fallback = bool(current_price_snapshot.get("price_is_fallback"))
+    if current_price is None:
+        current_price = historical_last_close_price
+        price_is_fallback = True
+    last_close_price = current_price
+    last_close_price_as_of = (
+        current_price_snapshot.get("price_timestamp")
+        or historical_last_close_price_as_of
+        or trade_date
+    )
+    price_source = (
+        current_price_snapshot.get("price_source")
+        or _price_source_label(price.value, historical_last_close_price)
+        or "unavailable"
+    )
+    price_currency = current_price_snapshot.get("price_currency") or _currency_for_ticker(ticker)
     price_chart = _build_price_chart(
         ticker=ticker,
         trade_date=trade_date,
         price_data=price.value,
         time_horizon_months=time_horizon_months,
-        source=_price_source_label(price.value, last_close_price) or "yfinance",
+        source=_price_source_label(price.value, historical_last_close_price) or "yfinance",
     )
     price_performance = dict(price_chart.get("summary") or {}) if isinstance(price_chart, dict) else {}
     technical_entry = build_technical_entry(
@@ -1183,7 +1203,7 @@ def collect_market_data(
         social_sentiment,
         event_risk,
         recommendation_trends,
-        last_close_price,
+        historical_last_close_price,
         vendor_attempts=vendor_attempts,
         request_budget=request_budget,
     )
@@ -1261,7 +1281,12 @@ def collect_market_data(
         data_quality=data_quality,
         last_close_price=last_close_price,
         last_close_price_as_of=last_close_price_as_of or trade_date,
-        last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
+        last_close_price_source=price_source if last_close_price is not None else None,
+        price_currency=price_currency,
+        price_source=price_source if last_close_price is not None else None,
+        price_timestamp=last_close_price_as_of or trade_date,
+        price_is_fallback=price_is_fallback,
+        volatility_metadata=volatility_metadata,
         company_profile=company_profile,
         price_chart=price_chart,
         price_performance=price_performance,
