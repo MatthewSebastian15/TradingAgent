@@ -113,7 +113,8 @@ function normalizeSignal(signal) {
   const normalized = String(signal || 'HOLD').trim().toUpperCase();
   if (normalized === 'OVERWEIGHT') return 'BUY';
   if (normalized === 'UNDERWEIGHT' || normalized === 'AVOID') return 'SELL';
-  if (['BUY', 'HOLD', 'WAIT', 'REDUCE', 'SELL'].includes(normalized)) return normalized;
+  if (['BUY', 'HOLD', 'WAIT', 'REDUCE', 'SELL', 'NEUTRAL'].includes(normalized))
+    return normalized;
   return 'HOLD';
 }
 

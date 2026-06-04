@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MOCK_HOLD_RESPONSE, MOCK_RESPONSE } from '../../dev/mockData';
+import { MOCK_HOLD_RESPONSE, MOCK_PTRO_REDUCE_RESPONSE, MOCK_PTRO_WAIT_RESPONSE, MOCK_RESPONSE } from '../../dev/mockData';
 import { buildMockActionPlanRows, buildMockReportHtml } from './mockReport';
 
 describe('mockReport', () => {
@@ -37,6 +37,25 @@ describe('mockReport', () => {
     expect(html).not.toContain('Price Target');
     expect(html).not.toContain('Risk Per Share');
     expect(html).not.toContain('Reward Per Share');
+  });
+
+
+  it('renders full mock contract sections for WAIT and REDUCE signals', () => {
+    const waitHtml = buildMockReportHtml(MOCK_PTRO_WAIT_RESPONSE);
+    const reduceHtml = buildMockReportHtml(MOCK_PTRO_REDUCE_RESPONSE);
+
+    expect(waitHtml).toContain('PTRO.JK');
+    expect(waitHtml).toContain('WAIT');
+    expect(waitHtml).toContain('Confidence Breakdown');
+    expect(waitHtml).toContain('Low Conviction');
+    expect(waitHtml).toContain('Volatility Metadata');
+    expect(waitHtml).toContain('Key Levels');
+    expect(waitHtml).toContain('Agent Pipeline');
+    expect(waitHtml).toContain('Data Sources');
+    expect(waitHtml).toContain('Data Freshness');
+    expect(waitHtml).toContain('Yahoo Finance');
+    expect(reduceHtml).toContain('REDUCE');
+    expect(reduceHtml).toContain('NEUTRAL');
   });
 
   it('renders Hold report without fake trade levels', () => {

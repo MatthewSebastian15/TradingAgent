@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { getMockAnalysisResponseByRequestId, MOCK_RESPONSES_BY_REQUEST_ID } from '../dev/mockData';
+import {
+  getMockAnalysisResponseByRequestId,
+  MOCK_RESPONSES_BY_REQUEST_ID,
+  resolveDisplaySignal,
+} from '../dev/mockData';
 
 describe('mockData', () => {
   it('returns complete mock result by request id', () => {
@@ -43,8 +47,23 @@ describe('mockData', () => {
     });
     expect(result.analysis_overview).toMatchObject({
       recommendation: 'Buy',
-      confidence: 'High',
+      confidence: 'High Conviction',
     });
+    expect(result).toMatchObject({
+      id: 'mock-nvda-buy',
+      input_ticker: 'NVDA',
+      normalized_ticker: 'NVDA',
+      display_signal: 'BUY',
+      raw_ai_signal: 'BUY',
+      price_is_fallback: false,
+      market_status: 'closed',
+    });
+    expect(result.agent_pipeline).toHaveLength(10);
+    expect(result.technical_levels).toHaveProperty('current_price');
+    expect(result.data_sources.price.provider).toBe('Yahoo Finance');
+    expect(result.data_freshness.price.freshness_status).toBe('fresh');
+    expect(result.analysis_params.normalized_ticker).toBe('NVDA');
+    expect(result.tab_status.analysis).toBe('ok');
     expect(result.price_chart).toMatchObject({
       available: true,
       ticker: 'NVDA',
@@ -123,7 +142,100 @@ describe('mockData', () => {
       'mock-meta-repaired-buy',
       'mock-bbca-id-buy',
       'mock-unvr-news-unavailable-sell',
+      'mock-ptro-wait-no-position',
+      'mock-ptro-reduce-existing-position',
+      'mock-bbca-buy-no-position',
+      'mock-bbri-hold-existing-position',
+      'mock-tlkm-sell-existing-position',
     ]);
+  });
+
+
+  it('maps raw AI signal into position-aware display signal', () => {
+    expect(resolveDisplaySignal('BUY', false)).toBe('BUY');
+    expect(resolveDisplaySignal('HOLD', false)).toBe('WAIT');
+    expect(resolveDisplaySignal('BUY', true)).toBe('HOLD');
+    expect(resolveDisplaySignal('NEUTRAL', true)).toBe('REDUCE');
+    expect(resolveDisplaySignal('SELL', true)).toBe('SELL');
+  });
+
+  it('covers WAIT, REDUCE, BUY, HOLD, and SELL mock scenarios', () => {
+    const scenarios = {
+      'mock-ptro-wait-no-position': 'WAIT',
+      'mock-ptro-reduce-existing-position': 'REDUCE',
+      'mock-bbca-buy-no-position': 'BUY',
+      'mock-bbri-hold-existing-position': 'HOLD',
+      'mock-tlkm-sell-existing-position': 'SELL',
+    };
+
+    for (const [requestId, displaySignal] of Object.entries(scenarios)) {
+      const result = getMockAnalysisResponseByRequestId(requestId);
+      expect(result.display_signal).toBe(displaySignal);
+      expect(result.agent_pipeline).toHaveLength(10);
+      expect(result.data_sources.price.provider).toBe('Yahoo Finance');
+      expect(result.technical_levels.technical_levels_available).toBe(true);
+      expect(result.analysis_params.normalized_ticker).toBe(result.normalized_ticker);
+    }
+  });
+
+  it('keeps mock analysis response schema complete for WAIT scenario', () => {
+    const requiredFields = [
+      'id',
+      'input_ticker',
+      'normalized_ticker',
+      'company_name',
+      'exchange',
+      'currency',
+      'market',
+      'horizon',
+      'created_at',
+      'last_price',
+      'price_currency',
+      'price_source',
+      'price_timestamp',
+      'price_is_fallback',
+      'market_status',
+      'raw_ai_signal',
+      'display_signal',
+      'has_existing_position',
+      'signal_context',
+      'confidence_score',
+      'confidence_label',
+      'confidence_tier',
+      'confidence_breakdown',
+      'volatility_score',
+      'volatility_scale',
+      'volatility_method',
+      'volatility_lookback_days',
+      'volatility_classification',
+      'executive_summary',
+      'investment_thesis',
+      'mini_risk_summary',
+      'action_status',
+      'new_entry_action',
+      'position_size_hint',
+      'key_reasons',
+      'key_catalysts',
+      'invalidation_conditions',
+      'technical_levels',
+      'agent_pipeline',
+      'total_pipeline_seconds',
+      'data_sources',
+      'data_freshness',
+      'analysis_params',
+      'tab_status',
+      'profile',
+      'fundamentals',
+      'chart_price',
+      'news',
+      'risk_data_quality',
+      'disclaimer',
+    ];
+    const result = getMockAnalysisResponseByRequestId('mock-ptro-wait-no-position');
+
+    for (const field of requiredFields) {
+      expect(result).toHaveProperty(field);
+    }
   });
 
   it('returns cloned mock objects so tests cannot mutate the registry', () => {
