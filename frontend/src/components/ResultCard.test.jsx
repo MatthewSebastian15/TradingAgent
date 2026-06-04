@@ -14,17 +14,101 @@ import {
   MOCK_TPIA_REDUCE_SCENARIO_RESPONSE,
 } from '../../dev/mockData';
 
+function countWords(text) {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
 describe('ResultCard risk-engine contract', () => {
   afterEach(() => cleanup());
 
-  it('renders the collapsed disclaimer footer and can expand the full disclaimer', () => {
+  it('renders the full disclaimer permanently without expand or collapse controls', () => {
     render(<ResultCard result={MOCK_HOLD_RESPONSE} />);
 
-    expect(screen.getByText(/AI-generated analysis. Not financial advice/i)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /read full disclaimer/i }));
-    expect(screen.getByText('Full Disclaimer')).toBeTruthy();
+    expect(screen.getByText(/Disclaimer/i)).toBeTruthy();
     expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
     expect(screen.getByText(/may contain errors/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /read full disclaimer/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /hide disclaimer/i })).toBeNull();
+  });
+
+  it('keeps the full disclaimer visible across all result tabs', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Profil'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Fundamental'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('News'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+  });
+
+  it('does not render Key Levels in the Analisis tab', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.getByText('EXECUTIVE SUMMARY')).toBeTruthy();
+    expect(screen.queryByText('KEY LEVELS')).toBeNull();
+    expect(screen.queryByText('Nearest Support')).toBeNull();
+    expect(screen.queryByText('Nearest Resistance')).toBeNull();
+    expect(screen.queryByText('Invalidation Level')).toBeNull();
+  });
+
+  it('renders Key Reasons as a single paragraph between 75 and 125 words', () => {
+    const keyReasonsParagraph =
+      'The recommendation is supported by improving earnings visibility, resilient margin structure, disciplined balance sheet quality, and a more balanced risk/reward setup. Price momentum remains constructive, but the model still requires confirmation from fresh market data and reliable vendor inputs before increasing conviction. News flow and catalyst quality should be monitored because valuation sensitivity can reduce upside if earnings delivery weakens. Position sizing should remain controlled until volatility, liquidity, thesis confirmation, entry timing, and source reliability improve together.';
+
+    const result = {
+      ...MOCK_RESPONSE,
+      key_reasons_paragraph: keyReasonsParagraph,
+      analysis_overview: {
+        ...MOCK_RESPONSE.analysis_overview,
+        key_reasons_paragraph: keyReasonsParagraph,
+      },
+    };
+
+    const { container } = render(<ResultCard result={result} />);
+
+    const heading = screen.getByText('KEY REASONS');
+    const section = heading.closest('.px-4');
+    const paragraph = section.querySelector('p');
+
+    expect(paragraph).toBeTruthy();
+    expect(section.querySelector('ul')).toBeNull();
+    expect(section.querySelector('li')).toBeNull();
+    expect(paragraph.textContent).not.toContain('+');
+    expect(countWords(paragraph.textContent)).toBeGreaterThanOrEqual(75);
+    expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(125);
+    expect(container.textContent).toContain('KEY REASONS');
+  });
+
+  it('truncates an overly long Key Reasons paragraph to 125 words', () => {
+    const longParagraph = Array.from({ length: 150 }, (_, index) => `word${index + 1}`).join(' ');
+
+    const result = {
+      ...MOCK_RESPONSE,
+      key_reasons_paragraph: longParagraph,
+      analysis_overview: {
+        ...MOCK_RESPONSE.analysis_overview,
+        key_reasons_paragraph: longParagraph,
+      },
+    };
+
+    render(<ResultCard result={result} />);
+
+    const section = screen.getByText('KEY REASONS').closest('.px-4');
+    const paragraph = section.querySelector('p');
+
+    expect(paragraph).toBeTruthy();
+    expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(125);
   });
 
   it('renders financial highlights only inside Fundamental', () => {

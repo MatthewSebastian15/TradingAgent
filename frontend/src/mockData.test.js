@@ -6,6 +6,10 @@ import {
   resolveDisplaySignal,
 } from '../dev/mockData';
 
+function countWords(text) {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
 describe('mockData', () => {
   it('returns complete mock result by request id', () => {
     const result = getMockAnalysisResponseByRequestId('mock-nvda-buy');
@@ -239,6 +243,7 @@ describe('mockData', () => {
       'new_entry_action',
       'position_size_hint',
       'key_reasons',
+      'key_reasons_paragraph',
       'key_catalysts',
       'invalidation_conditions',
       'technical_levels',
@@ -259,6 +264,25 @@ describe('mockData', () => {
 
     for (const field of requiredFields) {
       expect(result).toHaveProperty(field);
+    }
+  });
+
+
+
+  it('mock responses provide a key reasons paragraph between 75 and 125 words when present', () => {
+    const responses = [
+      getMockAnalysisResponseByRequestId('mock-nvda-buy'),
+      getMockAnalysisResponseByRequestId('mock-tsla-sell'),
+      getMockAnalysisResponseByRequestId('mock-aapl-hold'),
+      getMockAnalysisResponseByRequestId('mock-ptro-wait-no-position'),
+      getMockAnalysisResponseByRequestId('mock-tpia-reduce-existing-position'),
+    ];
+
+    for (const response of responses) {
+      expect(response.key_reasons_paragraph).toBeTruthy();
+      expect(countWords(response.key_reasons_paragraph)).toBeGreaterThanOrEqual(75);
+      expect(countWords(response.key_reasons_paragraph)).toBeLessThanOrEqual(125);
+      expect(response.analysis_overview.key_reasons_paragraph).toBe(response.key_reasons_paragraph);
     }
   });
 

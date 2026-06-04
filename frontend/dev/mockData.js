@@ -1782,13 +1782,47 @@ function confidenceLabel(value) {
   return 'Very High Conviction';
 }
 
+function normalizeInlineText(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+function truncateReasonWords(text, maxWords = 125) {
+  const words = normalizeInlineText(text).split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(' ');
+  return `${words.slice(0, maxWords).join(' ')}.`.replace(/\.\.$/, '.');
+}
+
+function createMockKeyReasonsParagraph(result = {}) {
+  const direct = normalizeInlineText(
+    result.key_reasons_paragraph || result.analysis_overview?.key_reasons_paragraph
+  );
+  if (direct) return truncateReasonWords(direct, 125);
+
+  const ticker = result.normalized_ticker || result.ticker || 'the selected ticker';
+  const signal = result.display_signal || result.final_decision || result.decision || 'HOLD';
+  const volatility = result.volatility_classification || result.volatility_level || 'measured';
+  const catalysts = Array.isArray(result.key_catalysts) ? result.key_catalysts.filter(Boolean) : [];
+  const catalystText = catalysts.length
+    ? catalysts.slice(0, 2).join(' and ')
+    : 'confirmation from price action and refreshed vendor data';
+
+  return truncateReasonWords(
+    `The ${signal} recommendation for ${ticker} is supported by a usable mock contract, visible risk controls, and enough cross-tab data to verify the dashboard without relying on live vendors. Current price, action status, catalyst quality, and ${volatility} volatility remain the main anchors, while ${catalystText} should confirm whether conviction can improve. Position sizing stays disciplined because this result is synthetic and must test rendering, serialization, report export, and data-quality warnings rather than pretend to be a live market call.`,
+    125
+  );
+}
+
 function createMockAnalysisOverview(result) {
+  const keyReasonsParagraph = createMockKeyReasonsParagraph(result);
+
   return {
     recommendation: result.final_decision || result.decision || 'Hold',
     confidence: result.confidence_label || confidenceLabel(result.confidence_score),
     executive_summary: result.executive_summary,
     investment_thesis: result.investment_thesis,
     key_reasons: result.key_reasons || result.key_catalysts || [],
+    key_reasons_paragraph: keyReasonsParagraph,
     action_plan: {
       current_price: result.current_price,
       entry: result.entry_price,
@@ -2192,6 +2226,8 @@ function createMockProductionContract(result, overrides = {}) {
       overrides.fundamentals || result.fundamentals || createSimpleFundamentalsAlias(result.financial_highlights),
     chart_price: overrides.chart_price || result.chart_price || createChartPriceAlias(result.price_chart),
     news_items: overrides.news_items || result.news_items || createNewsItemsAlias(result),
+    key_reasons_paragraph:
+      overrides.key_reasons_paragraph || result.key_reasons_paragraph || createMockKeyReasonsParagraph(result),
     disclaimer:
       overrides.disclaimer ||
       result.disclaimer ||
@@ -2258,7 +2294,13 @@ function completeMockAnalysis(overrides = {}) {
     full_decision: null,
 
     key_catalysts: ['Mock catalyst 1', 'Mock catalyst 2'],
-    key_reasons: ['Validated trade plan', 'Complete dashboard contract', 'Visible risk controls'],
+    key_reasons_paragraph:
+      'The default Buy recommendation is supported by a complete mock contract, valid trade levels, visible catalyst data, and risk controls that can be checked across the dashboard and export flow. Current price, entry, stop loss, take profit, allocation, volatility, and confidence all point to an actionable scenario for testing, while the artificial data label prevents it from being confused with live advice. Position sizing remains staged because the purpose is to verify rendering, serialization, report previews, and data-quality warnings rather than create a real investment call.',
+    key_reasons: [
+      'The mock trade plan is complete enough to test price, entry, stop loss, take profit, allocation, and risk reward display together.',
+      'The dashboard contract includes catalysts, invalidation conditions, confidence metadata, and data-quality warnings for cross-tab validation.',
+      'Position sizing stays controlled because every value is synthetic and must not be treated as a live market recommendation.',
+    ],
     invalidation_conditions: ['Mock invalidation 1', 'Mock invalidation 2'],
 
     data_quality: COMMON_MOCK_QUALITY,
@@ -2991,6 +3033,8 @@ function buildPtroScenarioResponse(scenarioKey) {
     executive_summary: PTRO_SUMMARY,
     investment_thesis: PTRO_THESIS,
     company_profile: MOCK_PTRO_COMPANY_PROFILE,
+    key_reasons_paragraph:
+      'The PTRO scenario supports a WAIT or REDUCE-style conclusion because price is near resistance, downside support is materially lower, and very high volatility makes a fresh entry unattractive without stronger confirmation. Partial quarterly financial data lowers confidence, while the mining services backdrop still needs cleaner news flow and better cash flow visibility before exposure can increase. The model keeps position sizing conservative because risk reward is not attractive at the current level, and the thesis should improve only after stronger volume, updated financials, and healthier sector sentiment align.',
     key_reasons: [
       'Current price is close to resistance while support is meaningfully lower.',
       'Volatility is classified as very high on a 20-day lookback.',

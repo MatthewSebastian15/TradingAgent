@@ -462,7 +462,15 @@ class PortfolioDecision(BaseModel):
     key_reasons: list[str] = Field(
         default_factory=list,
         max_length=8,
-        description="Primary reasons supporting the final recommendation.",
+        description=(
+            "Primary reasons supporting the final recommendation. Items must be written so they can be "
+            "combined into one coherent 75-125 word paragraph for the dashboard. Avoid fragments, labels, "
+            "or duplicate ideas."
+        ),
+    )
+    key_reasons_paragraph: str | None = Field(
+        default=None,
+        description="One coherent paragraph summarizing the key reasons in 75-125 words.",
     )
     invalidation_conditions: list[str] = Field(
         default_factory=list,

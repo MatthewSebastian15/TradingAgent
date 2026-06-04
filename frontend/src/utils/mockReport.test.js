@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { MOCK_HOLD_RESPONSE, MOCK_PTRO_WAIT_RESPONSE, MOCK_RESPONSE, MOCK_TPIA_REDUCE_SCENARIO_RESPONSE } from '../../dev/mockData';
 import { buildMockActionPlanRows, buildMockReportHtml } from './mockReport';
 
+function countWords(text) {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
 describe('mockReport', () => {
   it('builds 12 action plan metrics in the required order', () => {
     const rows = buildMockActionPlanRows(MOCK_RESPONSE);
@@ -40,7 +44,7 @@ describe('mockReport', () => {
   });
 
 
-  it('renders full mock contract sections for WAIT and REDUCE signals', () => {
+  it('renders full mock contract sections for WAIT and REDUCE signals without Key Levels', () => {
     const waitHtml = buildMockReportHtml(MOCK_PTRO_WAIT_RESPONSE);
     const reduceHtml = buildMockReportHtml(MOCK_TPIA_REDUCE_SCENARIO_RESPONSE);
 
@@ -51,7 +55,7 @@ describe('mockReport', () => {
     expect(waitHtml).toContain('Confidence Breakdown');
     expect(waitHtml).toContain('Low Conviction');
     expect(waitHtml).toContain('Volatility Metadata');
-    expect(waitHtml).toContain('Key Levels');
+    expect(waitHtml).not.toContain('Key Levels');
     expect(waitHtml).toContain('Agent Pipeline');
     expect(waitHtml).toContain('Data Sources');
     expect(waitHtml).toContain('Data Freshness');
@@ -60,6 +64,7 @@ describe('mockReport', () => {
     expect(reduceHtml).toContain('REDUCE');
     expect(reduceHtml).toContain('Trim position');
     expect(reduceHtml).toContain('Do not add; reduce existing exposure');
+    expect(reduceHtml).not.toContain('Key Levels');
   });
 
   it('renders Hold report without fake trade levels', () => {
@@ -84,6 +89,23 @@ describe('mockReport', () => {
     expect(html).toContain('mock analysis report');
     expect(html).toContain('dummy data');
     expect(html).toContain('Do not use mock report output');
+    expect(html).not.toContain('Read full disclaimer');
+    expect(html).not.toContain('Hide disclaimer');
+  });
+
+  it('renders Key Reasons as a paragraph in mock HTML output', () => {
+    const html = buildMockReportHtml(MOCK_RESPONSE);
+
+    expect(html).toContain('Key Reasons');
+    expect(html).not.toContain('<li>+');
+    expect(html).not.toContain('<ul class="key-reasons"');
+
+    const match = html.match(/<h2>Key Reasons<\/h2>\s*<p>(.*?)<\/p>/s);
+    expect(match).toBeTruthy();
+
+    const text = match[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&');
+    expect(countWords(text)).toBeGreaterThanOrEqual(75);
+    expect(countWords(text)).toBeLessThanOrEqual(125);
   });
 
   it('renders static financial highlights in mock HTML output', () => {

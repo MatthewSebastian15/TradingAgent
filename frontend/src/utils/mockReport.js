@@ -46,6 +46,42 @@ function arrayOfText(value) {
   return value.map((item) => display(item)).filter((item) => item !== 'N/A');
 }
 
+function normalizeInlineText(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+function truncateReasonWords(text, maxWords = 125) {
+  const words = normalizeInlineText(text).split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(' ');
+  return `${words.slice(0, maxWords).join(' ')}.`.replace(/\.\.$/, '.');
+}
+
+function asReasonItems(value) {
+  if (Array.isArray(value)) return value.map(normalizeInlineText).filter(Boolean);
+  const text = normalizeInlineText(value);
+  return text ? [text] : [];
+}
+
+function buildKeyReasonsParagraph(result = {}) {
+  const overview = result.analysis_overview || {};
+  const direct = normalizeInlineText(overview.key_reasons_paragraph || result.key_reasons_paragraph);
+  if (direct) return truncateReasonWords(direct, 125);
+
+  const items = [
+    ...asReasonItems(overview.key_reasons || result.key_reasons),
+    ...asReasonItems(result.key_catalysts),
+    normalizeInlineText(result.mini_risk_summary),
+    normalizeInlineText(result.decision_adjusted_reason),
+  ].filter(Boolean);
+
+  const uniqueItems = Array.from(new Set(items));
+  if (!uniqueItems.length) return '';
+
+  const paragraph = uniqueItems.join('. ');
+  return truncateReasonWords(paragraph.endsWith('.') ? paragraph : `${paragraph}.`, 125);
+}
+
 function finalDecision(result) {
   return display(result?.display_signal || result?.final_decision || result?.decision || result?.rating || 'WAIT');
 }
@@ -368,23 +404,6 @@ function buildVolatilityRows(result) {
   ];
 }
 
-function buildKeyLevelRows(levels = {}, result = {}) {
-  return [
-    row('Current Price', price(levels.current_price, result)),
-    row('Nearest Support', price(levels.nearest_support, result)),
-    row('Nearest Resistance', price(levels.nearest_resistance, result)),
-    row('Suggested Stop Loss', price(levels.suggested_stop_loss, result)),
-    row('Invalidation Level', price(levels.invalidation_level, result)),
-    row(
-      'Entry Range',
-      hasValue(levels.entry_range_low) && hasValue(levels.entry_range_high)
-        ? `${price(levels.entry_range_low, result)} - ${price(levels.entry_range_high, result)}`
-        : null
-    ),
-    row('Risk / Reward', levels.risk_reward_ratio),
-  ];
-}
-
 function buildDataSourceRows(sources = {}) {
   return Object.entries(sources).map(([key, value]) =>
     row(
@@ -480,6 +499,7 @@ export function buildMockReportContext(result = {}) {
     has_existing_position: Boolean(result.has_existing_position),
     show_trade_plan: showTradePlan,
     executive_summary: textOrNull(result.executive_summary) || 'N/A',
+    key_reasons_paragraph: buildKeyReasonsParagraph(result),
     decision_rows: [
       row('Display Signal', result.display_signal || decision),
       row('Raw AI Signal', result.raw_ai_signal || result.llm_decision),
@@ -499,7 +519,6 @@ export function buildMockReportContext(result = {}) {
     ],
     confidence_rows: buildConfidenceRows(result),
     volatility_rows: buildVolatilityRows(result),
-    key_level_rows: buildKeyLevelRows(result.technical_levels, result),
     data_source_rows: buildDataSourceRows(result.data_sources),
     data_freshness_rows: buildDataFreshnessRows(result.data_freshness),
     agent_pipeline_rows: buildAgentPipelineRows(result.agent_pipeline),
@@ -1164,6 +1183,15 @@ export function renderMockReportHtml(report) {
         <p>${escapeHtml(report.executive_summary)}</p>
       </section>
 
+      ${
+        report.key_reasons_paragraph
+          ? `<section class="section">
+        <h2>Key Reasons</h2>
+        <p>${escapeHtml(report.key_reasons_paragraph)}</p>
+      </section>`
+          : ''
+      }
+
       <section class="section">
         <h2>Final Recommendation</h2>
         <table><tbody>${renderRows(report.decision_rows)}</tbody></table>
@@ -1183,11 +1211,6 @@ export function renderMockReportHtml(report) {
       <section class="section">
         <h2>Volatility Metadata</h2>
         <table><tbody>${renderRows(report.volatility_rows)}</tbody></table>
-      </section>
-
-      <section class="section">
-        <h2>Key Levels</h2>
-        <table><tbody>${renderRows(report.key_level_rows)}</tbody></table>
       </section>
 
       ${

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 
+def _count_words(text: str) -> int:
+    return len([word for word in text.split() if word])
+
+
 def _valid_executive_summary() -> str:
     return (
         'The final rating is Hold because the available evidence is balanced and the setup does not justify forcing a new position before confirmation improves. The strongest support comes from stable price behavior, controlled downside assumptions, and a risk plan that keeps capital protected while the next catalyst develops. The biggest risk is incomplete data or weak confirmation, because either problem could turn a neutral setup into a poor trade. The recommended action is to keep allocation modest, avoid adding size, wait for a cleaner entry, and only use a stop loss after price data confirms the setup. The expected horizon is short to medium term, and the thesis should be confirmed by stronger trend evidence or invalidated by a break below support. It also names the rating, support, risk, action plan, sizing posture, stop context, time horizon, and invalidation logic so the object behaves like a real portfolio manager response. The wording is deliberately reusable so schema validation remains stable across parse, memory, and trade level tests without changing assertions. The summary also includes enough realistic context to satisfy production length checks, because short placeholders are dangerous when the schema is deliberately strict. It explains that allocation should remain conservative, that price confirmation matters more than narrative confidence, and that the user should avoid pretending a watchlist idea is already a validated trade. This extra detail keeps test fixtures aligned with the same narrative contract used by real analysis responses. It also confirms that action wording, risk posture, position context, and validation behavior can be tested together without inventing a live recommendation.'
@@ -94,9 +98,44 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     assert parsed["analysis_overview"]["recommendation"] == "Buy"
     assert parsed["analysis_overview"]["confidence"] == "Medium"
     assert parsed["analysis_overview"]["key_reasons"] == ["Validated earnings growth"]
+    assert parsed["key_reasons_paragraph"] == parsed["analysis_overview"]["key_reasons_paragraph"]
     assert parsed["analysis_overview"]["action_plan"]["risk_reward_ratio"] == 3.0
     assert parsed["data_quality"]["price_data"] == "ok"
     assert parsed["validation_warnings"] == []
+
+
+def test_parse_final_result_builds_key_reasons_paragraph():
+    from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    decision = PortfolioDecision(
+        confidence_score=0.68,
+        rating=PortfolioRating.HOLD,
+        executive_summary=_valid_executive_summary(),
+        investment_thesis=_valid_investment_thesis(),
+        key_reasons=[
+            "Improving earnings visibility supports the final recommendation because revenue quality and margin resilience remain aligned with the selected time horizon",
+            "The risk reward profile is acceptable only when fresh price data confirms entry discipline and vendor data quality remains usable",
+            "Position sizing should stay controlled because volatility, valuation sensitivity, and market liquidity can reduce conviction if momentum weakens",
+        ],
+        key_catalysts=[
+            "News flow and catalyst quality should be monitored for confirmation before increasing exposure",
+        ],
+        final_decision="Hold",
+        decision="Hold",
+        trade_plan_valid=False,
+    )
+
+    parsed = _parse_final_result("summary", decision, PortfolioRating, {"last_close_price": 100.0})
+
+    paragraph = parsed["key_reasons_paragraph"]
+    assert isinstance(paragraph, str)
+    assert paragraph
+    assert "+" not in paragraph
+    assert "\n" not in paragraph
+    assert _count_words(paragraph) <= 125
+    assert parsed["analysis_overview"]["key_reasons_paragraph"] == paragraph
 
 
 def test_parse_final_result_forces_valid_trade_rr_to_one_to_three():

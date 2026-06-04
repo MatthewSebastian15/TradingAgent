@@ -149,6 +149,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "final_decision": final_decision,
         "decision": final_decision,
         "executive_summary": _display(result.get("executive_summary")),
+        "key_reasons_paragraph": _key_reasons_paragraph(result),
         "decision_adjusted": bool(result.get("decision_adjusted")),
         "decision_adjusted_reason": _display(result.get("decision_adjusted_reason")),
         "trade_plan_valid": trade_plan_valid,
@@ -405,6 +406,54 @@ def _as_text_list(value: Any) -> list[str]:
         if text:
             items.append(text)
     return items
+
+
+def _normalize_inline_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def _truncate_words(text: str, max_words: int = 125) -> str:
+    words = [word for word in _normalize_inline_text(text).split(" ") if word]
+    if len(words) <= max_words:
+        return " ".join(words)
+    return f"{' '.join(words[:max_words])}.".replace("..", ".")
+
+
+def _reason_items(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [_normalize_inline_text(item) for item in value if _normalize_inline_text(item)]
+    text = _normalize_inline_text(value)
+    return [text] if text else []
+
+
+def _key_reasons_paragraph(result: dict[str, Any]) -> str:
+    overview = _as_dict(result.get("analysis_overview"))
+    direct = _normalize_inline_text(overview.get("key_reasons_paragraph") or result.get("key_reasons_paragraph"))
+    if direct:
+        return _truncate_words(direct, 125)
+
+    items: list[str] = []
+    for source in (overview.get("key_reasons"), result.get("key_reasons"), result.get("key_catalysts")):
+        items.extend(_reason_items(source))
+
+    mini_risk_summary = _normalize_inline_text(result.get("mini_risk_summary"))
+    if mini_risk_summary:
+        items.append(mini_risk_summary)
+
+    decision_reason = _normalize_inline_text(result.get("decision_adjusted_reason"))
+    if decision_reason:
+        items.append(decision_reason)
+
+    unique_items = list(dict.fromkeys(item for item in items if item))
+    if not unique_items:
+        return "N/A"
+
+    paragraph = ". ".join(unique_items).strip()
+    if paragraph and not paragraph.endswith("."):
+        paragraph = f"{paragraph}."
+    return _truncate_words(paragraph, 125)
 
 
 def _display(value: Any) -> str:
