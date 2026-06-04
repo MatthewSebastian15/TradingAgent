@@ -143,7 +143,7 @@ describe('mockData', () => {
       'mock-bbca-id-buy',
       'mock-unvr-news-unavailable-sell',
       'mock-ptro-wait-no-position',
-      'mock-ptro-reduce-existing-position',
+      'mock-tpia-reduce-existing-position',
       'mock-bbca-buy-no-position',
       'mock-bbri-hold-existing-position',
       'mock-tlkm-sell-existing-position',
@@ -152,25 +152,49 @@ describe('mockData', () => {
 
 
   it('maps raw AI signal into position-aware display signal', () => {
-    expect(resolveDisplaySignal('BUY', false)).toBe('BUY');
-    expect(resolveDisplaySignal('HOLD', false)).toBe('WAIT');
-    expect(resolveDisplaySignal('BUY', true)).toBe('HOLD');
-    expect(resolveDisplaySignal('NEUTRAL', true)).toBe('REDUCE');
-    expect(resolveDisplaySignal('SELL', true)).toBe('SELL');
+    expect(resolveDisplaySignal('BUY', false, 'Open new position')).toBe('BUY');
+    expect(resolveDisplaySignal('BUY', false, 'No position to rebalance')).toBe('WAIT');
+    expect(resolveDisplaySignal('HOLD', false, 'No position to rebalance')).toBe('WAIT');
+    expect(resolveDisplaySignal('BUY', true, 'Maintain position')).toBe('HOLD');
+    expect(resolveDisplaySignal('SELL', true, 'Trim position')).toBe('REDUCE');
+    expect(resolveDisplaySignal('SELL', true, 'Exit position')).toBe('SELL');
   });
 
   it('covers WAIT, REDUCE, BUY, HOLD, and SELL mock scenarios', () => {
     const scenarios = {
-      'mock-ptro-wait-no-position': 'WAIT',
-      'mock-ptro-reduce-existing-position': 'REDUCE',
-      'mock-bbca-buy-no-position': 'BUY',
-      'mock-bbri-hold-existing-position': 'HOLD',
-      'mock-tlkm-sell-existing-position': 'SELL',
+      'mock-bbca-buy-no-position': {
+        display_signal: 'BUY',
+        rebalancing_action: 'Open new position',
+        new_entry_action: 'Allowed with validated entry',
+      },
+      'mock-bbri-hold-existing-position': {
+        display_signal: 'HOLD',
+        rebalancing_action: 'Maintain position',
+        new_entry_action: 'No new entry; maintain existing position',
+      },
+      'mock-tlkm-sell-existing-position': {
+        display_signal: 'SELL',
+        rebalancing_action: 'Exit position',
+        new_entry_action: 'No new entry; exit existing position',
+      },
+      'mock-ptro-wait-no-position': {
+        display_signal: 'WAIT',
+        rebalancing_action: 'No position to rebalance',
+        new_entry_action: 'Wait for valid entry setup',
+      },
+      'mock-tpia-reduce-existing-position': {
+        display_signal: 'REDUCE',
+        rebalancing_action: 'Trim position',
+        new_entry_action: 'Do not add; reduce existing exposure',
+      },
     };
 
-    for (const [requestId, displaySignal] of Object.entries(scenarios)) {
+    for (const [requestId, expected] of Object.entries(scenarios)) {
       const result = getMockAnalysisResponseByRequestId(requestId);
-      expect(result.display_signal).toBe(displaySignal);
+      expect(result.display_signal).toBe(expected.display_signal);
+      expect(result.rebalancing_action).toBe(expected.rebalancing_action);
+      expect(result.new_entry_action).toBe(expected.new_entry_action);
+      expect(result.position_size_hint).toBeTruthy();
       expect(result.agent_pipeline).toHaveLength(10);
       expect(result.data_sources.price.provider).toBe('Yahoo Finance');
       expect(result.technical_levels.technical_levels_available).toBe(true);

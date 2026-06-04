@@ -466,20 +466,21 @@ def _normalize_raw_signal(raw_ai_signal: str | None) -> str:
     return signal or "HOLD"
 
 
-def resolve_display_signal(raw_ai_signal: str, has_existing_position: bool) -> str:
+def resolve_display_signal(raw_ai_signal: str, has_existing_position: bool, rebalancing_action: str | None = None) -> str:
     """Convert the raw AI recommendation into the user-position-aware signal."""
     signal = _normalize_raw_signal(raw_ai_signal)
+    action = str(rebalancing_action or "").strip()
 
     if not has_existing_position:
-        return "BUY" if signal == "BUY" else "WAIT"
+        return "BUY" if signal == "BUY" and action == "Open new position" else "WAIT"
 
-    if signal == "BUY":
-        return "HOLD"
-    if signal == "HOLD":
-        return "HOLD"
-    if signal in {"SELL", "AVOID"}:
+    if action == "Trim position":
+        return "REDUCE"
+    if action == "Exit position":
         return "SELL"
-    return "REDUCE"
+    if signal == "SELL":
+        return "SELL"
+    return "HOLD"
 
 
 def _signal_context(raw_signal: str, display_signal: str, has_existing_position: bool) -> str:
@@ -557,7 +558,11 @@ def _attach_phase1_fields(payload: dict[str, Any], final_state: dict[str, Any]) 
 
     has_position = bool(enriched.get("has_existing_position", False))
     raw_signal = _normalize_raw_signal(enriched.get("final_decision") or enriched.get("decision") or enriched.get("llm_decision"))
-    display_signal = resolve_display_signal(raw_signal, has_position)
+    display_signal = resolve_display_signal(
+        raw_signal,
+        has_position,
+        enriched.get("rebalancing_action"),
+    )
     enriched["raw_ai_signal"] = raw_signal
     enriched["display_signal"] = display_signal
     enriched["signal_context"] = _signal_context(raw_signal, display_signal, has_position)
@@ -946,13 +951,13 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
         position_action = None
     new_entry_action = getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else None
     if not new_entry_action:
-        new_entry_action = "No new entry; maintain existing position" if has_pos else "No new entry"
+        new_entry_action = "No new entry; maintain existing position" if has_pos else "Wait for valid entry setup"
     position_size_hint = getattr(pd_obj, "position_size_hint", None) if pd_obj is not None else None
     if not position_size_hint:
         position_size_hint = (
             "Maintain current position size; no additional exposure suggested."
             if has_pos
-            else "No new position suggested."
+            else "0% allocation until setup improves."
         )
     return {
         "llm_decision": None,
@@ -1063,7 +1068,7 @@ def parse_final_result(
                 "max_drawdown_estimate": None,
                 "volatility_level": "Medium",
                 "position_sizing_reason": None,
-                "rebalancing_action": "Avoid new entry",
+                "rebalancing_action": "No position to rebalance",
                 "key_catalysts": [],
                 "key_reasons": [],
                 "invalidation_conditions": [],
@@ -1099,17 +1104,23 @@ def parse_final_result(
     new_entry_action_value = getattr(pd_obj, "new_entry_action", None)
     if not new_entry_action_value:
         new_entry_action_value = (
-            "No new entry; maintain existing position" if has_existing_position_value else "No new entry"
+            "No new entry; maintain existing position"
+            if has_existing_position_value
+            else "Wait for valid entry setup"
         )
     rebalancing_action_value = _enum_value(getattr(pd_obj, "rebalancing_action", None))
     if not rebalancing_action_value:
-        rebalancing_action_value = "Maintain position" if has_existing_position_value else "Avoid new entry"
+        rebalancing_action_value = (
+            "Maintain position"
+            if has_existing_position_value
+            else "No position to rebalance"
+        )
     position_size_hint_value = getattr(pd_obj, "position_size_hint", None)
     if not position_size_hint_value:
         position_size_hint_value = (
             "Maintain current position size; no additional exposure suggested."
             if has_existing_position_value
-            else "No new position suggested."
+            else "0% allocation until setup improves."
         )
 
     return _with_analysis_overview_and_risk_data_quality(

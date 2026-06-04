@@ -344,7 +344,7 @@ Use the market report for entry and stop context.
 - If a setup cannot support a valid 1:3 Risk:Reward structure, recommend Hold, Wait for better entry, or Avoid new entry.
 - Do not invent current_price.
 - Allowed volatility_level values are only Low, Medium, High, or Very High.
-- Allowed rebalancing_action values are only Open new position, Add position, Maintain position, Trim position, Exit position, or Avoid new entry.
+- Allowed rebalancing_action values are only Open new position, Add position, Maintain position, Trim position, Exit position, Avoid new entry, or No position to rebalance.
 
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
@@ -455,9 +455,9 @@ Keep language simple and practical. Include an action plan, risk controls, price
 - If a setup cannot support a valid 1:3 Risk:Reward structure, recommend Hold, Wait for better entry, or Avoid new entry.
 - Use price_target as the analyst or fair target. Use take_profit as the trade execution target based on risk/reward.
 - Allowed volatility_level values only: Low, Medium, High, Very High.
-- Allowed rebalancing_action values only: Open new position, Add position, Maintain position, Trim position, Exit position, Avoid new entry.
+- Allowed rebalancing_action values only: Open new position, Add position, Maintain position, Trim position, Exit position, Avoid new entry, No position to rebalance.
 - When has_existing_position is true, do not recommend Open new position as the portfolio action. Use Add position, Maintain position, Trim position, or Exit position.
-- When has_existing_position is false, do not recommend Add position, Maintain position, Trim position, or Exit position. Use Open new position only for valid Buy setups and Avoid new entry otherwise.
+- When has_existing_position is false, do not recommend Add position, Maintain position, Trim position, or Exit position. Use Open new position only for valid Buy setups and No position to rebalance otherwise.
 - NEW ENTRY ACTION must describe whether a new exposure should be opened. For existing positions, it must not imply a separate new trade. It should describe add-only, maintain, trim, or exit context.
 - Backend validation remains the final source of truth for position action fields.
 - Use Hold when no safe actionable setup exists.
