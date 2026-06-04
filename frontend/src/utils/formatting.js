@@ -1,16 +1,18 @@
-export function formatPrice(price, ticker = '') {
+export function formatPrice(price, ticker = '', currency = '') {
   if (price === null || price === undefined || price === '') return null;
   if (typeof price === 'number' && !Number.isFinite(price)) return null;
 
   const value = typeof price === 'number' ? price.toLocaleString() : String(price);
-  const normalizedTicker = ticker.toUpperCase();
+  const normalizedTicker = String(ticker || '').toUpperCase();
+  const normalizedCurrency = String(currency || '').toUpperCase();
 
-  if (normalizedTicker.endsWith('.JK')) return `Rp ${value}`;
-  if (normalizedTicker.endsWith('.HK')) return `HK$ ${value}`;
-  if (normalizedTicker.endsWith('.T')) return `\u00a5${value}`;
-  if (normalizedTicker.endsWith('.DE')) return `\u20ac${value}`;
-  if (normalizedTicker.endsWith('.L')) return `\u00a3${value}`;
-  return `$${value}`;
+  if (normalizedCurrency === 'IDR' || normalizedTicker.endsWith('.JK')) return `Rp ${value}`;
+  if (normalizedCurrency === 'HKD' || normalizedTicker.endsWith('.HK')) return `HK$ ${value}`;
+  if (normalizedCurrency === 'JPY' || normalizedTicker.endsWith('.T')) return `¥${value}`;
+  if (normalizedCurrency === 'EUR' || normalizedTicker.endsWith('.DE')) return `€${value}`;
+  if (normalizedCurrency === 'GBP' || normalizedTicker.endsWith('.L')) return `£${value}`;
+  if (normalizedCurrency === 'USD' || !normalizedCurrency) return `$${value}`;
+  return `${normalizedCurrency} ${value}`;
 }
 
 export function formatTickerLabel(ticker = '') {

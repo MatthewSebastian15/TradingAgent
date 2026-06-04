@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import threading
 from collections import OrderedDict
@@ -6,6 +7,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 import pandas as pd
+import pytz
 from dateutil.relativedelta import relativedelta
 
 from tradingagents.yfinance_runtime import yf
@@ -121,6 +123,154 @@ def _get_ticker(symbol: str):
         if len(_ticker_cache) > _TICKER_CACHE_MAX_ENTRIES:
             _ticker_cache.popitem(last=False)
         return ticker_obj
+
+
+
+
+def _currency_for_symbol(symbol: str) -> str:
+    normalized = str(symbol or "").upper()
+    if normalized.endswith(".JK"):
+        return "IDR"
+    if normalized.endswith(".HK"):
+        return "HKD"
+    if normalized.endswith(".T"):
+        return "JPY"
+    if normalized.endswith(".DE"):
+        return "EUR"
+    if normalized.endswith(".L"):
+        return "GBP"
+    return "USD"
+
+
+def _fast_info_value(fast_info: Any, *names: str) -> Any:
+    for name in names:
+        try:
+            if isinstance(fast_info, dict) and name in fast_info:
+                return fast_info[name]
+            value = getattr(fast_info, name, None)
+            if value is not None:
+                return value
+        except Exception:
+            continue
+    return None
+
+
+def _coerce_positive_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number <= 0:
+        return None
+    return number
+
+
+def fetch_current_price(symbol: str) -> dict[str, Any]:
+    """Fetch the latest available quote once at the start of an analysis run.
+
+    The first choice is yfinance ``fast_info.last_price`` because it represents
+    the freshest quote yfinance exposes for the instrument. If that is missing,
+    the function falls back to the latest available historical close and marks
+    the result as a fallback so the UI can warn the user clearly.
+    """
+    normalized = normalize_ticker(symbol)
+    wib = pytz.timezone("Asia/Jakarta")
+    now = datetime.now(wib)
+    currency = _currency_for_symbol(normalized)
+
+    try:
+        ticker = yf.Ticker(normalized)
+        fast_info = ticker.fast_info
+        price = _coerce_positive_float(
+            _fast_info_value(fast_info, "last_price", "regularMarketPrice", "lastPrice")
+        )
+        if price is None:
+            raise ValueError("fast_info.last_price returned None or 0")
+
+        return {
+            "price": price,
+            "price_currency": currency,
+            "price_source": "fast_info.last_price",
+            "price_timestamp": now.isoformat(),
+            "price_is_fallback": False,
+        }
+    except Exception as primary_exc:
+        try:
+            ticker = yf.Ticker(normalized)
+            hist = ticker.history(period="2d")
+            if hist is None or hist.empty or "Close" not in hist:
+                raise ValueError("history fallback returned no Close rows") from primary_exc
+
+            price = _coerce_positive_float(hist["Close"].iloc[-1])
+            if price is None:
+                raise ValueError("history fallback returned invalid Close value") from primary_exc
+
+            price_date = hist.index[-1]
+            try:
+                price_timestamp = price_date.isoformat()
+            except AttributeError:
+                price_timestamp = str(price_date)
+
+            return {
+                "price": price,
+                "price_currency": currency,
+                "price_source": "history_close_fallback",
+                "price_timestamp": price_timestamp,
+                "price_is_fallback": True,
+            }
+        except Exception as fallback_exc:
+            logger.warning("Unable to fetch current price for %s: %s", normalized, fallback_exc)
+            return {
+                "price": None,
+                "price_currency": currency,
+                "price_source": "unavailable",
+                "price_timestamp": now.isoformat(),
+                "price_is_fallback": True,
+                "warning": str(fallback_exc),
+            }
+
+
+def _volatility_classification(score: float | None) -> str | None:
+    if score is None:
+        return None
+    if score < 20:
+        return "Very Low"
+    if score < 40:
+        return "Low"
+    if score < 60:
+        return "Moderate"
+    if score < 80:
+        return "High"
+    return "Very High"
+
+
+def calculate_volatility(symbol: str, lookback_days: int = 20) -> dict[str, Any]:
+    """Calculate annualized daily-return volatility on a 0-100 scale."""
+    normalized = normalize_ticker(symbol)
+    metadata = {
+        "volatility_score": None,
+        "volatility_scale": "0–100",
+        "volatility_method": "Annualized standard deviation of daily returns, normalized to 0–100",
+        "volatility_lookback_days": lookback_days,
+        "volatility_classification": None,
+    }
+    try:
+        hist = yf.Ticker(normalized).history(period=f"{lookback_days + 5}d")
+        if hist is None or hist.empty or "Close" not in hist:
+            return metadata
+        returns = hist["Close"].pct_change().dropna().tail(lookback_days)
+        if len(returns) < 2:
+            return metadata
+        annual_vol = float(returns.std()) * math.sqrt(252)
+        if not math.isfinite(annual_vol):
+            return metadata
+        score = round(min(max(annual_vol * 100, 0.0), 100.0), 2)
+        metadata["volatility_score"] = score
+        metadata["volatility_classification"] = _volatility_classification(score)
+        return metadata
+    except Exception as exc:
+        logger.warning("Unable to calculate volatility for %s: %s", normalized, exc)
+        return metadata
 
 
 def get_YFin_data_online(

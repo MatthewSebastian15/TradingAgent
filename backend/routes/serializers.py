@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from analysis_cache import AnalysisCacheKey
@@ -29,6 +31,22 @@ SUMMARY_FIELDS = {
     "current_price",
     "current_price_as_of",
     "current_price_source",
+    "last_price",
+    "price_currency",
+    "price_source",
+    "price_timestamp",
+    "price_is_fallback",
+    "market_status",
+    "raw_ai_signal",
+    "display_signal",
+    "signal_context",
+    "confidence_label",
+    "confidence_tier",
+    "volatility_scale",
+    "volatility_method",
+    "volatility_lookback_days",
+    "volatility_classification",
+    "mini_risk_summary",
     "executive_summary",
     "investment_thesis",
     "price_target",
@@ -108,23 +126,72 @@ def _enum_value(value: Any) -> Any:
     return getattr(value, "value", value)
 
 
+def _parse_datetime(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            return datetime.fromisoformat(text[:10])
+        except ValueError:
+            return None
+
+
+def get_market_status(timestamp: datetime) -> str:
+    """Return IDX market status for a timestamp using WIB trading hours."""
+    wib = ZoneInfo("Asia/Jakarta")
+    dt = timestamp.astimezone(wib) if timestamp.tzinfo is not None else timestamp.replace(tzinfo=wib)
+
+    if dt.weekday() >= 5:
+        return "closed"
+
+    time_val = dt.hour * 100 + dt.minute
+    return "open" if 900 <= time_val <= 1549 else "closed"
+
+
+def _market_status_from_value(value: Any) -> str | None:
+    parsed = _parse_datetime(value)
+    if parsed is None:
+        return None
+    return get_market_status(parsed)
+
+
 def _get_current_price_fields(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
-    current_price = final_state.get("last_close_price")
+    current_price = final_state.get("last_price", final_state.get("last_close_price"))
     if current_price is None and pd_obj is not None:
         current_price = getattr(pd_obj, "current_price", None)
-    current_price_as_of = final_state.get("last_close_price_as_of")
+
+    price_timestamp = final_state.get("price_timestamp")
+    current_price_as_of = price_timestamp or final_state.get("last_close_price_as_of")
     if current_price_as_of is None and pd_obj is not None:
         current_price_as_of = getattr(pd_obj, "current_price_as_of", None)
     current_price_as_of = current_price_as_of or final_state.get("trade_date")
-    current_price_source = "yfinance:last_close" if current_price is not None else None
+
+    current_price_source = final_state.get("price_source") or final_state.get("last_close_price_source")
+    if current_price_source is None and current_price is not None:
+        current_price_source = "yfinance:last_close"
     if pd_obj is not None:
         current_price_source = getattr(pd_obj, "current_price_source", None) or current_price_source
+
+    price_is_fallback = bool(final_state.get("price_is_fallback", False))
+    price_currency = final_state.get("price_currency")
+    market_status = final_state.get("market_status") or _market_status_from_value(current_price_as_of)
+
     return {
         "current_price": current_price,
         "current_price_as_of": current_price_as_of,
         "current_price_source": current_price_source,
+        "last_price": current_price,
+        "price_currency": price_currency,
+        "price_source": final_state.get("price_source") or current_price_source,
+        "price_timestamp": price_timestamp or current_price_as_of,
+        "price_is_fallback": price_is_fallback,
+        "market_status": market_status,
     }
-
 
 def _coerce_data_quality(value: Any) -> dict[str, Any]:
     if hasattr(value, "model_dump"):
@@ -350,14 +417,172 @@ def _complete_risk_engine_data_quality(
     return merged
 
 
-def _confidence_label(value: Any) -> str:
+
+def _confidence_score_percent(value: Any) -> float | None:
     try:
         score = float(value)
     except (TypeError, ValueError):
+        return None
+    if score != score:
+        return None
+    return score * 100 if 0 <= score <= 1 else score
+
+
+def get_confidence_label(score: int | float | None) -> dict[str, str | None]:
+    score_pct = _confidence_score_percent(score)
+    if score_pct is None:
+        return {"label": None, "tier": None}
+    if score_pct < 50:
+        return {"label": "Very Low Conviction", "tier": "very_low"}
+    if score_pct < 65:
+        return {"label": "Low Conviction", "tier": "low"}
+    if score_pct < 75:
+        return {"label": "Moderate Conviction", "tier": "moderate"}
+    if score_pct < 85:
+        return {"label": "High Conviction", "tier": "high"}
+    return {"label": "Very High Conviction", "tier": "very_high"}
+
+
+def _normalize_raw_signal(raw_ai_signal: str | None) -> str:
+    signal = str(raw_ai_signal or "HOLD").strip().upper()
+    if signal in {"BUY", "OVERWEIGHT", "ACCUMULATE", "ADD"}:
+        return "BUY"
+    if signal in {"SELL", "UNDERWEIGHT", "AVOID", "EXIT"}:
+        return "SELL"
+    if signal in {"HOLD", "NEUTRAL", "WAIT"}:
+        return "HOLD"
+    return signal or "HOLD"
+
+
+def resolve_display_signal(raw_ai_signal: str, has_existing_position: bool) -> str:
+    """Convert the raw AI recommendation into the user-position-aware signal."""
+    signal = _normalize_raw_signal(raw_ai_signal)
+
+    if not has_existing_position:
+        return "BUY" if signal == "BUY" else "WAIT"
+
+    if signal == "BUY":
+        return "HOLD"
+    if signal == "HOLD":
+        return "HOLD"
+    if signal in {"SELL", "AVOID"}:
+        return "SELL"
+    return "REDUCE"
+
+
+def _signal_context(raw_signal: str, display_signal: str, has_existing_position: bool) -> str:
+    position_text = "User has an existing position" if has_existing_position else "User has no existing position"
+    return f"{position_text}. AI signal {raw_signal} translated to {display_signal}."
+
+
+def sanitize_text(text: str | None) -> str | None:
+    """Normalize AI text capitalization and simple label-prefix formatting."""
+    if text is None:
+        return text
+    cleaned = re.sub(r"[ \t]+", " ", str(text).strip())
+    cleaned = re.sub(r"\n{2,}", "\n", cleaned)
+    if not cleaned:
+        return cleaned
+
+    def normalize_label(match: re.Match[str]) -> str:
+        label = match.group(1).strip()
+        words = [word if word.isupper() else word.capitalize() for word in label.split()]
+        return f"{' '.join(words)}. "
+
+    cleaned = re.sub(r"^([a-zA-Z][a-zA-Z ]{1,40}):\s*", normalize_label, cleaned)
+    cleaned = re.sub(
+        r"(^|(?<=[.!?])\s+)([a-z])",
+        lambda match: match.group(1) + match.group(2).upper(),
+        cleaned,
+    )
+    return cleaned.strip()
+
+
+def _sanitize_text_list(value: Any) -> list[Any]:
+    if not isinstance(value, list):
+        return []
+    return [sanitize_text(item) if isinstance(item, str) else item for item in value]
+
+
+def _volatility_classification(score: Any) -> str | None:
+    try:
+        numeric = float(score)
+    except (TypeError, ValueError):
+        return None
+    if numeric != numeric:
+        return None
+    if numeric < 20:
+        return "Very Low"
+    if numeric < 40:
         return "Low"
-    if score >= 0.75:
+    if numeric < 60:
+        return "Moderate"
+    if numeric < 80:
         return "High"
-    if score >= 0.5:
+    return "Very High"
+
+
+def _attach_phase1_fields(payload: dict[str, Any], final_state: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(payload)
+
+    text_fields = [
+        "executive_summary",
+        "investment_thesis",
+        "decision_adjusted_reason",
+        "position_sizing_reason",
+        "rebalancing_action",
+        "position_action",
+        "new_entry_action",
+        "position_size_hint",
+    ]
+    for field in text_fields:
+        if field in enriched and isinstance(enriched[field], str):
+            enriched[field] = sanitize_text(enriched[field])
+
+    for field in ["key_reasons", "key_catalysts", "invalidation_conditions"]:
+        if field in enriched:
+            enriched[field] = _sanitize_text_list(enriched[field])
+
+    has_position = bool(enriched.get("has_existing_position", False))
+    raw_signal = _normalize_raw_signal(enriched.get("final_decision") or enriched.get("decision") or enriched.get("llm_decision"))
+    display_signal = resolve_display_signal(raw_signal, has_position)
+    enriched["raw_ai_signal"] = raw_signal
+    enriched["display_signal"] = display_signal
+    enriched["signal_context"] = _signal_context(raw_signal, display_signal, has_position)
+
+    confidence = get_confidence_label(enriched.get("confidence_score"))
+    enriched["confidence_label"] = confidence["label"]
+    enriched["confidence_tier"] = confidence["tier"]
+
+    volatility_metadata = final_state.get("volatility_metadata") if isinstance(final_state, dict) else None
+    volatility_metadata = volatility_metadata if isinstance(volatility_metadata, dict) else {}
+    volatility_score = enriched.get("volatility_score")
+    enriched["volatility_scale"] = volatility_metadata.get("volatility_scale") or "0–100"
+    enriched["volatility_method"] = volatility_metadata.get("volatility_method") or (
+        "Annualized standard deviation of daily returns, normalized to 0–100"
+    )
+    enriched["volatility_lookback_days"] = volatility_metadata.get("volatility_lookback_days") or 20
+    enriched["volatility_classification"] = (
+        volatility_metadata.get("volatility_classification") or _volatility_classification(volatility_score)
+    )
+
+    risk_reason = (
+        enriched.get("decision_adjusted_reason")
+        or enriched.get("position_sizing_reason")
+        or f"Volatility level is {enriched.get('volatility_level') or 'N/A'}."
+    )
+    risk_label = enriched.get("volatility_classification") or enriched.get("volatility_level") or "N/A"
+    enriched["mini_risk_summary"] = sanitize_text(f"{risk_label}: {risk_reason}")
+
+    return enriched
+
+def _confidence_label(value: Any) -> str:
+    score = _confidence_score_percent(value)
+    if score is None:
+        return "Low"
+    if score >= 75:
+        return "High"
+    if score >= 50:
         return "Medium"
     return "Low"
 
@@ -390,7 +615,7 @@ def _analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
         },
         "risk_summary": {
             "overall_risk": str(volatility).lower(),
-            "short_reason": risk_reason,
+            "short_reason": sanitize_text(risk_reason) or "N/A",
         },
     }
 
@@ -403,6 +628,7 @@ def _with_analysis_overview_and_risk_data_quality(
     payload: dict[str, Any],
     final_state: dict[str, Any],
 ) -> dict[str, Any]:
+    payload = _attach_phase1_fields(payload, final_state)
     enriched = _with_analysis_overview(payload)
     try:
         from tradingagents.risk import build_risk_data_quality  # noqa: PLC0415
