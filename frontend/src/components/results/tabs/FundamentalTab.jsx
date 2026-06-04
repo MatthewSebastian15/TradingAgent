@@ -16,6 +16,23 @@ function displayPercent(value) {
   return value === null || value === undefined ? 'N/A' : `${value}%`;
 }
 
+function FundamentalDataSourceBadge({ dataSources }) {
+  const fundamentals = dataSources?.fundamentals;
+  if (!fundamentals || fundamentals.completeness !== 'partial') return null;
+
+  return (
+    <div className="px-4 pt-4">
+      <div className="inline-flex items-center gap-2 border border-bloomberg-amber bg-bloomberg-amber-dim px-2.5 py-1 font-mono text-xs text-bloomberg-amber">
+        ⚠ Partial data · {fundamentals.last_period || 'Latest period'}
+      </div>
+    </div>
+  );
+}
+
+FundamentalDataSourceBadge.propTypes = {
+  dataSources: PropTypes.object,
+};
+
 function QualityNotice({ payload }) {
   const quality = payload?.data_quality;
   if (!quality || quality.status === 'complete') return null;
@@ -236,6 +253,7 @@ PeerComparison.propTypes = {
 export default function FundamentalTab({ financialHighlights, result = {} }) {
   return (
     <>
+      <FundamentalDataSourceBadge dataSources={result.data_sources} />
       <FinancialHighlightsTable financialHighlights={financialHighlights} />
       <FinancialTrends payload={result.financial_trends} />
       <MetricSection

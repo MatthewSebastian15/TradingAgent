@@ -77,7 +77,7 @@ class CollectedData:
     news_impact: dict[str, Any] | None = None
     catalyst_tracker: dict[str, Any] | None = None
     analyst_consensus: dict[str, Any] | None = None
-    data_sources: dict[str, str] | None = None
+    data_sources: dict[str, Any] | None = None
     data_limitations: list[str] | None = None
     vendor_attempts: dict[str, list[str]] | None = None
     request_budget: dict[str, Any] | None = None

@@ -1001,6 +1001,110 @@ def _price_source_label(price_data: str, last_close_price: float | None) -> str 
     return "yfinance:last_close"
 
 
+def _provider_name_from_label(label: str | None) -> str:
+    lowered = str(label or "").lower()
+    providers: list[str] = []
+    if "yfinance" in lowered or "yahoo" in lowered:
+        providers.append("Yahoo Finance")
+    if "finnhub" in lowered:
+        providers.append("Finnhub")
+    if "alpha_vantage" in lowered or "alpha vantage" in lowered:
+        providers.append("Alpha Vantage")
+    if "marketaux" in lowered:
+        providers.append("Marketaux")
+    if "newsdata" in lowered:
+        providers.append("NewsData.io")
+    if not providers:
+        return "Unavailable" if lowered in {"", "none", "unavailable"} else str(label or "Unavailable")
+    return " + ".join(dict.fromkeys(providers))
+
+
+def _price_method_from_label(label: str | None) -> str:
+    lowered = str(label or "").lower()
+    if "fast_info" in lowered or "current" in lowered:
+        return "fast_info.last_price"
+    if "stock_candle" in lowered:
+        return "stock_candle.last_close"
+    if "daily" in lowered:
+        return "daily.last_close"
+    if "last_close" in lowered:
+        return "last_close"
+    return "latest_available"
+
+
+def _latest_article_date(news_context: dict[str, Any] | None) -> str | None:
+    context = news_context if isinstance(news_context, dict) else {}
+    for key in ("latest_article_date", "latest_published_at", "latest_date"):
+        value = context.get(key)
+        if value:
+            return str(value)[:10]
+    articles = context.get("articles") if isinstance(context.get("articles"), list) else []
+    dates = sorted(
+        str(item.get("published_at") or item.get("date") or "")[:10]
+        for item in articles
+        if isinstance(item, dict) and (item.get("published_at") or item.get("date"))
+    )
+    return dates[-1] if dates else None
+
+
+def _last_fundamental_period(financial_highlights: dict[str, Any] | None) -> tuple[str | None, str | None]:
+    if not isinstance(financial_highlights, dict):
+        return None, None
+    periods = financial_highlights.get("periods") if isinstance(financial_highlights.get("periods"), list) else []
+    if not periods:
+        return None, None
+    latest = periods[-1] if isinstance(periods[-1], dict) else {}
+    label = latest.get("label") or latest.get("key")
+    period_end_date = latest.get("period_end_date") or latest.get("end_date")
+    return (str(label) if label else None, str(period_end_date) if period_end_date else None)
+
+
+def _build_structured_data_sources(
+    raw_sources: dict[str, str],
+    *,
+    price_source: str | None,
+    price_timestamp: str | None,
+    price_is_fallback: bool,
+    data_quality: DataQualityReport,
+    news_context: dict[str, Any] | None,
+    news_lookback_days: int,
+    financial_highlights: dict[str, Any] | None,
+) -> dict[str, Any]:
+    last_period, period_end_date = _last_fundamental_period(financial_highlights)
+    news_source = raw_sources.get("news") or raw_sources.get("company_news")
+    context = news_context if isinstance(news_context, dict) else {}
+    articles_found = context.get("articles_found")
+    if articles_found is None:
+        articles = context.get("articles") if isinstance(context.get("articles"), list) else []
+        articles_found = len(articles)
+
+    return {
+        "price": {
+            "provider": _provider_name_from_label(price_source or raw_sources.get("price")),
+            "method": _price_method_from_label(price_source or raw_sources.get("price")),
+            "timestamp": price_timestamp,
+            "is_fallback": bool(price_is_fallback),
+        },
+        "fundamentals": {
+            "provider": _provider_name_from_label(raw_sources.get("fundamental_profile_metrics")),
+            "completeness": data_quality.fundamentals,
+            "last_period": last_period,
+            "period_end_date": period_end_date,
+        },
+        "news": {
+            "provider": _provider_name_from_label(news_source),
+            "articles_found": articles_found,
+            "lookback_days": news_lookback_days,
+            "latest_article_date": _latest_article_date(news_context),
+        },
+        "macro": {
+            "provider": _provider_name_from_label(raw_sources.get("global_news")),
+            "description": "Latest available",
+        },
+        "raw": raw_sources,
+    }
+
+
 def _build_data_source_metadata(
     price: DataField,
     fundamentals: DataField,
@@ -1190,7 +1294,7 @@ def collect_market_data(
     )
     vendor_attempts = attempt_recorder.get_summary()
     request_budget = budget.get_summary()
-    data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
+    raw_data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
         price,
         fundamentals,
         balance_sheet,
@@ -1213,7 +1317,7 @@ def collect_market_data(
         time_horizon_months=time_horizon_months,
         company_news=company_news.value,
         global_news=global_news.value,
-        source_label=data_sources.get("news"),
+        source_label=raw_data_sources.get("news"),
         news_context=news_context,
         limit=8,
     )
@@ -1256,6 +1360,16 @@ def collect_market_data(
         )
     except Exception:
         logger.exception("Failed to build deterministic fundamental analysis for %s", ticker)
+    data_sources = _build_structured_data_sources(
+        raw_data_sources,
+        price_source=price_source,
+        price_timestamp=last_close_price_as_of or trade_date,
+        price_is_fallback=price_is_fallback,
+        data_quality=data_quality,
+        news_context=news_context,
+        news_lookback_days=news_lookback_days,
+        financial_highlights=financial_highlights,
+    )
     try:
         release_budget(budget_id)
         release_attempt_recorder(attempt_id)

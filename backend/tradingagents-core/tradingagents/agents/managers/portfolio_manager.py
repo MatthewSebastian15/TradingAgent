@@ -69,9 +69,9 @@ def create_portfolio_manager(llm):
 
 **Output requirements:**
 
-Executive Summary: Write 150-200 words in one paragraph. No bullet points. Summarize the final rating, strongest reason, key quantitative support, biggest risk, recommended action, entry strategy, sizing, stop-loss context, time horizon, and confirmation or invalidation catalyst.
+Executive Summary: Write 250-300 words in exactly 5 parts, written as continuous paragraphs without headers, section numbers, or bullet points. Part 1 states the signal and single most important reason. Part 2 describes recent price movement and separates fundamental-driven movement from speculative movement. Part 3 briefly states revenue trend, profitability, and financial health. Part 4 states overall risk level and the top 2 risk factors. Part 5 clearly states what the user should do right now.
 
-Investment Thesis: Write 250-350 words as flowing paragraphs. No bullet points and no headers. Explain what the company does, why it matters now, the biggest tailwind or headwind, at least three specific numbers from the analysts' reports, the bear case, why one side wins, and the full action plan including entry, sizing, stop-loss, and profit-taking. Avoid unexplained jargon.
+Investment Thesis: Write 400-450 words in exactly 6 parts, written as continuous paragraphs without headers, section numbers, or bullet points. Part 1 explains business overview, segments, and market position. Part 2 explains recent price movement and whether it is fundamentally supported or speculative. Part 3 covers revenue growth, profit margins, cashflow quality, and balance sheet strength with numbers where available. Part 4 identifies support, resistance, moving average conditions, and trend direction. Part 5 explains one macro risk, one sector risk, and one company-specific risk. Part 6 states the recommended action and the conditions that would upgrade or downgrade the recommendation.
 
 Return a confidence_score from 0.0 to 1.0. Lower it when reports are incomplete, risk controls are weak, or debate evidence is mixed.
 

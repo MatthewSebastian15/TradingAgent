@@ -13,6 +13,7 @@ from tradingagents.agents.schemas import (
     DebateArgument,
     PortfolioDecision,
     PortfolioRating,
+    TechnicalLevels,
     TraderAction,
     TraderProposal,
     VolatilityLevel,
@@ -34,7 +35,7 @@ from tradingagents.pipeline_balanced_llm import (
     _research_plan_to_markdown,
     _risk_to_markdown,
 )
-from tradingagents.pipeline_balanced_progress import _emit_data_quality, _emit_progress, _run_tracked
+from tradingagents.pipeline_balanced_progress import AGENT_LABELS, _emit_data_quality, _emit_progress, _run_tracked
 from tradingagents.pipeline_balanced_prompts import (
     bear_prompt,
     bull_prompt,
@@ -56,6 +57,126 @@ from tradingagents.pipeline_balanced_types import (
 from tradingagents.trade_levels import normalize_trade_levels
 
 logger = logging.getLogger(__name__)
+
+AGENT_PIPELINE_ORDER = [
+    "data_collection",
+    "market_analyst",
+    "news_analyst",
+    "fundamentals",
+    "bull_researcher",
+    "bear_researcher",
+    "research_manager",
+    "trader",
+    "risk_analysts",
+    "portfolio_manager",
+]
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None
+
+
+def _set_agent_timing(
+    timings: dict[str, dict[str, Any]],
+    agent_id: str,
+    *,
+    status: str | None = None,
+    warning: str | None = None,
+) -> None:
+    item = timings.setdefault(
+        agent_id,
+        {
+            "name": AGENT_LABELS.get(agent_id, agent_id.replace("_", " ").title()),
+            "status": "ok",
+            "duration_seconds": 0.0,
+            "warning": None,
+        },
+    )
+    if status:
+        item["status"] = status
+    if warning:
+        item["warning"] = warning
+
+
+def _mark_data_quality_timings(timings: dict[str, dict[str, Any]], data) -> None:
+    report = getattr(data, "data_quality", None)
+    if report is None:
+        return
+    first_warning = (report.warnings or [None])[0]
+
+    if report.price_data in {"missing", "invalid_ticker"}:
+        _set_agent_timing(timings, "data_collection", status="error", warning=first_warning or "Price data unavailable.")
+    elif report.price_data in {"partial", "market_closed"}:
+        _set_agent_timing(timings, "data_collection", status="fallback", warning=first_warning or "Price data used a fallback path.")
+
+    if report.fundamentals in {"partial", "missing", "unavailable"}:
+        _set_agent_timing(
+            timings,
+            "fundamentals",
+            status="partial" if report.fundamentals != "missing" else "error",
+            warning=first_warning or "Some fundamental statement data was not available from the provider.",
+        )
+    if report.news in {"partial", "missing", "unavailable"}:
+        _set_agent_timing(
+            timings,
+            "news_analyst",
+            status="partial" if report.news == "partial" else "fallback",
+            warning=first_warning or "News coverage was incomplete or unavailable.",
+        )
+
+
+def _agent_pipeline_from_timings(timings: dict[str, dict[str, Any]]) -> tuple[list[dict[str, Any]], float]:
+    rows: list[dict[str, Any]] = []
+    for agent_id in AGENT_PIPELINE_ORDER:
+        item = timings.get(agent_id)
+        if not item:
+            item = {
+                "name": AGENT_LABELS.get(agent_id, agent_id.replace("_", " ").title()),
+                "status": "fallback",
+                "duration_seconds": 0.0,
+                "warning": "This stage was skipped or did not report timing metadata.",
+            }
+        rows.append(
+            {
+                "name": item.get("name") or AGENT_LABELS.get(agent_id, agent_id.replace("_", " ").title()),
+                "status": item.get("status") or "ok",
+                "duration_seconds": round(float(item.get("duration_seconds") or 0.0), 1),
+                "warning": item.get("warning"),
+            }
+        )
+    return rows, round(sum(row["duration_seconds"] for row in rows), 1)
+
+
+def _build_technical_levels(decision: PortfolioDecision, technical_entry: dict[str, Any] | None) -> TechnicalLevels:
+    technical = technical_entry if isinstance(technical_entry, dict) else {}
+    current_price = _safe_float(getattr(decision, "current_price", None))
+    if current_price is None:
+        return TechnicalLevels(current_price=0.0, technical_levels_available=False)
+
+    trade_plan_valid = bool(getattr(decision, "trade_plan_valid", False))
+    entry_price = _safe_float(getattr(decision, "entry_price", None)) if trade_plan_valid else None
+    stop_loss = _safe_float(getattr(decision, "stop_loss", None)) if trade_plan_valid else None
+    risk_reward = getattr(decision, "risk_reward_display", None) or getattr(decision, "risk_reward_ratio", None)
+    if not trade_plan_valid:
+        risk_reward = "Not attractive"
+    elif isinstance(risk_reward, (int, float)):
+        risk_reward = f"1:{risk_reward:g}"
+
+    return TechnicalLevels(
+        current_price=current_price,
+        nearest_support=_safe_float(technical.get("support")),
+        nearest_resistance=_safe_float(technical.get("resistance")),
+        suggested_stop_loss=stop_loss,
+        invalidation_level=stop_loss or _safe_float(technical.get("support")),
+        entry_range_low=entry_price,
+        entry_range_high=entry_price,
+        risk_reward_ratio=str(risk_reward) if risk_reward is not None else None,
+        technical_levels_available=bool(technical.get("available", True)),
+    )
 
 
 def _limit_unique_text_items(items: list[str], limit: int = 5) -> list[str]:
@@ -88,6 +209,7 @@ def _build_initial_analyst_reports(
     llm_budget: LLMBudget,
     progress_callback: ProgressCallback | None,
     cancel_check: Callable[[], bool] | None,
+    agent_timings: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[AnalystReport, AnalystReport, AnalystReport]:
     analyst_event_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
     analyst_forwarder: threading.Thread | None = None
@@ -134,6 +256,7 @@ def _build_initial_analyst_reports(
                 llm_budget,
                 cancel_check,
             ),
+            timings=agent_timings,
         )
 
     def build_news_social_report_parallel() -> AnalystReport:
@@ -153,6 +276,7 @@ def _build_initial_analyst_reports(
                 llm_budget,
                 cancel_check,
             ),
+            timings=agent_timings,
         )
 
     def build_fundamentals_report_parallel() -> AnalystReport:
@@ -172,6 +296,7 @@ def _build_initial_analyst_reports(
                 llm_budget,
                 cancel_check,
             ),
+            timings=agent_timings,
         )
 
     try:
@@ -212,6 +337,7 @@ def run_balanced_pipeline(
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
     time_horizon_text = _time_horizon_label(time_horizon_months)
     llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
+    agent_timings: dict[str, dict[str, Any]] = {}
     _emit_progress(
         progress_callback, "news_fetch", "started", "Fetching normalized company news from configured providers..."
     )
@@ -221,7 +347,9 @@ def run_balanced_pipeline(
         "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
         lambda: collect_market_data(ticker, trade_date, config, cancel_check=cancel_check),
         cancel_check=cancel_check,
+        timings=agent_timings,
     )
+    _mark_data_quality_timings(agent_timings, data)
     _emit_progress(
         progress_callback,
         "news_fetch",
@@ -244,7 +372,9 @@ def run_balanced_pipeline(
         llm_budget,
         progress_callback,
         cancel_check,
+        agent_timings,
     )
+    _mark_data_quality_timings(agent_timings, data)
 
     market_md = _report_to_markdown(market_report)
     news_social_md = _report_to_markdown(news_social_report)
@@ -288,6 +418,18 @@ def run_balanced_pipeline(
                 render_debate_argument(bear, "Bear Researcher"),
             ]
         )
+        _set_agent_timing(
+            agent_timings,
+            "bull_researcher",
+            status="fallback",
+            warning="Bull debate skipped in fast mode.",
+        )
+        _set_agent_timing(
+            agent_timings,
+            "bear_researcher",
+            status="fallback",
+            warning="Bear debate skipped in fast mode.",
+        )
     else:
         bull = _run_tracked(
             progress_callback,
@@ -321,6 +463,7 @@ def run_balanced_pipeline(
                 llm_budget,
                 cancel_check,
             ),
+            timings=agent_timings,
         )
 
         bear = _run_tracked(
@@ -356,6 +499,7 @@ def run_balanced_pipeline(
                 llm_budget,
                 cancel_check,
             ),
+            timings=agent_timings,
         )
         debate_history.extend(
             [
@@ -398,6 +542,7 @@ def run_balanced_pipeline(
                     llm_budget,
                     cancel_check,
                 ),
+                timings=agent_timings,
             )
             debate_history.append(render_debate_argument(bull, f"Bull Researcher R{round_number}"))
 
@@ -435,6 +580,7 @@ def run_balanced_pipeline(
                     llm_budget,
                     cancel_check,
                 ),
+                timings=agent_timings,
             )
             debate_history.append(render_debate_argument(bear, f"Bear Researcher R{round_number}"))
 
@@ -467,6 +613,7 @@ def run_balanced_pipeline(
             llm_budget,
             cancel_check,
         ),
+        timings=agent_timings,
     )
     investment_plan = _research_plan_to_markdown(research_plan)
 
@@ -495,6 +642,7 @@ def run_balanced_pipeline(
             llm_budget,
             cancel_check,
         ),
+        timings=agent_timings,
     )
     trader_plan = render_trader_proposal(trader_proposal)
 
@@ -520,6 +668,12 @@ def run_balanced_pipeline(
             )[:8],
             mitigation_plan="Keep sizing small, require a clear stop-loss, and rerun balanced/deep mode before a high-conviction trade.",
             confidence=0.45,
+        )
+        _set_agent_timing(
+            agent_timings,
+            "risk_analysts",
+            status="fallback",
+            warning="Risk committee skipped in fast mode; conservative risk fallback applied.",
         )
     else:
         risk_report = _run_tracked(
@@ -557,6 +711,7 @@ def run_balanced_pipeline(
                 llm_budget,
                 cancel_check,
             ),
+            timings=agent_timings,
         )
         for round_number in range(2, extra_risk_rounds + 2):
             prior_risk_md = _risk_to_markdown(risk_report)
@@ -592,6 +747,7 @@ def run_balanced_pipeline(
                     llm_budget,
                     cancel_check,
                 ),
+                timings=agent_timings,
             )
     risk_md = _risk_to_markdown(risk_report)
 
@@ -620,22 +776,18 @@ def run_balanced_pipeline(
                 confidence_score=0.35,
                 rating=PortfolioRating.HOLD,
                 executive_summary=(
-                    f"The final rating for {ticker} is Hold because the balanced pipeline could not generate a fully reliable structured model decision, so the safest conclusion is to protect capital instead of forcing a trade. "
-                    "The system may have collected market, news, social, and fundamental inputs, but the final decision still needs manual review before any money is put at risk, especially when provider quality can vary. "
-                    "The biggest risk is acting on incomplete or fallback analysis, because a weak model response can hide missing prices, stale data, unsupported trade levels, or a broken risk/reward setup. "
-                    "The recommended action is to avoid new exposure, keep allocation at zero for new trades, do not set an artificial entry, and wait for a verified rerun before using a stop-loss or take-profit. "
-                    f"The selected horizon is {time_horizon_text}, but this fallback result should be treated as a safety message, not a real investment recommendation, until the dashboard shows clean validated output."
+                    f"The final rating for {ticker} is Hold because the pipeline reached the portfolio stage through a safety fallback, so the most responsible recommendation is to preserve capital rather than force a trade from incomplete evidence. The single most important reason is output reliability: the backend could not treat the final model response as a complete investment decision. "
+                    "Recent price action should be treated as context only, not as confirmation, because the final structured model response could not be verified. Any move in the share price may reflect normal market noise, provider gaps, or speculative positioning, and it should not be classified as fundamentally supported until a clean rerun connects the move to fresh earnings, news, or technical evidence. "
+                    "The fundamental picture is also incomplete in this fallback path. Revenue trend, profitability, cash flow quality, and balance sheet strength may have been collected earlier, but the final decision layer did not validate them into a reliable investment conclusion or translate them into a clean position plan. "
+                    "The risk level is High because missing or partial final output can hide stale prices, unsupported trade levels, weak risk/reward, and incomplete fundamental data. The two main risks are acting on an unverified model response and using fallback vendor data as if it were complete market evidence. "
+                    f"The action right now is to avoid any new entry, keep allocation at zero for fresh trades, and rerun the analysis until the dashboard shows clean data quality and validated trade levels. Existing holders should maintain only if their separate risk plan already allows it for the selected {time_horizon_text} horizon."
                 ),
                 investment_thesis=(
-                    f"{ticker} should stay on hold until the analysis can be verified because the final portfolio decision was produced by the fallback path, not by a clean structured model response. "
-                    "In plain terms, the application is saying that it does not have enough reliable final evidence to support a Buy or Sell call. "
-                    "The earlier pipeline may still have gathered price action, technical context, news signals, social sentiment, and fundamental information, but those inputs are not enough when the last decision layer fails or returns something incomplete. "
-                    "A good trade needs more than an interesting story; it needs a current price anchor, a clear entry, a valid stop-loss, a realistic take-profit, and a risk/reward setup that the backend can validate. "
-                    "The bull case is that the collected data may still contain useful clues once the model response is repaired or regenerated, especially if the market trend, analyst debate, and risk committee point in the same direction. "
-                    "The bear case is more important right now because acting on a fallback can create false confidence, especially if data quality flags show missing provider results, partial fundamentals, stale news, or unsupported trade levels. "
-                    "Since the bear case is about process reliability rather than market opinion, it wins the decision. "
-                    "The practical action plan is simple: open no new position, keep suggested allocation at zero, avoid averaging down or chasing momentum, and rerun the analysis after the model and data providers complete normally. "
-                    "Only after a clean result appears should the user consider entry, sizing, stop-loss, and profit-taking rules. Until then, patience is the only useful trade."
+                    f"{ticker} should be treated as a Hold until the analysis can be regenerated cleanly because this output came from a portfolio fallback rather than a fully verified model decision. The business may still have analyzable operations, segments, and industry positioning, but this fallback does not safely confirm those details. For dashboard purposes, the company profile and segment view should be read in the dedicated profile and fundamental tabs, not inferred from this safety message. "
+                    "Recent price movement is not enough to justify a new trade here. The pipeline may have collected market data, technical indicators, and news context, yet the final decision layer failed to convert those inputs into a dependable call. That means any recent price strength or weakness should be treated as unconfirmed until a rerun identifies whether it came from earnings, valuation change, institutional flows, sector rotation, or simple speculation. Without that link, chasing the move would be theatrical portfolio management, which is just gambling with nicer fonts. "
+                    "The fundamental view is therefore incomplete. Revenue growth, profit margins, cash flow quality, and balance sheet strength might exist in the collected data, but the final structured response did not validate them with enough reliability to support Buy or Sell. A sound thesis needs specific numbers, period labels, and provider quality checks before it can say whether profitability is improving, leverage is safe, or cash generation supports the valuation. When those checks are uncertain, the correct conclusion is caution. "
+                    "The technical view is also defensive. Current price can be displayed if the backend has a valid quote, but entry, support, resistance, stop loss, and take profit should not be invented. A valid setup needs a clear level, a protective stop, and a reward target that passes the backend risk/reward rules. If that structure is absent, the correct trade is no trade, because pretending otherwise simply converts missing evidence into decorative confidence. "
+                    "The main risks are macro volatility, sector-level sentiment shifts, and company-specific uncertainty caused by incomplete final validation. These risks matter because weak data can make a bad setup look clean. The recommendation would improve only after a clean rerun shows complete provider data, a validated technical setup, and consistent analyst, trader, and risk committee evidence. It would downgrade further if price data remains missing, fundamentals stay partial, or risk controls fail validation. Until those conditions change, open no new position, do not average down, and use the next clean analysis as the trigger for any upgrade."
                 ),
                 suggested_allocation_percent=0.0,
                 entry_price=None,
@@ -672,6 +824,7 @@ def run_balanced_pipeline(
             llm_budget,
             cancel_check,
         ),
+        timings=agent_timings,
     )
 
     portfolio_decision = normalize_trade_levels(
@@ -687,6 +840,8 @@ def run_balanced_pipeline(
         data_quality=data.data_quality.model_dump(),
     )
 
+    technical_levels = _build_technical_levels(portfolio_decision, data.technical_entry)
+    agent_pipeline, total_pipeline_seconds = _agent_pipeline_from_timings(agent_timings)
     budget_snapshot = llm_budget.snapshot()
 
     return {
@@ -716,6 +871,9 @@ def run_balanced_pipeline(
             "count": 3 + (3 * extra_risk_rounds),
         },
         "portfolio_decision": portfolio_decision,
+        "technical_levels": technical_levels.model_dump(),
+        "agent_pipeline": agent_pipeline,
+        "total_pipeline_seconds": total_pipeline_seconds,
         "data_quality": data.data_quality.model_dump(),
         "data_sources": data.data_sources or {},
         "data_limitations": data.data_limitations or [],

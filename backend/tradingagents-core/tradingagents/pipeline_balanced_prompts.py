@@ -461,8 +461,19 @@ Keep language simple and practical. Include an action plan, risk controls, price
 - NEW ENTRY ACTION must describe whether a new exposure should be opened. For existing positions, it must not imply a separate new trade. It should describe add-only, maintain, trim, or exit context.
 - Backend validation remains the final source of truth for position action fields.
 - Use Hold when no safe actionable setup exists.
-- executive_summary must be 150-200 words in one paragraph. No bullet points.
-- investment_thesis must be 250-350 words as flowing paragraphs. No bullet points and no headers.
+- executive_summary must be 250-300 words in exactly 5 parts, written as continuous paragraphs without headers, section numbers, or bullet points.
+  Part 1 — Recommendation (1-2 sentences): State the signal and the single most important reason behind it.
+  Part 2 — Price Action (2-3 sentences): Describe recent price movement and distinguish fundamental-driven movement from speculative movement.
+  Part 3 — Fundamental Context (2-3 sentences): Briefly state revenue trend, profitability, and financial health.
+  Part 4 — Risk View (2-3 sentences): State the overall risk level and name the top 2 risk factors.
+  Part 5 — Final Action (1-2 sentences): State clearly and concisely what the user should do right now.
+- investment_thesis must be 400-450 words in exactly 6 parts, written as continuous paragraphs without headers, section numbers, or bullet points.
+  Part 1 — Business Overview (2-3 sentences): Describe what the company does, main segments, and market position.
+  Part 2 — Recent Price Movement (3-4 sentences): Explain recent price action and whether the movement is fundamentally supported or speculative.
+  Part 3 — Fundamental View (4-5 sentences): Cover revenue growth, profit margins, cashflow quality, and balance sheet strength with numbers where available.
+  Part 4 — Technical View (3-4 sentences): Identify support, resistance, moving average conditions, and trend direction.
+  Part 5 — Risk Assessment (3-4 sentences): Explain the top 3 risks: one macro risk, one sector risk, and one company-specific risk.
+  Part 6 — Final Positioning (2-3 sentences): State the recommended action and the conditions that would upgrade or downgrade the recommendation.
 - Do not return short placeholder text. These fields are displayed directly in the analysis dashboard and report.
 
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import TypeVar
@@ -73,17 +74,40 @@ def _run_tracked(
     message: str,
     func: Callable[[], T],
     cancel_check=None,
+    timings: dict[str, dict] | None = None,
 ) -> T:
     _check_cancel(cancel_check)
     _emit_progress(callback, agent_id, "started", message)
+    start = time.perf_counter()
     try:
         result = func()
     except AnalysisCancelledError:
+        if timings is not None:
+            timings[agent_id] = {
+                "name": AGENT_LABELS.get(agent_id, agent_id.replace("_", " ").title()),
+                "status": "error",
+                "duration_seconds": round(time.perf_counter() - start, 1),
+                "warning": "Agent was cancelled before completion.",
+            }
         _emit_progress(callback, agent_id, "failed", f"{AGENT_LABELS.get(agent_id, agent_id)} cancelled.")
         raise
     except Exception:
+        if timings is not None:
+            timings[agent_id] = {
+                "name": AGENT_LABELS.get(agent_id, agent_id.replace("_", " ").title()),
+                "status": "error",
+                "duration_seconds": round(time.perf_counter() - start, 1),
+                "warning": f"{AGENT_LABELS.get(agent_id, agent_id)} failed.",
+            }
         _emit_progress(callback, agent_id, "failed", f"{AGENT_LABELS.get(agent_id, agent_id)} failed.")
         raise
     _check_cancel(cancel_check)
+    if timings is not None:
+        timings[agent_id] = {
+            "name": AGENT_LABELS.get(agent_id, agent_id.replace("_", " ").title()),
+            "status": "ok",
+            "duration_seconds": round(time.perf_counter() - start, 1),
+            "warning": None,
+        }
     _emit_progress(callback, agent_id, "completed", f"{AGENT_LABELS.get(agent_id, agent_id)} completed.")
     return result

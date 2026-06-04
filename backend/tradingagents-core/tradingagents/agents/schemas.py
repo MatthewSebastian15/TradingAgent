@@ -300,6 +300,26 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Technical Levels
+# ---------------------------------------------------------------------------
+
+
+class TechnicalLevels(BaseModel):
+    current_price: float = Field(description="Current market price anchor for the analysis.")
+    nearest_support: float | None = Field(default=None)
+    nearest_resistance: float | None = Field(default=None)
+    suggested_stop_loss: float | None = Field(default=None)
+    invalidation_level: float | None = Field(default=None)
+    entry_range_low: float | None = Field(default=None)
+    entry_range_high: float | None = Field(default=None)
+    risk_reward_ratio: str | None = Field(
+        default=None,
+        description='Display value such as "1:2.1" or "Not attractive".',
+    )
+    technical_levels_available: bool = Field(default=True)
+
+
+# ---------------------------------------------------------------------------
 # Portfolio Manager
 # ---------------------------------------------------------------------------
 
@@ -335,34 +355,32 @@ class PortfolioDecision(BaseModel):
     )
     executive_summary: str = Field(
         description=(
-            "A single paragraph of 150-200 words summarizing the final decision. "
-            "State the rating, strongest reason, key supporting data, biggest risk, "
-            "recommended action, entry strategy, position sizing, stop-loss context, "
-            "time horizon, and the catalyst that will confirm or invalidate the thesis. "
-            "Write in plain, everyday language. Avoid jargon. No bullet points."
+            "Write 250-300 words in exactly 5 continuous paragraphs without headers, numbering, or bullets. "
+            "Part 1 states the recommendation and the single most important reason. "
+            "Part 2 explains recent price action and separates fundamental movement from speculation. "
+            "Part 3 summarizes revenue trend, profitability, and financial health. "
+            "Part 4 states overall risk level and the top two risk factors. "
+            "Part 5 gives the immediate action the user should take."
         ),
     )
 
     @field_validator("executive_summary")
     @classmethod
     def executive_summary_word_range(cls, v: str) -> str:
-        return _validate_word_range("executive_summary", v, 150, 200)
+        return _validate_word_range("executive_summary", v, 250, 300)
 
     investment_thesis: str = Field(
         description=(
-            "A thorough, easy-to-understand explanation of WHY this trade makes sense. "
-            "Write 250-350 words as flowing paragraphs with no bullet points and no headers. "
-            "Explain what the company does, why it matters now, the biggest tailwind or headwind, "
-            "at least three specific metrics from the analysts' reports, the bear case, "
-            "why the bull or bear case wins overall, and the full action plan including entry, "
-            "allocation, stop-loss, and take-profit. Use simple words."
+            "Write 400-450 words in exactly 6 continuous paragraphs without headers, numbering, or bullets. "
+            "Cover business overview, recent price movement, fundamental view, technical view, risk assessment, "
+            "and final positioning. Include specific numbers where available and clearly state upgrade or downgrade conditions."
         ),
     )
 
     @field_validator("investment_thesis")
     @classmethod
     def investment_thesis_word_range(cls, v: str) -> str:
-        return _validate_word_range("investment_thesis", v, 250, 350)
+        return _validate_word_range("investment_thesis", v, 400, 450)
 
     suggested_allocation_percent: float | None = Field(
         default=None,

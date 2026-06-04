@@ -81,7 +81,7 @@ function toHistorySummary(entry) {
     schema_version: HISTORY_SCHEMA_VERSION,
     job_id: textOrNull(entry.job_id),
     request_id: textOrNull(entry.request_id),
-    ticker: textOrNull(entry.ticker),
+    ticker: textOrNull(entry.normalized_ticker) || textOrNull(entry.ticker),
     market: textOrNull(entry.market),
     trade_date: textOrNull(entry.trade_date),
     status: textOrNull(entry.status) || 'completed',
