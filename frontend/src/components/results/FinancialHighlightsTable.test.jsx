@@ -14,9 +14,12 @@ describe('FinancialHighlightsTable', () => {
     );
 
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
+    expect(screen.getAllByText('Unit').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('FY22').length).toBeGreaterThan(0);
     expect(screen.getAllByText('FY23').length).toBeGreaterThan(0);
     expect(screen.getAllByText('FY26Q1').length).toBeGreaterThan(0);
     expect(screen.getByText('Revenue')).toBeTruthy();
+    expect(screen.getAllByText('USD Mn').length).toBeGreaterThan(0);
     expect(screen.getByText('Latest Market Snapshot')).toBeTruthy();
     expect(screen.getByText('Market & Scale')).toBeTruthy();
     expect(screen.getByText('Growth')).toBeTruthy();
@@ -27,6 +30,7 @@ describe('FinancialHighlightsTable', () => {
     expect(screen.getByText('126.00%')).toBeTruthy();
     expect(screen.getByText('0.45x')).toBeTruthy();
     expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('x').length).toBeGreaterThan(0);
     expect(
       Array.from(container.querySelectorAll('tbody tr td:first-child')).map(
         (cell) => cell.textContent

@@ -974,11 +974,24 @@ def _safe_external_http_url(value: Any) -> str | None:
     return text if parts.scheme.lower() in {"http", "https"} and hostname else None
 
 
+def _normalize_financial_highlight_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "label": _clean_text(row.get("label")) or _clean_text(row.get("key")) or "Metric",
+        "unit": _clean_text(row.get("unit")) or "-",
+        "values": row.get("values") if isinstance(row.get("values"), dict) else {},
+    }
+
+
 def _financial_highlights(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
     periods = [period for period in value.get("periods", []) if isinstance(period, dict) and period.get("key")]
-    rows = [row for row in value.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)]
+    rows = [
+        _normalize_financial_highlight_row(row)
+        for row in value.get("rows", [])
+        if isinstance(row, dict) and isinstance(row.get("values"), dict)
+    ]
     if not periods or not rows:
         return None
     sections = []
@@ -986,7 +999,9 @@ def _financial_highlights(value: Any) -> dict[str, Any] | None:
         if not isinstance(section, dict):
             continue
         section_rows = [
-            row for row in section.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)
+            _normalize_financial_highlight_row(row)
+            for row in section.get("rows", [])
+            if isinstance(row, dict) and isinstance(row.get("values"), dict)
         ]
         if section_rows:
             sections.append({**section, "rows": section_rows})
@@ -1022,27 +1037,31 @@ def _metric_detail_display(value: Any, fallback: Any = None) -> str:
 def _financial_trend_rows(value: Any) -> list[dict[str, Any]]:
     payload = _as_dict(value)
     details = _as_dict(payload.get("metric_details"))
+    periods = [period for period in payload.get("periods", []) if isinstance(period, dict) and period.get("key")]
     definitions = [
-        ("revenue", "Revenue"),
-        ("revenue_growth_percent", "Revenue Growth"),
-        ("ebitda", "EBITDA"),
-        ("ebitda_margin_percent", "EBITDA Margin"),
-        ("net_profit", "Net Profit"),
-        ("net_profit_growth_percent", "Net Profit Growth"),
-        ("net_profit_margin_percent", "Net Profit Margin"),
-        ("roe_percent", "ROE"),
-        ("eps", "EPS"),
-        ("bvps", "BVPS"),
-        ("der", "DER"),
+        ("revenue", "Revenue", payload.get("scale_label") or ""),
+        ("revenue_growth_percent", "Revenue Growth", "%"),
+        ("ebitda", "EBITDA", payload.get("scale_label") or ""),
+        ("ebitda_margin_percent", "EBITDA Margin", "%"),
+        ("net_profit", "Net Profit", payload.get("scale_label") or ""),
+        ("net_profit_growth_percent", "Net Profit Growth", "%"),
+        ("net_profit_margin_percent", "Net Profit Margin", "%"),
+        ("roe_percent", "ROE", "%"),
+        ("eps", "EPS", f"{payload.get('currency') or ''}/share"),
+        ("bvps", "BVPS", f"{payload.get('currency') or ''}/share"),
+        ("der", "DER", "x"),
     ]
-    return [
-        {
-            "label": label,
-            "values": [_metric_detail_display(cell) for cell in details.get(key, [])],
-        }
-        for key, label in definitions
-        if isinstance(details.get(key), list)
-    ]
+    rows = []
+    for key, label, unit in definitions:
+        cells = details.get(key)
+        if not isinstance(cells, list):
+            continue
+        values = [
+            _metric_detail_display(cells[index] if index < len(cells) else None)
+            for index, _period in enumerate(periods or cells)
+        ]
+        rows.append({"label": label, "unit": unit or "-", "values": values})
+    return rows
 
 
 def _scenario_rows(value: Any) -> list[dict[str, str]]:

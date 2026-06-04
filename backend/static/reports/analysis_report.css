@@ -233,6 +233,9 @@ footer {
 }
 
 .financial-highlights-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
   font-size: 8.5pt;
   white-space: nowrap;
 }
@@ -240,6 +243,7 @@ footer {
 .financial-highlights-table th,
 .financial-highlights-table td {
   padding: 5px 6px;
+  border: 1px solid #ddd;
   text-align: right;
   white-space: nowrap;
 }
@@ -247,8 +251,22 @@ footer {
 .financial-highlights-table th:first-child,
 .financial-highlights-table td:first-child {
   text-align: left;
+  min-width: 150px;
 }
 
-.financial-highlights-table th:first-child {
-  width: auto;
+.financial-highlights-table th:nth-child(2),
+.financial-highlights-table td:nth-child(2) {
+  text-align: left;
+  min-width: 70px;
+}
+
+@media print {
+  .financial-highlights-table {
+    font-size: 8pt;
+  }
+
+  .financial-highlights-table th,
+  .financial-highlights-table td {
+    padding: 4px 5px;
+  }
 }

@@ -140,6 +140,7 @@
               <thead>
                 <tr>
                   <th>Metric</th>
+                  <th>Unit</th>
                   {% for period in report.financial_highlights.periods %}<th>{{ period.label }}</th>{% endfor %}
                 </tr>
               </thead>
@@ -147,6 +148,7 @@
                 {% for row in section.rows %}
                   <tr>
                     <td>{{ row.label }}</td>
+                    <td>{{ row.unit or '-' }}</td>
                     {% for period in report.financial_highlights.periods %}
                       {% set cell = row['values'].get(period.key) %}
                       <td>{{ cell.display if cell else 'N/A' }}</td>
@@ -164,10 +166,10 @@
           <h2>Financial Trend Analysis</h2>
           {% if report.financial_trends.unit_note %}<p class="muted">{{ report.financial_trends.unit_note }}</p>{% endif %}
           <table class="financial-highlights-table">
-            <thead><tr><th>Metric</th>{% for period in report.financial_trends.periods %}<th>{{ period.label }}</th>{% endfor %}</tr></thead>
+            <thead><tr><th>Metric</th><th>Unit</th>{% for period in report.financial_trends.periods %}<th>{{ period.label }}</th>{% endfor %}</tr></thead>
             <tbody>
               {% for row in report.financial_trend_rows %}
-                <tr><td>{{ row.label }}</td>{% for value in row['values'] %}<td>{{ value }}</td>{% endfor %}</tr>
+                <tr><td>{{ row.label }}</td><td>{{ row.unit or '-' }}</td>{% for value in row['values'] %}<td>{{ value }}</td>{% endfor %}</tr>
               {% endfor %}
             </tbody>
           </table>

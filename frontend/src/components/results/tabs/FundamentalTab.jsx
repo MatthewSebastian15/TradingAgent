@@ -82,17 +82,17 @@ MetricSection.propTypes = {
 function FinancialTrends({ payload }) {
   if (!payload?.periods?.length || !payload?.metric_details) return null;
   const rows = [
-    ['revenue', 'Revenue'],
-    ['revenue_growth_percent', 'Revenue Growth'],
-    ['ebitda', 'EBITDA'],
-    ['ebitda_margin_percent', 'EBITDA Margin'],
-    ['net_profit', 'Net Profit'],
-    ['net_profit_growth_percent', 'Net Profit Growth'],
-    ['net_profit_margin_percent', 'Net Profit Margin'],
-    ['roe_percent', 'ROE'],
-    ['eps', 'EPS'],
-    ['bvps', 'BVPS'],
-    ['der', 'DER'],
+    ['revenue', 'Revenue', payload.scale_label || ''],
+    ['revenue_growth_percent', 'Revenue Growth', '%'],
+    ['ebitda', 'EBITDA', payload.scale_label || ''],
+    ['ebitda_margin_percent', 'EBITDA Margin', '%'],
+    ['net_profit', 'Net Profit', payload.scale_label || ''],
+    ['net_profit_growth_percent', 'Net Profit Growth', '%'],
+    ['net_profit_margin_percent', 'Net Profit Margin', '%'],
+    ['roe_percent', 'ROE', '%'],
+    ['eps', 'EPS', `${payload.currency || ''}/share`],
+    ['bvps', 'BVPS', `${payload.currency || ''}/share`],
+    ['der', 'DER', 'x'],
   ];
   return (
     <section className="px-4 py-4 border-b border-bloomberg-border space-y-3">
@@ -101,29 +101,42 @@ function FinancialTrends({ payload }) {
         <p className="font-mono text-[11px] text-bloomberg-muted">{payload.unit_note}</p>
       )}
       <div className="overflow-x-auto border border-bloomberg-border">
-        <table className="min-w-full text-xs font-mono">
+        <table className="min-w-[980px] w-full text-xs font-mono border-collapse">
           <thead>
             <tr className="text-bloomberg-muted border-b border-bloomberg-border">
-              <th className="text-left px-3 py-2">Metric</th>
+              <th className="sticky left-0 z-20 bg-black text-left px-3 py-2 whitespace-nowrap min-w-[190px]">
+                Metric
+              </th>
+              <th className="sticky left-[190px] z-20 bg-black text-left px-3 py-2 whitespace-nowrap min-w-[90px] border-r border-bloomberg-border">
+                Unit
+              </th>
               {payload.periods.map((period) => (
-                <th key={period.key} className="text-right px-3 py-2 whitespace-nowrap">
+                <th key={period.key} className="text-right px-3 py-2 whitespace-nowrap min-w-[86px]">
                   {period.label}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map(([key, label]) => (
+            {rows.map(([key, label, unit]) => (
               <tr key={key} className="border-b border-bloomberg-border border-opacity-50">
-                <td className="px-3 py-2 text-bloomberg-white whitespace-nowrap">{label}</td>
-                {(payload.metric_details[key] || []).map((cell, index) => (
-                  <td
-                    key={`${key}-${index}`}
-                    className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap"
-                  >
-                    {displayMetric(cell)}
-                  </td>
-                ))}
+                <td className="sticky left-0 z-10 bg-black px-3 py-2 text-bloomberg-white whitespace-nowrap min-w-[190px]">
+                  {label}
+                </td>
+                <td className="sticky left-[190px] z-10 bg-black px-3 py-2 text-bloomberg-muted whitespace-nowrap min-w-[90px] border-r border-bloomberg-border">
+                  {unit || '-'}
+                </td>
+                {payload.periods.map((period, index) => {
+                  const cell = payload.metric_details[key]?.[index];
+                  return (
+                    <td
+                      key={`${key}-${period.key}`}
+                      className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap min-w-[86px]"
+                    >
+                      {displayMetric(cell)}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

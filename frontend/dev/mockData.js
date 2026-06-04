@@ -336,8 +336,9 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
   currency: 'USD',
   scale: 'billion',
   analysis_date: '2026-05-18',
-  period_logic: 'analysis_quarter',
+  period_logic: 'fy22_to_analysis_quarter',
   periods: [
+    { key: 'FY22', label: 'FY22', type: 'annual', year: 2022, quarter: null },
     { key: 'FY23', label: 'FY23', type: 'annual', year: 2023, quarter: null },
     { key: 'FY24', label: 'FY24', type: 'annual', year: 2024, quarter: null },
     { key: 'FY25', label: 'FY25', type: 'annual', year: 2025, quarter: null },
@@ -349,6 +350,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'Revenue',
       unit: 'USD Bn',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable', source_vendor: null },
         FY23: { value: 60.9, display: '60.9', status: 'reported', source_vendor: 'mock' },
         FY24: { value: 130.5, display: '130.5', status: 'reported', source_vendor: 'mock' },
         FY25: { value: 208.7, display: '208.7', status: 'reported', source_vendor: 'mock' },
@@ -365,6 +367,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'Revenue Growth (%)',
       unit: '%',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: { value: 126, display: '126', status: 'calculated', formula: 'Revenue YoY growth' },
         FY24: {
           value: 114.3,
@@ -381,6 +384,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'EBITDA',
       unit: 'USD Bn',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: { value: 32.9, display: '32.9', status: 'reported', source_vendor: 'mock' },
         FY24: { value: 88.2, display: '88.2', status: 'reported', source_vendor: 'mock' },
         FY25: { value: 141.9, display: '141.9', status: 'reported', source_vendor: 'mock' },
@@ -392,6 +396,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'EBITDA Margin (%)',
       unit: '%',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: { value: 54, display: '54', status: 'calculated', formula: 'EBITDA / Revenue' },
         FY24: { value: 67.6, display: '67.6', status: 'calculated', formula: 'EBITDA / Revenue' },
         FY25: { value: 68, display: '68', status: 'calculated', formula: 'EBITDA / Revenue' },
@@ -403,6 +408,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'Net Profit',
       unit: 'USD Bn',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: { value: 29.8, display: '29.8', status: 'reported', source_vendor: 'mock' },
         FY24: { value: 72.9, display: '72.9', status: 'reported', source_vendor: 'mock' },
         FY25: { value: 113.4, display: '113.4', status: 'reported', source_vendor: 'mock' },
@@ -414,6 +420,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'Net Profit Growth (%)',
       unit: '%',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: {
           value: 581.3,
           display: '581.3',
@@ -440,6 +447,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'Net Profit Margin (%)',
       unit: '%',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: {
           value: 48.9,
           display: '48.9',
@@ -466,6 +474,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'ROE (%)',
       unit: '%',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: {
           value: 69.2,
           display: '69.2',
@@ -492,6 +501,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'EPS',
       unit: 'USD/share',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: { value: 1.19, display: '1.19', status: 'reported', source_vendor: 'mock' },
         FY24: { value: 2.94, display: '2.94', status: 'reported', source_vendor: 'mock' },
         FY25: { value: 4.62, display: '4.62', status: 'reported', source_vendor: 'mock' },
@@ -503,6 +513,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'BVPS',
       unit: 'USD/share',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: {
           value: 1.73,
           display: '1.73',
@@ -529,6 +540,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'DER',
       unit: 'Ratio',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: {
           value: 0.45,
           display: '0.45',
@@ -555,6 +567,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
       label: 'Dividend Yield (%)',
       unit: '%',
       values: {
+        FY22: { value: null, display: 'N/A', status: 'unavailable' },
         FY23: {
           value: 0.03,
           display: '0.03',
@@ -578,13 +591,14 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
     },
   ],
   notes: [
-    'Periods are selected dynamically from the analysis date quarter.',
+    'Periods start from FY22 and extend dynamically based on the analysis date quarter.',
+    'Older historical periods remain visible even when vendor data is unavailable; missing values are shown as N/A.',
     'Unavailable values are shown as N/A.',
   ],
   data_quality: {
     status: 'partial',
     missing_metrics: [],
-    missing_periods: ['FY26Q1'],
+    missing_periods: ['FY22', 'FY26Q1'],
     sources_used: ['mock'],
   },
 };
