@@ -876,6 +876,7 @@ def run_balanced_pipeline(
         "total_pipeline_seconds": total_pipeline_seconds,
         "data_quality": data.data_quality.model_dump(),
         "data_sources": data.data_sources or {},
+        "data_freshness": data.data_freshness or {},
         "data_limitations": data.data_limitations or [],
         "vendor_attempts": data.vendor_attempts or {},
         "request_budget": data.request_budget or {},

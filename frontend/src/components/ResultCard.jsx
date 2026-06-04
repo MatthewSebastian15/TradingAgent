@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
+import ConfidenceBreakdown from './ConfidenceBreakdown';
+import DisclaimerFooter from './DisclaimerFooter';
 import ExportReportButtons from './ExportReportButtons';
+import RerunPanel from './RerunPanel';
 import MetricBox from './results/MetricBox';
 import NoticeBox from './results/NoticeBox';
 import SectionHeader from './results/SectionHeader';
@@ -10,7 +13,6 @@ import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
 import RiskDataQualityTab from './results/tabs/RiskDataQualityTab';
 import ResultTabs from './results/tabs/ResultTabs';
-import { REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['BUY', 'SELL', 'Buy', 'Overweight', 'Sell', 'Underweight']);
@@ -783,22 +785,18 @@ AgentPipeline.propTypes = {
   totalSeconds: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
 };
 
-function ReportDisclaimer() {
-  return (
-    <div className="px-4 py-4 border-b border-bloomberg-border bg-black bg-opacity-20">
-      <SectionHeader label="DISCLAIMER" />
-      <p className="font-mono text-[11px] text-bloomberg-muted leading-relaxed whitespace-pre-line">
-        {REPORT_DISCLAIMER}
-      </p>
-    </div>
-  );
-}
-
-export default function ResultCard({ result, enableReportExport = true, mockReport = false }) {
+export default function ResultCard({
+  result,
+  enableReportExport = true,
+  mockReport = false,
+  onRerunSubmit = null,
+  rerunRunning = false,
+}) {
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [thesisExpanded, setThesisExpanded] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [activeTab, setActiveTab] = useState('analisis');
+  const [showRerunPanel, setShowRerunPanel] = useState(false);
   const disabledTabs = [];
 
   if (!result) return null;
@@ -891,6 +889,16 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
               Created: {createdAtLabel}
             </span>
           )}
+          {onRerunSubmit && (
+            <button
+              type="button"
+              disabled={rerunRunning}
+              onClick={() => setShowRerunPanel((value) => !value)}
+              className="font-mono text-xs border border-bloomberg-border px-2.5 py-1.5 tracking-wider text-bloomberg-muted hover:text-bloomberg-white disabled:opacity-50"
+            >
+              ↺ RE-RUN
+            </button>
+          )}
           {enableReportExport && (result.job_id || result.request_id) && (
             <ExportReportButtons
               resourceId={result.job_id || result.request_id}
@@ -902,7 +910,22 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
         </div>
       </div>
 
-      <ResultTabs activeTab={activeTab} onTabChange={setActiveTab} disabledTabs={disabledTabs} />
+      {onRerunSubmit && (
+        <RerunPanel
+          result={result}
+          open={showRerunPanel}
+          onClose={() => setShowRerunPanel(false)}
+          onSubmit={onRerunSubmit}
+          running={rerunRunning}
+        />
+      )}
+
+      <ResultTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        disabledTabs={disabledTabs}
+        tabStatus={result.tab_status}
+      />
 
       {activeTab === 'analisis' && (
         <>
@@ -962,6 +985,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
                   <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
                 )}
               </div>
+              <ConfidenceBreakdown breakdown={result.confidence_breakdown} />
               {result.price_is_fallback && (
                 <div className="mt-2 font-mono text-[11px] text-bloomberg-amber leading-relaxed">
                   ⚠ Harga tidak tersedia saat analisis dibuat. Menampilkan harga penutupan terakhir.
@@ -1111,8 +1135,6 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
             totalSeconds={result.total_pipeline_seconds}
           />
 
-          <ReportDisclaimer />
-
           {/* Raw JSON debug */}
           {canShowRaw && (
             <div className="px-4 py-3">
@@ -1143,6 +1165,8 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
       {activeTab === 'news' && <NewsTab result={result} />}
 
       {activeTab === 'risk_data_quality' && <RiskDataQualityTab result={result} />}
+
+      <DisclaimerFooter />
     </div>
   );
 }
@@ -1151,4 +1175,6 @@ ResultCard.propTypes = {
   result: PropTypes.object,
   enableReportExport: PropTypes.bool,
   mockReport: PropTypes.bool,
+  onRerunSubmit: PropTypes.func,
+  rerunRunning: PropTypes.bool,
 };

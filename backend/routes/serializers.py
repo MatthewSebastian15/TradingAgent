@@ -110,6 +110,10 @@ SUMMARY_FIELDS = {
     "news_context",
     "analysis_overview",
     "risk_data_quality",
+    "confidence_breakdown",
+    "data_freshness",
+    "tab_status",
+    "analysis_params",
 }
 
 AGENT_SEQUENCE = [
@@ -628,6 +632,289 @@ def _analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _model_to_dict(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if hasattr(value, "model_dump"):
+        try:
+            value = value.model_dump()
+        except Exception:
+            return {}
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _clamp_int_score(value: Any, default: int | None = None) -> int | None:
+    if value is None or value == "":
+        return default
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not numeric == numeric:
+        return default
+    if 0 <= numeric <= 1:
+        numeric *= 100
+    return max(0, min(100, int(round(numeric))))
+
+
+def _status_to_score(status: Any) -> int:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"ok", "fresh", "complete", "completed", "available"}:
+        return 80
+    if normalized in {"partial", "stale", "fallback", "limited", "market_closed"}:
+        return 55
+    if normalized in {"missing", "outdated", "unavailable", "error", "invalid"}:
+        return 25
+    return 50
+
+
+def _price_momentum_score(payload: dict[str, Any]) -> int:
+    technical_entry = payload.get("technical_entry") if isinstance(payload.get("technical_entry"), dict) else {}
+    for key in ("entry_quality_score", "score", "technical_score"):
+        score = _clamp_int_score(technical_entry.get(key))
+        if score is not None:
+            return score
+
+    performance = payload.get("price_performance") if isinstance(payload.get("price_performance"), dict) else {}
+    for key in ("period_return_percent", "one_month_return_percent", "return_percent"):
+        value = performance.get(key)
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        return max(0, min(100, int(round(50 + numeric * 2))))
+    return 50
+
+
+def _fundamental_quality_score(payload: dict[str, Any]) -> int:
+    data_quality = _coerce_data_quality(payload.get("data_quality"))
+    if data_quality.get("fundamentals"):
+        return _status_to_score(data_quality.get("fundamentals"))
+    data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
+    fundamentals = data_sources.get("fundamentals") if isinstance(data_sources.get("fundamentals"), dict) else {}
+    return _status_to_score(fundamentals.get("completeness"))
+
+
+def _news_sentiment_score(payload: dict[str, Any]) -> int:
+    impact = payload.get("news_impact") if isinstance(payload.get("news_impact"), dict) else {}
+    for key in ("sentiment_score", "score"):
+        score = _clamp_int_score(impact.get(key))
+        if score is not None:
+            return score
+    label = str(impact.get("sentiment_label") or impact.get("overall_sentiment") or "").lower()
+    if any(word in label for word in ("positive", "bullish", "favorable")):
+        return 70
+    if any(word in label for word in ("negative", "bearish", "unfavorable")):
+        return 35
+    if label:
+        return 50
+    data_quality = _coerce_data_quality(payload.get("data_quality"))
+    return _status_to_score(data_quality.get("news"))
+
+
+def _risk_level_component_score(payload: dict[str, Any]) -> int:
+    volatility_score = _clamp_int_score(payload.get("volatility_score"))
+    if volatility_score is not None:
+        return max(0, min(100, 100 - volatility_score))
+    level = str(payload.get("volatility_level") or "").strip().lower()
+    if level in {"low", "very low"}:
+        return 80
+    if level == "medium":
+        return 60
+    if level == "high":
+        return 35
+    if level == "very high":
+        return 20
+    return 50
+
+
+def _data_quality_score(payload: dict[str, Any]) -> int:
+    risk_payload = payload.get("risk_data_quality") if isinstance(payload.get("risk_data_quality"), dict) else {}
+    risk_quality = risk_payload.get("data_quality") if isinstance(risk_payload.get("data_quality"), dict) else {}
+    score = _clamp_int_score(risk_quality.get("score"))
+    if score is not None:
+        return score
+
+    data_quality = _coerce_data_quality(payload.get("data_quality"))
+    statuses = [
+        data_quality.get("price_data"),
+        data_quality.get("fundamentals"),
+        data_quality.get("news"),
+        data_quality.get("volatility_data"),
+        data_quality.get("llm_output"),
+    ]
+    scores = [_status_to_score(item) for item in statuses if item is not None]
+    return int(round(sum(scores) / len(scores))) if scores else 50
+
+
+def _normalize_confidence_breakdown(value: Any) -> dict[str, Any]:
+    data = _model_to_dict(value)
+    if not data:
+        return {}
+    normalized: dict[str, Any] = {}
+    mapping = {
+        "price_momentum": "price_momentum",
+        "fundamental_quality": "fundamental_quality",
+        "news_sentiment": "news_sentiment",
+        "risk_level_score": "risk_level_score",
+        "risk": "risk_level_score",
+        "data_quality": "data_quality",
+        "overall": "overall",
+    }
+    for source, target in mapping.items():
+        if source in data and target not in normalized:
+            score = _clamp_int_score(data.get(source))
+            if score is not None:
+                normalized[target] = score
+    return normalized
+
+
+def _build_confidence_breakdown(payload: dict[str, Any], final_state: dict[str, Any]) -> dict[str, int]:
+    supplied = _normalize_confidence_breakdown(payload.get("confidence_breakdown")) or _normalize_confidence_breakdown(
+        final_state.get("confidence_breakdown")
+    )
+    components = {
+        "price_momentum": supplied.get("price_momentum", _price_momentum_score(payload)),
+        "fundamental_quality": supplied.get("fundamental_quality", _fundamental_quality_score(payload)),
+        "news_sentiment": supplied.get("news_sentiment", _news_sentiment_score(payload)),
+        "risk_level_score": supplied.get("risk_level_score", _risk_level_component_score(payload)),
+        "data_quality": supplied.get("data_quality", _data_quality_score(payload)),
+    }
+    confidence_percent = _confidence_score_percent(payload.get("confidence_score"))
+    if supplied.get("overall") is not None:
+        overall = supplied["overall"]
+    elif confidence_percent is not None:
+        overall = confidence_percent
+    else:
+        overall = int(
+            round(
+                components["price_momentum"] * 0.30
+                + components["fundamental_quality"] * 0.20
+                + components["news_sentiment"] * 0.15
+                + components["risk_level_score"] * 0.20
+                + components["data_quality"] * 0.15
+            )
+        )
+    return {**components, "overall": max(0, min(100, int(overall)))}
+
+
+def _date_from_any(value: Any) -> datetime | None:
+    parsed = _parse_datetime(value)
+    if parsed is not None:
+        return parsed
+    return None
+
+
+def _days_old(value: Any) -> int | None:
+    parsed = _date_from_any(value)
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    now = datetime.now(UTC)
+    return max(0, (now.date() - parsed.astimezone(UTC).date()).days)
+
+
+def _freshness_status_from_date(value: Any) -> str:
+    age_days = _days_old(value)
+    if age_days is None:
+        return "unknown"
+    if age_days < 30:
+        return "fresh"
+    if age_days <= 90:
+        return "stale"
+    return "outdated"
+
+
+def _period_end_from_label(label: Any) -> str | None:
+    text = str(label or "").strip().upper().replace(" ", "")
+    if not text:
+        return None
+    match = re.search(r"FY(\d{2,4})Q([1-4])", text)
+    if match:
+        year = int(match.group(1))
+        if year < 100:
+            year += 2000
+        quarter_end = {"1": "03-31", "2": "06-30", "3": "09-30", "4": "12-31"}[match.group(2)]
+        return f"{year}-{quarter_end}"
+    match = re.search(r"FY(\d{2,4})", text)
+    if match:
+        year = int(match.group(1))
+        if year < 100:
+            year += 2000
+        return f"{year}-12-31"
+    return None
+
+
+def _build_data_freshness(payload: dict[str, Any], final_state: dict[str, Any]) -> dict[str, Any]:
+    existing = final_state.get("data_freshness") if isinstance(final_state, dict) else None
+    if isinstance(existing, dict) and existing:
+        return existing
+
+    data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
+    price_source = data_sources.get("price") if isinstance(data_sources.get("price"), dict) else {}
+    fundamentals = data_sources.get("fundamentals") if isinstance(data_sources.get("fundamentals"), dict) else {}
+    news_source = data_sources.get("news") if isinstance(data_sources.get("news"), dict) else {}
+    macro_source = data_sources.get("macro") if isinstance(data_sources.get("macro"), dict) else {}
+
+    price_timestamp = payload.get("price_timestamp") or price_source.get("timestamp") or payload.get("current_price_as_of")
+    financial_period = fundamentals.get("last_period")
+    period_end_date = fundamentals.get("period_end_date") or _period_end_from_label(financial_period)
+    latest_article_date = news_source.get("latest_article_date")
+
+    market_status = str(payload.get("market_status") or "").lower()
+    price_type = "intraday" if market_status == "open" and not payload.get("price_is_fallback") else "previous_close"
+    if not payload.get("price_is_fallback") and market_status != "open":
+        price_type = price_source.get("method") or "daily"
+
+    return {
+        "price": {
+            "timestamp": price_timestamp,
+            "type": price_type,
+            "freshness_status": _freshness_status_from_date(price_timestamp),
+        },
+        "financials": {
+            "period": financial_period,
+            "period_end_date": period_end_date,
+            "freshness_status": _freshness_status_from_date(period_end_date),
+        },
+        "news": {
+            "lookback_days": news_source.get("lookback_days"),
+            "articles_count": news_source.get("articles_found") or 0,
+            "latest_article_date": latest_article_date,
+            "freshness_status": _freshness_status_from_date(latest_article_date),
+        },
+        "macro": {
+            "description": macro_source.get("description") or "Latest available from provider",
+            "freshness_status": "unknown",
+        },
+    }
+
+
+def _build_tab_status(payload: dict[str, Any]) -> dict[str, str]:
+    statuses = {
+        "analysis": "ok",
+        "profile": "ok",
+        "fundamental": "ok",
+        "chart_price": "ok",
+        "news": "ok",
+        "risk_data_quality": "ok",
+    }
+    data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
+    fundamentals = data_sources.get("fundamentals") if isinstance(data_sources.get("fundamentals"), dict) else {}
+    data_quality = _coerce_data_quality(payload.get("data_quality"))
+    if str(fundamentals.get("completeness") or data_quality.get("fundamentals") or "").lower() == "partial":
+        statuses["fundamental"] = "partial"
+
+    freshness = payload.get("data_freshness") if isinstance(payload.get("data_freshness"), dict) else {}
+    if any(
+        str(item.get("freshness_status") if isinstance(item, dict) else "").lower() in {"stale", "outdated"}
+        for item in freshness.values()
+    ):
+        statuses["risk_data_quality"] = "warning"
+    return statuses
+
+
 def _with_analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
     return {**payload, "analysis_overview": _analysis_overview(payload)}
 
@@ -645,6 +932,9 @@ def _with_analysis_overview_and_risk_data_quality(
     except Exception:
         logger.exception("Failed to build risk_data_quality response contract")
         enriched["risk_data_quality"] = {}
+    enriched["data_freshness"] = _build_data_freshness(enriched, final_state)
+    enriched["confidence_breakdown"] = _build_confidence_breakdown(enriched, final_state)
+    enriched["tab_status"] = _build_tab_status(enriched)
     return enriched
 
 
@@ -736,6 +1026,7 @@ def parse_final_result(
         "news": final_state.get("news") or final_state.get("news_context") or {},
         "news_context": final_state.get("news_context") or final_state.get("news") or {},
         "data_sources": final_state.get("data_sources") or {},
+        "data_freshness": final_state.get("data_freshness") or {},
         "technical_levels": final_state.get("technical_levels") or {},
         "agent_pipeline": final_state.get("agent_pipeline") or [],
         "total_pipeline_seconds": final_state.get("total_pipeline_seconds"),
@@ -841,6 +1132,7 @@ def parse_final_result(
             "price_target": getattr(pd_obj, "price_target", None),
             "time_horizon": configured_time_horizon or getattr(pd_obj, "time_horizon", None),
             "confidence_score": getattr(pd_obj, "confidence_score", None),
+            "confidence_breakdown": _model_to_dict(getattr(pd_obj, "confidence_breakdown", None)) or None,
             "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
             "entry_price": getattr(pd_obj, "entry_price", None),
             "stop_loss": getattr(pd_obj, "stop_loss", None),
@@ -916,6 +1208,21 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
     exchange = "IDX" if str(normalized_ticker).upper().endswith(".JK") or req.market == "ID" else "US" if req.market == "US" else None
     currency = "IDR" if exchange == "IDX" else "USD" if exchange == "US" else result_fields.get("price_currency")
 
+    analysis_params = {
+        "ticker": input_ticker,
+        "normalized_ticker": normalized_ticker,
+        "market": req.market,
+        "horizon": f"{req.time_horizon_months}M",
+        "trade_date": req.trade_date,
+        "debate_rounds": req.max_debate_rounds,
+        "max_debate_rounds": req.max_debate_rounds,
+        "analysis_depth": req.analysis_depth,
+        "response_detail": req.response_detail,
+        "has_existing_position": bool(req.has_existing_position) if req.has_existing_position is not None else False,
+        "position_quantity": req.position_quantity,
+        "average_entry_price": req.average_entry_price,
+    }
+
     payload = {
         "request_id": request_id,
         "input_ticker": input_ticker,
@@ -931,6 +1238,7 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
         "has_existing_position": bool(req.has_existing_position) if req.has_existing_position is not None else False,
         "position_quantity": req.position_quantity,
         "average_entry_price": req.average_entry_price,
+        "analysis_params": analysis_params,
         "agents_used": [agent[1] for agent in AGENT_SEQUENCE],
         **result_fields,
         "time_horizon_months": req.time_horizon_months,

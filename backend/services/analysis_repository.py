@@ -21,6 +21,27 @@ def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _confidence_score_percent(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if 0 <= numeric <= 1:
+        numeric *= 100
+    return max(0, min(100, int(round(numeric))))
+
+
+def _history_signal(result: dict[str, Any] | None, fallback: Any) -> str | None:
+    if isinstance(result, dict):
+        for key in ("display_signal", "final_decision", "decision", "rating"):
+            value = result.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return str(fallback).strip() if fallback else None
+
+
 def _write_lock_for_path(path: Path) -> threading.RLock:
     resolved = path.resolve(strict=False)
     with _WRITE_LOCKS_GUARD:
@@ -166,7 +187,7 @@ class AnalysisRepository:
                     time_horizon_months, analysis_depth, response_detail,
                     decision, recommendation, current_price, entry_price,
                     stop_loss, take_profit, rr_ratio, source_summary,
-                    status, created_at, created_at AS analysis_created_at,
+                    status, result_json, created_at, created_at AS analysis_created_at,
                     updated_at, exported_html_at, exported_pdf_at
                 FROM analyses
                 {where}
@@ -175,7 +196,15 @@ class AnalysisRepository:
                 """,
                 params,
             ).fetchall()
-        return [dict(row) for row in rows]
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            result = self._loads_dict(item.pop("result_json", None)) or {}
+            item["display_signal"] = _history_signal(result, item.get("decision"))
+            item["confidence_score"] = _confidence_score_percent(result.get("confidence_score"))
+            item["confidence_tier"] = result.get("confidence_tier") if isinstance(result.get("confidence_tier"), str) else None
+            items.append(item)
+        return items
 
     def delete_analysis(self, request_id: str) -> bool:
         with self._write_lock, self._connect() as conn:

@@ -75,6 +75,8 @@ Investment Thesis: Write 400-450 words in exactly 6 parts, written as continuous
 
 Return a confidence_score from 0.0 to 1.0. Lower it when reports are incomplete, risk controls are weak, or debate evidence is mixed.
 
+Also return confidence_breakdown as structured 0-100 integer scores for price_momentum, fundamental_quality, news_sentiment, risk_level_score, data_quality, and overall. Use risk_level_score so lower portfolio risk produces a higher score. The overall value must be a weighted average that is consistent with confidence_score after converting confidence_score to percent.
+
 Be decisive. Ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
 
         # Attempt structured output and capture the typed object.

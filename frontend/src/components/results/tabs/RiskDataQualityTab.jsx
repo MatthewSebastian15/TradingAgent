@@ -100,6 +100,99 @@ DataTable.propTypes = {
   rows: PropTypes.array,
 };
 
+function freshnessBadge(status) {
+  const normalized = String(status || 'unknown').toLowerCase();
+  if (normalized === 'fresh') return 'border-bloomberg-green text-bloomberg-green bg-bloomberg-green-dim';
+  if (normalized === 'stale') return 'border-bloomberg-amber text-bloomberg-amber bg-bloomberg-amber-dim';
+  if (normalized === 'outdated') return 'border-bloomberg-red text-bloomberg-red bg-bloomberg-red-dim';
+  return 'border-bloomberg-border text-bloomberg-muted bg-bloomberg-surface';
+}
+
+function formatDateTimeWib(value, includeTime = true) {
+  if (!hasValue(value)) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  if (!includeTime || String(value).length <= 10) return String(value).slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(date)
+    .reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+  return `${parts.year}-${parts.month}-${parts.day}  ${parts.hour}:${parts.minute} WIB`;
+}
+
+function DataFreshness({ freshness }) {
+  if (!freshness || typeof freshness !== 'object') return null;
+
+  const price = freshness.price || {};
+  const financials = freshness.financials || {};
+  const news = freshness.news || {};
+  const macro = freshness.macro || {};
+  const rows = [
+    {
+      label: 'Price Data',
+      detail: [formatDateTimeWib(price.timestamp), price.type].filter(Boolean).join(' · ') || 'No timestamp metadata',
+      status: price.freshness_status,
+    },
+    {
+      label: 'Financial Reports',
+      detail: [financials.period, financials.period_end_date ? `(${financials.period_end_date})` : null].filter(Boolean).join(' ') || 'No period metadata',
+      status: financials.freshness_status,
+    },
+    {
+      label: 'News Coverage',
+      detail: [
+        hasValue(news.lookback_days) ? `Last ${news.lookback_days} days` : null,
+        hasValue(news.articles_count) ? `${news.articles_count} articles` : null,
+        news.latest_article_date ? `latest ${formatDateTimeWib(news.latest_article_date, false)}` : null,
+      ].filter(Boolean).join(' · ') || 'No article metadata',
+      status: news.freshness_status,
+    },
+    {
+      label: 'Macro Data',
+      detail: macro.description || 'Latest available from provider',
+      status: macro.freshness_status,
+    },
+  ];
+
+  return (
+    <Section title="DATA FRESHNESS">
+      <div className="border border-bloomberg-border">
+        {rows.map((row) => {
+          const normalized = String(row.status || 'unknown').toLowerCase();
+          const needsWarning = ['stale', 'outdated'].includes(normalized);
+          return (
+            <div key={row.label} className="border-b border-bloomberg-border last:border-b-0 px-3 py-2">
+              <div className="grid grid-cols-1 gap-2 font-mono text-xs sm:grid-cols-[12rem_1fr_auto] sm:items-center">
+                <div className="text-bloomberg-muted">{row.label}</div>
+                <div className="text-bloomberg-white">{row.detail}</div>
+                <span className={`inline-flex w-fit items-center rounded-sm border px-2 py-0.5 text-[10px] tracking-wider ${freshnessBadge(normalized)}`}>
+                  ● {normalized.toUpperCase()}
+                </span>
+              </div>
+              {needsWarning && (
+                <div className="mt-1 font-mono text-[11px] text-bloomberg-amber">
+                  ⚠ Data may not reflect current conditions.
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
+
+DataFreshness.propTypes = {
+  freshness: PropTypes.object,
+};
+
 function RiskSummary({ payload }) {
   const summary = payload?.risk_summary || {};
   return (
@@ -399,6 +492,7 @@ export default function RiskDataQualityTab({ result }) {
 
   return (
     <>
+      <DataFreshness freshness={result?.data_freshness} />
       <RiskSummary payload={payload} />
       <BalanceSheetRiskSummary payload={payload} />
       <MarketRisk payload={payload} />

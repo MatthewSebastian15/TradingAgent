@@ -15,10 +15,12 @@ import {
 describe('ResultCard risk-engine contract', () => {
   afterEach(() => cleanup());
 
-  it('renders the report disclaimer in the analysis result card', () => {
+  it('renders the collapsed disclaimer footer and can expand the full disclaimer', () => {
     render(<ResultCard result={MOCK_HOLD_RESPONSE} />);
 
-    expect(screen.getByText('DISCLAIMER')).toBeTruthy();
+    expect(screen.getByText(/AI-generated analysis. Not financial advice/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /read full disclaimer/i }));
+    expect(screen.getByText('Full Disclaimer')).toBeTruthy();
     expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
     expect(screen.getByText(/may contain errors/i)).toBeTruthy();
   });
@@ -324,7 +326,7 @@ describe('ResultCard risk-engine contract', () => {
   it('keeps Hold result limited to status metrics', () => {
     render(<ResultCard result={MOCK_HOLD_RESPONSE} />);
 
-    expect(screen.getByText('◆ HOLD')).toBeTruthy();
+    expect(screen.getByText('◇ WAIT')).toBeTruthy();
     expect(screen.getAllByText('CURRENT PRICE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('VOLATILITY').length).toBeGreaterThan(0);
     expect(screen.getAllByText('VOLATILITY SCORE').length).toBeGreaterThan(0);
@@ -373,6 +375,8 @@ describe('ResultCard risk-engine contract', () => {
         result={{
           ...MOCK_HOLD_RESPONSE,
           llm_decision: 'Buy',
+          raw_ai_signal: 'BUY',
+          display_signal: 'WAIT',
           decision_adjusted: true,
           decision_adjusted_reason: 'Invalid risk reward structure',
         }}
@@ -381,7 +385,7 @@ describe('ResultCard risk-engine contract', () => {
 
     expect(screen.getByText('DECISION ADJUSTED')).toBeTruthy();
     expect(screen.getByText('Invalid risk reward structure')).toBeTruthy();
-    expect(screen.getByText(/LLM: BUY → FINAL:/)).toBeTruthy();
+    expect(screen.getByText(/LLM: BUY → FINAL: WAIT/)).toBeTruthy();
   });
 
   it('shows Phase 4 data quality score and vendor status', () => {
