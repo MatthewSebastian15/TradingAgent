@@ -197,11 +197,14 @@ function normalizeBackendHistory(entries) {
 }
 
 function decisionStyle(decision) {
-  if (decision === 'Buy' || decision === 'Overweight')
+  const normalized = String(decision || '').trim().toUpperCase();
+  if (normalized === 'BUY' || normalized === 'OVERWEIGHT')
     return 'text-bloomberg-green border-bloomberg-green';
-  if (decision === 'Sell' || decision === 'Underweight')
+  if (normalized === 'SELL' || normalized === 'UNDERWEIGHT')
     return 'text-bloomberg-red border-bloomberg-red';
-  return 'text-bloomberg-amber border-bloomberg-amber';
+  if (normalized === 'WAIT') return 'text-bloomberg-muted border-bloomberg-border';
+  if (normalized === 'REDUCE') return 'text-bloomberg-amber border-bloomberg-amber';
+  return 'text-bloomberg-orange border-bloomberg-orange';
 }
 
 function formatHistoryHorizon(months) {

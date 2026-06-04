@@ -2,7 +2,7 @@ import { formatPrice } from './formatting';
 import { safeExternalUrl } from './url';
 import { MOCK_REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 
-const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
+const ACTIONABLE_DECISIONS = new Set(['BUY', 'Buy', 'Overweight', 'SELL', 'Sell', 'Underweight']);
 const LEGACY_REPORT_FIELD_PATTERN = /\b(price target|risk per share|reward per share)\b/i;
 
 function hasValue(value) {
@@ -47,7 +47,7 @@ function arrayOfText(value) {
 }
 
 function finalDecision(result) {
-  return display(result?.final_decision || result?.decision || result?.rating || 'Hold');
+  return display(result?.display_signal || result?.final_decision || result?.decision || result?.rating || 'WAIT');
 }
 
 function riskRewardDisplay(result) {
@@ -299,6 +299,125 @@ function buildDataQualityRows(dataQuality = {}) {
   ];
 }
 
+function normalizedConfidencePercent(value) {
+  if (!hasValue(value)) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.max(0, Math.min(100, Math.round(numeric <= 1 ? numeric * 100 : numeric)));
+}
+
+function formatConfidence(score, label) {
+  const percent = normalizedConfidencePercent(score);
+  if (percent === null) return 'N/A';
+  return label ? `${percent}% — ${label}` : `${percent}%`;
+}
+
+function formatDateTimeWib(value, includeTime = true) {
+  if (!hasValue(value)) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return display(value);
+  if (!includeTime || String(value).length <= 10) return String(value).slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(date)
+    .reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} WIB`;
+}
+
+function buildConfidenceRows(result) {
+  const breakdown = result?.confidence_breakdown || {};
+  return [
+    row('Confidence', formatConfidence(result?.confidence_score, result?.confidence_label)),
+    row('Confidence Tier', result?.confidence_tier),
+    row('Price Momentum', breakdown.price_momentum),
+    row('Fundamental Quality', breakdown.fundamental_quality),
+    row('News Sentiment', breakdown.news_sentiment),
+    row('Risk Level Score', breakdown.risk_level_score),
+    row('Data Quality', breakdown.data_quality),
+    row('Overall', breakdown.overall),
+  ];
+}
+
+function buildVolatilityRows(result) {
+  return [
+    row('Volatility Score', hasValue(result?.volatility_score) ? `${result.volatility_score} / 100` : null),
+    row('Classification', result?.volatility_classification || result?.volatility_level),
+    row('Scale', result?.volatility_scale),
+    row('Lookback', hasValue(result?.volatility_lookback_days) ? `${result.volatility_lookback_days} days` : null),
+    row('Method', result?.volatility_method),
+  ];
+}
+
+function buildKeyLevelRows(levels = {}, result = {}) {
+  return [
+    row('Current Price', price(levels.current_price, result)),
+    row('Nearest Support', price(levels.nearest_support, result)),
+    row('Nearest Resistance', price(levels.nearest_resistance, result)),
+    row('Suggested Stop Loss', price(levels.suggested_stop_loss, result)),
+    row('Invalidation Level', price(levels.invalidation_level, result)),
+    row(
+      'Entry Range',
+      hasValue(levels.entry_range_low) && hasValue(levels.entry_range_high)
+        ? `${price(levels.entry_range_low, result)} - ${price(levels.entry_range_high, result)}`
+        : null
+    ),
+    row('Risk / Reward', levels.risk_reward_ratio),
+  ];
+}
+
+function buildDataSourceRows(sources = {}) {
+  return Object.entries(sources).map(([key, value]) =>
+    row(
+      key.replace(/_/g, ' ').toUpperCase(),
+      value && typeof value === 'object'
+        ? Object.entries(value)
+            .map(([itemKey, itemValue]) => `${itemKey}: ${display(itemValue)}`)
+            .join(' | ')
+        : value
+    )
+  );
+}
+
+function buildDataFreshnessRows(freshness = {}) {
+  const priceFreshness = freshness.price || {};
+  const financials = freshness.financials || {};
+  const news = freshness.news || {};
+  const macro = freshness.macro || {};
+  return [
+    row(
+      'Price Data',
+      `${formatDateTimeWib(priceFreshness.timestamp)} | ${display(priceFreshness.freshness_status)}`
+    ),
+    row(
+      'Financial Reports',
+      `${display(financials.period)} ${financials.period_end_date ? `(${financials.period_end_date})` : ''} | ${display(financials.freshness_status)}`
+    ),
+    row(
+      'News Coverage',
+      `Last ${display(news.lookback_days)} days | ${display(news.articles_count)} articles | latest ${display(news.latest_article_date)} | ${display(news.freshness_status)}`
+    ),
+    row('Macro Data', `${display(macro.description)} | ${display(macro.freshness_status)}`),
+  ];
+}
+
+function buildAgentPipelineRows(pipeline = []) {
+  return Array.isArray(pipeline)
+    ? pipeline.map((agent) =>
+        row(
+          agent.name,
+          `${display(agent.status)} | ${hasValue(agent.duration_seconds) ? `${agent.duration_seconds}s` : 'N/A'}${agent.warning ? ` | ${agent.warning}` : ''}`
+        )
+      )
+    : [];
+}
+
 function buildAnalystSections(result) {
   return [
     ['Market Analyst', result?.market_report],
@@ -324,19 +443,24 @@ export function buildMockReportContext(result = {}) {
 
   return {
     title: 'TradingAgent Mock Analysis Report',
-    request_id: display(result.request_id),
-    ticker: display(result.ticker),
+    request_id: display(result.request_id || result.id),
+    ticker: display(result.normalized_ticker || result.ticker),
     market: display(result.market),
+    company_name: display(result.company_name),
+    exchange: display(result.exchange),
     trade_date: display(result.trade_date),
     analysis_created_at: display(result.analysis_created_at || result.saved_at),
     generated_at: new Date().toISOString(),
     disclaimer: MOCK_REPORT_DISCLAIMER,
-    current_price: result.current_price,
-    current_price_display: price(result.current_price, result),
-    current_price_as_of: display(result.current_price_as_of || result.last_close_price_as_of),
-    current_price_source: display(result.current_price_source),
-    llm_decision: display(result.llm_decision),
-    final_decision: decision,
+    current_price: result.current_price ?? result.last_price,
+    current_price_display: price(result.current_price ?? result.last_price, result),
+    current_price_as_of: display(result.price_timestamp || result.current_price_as_of || result.last_close_price_as_of),
+    current_price_source: display(result.price_source || result.current_price_source),
+    llm_decision: display(result.raw_ai_signal || result.llm_decision),
+    final_decision: result.display_signal || decision,
+    raw_ai_signal: display(result.raw_ai_signal || result.llm_decision),
+    display_signal: display(result.display_signal || decision),
+    signal_context: display(result.signal_context),
     decision_adjusted: Boolean(result.decision_adjusted),
     decision_adjusted_reason: display(result.decision_adjusted_reason),
     trade_plan_valid: tradePlanValid,
@@ -344,19 +468,15 @@ export function buildMockReportContext(result = {}) {
     show_trade_plan: showTradePlan,
     executive_summary: textOrNull(result.executive_summary) || 'N/A',
     decision_rows: [
-      row('Final Decision', decision),
-      row('LLM Decision', result.llm_decision),
+      row('Display Signal', result.display_signal || decision),
+      row('Raw AI Signal', result.raw_ai_signal || result.llm_decision),
+      row('Signal Context', result.signal_context),
       row('Decision Adjusted', Boolean(result.decision_adjusted)),
       row('Decision Adjusted Reason', result.decision_adjusted_reason),
       row('Trade Plan Valid', tradePlanValid),
       row('Has Existing Position', Boolean(result.has_existing_position)),
-      row('Time Horizon', result.time_horizon),
-      row(
-        'Confidence',
-        hasValue(result.confidence_score)
-          ? `${Math.round(Number(result.confidence_score) * 100)}%`
-          : null
-      ),
+      row('Time Horizon', result.time_horizon || result.horizon),
+      row('Confidence', formatConfidence(result.confidence_score, result.confidence_label)),
       row(
         'Suggested Allocation',
         hasValue(result.suggested_allocation_percent)
@@ -364,6 +484,13 @@ export function buildMockReportContext(result = {}) {
           : null
       ),
     ],
+    confidence_rows: buildConfidenceRows(result),
+    volatility_rows: buildVolatilityRows(result),
+    key_level_rows: buildKeyLevelRows(result.technical_levels, result),
+    data_source_rows: buildDataSourceRows(result.data_sources),
+    data_freshness_rows: buildDataFreshnessRows(result.data_freshness),
+    agent_pipeline_rows: buildAgentPipelineRows(result.agent_pipeline),
+    total_pipeline_seconds: result.total_pipeline_seconds,
     action_plan_rows: showTradePlan ? buildMockActionPlanRows(result) : [],
     risk_rows: buildRiskRows(result, showTradePlan),
     validation_rows: [
@@ -997,6 +1124,8 @@ export function renderMockReportHtml(report) {
         <h1>${escapeHtml(report.title)}</h1>
         <div class="meta-grid">
           <div><span>Ticker</span>${escapeHtml(report.ticker)}</div>
+          <div><span>Company</span>${escapeHtml(report.company_name)}</div>
+          <div><span>Exchange</span>${escapeHtml(report.exchange)}</div>
           <div><span>Market</span>${escapeHtml(report.market)}</div>
           <div><span>Trade date</span>${escapeHtml(report.trade_date)}</div>
           <div><span>Generated at</span>${escapeHtml(report.generated_at)}</div>
@@ -1030,6 +1159,38 @@ export function renderMockReportHtml(report) {
             ? renderMetricGrid(report.action_plan_rows)
             : `<p class="muted">No actionable trade plan is available. Final decision: ${escapeHtml(report.final_decision)}.</p>`
         }
+      </section>
+
+      <section class="section">
+        <h2>Confidence Breakdown</h2>
+        <table><tbody>${renderRows(report.confidence_rows)}</tbody></table>
+      </section>
+
+      <section class="section">
+        <h2>Volatility Metadata</h2>
+        <table><tbody>${renderRows(report.volatility_rows)}</tbody></table>
+      </section>
+
+      <section class="section">
+        <h2>Key Levels</h2>
+        <table><tbody>${renderRows(report.key_level_rows)}</tbody></table>
+      </section>
+
+      ${
+        report.agent_pipeline_rows.length
+          ? `<section class="section"><h2>Agent Pipeline</h2><table><tbody>${renderRows(report.agent_pipeline_rows)}</tbody></table><p class="muted">Total pipeline time: ${escapeHtml(report.total_pipeline_seconds || 'N/A')}s</p></section>`
+          : ''
+      }
+
+      ${
+        report.data_source_rows.length
+          ? `<section class="section"><h2>Data Sources</h2><table><tbody>${renderRows(report.data_source_rows)}</tbody></table></section>`
+          : ''
+      }
+
+      <section class="section">
+        <h2>Data Freshness</h2>
+        <table><tbody>${renderRows(report.data_freshness_rows)}</tbody></table>
       </section>
 
       ${renderCompanyProfile(
