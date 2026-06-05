@@ -26,9 +26,10 @@ const PIPELINE_AGENTS = [
 
 const MOCK_ANALYSIS_CREATED_AT = '2026-05-18T09:00:00.000Z';
 
-
 export function resolveDisplaySignal(rawAiSignal, hasExistingPosition, rebalancingAction = null) {
-  const signal = String(rawAiSignal || 'HOLD').toUpperCase().trim();
+  const signal = String(rawAiSignal || 'HOLD')
+    .toUpperCase()
+    .trim();
   const action = String(rebalancingAction || '').trim();
 
   if (!hasExistingPosition) {
@@ -1485,7 +1486,9 @@ function createMockTechnicalEntry(chart) {
 }
 
 function mockNewsScopeLabel(scope) {
-  return String(scope || 'company').replace(/_/g, ' ').toUpperCase();
+  return String(scope || 'company')
+    .replace(/_/g, ' ')
+    .toUpperCase();
 }
 
 function makeMockHighImpactNews(index, ticker = 'GOTO.JK') {
@@ -1548,8 +1551,7 @@ function makeMockFullNews(index, ticker = 'GOTO.JK', scope = 'company', override
         : 'Included as related full news but below high-impact threshold.'),
     summary: overrides.summary || `Mock full news summary ${index}.`,
     url: overrides.url || `https://example.com/${ticker.toLowerCase()}-full-${index}`,
-    normalized_url:
-      overrides.normalized_url || `example.com/${ticker.toLowerCase()}-full-${index}`,
+    normalized_url: overrides.normalized_url || `example.com/${ticker.toLowerCase()}-full-${index}`,
     normalized_title:
       overrides.normalized_title || `full news ${ticker.toLowerCase()} article ${index}`,
     dedupe_key: overrides.dedupe_key || `full-${ticker}-${index}`,
@@ -1563,7 +1565,10 @@ function createMockNewsImpact({ relatedNews, news, ticker }) {
   const merged = [...relatedItems, ...contextItems].filter((item) => item?.title && item?.url);
   const seen = new Set();
   const deduped = merged.filter((item) => {
-    const key = String(item.dedupe_key || item.normalized_url || item.url || item.title).replace(/\?.*$/, '');
+    const key = String(item.dedupe_key || item.normalized_url || item.url || item.title).replace(
+      /\?.*$/,
+      ''
+    );
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -1591,7 +1596,11 @@ function createMockNewsImpact({ relatedNews, news, ticker }) {
       url: item.url,
       normalized_url: item.normalized_url || item.url,
       normalized_title: item.normalized_title || String(item.title).toLowerCase(),
-      dedupe_key: item.dedupe_key || item.normalized_url || item.url || `full-${normalizedTicker}-${index + 1}`,
+      dedupe_key:
+        item.dedupe_key ||
+        item.normalized_url ||
+        item.url ||
+        `full-${normalizedTicker}-${index + 1}`,
     })
   );
 
@@ -1730,7 +1739,9 @@ function confidenceTier(value) {
 }
 
 function normalizeRawAiSignal(value) {
-  const raw = String(value || 'HOLD').toUpperCase().trim();
+  const raw = String(value || 'HOLD')
+    .toUpperCase()
+    .trim();
   if (raw === 'OVERWEIGHT') return 'BUY';
   if (raw === 'UNDERWEIGHT') return 'SELL';
   if (['BUY', 'HOLD', 'SELL', 'AVOID', 'NEUTRAL'].includes(raw)) return raw;
@@ -1761,7 +1772,8 @@ function createMockConfidenceBreakdown(result) {
   const riskScore = Math.max(0, Math.min(100, 100 - Number(result.volatility_score || 45)));
   const newsUnavailable = result.data_quality?.news === 'unavailable';
   return {
-    price_momentum: result.final_decision === 'Sell' ? 35 : result.final_decision === 'Hold' ? 55 : 74,
+    price_momentum:
+      result.final_decision === 'Sell' ? 35 : result.final_decision === 'Hold' ? 55 : 74,
     fundamental_quality: result.financial_highlights?.data_quality?.status === 'partial' ? 58 : 78,
     news_sentiment: newsUnavailable ? 30 : result.final_decision === 'Sell' ? 38 : 66,
     risk_level_score: riskScore,
@@ -1772,7 +1784,9 @@ function createMockConfidenceBreakdown(result) {
 
 function createMockDataFreshness(result) {
   const latestArticleDate = result.news?.articles?.[0]?.published_at?.slice(0, 10) || '2026-05-17';
-  const periods = Array.isArray(result.financial_highlights?.periods) ? result.financial_highlights.periods : [];
+  const periods = Array.isArray(result.financial_highlights?.periods)
+    ? result.financial_highlights.periods
+    : [];
   const latestPeriod = periods.length ? periods[periods.length - 1] : {};
   return {
     price: {
@@ -1799,7 +1813,9 @@ function createMockDataFreshness(result) {
 }
 
 function createMockTabStatus(result, dataFreshness) {
-  const hasStaleFreshness = Object.values(dataFreshness || {}).some((item) => ['stale', 'outdated'].includes(String(item?.freshness_status || '').toLowerCase()));
+  const hasStaleFreshness = Object.values(dataFreshness || {}).some((item) =>
+    ['stale', 'outdated'].includes(String(item?.freshness_status || '').toLowerCase())
+  );
   return {
     analysis: 'ok',
     profile: 'ok',
@@ -1818,7 +1834,9 @@ function createMockAnalysisParams(result) {
     horizon: `${result.time_horizon_months || 1}M`,
     trade_date: result.trade_date,
     debate_rounds: 3,
-    analysis_depth: ['fast', 'balanced', 'deep'].includes(result.analysis_depth) ? result.analysis_depth : 'balanced',
+    analysis_depth: ['fast', 'balanced', 'deep'].includes(result.analysis_depth)
+      ? result.analysis_depth
+      : 'balanced',
     response_detail: result.response_detail || 'full',
     has_existing_position: Boolean(result.has_existing_position),
     position_quantity: result.position_quantity ?? null,
@@ -1826,22 +1844,36 @@ function createMockAnalysisParams(result) {
   };
 }
 
-function createMockPhase3(completed, overrides) {
-  const pricePerformance = overrides.price_performance || completed.price_chart?.summary || {};
-  const technicalEntry =
-    overrides.technical_entry || createMockTechnicalEntry(completed.price_chart || {});
-  const newsImpact =
-    overrides.news_impact ||
-    createMockNewsImpact({
-      relatedNews: completed.related_news,
-      news: completed.news,
-      ticker: completed.ticker,
-    });
-  const catalystTracker = overrides.catalyst_tracker || createMockCatalystTracker(newsImpact);
-  const analystConsensus =
-    overrides.analyst_consensus || createMockAnalystConsensus(completed.ticker);
-  const dataFreshness = overrides.data_freshness || createMockDataFreshness(completed);
-  const displaySignal = overrides.display_signal || displaySignalForMock(completed);
+function hasOwnOverride(overrides = {}, key) {
+  return Object.prototype.hasOwnProperty.call(overrides, key);
+}
+
+function createMockPhase3(completed, overrides = {}) {
+  const pricePerformance = hasOwnOverride(overrides, 'price_performance')
+    ? overrides.price_performance
+    : completed.price_chart?.summary || {};
+  const technicalEntry = hasOwnOverride(overrides, 'technical_entry')
+    ? overrides.technical_entry
+    : createMockTechnicalEntry(completed.price_chart || {});
+  const newsImpact = hasOwnOverride(overrides, 'news_impact')
+    ? overrides.news_impact
+    : createMockNewsImpact({
+        relatedNews: completed.related_news,
+        news: completed.news,
+        ticker: completed.ticker,
+      });
+  const catalystTracker = hasOwnOverride(overrides, 'catalyst_tracker')
+    ? overrides.catalyst_tracker
+    : createMockCatalystTracker(newsImpact);
+  const analystConsensus = hasOwnOverride(overrides, 'analyst_consensus')
+    ? overrides.analyst_consensus
+    : createMockAnalystConsensus(completed.ticker);
+  const dataFreshness = hasOwnOverride(overrides, 'data_freshness')
+    ? overrides.data_freshness
+    : createMockDataFreshness(completed);
+  const displaySignal = hasOwnOverride(overrides, 'display_signal')
+    ? overrides.display_signal
+    : displaySignalForMock(completed);
 
   return {
     price_performance: pricePerformance,
@@ -1849,7 +1881,8 @@ function createMockPhase3(completed, overrides) {
     news_impact: newsImpact,
     catalyst_tracker: catalystTracker,
     analyst_consensus: analystConsensus,
-    raw_ai_signal: overrides.raw_ai_signal || completed.final_decision || completed.decision || 'Hold',
+    raw_ai_signal:
+      overrides.raw_ai_signal || completed.final_decision || completed.decision || 'Hold',
     display_signal: displaySignal,
     signal_context:
       overrides.signal_context ||
@@ -2127,9 +2160,10 @@ function createMockRiskDataQuality(result) {
   };
 }
 
-
 function normalizeInputTicker(ticker) {
-  return String(ticker || '').replace(/\.JK$/i, '').toUpperCase();
+  return String(ticker || '')
+    .replace(/\.JK$/i, '')
+    .toUpperCase();
 }
 
 function createMockAgentPipeline(result) {
@@ -2148,8 +2182,10 @@ function createMockAgentPipeline(result) {
 
 function createMockTechnicalLevels(result) {
   const currentPrice = result.current_price ?? result.last_price ?? null;
-  const support = result.technical_entry?.support ?? result.price_chart?.summary?.period_low ?? null;
-  const resistance = result.technical_entry?.resistance ?? result.price_chart?.summary?.period_high ?? null;
+  const support =
+    result.technical_entry?.support ?? result.price_chart?.summary?.period_low ?? null;
+  const resistance =
+    result.technical_entry?.resistance ?? result.price_chart?.summary?.period_high ?? null;
   const stopLoss = result.stop_loss ?? null;
   const entry = result.trade_plan_valid ? result.entry_price : null;
 
@@ -2206,7 +2242,10 @@ function createSimpleFundamentalsAlias(financialHighlights = {}) {
               (item) => (item.label || item.key) === period
             );
             const cell = row.values?.[sourcePeriod?.key || period];
-            return [period, cell?.status === 'unavailable' ? null : cell?.display ?? cell?.value ?? null];
+            return [
+              period,
+              cell?.status === 'unavailable' ? null : (cell?.display ?? cell?.value ?? null),
+            ];
           })
         );
         return { metric: row.label, ...values };
@@ -2264,40 +2303,81 @@ function createMockProductionContract(result, overrides = {}) {
   const ticker = result.ticker || overrides.normalized_ticker || 'NVDA';
   const profile = result.company_profile || {};
   const rawAiSignal = normalizeRawAiSignal(
-    overrides.raw_ai_signal || result.raw_ai_signal || result.final_decision || result.decision || result.rating
+    overrides.raw_ai_signal ||
+      result.raw_ai_signal ||
+      result.final_decision ||
+      result.decision ||
+      result.rating
   );
   const displaySignal =
     overrides.display_signal ||
     resolveDisplaySignal(rawAiSignal, result.has_existing_position, result.rebalancing_action);
-  const pipeline = overrides.agent_pipeline || result.agent_pipeline || createMockAgentPipeline(result);
-  const dataFreshness = overrides.data_freshness || result.data_freshness || createMockDataFreshness(result);
+  const pipeline =
+    overrides.agent_pipeline || result.agent_pipeline || createMockAgentPipeline(result);
+  const dataFreshness =
+    overrides.data_freshness || result.data_freshness || createMockDataFreshness(result);
 
   return {
     id: overrides.id || result.id || result.request_id,
     input_ticker: overrides.input_ticker || result.input_ticker || normalizeInputTicker(ticker),
     normalized_ticker: overrides.normalized_ticker || result.normalized_ticker || ticker,
-    company_name: overrides.company_name || result.company_name || profile.company_name || profile.name || ticker,
-    exchange: overrides.exchange || result.exchange || profile.exchange || (ticker.endsWith('.JK') ? 'IDX' : 'NASDAQ'),
-    currency: overrides.currency || result.currency || profile.currency || (ticker.endsWith('.JK') ? 'IDR' : 'USD'),
+    company_name:
+      overrides.company_name ||
+      result.company_name ||
+      profile.company_name ||
+      profile.name ||
+      ticker,
+    exchange:
+      overrides.exchange ||
+      result.exchange ||
+      profile.exchange ||
+      (ticker.endsWith('.JK') ? 'IDX' : 'NASDAQ'),
+    currency:
+      overrides.currency ||
+      result.currency ||
+      profile.currency ||
+      (ticker.endsWith('.JK') ? 'IDR' : 'USD'),
     market: result.market,
     horizon: overrides.horizon || result.horizon || `${result.time_horizon_months || 1}M`,
-    created_at: overrides.created_at || result.created_at || result.analysis_created_at || result.saved_at,
+    created_at:
+      overrides.created_at || result.created_at || result.analysis_created_at || result.saved_at,
     last_price: overrides.last_price ?? result.last_price ?? result.current_price,
     price_currency:
-      overrides.price_currency || result.price_currency || result.currency || profile.currency || (ticker.endsWith('.JK') ? 'IDR' : 'USD'),
-    price_source: overrides.price_source || result.price_source || result.current_price_source || 'mock:yfinance:last_close',
+      overrides.price_currency ||
+      result.price_currency ||
+      result.currency ||
+      profile.currency ||
+      (ticker.endsWith('.JK') ? 'IDR' : 'USD'),
+    price_source:
+      overrides.price_source ||
+      result.price_source ||
+      result.current_price_source ||
+      'mock:yfinance:last_close',
     price_timestamp:
-      overrides.price_timestamp || result.price_timestamp || result.current_price_as_of || result.trade_date,
+      overrides.price_timestamp ||
+      result.price_timestamp ||
+      result.current_price_as_of ||
+      result.trade_date,
     price_is_fallback: Boolean(overrides.price_is_fallback ?? result.price_is_fallback ?? false),
     market_status: overrides.market_status || result.market_status || 'closed',
     raw_ai_signal: rawAiSignal,
     display_signal: displaySignal,
     signal_context:
-      overrides.signal_context || result.signal_context || signalContextForMock(rawAiSignal, result.has_existing_position, displaySignal),
-    confidence_label: overrides.confidence_label || result.confidence_label || confidenceLabel(result.confidence_score),
-    confidence_tier: overrides.confidence_tier || result.confidence_tier || confidenceTier(result.confidence_score),
+      overrides.signal_context ||
+      result.signal_context ||
+      signalContextForMock(rawAiSignal, result.has_existing_position, displaySignal),
+    confidence_label:
+      overrides.confidence_label ||
+      result.confidence_label ||
+      confidenceLabel(result.confidence_score),
+    confidence_tier:
+      overrides.confidence_tier ||
+      result.confidence_tier ||
+      confidenceTier(result.confidence_score),
     confidence_breakdown:
-      overrides.confidence_breakdown || result.confidence_breakdown || createMockConfidenceBreakdown(result),
+      overrides.confidence_breakdown ||
+      result.confidence_breakdown ||
+      createMockConfidenceBreakdown(result),
     volatility_scale: overrides.volatility_scale || result.volatility_scale || '0-100',
     volatility_method:
       overrides.volatility_method ||
@@ -2306,29 +2386,45 @@ function createMockProductionContract(result, overrides = {}) {
     volatility_lookback_days:
       overrides.volatility_lookback_days || result.volatility_lookback_days || 20,
     volatility_classification:
-      overrides.volatility_classification || result.volatility_classification || result.volatility_level || 'Medium',
+      overrides.volatility_classification ||
+      result.volatility_classification ||
+      result.volatility_level ||
+      'Medium',
     mini_risk_summary:
       overrides.mini_risk_summary ||
       result.mini_risk_summary ||
       `${result.volatility_level || 'Medium'}. Maintain risk controls because this is mock data.`,
     action_status: overrides.action_status || result.action_status || displaySignal,
-    technical_levels: overrides.technical_levels || result.technical_levels || createMockTechnicalLevels(result),
+    technical_levels:
+      overrides.technical_levels || result.technical_levels || createMockTechnicalLevels(result),
     agent_pipeline: pipeline,
     total_pipeline_seconds:
       overrides.total_pipeline_seconds ||
       result.total_pipeline_seconds ||
-      Number(pipeline.reduce((sum, item) => sum + Number(item.duration_seconds || 0), 0).toFixed(1)),
-    data_sources: overrides.data_sources || result.data_sources || createMockDataSources({ ...result, data_freshness: dataFreshness }),
+      Number(
+        pipeline.reduce((sum, item) => sum + Number(item.duration_seconds || 0), 0).toFixed(1)
+      ),
+    data_sources:
+      overrides.data_sources ||
+      result.data_sources ||
+      createMockDataSources({ ...result, data_freshness: dataFreshness }),
     data_freshness: dataFreshness,
-    analysis_params: overrides.analysis_params || result.analysis_params || createMockAnalysisParams(result),
-    tab_status: overrides.tab_status || result.tab_status || createMockTabStatus(result, dataFreshness),
+    analysis_params:
+      overrides.analysis_params || result.analysis_params || createMockAnalysisParams(result),
+    tab_status:
+      overrides.tab_status || result.tab_status || createMockTabStatus(result, dataFreshness),
     profile: overrides.profile || result.profile || profile,
     fundamentals:
-      overrides.fundamentals || result.fundamentals || createSimpleFundamentalsAlias(result.financial_highlights),
-    chart_price: overrides.chart_price || result.chart_price || createChartPriceAlias(result.price_chart),
+      overrides.fundamentals ||
+      result.fundamentals ||
+      createSimpleFundamentalsAlias(result.financial_highlights),
+    chart_price:
+      overrides.chart_price || result.chart_price || createChartPriceAlias(result.price_chart),
     news_items: overrides.news_items || result.news_items || createNewsItemsAlias(result),
     key_reasons_paragraph:
-      overrides.key_reasons_paragraph || result.key_reasons_paragraph || createMockKeyReasonsParagraph(result),
+      overrides.key_reasons_paragraph ||
+      result.key_reasons_paragraph ||
+      createMockKeyReasonsParagraph(result),
     disclaimer:
       overrides.disclaimer ||
       result.disclaimer ||
@@ -3019,7 +3115,11 @@ function stripGeneratedContractFields(base = {}) {
 }
 
 function withOverrides(base, overrides) {
-  return completeMockAnalysis({ ...stripGeneratedContractFields(base), full_decision: null, ...overrides });
+  return completeMockAnalysis({
+    ...stripGeneratedContractFields(base),
+    full_decision: null,
+    ...overrides,
+  });
 }
 
 const MOCK_BBRI_COMPANY_PROFILE = {

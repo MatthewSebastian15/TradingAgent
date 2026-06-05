@@ -65,7 +65,9 @@ function asReasonItems(value) {
 
 function buildKeyReasonsParagraph(result = {}) {
   const overview = result.analysis_overview || {};
-  const direct = normalizeInlineText(overview.key_reasons_paragraph || result.key_reasons_paragraph);
+  const direct = normalizeInlineText(
+    overview.key_reasons_paragraph || result.key_reasons_paragraph
+  );
   if (direct) return truncateReasonWords(direct, 125);
 
   const items = [
@@ -83,7 +85,9 @@ function buildKeyReasonsParagraph(result = {}) {
 }
 
 function finalDecision(result) {
-  return display(result?.display_signal || result?.final_decision || result?.decision || result?.rating || 'WAIT');
+  return display(
+    result?.display_signal || result?.final_decision || result?.decision || result?.rating || 'WAIT'
+  );
 }
 
 function riskRewardDisplay(result) {
@@ -221,17 +225,16 @@ function buildTechnicalEntryRows(technical, result) {
 
 function buildRelatedNewsItems(relatedNews) {
   if (!Array.isArray(relatedNews?.items)) return [];
-  return dedupeNewsItems(relatedNews.items)
-    .map((item) => ({
-      title: display(item.title),
-      publisher: display(item.publisher),
-      published_at: display(item.published_at),
-      source: display(item.source),
-      event_type: display(item.event_type),
-      summary: display(item.summary),
-      relevance_reason: display(item.relevance_reason),
-      url: safeExternalUrl(item.url),
-    }));
+  return dedupeNewsItems(relatedNews.items).map((item) => ({
+    title: display(item.title),
+    publisher: display(item.publisher),
+    published_at: display(item.published_at),
+    source: display(item.source),
+    event_type: display(item.event_type),
+    summary: display(item.summary),
+    relevance_reason: display(item.relevance_reason),
+    url: safeExternalUrl(item.url),
+  }));
 }
 
 function newsDedupeKey(item) {
@@ -317,7 +320,10 @@ function buildNewsImpactRows(newsImpact) {
   return [
     row('Overall Sentiment', newsImpact.overall_sentiment),
     row('Sentiment Score', newsImpact.sentiment_score),
-    row('High Impact Count', newsImpact.high_impact_count || newsImpact.high_impact_news?.length || 0),
+    row(
+      'High Impact Count',
+      newsImpact.high_impact_count || newsImpact.high_impact_news?.length || 0
+    ),
     row('Full News Count', newsImpact.full_news_count || newsImpact.full_news_list?.length || 0),
     row('News Count', newsImpact.news_count),
     row('Deduplicated Count', newsImpact.deduplicated_count),
@@ -459,10 +465,16 @@ function buildConfidenceRows(result) {
 
 function buildVolatilityRows(result) {
   return [
-    row('Volatility Score', hasValue(result?.volatility_score) ? `${result.volatility_score} / 100` : null),
+    row(
+      'Volatility Score',
+      hasValue(result?.volatility_score) ? `${result.volatility_score} / 100` : null
+    ),
     row('Classification', result?.volatility_classification || result?.volatility_level),
     row('Scale', result?.volatility_scale),
-    row('Lookback', hasValue(result?.volatility_lookback_days) ? `${result.volatility_lookback_days} days` : null),
+    row(
+      'Lookback',
+      hasValue(result?.volatility_lookback_days) ? `${result.volatility_lookback_days} days` : null
+    ),
     row('Method', result?.volatility_method),
   ];
 }
@@ -549,7 +561,9 @@ export function buildMockReportContext(result = {}) {
     disclaimer: MOCK_REPORT_DISCLAIMER,
     current_price: result.current_price ?? result.last_price,
     current_price_display: price(result.current_price ?? result.last_price, result),
-    current_price_as_of: display(result.price_timestamp || result.current_price_as_of || result.last_close_price_as_of),
+    current_price_as_of: display(
+      result.price_timestamp || result.current_price_as_of || result.last_close_price_as_of
+    ),
     current_price_source: display(result.price_source || result.current_price_source),
     llm_decision: display(result.raw_ai_signal || result.llm_decision),
     final_decision: result.display_signal || decision,
@@ -788,8 +802,9 @@ function renderFinancialTrends(payload) {
         .map(
           ([key, label, unit]) =>
             `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(unit || '-')}</td>${payload.periods
-              .map((period, index) =>
-                `<td>${escapeHtml(metricDetailDisplay(payload.metric_details[key]?.[index]))}</td>`
+              .map(
+                (period, index) =>
+                  `<td>${escapeHtml(metricDetailDisplay(payload.metric_details[key]?.[index]))}</td>`
               )
               .join('')}</tr>`
         )

@@ -107,7 +107,10 @@ function toHistorySummary(entry) {
     trade_date: textOrNull(entry.trade_date),
     status: textOrNull(entry.status) || 'completed',
     decision: textOrNull(entry.decision),
-    display_signal: textOrNull(entry.display_signal) || textOrNull(entry.final_decision) || textOrNull(entry.decision),
+    display_signal:
+      textOrNull(entry.display_signal) ||
+      textOrNull(entry.final_decision) ||
+      textOrNull(entry.decision),
     confidence_score: normalizeHistoryConfidence(entry.confidence_score),
     confidence_tier: textOrNull(entry.confidence_tier),
     time_horizon_months: [1, 2, 3].includes(horizon) ? horizon : null,
@@ -197,7 +200,9 @@ function normalizeBackendHistory(entries) {
 }
 
 function decisionStyle(decision) {
-  const normalized = String(decision || '').trim().toUpperCase();
+  const normalized = String(decision || '')
+    .trim()
+    .toUpperCase();
   if (normalized === 'BUY' || normalized === 'OVERWEIGHT')
     return 'text-bloomberg-green border-bloomberg-green';
   if (normalized === 'SELL' || normalized === 'UNDERWEIGHT')
@@ -288,7 +293,10 @@ function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, on
         {history.map((item, index) => {
           const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
           const displaySignal = item.display_signal || item.decision;
-          const confidenceScore = item.confidence_score !== null && item.confidence_score !== undefined ? `${item.confidence_score}%` : '—';
+          const confidenceScore =
+            item.confidence_score !== null && item.confidence_score !== undefined
+              ? `${item.confidence_score}%`
+              : '—';
           return (
             <button
               key={
@@ -319,7 +327,9 @@ function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, on
                 >
                   {(displaySignal || 'N/A').toUpperCase()}
                 </span>
-                <span className={`font-mono text-xs font-semibold ${confidenceScoreStyle(item.confidence_tier)}`}>
+                <span
+                  className={`font-mono text-xs font-semibold ${confidenceScoreStyle(item.confidence_tier)}`}
+                >
                   {confidenceScore}
                 </span>
               </div>

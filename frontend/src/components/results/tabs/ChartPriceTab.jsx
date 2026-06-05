@@ -103,10 +103,7 @@ export default function ChartPriceTab({ result }) {
             label="PERIOD LOW"
             value={displayPrice(performance.period_low ?? stats.low, ticker)}
           />
-          <MetricBox
-            label="MAX DRAWDOWN"
-            value={formatPercent(performance.max_drawdown_percent)}
-          />
+          <MetricBox label="MAX DRAWDOWN" value={formatPercent(performance.max_drawdown_percent)} />
           <MetricBox
             label="LATEST CLOSE"
             value={displayPrice(performance.latest_close ?? stats.end_price, ticker)}
@@ -115,10 +112,7 @@ export default function ChartPriceTab({ result }) {
             label="AVERAGE VOLUME"
             value={formatCompactNumber(performance.average_volume ?? stats.average_volume)}
           />
-          <MetricBox
-            label="LATEST VOLUME"
-            value={formatCompactNumber(performance.latest_volume)}
-          />
+          <MetricBox label="LATEST VOLUME" value={formatCompactNumber(performance.latest_volume)} />
           <MetricBox label="VOLUME TREND" value={displayLabel(performance.volume_trend)} />
         </div>
       </section>
@@ -126,15 +120,22 @@ export default function ChartPriceTab({ result }) {
       <section>
         <SectionHeader label="TECHNICAL ENTRY QUALITY" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <MetricBox label="ENTRY QUALITY" value={displayLabel(technical.entry_quality)} highlight />
-          <MetricBox label="TREND" value={displayLabel(technical.trend)} />
-          <MetricBox label="RSI" value={hasValue(technical.rsi) ? Number(technical.rsi).toFixed(2) : 'N/A'} />
-          <MetricBox label="RSI SIGNAL" value={displayLabel(technical.rsi_signal)} />
-          <MetricBox label="MACD" value={hasValue(technical.macd) ? Number(technical.macd).toFixed(2) : 'N/A'} />
           <MetricBox
-            label="MACD SIGNAL"
-            value={displayLabel(technical.macd_signal)}
+            label="ENTRY QUALITY"
+            value={displayLabel(technical.entry_quality)}
+            highlight
           />
+          <MetricBox label="TREND" value={displayLabel(technical.trend)} />
+          <MetricBox
+            label="RSI"
+            value={hasValue(technical.rsi) ? Number(technical.rsi).toFixed(2) : 'N/A'}
+          />
+          <MetricBox label="RSI SIGNAL" value={displayLabel(technical.rsi_signal)} />
+          <MetricBox
+            label="MACD"
+            value={hasValue(technical.macd) ? Number(technical.macd).toFixed(2) : 'N/A'}
+          />
+          <MetricBox label="MACD SIGNAL" value={displayLabel(technical.macd_signal)} />
           <MetricBox label="ATR" value={displayPrice(technical.atr, ticker)} />
           <MetricBox label="SMA 20" value={displayPrice(technical.sma_20, ticker)} />
           <MetricBox label="SMA 50" value={displayPrice(technical.sma_50, ticker)} />

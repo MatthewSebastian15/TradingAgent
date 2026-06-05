@@ -22,8 +22,16 @@ function parseHorizon(value) {
 }
 
 function normalizeMarket(value, ticker) {
-  const normalized = String(value || '').trim().toUpperCase();
-  if (['ID', 'IDX', 'INDONESIA'].includes(normalized) || String(ticker || '').toUpperCase().endsWith('.JK')) return 'ID';
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  if (
+    ['ID', 'IDX', 'INDONESIA'].includes(normalized) ||
+    String(ticker || '')
+      .toUpperCase()
+      .endsWith('.JK')
+  )
+    return 'ID';
   return 'US';
 }
 
@@ -33,17 +41,26 @@ function normalizeDepth(value) {
 
 function initialStateFromResult(result) {
   const params = result?.analysis_params || {};
-  const normalizedTicker = params.normalized_ticker || result?.normalized_ticker || result?.ticker || '';
+  const normalizedTicker =
+    params.normalized_ticker || result?.normalized_ticker || result?.ticker || '';
   const market = normalizeMarket(params.market || result?.market, normalizedTicker);
-  const rawTicker = params.ticker || result?.input_ticker || normalizedTicker || MARKETS[market].defaultTicker;
+  const rawTicker =
+    params.ticker || result?.input_ticker || normalizedTicker || MARKETS[market].defaultTicker;
   const ticker = normalizeTickerInput(String(rawTicker).replace(/\.JK$/i, ''), market);
 
   return {
     activeMarket: market,
     ticker,
     date: params.trade_date || result?.trade_date || today(),
-    timeHorizonMonths: parseHorizon(params.horizon || result?.time_horizon_months || params.time_horizon_months),
-    rounds: Number(params.debate_rounds || params.max_debate_rounds || result?.max_debate_rounds || DEFAULT_DEBATE_ROUNDS),
+    timeHorizonMonths: parseHorizon(
+      params.horizon || result?.time_horizon_months || params.time_horizon_months
+    ),
+    rounds: Number(
+      params.debate_rounds ||
+        params.max_debate_rounds ||
+        result?.max_debate_rounds ||
+        DEFAULT_DEBATE_ROUNDS
+    ),
     analysisDepth: normalizeDepth(params.analysis_depth || result?.analysis_depth),
     responseDetail: params.response_detail || result?.response_detail || 'full',
     hasExistingPosition: Boolean(params.has_existing_position ?? result?.has_existing_position),
@@ -82,10 +99,19 @@ export default function RerunPanel({ result, open, onClose, onSubmit, running = 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-b border-bloomberg-border bg-black bg-opacity-30 px-4 py-4">
+    <form
+      onSubmit={handleSubmit}
+      className="border-b border-bloomberg-border bg-black bg-opacity-30 px-4 py-4"
+    >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">Re-run Analysis Parameters</div>
-        <button type="button" onClick={onClose} className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white">
+        <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
+          Re-run Analysis Parameters
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white"
+        >
           Close
         </button>
       </div>
@@ -98,12 +124,17 @@ export default function RerunPanel({ result, open, onClose, onSubmit, running = 
             onChange={(event) => {
               const nextMarket = event.target.value;
               update('activeMarket', nextMarket);
-              update('ticker', normalizeTickerInput(form.ticker, nextMarket) || MARKETS[nextMarket].defaultTicker);
+              update(
+                'ticker',
+                normalizeTickerInput(form.ticker, nextMarket) || MARKETS[nextMarket].defaultTicker
+              );
             }}
             className="mt-1 w-full border border-bloomberg-border bg-bloomberg-card px-2 py-2 text-bloomberg-white"
           >
             {Object.entries(MARKETS).map(([id, market]) => (
-              <option key={id} value={id}>{market.label}</option>
+              <option key={id} value={id}>
+                {market.label}
+              </option>
             ))}
           </select>
         </label>
@@ -112,7 +143,9 @@ export default function RerunPanel({ result, open, onClose, onSubmit, running = 
           Ticker
           <input
             value={form.ticker}
-            onChange={(event) => update('ticker', normalizeTickerInput(event.target.value, form.activeMarket))}
+            onChange={(event) =>
+              update('ticker', normalizeTickerInput(event.target.value, form.activeMarket))
+            }
             className="mt-1 w-full border border-bloomberg-border bg-bloomberg-card px-2 py-2 text-bloomberg-white"
           />
         </label>
@@ -134,7 +167,11 @@ export default function RerunPanel({ result, open, onClose, onSubmit, running = 
             onChange={(event) => update('timeHorizonMonths', Number(event.target.value))}
             className="mt-1 w-full border border-bloomberg-border bg-bloomberg-card px-2 py-2 text-bloomberg-white"
           >
-            {HORIZON_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            {HORIZON_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -157,7 +194,11 @@ export default function RerunPanel({ result, open, onClose, onSubmit, running = 
             onChange={(event) => update('analysisDepth', event.target.value)}
             className="mt-1 w-full border border-bloomberg-border bg-bloomberg-card px-2 py-2 text-bloomberg-white"
           >
-            {DEPTH_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            {DEPTH_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
           </select>
         </label>
 
