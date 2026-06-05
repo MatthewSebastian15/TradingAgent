@@ -148,14 +148,19 @@ class NewsService:
         articles = _filter_articles_by_window(articles, as_of_date=as_of_date, window_days=window_days)
         deduped = deduplicate_news_articles(articles)
         ui_articles = [
-            article for article in deduped if article.relevance_score >= min_relevance or article.market_context_only
+            article
+            for article in deduped
+            if (article.relevance_score >= min_relevance or article.market_context_only)
+            and (article.bucket or "full_news") != "discard"
         ][:ui_limit]
         prompt_min = float(self.config.get("prompt_min_relevance_score", 65))
         prompt_limit = max(1, int(self.config.get("max_articles_for_prompt", 5)))
         prompt_articles = [
             article
             for article in ui_articles
-            if article.relevance_score >= prompt_min and not article.market_context_only
+            if article.relevance_score >= prompt_min
+            and not article.market_context_only
+            and (article.bucket or "full_news") in {"full_news", "macro_context"}
         ][:prompt_limit]
         serialized_articles = [article_to_dict(article) for article in ui_articles]
         serialized_prompt_articles = [article_to_dict(article) for article in prompt_articles]

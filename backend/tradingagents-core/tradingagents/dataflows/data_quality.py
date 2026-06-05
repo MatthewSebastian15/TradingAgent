@@ -265,3 +265,50 @@ def validate_sentiment(result) -> dict:
             warnings=[str(result.get("reason") or "Sentiment unavailable")],
         )
     return _quality(available=True, confidence="medium")
+
+
+@dataclass
+class FieldQuality:
+    """Field-level quality metadata for API/UI/report consumers."""
+
+    field_name: str
+    source: str
+    confidence_score: int
+    freshness_score: int
+    completeness_score: int
+    source_reliability_score: int
+    cross_vendor_match_score: int
+    warnings: list[str]
+    status: str = "available"
+
+
+def calculate_confidence_score(
+    source_reliability_score: int,
+    freshness_score: int,
+    completeness_score: int,
+    cross_vendor_match_score: int,
+    missing_field_penalty: int = 0,
+    stale_data_penalty: int = 0,
+) -> int:
+    """Calculate a bounded 0-100 confidence score for a data field."""
+    score = (
+        int(source_reliability_score)
+        + int(freshness_score)
+        + int(completeness_score)
+        + int(cross_vendor_match_score)
+        - int(missing_field_penalty)
+        - int(stale_data_penalty)
+    )
+    return max(0, min(100, score))
+
+
+DATA_STATUS_LABELS = {
+    "available": "data tersedia dan valid",
+    "calculated": "data dihitung lokal dari field mentah",
+    "not_applicable": "metric memang tidak berlaku",
+    "no_history": "perusahaan tidak punya riwayat data tersebut",
+    "source_unavailable": "vendor/source gagal atau tidak punya coverage",
+    "stale": "data tersedia tapi melewati TTL",
+    "conflict": "vendor berbeda signifikan",
+    "partial": "sebagian subfield tersedia, sebagian tidak",
+}

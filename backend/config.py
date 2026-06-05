@@ -54,10 +54,26 @@ from config_defaults import (
     DATA_CACHE_MAX_ENTRIES,
     DATA_CACHE_TTL_SECONDS,
     DATA_COLLECTION_WORKERS,
+    DATA_VENDOR_ANALYST_RATING,
     DATA_VENDOR_CORE_STOCK_APIS,
+    DATA_VENDOR_CRYPTO_DATA,
+    DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT,
+    DATA_VENDOR_ENABLE_FINNHUB_FALLBACK,
+    DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS,
+    DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE,
+    DATA_VENDOR_EVENT_DATA,
+    DATA_VENDOR_FINANCIAL_STATEMENTS,
+    DATA_VENDOR_FOREX_DATA,
     DATA_VENDOR_FUNDAMENTAL_DATA,
+    DATA_VENDOR_GLOBAL_NEWS_DATA,
+    DATA_VENDOR_INSIDER_DATA,
     DATA_VENDOR_NEWS_DATA,
     DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE,
+    DATA_VENDOR_QUOTE_DATA,
+    DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE,
+    DATA_VENDOR_REQUIRE_SOURCE_METADATA,
+    DATA_VENDOR_SENTIMENT_DATA,
+    DATA_VENDOR_SOCIAL_SENTIMENT,
     DATA_VENDOR_TECHNICAL_INDICATORS,
     DEBATE_CONFIDENCE_GAP,
     DEBATE_CONSENSUS_THRESHOLD,
@@ -168,10 +184,26 @@ class _BackendSettingsShim:
     owner_session_secret = OWNER_SESSION_SECRET
     owner_session_ttl_seconds = OWNER_SESSION_TTL_SECONDS
     data_vendor_core_stock_apis = DATA_VENDOR_CORE_STOCK_APIS
+    data_vendor_quote_data = DATA_VENDOR_QUOTE_DATA
     data_vendor_technical_indicators = DATA_VENDOR_TECHNICAL_INDICATORS
     data_vendor_fundamental_data = DATA_VENDOR_FUNDAMENTAL_DATA
+    data_vendor_financial_statements = DATA_VENDOR_FINANCIAL_STATEMENTS
     data_vendor_news_data = DATA_VENDOR_NEWS_DATA
+    data_vendor_global_news_data = DATA_VENDOR_GLOBAL_NEWS_DATA
+    data_vendor_sentiment_data = DATA_VENDOR_SENTIMENT_DATA
+    data_vendor_social_sentiment = DATA_VENDOR_SOCIAL_SENTIMENT
+    data_vendor_event_data = DATA_VENDOR_EVENT_DATA
+    data_vendor_analyst_rating = DATA_VENDOR_ANALYST_RATING
+    data_vendor_insider_data = DATA_VENDOR_INSIDER_DATA
+    data_vendor_forex_data = DATA_VENDOR_FOREX_DATA
+    data_vendor_crypto_data = DATA_VENDOR_CRYPTO_DATA
     data_vendor_news_min_relevance_score = DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE
+    data_vendor_enable_multi_source_news = DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS
+    data_vendor_enable_multi_source_price = DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE
+    data_vendor_enable_finnhub_fallback = DATA_VENDOR_ENABLE_FINNHUB_FALLBACK
+    data_vendor_enable_finnhub_enrichment = DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT
+    data_vendor_require_source_metadata = DATA_VENDOR_REQUIRE_SOURCE_METADATA
+    data_vendor_return_partial_on_failure = DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE
 
     @property
     def llm_provider(self):

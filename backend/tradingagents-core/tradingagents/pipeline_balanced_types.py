@@ -63,11 +63,6 @@ class CollectedData:
     recommendation_trends: str = ""
     last_close_price_as_of: str | None = None
     last_close_price_source: str | None = None
-    price_currency: str | None = None
-    price_source: str | None = None
-    price_timestamp: str | None = None
-    price_is_fallback: bool = False
-    volatility_metadata: dict[str, Any] | None = None
     company_profile: dict[str, Any] | None = None
     price_chart: dict[str, Any] | None = None
     price_performance: dict[str, Any] | None = None
@@ -77,11 +72,12 @@ class CollectedData:
     news_impact: dict[str, Any] | None = None
     catalyst_tracker: dict[str, Any] | None = None
     analyst_consensus: dict[str, Any] | None = None
-    data_sources: dict[str, Any] | None = None
-    data_freshness: dict[str, Any] | None = None
+    data_sources: dict[str, str] | None = None
     data_limitations: list[str] | None = None
     vendor_attempts: dict[str, list[str]] | None = None
     request_budget: dict[str, Any] | None = None
+    data_completeness: dict[str, Any] | None = None
+    fundamental_gap_report: dict[str, Any] | None = None
     financial_highlights: dict[str, Any] | None = None
     fundamental_analysis: dict[str, Any] | None = None
     prompt_context: dict[str, Any] | None = None
