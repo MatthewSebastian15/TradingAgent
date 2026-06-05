@@ -102,6 +102,83 @@ DataTable.propTypes = {
   rows: PropTypes.array,
 };
 
+function qualityFreshnessLabel(quality) {
+  const freshness = quality?.freshness_status || quality?.freshness;
+  if (freshness && typeof freshness === 'object') return freshness.status || 'unknown';
+  return freshness || 'unknown';
+}
+
+function FieldQualityReport({ dataQuality }) {
+  const fieldQuality = dataQuality?.field_quality;
+  if (!fieldQuality || typeof fieldQuality !== 'object') return null;
+  const rows = Object.entries(fieldQuality).map(([field, quality]) => ({
+    field: field.replaceAll('_', ' '),
+    status: quality?.status || 'unknown',
+    source: quality?.source || 'N/A',
+    confidence: quality?.confidence_score ?? 'N/A',
+    freshness: qualityFreshnessLabel(quality),
+    as_of_date: quality?.as_of_date || quality?.freshness_status?.as_of_date || 'N/A',
+    warnings: Array.isArray(quality?.warnings) ? quality.warnings.join(' | ') : 'N/A',
+    reason: quality?.reason || 'N/A',
+    vendor_attempts: Array.isArray(quality?.vendor_attempts)
+      ? quality.vendor_attempts.map((item) => `${item.vendor || 'vendor'}:${item.status || 'unknown'}`).join(', ')
+      : 'N/A',
+  }));
+  return (
+    <Section title="FIELD QUALITY">
+      <DataTable
+        columns={[
+          ['field', 'Field'],
+          ['status', 'Status'],
+          ['source', 'Source'],
+          ['confidence', 'Confidence'],
+          ['freshness', 'Freshness'],
+          ['as_of_date', 'As Of'],
+          ['warnings', 'Warnings'],
+          ['reason', 'Reason'],
+          ['vendor_attempts', 'Vendor Attempts'],
+        ]}
+        rows={rows}
+      />
+    </Section>
+  );
+}
+
+FieldQualityReport.propTypes = {
+  dataQuality: PropTypes.object,
+};
+
+function ConflictFieldsReport({ dataQuality }) {
+  const fieldQuality = dataQuality?.field_quality;
+  if (!fieldQuality || typeof fieldQuality !== 'object') return null;
+  const rows = Object.entries(fieldQuality)
+    .filter(([, quality]) => String(quality?.status || '').toLowerCase() === 'conflict')
+    .map(([field, quality]) => ({
+      field: field.replaceAll('_', ' '),
+      source: quality?.source || 'N/A',
+      warnings: Array.isArray(quality?.warnings) ? quality.warnings.join(' | ') : 'N/A',
+      vendor_values: quality?.vendor_values ? JSON.stringify(quality.vendor_values) : 'N/A',
+    }));
+  if (!rows.length) return null;
+  return (
+    <Section title="CONFLICT FIELDS">
+      <DataTable
+        columns={[
+          ['field', 'Field'],
+          ['source', 'Source'],
+          ['warnings', 'Warnings'],
+          ['vendor_values', 'Vendor Values'],
+        ]}
+        rows={rows}
+      />
+    </Section>
+  );
+}
+
+ConflictFieldsReport.propTypes = {
+  dataQuality: PropTypes.object,
+};
+
 function freshnessBadge(status) {
   const normalized = String(status || 'unknown').toLowerCase();
   if (normalized === 'fresh')
@@ -281,6 +358,20 @@ function FundamentalGapReport({ gapReport }) {
 }
 
 FundamentalGapReport.propTypes = {
+  gapReport: PropTypes.object,
+};
+
+function RecommendedActionsReport({ gapReport }) {
+  const actions = Array.isArray(gapReport?.recommended_actions) ? gapReport.recommended_actions : [];
+  if (!actions.length) return null;
+  return (
+    <Section title="RECOMMENDED ACTIONS">
+      <ListItems items={actions} />
+    </Section>
+  );
+}
+
+RecommendedActionsReport.propTypes = {
   gapReport: PropTypes.object,
 };
 
@@ -667,8 +758,11 @@ export default function RiskDataQualityTab({ result }) {
   return (
     <>
       <ResponseSourceWarnings result={result} />
+      <FieldQualityReport dataQuality={result?.data_quality} />
+      <ConflictFieldsReport dataQuality={result?.data_quality} />
       <DataCompletenessReport completeness={result?.data_completeness} />
       <FundamentalGapReport gapReport={result?.fundamental_gap_report} />
+      <RecommendedActionsReport gapReport={result?.fundamental_gap_report} />
       <VendorAttemptsReport attempts={result?.vendor_attempts} />
       <DataFreshness freshness={result?.data_freshness} />
       <RiskSummary payload={payload} />

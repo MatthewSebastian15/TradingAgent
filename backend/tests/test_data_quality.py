@@ -9,13 +9,16 @@ def test_build_field_quality_available_and_missing():
 
     assert available["status"] in {"available", "stale"}
     assert isinstance(available["confidence_score"], int)
+    assert available["freshness_status"]["status"] in {"fresh", "stale"}
     assert missing["status"] == "source_unavailable"
     assert missing["reason"]
+    assert "missing_as_of_date" not in missing["warnings"]
 
 
 def test_data_quality_report_accepts_field_quality():
     report = DataQualityReport(field_quality={"quote": build_field_quality("quote", 1, "yfinance")})
     assert report.field_quality["quote"]["confidence_score"] >= 0
+    assert report.field_quality["quote"]["freshness_status"]["status"] == "unknown"
 
 
 def test_build_field_quality_conflict_status():
@@ -28,3 +31,4 @@ def test_build_field_quality_conflict_status():
     )
     assert quality["status"] == "conflict"
     assert quality["vendor_values"]["finnhub"] == 1060
+    assert quality["freshness_status"]["status"] == "unknown"

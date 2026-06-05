@@ -166,6 +166,7 @@ class NewsService:
         serialized_articles = [article_to_dict(article) for article in ui_articles]
         serialized_prompt_articles = [article_to_dict(article) for article in prompt_articles]
         providers_used = list(dict.fromkeys(article.provider for article in ui_articles))
+        latest_article_date = max((str(item.get("published_at")) for item in serialized_articles if item.get("published_at")), default=None)
         result = {
             "enabled": bool(enabled_providers or self.config.get("enable_yfinance_fallback", True)),
             "ticker": profile["ticker"],
@@ -176,7 +177,9 @@ class NewsService:
             "provider_health": provider_health,
             "articles_found": len(ui_articles),
             "articles_used_in_prompt": len(prompt_articles),
+            "latest_article_date": latest_article_date,
             "dedup_removed_count": dedup_removed_count,
+            "duplicate_removed_count": dedup_removed_count,
             "average_sentiment": _average_sentiment(ui_articles),
             "articles": serialized_articles,
             "prompt_articles": serialized_prompt_articles,

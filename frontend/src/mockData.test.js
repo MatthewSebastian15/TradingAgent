@@ -4,6 +4,7 @@ import {
   getMockAnalysisResponseByRequestId,
   MOCK_RESPONSES_BY_REQUEST_ID,
   mockConflictDataQuality,
+  mockFreshnessAndQuality,
   resolveDisplaySignal,
 } from '../dev/mockData';
 
@@ -306,6 +307,16 @@ describe('mockData', () => {
     expect(mockConflictDataQuality.field_quality.last_price.warnings[0]).toContain(
       'last_price conflict'
     );
+  });
+
+  it('provides mock freshness and quality status variants', () => {
+    const fieldQuality = mockFreshnessAndQuality.data_quality.field_quality;
+
+    expect(fieldQuality.revenue.status).toBe('stale');
+    expect(fieldQuality.last_price.status).toBe('conflict');
+    expect(fieldQuality.sma_20.status).toBe('calculated');
+    expect(fieldQuality.sma_200.status).toBe('source_unavailable');
+    expect(fieldQuality.dividend_yield.status).toBe('no_dividend_history');
   });
 
   it('returns cloned mock objects so tests cannot mutate the registry', () => {

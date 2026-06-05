@@ -208,6 +208,30 @@ def _parse_date(value: Any) -> date | None:
 
 def _stale_warnings(result: dict[str, Any]) -> list[dict[str, Any]]:
     warnings: list[dict[str, Any]] = []
+    field_quality = _as_dict(_as_dict(result.get("data_quality")).get("field_quality"))
+    for field_name, quality_value in field_quality.items():
+        quality = _as_dict(quality_value)
+        freshness = quality.get("freshness_status") or quality.get("freshness")
+        freshness_payload = _as_dict(freshness)
+        status = str(
+            freshness_payload.get("status")
+            or freshness
+            or quality.get("status")
+            or "unknown"
+        ).lower()
+        is_stale = bool(freshness_payload.get("is_stale")) or status in {"stale", "unknown", "outdated"}
+        if not is_stale:
+            continue
+        warnings.append(
+            {
+                "module": "field_quality",
+                "field": str(field_name),
+                "warning": "; ".join(str(item) for item in (quality.get("warnings") or freshness_payload.get("warnings") or []))
+                or "Field freshness cannot be verified.",
+                "severity": "medium" if status == "stale" else "low",
+            }
+        )
+
     trade_date = _parse_date(result.get("trade_date"))
     price_date = _parse_date(result.get("current_price_as_of") or result.get("last_close_price_as_of"))
     if not price_date:

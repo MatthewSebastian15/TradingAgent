@@ -890,6 +890,22 @@ def _freshness_status_from_date(value: Any) -> str:
     return "outdated"
 
 
+def _field_freshness_payload(field_name: str, as_of_date: Any) -> dict[str, Any]:
+    try:
+        from tradingagents.dataflows.freshness_policy import get_freshness_status  # noqa: PLC0415
+
+        detail = get_freshness_status(field_name, as_of_date)
+        return {
+            "freshness_status": detail.get("status"),
+            "freshness_detail": detail,
+        }
+    except Exception:
+        return {
+            "freshness_status": _freshness_status_from_date(as_of_date),
+            "freshness_detail": None,
+        }
+
+
 def _period_end_from_label(label: Any) -> str | None:
     text = str(label or "").strip().upper().replace(" ", "")
     if not text:
@@ -959,8 +975,16 @@ def _build_data_freshness(payload: dict[str, Any], final_state: dict[str, Any]) 
 
     price_timestamp = payload.get("price_timestamp") or price_source.get("timestamp") or payload.get("current_price_as_of")
     financial_period = fundamentals.get("last_period")
-    period_end_date = fundamentals.get("period_end_date") or _period_end_from_label(financial_period)
-    latest_article_date = news_source.get("latest_article_date")
+    period_end_date = fundamentals.get("as_of_date") or fundamentals.get("period_end_date") or _period_end_from_label(financial_period)
+    news_payload = payload.get("news_context") if isinstance(payload.get("news_context"), dict) else payload.get("news") if isinstance(payload.get("news"), dict) else {}
+    news_impact = payload.get("news_impact") if isinstance(payload.get("news_impact"), dict) else {}
+    news_articles = news_payload.get("articles") if isinstance(news_payload, dict) else []
+    impact_articles = news_impact.get("full_news_list") if isinstance(news_impact, dict) else []
+    latest_article_date = (
+        news_source.get("latest_article_date")
+        or (news_payload or {}).get("latest_article_date")
+        or max((str(item.get("published_at")) for item in [*(news_articles or []), *(impact_articles or [])] if isinstance(item, dict) and item.get("published_at")), default=None)
+    )
 
     market_status = str(payload.get("market_status") or "").lower()
     price_type = "intraday" if market_status == "open" and not payload.get("price_is_fallback") else "previous_close"
@@ -971,18 +995,20 @@ def _build_data_freshness(payload: dict[str, Any], final_state: dict[str, Any]) 
         "price": {
             "timestamp": price_timestamp,
             "type": price_type,
-            "freshness_status": _freshness_status_from_date(price_timestamp),
+            **_field_freshness_payload("historical_price", price_timestamp),
         },
         "financials": {
             "period": financial_period,
             "period_end_date": period_end_date,
-            "freshness_status": _freshness_status_from_date(period_end_date),
+            "as_of_date": period_end_date,
+            **_field_freshness_payload("financial_statement", period_end_date),
         },
         "news": {
-            "lookback_days": news_source.get("lookback_days"),
-            "articles_count": news_source.get("articles_found") or 0,
+            "lookback_days": news_source.get("lookback_days") or (news_payload or {}).get("window_days"),
+            "articles_count": news_source.get("articles_found") or (news_payload or {}).get("articles_found") or len(news_articles or []),
             "latest_article_date": latest_article_date,
-            "freshness_status": _freshness_status_from_date(latest_article_date),
+            "duplicate_removed_count": (news_payload or {}).get("duplicate_removed_count") or (news_payload or {}).get("dedup_removed_count") or news_impact.get("duplicate_excluded_count"),
+            **_field_freshness_payload("company_news", latest_article_date),
         },
         "macro": {
             "description": macro_source.get("description") or "Latest available from provider",

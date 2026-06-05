@@ -367,7 +367,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
     <>
       <FundamentalDataSourceBadge dataSources={result.data_sources} />
       <FundamentalQualitySummary result={result} />
-      <FinancialHighlightsTable financialHighlights={financialHighlights} />
+      <FinancialHighlightsTable financialHighlights={financialHighlights} dataQuality={result?.data_quality} />
       <FinancialTrends payload={result.financial_trends} dataQuality={result?.data_quality} />
       <MetricSection
         dataQuality={result?.data_quality}

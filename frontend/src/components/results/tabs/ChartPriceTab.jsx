@@ -33,6 +33,14 @@ function indicatorQuality(result, technical, key) {
   return technical?.indicator_quality?.[key] || getFieldQuality(result?.data_quality, key);
 }
 
+function firstQuality(result, technical, keys) {
+  for (const key of keys) {
+    const quality = indicatorQuality(result, technical, key);
+    if (quality) return quality;
+  }
+  return null;
+}
+
 function displayLabel(value) {
   if (!hasValue(value)) return 'N/A';
   return String(value).replace(/_/g, ' ').toUpperCase();
@@ -141,8 +149,16 @@ export default function ChartPriceTab({ result }) {
           <MetricBox
             label="RSI"
             value={hasValue(technical.rsi) ? Number(technical.rsi).toFixed(2) : 'N/A'}
+            quality={firstQuality(result, technical, ['rsi', 'rsi_14'])}
+            preserveSlot
           />
           <MetricBox label="RSI SIGNAL" value={displayLabel(technical.rsi_signal)} />
+          <MetricBox
+            label="VOLATILITY"
+            value={formatPercent(technical.volatility ?? result?.risk_data_quality?.market_risk?.volatility_percent)}
+            quality={indicatorQuality(result, technical, 'volatility')}
+            preserveSlot
+          />
           <MetricBox
             label="MACD"
             value={hasValue(technical.macd) ? Number(technical.macd).toFixed(2) : 'N/A'}
