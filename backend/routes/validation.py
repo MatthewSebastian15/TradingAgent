@@ -77,7 +77,7 @@ class AnalysisRequest(BaseModel):
     """Payload accepted by analysis API entry points."""
 
     ticker: str = Field(..., min_length=1, max_length=12)
-    input_ticker: str | None = Field(default=None, exclude=True)
+    input_ticker: str | None = None
     trade_date: str
     time_horizon_months: int = Field(default=1)
     max_debate_rounds: int = Field(default=DEFAULT_MAX_DEBATE_ROUNDS)
