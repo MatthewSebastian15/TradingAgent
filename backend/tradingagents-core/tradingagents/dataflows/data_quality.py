@@ -321,6 +321,8 @@ DATA_STATUS_LABELS = {
     "stale": "data tersedia tapi melewati TTL",
     "conflict": "vendor berbeda signifikan",
     "partial": "sebagian subfield tersedia, sebagian tidak",
+    "no_dividend_history": "perusahaan tidak punya riwayat dividen tunai",
+    "not_applicable_negative_earnings": "metrik tidak relevan saat laba negatif",
 }
 
 _SOURCE_RELIABILITY_SCORE = {
@@ -341,6 +343,8 @@ _ALLOWED_STATUSES = {
     "calculated",
     "not_applicable",
     "no_history",
+    "no_dividend_history",
+    "not_applicable_negative_earnings",
     "source_unavailable",
     "stale",
     "conflict",

@@ -170,3 +170,62 @@ def normalized_number(value: Any, unit: str = "raw", currency: str = "IDR") -> f
     except (TypeError, ValueError):
         return None
     return number if number == number else None
+
+
+def build_normalized_period_rows(
+    *,
+    income_statement: Any | None = None,
+    balance_sheet: Any | None = None,
+    cashflow: Any | None = None,
+    default_unit: str = "raw",
+    default_currency: str = "IDR",
+) -> list[dict[str, Any]]:
+    """Build normalized annual/quarter rows from vendor statement payloads.
+
+    This adapter is deliberately tolerant because vendor statement shapes have
+    the aesthetic consistency of a junk drawer. It reuses the existing financial
+    statement parser and returns calculator-ready rows.
+    """
+    try:
+        from tradingagents.financial_highlights.statement_parser import parse_vendor_financials
+    except Exception:
+        return []
+
+    parsed = parse_vendor_financials(
+        ticker="UNKNOWN",
+        periods=[],
+        income_statement=income_statement,
+        balance_sheet=balance_sheet,
+        cashflow=cashflow,
+    )
+    periods = parsed.get("periods") if isinstance(parsed, dict) else {}
+    if not isinstance(periods, dict):
+        return []
+
+    alias_map = {
+        "total_assets": "assets",
+        "total_equity": "equity",
+        "total_debt": "debt",
+        "cash_from_operations": "operating_cash_flow",
+        "capital_expenditure": "capex",
+    }
+    rows: list[dict[str, Any]] = []
+    for period_key, values in periods.items():
+        if not isinstance(values, dict):
+            continue
+        row: dict[str, Any] = {
+            "period": {"period_label": str(period_key), "period_type": "annual" if "Q" not in str(period_key) else "quarter"},
+            "period_label": str(period_key),
+            "currency": parsed.get("currency") or default_currency,
+            "unit": default_unit,
+        }
+        for raw_field, payload in values.items():
+            field = alias_map.get(raw_field, raw_field)
+            value = payload.get("value") if isinstance(payload, dict) else payload
+            row[field] = normalize_financial_field(value, unit=default_unit, currency=row["currency"])
+        rows.append(row)
+
+    def sort_key(row: dict[str, Any]) -> str:
+        return str(row.get("period_label") or (row.get("period") or {}).get("period_label") or "")
+
+    return sorted(normalize_financial_rows(rows, default_unit=default_unit, default_currency=default_currency), key=sort_key)

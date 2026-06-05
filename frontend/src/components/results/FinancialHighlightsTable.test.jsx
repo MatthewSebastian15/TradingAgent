@@ -29,7 +29,7 @@ describe('FinancialHighlightsTable', () => {
     expect(screen.getByText(/Currency: USD \(US Dollar\)/)).toBeTruthy();
     expect(screen.getByText('126.00%')).toBeTruthy();
     expect(screen.getByText('0.45x')).toBeTruthy();
-    expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Source unavailable').length).toBeGreaterThan(0);
     expect(screen.getAllByText('x').length).toBeGreaterThan(0);
     expect(
       Array.from(container.querySelectorAll('tbody tr td:first-child')).map(

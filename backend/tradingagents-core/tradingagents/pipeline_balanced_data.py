@@ -22,9 +22,13 @@ from tradingagents.dataflows.data_quality import (
     looks_missing,
 )
 from tradingagents.dataflows.data_completeness import calculate_completeness
+from tradingagents.dataflows.dividend_data import build_dividend_status
 from tradingagents.dataflows.freshness_policy import get_freshness_status
 from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
+from tradingagents.dataflows.fundamental_calculator import calculate_derived_fundamentals
+from tradingagents.dataflows.normalizers import build_normalized_period_rows
 from tradingagents.dataflows.source_priority import get_field_vendor_order
+from tradingagents.dataflows.technical_calculator import calculate_technical_fallback, indicator_numeric_value, is_missing_indicator
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
 from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_url, rank_news
 from tradingagents.dataflows.news_intelligence import (
@@ -1208,6 +1212,95 @@ def _safe_corporate_actions(ticker: str, start_date: str, end_date: str) -> dict
         return {"available": False, "corporate_actions": [], "reason": str(exc), "source": "unavailable"}
 
 
+
+
+def _numeric_value(value: Any) -> float | None:
+    if isinstance(value, dict):
+        value = value.get("value", value.get("normalized_value"))
+    try:
+        number = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None
+
+
+def _latest_derived_metric(derived_fundamentals: list[dict[str, Any]] | None, field: str) -> dict[str, Any] | None:
+    for row in reversed(derived_fundamentals or []):
+        if not isinstance(row, dict):
+            continue
+        metrics = row.get("derived_metrics") if isinstance(row.get("derived_metrics"), dict) else row
+        value = metrics.get(field) if isinstance(metrics, dict) else None
+        if isinstance(value, dict):
+            return value
+        if value is not None:
+            return {"value": value, "status": "calculated", "source": "local_calculation_from_normalized_financials"}
+    return None
+
+
+def _latest_statement_value(rows: list[dict[str, Any]] | None, field: str) -> float | None:
+    for row in reversed(rows or []):
+        if not isinstance(row, dict):
+            continue
+        value = row.get(field)
+        number = _numeric_value(value)
+        if number is not None:
+            return number
+    return None
+
+
+def _normalize_technical_entry_for_display(technical_entry: dict[str, Any]) -> dict[str, Any]:
+    entry = dict(technical_entry or {})
+    quality = dict(entry.get("indicator_quality") or {})
+    for key in ("sma_20", "sma_50", "sma_200", "volatility", "rsi_14"):
+        value = entry.get(key)
+        if isinstance(value, dict):
+            quality[key] = value
+            numeric = indicator_numeric_value(value)
+            if numeric is not None:
+                entry[key] = numeric
+    if quality:
+        entry["indicator_quality"] = quality
+    return entry
+
+
+def _apply_technical_fallback(technical_entry: dict[str, Any], price_history: Any) -> dict[str, Any]:
+    entry = dict(technical_entry or {})
+    fallback = calculate_technical_fallback(price_history)
+    indicator_quality = dict(entry.get("indicator_quality") or {})
+    for key in ("sma_20", "sma_50", "sma_200", "volatility"):
+        fallback_value = fallback.get(key)
+        if fallback_value is None:
+            continue
+        if is_missing_indicator(entry.get(key)):
+            indicator_quality[key] = fallback_value
+            numeric = indicator_numeric_value(fallback_value)
+            entry[key] = numeric if numeric is not None else fallback_value
+        else:
+            indicator_quality.setdefault(
+                key,
+                {
+                    "value": indicator_numeric_value(entry.get(key)) or entry.get(key),
+                    "status": "available",
+                    "source": "vendor_or_entry_quality",
+                    "reason": None,
+                    "warnings": [],
+                },
+            )
+    entry["technical_fallback"] = fallback
+    entry["indicator_quality"] = indicator_quality
+    return entry
+
+
+def _corporate_action_summary(corporate_actions_result: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+    summary = {"source": corporate_actions_result.get("source") or "idx_official/yfinance", "split": None, "rights_issue": None}
+    for row in rows or []:
+        text = " ".join(str(row.get(key) or "") for key in ("type", "action", "event", "description")).lower()
+        if "split" in text:
+            summary["split"] = row
+        if "right" in text or "hmtd" in text:
+            summary["rights_issue"] = row
+    return summary
+
 def _build_field_quality_metadata(
     *,
     trade_date: str,
@@ -1374,11 +1467,39 @@ def collect_market_data(
             "source": "unavailable",
             "action_count": 0,
         }
+    technical_history = price_chart.get("data") or price_chart.get("points") or price.value
     technical_entry = build_technical_entry(
-        price_chart.get("data") or price_chart.get("points") or price.value,
+        technical_history,
         current_price=last_close_price,
         config={"time_horizon_months": time_horizon_months},
     )
+    technical_entry = _apply_technical_fallback(technical_entry, technical_history)
+
+    normalized_period_rows = build_normalized_period_rows(
+        income_statement=annual_income_statement.value,
+        balance_sheet=annual_balance_sheet.value,
+        cashflow=annual_cashflow.value,
+    )
+    derived_fundamentals = calculate_derived_fundamentals(normalized_period_rows)
+    latest_derived = derived_fundamentals[-1].get("derived_metrics", {}) if derived_fundamentals else {}
+    latest_net_profit = _latest_statement_value(normalized_period_rows, "net_profit")
+    latest_free_cash_flow = _numeric_value((latest_derived.get("free_cash_flow") or {}).get("value"))
+    if latest_free_cash_flow is None:
+        latest_free_cash_flow = _latest_statement_value(normalized_period_rows, "free_cash_flow")
+    dividend_events = [
+        row for row in corporate_actions_rows
+        if isinstance(row, dict) and "dividend" in " ".join(str(row.get(key) or "") for key in ("type", "action", "event", "description")).lower()
+    ]
+    dividend_quality = build_dividend_status(
+        ticker=ticker,
+        dividends=dividend_events if corporate_actions_result.get("available", True) else None,
+        latest_price=last_close_price,
+        net_profit=latest_net_profit,
+        free_cash_flow=latest_free_cash_flow,
+        source=corporate_actions_result.get("source") or "idx_corporate_action",
+    )
+    corporate_action_summary = _corporate_action_summary(corporate_actions_result, corporate_actions_rows)
+
     vendor_attempts = attempt_recorder.get_detailed_summary()
     request_budget = budget.get_summary()
     data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
@@ -1421,6 +1542,50 @@ def collect_market_data(
         news_context=news_context,
         last_close_price_as_of=last_close_price_as_of,
     )
+    for field_name in (
+        "revenue_growth_percent",
+        "net_profit_growth_percent",
+        "ebitda_margin",
+        "net_profit_margin",
+        "free_cash_flow",
+        "cfo_to_net_income",
+        "net_debt",
+    ):
+        metric = _latest_derived_metric(derived_fundamentals, field_name)
+        data_quality.field_quality[field_name] = build_field_quality(
+            field_name,
+            (metric or {}).get("value"),
+            source="local_calculation_from_normalized_financials",
+            status=(metric or {}).get("status") or "source_unavailable",
+            warnings=(metric or {}).get("warnings") or [],
+        )
+    for field_name, value_name in (
+        ("dividend_yield", "dividend_yield"),
+        ("dividend_yield_percent", "dividend_yield_percent"),
+        ("payout_ratio", "payout_ratio"),
+        ("payout_ratio_percent", "payout_ratio_percent"),
+        ("fcf_coverage", "fcf_coverage"),
+    ):
+        data_quality.field_quality[field_name] = build_field_quality(
+            field_name,
+            dividend_quality.get(value_name),
+            source=dividend_quality.get("source") or "idx_corporate_action",
+            status=dividend_quality.get("dividend_status") or "source_unavailable",
+            warnings=dividend_quality.get("warnings") or [],
+        )
+        if dividend_quality.get("reason"):
+            data_quality.field_quality[field_name]["reason"] = dividend_quality.get("reason")
+    for field_name in ("sma_20", "sma_50", "sma_200", "volatility"):
+        indicator_quality = (technical_entry.get("indicator_quality") or {}).get(field_name) if isinstance(technical_entry, dict) else None
+        data_quality.field_quality[field_name] = build_field_quality(
+            field_name,
+            indicator_numeric_value(indicator_quality) if indicator_quality else technical_entry.get(field_name),
+            source=(indicator_quality or {}).get("source") or "local_calculation_from_historical_price",
+            status=(indicator_quality or {}).get("status") or "available",
+            warnings=(indicator_quality or {}).get("warnings") or [],
+        )
+        if isinstance(indicator_quality, dict) and indicator_quality.get("reason"):
+            data_quality.field_quality[field_name]["reason"] = indicator_quality.get("reason")
     data_quality.data_sources = dict(data_sources)
     related_news = _build_related_news(
         ticker=ticker,
@@ -1440,28 +1605,6 @@ def collect_market_data(
     )
     catalyst_tracker = build_catalyst_tracker(news_impact, event_risk.value)
     analyst_consensus = build_analyst_consensus(recommendation_trends.value)
-    data_completeness = calculate_completeness(
-        {
-            "quote": last_close_price,
-            "historical_price": price.value,
-            "market_cap": (company_profile or {}).get("market_cap"),
-            "volume": (price_performance or {}).get("latest_volume"),
-            "company_news": company_news.value,
-            "global_news": global_news.value,
-            "high_impact_news": (news_impact or {}).get("high_impact_news"),
-            "news_sentiment": news_sentiment.value,
-            "social_sentiment": social_sentiment.value,
-            "company_profile": company_profile,
-            "executives": (company_profile or {}).get("officers"),
-            "shareholders": (company_profile or {}).get("shareholders"),
-        }
-    )
-    fundamental_gap_report = map_fundamental_gaps(
-        {
-            **((technical_entry or {})),
-            "technical_entry": technical_entry or {},
-        }
-    )
     financial_highlights = None
     try:
         financial_highlights = financial_highlights_to_dict(
@@ -1478,6 +1621,8 @@ def collect_market_data(
         )
     except Exception:
         logger.exception("Failed to build financial highlights for %s", ticker)
+    if isinstance(financial_highlights, dict):
+        financial_highlights["derived_fundamentals"] = derived_fundamentals
     data_freshness = _build_runtime_freshness_metadata(
         trade_date=trade_date,
         last_close_price_as_of=last_close_price_as_of or trade_date,
@@ -1499,6 +1644,73 @@ def collect_market_data(
         )
     except Exception:
         logger.exception("Failed to build deterministic fundamental analysis for %s", ticker)
+    if fundamental_analysis is None:
+        fundamental_analysis = {}
+    existing_dividend_quality = fundamental_analysis.get("dividend_quality") if isinstance(fundamental_analysis, dict) else None
+    if isinstance(existing_dividend_quality, dict):
+        fundamental_analysis["dividend_quality"] = {**existing_dividend_quality, **dividend_quality}
+    else:
+        fundamental_analysis["dividend_quality"] = dividend_quality
+
+    latest_balance_sheet = normalized_period_rows[-1] if normalized_period_rows else {}
+    latest_cashflow = {
+        "operating_cash_flow": _latest_statement_value(normalized_period_rows, "operating_cash_flow"),
+        "free_cash_flow": latest_free_cash_flow,
+    }
+    latest_revenue = _latest_statement_value(normalized_period_rows, "revenue")
+    latest_ebitda = _latest_statement_value(normalized_period_rows, "ebitda")
+
+    completeness_input = {
+        "quote": last_close_price,
+        "historical_price": price.value,
+        "market_cap": (company_profile or {}).get("market_cap"),
+        "volume": (price_performance or {}).get("latest_volume"),
+        "revenue": latest_revenue or (financial_highlights or {}).get("revenue"),
+        "ebitda": latest_ebitda or (financial_highlights or {}).get("ebitda"),
+        "net_profit": latest_net_profit or (financial_highlights or {}).get("net_profit"),
+        "assets": _numeric_value(latest_balance_sheet.get("assets")),
+        "equity": _numeric_value(latest_balance_sheet.get("equity")),
+        "cashflow": latest_cashflow,
+        "company_news": company_news.value,
+        "global_news": global_news.value,
+        "high_impact_news": (news_impact or {}).get("high_impact_news"),
+        "news_sentiment": news_sentiment.value,
+        "social_sentiment": social_sentiment.value,
+        "company_profile": company_profile,
+        "executives": (company_profile or {}).get("officers"),
+        "shareholders": (company_profile or {}).get("shareholders"),
+        "dividend": dividend_quality,
+        "split": corporate_action_summary.get("split"),
+        "rights_issue": corporate_action_summary.get("rights_issue"),
+        "sma_20": (technical_entry.get("indicator_quality") or {}).get("sma_20") or technical_entry.get("sma_20"),
+        "sma_50": (technical_entry.get("indicator_quality") or {}).get("sma_50") or technical_entry.get("sma_50"),
+        "sma_200": (technical_entry.get("indicator_quality") or {}).get("sma_200") or technical_entry.get("sma_200"),
+        "volatility": (technical_entry.get("indicator_quality") or {}).get("volatility"),
+        "pe_ratio": (fundamental_analysis.get("valuation_multiples") or {}).get("pe"),
+        "pb_ratio": (fundamental_analysis.get("valuation_multiples") or {}).get("pbv"),
+        "ev_ebitda": (fundamental_analysis.get("valuation_multiples") or {}).get("ev_ebitda"),
+        "fair_value_range": fundamental_analysis.get("fair_value_range"),
+        "leverage": (fundamental_analysis.get("balance_sheet_risk") or {}).get("der"),
+        "drawdown": (price_performance or {}).get("max_drawdown_percent"),
+        "liquidity": (fundamental_analysis.get("balance_sheet_risk") or {}).get("cash_ratio"),
+        "beta": (company_profile or {}).get("beta"),
+    }
+    data_completeness = calculate_completeness(completeness_input)
+    fundamental_payload_for_gap = {
+        "financial_highlights": financial_highlights or {},
+        "fundamentals": fundamentals.value,
+        "income_statement": income_statement.value,
+        "annual_income_statement": annual_income_statement.value,
+        "balance_sheet": balance_sheet.value,
+        "annual_balance_sheet": annual_balance_sheet.value,
+        "cashflow": cashflow.value,
+        "annual_cashflow": annual_cashflow.value,
+        "derived_fundamentals": derived_fundamentals,
+        "dividend_quality": dividend_quality,
+        "technical_entry": technical_entry or {},
+    }
+    fundamental_gap_report = map_fundamental_gaps(fundamental_payload_for_gap)
+
     try:
         release_budget(budget_id)
         release_attempt_recorder(attempt_id)

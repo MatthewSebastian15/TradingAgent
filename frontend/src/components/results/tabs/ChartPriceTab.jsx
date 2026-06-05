@@ -3,6 +3,7 @@ import { formatPrice } from '../../../utils/formatting';
 import MetricBox from '../MetricBox';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
+import { getFieldQuality } from '../../../utils/dataStatus';
 import CandlestickPriceChart from './CandlestickPriceChart';
 import { formatCompactNumber, normalizePricePoints } from './priceChartUtils';
 import VolumeChart from './VolumeChart';
@@ -17,8 +18,19 @@ function formatPercent(value) {
   return `${number.toFixed(2)}%`;
 }
 
+function unwrapValue(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value.value ?? value.normalized_value ?? null;
+  }
+  return value;
+}
+
 function displayPrice(value, ticker) {
-  return formatPrice(value, ticker) || 'N/A';
+  return formatPrice(unwrapValue(value), ticker) || 'N/A';
+}
+
+function indicatorQuality(result, technical, key) {
+  return technical?.indicator_quality?.[key] || getFieldQuality(result?.data_quality, key);
 }
 
 function displayLabel(value) {
@@ -103,7 +115,7 @@ export default function ChartPriceTab({ result }) {
             label="PERIOD LOW"
             value={displayPrice(performance.period_low ?? stats.low, ticker)}
           />
-          <MetricBox label="MAX DRAWDOWN" value={formatPercent(performance.max_drawdown_percent)} />
+          <MetricBox label="MAX DRAWDOWN" value={formatPercent(performance.max_drawdown_percent)} quality={getFieldQuality(result?.data_quality, 'drawdown')} preserveSlot />
           <MetricBox
             label="LATEST CLOSE"
             value={displayPrice(performance.latest_close ?? stats.end_price, ticker)}
@@ -137,9 +149,9 @@ export default function ChartPriceTab({ result }) {
           />
           <MetricBox label="MACD SIGNAL" value={displayLabel(technical.macd_signal)} />
           <MetricBox label="ATR" value={displayPrice(technical.atr, ticker)} />
-          <MetricBox label="SMA 20" value={displayPrice(technical.sma_20, ticker)} />
-          <MetricBox label="SMA 50" value={displayPrice(technical.sma_50, ticker)} />
-          <MetricBox label="SMA 200" value={displayPrice(technical.sma_200, ticker)} />
+          <MetricBox label="SMA 20" value={displayPrice(technical.sma_20, ticker)} quality={indicatorQuality(result, technical, 'sma_20')} preserveSlot />
+          <MetricBox label="SMA 50" value={displayPrice(technical.sma_50, ticker)} quality={indicatorQuality(result, technical, 'sma_50')} preserveSlot />
+          <MetricBox label="SMA 200" value={displayPrice(technical.sma_200, ticker)} quality={indicatorQuality(result, technical, 'sma_200')} preserveSlot />
           <MetricBox label="SUPPORT" value={displayPrice(technical.support, ticker)} />
           <MetricBox label="RESISTANCE" value={displayPrice(technical.resistance, ticker)} />
         </div>

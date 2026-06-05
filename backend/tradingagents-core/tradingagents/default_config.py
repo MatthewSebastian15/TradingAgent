@@ -102,6 +102,14 @@ DEFAULT_CONFIG = {
         "symbol_cache_ttl_seconds": int(_env("FINNHUB_SYMBOL_CACHE_TTL_SECONDS") or "2592000"),
         "max_calls_per_analysis": int(_env("FINNHUB_MAX_CALLS_PER_ANALYSIS") or "8"),
     },
+    "idx_official": {
+        "enabled": _env_bool("IDX_OFFICIAL_ENABLED", True),
+        "report_index_url": _env("IDX_REPORT_INDEX_URL"),
+        "report_index_path": _env("IDX_REPORT_INDEX_PATH"),
+        "report_cache_dir": _env("IDX_REPORT_CACHE_DIR") or ".cache/idx_reports",
+        "report_timeout_seconds": int(_env("IDX_REPORT_TIMEOUT_SECONDS") or "20"),
+        "report_prefer_formats": _env("IDX_REPORT_PREFER_FORMATS") or "xbrl,xlsx,csv,json,pdf",
+    },
     "news": {
         "marketaux_api_key": _env("MARKETAUX_API_KEY"),
         "newsdata_api_key": _env("NEWSDATA_API_KEY"),

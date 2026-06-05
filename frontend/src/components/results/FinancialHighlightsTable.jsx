@@ -2,11 +2,17 @@ import React from 'react';
 import PropTypes from 'prop-types';
 
 import SectionHeader from './SectionHeader';
+import { getDataStatusLabel, getDisplayValue } from '../../utils/dataStatus';
 
 function formatCell(cell) {
-  if (!cell || cell.status === 'unavailable') return 'N/A';
-  const value = cell.display ?? cell.value ?? 'N/A';
-  return cell.status === 'estimated' ? `${value} EST` : value;
+  if (!cell) return { text: 'N/A', reason: null };
+  const status = cell.status === 'unavailable' ? 'source_unavailable' : cell.status;
+  const quality = { status, reason: cell.reason || cell.warning || null };
+  const display = getDisplayValue(cell.display ?? cell.value, quality);
+  const text = cell.status === 'estimated' && display.text !== 'N/A'
+    ? `${display.text} EST`
+    : display.text;
+  return { text, reason: display.reason };
 }
 
 function FinancialTable({ periods, rows }) {
@@ -42,7 +48,17 @@ function FinancialTable({ periods, rows }) {
                   key={period.key}
                   className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap min-w-[86px]"
                 >
-                  {formatCell(row.values?.[period.key])}
+                  {(() => {
+                    const display = formatCell(row.values?.[period.key]);
+                    return (
+                      <>
+                        <div>{display.text}</div>
+                        {display.reason && (
+                          <div className="mt-1 text-[10px] text-bloomberg-muted">Reason: {display.reason}</div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </td>
               ))}
             </tr>
@@ -92,7 +108,7 @@ export default function FinancialHighlightsTable({ financialHighlights }) {
                   {item.label}
                 </div>
                 <div className="font-mono text-xs text-bloomberg-white mt-1">
-                  {item.status === 'unavailable' ? 'N/A' : item.display} {item.unit}
+                  {item.status === 'unavailable' ? getDataStatusLabel('source_unavailable') : item.display} {item.unit}
                 </div>
                 <div className="font-mono text-[10px] text-bloomberg-muted mt-1">
                   As of: {item.as_of || 'N/A'}
