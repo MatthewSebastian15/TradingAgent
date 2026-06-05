@@ -321,6 +321,47 @@ ResponseSourceWarnings.propTypes = {
   result: PropTypes.object,
 };
 
+
+function VendorAttemptsReport({ attempts }) {
+  if (!attempts || typeof attempts !== 'object' || Object.keys(attempts).length === 0) return null;
+  const rows = Object.entries(attempts).flatMap(([field, entries]) => {
+    const list = Array.isArray(entries) ? entries : [];
+    return list.map((entry) => {
+      if (entry && typeof entry === 'object') {
+        return {
+          field: field.replaceAll('_', ' '),
+          vendor: entry.vendor || 'N/A',
+          status: entry.status || 'unknown',
+          reason: entry.reason || 'N/A',
+          duration_ms: entry.duration_ms ?? 'N/A',
+        };
+      }
+      const text = String(entry || '');
+      const [vendor, rest = 'unknown'] = text.split(':');
+      return { field: field.replaceAll('_', ' '), vendor, status: rest, reason: 'N/A', duration_ms: 'N/A' };
+    });
+  });
+  if (!rows.length) return null;
+  return (
+    <Section title="VENDOR ATTEMPTS">
+      <DataTable
+        columns={[
+          ['field', 'Field'],
+          ['vendor', 'Vendor'],
+          ['status', 'Status'],
+          ['reason', 'Reason'],
+          ['duration_ms', 'Duration MS'],
+        ]}
+        rows={rows}
+      />
+    </Section>
+  );
+}
+
+VendorAttemptsReport.propTypes = {
+  attempts: PropTypes.object,
+};
+
 function RiskSummary({ payload }) {
   const summary = payload?.risk_summary || {};
   return (
@@ -623,6 +664,7 @@ export default function RiskDataQualityTab({ result }) {
       <ResponseSourceWarnings result={result} />
       <DataCompletenessReport completeness={result?.data_completeness} />
       <FundamentalGapReport gapReport={result?.fundamental_gap_report} />
+      <VendorAttemptsReport attempts={result?.vendor_attempts} />
       <DataFreshness freshness={result?.data_freshness} />
       <RiskSummary payload={payload} />
       <BalanceSheetRiskSummary payload={payload} />

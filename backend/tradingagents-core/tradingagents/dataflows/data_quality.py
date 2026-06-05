@@ -284,7 +284,9 @@ class FieldQuality:
     warnings: list[str] = field(default_factory=list)
     as_of_date: str | None = None
     freshness_status: str | None = None
+    freshness: dict[str, Any] | None = None
     reason: str | None = None
+    vendor_attempts: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -343,6 +345,10 @@ _ALLOWED_STATUSES = {
     "stale",
     "conflict",
     "partial",
+    "empty",
+    "failed",
+    "skipped",
+    "success",
 }
 
 _MISSING_SENTINELS = {"", "n/a", "na", "none", "null", "unavailable", "source_unavailable"}
@@ -379,6 +385,7 @@ def build_field_quality(
     status: str | None = None,
     calculated: bool = False,
     conflict_warnings: list[str] | None = None,
+    vendor_attempts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build standardized field-level quality metadata.
 
@@ -405,22 +412,23 @@ def build_field_quality(
     cross_vendor_match_score = 0 if conflict_warnings else 15
     freshness_score = 0
     freshness_status = None
+    freshness_detail: dict[str, Any] | None = None
     stale_penalty = 0
 
     try:
         from tradingagents.dataflows.freshness_policy import get_freshness_status
 
-        freshness = get_freshness_status(field_name, as_of_date) if as_of_date else None
-        if freshness:
-            freshness_status = freshness.get("status")
-            freshness_score = int(freshness.get("freshness_score") or 0)
-            if freshness.get("status") == "stale":
-                stale_penalty = 10
-                if status == "available":
-                    status = "stale"
-            field_warnings.extend(freshness.get("warnings") or [])
+        freshness_detail = get_freshness_status(field_name, as_of_date)
+        freshness_status = freshness_detail.get("status")
+        freshness_score = int(freshness_detail.get("freshness_score") or 0)
+        if freshness_detail.get("is_stale") and status == "available":
+            if freshness_status == "stale":
+                status = "stale"
+            stale_penalty = 10
+        field_warnings.extend(freshness_detail.get("warnings") or [])
     except Exception:
         freshness_score = 0
+        freshness_detail = None
 
     missing_penalty = 25 if missing else 0
     confidence = calculate_confidence_score(
@@ -449,6 +457,8 @@ def build_field_quality(
         warnings=list(dict.fromkeys(field_warnings)),
         as_of_date=as_of_date,
         freshness_status=freshness_status,
+        freshness=freshness_detail,
         reason=reason,
+        vendor_attempts=list(vendor_attempts or []),
     ).to_dict()
 

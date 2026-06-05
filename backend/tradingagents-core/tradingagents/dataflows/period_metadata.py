@@ -98,6 +98,73 @@ def build_quarter_period_metadata(
     ).to_dict()
 
 
+
+def build_ttm_period_metadata(
+    end_date: str,
+    *,
+    reported_date: str | None = None,
+    as_of_date: str | None = None,
+    currency: str = "IDR",
+    unit: str = "raw",
+    is_restated: bool = False,
+    audit_status: str | None = None,
+) -> dict[str, Any]:
+    parsed = date.fromisoformat(str(end_date)[:10])
+    return PeriodMetadata(
+        period_label=f"TTM {parsed.year}",
+        period_type="ttm",
+        fiscal_year=parsed.year,
+        fiscal_quarter=None,
+        period_start=None,
+        period_end=parsed.isoformat(),
+        reported_date=reported_date,
+        as_of_date=as_of_date or reported_date or parsed.isoformat(),
+        is_restated=bool(is_restated),
+        audit_status=audit_status,
+        currency=str(currency or "IDR").upper(),
+        unit=str(unit or "raw").lower(),
+    ).to_dict()
+
+
+def attach_period_metadata_to_rows(
+    rows: list[dict[str, Any]] | None,
+    default_currency: str = "IDR",
+    default_unit: str = "raw",
+) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        if not isinstance(item.get("period"), dict):
+            label = item.get("period_label") or item.get("period") or item.get("date") or item.get("fiscalDateEnding")
+            reported_date = item.get("reported_date") or item.get("reportedDate") or item.get("acceptedDate")
+            is_restated = bool(item.get("is_restated") or "restated" in str(item.get("status") or "").lower())
+            try:
+                item["period"] = infer_period_metadata(
+                    str(label or ""),
+                    period_end=item.get("period_end") or item.get("fiscalDateEnding"),
+                    reported_date=reported_date,
+                    currency=item.get("currency") or default_currency,
+                    unit=item.get("unit") or default_unit,
+                    is_restated=is_restated,
+                )
+            except Exception:
+                period_end = item.get("period_end") or item.get("fiscalDateEnding")
+                if period_end:
+                    try:
+                        item["period"] = build_ttm_period_metadata(
+                            str(period_end),
+                            reported_date=reported_date,
+                            currency=item.get("currency") or default_currency,
+                            unit=item.get("unit") or default_unit,
+                            is_restated=is_restated,
+                        )
+                    except Exception:
+                        pass
+        enriched.append(item)
+    return enriched
+
 def infer_period_metadata(
     label: str,
     *,
@@ -111,6 +178,14 @@ def infer_period_metadata(
     text = str(label or "").strip().upper().replace(" ", "")
     import re
 
+    if text.startswith("TTM") and period_end:
+        return build_ttm_period_metadata(
+            period_end,
+            reported_date=reported_date,
+            currency=currency,
+            unit=unit,
+            is_restated=is_restated,
+        )
     quarter_match = re.search(r"(?:FY)?(20\d{2})Q([1-4])|Q([1-4])(?:FY)?(20\d{2})", text)
     if quarter_match:
         year = quarter_match.group(1) or quarter_match.group(4)

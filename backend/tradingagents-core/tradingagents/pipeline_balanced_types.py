@@ -76,6 +76,7 @@ class CollectedData:
     data_limitations: list[str] | None = None
     vendor_attempts: dict[str, list[str]] | None = None
     request_budget: dict[str, Any] | None = None
+    data_freshness: dict[str, Any] | None = None
     data_completeness: dict[str, Any] | None = None
     fundamental_gap_report: dict[str, Any] | None = None
     financial_highlights: dict[str, Any] | None = None

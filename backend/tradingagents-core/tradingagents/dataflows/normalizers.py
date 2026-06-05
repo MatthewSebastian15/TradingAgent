@@ -47,7 +47,7 @@ _UNIT_ALIASES = {
     "triliun": "trillion",
 }
 
-_SUFFIX_PATTERN = re.compile(r"^\s*(?P<prefix>rp|idr|usd)?\s*(?P<number>[-+]?\d+(?:[.,]\d+)?)\s*(?P<suffix>k|m|mn|b|bn|t|tn|ribu|juta|miliar|triliun)?\s*$", re.IGNORECASE)
+_SUFFIX_PATTERN = re.compile(r"^\s*(?P<prefix>rp|idr|usd)?\s*(?P<number>[-+]?\d+(?:[.,]\d+)?)\s*(?P<suffix>k|m|mn|b|bn|t|tn|ribu|juta|miliar|triliun|thousand|million|billion|trillion|thousands|millions|billions|trillions)?\s*$", re.IGNORECASE)
 
 
 def _normalize_unit(unit: str | None) -> str:
@@ -100,16 +100,65 @@ def normalize_financial_value(value: float | int | str | None, unit: str = "raw"
     raw_unit = _normalize_unit(unit)
     normalized_currency = str(currency or "IDR").strip().upper()
     numeric, detected_unit, warning = _parse_numeric_and_unit(value, raw_unit)
+    warnings = [warning] if warning else []
+    if numeric is None and value in (None, "", "N/A", "n/a", "NA", "-"):
+        warnings.append("Value cannot be normalized")
     payload = {
         "raw_value": numeric if numeric is not None else value if value not in (None, "", "N/A", "n/a", "NA", "-") else None,
         "raw_unit": detected_unit,
         "raw_currency": normalized_currency,
         "normalized_value": None if numeric is None else numeric * UNIT_MULTIPLIER.get(detected_unit, 1),
+        "normalized_unit": "raw",
         "normalized_currency": normalized_currency,
+        "status": "available" if numeric is not None else "source_unavailable",
+        "warnings": list(dict.fromkeys(warnings)),
     }
     if warning:
         payload["warning"] = warning
     return payload
+
+
+def normalize_financial_field(value: Any, unit: str = "raw", currency: str = "IDR") -> dict[str, Any]:
+    """Normalize one financial field while preserving raw value and status metadata."""
+    return normalize_financial_value(value, unit=unit, currency=currency)
+
+
+FINANCIAL_FIELDS = {
+    "revenue",
+    "ebitda",
+    "net_profit",
+    "operating_cash_flow",
+    "cash_from_operations",
+    "capex",
+    "capital_expenditure",
+    "cash",
+    "cash_and_equivalents",
+    "debt",
+    "total_debt",
+    "equity",
+    "assets",
+    "current_liabilities",
+}
+
+
+def normalize_financial_rows(
+    rows: list[dict[str, Any]] | None,
+    default_unit: str = "raw",
+    default_currency: str = "IDR",
+) -> list[dict[str, Any]]:
+    normalized_rows: list[dict[str, Any]] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        unit = item.get("unit") or default_unit
+        currency = item.get("currency") or default_currency
+        for field in FINANCIAL_FIELDS:
+            value = item.get(field)
+            if field in item and not isinstance(value, dict):
+                item[field] = normalize_financial_field(value, unit=unit, currency=currency)
+        normalized_rows.append(item)
+    return normalized_rows
 
 
 def normalized_number(value: Any, unit: str = "raw", currency: str = "IDR") -> float | None:

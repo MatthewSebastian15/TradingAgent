@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-import { getDataStatusClasses, getDataStatusLabel, normalizeQualityPayload } from '../utils/dataStatus';
+import { getDataStatusClasses, getDataStatusLabel, normalizeQualityPayload, readableSource } from '../utils/dataStatus';
 
 function displayConfidence(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -32,7 +32,7 @@ export default function DataStatusBadge({ quality, status, source, reason, confi
       </span>
       {finalSource && (
         <span className="inline-flex w-fit items-center rounded-sm border border-bloomberg-border bg-black px-2 py-0.5 text-bloomberg-muted">
-          Source: {String(finalSource).replaceAll('_', ' ')}
+          Source: {readableSource(finalSource)}
         </span>
       )}
       {confidence && (

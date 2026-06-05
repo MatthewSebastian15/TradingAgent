@@ -721,6 +721,7 @@ def run_balanced_pipeline(
         "data_limitations": data.data_limitations or [],
         "vendor_attempts": data.vendor_attempts or {},
         "request_budget": data.request_budget or {},
+        "data_freshness": data.data_freshness or {},
         "data_completeness": data.data_completeness or {},
         "fundamental_gap_report": data.fundamental_gap_report or {},
         "financial_highlights": data.financial_highlights,
