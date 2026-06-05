@@ -6,6 +6,7 @@ import FinancialHighlightsTable from '../FinancialHighlightsTable';
 import MetricBox from '../MetricBox';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
+import { getFieldQuality } from '../../../utils/dataStatus';
 
 function displayMetric(metric) {
   if (!metric || metric.status === 'unavailable') return 'N/A';
@@ -118,7 +119,7 @@ QualityNotice.propTypes = {
   payload: PropTypes.object,
 };
 
-function MetricSection({ title, payload, metrics, summary }) {
+function MetricSection({ title, payload, metrics, summary, dataQuality }) {
   if (!payload) return null;
   return (
     <section className="px-4 py-4 border-b border-bloomberg-border space-y-3">
@@ -128,7 +129,8 @@ function MetricSection({ title, payload, metrics, summary }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {metrics.map(([key, label]) => {
           const detail = payload.metric_details?.[key];
-          const metricStatus = normalizeMetricStatus(detail?.status);
+          const fieldQuality = getFieldQuality(dataQuality, key);
+          const metricStatus = normalizeMetricStatus(detail?.status || fieldQuality?.status);
           return (
             <div key={key} className="space-y-1">
               <MetricBox
@@ -137,13 +139,14 @@ function MetricSection({ title, payload, metrics, summary }) {
                 compact
                 preserveSlot
               />
-              {(metricStatus || detail?.source || detail?.reason) && (
+              {(fieldQuality || metricStatus || detail?.source || detail?.reason) && (
                 <DataStatusBadge
                   compact
-                  status={metricStatus || 'available'}
-                  source={detail?.source || detail?.source_field}
-                  reason={detail?.reason || detail?.formula}
-                  confidenceScore={detail?.confidence_score}
+                  quality={fieldQuality || undefined}
+                  status={metricStatus || fieldQuality?.status || 'available'}
+                  source={detail?.source || detail?.source_field || fieldQuality?.source}
+                  reason={detail?.reason || detail?.formula || fieldQuality?.reason}
+                  confidenceScore={detail?.confidence_score ?? fieldQuality?.confidence_score}
                 />
               )}
             </div>
@@ -160,9 +163,10 @@ MetricSection.propTypes = {
   payload: PropTypes.object,
   metrics: PropTypes.array.isRequired,
   summary: PropTypes.node,
+  dataQuality: PropTypes.object,
 };
 
-function FinancialTrends({ payload }) {
+function FinancialTrends({ payload, dataQuality }) {
   if (!payload?.periods?.length || !payload?.metric_details) return null;
   const rows = [
     ['revenue', 'Revenue', payload.scale_label || ''],
@@ -220,7 +224,12 @@ function FinancialTrends({ payload }) {
                       key={`${key}-${period.key}`}
                       className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap min-w-[86px]"
                     >
-                      {displayMetric(cell)}
+                      <div>{displayMetric(cell)}</div>
+                      {getFieldQuality(dataQuality, key) && (
+                        <div className="mt-1 flex justify-end">
+                          <DataStatusBadge compact quality={getFieldQuality(dataQuality, key)} />
+                        </div>
+                      )}
                     </td>
                   );
                 })}
@@ -247,6 +256,7 @@ function FinancialTrends({ payload }) {
 
 FinancialTrends.propTypes = {
   payload: PropTypes.object,
+  dataQuality: PropTypes.object,
 };
 
 function ScenarioAnalysis({ payload }) {
@@ -356,8 +366,9 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
       <FundamentalDataSourceBadge dataSources={result.data_sources} />
       <FundamentalQualitySummary result={result} />
       <FinancialHighlightsTable financialHighlights={financialHighlights} />
-      <FinancialTrends payload={result.financial_trends} />
+      <FinancialTrends payload={result.financial_trends} dataQuality={result?.data_quality} />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="VALUATION MULTIPLES"
         payload={result.valuation_multiples}
         metrics={[
@@ -378,6 +389,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
         }
       />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="FAIR VALUE RANGE"
         payload={result.fair_value_range}
         metrics={[
@@ -399,6 +411,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
       />
       <ScenarioAnalysis payload={result.scenario_analysis} />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="QUALITY OF EARNINGS"
         payload={result.quality_of_earnings}
         metrics={[
@@ -416,6 +429,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
         }
       />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="BALANCE SHEET RISK"
         payload={result.balance_sheet_risk}
         metrics={[
@@ -434,6 +448,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
         }
       />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="DIVIDEND QUALITY"
         payload={result.dividend_quality}
         metrics={[

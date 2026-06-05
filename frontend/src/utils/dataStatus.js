@@ -14,6 +14,33 @@ export const DATA_STATUS_LABELS = {
   unknown: 'Unknown',
 };
 
+export const SOURCE_LABELS = {
+  idx_official: 'IDX Official',
+  yfinance: 'Yahoo Finance',
+  alpha_vantage: 'Alpha Vantage',
+  finnhub: 'Finnhub',
+  marketaux: 'Marketaux',
+  newsdata: 'NewsData',
+  local_calculation_from_normalized_financials: 'local calculation from normalized financials',
+  local_calculation_from_historical_price: 'local calculation from historical price',
+  configured_ohlcv: 'Configured OHLCV',
+};
+
+export function readableSource(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const normalized = text.toLowerCase();
+  if (SOURCE_LABELS[normalized]) return SOURCE_LABELS[normalized];
+  const match = Object.keys(SOURCE_LABELS).find((key) => normalized.includes(key));
+  if (match) return SOURCE_LABELS[match];
+  return text.replaceAll('_', ' ');
+}
+
+export function getFieldQuality(dataQuality, fieldName) {
+  if (!dataQuality || typeof dataQuality !== 'object') return null;
+  return dataQuality.field_quality?.[fieldName] || dataQuality[fieldName] || null;
+}
+
 export function getDataStatusLabel(status) {
   const normalized = String(status || 'unknown').toLowerCase();
   return DATA_STATUS_LABELS[normalized] || 'Unknown';

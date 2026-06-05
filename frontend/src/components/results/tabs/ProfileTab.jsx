@@ -80,6 +80,7 @@ export default function ProfileTab({ profile, result }) {
     : Array.isArray(profile.executives)
       ? profile.executives
       : [];
+  const shareholders = Array.isArray(profile.shareholders) ? profile.shareholders : [];
   const companyName = profile.company_name || profile.name;
   const businessSummary = profile.business_summary || profile.description;
   const employeeCount = profile.employee_count ?? profile.full_time_employees;
@@ -174,6 +175,41 @@ export default function ProfileTab({ profile, result }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+      )}
+
+
+      {shareholders.length > 0 && (
+        <section>
+          <SectionHeader label="SHAREHOLDERS" />
+          <div className="overflow-x-auto border border-bloomberg-border">
+            <table className="w-full text-left font-mono text-xs">
+              <thead className="bg-bloomberg-surface text-bloomberg-muted uppercase tracking-wider">
+                <tr>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Ownership</th>
+                  <th className="px-3 py-2">Shares</th>
+                  <th className="px-3 py-2">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shareholders.map((holder, index) => (
+                  <tr
+                    key={`${holder.name || 'shareholder'}-${index}`}
+                    className="border-t border-bloomberg-border"
+                  >
+                    <td className="px-3 py-2 text-bloomberg-white">{holder.name || holder.shareholder || 'N/A'}</td>
+                    <td className="px-3 py-2 text-bloomberg-muted">{holder.ownership_percent ?? holder.percent ?? holder.percentage ?? 'N/A'}</td>
+                    <td className="px-3 py-2 text-bloomberg-muted">{formatNumber(holder.shares ?? holder.share_count)}</td>
+                    <td className="px-3 py-2 text-bloomberg-muted">{holder.source || profile.source || 'N/A'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-2">
+            <DataStatusBadge compact quality={result?.data_quality?.field_quality?.shareholders || profile.shareholders_quality} />
           </div>
         </section>
       )}

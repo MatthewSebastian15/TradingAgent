@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 
 from tradingagents.company_profile.builder import build_company_profile
 from tradingagents.dataflows.config import get_config, set_config, use_config
+from tradingagents.dataflows.corporate_actions import apply_corporate_action_adjustments
 from tradingagents.dataflows.data_quality import (
     DataField,
     DataQualityReport,
@@ -21,6 +22,7 @@ from tradingagents.dataflows.data_quality import (
     looks_missing,
 )
 from tradingagents.dataflows.data_completeness import calculate_completeness
+from tradingagents.dataflows.freshness_policy import get_freshness_status
 from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
 from tradingagents.dataflows.source_priority import get_field_vendor_order
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
@@ -782,12 +784,23 @@ def _build_collection_tasks(
     tasks: dict[str, Callable[[], DataField]] = {
         "price_data": lambda: _safe_data_field(
             "price_data",
-            lambda: route_to_vendor("get_stock_data", ticker, start_price, end),
+            lambda: route_to_vendor(
+                "get_stock_data",
+                ticker,
+                start_price,
+                end,
+                vendor_order=get_field_vendor_order("historical_price", ticker),
+            ),
             limit=14_000,
         ),
         "fundamentals": lambda: _safe_data_field(
             "fundamentals",
-            lambda: route_to_vendor("get_fundamentals", ticker, trade_date),
+            lambda: route_to_vendor(
+                "get_fundamentals",
+                ticker,
+                trade_date,
+                vendor_order=get_field_vendor_order("financial_statement", ticker),
+            ),
             limit=12_000,
         ),
         "balance_sheet": lambda: _safe_data_field(
@@ -834,7 +847,11 @@ def _build_collection_tasks(
         ),
         "news_sentiment": lambda: _safe_data_field(
             "news_sentiment",
-            lambda: route_to_vendor("get_news_sentiment", ticker),
+            lambda: route_to_vendor(
+                "get_news_sentiment",
+                ticker,
+                vendor_order=get_field_vendor_order("news_sentiment", ticker),
+            ),
             limit=4_000,
         ),
         "social_sentiment": lambda: _safe_data_field(
@@ -1094,6 +1111,7 @@ def _build_data_source_metadata(
         "event_risk": _source_label(event_risk.value),
         "recommendation_trends": _source_label(recommendation_trends.value),
         "insider": _source_label(insider_transactions.value, default="disabled_or_unavailable"),
+        "corporate_actions": "idx_official/yfinance",
         "forex": "deferred",
         "crypto": "deferred",
     }
@@ -1111,6 +1129,83 @@ def _build_data_source_metadata(
     return data_sources, limitations, runtime_metadata
 
 
+
+
+def _attempts_for_field(vendor_attempts: dict[str, Any] | None, key: str) -> list[dict[str, Any]]:
+    attempts = (vendor_attempts or {}).get(key) or []
+    if not isinstance(attempts, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for item in attempts:
+        if isinstance(item, dict):
+            normalized.append(item)
+            continue
+        text = str(item)
+        vendor, _, rest = text.partition(":")
+        status, _, reason = rest.partition("(")
+        normalized.append(
+            {
+                "vendor": vendor or "unknown",
+                "status": status or rest or "unknown",
+                "reason": reason.rstrip(")") or None,
+                "duration_ms": None,
+            }
+        )
+    return normalized
+
+
+def _latest_news_date(news_context: dict[str, Any] | None, fallback: str | None = None) -> str | None:
+    articles = news_context.get("articles") if isinstance(news_context, dict) else []
+    dates = [str(item.get("published_at") or "") for item in articles if isinstance(item, dict) and item.get("published_at")]
+    return max(dates) if dates else fallback
+
+
+def _build_runtime_freshness_metadata(
+    *,
+    trade_date: str,
+    last_close_price_as_of: str | None,
+    news_context: dict[str, Any] | None,
+    financial_highlights: dict[str, Any] | None,
+) -> dict[str, Any]:
+    latest_news_date = _latest_news_date(news_context)
+    financial_period_end = None
+    if isinstance(financial_highlights, dict):
+        periods = financial_highlights.get("periods")
+        trends = financial_highlights.get("financial_trends")
+        if periods is None and isinstance(trends, dict):
+            periods = trends.get("periods")
+        if isinstance(periods, list) and periods:
+            latest_period = periods[-1] if isinstance(periods[-1], dict) else {}
+            financial_period_end = latest_period.get("period_end") or latest_period.get("date") or latest_period.get("key")
+    return {
+        "price": {
+            "timestamp": last_close_price_as_of or trade_date,
+            **get_freshness_status("historical_price", last_close_price_as_of or trade_date),
+        },
+        "financials": {
+            "period_end_date": financial_period_end,
+            **get_freshness_status("financial_statement", financial_period_end),
+        },
+        "news": {
+            "latest_article_date": latest_news_date,
+            **get_freshness_status("company_news", latest_news_date),
+        },
+    }
+
+
+def _safe_corporate_actions(ticker: str, start_date: str, end_date: str) -> dict[str, Any]:
+    try:
+        result = route_to_vendor(
+            "get_corporate_actions",
+            ticker,
+            start_date,
+            end_date,
+            vendor_order=get_field_vendor_order("corporate_actions", ticker),
+        )
+        return result if isinstance(result, dict) else {"available": False, "corporate_actions": [], "reason": str(result)}
+    except Exception as exc:
+        logger.warning("Corporate actions unavailable for %s: %s", ticker, exc)
+        return {"available": False, "corporate_actions": [], "reason": str(exc), "source": "unavailable"}
 
 
 def _build_field_quality_metadata(
@@ -1133,27 +1228,32 @@ def _build_field_quality_metadata(
     last_close_price: float | None,
     company_profile: dict[str, Any] | None,
     price_performance: dict[str, Any] | None,
+    vendor_attempts: dict[str, Any] | None = None,
+    news_context: dict[str, Any] | None = None,
+    last_close_price_as_of: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     profile = company_profile or {}
     performance = price_performance or {}
+    latest_news_as_of = _latest_news_date(news_context, fallback=trade_date)
+    price_as_of = last_close_price_as_of or trade_date
     return {
-        "quote": build_field_quality("quote", last_close_price, data_sources.get("quote", "unavailable"), as_of_date=trade_date),
-        "stock_price": build_field_quality("stock_price", last_close_price, data_sources.get("price", "unavailable"), as_of_date=trade_date),
-        "market_cap": build_field_quality("market_cap", profile.get("market_cap"), "company_profile", as_of_date=trade_date),
-        "volume": build_field_quality("volume", performance.get("latest_volume"), data_sources.get("ohlcv", "unavailable"), as_of_date=trade_date),
-        "historical_price": build_field_quality("historical_price", price.value, data_sources.get("ohlcv", "unavailable"), warnings=[price.warning] if price.warning else [], as_of_date=trade_date),
-        "financial_metrics": build_field_quality("financial_metrics", fundamentals.value, data_sources.get("fundamental_profile_metrics", "unavailable"), warnings=[fundamentals.warning] if fundamentals.warning else [], as_of_date=trade_date),
-        "balance_sheet": build_field_quality("balance_sheet", balance_sheet.value, data_sources.get("balance_sheet", "unavailable"), warnings=[balance_sheet.warning] if balance_sheet.warning else [], as_of_date=trade_date),
-        "cashflow": build_field_quality("cashflow", cashflow.value, data_sources.get("cashflow", "unavailable"), warnings=[cashflow.warning] if cashflow.warning else [], as_of_date=trade_date),
-        "income_statement": build_field_quality("income_statement", income_statement.value, data_sources.get("income_statement", "unavailable"), warnings=[income_statement.warning] if income_statement.warning else [], as_of_date=trade_date),
-        "company_news": build_field_quality("company_news", company_news.value, data_sources.get("company_news", "unavailable"), warnings=[company_news.warning] if company_news.warning else [], as_of_date=trade_date),
-        "global_news": build_field_quality("global_news", global_news.value, data_sources.get("global_news", "unavailable"), warnings=[global_news.warning] if global_news.warning else [], as_of_date=trade_date),
-        "news_sentiment": build_field_quality("news_sentiment", news_sentiment.value, data_sources.get("news_sentiment", "unavailable"), warnings=[news_sentiment.warning] if news_sentiment.warning else [], as_of_date=trade_date),
-        "social_sentiment": build_field_quality("social_sentiment", social_sentiment.value, data_sources.get("social_sentiment", "unavailable"), warnings=[social_sentiment.warning] if social_sentiment.warning else [], as_of_date=trade_date),
-        "event_risk": build_field_quality("event_risk", event_risk.value, data_sources.get("event_risk", "unavailable"), warnings=[event_risk.warning] if event_risk.warning else [], as_of_date=trade_date),
-        "recommendation_trends": build_field_quality("recommendation_trends", recommendation_trends.value, data_sources.get("recommendation_trends", "unavailable"), warnings=[recommendation_trends.warning] if recommendation_trends.warning else [], as_of_date=trade_date),
-        "insider_transactions": build_field_quality("insider_transactions", insider_transactions.value, data_sources.get("insider", "unavailable"), warnings=[insider_transactions.warning] if insider_transactions.warning else [], as_of_date=trade_date),
-        "technical_indicators": build_field_quality("technical_indicators", technical_indicators.value, data_sources.get("technical", "unavailable"), warnings=[technical_indicators.warning] if technical_indicators.warning else [], as_of_date=trade_date, calculated=True),
+        "quote": build_field_quality("quote", last_close_price, data_sources.get("quote", "unavailable"), as_of_date=price_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "quote")),
+        "stock_price": build_field_quality("stock_price", last_close_price, data_sources.get("price", "unavailable"), as_of_date=price_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv")),
+        "market_cap": build_field_quality("market_cap", profile.get("market_cap"), "company_profile", as_of_date=trade_date, vendor_attempts=_attempts_for_field(vendor_attempts, "profile")),
+        "volume": build_field_quality("volume", performance.get("latest_volume"), data_sources.get("ohlcv", "unavailable"), as_of_date=price_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv")),
+        "historical_price": build_field_quality("historical_price", price.value, data_sources.get("ohlcv", "unavailable"), warnings=[price.warning] if price.warning else [], as_of_date=price_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv")),
+        "financial_metrics": build_field_quality("financial_metrics", fundamentals.value, data_sources.get("fundamental_profile_metrics", "unavailable"), warnings=[fundamentals.warning] if fundamentals.warning else [], as_of_date=trade_date, vendor_attempts=_attempts_for_field(vendor_attempts, "fundamentals")),
+        "balance_sheet": build_field_quality("balance_sheet", balance_sheet.value, data_sources.get("balance_sheet", "unavailable"), warnings=[balance_sheet.warning] if balance_sheet.warning else [], as_of_date=trade_date, vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements")),
+        "cashflow": build_field_quality("cashflow", cashflow.value, data_sources.get("cashflow", "unavailable"), warnings=[cashflow.warning] if cashflow.warning else [], as_of_date=trade_date, vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements")),
+        "income_statement": build_field_quality("income_statement", income_statement.value, data_sources.get("income_statement", "unavailable"), warnings=[income_statement.warning] if income_statement.warning else [], as_of_date=trade_date, vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements")),
+        "company_news": build_field_quality("company_news", company_news.value, data_sources.get("company_news", "unavailable"), warnings=[company_news.warning] if company_news.warning else [], as_of_date=latest_news_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "news")),
+        "global_news": build_field_quality("global_news", global_news.value, data_sources.get("global_news", "unavailable"), warnings=[global_news.warning] if global_news.warning else [], as_of_date=latest_news_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "news")),
+        "news_sentiment": build_field_quality("news_sentiment", news_sentiment.value, data_sources.get("news_sentiment", "unavailable"), warnings=[news_sentiment.warning] if news_sentiment.warning else [], as_of_date=latest_news_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "news_sentiment")),
+        "social_sentiment": build_field_quality("social_sentiment", social_sentiment.value, data_sources.get("social_sentiment", "unavailable"), warnings=[social_sentiment.warning] if social_sentiment.warning else [], as_of_date=latest_news_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "social_sentiment")),
+        "event_risk": build_field_quality("event_risk", event_risk.value, data_sources.get("event_risk", "unavailable"), warnings=[event_risk.warning] if event_risk.warning else [], as_of_date=trade_date, vendor_attempts=_attempts_for_field(vendor_attempts, "event_risk")),
+        "recommendation_trends": build_field_quality("recommendation_trends", recommendation_trends.value, data_sources.get("recommendation_trends", "unavailable"), warnings=[recommendation_trends.warning] if recommendation_trends.warning else [], as_of_date=trade_date, vendor_attempts=_attempts_for_field(vendor_attempts, "event_risk")),
+        "insider_transactions": build_field_quality("insider_transactions", insider_transactions.value, data_sources.get("insider", "unavailable"), warnings=[insider_transactions.warning] if insider_transactions.warning else [], as_of_date=trade_date, vendor_attempts=_attempts_for_field(vendor_attempts, "insider")),
+        "technical_indicators": build_field_quality("technical_indicators", technical_indicators.value, data_sources.get("technical", "unavailable"), warnings=[technical_indicators.warning] if technical_indicators.warning else [], as_of_date=price_as_of, calculated=True, vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv")),
     }
 
 
@@ -1250,13 +1350,36 @@ def collect_market_data(
         time_horizon_months=time_horizon_months,
         source=_price_source_label(price.value, last_close_price) or "yfinance",
     )
+    corporate_actions_result = _safe_corporate_actions(ticker, start_price, end)
+    corporate_actions_rows = (
+        corporate_actions_result.get("corporate_actions")
+        if isinstance(corporate_actions_result.get("corporate_actions"), list)
+        else []
+    )
+    if isinstance(price_chart, dict) and price_chart.get("available"):
+        adjusted_rows = apply_corporate_action_adjustments(price_chart.get("points") or [], corporate_actions_rows)
+        price_chart["adjusted_price_history"] = adjusted_rows
+        price_chart["corporate_action_adjustment"] = {
+            "status": "available" if corporate_actions_rows else "source_unavailable",
+            "source": corporate_actions_result.get("source") or "idx_official/yfinance",
+            "action_count": len(corporate_actions_rows),
+            "warnings": corporate_actions_result.get("warnings") or [],
+            "reason": corporate_actions_result.get("reason"),
+        }
     price_performance = dict(price_chart.get("summary") or {}) if isinstance(price_chart, dict) else {}
+    if isinstance(price_chart, dict):
+        price_performance["adjusted_price_history"] = price_chart.get("adjusted_price_history") or []
+        price_performance["corporate_action_adjustment"] = price_chart.get("corporate_action_adjustment") or {
+            "status": "source_unavailable",
+            "source": "unavailable",
+            "action_count": 0,
+        }
     technical_entry = build_technical_entry(
         price_chart.get("data") or price_chart.get("points") or price.value,
         current_price=last_close_price,
         config={"time_horizon_months": time_horizon_months},
     )
-    vendor_attempts = attempt_recorder.get_summary()
+    vendor_attempts = attempt_recorder.get_detailed_summary()
     request_budget = budget.get_summary()
     data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
         price,
@@ -1294,6 +1417,9 @@ def collect_market_data(
         last_close_price=last_close_price,
         company_profile=company_profile,
         price_performance=price_performance,
+        vendor_attempts=vendor_attempts,
+        news_context=news_context,
+        last_close_price_as_of=last_close_price_as_of,
     )
     data_quality.data_sources = dict(data_sources)
     related_news = _build_related_news(
@@ -1352,6 +1478,12 @@ def collect_market_data(
         )
     except Exception:
         logger.exception("Failed to build financial highlights for %s", ticker)
+    data_freshness = _build_runtime_freshness_metadata(
+        trade_date=trade_date,
+        last_close_price_as_of=last_close_price_as_of or trade_date,
+        news_context=news_context,
+        financial_highlights=financial_highlights,
+    )
     fundamental_analysis = None
     try:
         fundamental_analysis = build_fundamental_analysis(
@@ -1406,6 +1538,7 @@ def collect_market_data(
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
         request_budget=runtime_metadata.get("request_budget", {}),
+        data_freshness=data_freshness,
         data_completeness=data_completeness,
         fundamental_gap_report=fundamental_gap_report,
         financial_highlights=financial_highlights,

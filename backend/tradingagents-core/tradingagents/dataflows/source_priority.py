@@ -19,6 +19,8 @@ FIELD_SOURCE_PRIORITY: dict[str, list[str]] = {
     "insider_us": ["finnhub", "alpha_vantage", "yfinance"],
     "shareholders_idx": ["idx_official", "yfinance"],
     "executives_idx": ["idx_official", "yfinance"],
+    "corporate_actions_idx": ["idx_official", "yfinance"],
+    "dividend_idx": ["idx_official", "yfinance"],
 }
 
 
@@ -33,6 +35,7 @@ def get_field_vendor_order(field_name: str, ticker: str | None = None) -> list[s
         return list(FIELD_SOURCE_PRIORITY["financial_statement_idx" if is_idx_ticker(ticker) else "financial_statement_us"])
     if key in {"insider", "insider_transactions", "insider_sentiment"}:
         return list(FIELD_SOURCE_PRIORITY["insider_idx" if is_idx_ticker(ticker) else "insider_us"])
-    if key in {"shareholders", "executives"} and is_idx_ticker(ticker):
-        return list(FIELD_SOURCE_PRIORITY[f"{key}_idx"])
+    if key in {"shareholders", "executives", "corporate_actions", "corporate_action", "dividend", "dividends"} and is_idx_ticker(ticker):
+        normalized_key = {"corporate_action": "corporate_actions", "dividends": "dividend"}.get(key, key)
+        return list(FIELD_SOURCE_PRIORITY.get(f"{normalized_key}_idx", ["idx_official", "yfinance"]))
     return list(FIELD_SOURCE_PRIORITY.get(key, ["yfinance", "finnhub", "alpha_vantage"]))

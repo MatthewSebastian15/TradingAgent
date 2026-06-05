@@ -36,20 +36,45 @@ class VendorAttemptRecorder:
     """Tracks vendor outcomes per route for final metadata."""
 
     def __init__(self) -> None:
-        self._attempts: dict[str, list[str]] = defaultdict(list)
+        self._attempts: dict[str, list[VendorAttempt]] = defaultdict(list)
         self._lock = threading.Lock()
 
-    def record(self, method: str, vendor: str, status: str, detail: str | None = None) -> None:
+    def record(
+        self,
+        method: str,
+        vendor: str,
+        status: str,
+        detail: str | None = None,
+        *,
+        duration_ms: int | None = None,
+    ) -> None:
         method_key = method_to_metadata_key(method)
-        entry = f"{vendor}:{status}"
-        if detail:
-            entry = f"{entry}({sanitize_error(detail)})"
+        attempt = VendorAttempt(
+            vendor=str(vendor),
+            status=str(status),
+            reason=sanitize_error(detail) if detail else None,
+            duration_ms=duration_ms,
+        )
         with self._lock:
-            self._attempts[method_key].append(entry)
+            self._attempts[method_key].append(attempt)
 
     def get_summary(self) -> dict[str, list[str]]:
+        """Return the legacy compact summary used by older tests/UI."""
         with self._lock:
-            return {key: list(value) for key, value in self._attempts.items()}
+            result: dict[str, list[str]] = {}
+            for key, attempts in self._attempts.items():
+                rows: list[str] = []
+                for attempt in attempts:
+                    entry = f"{attempt.vendor}:{attempt.status}"
+                    if attempt.reason:
+                        entry = f"{entry}({sanitize_error(attempt.reason)})"
+                    rows.append(entry)
+                result[key] = rows
+            return result
+
+    def get_detailed_summary(self) -> dict[str, list[dict[str, Any]]]:
+        with self._lock:
+            return {key: [attempt.to_dict() for attempt in attempts] for key, attempts in self._attempts.items()}
 
 
 _RECORDERS: dict[str, VendorAttemptRecorder] = {}
@@ -95,5 +120,6 @@ def method_to_metadata_key(method: str) -> str:
         "get_recommendation_trends": "event_risk",
         "get_insider_transactions": "insider",
         "get_insider_sentiment": "insider",
+        "get_corporate_actions": "corporate_actions",
     }
     return mapping.get(method, method)

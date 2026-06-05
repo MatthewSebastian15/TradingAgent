@@ -704,3 +704,68 @@ def get_insider_transactions(ticker: Annotated[str, "ticker symbol of the compan
 
     except Exception as e:
         return f"Error retrieving insider transactions for {ticker}: {str(e)}"
+
+
+def get_corporate_actions(ticker: Annotated[str, "ticker symbol of the company"], start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
+    """Return yfinance split/dividend events in the corporate-action schema."""
+    try:
+        ticker_obj = yf.Ticker(ticker)
+        actions = yf_retry(lambda: ticker_obj.actions)
+        rows: list[dict[str, Any]] = []
+        if actions is not None and not getattr(actions, "empty", True):
+            for index, row in actions.iterrows():
+                date_text = str(getattr(index, "date", lambda: index)())[:10]
+                if start_date and date_text < str(start_date)[:10]:
+                    continue
+                if end_date and date_text > str(end_date)[:10]:
+                    continue
+                dividend = row.get("Dividends") if hasattr(row, "get") else None
+                split = row.get("Stock Splits") if hasattr(row, "get") else None
+                try:
+                    dividend_value = float(dividend or 0)
+                except (TypeError, ValueError):
+                    dividend_value = 0.0
+                try:
+                    split_value = float(split or 0)
+                except (TypeError, ValueError):
+                    split_value = 0.0
+                if dividend_value:
+                    rows.append(
+                        {
+                            "ticker": ticker,
+                            "action_type": "cash_dividend",
+                            "effective_date": date_text,
+                            "cash_amount": dividend_value,
+                            "source": "yfinance",
+                        }
+                    )
+                if split_value:
+                    action_type = "reverse_split" if split_value < 1 else "split"
+                    ratio = (1 / split_value) if split_value < 1 else split_value
+                    rows.append(
+                        {
+                            "ticker": ticker,
+                            "action_type": action_type,
+                            "effective_date": date_text,
+                            "ratio": ratio,
+                            "source": "yfinance",
+                        }
+                    )
+        return {
+            "available": True,
+            "ticker": ticker,
+            "source": "yfinance",
+            "start_date": start_date,
+            "end_date": end_date,
+            "corporate_actions": rows,
+        }
+    except Exception as exc:  # pragma: no cover - depends on optional yfinance endpoint
+        return {
+            "available": False,
+            "ticker": ticker,
+            "source": "yfinance",
+            "start_date": start_date,
+            "end_date": end_date,
+            "corporate_actions": [],
+            "reason": f"yfinance corporate actions unavailable: {exc}",
+        }
