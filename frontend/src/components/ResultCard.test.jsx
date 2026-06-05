@@ -120,7 +120,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('Key Financial Highlights')).toBeNull();
     fireEvent.click(screen.getByText('Fundamental'));
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
-    expect(screen.getAllByText('FY26Q1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Q1 2026').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Revenue').length).toBeGreaterThan(0);
   });
 

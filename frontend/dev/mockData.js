@@ -360,7 +360,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
     { key: 'FY23', label: 'FY23', type: 'annual', year: 2023, quarter: null },
     { key: 'FY24', label: 'FY24', type: 'annual', year: 2024, quarter: null },
     { key: 'FY25', label: 'FY25', type: 'annual', year: 2025, quarter: null },
-    { key: 'FY26Q1', label: 'FY26Q1', type: 'quarter', year: 2026, quarter: 1 },
+    { key: 'FY26Q1', label: 'Q1 2026', type: 'quarterly', year: 2026, quarter: 1 },
   ],
   rows: [
     {
@@ -616,7 +616,7 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
   data_quality: {
     status: 'partial',
     missing_metrics: [],
-    missing_periods: ['FY22', 'FY26Q1'],
+    missing_periods: ['FY22', 'Q1 2026'],
     sources_used: ['mock'],
   },
 };
@@ -734,6 +734,34 @@ const MOCK_IDX_FINANCIAL_HIGHLIGHTS = createMockFinancialHighlights({
   currencyLabel: 'Indonesian Rupiah',
 });
 
+export const mockNormalizedPeriodRows = [
+  {
+    period: {
+      period_label: 'FY2024',
+      period_type: 'annual',
+      fiscal_year: 2024,
+      fiscal_quarter: null,
+      period_start: '2024-01-01',
+      period_end: '2024-12-31',
+      reported_date: '2025-03-31',
+      as_of_date: '2025-03-31',
+      is_restated: false,
+      audit_status: 'audited',
+      currency: 'IDR',
+      unit: 'raw',
+    },
+    revenue: {
+      raw_value: 106000000000000,
+      raw_unit: 'raw',
+      raw_currency: 'IDR',
+      normalized_value: 106000000000000,
+      normalized_currency: 'IDR',
+      status: 'available',
+      warnings: [],
+    },
+  },
+];
+
 function mockMetric(value, display, formula, status = 'calculated') {
   return { value, display, status: value == null ? 'unavailable' : status, formula };
 }
@@ -756,7 +784,7 @@ function createMockFundamentalAnalysis({
   const quality = { status: 'complete', missing_fields: [], fallback_used: [], warnings: [] };
   const partialQuality = {
     status: 'partial',
-    missing_fields: ['FY26Q1 net_profit_growth_percent'],
+    missing_fields: ['Q1 2026 net_profit_growth_percent'],
     fallback_used: [],
     warnings: ['Latest quarterly growth comparison is unavailable.'],
   };
@@ -1812,7 +1840,7 @@ function createMockDataFreshness(result) {
       freshness_status: 'fresh',
     },
     financials: {
-      period: latestPeriod.label || latestPeriod.key || 'FY26Q1',
+      period: latestPeriod.label || latestPeriod.key || 'Q1 2026',
       period_end_date: latestPeriod.period_end_date || '2026-03-31',
       freshness_status: 'fresh',
     },
@@ -2231,7 +2259,7 @@ function createMockDataSources(result) {
     fundamentals: {
       provider: 'Yahoo Finance',
       completeness: result.financial_highlights?.data_quality?.status || 'partial',
-      last_period: result.data_freshness?.financials?.period || 'FY26Q1',
+      last_period: result.data_freshness?.financials?.period || 'Q1 2026',
       period_end_date: result.data_freshness?.financials?.period_end_date || '2026-03-31',
     },
     news: {
@@ -2519,6 +2547,8 @@ function completeMockAnalysis(overrides = {}) {
 
     data_quality: COMMON_MOCK_QUALITY,
     financial_highlights: MOCK_FINANCIAL_HIGHLIGHTS,
+    normalized_period_rows: mockNormalizedPeriodRows,
+    derived_fundamentals: [],
     ...MOCK_FUNDAMENTAL_ANALYSIS,
     company_profile: MOCK_COMPANY_PROFILE,
     news: MOCK_NEWS_CONTEXT,
@@ -2907,6 +2937,8 @@ export const MOCK_IDX_RESPONSE = completeMockAnalysis({
     'Use staged sizing because the stock is high volatility. IDX prices are rounded using exchange tick-size logic in the backend contract.',
   company_profile: MOCK_IDX_COMPANY_PROFILE,
   financial_highlights: MOCK_IDX_FINANCIAL_HIGHLIGHTS,
+  normalized_period_rows: mockNormalizedPeriodRows,
+  derived_fundamentals: [],
   ...MOCK_IDX_FUNDAMENTAL_ANALYSIS,
   executive_summary: `BBCA.JK is rated Buy because the IDX mock uses a defensive large-cap bank profile with steady profitability, strong liquidity, and a complete tick-size-rounded trade plan. The strongest support is the validated structure: current price and entry are 9800, stop loss is 9300, take profit is 11300, volatility is High at 72, allocation is 8 percent, and risk/reward is exactly 1:3 after local rounding. The biggest risk is macro pressure from rates, consumption, liquidity, or credit costs, but the mock bank profile still favors controlled exposure because asset quality and deposit strength remain supportive. The recommended action is to open a staged position, use smaller sizing despite the 8 percent allocation limit, respect the stop, and avoid averaging down. The horizon is 3 Months, and the thesis is confirmed by stable net interest margin and loan growth, or invalidated by rising credit costs or a break below support. This keeps the preview realistic while still making the non-live mock status clear to anyone reading the report.`,
   market_report:

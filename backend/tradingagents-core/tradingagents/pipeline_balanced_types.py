@@ -82,6 +82,8 @@ class CollectedData:
     data_freshness: dict[str, Any] | None = None
     data_completeness: dict[str, Any] | None = None
     fundamental_gap_report: dict[str, Any] | None = None
+    normalized_period_rows: list[dict[str, Any]] | None = None
+    derived_fundamentals: list[dict[str, Any]] | None = None
     financial_highlights: dict[str, Any] | None = None
     fundamental_analysis: dict[str, Any] | None = None
     prompt_context: dict[str, Any] | None = None

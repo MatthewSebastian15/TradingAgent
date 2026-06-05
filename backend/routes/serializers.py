@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 import re
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from analysis_cache import AnalysisCacheKey
 from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
@@ -99,6 +99,8 @@ SUMMARY_FIELDS = {
     "budget_exhausted",
     "agents_skipped",
     "financial_highlights",
+    "normalized_period_rows",
+    "derived_fundamentals",
     "financial_trends",
     "valuation_multiples",
     "fair_value_range",
@@ -712,7 +714,7 @@ def _clamp_int_score(value: Any, default: int | None = None) -> int | None:
         numeric = float(value)
     except (TypeError, ValueError):
         return default
-    if not numeric == numeric:
+    if numeric != numeric:
         return default
     if 0 <= numeric <= 1:
         numeric *= 100
@@ -1117,6 +1119,8 @@ def parse_final_result(
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
         "financial_highlights": final_state.get("financial_highlights"),
+        "normalized_period_rows": final_state.get("normalized_period_rows") or [],
+        "derived_fundamentals": final_state.get("derived_fundamentals") or [],
         "financial_trends": final_state.get("financial_trends"),
         "valuation_multiples": final_state.get("valuation_multiples"),
         "fair_value_range": final_state.get("fair_value_range"),

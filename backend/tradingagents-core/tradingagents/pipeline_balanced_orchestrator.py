@@ -727,6 +727,8 @@ def run_balanced_pipeline(
         "data_freshness": data.data_freshness or {},
         "data_completeness": data.data_completeness or {},
         "fundamental_gap_report": data.fundamental_gap_report or {},
+        "normalized_period_rows": data.normalized_period_rows or [],
+        "derived_fundamentals": data.derived_fundamentals or [],
         "financial_highlights": data.financial_highlights,
         **(data.fundamental_analysis or {}),
         "company_profile": data.company_profile
