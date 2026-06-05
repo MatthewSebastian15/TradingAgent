@@ -1,5 +1,7 @@
 import PropTypes from 'prop-types';
 
+import DataSourceBadge from '../../DataSourceBadge';
+import DataStatusBadge from '../../DataStatusBadge';
 import MetricBox from '../MetricBox';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
@@ -209,6 +211,114 @@ function DataFreshness({ freshness }) {
 
 DataFreshness.propTypes = {
   freshness: PropTypes.object,
+};
+
+function DataCompletenessReport({ completeness }) {
+  if (!completeness || typeof completeness !== 'object' || Object.keys(completeness).length === 0) return null;
+  const rows = Object.entries(completeness).map(([group, value]) => {
+    const payload = value && typeof value === 'object' ? value : { status: value };
+    return {
+      group: group.replaceAll('_', ' '),
+      status: payload.status || payload.label || 'partial',
+      percent: payload.percent ?? payload.score ?? payload.completeness_percent ?? 'N/A',
+      missing: Array.isArray(payload.missing_fields) ? payload.missing_fields.join(', ') : payload.missing_fields,
+    };
+  });
+  return (
+    <Section title="DATA COMPLETENESS">
+      <DataTable
+        columns={[
+          ['group', 'Group'],
+          ['status', 'Status'],
+          ['percent', 'Completeness'],
+          ['missing', 'Missing'],
+        ]}
+        rows={rows}
+      />
+    </Section>
+  );
+}
+
+DataCompletenessReport.propTypes = {
+  completeness: PropTypes.object,
+};
+
+function FundamentalGapReport({ gapReport }) {
+  if (!gapReport || typeof gapReport !== 'object' || Object.keys(gapReport).length === 0) return null;
+  const rawRows = gapReport.missing_fields || gapReport.missing || gapReport.gaps || [];
+  const rows = Array.isArray(rawRows)
+    ? rawRows.map((item) => {
+        if (typeof item === 'string') {
+          return { field: item, impact: 'medium', recommended_fallback: 'review source metadata', reason: 'Field is missing.' };
+        }
+        return {
+          field: item?.field || item?.name || 'N/A',
+          impact: item?.impact || 'medium',
+          recommended_fallback: item?.recommended_fallback || item?.fallback || item?.fallback_available || 'N/A',
+          reason: item?.reason || item?.missing_reason || 'N/A',
+        };
+      })
+    : [];
+  if (!rows.length) return null;
+  return (
+    <Section title="FUNDAMENTAL GAP REPORT">
+      <DataTable
+        columns={[
+          ['field', 'Field'],
+          ['impact', 'Impact'],
+          ['recommended_fallback', 'Recommended Fallback'],
+          ['reason', 'Reason'],
+        ]}
+        rows={rows}
+      />
+    </Section>
+  );
+}
+
+FundamentalGapReport.propTypes = {
+  gapReport: PropTypes.object,
+};
+
+function ResponseSourceWarnings({ result }) {
+  const warnings = Array.isArray(result?.warnings) ? result.warnings : [];
+  const rootQuality = result?.data_quality;
+  const sources = result?.data_sources;
+  if (!warnings.length && !rootQuality && !sources) return null;
+  return (
+    <Section title="RESPONSE DATA STATUS">
+      <div className="space-y-2">
+        {sources && (
+          <div className="space-y-1">
+            {Object.entries(sources).map(([label, sourcePayload]) => (
+              <DataSourceBadge key={label} sources={sourcePayload} label={`${label.replaceAll('_', ' ')} sources`} />
+            ))}
+          </div>
+        )}
+        {rootQuality && typeof rootQuality === 'object' && (
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(rootQuality)
+              .filter(([, value]) => typeof value === 'string' || (value && typeof value === 'object' && (value.status || value.confidence_score || value.reason)))
+              .slice(0, 12)
+              .map(([field, value]) => (
+                <DataStatusBadge
+                  key={field}
+                  compact
+                  quality={typeof value === 'object' ? value : undefined}
+                  status={typeof value === 'string' ? value : value.status}
+                  source={typeof value === 'object' ? value.source : undefined}
+                  reason={field.replaceAll('_', ' ')}
+                />
+              ))}
+          </div>
+        )}
+        {warnings.length > 0 && <ListItems items={warnings} />}
+      </div>
+    </Section>
+  );
+}
+
+ResponseSourceWarnings.propTypes = {
+  result: PropTypes.object,
 };
 
 function RiskSummary({ payload }) {
@@ -510,6 +620,9 @@ export default function RiskDataQualityTab({ result }) {
 
   return (
     <>
+      <ResponseSourceWarnings result={result} />
+      <DataCompletenessReport completeness={result?.data_completeness} />
+      <FundamentalGapReport gapReport={result?.fundamental_gap_report} />
       <DataFreshness freshness={result?.data_freshness} />
       <RiskSummary payload={payload} />
       <BalanceSheetRiskSummary payload={payload} />

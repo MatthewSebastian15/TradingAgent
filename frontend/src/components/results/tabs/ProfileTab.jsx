@@ -1,4 +1,6 @@
 import PropTypes from 'prop-types';
+import DataSourceBadge from '../../DataSourceBadge';
+import DataStatusBadge from '../../DataStatusBadge';
 import { safeExternalUrl } from '../../../utils/url';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
@@ -62,7 +64,7 @@ ProfileField.propTypes = {
   value: PropTypes.node,
 };
 
-export default function ProfileTab({ profile }) {
+export default function ProfileTab({ profile, result }) {
   if (!profile || !profile.available) {
     return (
       <div className="px-4 py-4 border-b border-bloomberg-border">
@@ -127,8 +129,18 @@ export default function ProfileTab({ profile }) {
             }
           />
         </div>
-        <div className="mt-2 font-mono text-[11px] text-bloomberg-muted">
-          Profile data: {profile.data_quality?.status || 'N/A'}
+        <div className="mt-2 space-y-2">
+          <div className="font-mono text-[11px] text-bloomberg-muted">
+            Profile data: {profile.data_quality?.status || 'N/A'}
+          </div>
+          <DataStatusBadge
+            quality={profile.data_quality}
+            status={profile.data_quality?.status}
+            source={profile.data_quality?.source || profile.source}
+            reason={profile.data_quality?.reason || profile.warning}
+            confidenceScore={profile.data_quality?.confidence_score}
+          />
+          <DataSourceBadge sources={profile.data_sources || result?.data_sources?.profile || profile.sources || profile.source} label="Profile sources" />
         </div>
       </section>
 
@@ -171,4 +183,5 @@ export default function ProfileTab({ profile }) {
 
 ProfileTab.propTypes = {
   profile: PropTypes.object,
+  result: PropTypes.object,
 };

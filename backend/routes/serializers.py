@@ -81,6 +81,12 @@ SUMMARY_FIELDS = {
     "key_catalysts",
     "invalidation_conditions",
     "data_quality",
+    "data_completeness",
+    "fundamental_gap_report",
+    "data_limitations",
+    "vendor_attempts",
+    "request_budget",
+    "warnings",
     "validation_warnings",
     "validation_warning_details",
     "analysis_created_at",
@@ -900,6 +906,42 @@ def _period_end_from_label(label: Any) -> str | None:
     return None
 
 
+def _build_response_warnings(payload: dict[str, Any], final_state: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    for source in (payload.get("warnings"), final_state.get("warnings") if isinstance(final_state, dict) else None):
+        if isinstance(source, list):
+            warnings.extend(str(item) for item in source if item)
+        elif source:
+            warnings.append(str(source))
+
+    data_quality = _coerce_data_quality(payload.get("data_quality") or final_state.get("data_quality"))
+    for item in data_quality.get("warnings") or []:
+        warnings.append(str(item))
+
+    for item in final_state.get("data_limitations", []) if isinstance(final_state, dict) else []:
+        warnings.append(str(item))
+
+    gap_report = final_state.get("fundamental_gap_report") if isinstance(final_state, dict) else None
+    if isinstance(gap_report, dict):
+        missing = gap_report.get("missing_fields") or gap_report.get("missing") or []
+        if missing:
+            warnings.append(f"{len(missing)} fundamental field(s) have explicit missing-data metadata.")
+
+    return list(dict.fromkeys(warnings))[:30]
+
+
+def _normalize_data_sources_for_response(data_sources: Any) -> dict[str, Any]:
+    if not isinstance(data_sources, dict):
+        return {}
+    normalized = dict(data_sources)
+    for key, value in list(normalized.items()):
+        if isinstance(value, str):
+            normalized[key] = {"primary": value, "sources": [value], "status": "available" if value else "source_unavailable"}
+        elif isinstance(value, list):
+            normalized[key] = {"sources": value, "primary": value[0] if value else None, "status": "available" if value else "source_unavailable"}
+    return normalized
+
+
 def _build_data_freshness(payload: dict[str, Any], final_state: dict[str, Any]) -> dict[str, Any]:
     existing = final_state.get("data_freshness") if isinstance(final_state, dict) else None
     if isinstance(existing, dict) and existing:
@@ -957,7 +999,17 @@ def _build_tab_status(payload: dict[str, Any]) -> dict[str, str]:
     data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
     fundamentals = data_sources.get("fundamentals") if isinstance(data_sources.get("fundamentals"), dict) else {}
     data_quality = _coerce_data_quality(payload.get("data_quality"))
-    if str(fundamentals.get("completeness") or data_quality.get("fundamentals") or "").lower() == "partial":
+    completeness = payload.get("data_completeness") if isinstance(payload.get("data_completeness"), dict) else {}
+    gap_report = payload.get("fundamental_gap_report") if isinstance(payload.get("fundamental_gap_report"), dict) else {}
+    fundamental_completeness = completeness.get("fundamental_data") or completeness.get("fundamentals") or {}
+    pct = None
+    if isinstance(fundamental_completeness, dict):
+        pct = fundamental_completeness.get("percent") or fundamental_completeness.get("score")
+    if (
+        str(fundamentals.get("completeness") or data_quality.get("fundamentals") or "").lower() == "partial"
+        or bool(gap_report.get("missing_fields") or gap_report.get("missing"))
+        or (isinstance(pct, (int, float)) and pct < 80)
+    ):
         statuses["fundamental"] = "partial"
 
     freshness = payload.get("data_freshness") if isinstance(payload.get("data_freshness"), dict) else {}
@@ -1081,8 +1133,14 @@ def parse_final_result(
         "analyst_consensus": final_state.get("analyst_consensus") or {},
         "news": final_state.get("news") or final_state.get("news_context") or {},
         "news_context": final_state.get("news_context") or final_state.get("news") or {},
-        "data_sources": final_state.get("data_sources") or {},
+        "data_sources": _normalize_data_sources_for_response(final_state.get("data_sources") or {}),
         "data_freshness": final_state.get("data_freshness") or {},
+        "data_completeness": final_state.get("data_completeness") or {},
+        "fundamental_gap_report": final_state.get("fundamental_gap_report") or {},
+        "data_limitations": final_state.get("data_limitations") or [],
+        "vendor_attempts": final_state.get("vendor_attempts") or {},
+        "request_budget": final_state.get("request_budget") or {},
+        "warnings": _build_response_warnings(final_state, final_state),
         "technical_levels": final_state.get("technical_levels") or {},
         "agent_pipeline": final_state.get("agent_pipeline") or [],
         "total_pipeline_seconds": final_state.get("total_pipeline_seconds"),

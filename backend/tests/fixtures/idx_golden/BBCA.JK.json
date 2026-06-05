@@ -1,0 +1,86 @@
+{
+  "ticker": "BBCA.JK",
+  "expected_fields": {
+    "last_price": "not_null",
+    "market_cap": "not_null",
+    "revenue_fy2022": "not_null",
+    "revenue_fy2023": "not_null",
+    "revenue_fy2024": "not_null",
+    "net_profit_fy2022": "not_null",
+    "net_profit_fy2023": "not_null",
+    "net_profit_fy2024": "not_null",
+    "revenue_growth": "valid_percentage",
+    "net_profit_growth": "valid_percentage",
+    "sector": "not_null",
+    "shareholders": "list_not_empty",
+    "company_news_count": ">= 3"
+  },
+  "mock_payload": {
+    "ticker": "BBCA.JK",
+    "last_price": 1000,
+    "volume": 1000000,
+    "market_cap": 1000000000000000,
+    "price_history": [
+      {
+        "date": "2026-06-01",
+        "close": 1000
+      },
+      {
+        "date": "2026-06-02",
+        "close": 1010
+      }
+    ],
+    "revenue_fy2022": 80000000000000,
+    "revenue_fy2023": 90000000000000,
+    "revenue_fy2024": 100000000000000,
+    "net_profit_fy2022": 10000000000000,
+    "net_profit_fy2023": 11000000000000,
+    "net_profit_fy2024": 12000000000000,
+    "ebitda_fy2024": 22000000000000,
+    "revenue_growth": 11.1,
+    "net_profit_growth": 9.1,
+    "sector": "Financials",
+    "shareholders": [
+      {
+        "name": "Public",
+        "percentage": 45.0
+      },
+      {
+        "name": "Institutional",
+        "percentage": 55.0
+      }
+    ],
+    "company_news_count": 5,
+    "valuation": {
+      "ev_ebitda": 8.5,
+      "ps": 2.1,
+      "pb": 1.8,
+      "fair_value_range": {
+        "bear": 900,
+        "base": 1100,
+        "bull": 1300
+      }
+    },
+    "risk": {
+      "leverage": 0.4,
+      "volatility": 18.0,
+      "drawdown": -8.0,
+      "liquidity": "good",
+      "sma_200": 980
+    },
+    "fundamental": {
+      "dividend_status": "available",
+      "dividend_yield": 2.5,
+      "payout_ratio": 35.0,
+      "fcf_coverage": 1.4
+    },
+    "data_quality_summary": {
+      "price": 96,
+      "fundamental": 84,
+      "news": 88,
+      "valuation": 76,
+      "risk": 83,
+      "dividend": 82
+    }
+  }
+}
