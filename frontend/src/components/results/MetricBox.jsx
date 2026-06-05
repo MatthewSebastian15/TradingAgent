@@ -1,5 +1,8 @@
 import PropTypes from 'prop-types';
 
+import DataStatusBadge from '../DataStatusBadge';
+import { getDisplayValue, normalizeQualityPayload } from '../../utils/dataStatus';
+
 function hasDisplayValue(value) {
   return (
     value !== null &&
@@ -65,10 +68,13 @@ export default function MetricBox({
   compact = false,
   preserveSlot = false,
   dataTestId,
+  quality,
 }) {
-  if (!preserveSlot && !hasDisplayValue(value)) return null;
+  const normalizedQuality = normalizeQualityPayload(quality);
+  if (!preserveSlot && !hasDisplayValue(value) && !normalizedQuality) return null;
 
-  const displayValue = hasDisplayValue(value) ? value : 'N/A';
+  const displayPayload = getDisplayValue(value, normalizedQuality);
+  const displayValue = displayPayload.text;
   const isEmpty = !hasDisplayValue(value);
   const toneClasses = getToneClasses(tone, highlight, isEmpty);
 
@@ -90,9 +96,19 @@ export default function MetricBox({
       <div className={`font-mono ${valueSize} font-semibold break-words ${toneClasses.value}`}>
         {displayValue}
       </div>
+      {displayPayload.reason && (
+        <div className="mt-1 font-mono text-[11px] text-bloomberg-muted leading-relaxed">
+          Reason: {displayPayload.reason}
+        </div>
+      )}
       {hasDisplayValue(subValue) && (
         <div className="mt-1 font-mono text-[11px] text-bloomberg-muted leading-relaxed">
           {subValue}
+        </div>
+      )}
+      {normalizedQuality && (
+        <div className="mt-2">
+          <DataStatusBadge compact quality={normalizedQuality} />
         </div>
       )}
     </div>
@@ -109,4 +125,5 @@ MetricBox.propTypes = {
   compact: PropTypes.bool,
   preserveSlot: PropTypes.bool,
   dataTestId: PropTypes.string,
+  quality: PropTypes.object,
 };

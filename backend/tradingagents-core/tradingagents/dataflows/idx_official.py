@@ -63,13 +63,13 @@ def get_idx_financial_statements(ticker: str, period: str = "annual") -> dict[st
     if not _is_idx_ticker(ticker_key):
         return {**_unavailable(ticker_key, "financial_statements", "IDX official is only used for .JK tickers"), "period": period}
 
-    reports = find_idx_financial_reports(ticker_key, year=_target_year(period))
+    reports = find_idx_financial_reports(ticker_key, year=_target_year(period), period=period)
     if not reports:
         return {
             **_unavailable(
                 ticker_key,
                 "financial_statements",
-                "No IDX official financial report metadata found; configure IDX_FINANCIAL_REPORT_INDEX_PATH or IDX_FINANCIAL_REPORT_INDEX_URL",
+                "No IDX official financial report metadata found; configure IDX_REPORT_INDEX_PATH or IDX_REPORT_INDEX_URL",
             ),
             "period": period,
             "report_candidates": [],

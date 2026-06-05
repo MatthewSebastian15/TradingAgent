@@ -144,8 +144,8 @@ def _load_report_index(index_path: str | None = None, index_url: str | None = No
     the network like a bored intern.
     """
     payload: Any = None
-    path_value = index_path or _env("IDX_FINANCIAL_REPORT_INDEX_PATH")
-    url_value = index_url or _env("IDX_FINANCIAL_REPORT_INDEX_URL")
+    path_value = index_path or _env("IDX_REPORT_INDEX_PATH") or _env("IDX_FINANCIAL_REPORT_INDEX_PATH")
+    url_value = index_url or _env("IDX_REPORT_INDEX_URL") or _env("IDX_FINANCIAL_REPORT_INDEX_URL")
 
     if path_value:
         path = Path(path_value).expanduser()
@@ -182,14 +182,15 @@ def _report_format(report: dict[str, Any]) -> str:
 def find_idx_financial_reports(
     ticker: str,
     year: int | None = None,
+    period: str = "annual",
     *,
     index_path: str | None = None,
     index_url: str | None = None,
 ) -> list[dict[str, Any]]:
     """Find official IDX financial report metadata for a ticker.
 
-    The function consumes an index supplied by ``IDX_FINANCIAL_REPORT_INDEX_PATH``
-    or ``IDX_FINANCIAL_REPORT_INDEX_URL``. A future IDX website scraper can simply
+    The function consumes an index supplied by ``IDX_REPORT_INDEX_PATH``
+    or ``IDX_REPORT_INDEX_URL``. A future IDX website scraper can simply
     emit the same metadata shape and reuse the parser/download code.
     """
     variants = _ticker_variants(ticker)
@@ -199,6 +200,10 @@ def find_idx_financial_reports(
         if report_ticker and report_ticker not in variants:
             continue
         if year is not None and _period_year(report) != int(year):
+            continue
+        requested_period = str(period or "annual").lower()
+        report_period = str(report.get("statement_type") or report.get("period_type") or report.get("period_kind") or "").lower()
+        if requested_period in {"annual", "quarterly"} and report_period and requested_period.rstrip("ly") not in report_period:
             continue
         document_type = str(report.get("document_type") or report.get("type") or "financial_statement").lower()
         if "financial" not in document_type and "laporan" not in document_type and "annual" not in document_type:
@@ -263,7 +268,7 @@ def download_idx_report(report_meta: dict[str, Any], cache_dir: str | None = Non
             "format": _report_format({**meta, "local_path": str(path)}),
         }
 
-    cache_root = Path(cache_dir or _env("IDX_FINANCIAL_REPORT_CACHE_DIR") or ".cache/idx_reports")
+    cache_root = Path(cache_dir or _env("IDX_REPORT_CACHE_DIR") or _env("IDX_FINANCIAL_REPORT_CACHE_DIR") or ".cache/idx_reports")
     cache_root.mkdir(parents=True, exist_ok=True)
     filename = _safe_filename(Path(str(source_url).split("?", 1)[0]).name or hashlib.sha1(str(source_url).encode()).hexdigest())
     destination = cache_root / filename
@@ -474,6 +479,35 @@ def _parse_xlsx_report(path: Path, report_meta: dict[str, Any]) -> dict[str, Any
     return parse_idx_financial_statement(payload)
 
 
+
+
+def _parse_xbrl_report(path: Path, report_meta: dict[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "ticker": report_meta.get("ticker"),
+        "period": report_meta.get("period"),
+        "period_label": report_meta.get("period_label") or report_meta.get("period"),
+        "period_end": report_meta.get("period_end"),
+        "reported_date": report_meta.get("reported_date"),
+        "currency": report_meta.get("currency") or "IDR",
+        "unit": report_meta.get("unit") or "raw",
+        "income_statement": {},
+        "balance_sheet": {},
+        "cashflow": {},
+    }
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError as exc:
+        return _unavailable(f"IDX XBRL/XML parser failed: {exc}", local_path=str(path), format=_report_format(report_meta))
+    for node in root.iter():
+        tag = node.tag.rsplit("}", 1)[-1] if "}" in node.tag else node.tag
+        field = _canonical_field(tag)
+        if not field or node.text is None:
+            continue
+        payload[_section_for_field(field)][field] = node.text
+    if not any(payload[section] for section in ("income_statement", "balance_sheet", "cashflow")):
+        return _unavailable("IDX XBRL/XML report did not contain mapped financial fields", local_path=str(path), format=_report_format(report_meta))
+    return parse_idx_financial_statement(payload)
+
 def parse_idx_report_file(path: str | Path, report_meta: dict[str, Any] | None = None) -> dict[str, Any]:
     """Parse JSON/CSV/basic-XLSX IDX financial report files into normalized payloads."""
     report_meta = dict(report_meta or {})
@@ -481,7 +515,9 @@ def parse_idx_report_file(path: str | Path, report_meta: dict[str, Any] | None =
     if not path_obj.exists():
         return _unavailable("IDX report file does not exist", local_path=str(path_obj))
     fmt = _report_format({**report_meta, "local_path": str(path_obj)})
-    if fmt == "json":
+    if fmt in {"xbrl", "xml"}:
+        result = _parse_xbrl_report(path_obj, report_meta)
+    elif fmt == "json":
         result = _parse_json_report(path_obj)
     elif fmt == "csv":
         result = _parse_csv_report(path_obj, report_meta)
@@ -527,3 +563,7 @@ def build_idx_financial_statement_from_report(report_meta: dict[str, Any], cache
             "report_format": downloaded.get("format"),
         },
     }
+
+
+# Backward/contract alias used by implementation docs and tests.
+parse_idx_financial_report = parse_idx_report_file

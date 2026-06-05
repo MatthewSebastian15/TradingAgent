@@ -3,6 +3,8 @@ export const DATA_STATUS_LABELS = {
   calculated: 'Calculated',
   not_applicable: 'Not applicable',
   no_history: 'No history',
+  no_dividend_history: 'No dividend history',
+  not_applicable_negative_earnings: 'Not applicable: negative earnings',
   source_unavailable: 'Source unavailable',
   unavailable: 'Source unavailable',
   stale: 'Stale',
@@ -11,6 +13,9 @@ export const DATA_STATUS_LABELS = {
   complete: 'Available',
   ok: 'Available',
   missing: 'Source unavailable',
+  empty: 'Empty',
+  failed: 'Failed',
+  skipped: 'Skipped',
   unknown: 'Unknown',
 };
 
@@ -54,8 +59,8 @@ export function getDataStatusTone(status, confidenceScore) {
   }
   if (normalized === 'calculated') return Number.isFinite(score) && score < 60 ? 'warning' : 'info';
   if (['conflict', 'stale', 'partial'].includes(normalized)) return 'warning';
-  if (['source_unavailable', 'unavailable', 'missing'].includes(normalized)) return 'error';
-  if (normalized === 'not_applicable' || normalized === 'no_history') return 'neutral';
+  if (['source_unavailable', 'unavailable', 'missing', 'failed'].includes(normalized)) return 'error';
+  if (['not_applicable', 'no_history', 'no_dividend_history', 'not_applicable_negative_earnings', 'empty', 'skipped'].includes(normalized)) return 'neutral';
   return 'neutral';
 }
 
@@ -76,7 +81,7 @@ export function normalizeQualityPayload(payload) {
     label: getDataStatusLabel(status),
     source: payload.source || payload.primary || payload.method || payload.vendor || null,
     reason: payload.reason || payload.warning || payload.summary || null,
-    confidenceScore: payload.confidence_score ?? payload.score ?? payload.confidence ?? null,
+    confidenceScore: payload.confidence_score ?? payload.confidenceScore ?? payload.score ?? payload.confidence ?? null,
     warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
   };
 }
@@ -91,4 +96,22 @@ export function normalizeSources(value) {
     return [value.primary, value.source, value.vendor].filter(Boolean).map(String);
   }
   return [];
+}
+
+
+export function getDisplayValue(value, quality) {
+  const isGenericUnavailable = typeof value === 'string' && value.trim().toUpperCase() === 'N/A';
+  if (value !== null && value !== undefined && value !== '' && !(quality && isGenericUnavailable)) {
+    return { text: value, muted: false, reason: null };
+  }
+
+  if (quality?.reason) {
+    return { text: getDataStatusLabel(quality.status), reason: quality.reason, muted: true };
+  }
+
+  if (quality?.status) {
+    return { text: getDataStatusLabel(quality.status), reason: null, muted: true };
+  }
+
+  return { text: 'N/A', reason: null, muted: true };
 }

@@ -5,6 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import DataStatusBadge from './DataStatusBadge';
+import MetricBox from './results/MetricBox';
 import { getDataStatusLabel } from '../utils/dataStatus';
 
 describe('DataStatusBadge', () => {
@@ -31,4 +32,20 @@ describe('DataStatusBadge', () => {
     expect(screen.getByText(/Confidence: 92/i)).toBeInTheDocument();
     expect(screen.getByText(/Reason: SMA 200 calculated/i)).toBeInTheDocument();
   });
+
+  it('shows reason instead of plain N/A when quality metadata exists', () => {
+    render(
+      <MetricBox
+        label="Dividend Yield"
+        value={null}
+        quality={{ status: 'no_dividend_history', reason: 'No cash dividend found' }}
+        preserveSlot
+      />
+    );
+
+    expect(screen.getAllByText(/No dividend history/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/No cash dividend found/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^N\/A$/i)).not.toBeInTheDocument();
+  });
+
 });

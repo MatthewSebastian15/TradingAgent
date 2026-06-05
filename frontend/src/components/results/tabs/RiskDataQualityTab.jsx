@@ -215,15 +215,20 @@ DataFreshness.propTypes = {
 
 function DataCompletenessReport({ completeness }) {
   if (!completeness || typeof completeness !== 'object' || Object.keys(completeness).length === 0) return null;
-  const rows = Object.entries(completeness).map(([group, value]) => {
-    const payload = value && typeof value === 'object' ? value : { status: value };
-    return {
-      group: group.replaceAll('_', ' '),
-      status: payload.status || payload.label || 'partial',
-      percent: payload.percent ?? payload.score ?? payload.completeness_percent ?? 'N/A',
-      missing: Array.isArray(payload.missing_fields) ? payload.missing_fields.join(', ') : payload.missing_fields,
-    };
-  });
+  const completenessGroups = completeness.groups && typeof completeness.groups === 'object'
+    ? completeness.groups
+    : completeness;
+  const rows = Object.entries(completenessGroups)
+    .filter(([group]) => group !== 'groups' && group !== 'overall')
+    .map(([group, value]) => {
+      const payload = value && typeof value === 'object' ? value : { status: value };
+      return {
+        group: group.replaceAll('_', ' '),
+        status: payload.status || payload.label || 'partial',
+        percent: payload.completeness_pct ?? payload.completeness_percent ?? payload.percent ?? payload.score ?? 'N/A',
+        missing: Array.isArray(payload.missing_fields) ? payload.missing_fields.join(', ') : payload.missing_fields,
+      };
+    });
   return (
     <Section title="DATA COMPLETENESS">
       <DataTable

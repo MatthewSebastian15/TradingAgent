@@ -8,11 +8,12 @@ import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 import { getFieldQuality } from '../../../utils/dataStatus';
 
-function displayMetric(metric) {
-  if (!metric || metric.status === 'unavailable') return 'N/A';
+function displayMetric(metric, quality) {
+  const status = String(metric?.status || quality?.status || '').toLowerCase();
+  if (!metric || ['unavailable', 'source_unavailable', 'no_dividend_history', 'not_applicable_negative_earnings'].includes(status)) return null;
   return metric.status === 'estimated'
     ? `${metric.display ?? 'N/A'} EST`
-    : (metric.display ?? 'N/A');
+    : (metric.display ?? metric.value ?? null);
 }
 
 function displayPercent(value) {
@@ -66,7 +67,7 @@ function FundamentalQualitySummary({ result }) {
             status={typeof fundamentalCompleteness === 'object' ? fundamentalCompleteness.status || 'partial' : 'partial'}
             reason={
               typeof fundamentalCompleteness === 'object'
-                ? `Completeness: ${fundamentalCompleteness.percent ?? fundamentalCompleteness.score ?? 'N/A'}`
+                ? `Completeness: ${fundamentalCompleteness.completeness_pct ?? fundamentalCompleteness.completeness_percent ?? fundamentalCompleteness.percent ?? fundamentalCompleteness.score ?? 'N/A'}`
                 : String(fundamentalCompleteness)
             }
           />
@@ -135,7 +136,8 @@ function MetricSection({ title, payload, metrics, summary, dataQuality }) {
             <div key={key} className="space-y-1">
               <MetricBox
                 label={label}
-                value={displayMetric(detail)}
+                value={displayMetric(detail, fieldQuality)}
+                quality={fieldQuality}
                 compact
                 preserveSlot
               />
@@ -224,7 +226,7 @@ function FinancialTrends({ payload, dataQuality }) {
                       key={`${key}-${period.key}`}
                       className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap min-w-[86px]"
                     >
-                      <div>{displayMetric(cell)}</div>
+                      <div>{displayMetric(cell, getFieldQuality(dataQuality, key)) || 'N/A'}</div>
                       {getFieldQuality(dataQuality, key) && (
                         <div className="mt-1 flex justify-end">
                           <DataStatusBadge compact quality={getFieldQuality(dataQuality, key)} />
