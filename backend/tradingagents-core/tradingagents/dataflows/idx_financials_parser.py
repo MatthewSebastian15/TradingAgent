@@ -19,6 +19,7 @@ import shutil
 import tempfile
 import urllib.request
 import zipfile
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -154,10 +155,7 @@ def _load_report_index(index_path: str | None = None, index_url: str | None = No
     elif url_value:
         payload = _load_json_from_url(url_value)
 
-    if isinstance(payload, dict):
-        reports = payload.get("reports") or payload.get("data") or []
-    else:
-        reports = payload or []
+    reports = payload.get("reports") or payload.get("data") or [] if isinstance(payload, dict) else payload or []
     return [dict(item) for item in reports if isinstance(item, dict)]
 
 
@@ -274,10 +272,12 @@ def download_idx_report(report_meta: dict[str, Any], cache_dir: str | None = Non
     destination = cache_root / filename
     try:
         request = urllib.request.Request(str(source_url), headers={"User-Agent": "TradingAgent-IDX-Parser/1.0"})
-        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - controlled by report metadata
-            with tempfile.NamedTemporaryFile(delete=False, dir=cache_root) as tmp:
-                shutil.copyfileobj(response, tmp)
-                tmp_path = Path(tmp.name)
+        with (
+            urllib.request.urlopen(request, timeout=30) as response,  # noqa: S310 - controlled by report metadata
+            tempfile.NamedTemporaryFile(delete=False, dir=cache_root) as tmp,
+        ):
+            shutil.copyfileobj(response, tmp)
+            tmp_path = Path(tmp.name)
         tmp_path.replace(destination)
     except Exception as exc:  # pragma: no cover - network disabled in CI; contract remains explicit
         return _unavailable(f"IDX report download failed: {exc}", source_url=source_url)
@@ -307,17 +307,16 @@ def normalize_idx_statement_row(row: dict[str, Any], *, currency: str = "IDR", u
     normalized.setdefault("unit", "raw")
     normalized.setdefault("source", "idx_official")
     if "period" not in normalized and (normalized.get("period_label") or normalized.get("period_end")):
-        try:
+        with suppress(ValueError):
             normalized["period"] = infer_period_metadata(
                 str(normalized.get("period_label") or normalized.get("period_end")),
+                period_type_hint=normalized.get("period_type"),
                 period_end=normalized.get("period_end"),
                 reported_date=normalized.get("reported_date"),
                 currency=currency,
                 unit="raw",
                 is_restated=bool(normalized.get("is_restated")),
             )
-        except ValueError:
-            pass
     return normalized
 
 
@@ -329,6 +328,7 @@ def _period_from_payload(payload: dict[str, Any], currency: str, unit: str) -> d
     try:
         return infer_period_metadata(
             label,
+            period_type_hint=payload.get("period_type"),
             period_end=payload.get("period_end"),
             reported_date=payload.get("reported_date"),
             currency=currency,

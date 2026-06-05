@@ -237,7 +237,7 @@ describe('mockReport', () => {
 
     expect(html).toContain('Key Financial Highlights');
     expect(html).toContain('FY22');
-    expect(html).toContain('FY26Q1');
+    expect(html).toContain('Q1 2026');
     expect(html).toContain('<th>Unit</th>');
     expect(html).toContain('USD Mn');
     expect(html).toContain('Revenue');

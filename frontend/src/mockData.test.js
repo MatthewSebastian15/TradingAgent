@@ -29,13 +29,19 @@ describe('mockData', () => {
     });
     expect(result.agents_used.length).toBeGreaterThan(0);
     expect(result.data_quality.warnings[0]).toContain('Mock data only');
-    expect(result.financial_highlights.periods.map((period) => period.key)).toEqual([
+    expect(result.financial_highlights.periods.map((period) => period.label)).toEqual([
       'FY22',
       'FY23',
       'FY24',
       'FY25',
-      'FY26Q1',
+      'Q1 2026',
     ]);
+    expect(result.normalized_period_rows[0].period).toMatchObject({
+      period_label: 'FY2024',
+      as_of_date: '2025-03-31',
+      currency: 'IDR',
+      unit: 'raw',
+    });
     expect(result.financial_highlights.rows).toHaveLength(13);
     expect(result.financial_highlights.sections).toHaveLength(5);
     expect(result.financial_highlights.point_in_time[0]).toMatchObject({

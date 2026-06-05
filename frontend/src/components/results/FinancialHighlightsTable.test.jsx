@@ -17,7 +17,7 @@ describe('FinancialHighlightsTable', () => {
     expect(screen.getAllByText('Unit').length).toBeGreaterThan(0);
     expect(screen.getAllByText('FY22').length).toBeGreaterThan(0);
     expect(screen.getAllByText('FY23').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('FY26Q1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Q1 2026').length).toBeGreaterThan(0);
     expect(screen.getByText('Revenue')).toBeTruthy();
     expect(screen.getAllByText('USD Mn').length).toBeGreaterThan(0);
     expect(screen.getByText('Latest Market Snapshot')).toBeTruthy();

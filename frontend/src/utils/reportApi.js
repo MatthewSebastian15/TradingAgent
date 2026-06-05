@@ -107,6 +107,8 @@ function compactReportPayload(result) {
     'validation_warnings',
     'validation_warning_details',
     'financial_highlights',
+    'normalized_period_rows',
+    'derived_fundamentals',
     'financial_trends',
     'valuation_multiples',
     'fair_value_range',

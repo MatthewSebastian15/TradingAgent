@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from .normalizers import normalized_number
-
 
 def safe_div(numerator: float | int | None, denominator: float | int | None) -> float | None:
     if numerator is None or denominator in (None, 0):
@@ -25,25 +23,44 @@ def calculate_growth(current: float | int | None, previous: float | int | None) 
         return None
 
 
-def _num(value: Any, *, unit: str = "raw", currency: str = "IDR") -> float | None:
+def get_normalized_value(row: dict[str, Any], field: str) -> float | None:
+    value = row.get(field)
     if isinstance(value, dict):
-        candidate = value.get("normalized_value")
-        if candidate is None:
-            candidate = value.get("value") or value.get("raw_value")
-        unit = str(value.get("normalized_unit") or value.get("raw_unit") or unit)
-        currency = str(value.get("normalized_currency") or value.get("raw_currency") or currency)
-        return normalized_number(candidate, unit=unit, currency=currency) if value.get("normalized_value") is None else _plain_number(candidate)
-    return normalized_number(value, unit=unit, currency=currency)
+        normalized = value.get("normalized_value")
+        if isinstance(normalized, (int, float)) and not isinstance(normalized, bool):
+            return float(normalized)
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
 
 
-def _plain_number(value: Any) -> float | None:
-    if value in (None, "", "N/A"):
+def _first_normalized_value(row: dict[str, Any], *fields: str) -> float | None:
+    for field in fields:
+        value = get_normalized_value(row, field)
+        if value is not None:
+            return value
+    return None
+
+
+def calculate_margin(numerator: float | int | None, revenue: float | int | None) -> float | None:
+    return safe_div(numerator, revenue)
+
+
+def calculate_fcf(operating_cash_flow: float | int | None, capex: float | int | None) -> float | None:
+    if operating_cash_flow is None or capex is None:
         return None
-    try:
-        number = float(str(value).replace(",", ""))
-    except (TypeError, ValueError):
+    return float(operating_cash_flow) - float(capex)
+
+
+def calculate_cfo_to_net_income(operating_cash_flow: float | int | None, net_profit: float | int | None) -> float | None:
+    return safe_div(operating_cash_flow, net_profit)
+
+
+def calculate_net_debt(total_debt: float | int | None, cash: float | int | None) -> float | None:
+    if total_debt is None or cash is None:
         return None
-    return number if number == number else None
+    return float(total_debt) - float(cash)
 
 
 def _calculated(value: float | None, formula: str, warnings: list[str] | None = None) -> dict[str, Any]:
@@ -69,22 +86,20 @@ def calculate_derived_fundamentals(period_rows: list[dict[str, Any]]) -> list[di
 
     for index, row in enumerate(rows):
         prev = rows[index - 1] if index > 0 else None
-        unit = str(row.get("unit") or "raw")
-        currency = str(row.get("currency") or "IDR")
-        revenue = _num(row.get("revenue"), unit=unit, currency=currency)
-        ebitda = _num(row.get("ebitda"), unit=unit, currency=currency)
-        net_profit = _num(row.get("net_profit"), unit=unit, currency=currency)
-        operating_cash_flow = _num(row.get("operating_cash_flow") or row.get("cash_from_operations"), unit=unit, currency=currency)
-        capex = _num(row.get("capex") or row.get("capital_expenditure"), unit=unit, currency=currency)
-        total_debt = _num(row.get("total_debt") or row.get("debt"), unit=unit, currency=currency)
-        cash = _num(row.get("cash") or row.get("cash_and_equivalents"), unit=unit, currency=currency)
-        current_liabilities = _num(row.get("current_liabilities"), unit=unit, currency=currency)
+        revenue = get_normalized_value(row, "revenue")
+        ebitda = get_normalized_value(row, "ebitda")
+        net_profit = get_normalized_value(row, "net_profit")
+        operating_cash_flow = _first_normalized_value(row, "operating_cash_flow", "cash_from_operations")
+        capex = _first_normalized_value(row, "capex", "capital_expenditure")
+        total_debt = _first_normalized_value(row, "total_debt", "debt")
+        cash = _first_normalized_value(row, "cash", "cash_and_equivalents")
+        current_liabilities = get_normalized_value(row, "current_liabilities")
 
-        ebitda_margin = safe_div(ebitda, revenue)
-        net_profit_margin = safe_div(net_profit, revenue)
-        free_cash_flow = operating_cash_flow - capex if operating_cash_flow is not None and capex is not None else None
-        cfo_to_net_income = safe_div(operating_cash_flow, net_profit)
-        net_debt = total_debt - cash if total_debt is not None and cash is not None else None
+        ebitda_margin = calculate_margin(ebitda, revenue)
+        net_profit_margin = calculate_margin(net_profit, revenue)
+        free_cash_flow = calculate_fcf(operating_cash_flow, capex)
+        cfo_to_net_income = calculate_cfo_to_net_income(operating_cash_flow, net_profit)
+        net_debt = calculate_net_debt(total_debt, cash)
         cash_ratio = safe_div(cash, current_liabilities)
 
         row["ebitda_margin"] = ebitda_margin
@@ -104,10 +119,8 @@ def calculate_derived_fundamentals(period_rows: list[dict[str, Any]]) -> list[di
         }
 
         if prev:
-            prev_unit = str(prev.get("unit") or unit)
-            prev_currency = str(prev.get("currency") or currency)
-            revenue_growth = calculate_growth(revenue, _num(prev.get("revenue"), unit=prev_unit, currency=prev_currency))
-            net_profit_growth = calculate_growth(net_profit, _num(prev.get("net_profit"), unit=prev_unit, currency=prev_currency))
+            revenue_growth = calculate_growth(revenue, get_normalized_value(prev, "revenue"))
+            net_profit_growth = calculate_growth(net_profit, get_normalized_value(prev, "net_profit"))
             row["revenue_growth_percent"] = revenue_growth
             row["net_profit_growth_percent"] = net_profit_growth
             derived_metrics["revenue_growth_percent"] = _calculated(

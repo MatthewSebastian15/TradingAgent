@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from tradingagents.company_profile.builder import build_company_profile
 from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.corporate_actions import apply_corporate_action_adjustments
+from tradingagents.dataflows.data_completeness import calculate_completeness
 from tradingagents.dataflows.data_quality import (
     DataField,
     DataQualityReport,
@@ -21,14 +22,10 @@ from tradingagents.dataflows.data_quality import (
     extract_price_dates,
     looks_missing,
 )
-from tradingagents.dataflows.data_completeness import calculate_completeness
 from tradingagents.dataflows.dividend_data import build_dividend_status
 from tradingagents.dataflows.freshness_policy import get_freshness_status
-from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
 from tradingagents.dataflows.fundamental_calculator import calculate_derived_fundamentals
-from tradingagents.dataflows.normalizers import build_normalized_period_rows
-from tradingagents.dataflows.source_priority import get_field_vendor_order
-from tradingagents.dataflows.technical_calculator import calculate_technical_fallback, indicator_numeric_value, is_missing_indicator
+from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
 from tradingagents.dataflows.interface import collect_vendor_values, route_to_all_vendors, route_to_vendor
 from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_url, rank_news
 from tradingagents.dataflows.news_intelligence import (
@@ -37,6 +34,16 @@ from tradingagents.dataflows.news_intelligence import (
     build_news_impact,
 )
 from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
+from tradingagents.dataflows.normalizers import (
+    build_financial_highlights_from_normalized_rows,
+    build_normalized_period_rows,
+)
+from tradingagents.dataflows.source_priority import get_field_vendor_order
+from tradingagents.dataflows.technical_calculator import (
+    calculate_technical_fallback,
+    indicator_numeric_value,
+    is_missing_indicator,
+)
 from tradingagents.dataflows.validators import (
     validate_fundamental_consistency,
     validate_price_consistency,
@@ -45,8 +52,6 @@ from tradingagents.dataflows.validators import (
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
 from tradingagents.dataflows.y_finance import normalize_ticker
-from tradingagents.financial_highlights.builder import build_financial_highlights
-from tradingagents.financial_highlights.models import to_dict as financial_highlights_to_dict
 from tradingagents.fundamentals.builder import build_fundamental_analysis
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 from tradingagents.prompt_context import build_prompt_context
@@ -328,7 +333,7 @@ def _safe_structured_company_news(
 ) -> DataField:
     try:
         vendor_order = get_field_vendor_order("company_news", ticker)
-        news_config = dict((get_config().get("news") or {}))
+        news_config = dict(get_config().get("news") or {})
         provider_priority = [vendor for vendor in vendor_order if vendor in {"marketaux", "newsdata"}]
         if provider_priority:
             news_config["provider_priority"] = provider_priority
@@ -1303,14 +1308,21 @@ def _build_runtime_freshness_metadata(
 ) -> dict[str, Any]:
     latest_news_date = _latest_news_date(news_context)
     financial_period_end = None
+    financial_as_of_date = None
     if isinstance(financial_highlights, dict):
-        periods = financial_highlights.get("periods")
-        trends = financial_highlights.get("financial_trends")
-        if periods is None and isinstance(trends, dict):
-            periods = trends.get("periods")
-        if isinstance(periods, list) and periods:
-            latest_period = periods[-1] if isinstance(periods[-1], dict) else {}
-            financial_period_end = latest_period.get("period_end") or latest_period.get("date") or latest_period.get("key")
+        period = financial_highlights.get("period")
+        if isinstance(period, dict):
+            financial_period_end = period.get("period_end")
+            financial_as_of_date = period.get("as_of_date") or period.get("reported_date") or financial_period_end
+        if financial_period_end is None:
+            periods = financial_highlights.get("periods")
+            trends = financial_highlights.get("financial_trends")
+            if periods is None and isinstance(trends, dict):
+                periods = trends.get("periods")
+            if isinstance(periods, list) and periods:
+                latest_period = periods[-1] if isinstance(periods[-1], dict) else {}
+                financial_period_end = latest_period.get("period_end") or latest_period.get("date") or latest_period.get("key")
+                financial_as_of_date = financial_as_of_date or financial_period_end
     return {
         "price": {
             "timestamp": last_close_price_as_of or trade_date,
@@ -1318,7 +1330,8 @@ def _build_runtime_freshness_metadata(
         },
         "financials": {
             "period_end_date": financial_period_end,
-            **get_freshness_status("financial_statement", financial_period_end),
+            "as_of_date": financial_as_of_date,
+            **get_freshness_status("financial_statement", financial_as_of_date or financial_period_end),
         },
         "news": {
             "latest_article_date": latest_news_date,
@@ -1640,6 +1653,7 @@ def collect_market_data(
         income_statement=annual_income_statement.value,
         balance_sheet=annual_balance_sheet.value,
         cashflow=annual_cashflow.value,
+        default_currency="IDR" if ticker.upper().endswith(".JK") else "USD",
     )
     derived_fundamentals = calculate_derived_fundamentals(normalized_period_rows)
     latest_derived = derived_fundamentals[-1].get("derived_metrics", {}) if derived_fundamentals else {}
@@ -1774,24 +1788,8 @@ def collect_market_data(
     )
     catalyst_tracker = build_catalyst_tracker(news_impact, event_risk.value)
     analyst_consensus = build_analyst_consensus(recommendation_trends.value)
-    financial_highlights = None
-    try:
-        financial_highlights = financial_highlights_to_dict(
-            build_financial_highlights(
-                ticker=ticker,
-                analysis_date=trade_date,
-                fundamentals=fundamentals.value,
-                income_statement={"quarterly": income_statement.value, "annual": annual_income_statement.value},
-                balance_sheet={"quarterly": balance_sheet.value, "annual": annual_balance_sheet.value},
-                cashflow={"quarterly": cashflow.value, "annual": annual_cashflow.value},
-                price_data=price.value,
-                company_profile=company_profile,
-            )
-        )
-    except Exception:
-        logger.exception("Failed to build financial highlights for %s", ticker)
-    if isinstance(financial_highlights, dict):
-        financial_highlights["derived_fundamentals"] = derived_fundamentals
+    financial_highlights = build_financial_highlights_from_normalized_rows(normalized_period_rows)
+    financial_highlights["derived_fundamentals"] = derived_fundamentals
     data_freshness = _build_runtime_freshness_metadata(
         trade_date=trade_date,
         last_close_price_as_of=last_close_price_as_of or trade_date,
@@ -1925,6 +1923,8 @@ def collect_market_data(
         data_freshness=data_freshness,
         data_completeness=data_completeness,
         fundamental_gap_report=fundamental_gap_report,
+        normalized_period_rows=normalized_period_rows,
+        derived_fundamentals=derived_fundamentals,
         financial_highlights=financial_highlights,
         fundamental_analysis=fundamental_analysis,
     )
