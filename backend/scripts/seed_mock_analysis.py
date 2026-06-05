@@ -12,6 +12,67 @@ if str(BACKEND_DIR) not in sys.path:
 from services.analysis_repository import get_analysis_repository  # noqa: E402
 
 MOCK_JOB_ID = "mock-seed-nvda-job"
+
+
+def _mock_high_impact_news(index: int) -> dict[str, object]:
+    confidence_label = "VERY_HIGH" if index == 1 else "HIGH" if index <= 4 else "LOW" if index == 7 else "MEDIUM"
+    source = "IDX Official Disclosure" if index == 1 else "Local Blog" if index == 7 else "Reuters"
+    return {
+        "title": f"High Impact NVDA News {index}",
+        "source": source,
+        "publisher": "IDX" if index == 1 else source,
+        "published_at": f"2026-06-{index:02d}",
+        "sentiment": "negative" if index % 2 == 0 else "neutral",
+        "impact": "high",
+        "impact_score": 80 + index,
+        "relevance_score": 90,
+        "recency_score": 85,
+        "materiality_score": 90,
+        "materiality_category": "index" if index % 2 == 0 else "corporate_action",
+        "source_confidence_score": 95 if index == 1 else 85 if index <= 4 else 45 if index == 7 else 70,
+        "source_confidence_label": confidence_label,
+        "news_scope": "company",
+        "scope_label": "COMPANY",
+        "impact_reason": f"High impact because this article directly matches NVDA and passes materiality filter {index}.",
+        "summary": f"Mock high impact summary {index}.",
+        "url": f"https://example.com/nvda-high-{index}",
+        "normalized_url": f"example.com/nvda-high-{index}",
+        "normalized_title": f"high impact nvda news {index}",
+        "dedupe_key": f"high-nvda-{index}",
+        "is_high_impact": True,
+    }
+
+
+def _mock_full_news(index: int, scope: str = "company") -> dict[str, object]:
+    scope_label = scope.replace("_", " ").upper()
+    return {
+        "title": f"{'Market Context News' if scope == 'market_context' else 'Full News NVDA Article'} {index}",
+        "source": "NewsData" if index % 3 == 0 else "MarketAux",
+        "publisher": "NewsData" if index % 3 == 0 else "MarketAux",
+        "published_at": f"2026-05-{index:02d}",
+        "sentiment": "neutral",
+        "impact": "medium",
+        "impact_score": 45 + index,
+        "relevance_score": 66 if scope == "market_context" else 72,
+        "recency_score": 55,
+        "materiality_score": 45 if scope == "market_context" else 65,
+        "materiality_category": "market_context" if scope == "market_context" else "sector",
+        "source_confidence_score": 70,
+        "source_confidence_label": "MEDIUM",
+        "news_scope": scope,
+        "scope_label": scope_label,
+        "impact_reason": (
+            "Included as market context and not classified as high impact because it does not directly match the ticker."
+            if scope == "market_context"
+            else "Included as related full news but below high-impact threshold."
+        ),
+        "summary": f"Mock full news summary {index}.",
+        "url": f"https://example.com/nvda-full-{index}",
+        "normalized_url": f"example.com/nvda-full-{index}",
+        "normalized_title": f"full news nvda article {index}",
+        "dedupe_key": f"full-nvda-{index}",
+        "is_high_impact": False,
+    }
 MOCK_RESULT = {
     "request_id": "mock-seed-nvda-buy",
     "job_id": MOCK_JOB_ID,
@@ -49,6 +110,46 @@ MOCK_RESULT = {
     "investment_thesis": "This is static development data. It does not contain a live market recommendation.",
     "key_catalysts": ["Mock catalyst for report layout testing."],
     "invalidation_conditions": ["Mock invalidation condition for report layout testing."],
+    "related_news": {
+        "available": True,
+        "ticker": "NVDA",
+        "trade_date": "2026-05-28",
+        "lookback_days": 30,
+        "source": "mock",
+        "summary": "Seeded related news payload kept only as a legacy fallback.",
+        "items": [_mock_full_news(1), _mock_full_news(2), _mock_full_news(3)],
+    },
+    "news_impact": {
+        "available": True,
+        "overall_sentiment": "neutral",
+        "sentiment_score": 52,
+        "news_count": 24,
+        "deduplicated_count": 18,
+        "high_impact_count": 7,
+        "full_news_count": 11,
+        "duplicate_excluded_count": 6,
+        "high_impact_news": [_mock_high_impact_news(index) for index in range(1, 8)],
+        "full_news_list": [
+            *[_mock_full_news(index) for index in range(1, 10)],
+            _mock_full_news(10, "market_context"),
+            _mock_full_news(11, "market_context"),
+        ],
+        "data_quality": {
+            "status": "available",
+            "sources_used": ["IDX Official Disclosure", "Reuters", "NewsData", "MarketAux"],
+            "source_confidence_breakdown": {
+                "VERY_HIGH": 1,
+                "HIGH": 3,
+                "MEDIUM": 13,
+                "LOW": 1,
+            },
+            "rules": {
+                "high_impact_limited": False,
+                "full_news_limited": False,
+                "high_impact_removed_from_full_list": True,
+            },
+        },
+    },
     "data_quality": {
         "price_data": "mock",
         "trade_levels": "mock_validated",

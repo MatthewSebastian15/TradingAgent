@@ -1484,66 +1484,153 @@ function createMockTechnicalEntry(chart) {
   };
 }
 
+function mockNewsScopeLabel(scope) {
+  return String(scope || 'company').replace(/_/g, ' ').toUpperCase();
+}
+
+function makeMockHighImpactNews(index, ticker = 'GOTO.JK') {
+  const confidenceLabel =
+    index === 1 ? 'VERY_HIGH' : index <= 4 ? 'HIGH' : index === 7 ? 'LOW' : 'MEDIUM';
+  const source = index === 1 ? 'IDX Official Disclosure' : index === 7 ? 'Local Blog' : 'Reuters';
+
+  return {
+    title: `High Impact ${ticker} News ${index}`,
+    source,
+    publisher: index === 1 ? 'IDX' : source,
+    published_at: `2026-06-${String(index).padStart(2, '0')}`,
+    sentiment: index % 2 === 0 ? 'negative' : 'neutral',
+    impact: 'high',
+    impact_score: 80 + index,
+    relevance_score: 90,
+    recency_score: 85,
+    materiality_score: 90,
+    materiality_category: index % 2 === 0 ? 'index' : 'corporate_action',
+    source_confidence_score: index === 1 ? 95 : index <= 4 ? 85 : index === 7 ? 45 : 70,
+    source_confidence_label: confidenceLabel,
+    news_scope: 'company',
+    scope_label: 'COMPANY',
+    impact_reason: `High impact because this article directly matches ${ticker} and passes materiality filter ${index}.`,
+    summary: `Mock high impact summary ${index}.`,
+    url: `https://example.com/${ticker.toLowerCase()}-high-${index}`,
+    normalized_url: `example.com/${ticker.toLowerCase()}-high-${index}`,
+    normalized_title: `high impact ${ticker.toLowerCase()} news ${index}`,
+    dedupe_key: `high-${ticker}-${index}`,
+    is_high_impact: true,
+  };
+}
+
+function makeMockFullNews(index, ticker = 'GOTO.JK', scope = 'company', overrides = {}) {
+  return {
+    title:
+      overrides.title ||
+      (scope === 'market_context'
+        ? `Market Context News ${index}`
+        : `Full News ${ticker} Article ${index}`),
+    source: overrides.source || (index % 3 === 0 ? 'NewsData' : 'MarketAux'),
+    publisher: overrides.publisher || (index % 3 === 0 ? 'NewsData' : 'MarketAux'),
+    published_at: overrides.published_at || `2026-05-${String(index).padStart(2, '0')}`,
+    sentiment: overrides.sentiment || 'neutral',
+    impact: overrides.impact || 'medium',
+    impact_score: overrides.impact_score ?? 45 + index,
+    relevance_score: overrides.relevance_score ?? (scope === 'market_context' ? 66 : 72),
+    recency_score: overrides.recency_score ?? 55,
+    materiality_score: overrides.materiality_score ?? (scope === 'market_context' ? 45 : 65),
+    materiality_category:
+      overrides.materiality_category || (scope === 'market_context' ? 'market_context' : 'sector'),
+    source_confidence_score: overrides.source_confidence_score ?? 70,
+    source_confidence_label: overrides.source_confidence_label || 'MEDIUM',
+    news_scope: scope,
+    scope_label: mockNewsScopeLabel(scope),
+    impact_reason:
+      overrides.impact_reason ||
+      (scope === 'market_context'
+        ? 'Included as market context and not classified as high impact because it does not directly match the ticker.'
+        : 'Included as related full news but below high-impact threshold.'),
+    summary: overrides.summary || `Mock full news summary ${index}.`,
+    url: overrides.url || `https://example.com/${ticker.toLowerCase()}-full-${index}`,
+    normalized_url:
+      overrides.normalized_url || `example.com/${ticker.toLowerCase()}-full-${index}`,
+    normalized_title:
+      overrides.normalized_title || `full news ${ticker.toLowerCase()} article ${index}`,
+    dedupe_key: overrides.dedupe_key || `full-${ticker}-${index}`,
+    is_high_impact: false,
+  };
+}
+
 function createMockNewsImpact({ relatedNews, news, ticker }) {
   const relatedItems = Array.isArray(relatedNews?.items) ? relatedNews.items : [];
   const contextItems = Array.isArray(news?.articles) ? news.articles : [];
   const merged = [...relatedItems, ...contextItems].filter((item) => item?.title && item?.url);
   const seen = new Set();
   const deduped = merged.filter((item) => {
-    const key = String(item.normalized_url || item.url || item.title).replace(/\?.*$/, '');
+    const key = String(item.dedupe_key || item.normalized_url || item.url || item.title).replace(/\?.*$/, '');
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 
-  if (!deduped.length) {
-    return {
-      available: false,
-      overall_sentiment: 'neutral',
-      sentiment_score: 50,
-      high_impact_news: [],
-      full_news_list: [],
-      news_count: 0,
-      deduplicated_count: 0,
-      data_quality: { status: 'unavailable', sources_used: [] },
-    };
-  }
-
-  const scored = deduped.map((item, index) => {
-    const sentiment = index % 3 === 2 ? 'negative' : 'positive';
-    const impactScore = index === 0 ? 86 : index === 2 ? 78 : 62;
-    return {
+  const normalizedTicker = ticker || 'GOTO.JK';
+  const highImpactNews = Array.from({ length: 7 }, (_, index) =>
+    makeMockHighImpactNews(index + 1, normalizedTicker)
+  );
+  const vendorFullNews = deduped.slice(0, 9).map((item, index) =>
+    makeMockFullNews(index + 1, normalizedTicker, index % 4 === 1 ? 'sector' : 'company', {
       title: item.title,
       source: item.source || item.provider || 'mock',
+      publisher: item.publisher || item.source || item.provider || 'Mock News',
       published_at: item.published_at || '2026-05-29',
-      sentiment,
-      impact: impactScore >= 70 ? 'high' : 'medium',
-      impact_score: impactScore,
-      relevance_score: item.relevance_score || 82 - index * 4,
-      recency_score: 85 - index * 5,
-      materiality_score: index === 0 ? 90 : 70,
-      materiality_category: item.event_type || (index === 2 ? 'regulatory' : 'earnings'),
-      summary: item.summary || `Mock impact summary for ${ticker}.`,
+      sentiment: item.sentiment || item.sentiment_label || 'neutral',
+      impact_score: 55 + index,
+      relevance_score: item.relevance_score || 78 - index,
+      materiality_category: item.event_type || (index % 4 === 1 ? 'sector' : 'company_news'),
+      summary: item.summary || `Mock full news summary for ${normalizedTicker}.`,
+      impact_reason:
+        item.impact_reason ||
+        item.relevance_reason ||
+        'Included as related full news but below high-impact threshold.',
       url: item.url,
       normalized_url: item.normalized_url || item.url,
-    };
-  });
+      normalized_title: item.normalized_title || String(item.title).toLowerCase(),
+      dedupe_key: item.dedupe_key || item.normalized_url || item.url || `full-${normalizedTicker}-${index + 1}`,
+    })
+  );
+
+  const generatedCompanyNews = Array.from(
+    { length: Math.max(0, 9 - vendorFullNews.length) },
+    (_, index) => makeMockFullNews(vendorFullNews.length + index + 1, normalizedTicker)
+  );
+  const fullNewsList = [
+    ...vendorFullNews,
+    ...generatedCompanyNews,
+    makeMockFullNews(10, normalizedTicker, 'market_context'),
+    makeMockFullNews(11, normalizedTicker, 'market_context'),
+  ];
 
   return {
     available: true,
-    overall_sentiment:
-      scored.filter((item) => item.sentiment === 'positive').length >=
-      scored.filter((item) => item.sentiment === 'negative').length
-        ? 'positive'
-        : 'negative',
-    sentiment_score: 68,
-    high_impact_news: scored.filter((item) => item.impact === 'high').slice(0, 5),
-    full_news_list: scored,
-    news_count: merged.length,
-    deduplicated_count: scored.length,
+    overall_sentiment: 'neutral',
+    sentiment_score: 52,
+    news_count: merged.length + highImpactNews.length + fullNewsList.length,
+    deduplicated_count: highImpactNews.length + fullNewsList.length,
+    high_impact_count: highImpactNews.length,
+    full_news_count: fullNewsList.length,
+    duplicate_excluded_count: Math.max(0, merged.length - deduped.length) + 6,
+    high_impact_news: highImpactNews,
+    full_news_list: fullNewsList,
     data_quality: {
-      status: 'complete',
-      sources_used: [...new Set(scored.map((item) => item.source))],
+      status: 'available',
+      sources_used: ['IDX Official Disclosure', 'Reuters', 'NewsData', 'MarketAux'],
+      source_confidence_breakdown: {
+        VERY_HIGH: 1,
+        HIGH: 3,
+        MEDIUM: 13,
+        LOW: 1,
+      },
+      rules: {
+        high_impact_limited: false,
+        full_news_limited: false,
+        high_impact_removed_from_full_list: true,
+      },
     },
   };
 }

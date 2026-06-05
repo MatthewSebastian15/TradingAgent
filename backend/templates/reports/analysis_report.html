@@ -270,8 +270,19 @@
               {% for item in report.high_impact_news_items %}
                 <article class="news-item">
                   <h3>{{ item.title }}</h3>
-                  <p class="muted">Source: {{ item.source }} | Published: {{ item.published_at }} | Sentiment: {{ item.sentiment }} | Impact: {{ item.impact }} | Score: {{ item.impact_score }}</p>
+                  <p class="muted">
+                    Source: {{ item.source }} |
+                    Published: {{ item.published_at }} |
+                    Scope: {{ item.news_scope }} |
+                    Category: {{ item.materiality_category }} |
+                    Source Confidence: {{ item.source_confidence_label }} |
+                    Sentiment: {{ item.sentiment }} |
+                    Impact: {{ item.impact }} |
+                    Score: {{ item.impact_score }} |
+                    Relevance: {{ item.relevance_score }}
+                  </p>
                   {% if item.summary and item.summary != 'N/A' %}<p>{{ item.summary }}</p>{% endif %}
+                  {% if item.impact_reason and item.impact_reason != 'N/A' %}<p><strong>Why it matters:</strong> {{ item.impact_reason }}</p>{% endif %}
                   {% if item.url %}<p><a href="{{ item.url }}">Open original source</a></p>{% endif %}
                 </article>
               {% endfor %}
@@ -308,9 +319,37 @@
         </section>
       {% endif %}
 
-      {% if report.related_news_items %}
+      {% if report.full_news_items %}
+        <section class="section">
+          <h2>Full News List</h2>
+          {% if report.related_news.summary %}<p>{{ report.related_news.summary }}</p>{% endif %}
+          <p class="muted">Includes company, index, sector, and market-context news that did not qualify as high impact.</p>
+          <div class="news-list">
+            {% for item in report.full_news_items %}
+              <article class="news-item">
+                <h3>{{ item.title }}</h3>
+                <p class="muted">
+                  Publisher: {{ item.publisher }} |
+                  Published: {{ item.published_at }} |
+                  Source: {{ item.source }} |
+                  Scope: {{ item.news_scope }} |
+                  Category: {{ item.materiality_category }} |
+                  Source Confidence: {{ item.source_confidence_label }} |
+                  Impact: {{ item.impact }} |
+                  Score: {{ item.impact_score }} |
+                  Relevance: {{ item.relevance_score }}
+                </p>
+                {% if item.summary and item.summary != 'N/A' %}<p>{{ item.summary }}</p>{% endif %}
+                {% if item.impact_reason and item.impact_reason != 'N/A' %}<p><strong>Why it matters:</strong> {{ item.impact_reason }}</p>{% endif %}
+                {% if item.url %}<p><a href="{{ item.url }}">Open original source</a></p>{% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% elif report.related_news_items %}
         <section class="section">
           <h2>Related News</h2>
+          <p class="muted">Legacy related news payload. Prefer news_impact.full_news_list for new reports.</p>
           {% if report.related_news.summary %}<p>{{ report.related_news.summary }}</p>{% endif %}
           <div class="news-list">
             {% for item in report.related_news_items %}

@@ -221,9 +221,7 @@ function buildTechnicalEntryRows(technical, result) {
 
 function buildRelatedNewsItems(relatedNews) {
   if (!Array.isArray(relatedNews?.items)) return [];
-  return relatedNews.items
-    .slice(0, 8)
-    .filter((item) => item && typeof item === 'object' && item.title)
+  return dedupeNewsItems(relatedNews.items)
     .map((item) => ({
       title: display(item.title),
       publisher: display(item.publisher),
@@ -236,20 +234,81 @@ function buildRelatedNewsItems(relatedNews) {
     }));
 }
 
+function newsDedupeKey(item) {
+  if (!item || typeof item !== 'object') return '';
+  return String(
+    item.dedupe_key || item.normalized_url || item.url || item.normalized_title || item.title || ''
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function dedupeNewsItems(items) {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set();
+  const output = [];
+
+  items.forEach((item) => {
+    if (!item || typeof item !== 'object' || !item.title) return;
+    const key = newsDedupeKey(item) || String(item.title).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    output.push(item);
+  });
+
+  return output;
+}
+
 function buildHighImpactNewsItems(newsImpact) {
   if (!Array.isArray(newsImpact?.high_impact_news)) return [];
   return newsImpact.high_impact_news
-    .slice(0, 5)
     .filter((item) => item && typeof item === 'object' && item.title)
     .map((item) => ({
       title: display(item.title),
       source: display(item.source),
+      publisher: display(item.publisher),
       published_at: display(item.published_at),
       sentiment: display(item.sentiment),
       impact: display(item.impact),
       impact_score: display(item.impact_score),
+      relevance_score: display(item.relevance_score),
+      materiality_category: display(item.materiality_category),
+      source_confidence_label: display(item.source_confidence_label),
+      news_scope: display(item.scope_label || item.news_scope),
+      impact_reason: display(item.impact_reason || item.relevance_reason),
       summary: display(item.summary),
       url: safeExternalUrl(item.url),
+      dedupe_key: display(item.dedupe_key),
+    }));
+}
+
+function buildFullNewsItems(newsImpact, relatedNews) {
+  const hasFullNewsList = Array.isArray(newsImpact?.full_news_list);
+  const rawItems = hasFullNewsList ? newsImpact.full_news_list : relatedNews?.items;
+  const highImpactItems = Array.isArray(newsImpact?.high_impact_news)
+    ? newsImpact.high_impact_news
+    : [];
+
+  const highKeys = new Set(dedupeNewsItems(highImpactItems).map(newsDedupeKey).filter(Boolean));
+
+  return dedupeNewsItems(rawItems)
+    .filter((item) => !highKeys.has(newsDedupeKey(item)))
+    .map((item) => ({
+      title: display(item.title),
+      publisher: display(item.publisher),
+      published_at: display(item.published_at),
+      source: display(item.source),
+      event_type: display(item.event_type || item.materiality_category),
+      materiality_category: display(item.materiality_category),
+      news_scope: display(item.scope_label || item.news_scope),
+      source_confidence_label: display(item.source_confidence_label),
+      impact: display(item.impact),
+      impact_score: display(item.impact_score),
+      relevance_score: display(item.relevance_score),
+      summary: display(item.summary),
+      impact_reason: display(item.impact_reason || item.relevance_reason),
+      url: safeExternalUrl(item.url),
+      dedupe_key: display(item.dedupe_key),
     }));
 }
 
@@ -258,9 +317,13 @@ function buildNewsImpactRows(newsImpact) {
   return [
     row('Overall Sentiment', newsImpact.overall_sentiment),
     row('Sentiment Score', newsImpact.sentiment_score),
-    row('High Impact Count', newsImpact.high_impact_news?.length || 0),
+    row('High Impact Count', newsImpact.high_impact_count || newsImpact.high_impact_news?.length || 0),
+    row('Full News Count', newsImpact.full_news_count || newsImpact.full_news_list?.length || 0),
     row('News Count', newsImpact.news_count),
     row('Deduplicated Count', newsImpact.deduplicated_count),
+    row('Duplicate Removed', newsImpact.duplicate_excluded_count),
+    row('High Impact Limited', newsImpact.data_quality?.rules?.high_impact_limited),
+    row('Full News Limited', newsImpact.data_quality?.rules?.full_news_limited),
     row('Sources Used', (newsImpact.data_quality?.sources_used || []).join(', ')),
   ];
 }
@@ -557,13 +620,16 @@ export function buildMockReportContext(result = {}) {
     news_impact: result.news_impact || {},
     news_impact_rows: buildNewsImpactRows(result.news_impact),
     high_impact_news_items: buildHighImpactNewsItems(result.news_impact),
+    full_news_items: buildFullNewsItems(result.news_impact, result.related_news),
     catalyst_tracker: result.catalyst_tracker || {},
     positive_catalysts: buildCatalystItems(result.catalyst_tracker, 'positive_catalysts'),
     negative_catalysts: buildCatalystItems(result.catalyst_tracker, 'negative_catalysts'),
     upcoming_events: buildCatalystItems(result.catalyst_tracker, 'upcoming_events'),
     analyst_consensus_rows: buildAnalystConsensusRows(result.analyst_consensus),
     related_news: result.related_news || {},
-    related_news_items: buildRelatedNewsItems(result.related_news),
+    related_news_items: Array.isArray(result.news_impact?.full_news_list)
+      ? []
+      : buildRelatedNewsItems(result.related_news),
   };
 }
 
@@ -837,8 +903,9 @@ function renderNewsImpact(report) {
               .map(
                 (item) => `<article class="news-item">
                   <h3>${escapeHtml(item.title)}</h3>
-                  <p class="muted">Source: ${escapeHtml(item.source)} | Published: ${escapeHtml(item.published_at)} | Sentiment: ${escapeHtml(item.sentiment)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)}</p>
+                  <p class="muted">Source: ${escapeHtml(item.source)} | Published: ${escapeHtml(item.published_at)} | Scope: ${escapeHtml(item.news_scope)} | Category: ${escapeHtml(item.materiality_category)} | Source Confidence: ${escapeHtml(item.source_confidence_label)} | Sentiment: ${escapeHtml(item.sentiment)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)} | Relevance: ${escapeHtml(item.relevance_score)}</p>
                   ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
+                  ${item.impact_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.impact_reason)}</p>` : ''}
                   ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
                 </article>`
               )
@@ -1070,6 +1137,31 @@ function renderRelatedNews(relatedNews, items) {
         .join('')}
     </div>
   </section>`;
+}
+
+function renderFullNewsList(report) {
+  if (!report.full_news_items?.length) return '';
+
+  return `
+    <section class="section">
+      <h2>Full News List</h2>
+      ${report.related_news?.summary ? `<p>${escapeHtml(report.related_news.summary)}</p>` : ''}
+      <p class="muted">Includes company, index, sector, and market-context news that did not qualify as high impact.</p>
+      <div class="news-list">
+        ${report.full_news_items
+          .map(
+            (item) => `<article class="news-item">
+              <h3>${escapeHtml(item.title)}</h3>
+              <p class="muted">Publisher: ${escapeHtml(item.publisher)} | Published: ${escapeHtml(item.published_at)} | Source: ${escapeHtml(item.source)} | Scope: ${escapeHtml(item.news_scope)} | Category: ${escapeHtml(item.materiality_category)} | Source Confidence: ${escapeHtml(item.source_confidence_label)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)} | Relevance: ${escapeHtml(item.relevance_score)}</p>
+              ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
+              ${item.impact_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.impact_reason)}</p>` : ''}
+              ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
+            </article>`
+          )
+          .join('')}
+      </div>
+    </section>
+  `;
 }
 
 export function renderMockReportHtml(report) {
@@ -1311,7 +1403,9 @@ export function renderMockReportHtml(report) {
 
       ${renderAnalystConsensus(report.analyst_consensus_rows)}
 
-      ${renderRelatedNews(report.related_news, report.related_news_items)}
+      ${renderFullNewsList(report)}
+
+      ${!report.full_news_items?.length ? renderRelatedNews(report.related_news, report.related_news_items) : ''}
 
       ${renderRiskDataQuality(report)}
 
