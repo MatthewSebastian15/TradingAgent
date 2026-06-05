@@ -29,7 +29,7 @@ from tradingagents.dataflows.fundamental_calculator import calculate_derived_fun
 from tradingagents.dataflows.normalizers import build_normalized_period_rows
 from tradingagents.dataflows.source_priority import get_field_vendor_order
 from tradingagents.dataflows.technical_calculator import calculate_technical_fallback, indicator_numeric_value, is_missing_indicator
-from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
+from tradingagents.dataflows.interface import collect_vendor_values, route_to_all_vendors, route_to_vendor
 from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_url, rank_news
 from tradingagents.dataflows.news_intelligence import (
     build_analyst_consensus,
@@ -37,6 +37,11 @@ from tradingagents.dataflows.news_intelligence import (
     build_news_impact,
 )
 from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
+from tradingagents.dataflows.validators import (
+    validate_fundamental_consistency,
+    validate_price_consistency,
+    validate_volume_consistency,
+)
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
 from tradingagents.dataflows.y_finance import normalize_ticker
@@ -127,6 +132,93 @@ def _run_with_config(config: dict[str, Any], func: Callable[[], T]) -> T:
         return func()
 
 
+def run_cross_vendor_validation(field_name: str, vendor_values: dict[str, float]) -> dict[str, Any]:
+    """Validate numeric values from multiple vendors and return API-ready metadata."""
+    normalized_values = dict(vendor_values or {})
+    if len(normalized_values) < 2:
+        return {
+            "field_name": field_name,
+            "status": "skipped",
+            "vendor_values": normalized_values,
+            "warnings": [],
+            "reason": "less_than_two_vendor_values",
+        }
+
+    if field_name in {"quote", "last_price", "price"}:
+        warnings = validate_price_consistency(normalized_values)
+    elif field_name == "volume":
+        warnings = validate_volume_consistency(normalized_values)
+    elif field_name in {"revenue", "ebitda", "net_profit", "market_cap", "total_assets", "assets", "equity"}:
+        warnings = validate_fundamental_consistency(field_name, normalized_values)
+    else:
+        warnings = []
+
+    return {
+        "field_name": field_name,
+        "status": "conflict" if warnings else "available",
+        "vendor_values": normalized_values,
+        "warnings": warnings,
+        "reason": None if warnings else "within_tolerance",
+    }
+
+
+def _collect_quote_validation(ticker: str, trade_date: str) -> dict[str, Any]:
+    try:
+        vendor_results = route_to_all_vendors(
+            "get_quote",
+            ticker,
+            trade_date,
+            vendor_order=get_field_vendor_order("quote", ticker),
+            field_name="last_price",
+        )
+    except Exception as exc:
+        return {
+            "field_name": "last_price",
+            "status": "skipped",
+            "vendor_values": {},
+            "warnings": [],
+            "reason": f"quote_validation_unavailable: {exc}",
+        }
+    vendor_values = collect_vendor_values(vendor_results, "last_price")
+    return run_cross_vendor_validation("last_price", vendor_values)
+
+
+def _build_field_sources(ticker: str, data_sources: dict[str, str]) -> dict[str, dict[str, Any]]:
+    field_to_source_key = {
+        "quote": "quote",
+        "last_price": "price",
+        "historical_price": "ohlcv",
+        "financial_statement": "fundamental_profile_metrics",
+        "balance_sheet": "balance_sheet",
+        "income_statement": "income_statement",
+        "cashflow": "cashflow",
+        "company_news": "company_news",
+        "global_news": "global_news",
+        "news_sentiment": "news_sentiment",
+        "insider_transactions": "insider",
+        "shareholders": "profile",
+        "executives": "profile",
+        "corporate_actions": "corporate_actions",
+        "dividend": "dividend",
+        "profile": "profile",
+    }
+    field_to_priority_key = {
+        "last_price": "quote",
+        "financial_statement": "financial_statement",
+        "balance_sheet": "financial_statement",
+        "income_statement": "financial_statement",
+        "cashflow": "financial_statement",
+    }
+    metadata: dict[str, dict[str, Any]] = {}
+    for field_name, source_key in field_to_source_key.items():
+        priority_key = field_to_priority_key.get(field_name, field_name)
+        metadata[field_name] = {
+            "selected_source": data_sources.get(source_key) or "unavailable",
+            "vendor_order": get_field_vendor_order(priority_key, ticker),
+        }
+    return metadata
+
+
 def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -> DataField:
     try:
         raw_value = _call_yfinance_with_resilience(func)
@@ -192,18 +284,38 @@ def _safe_multi_source_data_field(label: str, func: Callable[[], dict[str, Any]]
         return DataField.unavailable(label, exc)
 
 
-def _fetch_news_field(method: str, *args) -> Any:
+def _fetch_news_field(
+    method: str,
+    *args,
+    vendor_order: list[str] | None = None,
+    field_name: str | None = None,
+) -> Any:
     config = get_config()
     if bool(config.get("data_vendor_enable_multi_source_news", False)):
-        return route_to_all_vendors(method, *args)
-    return route_to_vendor(method, *args)
+        return route_to_all_vendors(method, *args, vendor_order=vendor_order, field_name=field_name)
+    return route_to_vendor(method, *args, vendor_order=vendor_order, field_name=field_name)
 
 
-def _safe_news_data_field(label: str, method: str, *args, limit: int = 12_000) -> DataField:
+def _safe_news_data_field(
+    label: str,
+    method: str,
+    *args,
+    vendor_order: list[str] | None = None,
+    field_name: str | None = None,
+    limit: int = 12_000,
+) -> DataField:
     config = get_config()
     if bool(config.get("data_vendor_enable_multi_source_news", False)):
-        return _safe_multi_source_data_field(label, lambda: route_to_all_vendors(method, *args), limit=limit)
-    return _safe_data_field(label, lambda: route_to_vendor(method, *args), limit=limit)
+        return _safe_multi_source_data_field(
+            label,
+            lambda: route_to_all_vendors(method, *args, vendor_order=vendor_order, field_name=field_name),
+            limit=limit,
+        )
+    return _safe_data_field(
+        label,
+        lambda: route_to_vendor(method, *args, vendor_order=vendor_order, field_name=field_name),
+        limit=limit,
+    )
 
 
 def _safe_structured_company_news(
@@ -215,7 +327,13 @@ def _safe_structured_company_news(
     limit: int = 12_000,
 ) -> DataField:
     try:
-        context = NewsService().fetch_news(ticker, as_of_date=trade_date, window_days=window_days)
+        vendor_order = get_field_vendor_order("company_news", ticker)
+        news_config = dict((get_config().get("news") or {}))
+        provider_priority = [vendor for vendor in vendor_order if vendor in {"marketaux", "newsdata"}]
+        if provider_priority:
+            news_config["provider_priority"] = provider_priority
+        news_config["enable_yfinance_fallback"] = "yfinance" in vendor_order
+        context = NewsService(config=news_config).fetch_news(ticker, as_of_date=trade_date, window_days=window_days)
         holder.update(context)
         return DataField.from_text(_truncate(format_news_for_prompt(context), limit))
     except Exception as exc:
@@ -442,6 +560,7 @@ def _build_related_news(
 
 def _safe_company_profile(ticker: str, trade_date: str) -> dict[str, Any]:
     try:
+        vendor_order = get_field_vendor_order("profile", ticker)
         return build_company_profile(
             ticker=ticker,
             fetch_vendor=lambda vendor: route_to_vendor(
@@ -449,7 +568,9 @@ def _safe_company_profile(ticker: str, trade_date: str) -> dict[str, Any]:
                 ticker,
                 trade_date,
                 vendor_order=[vendor],
+                field_name="profile",
             ),
+            vendor_order=vendor_order,
         )
     except Exception as exc:
         logger.warning("company_profile fetch failed for %s: %s", ticker, exc)
@@ -794,6 +915,7 @@ def _build_collection_tasks(
                 start_price,
                 end,
                 vendor_order=get_field_vendor_order("historical_price", ticker),
+                field_name="historical_price",
             ),
             limit=14_000,
         ),
@@ -804,6 +926,7 @@ def _build_collection_tasks(
                 ticker,
                 trade_date,
                 vendor_order=get_field_vendor_order("financial_statement", ticker),
+                field_name="financial_statement",
             ),
             limit=12_000,
         ),
@@ -815,6 +938,7 @@ def _build_collection_tasks(
                 "quarterly",
                 trade_date,
                 vendor_order=get_field_vendor_order("financial_statement", ticker),
+                field_name="financial_statement",
             ),
             limit=10_000,
         ),
@@ -826,6 +950,7 @@ def _build_collection_tasks(
                 "quarterly",
                 trade_date,
                 vendor_order=get_field_vendor_order("financial_statement", ticker),
+                field_name="financial_statement",
             ),
             limit=10_000,
         ),
@@ -837,6 +962,7 @@ def _build_collection_tasks(
                 "quarterly",
                 trade_date,
                 vendor_order=get_field_vendor_order("financial_statement", ticker),
+                field_name="financial_statement",
             ),
             limit=10_000,
         ),
@@ -846,6 +972,7 @@ def _build_collection_tasks(
                 "get_insider_transactions",
                 ticker,
                 vendor_order=get_field_vendor_order("insider_transactions", ticker),
+                field_name="insider_transactions",
             ),
             limit=6_000,
         ),
@@ -855,6 +982,7 @@ def _build_collection_tasks(
                 "get_news_sentiment",
                 ticker,
                 vendor_order=get_field_vendor_order("news_sentiment", ticker),
+                field_name="news_sentiment",
             ),
             limit=4_000,
         ),
@@ -887,6 +1015,8 @@ def _build_collection_tasks(
         trade_date,
         news_lookback_days,
         10,
+        vendor_order=get_field_vendor_order("global_news", ticker),
+        field_name="global_news",
         limit=8_000,
     )
     return tasks
@@ -902,17 +1032,17 @@ def _build_annual_tasks(
     return {
         "annual_balance_sheet": lambda: _safe_data_field(
             "annual_balance_sheet",
-            lambda: route_to_vendor("get_balance_sheet", ticker, "annual", trade_date, vendor_order=vendor_order),
+            lambda: route_to_vendor("get_balance_sheet", ticker, "annual", trade_date, vendor_order=vendor_order, field_name="financial_statement"),
             limit=10_000,
         ),
         "annual_income_statement": lambda: _safe_data_field(
             "annual_income_statement",
-            lambda: route_to_vendor("get_income_statement", ticker, "annual", trade_date, vendor_order=vendor_order),
+            lambda: route_to_vendor("get_income_statement", ticker, "annual", trade_date, vendor_order=vendor_order, field_name="financial_statement"),
             limit=10_000,
         ),
         "annual_cashflow": lambda: _safe_data_field(
             "annual_cashflow",
-            lambda: route_to_vendor("get_cashflow", ticker, "annual", trade_date, vendor_order=vendor_order),
+            lambda: route_to_vendor("get_cashflow", ticker, "annual", trade_date, vendor_order=vendor_order, field_name="financial_statement"),
             limit=10_000,
         ),
     }
@@ -1205,6 +1335,7 @@ def _safe_corporate_actions(ticker: str, start_date: str, end_date: str) -> dict
             start_date,
             end_date,
             vendor_order=get_field_vendor_order("corporate_actions", ticker),
+            field_name="corporate_actions",
         )
         return result if isinstance(result, dict) else {"available": False, "corporate_actions": [], "reason": str(result)}
     except Exception as exc:
@@ -1324,14 +1455,44 @@ def _build_field_quality_metadata(
     vendor_attempts: dict[str, Any] | None = None,
     news_context: dict[str, Any] | None = None,
     last_close_price_as_of: str | None = None,
+    validation_summary: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     profile = company_profile or {}
     performance = price_performance or {}
     latest_news_as_of = _latest_news_date(news_context, fallback=trade_date)
     price_as_of = last_close_price_as_of or trade_date
+    validation_summary = validation_summary or {}
+    last_price_validation = validation_summary.get("last_price") if isinstance(validation_summary.get("last_price"), dict) else {}
+    last_price_warnings = list(last_price_validation.get("warnings") or [])
+    last_price_vendor_values = dict(last_price_validation.get("vendor_values") or {})
     return {
-        "quote": build_field_quality("quote", last_close_price, data_sources.get("quote", "unavailable"), as_of_date=price_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "quote")),
-        "stock_price": build_field_quality("stock_price", last_close_price, data_sources.get("price", "unavailable"), as_of_date=price_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv")),
+        "quote": build_field_quality(
+            "quote",
+            last_close_price,
+            data_sources.get("quote", "unavailable"),
+            as_of_date=price_as_of,
+            conflict_warnings=last_price_warnings,
+            vendor_values=last_price_vendor_values,
+            vendor_attempts=_attempts_for_field(vendor_attempts, "quote"),
+        ),
+        "last_price": build_field_quality(
+            "last_price",
+            last_close_price,
+            data_sources.get("price", "unavailable"),
+            as_of_date=price_as_of,
+            conflict_warnings=last_price_warnings,
+            vendor_values=last_price_vendor_values,
+            vendor_attempts=_attempts_for_field(vendor_attempts, "quote"),
+        ),
+        "stock_price": build_field_quality(
+            "stock_price",
+            last_close_price,
+            data_sources.get("price", "unavailable"),
+            as_of_date=price_as_of,
+            conflict_warnings=last_price_warnings,
+            vendor_values=last_price_vendor_values,
+            vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv"),
+        ),
         "market_cap": build_field_quality("market_cap", profile.get("market_cap"), "company_profile", as_of_date=trade_date, vendor_attempts=_attempts_for_field(vendor_attempts, "profile")),
         "volume": build_field_quality("volume", performance.get("latest_volume"), data_sources.get("ohlcv", "unavailable"), as_of_date=price_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv")),
         "historical_price": build_field_quality("historical_price", price.value, data_sources.get("ohlcv", "unavailable"), warnings=[price.warning] if price.warning else [], as_of_date=price_as_of, vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv")),
@@ -1500,6 +1661,9 @@ def collect_market_data(
     )
     corporate_action_summary = _corporate_action_summary(corporate_actions_result, corporate_actions_rows)
 
+    validation_summary = {"last_price": _collect_quote_validation(ticker, trade_date)}
+    validation_warnings = list(validation_summary["last_price"].get("warnings") or [])
+
     vendor_attempts = attempt_recorder.get_detailed_summary()
     request_budget = budget.get_summary()
     data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
@@ -1519,6 +1683,10 @@ def collect_market_data(
         vendor_attempts=vendor_attempts,
         request_budget=request_budget,
     )
+    if validation_warnings:
+        data_quality.warnings = list(dict.fromkeys([*(data_quality.warnings or []), *validation_warnings]))[:20]
+        data_quality.warning_details = [_warning_detail_from_message(message) for message in data_quality.warnings]
+    field_sources = _build_field_sources(ticker, data_sources)
     data_quality.field_quality = _build_field_quality_metadata(
         trade_date=trade_date,
         data_sources=data_sources,
@@ -1541,6 +1709,7 @@ def collect_market_data(
         vendor_attempts=vendor_attempts,
         news_context=news_context,
         last_close_price_as_of=last_close_price_as_of,
+        validation_summary=validation_summary,
     )
     for field_name in (
         "revenue_growth_percent",
@@ -1748,6 +1917,9 @@ def collect_market_data(
         analyst_consensus=analyst_consensus,
         data_sources=data_sources,
         data_limitations=data_limitations,
+        field_sources=field_sources,
+        validation_summary=validation_summary,
+        warnings=data_quality.warnings,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
         request_budget=runtime_metadata.get("request_budget", {}),
         data_freshness=data_freshness,

@@ -616,9 +616,11 @@ def extract_vendor_numeric_value(result: Any, field_name: str) -> float | None:
     """Extract a comparable numeric value from a vendor payload for validation."""
     if result in (None, "", [], {}):
         return None
+
     if isinstance(result, (int, float)) and not isinstance(result, bool):
         value = float(result)
         return value if value == value else None
+
     if isinstance(result, dict):
         keys = (
             field_name,
@@ -626,10 +628,20 @@ def extract_vendor_numeric_value(result: Any, field_name: str) -> float | None:
             "current_price",
             "price",
             "last",
+            "last_price",
             "close",
+            "regularMarketPrice",
             "c",
             "market_cap",
+            "marketCap",
             "volume",
+            "revenue",
+            "ebitda",
+            "net_profit",
+            "netIncome",
+            "total_assets",
+            "assets",
+            "equity",
         )
         for key in keys:
             value = result.get(key)
@@ -644,7 +656,7 @@ def extract_vendor_numeric_value(result: Any, field_name: str) -> float | None:
     return None
 
 
-def collect_vendor_numeric_values(vendor_results: dict[str, Any], field_name: str) -> dict[str, float]:
+def collect_vendor_values(vendor_results: dict[str, Any], field_name: str) -> dict[str, float]:
     values: dict[str, float] = {}
     for vendor, result in (vendor_results or {}).items():
         numeric = extract_vendor_numeric_value(result, field_name)
@@ -652,6 +664,10 @@ def collect_vendor_numeric_values(vendor_results: dict[str, Any], field_name: st
             values[str(vendor)] = numeric
     return values
 
+
+def collect_vendor_numeric_values(vendor_results: dict[str, Any], field_name: str) -> dict[str, float]:
+    """Backward-compatible alias for older tests/imports."""
+    return collect_vendor_values(vendor_results, field_name)
 
 def _attach_attempt_metadata(result: Any, attempts: list[VendorAttempt]) -> Any:
     if isinstance(result, dict):
@@ -663,8 +679,15 @@ def _attach_attempt_metadata(result: Any, attempts: list[VendorAttempt]) -> Any:
     return result
 
 
-def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, **kwargs):
+def route_to_vendor(
+    method: str,
+    *args,
+    vendor_order: list[str] | None = None,
+    field_name: str | None = None,
+    **kwargs,
+):
     """Route method calls to vendors with fallback, budget, attempts, timeout, retry and cache."""
+    _ = field_name
     config = get_config()
 
     if method not in VENDOR_METHODS:
@@ -691,7 +714,7 @@ def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, *
 
     for vendor in vendor_order or _vendor_sequence(method):
         if vendor not in VENDOR_METHODS[method]:
-            record(vendor, "unsupported", "vendor is not supported for this method")
+            record(vendor, "unsupported", f"Method {method} is not implemented for {vendor}")
             continue
         enabled, disabled_reason = _is_vendor_enabled(method, vendor, config)
         if not enabled:
@@ -749,16 +772,24 @@ def get_quote(ticker: str, curr_date: str | None = None) -> dict[str, Any]:
         ticker,
         curr_date,
         vendor_order=get_field_vendor_order("quote", ticker),
+        field_name="quote",
     )
 
 
-def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
+def route_to_all_vendors(
+    method: str,
+    *args,
+    vendor_order: list[str] | None = None,
+    field_name: str | None = None,
+    **kwargs,
+) -> dict[str, Any]:
     """Return usable payloads from every configured/supported vendor.
 
     This is intentionally used only for fields where multi-source context is
     worth the extra calls, such as news. Single-source fields should keep using
     route_to_vendor to avoid consuming provider quotas unnecessarily.
     """
+    _ = field_name
     config = get_config()
     if method not in VENDOR_METHODS:
         raise ValueError(f"Method '{method}' not supported")
@@ -766,7 +797,12 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
     results: dict[str, Any] = {}
     errors: list[str] = []
     first_unusable: tuple[str, Any] | None = None
-    for vendor in _vendor_sequence(method):
+    for vendor in vendor_order or _vendor_sequence(method):
+        if vendor not in VENDOR_METHODS[method]:
+            reason = f"Method {method} is not implemented for {vendor}"
+            errors.append(f"{vendor}: {reason}")
+            _record_attempt(config, method, vendor, "skipped", reason)
+            continue
         enabled, disabled_reason = _is_vendor_enabled(method, vendor, config)
         if not enabled:
             errors.append(f"{vendor}: {disabled_reason}")
