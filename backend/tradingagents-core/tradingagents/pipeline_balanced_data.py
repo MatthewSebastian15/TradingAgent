@@ -281,7 +281,8 @@ def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -
         current["url"] = url
         current["summary"] = _clean_news_summary("\n".join(summary_lines).strip())
         current["normalized_url"] = normalize_url(url)
-        current["related_ticker"] = current.get("related_ticker") or ticker
+        if not current.get("related_ticker") and default_source == "company_news":
+            current["related_ticker"] = ticker
         current["event_type"] = current.get("event_type") or "general"
         current["relevance_reason"] = _news_relevance_reason(current, ticker)
 
@@ -311,7 +312,7 @@ def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -
                 "summary": "",
                 "source": current_source or default_source,
                 "event_type": "general",
-                "related_ticker": ticker,
+                "related_ticker": ticker if default_source == "company_news" else None,
             }
             continue
 
@@ -332,6 +333,7 @@ def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -
             current["url"] = line.split(":", 1)[1].strip()
             continue
         if lowered.startswith("relevant tickers:"):
+            current["related_ticker"] = line.split(":", 1)[1].strip() or current.get("related_ticker")
             continue
 
         summary_lines.append(line)
@@ -374,18 +376,20 @@ def _related_news_items_from_context(news_context: dict[str, Any] | None, ticker
 
 
 def _build_related_news(
+    *,
     ticker: str,
     trade_date: str,
-    time_horizon_months: int,
-    company_news: str,
-    global_news: str,
-    source_label: str | None = None,
-    news_context: dict[str, Any] | None = None,
-    limit: int = 8,
+    company_news: str | None,
+    global_news: str | None,
+    source_label: str | None,
+    news_context: dict[str, Any] | None,
+    limit: int | None = None,
+    time_horizon_months: int = 1,
 ) -> dict[str, Any]:
+    # Backward-compatible limit only. Related news output must not be capped here.
+    _ = limit
     months = _normalize_time_horizon_months(time_horizon_months)
     lookback_days = _horizon_days(months)
-    max_items = max(1, min(int(limit or 8), 8))
 
     base_payload: dict[str, Any] = {
         "available": False,
@@ -406,10 +410,10 @@ def _build_related_news(
         return {**base_payload, "warning": "Related news is unavailable."}
 
     try:
-        ranked = rank_news(deduplicate_news(merged), ticker=ticker)[:max_items]
+        ranked = rank_news(deduplicate_news(merged), ticker=ticker)
     except Exception as exc:
         logger.warning("Failed to rank related news for %s: %s", ticker, exc)
-        ranked = merged[:max_items]
+        ranked = merged
 
     if not ranked:
         return {**base_payload, "warning": "Related news is unavailable after deduplication."}
@@ -420,7 +424,7 @@ def _build_related_news(
         **base_payload,
         "available": True,
         "source": source,
-        "summary": f"Top {len(ranked)} related news items collected from configured vendors for this analysis window.",
+        "summary": f"{len(ranked)} related news items collected from configured vendors for this analysis window.",
         "items": ranked,
     }
 
@@ -1403,12 +1407,10 @@ def collect_market_data(
     related_news = _build_related_news(
         ticker=ticker,
         trade_date=trade_date,
-        time_horizon_months=time_horizon_months,
         company_news=company_news.value,
         global_news=global_news.value,
         source_label=raw_data_sources.get("news"),
         news_context=news_context,
-        limit=8,
     )
     news_impact = build_news_impact(
         ticker=ticker,
