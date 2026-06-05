@@ -36,7 +36,11 @@ class NormalizedNewsArticle(BaseModel):
     sentiment_label: str | None = None
     sentiment_score: float | None = None
     relevance_score: float = 0
+    relevance_category: str | None = None
     relevance_reasons: list[str] = Field(default_factory=list)
+    entity_match: str | None = None
+    matched_terms: list[str] = Field(default_factory=list)
+    bucket: str | None = None
     content_hash: str | None = None
     raw_payload: dict[str, Any] | None = None
     query_strategy: str | None = None

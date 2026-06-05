@@ -14,6 +14,9 @@ from urllib.parse import urlsplit
 from tradingagents.company_profile.builder import build_company_profile
 from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
+from tradingagents.dataflows.data_completeness import calculate_completeness
+from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
+from tradingagents.dataflows.source_priority import get_field_vendor_order
 from tradingagents.dataflows.interface import route_to_all_vendors, route_to_vendor
 from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_url, rank_news
 from tradingagents.dataflows.news_intelligence import (
@@ -24,7 +27,7 @@ from tradingagents.dataflows.news_intelligence import (
 from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
 from tradingagents.dataflows.vendor_budget import create_budget_from_config, release_budget
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
-from tradingagents.dataflows.y_finance import calculate_volatility, fetch_current_price, normalize_ticker
+from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.financial_highlights.builder import build_financial_highlights
 from tradingagents.financial_highlights.models import to_dict as financial_highlights_to_dict
 from tradingagents.fundamentals.builder import build_fundamental_analysis
@@ -281,8 +284,7 @@ def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -
         current["url"] = url
         current["summary"] = _clean_news_summary("\n".join(summary_lines).strip())
         current["normalized_url"] = normalize_url(url)
-        if not current.get("related_ticker") and default_source == "company_news":
-            current["related_ticker"] = ticker
+        current["related_ticker"] = current.get("related_ticker") or ticker
         current["event_type"] = current.get("event_type") or "general"
         current["relevance_reason"] = _news_relevance_reason(current, ticker)
 
@@ -312,7 +314,7 @@ def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -
                 "summary": "",
                 "source": current_source or default_source,
                 "event_type": "general",
-                "related_ticker": ticker if default_source == "company_news" else None,
+                "related_ticker": ticker,
             }
             continue
 
@@ -333,7 +335,6 @@ def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -
             current["url"] = line.split(":", 1)[1].strip()
             continue
         if lowered.startswith("relevant tickers:"):
-            current["related_ticker"] = line.split(":", 1)[1].strip() or current.get("related_ticker")
             continue
 
         summary_lines.append(line)
@@ -376,20 +377,18 @@ def _related_news_items_from_context(news_context: dict[str, Any] | None, ticker
 
 
 def _build_related_news(
-    *,
     ticker: str,
     trade_date: str,
-    company_news: str | None,
-    global_news: str | None,
-    source_label: str | None,
-    news_context: dict[str, Any] | None,
-    limit: int | None = None,
-    time_horizon_months: int = 1,
+    time_horizon_months: int,
+    company_news: str,
+    global_news: str,
+    source_label: str | None = None,
+    news_context: dict[str, Any] | None = None,
+    limit: int = 8,
 ) -> dict[str, Any]:
-    # Backward-compatible limit only. Related news output must not be capped here.
-    _ = limit
     months = _normalize_time_horizon_months(time_horizon_months)
     lookback_days = _horizon_days(months)
+    max_items = max(1, min(int(limit or 8), 8))
 
     base_payload: dict[str, Any] = {
         "available": False,
@@ -410,10 +409,10 @@ def _build_related_news(
         return {**base_payload, "warning": "Related news is unavailable."}
 
     try:
-        ranked = rank_news(deduplicate_news(merged), ticker=ticker)
+        ranked = rank_news(deduplicate_news(merged), ticker=ticker)[:max_items]
     except Exception as exc:
         logger.warning("Failed to rank related news for %s: %s", ticker, exc)
-        ranked = merged
+        ranked = merged[:max_items]
 
     if not ranked:
         return {**base_payload, "warning": "Related news is unavailable after deduplication."}
@@ -424,7 +423,7 @@ def _build_related_news(
         **base_payload,
         "available": True,
         "source": source,
-        "summary": f"{len(ranked)} related news items collected from configured vendors for this analysis window.",
+        "summary": f"Top {len(ranked)} related news items collected from configured vendors for this analysis window.",
         "items": ranked,
     }
 
@@ -802,7 +801,11 @@ def _build_collection_tasks(
         ),
         "insider_transactions": lambda: _safe_data_field(
             "insider_transactions",
-            lambda: route_to_vendor("get_insider_transactions", ticker),
+            lambda: route_to_vendor(
+                "get_insider_transactions",
+                ticker,
+                vendor_order=get_field_vendor_order("insider_transactions", ticker),
+            ),
             limit=6_000,
         ),
         "news_sentiment": lambda: _safe_data_field(
@@ -843,6 +846,35 @@ def _build_collection_tasks(
     )
     return tasks
 
+
+
+def _build_annual_tasks(
+    ticker: str,
+    trade_date: str,
+) -> dict[str, Callable[[], DataField]]:
+    """Annual statement tasks are independent and can run with the main batch."""
+    vendor_order = [
+        vendor
+        for vendor in get_field_vendor_order("financial_statement", ticker)
+        if vendor != "idx_official"  # IDX official parser is a separate source layer, not a router vendor yet.
+    ]
+    return {
+        "annual_balance_sheet": lambda: _safe_data_field(
+            "annual_balance_sheet",
+            lambda: route_to_vendor("get_balance_sheet", ticker, "annual", trade_date, vendor_order=vendor_order),
+            limit=10_000,
+        ),
+        "annual_income_statement": lambda: _safe_data_field(
+            "annual_income_statement",
+            lambda: route_to_vendor("get_income_statement", ticker, "annual", trade_date, vendor_order=vendor_order),
+            limit=10_000,
+        ),
+        "annual_cashflow": lambda: _safe_data_field(
+            "annual_cashflow",
+            lambda: route_to_vendor("get_cashflow", ticker, "annual", trade_date, vendor_order=vendor_order),
+            limit=10_000,
+        ),
+    }
 
 def _run_collection_tasks(
     tasks: dict[str, Callable[[], DataField]],
@@ -1005,199 +1037,6 @@ def _price_source_label(price_data: str, last_close_price: float | None) -> str 
     return "yfinance:last_close"
 
 
-def _provider_name_from_label(label: str | None) -> str:
-    lowered = str(label or "").lower()
-    providers: list[str] = []
-    if "yfinance" in lowered or "yahoo" in lowered:
-        providers.append("Yahoo Finance")
-    if "finnhub" in lowered:
-        providers.append("Finnhub")
-    if "alpha_vantage" in lowered or "alpha vantage" in lowered:
-        providers.append("Alpha Vantage")
-    if "marketaux" in lowered:
-        providers.append("Marketaux")
-    if "newsdata" in lowered:
-        providers.append("NewsData.io")
-    if not providers:
-        return "Unavailable" if lowered in {"", "none", "unavailable"} else str(label or "Unavailable")
-    return " + ".join(dict.fromkeys(providers))
-
-
-def _price_method_from_label(label: str | None) -> str:
-    lowered = str(label or "").lower()
-    if "fast_info" in lowered or "current" in lowered:
-        return "fast_info.last_price"
-    if "stock_candle" in lowered:
-        return "stock_candle.last_close"
-    if "daily" in lowered:
-        return "daily.last_close"
-    if "last_close" in lowered:
-        return "last_close"
-    return "latest_available"
-
-
-def _latest_article_date(news_context: dict[str, Any] | None) -> str | None:
-    context = news_context if isinstance(news_context, dict) else {}
-    for key in ("latest_article_date", "latest_published_at", "latest_date"):
-        value = context.get(key)
-        if value:
-            return str(value)[:10]
-    articles = context.get("articles") if isinstance(context.get("articles"), list) else []
-    dates = sorted(
-        str(item.get("published_at") or item.get("date") or "")[:10]
-        for item in articles
-        if isinstance(item, dict) and (item.get("published_at") or item.get("date"))
-    )
-    return dates[-1] if dates else None
-
-
-def _last_fundamental_period(financial_highlights: dict[str, Any] | None) -> tuple[str | None, str | None]:
-    if not isinstance(financial_highlights, dict):
-        return None, None
-    periods = financial_highlights.get("periods") if isinstance(financial_highlights.get("periods"), list) else []
-    if not periods:
-        return None, None
-    latest = periods[-1] if isinstance(periods[-1], dict) else {}
-    label = latest.get("label") or latest.get("key")
-    period_end_date = latest.get("period_end_date") or latest.get("end_date") or _period_end_from_label(label)
-    return (str(label) if label else None, str(period_end_date) if period_end_date else None)
-
-
-
-def _parse_metadata_datetime(value: Any) -> datetime | None:
-    if value is None or value == "":
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        try:
-            return datetime.fromisoformat(text[:10])
-        except ValueError:
-            return None
-
-
-def _metadata_days_old(value: Any) -> int | None:
-    parsed = _parse_metadata_datetime(value)
-    if parsed is None:
-        return None
-    return max(0, (datetime.utcnow().date() - parsed.date()).days)
-
-
-def _freshness_status_from_value(value: Any) -> str:
-    age_days = _metadata_days_old(value)
-    if age_days is None:
-        return "unknown"
-    if age_days < 30:
-        return "fresh"
-    if age_days <= 90:
-        return "stale"
-    return "outdated"
-
-
-def _period_end_from_label(label: Any) -> str | None:
-    text = str(label or "").strip().upper().replace(" ", "")
-    if not text:
-        return None
-    match = re.search(r"FY(\d{2,4})Q([1-4])", text)
-    if match:
-        year = int(match.group(1))
-        if year < 100:
-            year += 2000
-        quarter_end = {"1": "03-31", "2": "06-30", "3": "09-30", "4": "12-31"}[match.group(2)]
-        return f"{year}-{quarter_end}"
-    match = re.search(r"FY(\d{2,4})", text)
-    if match:
-        year = int(match.group(1))
-        if year < 100:
-            year += 2000
-        return f"{year}-12-31"
-    return None
-
-
-def _build_data_freshness_metadata(data_sources: dict[str, Any], *, market_status: str | None = None) -> dict[str, Any]:
-    price = data_sources.get("price") if isinstance(data_sources.get("price"), dict) else {}
-    fundamentals = data_sources.get("fundamentals") if isinstance(data_sources.get("fundamentals"), dict) else {}
-    news = data_sources.get("news") if isinstance(data_sources.get("news"), dict) else {}
-    macro = data_sources.get("macro") if isinstance(data_sources.get("macro"), dict) else {}
-
-    price_timestamp = price.get("timestamp")
-    price_type = "intraday" if str(market_status or "").lower() == "open" and not price.get("is_fallback") else price.get("method") or "latest_available"
-    period = fundamentals.get("last_period")
-    period_end_date = fundamentals.get("period_end_date") or _period_end_from_label(period)
-    latest_article_date = news.get("latest_article_date")
-
-    return {
-        "price": {
-            "timestamp": price_timestamp,
-            "type": price_type,
-            "freshness_status": _freshness_status_from_value(price_timestamp),
-        },
-        "financials": {
-            "period": period,
-            "period_end_date": period_end_date,
-            "freshness_status": _freshness_status_from_value(period_end_date),
-        },
-        "news": {
-            "lookback_days": news.get("lookback_days"),
-            "articles_count": news.get("articles_found") or 0,
-            "latest_article_date": latest_article_date,
-            "freshness_status": _freshness_status_from_value(latest_article_date),
-        },
-        "macro": {
-            "description": macro.get("description") or "Latest available from provider",
-            "freshness_status": "unknown",
-        },
-    }
-
-def _build_structured_data_sources(
-    raw_sources: dict[str, str],
-    *,
-    price_source: str | None,
-    price_timestamp: str | None,
-    price_is_fallback: bool,
-    data_quality: DataQualityReport,
-    news_context: dict[str, Any] | None,
-    news_lookback_days: int,
-    financial_highlights: dict[str, Any] | None,
-) -> dict[str, Any]:
-    last_period, period_end_date = _last_fundamental_period(financial_highlights)
-    news_source = raw_sources.get("news") or raw_sources.get("company_news")
-    context = news_context if isinstance(news_context, dict) else {}
-    articles_found = context.get("articles_found")
-    if articles_found is None:
-        articles = context.get("articles") if isinstance(context.get("articles"), list) else []
-        articles_found = len(articles)
-
-    return {
-        "price": {
-            "provider": _provider_name_from_label(price_source or raw_sources.get("price")),
-            "method": _price_method_from_label(price_source or raw_sources.get("price")),
-            "timestamp": price_timestamp,
-            "is_fallback": bool(price_is_fallback),
-        },
-        "fundamentals": {
-            "provider": _provider_name_from_label(raw_sources.get("fundamental_profile_metrics")),
-            "completeness": data_quality.fundamentals,
-            "last_period": last_period,
-            "period_end_date": period_end_date,
-        },
-        "news": {
-            "provider": _provider_name_from_label(news_source),
-            "articles_found": articles_found,
-            "lookback_days": news_lookback_days,
-            "latest_article_date": _latest_article_date(news_context),
-        },
-        "macro": {
-            "provider": _provider_name_from_label(raw_sources.get("global_news")),
-            "description": "Latest available",
-        },
-        "raw": raw_sources,
-    }
-
-
 def _build_data_source_metadata(
     price: DataField,
     fundamentals: DataField,
@@ -1272,11 +1111,8 @@ def collect_market_data(
     price_lookback = _price_lookback_days(time_horizon_months)
     start_price, start_news, end = _date_window(trade_date, time_horizon_months)
 
-    current_price_snapshot = fetch_current_price(ticker)
-    volatility_metadata = calculate_volatility(ticker, lookback_days=20)
-
     news_context: dict[str, Any] = {}
-    tasks = _build_collection_tasks(
+    primary_tasks = _build_collection_tasks(
         ticker,
         trade_date,
         start_price,
@@ -1285,28 +1121,14 @@ def collect_market_data(
         news_lookback_days,
         news_context_holder=news_context,
     )
-    results = _run_collection_tasks(tasks, config, cancel_check)
-    annual_statement_results = _run_collection_tasks(
-        {
-            "annual_balance_sheet": lambda: _safe_data_field(
-                "annual_balance_sheet",
-                lambda: route_to_vendor("get_balance_sheet", ticker, "annual", trade_date),
-                limit=10_000,
-            ),
-            "annual_income_statement": lambda: _safe_data_field(
-                "annual_income_statement",
-                lambda: route_to_vendor("get_income_statement", ticker, "annual", trade_date),
-                limit=10_000,
-            ),
-            "annual_cashflow": lambda: _safe_data_field(
-                "annual_cashflow",
-                lambda: route_to_vendor("get_cashflow", ticker, "annual", trade_date),
-                limit=10_000,
-            ),
-        },
-        config,
-        cancel_check,
-    )
+    annual_task_names = {"annual_balance_sheet", "annual_income_statement", "annual_cashflow"}
+    tasks = {**primary_tasks, **_build_annual_tasks(ticker, trade_date)}
+    all_results = _run_collection_tasks(tasks, config, cancel_check)
+    results = {key: value for key, value in all_results.items() if key not in annual_task_names}
+    annual_statement_results = {
+        key: all_results.get(key, DataField.unavailable(key, RuntimeError("annual statement task did not complete")))
+        for key in annual_task_names
+    }
 
     price = results["price_data"]
     fundamentals = results["fundamentals"]
@@ -1354,30 +1176,13 @@ def collect_market_data(
     )
 
     _check_cancel(cancel_check)
-    historical_last_close_price, historical_last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
-    current_price = _safe_float(current_price_snapshot.get("price"))
-    price_is_fallback = bool(current_price_snapshot.get("price_is_fallback"))
-    if current_price is None:
-        current_price = historical_last_close_price
-        price_is_fallback = True
-    last_close_price = current_price
-    last_close_price_as_of = (
-        current_price_snapshot.get("price_timestamp")
-        or historical_last_close_price_as_of
-        or trade_date
-    )
-    price_source = (
-        current_price_snapshot.get("price_source")
-        or _price_source_label(price.value, historical_last_close_price)
-        or "unavailable"
-    )
-    price_currency = current_price_snapshot.get("price_currency") or _currency_for_ticker(ticker)
+    last_close_price, last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
     price_chart = _build_price_chart(
         ticker=ticker,
         trade_date=trade_date,
         price_data=price.value,
         time_horizon_months=time_horizon_months,
-        source=_price_source_label(price.value, historical_last_close_price) or "yfinance",
+        source=_price_source_label(price.value, last_close_price) or "yfinance",
     )
     price_performance = dict(price_chart.get("summary") or {}) if isinstance(price_chart, dict) else {}
     technical_entry = build_technical_entry(
@@ -1387,7 +1192,7 @@ def collect_market_data(
     )
     vendor_attempts = attempt_recorder.get_summary()
     request_budget = budget.get_summary()
-    raw_data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
+    data_sources, data_limitations, runtime_metadata = _build_data_source_metadata(
         price,
         fundamentals,
         balance_sheet,
@@ -1400,17 +1205,19 @@ def collect_market_data(
         social_sentiment,
         event_risk,
         recommendation_trends,
-        historical_last_close_price,
+        last_close_price,
         vendor_attempts=vendor_attempts,
         request_budget=request_budget,
     )
     related_news = _build_related_news(
         ticker=ticker,
         trade_date=trade_date,
+        time_horizon_months=time_horizon_months,
         company_news=company_news.value,
         global_news=global_news.value,
-        source_label=raw_data_sources.get("news"),
+        source_label=data_sources.get("news"),
         news_context=news_context,
+        limit=8,
     )
     news_impact = build_news_impact(
         ticker=ticker,
@@ -1420,6 +1227,28 @@ def collect_market_data(
     )
     catalyst_tracker = build_catalyst_tracker(news_impact, event_risk.value)
     analyst_consensus = build_analyst_consensus(recommendation_trends.value)
+    data_completeness = calculate_completeness(
+        {
+            "quote": last_close_price,
+            "historical_price": price.value,
+            "market_cap": (company_profile or {}).get("market_cap"),
+            "volume": (price_performance or {}).get("latest_volume"),
+            "company_news": company_news.value,
+            "global_news": global_news.value,
+            "high_impact_news": (news_impact or {}).get("high_impact_news"),
+            "news_sentiment": news_sentiment.value,
+            "social_sentiment": social_sentiment.value,
+            "company_profile": company_profile,
+            "executives": (company_profile or {}).get("officers"),
+            "shareholders": (company_profile or {}).get("shareholders"),
+        }
+    )
+    fundamental_gap_report = map_fundamental_gaps(
+        {
+            **((technical_entry or {})),
+            "technical_entry": technical_entry or {},
+        }
+    )
     financial_highlights = None
     try:
         financial_highlights = financial_highlights_to_dict(
@@ -1451,20 +1280,6 @@ def collect_market_data(
         )
     except Exception:
         logger.exception("Failed to build deterministic fundamental analysis for %s", ticker)
-    data_sources = _build_structured_data_sources(
-        raw_data_sources,
-        price_source=price_source,
-        price_timestamp=last_close_price_as_of or trade_date,
-        price_is_fallback=price_is_fallback,
-        data_quality=data_quality,
-        news_context=news_context,
-        news_lookback_days=news_lookback_days,
-        financial_highlights=financial_highlights,
-    )
-    data_freshness = _build_data_freshness_metadata(
-        data_sources,
-        market_status=None,
-    )
     try:
         release_budget(budget_id)
         release_attempt_recorder(attempt_id)
@@ -1490,12 +1305,7 @@ def collect_market_data(
         data_quality=data_quality,
         last_close_price=last_close_price,
         last_close_price_as_of=last_close_price_as_of or trade_date,
-        last_close_price_source=price_source if last_close_price is not None else None,
-        price_currency=price_currency,
-        price_source=price_source if last_close_price is not None else None,
-        price_timestamp=last_close_price_as_of or trade_date,
-        price_is_fallback=price_is_fallback,
-        volatility_metadata=volatility_metadata,
+        last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
         company_profile=company_profile,
         price_chart=price_chart,
         price_performance=price_performance,
@@ -1506,10 +1316,11 @@ def collect_market_data(
         catalyst_tracker=catalyst_tracker,
         analyst_consensus=analyst_consensus,
         data_sources=data_sources,
-        data_freshness=data_freshness,
         data_limitations=data_limitations,
         vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
         request_budget=runtime_metadata.get("request_budget", {}),
+        data_completeness=data_completeness,
+        fundamental_gap_report=fundamental_gap_report,
         financial_highlights=financial_highlights,
         fundamental_analysis=fundamental_analysis,
     )
