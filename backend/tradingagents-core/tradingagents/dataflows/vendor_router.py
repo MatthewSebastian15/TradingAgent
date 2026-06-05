@@ -4,6 +4,7 @@ import re
 import threading
 import uuid
 from collections import defaultdict
+from dataclasses import asdict, dataclass
 from typing import Any
 
 _SECRET_PATTERNS = [
@@ -11,6 +12,17 @@ _SECRET_PATTERNS = [
     re.compile(r"apikey=([^&\s]+)", re.IGNORECASE),
     re.compile(r"api_key=([^&\s]+)", re.IGNORECASE),
 ]
+
+
+@dataclass
+class VendorAttempt:
+    vendor: str
+    status: str
+    reason: str | None = None
+    duration_ms: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 def sanitize_error(value: Any) -> str:

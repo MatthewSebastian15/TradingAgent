@@ -17,7 +17,7 @@ def _unavailable(ticker: str, endpoint: str) -> dict[str, Any]:
         "source": "idx_official",
         "endpoint": endpoint,
         "status": "source_unavailable",
-        "reason": "IDX official fetcher/parser is not configured in this runtime.",
+        "reason": "IDX official live adapter is not implemented yet",
     }
 
 

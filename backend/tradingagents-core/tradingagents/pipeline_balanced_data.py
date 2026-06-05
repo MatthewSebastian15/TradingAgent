@@ -13,7 +13,13 @@ from urllib.parse import urlsplit
 
 from tradingagents.company_profile.builder import build_company_profile
 from tradingagents.dataflows.config import get_config, set_config, use_config
-from tradingagents.dataflows.data_quality import DataField, DataQualityReport, extract_price_dates, looks_missing
+from tradingagents.dataflows.data_quality import (
+    DataField,
+    DataQualityReport,
+    build_field_quality,
+    extract_price_dates,
+    looks_missing,
+)
 from tradingagents.dataflows.data_completeness import calculate_completeness
 from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
 from tradingagents.dataflows.source_priority import get_field_vendor_order
@@ -786,17 +792,35 @@ def _build_collection_tasks(
         ),
         "balance_sheet": lambda: _safe_data_field(
             "balance_sheet",
-            lambda: route_to_vendor("get_balance_sheet", ticker, "quarterly", trade_date),
+            lambda: route_to_vendor(
+                "get_balance_sheet",
+                ticker,
+                "quarterly",
+                trade_date,
+                vendor_order=get_field_vendor_order("financial_statement", ticker),
+            ),
             limit=10_000,
         ),
         "cashflow": lambda: _safe_data_field(
             "cashflow",
-            lambda: route_to_vendor("get_cashflow", ticker, "quarterly", trade_date),
+            lambda: route_to_vendor(
+                "get_cashflow",
+                ticker,
+                "quarterly",
+                trade_date,
+                vendor_order=get_field_vendor_order("financial_statement", ticker),
+            ),
             limit=10_000,
         ),
         "income_statement": lambda: _safe_data_field(
             "income_statement",
-            lambda: route_to_vendor("get_income_statement", ticker, "quarterly", trade_date),
+            lambda: route_to_vendor(
+                "get_income_statement",
+                ticker,
+                "quarterly",
+                trade_date,
+                vendor_order=get_field_vendor_order("financial_statement", ticker),
+            ),
             limit=10_000,
         ),
         "insider_transactions": lambda: _safe_data_field(
@@ -853,11 +877,7 @@ def _build_annual_tasks(
     trade_date: str,
 ) -> dict[str, Callable[[], DataField]]:
     """Annual statement tasks are independent and can run with the main batch."""
-    vendor_order = [
-        vendor
-        for vendor in get_field_vendor_order("financial_statement", ticker)
-        if vendor != "idx_official"  # IDX official parser is a separate source layer, not a router vendor yet.
-    ]
+    vendor_order = get_field_vendor_order("financial_statement", ticker)
     return {
         "annual_balance_sheet": lambda: _safe_data_field(
             "annual_balance_sheet",
@@ -882,7 +902,7 @@ def _run_collection_tasks(
     cancel_check: Callable[[], bool] | None,
 ) -> dict[str, DataField]:
     results: dict[str, DataField] = {}
-    max_workers = min(max(1, int(config.get("data_collection_workers", 6))), len(tasks))
+    max_workers = min(max(1, int(config.get("data_collection_workers", 12))), len(tasks))
     with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="balanced-data") as pool:
         futures = {pool.submit(_run_with_config, config, func): name for name, func in tasks.items()}
         for future in as_completed(futures):
@@ -1091,6 +1111,52 @@ def _build_data_source_metadata(
     return data_sources, limitations, runtime_metadata
 
 
+
+
+def _build_field_quality_metadata(
+    *,
+    trade_date: str,
+    data_sources: dict[str, str],
+    price: DataField,
+    fundamentals: DataField,
+    balance_sheet: DataField,
+    cashflow: DataField,
+    income_statement: DataField,
+    company_news: DataField,
+    global_news: DataField,
+    insider_transactions: DataField,
+    news_sentiment: DataField,
+    social_sentiment: DataField,
+    technical_indicators: DataField,
+    event_risk: DataField,
+    recommendation_trends: DataField,
+    last_close_price: float | None,
+    company_profile: dict[str, Any] | None,
+    price_performance: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    profile = company_profile or {}
+    performance = price_performance or {}
+    return {
+        "quote": build_field_quality("quote", last_close_price, data_sources.get("quote", "unavailable"), as_of_date=trade_date),
+        "stock_price": build_field_quality("stock_price", last_close_price, data_sources.get("price", "unavailable"), as_of_date=trade_date),
+        "market_cap": build_field_quality("market_cap", profile.get("market_cap"), "company_profile", as_of_date=trade_date),
+        "volume": build_field_quality("volume", performance.get("latest_volume"), data_sources.get("ohlcv", "unavailable"), as_of_date=trade_date),
+        "historical_price": build_field_quality("historical_price", price.value, data_sources.get("ohlcv", "unavailable"), warnings=[price.warning] if price.warning else [], as_of_date=trade_date),
+        "financial_metrics": build_field_quality("financial_metrics", fundamentals.value, data_sources.get("fundamental_profile_metrics", "unavailable"), warnings=[fundamentals.warning] if fundamentals.warning else [], as_of_date=trade_date),
+        "balance_sheet": build_field_quality("balance_sheet", balance_sheet.value, data_sources.get("balance_sheet", "unavailable"), warnings=[balance_sheet.warning] if balance_sheet.warning else [], as_of_date=trade_date),
+        "cashflow": build_field_quality("cashflow", cashflow.value, data_sources.get("cashflow", "unavailable"), warnings=[cashflow.warning] if cashflow.warning else [], as_of_date=trade_date),
+        "income_statement": build_field_quality("income_statement", income_statement.value, data_sources.get("income_statement", "unavailable"), warnings=[income_statement.warning] if income_statement.warning else [], as_of_date=trade_date),
+        "company_news": build_field_quality("company_news", company_news.value, data_sources.get("company_news", "unavailable"), warnings=[company_news.warning] if company_news.warning else [], as_of_date=trade_date),
+        "global_news": build_field_quality("global_news", global_news.value, data_sources.get("global_news", "unavailable"), warnings=[global_news.warning] if global_news.warning else [], as_of_date=trade_date),
+        "news_sentiment": build_field_quality("news_sentiment", news_sentiment.value, data_sources.get("news_sentiment", "unavailable"), warnings=[news_sentiment.warning] if news_sentiment.warning else [], as_of_date=trade_date),
+        "social_sentiment": build_field_quality("social_sentiment", social_sentiment.value, data_sources.get("social_sentiment", "unavailable"), warnings=[social_sentiment.warning] if social_sentiment.warning else [], as_of_date=trade_date),
+        "event_risk": build_field_quality("event_risk", event_risk.value, data_sources.get("event_risk", "unavailable"), warnings=[event_risk.warning] if event_risk.warning else [], as_of_date=trade_date),
+        "recommendation_trends": build_field_quality("recommendation_trends", recommendation_trends.value, data_sources.get("recommendation_trends", "unavailable"), warnings=[recommendation_trends.warning] if recommendation_trends.warning else [], as_of_date=trade_date),
+        "insider_transactions": build_field_quality("insider_transactions", insider_transactions.value, data_sources.get("insider", "unavailable"), warnings=[insider_transactions.warning] if insider_transactions.warning else [], as_of_date=trade_date),
+        "technical_indicators": build_field_quality("technical_indicators", technical_indicators.value, data_sources.get("technical", "unavailable"), warnings=[technical_indicators.warning] if technical_indicators.warning else [], as_of_date=trade_date, calculated=True),
+    }
+
+
 def collect_market_data(
     ticker: str,
     trade_date: str,
@@ -1209,6 +1275,27 @@ def collect_market_data(
         vendor_attempts=vendor_attempts,
         request_budget=request_budget,
     )
+    data_quality.field_quality = _build_field_quality_metadata(
+        trade_date=trade_date,
+        data_sources=data_sources,
+        price=price,
+        fundamentals=fundamentals,
+        balance_sheet=balance_sheet,
+        cashflow=cashflow,
+        income_statement=income_statement,
+        company_news=company_news,
+        global_news=global_news,
+        insider_transactions=insider_transactions,
+        news_sentiment=news_sentiment,
+        social_sentiment=social_sentiment,
+        technical_indicators=technical_indicators,
+        event_risk=event_risk,
+        recommendation_trends=recommendation_trends,
+        last_close_price=last_close_price,
+        company_profile=company_profile,
+        price_performance=price_performance,
+    )
+    data_quality.data_sources = dict(data_sources)
     related_news = _build_related_news(
         ticker=ticker,
         trade_date=trade_date,

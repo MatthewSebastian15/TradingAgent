@@ -19,6 +19,11 @@ _MISSING_VALUES = (None, "", "N/A", "n/a", [], {})
 def _available(value: Any) -> bool:
     if value in _MISSING_VALUES:
         return False
+    if isinstance(value, dict):
+        if value.get("available") is False or value.get("status") in {"source_unavailable", "unavailable", "missing"}:
+            return False
+        if "value" in value:
+            return _available(value.get("value"))
     if isinstance(value, str):
         lowered = value.strip().lower()
         if not lowered or lowered.startswith("no ") or " unavailable" in lowered or "not found" in lowered:
@@ -28,12 +33,25 @@ def _available(value: Any) -> bool:
 
 def calculate_completeness(data: dict[str, Any]) -> dict[str, Any]:
     report: dict[str, Any] = {}
+    payload = data or {}
     for group_name, fields in COMPLETENESS_GROUPS.items():
-        available = sum(1 for field in fields if _available((data or {}).get(field)))
+        available_fields = [field for field in fields if _available(payload.get(field))]
+        missing_fields = [field for field in fields if field not in available_fields]
         total = len(fields)
+        pct = round((len(available_fields) / total) * 100, 2) if total else 0.0
         report[group_name] = {
-            "available_fields": available,
+            "status": "complete" if pct == 100 else "partial" if pct > 0 else "source_unavailable",
+            "available_fields": len(available_fields),
             "total_fields": total,
-            "completeness_pct": round((available / total) * 100, 2) if total else 0,
+            "missing_fields": missing_fields,
+            "completeness_pct": pct,
         }
+    overall_total = sum(item["total_fields"] for item in report.values())
+    overall_available = sum(item["available_fields"] for item in report.values())
+    report["overall"] = {
+        "status": "complete" if overall_available == overall_total else "partial" if overall_available else "source_unavailable",
+        "available_fields": overall_available,
+        "total_fields": overall_total,
+        "completeness_pct": round((overall_available / overall_total) * 100, 2) if overall_total else 0.0,
+    }
     return report

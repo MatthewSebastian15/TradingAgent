@@ -104,10 +104,14 @@ from .finnhub_stock import (
 from .finnhub_stock import (
     get_stock as get_finnhub_stock,
 )
+from .idx_official import (
+    get_idx_company_profile,
+    get_idx_financial_statements,
+)
 from .marketaux_news import get_news as get_marketaux_news
 from .newsdata_news import get_news as get_newsdata_news
 from .vendor_budget import get_budget
-from .vendor_router import get_attempt_recorder, sanitize_error
+from .vendor_router import VendorAttempt, get_attempt_recorder, sanitize_error
 from .y_finance import (
     get_balance_sheet as get_yfinance_balance_sheet,
 )
@@ -263,6 +267,7 @@ _PERSISTENT_TOOL_CACHE = None
 _PERSISTENT_TOOL_CACHE_CONFIG = None
 
 VENDOR_LIST = [
+    "idx_official",
     "marketaux",
     "newsdata",
     "yfinance",
@@ -296,21 +301,25 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_fundamentals,
     },
     "get_company_profile": {
+        "idx_official": get_idx_company_profile,
         "yfinance": get_yfinance_company_profile,
         "finnhub": get_finnhub_company_profile,
         "alpha_vantage": get_alpha_vantage_company_profile,
     },
     "get_balance_sheet": {
+        "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
         "yfinance": get_yfinance_balance_sheet,
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "finnhub": get_finnhub_balance_sheet,
     },
     "get_cashflow": {
+        "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
         "yfinance": get_yfinance_cashflow,
         "alpha_vantage": get_alpha_vantage_cashflow,
         "finnhub": get_finnhub_cashflow,
     },
     "get_income_statement": {
+        "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
         "yfinance": get_yfinance_income_statement,
         "alpha_vantage": get_alpha_vantage_income_statement,
         "finnhub": get_finnhub_income_statement,
@@ -490,7 +499,7 @@ def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, st
     fallback_methods = {"get_stock_data", "get_quote", "get_indicators"}
     if method in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_fallback", True)):
         return False, "Finnhub fallback disabled by DATA_VENDOR_ENABLE_FINNHUB_FALLBACK"
-    if method not in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_enrichment", False)):
+    if method not in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_enrichment", True)):
         return False, "Finnhub enrichment disabled by DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT"
     feature_key = feature_for_method(method)
     if not is_finnhub_feature_enabled(feature_key):
@@ -581,6 +590,16 @@ def get_tool_cache_stats() -> dict:
     }
 
 
+def _attach_attempt_metadata(result: Any, attempts: list[VendorAttempt]) -> Any:
+    if isinstance(result, dict):
+        enriched = dict(result)
+        metadata = dict(enriched.get("metadata") or {})
+        metadata["vendor_attempts"] = [attempt.to_dict() for attempt in attempts]
+        enriched["metadata"] = metadata
+        return enriched
+    return result
+
+
 def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, **kwargs):
     """Route method calls to vendors with fallback, budget, attempts, timeout, retry and cache."""
     config = get_config()
@@ -590,14 +609,27 @@ def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, *
 
     errors = []
     first_unusable_result = None
+    local_attempts: list[VendorAttempt] = []
+
+    def record(vendor: str, status: str, detail: str | None = None) -> None:
+        normalized = {
+            "disabled": "skipped",
+            "unsupported": "skipped",
+            "unavailable": "empty",
+            "failure": "failed",
+        }.get(status, status)
+        reason = sanitize_error(detail) if detail else None
+        _record_attempt(config, method, vendor, normalized, reason)
+        local_attempts.append(VendorAttempt(vendor=vendor, status=normalized, reason=reason))
+
     for vendor in vendor_order or _vendor_sequence(method):
         if vendor not in VENDOR_METHODS[method]:
-            _record_attempt(config, method, vendor, "unsupported")
+            record(vendor, "unsupported", "vendor is not supported for this method")
             continue
         enabled, disabled_reason = _is_vendor_enabled(method, vendor, config)
         if not enabled:
             errors.append(f"{vendor}: {disabled_reason}")
-            _record_attempt(config, method, vendor, "disabled", disabled_reason)
+            record(vendor, "disabled", disabled_reason)
             continue
         try:
             result = _call_vendor(method, vendor, args, kwargs, config)
@@ -607,29 +639,30 @@ def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, *
                     first_unusable_result = result
                 detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or ["quality unavailable"])
                 errors.append(f"{vendor}: invalid quality: {detail}")
-                _record_attempt(config, method, vendor, "unavailable", detail)
+                record(vendor, "unavailable", detail)
                 continue
             if _is_unusable_result(result):
                 if first_unusable_result is None:
                     first_unusable_result = result
-                errors.append(f"{vendor}: empty or unusable response")
-                _record_attempt(config, method, vendor, "unavailable", "empty or unusable response")
+                detail = str(result.get("reason") if isinstance(result, dict) else "empty or unusable response")
+                errors.append(f"{vendor}: {detail or 'empty or unusable response'}")
+                record(vendor, "unavailable", detail or "empty or unusable response")
                 continue
             status = "partial" if quality and quality.get("confidence") in {"low", "medium"} else "success"
-            _record_attempt(config, method, vendor, status)
+            record(vendor, status)
             return result
         except AlphaVantagePermanentError as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
-            _record_attempt(config, method, vendor, "unavailable", sanitize_error(exc))
+            record(vendor, "unavailable", sanitize_error(exc))
             continue
         except (AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
             errors.append(f"{vendor}: rate limited: {sanitize_error(exc)}")
-            _record_attempt(config, method, vendor, "rate_limited", sanitize_error(exc))
+            record(vendor, "rate_limited", sanitize_error(exc))
             continue
         except Exception as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
             status = "budget_exceeded" if "budget" in str(exc).lower() else "failure"
-            _record_attempt(config, method, vendor, status, sanitize_error(exc))
+            record(vendor, status, sanitize_error(exc))
             continue
 
     if first_unusable_result is not None:
@@ -640,7 +673,6 @@ def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, *
         return {"available": False, "source": "unavailable", "reason": " | ".join(errors) or "no configured vendor"}
 
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")
-
 
 def get_quote(ticker: str, curr_date: str | None = None) -> dict[str, Any]:
     return route_to_vendor(
@@ -669,7 +701,7 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
         enabled, disabled_reason = _is_vendor_enabled(method, vendor, config)
         if not enabled:
             errors.append(f"{vendor}: {disabled_reason}")
-            _record_attempt(config, method, vendor, "disabled", disabled_reason)
+            _record_attempt(config, method, vendor, "skipped", disabled_reason)
             continue
         try:
             result = _call_vendor(method, vendor, args, kwargs, config)
@@ -681,19 +713,19 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
                 if quality is not None:
                     detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or [detail])
                 errors.append(f"{vendor}: {detail}")
-                _record_attempt(config, method, vendor, "unavailable", detail)
+                _record_attempt(config, method, vendor, "empty", detail)
                 continue
             _record_attempt(config, method, vendor, "success")
             results[vendor] = result
         except AlphaVantagePermanentError as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
-            _record_attempt(config, method, vendor, "unavailable", sanitize_error(exc))
+            _record_attempt(config, method, vendor, "empty", sanitize_error(exc))
         except (AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
             errors.append(f"{vendor}: rate limited: {sanitize_error(exc)}")
             _record_attempt(config, method, vendor, "rate_limited", sanitize_error(exc))
         except Exception as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
-            status = "budget_exceeded" if "budget" in str(exc).lower() else "failure"
+            status = "budget_exceeded" if "budget" in str(exc).lower() else "failed"
             _record_attempt(config, method, vendor, status, sanitize_error(exc))
 
     if results:
@@ -704,3 +736,4 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
     if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends"}:
         return {"optional": f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"}
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")
+

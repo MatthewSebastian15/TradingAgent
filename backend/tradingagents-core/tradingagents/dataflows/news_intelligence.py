@@ -4,7 +4,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_title, normalize_url, rank_news
+from tradingagents.dataflows.news_aggregator import normalize_title, normalize_url, rank_news
+from tradingagents.dataflows.news_dedup import dedup_news_articles_with_metadata
 from tradingagents.dataflows.news_impact import classify_news_impact
 from tradingagents.dataflows.news_noise_filter import route_news_bucket
 from tradingagents.dataflows.news_relevance import score_news_relevance
@@ -236,7 +237,7 @@ def build_news_impact(
             "data_quality": {"status": "unavailable", "sources_used": []},
         }
 
-    deduped = deduplicate_news(raw_articles)
+    deduped, dedup_metadata = dedup_news_articles_with_metadata(raw_articles)
     ranked = rank_news(deduped, ticker=ticker)
     scored: list[dict[str, Any]] = []
     sentiment_values: list[float] = []
@@ -313,6 +314,7 @@ def build_news_impact(
         "full_news_list": scored[:full_limit],
         "news_count": len(raw_articles),
         "deduplicated_count": len(scored),
+        "dedup_removed_count": dedup_metadata.get("dedup_removed_count", 0),
         "data_quality": {"status": "complete", "sources_used": sources_used},
     }
 
