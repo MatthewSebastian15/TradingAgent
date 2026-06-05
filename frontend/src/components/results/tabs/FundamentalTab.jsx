@@ -1,5 +1,7 @@
 import PropTypes from 'prop-types';
 
+import DataSourceBadge from '../../DataSourceBadge';
+import DataStatusBadge from '../../DataStatusBadge';
 import FinancialHighlightsTable from '../FinancialHighlightsTable';
 import MetricBox from '../MetricBox';
 import NoticeBox from '../NoticeBox';
@@ -15,6 +17,72 @@ function displayMetric(metric) {
 function displayPercent(value) {
   return value === null || value === undefined ? 'N/A' : `${value}%`;
 }
+
+
+function normalizeMetricStatus(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'estimated') return 'calculated';
+  if (normalized === 'unavailable') return 'source_unavailable';
+  return normalized || null;
+}
+
+function SectionQualityStatus({ payload }) {
+  const quality = payload?.data_quality;
+  if (!quality || typeof quality !== 'object') return null;
+  return <DataStatusBadge quality={quality} />;
+}
+
+SectionQualityStatus.propTypes = {
+  payload: PropTypes.object,
+};
+
+function FundamentalQualitySummary({ result }) {
+  const dataQuality = result?.data_quality || {};
+  const completeness = result?.data_completeness || {};
+  const gapReport = result?.fundamental_gap_report || {};
+  const sources = result?.data_sources?.fundamentals || result?.data_sources?.fundamental;
+  const fundamentalStatus = dataQuality?.fundamentals || dataQuality?.fundamental_data || null;
+  const fundamentalCompleteness = completeness?.fundamental_data || completeness?.fundamentals || null;
+  const missing = gapReport?.missing_fields || gapReport?.missing || [];
+
+  if (!fundamentalStatus && !fundamentalCompleteness && !sources && !missing.length) return null;
+
+  return (
+    <section className="px-4 py-3 border-b border-bloomberg-border space-y-2">
+      <SectionHeader label="FUNDAMENTAL DATA STATUS" />
+      <div className="flex flex-col gap-2">
+        {sources && <DataSourceBadge sources={sources} label="Fundamental sources" />}
+        {fundamentalStatus && (
+          <DataStatusBadge
+            status={typeof fundamentalStatus === 'string' ? fundamentalStatus : fundamentalStatus.status}
+            quality={typeof fundamentalStatus === 'object' ? fundamentalStatus : undefined}
+            reason={typeof fundamentalStatus === 'string' && fundamentalStatus !== 'ok' ? fundamentalStatus : undefined}
+          />
+        )}
+        {fundamentalCompleteness && (
+          <DataStatusBadge
+            quality={typeof fundamentalCompleteness === 'object' ? fundamentalCompleteness : undefined}
+            status={typeof fundamentalCompleteness === 'object' ? fundamentalCompleteness.status || 'partial' : 'partial'}
+            reason={
+              typeof fundamentalCompleteness === 'object'
+                ? `Completeness: ${fundamentalCompleteness.percent ?? fundamentalCompleteness.score ?? 'N/A'}`
+                : String(fundamentalCompleteness)
+            }
+          />
+        )}
+        {missing.length > 0 && (
+          <p className="font-mono text-[11px] text-bloomberg-amber">
+            Missing fundamentals: {missing.length}. See Risk / Data Quality for fallback details.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+FundamentalQualitySummary.propTypes = {
+  result: PropTypes.object,
+};
 
 function FundamentalDataSourceBadge({ dataSources }) {
   const fundamentals = dataSources?.fundamentals;
@@ -56,16 +124,31 @@ function MetricSection({ title, payload, metrics, summary }) {
     <section className="px-4 py-4 border-b border-bloomberg-border space-y-3">
       <SectionHeader label={title} />
       {summary}
+      <SectionQualityStatus payload={payload} />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {metrics.map(([key, label]) => (
-          <MetricBox
-            key={key}
-            label={label}
-            value={displayMetric(payload.metric_details?.[key])}
-            compact
-            preserveSlot
-          />
-        ))}
+        {metrics.map(([key, label]) => {
+          const detail = payload.metric_details?.[key];
+          const metricStatus = normalizeMetricStatus(detail?.status);
+          return (
+            <div key={key} className="space-y-1">
+              <MetricBox
+                label={label}
+                value={displayMetric(detail)}
+                compact
+                preserveSlot
+              />
+              {(metricStatus || detail?.source || detail?.reason) && (
+                <DataStatusBadge
+                  compact
+                  status={metricStatus || 'available'}
+                  source={detail?.source || detail?.source_field}
+                  reason={detail?.reason || detail?.formula}
+                  confidenceScore={detail?.confidence_score}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
       <QualityNotice payload={payload} />
     </section>
@@ -100,6 +183,7 @@ function FinancialTrends({ payload }) {
       {payload.unit_note && (
         <p className="font-mono text-[11px] text-bloomberg-muted">{payload.unit_note}</p>
       )}
+      <SectionQualityStatus payload={payload} />
       <div className="overflow-x-auto border border-bloomberg-border">
         <table className="min-w-[980px] w-full text-xs font-mono border-collapse">
           <thead>
@@ -270,6 +354,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
   return (
     <>
       <FundamentalDataSourceBadge dataSources={result.data_sources} />
+      <FundamentalQualitySummary result={result} />
       <FinancialHighlightsTable financialHighlights={financialHighlights} />
       <FinancialTrends payload={result.financial_trends} />
       <MetricSection

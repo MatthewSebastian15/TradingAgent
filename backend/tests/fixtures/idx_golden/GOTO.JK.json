@@ -1,0 +1,86 @@
+{
+  "ticker": "GOTO.JK",
+  "expected_fields": {
+    "last_price": "not_null",
+    "market_cap": "not_null",
+    "revenue_fy2022": "not_null",
+    "revenue_fy2023": "not_null",
+    "revenue_fy2024": "not_null",
+    "net_profit_fy2022": "not_null",
+    "net_profit_fy2023": "not_null",
+    "net_profit_fy2024": "not_null",
+    "revenue_growth": "valid_percentage",
+    "net_profit_growth": "valid_percentage",
+    "sector": "not_null",
+    "shareholders": "list_not_empty",
+    "company_news_count": ">= 3"
+  },
+  "mock_payload": {
+    "ticker": "GOTO.JK",
+    "last_price": 7000,
+    "volume": 7000000,
+    "market_cap": 7000000000000000,
+    "price_history": [
+      {
+        "date": "2026-06-01",
+        "close": 7000
+      },
+      {
+        "date": "2026-06-02",
+        "close": 7070
+      }
+    ],
+    "revenue_fy2022": 560000000000000,
+    "revenue_fy2023": 630000000000000,
+    "revenue_fy2024": 700000000000000,
+    "net_profit_fy2022": 70000000000000,
+    "net_profit_fy2023": 77000000000000,
+    "net_profit_fy2024": 84000000000000,
+    "ebitda_fy2024": 154000000000000,
+    "revenue_growth": 11.1,
+    "net_profit_growth": 9.1,
+    "sector": "Technology",
+    "shareholders": [
+      {
+        "name": "Public",
+        "percentage": 45.0
+      },
+      {
+        "name": "Institutional",
+        "percentage": 55.0
+      }
+    ],
+    "company_news_count": 5,
+    "valuation": {
+      "ev_ebitda": 8.5,
+      "ps": 2.1,
+      "pb": 1.8,
+      "fair_value_range": {
+        "bear": 6300,
+        "base": 7700,
+        "bull": 9100
+      }
+    },
+    "risk": {
+      "leverage": 0.4,
+      "volatility": 18.0,
+      "drawdown": -8.0,
+      "liquidity": "good",
+      "sma_200": 6860
+    },
+    "fundamental": {
+      "dividend_status": "no_dividend_history",
+      "dividend_yield": null,
+      "payout_ratio": null,
+      "fcf_coverage": null
+    },
+    "data_quality_summary": {
+      "price": 96,
+      "fundamental": 84,
+      "news": 88,
+      "valuation": 76,
+      "risk": 83,
+      "dividend": 100
+    }
+  }
+}

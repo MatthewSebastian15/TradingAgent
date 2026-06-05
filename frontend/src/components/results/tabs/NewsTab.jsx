@@ -1,5 +1,7 @@
 import PropTypes from 'prop-types';
 
+import DataSourceBadge from '../../DataSourceBadge';
+import DataStatusBadge from '../../DataStatusBadge';
 import { safeExternalUrl } from '../../../utils/url';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
@@ -156,6 +158,16 @@ function NewsCard({ item, index }) {
         {item.relevance_score !== undefined && <span>Relevance: {item.relevance_score}</span>}
       </div>
 
+      <div className="mt-2">
+        <DataStatusBadge
+          compact
+          status={item.status || 'available'}
+          source={item.source || item.publisher}
+          reason={item.impact_reason || item.relevance_reason}
+          confidenceScore={item.source_confidence_score}
+        />
+      </div>
+
       {item.summary && (
         <p className="mt-3 font-mono text-xs text-bloomberg-muted leading-relaxed">
           {item.summary}
@@ -228,6 +240,29 @@ CatalystList.propTypes = {
   items: PropTypes.array,
 };
 
+function NewsSourceStatus({ relatedNews, newsImpact, result }) {
+  const rootNewsQuality = result?.data_quality?.news;
+  const sources = result?.data_sources?.news || newsImpact?.data_quality?.sources_used || relatedNews?.source;
+  return (
+    <div className="mt-3 space-y-2">
+      <DataSourceBadge sources={sources} label="News sources" />
+      {(rootNewsQuality || newsImpact?.data_quality) && (
+        <DataStatusBadge
+          quality={typeof rootNewsQuality === 'object' ? rootNewsQuality : newsImpact?.data_quality}
+          status={typeof rootNewsQuality === 'string' ? rootNewsQuality : newsImpact?.data_quality?.status}
+          reason={newsImpact?.data_quality?.reason || newsImpact?.data_quality?.summary}
+        />
+      )}
+    </div>
+  );
+}
+
+NewsSourceStatus.propTypes = {
+  relatedNews: PropTypes.object,
+  newsImpact: PropTypes.object,
+  result: PropTypes.object,
+};
+
 export default function NewsTab({ result }) {
   const relatedNews = result?.related_news || {};
   const newsImpact = result?.news_impact || {};
@@ -278,6 +313,7 @@ export default function NewsTab({ result }) {
           <SummaryMetric label="SENTIMENT SCORE" value={newsImpact.sentiment_score ?? 'N/A'} />
         </div>
         <SourceConfidenceSummary breakdown={newsImpact.data_quality?.source_confidence_breakdown} />
+        <NewsSourceStatus relatedNews={relatedNews} newsImpact={newsImpact} result={result} />
       </section>
 
       <section>

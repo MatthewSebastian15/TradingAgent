@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-KNOWN_VENDORS = ("yfinance", "alpha_vantage", "finnhub", "marketaux", "newsdata")
+KNOWN_VENDORS = ("idx_official", "yfinance", "alpha_vantage", "finnhub", "marketaux", "newsdata")
 SUCCESS_STATUSES = {"success", "cache_hit", "ok", "complete"}
 PARTIAL_STATUSES = {"partial", "fallback"}
 RATE_LIMIT_STATUSES = {"rate_limited"}
@@ -277,8 +277,14 @@ def _stale_warnings(result: dict[str, Any]) -> list[dict[str, Any]]:
     return _dedupe_items(warnings, ("module", "field", "warning"))
 
 
-def _parse_attempt(entry: str) -> tuple[str, str, str | None]:
-    vendor, _, rest = entry.partition(":")
+def _parse_attempt(entry: Any) -> tuple[str, str, str | None]:
+    if isinstance(entry, dict):
+        return (
+            str(entry.get("vendor") or "").strip().lower(),
+            str(entry.get("status") or "").strip().lower(),
+            str(entry.get("reason") or entry.get("detail") or "") or None,
+        )
+    vendor, _, rest = str(entry).partition(":")
     status = rest
     detail = None
     if "(" in rest and rest.endswith(")"):
@@ -335,6 +341,7 @@ def _vendor_status(result: dict[str, Any], missing_fields: list[dict[str, Any]])
 
     used_for = _used_for_from_attempts(result)
     module_missing = {
+        "idx_official": ["financial_highlights", "financial_trends", "company_profile"],
         "yfinance": ["price_chart", "company_profile", "financial_highlights"],
         "alpha_vantage": ["financial_highlights", "financial_trends"],
         "finnhub": ["company_profile", "analyst_consensus", "news_impact"],

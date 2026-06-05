@@ -1172,7 +1172,7 @@ export default function ResultCard({
         </>
       )}
 
-      {activeTab === 'profile' && <ProfileTab profile={result.company_profile} />}
+      {activeTab === 'profile' && <ProfileTab profile={result.company_profile} result={result} />}
 
       {activeTab === 'fundamental' && (
         <FundamentalTab financialHighlights={result.financial_highlights} result={result} />
