@@ -15,7 +15,10 @@ import {
 } from '../../dev/mockData';
 
 function countWords(text) {
-  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
 }
 
 describe('ResultCard risk-engine contract', () => {
@@ -203,7 +206,6 @@ describe('ResultCard risk-engine contract', () => {
           news_impact: {
             available: false,
             high_impact_news: [],
-            full_news_list: [],
             data_quality: { status: 'unavailable', sources_used: [] },
           },
           catalyst_tracker: {
@@ -424,7 +426,9 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('◒ REDUCE')).toBeTruthy();
     expect(screen.getAllByText('Trim position').length).toBeGreaterThan(0);
     expect(screen.getByText('Do not add; reduce existing exposure')).toBeTruthy();
-    expect(screen.getByText('Reduce position size gradually; no new exposure suggested.')).toBeTruthy();
+    expect(
+      screen.getByText('Reduce position size gradually; no new exposure suggested.')
+    ).toBeTruthy();
   });
 
   it('keeps Hold result limited to status metrics', () => {

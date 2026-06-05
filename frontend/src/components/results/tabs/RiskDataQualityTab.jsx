@@ -102,9 +102,12 @@ DataTable.propTypes = {
 
 function freshnessBadge(status) {
   const normalized = String(status || 'unknown').toLowerCase();
-  if (normalized === 'fresh') return 'border-bloomberg-green text-bloomberg-green bg-bloomberg-green-dim';
-  if (normalized === 'stale') return 'border-bloomberg-amber text-bloomberg-amber bg-bloomberg-amber-dim';
-  if (normalized === 'outdated') return 'border-bloomberg-red text-bloomberg-red bg-bloomberg-red-dim';
+  if (normalized === 'fresh')
+    return 'border-bloomberg-green text-bloomberg-green bg-bloomberg-green-dim';
+  if (normalized === 'stale')
+    return 'border-bloomberg-amber text-bloomberg-amber bg-bloomberg-amber-dim';
+  if (normalized === 'outdated')
+    return 'border-bloomberg-red text-bloomberg-red bg-bloomberg-red-dim';
   return 'border-bloomberg-border text-bloomberg-muted bg-bloomberg-surface';
 }
 
@@ -137,21 +140,31 @@ function DataFreshness({ freshness }) {
   const rows = [
     {
       label: 'Price Data',
-      detail: [formatDateTimeWib(price.timestamp), price.type].filter(Boolean).join(' · ') || 'No timestamp metadata',
+      detail:
+        [formatDateTimeWib(price.timestamp), price.type].filter(Boolean).join(' · ') ||
+        'No timestamp metadata',
       status: price.freshness_status,
     },
     {
       label: 'Financial Reports',
-      detail: [financials.period, financials.period_end_date ? `(${financials.period_end_date})` : null].filter(Boolean).join(' ') || 'No period metadata',
+      detail:
+        [financials.period, financials.period_end_date ? `(${financials.period_end_date})` : null]
+          .filter(Boolean)
+          .join(' ') || 'No period metadata',
       status: financials.freshness_status,
     },
     {
       label: 'News Coverage',
-      detail: [
-        hasValue(news.lookback_days) ? `Last ${news.lookback_days} days` : null,
-        hasValue(news.articles_count) ? `${news.articles_count} articles` : null,
-        news.latest_article_date ? `latest ${formatDateTimeWib(news.latest_article_date, false)}` : null,
-      ].filter(Boolean).join(' · ') || 'No article metadata',
+      detail:
+        [
+          hasValue(news.lookback_days) ? `Last ${news.lookback_days} days` : null,
+          hasValue(news.articles_count) ? `${news.articles_count} articles` : null,
+          news.latest_article_date
+            ? `latest ${formatDateTimeWib(news.latest_article_date, false)}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || 'No article metadata',
       status: news.freshness_status,
     },
     {
@@ -168,11 +181,16 @@ function DataFreshness({ freshness }) {
           const normalized = String(row.status || 'unknown').toLowerCase();
           const needsWarning = ['stale', 'outdated'].includes(normalized);
           return (
-            <div key={row.label} className="border-b border-bloomberg-border last:border-b-0 px-3 py-2">
+            <div
+              key={row.label}
+              className="border-b border-bloomberg-border last:border-b-0 px-3 py-2"
+            >
               <div className="grid grid-cols-1 gap-2 font-mono text-xs sm:grid-cols-[12rem_1fr_auto] sm:items-center">
                 <div className="text-bloomberg-muted">{row.label}</div>
                 <div className="text-bloomberg-white">{row.detail}</div>
-                <span className={`inline-flex w-fit items-center rounded-sm border px-2 py-0.5 text-[10px] tracking-wider ${freshnessBadge(normalized)}`}>
+                <span
+                  className={`inline-flex w-fit items-center rounded-sm border px-2 py-0.5 text-[10px] tracking-wider ${freshnessBadge(normalized)}`}
+                >
                   ● {normalized.toUpperCase()}
                 </span>
               </div>

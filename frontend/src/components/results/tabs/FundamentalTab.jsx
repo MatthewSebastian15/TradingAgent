@@ -111,7 +111,10 @@ function FinancialTrends({ payload }) {
                 Unit
               </th>
               {payload.periods.map((period) => (
-                <th key={period.key} className="text-right px-3 py-2 whitespace-nowrap min-w-[86px]">
+                <th
+                  key={period.key}
+                  className="text-right px-3 py-2 whitespace-nowrap min-w-[86px]"
+                >
                   {period.label}
                 </th>
               ))}

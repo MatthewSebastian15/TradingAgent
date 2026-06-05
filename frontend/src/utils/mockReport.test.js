@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { MOCK_HOLD_RESPONSE, MOCK_PTRO_WAIT_RESPONSE, MOCK_RESPONSE, MOCK_TPIA_REDUCE_SCENARIO_RESPONSE } from '../../dev/mockData';
+import {
+  MOCK_HOLD_RESPONSE,
+  MOCK_PTRO_WAIT_RESPONSE,
+  MOCK_RESPONSE,
+  MOCK_TPIA_REDUCE_SCENARIO_RESPONSE,
+} from '../../dev/mockData';
 import { buildMockActionPlanRows, buildMockReportContext, buildMockReportHtml } from './mockReport';
 
 function countWords(text) {
-  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
 }
 
 function makeMockNewsItem(prefix, index, overrides = {}) {
@@ -129,7 +137,6 @@ describe('mockReport', () => {
     expect(html).not.toContain('Reward Per Share');
   });
 
-
   it('renders full mock contract sections for WAIT and REDUCE signals without Key Levels', () => {
     const waitHtml = buildMockReportHtml(MOCK_PTRO_WAIT_RESPONSE);
     const reduceHtml = buildMockReportHtml(MOCK_TPIA_REDUCE_SCENARIO_RESPONSE);
@@ -167,8 +174,6 @@ describe('mockReport', () => {
     expect(html).not.toContain('<div class="metric-label">Stop Loss</div>');
     expect(html).not.toContain('<div class="metric-label">Take Profit</div>');
   });
-
-
 
   it('builds all high impact news items without limit', () => {
     const result = makeMockResultWithNews({ highImpactCount: 7, fullCount: 0 });

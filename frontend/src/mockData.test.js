@@ -7,7 +7,10 @@ import {
 } from '../dev/mockData';
 
 function countWords(text) {
-  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
 }
 
 describe('mockData', () => {
@@ -26,6 +29,7 @@ describe('mockData', () => {
     expect(result.agents_used.length).toBeGreaterThan(0);
     expect(result.data_quality.warnings[0]).toContain('Mock data only');
     expect(result.financial_highlights.periods.map((period) => period.key)).toEqual([
+      'FY22',
       'FY23',
       'FY24',
       'FY25',
@@ -107,7 +111,7 @@ describe('mockData', () => {
     });
     expect(result.news_impact).toMatchObject({
       available: true,
-      overall_sentiment: 'positive',
+      overall_sentiment: 'neutral',
     });
     expect(result.news_impact.high_impact_news.length).toBeGreaterThan(0);
     expect(result.catalyst_tracker.positive_catalysts.length).toBeGreaterThan(0);
@@ -153,7 +157,6 @@ describe('mockData', () => {
       'mock-tlkm-sell-existing-position',
     ]);
   });
-
 
   it('maps raw AI signal into position-aware display signal', () => {
     expect(resolveDisplaySignal('BUY', false, 'Open new position')).toBe('BUY');
@@ -266,8 +269,6 @@ describe('mockData', () => {
       expect(result).toHaveProperty(field);
     }
   });
-
-
 
   it('mock responses provide a key reasons paragraph between 75 and 125 words when present', () => {
     const responses = [

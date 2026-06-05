@@ -10,7 +10,12 @@ const ROWS = [
 ];
 
 function hasValue(value) {
-  return value !== null && value !== undefined && value !== '' && !(typeof value === 'number' && !Number.isFinite(value));
+  return (
+    value !== null &&
+    value !== undefined &&
+    value !== '' &&
+    !(typeof value === 'number' && !Number.isFinite(value))
+  );
 }
 
 function normalizeScore(value) {
@@ -40,7 +45,9 @@ export default function ConfidenceBreakdown({ breakdown }) {
   if (!breakdown || typeof breakdown !== 'object') return null;
 
   const overall = normalizeScore(breakdown.overall);
-  const rows = ROWS.map(([key, label]) => [key, label, normalizeScore(breakdown[key])]).filter(([, , score]) => score !== null);
+  const rows = ROWS.map(([key, label]) => [key, label, normalizeScore(breakdown[key])]).filter(
+    ([, , score]) => score !== null
+  );
   if (!rows.length && overall === null) return null;
 
   return (

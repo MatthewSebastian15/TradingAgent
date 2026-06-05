@@ -59,7 +59,8 @@ function historySummary(overrides = {}) {
     trade_date: null,
     status: 'completed',
     decision: null,
-    display_signal: overrides.display_signal ?? overrides.final_decision ?? overrides.decision ?? null,
+    display_signal:
+      overrides.display_signal ?? overrides.final_decision ?? overrides.decision ?? null,
     confidence_score: overrides.confidence_score ?? null,
     confidence_tier: overrides.confidence_tier ?? null,
     time_horizon_months: null,
@@ -68,7 +69,6 @@ function historySummary(overrides = {}) {
     ...overrides,
   };
 }
-
 
 function completedJobResponse({
   jobId = 'job-1',

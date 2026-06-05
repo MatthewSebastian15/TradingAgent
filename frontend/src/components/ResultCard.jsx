@@ -110,16 +110,19 @@ function formatRiskReward(result) {
 }
 
 function normalizeSignal(signal) {
-  const normalized = String(signal || 'HOLD').trim().toUpperCase();
+  const normalized = String(signal || 'HOLD')
+    .trim()
+    .toUpperCase();
   if (normalized === 'OVERWEIGHT') return 'BUY';
   if (normalized === 'UNDERWEIGHT' || normalized === 'AVOID') return 'SELL';
-  if (['BUY', 'HOLD', 'WAIT', 'REDUCE', 'SELL', 'NEUTRAL'].includes(normalized))
-    return normalized;
+  if (['BUY', 'HOLD', 'WAIT', 'REDUCE', 'SELL', 'NEUTRAL'].includes(normalized)) return normalized;
   return 'HOLD';
 }
 
 function getFinalDecision(result) {
-  return normalizeSignal(result.display_signal ?? result.final_decision ?? result.decision ?? result.rating);
+  return normalizeSignal(
+    result.display_signal ?? result.final_decision ?? result.decision ?? result.rating
+  );
 }
 
 function getCurrentPrice(result) {
@@ -195,13 +198,19 @@ function formatPriceAsOf(result, fallbackValue) {
 }
 
 function truncateWords(text, limit) {
-  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  const words = String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   if (words.length <= limit) return String(text || '').trim();
   return `${words.slice(0, limit).join(' ')}…`;
 }
 
 function wordCount(text) {
-  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
 }
 
 function normalizeInlineText(value) {
@@ -224,7 +233,13 @@ function normalizeReasonItems(value) {
   return text ? [text] : [];
 }
 
-function buildKeyReasonsParagraph({ paragraph, reasons, catalysts, miniRiskSummary, decisionReason }) {
+function buildKeyReasonsParagraph({
+  paragraph,
+  reasons,
+  catalysts,
+  miniRiskSummary,
+  decisionReason,
+}) {
   const directParagraph = normalizeInlineText(paragraph);
   if (directParagraph) return truncateKeyReasonWords(directParagraph, 125);
 
@@ -243,7 +258,6 @@ function buildKeyReasonsParagraph({ paragraph, reasons, catalysts, miniRiskSumma
   return truncateKeyReasonWords(normalized, 125);
 }
 
-
 function formatDataSourcePriceLabel(result) {
   const priceSource = result.data_sources?.price;
   if (priceSource?.provider) {
@@ -256,7 +270,9 @@ function formatDataSourcePriceLabel(result) {
 
   const source = coalesceDisplayValue(result.price_source, result.current_price_source);
   if (!source) return null;
-  const provider = String(source).toLowerCase().includes('yfinance') ? 'Yahoo Finance' : String(source);
+  const provider = String(source).toLowerCase().includes('yfinance')
+    ? 'Yahoo Finance'
+    : String(source);
   const timestamp = result.price_timestamp || result.current_price_as_of;
   const dateLabel = formatWibPriceTimestamp(timestamp, !result.price_is_fallback);
   const fallback = result.price_is_fallback ? '⚠  ' : '';
@@ -266,7 +282,10 @@ function formatDataSourcePriceLabel(result) {
 
 function formatVolatilityValue(result) {
   if (!hasDisplayValue(result.volatility_score)) return null;
-  const score = typeof result.volatility_score === 'number' ? result.volatility_score.toFixed(2).replace(/\.00$/, '') : result.volatility_score;
+  const score =
+    typeof result.volatility_score === 'number'
+      ? result.volatility_score.toFixed(2).replace(/\.00$/, '')
+      : result.volatility_score;
   return `${score} / 100`;
 }
 
@@ -472,7 +491,9 @@ function getActionPlanMetrics({ result, currentPrice, riskReward }) {
   return [
     {
       label: 'CURRENT PRICE',
-      value: hasDisplayValue(currentPrice) ? formatPrice(currentPrice, result.ticker, result.price_currency || result.currency) : 'N/A',
+      value: hasDisplayValue(currentPrice)
+        ? formatPrice(currentPrice, result.ticker, result.price_currency || result.currency)
+        : 'N/A',
       highlight: true,
     },
     {
@@ -591,7 +612,11 @@ function HoldMetrics({ result, currentPrice }) {
         {hasDisplayValue(currentPrice) && (
           <MetricBox
             label="CURRENT PRICE"
-            value={formatPrice(currentPrice, result.ticker, result.price_currency || result.currency)}
+            value={formatPrice(
+              currentPrice,
+              result.ticker,
+              result.price_currency || result.currency
+            )}
             highlight
           />
         )}
@@ -705,14 +730,18 @@ function AgentPipeline({ pipeline = [], agents = [], totalSeconds }) {
               <button
                 type="button"
                 key={rowKey}
-                onClick={() => warning && setExpandedRows((prev) => ({ ...prev, [rowKey]: !prev[rowKey] }))}
+                onClick={() =>
+                  warning && setExpandedRows((prev) => ({ ...prev, [rowKey]: !prev[rowKey] }))
+                }
                 className="text-left border border-bloomberg-border px-2.5 py-2 bg-black bg-opacity-10 hover:bg-bloomberg-surface transition-colors"
               >
                 <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center font-mono text-xs">
                   <span className="text-bloomberg-muted">{agent.name}</span>
                   <span className={statusMeta.classes}>{statusMeta.icon}</span>
                   <span className="text-bloomberg-white">
-                    {hasDisplayValue(agent.duration_seconds) ? `${Number(agent.duration_seconds).toFixed(1)}s` : '—'}
+                    {hasDisplayValue(agent.duration_seconds)
+                      ? `${Number(agent.duration_seconds).toFixed(1)}s`
+                      : '—'}
                   </span>
                 </div>
                 {warning && (
@@ -795,7 +824,9 @@ export default function ResultCard({
   const displayTicker = result.normalized_ticker || result.ticker;
   const displayResult = { ...result, ticker: displayTicker };
   const finalDecision = getFinalDecision(result);
-  const rawAiSignal = normalizeSignal(result.raw_ai_signal || result.llm_decision || result.final_decision || result.decision);
+  const rawAiSignal = normalizeSignal(
+    result.raw_ai_signal || result.llm_decision || result.final_decision || result.decision
+  );
   const isActionable = ACTIONABLE_DECISIONS.has(finalDecision);
   const tradePlanValid = Boolean(result.trade_plan_valid);
   const shouldShowActionPlan = isActionable && tradePlanValid;
@@ -829,7 +860,9 @@ export default function ResultCard({
     miniRiskSummary,
     decisionReason: result.decision_adjusted_reason,
   });
-  const signalPositionLabel = result.has_existing_position ? 'Existing position' : 'No existing position';
+  const signalPositionLabel = result.has_existing_position
+    ? 'Existing position'
+    : 'No existing position';
   const agents = result.agents_used || [];
   const budgetExhausted = Boolean(result.budget_exhausted);
   const agentsSkipped = result.agents_skipped || [];
@@ -946,8 +979,16 @@ export default function ResultCard({
                 {hasDisplayValue(currentPrice) && (
                   <MetricBox
                     label="LAST PRICE"
-                    value={formatPrice(currentPrice, displayTicker, result.price_currency || result.currency)}
-                    subValue={result.price_is_fallback || !priceTimestampLabel ? null : `as of ${priceTimestampLabel}`}
+                    value={formatPrice(
+                      currentPrice,
+                      displayTicker,
+                      result.price_currency || result.currency
+                    )}
+                    subValue={
+                      result.price_is_fallback || !priceTimestampLabel
+                        ? null
+                        : `as of ${priceTimestampLabel}`
+                    }
                     highlight
                   />
                 )}
@@ -1008,7 +1049,9 @@ export default function ResultCard({
             />
           )}
 
-          {shouldShowHoldMetrics && <HoldMetrics result={displayResult} currentPrice={currentPrice} />}
+          {shouldShowHoldMetrics && (
+            <HoldMetrics result={displayResult} currentPrice={currentPrice} />
+          )}
 
           {budgetExhausted && (
             <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
@@ -1088,7 +1131,8 @@ export default function ResultCard({
             <div className="px-4 py-4 border-b border-bloomberg-border">
               <SectionHeader label="MINI RISK SUMMARY" />
               <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                {miniRiskSummary || `${riskSummary.overall_risk || 'N/A'}: ${riskSummary.short_reason || 'N/A'}`}
+                {miniRiskSummary ||
+                  `${riskSummary.overall_risk || 'N/A'}: ${riskSummary.short_reason || 'N/A'}`}
               </p>
             </div>
           )}
