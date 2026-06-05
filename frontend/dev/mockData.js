@@ -230,6 +230,23 @@ const COMMON_MOCK_QUALITY = {
   warnings: ['Mock data only. No backend, provider, or LLM call was executed.'],
 };
 
+export const mockConflictDataQuality = {
+  field_quality: {
+    last_price: {
+      status: 'conflict',
+      source: 'yfinance',
+      confidence_score: 65,
+      warnings: [
+        'last_price conflict: yfinance=1000, finnhub=1060, difference=6.0%, tolerance=3.0%',
+      ],
+      vendor_values: {
+        yfinance: 1000,
+        finnhub: 1060,
+      },
+    },
+  },
+};
+
 const MOCK_COMPANY_PROFILE = {
   available: true,
   ticker: 'NVDA',

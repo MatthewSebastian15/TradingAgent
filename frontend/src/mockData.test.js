@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getMockAnalysisResponseByRequestId,
   MOCK_RESPONSES_BY_REQUEST_ID,
+  mockConflictDataQuality,
   resolveDisplaySignal,
 } from '../dev/mockData';
 
@@ -285,6 +286,20 @@ describe('mockData', () => {
       expect(countWords(response.key_reasons_paragraph)).toBeLessThanOrEqual(125);
       expect(response.analysis_overview.key_reasons_paragraph).toBe(response.key_reasons_paragraph);
     }
+  });
+
+  it('provides mock conflict data quality for vendor mismatch UI', () => {
+    expect(mockConflictDataQuality.field_quality.last_price).toMatchObject({
+      status: 'conflict',
+      source: 'yfinance',
+      vendor_values: {
+        yfinance: 1000,
+        finnhub: 1060,
+      },
+    });
+    expect(mockConflictDataQuality.field_quality.last_price.warnings[0]).toContain(
+      'last_price conflict'
+    );
   });
 
   it('returns cloned mock objects so tests cannot mutate the registry', () => {

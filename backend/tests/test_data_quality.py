@@ -16,3 +16,15 @@ def test_build_field_quality_available_and_missing():
 def test_data_quality_report_accepts_field_quality():
     report = DataQualityReport(field_quality={"quote": build_field_quality("quote", 1, "yfinance")})
     assert report.field_quality["quote"]["confidence_score"] >= 0
+
+
+def test_build_field_quality_conflict_status():
+    quality = build_field_quality(
+        "last_price",
+        value=1000,
+        source="yfinance",
+        conflict_warnings=["last_price conflict"],
+        vendor_values={"yfinance": 1000, "finnhub": 1060},
+    )
+    assert quality["status"] == "conflict"
+    assert quality["vendor_values"]["finnhub"] == 1060

@@ -287,6 +287,7 @@ class FieldQuality:
     freshness: dict[str, Any] | None = None
     reason: str | None = None
     vendor_attempts: list[dict[str, Any]] = field(default_factory=list)
+    vendor_values: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -390,6 +391,7 @@ def build_field_quality(
     calculated: bool = False,
     conflict_warnings: list[str] | None = None,
     vendor_attempts: list[dict[str, Any]] | None = None,
+    vendor_values: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Build standardized field-level quality metadata.
 
@@ -397,6 +399,7 @@ def build_field_quality(
     payloads without forcing legacy text fields to change shape.
     """
     field_warnings = list(warnings or []) + list(conflict_warnings or [])
+    normalized_vendor_values = dict(vendor_values or {})
     source_text = str(source or "unavailable")
     missing = _is_missing_value(value)
     if status is None:
@@ -464,5 +467,6 @@ def build_field_quality(
         freshness=freshness_detail,
         reason=reason,
         vendor_attempts=list(vendor_attempts or []),
+        vendor_values=normalized_vendor_values,
     ).to_dict()
 
