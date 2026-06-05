@@ -239,7 +239,7 @@ export default function NewsTab({ result }) {
   const highImpactItemsRaw = Array.isArray(newsImpact.high_impact_news)
     ? newsImpact.high_impact_news
     : [];
-  const fullNewsItemsRaw = hasNewsImpactFullList && impactFullNewsItems.length > 0 ? impactFullNewsItems : relatedItems;
+  const fullNewsItemsRaw = hasNewsImpactFullList ? impactFullNewsItems : relatedItems;
   const highImpactItems = dedupeNewsItems(highImpactItemsRaw);
   const fullNewsItems = excludeNewsItems(fullNewsItemsRaw, highImpactItems);
 
