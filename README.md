@@ -6,7 +6,7 @@ The application receives a stock ticker, market, analysis date, investment horiz
 
 > This application is a research tool, not financial advice. Always validate the data, risk assumptions, and trading decisions independently before taking action.
 
-![TradingAgent Dashboard](assets/TradingAgent%20Home%20UI.png)
+![TradingAgent Dashboard](assets/TradingAgent%20Home.png)
 
 ---
 
