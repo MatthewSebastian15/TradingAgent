@@ -178,13 +178,16 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "news_impact": _as_dict(result.get("news_impact")),
         "news_impact_rows": _news_impact_rows(result),
         "high_impact_news_items": _high_impact_news_items(result),
+        "full_news_items": _full_news_items(result),
         "catalyst_tracker": _as_dict(result.get("catalyst_tracker")),
         "positive_catalysts": _catalyst_items(result, "positive_catalysts"),
         "negative_catalysts": _catalyst_items(result, "negative_catalysts"),
         "upcoming_events": _catalyst_items(result, "upcoming_events"),
         "analyst_consensus_rows": _analyst_consensus_rows(result),
         "related_news": _as_dict(result.get("related_news")),
-        "related_news_items": _related_news_items(result),
+        "related_news_items": []
+        if isinstance(_as_dict(result.get("news_impact")).get("full_news_list"), list)
+        else _related_news_items(result),
         "news": _news_context(result),
         "news_articles": _news_articles(result),
         "news_provider_rows": _news_provider_rows(result),
@@ -858,12 +861,17 @@ def _news_impact_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     if not impact:
         return []
     quality = _as_dict(impact.get("data_quality"))
+    rules = _as_dict(quality.get("rules"))
     return [
         _row("Overall Sentiment", impact.get("overall_sentiment")),
         _row("Sentiment Score", impact.get("sentiment_score")),
-        _row("High Impact Count", len(impact.get("high_impact_news") or [])),
+        _row("High Impact Count", impact.get("high_impact_count") or len(impact.get("high_impact_news") or [])),
+        _row("Full News Count", impact.get("full_news_count") or len(impact.get("full_news_list") or [])),
         _row("News Count", impact.get("news_count")),
         _row("Deduplicated Count", impact.get("deduplicated_count")),
+        _row("Duplicate Removed", impact.get("duplicate_excluded_count")),
+        _row("High Impact Limited", rules.get("high_impact_limited")),
+        _row("Full News Limited", rules.get("full_news_limited")),
         _row("Sources Used", ", ".join(str(item) for item in quality.get("sources_used", []))),
     ]
 
@@ -874,19 +882,26 @@ def _high_impact_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(raw_items, list):
         return []
     items: list[dict[str, Any]] = []
-    for item in raw_items[:5]:
+    for item in raw_items:
         if not isinstance(item, dict) or not item.get("title"):
             continue
         items.append(
             {
                 "title": _display(item.get("title")),
                 "source": _display(item.get("source")),
+                "publisher": _display(item.get("publisher")),
                 "published_at": _display(item.get("published_at")),
                 "sentiment": _display(item.get("sentiment")),
                 "impact": _display(item.get("impact")),
                 "impact_score": _display(item.get("impact_score")),
+                "relevance_score": _display(item.get("relevance_score")),
+                "materiality_category": _display(item.get("materiality_category")),
+                "source_confidence_label": _display(item.get("source_confidence_label")),
+                "news_scope": _display(item.get("scope_label") or item.get("news_scope")),
+                "impact_reason": _display(item.get("impact_reason") or item.get("relevance_reason")),
                 "summary": _display(item.get("summary")),
                 "url": _safe_external_http_url(item.get("url")),
+                "dedupe_key": _display(item.get("dedupe_key")),
             }
         )
     return items
@@ -938,10 +953,7 @@ def _related_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
     items: list[dict[str, Any]] = []
-    for item in raw_items[:8]:
-        if not isinstance(item, dict):
-            continue
-
+    for item in _dedupe_report_news_items(raw_items):
         title = _clean_text(item.get("title"))
         if not title:
             continue
@@ -956,6 +968,79 @@ def _related_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
                 "summary": _display(item.get("summary")),
                 "relevance_reason": _display(item.get("relevance_reason")),
                 "url": _safe_external_http_url(item.get("url")),
+            }
+        )
+    return items
+
+
+def _news_dedupe_key(item: dict[str, Any]) -> str:
+    return _clean_text(
+        item.get("dedupe_key")
+        or item.get("normalized_url")
+        or item.get("url")
+        or item.get("normalized_title")
+        or item.get("title")
+    ).lower()
+
+
+def _dedupe_report_news_items(items: list[Any]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    output: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = _clean_text(item.get("title"))
+        if not title:
+            continue
+        key = _news_dedupe_key(item) or title.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+    return output
+
+
+def _full_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
+    impact = _as_dict(result.get("news_impact"))
+    related_news = _as_dict(result.get("related_news"))
+
+    has_full_news_list = isinstance(impact.get("full_news_list"), list) if impact else False
+    raw_items = impact.get("full_news_list") if has_full_news_list else related_news.get("items", [])
+    high_items = impact.get("high_impact_news", []) if impact else []
+
+    if not isinstance(raw_items, list):
+        raw_items = []
+    if not isinstance(high_items, list):
+        high_items = []
+
+    high_keys = {
+        _news_dedupe_key(item)
+        for item in high_items
+        if isinstance(item, dict) and _news_dedupe_key(item)
+    }
+
+    items: list[dict[str, Any]] = []
+    for item in _dedupe_report_news_items(raw_items):
+        key = _news_dedupe_key(item)
+        if key and key in high_keys:
+            continue
+        items.append(
+            {
+                "title": _display(item.get("title")),
+                "publisher": _display(item.get("publisher")),
+                "published_at": _display(item.get("published_at")),
+                "source": _display(item.get("source")),
+                "event_type": _display(item.get("event_type") or item.get("materiality_category")),
+                "materiality_category": _display(item.get("materiality_category")),
+                "news_scope": _display(item.get("scope_label") or item.get("news_scope")),
+                "source_confidence_label": _display(item.get("source_confidence_label")),
+                "impact": _display(item.get("impact")),
+                "impact_score": _display(item.get("impact_score")),
+                "relevance_score": _display(item.get("relevance_score")),
+                "summary": _display(item.get("summary")),
+                "impact_reason": _display(item.get("impact_reason") or item.get("relevance_reason")),
+                "url": _safe_external_http_url(item.get("url")),
+                "dedupe_key": _display(item.get("dedupe_key")),
             }
         )
     return items

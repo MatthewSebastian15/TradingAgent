@@ -1,10 +1,96 @@
 import { describe, expect, it } from 'vitest';
 
 import { MOCK_HOLD_RESPONSE, MOCK_PTRO_WAIT_RESPONSE, MOCK_RESPONSE, MOCK_TPIA_REDUCE_SCENARIO_RESPONSE } from '../../dev/mockData';
-import { buildMockActionPlanRows, buildMockReportHtml } from './mockReport';
+import { buildMockActionPlanRows, buildMockReportContext, buildMockReportHtml } from './mockReport';
 
 function countWords(text) {
   return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function makeMockNewsItem(prefix, index, overrides = {}) {
+  return {
+    title: `${prefix} GOTO News ${index}`,
+    source: 'MarketAux',
+    publisher: 'MarketAux',
+    published_at: `2026-06-${String(index).padStart(2, '0')}`,
+    sentiment: 'neutral',
+    impact: prefix === 'High Impact' ? 'high' : 'medium',
+    impact_score: prefix === 'High Impact' ? 90 + index : 45 + index,
+    relevance_score: prefix === 'High Impact' ? 90 : 70,
+    materiality_category: prefix === 'High Impact' ? 'corporate_action' : 'sector',
+    source_confidence_label: prefix === 'High Impact' ? 'HIGH' : 'MEDIUM',
+    news_scope: 'company',
+    scope_label: 'COMPANY',
+    impact_reason: `${prefix} item ${index} is relevant for mock report testing.`,
+    summary: `${prefix} summary ${index}.`,
+    url: `https://example.com/${prefix.toLowerCase().replace(/\s+/g, '-')}-${index}`,
+    normalized_url: `example.com/${prefix.toLowerCase().replace(/\s+/g, '-')}-${index}`,
+    normalized_title: `${prefix.toLowerCase()} goto news ${index}`,
+    dedupe_key: `${prefix.toLowerCase().replace(/\s+/g, '-')}-${index}`,
+    is_high_impact: prefix === 'High Impact',
+    ...overrides,
+  };
+}
+
+function makeMockResultWithNews({ highImpactCount = 0, fullCount = 0 } = {}) {
+  const highImpactNews = Array.from({ length: highImpactCount }, (_, index) =>
+    makeMockNewsItem('High Impact', index + 1)
+  );
+  const fullNewsList = Array.from({ length: fullCount }, (_, index) =>
+    makeMockNewsItem('Full News', index + 1, { is_high_impact: false })
+  );
+
+  return {
+    ticker: 'GOTO.JK',
+    market: 'ID',
+    related_news: {
+      source: 'backend-news-pipeline',
+      summary: 'News summary for GOTO.JK.',
+      lookback_days: 14,
+      total_fetched: highImpactCount + fullCount,
+      items: [],
+    },
+    news_impact: {
+      available: true,
+      high_impact_news: highImpactNews,
+      full_news_list: fullNewsList,
+      high_impact_count: highImpactCount,
+      full_news_count: fullCount,
+      news_count: highImpactCount + fullCount,
+      deduplicated_count: highImpactCount + fullCount,
+      duplicate_excluded_count: 0,
+      overall_sentiment: 'neutral',
+      sentiment_score: 52,
+      data_quality: {
+        sources_used: ['MarketAux'],
+        rules: {
+          high_impact_limited: false,
+          full_news_limited: false,
+          high_impact_removed_from_full_list: true,
+        },
+      },
+    },
+    catalyst_tracker: {},
+    analyst_consensus: {},
+  };
+}
+
+function makeMockResultWithMarketContext() {
+  const result = makeMockResultWithNews({ highImpactCount: 1, fullCount: 2 });
+  result.news_impact.full_news_list.push(
+    makeMockNewsItem('Market Context', 1, {
+      title: 'Market Context News 1',
+      scope_label: 'MARKET CONTEXT',
+      news_scope: 'market_context',
+      materiality_category: 'market_context',
+      dedupe_key: 'market-context-1',
+      normalized_url: 'example.com/market-context-1',
+    })
+  );
+  result.news_impact.full_news_count += 1;
+  result.news_impact.news_count += 1;
+  result.news_impact.deduplicated_count += 1;
+  return result;
 }
 
 describe('mockReport', () => {
@@ -80,6 +166,39 @@ describe('mockReport', () => {
     expect(html).not.toContain('<div class="metric-label">Entry</div>');
     expect(html).not.toContain('<div class="metric-label">Stop Loss</div>');
     expect(html).not.toContain('<div class="metric-label">Take Profit</div>');
+  });
+
+
+
+  it('builds all high impact news items without limit', () => {
+    const result = makeMockResultWithNews({ highImpactCount: 7, fullCount: 0 });
+    const report = buildMockReportContext(result);
+
+    expect(report.high_impact_news_items).toHaveLength(7);
+    expect(report.high_impact_news_items[6].title).toContain('7');
+  });
+
+  it('builds all full news list items without limit', () => {
+    const result = makeMockResultWithNews({ highImpactCount: 0, fullCount: 11 });
+    const report = buildMockReportContext(result);
+
+    expect(report.full_news_items).toHaveLength(11);
+    expect(report.full_news_items[10].title).toContain('11');
+  });
+
+  it('keeps market context items in full news list', () => {
+    const result = makeMockResultWithMarketContext();
+    const report = buildMockReportContext(result);
+
+    expect(report.full_news_items.some((item) => item.news_scope === 'MARKET CONTEXT')).toBe(true);
+  });
+
+  it('renders the last high impact and full news item in report html', () => {
+    const result = makeMockResultWithNews({ highImpactCount: 7, fullCount: 11 });
+    const html = buildMockReportHtml(result);
+
+    expect(html).toContain('High Impact GOTO News 7');
+    expect(html).toContain('Full News GOTO News 11');
   });
 
   it('renders the mock report disclaimer in mock HTML output', () => {
@@ -179,10 +298,10 @@ describe('mockReport', () => {
     expect(html).toContain('Calculation Notes');
   });
 
-  it('renders static Related News items in mock HTML output', () => {
+  it('renders static Full News List items in mock HTML output', () => {
     const html = buildMockReportHtml(MOCK_RESPONSE);
 
-    expect(html).toContain('Related News');
+    expect(html).toContain('Full News List');
     expect(html).toContain('NVDA earnings outlook remains constructive');
     expect(html).toContain('Open original source');
   });
@@ -197,7 +316,6 @@ describe('mockReport', () => {
       news_impact: {
         available: false,
         high_impact_news: [],
-        full_news_list: [],
         data_quality: { status: 'unavailable', sources_used: [] },
       },
       catalyst_tracker: {
