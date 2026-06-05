@@ -7,10 +7,36 @@ default environment values before tests import the FastAPI app.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
+from dotenv import dotenv_values
 from fastapi.testclient import TestClient
 from tradingagents.llm_clients.model_catalog import MODEL_CATALOG
+
+
+_LIVE_TEST_ENV_KEYS = {"FINNHUB_API_KEY", "FINNHUB_BASE_URL", "FINNHUB_ENABLED"}
+
+
+def _load_live_test_dotenv_values() -> None:
+    """Expose explicit live-test vendor settings from backend/.env to pytest.
+
+    The regular test suite stays hermetic because backend config loading remains
+    disabled by TRADINGAGENTS_SKIP_DOTENV. Only allowlisted live API settings are
+    copied into os.environ, and real shell environment values keep priority.
+    """
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.exists():
+        return
+
+    dotenv_values_map = dotenv_values(env_path)
+    for key in _LIVE_TEST_ENV_KEYS:
+        value = dotenv_values_map.get(key)
+        if value and not os.environ.get(key):
+            os.environ[key] = value.strip()
+
+
+_load_live_test_dotenv_values()
 
 _GOOGLE_QUICK_LLM = MODEL_CATALOG["google"]["quick"][0][1]
 _GOOGLE_DEEP_LLM = MODEL_CATALOG["google"]["deep"][0][1]
