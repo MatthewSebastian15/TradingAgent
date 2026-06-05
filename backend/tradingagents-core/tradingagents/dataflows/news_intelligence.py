@@ -7,12 +7,67 @@ from typing import Any
 from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_title, normalize_url, rank_news
 
 MATERIAL_KEYWORDS = {
-    "earnings": ["earnings", "profit", "revenue", "margin", "guidance", "eps"],
-    "dividend": ["dividend", "payout", "distribution"],
-    "corporate_action": ["merger", "acquisition", "buyback", "rights issue", "spin off", "tender offer"],
-    "regulatory": ["investigation", "sanction", "regulation", "lawsuit", "probe", "fine"],
-    "management": ["ceo", "cfo", "resignation", "appointment", "chairman", "director"],
-    "sector": ["interest rate", "commodity price", "policy", "inflation", "sector", "tariff"],
+    "earnings": [
+        "earnings", "profit", "net profit", "revenue", "sales", "margin", "eps",
+        "laba", "laba bersih", "pendapatan", "penjualan", "rugi", "kinerja keuangan",
+    ],
+    "dividend": [
+        "dividend", "dividen", "payout", "distribution", "cum date", "ex date",
+        "pembagian dividen", "rasio pembayaran",
+    ],
+    "corporate_action": [
+        "merger", "acquisition", "akuisisi", "buyback", "rights issue", "right issue",
+        "private placement", "spin off", "tender offer", "reverse stock", "stock split",
+        "aksi korporasi", "penggabungan", "peleburan",
+    ],
+    "index": [
+        "msci", "ftse", "idx30", "lq45", "kompas100", "indeks", "index inclusion",
+        "index exclusion", "rebalancing", "free float", "liquidity", "likuiditas",
+        "keluar dari indeks", "masuk indeks", "dikeluarkan dari indeks",
+    ],
+    "regulatory": [
+        "investigation", "sanction", "regulation", "lawsuit", "probe", "fine",
+        "sanksi", "gugatan", "penyelidikan", "otoritas", "ojk", "bei", "idx",
+        "suspensi", "suspension", "delisting", "peringatan tertulis",
+    ],
+    "management": [
+        "ceo", "cfo", "director", "commissioner", "chairman", "resignation",
+        "appointment", "direktur", "komisaris", "direktur utama", "pengunduran diri",
+        "pergantian manajemen", "rapat umum pemegang saham", "rups",
+    ],
+    "shareholder": [
+        "shareholder", "pemegang saham", "ownership", "kepemilikan", "pengendali",
+        "beneficial owner", "ultimate shareholder", "public float", "free float",
+    ],
+    "debt_rating": [
+        "bond", "bonds", "debt", "rating", "downgrade", "upgrade", "default",
+        "utang", "obligasi", "sukuk", "peringkat", "gagal bayar", "refinancing",
+    ],
+    "major_contract": [
+        "contract", "capex", "expansion", "project", "partnership", "joint venture",
+        "kontrak", "proyek", "ekspansi", "belanja modal", "kerja sama", "kemitraan",
+    ],
+    "market_context": [
+        "interest rate", "inflation", "commodity", "rupiah", "fed", "bi rate",
+        "suku bunga", "inflasi", "komoditas", "ihsg", "asia market", "global market",
+        "market context", "market_context", "macro", "global market", "asian markets",
+    ],
+    "sector": [
+        "sector", "sektor", "industry", "industri", "tariff", "policy", "commodity price",
+        "harga komoditas", "regulasi sektor", "sector rotation",
+    ],
+}
+
+HIGH_IMPACT_MATERIALITY = {
+    "earnings",
+    "dividend",
+    "corporate_action",
+    "index",
+    "regulatory",
+    "management",
+    "shareholder",
+    "debt_rating",
+    "major_contract",
 }
 
 POSITIVE_WORDS = {
@@ -28,6 +83,10 @@ POSITIVE_WORDS = {
     "buyback",
     "dividend increase",
     "profit",
+    "laba",
+    "membaik",
+    "naik",
+    "tumbuh",
 }
 NEGATIVE_WORDS = {
     "miss",
@@ -42,6 +101,10 @@ NEGATIVE_WORDS = {
     "weak",
     "loss",
     "decline",
+    "rugi",
+    "turun",
+    "sanksi",
+    "gugatan",
 }
 
 
@@ -122,21 +185,34 @@ def _sentiment_numeric(item: dict[str, Any], label: str) -> float:
     return 0.0
 
 
+def _source_confidence_detail(source: Any, publisher: Any = None) -> dict[str, Any]:
+    text = f"{source or ''} {publisher or ''}".lower()
+
+    very_high_keywords = [
+        "idx", "bei", "indonesia stock exchange", "company filing", "official disclosure",
+        "keterbukaan informasi", "annual report", "financial statement", "laporan keuangan",
+    ]
+    high_keywords = [
+        "reuters", "bloomberg", "cnbc", "kontan", "bisnis", "investor.id",
+        "the jakarta post", "antara", "katadata",
+    ]
+    medium_keywords = [
+        "newsdata", "marketaux", "finnhub", "alpha", "yahoo", "yfinance",
+    ]
+
+    if any(keyword in text for keyword in very_high_keywords):
+        return {"score": 95, "label": "VERY_HIGH"}
+    if any(keyword in text for keyword in high_keywords):
+        return {"score": 85, "label": "HIGH"}
+    if any(keyword in text for keyword in medium_keywords):
+        return {"score": 70, "label": "MEDIUM"}
+    if text.strip() and "unknown" not in text:
+        return {"score": 60, "label": "MEDIUM"}
+    return {"score": 45, "label": "LOW"}
+
+
 def _source_confidence(source: Any) -> int:
-    text = str(source or "").lower()
-    if "finnhub" in text:
-        return 85
-    if "marketaux" in text:
-        return 82
-    if "newsdata" in text:
-        return 74
-    if "alpha" in text:
-        return 72
-    if "yfinance" in text or "yahoo" in text:
-        return 68
-    if text and text != "unknown":
-        return 60
-    return 45
+    return int(_source_confidence_detail(source).get("score") or 45)
 
 
 def _recency_score(published_at: Any, trade_date: str) -> int:
@@ -159,12 +235,13 @@ def _recency_score(published_at: Any, trade_date: str) -> int:
 
 
 def _materiality_score(item: dict[str, Any]) -> tuple[int, str]:
-    text = f"{item.get('title') or ''} {item.get('summary') or ''} {item.get('event_type') or ''}".lower()
+    event_type = str(item.get("event_type") or "general").lower().strip()
+    text = f"{item.get('title') or ''} {item.get('summary') or ''} {event_type}".lower()
     for category, keywords in MATERIAL_KEYWORDS.items():
-        if any(keyword in text for keyword in keywords):
+        if event_type == category or any(keyword in text for keyword in keywords):
             return 90, category
-    if str(item.get("event_type") or "general").lower() != "general":
-        return 65, str(item.get("event_type")).lower()
+    if event_type != "general":
+        return 65, event_type
     return 25, "general"
 
 
@@ -173,6 +250,56 @@ def _article_key(item: dict[str, Any]) -> str:
     if url:
         return url
     return normalize_title(str(item.get("title") or ""))
+
+
+def _ticker_aliases(ticker: str) -> set[str]:
+    raw = str(ticker or "").upper().strip()
+    base = raw.removesuffix(".JK")
+    aliases = {raw, base}
+    if base:
+        aliases.add(f"{base}.JK")
+    return {item for item in aliases if item}
+
+
+def _has_direct_entity_match(item: dict[str, Any], ticker: str) -> bool:
+    text = f"{item.get('title') or ''} {item.get('summary') or ''} {item.get('related_ticker') or ''}".upper()
+    aliases = _ticker_aliases(ticker)
+    return any(alias in text for alias in aliases)
+
+
+def _news_scope(item: dict[str, Any], ticker: str, materiality_category: str) -> str:
+    if _has_direct_entity_match(item, ticker):
+        return "company"
+    if materiality_category == "index":
+        return "index"
+    if materiality_category == "sector":
+        return "sector"
+    return "market_context"
+
+
+def _is_high_impact_news(
+    *,
+    item: dict[str, Any],
+    ticker: str,
+    relevance_score: float,
+    impact_score: float,
+    materiality_category: str,
+) -> bool:
+    return (
+        relevance_score >= 65
+        and impact_score >= 70
+        and materiality_category in HIGH_IMPACT_MATERIALITY
+        and _has_direct_entity_match(item, ticker)
+    )
+
+
+def _impact_reason(category: str, score: float, source_label: str, scope: str) -> str:
+    readable_category = str(category or "general").replace("_", " ")
+    readable_scope = str(scope or "market_context").replace("_", " ")
+    return (
+        f"Classified as {readable_category} with {score:.1f} impact score, "
+        f"{source_label} source confidence, and {readable_scope} scope."
+    )
 
 
 def _collect_articles(related_news: dict[str, Any] | None, news_context: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -212,37 +339,64 @@ def _collect_articles(related_news: dict[str, Any] | None, news_context: dict[st
     return articles
 
 
+def _empty_news_impact(status: str = "unavailable") -> dict[str, Any]:
+    return {
+        "available": False,
+        "overall_sentiment": "neutral",
+        "sentiment_score": 50,
+        "high_impact_news": [],
+        "full_news_list": [],
+        "news_count": 0,
+        "deduplicated_count": 0,
+        "high_impact_count": 0,
+        "full_news_count": 0,
+        "duplicate_excluded_count": 0,
+        "data_quality": {
+            "status": status,
+            "sources_used": [],
+            "source_confidence_breakdown": {"VERY_HIGH": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0},
+            "rules": {
+                "high_impact_limited": False,
+                "full_news_limited": False,
+                "high_impact_removed_from_full_list": True,
+            },
+        },
+    }
+
+
 def build_news_impact(
     ticker: str,
     trade_date: str,
     related_news: dict[str, Any] | None = None,
     news_context: dict[str, Any] | None = None,
     *,
-    limit: int = 20,
+    limit: int | None = None,
 ) -> dict[str, Any]:
+    # Backward-compatible parameter only. Final display lists must not be capped here.
+    _ = limit
     raw_articles = _collect_articles(related_news, news_context)
     if not raw_articles:
-        return {
-            "available": False,
-            "overall_sentiment": "neutral",
-            "sentiment_score": 50,
-            "high_impact_news": [],
-            "full_news_list": [],
-            "news_count": 0,
-            "deduplicated_count": 0,
-            "data_quality": {"status": "unavailable", "sources_used": []},
-        }
+        return _empty_news_impact()
 
     deduped = deduplicate_news(raw_articles)
+    if not deduped:
+        result = _empty_news_impact(status="unavailable_after_deduplication")
+        result["news_count"] = len(raw_articles)
+        result["duplicate_excluded_count"] = len(raw_articles)
+        return result
+
     ranked = rank_news(deduped, ticker=ticker)
     scored: list[dict[str, Any]] = []
     sentiment_values: list[float] = []
+    source_confidence_breakdown = {"VERY_HIGH": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+
     for item in ranked:
         relevance = _safe_float(item.get("relevance_score"))
         if relevance is None or relevance <= 0:
             text = f"{item.get('title') or ''} {item.get('summary') or ''}".upper()
             relevance = 70 if ticker.upper().removesuffix(".JK") in text else 45
         relevance = max(0, min(100, relevance))
+
         sentiment = _infer_sentiment_label(item)
         sentiment_value = _sentiment_numeric(item, sentiment)
         sentiment_values.append(sentiment_value)
@@ -250,20 +404,42 @@ def build_news_impact(
         recency = _recency_score(item.get("published_at"), trade_date)
         materiality, category = _materiality_score(item)
         source = item.get("source") or item.get("publisher") or "unknown"
-        source_confidence = _source_confidence(source)
+        publisher = item.get("publisher")
+        confidence = _source_confidence_detail(source, publisher)
+        source_confidence_score = int(confidence.get("score") or 45)
+        source_confidence_label = str(confidence.get("label") or "LOW")
+        source_confidence_breakdown[source_confidence_label] = source_confidence_breakdown.get(source_confidence_label, 0) + 1
+
         impact_score = round(
-            (relevance * 0.35)
-            + (recency * 0.25)
-            + (sentiment_strength * 0.20)
-            + (source_confidence * 0.10)
-            + (materiality * 0.10),
+            (relevance * 0.40)
+            + (materiality * 0.30)
+            + (recency * 0.15)
+            + (source_confidence_score * 0.10)
+            + (sentiment_strength * 0.05),
             2,
         )
-        impact = "high" if impact_score >= 70 else "medium" if impact_score >= 45 else "low"
+        is_high = _is_high_impact_news(
+            item=item,
+            ticker=ticker,
+            relevance_score=relevance,
+            impact_score=impact_score,
+            materiality_category=category,
+        )
+        impact = "high" if is_high else "medium" if impact_score >= 45 else "low"
+        scope = _news_scope(item, ticker, category)
+        key = _article_key(item)
+        reason = (
+            f"High impact because this article directly matches {ticker}, "
+            f"falls under {category.replace('_', ' ')}, and has {impact_score:.1f} impact score."
+            if is_high
+            else _impact_reason(category, impact_score, source_confidence_label, scope)
+        )
+
         scored.append(
             {
                 "title": str(item.get("title") or "").strip(),
                 "source": str(source or "unknown"),
+                "publisher": publisher,
                 "published_at": str(item.get("published_at") or "")[:10] or None,
                 "sentiment": sentiment,
                 "impact": impact,
@@ -272,24 +448,61 @@ def build_news_impact(
                 "recency_score": recency,
                 "materiality_score": materiality,
                 "materiality_category": category,
+                "source_confidence_score": source_confidence_score,
+                "source_confidence_label": source_confidence_label,
+                "news_scope": scope,
+                "scope_label": scope.replace("_", " ").upper(),
+                "impact_reason": reason,
                 "summary": _clean_summary(item.get("summary")),
                 "url": str(item.get("url") or ""),
                 "normalized_url": normalize_url(str(item.get("url") or "")),
+                "normalized_title": normalize_title(str(item.get("title") or "")),
+                "dedupe_key": key,
+                "is_high_impact": is_high,
             }
         )
-    scored = sorted(scored, key=lambda item: (item["impact_score"], item["published_at"] or ""), reverse=True)
+
+    high_impact_news = [item for item in scored if item.get("is_high_impact")]
+    high_impact_keys = {item.get("dedupe_key") for item in high_impact_news if item.get("dedupe_key")}
+    full_news_list = [item for item in scored if item.get("dedupe_key") not in high_impact_keys]
+
+    high_impact_news = sorted(
+        high_impact_news,
+        key=lambda item: (item.get("impact_score") or 0, item.get("published_at") or ""),
+        reverse=True,
+    )
+    full_news_list = sorted(
+        full_news_list,
+        key=lambda item: (item.get("published_at") or "", item.get("relevance_score") or 0),
+        reverse=True,
+    )
+
     average_sentiment = sum(sentiment_values) / len(sentiment_values) if sentiment_values else 0
     overall_sentiment = "positive" if average_sentiment > 0.1 else "negative" if average_sentiment < -0.1 else "neutral"
     sources_used = list(dict.fromkeys(str(item.get("source") or "unknown") for item in scored))
+    duplicate_excluded_count = max(0, len(raw_articles) - len(deduped))
+
     return {
         "available": True,
         "overall_sentiment": overall_sentiment,
-        "sentiment_score": round(50 + (average_sentiment * 50)),
-        "high_impact_news": [item for item in scored if item["impact"] == "high"][:5],
-        "full_news_list": scored[: max(1, int(limit or 20))],
+        "sentiment_score": round((average_sentiment + 1) * 50, 2),
+        "high_impact_news": high_impact_news,
+        "full_news_list": full_news_list,
         "news_count": len(raw_articles),
-        "deduplicated_count": len(scored),
-        "data_quality": {"status": "complete", "sources_used": sources_used},
+        "deduplicated_count": len(deduped),
+        "high_impact_count": len(high_impact_news),
+        "full_news_count": len(full_news_list),
+        "duplicate_excluded_count": duplicate_excluded_count,
+        "data_quality": {
+            "status": "available",
+            "sources_used": sources_used,
+            "source_confidence_breakdown": source_confidence_breakdown,
+            "rules": {
+                "high_impact_limited": False,
+                "full_news_limited": False,
+                "high_impact_removed_from_full_list": True,
+            },
+        },
     }
 
 
