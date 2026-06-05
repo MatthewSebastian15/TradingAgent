@@ -26,8 +26,9 @@ export const SOURCE_LABELS = {
   finnhub: 'Finnhub',
   marketaux: 'Marketaux',
   newsdata: 'NewsData',
-  local_calculation_from_normalized_financials: 'local calculation from normalized financials',
-  local_calculation_from_historical_price: 'local calculation from historical price',
+  normalized_financial_rows: 'Normalized financial rows',
+  local_calculation_from_normalized_financials: 'Local calculation',
+  local_calculation_from_historical_price: 'Local historical price calculation',
   configured_ohlcv: 'Configured OHLCV',
 };
 
@@ -39,6 +40,10 @@ export function readableSource(value) {
   const match = Object.keys(SOURCE_LABELS).find((key) => normalized.includes(key));
   if (match) return SOURCE_LABELS[match];
   return text.replaceAll('_', ' ');
+}
+
+export function formatSourceLabel(source) {
+  return readableSource(source) || 'Unknown source';
 }
 
 export function getFieldQuality(dataQuality, fieldName) {
@@ -75,14 +80,28 @@ export function getDataStatusClasses(status, confidenceScore) {
 
 export function normalizeQualityPayload(payload) {
   if (!payload || typeof payload !== 'object') return null;
-  const status = payload.status || payload.freshness_status || payload.completeness || 'unknown';
+  const freshnessPayload =
+    payload.freshness_status && typeof payload.freshness_status === 'object'
+      ? payload.freshness_status
+      : payload.freshness && typeof payload.freshness === 'object'
+        ? payload.freshness
+        : null;
+  const freshnessStatus =
+    freshnessPayload?.status ||
+    (typeof payload.freshness_status === 'string' ? payload.freshness_status : null);
+  const status = payload.status || freshnessStatus || payload.completeness || 'unknown';
+  const warnings = [
+    ...(Array.isArray(payload.warnings) ? payload.warnings : []),
+    ...(Array.isArray(freshnessPayload?.warnings) ? freshnessPayload.warnings : []),
+  ];
   return {
     status,
     label: getDataStatusLabel(status),
     source: payload.source || payload.primary || payload.method || payload.vendor || null,
     reason: payload.reason || payload.warning || payload.summary || null,
     confidenceScore: payload.confidence_score ?? payload.confidenceScore ?? payload.score ?? payload.confidence ?? null,
-    warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+    warnings: [...new Set(warnings)],
+    freshnessStatus: freshnessPayload,
   };
 }
 

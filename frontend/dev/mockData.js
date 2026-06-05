@@ -220,6 +220,65 @@ export const MOCK_RECENT_ANALYSES = [
   },
 ];
 
+const COMMON_FIELD_QUALITY = {
+  revenue: {
+    status: 'available',
+    source: 'normalized_financial_rows',
+    confidence_score: 92,
+    warnings: [],
+    as_of_date: '2026-03-31',
+    freshness_status: {
+      status: 'fresh',
+      is_stale: false,
+      age_seconds: 120000,
+      ttl_seconds: 604800,
+      as_of_date: '2026-03-31T00:00:00+00:00',
+      warnings: [],
+    },
+  },
+  sma_20: {
+    status: 'calculated',
+    source: 'local_calculation_from_historical_price',
+    confidence_score: 88,
+    warnings: [],
+    as_of_date: '2026-05-18',
+    freshness_status: {
+      status: 'fresh',
+      is_stale: false,
+      ttl_seconds: 86400,
+      as_of_date: '2026-05-18T00:00:00+00:00',
+      warnings: [],
+    },
+  },
+  sma_200: {
+    status: 'source_unavailable',
+    source: 'local_calculation_from_historical_price',
+    confidence_score: 35,
+    reason: 'Not enough price history for SMA 200.',
+    warnings: ['SMA 200 requires at least 200 close prices.'],
+  },
+  dividend_yield: {
+    status: 'no_dividend_history',
+    source: 'idx_official',
+    reason: 'No cash dividend found for selected period',
+    warnings: [],
+  },
+  company_news: {
+    status: 'available',
+    source: 'marketaux',
+    confidence_score: 84,
+    warnings: [],
+    as_of_date: '2026-05-17T10:30:00Z',
+    freshness_status: {
+      status: 'fresh',
+      is_stale: false,
+      ttl_seconds: 3600,
+      as_of_date: '2026-05-17T10:30:00+00:00',
+      warnings: [],
+    },
+  },
+};
+
 const COMMON_MOCK_QUALITY = {
   price_data: 'mock',
   trade_levels: 'mock_validated',
@@ -228,6 +287,7 @@ const COMMON_MOCK_QUALITY = {
   fundamentals: 'mock',
   news: 'mock',
   warnings: ['Mock data only. No backend, provider, or LLM call was executed.'],
+  field_quality: COMMON_FIELD_QUALITY,
 };
 
 export const mockConflictDataQuality = {
@@ -239,10 +299,43 @@ export const mockConflictDataQuality = {
       warnings: [
         'last_price conflict: yfinance=1000, finnhub=1060, difference=6.0%, tolerance=3.0%',
       ],
+      freshness_status: {
+        status: 'fresh',
+        is_stale: false,
+        ttl_seconds: 300,
+        as_of_date: '2026-06-05T09:00:00+00:00',
+        warnings: [],
+      },
       vendor_values: {
         yfinance: 1000,
         finnhub: 1060,
       },
+    },
+  },
+};
+
+export const mockFreshnessAndQuality = {
+  data_quality: {
+    field_quality: {
+      revenue: {
+        status: 'stale',
+        source: 'idx_official',
+        confidence_score: 90,
+        reason: null,
+        warnings: ['Data is stale based on field freshness policy'],
+        as_of_date: '2024-03-31',
+        freshness_status: {
+          status: 'stale',
+          is_stale: true,
+          age_seconds: 700000,
+          ttl_seconds: 604800,
+          warnings: ['Data is stale based on field freshness policy'],
+        },
+      },
+      last_price: mockConflictDataQuality.field_quality.last_price,
+      sma_20: COMMON_FIELD_QUALITY.sma_20,
+      sma_200: COMMON_FIELD_QUALITY.sma_200,
+      dividend_yield: COMMON_FIELD_QUALITY.dividend_yield,
     },
   },
 };
@@ -1949,6 +2042,10 @@ function normalizeDataQuality(overrides = {}) {
     ...COMMON_MOCK_QUALITY,
     ...overrides,
     warnings: overrides.warnings || COMMON_MOCK_QUALITY.warnings,
+    field_quality: {
+      ...COMMON_FIELD_QUALITY,
+      ...(overrides.field_quality || {}),
+    },
   };
 }
 

@@ -274,16 +274,16 @@ class FieldQuality:
     """Field-level quality metadata for API/UI/report consumers."""
 
     field_name: str
-    source: str
+    source: str | None
     status: str
-    confidence_score: int
+    confidence_score: int | float | None
     freshness_score: int = 0
     completeness_score: int = 0
     source_reliability_score: int = 0
     cross_vendor_match_score: int = 0
     warnings: list[str] = field(default_factory=list)
     as_of_date: str | None = None
-    freshness_status: str | None = None
+    freshness_status: dict[str, Any] | None = None
     freshness: dict[str, Any] | None = None
     reason: str | None = None
     vendor_attempts: list[dict[str, Any]] = field(default_factory=list)
@@ -354,6 +354,8 @@ _ALLOWED_STATUSES = {
     "failed",
     "skipped",
     "success",
+    "unknown",
+    "unavailable",
 }
 
 _MISSING_SENTINELS = {"", "n/a", "na", "none", "null", "unavailable", "source_unavailable"}
@@ -383,12 +385,15 @@ def _source_score(source: str) -> int:
 def build_field_quality(
     field_name: str,
     value: Any,
-    source: str = "unknown",
+    source: str | None = "unknown",
+    confidence_score: int | float | None = None,
     warnings: list[str] | None = None,
     *,
     as_of_date: str | None = None,
     status: str | None = None,
+    status_override: str | None = None,
     calculated: bool = False,
+    reason: str | None = None,
     conflict_warnings: list[str] | None = None,
     vendor_attempts: list[dict[str, Any]] | None = None,
     vendor_values: dict[str, float] | None = None,
@@ -400,8 +405,9 @@ def build_field_quality(
     """
     field_warnings = list(warnings or []) + list(conflict_warnings or [])
     normalized_vendor_values = dict(vendor_values or {})
-    source_text = str(source or "unavailable")
+    source_text = str(source or "unavailable") if source is not None else None
     missing = _is_missing_value(value)
+    status = status_override or status
     if status is None:
         if conflict_warnings:
             status = "conflict"
@@ -414,11 +420,10 @@ def build_field_quality(
     if status not in _ALLOWED_STATUSES:
         status = "partial" if status else "source_unavailable"
 
-    source_reliability_score = _source_score(source_text)
+    source_reliability_score = _source_score(source_text or "unavailable")
     completeness_score = 25 if not missing else 0
     cross_vendor_match_score = 0 if conflict_warnings else 15
     freshness_score = 0
-    freshness_status = None
     freshness_detail: dict[str, Any] | None = None
     stale_penalty = 0
 
@@ -426,10 +431,9 @@ def build_field_quality(
         from tradingagents.dataflows.freshness_policy import get_freshness_status
 
         freshness_detail = get_freshness_status(field_name, as_of_date)
-        freshness_status = freshness_detail.get("status")
         freshness_score = int(freshness_detail.get("freshness_score") or 0)
         if freshness_detail.get("is_stale") and status == "available":
-            if freshness_status == "stale":
+            if freshness_detail.get("status") == "stale":
                 status = "stale"
             stale_penalty = 10
         field_warnings.extend(freshness_detail.get("warnings") or [])
@@ -438,19 +442,24 @@ def build_field_quality(
         freshness_detail = None
 
     missing_penalty = 25 if missing else 0
-    confidence = calculate_confidence_score(
-        source_reliability_score=source_reliability_score,
-        freshness_score=freshness_score,
-        completeness_score=completeness_score,
-        cross_vendor_match_score=cross_vendor_match_score,
-        missing_field_penalty=missing_penalty,
-        stale_data_penalty=stale_penalty,
+    confidence = (
+        confidence_score
+        if confidence_score is not None
+        else calculate_confidence_score(
+            source_reliability_score=source_reliability_score,
+            freshness_score=freshness_score,
+            completeness_score=completeness_score,
+            cross_vendor_match_score=cross_vendor_match_score,
+            missing_field_penalty=missing_penalty,
+            stale_data_penalty=stale_penalty,
+        )
     )
-    reason = None
-    if missing:
+    if reason is None and missing:
         reason = "Source did not return usable data for this field."
-    elif conflict_warnings:
+    elif reason is None and conflict_warnings:
         reason = "Cross-vendor validation found a material mismatch."
+    if conflict_warnings:
+        status = "conflict"
 
     return FieldQuality(
         field_name=str(field_name),
@@ -463,10 +472,9 @@ def build_field_quality(
         cross_vendor_match_score=cross_vendor_match_score,
         warnings=list(dict.fromkeys(field_warnings)),
         as_of_date=as_of_date,
-        freshness_status=freshness_status,
+        freshness_status=freshness_detail,
         freshness=freshness_detail,
         reason=reason,
         vendor_attempts=list(vendor_attempts or []),
         vendor_values=normalized_vendor_values,
     ).to_dict()
-

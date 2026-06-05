@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import DataSourceBadge from '../../DataSourceBadge';
 import DataStatusBadge from '../../DataStatusBadge';
 import { safeExternalUrl } from '../../../utils/url';
+import { getFieldQuality } from '../../../utils/dataStatus';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 
@@ -123,7 +124,7 @@ SourceConfidenceSummary.propTypes = {
   breakdown: PropTypes.object,
 };
 
-function NewsCard({ item, index }) {
+function NewsCard({ item, index, quality, duplicateRemovedCount }) {
   const url = safeExternalUrl(item.url);
 
   return (
@@ -144,6 +145,7 @@ function NewsCard({ item, index }) {
 
       <div className="mt-2 flex flex-wrap gap-2 font-mono text-[11px] text-bloomberg-muted">
         <span>Publisher: {item.publisher || 'Unknown'}</span>
+        <span>Provider: {item.provider || item.source || 'Unknown'}</span>
         <span>Published: {formatDate(item.published_at)}</span>
         <span>Scope: {displayLabel(item.scope_label || item.news_scope || 'company')}</span>
         <span>
@@ -155,13 +157,16 @@ function NewsCard({ item, index }) {
         {item.impact && <span>Impact: {displayLabel(item.impact)}</span>}
         {item.sentiment && <span>Sentiment: {displayLabel(item.sentiment)}</span>}
         {item.impact_score !== undefined && <span>Impact Score: {item.impact_score}</span>}
+        {item.impact_status && <span>Impact Status: {displayLabel(item.impact_status)}</span>}
         {item.relevance_score !== undefined && <span>Relevance: {item.relevance_score}</span>}
+        {duplicateRemovedCount !== undefined && <span>Duplicate Removed: {duplicateRemovedCount}</span>}
       </div>
 
       <div className="mt-2">
         <DataStatusBadge
           compact
-          status={item.status || 'available'}
+          quality={quality}
+          status={quality ? undefined : item.status || 'available'}
           source={item.source || item.publisher}
           reason={item.impact_reason || item.relevance_reason}
           confidenceScore={item.source_confidence_score}
@@ -198,6 +203,8 @@ function NewsCard({ item, index }) {
 NewsCard.propTypes = {
   item: PropTypes.object.isRequired,
   index: PropTypes.number.isRequired,
+  quality: PropTypes.object,
+  duplicateRemovedCount: PropTypes.number,
 };
 
 function CatalystList({ title, items }) {
@@ -242,14 +249,15 @@ CatalystList.propTypes = {
 
 function NewsSourceStatus({ relatedNews, newsImpact, result }) {
   const rootNewsQuality = result?.data_quality?.news;
+  const fieldQuality = getFieldQuality(result?.data_quality, 'company_news');
   const sources = result?.data_sources?.news || newsImpact?.data_quality?.sources_used || relatedNews?.source;
   return (
     <div className="mt-3 space-y-2">
       <DataSourceBadge sources={sources} label="News sources" />
-      {(rootNewsQuality || newsImpact?.data_quality) && (
+      {(fieldQuality || rootNewsQuality || newsImpact?.data_quality) && (
         <DataStatusBadge
-          quality={typeof rootNewsQuality === 'object' ? rootNewsQuality : newsImpact?.data_quality}
-          status={typeof rootNewsQuality === 'string' ? rootNewsQuality : newsImpact?.data_quality?.status}
+          quality={fieldQuality || (typeof rootNewsQuality === 'object' ? rootNewsQuality : newsImpact?.data_quality)}
+          status={fieldQuality ? undefined : typeof rootNewsQuality === 'string' ? rootNewsQuality : newsImpact?.data_quality?.status}
           reason={newsImpact?.data_quality?.reason || newsImpact?.data_quality?.summary}
         />
       )}
@@ -277,6 +285,12 @@ export default function NewsTab({ result }) {
   const fullNewsItemsRaw = hasNewsImpactFullList ? impactFullNewsItems : relatedItems;
   const highImpactItems = dedupeNewsItems(highImpactItemsRaw);
   const fullNewsItems = excludeNewsItems(fullNewsItemsRaw, highImpactItems);
+  const companyNewsQuality = getFieldQuality(result?.data_quality, 'company_news');
+  const duplicateRemovedCount =
+    newsImpact.duplicate_excluded_count ??
+    newsImpact.duplicate_removed_count ??
+    result?.news?.duplicate_removed_count ??
+    result?.news?.dedup_removed_count;
 
   if (!hasNewsPayload(result)) {
     return (
@@ -325,6 +339,8 @@ export default function NewsTab({ result }) {
                 key={newsDedupeKey(item) || `${item.title}-${index}`}
                 item={item}
                 index={index}
+                quality={companyNewsQuality}
+                duplicateRemovedCount={duplicateRemovedCount}
               />
             ))}
           </div>
@@ -381,6 +397,8 @@ export default function NewsTab({ result }) {
                 key={newsDedupeKey(item) || `${item.title}-${index}`}
                 item={item}
                 index={index}
+                quality={companyNewsQuality}
+                duplicateRemovedCount={duplicateRemovedCount}
               />
             ))}
           </div>

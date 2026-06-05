@@ -4,6 +4,7 @@ import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import DataQualityBadge from './DataQualityBadge';
 import DataStatusBadge from './DataStatusBadge';
 import MetricBox from './results/MetricBox';
 import { getDataStatusLabel } from '../utils/dataStatus';
@@ -28,7 +29,7 @@ describe('DataStatusBadge', () => {
     );
 
     expect(screen.getByText('Calculated')).toBeInTheDocument();
-    expect(screen.getByText(/Source: local calculation from historical price/i)).toBeInTheDocument();
+    expect(screen.getByText(/Source: Local historical price calculation/i)).toBeInTheDocument();
     expect(screen.getByText(/Confidence: 92/i)).toBeInTheDocument();
     expect(screen.getByText(/Reason: SMA 200 calculated/i)).toBeInTheDocument();
   });
@@ -46,6 +47,24 @@ describe('DataStatusBadge', () => {
     expect(screen.getAllByText(/No dividend history/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/No cash dividend found/i)).toBeInTheDocument();
     expect(screen.queryByText(/^N\/A$/i)).not.toBeInTheDocument();
+  });
+
+  it('shows freshness warning', () => {
+    render(
+      <DataQualityBadge
+        quality={{
+          status: 'stale',
+          source: 'idx_official',
+          confidence_score: 90,
+          warnings: ['Data is stale based on field freshness policy'],
+          freshness_status: { status: 'stale' },
+        }}
+      />
+    );
+
+    expect(screen.getAllByText(/Stale/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/IDX Official/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Data is stale/i).length).toBeGreaterThan(0);
   });
 
 });

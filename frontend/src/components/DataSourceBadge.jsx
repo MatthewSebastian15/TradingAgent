@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-import { normalizeSources, readableSource } from '../utils/dataStatus';
+import { formatSourceLabel, normalizeSources } from '../utils/dataStatus';
 
 export default function DataSourceBadge({ sources, label = 'Sources' }) {
   const normalized = normalizeSources(sources);
@@ -12,7 +12,7 @@ export default function DataSourceBadge({ sources, label = 'Sources' }) {
       </span>
       {normalized.map((source) => (
         <span key={source} className="border border-bloomberg-border bg-bloomberg-surface px-2 py-0.5">
-          {readableSource(source)}
+          {formatSourceLabel(source)}
         </span>
       ))}
     </div>

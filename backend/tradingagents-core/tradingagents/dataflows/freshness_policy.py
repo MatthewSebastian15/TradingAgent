@@ -1,4 +1,4 @@
-"""Per-field freshness policy used by cache/status reporting."""
+"""Per-field freshness policy used by data-quality metadata."""
 
 from __future__ import annotations
 
@@ -8,86 +8,145 @@ from typing import Any
 FIELD_TTL_SECONDS: dict[str, int] = {
     "quote": 300,
     "last_price": 300,
-    "stock_price": 300,
     "historical_price": 86_400,
+    "technical": 86_400,
+    "technical_indicators": 86_400,
     "company_news": 3_600,
     "global_news": 10_800,
+    "high_impact_news": 3_600,
     "news_sentiment": 3_600,
-    "social_sentiment": 3_600,
     "financial_statement": 604_800,
-    "financial_metrics": 604_800,
-    "fundamentals": 604_800,
+    "revenue": 604_800,
+    "ebitda": 604_800,
+    "net_profit": 604_800,
     "balance_sheet": 604_800,
     "cashflow": 604_800,
-    "income_statement": 604_800,
+    "derived_fundamentals": 604_800,
     "shareholders": 604_800,
     "executives": 2_592_000,
+    "company_profile": 2_592_000,
     "corporate_actions": 86_400,
-    "insider_transactions": 43_200,
-    "technical_indicators": 86_400,
+    "dividend": 604_800,
+    "dividend_quality": 604_800,
+}
+
+_FIELD_ALIASES: dict[str, str] = {
+    "stock_price": "last_price",
+    "ohlcv": "historical_price",
+    "financial_metrics": "financial_statement",
+    "fundamentals": "financial_statement",
+    "income_statement": "financial_statement",
+    "social_sentiment": "news_sentiment",
+    "insider_transactions": "shareholders",
+    "event_risk": "corporate_actions",
+    "recommendation_trends": "corporate_actions",
+    "sma_20": "technical_indicators",
+    "sma_50": "technical_indicators",
+    "sma_200": "technical_indicators",
+    "volatility": "technical_indicators",
+    "rsi": "technical_indicators",
+    "rsi_14": "technical_indicators",
+    "revenue_growth_percent": "derived_fundamentals",
+    "net_profit_growth_percent": "derived_fundamentals",
+    "ebitda_margin": "derived_fundamentals",
+    "ebitda_margin_percent": "derived_fundamentals",
+    "net_profit_margin": "derived_fundamentals",
+    "net_profit_margin_percent": "derived_fundamentals",
+    "free_cash_flow": "derived_fundamentals",
+    "cfo_to_net_income": "derived_fundamentals",
+    "net_debt": "derived_fundamentals",
+    "dividend_yield": "dividend",
+    "dividend_yield_percent": "dividend",
+    "payout_ratio": "dividend",
+    "payout_ratio_percent": "dividend",
+    "fcf_coverage": "dividend",
+    "market_cap": "company_profile",
+    "sector": "company_profile",
+    "industry": "company_profile",
+    "country": "company_profile",
+    "exchange": "company_profile",
 }
 
 
+def _canonical_field(field_name: str) -> str:
+    normalized = str(field_name or "").lower()
+    return _FIELD_ALIASES.get(normalized, normalized)
+
+
 def ttl_for_field(field_name: str, default_seconds: int = 900) -> int:
-    return int(FIELD_TTL_SECONDS.get(str(field_name or "").lower(), default_seconds))
+    return int(FIELD_TTL_SECONDS.get(_canonical_field(field_name), default_seconds))
 
 
-def _parse_datetime(value: Any) -> datetime | None:
+def parse_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
     if isinstance(value, datetime):
         return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
-    text = str(value or "").strip()
-    if not text:
-        return None
-    candidates = [text]
-    if len(text) >= 10:
-        candidates.append(text[:10])
-    for candidate in candidates:
-        try:
-            parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
-            return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
-        try:
-            return datetime.strptime(candidate[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        candidates = [text]
+        if len(text) >= 10:
+            candidates.append(text[:10])
+        for candidate in candidates:
+            try:
+                parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+                return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+            try:
+                return datetime.strptime(candidate[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
     return None
 
 
-def get_freshness_status(field_name: str, as_of: Any, now: datetime | None = None) -> dict[str, Any]:
-    """Return freshness metadata for one field.
+def _freshness_score(ttl: int | None, age_seconds: int | None, is_stale: bool) -> int:
+    if age_seconds is None:
+        return 0
+    if ttl is None:
+        return 25
+    if not is_stale:
+        return 25
+    return max(0, int(25 * (ttl / age_seconds))) if age_seconds else 25
 
-    Uses standardized statuses consumed by data-quality metadata: available,
-    stale, or source_unavailable when timestamp is missing.
-    """
-    ttl = ttl_for_field(field_name)
-    warnings: list[str] = []
-    as_of_dt = _parse_datetime(as_of)
-    if as_of_dt is None:
+
+def get_freshness_status(field_name: str, as_of: Any, now: datetime | None = None) -> dict[str, Any]:
+    ttl = FIELD_TTL_SECONDS.get(_canonical_field(field_name))
+    parsed_as_of = parse_datetime(as_of)
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    else:
+        current = current.astimezone(timezone.utc)
+
+    if not parsed_as_of:
         return {
             "field_name": field_name,
-            "status": "source_unavailable",
+            "status": "unknown",
             "is_stale": True,
-            "ttl_seconds": ttl,
             "age_seconds": None,
+            "ttl_seconds": ttl,
+            "as_of_date": None,
             "freshness_score": 0,
             "warnings": ["missing_as_of_date"],
         }
-    now_dt = now.astimezone(timezone.utc) if now and now.tzinfo else (now or datetime.now(timezone.utc))
-    if now_dt.tzinfo is None:
-        now_dt = now_dt.replace(tzinfo=timezone.utc)
-    age_seconds = max(0, int((now_dt - as_of_dt).total_seconds()))
-    status = "available" if age_seconds <= ttl else "stale"
-    if status == "stale":
-        warnings.append(f"{field_name} is stale: age_seconds={age_seconds}, ttl_seconds={ttl}")
-    # 25 is the freshness component used by build_field_quality.
-    freshness_score = 25 if status == "available" else max(0, int(25 * (ttl / age_seconds))) if age_seconds else 25
+
+    age_seconds = max(0, int((current - parsed_as_of).total_seconds()))
+    is_stale = bool(ttl is not None and age_seconds > ttl)
+    warnings = ["Data is stale based on field freshness policy"] if is_stale else []
+
     return {
         "field_name": field_name,
-        "status": status,
-        "is_stale": status == "stale",
-        "ttl_seconds": ttl,
+        "status": "stale" if is_stale else "fresh",
+        "is_stale": is_stale,
         "age_seconds": age_seconds,
-        "freshness_score": freshness_score,
+        "ttl_seconds": ttl,
+        "as_of_date": parsed_as_of.isoformat(),
+        "freshness_score": _freshness_score(ttl, age_seconds, is_stale),
         "warnings": warnings,
     }
+
+
+_parse_datetime = parse_datetime
