@@ -71,3 +71,20 @@ def test_gap_mapper_and_completeness_report():
     assert any(item["field"] == "dividend_yield" for item in gaps["gaps"])
     report = calculate_completeness({"quote": 1, "historical_price": "rows", "company_news": "news"})
     assert report["price_data"]["available_fields"] >= 2
+
+
+def test_data_collection_workers_default(monkeypatch):
+    import importlib
+
+    from tradingagents import default_config
+
+    try:
+        monkeypatch.delenv("DATA_COLLECTION_WORKERS", raising=False)
+        reloaded = importlib.reload(default_config)
+        assert reloaded.DEFAULT_CONFIG["data_collection_workers"] >= 12
+    finally:
+        importlib.reload(default_config)
+
+
+def test_idx_financial_statement_priority():
+    assert get_field_vendor_order("financial_statement", "BBCA.JK")[0] == "idx_official"

@@ -147,6 +147,7 @@ class NewsService:
 
         articles = _filter_articles_by_window(articles, as_of_date=as_of_date, window_days=window_days)
         deduped = deduplicate_news_articles(articles)
+        dedup_removed_count = max(0, len(articles) - len(deduped))
         ui_articles = [
             article
             for article in deduped
@@ -175,6 +176,7 @@ class NewsService:
             "provider_health": provider_health,
             "articles_found": len(ui_articles),
             "articles_used_in_prompt": len(prompt_articles),
+            "dedup_removed_count": dedup_removed_count,
             "average_sentiment": _average_sentiment(ui_articles),
             "articles": serialized_articles,
             "prompt_articles": serialized_prompt_articles,

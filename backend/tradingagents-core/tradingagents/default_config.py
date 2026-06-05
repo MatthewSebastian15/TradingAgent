@@ -53,6 +53,7 @@ DEFAULT_CONFIG = {
     "parallel_analysts": True,
     "analysis_mode": "balanced",
     "max_gemini_calls": 9,
+    "data_collection_workers": int(_env("DATA_COLLECTION_WORKERS") or "12"),
     # Reasoning effort (provider-specific, None = default)
     "google_thinking_level": None,
     "openai_reasoning_effort": None,
@@ -81,7 +82,7 @@ DEFAULT_CONFIG = {
         "enable_news": (_env("FINNHUB_ENABLE_NEWS") or "true").lower() == "true",
         "enable_sentiment": (_env("FINNHUB_ENABLE_SENTIMENT") or "true").lower() == "true",
         "enable_events": (_env("FINNHUB_ENABLE_EVENTS") or "true").lower() == "true",
-        "enable_insider": (_env("FINNHUB_ENABLE_INSIDER") or "false").lower() == "true",
+        "enable_insider": (_env("FINNHUB_ENABLE_INSIDER") or "true").lower() == "true",
         "enable_forex": (_env("FINNHUB_ENABLE_FOREX") or "false").lower() == "true",
         "enable_crypto": (_env("FINNHUB_ENABLE_CRYPTO") or "false").lower() == "true",
         "enable_symbol_resolver": (_env("FINNHUB_ENABLE_SYMBOL_RESOLVER") or "true").lower() == "true",
@@ -99,7 +100,7 @@ DEFAULT_CONFIG = {
         "forex_cache_ttl_seconds": int(_env("FINNHUB_FOREX_CACHE_TTL_SECONDS") or "300"),
         "crypto_cache_ttl_seconds": int(_env("FINNHUB_CRYPTO_CACHE_TTL_SECONDS") or "120"),
         "symbol_cache_ttl_seconds": int(_env("FINNHUB_SYMBOL_CACHE_TTL_SECONDS") or "2592000"),
-        "max_calls_per_analysis": int(_env("FINNHUB_MAX_CALLS_PER_ANALYSIS") or "12"),
+        "max_calls_per_analysis": int(_env("FINNHUB_MAX_CALLS_PER_ANALYSIS") or "8"),
     },
     "news": {
         "marketaux_api_key": _env("MARKETAUX_API_KEY"),
