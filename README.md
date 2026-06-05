@@ -31,24 +31,6 @@ Data collection runs in parallel. The first three analyst stages also run in par
 
 ---
 
-## Result Examples
-
-The `assets/` folder contains sample results for **Buy**, **Sell**, and **Hold** decisions.
-
-### Buy
-
-![TradingAgent Buy Result](assets/Result%20Analyst%20Buy.png)
-
-### Sell
-
-![TradingAgent Sell Result](assets/Result%20Analyst%20Sell.png)
-
-### Hold
-
-![TradingAgent Hold Result](assets/Result%20Analyst%20Hold.png)
-
----
-
 ## Architecture
 
 ```text
