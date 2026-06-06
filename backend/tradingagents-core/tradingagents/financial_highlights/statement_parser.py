@@ -512,8 +512,7 @@ def parse_vendor_financials(
         normalized["currency"] = normalized["currency"] or _currency_from_payload(bundle.get("fundamentals"))
 
     normalized["currency"] = normalized["currency"] or _currency_from_payload(fundamentals)
-    if not normalized["currency"]:
-        normalized["currency"] = "IDR" if str(ticker).upper().endswith(".JK") else "USD"
+    normalized["currency"] = "IDR" if str(ticker).upper().endswith(".JK") else (normalized["currency"] or "USD")
 
     for vendor in VENDOR_PRIORITY:
         for payload, frequency in grouped.get(vendor, []):

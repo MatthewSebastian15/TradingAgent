@@ -1,5 +1,4 @@
 import PropTypes from 'prop-types';
-import DataSourceBadge from '../../DataSourceBadge';
 import DataStatusBadge from '../../DataStatusBadge';
 import { safeExternalUrl } from '../../../utils/url';
 import { getDisplayValue, getFieldQuality } from '../../../utils/dataStatus';
@@ -50,21 +49,20 @@ function formatCurrentPrice(value, currency) {
 }
 
 function ProfileField({ label, value, quality }) {
-  const displayPayload = quality ? getDisplayValue(value, quality) : { text: display(value), reason: null };
+  const displayPayload = quality
+    ? getDisplayValue(value, quality)
+    : { text: display(value), reason: null };
   return (
     <div className="border border-bloomberg-border bg-black px-3 py-2">
       <div className="font-mono text-[10px] text-bloomberg-muted uppercase tracking-wider mb-1">
         {label}
       </div>
-      <div className="font-mono text-xs text-bloomberg-white break-words">{displayPayload.text}</div>
+      <div className="font-mono text-xs text-bloomberg-white break-words">
+        {displayPayload.text}
+      </div>
       {displayPayload.reason && (
         <div className="mt-1 font-mono text-[11px] text-bloomberg-muted">
           Reason: {displayPayload.reason}
-        </div>
-      )}
-      {quality && (
-        <div className="mt-2">
-          <DataStatusBadge compact quality={quality} />
         </div>
       )}
     </div>
@@ -108,11 +106,27 @@ export default function ProfileTab({ profile, result }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <ProfileField label="Company Name" value={companyName} quality={profileQuality} />
           <ProfileField label="Ticker" value={profile.ticker} />
-          <ProfileField label="Exchange" value={profile.exchange} quality={getFieldQuality(dataQuality, 'exchange') || profileQuality} />
+          <ProfileField
+            label="Exchange"
+            value={profile.exchange}
+            quality={getFieldQuality(dataQuality, 'exchange') || profileQuality}
+          />
           <ProfileField label="Currency" value={profile.currency} />
-          <ProfileField label="Country" value={profile.country} quality={getFieldQuality(dataQuality, 'country') || profileQuality} />
-          <ProfileField label="Sector" value={profile.sector} quality={getFieldQuality(dataQuality, 'sector') || profileQuality} />
-          <ProfileField label="Industry" value={profile.industry} quality={getFieldQuality(dataQuality, 'industry') || profileQuality} />
+          <ProfileField
+            label="Country"
+            value={profile.country}
+            quality={getFieldQuality(dataQuality, 'country') || profileQuality}
+          />
+          <ProfileField
+            label="Sector"
+            value={profile.sector}
+            quality={getFieldQuality(dataQuality, 'sector') || profileQuality}
+          />
+          <ProfileField
+            label="Industry"
+            value={profile.industry}
+            quality={getFieldQuality(dataQuality, 'industry') || profileQuality}
+          />
           <ProfileField
             label="Market Cap"
             value={formatMarketCap(profile.market_cap, profile.currency)}
@@ -128,7 +142,11 @@ export default function ProfileTab({ profile, result }) {
             quality={getFieldQuality(dataQuality, 'last_price')}
           />
           <ProfileField label="Fiscal Year End" value={profile.fiscal_year_end} />
-          <ProfileField label="Employees" value={formatNumber(employeeCount)} quality={profileQuality} />
+          <ProfileField
+            label="Employees"
+            value={formatNumber(employeeCount)}
+            quality={profileQuality}
+          />
           <ProfileField
             label="Website"
             value={
@@ -146,19 +164,6 @@ export default function ProfileTab({ profile, result }) {
               )
             }
           />
-        </div>
-        <div className="mt-2 space-y-2">
-          <div className="font-mono text-[11px] text-bloomberg-muted">
-            Profile data: {profile.data_quality?.status || 'N/A'}
-          </div>
-          <DataStatusBadge
-            quality={profile.data_quality}
-            status={profile.data_quality?.status}
-            source={profile.data_quality?.source || profile.source}
-            reason={profile.data_quality?.reason || profile.warning}
-            confidenceScore={profile.data_quality?.confidence_score}
-          />
-          <DataSourceBadge sources={profile.data_sources || result?.data_sources?.profile || profile.sources || profile.source} label="Profile sources" />
         </div>
       </section>
 
@@ -193,14 +198,8 @@ export default function ProfileTab({ profile, result }) {
               </tbody>
             </table>
           </div>
-          {(getFieldQuality(dataQuality, 'executives') || profileQuality) && (
-            <div className="mt-2">
-              <DataStatusBadge compact quality={getFieldQuality(dataQuality, 'executives') || profileQuality} />
-            </div>
-          )}
         </section>
       )}
-
 
       {shareholders.length > 0 && (
         <section>
@@ -221,10 +220,18 @@ export default function ProfileTab({ profile, result }) {
                     key={`${holder.name || 'shareholder'}-${index}`}
                     className="border-t border-bloomberg-border"
                   >
-                    <td className="px-3 py-2 text-bloomberg-white">{holder.name || holder.shareholder || 'N/A'}</td>
-                    <td className="px-3 py-2 text-bloomberg-muted">{holder.ownership_percent ?? holder.percent ?? holder.percentage ?? 'N/A'}</td>
-                    <td className="px-3 py-2 text-bloomberg-muted">{formatNumber(holder.shares ?? holder.share_count)}</td>
-                    <td className="px-3 py-2 text-bloomberg-muted">{holder.source || profile.source || 'N/A'}</td>
+                    <td className="px-3 py-2 text-bloomberg-white">
+                      {holder.name || holder.shareholder || 'N/A'}
+                    </td>
+                    <td className="px-3 py-2 text-bloomberg-muted">
+                      {holder.ownership_percent ?? holder.percent ?? holder.percentage ?? 'N/A'}
+                    </td>
+                    <td className="px-3 py-2 text-bloomberg-muted">
+                      {formatNumber(holder.shares ?? holder.share_count)}
+                    </td>
+                    <td className="px-3 py-2 text-bloomberg-muted">
+                      {holder.source || profile.source || 'N/A'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -232,7 +239,12 @@ export default function ProfileTab({ profile, result }) {
           </div>
           {(getFieldQuality(dataQuality, 'shareholders') || profile.shareholders_quality) && (
             <div className="mt-2">
-              <DataStatusBadge compact quality={getFieldQuality(dataQuality, 'shareholders') || profile.shareholders_quality} />
+              <DataStatusBadge
+                compact
+                quality={
+                  getFieldQuality(dataQuality, 'shareholders') || profile.shareholders_quality
+                }
+              />
             </div>
           )}
         </section>

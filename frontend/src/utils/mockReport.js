@@ -691,6 +691,79 @@ function renderAnalystSections(sections) {
   </section>`;
 }
 
+function expandFinancialYear(value) {
+  const year = Number(value);
+  if (!Number.isFinite(year)) return null;
+  if (year < 100) return year < 50 ? 2000 + year : 1900 + year;
+  return year;
+}
+
+function displayPeriodLabel(period) {
+  const raw = String(period?.display_period || period?.label || period?.period || '').trim();
+  let match = raw.match(/^FY\s?(\d{2}|\d{4})$/i);
+  if (match) {
+    const year = expandFinancialYear(match[1]);
+    return year ? `FY ${year}` : '-';
+  }
+
+  match = raw.match(/^FY\s?(\d{2}|\d{4})Q([1-4])$/i) || raw.match(/^Q([1-4])\s?(\d{2}|\d{4})$/i);
+  if (match) {
+    const isLegacyQuarter = match[0].toUpperCase().startsWith('FY');
+    const quarter = isLegacyQuarter ? match[2] : match[1];
+    const year = expandFinancialYear(isLegacyQuarter ? match[1] : match[2]);
+    return year ? `Q${quarter} ${year}` : '-';
+  }
+
+  return raw || '-';
+}
+
+function periodSortValue(period) {
+  if (period?.sort_key) return String(period.sort_key);
+  const label = displayPeriodLabel(period);
+  const annual = label.match(/^FY\s(\d{4})$/i);
+  if (annual) return `${annual[1]}1231`;
+  const quarter = label.match(/^Q([1-4])\s(\d{4})$/i);
+  if (quarter) return `${quarter[2]}${String(Number(quarter[1]) * 3).padStart(2, '0')}31`;
+  const year = Number(period?.year || period?.fiscal_year || 0);
+  const fiscalQuarter = Number(period?.quarter || period?.fiscal_quarter || 0);
+  return `${String(year).padStart(4, '0')}${String(fiscalQuarter).padStart(2, '0')}`;
+}
+
+function sortFinancialPeriods(periods) {
+  return [...periods].sort((left, right) =>
+    periodSortValue(right).localeCompare(periodSortValue(left))
+  );
+}
+
+function unitSuffix(unit) {
+  const text = String(unit || '');
+  if (/\bBn\b/i.test(text)) return 'Bn';
+  if (/\bMn\b/i.test(text)) return 'Mn';
+  if (text.includes('%')) return '%';
+  if (/\/share/i.test(text)) return text;
+  if (/\bx\b/i.test(text) || /ratio/i.test(text)) return 'x';
+  return '';
+}
+
+function appendFinancialUnit(value, unit) {
+  if (value === null || value === undefined || value === '') return 'N/A';
+  const text = String(value).trim();
+  if (text === 'N/A' || text.toLowerCase() === 'source unavailable') return 'N/A';
+  const suffix = unitSuffix(unit);
+  if (!suffix) return text.replace(/\s*%/g, ' %');
+  if (suffix === '%') return `${text.replace(/\s*%$/, '')} %`;
+  if (suffix === 'x') return /\s*x$/i.test(text) ? text : `${text}x`;
+  if (text.toLowerCase().endsWith(suffix.toLowerCase())) return text;
+  return `${text} ${suffix}`;
+}
+
+function financialCellDisplay(cell, unit) {
+  if (!cell || cell.status === 'unavailable' || cell.status === 'source_unavailable') return 'N/A';
+  const value = cell.display ?? cell.value;
+  const display = appendFinancialUnit(value, unit);
+  return cell.status === 'estimated' && display !== 'N/A' ? `${display} EST` : display;
+}
+
 function renderFinancialHighlights(financialHighlights) {
   const periods = financialHighlights?.periods;
   const sections = Array.isArray(financialHighlights?.sections)
@@ -703,12 +776,12 @@ function renderFinancialHighlights(financialHighlights) {
   const snapshot = Array.isArray(financialHighlights.point_in_time)
     ? financialHighlights.point_in_time
     : [];
+  const displayPeriods = sortFinancialPeriods(periods);
   const renderTable = (rows) => `<table class="financial-highlights-table">
     <thead>
       <tr>
         <th>Metric</th>
-        <th>Unit</th>
-        ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
+        ${displayPeriods.map((period) => `<th>${escapeHtml(displayPeriodLabel(period))}</th>`).join('')}
       </tr>
     </thead>
     <tbody>
@@ -716,11 +789,10 @@ function renderFinancialHighlights(financialHighlights) {
         .map(
           (item) => `<tr>
             <td>${escapeHtml(item.label)}</td>
-            <td>${escapeHtml(item.unit || '-')}</td>
-            ${periods
+            ${displayPeriods
               .map((period) => {
                 const cell = item.values?.[period.key];
-                return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display || 'N/A')}</td>`;
+                return `<td>${escapeHtml(financialCellDisplay(cell, item.unit))}</td>`;
               })
               .join('')}
           </tr>`
@@ -737,7 +809,7 @@ function renderFinancialHighlights(financialHighlights) {
           <table><tbody>${snapshot
             .map(
               (item) =>
-                `<tr><th>${escapeHtml(item.label)}</th><td>${escapeHtml(item.status === 'unavailable' ? 'N/A' : `${item.display} ${item.unit}`)}</td></tr>`
+                `<tr><th>${escapeHtml(item.label)}</th><td>${escapeHtml(financialCellDisplay(item, item.unit))}</td></tr>`
             )
             .join('')}</tbody></table>`
         : ''
@@ -752,9 +824,8 @@ function renderFinancialHighlights(financialHighlights) {
   </section>`;
 }
 
-function metricDetailDisplay(detail) {
-  if (!detail || detail.status === 'unavailable') return 'N/A';
-  return detail.status === 'estimated' ? `${detail.display || 'N/A'} EST` : detail.display || 'N/A';
+function metricDetailDisplay(detail, unit) {
+  return financialCellDisplay(detail, unit);
 }
 
 function renderFundamentalQuality(payload) {
@@ -774,12 +845,12 @@ function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
     <table><tbody>${renderRows(
       metrics.map(([key, label]) => row(label, metricDetailDisplay(payload.metric_details[key])))
     )}</tbody></table>
-    ${renderFundamentalQuality(payload)}
   </section>`;
 }
 
 function renderFinancialTrends(payload) {
   if (!payload?.periods?.length || !payload?.metric_details) return '';
+  const displayPeriods = sortFinancialPeriods(payload.periods);
   const metrics = [
     ['revenue', 'Revenue', payload.scale_label || ''],
     ['revenue_growth_percent', 'Revenue Growth', '%'],
@@ -797,20 +868,19 @@ function renderFinancialTrends(payload) {
     <h2>Financial Trend Analysis</h2>
     ${payload.unit_note ? `<p class="muted">${escapeHtml(payload.unit_note)}</p>` : ''}
     <table class="financial-highlights-table">
-      <thead><tr><th>Metric</th><th>Unit</th>${payload.periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}</tr></thead>
+      <thead><tr><th>Metric</th>${displayPeriods.map((period) => `<th>${escapeHtml(displayPeriodLabel(period))}</th>`).join('')}</tr></thead>
       <tbody>${metrics
         .map(
           ([key, label, unit]) =>
-            `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(unit || '-')}</td>${payload.periods
-              .map(
-                (period, index) =>
-                  `<td>${escapeHtml(metricDetailDisplay(payload.metric_details[key]?.[index]))}</td>`
-              )
+            `<tr><td>${escapeHtml(label)}</td>${displayPeriods
+              .map((period) => {
+                const index = payload.periods.findIndex((item) => item.key === period.key);
+                return `<td>${escapeHtml(metricDetailDisplay(payload.metric_details[key]?.[index], unit))}</td>`;
+              })
               .join('')}</tr>`
         )
         .join('')}</tbody>
     </table>
-    ${renderFundamentalQuality(payload)}
   </section>`;
 }
 

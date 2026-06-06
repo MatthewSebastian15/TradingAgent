@@ -69,7 +69,7 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         vendor_payloads=_vendor_payloads(),
     )
 
-    assert [period.key for period in highlights.periods] == ["FY22", "FY23", "FY24", "FY25", "FY26Q1"]
+    assert [period.key for period in highlights.periods] == ["FY23", "FY24", "FY25", "FY26Q1"]
     assert [row.key for row in highlights.rows] == [
         "revenue",
         "ebitda",
@@ -93,11 +93,10 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         "Dividends",
     ]
 
-    assert highlights.period_logic == "fy22_to_analysis_quarter"
+    assert highlights.period_logic == "fy23_to_analysis_quarter"
     revenue_rows = [row for row in highlights.rows if row.key == "revenue"]
     assert len(revenue_rows) == 1
-    assert set(revenue_rows[0].values.keys()) == {"FY22", "FY23", "FY24", "FY25", "FY26Q1"}
-
+    assert set(revenue_rows[0].values.keys()) == {"FY23", "FY24", "FY25", "FY26Q1"}
 
 
 def test_builder_marks_reported_calculated_and_unavailable_cells():
@@ -108,8 +107,6 @@ def test_builder_marks_reported_calculated_and_unavailable_cells():
     )
     rows = _rows(highlights)
 
-    assert rows["revenue"].values["FY22"].status == "reported"
-    assert rows["revenue"].values["FY22"].display == "100,000.0"
     assert rows["revenue"].values["FY23"].status == "reported"
     assert rows["revenue"].values["FY23"].display == "120,000.0"
     assert rows["revenue_growth"].values["FY23"].status == "calculated"
@@ -168,6 +165,14 @@ def test_statement_parser_uses_vendor_priority_for_duplicate_values():
 
     assert normalized["periods"]["FY25"]["revenue"]["value"] == 150_000_000_000
     assert normalized["periods"]["FY25"]["revenue"]["source_vendor"] == "yfinance"
+
+
+def test_statement_parser_sets_currency_from_ticker_market():
+    idr = parse_vendor_financials(ticker="BBCA.JK", periods=[])
+    usd = parse_vendor_financials(ticker="AAPL", periods=[])
+
+    assert idr["currency"] == "IDR"
+    assert usd["currency"] == "USD"
 
 
 def test_builder_parses_alpha_vantage_statement_payload():
@@ -271,11 +276,7 @@ def test_builder_uses_last_close_on_or_before_analysis_date_for_dividend_yield()
         ticker="TEST",
         analysis_date="2026-01-15",
         dividends={"FY25": {"dividend_per_share": 1}},
-        price_data=(
-            "Date,Open,High,Low,Close,Volume\n"
-            "2026-01-14,9,11,8,10,100\n"
-            "2026-01-16,18,22,17,20,200"
-        ),
+        price_data=("Date,Open,High,Low,Close,Volume\n2026-01-14,9,11,8,10,100\n2026-01-16,18,22,17,20,200"),
     )
 
     assert _rows(highlights)["dividend_yield"].values["FY25"].value == 10

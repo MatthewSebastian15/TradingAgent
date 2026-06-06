@@ -11,7 +11,6 @@ import ChartPriceTab from './results/tabs/ChartPriceTab';
 import FundamentalTab from './results/tabs/FundamentalTab';
 import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
-import RiskDataQualityTab from './results/tabs/RiskDataQualityTab';
 import ResultTabs from './results/tabs/ResultTabs';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
@@ -1181,8 +1180,6 @@ export default function ResultCard({
       {activeTab === 'chart_price' && <ChartPriceTab result={result} />}
 
       {activeTab === 'news' && <NewsTab result={result} />}
-
-      {activeTab === 'risk_data_quality' && <RiskDataQualityTab result={result} />}
 
       <DisclaimerFooter />
     </div>

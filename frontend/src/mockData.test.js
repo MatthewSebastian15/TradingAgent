@@ -31,10 +31,9 @@ describe('mockData', () => {
     expect(result.agents_used.length).toBeGreaterThan(0);
     expect(result.data_quality.warnings[0]).toContain('Mock data only');
     expect(result.financial_highlights.periods.map((period) => period.label)).toEqual([
-      'FY22',
-      'FY23',
-      'FY24',
-      'FY25',
+      'FY 2023',
+      'FY 2024',
+      'FY 2025',
       'Q1 2026',
     ]);
     expect(result.normalized_period_rows[0].period).toMatchObject({
@@ -147,6 +146,26 @@ describe('mockData', () => {
     expect(result.risk_data_quality.calculation_notes).toContain(
       'Risk/reward ratio = expected upside / expected downside'
     );
+  });
+
+  it('keeps IDX fundamental mock values in IDR', () => {
+    const result = getMockAnalysisResponseByRequestId('mock-bbca-id-buy');
+    const serializedFundamentals = JSON.stringify({
+      financial_highlights: result.financial_highlights,
+      financial_trends: result.financial_trends,
+      valuation_multiples: result.valuation_multiples,
+      fair_value_range: result.fair_value_range,
+      scenario_analysis: result.scenario_analysis,
+      quality_of_earnings: result.quality_of_earnings,
+      balance_sheet_risk: result.balance_sheet_risk,
+      dividend_quality: result.dividend_quality,
+    });
+
+    expect(result.financial_highlights.currency).toBe('IDR');
+    expect(result.financial_highlights.scale_label).toBe('IDR Bn');
+    expect(serializedFundamentals).toContain('IDR');
+    expect(serializedFundamentals).not.toContain('USD Mn');
+    expect(serializedFundamentals).not.toContain('USD/share');
   });
 
   it('supports required direct mock routes', () => {

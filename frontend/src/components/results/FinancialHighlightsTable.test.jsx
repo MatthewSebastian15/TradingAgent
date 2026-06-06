@@ -14,12 +14,17 @@ describe('FinancialHighlightsTable', () => {
     );
 
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
-    expect(screen.getAllByText('Unit').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('FY22').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('FY23').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Unit')).toBeNull();
+    expect(screen.queryByText('FY 2022')).toBeNull();
+    expect(screen.getAllByText('FY 2023').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Q1 2026').length).toBeGreaterThan(0);
+    expect(
+      Array.from(container.querySelectorAll('thead')[0].querySelectorAll('th')).map(
+        (cell) => cell.textContent
+      )
+    ).toEqual(['Metric', 'Q1 2026', 'FY 2025', 'FY 2024', 'FY 2023']);
     expect(screen.getByText('Revenue')).toBeTruthy();
-    expect(screen.getAllByText('USD Mn').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Mn/).length).toBeGreaterThan(0);
     expect(screen.getByText('Latest Market Snapshot')).toBeTruthy();
     expect(screen.getByText('Market & Scale')).toBeTruthy();
     expect(screen.getByText('Growth')).toBeTruthy();
@@ -27,10 +32,10 @@ describe('FinancialHighlightsTable', () => {
     expect(screen.getByText('Per Share & Balance Sheet')).toBeTruthy();
     expect(screen.getByText('Dividends')).toBeTruthy();
     expect(screen.getByText(/Currency: USD \(US Dollar\)/)).toBeTruthy();
-    expect(screen.getByText('126.00%')).toBeTruthy();
+    expect(screen.getByText('126.00 %')).toBeTruthy();
     expect(screen.getByText('0.45x')).toBeTruthy();
-    expect(screen.getAllByText('Source unavailable').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('x').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Source unavailable')).toBeNull();
+    expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
     expect(
       Array.from(container.querySelectorAll('tbody tr td:first-child')).map(
         (cell) => cell.textContent
