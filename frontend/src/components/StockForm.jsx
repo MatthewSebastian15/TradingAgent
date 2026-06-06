@@ -195,10 +195,7 @@ export default function StockForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-0">
       {/* Header */}
       <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center gap-2">
-        <span className="text-bloomberg-orange font-mono text-xs font-semibold tracking-wider">
-          NEW ANALYSIS
-        </span>
-        <span className="text-bloomberg-muted font-mono text-xs">/ CONFIGURE PARAMETERS</span>
+        <span className="text-bloomberg-muted font-mono text-xs">CONFIGURE PARAMETERS</span>
       </div>
 
       {/* Market tabs */}
@@ -399,8 +396,7 @@ export default function StockForm({
                 EXISTING POSITION
               </span>
               <span className="block mt-1 text-xs font-mono text-bloomberg-muted leading-relaxed">
-                Saya sudah punya posisi di ticker ini. Jika tidak dicentang, sistem akan menganggap
-                belum ada posisi.
+                Already have a position in this ticker. If this is not checked, the system will assume there is no position.
               </span>
             </span>
           </label>

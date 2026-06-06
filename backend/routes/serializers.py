@@ -636,7 +636,7 @@ def _attach_phase1_fields(payload: dict[str, Any], final_state: dict[str, Any]) 
     enriched["volatility_method"] = volatility_metadata.get("volatility_method") or (
         "Annualized standard deviation of daily returns, normalized to 0–100"
     )
-    enriched["volatility_lookback_days"] = volatility_metadata.get("volatility_lookback_days") or 20
+    enriched["volatility_lookback_days"] = volatility_metadata.get("volatility_lookback_days") or 365
     enriched["volatility_classification"] = (
         volatility_metadata.get("volatility_classification") or _volatility_classification(volatility_score)
     )

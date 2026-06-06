@@ -72,14 +72,14 @@ export default function ChartPriceTab({ result }) {
 
       <section>
         <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-2">
-          OHLC Candlestick
+          CHART
         </div>
         <CandlestickPriceChart points={points} ticker={ticker} />
       </section>
 
       <section>
         <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-2">
-          Volume
+          VOLUME
         </div>
         <VolumeChart points={points} />
       </section>

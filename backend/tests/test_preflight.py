@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
+from dateutil.relativedelta import relativedelta
 
 from errors import BadRequestError
 from routes.analysis import _preflight_market_data
@@ -54,8 +55,8 @@ def _mock_market_data(monkeypatch: pytest.MonkeyPatch, sample: str | Exception) 
     ) -> str:
         assert analysis_depth == "fast"
         trade_dt = datetime.strptime(trade_date, "%Y-%m-%d")
-        start = (trade_dt - timedelta(days=10)).strftime("%Y-%m-%d")
-        end = (trade_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        start = (trade_dt - relativedelta(years=1)).strftime("%Y-%m-%d")
+        end = (trade_dt + relativedelta(days=1)).strftime("%Y-%m-%d")
         calls.append(("get_stock_data", ticker, start, end))
         if isinstance(sample, Exception):
             raise sample
@@ -71,13 +72,13 @@ def test_preflight_market_data_accepts_valid_ticker(monkeypatch):
 
     asyncio.run(_preflight_market_data(_analysis_request()))
 
-    assert calls == [("get_stock_data", "BBCA.JK", "2026-05-04", "2026-05-15")]
+    assert calls == [("get_stock_data", "BBCA.JK", "2025-05-14", "2026-05-15")]
 
 
 def test_preflight_market_data_rejects_missing_ticker(monkeypatch):
     _mock_market_data(
         monkeypatch,
-        "No data found for symbol 'NOPE.JK' between 2026-05-04 and 2026-05-15",
+        "No data found for symbol 'NOPE.JK' between 2025-05-14 and 2026-05-15",
     )
 
     with pytest.raises(BadRequestError) as exc_info:
