@@ -24,6 +24,10 @@ def test_global_news_has_field_specific_order():
     assert get_field_vendor_order("global_news", "BBCA.JK")[:2] == ["finnhub", "alpha_vantage"]
 
 
+def test_company_news_uses_google_news_light_first():
+    assert get_field_vendor_order("company_news", "BBCA.JK")[0] == "google_news_light"
+
+
 def test_profile_priority_is_market_aware():
     assert get_field_vendor_order("profile", "BBCA.JK")[0] == "idx_official"
     assert get_field_vendor_order("profile", "AAPL")[0] == "finnhub"

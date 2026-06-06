@@ -130,6 +130,8 @@ def _source_confidence(source: Any) -> int:
     text = str(source or "").lower()
     if "finnhub" in text:
         return 85
+    if "google news light" in text or "google_news_light" in text:
+        return 80
     if "marketaux" in text:
         return 82
     if "newsdata" in text:

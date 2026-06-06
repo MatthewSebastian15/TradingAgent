@@ -13,7 +13,7 @@ from schemas import NewsResponse
 
 router = APIRouter(tags=["news"])
 debug_router = APIRouter(tags=["news"])
-_SUPPORTED_DEBUG_PROVIDERS = {"marketaux", "newsdata"}
+_SUPPORTED_DEBUG_PROVIDERS = {"google_news_light", "marketaux", "newsdata"}
 
 
 def _fetch_news(

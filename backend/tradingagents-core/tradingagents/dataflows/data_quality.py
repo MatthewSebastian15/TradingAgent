@@ -329,6 +329,7 @@ DATA_STATUS_LABELS = {
 _SOURCE_RELIABILITY_SCORE = {
     "idx_official": 35,
     "finnhub": 31,
+    "google_news_light": 30,
     "marketaux": 30,
     "newsdata": 28,
     "alpha_vantage": 28,

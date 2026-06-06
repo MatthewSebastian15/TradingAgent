@@ -14,7 +14,7 @@ FIELD_SOURCE_PRIORITY: dict[str, list[str]] = {
     "historical_price": ["yfinance", "alpha_vantage", "finnhub"],
     "financial_statement_idx": ["idx_official", "yfinance", "alpha_vantage", "finnhub"],
     "financial_statement_us": ["alpha_vantage", "finnhub", "yfinance"],
-    "company_news": ["marketaux", "newsdata", "yfinance"],
+    "company_news": ["google_news_light", "marketaux", "newsdata", "yfinance"],
     "global_news": ["finnhub", "alpha_vantage", "yfinance"],
     "news_sentiment": ["finnhub", "internal_rule_scoring", "alpha_vantage"],
     "insider_idx": ["yfinance", "alpha_vantage", "finnhub"],
