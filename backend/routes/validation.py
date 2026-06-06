@@ -77,6 +77,7 @@ class AnalysisRequest(BaseModel):
     """Payload accepted by analysis API entry points."""
 
     ticker: str = Field(..., min_length=1, max_length=12)
+    input_ticker: str | None = None
     trade_date: str
     time_horizon_months: int = Field(default=1)
     max_debate_rounds: int = Field(default=DEFAULT_MAX_DEBATE_ROUNDS)
@@ -100,6 +101,10 @@ def normalize_market(market: str | None) -> str | None:
     if not isinstance(market, str):
         return None
     normalized = market.strip().upper()
+    if normalized in {"INDONESIA", "IDX", "IDN"}:
+        return "ID"
+    if normalized in {"UNITED_STATES", "USA", "US_MARKET", "NYSE", "NASDAQ"}:
+        return "US"
     return normalized or None
 
 
@@ -132,6 +137,7 @@ def normalize_ticker_symbol(ticker: str) -> str:
 def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisRequest:
     """Validate user input before the expensive agent pipeline starts."""
 
+    input_ticker = req.input_ticker or (req.ticker if isinstance(req.ticker, str) else None)
     market = normalize_market(req.market)
     ticker = normalize_ticker_for_market(req.ticker, market) if isinstance(req.ticker, str) else req.ticker
     trade_date = req.trade_date.strip() if isinstance(req.trade_date, str) else req.trade_date
@@ -197,6 +203,7 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
 
     return AnalysisRequest(
         ticker=ticker,
+        input_ticker=input_ticker,
         trade_date=trade_date,
         time_horizon_months=time_horizon_months,
         max_debate_rounds=req.max_debate_rounds,

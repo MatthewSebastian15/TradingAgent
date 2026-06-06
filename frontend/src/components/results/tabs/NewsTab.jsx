@@ -1,6 +1,9 @@
 import PropTypes from 'prop-types';
 
+import DataSourceBadge from '../../DataSourceBadge';
+import DataStatusBadge from '../../DataStatusBadge';
 import { safeExternalUrl } from '../../../utils/url';
+import { getFieldQuality } from '../../../utils/dataStatus';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 
@@ -8,7 +11,7 @@ function formatDate(value) {
   if (!value) return 'N/A';
   const text = String(value);
   if (/^\d{8}T\d{6}/.test(text)) {
-    return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+    return `${text.substring(0, 4)}-${text.substring(4, 6)}-${text.substring(6, 8)}`;
   }
   return text;
 }
@@ -16,6 +19,61 @@ function formatDate(value) {
 function displayLabel(value) {
   if (value === null || value === undefined || value === '') return 'N/A';
   return String(value).replace(/_/g, ' ').toUpperCase();
+}
+
+function shortLabel(value, max = 18) {
+  const text = String(value || '').trim();
+  if (!text) return 'vendor';
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+function newsDedupeKey(item) {
+  if (!item || typeof item !== 'object') return '';
+  return String(
+    item.dedupe_key || item.normalized_url || item.url || item.normalized_title || item.title || ''
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function newsFallbackKey(item) {
+  if (!item || typeof item !== 'object') return '';
+  return `${item.title || ''}-${item.published_at || ''}`.trim().toLowerCase();
+}
+
+function dedupeNewsItems(items) {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set();
+  const result = [];
+
+  items.forEach((item) => {
+    if (!item || typeof item !== 'object' || !item.title) return;
+    const key = newsDedupeKey(item) || newsFallbackKey(item);
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(item);
+  });
+
+  return result;
+}
+
+function excludeNewsItems(items, excludedItems) {
+  const excludedKeys = new Set(
+    dedupeNewsItems(excludedItems)
+      .map((item) => newsDedupeKey(item) || newsFallbackKey(item))
+      .filter(Boolean)
+  );
+
+  return dedupeNewsItems(items).filter(
+    (item) => !excludedKeys.has(newsDedupeKey(item) || newsFallbackKey(item))
+  );
+}
+
+function formatSourceValue(relatedNews, newsImpact) {
+  const sourcesUsed = newsImpact?.data_quality?.sources_used;
+  if (relatedNews?.source) return relatedNews.source;
+  if (Array.isArray(sourcesUsed) && sourcesUsed.length > 0) return sourcesUsed.join(', ');
+  return 'N/A';
 }
 
 function hasNewsPayload(result) {
@@ -47,7 +105,26 @@ SummaryMetric.propTypes = {
   value: PropTypes.node,
 };
 
-function NewsCard({ item, index }) {
+function SourceConfidenceSummary({ breakdown }) {
+  if (!breakdown || typeof breakdown !== 'object') return null;
+
+  const rows = Object.entries(breakdown).filter(([, value]) => Number(value) > 0);
+  if (!rows.length) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2 font-mono text-[11px] text-bloomberg-muted">
+      {rows.map(([label, value]) => (
+        <SummaryMetric key={label} label={displayLabel(label)} value={value} />
+      ))}
+    </div>
+  );
+}
+
+SourceConfidenceSummary.propTypes = {
+  breakdown: PropTypes.object,
+};
+
+function NewsCard({ item, index, quality, duplicateRemovedCount }) {
   const url = safeExternalUrl(item.url);
 
   return (
@@ -62,17 +139,38 @@ function NewsCard({ item, index }) {
           </h3>
         </div>
         <span className="font-mono text-[10px] border border-bloomberg-border text-bloomberg-muted px-2 py-1 uppercase flex-shrink-0">
-          {item.source || item.publisher || 'vendor'}
+          {shortLabel(item.source || item.publisher || item.source_confidence_label || 'vendor')}
         </span>
       </div>
 
       <div className="mt-2 flex flex-wrap gap-2 font-mono text-[11px] text-bloomberg-muted">
         <span>Publisher: {item.publisher || 'Unknown'}</span>
+        <span>Provider: {item.provider || item.source || 'Unknown'}</span>
         <span>Published: {formatDate(item.published_at)}</span>
-        <span>Event: {item.event_type || item.materiality_category || 'general'}</span>
+        <span>Scope: {displayLabel(item.scope_label || item.news_scope || 'company')}</span>
+        <span>
+          Category: {displayLabel(item.materiality_category || item.event_type || 'general')}
+        </span>
+        {item.source_confidence_label && (
+          <span>Source Confidence: {displayLabel(item.source_confidence_label)}</span>
+        )}
         {item.impact && <span>Impact: {displayLabel(item.impact)}</span>}
         {item.sentiment && <span>Sentiment: {displayLabel(item.sentiment)}</span>}
-        {item.impact_score !== undefined && <span>Score: {item.impact_score}</span>}
+        {item.impact_score !== undefined && <span>Impact Score: {item.impact_score}</span>}
+        {item.impact_status && <span>Impact Status: {displayLabel(item.impact_status)}</span>}
+        {item.relevance_score !== undefined && <span>Relevance: {item.relevance_score}</span>}
+        {duplicateRemovedCount !== undefined && <span>Duplicate Removed: {duplicateRemovedCount}</span>}
+      </div>
+
+      <div className="mt-2">
+        <DataStatusBadge
+          compact
+          quality={quality}
+          status={quality ? undefined : item.status || 'available'}
+          source={item.source || item.publisher}
+          reason={item.impact_reason || item.relevance_reason}
+          confidenceScore={item.source_confidence_score}
+        />
       </div>
 
       {item.summary && (
@@ -81,9 +179,10 @@ function NewsCard({ item, index }) {
         </p>
       )}
 
-      {item.relevance_reason && (
+      {(item.impact_reason || item.relevance_reason) && (
         <p className="mt-2 font-mono text-xs text-bloomberg-muted leading-relaxed">
-          <span className="text-bloomberg-white">Why it matters:</span> {item.relevance_reason}
+          <span className="text-bloomberg-white">Why it matters:</span>{' '}
+          {item.impact_reason || item.relevance_reason}
         </p>
       )}
 
@@ -104,6 +203,8 @@ function NewsCard({ item, index }) {
 NewsCard.propTypes = {
   item: PropTypes.object.isRequired,
   index: PropTypes.number.isRequired,
+  quality: PropTypes.object,
+  duplicateRemovedCount: PropTypes.number,
 };
 
 function CatalystList({ title, items }) {
@@ -146,19 +247,50 @@ CatalystList.propTypes = {
   items: PropTypes.array,
 };
 
+function NewsSourceStatus({ relatedNews, newsImpact, result }) {
+  const rootNewsQuality = result?.data_quality?.news;
+  const fieldQuality = getFieldQuality(result?.data_quality, 'company_news');
+  const sources = result?.data_sources?.news || newsImpact?.data_quality?.sources_used || relatedNews?.source;
+  return (
+    <div className="mt-3 space-y-2">
+      <DataSourceBadge sources={sources} label="News sources" />
+      {(fieldQuality || rootNewsQuality || newsImpact?.data_quality) && (
+        <DataStatusBadge
+          quality={fieldQuality || (typeof rootNewsQuality === 'object' ? rootNewsQuality : newsImpact?.data_quality)}
+          status={fieldQuality ? undefined : typeof rootNewsQuality === 'string' ? rootNewsQuality : newsImpact?.data_quality?.status}
+          reason={newsImpact?.data_quality?.reason || newsImpact?.data_quality?.summary}
+        />
+      )}
+    </div>
+  );
+}
+
+NewsSourceStatus.propTypes = {
+  relatedNews: PropTypes.object,
+  newsImpact: PropTypes.object,
+  result: PropTypes.object,
+};
+
 export default function NewsTab({ result }) {
   const relatedNews = result?.related_news || {};
   const newsImpact = result?.news_impact || {};
   const tracker = result?.catalyst_tracker || {};
   const analystConsensus = result?.analyst_consensus || {};
   const relatedItems = Array.isArray(relatedNews.items) ? relatedNews.items : [];
-  const impactFullNewsItems = Array.isArray(newsImpact.full_news_list)
-    ? newsImpact.full_news_list
-    : [];
-  const fullNewsItems = impactFullNewsItems.length > 0 ? impactFullNewsItems : relatedItems;
-  const highImpactItems = Array.isArray(newsImpact.high_impact_news)
+  const hasNewsImpactFullList = Array.isArray(newsImpact.full_news_list);
+  const impactFullNewsItems = hasNewsImpactFullList ? newsImpact.full_news_list : [];
+  const highImpactItemsRaw = Array.isArray(newsImpact.high_impact_news)
     ? newsImpact.high_impact_news
     : [];
+  const fullNewsItemsRaw = hasNewsImpactFullList ? impactFullNewsItems : relatedItems;
+  const highImpactItems = dedupeNewsItems(highImpactItemsRaw);
+  const fullNewsItems = excludeNewsItems(fullNewsItemsRaw, highImpactItems);
+  const companyNewsQuality = getFieldQuality(result?.data_quality, 'company_news');
+  const duplicateRemovedCount =
+    newsImpact.duplicate_excluded_count ??
+    newsImpact.duplicate_removed_count ??
+    result?.news?.duplicate_removed_count ??
+    result?.news?.dedup_removed_count;
 
   if (!hasNewsPayload(result)) {
     return (
@@ -178,29 +310,46 @@ export default function NewsTab({ result }) {
           {relatedNews.summary || `Top related news for ${result.ticker || 'this ticker'}.`}
         </div>
         <div className="mt-2 flex flex-wrap gap-2 font-mono text-[11px] text-bloomberg-muted">
-          <SummaryMetric label="SOURCE" value={relatedNews.source || 'N/A'} />
+          <SummaryMetric label="SOURCE" value={formatSourceValue(relatedNews, newsImpact)} />
           <SummaryMetric label="LOOKBACK" value={`${relatedNews.lookback_days || 'N/A'} days`} />
-          <SummaryMetric label="ITEMS" value={fullNewsItems.length} />
+          <SummaryMetric
+            label="FETCHED"
+            value={newsImpact.news_count ?? relatedNews.total_fetched ?? 'N/A'}
+          />
+          <SummaryMetric label="DEDUPED" value={newsImpact.deduplicated_count ?? 'N/A'} />
+          <SummaryMetric label="HIGH IMPACT" value={highImpactItems.length} />
+          <SummaryMetric label="FULL LIST" value={fullNewsItems.length} />
+          <SummaryMetric
+            label="DUPLICATE REMOVED"
+            value={newsImpact.duplicate_excluded_count ?? 0}
+          />
           <SummaryMetric label="SENTIMENT" value={displayLabel(newsImpact.overall_sentiment)} />
           <SummaryMetric label="SENTIMENT SCORE" value={newsImpact.sentiment_score ?? 'N/A'} />
-          <SummaryMetric label="DEDUPED" value={newsImpact.deduplicated_count ?? 'N/A'} />
         </div>
+        <SourceConfidenceSummary breakdown={newsImpact.data_quality?.source_confidence_breakdown} />
+        <NewsSourceStatus relatedNews={relatedNews} newsImpact={newsImpact} result={result} />
       </section>
 
-      {highImpactItems.length > 0 && (
-        <section>
-          <SectionHeader label="HIGH-IMPACT NEWS" />
+      <section>
+        <SectionHeader label="HIGH-IMPACT NEWS" />
+        {highImpactItems.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {highImpactItems.slice(0, 4).map((item, index) => (
+            {highImpactItems.map((item, index) => (
               <NewsCard
-                key={item.normalized_url || item.url || `${item.title}-${index}`}
+                key={newsDedupeKey(item) || `${item.title}-${index}`}
                 item={item}
                 index={index}
+                quality={companyNewsQuality}
+                duplicateRemovedCount={duplicateRemovedCount}
               />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <NoticeBox title="NO HIGH-IMPACT NEWS" tone="amber">
+            No articles passed the strict high-impact filter for this analysis window.
+          </NoticeBox>
+        )}
+      </section>
 
       <CatalystList title="POSITIVE CATALYSTS" items={tracker.positive_catalysts} />
       <CatalystList title="NEGATIVE CATALYSTS" items={tracker.negative_catalysts} />
@@ -217,7 +366,10 @@ export default function NewsTab({ result }) {
             <SummaryMetric label="SELL" value={analystConsensus.sell ?? 0} />
             <SummaryMetric label="STRONG SELL" value={analystConsensus.strong_sell ?? 0} />
             <SummaryMetric label="TOTAL" value={analystConsensus.total ?? 0} />
-            <SummaryMetric label="CONSENSUS" value={displayLabel(analystConsensus.consensus_label)} />
+            <SummaryMetric
+              label="CONSENSUS"
+              value={displayLabel(analystConsensus.consensus_label)}
+            />
             <SummaryMetric label="TREND" value={displayLabel(analystConsensus.trend)} />
           </div>
         </section>
@@ -232,21 +384,31 @@ export default function NewsTab({ result }) {
         </section>
       )}
 
-      {fullNewsItems.length > 0 && (
-        <section>
-          <SectionHeader label="FULL NEWS LIST" />
+      <section>
+        <SectionHeader label="FULL NEWS LIST" />
+        <div className="font-mono text-xs text-bloomberg-muted leading-relaxed mb-2">
+          Includes company, index, sector, and market-context news that did not qualify as high
+          impact.
+        </div>
+        {fullNewsItems.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {fullNewsItems.slice(0, 8).map((item, index) => (
+            {fullNewsItems.map((item, index) => (
               <NewsCard
-                key={item.normalized_url || item.url || `${item.title}-${index}`}
+                key={newsDedupeKey(item) || `${item.title}-${index}`}
                 item={item}
                 index={index}
+                quality={companyNewsQuality}
+                duplicateRemovedCount={duplicateRemovedCount}
               />
             ))}
           </div>
-        </section>
-      )}
-
+        ) : (
+          <NoticeBox title="NO ADDITIONAL NEWS" tone="amber">
+            All valid articles are already classified as high impact or no additional related
+            articles were available.
+          </NoticeBox>
+        )}
+      </section>
     </div>
   );
 }

@@ -10,6 +10,7 @@ from tradingagents.utils_resilience import TTLCache
 from tradingagents.yfinance_runtime import yf
 
 from .config import get_config
+from .google_news_light import GoogleNewsLightProvider
 from .marketaux_news import MarketAuxProvider
 from .news_deduplication import deduplicate_news_articles
 from .news_models import NewsEntity, NormalizedNewsArticle, article_to_dict
@@ -22,6 +23,7 @@ from .vendor_router import get_attempt_recorder
 from .yfinance_news import _extract_article_data
 
 logger = logging.getLogger(__name__)
+STRUCTURED_NEWS_PROVIDERS = {"google_news_light", "marketaux", "newsdata"}
 _MEMORY_CACHE = TTLCache(maxsize=512, ttl_seconds=6 * 60 * 60)
 _PERSISTENT_CACHE = None
 _PERSISTENT_CACHE_CONFIG = None
@@ -62,8 +64,8 @@ class NewsService:
             window_days,
             ui_limit,
             provider_filter,
-            self.config.get("provider_priority"),
-            self.config.get("enabled_providers"),
+            tuple(_string_list(self.config.get("provider_priority"))),
+            tuple(_string_list(self.config.get("enabled_providers"))),
         )
         cache = _active_cache(self.config)
 
@@ -74,8 +76,12 @@ class NewsService:
                 result["cache"] = {"hit": True}
                 return result
 
-        enabled_providers = _string_list(self.config.get("enabled_providers", ["marketaux", "newsdata"]))
-        provider_priority = _string_list(self.config.get("provider_priority", ["marketaux", "newsdata"]))
+        enabled_providers = _string_list(
+            self.config.get("enabled_providers", ["google_news_light", "marketaux", "newsdata"])
+        )
+        provider_priority = _string_list(
+            self.config.get("provider_priority", ["google_news_light", "marketaux", "newsdata"])
+        )
         if provider_filter:
             provider_priority = [provider_filter]
             if provider_filter not in enabled_providers:
@@ -89,8 +95,8 @@ class NewsService:
         required_primary_count = max(1, int(self.config.get("secondary_fetch_threshold", 5)))
         min_relevance = float(self.config.get("min_relevance_score", 50))
 
-        for provider_name in provider_priority:
-            if provider_name not in {"marketaux", "newsdata"}:
+        for index, provider_name in enumerate(provider_priority):
+            if provider_name not in STRUCTURED_NEWS_PROVIDERS:
                 provider_status[provider_name] = "disabled"
                 continue
             if provider_name not in enabled_providers:
@@ -98,7 +104,7 @@ class NewsService:
                 provider_health[provider_name] = _provider_health(False, "disabled")
                 continue
             if (
-                provider_name == "newsdata"
+                index > 0
                 and not self.config.get("fetch_secondary_always", False)
                 and len([item for item in articles if item.relevance_score >= min_relevance]) >= required_primary_count
             ):
@@ -147,19 +153,26 @@ class NewsService:
 
         articles = _filter_articles_by_window(articles, as_of_date=as_of_date, window_days=window_days)
         deduped = deduplicate_news_articles(articles)
+        dedup_removed_count = max(0, len(articles) - len(deduped))
         ui_articles = [
-            article for article in deduped if article.relevance_score >= min_relevance or article.market_context_only
+            article
+            for article in deduped
+            if (article.relevance_score >= min_relevance or article.market_context_only)
+            and (article.bucket or "full_news") != "discard"
         ][:ui_limit]
         prompt_min = float(self.config.get("prompt_min_relevance_score", 65))
         prompt_limit = max(1, int(self.config.get("max_articles_for_prompt", 5)))
         prompt_articles = [
             article
             for article in ui_articles
-            if article.relevance_score >= prompt_min and not article.market_context_only
+            if article.relevance_score >= prompt_min
+            and not article.market_context_only
+            and (article.bucket or "full_news") in {"full_news", "macro_context"}
         ][:prompt_limit]
         serialized_articles = [article_to_dict(article) for article in ui_articles]
         serialized_prompt_articles = [article_to_dict(article) for article in prompt_articles]
         providers_used = list(dict.fromkeys(article.provider for article in ui_articles))
+        latest_article_date = max((str(item.get("published_at")) for item in serialized_articles if item.get("published_at")), default=None)
         result = {
             "enabled": bool(enabled_providers or self.config.get("enable_yfinance_fallback", True)),
             "ticker": profile["ticker"],
@@ -170,6 +183,9 @@ class NewsService:
             "provider_health": provider_health,
             "articles_found": len(ui_articles),
             "articles_used_in_prompt": len(prompt_articles),
+            "latest_article_date": latest_article_date,
+            "dedup_removed_count": dedup_removed_count,
+            "duplicate_removed_count": dedup_removed_count,
             "average_sentiment": _average_sentiment(ui_articles),
             "articles": serialized_articles,
             "prompt_articles": serialized_prompt_articles,
@@ -201,6 +217,8 @@ class NewsService:
             "timeout_seconds": int(self.config.get("vendor_timeout_seconds", 15)),
             "max_retries": int(self.config.get("vendor_max_retries", 2)),
         }
+        if provider_name == "google_news_light":
+            return GoogleNewsLightProvider(str(self.config.get("google_news_light_api_key") or ""), **kwargs)
         if provider_name == "marketaux":
             return MarketAuxProvider(str(self.config.get("marketaux_api_key") or ""), **kwargs)
         return NewsDataProvider(str(self.config.get("newsdata_api_key") or ""), **kwargs)

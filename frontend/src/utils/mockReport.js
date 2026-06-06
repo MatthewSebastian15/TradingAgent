@@ -2,7 +2,7 @@ import { formatPrice } from './formatting';
 import { safeExternalUrl } from './url';
 import { MOCK_REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 
-const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
+const ACTIONABLE_DECISIONS = new Set(['BUY', 'Buy', 'Overweight', 'SELL', 'Sell', 'Underweight']);
 const LEGACY_REPORT_FIELD_PATTERN = /\b(price target|risk per share|reward per share)\b/i;
 
 function hasValue(value) {
@@ -46,8 +46,48 @@ function arrayOfText(value) {
   return value.map((item) => display(item)).filter((item) => item !== 'N/A');
 }
 
+function normalizeInlineText(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+function truncateReasonWords(text, maxWords = 125) {
+  const words = normalizeInlineText(text).split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(' ');
+  return `${words.slice(0, maxWords).join(' ')}.`.replace(/\.\.$/, '.');
+}
+
+function asReasonItems(value) {
+  if (Array.isArray(value)) return value.map(normalizeInlineText).filter(Boolean);
+  const text = normalizeInlineText(value);
+  return text ? [text] : [];
+}
+
+function buildKeyReasonsParagraph(result = {}) {
+  const overview = result.analysis_overview || {};
+  const direct = normalizeInlineText(
+    overview.key_reasons_paragraph || result.key_reasons_paragraph
+  );
+  if (direct) return truncateReasonWords(direct, 125);
+
+  const items = [
+    ...asReasonItems(overview.key_reasons || result.key_reasons),
+    ...asReasonItems(result.key_catalysts),
+    normalizeInlineText(result.mini_risk_summary),
+    normalizeInlineText(result.decision_adjusted_reason),
+  ].filter(Boolean);
+
+  const uniqueItems = Array.from(new Set(items));
+  if (!uniqueItems.length) return '';
+
+  const paragraph = uniqueItems.join('. ');
+  return truncateReasonWords(paragraph.endsWith('.') ? paragraph : `${paragraph}.`, 125);
+}
+
 function finalDecision(result) {
-  return display(result?.final_decision || result?.decision || result?.rating || 'Hold');
+  return display(
+    result?.display_signal || result?.final_decision || result?.decision || result?.rating || 'WAIT'
+  );
 }
 
 function riskRewardDisplay(result) {
@@ -185,35 +225,93 @@ function buildTechnicalEntryRows(technical, result) {
 
 function buildRelatedNewsItems(relatedNews) {
   if (!Array.isArray(relatedNews?.items)) return [];
-  return relatedNews.items
-    .slice(0, 8)
-    .filter((item) => item && typeof item === 'object' && item.title)
-    .map((item) => ({
-      title: display(item.title),
-      publisher: display(item.publisher),
-      published_at: display(item.published_at),
-      source: display(item.source),
-      event_type: display(item.event_type),
-      summary: display(item.summary),
-      relevance_reason: display(item.relevance_reason),
-      url: safeExternalUrl(item.url),
-    }));
+  return dedupeNewsItems(relatedNews.items).map((item) => ({
+    title: display(item.title),
+    publisher: display(item.publisher),
+    published_at: display(item.published_at),
+    source: display(item.source),
+    event_type: display(item.event_type),
+    summary: display(item.summary),
+    relevance_reason: display(item.relevance_reason),
+    url: safeExternalUrl(item.url),
+  }));
+}
+
+function newsDedupeKey(item) {
+  if (!item || typeof item !== 'object') return '';
+  return String(
+    item.dedupe_key || item.normalized_url || item.url || item.normalized_title || item.title || ''
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function dedupeNewsItems(items) {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set();
+  const output = [];
+
+  items.forEach((item) => {
+    if (!item || typeof item !== 'object' || !item.title) return;
+    const key = newsDedupeKey(item) || String(item.title).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    output.push(item);
+  });
+
+  return output;
 }
 
 function buildHighImpactNewsItems(newsImpact) {
   if (!Array.isArray(newsImpact?.high_impact_news)) return [];
   return newsImpact.high_impact_news
-    .slice(0, 5)
     .filter((item) => item && typeof item === 'object' && item.title)
     .map((item) => ({
       title: display(item.title),
       source: display(item.source),
+      publisher: display(item.publisher),
       published_at: display(item.published_at),
       sentiment: display(item.sentiment),
       impact: display(item.impact),
       impact_score: display(item.impact_score),
+      relevance_score: display(item.relevance_score),
+      materiality_category: display(item.materiality_category),
+      source_confidence_label: display(item.source_confidence_label),
+      news_scope: display(item.scope_label || item.news_scope),
+      impact_reason: display(item.impact_reason || item.relevance_reason),
       summary: display(item.summary),
       url: safeExternalUrl(item.url),
+      dedupe_key: display(item.dedupe_key),
+    }));
+}
+
+function buildFullNewsItems(newsImpact, relatedNews) {
+  const hasFullNewsList = Array.isArray(newsImpact?.full_news_list);
+  const rawItems = hasFullNewsList ? newsImpact.full_news_list : relatedNews?.items;
+  const highImpactItems = Array.isArray(newsImpact?.high_impact_news)
+    ? newsImpact.high_impact_news
+    : [];
+
+  const highKeys = new Set(dedupeNewsItems(highImpactItems).map(newsDedupeKey).filter(Boolean));
+
+  return dedupeNewsItems(rawItems)
+    .filter((item) => !highKeys.has(newsDedupeKey(item)))
+    .map((item) => ({
+      title: display(item.title),
+      publisher: display(item.publisher),
+      published_at: display(item.published_at),
+      source: display(item.source),
+      event_type: display(item.event_type || item.materiality_category),
+      materiality_category: display(item.materiality_category),
+      news_scope: display(item.scope_label || item.news_scope),
+      source_confidence_label: display(item.source_confidence_label),
+      impact: display(item.impact),
+      impact_score: display(item.impact_score),
+      relevance_score: display(item.relevance_score),
+      summary: display(item.summary),
+      impact_reason: display(item.impact_reason || item.relevance_reason),
+      url: safeExternalUrl(item.url),
+      dedupe_key: display(item.dedupe_key),
     }));
 }
 
@@ -222,9 +320,16 @@ function buildNewsImpactRows(newsImpact) {
   return [
     row('Overall Sentiment', newsImpact.overall_sentiment),
     row('Sentiment Score', newsImpact.sentiment_score),
-    row('High Impact Count', newsImpact.high_impact_news?.length || 0),
+    row(
+      'High Impact Count',
+      newsImpact.high_impact_count || newsImpact.high_impact_news?.length || 0
+    ),
+    row('Full News Count', newsImpact.full_news_count || newsImpact.full_news_list?.length || 0),
     row('News Count', newsImpact.news_count),
     row('Deduplicated Count', newsImpact.deduplicated_count),
+    row('Duplicate Removed', newsImpact.duplicate_excluded_count),
+    row('High Impact Limited', newsImpact.data_quality?.rules?.high_impact_limited),
+    row('Full News Limited', newsImpact.data_quality?.rules?.full_news_limited),
     row('Sources Used', (newsImpact.data_quality?.sources_used || []).join(', ')),
   ];
 }
@@ -274,6 +379,19 @@ export function buildMockActionPlanRows(result) {
   ];
 }
 
+function buildMockStatusActionRows(result) {
+  return [
+    row('Current Price', price(result?.current_price ?? result?.last_price, result)),
+    row('Volatility', result?.volatility_level),
+    row('Volatility Score', result?.volatility_score),
+    row('Rebalancing', result?.rebalancing_action),
+    row('Position Action', result?.position_action),
+    row('New Entry Action', result?.new_entry_action),
+    row('Position Size Hint', result?.position_size_hint),
+    row('R/R Ratio', riskRewardDisplay(result)),
+  ];
+}
+
 function buildRiskRows(result, includeTradePlanRisk) {
   const rows = [
     row('Volatility Level', result?.volatility_level),
@@ -297,6 +415,114 @@ function buildDataQualityRows(dataQuality = {}) {
     row('Fundamentals', dataQuality.fundamentals),
     row('News', dataQuality.news),
   ];
+}
+
+function normalizedConfidencePercent(value) {
+  if (!hasValue(value)) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.max(0, Math.min(100, Math.round(numeric <= 1 ? numeric * 100 : numeric)));
+}
+
+function formatConfidence(score, label) {
+  const percent = normalizedConfidencePercent(score);
+  if (percent === null) return 'N/A';
+  return label ? `${percent}% — ${label}` : `${percent}%`;
+}
+
+function formatDateTimeWib(value, includeTime = true) {
+  if (!hasValue(value)) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return display(value);
+  if (!includeTime || String(value).length <= 10) return String(value).slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(date)
+    .reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} WIB`;
+}
+
+function buildConfidenceRows(result) {
+  const breakdown = result?.confidence_breakdown || {};
+  return [
+    row('Confidence', formatConfidence(result?.confidence_score, result?.confidence_label)),
+    row('Confidence Tier', result?.confidence_tier),
+    row('Price Momentum', breakdown.price_momentum),
+    row('Fundamental Quality', breakdown.fundamental_quality),
+    row('News Sentiment', breakdown.news_sentiment),
+    row('Risk Level Score', breakdown.risk_level_score),
+    row('Data Quality', breakdown.data_quality),
+    row('Overall', breakdown.overall),
+  ];
+}
+
+function buildVolatilityRows(result) {
+  return [
+    row(
+      'Volatility Score',
+      hasValue(result?.volatility_score) ? `${result.volatility_score} / 100` : null
+    ),
+    row('Classification', result?.volatility_classification || result?.volatility_level),
+    row('Scale', result?.volatility_scale),
+    row(
+      'Lookback',
+      hasValue(result?.volatility_lookback_days) ? `${result.volatility_lookback_days} days` : null
+    ),
+    row('Method', result?.volatility_method),
+  ];
+}
+
+function buildDataSourceRows(sources = {}) {
+  return Object.entries(sources).map(([key, value]) =>
+    row(
+      key.replace(/_/g, ' ').toUpperCase(),
+      value && typeof value === 'object'
+        ? Object.entries(value)
+            .map(([itemKey, itemValue]) => `${itemKey}: ${display(itemValue)}`)
+            .join(' | ')
+        : value
+    )
+  );
+}
+
+function buildDataFreshnessRows(freshness = {}) {
+  const priceFreshness = freshness.price || {};
+  const financials = freshness.financials || {};
+  const news = freshness.news || {};
+  const macro = freshness.macro || {};
+  return [
+    row(
+      'Price Data',
+      `${formatDateTimeWib(priceFreshness.timestamp)} | ${display(priceFreshness.freshness_status)}`
+    ),
+    row(
+      'Financial Reports',
+      `${display(financials.period)} ${financials.period_end_date ? `(${financials.period_end_date})` : ''} | ${display(financials.freshness_status)}`
+    ),
+    row(
+      'News Coverage',
+      `Last ${display(news.lookback_days)} days | ${display(news.articles_count)} articles | latest ${display(news.latest_article_date)} | ${display(news.freshness_status)}`
+    ),
+    row('Macro Data', `${display(macro.description)} | ${display(macro.freshness_status)}`),
+  ];
+}
+
+function buildAgentPipelineRows(pipeline = []) {
+  return Array.isArray(pipeline)
+    ? pipeline.map((agent) =>
+        row(
+          agent.name,
+          `${display(agent.status)} | ${hasValue(agent.duration_seconds) ? `${agent.duration_seconds}s` : 'N/A'}${agent.warning ? ` | ${agent.warning}` : ''}`
+        )
+      )
+    : [];
 }
 
 function buildAnalystSections(result) {
@@ -324,39 +550,43 @@ export function buildMockReportContext(result = {}) {
 
   return {
     title: 'TradingAgent Mock Analysis Report',
-    request_id: display(result.request_id),
-    ticker: display(result.ticker),
+    request_id: display(result.request_id || result.id),
+    ticker: display(result.normalized_ticker || result.ticker),
     market: display(result.market),
+    company_name: display(result.company_name),
+    exchange: display(result.exchange),
     trade_date: display(result.trade_date),
     analysis_created_at: display(result.analysis_created_at || result.saved_at),
     generated_at: new Date().toISOString(),
     disclaimer: MOCK_REPORT_DISCLAIMER,
-    current_price: result.current_price,
-    current_price_display: price(result.current_price, result),
-    current_price_as_of: display(result.current_price_as_of || result.last_close_price_as_of),
-    current_price_source: display(result.current_price_source),
-    llm_decision: display(result.llm_decision),
-    final_decision: decision,
+    current_price: result.current_price ?? result.last_price,
+    current_price_display: price(result.current_price ?? result.last_price, result),
+    current_price_as_of: display(
+      result.price_timestamp || result.current_price_as_of || result.last_close_price_as_of
+    ),
+    current_price_source: display(result.price_source || result.current_price_source),
+    llm_decision: display(result.raw_ai_signal || result.llm_decision),
+    final_decision: result.display_signal || decision,
+    raw_ai_signal: display(result.raw_ai_signal || result.llm_decision),
+    display_signal: display(result.display_signal || decision),
+    signal_context: display(result.signal_context),
     decision_adjusted: Boolean(result.decision_adjusted),
     decision_adjusted_reason: display(result.decision_adjusted_reason),
     trade_plan_valid: tradePlanValid,
     has_existing_position: Boolean(result.has_existing_position),
     show_trade_plan: showTradePlan,
     executive_summary: textOrNull(result.executive_summary) || 'N/A',
+    key_reasons_paragraph: buildKeyReasonsParagraph(result),
     decision_rows: [
-      row('Final Decision', decision),
-      row('LLM Decision', result.llm_decision),
+      row('Display Signal', result.display_signal || decision),
+      row('Raw AI Signal', result.raw_ai_signal || result.llm_decision),
+      row('Signal Context', result.signal_context),
       row('Decision Adjusted', Boolean(result.decision_adjusted)),
       row('Decision Adjusted Reason', result.decision_adjusted_reason),
       row('Trade Plan Valid', tradePlanValid),
       row('Has Existing Position', Boolean(result.has_existing_position)),
-      row('Time Horizon', result.time_horizon),
-      row(
-        'Confidence',
-        hasValue(result.confidence_score)
-          ? `${Math.round(Number(result.confidence_score) * 100)}%`
-          : null
-      ),
+      row('Time Horizon', result.time_horizon || result.horizon),
+      row('Confidence', formatConfidence(result.confidence_score, result.confidence_label)),
       row(
         'Suggested Allocation',
         hasValue(result.suggested_allocation_percent)
@@ -364,7 +594,14 @@ export function buildMockReportContext(result = {}) {
           : null
       ),
     ],
+    confidence_rows: buildConfidenceRows(result),
+    volatility_rows: buildVolatilityRows(result),
+    data_source_rows: buildDataSourceRows(result.data_sources),
+    data_freshness_rows: buildDataFreshnessRows(result.data_freshness),
+    agent_pipeline_rows: buildAgentPipelineRows(result.agent_pipeline),
+    total_pipeline_seconds: result.total_pipeline_seconds,
     action_plan_rows: showTradePlan ? buildMockActionPlanRows(result) : [],
+    status_action_rows: showTradePlan ? [] : buildMockStatusActionRows(result),
     risk_rows: buildRiskRows(result, showTradePlan),
     validation_rows: [
       row('Current Price Source', result.current_price_source),
@@ -397,13 +634,16 @@ export function buildMockReportContext(result = {}) {
     news_impact: result.news_impact || {},
     news_impact_rows: buildNewsImpactRows(result.news_impact),
     high_impact_news_items: buildHighImpactNewsItems(result.news_impact),
+    full_news_items: buildFullNewsItems(result.news_impact, result.related_news),
     catalyst_tracker: result.catalyst_tracker || {},
     positive_catalysts: buildCatalystItems(result.catalyst_tracker, 'positive_catalysts'),
     negative_catalysts: buildCatalystItems(result.catalyst_tracker, 'negative_catalysts'),
     upcoming_events: buildCatalystItems(result.catalyst_tracker, 'upcoming_events'),
     analyst_consensus_rows: buildAnalystConsensusRows(result.analyst_consensus),
     related_news: result.related_news || {},
-    related_news_items: buildRelatedNewsItems(result.related_news),
+    related_news_items: Array.isArray(result.news_impact?.full_news_list)
+      ? []
+      : buildRelatedNewsItems(result.related_news),
   };
 }
 
@@ -467,6 +707,7 @@ function renderFinancialHighlights(financialHighlights) {
     <thead>
       <tr>
         <th>Metric</th>
+        <th>Unit</th>
         ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
       </tr>
     </thead>
@@ -475,10 +716,11 @@ function renderFinancialHighlights(financialHighlights) {
         .map(
           (item) => `<tr>
             <td>${escapeHtml(item.label)}</td>
+            <td>${escapeHtml(item.unit || '-')}</td>
             ${periods
               .map((period) => {
                 const cell = item.values?.[period.key];
-                return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display)}</td>`;
+                return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display || 'N/A')}</td>`;
               })
               .join('')}
           </tr>`
@@ -539,28 +781,31 @@ function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
 function renderFinancialTrends(payload) {
   if (!payload?.periods?.length || !payload?.metric_details) return '';
   const metrics = [
-    ['revenue', 'Revenue'],
-    ['revenue_growth_percent', 'Revenue Growth'],
-    ['ebitda', 'EBITDA'],
-    ['ebitda_margin_percent', 'EBITDA Margin'],
-    ['net_profit', 'Net Profit'],
-    ['net_profit_growth_percent', 'Net Profit Growth'],
-    ['net_profit_margin_percent', 'Net Profit Margin'],
-    ['roe_percent', 'ROE'],
-    ['eps', 'EPS'],
-    ['bvps', 'BVPS'],
-    ['der', 'DER'],
+    ['revenue', 'Revenue', payload.scale_label || ''],
+    ['revenue_growth_percent', 'Revenue Growth', '%'],
+    ['ebitda', 'EBITDA', payload.scale_label || ''],
+    ['ebitda_margin_percent', 'EBITDA Margin', '%'],
+    ['net_profit', 'Net Profit', payload.scale_label || ''],
+    ['net_profit_growth_percent', 'Net Profit Growth', '%'],
+    ['net_profit_margin_percent', 'Net Profit Margin', '%'],
+    ['roe_percent', 'ROE', '%'],
+    ['eps', 'EPS', `${payload.currency || ''}/share`],
+    ['bvps', 'BVPS', `${payload.currency || ''}/share`],
+    ['der', 'DER', 'x'],
   ];
   return `<section class="section">
     <h2>Financial Trend Analysis</h2>
     ${payload.unit_note ? `<p class="muted">${escapeHtml(payload.unit_note)}</p>` : ''}
     <table class="financial-highlights-table">
-      <thead><tr><th>Metric</th>${payload.periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}</tr></thead>
+      <thead><tr><th>Metric</th><th>Unit</th>${payload.periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}</tr></thead>
       <tbody>${metrics
         .map(
-          ([key, label]) =>
-            `<tr><td>${escapeHtml(label)}</td>${(payload.metric_details[key] || [])
-              .map((detail) => `<td>${escapeHtml(metricDetailDisplay(detail))}</td>`)
+          ([key, label, unit]) =>
+            `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(unit || '-')}</td>${payload.periods
+              .map(
+                (period, index) =>
+                  `<td>${escapeHtml(metricDetailDisplay(payload.metric_details[key]?.[index]))}</td>`
+              )
               .join('')}</tr>`
         )
         .join('')}</tbody>
@@ -673,8 +918,9 @@ function renderNewsImpact(report) {
               .map(
                 (item) => `<article class="news-item">
                   <h3>${escapeHtml(item.title)}</h3>
-                  <p class="muted">Source: ${escapeHtml(item.source)} | Published: ${escapeHtml(item.published_at)} | Sentiment: ${escapeHtml(item.sentiment)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)}</p>
+                  <p class="muted">Source: ${escapeHtml(item.source)} | Published: ${escapeHtml(item.published_at)} | Scope: ${escapeHtml(item.news_scope)} | Category: ${escapeHtml(item.materiality_category)} | Source Confidence: ${escapeHtml(item.source_confidence_label)} | Sentiment: ${escapeHtml(item.sentiment)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)} | Relevance: ${escapeHtml(item.relevance_score)}</p>
                   ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
+                  ${item.impact_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.impact_reason)}</p>` : ''}
                   ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
                 </article>`
               )
@@ -908,6 +1154,31 @@ function renderRelatedNews(relatedNews, items) {
   </section>`;
 }
 
+function renderFullNewsList(report) {
+  if (!report.full_news_items?.length) return '';
+
+  return `
+    <section class="section">
+      <h2>Full News List</h2>
+      ${report.related_news?.summary ? `<p>${escapeHtml(report.related_news.summary)}</p>` : ''}
+      <p class="muted">Includes company, index, sector, and market-context news that did not qualify as high impact.</p>
+      <div class="news-list">
+        ${report.full_news_items
+          .map(
+            (item) => `<article class="news-item">
+              <h3>${escapeHtml(item.title)}</h3>
+              <p class="muted">Publisher: ${escapeHtml(item.publisher)} | Published: ${escapeHtml(item.published_at)} | Source: ${escapeHtml(item.source)} | Scope: ${escapeHtml(item.news_scope)} | Category: ${escapeHtml(item.materiality_category)} | Source Confidence: ${escapeHtml(item.source_confidence_label)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)} | Relevance: ${escapeHtml(item.relevance_score)}</p>
+              ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
+              ${item.impact_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.impact_reason)}</p>` : ''}
+              ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
+            </article>`
+          )
+          .join('')}
+      </div>
+    </section>
+  `;
+}
+
 export function renderMockReportHtml(report) {
   return `<!doctype html>
 <html lang="en">
@@ -997,6 +1268,8 @@ export function renderMockReportHtml(report) {
         <h1>${escapeHtml(report.title)}</h1>
         <div class="meta-grid">
           <div><span>Ticker</span>${escapeHtml(report.ticker)}</div>
+          <div><span>Company</span>${escapeHtml(report.company_name)}</div>
+          <div><span>Exchange</span>${escapeHtml(report.exchange)}</div>
           <div><span>Market</span>${escapeHtml(report.market)}</div>
           <div><span>Trade date</span>${escapeHtml(report.trade_date)}</div>
           <div><span>Generated at</span>${escapeHtml(report.generated_at)}</div>
@@ -1021,6 +1294,15 @@ export function renderMockReportHtml(report) {
         <p>${escapeHtml(report.executive_summary)}</p>
       </section>
 
+      ${
+        report.key_reasons_paragraph
+          ? `<section class="section">
+        <h2>Key Reasons</h2>
+        <p>${escapeHtml(report.key_reasons_paragraph)}</p>
+      </section>`
+          : ''
+      }
+
       <section class="section">
         <h2>Final Recommendation</h2>
         <table><tbody>${renderRows(report.decision_rows)}</tbody></table>
@@ -1028,8 +1310,35 @@ export function renderMockReportHtml(report) {
         ${
           report.show_trade_plan
             ? renderMetricGrid(report.action_plan_rows)
-            : `<p class="muted">No actionable trade plan is available. Final decision: ${escapeHtml(report.final_decision)}.</p>`
+            : `<p class="muted">No actionable trade plan is available. Final decision: ${escapeHtml(report.final_decision)}.</p>${renderMetricGrid(report.status_action_rows)}`
         }
+      </section>
+
+      <section class="section">
+        <h2>Confidence Breakdown</h2>
+        <table><tbody>${renderRows(report.confidence_rows)}</tbody></table>
+      </section>
+
+      <section class="section">
+        <h2>Volatility Metadata</h2>
+        <table><tbody>${renderRows(report.volatility_rows)}</tbody></table>
+      </section>
+
+      ${
+        report.agent_pipeline_rows.length
+          ? `<section class="section"><h2>Agent Pipeline</h2><table><tbody>${renderRows(report.agent_pipeline_rows)}</tbody></table><p class="muted">Total pipeline time: ${escapeHtml(report.total_pipeline_seconds || 'N/A')}s</p></section>`
+          : ''
+      }
+
+      ${
+        report.data_source_rows.length
+          ? `<section class="section"><h2>Data Sources</h2><table><tbody>${renderRows(report.data_source_rows)}</tbody></table></section>`
+          : ''
+      }
+
+      <section class="section">
+        <h2>Data Freshness</h2>
+        <table><tbody>${renderRows(report.data_freshness_rows)}</tbody></table>
       </section>
 
       ${renderCompanyProfile(
@@ -1109,7 +1418,9 @@ export function renderMockReportHtml(report) {
 
       ${renderAnalystConsensus(report.analyst_consensus_rows)}
 
-      ${renderRelatedNews(report.related_news, report.related_news_items)}
+      ${renderFullNewsList(report)}
+
+      ${!report.full_news_items?.length ? renderRelatedNews(report.related_news, report.related_news_items) : ''}
 
       ${renderRiskDataQuality(report)}
 

@@ -100,8 +100,12 @@ def _env_int(name: str, default: int, *, min_value: int = 1) -> int:
         return default
 
 
-_TIMEOUT_MAX_ACTIVE_CALLS = min(32, (os.cpu_count() or 1) + 4)
+_TIMEOUT_MAX_ACTIVE_CALLS = _env_int(
+    "TRADINGAGENTS_TIMEOUT_MAX_ACTIVE_CALLS",
+    max(16, min(32, (os.cpu_count() or 1) + 4)),
+)
 _TIMEOUT_MAX_ABANDONED_CALLS = _env_int("TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS", _TIMEOUT_MAX_ACTIVE_CALLS)
+_TIMEOUT_CAPACITY_WAIT_SECONDS = _env_int("TRADINGAGENTS_TIMEOUT_CAPACITY_WAIT_SECONDS", 5, min_value=0)
 _TIMEOUT_ACTIVE_CAPACITY = threading.BoundedSemaphore(_TIMEOUT_MAX_ACTIVE_CALLS)
 _TIMEOUT_ABANDONED_CAPACITY = threading.BoundedSemaphore(max(1, _TIMEOUT_MAX_ABANDONED_CALLS))
 _TIMEOUT_STATS_LOCK = threading.Lock()
@@ -193,6 +197,7 @@ def get_timeout_stats() -> dict[str, int]:
             "max_active_calls": _TIMEOUT_MAX_ACTIVE_CALLS,
             "abandoned_calls": _TIMEOUT_ABANDONED_CALLS,
             "max_abandoned_calls": max(1, _TIMEOUT_MAX_ABANDONED_CALLS),
+            "capacity_wait_seconds": _TIMEOUT_CAPACITY_WAIT_SECONDS,
         }
 
 
@@ -206,9 +211,9 @@ def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_na
     so a permanently blocked daemon thread is ultimately reaped with its worker
     process instead of accumulating in the API process.
     """
-    if not _TIMEOUT_ACTIVE_CAPACITY.acquire(blocking=False):
+    if not _TIMEOUT_ACTIVE_CAPACITY.acquire(blocking=True, timeout=_TIMEOUT_CAPACITY_WAIT_SECONDS):
         raise TimeoutError(f"{service_name} timed out before starting because active timed-call capacity is saturated.")
-    if not _TIMEOUT_ABANDONED_CAPACITY.acquire(blocking=False):
+    if not _TIMEOUT_ABANDONED_CAPACITY.acquire(blocking=True, timeout=_TIMEOUT_CAPACITY_WAIT_SECONDS):
         _TIMEOUT_ACTIVE_CAPACITY.release()
         raise TimeoutError(
             f"{service_name} timed out before starting because abandoned timed-call capacity is saturated."

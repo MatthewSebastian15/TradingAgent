@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from tradingagents.dataflows.google_news_light import GoogleNewsLightProvider
 from tradingagents.dataflows.marketaux_news import MarketAuxProvider
 from tradingagents.dataflows.news_models import NewsEntity, NormalizedNewsArticle
 from tradingagents.dataflows.news_provider_base import ProviderFetchResult, sanitize_params
@@ -66,6 +67,57 @@ def test_marketaux_normalizes_entity_news_and_redacts_token(monkeypatch):
     assert calls[0]["params"]["symbols"] == "BBCA.JK"
     assert result.attempts[0]["request_params"]["api_token"] == "***REDACTED***"
     assert "secret-token" not in str(result.attempts)
+
+
+def test_google_news_light_normalizes_results_and_redacts_key(monkeypatch):
+    calls: list[dict[str, Any]] = []
+
+    def fake_get(_url, *, params, timeout):
+        calls.append({"params": params, "timeout": timeout})
+        return FakeResponse(
+            200,
+            {
+                "organic_results": [
+                    {
+                        "position": 1,
+                        "title": "BBCA earnings support Bank Central Asia saham outlook",
+                        "link": "https://www.google.com/url?q=https%3A%2F%2Fexample.com%2Fbbca-earnings&sa=U",
+                        "source": "Example Finance",
+                        "snippet": "Bank Central Asia reported resilient profit growth.",
+                        "date": "2 hours ago",
+                        "thumbnail": "https://example.com/thumb.jpg",
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr("tradingagents.dataflows.news_provider_base.requests.get", fake_get)
+    result = GoogleNewsLightProvider("google-news-secret", max_retries=0).fetch_news(
+        resolve_news_ticker("BBCA.JK"),
+        as_of_date="2026-06-01",
+        window_days=7,
+        include_raw=True,
+    )
+
+    assert result.status == "success"
+    assert result.articles[0].provider == "google_news_light"
+    assert result.articles[0].url == "https://example.com/bbca-earnings"
+    assert result.articles[0].published_at is not None
+    assert result.articles[0].relevance_score >= 80
+    assert calls[0]["params"]["engine"] == "google_news_light"
+    assert calls[0]["params"]["gl"] == "id"
+    assert calls[0]["params"]["hl"] == "id"
+    assert calls[0]["params"]["time_period"] == "last_week"
+    assert "saham" in calls[0]["params"]["q"]
+    assert result.attempts[0]["request_params"]["api_key"] == "***REDACTED***"
+    assert "google-news-secret" not in str(result.attempts)
+
+
+def test_google_news_light_missing_api_key_returns_status():
+    result = GoogleNewsLightProvider("", max_retries=0).fetch_news(resolve_news_ticker("BBCA.JK"))
+
+    assert result.status == "missing_api_key"
+    assert result.articles == []
 
 
 def test_newsdata_uses_separate_fallback_queries(monkeypatch):
@@ -161,6 +213,150 @@ def test_news_service_skips_secondary_when_primary_is_sufficient(monkeypatch):
     assert result["articles_found"] == 5
     assert result["articles_used_in_prompt"] == 5
     assert "BBCA earnings remain resilient" in format_news_for_prompt(result)
+
+
+def test_news_service_skips_marketaux_when_google_news_is_sufficient(monkeypatch):
+    primary_articles = [
+        NormalizedNewsArticle(
+            provider="google_news_light",
+            provider_article_id=f"google-{index}",
+            ticker="BBCA.JK",
+            title=f"BBCA Google News Light Article {index}",
+            url=f"https://example.com/google-{index}",
+            relevance_score=90,
+        )
+        for index in range(3)
+    ]
+
+    class GoogleProvider:
+        api_key = "configured"
+
+        def fetch_news(self, *_args, **_kwargs):
+            return ProviderFetchResult(provider="google_news_light", status="success", articles=primary_articles)
+
+    class MarketAuxProviderStub:
+        api_key = "configured"
+
+        def fetch_news(self, *_args, **_kwargs):
+            raise AssertionError("MarketAux should be skipped.")
+
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service.GoogleNewsLightProvider", lambda *_args, **_kwargs: GoogleProvider()
+    )
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: MarketAuxProviderStub()
+    )
+
+    result = NewsService(
+        {
+            "provider_priority": "google_news_light,marketaux",
+            "enabled_providers": "google_news_light,marketaux",
+            "cache_enabled": False,
+            "enable_yfinance_fallback": False,
+            "fetch_secondary_always": False,
+            "secondary_fetch_threshold": 3,
+            "min_relevance_score": 50,
+            "prompt_min_relevance_score": 65,
+        }
+    ).fetch_news("BBCA.JK")
+
+    assert result["provider_status"] == {
+        "google_news_light": "success",
+        "marketaux": "skipped_sufficient_primary",
+    }
+    assert result["providers_used"] == ["google_news_light"]
+
+
+def test_news_service_uses_marketaux_when_google_news_is_below_threshold(monkeypatch):
+    google_articles = [
+        NormalizedNewsArticle(
+            provider="google_news_light",
+            ticker="BBCA.JK",
+            title="Low relevance market article",
+            url="https://example.com/google-low",
+            relevance_score=10,
+        )
+    ]
+    marketaux_articles = [
+        NormalizedNewsArticle(
+            provider="marketaux",
+            ticker="BBCA.JK",
+            title="BBCA marketaux article",
+            url="https://example.com/marketaux",
+            relevance_score=90,
+        )
+    ]
+
+    class Provider:
+        api_key = "configured"
+
+        def __init__(self, provider: str) -> None:
+            self.provider = provider
+
+        def fetch_news(self, *_args, **_kwargs):
+            articles = google_articles if self.provider == "google_news_light" else marketaux_articles
+            return ProviderFetchResult(provider=self.provider, status="success", articles=articles)
+
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service.GoogleNewsLightProvider",
+        lambda *_args, **_kwargs: Provider("google_news_light"),
+    )
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: Provider("marketaux")
+    )
+
+    result = NewsService(
+        {
+            "provider_priority": "google_news_light,marketaux",
+            "enabled_providers": "google_news_light,marketaux",
+            "cache_enabled": False,
+            "enable_yfinance_fallback": False,
+            "fetch_secondary_always": False,
+            "secondary_fetch_threshold": 3,
+            "min_relevance_score": 50,
+            "prompt_min_relevance_score": 65,
+        }
+    ).fetch_news("BBCA.JK")
+
+    assert result["provider_status"] == {"google_news_light": "success", "marketaux": "success"}
+    assert result["articles_found"] == 1
+    assert result["articles"][0]["provider"] == "marketaux"
+
+
+def test_news_service_accepts_list_provider_config_with_cache(monkeypatch):
+    articles = [
+        NormalizedNewsArticle(
+            provider="google_news_light",
+            ticker="BBCA.JK",
+            title="BBCA cached provider config article",
+            url="https://example.com/google-cache",
+            relevance_score=90,
+        )
+    ]
+
+    class GoogleProvider:
+        api_key = "configured"
+
+        def fetch_news(self, *_args, **_kwargs):
+            return ProviderFetchResult(provider="google_news_light", status="success", articles=articles)
+
+    monkeypatch.setattr("tradingagents.dataflows.news_service.SQLiteTTLCache", None)
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service.GoogleNewsLightProvider", lambda *_args, **_kwargs: GoogleProvider()
+    )
+
+    result = NewsService(
+        {
+            "provider_priority": ["google_news_light"],
+            "enabled_providers": ["google_news_light"],
+            "cache_enabled": True,
+            "enable_yfinance_fallback": False,
+            "min_relevance_score": 50,
+            "prompt_min_relevance_score": 65,
+        }
+    ).fetch_news("BBCA.JK")
+
+    assert result["articles_found"] == 1
 
 
 def test_news_service_deduplicates_and_filters_low_relevance(monkeypatch):

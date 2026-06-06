@@ -6,6 +6,10 @@ from errors import ApiError
 from services.report_service import build_report_context, render_analysis_report_html, validate_report_scope
 
 
+def _count_words(text: str) -> int:
+    return len([word for word in text.split() if word])
+
+
 def _base_result(**overrides):
     result = {
         "request_id": "report-test-1",
@@ -127,6 +131,18 @@ def _base_result(**overrides):
             "calculation_notes": ["Risk/reward ratio = expected upside / expected downside"],
         },
         "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
+        "key_reasons_paragraph": (
+            "The recommendation is supported by improving earnings visibility, resilient margin structure, disciplined balance sheet quality, and a more balanced risk reward setup. "
+            "Price momentum remains constructive, but the model still requires confirmation from fresh market data and reliable vendor inputs before increasing conviction. "
+            "News flow and catalyst quality should be monitored because valuation sensitivity can reduce upside if earnings delivery weakens. "
+            "Position sizing should remain controlled until volatility, liquidity, thesis confirmation, entry discipline, and source reliability improve together."
+        ),
+        "key_reasons": [
+            "Improving earnings visibility supports the final recommendation.",
+            "Risk reward is more balanced when current price data and technical confirmation are available.",
+            "Position sizing should remain controlled because volatility and data quality still affect conviction.",
+        ],
+        "key_catalysts": ["News flow and catalyst quality should be monitored for confirmation."],
         "executive_summary": "Summary text.",
         "company_profile": {
             "available": True,
@@ -310,6 +326,59 @@ def _base_result(**overrides):
     return result
 
 
+def _make_news_item(prefix: str, index: int, *, high: bool = False, scope: str = "company") -> dict[str, object]:
+    return {
+        "title": f"{prefix} News {index}",
+        "source": "Reuters" if high else "MarketAux",
+        "publisher": "Reuters" if high else "MarketAux",
+        "published_at": f"2026-06-{index:02d}",
+        "sentiment": "neutral",
+        "impact": "high" if high else "medium",
+        "impact_score": 90 + index if high else 50 + index,
+        "relevance_score": 90 if high else 70,
+        "materiality_category": "corporate_action" if high else "sector",
+        "source_confidence_label": "HIGH" if high else "MEDIUM",
+        "news_scope": scope,
+        "scope_label": scope.replace("_", " ").upper(),
+        "impact_reason": f"{prefix} news {index} is included for report testing.",
+        "summary": f"{prefix} news summary {index}.",
+        "url": f"https://example.com/{prefix.lower().replace(' ', '-')}-{index}",
+        "normalized_url": f"example.com/{prefix.lower().replace(' ', '-')}-{index}",
+        "normalized_title": f"{prefix.lower()} news {index}",
+        "dedupe_key": f"{prefix.lower().replace(' ', '-')}-{index}",
+        "is_high_impact": high,
+    }
+
+
+def make_result_with_news(high_count: int = 0, full_count: int = 0) -> dict[str, object]:
+    high_items = [_make_news_item("High Impact", index + 1, high=True) for index in range(high_count)]
+    full_items = [_make_news_item("Full", index + 1, high=False) for index in range(full_count)]
+    return _base_result(
+        news_impact={
+            "available": True,
+            "overall_sentiment": "neutral",
+            "sentiment_score": 52,
+            "high_impact_count": high_count,
+            "full_news_count": full_count,
+            "news_count": high_count + full_count,
+            "deduplicated_count": high_count + full_count,
+            "duplicate_excluded_count": 0,
+            "high_impact_news": high_items,
+            "full_news_list": full_items,
+            "data_quality": {
+                "status": "available",
+                "sources_used": ["Reuters", "MarketAux"],
+                "rules": {
+                    "high_impact_limited": False,
+                    "full_news_limited": False,
+                    "high_impact_removed_from_full_list": True,
+                },
+            },
+        },
+        related_news={"available": True, "items": []},
+    )
+
+
 def test_report_context_uses_final_decision_and_trade_plan_for_valid_buy():
     report = build_report_context(_base_result(llm_decision="Hold", final_decision="Buy", decision="Buy"))
 
@@ -351,6 +420,25 @@ def test_html_report_renders_disclaimer():
     assert "Disclaimer" in html
     assert "automated AI-assisted analysis engine" in html
     assert "may contain errors" in html
+    assert html.rfind("Disclaimer") > html.find("Executive Summary")
+
+
+def test_report_context_contains_key_reasons_paragraph():
+    report = build_report_context(_base_result())
+
+    assert "key_reasons_paragraph" in report
+    assert report["key_reasons_paragraph"]
+    assert _count_words(report["key_reasons_paragraph"]) >= 75
+    assert _count_words(report["key_reasons_paragraph"]) <= 125
+
+
+def test_html_report_renders_key_reasons_as_paragraph():
+    html = render_analysis_report_html(build_report_context(_base_result()))
+
+    assert "Key Reasons" in html
+    assert "<h2>Key Reasons</h2>" in html
+    key_reason_section = html.split("Key Reasons", 1)[1].split("</section>", 1)[0]
+    assert "<ul" not in key_reason_section
 
 
 def test_html_report_renders_dynamic_financial_highlights():
@@ -499,6 +587,50 @@ def test_html_report_renders_phase_3_chart_and_news_summaries():
     assert "Analyst Recommendation Trend" in html
 
 
+def test_report_high_impact_news_is_not_limited():
+    result = make_result_with_news(high_count=7, full_count=0)
+    report = build_report_context(result)
+
+    assert len(report["high_impact_news_items"]) == 7
+    assert report["high_impact_news_items"][6]["title"] == "High Impact News 7"
+
+
+def test_report_full_news_list_is_not_limited():
+    result = make_result_with_news(high_count=0, full_count=11)
+    report = build_report_context(result)
+
+    assert len(report["full_news_items"]) == 11
+    assert report["full_news_items"][10]["title"] == "Full News 11"
+
+
+def test_report_excludes_high_impact_from_full_news_items():
+    result = make_result_with_news(high_count=1, full_count=2)
+    duplicate = dict(result["news_impact"]["high_impact_news"][0])
+    duplicate["is_high_impact"] = False
+    result["news_impact"]["full_news_list"].append(duplicate)
+
+    report = build_report_context(result)
+
+    high_keys = {item["dedupe_key"] for item in report["high_impact_news_items"]}
+    full_keys = {item["dedupe_key"] for item in report["full_news_items"]}
+    assert high_keys.isdisjoint(full_keys)
+
+
+def test_report_does_not_fallback_to_related_when_full_news_list_is_empty():
+    result = make_result_with_news(high_count=1, full_count=0)
+    result["related_news"] = {
+        "items": [{"title": "Legacy duplicate", "url": "https://example.com/legacy"}]
+    }
+    result["news_impact"]["full_news_list"] = []
+
+    report = build_report_context(result)
+    html = render_analysis_report_html(report)
+
+    assert report["full_news_items"] == []
+    assert report["related_news_items"] == []
+    assert "Legacy duplicate" not in html
+
+
 def test_html_report_renders_phase_4_risk_data_quality_sections():
     report = build_report_context(_base_result())
     html = render_analysis_report_html(report)
@@ -551,11 +683,22 @@ def test_html_report_renders_related_news_with_safe_original_vendor_links_only()
         ],
     }
 
-    report = build_report_context(_base_result(related_news=related_news))
+    report = build_report_context(
+        _base_result(
+            related_news=related_news,
+            news_impact={
+                "available": True,
+                "overall_sentiment": "neutral",
+                "sentiment_score": 50,
+                "high_impact_news": [],
+                "data_quality": {"status": "legacy", "sources_used": ["marketaux"]},
+            },
+        )
+    )
     html = render_analysis_report_html(report)
 
-    assert len(report["related_news_items"]) == 3
-    assert "Related News" in html
+    assert len(report["full_news_items"]) == 3
+    assert "Full News List" in html
     assert "NVIDIA earnings remain resilient" in html
     assert "Open original source" in html
     assert "Missing original source" in html

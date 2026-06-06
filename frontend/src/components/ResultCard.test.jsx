@@ -7,20 +7,111 @@ import {
   MOCK_HOLD_RESPONSE,
   MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE,
   MOCK_MISSING_PRICE_RESPONSE,
+  MOCK_PTRO_WAIT_RESPONSE,
   MOCK_REPAIRED_RESPONSE,
   MOCK_RESPONSE,
   MOCK_SELL_RESPONSE,
+  MOCK_TPIA_REDUCE_SCENARIO_RESPONSE,
 } from '../../dev/mockData';
+
+function countWords(text) {
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
 
 describe('ResultCard risk-engine contract', () => {
   afterEach(() => cleanup());
 
-  it('renders the report disclaimer in the analysis result card', () => {
+  it('renders the full disclaimer permanently without expand or collapse controls', () => {
     render(<ResultCard result={MOCK_HOLD_RESPONSE} />);
 
-    expect(screen.getByText('DISCLAIMER')).toBeTruthy();
+    expect(screen.getByText(/Disclaimer/i)).toBeTruthy();
     expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
     expect(screen.getByText(/may contain errors/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /read full disclaimer/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /hide disclaimer/i })).toBeNull();
+  });
+
+  it('keeps the full disclaimer visible across all result tabs', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Profil'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Fundamental'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('News'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Risk / Data Quality'));
+    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
+  });
+
+  it('does not render Key Levels in the Analisis tab', () => {
+    render(<ResultCard result={MOCK_RESPONSE} />);
+
+    expect(screen.getByText('EXECUTIVE SUMMARY')).toBeTruthy();
+    expect(screen.queryByText('KEY LEVELS')).toBeNull();
+    expect(screen.queryByText('Nearest Support')).toBeNull();
+    expect(screen.queryByText('Nearest Resistance')).toBeNull();
+    expect(screen.queryByText('Invalidation Level')).toBeNull();
+  });
+
+  it('renders Key Reasons as a single paragraph between 75 and 125 words', () => {
+    const keyReasonsParagraph =
+      'The recommendation is supported by improving earnings visibility, resilient margin structure, disciplined balance sheet quality, and a more balanced risk/reward setup. Price momentum remains constructive, but the model still requires confirmation from fresh market data and reliable vendor inputs before increasing conviction. News flow and catalyst quality should be monitored because valuation sensitivity can reduce upside if earnings delivery weakens. Position sizing should remain controlled until volatility, liquidity, thesis confirmation, entry timing, and source reliability improve together.';
+
+    const result = {
+      ...MOCK_RESPONSE,
+      key_reasons_paragraph: keyReasonsParagraph,
+      analysis_overview: {
+        ...MOCK_RESPONSE.analysis_overview,
+        key_reasons_paragraph: keyReasonsParagraph,
+      },
+    };
+
+    const { container } = render(<ResultCard result={result} />);
+
+    const heading = screen.getByText('KEY REASONS');
+    const section = heading.closest('.px-4');
+    const paragraph = section.querySelector('p');
+
+    expect(paragraph).toBeTruthy();
+    expect(section.querySelector('ul')).toBeNull();
+    expect(section.querySelector('li')).toBeNull();
+    expect(paragraph.textContent).not.toContain('+');
+    expect(countWords(paragraph.textContent)).toBeGreaterThanOrEqual(75);
+    expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(125);
+    expect(container.textContent).toContain('KEY REASONS');
+  });
+
+  it('truncates an overly long Key Reasons paragraph to 125 words', () => {
+    const longParagraph = Array.from({ length: 150 }, (_, index) => `word${index + 1}`).join(' ');
+
+    const result = {
+      ...MOCK_RESPONSE,
+      key_reasons_paragraph: longParagraph,
+      analysis_overview: {
+        ...MOCK_RESPONSE.analysis_overview,
+        key_reasons_paragraph: longParagraph,
+      },
+    };
+
+    render(<ResultCard result={result} />);
+
+    const section = screen.getByText('KEY REASONS').closest('.px-4');
+    const paragraph = section.querySelector('p');
+
+    expect(paragraph).toBeTruthy();
+    expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(125);
   });
 
   it('renders financial highlights only inside Fundamental', () => {
@@ -29,7 +120,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('Key Financial Highlights')).toBeNull();
     fireEvent.click(screen.getByText('Fundamental'));
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
-    expect(screen.getAllByText('FY26Q1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Q1 2026').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Revenue').length).toBeGreaterThan(0);
   });
 
@@ -115,7 +206,6 @@ describe('ResultCard risk-engine contract', () => {
           news_impact: {
             available: false,
             high_impact_news: [],
-            full_news_list: [],
             data_quality: { status: 'unavailable', sources_used: [] },
           },
           catalyst_tracker: {
@@ -321,10 +411,30 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getAllByText('1:3').length).toBeGreaterThan(0);
   });
 
+  it('renders WAIT wording for no-position mock scenario', () => {
+    render(<ResultCard result={MOCK_PTRO_WAIT_RESPONSE} />);
+
+    expect(screen.getByText('◇ WAIT')).toBeTruthy();
+    expect(screen.getByText('No position to rebalance')).toBeTruthy();
+    expect(screen.getByText('Wait for valid entry setup')).toBeTruthy();
+    expect(screen.getByText('0% allocation until setup improves.')).toBeTruthy();
+  });
+
+  it('renders REDUCE wording for existing-position mock scenario', () => {
+    render(<ResultCard result={MOCK_TPIA_REDUCE_SCENARIO_RESPONSE} />);
+
+    expect(screen.getByText('◒ REDUCE')).toBeTruthy();
+    expect(screen.getAllByText('Trim position').length).toBeGreaterThan(0);
+    expect(screen.getByText('Do not add; reduce existing exposure')).toBeTruthy();
+    expect(
+      screen.getByText('Reduce position size gradually; no new exposure suggested.')
+    ).toBeTruthy();
+  });
+
   it('keeps Hold result limited to status metrics', () => {
     render(<ResultCard result={MOCK_HOLD_RESPONSE} />);
 
-    expect(screen.getByText('◆ HOLD')).toBeTruthy();
+    expect(screen.getByText('◇ WAIT')).toBeTruthy();
     expect(screen.getAllByText('CURRENT PRICE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('VOLATILITY').length).toBeGreaterThan(0);
     expect(screen.getAllByText('VOLATILITY SCORE').length).toBeGreaterThan(0);
@@ -373,6 +483,8 @@ describe('ResultCard risk-engine contract', () => {
         result={{
           ...MOCK_HOLD_RESPONSE,
           llm_decision: 'Buy',
+          raw_ai_signal: 'BUY',
+          display_signal: 'WAIT',
           decision_adjusted: true,
           decision_adjusted_reason: 'Invalid risk reward structure',
         }}
@@ -381,7 +493,7 @@ describe('ResultCard risk-engine contract', () => {
 
     expect(screen.getByText('DECISION ADJUSTED')).toBeTruthy();
     expect(screen.getByText('Invalid risk reward structure')).toBeTruthy();
-    expect(screen.getByText(/LLM: BUY → FINAL:/)).toBeTruthy();
+    expect(screen.getByText(/LLM: BUY → FINAL: WAIT/)).toBeTruthy();
   });
 
   it('shows Phase 4 data quality score and vendor status', () => {
@@ -450,6 +562,7 @@ describe('ResultCard risk-engine contract', () => {
           result={{
             ...MOCK_RESPONSE,
             current_price: Number.NaN,
+            last_price: Number.NaN,
             price_target: Number.NaN,
             validation_warnings: 'not-an-array',
             data_quality: null,

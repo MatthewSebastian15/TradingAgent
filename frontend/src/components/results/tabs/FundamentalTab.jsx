@@ -1,20 +1,107 @@
 import PropTypes from 'prop-types';
 
+import DataSourceBadge from '../../DataSourceBadge';
+import DataStatusBadge from '../../DataStatusBadge';
 import FinancialHighlightsTable from '../FinancialHighlightsTable';
 import MetricBox from '../MetricBox';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
+import { getFieldQuality } from '../../../utils/dataStatus';
 
-function displayMetric(metric) {
-  if (!metric || metric.status === 'unavailable') return 'N/A';
+function displayMetric(metric, quality) {
+  const status = String(metric?.status || quality?.status || '').toLowerCase();
+  if (!metric || ['unavailable', 'source_unavailable', 'no_dividend_history', 'not_applicable_negative_earnings'].includes(status)) return null;
   return metric.status === 'estimated'
     ? `${metric.display ?? 'N/A'} EST`
-    : (metric.display ?? 'N/A');
+    : (metric.display ?? metric.value ?? null);
 }
 
 function displayPercent(value) {
   return value === null || value === undefined ? 'N/A' : `${value}%`;
 }
+
+
+function normalizeMetricStatus(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'estimated') return 'calculated';
+  if (normalized === 'unavailable') return 'source_unavailable';
+  return normalized || null;
+}
+
+function SectionQualityStatus({ payload }) {
+  const quality = payload?.data_quality;
+  if (!quality || typeof quality !== 'object') return null;
+  return <DataStatusBadge quality={quality} />;
+}
+
+SectionQualityStatus.propTypes = {
+  payload: PropTypes.object,
+};
+
+function FundamentalQualitySummary({ result }) {
+  const dataQuality = result?.data_quality || {};
+  const completeness = result?.data_completeness || {};
+  const gapReport = result?.fundamental_gap_report || {};
+  const sources = result?.data_sources?.fundamentals || result?.data_sources?.fundamental;
+  const fundamentalStatus = dataQuality?.fundamentals || dataQuality?.fundamental_data || null;
+  const fundamentalCompleteness = completeness?.fundamental_data || completeness?.fundamentals || null;
+  const missing = gapReport?.missing_fields || gapReport?.missing || [];
+
+  if (!fundamentalStatus && !fundamentalCompleteness && !sources && !missing.length) return null;
+
+  return (
+    <section className="px-4 py-3 border-b border-bloomberg-border space-y-2">
+      <SectionHeader label="FUNDAMENTAL DATA STATUS" />
+      <div className="flex flex-col gap-2">
+        {sources && <DataSourceBadge sources={sources} label="Fundamental sources" />}
+        {fundamentalStatus && (
+          <DataStatusBadge
+            status={typeof fundamentalStatus === 'string' ? fundamentalStatus : fundamentalStatus.status}
+            quality={typeof fundamentalStatus === 'object' ? fundamentalStatus : undefined}
+            reason={typeof fundamentalStatus === 'string' && fundamentalStatus !== 'ok' ? fundamentalStatus : undefined}
+          />
+        )}
+        {fundamentalCompleteness && (
+          <DataStatusBadge
+            quality={typeof fundamentalCompleteness === 'object' ? fundamentalCompleteness : undefined}
+            status={typeof fundamentalCompleteness === 'object' ? fundamentalCompleteness.status || 'partial' : 'partial'}
+            reason={
+              typeof fundamentalCompleteness === 'object'
+                ? `Completeness: ${fundamentalCompleteness.completeness_pct ?? fundamentalCompleteness.completeness_percent ?? fundamentalCompleteness.percent ?? fundamentalCompleteness.score ?? 'N/A'}`
+                : String(fundamentalCompleteness)
+            }
+          />
+        )}
+        {missing.length > 0 && (
+          <p className="font-mono text-[11px] text-bloomberg-amber">
+            Missing fundamentals: {missing.length}. See Risk / Data Quality for fallback details.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+FundamentalQualitySummary.propTypes = {
+  result: PropTypes.object,
+};
+
+function FundamentalDataSourceBadge({ dataSources }) {
+  const fundamentals = dataSources?.fundamentals;
+  if (!fundamentals || fundamentals.completeness !== 'partial') return null;
+
+  return (
+    <div className="px-4 pt-4">
+      <div className="inline-flex items-center gap-2 border border-bloomberg-amber bg-bloomberg-amber-dim px-2.5 py-1 font-mono text-xs text-bloomberg-amber">
+        ⚠ Partial data · {fundamentals.last_period || 'Latest period'}
+      </div>
+    </div>
+  );
+}
+
+FundamentalDataSourceBadge.propTypes = {
+  dataSources: PropTypes.object,
+};
 
 function QualityNotice({ payload }) {
   const quality = payload?.data_quality;
@@ -33,22 +120,40 @@ QualityNotice.propTypes = {
   payload: PropTypes.object,
 };
 
-function MetricSection({ title, payload, metrics, summary }) {
+function MetricSection({ title, payload, metrics, summary, dataQuality }) {
   if (!payload) return null;
   return (
     <section className="px-4 py-4 border-b border-bloomberg-border space-y-3">
       <SectionHeader label={title} />
       {summary}
+      <SectionQualityStatus payload={payload} />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {metrics.map(([key, label]) => (
-          <MetricBox
-            key={key}
-            label={label}
-            value={displayMetric(payload.metric_details?.[key])}
-            compact
-            preserveSlot
-          />
-        ))}
+        {metrics.map(([key, label]) => {
+          const detail = payload.metric_details?.[key];
+          const fieldQuality = getFieldQuality(dataQuality, key);
+          const metricStatus = normalizeMetricStatus(detail?.status || fieldQuality?.status);
+          return (
+            <div key={key} className="space-y-1">
+              <MetricBox
+                label={label}
+                value={displayMetric(detail, fieldQuality)}
+                quality={fieldQuality}
+                compact
+                preserveSlot
+              />
+              {(fieldQuality || metricStatus || detail?.source || detail?.reason) && (
+                <DataStatusBadge
+                  compact
+                  quality={fieldQuality || undefined}
+                  status={metricStatus || fieldQuality?.status || 'available'}
+                  source={detail?.source || detail?.source_field || fieldQuality?.source}
+                  reason={detail?.reason || detail?.formula || fieldQuality?.reason}
+                  confidenceScore={detail?.confidence_score ?? fieldQuality?.confidence_score}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
       <QualityNotice payload={payload} />
     </section>
@@ -60,22 +165,23 @@ MetricSection.propTypes = {
   payload: PropTypes.object,
   metrics: PropTypes.array.isRequired,
   summary: PropTypes.node,
+  dataQuality: PropTypes.object,
 };
 
-function FinancialTrends({ payload }) {
+function FinancialTrends({ payload, dataQuality }) {
   if (!payload?.periods?.length || !payload?.metric_details) return null;
   const rows = [
-    ['revenue', 'Revenue'],
-    ['revenue_growth_percent', 'Revenue Growth'],
-    ['ebitda', 'EBITDA'],
-    ['ebitda_margin_percent', 'EBITDA Margin'],
-    ['net_profit', 'Net Profit'],
-    ['net_profit_growth_percent', 'Net Profit Growth'],
-    ['net_profit_margin_percent', 'Net Profit Margin'],
-    ['roe_percent', 'ROE'],
-    ['eps', 'EPS'],
-    ['bvps', 'BVPS'],
-    ['der', 'DER'],
+    ['revenue', 'Revenue', payload.scale_label || ''],
+    ['revenue_growth_percent', 'Revenue Growth', '%'],
+    ['ebitda', 'EBITDA', payload.scale_label || ''],
+    ['ebitda_margin_percent', 'EBITDA Margin', '%'],
+    ['net_profit', 'Net Profit', payload.scale_label || ''],
+    ['net_profit_growth_percent', 'Net Profit Growth', '%'],
+    ['net_profit_margin_percent', 'Net Profit Margin', '%'],
+    ['roe_percent', 'ROE', '%'],
+    ['eps', 'EPS', `${payload.currency || ''}/share`],
+    ['bvps', 'BVPS', `${payload.currency || ''}/share`],
+    ['der', 'DER', 'x'],
   ];
   return (
     <section className="px-4 py-4 border-b border-bloomberg-border space-y-3">
@@ -83,30 +189,52 @@ function FinancialTrends({ payload }) {
       {payload.unit_note && (
         <p className="font-mono text-[11px] text-bloomberg-muted">{payload.unit_note}</p>
       )}
+      <SectionQualityStatus payload={payload} />
       <div className="overflow-x-auto border border-bloomberg-border">
-        <table className="min-w-full text-xs font-mono">
+        <table className="min-w-[980px] w-full text-xs font-mono border-collapse">
           <thead>
             <tr className="text-bloomberg-muted border-b border-bloomberg-border">
-              <th className="text-left px-3 py-2">Metric</th>
+              <th className="sticky left-0 z-20 bg-black text-left px-3 py-2 whitespace-nowrap min-w-[190px]">
+                Metric
+              </th>
+              <th className="sticky left-[190px] z-20 bg-black text-left px-3 py-2 whitespace-nowrap min-w-[90px] border-r border-bloomberg-border">
+                Unit
+              </th>
               {payload.periods.map((period) => (
-                <th key={period.key} className="text-right px-3 py-2 whitespace-nowrap">
+                <th
+                  key={period.key}
+                  className="text-right px-3 py-2 whitespace-nowrap min-w-[86px]"
+                >
                   {period.label}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map(([key, label]) => (
+            {rows.map(([key, label, unit]) => (
               <tr key={key} className="border-b border-bloomberg-border border-opacity-50">
-                <td className="px-3 py-2 text-bloomberg-white whitespace-nowrap">{label}</td>
-                {(payload.metric_details[key] || []).map((cell, index) => (
-                  <td
-                    key={`${key}-${index}`}
-                    className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap"
-                  >
-                    {displayMetric(cell)}
-                  </td>
-                ))}
+                <td className="sticky left-0 z-10 bg-black px-3 py-2 text-bloomberg-white whitespace-nowrap min-w-[190px]">
+                  {label}
+                </td>
+                <td className="sticky left-[190px] z-10 bg-black px-3 py-2 text-bloomberg-muted whitespace-nowrap min-w-[90px] border-r border-bloomberg-border">
+                  {unit || '-'}
+                </td>
+                {payload.periods.map((period, index) => {
+                  const cell = payload.metric_details[key]?.[index];
+                  return (
+                    <td
+                      key={`${key}-${period.key}`}
+                      className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap min-w-[86px]"
+                    >
+                      <div>{displayMetric(cell, getFieldQuality(dataQuality, key)) || 'N/A'}</div>
+                      {getFieldQuality(dataQuality, key) && (
+                        <div className="mt-1 flex justify-end">
+                          <DataStatusBadge compact quality={getFieldQuality(dataQuality, key)} />
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -130,6 +258,7 @@ function FinancialTrends({ payload }) {
 
 FinancialTrends.propTypes = {
   payload: PropTypes.object,
+  dataQuality: PropTypes.object,
 };
 
 function ScenarioAnalysis({ payload }) {
@@ -236,9 +365,12 @@ PeerComparison.propTypes = {
 export default function FundamentalTab({ financialHighlights, result = {} }) {
   return (
     <>
-      <FinancialHighlightsTable financialHighlights={financialHighlights} />
-      <FinancialTrends payload={result.financial_trends} />
+      <FundamentalDataSourceBadge dataSources={result.data_sources} />
+      <FundamentalQualitySummary result={result} />
+      <FinancialHighlightsTable financialHighlights={financialHighlights} dataQuality={result?.data_quality} />
+      <FinancialTrends payload={result.financial_trends} dataQuality={result?.data_quality} />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="VALUATION MULTIPLES"
         payload={result.valuation_multiples}
         metrics={[
@@ -259,6 +391,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
         }
       />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="FAIR VALUE RANGE"
         payload={result.fair_value_range}
         metrics={[
@@ -280,6 +413,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
       />
       <ScenarioAnalysis payload={result.scenario_analysis} />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="QUALITY OF EARNINGS"
         payload={result.quality_of_earnings}
         metrics={[
@@ -297,6 +431,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
         }
       />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="BALANCE SHEET RISK"
         payload={result.balance_sheet_risk}
         metrics={[
@@ -315,6 +450,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
         }
       />
       <MetricSection
+        dataQuality={result?.data_quality}
         title="DIVIDEND QUALITY"
         payload={result.dividend_quality}
         metrics={[

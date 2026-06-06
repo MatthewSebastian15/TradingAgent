@@ -112,7 +112,9 @@ export default function VolumeChart({ points }) {
 
   return (
     <div className="relative h-56 border border-bloomberg-border bg-black p-3">
-      {hoverPoint && <VolumeTooltip point={hoverPoint} previousPoint={chart.points[hoverIndex - 1]} />}
+      {hoverPoint && (
+        <VolumeTooltip point={hoverPoint} previousPoint={chart.points[hoverIndex - 1]} />
+      )}
       <svg
         role="img"
         aria-label="Trading volume chart"

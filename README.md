@@ -6,7 +6,7 @@ The application receives a stock ticker, market, analysis date, investment horiz
 
 > This application is a research tool, not financial advice. Always validate the data, risk assumptions, and trading decisions independently before taking action.
 
-![TradingAgent Dashboard](assets/TradingAgent%20Home%20UI.png)
+![TradingAgent Dashboard](assets/TradingAgent%20Home.png)
 
 ---
 
@@ -28,24 +28,6 @@ The pipeline collects data first, then continues through the analysis agents.
 Data collection runs in parallel. The first three analyst stages also run in parallel after data collection completes. The debate, trader, risk, and portfolio manager stages run sequentially so each stage can use the output from the previous agents.
 
 ![Investment Analysis Flow](assets/Investment%20Analysis%20Flow.png)
-
----
-
-## Result Examples
-
-The `assets/` folder contains sample results for **Buy**, **Sell**, and **Hold** decisions.
-
-### Buy
-
-![TradingAgent Buy Result](assets/Result%20Analyst%20Buy.png)
-
-### Sell
-
-![TradingAgent Sell Result](assets/Result%20Analyst%20Sell.png)
-
-### Hold
-
-![TradingAgent Hold Result](assets/Result%20Analyst%20Hold.png)
 
 ---
 
@@ -241,7 +223,7 @@ DATA_VENDOR_QUOTE_DATA=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_TECHNICAL_INDICATORS=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_FUNDAMENTAL_DATA=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_FINANCIAL_STATEMENTS=yfinance,alpha_vantage,finnhub
-DATA_VENDOR_NEWS_DATA=marketaux,newsdata,yfinance,finnhub,alpha_vantage
+DATA_VENDOR_NEWS_DATA=google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage
 DATA_VENDOR_GLOBAL_NEWS_DATA=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_SENTIMENT_DATA=finnhub,alpha_vantage
 DATA_VENDOR_SOCIAL_SENTIMENT=finnhub
@@ -257,7 +239,7 @@ DATA_VENDOR_INSIDER_DATA=finnhub,alpha_vantage,yfinance
 | Technical indicators | Calculated locally from OHLCV using local indicators. |
 | Fundamentals/profile/metrics | yfinance, Finnhub, Alpha Vantage based on routing. |
 | Financial statements | yfinance, Alpha Vantage, Finnhub based on routing. |
-| Company news | MarketAux, NewsData.io, yfinance, Finnhub, Alpha Vantage based on routing. |
+| Company news | Google News Light, MarketAux, NewsData.io, yfinance, Finnhub, Alpha Vantage based on routing. |
 | Global/macro news | yfinance, Finnhub, Alpha Vantage based on routing. |
 | News sentiment | Finnhub, Alpha Vantage based on routing. |
 | Social sentiment | Finnhub when available. |
@@ -760,6 +742,7 @@ Legacy SSE endpoint. Runs the analysis with streamed progress without using the 
 | `OPENROUTER_API_KEY` | If OpenRouter | OpenRouter API key. |
 | `OLLAMA_BASE_URL` | If Ollama | Ollama URL. Default `http://localhost:11434`. |
 | `ALPHA_VANTAGE_API_KEY` | No | Optional fallback/enrichment for market/news/fundamental data. |
+| `GOOGLE_NEWS_LIGHT_API_KEY` | No | Optional SearchAPI.io key for Google News Light company news. |
 | `FINNHUB_API_KEY` | No | Optional Finnhub key. If empty, Finnhub is skipped. |
 | `FINNHUB_ENABLED` | No | Globally enables/disables Finnhub. |
 | `FINNHUB_ENABLE_*` | No | Feature flags per Finnhub endpoint. |

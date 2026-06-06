@@ -25,6 +25,8 @@ DECISION_ALIASES = {
 ACTIONABLE_DECISIONS = {"Buy", "Sell"}
 LONG_DECISIONS = {"Buy"}
 SHORT_DECISIONS = {"Sell"}
+NO_POSITION_REBALANCING_ACTION = "No position to rebalance"
+
 REBALANCING_ACTIONS = {
     "Open new position",
     "Add position",
@@ -32,6 +34,7 @@ REBALANCING_ACTIONS = {
     "Trim position",
     "Exit position",
     "Avoid new entry",
+    NO_POSITION_REBALANCING_ACTION,
 }
 EXISTING_POSITION_ACTIONS = {"Add position", "Maintain position", "Trim position", "Exit position"}
 LLM_REPAIR_WARNING_CODES = {
@@ -173,33 +176,15 @@ def calculate_volatility_score(price_data: str | None) -> float | None:
     window = rows[-20:]
     closes = [item["close"] for item in window]
     returns = [(closes[i] / closes[i - 1]) - 1 for i in range(1, len(closes)) if closes[i - 1] > 0]
-    return_std_pct = pstdev(returns) * 100 if len(returns) >= 2 else 0.0
+    if len(returns) < 2:
+        return None
 
-    ranges_pct = []
-    for item in window:
-        high = item.get("high") or 0.0
-        low = item.get("low") or 0.0
-        close = item["close"]
-        if high > 0 and low > 0 and high >= low and close > 0:
-            ranges_pct.append(((high - low) / close) * 100)
-    avg_range_pct = sum(ranges_pct) / len(ranges_pct) if ranges_pct else 0.0
+    annual_volatility = pstdev(returns) * math.sqrt(252)
+    if not math.isfinite(annual_volatility):
+        return None
 
-    last_close = closes[-1]
-    range_20d_pct = ((max(closes) - min(closes)) / last_close) * 100 if last_close > 0 else 0.0
-
-    volumes = [item.get("volume") or 0.0 for item in window if (item.get("volume") or 0.0) > 0]
-    if len(volumes) >= 5:
-        avg_volume = sum(volumes[:-1]) / max(len(volumes[:-1]), 1)
-        volume_spike = volumes[-1] / avg_volume if avg_volume > 0 else 1.0
-    else:
-        volume_spike = 1.0
-
-    atr_score = min(avg_range_pct * 9.0, 100.0)
-    return_std_score = min(return_std_pct * 18.0, 100.0)
-    range_score = min(range_20d_pct * 3.0, 100.0)
-    volume_spike_score = min(max((volume_spike - 1.0) * 35.0, 0.0), 100.0)
-    score = atr_score * 0.35 + return_std_score * 0.25 + range_score * 0.20 + volume_spike_score * 0.20
-    return round(max(0.0, min(score, 100.0)), 2)
+    score = min(max(annual_volatility * 100, 0.0), 100.0)
+    return round(score, 2)
 
 
 def calculate_atr(price_data: str | None, window_size: int = 14) -> float | None:
@@ -282,7 +267,7 @@ def normalize_rebalancing_action(
     if not has_existing_position:
         if normalized_decision == "Buy" and trade_plan_actionable:
             return "Open new position"
-        return "Avoid new entry"
+        return NO_POSITION_REBALANCING_ACTION
 
     if normalized_decision == "Buy":
         if trade_plan_actionable and confidence_value >= 0.65:
@@ -370,7 +355,9 @@ def build_new_entry_action(
 ) -> str:
     """Return user-facing new-entry instruction synced with existing position."""
     if not current_price_ok:
-        return "No new entry until price data is valid"
+        if has_existing_position:
+            return "No new entry until price data is valid"
+        return "Wait until valid price data is available"
 
     normalized_decision = _canonical_decision(final_decision)
 
@@ -380,7 +367,7 @@ def build_new_entry_action(
         if rebalancing_action == "Maintain position":
             return "No new entry; maintain existing position"
         if rebalancing_action == "Trim position":
-            return "No new entry; reduce existing exposure"
+            return "Do not add; reduce existing exposure"
         if rebalancing_action == "Exit position":
             return "No new entry; exit existing position"
         return "No new entry; maintain existing position"
@@ -388,10 +375,10 @@ def build_new_entry_action(
     if normalized_decision == "Buy" and trade_plan_valid:
         return "Allowed with validated entry"
     if normalized_decision == "Buy":
-        return "Wait for better entry"
+        return "Wait for valid entry setup"
     if normalized_decision == "Sell":
-        return "Avoid new entry"
-    return "No new entry"
+        return "Avoid entry; wait for risk to normalize"
+    return "Wait for valid entry setup"
 
 
 def build_position_size_hint(
@@ -407,7 +394,7 @@ def build_position_size_hint(
     if not current_price_ok:
         if has_existing_position:
             return "Maintain current position size until valid price data is available."
-        return "No new position suggested until valid price data is available."
+        return "0% allocation until valid price data is available."
 
     normalized_decision = _canonical_decision(final_decision)
 
@@ -425,11 +412,11 @@ def build_position_size_hint(
 
         if rebalancing_action == "Trim position":
             return {
-                "Low": "Trim part of the position to reduce exposure.",
-                "Medium": "Trim part of the position to reduce exposure.",
-                "High": "Trim position more conservatively due to elevated volatility.",
+                "Low": "Reduce position size gradually; no new exposure suggested.",
+                "Medium": "Reduce position size gradually; no new exposure suggested.",
+                "High": "Reduce exposure due to elevated volatility; no new add suggested.",
                 "Very High": "Reduce exposure aggressively or prepare full exit if risk worsens.",
-            }.get(volatility_level, "Trim part of the position to reduce exposure.")
+            }.get(volatility_level, "Reduce position size gradually; no new exposure suggested.")
 
         if rebalancing_action == "Exit position":
             return "Exit existing position; no new exposure suggested."
@@ -445,8 +432,10 @@ def build_position_size_hint(
         }.get(volatility_level, "Use standard starter size and avoid oversized entry.")
 
     if normalized_decision == "Buy":
-        return "No new position suggested until the trade plan is valid."
-    return "No new position suggested."
+        return "0% allocation until the trade plan is valid."
+    if normalized_decision == "Sell":
+        return "0% allocation; stay on watchlist only until risk normalizes."
+    return "0% allocation until setup improves."
 
 
 def _format_number(value: float) -> str:

@@ -166,3 +166,30 @@ def test_news_relevance_thresholds_use_separate_environment_keys(monkeypatch):
     finally:
         importlib.reload(default_config)
         importlib.reload(config)
+
+
+def test_vendor_order_skips_vendor_without_method(monkeypatch):
+    from tradingagents.dataflows import interface, vendor_router
+
+    recorder = VendorAttemptRecorder()
+    monkeypatch.setattr(vendor_router, "get_attempt_recorder", lambda _id: recorder)
+    monkeypatch.setattr(interface, "get_attempt_recorder", lambda _id: recorder)
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS,
+        "get_quote",
+        {"yfinance": lambda *a, **k: _quote("yfinance")},
+    )
+
+    with use_config({**BASE_CONFIG, "_vendor_attempt_recorder_id": "x"}):
+        result = route_to_vendor(
+            "get_quote",
+            "BBCA.JK",
+            "2026-05-28",
+            vendor_order=["idx_official", "yfinance"],
+            field_name="quote",
+        )
+
+    assert result["source"] == "yfinance"
+    summary = recorder.get_summary()["quote"]
+    assert summary[0].startswith("idx_official:skipped")
+    assert summary[1] == "yfinance:success"
