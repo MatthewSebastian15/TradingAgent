@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from time import monotonic
 
 from fastapi import APIRouter, Query, Request
 
@@ -28,6 +29,12 @@ _DEFAULT_TICKERS: list[str] = [
     "GOTO.JK",
     "ASII.JK",
 ]
+_QUOTE_CACHE_TTL_SECONDS = 60.0
+_QUOTE_CACHE: dict[tuple[str, ...], tuple[float, list[dict]]] = {}
+
+
+def _clone_quotes(quotes: list[dict]) -> list[dict]:
+    return [dict(item) for item in quotes]
 
 
 def _fetch_quote(symbol: str) -> dict:
@@ -92,6 +99,13 @@ async def get_market_quotes(
         # Cap at 20 to avoid overloading yfinance on a single request.
         capped = [normalize_ticker_symbol(sym) for sym in raw_symbols[:20]]
 
+        cache_key = tuple(capped)
+        cached_at, cached_quotes = _QUOTE_CACHE.get(cache_key, (0.0, []))
+        now = monotonic()
+        if cached_quotes and now - cached_at <= _QUOTE_CACHE_TTL_SECONDS:
+            return {"quotes": _clone_quotes(cached_quotes)}
+
         quotes = await _fetch_quotes(capped)
+        _QUOTE_CACHE[cache_key] = (now, _clone_quotes(quotes))
 
     return {"quotes": quotes}

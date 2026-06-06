@@ -832,9 +832,7 @@ function renderFundamentalQuality(payload) {
   const quality = payload?.data_quality;
   if (!quality || quality.status === 'complete') return '';
   const notes = [...(quality.fallback_used || []), ...(quality.warnings || [])];
-  return `<div class="warning"><strong>Data quality: ${escapeHtml(quality.status || 'N/A')}</strong>
-    ${notes.length ? renderList(notes) : '<p>Some values are unavailable. Missing values are shown as N/A.</p>'}
-  </div>`;
+  return notes.length ? `<div class="warning">${renderList(notes)}</div>` : '';
 }
 
 function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
@@ -967,40 +965,6 @@ function renderPriceChartSummary(rows) {
   </section>`;
 }
 
-function renderTechnicalEntry(rows) {
-  if (!rows.length) return '';
-  return `<section class="section">
-    <h2>Technical Entry Quality</h2>
-    <table><tbody>${renderRows(rows)}</tbody></table>
-  </section>`;
-}
-
-function renderNewsImpact(report) {
-  if (!report.news_impact_rows.length) return '';
-  return `<section class="section">
-    <h2>News Impact Summary</h2>
-    <table><tbody>${renderRows(report.news_impact_rows)}</tbody></table>
-    ${
-      report.high_impact_news_items.length
-        ? `<h3>High Impact News</h3>
-          <div class="news-list">
-            ${report.high_impact_news_items
-              .map(
-                (item) => `<article class="news-item">
-                  <h3>${escapeHtml(item.title)}</h3>
-                  <p class="muted">Source: ${escapeHtml(item.source)} | Published: ${escapeHtml(item.published_at)} | Scope: ${escapeHtml(item.news_scope)} | Category: ${escapeHtml(item.materiality_category)} | Source Confidence: ${escapeHtml(item.source_confidence_label)} | Sentiment: ${escapeHtml(item.sentiment)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)} | Relevance: ${escapeHtml(item.relevance_score)}</p>
-                  ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
-                  ${item.impact_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.impact_reason)}</p>` : ''}
-                  ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
-                </article>`
-              )
-              .join('')}
-          </div>`
-        : ''
-    }
-  </section>`;
-}
-
 function renderCatalystList(title, items) {
   if (!items.length) return '';
   return `<h3>${escapeHtml(title)}</h3>
@@ -1047,71 +1011,13 @@ function valuePercent(value) {
   return text.endsWith('%') ? text : `${text}%`;
 }
 
-function tableFromObjects(columns, rows) {
-  if (!Array.isArray(rows) || !rows.length) return '<p class="muted">N/A</p>';
-  return `<table>
-    <thead><tr>${columns.map(([_key, label]) => `<th>${escapeHtml(label)}</th>`).join('')}</tr></thead>
-    <tbody>${rows
-      .map(
-        (item) =>
-          `<tr>${columns.map(([key]) => `<td>${escapeHtml(Array.isArray(item?.[key]) ? item[key].join(', ') : item?.[key])}</td>`).join('')}</tr>`
-      )
-      .join('')}</tbody>
-  </table>`;
-}
-
 function renderRiskDataQuality(report) {
   const payload = report.risk_data_quality || {};
   if (!Object.keys(payload).length) return '';
-  const summary = payload.risk_summary || {};
-  const balance = payload.balance_sheet_risk_summary || {};
   const market = payload.market_risk || {};
   const riskReturn = payload.risk_adjusted_return || {};
-  const monitor = payload.thesis_monitor || {};
-  const quality = payload.data_quality || {};
-  const breakdown = quality.score_breakdown || {};
-  const vendorRows = Object.entries(payload.vendor_status || {}).map(([vendor, item]) => ({
-    vendor,
-    status: item.status,
-    used_for: item.used_for,
-    missing_fields: item.missing_fields,
-  }));
 
   return `
-    <section class="section">
-      <h2>Risk Summary</h2>
-      <table><tbody>${renderRows([
-        row('Overall Risk', summary.overall_risk),
-        row('Risk Score', summary.risk_score),
-        row('Main Risks', (summary.main_risks || []).join(', ')),
-        row('Risk Flags', (summary.risk_flags || []).join(', ')),
-        row('Explanation', summary.risk_explanation),
-      ])}</tbody></table>
-      <h3>Balance Sheet Risk Summary</h3>
-      <table><tbody>${renderRows([
-        row('DER', balance.der),
-        row('Net Debt', balance.net_debt),
-        row('Debt / EBITDA', balance.debt_to_ebitda),
-        row('Cash Ratio', balance.cash_ratio),
-        row('Risk Level', balance.risk_level),
-        row('Interpretation', balance.interpretation),
-      ])}</tbody></table>
-      ${
-        payload.catalyst_risk?.length
-          ? `<h3>Catalyst Risk</h3>${tableFromObjects(
-              [
-                ['type', 'Type'],
-                ['label', 'Label'],
-                ['impact', 'Impact'],
-                ['date', 'Date'],
-                ['source', 'Source'],
-                ['reason', 'Reason'],
-              ],
-              payload.catalyst_risk
-            )}`
-          : ''
-      }
-    </section>
     <section class="section">
       <h2>Market Risk</h2>
       <table><tbody>${renderRows([
@@ -1132,74 +1038,6 @@ function renderRiskDataQuality(report) {
         row('Expected Return', riskReturn.expected_return_label),
       ])}</tbody></table>
       ${renderList(riskReturn.notes || [])}
-    </section>
-    <section class="section">
-      <h2>Thesis Monitor</h2>
-      <table><tbody>${renderRows([row('Overall Thesis Status', monitor.overall_thesis_status)])}</tbody></table>
-      ${tableFromObjects(
-        [
-          ['category', 'Category'],
-          ['condition', 'Condition'],
-          ['status', 'Status'],
-          ['reason', 'Reason'],
-        ],
-        monitor.checklist || []
-      )}
-    </section>
-    <section class="section">
-      <h2>Source Confidence &amp; Data Quality</h2>
-      <table><tbody>${renderRows([
-        row('Score', quality.score),
-        row('Confidence', quality.confidence),
-        row('Summary', quality.summary),
-        row('Price Data', breakdown.price_data),
-        row('Financial Data', breakdown.financial_data),
-        row('Valuation Data', breakdown.valuation_data),
-        row('News Data', breakdown.news_data),
-        row('Vendor Success', breakdown.vendor_success),
-        row('Freshness', breakdown.freshness),
-      ])}</tbody></table>
-      <h3>Vendor Status</h3>
-      ${tableFromObjects(
-        [
-          ['vendor', 'Vendor'],
-          ['status', 'Status'],
-          ['used_for', 'Used For'],
-          ['missing_fields', 'Missing Fields'],
-        ],
-        vendorRows
-      )}
-      <h3>Missing Fields</h3>
-      ${tableFromObjects(
-        [
-          ['module', 'Module'],
-          ['field', 'Field'],
-          ['impact', 'Impact'],
-          ['fallback_available', 'Fallback Available'],
-        ],
-        payload.missing_fields || []
-      )}
-      <h3>Fallback Used</h3>
-      ${tableFromObjects(
-        [
-          ['field', 'Field'],
-          ['method', 'Method'],
-          ['confidence', 'Confidence'],
-        ],
-        payload.fallback_used || []
-      )}
-      <h3>Stale Data Warning</h3>
-      ${tableFromObjects(
-        [
-          ['module', 'Module'],
-          ['field', 'Field'],
-          ['warning', 'Warning'],
-          ['severity', 'Severity'],
-        ],
-        payload.stale_data_warning || []
-      )}
-      <h3>Calculation Notes</h3>
-      ${renderList(payload.calculation_notes || [])}
     </section>`;
 }
 
@@ -1432,9 +1270,7 @@ export function renderMockReportHtml(report) {
           ['ps', 'P/S'],
           ['ev_ebitda', 'EV/EBITDA'],
         ],
-        report.valuation_multiples?.interpretation
-          ? `<p>Label: ${escapeHtml(report.valuation_multiples.interpretation.valuation_label)}. ${escapeHtml(report.valuation_multiples.interpretation.main_reason)}</p>`
-          : ''
+        ''
       )}
 
       ${renderFundamentalMetricSection(
@@ -1479,10 +1315,6 @@ export function renderMockReportHtml(report) {
       ${renderPeerComparison(report.peer_comparison)}
 
       ${renderPriceChartSummary(report.price_chart_rows)}
-
-      ${renderTechnicalEntry(report.technical_entry_rows)}
-
-      ${renderNewsImpact(report)}
 
       ${renderCatalystTracker(report)}
 

@@ -103,6 +103,15 @@ body::after {
   }
 }
 
+@keyframes ticker-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -145,6 +154,27 @@ body::after {
 }
 .animate-marquee {
   animation: marquee 30s linear infinite;
+}
+.ticker-tape {
+  overflow: hidden;
+  width: 100%;
+}
+.ticker-tape__track {
+  display: flex;
+  width: max-content;
+  animation: ticker-marquee 72s linear infinite;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  contain: content;
+  will-change: transform;
+}
+.ticker-tape__group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2rem;
+  padding-right: 2rem;
+  white-space: nowrap;
 }
 
 /* Terminal cursor */
