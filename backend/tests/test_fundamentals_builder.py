@@ -256,6 +256,6 @@ def test_peer_comparison_is_only_returned_for_optional_payload():
 def test_financial_trends_keep_period_alignment_and_metric_detail_formula():
     trends = _bundle()["financial_trends"]
 
-    assert [period["key"] for period in trends["periods"]] == ["FY22", "FY23", "FY24", "FY25"]
-    assert len(trends["metric_details"]["revenue"]) == 4
+    assert [period["key"] for period in trends["periods"]] == ["FY23", "FY24", "FY25"]
+    assert len(trends["metric_details"]["revenue"]) == 3
     assert trends["metric_details"]["revenue"][-1]["formula"] == "Reported financial statement value"

@@ -51,7 +51,7 @@ describe('ProfileTab', () => {
     );
 
     expect(screen.getByText('PT Bank Central Asia Tbk')).toBeTruthy();
-    expect(screen.getByText('Profile data: partial')).toBeTruthy();
+    expect(screen.queryByText('Profile data: partial')).toBeNull();
     expect(screen.getByText('1,205,000.0 IDR Bn')).toBeTruthy();
     expect(screen.getByText('123,275,050,000')).toBeTruthy();
     expect(screen.getByText('Rp 9,800')).toBeTruthy();

@@ -29,21 +29,14 @@ function displayPrice(value, ticker) {
   return formatPrice(unwrapValue(value), ticker) || 'N/A';
 }
 
-function indicatorQuality(result, technical, key) {
-  return technical?.indicator_quality?.[key] || getFieldQuality(result?.data_quality, key);
-}
-
-function firstQuality(result, technical, keys) {
-  for (const key of keys) {
-    const quality = indicatorQuality(result, technical, key);
-    if (quality) return quality;
-  }
-  return null;
-}
-
 function displayLabel(value) {
   if (!hasValue(value)) return 'N/A';
   return String(value).replace(/_/g, ' ').toUpperCase();
+}
+
+function formatWindowLabel(chart) {
+  if (hasValue(chart.lookback_days)) return `${chart.lookback_days} Days Price`;
+  return chart.window_label || 'N/A';
 }
 
 export default function ChartPriceTab({ result }) {
@@ -51,7 +44,6 @@ export default function ChartPriceTab({ result }) {
   const points = normalizePricePoints(chart.points);
   const stats = chart.stats || {};
   const performance = result?.price_performance || chart.summary || {};
-  const technical = result?.technical_entry || {};
   const ticker = chart.ticker || result?.ticker;
 
   if (chart.available !== true || points.length < 2) {
@@ -68,11 +60,13 @@ export default function ChartPriceTab({ result }) {
     <div className="px-4 py-4 border-b border-bloomberg-border space-y-4">
       <section>
         <SectionHeader label="CHART & PRICE" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <MetricBox label="WINDOW" value={chart.window_label || 'N/A'} highlight />
-          <MetricBox label="POINTS" value={points.length} />
-          <MetricBox label="SOURCE" value={chart.source || 'N/A'} />
-          <MetricBox label="CHANGE" value={formatPercent(stats.change_percent)} highlight />
+        <div>
+          <div className="font-mono text-sm font-semibold text-bloomberg-white">
+            {formatWindowLabel(chart)}
+          </div>
+          <div className="mt-1 font-mono text-[11px] text-bloomberg-muted">
+            Source: {chart.source || 'N/A'}
+          </div>
         </div>
       </section>
 
@@ -123,7 +117,12 @@ export default function ChartPriceTab({ result }) {
             label="PERIOD LOW"
             value={displayPrice(performance.period_low ?? stats.low, ticker)}
           />
-          <MetricBox label="MAX DRAWDOWN" value={formatPercent(performance.max_drawdown_percent)} quality={getFieldQuality(result?.data_quality, 'drawdown')} preserveSlot />
+          <MetricBox
+            label="MAX DRAWDOWN"
+            value={formatPercent(performance.max_drawdown_percent)}
+            quality={getFieldQuality(result?.data_quality, 'drawdown')}
+            preserveSlot
+          />
           <MetricBox
             label="LATEST CLOSE"
             value={displayPrice(performance.latest_close ?? stats.end_price, ticker)}
@@ -135,54 +134,6 @@ export default function ChartPriceTab({ result }) {
           <MetricBox label="LATEST VOLUME" value={formatCompactNumber(performance.latest_volume)} />
           <MetricBox label="VOLUME TREND" value={displayLabel(performance.volume_trend)} />
         </div>
-      </section>
-
-      <section>
-        <SectionHeader label="TECHNICAL ENTRY QUALITY" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <MetricBox
-            label="ENTRY QUALITY"
-            value={displayLabel(technical.entry_quality)}
-            highlight
-          />
-          <MetricBox label="TREND" value={displayLabel(technical.trend)} />
-          <MetricBox
-            label="RSI"
-            value={hasValue(technical.rsi) ? Number(technical.rsi).toFixed(2) : 'N/A'}
-            quality={firstQuality(result, technical, ['rsi', 'rsi_14'])}
-            preserveSlot
-          />
-          <MetricBox label="RSI SIGNAL" value={displayLabel(technical.rsi_signal)} />
-          <MetricBox
-            label="VOLATILITY"
-            value={formatPercent(technical.volatility ?? result?.risk_data_quality?.market_risk?.volatility_percent)}
-            quality={indicatorQuality(result, technical, 'volatility')}
-            preserveSlot
-          />
-          <MetricBox
-            label="MACD"
-            value={hasValue(technical.macd) ? Number(technical.macd).toFixed(2) : 'N/A'}
-          />
-          <MetricBox label="MACD SIGNAL" value={displayLabel(technical.macd_signal)} />
-          <MetricBox label="ATR" value={displayPrice(technical.atr, ticker)} />
-          <MetricBox label="SMA 20" value={displayPrice(technical.sma_20, ticker)} quality={indicatorQuality(result, technical, 'sma_20')} preserveSlot />
-          <MetricBox label="SMA 50" value={displayPrice(technical.sma_50, ticker)} quality={indicatorQuality(result, technical, 'sma_50')} preserveSlot />
-          <MetricBox label="SMA 200" value={displayPrice(technical.sma_200, ticker)} quality={indicatorQuality(result, technical, 'sma_200')} preserveSlot />
-          <MetricBox label="SUPPORT" value={displayPrice(technical.support, ticker)} />
-          <MetricBox label="RESISTANCE" value={displayPrice(technical.resistance, ticker)} />
-        </div>
-        {Array.isArray(technical.reasons) && technical.reasons.length > 0 && (
-          <ul className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-2">
-            {technical.reasons.slice(0, 6).map((reason, index) => (
-              <li
-                key={`${reason}-${index}`}
-                className="border border-bloomberg-border bg-black px-3 py-2 font-mono text-xs text-bloomberg-muted leading-relaxed"
-              >
-                {reason}
-              </li>
-            ))}
-          </ul>
-        )}
       </section>
     </div>
   );

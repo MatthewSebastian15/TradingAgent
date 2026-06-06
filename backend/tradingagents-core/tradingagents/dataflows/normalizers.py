@@ -167,7 +167,9 @@ def parse_numeric_value(value: object) -> float | None:
     return numeric * UNIT_MULTIPLIER.get(detected_unit, 1)
 
 
-def normalize_financial_value(value: float | int | str | None, unit: str = "raw", currency: str = "IDR") -> dict[str, Any]:
+def normalize_financial_value(
+    value: float | int | str | None, unit: str = "raw", currency: str = "IDR"
+) -> dict[str, Any]:
     raw_unit = _normalize_unit(unit)
     normalized_currency = _normalize_currency(currency)
     numeric, detected_unit, warning = _parse_numeric_and_unit(value, raw_unit)
@@ -176,7 +178,11 @@ def normalize_financial_value(value: float | int | str | None, unit: str = "raw"
         warnings.append("Value cannot be normalized")
     normalized_value = None if numeric is None else numeric * UNIT_MULTIPLIER.get(detected_unit, 1)
     payload = {
-        "raw_value": numeric if numeric is not None else value if value not in (None, "", "N/A", "n/a", "NA", "-") else None,
+        "raw_value": numeric
+        if numeric is not None
+        else value
+        if value not in (None, "", "N/A", "n/a", "NA", "-")
+        else None,
         "raw_unit": detected_unit,
         "raw_currency": normalized_currency,
         "normalized_value": normalized_value,
@@ -271,7 +277,9 @@ def _row_from_period_mapping(period_label: str, values: Any, period_type_hint: s
             value = raw_value.get("normalized_value", raw_value.get("value", raw_value.get("raw_value")))
             row[_canonical_field(raw_key)] = value
             if raw_value.get("source_unit") or raw_value.get("unit") or raw_value.get("raw_unit"):
-                row.setdefault("unit", raw_value.get("source_unit") or raw_value.get("unit") or raw_value.get("raw_unit"))
+                row.setdefault(
+                    "unit", raw_value.get("source_unit") or raw_value.get("unit") or raw_value.get("raw_unit")
+                )
             if raw_value.get("currency") or raw_value.get("raw_currency") or raw_value.get("normalized_currency"):
                 row.setdefault(
                     "currency",
@@ -286,7 +294,11 @@ def _extract_statement_rows(payload: Any, default_period_type: str) -> list[dict
     if payload is None:
         return []
     if isinstance(payload, list):
-        return [dict(item, period_type=item.get("period_type") or default_period_type) for item in payload if isinstance(item, dict)]
+        return [
+            dict(item, period_type=item.get("period_type") or default_period_type)
+            for item in payload
+            if isinstance(item, dict)
+        ]
     mapping = _load_mapping(payload)
     if not mapping:
         return []
@@ -317,7 +329,10 @@ def _extract_statement_rows(payload: Any, default_period_type: str) -> list[dict
             if row:
                 rows.append(row)
 
-    if not rows and any(_canonical_field(key) in FINANCIAL_FIELDS or key in {"period", "period_label", "fiscalDateEnding"} for key in mapping):
+    if not rows and any(
+        _canonical_field(key) in FINANCIAL_FIELDS or key in {"period", "period_label", "fiscalDateEnding"}
+        for key in mapping
+    ):
         item = dict(mapping)
         item.setdefault("period_type", default_period_type)
         rows.append(item)
@@ -350,7 +365,7 @@ def _rows_from_vendor_parser(
         return []
 
     rows: list[dict[str, Any]] = []
-    currency = parsed.get("currency") or default_currency
+    currency = default_currency or parsed.get("currency") or "IDR"
     for period_key, values in periods.items():
         if not isinstance(values, dict):
             continue
@@ -464,12 +479,18 @@ def _financial_period_from_metadata(period: dict[str, Any]) -> Any | None:
     period_type = str(period.get("period_type") or "annual")
     if period_type not in {"annual", "quarter", "quarterly"}:
         return None
+    quarter = period.get("fiscal_quarter")
+    is_quarterly = period_type in {"quarter", "quarterly"}
+    key = f"FY{str(year)[-2:]}Q{quarter}" if is_quarterly and quarter else f"FY{str(year)[-2:]}"
+    label = f"Q{quarter} {year}" if is_quarterly and quarter else f"FY {year}"
     return FinancialPeriod(
-        key=str(period.get("period_label") or f"FY{year}"),
-        label=str(period.get("period_label") or f"FY{year}"),
-        type="quarterly" if period_type in {"quarter", "quarterly"} else "annual",
+        key=key,
+        label=label,
+        type="quarterly" if is_quarterly else "annual",
         year=year,
-        quarter=period.get("fiscal_quarter"),
+        quarter=quarter,
+        display_period=label,
+        sort_key=period.get("period_end"),
     )
 
 
@@ -481,11 +502,33 @@ def _dataclass_to_dict(value: Any) -> Any:
     return value
 
 
-def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[str, Any]]) -> dict[str, Any]:
+def build_financial_highlights_from_normalized_rows(
+    normalized_rows: list[dict[str, Any]],
+    *,
+    analysis_date: str | None = None,
+    currency: str | None = None,
+) -> dict[str, Any]:
     rows = sorted([dict(row) for row in (normalized_rows or [])], key=_period_sort_key)
-    latest = rows[-1] if rows else {}
+    allowed_keys: set[str] | None = None
+    resolved_periods: list[Any] | None = None
+    if analysis_date:
+        try:
+            from tradingagents.financial_highlights.period_resolver import resolve_financial_highlight_periods
+
+            resolved_periods = resolve_financial_highlight_periods(analysis_date)
+            allowed_keys = {period.key for period in resolved_periods}
+        except Exception:
+            resolved_periods = None
+            allowed_keys = None
+    display_rows = []
+    for row in rows:
+        period = row.get("period") if isinstance(row.get("period"), dict) else {}
+        financial_period = _financial_period_from_metadata(period)
+        if financial_period is not None and (allowed_keys is None or financial_period.key in allowed_keys):
+            display_rows.append(row)
+    latest = display_rows[-1] if display_rows else rows[-1] if rows else {}
     latest_period = latest.get("period") if isinstance(latest.get("period"), dict) else {}
-    currency = latest_period.get("currency") or latest.get("currency") or "IDR"
+    currency = currency or latest_period.get("currency") or latest.get("currency") or "IDR"
 
     highlights: dict[str, Any] = {
         "period": latest_period,
@@ -496,7 +539,9 @@ def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[s
         "equity": unwrap_normalized_value(latest.get("equity") or latest.get("total_equity")),
         "cash": unwrap_normalized_value(latest.get("cash") or latest.get("cash_and_equivalents")),
         "debt": unwrap_normalized_value(latest.get("debt") or latest.get("total_debt")),
-        "operating_cash_flow": unwrap_normalized_value(latest.get("operating_cash_flow") or latest.get("cash_from_operations")),
+        "operating_cash_flow": unwrap_normalized_value(
+            latest.get("operating_cash_flow") or latest.get("cash_from_operations")
+        ),
         "capex": unwrap_normalized_value(latest.get("capex") or latest.get("capital_expenditure")),
         "normalized_period_rows": rows,
         "source": "normalized_financial_rows",
@@ -509,7 +554,7 @@ def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[s
     except Exception:
         return highlights
 
-    periods = []
+    periods_by_key: dict[str, Any] = {period.key: period for period in resolved_periods or []}
     normalized_for_table: dict[str, Any] = {
         "currency": currency,
         "periods": {},
@@ -520,8 +565,9 @@ def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[s
         financial_period = _financial_period_from_metadata(period)
         if financial_period is None:
             continue
-        periods.append(financial_period)
         period_key = financial_period.key
+        if allowed_keys is None or (period_key in allowed_keys and resolved_periods is None):
+            periods_by_key[period_key] = financial_period
         period_values: dict[str, Any] = {}
         for field in FINANCIAL_FIELDS:
             record = _field_record(row, field)
@@ -539,6 +585,11 @@ def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[s
             period_values.setdefault("capital_expenditure", period_values["capex"])
         normalized_for_table["periods"][period_key] = period_values
 
+    periods = (
+        resolved_periods
+        if resolved_periods is not None
+        else sorted(periods_by_key.values(), key=lambda period: str(period.sort_key or ""))
+    )
     if periods:
         metric_rows, sections, data_quality = build_metric_rows(periods=periods, normalized=normalized_for_table)
         metadata = currency_metadata(currency)

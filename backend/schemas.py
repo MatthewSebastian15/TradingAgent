@@ -31,6 +31,8 @@ class FinancialHighlightPeriod(ApiSchema):
     type: Literal["annual", "quarter", "quarterly", "ttm"]
     year: int
     quarter: int | None = None
+    display_period: str | None = None
+    sort_key: str | None = None
 
 
 class FinancialHighlightCell(ApiSchema):

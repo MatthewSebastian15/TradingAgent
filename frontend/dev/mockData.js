@@ -447,12 +447,11 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
   currency: 'USD',
   scale: 'billion',
   analysis_date: '2026-05-18',
-  period_logic: 'fy22_to_analysis_quarter',
+  period_logic: 'fy23_to_analysis_quarter',
   periods: [
-    { key: 'FY22', label: 'FY22', type: 'annual', year: 2022, quarter: null },
-    { key: 'FY23', label: 'FY23', type: 'annual', year: 2023, quarter: null },
-    { key: 'FY24', label: 'FY24', type: 'annual', year: 2024, quarter: null },
-    { key: 'FY25', label: 'FY25', type: 'annual', year: 2025, quarter: null },
+    { key: 'FY23', label: 'FY 2023', type: 'annual', year: 2023, quarter: null },
+    { key: 'FY24', label: 'FY 2024', type: 'annual', year: 2024, quarter: null },
+    { key: 'FY25', label: 'FY 2025', type: 'annual', year: 2025, quarter: null },
     { key: 'FY26Q1', label: 'Q1 2026', type: 'quarterly', year: 2026, quarter: 1 },
   ],
   rows: [
@@ -702,14 +701,14 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
     },
   ],
   notes: [
-    'Periods start from FY22 and extend dynamically based on the analysis date quarter.',
+    'Periods start from FY23 and extend dynamically based on the analysis date quarter.',
     'Older historical periods remain visible even when vendor data is unavailable; missing values are shown as N/A.',
     'Unavailable values are shown as N/A.',
   ],
   data_quality: {
     status: 'partial',
     missing_metrics: [],
-    missing_periods: ['FY22', 'Q1 2026'],
+    missing_periods: ['Q1 2026'],
     sources_used: ['mock'],
   },
 };
