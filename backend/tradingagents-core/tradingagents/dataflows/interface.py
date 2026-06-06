@@ -54,6 +54,7 @@ from .data_quality import (
 )
 from .finnhub_common import (
     FinnhubRateLimitError,
+    FinnhubUnavailableError,
     feature_for_method,
     is_finnhub_feature_enabled,
 )
@@ -570,7 +571,7 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         max_delay=10.0,
         circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
         circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
-        should_retry=lambda exc: not isinstance(exc, AlphaVantagePermanentError),
+        should_retry=lambda exc: not isinstance(exc, (AlphaVantagePermanentError, FinnhubUnavailableError)),
     )
     cache.set(cache_key, result)
     return result

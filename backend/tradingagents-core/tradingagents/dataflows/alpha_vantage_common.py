@@ -92,7 +92,8 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
         response_json = json.loads(response_text)
         if "Error Message" in response_json:
             message = str(response_json["Error Message"])
-            if "invalid ticker format" in message.lower():
+            lowered_message = message.lower()
+            if "invalid ticker format" in lowered_message or "invalid api call" in lowered_message:
                 raise AlphaVantagePermanentError(f"Alpha Vantage error: {message}")
             raise ValueError(f"Alpha Vantage error: {message}")
         if "Note" in response_json:

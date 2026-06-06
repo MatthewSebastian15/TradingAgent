@@ -86,6 +86,8 @@ from config_defaults import (
     NEWSDATA_API_KEY,
     PROVIDER_SDK_MAX_RETRIES,
     RESPONSE_DETAILS,
+    TOOL_MAX_RETRIES,
+    TOOL_TIMEOUT_SECONDS,
 )
 from config_env import env
 
@@ -135,6 +137,8 @@ class LLMSettings:
             "provider_sdk_max_retries": PROVIDER_SDK_MAX_RETRIES,
             "data_collection_workers": DATA_COLLECTION_WORKERS,
             "analyst_parallel_workers": ANALYST_PARALLEL_WORKERS,
+            "tool_timeout_seconds": TOOL_TIMEOUT_SECONDS,
+            "tool_max_retries": TOOL_MAX_RETRIES,
             "llm_retry_base_delay": LLM_RETRY_BASE_DELAY,
             "llm_retry_max_delay": LLM_RETRY_MAX_DELAY,
             "llm_429_max_wait_seconds": LLM_429_MAX_WAIT_SECONDS,

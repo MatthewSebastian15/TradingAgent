@@ -34,8 +34,8 @@ DEFAULT_CONFIG = {
     "llm_retry_max_delay": 30,
     "circuit_breaker_failure_threshold": 5,
     "circuit_breaker_recovery_seconds": 60,
-    "tool_timeout_seconds": 45,
-    "tool_max_retries": 3,
+    "tool_timeout_seconds": int(_env("TOOL_TIMEOUT_SECONDS") or "45"),
+    "tool_max_retries": int(_env("TOOL_MAX_RETRIES") or "3"),
     # Cache
     "cache_ttl_seconds": 900,
     "cache_max_entries": 512,

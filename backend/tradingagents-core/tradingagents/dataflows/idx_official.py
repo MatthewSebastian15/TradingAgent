@@ -41,7 +41,15 @@ def _unavailable(ticker: str, endpoint: str, reason: str = "IDX official live ad
     }
 
 
-def get_idx_company_profile(ticker: str) -> dict[str, Any]:
+def get_idx_company_profile(ticker: str, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    """Return IDX company profile data when available.
+
+    The vendor router passes ``curr_date`` as a second positional argument for
+    profile calls so all vendors share one call contract. Accept and ignore
+    extra arguments here because the current IDX profile fallback only needs the
+    ticker. Without this shim the whole IDX profile attempt fails with a Python
+    signature error before normal vendor fallback can continue.
+    """
     return _unavailable(_ticker_key(ticker), "company_profile")
 
 
