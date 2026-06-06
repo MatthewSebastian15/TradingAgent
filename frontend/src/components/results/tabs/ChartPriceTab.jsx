@@ -29,11 +29,6 @@ function displayPrice(value, ticker) {
   return formatPrice(unwrapValue(value), ticker) || 'N/A';
 }
 
-function displayLabel(value) {
-  if (!hasValue(value)) return 'N/A';
-  return String(value).replace(/_/g, ' ').toUpperCase();
-}
-
 function formatWindowLabel(chart) {
   if (hasValue(chart.lookback_days)) return `${chart.lookback_days} Days Price`;
   return chart.window_label || 'N/A';
@@ -91,31 +86,15 @@ export default function ChartPriceTab({ result }) {
           <MetricBox label="END PRICE" value={displayPrice(stats.end_price, ticker)} />
           <MetricBox label="HIGH" value={displayPrice(stats.high, ticker)} />
           <MetricBox label="LOW" value={displayPrice(stats.low, ticker)} />
-          <MetricBox label="AVG CLOSE" value={displayPrice(stats.average_close, ticker)} />
-          <MetricBox label="AVG VOLUME" value={formatCompactNumber(stats.average_volume)} />
-          <MetricBox label="TRADE DATE" value={chart.trade_date || result.trade_date || 'N/A'} />
           <MetricBox
-            label="LOOKBACK"
-            value={`${hasValue(chart.lookback_days) ? chart.lookback_days : 'N/A'} days`}
+            label="AVG VOLUME"
+            value={formatCompactNumber(performance.average_volume ?? stats.average_volume)}
           />
-        </div>
-      </section>
-
-      <section>
-        <SectionHeader label="PRICE PERFORMANCE" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <MetricBox label="LATEST VOLUME" value={formatCompactNumber(performance.latest_volume)} />
           <MetricBox
             label="PERIOD RETURN"
             value={formatPercent(performance.period_return_percent ?? stats.change_percent)}
             highlight
-          />
-          <MetricBox
-            label="PERIOD HIGH"
-            value={displayPrice(performance.period_high ?? stats.high, ticker)}
-          />
-          <MetricBox
-            label="PERIOD LOW"
-            value={displayPrice(performance.period_low ?? stats.low, ticker)}
           />
           <MetricBox
             label="MAX DRAWDOWN"
@@ -123,16 +102,6 @@ export default function ChartPriceTab({ result }) {
             quality={getFieldQuality(result?.data_quality, 'drawdown')}
             preserveSlot
           />
-          <MetricBox
-            label="LATEST CLOSE"
-            value={displayPrice(performance.latest_close ?? stats.end_price, ticker)}
-          />
-          <MetricBox
-            label="AVERAGE VOLUME"
-            value={formatCompactNumber(performance.average_volume ?? stats.average_volume)}
-          />
-          <MetricBox label="LATEST VOLUME" value={formatCompactNumber(performance.latest_volume)} />
-          <MetricBox label="VOLUME TREND" value={displayLabel(performance.volume_trend)} />
         </div>
       </section>
     </div>

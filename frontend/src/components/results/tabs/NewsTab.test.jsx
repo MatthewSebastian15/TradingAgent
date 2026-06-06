@@ -118,6 +118,26 @@ describe('NewsTab', () => {
     expect(screen.getAllByText(/NEWS #/i).length).toBeGreaterThanOrEqual(7);
   });
 
+  it('hides the top news summary and source status block', () => {
+    render(<NewsTab result={makeNewsResult({ highImpactCount: 1, fullCount: 1 })} />);
+
+    expect(screen.queryByText('News summary for GOTO.JK.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/NEWS SOURCES/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/LOOKBACK:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/FETCHED:/i)).not.toBeInTheDocument();
+    expect(screen.getByText('High Impact Article 1')).toBeInTheDocument();
+  });
+
+  it('hides low-value news card metadata', () => {
+    render(<NewsTab result={makeNewsResult({ highImpactCount: 1, fullCount: 1 })} />);
+
+    expect(screen.queryByText(/Category:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Impact Score:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Relevance:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Duplicate Removed:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Why it matters:/i)).not.toBeInTheDocument();
+  });
+
   it('renders all full news list items without display limit', () => {
     render(<NewsTab result={makeNewsResult({ highImpactCount: 0, fullCount: 11 })} />);
 

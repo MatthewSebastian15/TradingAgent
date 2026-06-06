@@ -217,10 +217,19 @@ function normalizeInlineText(value) {
   return String(value).replace(/\s+/g, ' ').trim();
 }
 
-function truncateKeyReasonWords(text, maxWords = 125) {
+function truncateReasonRiskWords(text, maxWords = 150) {
   const words = normalizeInlineText(text).split(/\s+/).filter(Boolean);
   if (words.length <= maxWords) return words.join(' ');
   return `${words.slice(0, maxWords).join(' ')}.`.replace(/\.\.$/, '.');
+}
+
+function fitRecommendationRiskWords(text, minWords = 100, maxWords = 150) {
+  const normalized = normalizeInlineText(text);
+  const floorText =
+    'Rekomendasi ini harus dibaca bersama kualitas data, harga terakhir, volatilitas, likuiditas, katalis berita, dan validitas trade plan karena perubahan pada salah satu faktor tersebut dapat menurunkan conviction atau mengubah timing entry. Risiko tetap perlu dikontrol dengan ukuran posisi moderat, disiplin stop, dan pembaruan analisis saat data vendor atau kondisi pasar berubah. Jika sinyal utama melemah, alokasi harus ditahan sampai tesis dan level eksekusi kembali terkonfirmasi.';
+  const combined =
+    wordCount(normalized) >= minWords ? normalized : `${normalized} ${floorText}`.trim();
+  return truncateReasonRiskWords(combined, maxWords);
 }
 
 function normalizeReasonItems(value) {
@@ -232,20 +241,36 @@ function normalizeReasonItems(value) {
   return text ? [text] : [];
 }
 
-function buildKeyReasonsParagraph({
+function normalizeRiskSummaryText(riskSummary) {
+  if (!riskSummary || typeof riskSummary !== 'object') return '';
+
+  return normalizeInlineText(
+    [
+      riskSummary.overall_risk && `Overall risk ${riskSummary.overall_risk}`,
+      riskSummary.short_reason || riskSummary.risk_explanation,
+      Array.isArray(riskSummary.main_risks) ? riskSummary.main_risks.join(', ') : null,
+    ]
+      .filter(Boolean)
+      .join('. ')
+  );
+}
+
+function buildRecommendationRiskParagraph({
   paragraph,
   reasons,
   catalysts,
   miniRiskSummary,
+  riskSummary,
   decisionReason,
 }) {
   const directParagraph = normalizeInlineText(paragraph);
-  if (directParagraph) return truncateKeyReasonWords(directParagraph, 125);
+  const riskText = normalizeInlineText(miniRiskSummary) || normalizeRiskSummaryText(riskSummary);
 
   const items = [
-    ...normalizeReasonItems(reasons),
-    ...normalizeReasonItems(catalysts),
-    normalizeInlineText(miniRiskSummary),
+    ...(directParagraph
+      ? [directParagraph]
+      : [...normalizeReasonItems(reasons), ...normalizeReasonItems(catalysts)]),
+    riskText,
     normalizeInlineText(decisionReason),
   ].filter(Boolean);
 
@@ -254,7 +279,7 @@ function buildKeyReasonsParagraph({
   if (!joined) return '';
 
   const normalized = joined.endsWith('.') ? joined : `${joined}.`;
-  return truncateKeyReasonWords(normalized, 125);
+  return fitRecommendationRiskWords(normalized, 100, 150);
 }
 
 function formatDataSourcePriceLabel(result) {
@@ -705,77 +730,147 @@ ExpandableTextSection.propTypes = {
   expandLabel: PropTypes.string.isRequired,
 };
 
-function pipelineStatusMeta(status) {
-  const normalized = String(status || 'ok').toLowerCase();
-  if (normalized === 'partial') return { icon: '⚠', classes: 'text-bloomberg-amber' };
-  if (normalized === 'fallback') return { icon: 'ℹ', classes: 'text-bloomberg-orange' };
-  if (normalized === 'error') return { icon: '✗', classes: 'text-bloomberg-red' };
-  return { icon: '✓', classes: 'text-bloomberg-green' };
+const AGENT_ROLE_FALLBACKS = {
+  'Data Collection': 'Mengambil harga, fundamental, berita, dan metadata awal.',
+  'Market Analyst': 'Menganalisis tren harga, momentum, volume, volatilitas, dan level teknikal.',
+  'News Analyst': 'Meringkas berita, sentimen, katalis, dan risiko headline.',
+  'Fundamentals Analyst': 'Mengevaluasi laporan keuangan, rasio, kualitas laba, dan valuasi.',
+  'Bull Researcher': 'Menyusun argumen pendukung rekomendasi dan katalis positif.',
+  'Bear Researcher': 'Menguji risiko, kontra-argumen, dan kondisi invalidasi.',
+  'Research Manager': 'Menimbang argumen bull/bear dan memilih tesis paling kuat.',
+  Trader: 'Menerjemahkan tesis menjadi rencana entry, stop, target, dan sizing.',
+  'Risk Analysts': 'Memeriksa drawdown, volatilitas, leverage, likuiditas, dan kelayakan risiko.',
+  'Risk Manager': 'Memeriksa risiko portofolio dan batas eksposur.',
+  'Portfolio Manager': 'Menetapkan keputusan akhir, alokasi, dan konteks posisi.',
+};
+
+function normalizePipelineStatus(status) {
+  const normalized = String(status || 'completed').toLowerCase();
+  if (['error', 'failed', 'fail'].includes(normalized)) return 'gagal';
+  if (['skip', 'skipped'].includes(normalized)) return 'skip';
+  return 'selesai';
+}
+
+function pipelineStatusClasses(status) {
+  if (status === 'gagal') return 'border-bloomberg-red text-bloomberg-red bg-bloomberg-red-dim';
+  if (status === 'skip') return 'border-bloomberg-amber text-bloomberg-amber bg-bloomberg-amber-dim';
+  return 'border-bloomberg-green text-bloomberg-green bg-bloomberg-green-dim';
+}
+
+function formatDuration(value) {
+  if (!hasDisplayValue(value)) return 'N/A';
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${numeric.toFixed(1)}s` : String(value);
+}
+
+function normalizePipelineRows(pipeline = [], agents = []) {
+  if (Array.isArray(pipeline) && pipeline.length > 0) {
+    return pipeline.map((agent, index) => {
+      const name = normalizeInlineText(
+        agent.name || agent.agent_name || agent.agent || `Agent ${index + 1}`
+      );
+      const status = normalizePipelineStatus(agent.status);
+      const warning = normalizeInlineText(agent.warning || agent.error || agent.reason);
+      const output = normalizeInlineText(
+        agent.output_summary ||
+          agent.key_finding ||
+          agent.finding ||
+          agent.summary ||
+          agent.status_message ||
+          warning ||
+          (status === 'skip'
+            ? 'Agent dilewati oleh pipeline.'
+            : status === 'gagal'
+              ? 'Agent gagal menghasilkan output.'
+              : 'Agent selesai tanpa output ringkas dari backend.')
+      );
+
+      return {
+        key: `${name}-${index}`,
+        name,
+        role:
+          normalizeInlineText(agent.role || agent.function || agent.description) ||
+          AGENT_ROLE_FALLBACKS[name] ||
+          'Menjalankan tahap analisis sesuai pipeline.',
+        status,
+        output,
+        duration: formatDuration(
+          agent.duration_seconds || agent.elapsed_seconds || agent.execution_seconds
+        ),
+      };
+    });
+  }
+
+  return agents.map((agent, index) => {
+    const name = normalizeInlineText(agent) || `Agent ${index + 1}`;
+    return {
+      key: `${name}-${index}`,
+      name,
+      role: AGENT_ROLE_FALLBACKS[name] || 'Menjalankan tahap analisis sesuai pipeline.',
+      status: 'selesai',
+      output: 'Agent tercatat selesai. Backend tidak mengirim output ringkas terpisah.',
+      duration: 'N/A',
+    };
+  });
 }
 
 function AgentPipeline({ pipeline = [], agents = [], totalSeconds }) {
-  const [expandedRows, setExpandedRows] = useState({});
-
-  if (Array.isArray(pipeline) && pipeline.length > 0) {
-    return (
-      <div className="px-4 py-4 border-b border-bloomberg-border">
-        <SectionHeader label="AGENT PIPELINE" />
-        <div className="flex flex-col gap-1.5">
-          {pipeline.map((agent) => {
-            const statusMeta = pipelineStatusMeta(agent.status);
-            const warning = agent.warning;
-            const rowKey = agent.name;
-            return (
-              <button
-                type="button"
-                key={rowKey}
-                onClick={() =>
-                  warning && setExpandedRows((prev) => ({ ...prev, [rowKey]: !prev[rowKey] }))
-                }
-                className="text-left border border-bloomberg-border px-2.5 py-2 bg-black bg-opacity-10 hover:bg-bloomberg-surface transition-colors"
-              >
-                <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center font-mono text-xs">
-                  <span className="text-bloomberg-muted">{agent.name}</span>
-                  <span className={statusMeta.classes}>{statusMeta.icon}</span>
-                  <span className="text-bloomberg-white">
-                    {hasDisplayValue(agent.duration_seconds)
-                      ? `${Number(agent.duration_seconds).toFixed(1)}s`
-                      : '—'}
-                  </span>
-                </div>
-                {warning && (
-                  <div className="mt-1 font-mono text-[11px] text-bloomberg-amber">
-                    {expandedRows[rowKey] ? warning : 'Warning available'}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        {hasDisplayValue(totalSeconds) && (
-          <div className="mt-3 font-mono text-xs text-bloomberg-white">
-            Total pipeline time: {Number(totalSeconds).toFixed(1)}s
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (!agents.length) return null;
+  const [expanded, setExpanded] = useState(false);
+  const rows = normalizePipelineRows(pipeline, agents);
+  if (!rows.length) return null;
 
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border">
-      <SectionHeader label="AGENT PIPELINE" />
-      <div className="flex flex-wrap gap-1.5">
-        {agents.map((agent, index) => (
-          <span
-            key={`${agent}-${index}`}
-            className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted"
-          >
-            <span className="text-bloomberg-green mr-1.5">✓</span>
-            {agent}
-          </span>
-        ))}
+      <div className="border border-bloomberg-border bg-black bg-opacity-20">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left font-mono text-[11px] tracking-wider text-bloomberg-muted hover:text-bloomberg-white"
+        >
+          <span>Agent Pipeline</span>
+          <span>{expanded ? '▲ Hide' : '▾ Details'}</span>
+        </button>
+        {expanded && (
+          <div className="border-t border-bloomberg-border px-3 py-3">
+            <div className="grid grid-cols-1 gap-2">
+              {rows.map((agent) => (
+                <article
+                  key={agent.key}
+                  className="border border-bloomberg-border bg-black px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="font-mono text-xs font-semibold text-bloomberg-white">
+                        {agent.name}
+                      </div>
+                      <div className="mt-1 font-mono text-[11px] text-bloomberg-muted leading-relaxed">
+                        {agent.role}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${pipelineStatusClasses(agent.status)}`}
+                      >
+                        {agent.status}
+                      </span>
+                      <span className="border border-bloomberg-border px-2 py-1 font-mono text-[10px] text-bloomberg-muted">
+                        {agent.duration}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-2 font-mono text-xs text-bloomberg-muted leading-relaxed">
+                    {agent.output}
+                  </p>
+                </article>
+              ))}
+            </div>
+            {hasDisplayValue(totalSeconds) && (
+              <div className="mt-3 border-t border-bloomberg-border pt-2 font-mono text-xs text-bloomberg-white">
+                Total pipeline time: {formatDuration(totalSeconds)}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -852,11 +947,12 @@ export default function ResultCard({
   const invalidations = result.invalidation_conditions || [];
   const riskSummary = analysisOverview.risk_summary || null;
   const miniRiskSummary = result.mini_risk_summary;
-  const keyReasonsParagraph = buildKeyReasonsParagraph({
+  const recommendationRiskParagraph = buildRecommendationRiskParagraph({
     paragraph: analysisOverview.key_reasons_paragraph || result.key_reasons_paragraph,
     reasons: analysisOverview.key_reasons || result.key_reasons,
     catalysts,
     miniRiskSummary,
+    riskSummary,
     decisionReason: result.decision_adjusted_reason,
   });
   const signalPositionLabel = result.has_existing_position
@@ -1117,21 +1213,10 @@ export default function ResultCard({
             expandLabel="Read More"
           />
 
-          {keyReasonsParagraph && (
+          {recommendationRiskParagraph && (
             <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="KEY REASONS" />
               <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                {keyReasonsParagraph}
-              </p>
-            </div>
-          )}
-
-          {(miniRiskSummary || riskSummary) && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="MINI RISK SUMMARY" />
-              <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                {miniRiskSummary ||
-                  `${riskSummary.overall_risk || 'N/A'}: ${riskSummary.short_reason || 'N/A'}`}
+                {recommendationRiskParagraph}
               </p>
             </div>
           )}

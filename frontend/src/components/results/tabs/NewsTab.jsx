@@ -1,6 +1,5 @@
 import PropTypes from 'prop-types';
 
-import DataSourceBadge from '../../DataSourceBadge';
 import DataStatusBadge from '../../DataStatusBadge';
 import { safeExternalUrl } from '../../../utils/url';
 import { getFieldQuality } from '../../../utils/dataStatus';
@@ -69,13 +68,6 @@ function excludeNewsItems(items, excludedItems) {
   );
 }
 
-function formatSourceValue(relatedNews, newsImpact) {
-  const sourcesUsed = newsImpact?.data_quality?.sources_used;
-  if (relatedNews?.source) return relatedNews.source;
-  if (Array.isArray(sourcesUsed) && sourcesUsed.length > 0) return sourcesUsed.join(', ');
-  return 'N/A';
-}
-
 function hasNewsPayload(result) {
   const relatedItems = result?.related_news?.items;
   const impactItems = result?.news_impact?.full_news_list;
@@ -105,26 +97,7 @@ SummaryMetric.propTypes = {
   value: PropTypes.node,
 };
 
-function SourceConfidenceSummary({ breakdown }) {
-  if (!breakdown || typeof breakdown !== 'object') return null;
-
-  const rows = Object.entries(breakdown).filter(([, value]) => Number(value) > 0);
-  if (!rows.length) return null;
-
-  return (
-    <div className="mt-2 flex flex-wrap gap-2 font-mono text-[11px] text-bloomberg-muted">
-      {rows.map(([label, value]) => (
-        <SummaryMetric key={label} label={displayLabel(label)} value={value} />
-      ))}
-    </div>
-  );
-}
-
-SourceConfidenceSummary.propTypes = {
-  breakdown: PropTypes.object,
-};
-
-function NewsCard({ item, index, quality, duplicateRemovedCount }) {
+function NewsCard({ item, index, quality }) {
   const url = safeExternalUrl(item.url);
 
   return (
@@ -148,18 +121,12 @@ function NewsCard({ item, index, quality, duplicateRemovedCount }) {
         <span>Provider: {item.provider || item.source || 'Unknown'}</span>
         <span>Published: {formatDate(item.published_at)}</span>
         <span>Scope: {displayLabel(item.scope_label || item.news_scope || 'company')}</span>
-        <span>
-          Category: {displayLabel(item.materiality_category || item.event_type || 'general')}
-        </span>
         {item.source_confidence_label && (
           <span>Source Confidence: {displayLabel(item.source_confidence_label)}</span>
         )}
         {item.impact && <span>Impact: {displayLabel(item.impact)}</span>}
         {item.sentiment && <span>Sentiment: {displayLabel(item.sentiment)}</span>}
-        {item.impact_score !== undefined && <span>Impact Score: {item.impact_score}</span>}
         {item.impact_status && <span>Impact Status: {displayLabel(item.impact_status)}</span>}
-        {item.relevance_score !== undefined && <span>Relevance: {item.relevance_score}</span>}
-        {duplicateRemovedCount !== undefined && <span>Duplicate Removed: {duplicateRemovedCount}</span>}
       </div>
 
       <div className="mt-2">
@@ -176,13 +143,6 @@ function NewsCard({ item, index, quality, duplicateRemovedCount }) {
       {item.summary && (
         <p className="mt-3 font-mono text-xs text-bloomberg-muted leading-relaxed">
           {item.summary}
-        </p>
-      )}
-
-      {(item.impact_reason || item.relevance_reason) && (
-        <p className="mt-2 font-mono text-xs text-bloomberg-muted leading-relaxed">
-          <span className="text-bloomberg-white">Why it matters:</span>{' '}
-          {item.impact_reason || item.relevance_reason}
         </p>
       )}
 
@@ -204,7 +164,6 @@ NewsCard.propTypes = {
   item: PropTypes.object.isRequired,
   index: PropTypes.number.isRequired,
   quality: PropTypes.object,
-  duplicateRemovedCount: PropTypes.number,
 };
 
 function CatalystList({ title, items }) {
@@ -247,30 +206,6 @@ CatalystList.propTypes = {
   items: PropTypes.array,
 };
 
-function NewsSourceStatus({ relatedNews, newsImpact, result }) {
-  const rootNewsQuality = result?.data_quality?.news;
-  const fieldQuality = getFieldQuality(result?.data_quality, 'company_news');
-  const sources = result?.data_sources?.news || newsImpact?.data_quality?.sources_used || relatedNews?.source;
-  return (
-    <div className="mt-3 space-y-2">
-      <DataSourceBadge sources={sources} label="News sources" />
-      {(fieldQuality || rootNewsQuality || newsImpact?.data_quality) && (
-        <DataStatusBadge
-          quality={fieldQuality || (typeof rootNewsQuality === 'object' ? rootNewsQuality : newsImpact?.data_quality)}
-          status={fieldQuality ? undefined : typeof rootNewsQuality === 'string' ? rootNewsQuality : newsImpact?.data_quality?.status}
-          reason={newsImpact?.data_quality?.reason || newsImpact?.data_quality?.summary}
-        />
-      )}
-    </div>
-  );
-}
-
-NewsSourceStatus.propTypes = {
-  relatedNews: PropTypes.object,
-  newsImpact: PropTypes.object,
-  result: PropTypes.object,
-};
-
 export default function NewsTab({ result }) {
   const relatedNews = result?.related_news || {};
   const newsImpact = result?.news_impact || {};
@@ -286,12 +221,6 @@ export default function NewsTab({ result }) {
   const highImpactItems = dedupeNewsItems(highImpactItemsRaw);
   const fullNewsItems = excludeNewsItems(fullNewsItemsRaw, highImpactItems);
   const companyNewsQuality = getFieldQuality(result?.data_quality, 'company_news');
-  const duplicateRemovedCount =
-    newsImpact.duplicate_excluded_count ??
-    newsImpact.duplicate_removed_count ??
-    result?.news?.duplicate_removed_count ??
-    result?.news?.dedup_removed_count;
-
   if (!hasNewsPayload(result)) {
     return (
       <div className="px-4 py-4 border-b border-bloomberg-border">
@@ -305,32 +234,6 @@ export default function NewsTab({ result }) {
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border space-y-4">
       <section>
-        <SectionHeader label="NEWS" />
-        <div className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-          {relatedNews.summary || `Top related news for ${result.ticker || 'this ticker'}.`}
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2 font-mono text-[11px] text-bloomberg-muted">
-          <SummaryMetric label="SOURCE" value={formatSourceValue(relatedNews, newsImpact)} />
-          <SummaryMetric label="LOOKBACK" value={`${relatedNews.lookback_days || 'N/A'} days`} />
-          <SummaryMetric
-            label="FETCHED"
-            value={newsImpact.news_count ?? relatedNews.total_fetched ?? 'N/A'}
-          />
-          <SummaryMetric label="DEDUPED" value={newsImpact.deduplicated_count ?? 'N/A'} />
-          <SummaryMetric label="HIGH IMPACT" value={highImpactItems.length} />
-          <SummaryMetric label="FULL LIST" value={fullNewsItems.length} />
-          <SummaryMetric
-            label="DUPLICATE REMOVED"
-            value={newsImpact.duplicate_excluded_count ?? 0}
-          />
-          <SummaryMetric label="SENTIMENT" value={displayLabel(newsImpact.overall_sentiment)} />
-          <SummaryMetric label="SENTIMENT SCORE" value={newsImpact.sentiment_score ?? 'N/A'} />
-        </div>
-        <SourceConfidenceSummary breakdown={newsImpact.data_quality?.source_confidence_breakdown} />
-        <NewsSourceStatus relatedNews={relatedNews} newsImpact={newsImpact} result={result} />
-      </section>
-
-      <section>
         <SectionHeader label="HIGH-IMPACT NEWS" />
         {highImpactItems.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -340,7 +243,6 @@ export default function NewsTab({ result }) {
                 item={item}
                 index={index}
                 quality={companyNewsQuality}
-                duplicateRemovedCount={duplicateRemovedCount}
               />
             ))}
           </div>
@@ -398,7 +300,6 @@ export default function NewsTab({ result }) {
                 item={item}
                 index={index}
                 quality={companyNewsQuality}
-                duplicateRemovedCount={duplicateRemovedCount}
               />
             ))}
           </div>

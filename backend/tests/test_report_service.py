@@ -449,6 +449,8 @@ def test_html_report_renders_dynamic_financial_highlights():
     assert "FY26Q1" in html
     assert "Revenue" in html
     assert "N/A" in html
+    assert "<th>Unit</th>" not in html
+    assert "100.0 Mn" in html
     assert "Currency: USD (US Dollar)" in html
     assert "Latest Market Snapshot" in html
     assert "Market &amp; Scale" in html
@@ -581,8 +583,8 @@ def test_html_report_renders_phase_3_chart_and_news_summaries():
     assert report["high_impact_news_items"][0]["title"] == "NVIDIA earnings remain resilient"
     assert report["positive_catalysts"][0]["label"] == "Positive earnings catalyst"
     assert report["analyst_consensus_rows"]
-    assert "Technical Entry Quality" in html
-    assert "News Impact Summary" in html
+    assert "Technical Entry Quality" not in html
+    assert "News Impact Summary" not in html
     assert "Catalyst Tracker" in html
     assert "Analyst Recommendation Trend" in html
 
@@ -640,13 +642,20 @@ def test_html_report_renders_phase_4_risk_data_quality_sections():
     assert report["risk_adjusted_return_rows"]
     assert report["thesis_monitor_rows"]
     assert report["vendor_status_rows"]
-    assert "Risk Summary" in html
     assert "Market Risk" in html
     assert "Risk-Adjusted Return" in html
-    assert "Thesis Monitor" in html
-    assert "Source Confidence &amp; Data Quality" in html
-    assert "Vendor Status" in html
-    assert "Calculation Notes" in html
+    assert "Risk Summary" not in html
+    assert "Thesis Monitor" not in html
+    assert "Source Confidence &amp; Data Quality" not in html
+    assert "Vendor Status" not in html
+    assert "Missing Fields" not in html
+    assert "Stale Data Warning" not in html
+    assert "Calculation Notes" not in html
+    assert "Validation Warnings" not in html
+    assert "Data Quality Notes" not in html
+    assert "Data quality: partial" not in html
+    assert "Data quality: complete" not in html
+    assert "Label: expensive. EV/EBITDA is compared with the documented base policy multiple." not in html
 
 
 def test_html_report_hides_unavailable_price_chart_summary():
