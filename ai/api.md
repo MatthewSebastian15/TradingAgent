@@ -609,12 +609,12 @@ Query:
 
 | Field | Required | Rule |
 |---|---|---|
-| `provider` | yes | `marketaux` atau `newsdata`. |
+| `provider` | yes | `google_news_light`, `marketaux`, atau `newsdata`. |
 | `window_days` | no | 1 sampai 365, default 30. |
 | `limit` | no | 1 sampai 100, default 20. |
 | `include_raw` | no | Boolean, default false. |
 
-Jika `provider` bukan `marketaux` atau `newsdata`, backend mengembalikan
+Jika `provider` bukan `google_news_light`, `marketaux`, atau `newsdata`, backend mengembalikan
 `BAD_REQUEST`.
 
 ## Reports API

@@ -610,16 +610,17 @@ backend/.env.example
 | Variable | Default | Fungsi |
 |---|---|---|
 | `ALPHA_VANTAGE_API_KEY` | blank | Optional market/news/fundamental fallback. |
-| `MARKETAUX_API_KEY` | blank | Structured company news primary. |
-| `NEWSDATA_API_KEY` | blank | Structured company news secondary. |
+| `GOOGLE_NEWS_LIGHT_API_KEY` | blank | SearchAPI.io Google News Light primary. |
+| `MARKETAUX_API_KEY` | blank | Structured company news fallback. |
+| `NEWSDATA_API_KEY` | blank | Structured company news secondary fallback. |
 | `FINNHUB_API_KEY` | blank | Optional Finnhub fallback/enrichment. |
 
 ### News Provider
 
 | Variable | Default | Fungsi |
 |---|---:|---|
-| `NEWS_PROVIDER_PRIORITY` | `marketaux,newsdata` | Urutan provider structured news. |
-| `NEWS_ENABLED_PROVIDERS` | `marketaux,newsdata` | Provider news aktif. |
+| `NEWS_PROVIDER_PRIORITY` | `google_news_light,marketaux,newsdata` | Urutan provider structured news. |
+| `NEWS_ENABLED_PROVIDERS` | `google_news_light,marketaux,newsdata` | Provider news aktif. |
 | `NEWS_DEFAULT_WINDOW_DAYS` | `30` | Window default news. |
 | `NEWS_MAX_ARTICLES_PER_PROVIDER` | `10` | Limit artikel per provider. |
 | `NEWS_MAX_ARTICLES_FOR_PROMPT` | `5` | Artikel masuk prompt. |
@@ -680,7 +681,7 @@ backend/.env.example
 | `DATA_VENDOR_TECHNICAL_INDICATORS` | `yfinance,finnhub,alpha_vantage` | Technical data source before local calculation. |
 | `DATA_VENDOR_FUNDAMENTAL_DATA` | `yfinance,finnhub,alpha_vantage` | Fundamental data. |
 | `DATA_VENDOR_FINANCIAL_STATEMENTS` | `yfinance,alpha_vantage,finnhub` | Financial statements. |
-| `DATA_VENDOR_NEWS_DATA` | `marketaux,newsdata,yfinance,finnhub,alpha_vantage` | Company news. |
+| `DATA_VENDOR_NEWS_DATA` | `google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage` | Company news. |
 | `DATA_VENDOR_GLOBAL_NEWS_DATA` | `yfinance,finnhub,alpha_vantage` | Global/macro news. |
 | `DATA_VENDOR_SENTIMENT_DATA` | `finnhub,alpha_vantage` | News sentiment. |
 | `DATA_VENDOR_SOCIAL_SENTIMENT` | `finnhub` | Social sentiment. |

@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta
 import time
+from datetime import datetime, timedelta
 from io import StringIO
 from typing import Any
 
@@ -105,6 +105,7 @@ from .finnhub_stock import (
 from .finnhub_stock import (
     get_stock as get_finnhub_stock,
 )
+from .google_news_light import get_news as get_google_news_light_news
 from .idx_official import (
     get_idx_company_profile,
     get_idx_corporate_actions,
@@ -278,6 +279,7 @@ _PERSISTENT_TOOL_CACHE_CONFIG = None
 
 VENDOR_LIST = [
     "idx_official",
+    "google_news_light",
     "marketaux",
     "newsdata",
     "yfinance",
@@ -336,6 +338,7 @@ VENDOR_METHODS = {
     },
     # news_data
     "get_news": {
+        "google_news_light": get_google_news_light_news,
         "marketaux": get_marketaux_news,
         "newsdata": get_newsdata_news,
         "yfinance": get_news_yfinance,
@@ -820,9 +823,9 @@ def route_to_all_vendors(
                 if quality is not None:
                     detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or [detail])
                 errors.append(f"{vendor}: {detail}")
-                _record_attempt(config, method, vendor, "empty", detail)
+                _record_attempt(config, method, vendor, "empty", detail, duration_ms=duration_ms)
                 continue
-            _record_attempt(config, method, vendor, "success")
+            _record_attempt(config, method, vendor, "success", duration_ms=duration_ms)
             results[vendor] = result
         except AlphaVantagePermanentError as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
@@ -843,4 +846,3 @@ def route_to_all_vendors(
     if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends", "get_corporate_actions"}:
         return {"optional": f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"}
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")
-

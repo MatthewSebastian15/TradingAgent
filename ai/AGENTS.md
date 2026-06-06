@@ -88,7 +88,7 @@ TradingAgents/
 | Agent engine | LangGraph, LangChain, package `tradingagents` versi 0.2.4 |
 | LLM provider | Google, OpenAI, Anthropic, DeepSeek, OpenRouter, Ollama |
 | Market data | yfinance, Finnhub, Alpha Vantage |
-| News data | MarketAux, NewsData.io, yfinance fallback, optional Finnhub/Alpha Vantage |
+| News data | Google News Light, MarketAux, NewsData.io, yfinance fallback, optional Finnhub/Alpha Vantage |
 | Frontend | React 18.3.1, React Router 6.28.0, Vite 8.0.13 |
 | Frontend style | Tailwind CSS 3.4.17, Bloomberg-style tokens |
 | Frontend test | Vitest 4.1.7, Testing Library |

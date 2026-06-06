@@ -302,8 +302,9 @@ Implication:
 
 ## ADR-016: Structured News Service
 
-Decision: Company news memakai `NewsService` dengan MarketAux dan NewsData.io
-sebagai provider structured utama, lalu yfinance fallback jika diaktifkan.
+Decision: Company news memakai `NewsService` dengan Google News Light sebagai
+provider structured utama, MarketAux/NewsData.io sebagai fallback, lalu
+yfinance fallback jika diaktifkan.
 
 Reason:
 

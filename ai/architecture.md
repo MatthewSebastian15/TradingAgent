@@ -380,7 +380,7 @@ Data collection mengumpulkan:
 | Fundamentals | yfinance, Finnhub, Alpha Vantage via router. |
 | Balance sheet, income statement, cash flow | Quarterly dan annual statement. |
 | Company profile | `company_profile.builder`. |
-| Company news | `NewsService`, MarketAux/NewsData/yfinance fallback. |
+| Company news | `NewsService`, Google News Light/MarketAux/NewsData/yfinance fallback. |
 | Global news | Vendor router. |
 | News impact | `news_intelligence.build_news_impact`. |
 | Catalyst tracker | `build_catalyst_tracker`. |
@@ -414,7 +414,7 @@ DATA_VENDOR_QUOTE_DATA=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_TECHNICAL_INDICATORS=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_FUNDAMENTAL_DATA=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_FINANCIAL_STATEMENTS=yfinance,alpha_vantage,finnhub
-DATA_VENDOR_NEWS_DATA=marketaux,newsdata,yfinance,finnhub,alpha_vantage
+DATA_VENDOR_NEWS_DATA=google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage
 DATA_VENDOR_GLOBAL_NEWS_DATA=yfinance,finnhub,alpha_vantage
 DATA_VENDOR_SENTIMENT_DATA=finnhub,alpha_vantage
 DATA_VENDOR_SOCIAL_SENTIMENT=finnhub

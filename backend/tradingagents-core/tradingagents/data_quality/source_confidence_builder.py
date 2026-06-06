@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-KNOWN_VENDORS = ("idx_official", "yfinance", "alpha_vantage", "finnhub", "marketaux", "newsdata")
+KNOWN_VENDORS = ("idx_official", "yfinance", "alpha_vantage", "finnhub", "google_news_light", "marketaux", "newsdata")
 SUCCESS_STATUSES = {"success", "cache_hit", "ok", "complete"}
 PARTIAL_STATUSES = {"partial", "fallback"}
 RATE_LIMIT_STATUSES = {"rate_limited"}
@@ -369,6 +369,7 @@ def _vendor_status(result: dict[str, Any], missing_fields: list[dict[str, Any]])
         "yfinance": ["price_chart", "company_profile", "financial_highlights"],
         "alpha_vantage": ["financial_highlights", "financial_trends"],
         "finnhub": ["company_profile", "analyst_consensus", "news_impact"],
+        "google_news_light": ["news_impact"],
         "marketaux": ["news_impact"],
         "newsdata": ["news_impact"],
     }

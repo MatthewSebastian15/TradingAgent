@@ -334,7 +334,7 @@ def _safe_structured_company_news(
     try:
         vendor_order = get_field_vendor_order("company_news", ticker)
         news_config = dict(get_config().get("news") or {})
-        provider_priority = [vendor for vendor in vendor_order if vendor in {"marketaux", "newsdata"}]
+        provider_priority = [vendor for vendor in vendor_order if vendor in {"google_news_light", "marketaux", "newsdata"}]
         if provider_priority:
             news_config["provider_priority"] = provider_priority
         news_config["enable_yfinance_fallback"] = "yfinance" in vendor_order
@@ -365,6 +365,8 @@ def _detect_current_news_source(line: str, fallback: str = "unknown") -> str:
         return match.group(1).strip().lower().replace(" ", "_") or fallback
 
     lowered = line.lower()
+    if "google news light" in lowered or "google_news_light" in lowered:
+        return "google_news_light"
     if "marketaux" in lowered:
         return "marketaux"
     if "newsdata" in lowered:
@@ -1184,6 +1186,8 @@ def _build_data_quality(
 def _detect_sources_from_text(text: str) -> list[str]:
     lowered = (text or "").lower()
     sources: list[str] = []
+    if "google news light" in lowered or "google_news_light" in lowered:
+        sources.append("google_news_light")
     if "marketaux" in lowered:
         sources.append("marketaux")
     if "newsdata" in lowered:

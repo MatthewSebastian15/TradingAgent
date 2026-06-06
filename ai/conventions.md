@@ -153,7 +153,7 @@ unit, integration, smoke, live_api
 
 Rules:
 
-- Unit test tidak boleh memanggil yfinance, Finnhub, MarketAux, NewsData, Alpha
+- Unit test tidak boleh memanggil yfinance, Finnhub, Google News Light, MarketAux, NewsData, Alpha
   Vantage, atau LLM live.
 - Mock external call.
 - Test route pakai TestClient atau async client sesuai pola existing.

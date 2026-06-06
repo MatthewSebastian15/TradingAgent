@@ -79,3 +79,16 @@ def test_debug_news_endpoint_is_registered_in_development_with_raw_response_disa
             "include_raw": False,
         }
     ]
+
+
+def test_debug_news_endpoint_accepts_google_news_light(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "routes.news._fetch_news",
+        lambda ticker, **kwargs: calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker),
+    )
+
+    response = _news_client(is_development=True).get("/api/debug/news/BBCA.JK?provider=google_news_light")
+
+    assert response.status_code == 200
+    assert calls[0]["provider"] == "google_news_light"
