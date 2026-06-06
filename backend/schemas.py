@@ -28,7 +28,7 @@ class ErrorEnvelope(ApiSchema):
 class FinancialHighlightPeriod(ApiSchema):
     key: str
     label: str
-    type: Literal["annual", "quarter"]
+    type: Literal["annual", "quarter", "quarterly", "ttm"]
     year: int
     quarter: int | None = None
 
@@ -137,6 +137,7 @@ class AnalysisOverview(ApiSchema):
     executive_summary: str | None = None
     investment_thesis: str | None = None
     key_reasons: list[str] = Field(default_factory=list)
+    key_reasons_paragraph: str | None = None
     action_plan: AnalysisOverviewActionPlan
     risk_summary: AnalysisOverviewRiskSummary
 
@@ -347,7 +348,10 @@ class AnalysisResponse(ApiSchema):
     agents_used: list[str] = Field(default_factory=list)
     time_horizon_months: int | None = None
     analysis_overview: AnalysisOverview | dict[str, Any] | None = None
+    key_reasons_paragraph: str | None = None
     financial_highlights: FinancialHighlightsResponse | None = None
+    normalized_period_rows: list[dict[str, Any]] = Field(default_factory=list)
+    derived_fundamentals: list[dict[str, Any]] = Field(default_factory=list)
     financial_trends: dict[str, Any] | None = None
     valuation_multiples: dict[str, Any] | None = None
     fair_value_range: dict[str, Any] | None = None

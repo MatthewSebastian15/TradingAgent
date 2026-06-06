@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta
 from io import StringIO
 from typing import Any
@@ -53,6 +54,7 @@ from .data_quality import (
 )
 from .finnhub_common import (
     FinnhubRateLimitError,
+    FinnhubUnavailableError,
     feature_for_method,
     is_finnhub_feature_enabled,
 )
@@ -104,10 +106,17 @@ from .finnhub_stock import (
 from .finnhub_stock import (
     get_stock as get_finnhub_stock,
 )
+from .google_news_light import get_news as get_google_news_light_news
+from .idx_official import (
+    get_idx_company_profile,
+    get_idx_corporate_actions,
+    get_idx_financial_statements,
+)
 from .marketaux_news import get_news as get_marketaux_news
 from .newsdata_news import get_news as get_newsdata_news
+from .source_priority import get_field_vendor_order
 from .vendor_budget import get_budget
-from .vendor_router import get_attempt_recorder, sanitize_error
+from .vendor_router import VendorAttempt, get_attempt_recorder, sanitize_error
 from .y_finance import (
     get_balance_sheet as get_yfinance_balance_sheet,
 )
@@ -116,6 +125,9 @@ from .y_finance import (
 )
 from .y_finance import (
     get_company_profile as get_yfinance_company_profile,
+)
+from .y_finance import (
+    get_corporate_actions as get_yfinance_corporate_actions,
 )
 from .y_finance import (
     get_fundamentals as get_yfinance_fundamentals,
@@ -252,6 +264,10 @@ TOOLS_CATEGORIES = {
         "description": "Earnings and event-risk context",
         "tools": ["get_earnings_calendar"],
     },
+    "corporate_actions": {
+        "description": "Corporate actions, splits and dividends",
+        "tools": ["get_corporate_actions"],
+    },
     "analyst_rating": {
         "description": "External analyst recommendation trends",
         "tools": ["get_recommendation_trends"],
@@ -263,6 +279,8 @@ _PERSISTENT_TOOL_CACHE = None
 _PERSISTENT_TOOL_CACHE_CONFIG = None
 
 VENDOR_LIST = [
+    "idx_official",
+    "google_news_light",
     "marketaux",
     "newsdata",
     "yfinance",
@@ -296,27 +314,32 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_fundamentals,
     },
     "get_company_profile": {
+        "idx_official": get_idx_company_profile,
         "yfinance": get_yfinance_company_profile,
         "finnhub": get_finnhub_company_profile,
         "alpha_vantage": get_alpha_vantage_company_profile,
     },
     "get_balance_sheet": {
+        "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
         "yfinance": get_yfinance_balance_sheet,
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "finnhub": get_finnhub_balance_sheet,
     },
     "get_cashflow": {
+        "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
         "yfinance": get_yfinance_cashflow,
         "alpha_vantage": get_alpha_vantage_cashflow,
         "finnhub": get_finnhub_cashflow,
     },
     "get_income_statement": {
+        "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
         "yfinance": get_yfinance_income_statement,
         "alpha_vantage": get_alpha_vantage_income_statement,
         "finnhub": get_finnhub_income_statement,
     },
     # news_data
     "get_news": {
+        "google_news_light": get_google_news_light_news,
         "marketaux": get_marketaux_news,
         "newsdata": get_newsdata_news,
         "yfinance": get_news_yfinance,
@@ -349,6 +372,10 @@ VENDOR_METHODS = {
     "get_insider_sentiment": {
         "finnhub": get_finnhub_insider_sentiment,
     },
+    "get_corporate_actions": {
+        "idx_official": get_idx_corporate_actions,
+        "yfinance": get_yfinance_corporate_actions,
+    },
 }
 
 
@@ -370,6 +397,7 @@ TICKER_FIRST_ARG_METHODS = {
     "get_recommendation_trends",
     "get_insider_transactions",
     "get_insider_sentiment",
+    "get_corporate_actions",
 }
 
 
@@ -466,10 +494,17 @@ def _quality_for_result(method: str, result: Any) -> dict[str, Any] | None:
         return {"available": False, "confidence": "unavailable", "warnings": [sanitize_error(exc)]}
 
 
-def _record_attempt(config: dict, method: str, vendor: str, status: str, detail: str | None = None) -> None:
+def _record_attempt(
+    config: dict,
+    method: str,
+    vendor: str,
+    status: str,
+    detail: str | None = None,
+    duration_ms: int | None = None,
+) -> None:
     recorder = get_attempt_recorder(config.get("_vendor_attempt_recorder_id"))
     if recorder is not None:
-        recorder.record(method, vendor, status, detail)
+        recorder.record(method, vendor, status, detail, duration_ms=duration_ms)
 
 
 def _consume_budget(config: dict, method: str, vendor: str) -> tuple[bool, str | None]:
@@ -490,7 +525,7 @@ def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, st
     fallback_methods = {"get_stock_data", "get_quote", "get_indicators"}
     if method in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_fallback", True)):
         return False, "Finnhub fallback disabled by DATA_VENDOR_ENABLE_FINNHUB_FALLBACK"
-    if method not in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_enrichment", False)):
+    if method not in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_enrichment", True)):
         return False, "Finnhub enrichment disabled by DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT"
     feature_key = feature_for_method(method)
     if not is_finnhub_feature_enabled(feature_key):
@@ -536,7 +571,7 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         max_delay=10.0,
         circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
         circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
-        should_retry=lambda exc: not isinstance(exc, AlphaVantagePermanentError),
+        should_retry=lambda exc: not isinstance(exc, (AlphaVantagePermanentError, FinnhubUnavailableError)),
     )
     cache.set(cache_key, result)
     return result
@@ -581,8 +616,82 @@ def get_tool_cache_stats() -> dict:
     }
 
 
-def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, **kwargs):
+def extract_vendor_numeric_value(result: Any, field_name: str) -> float | None:
+    """Extract a comparable numeric value from a vendor payload for validation."""
+    if result in (None, "", [], {}):
+        return None
+
+    if isinstance(result, (int, float)) and not isinstance(result, bool):
+        value = float(result)
+        return value if value == value else None
+
+    if isinstance(result, dict):
+        keys = (
+            field_name,
+            "value",
+            "current_price",
+            "price",
+            "last",
+            "last_price",
+            "close",
+            "regularMarketPrice",
+            "c",
+            "market_cap",
+            "marketCap",
+            "volume",
+            "revenue",
+            "ebitda",
+            "net_profit",
+            "netIncome",
+            "total_assets",
+            "assets",
+            "equity",
+        )
+        for key in keys:
+            value = result.get(key)
+            if isinstance(value, dict):
+                value = value.get("normalized_value") or value.get("value") or value.get("raw_value")
+            try:
+                number = float(str(value).replace(",", ""))
+            except (TypeError, ValueError):
+                continue
+            if number == number:
+                return number
+    return None
+
+
+def collect_vendor_values(vendor_results: dict[str, Any], field_name: str) -> dict[str, float]:
+    values: dict[str, float] = {}
+    for vendor, result in (vendor_results or {}).items():
+        numeric = extract_vendor_numeric_value(result, field_name)
+        if numeric is not None:
+            values[str(vendor)] = numeric
+    return values
+
+
+def collect_vendor_numeric_values(vendor_results: dict[str, Any], field_name: str) -> dict[str, float]:
+    """Backward-compatible alias for older tests/imports."""
+    return collect_vendor_values(vendor_results, field_name)
+
+def _attach_attempt_metadata(result: Any, attempts: list[VendorAttempt]) -> Any:
+    if isinstance(result, dict):
+        enriched = dict(result)
+        metadata = dict(enriched.get("metadata") or {})
+        metadata["vendor_attempts"] = [attempt.to_dict() for attempt in attempts]
+        enriched["metadata"] = metadata
+        return enriched
+    return result
+
+
+def route_to_vendor(
+    method: str,
+    *args,
+    vendor_order: list[str] | None = None,
+    field_name: str | None = None,
+    **kwargs,
+):
     """Route method calls to vendors with fallback, budget, attempts, timeout, retry and cache."""
+    _ = field_name
     config = get_config()
 
     if method not in VENDOR_METHODS:
@@ -590,74 +699,101 @@ def route_to_vendor(method: str, *args, vendor_order: list[str] | None = None, *
 
     errors = []
     first_unusable_result = None
+    local_attempts: list[VendorAttempt] = []
+
+    def record(vendor: str, status: str, detail: str | None = None, duration_ms: int | None = None) -> None:
+        normalized = {
+            "disabled": "skipped",
+            "unsupported": "skipped",
+            "unavailable": "empty",
+            "failure": "failed",
+        }.get(status, status)
+        reason = sanitize_error(detail) if detail else None
+        _record_attempt(config, method, vendor, normalized, reason, duration_ms=duration_ms)
+        local_attempts.append(
+            VendorAttempt(vendor=vendor, status=normalized, reason=reason, duration_ms=duration_ms)
+        )
+
+    attach_metadata = bool(config.get("_vendor_attempt_recorder_id"))
+
     for vendor in vendor_order or _vendor_sequence(method):
         if vendor not in VENDOR_METHODS[method]:
-            _record_attempt(config, method, vendor, "unsupported")
+            record(vendor, "unsupported", f"Method {method} is not implemented for {vendor}")
             continue
         enabled, disabled_reason = _is_vendor_enabled(method, vendor, config)
         if not enabled:
             errors.append(f"{vendor}: {disabled_reason}")
-            _record_attempt(config, method, vendor, "disabled", disabled_reason)
+            record(vendor, "disabled", disabled_reason)
             continue
+        start = time.perf_counter()
         try:
             result = _call_vendor(method, vendor, args, kwargs, config)
+            duration_ms = int((time.perf_counter() - start) * 1000)
             quality = _quality_for_result(method, result)
             if quality is not None and quality.get("available") is False:
                 if first_unusable_result is None:
                     first_unusable_result = result
                 detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or ["quality unavailable"])
                 errors.append(f"{vendor}: invalid quality: {detail}")
-                _record_attempt(config, method, vendor, "unavailable", detail)
+                record(vendor, "unavailable", detail, duration_ms=duration_ms)
                 continue
             if _is_unusable_result(result):
                 if first_unusable_result is None:
                     first_unusable_result = result
-                errors.append(f"{vendor}: empty or unusable response")
-                _record_attempt(config, method, vendor, "unavailable", "empty or unusable response")
+                detail = str(result.get("reason") if isinstance(result, dict) else "empty or unusable response")
+                errors.append(f"{vendor}: {detail or 'empty or unusable response'}")
+                record(vendor, "unavailable", detail or "empty or unusable response", duration_ms=duration_ms)
                 continue
             status = "partial" if quality and quality.get("confidence") in {"low", "medium"} else "success"
-            _record_attempt(config, method, vendor, status)
-            return result
+            record(vendor, status, duration_ms=duration_ms)
+            return _attach_attempt_metadata(result, local_attempts) if attach_metadata else result
         except AlphaVantagePermanentError as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
-            _record_attempt(config, method, vendor, "unavailable", sanitize_error(exc))
+            record(vendor, "unavailable", sanitize_error(exc), duration_ms=int((time.perf_counter() - start) * 1000))
             continue
         except (AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
             errors.append(f"{vendor}: rate limited: {sanitize_error(exc)}")
-            _record_attempt(config, method, vendor, "rate_limited", sanitize_error(exc))
+            record(vendor, "rate_limited", sanitize_error(exc), duration_ms=int((time.perf_counter() - start) * 1000))
             continue
         except Exception as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
             status = "budget_exceeded" if "budget" in str(exc).lower() else "failure"
-            _record_attempt(config, method, vendor, status, sanitize_error(exc))
+            record(vendor, status, sanitize_error(exc), duration_ms=int((time.perf_counter() - start) * 1000))
             continue
 
     if first_unusable_result is not None:
-        return first_unusable_result
-    if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends"}:
-        return f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"
+        return _attach_attempt_metadata(first_unusable_result, local_attempts) if attach_metadata else first_unusable_result
+    if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends", "get_corporate_actions"}:
+        return {"available": False, "source": "unavailable", "corporate_actions": [], "reason": f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"} if method == "get_corporate_actions" else f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"
     if method == "get_quote":
         return {"available": False, "source": "unavailable", "reason": " | ".join(errors) or "no configured vendor"}
 
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")
-
 
 def get_quote(ticker: str, curr_date: str | None = None) -> dict[str, Any]:
     return route_to_vendor(
         "get_quote",
         ticker,
         curr_date,
-        vendor_order=["yfinance", "finnhub", "alpha_vantage"],
+        vendor_order=get_field_vendor_order("quote", ticker),
+        field_name="quote",
     )
 
 
-def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
+def route_to_all_vendors(
+    method: str,
+    *args,
+    vendor_order: list[str] | None = None,
+    field_name: str | None = None,
+    **kwargs,
+) -> dict[str, Any]:
     """Return usable payloads from every configured/supported vendor.
 
     This is intentionally used only for fields where multi-source context is
     worth the extra calls, such as news. Single-source fields should keep using
     route_to_vendor to avoid consuming provider quotas unnecessarily.
     """
+    _ = field_name
     config = get_config()
     if method not in VENDOR_METHODS:
         raise ValueError(f"Method '{method}' not supported")
@@ -665,14 +801,21 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
     results: dict[str, Any] = {}
     errors: list[str] = []
     first_unusable: tuple[str, Any] | None = None
-    for vendor in _vendor_sequence(method):
+    for vendor in vendor_order or _vendor_sequence(method):
+        if vendor not in VENDOR_METHODS[method]:
+            reason = f"Method {method} is not implemented for {vendor}"
+            errors.append(f"{vendor}: {reason}")
+            _record_attempt(config, method, vendor, "skipped", reason)
+            continue
         enabled, disabled_reason = _is_vendor_enabled(method, vendor, config)
         if not enabled:
             errors.append(f"{vendor}: {disabled_reason}")
-            _record_attempt(config, method, vendor, "disabled", disabled_reason)
+            _record_attempt(config, method, vendor, "skipped", disabled_reason)
             continue
+        start = time.perf_counter()
         try:
             result = _call_vendor(method, vendor, args, kwargs, config)
+            duration_ms = int((time.perf_counter() - start) * 1000)
             quality = _quality_for_result(method, result)
             if (quality is not None and quality.get("available") is False) or _is_unusable_result(result):
                 if first_unusable is None:
@@ -681,19 +824,19 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
                 if quality is not None:
                     detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or [detail])
                 errors.append(f"{vendor}: {detail}")
-                _record_attempt(config, method, vendor, "unavailable", detail)
+                _record_attempt(config, method, vendor, "empty", detail, duration_ms=duration_ms)
                 continue
-            _record_attempt(config, method, vendor, "success")
+            _record_attempt(config, method, vendor, "success", duration_ms=duration_ms)
             results[vendor] = result
         except AlphaVantagePermanentError as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
-            _record_attempt(config, method, vendor, "unavailable", sanitize_error(exc))
+            _record_attempt(config, method, vendor, "empty", sanitize_error(exc))
         except (AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
             errors.append(f"{vendor}: rate limited: {sanitize_error(exc)}")
             _record_attempt(config, method, vendor, "rate_limited", sanitize_error(exc))
         except Exception as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
-            status = "budget_exceeded" if "budget" in str(exc).lower() else "failure"
+            status = "budget_exceeded" if "budget" in str(exc).lower() else "failed"
             _record_attempt(config, method, vendor, status, sanitize_error(exc))
 
     if results:
@@ -701,6 +844,6 @@ def route_to_all_vendors(method: str, *args, **kwargs) -> dict[str, Any]:
     if first_unusable is not None:
         vendor, result = first_unusable
         return {vendor: result}
-    if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends"}:
+    if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends", "get_corporate_actions"}:
         return {"optional": f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"}
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")

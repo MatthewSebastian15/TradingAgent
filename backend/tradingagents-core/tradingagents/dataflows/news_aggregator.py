@@ -49,36 +49,46 @@ def _parse_dt(value: Any) -> datetime:
 
 def deduplicate_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen_urls: set[str] = set()
-    seen_titles: list[str] = []
+    seen_titles: set[str] = set()
+    seen_similar_titles: list[str] = []
     seen_publisher_date_title: set[str] = set()
     result: list[dict[str, Any]] = []
+
     for item in items:
+        if not isinstance(item, dict):
+            continue
+
         title = str(item.get("title") or item.get("headline") or "")
         normalized_title = normalize_title(title)
         normalized_url = normalize_url(str(item.get("url") or ""))
         publisher = str(item.get("publisher") or item.get("source") or "").lower().strip()
         published_date = str(item.get("published_at") or item.get("datetime") or "")[:10]
-        publisher_key = f"{publisher}:{published_date}:{normalized_title}"
+        publisher_key = f"{publisher}:{published_date}:{normalized_title}" if normalized_title else ""
 
+        if not normalized_title:
+            continue
         if normalized_url and normalized_url in seen_urls:
             continue
-        if normalized_title and normalized_title in seen_titles:
+        if normalized_title in seen_titles:
             continue
-        if normalized_title and any(similar_title(normalized_title, existing) for existing in seen_titles):
+        if any(similar_title(normalized_title, existing) for existing in seen_similar_titles):
             continue
         if publisher_key and publisher_key in seen_publisher_date_title:
             continue
 
         if normalized_url:
             seen_urls.add(normalized_url)
-        if normalized_title:
-            seen_titles.append(normalized_title)
+        seen_titles.add(normalized_title)
+        seen_similar_titles.append(normalized_title)
         if publisher_key:
             seen_publisher_date_title.add(publisher_key)
+
         enriched = dict(item)
+        enriched["normalized_title"] = normalized_title
         if normalized_url:
             enriched["normalized_url"] = normalized_url
         result.append(enriched)
+
     return result
 
 
@@ -100,12 +110,14 @@ def rank_news(items: list[dict[str, Any]], ticker: str | None = None) -> list[di
 
 
 def aggregate_news(
-    vendor_items: dict[str, list[dict[str, Any]]], ticker: str | None = None, limit: int = 25
+    vendor_items: dict[str, list[dict[str, Any]]], ticker: str | None = None, limit: int | None = None
 ) -> list[dict[str, Any]]:
+    # Backward-compatible limit only. Aggregated news should not be capped after collection.
+    _ = limit
     merged: list[dict[str, Any]] = []
     for vendor, items in vendor_items.items():
         for item in items:
             row = dict(item)
             row.setdefault("source", vendor)
             merged.append(row)
-    return rank_news(deduplicate_news(merged), ticker=ticker)[: max(1, int(limit or 25))]
+    return rank_news(deduplicate_news(merged), ticker=ticker)

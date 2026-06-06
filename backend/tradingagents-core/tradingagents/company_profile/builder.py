@@ -153,6 +153,7 @@ def build_company_profile(
     ticker: str,
     fetch_vendor: Callable[[str], Any] | None = None,
     vendor_payloads: Mapping[str, Any] | None = None,
+    vendor_order: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     """Build one canonical profile while limiting fallback vendor calls."""
     profile: dict[str, Any] = {field: None for field in PROFILE_FIELDS}
@@ -162,8 +163,9 @@ def build_company_profile(
     field_sources: dict[str, str] = {}
     warnings: list[str] = []
 
-    for vendor in ("yfinance", "finnhub", "alpha_vantage"):
-        if vendor != "yfinance" and not _needs_enrichment(profile):
+    ordered_vendors = list(vendor_order or ("yfinance", "finnhub", "alpha_vantage"))
+    for vendor in ordered_vendors:
+        if sources_used and not _needs_enrichment(profile):
             break
         try:
             raw_payload = vendor_payloads.get(vendor) if vendor_payloads is not None else fetch_vendor(vendor)

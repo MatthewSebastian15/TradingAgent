@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-KNOWN_VENDORS = ("yfinance", "alpha_vantage", "finnhub", "marketaux", "newsdata")
+KNOWN_VENDORS = ("idx_official", "yfinance", "alpha_vantage", "finnhub", "google_news_light", "marketaux", "newsdata")
 SUCCESS_STATUSES = {"success", "cache_hit", "ok", "complete"}
 PARTIAL_STATUSES = {"partial", "fallback"}
 RATE_LIMIT_STATUSES = {"rate_limited"}
@@ -208,6 +208,30 @@ def _parse_date(value: Any) -> date | None:
 
 def _stale_warnings(result: dict[str, Any]) -> list[dict[str, Any]]:
     warnings: list[dict[str, Any]] = []
+    field_quality = _as_dict(_as_dict(result.get("data_quality")).get("field_quality"))
+    for field_name, quality_value in field_quality.items():
+        quality = _as_dict(quality_value)
+        freshness = quality.get("freshness_status") or quality.get("freshness")
+        freshness_payload = _as_dict(freshness)
+        status = str(
+            freshness_payload.get("status")
+            or freshness
+            or quality.get("status")
+            or "unknown"
+        ).lower()
+        is_stale = bool(freshness_payload.get("is_stale")) or status in {"stale", "unknown", "outdated"}
+        if not is_stale:
+            continue
+        warnings.append(
+            {
+                "module": "field_quality",
+                "field": str(field_name),
+                "warning": "; ".join(str(item) for item in (quality.get("warnings") or freshness_payload.get("warnings") or []))
+                or "Field freshness cannot be verified.",
+                "severity": "medium" if status == "stale" else "low",
+            }
+        )
+
     trade_date = _parse_date(result.get("trade_date"))
     price_date = _parse_date(result.get("current_price_as_of") or result.get("last_close_price_as_of"))
     if not price_date:
@@ -277,8 +301,14 @@ def _stale_warnings(result: dict[str, Any]) -> list[dict[str, Any]]:
     return _dedupe_items(warnings, ("module", "field", "warning"))
 
 
-def _parse_attempt(entry: str) -> tuple[str, str, str | None]:
-    vendor, _, rest = entry.partition(":")
+def _parse_attempt(entry: Any) -> tuple[str, str, str | None]:
+    if isinstance(entry, dict):
+        return (
+            str(entry.get("vendor") or "").strip().lower(),
+            str(entry.get("status") or "").strip().lower(),
+            str(entry.get("reason") or entry.get("detail") or "") or None,
+        )
+    vendor, _, rest = str(entry).partition(":")
     status = rest
     detail = None
     if "(" in rest and rest.endswith(")"):
@@ -335,9 +365,11 @@ def _vendor_status(result: dict[str, Any], missing_fields: list[dict[str, Any]])
 
     used_for = _used_for_from_attempts(result)
     module_missing = {
+        "idx_official": ["financial_highlights", "financial_trends", "company_profile"],
         "yfinance": ["price_chart", "company_profile", "financial_highlights"],
         "alpha_vantage": ["financial_highlights", "financial_trends"],
         "finnhub": ["company_profile", "analyst_consensus", "news_impact"],
+        "google_news_light": ["news_impact"],
         "marketaux": ["news_impact"],
         "newsdata": ["news_impact"],
     }

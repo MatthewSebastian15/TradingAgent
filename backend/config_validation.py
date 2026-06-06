@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from config_defaults import (
     REQUIRE_API_KEY_FOR_RATE_LIMIT,
 )
 from config_llm import SUPPORTED_PROVIDERS, build_tradingagents_config, llm
+
+logger = logging.getLogger(__name__)
 
 
 def _has_any_env(*names: str) -> bool:
@@ -43,8 +46,18 @@ PROVIDER_KEY_REQUIREMENTS: dict[str, tuple[tuple[str, ...], str]] = {
 }
 
 
+
+def _warn_finnhub_runtime_mismatch() -> None:
+    api_key = bool(str(os.getenv("FINNHUB_API_KEY") or "").strip())
+    enabled = str(os.getenv("FINNHUB_ENABLED") or "false").strip().lower() in {"1", "true", "yes", "on"}
+    if api_key and not enabled:
+        logger.warning("FINNHUB_API_KEY is set but FINNHUB_ENABLED=false; Finnhub calls will be skipped")
+    if enabled and not api_key:
+        logger.warning("FINNHUB_ENABLED=true but FINNHUB_API_KEY is empty; Finnhub calls will be skipped")
+
 def validate_startup_config() -> list[str]:
     errors: list[str] = []
+    _warn_finnhub_runtime_mismatch()
 
     provider = llm.provider
     if not provider:

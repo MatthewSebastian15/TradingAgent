@@ -54,3 +54,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Graphify outputs
+graphify-out/

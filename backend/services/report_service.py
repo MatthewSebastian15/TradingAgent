@@ -149,6 +149,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "final_decision": final_decision,
         "decision": final_decision,
         "executive_summary": _display(result.get("executive_summary")),
+        "key_reasons_paragraph": _key_reasons_paragraph(result),
         "decision_adjusted": bool(result.get("decision_adjusted")),
         "decision_adjusted_reason": _display(result.get("decision_adjusted_reason")),
         "trade_plan_valid": trade_plan_valid,
@@ -177,13 +178,16 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
         "news_impact": _as_dict(result.get("news_impact")),
         "news_impact_rows": _news_impact_rows(result),
         "high_impact_news_items": _high_impact_news_items(result),
+        "full_news_items": _full_news_items(result),
         "catalyst_tracker": _as_dict(result.get("catalyst_tracker")),
         "positive_catalysts": _catalyst_items(result, "positive_catalysts"),
         "negative_catalysts": _catalyst_items(result, "negative_catalysts"),
         "upcoming_events": _catalyst_items(result, "upcoming_events"),
         "analyst_consensus_rows": _analyst_consensus_rows(result),
         "related_news": _as_dict(result.get("related_news")),
-        "related_news_items": _related_news_items(result),
+        "related_news_items": []
+        if isinstance(_as_dict(result.get("news_impact")).get("full_news_list"), list)
+        else _related_news_items(result),
         "news": _news_context(result),
         "news_articles": _news_articles(result),
         "news_provider_rows": _news_provider_rows(result),
@@ -405,6 +409,54 @@ def _as_text_list(value: Any) -> list[str]:
         if text:
             items.append(text)
     return items
+
+
+def _normalize_inline_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def _truncate_words(text: str, max_words: int = 125) -> str:
+    words = [word for word in _normalize_inline_text(text).split(" ") if word]
+    if len(words) <= max_words:
+        return " ".join(words)
+    return f"{' '.join(words[:max_words])}.".replace("..", ".")
+
+
+def _reason_items(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [_normalize_inline_text(item) for item in value if _normalize_inline_text(item)]
+    text = _normalize_inline_text(value)
+    return [text] if text else []
+
+
+def _key_reasons_paragraph(result: dict[str, Any]) -> str:
+    overview = _as_dict(result.get("analysis_overview"))
+    direct = _normalize_inline_text(overview.get("key_reasons_paragraph") or result.get("key_reasons_paragraph"))
+    if direct:
+        return _truncate_words(direct, 125)
+
+    items: list[str] = []
+    for source in (overview.get("key_reasons"), result.get("key_reasons"), result.get("key_catalysts")):
+        items.extend(_reason_items(source))
+
+    mini_risk_summary = _normalize_inline_text(result.get("mini_risk_summary"))
+    if mini_risk_summary:
+        items.append(mini_risk_summary)
+
+    decision_reason = _normalize_inline_text(result.get("decision_adjusted_reason"))
+    if decision_reason:
+        items.append(decision_reason)
+
+    unique_items = list(dict.fromkeys(item for item in items if item))
+    if not unique_items:
+        return "N/A"
+
+    paragraph = ". ".join(unique_items).strip()
+    if paragraph and not paragraph.endswith("."):
+        paragraph = f"{paragraph}."
+    return _truncate_words(paragraph, 125)
 
 
 def _display(value: Any) -> str:
@@ -809,12 +861,17 @@ def _news_impact_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     if not impact:
         return []
     quality = _as_dict(impact.get("data_quality"))
+    rules = _as_dict(quality.get("rules"))
     return [
         _row("Overall Sentiment", impact.get("overall_sentiment")),
         _row("Sentiment Score", impact.get("sentiment_score")),
-        _row("High Impact Count", len(impact.get("high_impact_news") or [])),
+        _row("High Impact Count", impact.get("high_impact_count") or len(impact.get("high_impact_news") or [])),
+        _row("Full News Count", impact.get("full_news_count") or len(impact.get("full_news_list") or [])),
         _row("News Count", impact.get("news_count")),
         _row("Deduplicated Count", impact.get("deduplicated_count")),
+        _row("Duplicate Removed", impact.get("duplicate_excluded_count")),
+        _row("High Impact Limited", rules.get("high_impact_limited")),
+        _row("Full News Limited", rules.get("full_news_limited")),
         _row("Sources Used", ", ".join(str(item) for item in quality.get("sources_used", []))),
     ]
 
@@ -825,19 +882,26 @@ def _high_impact_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(raw_items, list):
         return []
     items: list[dict[str, Any]] = []
-    for item in raw_items[:5]:
+    for item in raw_items:
         if not isinstance(item, dict) or not item.get("title"):
             continue
         items.append(
             {
                 "title": _display(item.get("title")),
                 "source": _display(item.get("source")),
+                "publisher": _display(item.get("publisher")),
                 "published_at": _display(item.get("published_at")),
                 "sentiment": _display(item.get("sentiment")),
                 "impact": _display(item.get("impact")),
                 "impact_score": _display(item.get("impact_score")),
+                "relevance_score": _display(item.get("relevance_score")),
+                "materiality_category": _display(item.get("materiality_category")),
+                "source_confidence_label": _display(item.get("source_confidence_label")),
+                "news_scope": _display(item.get("scope_label") or item.get("news_scope")),
+                "impact_reason": _display(item.get("impact_reason") or item.get("relevance_reason")),
                 "summary": _display(item.get("summary")),
                 "url": _safe_external_http_url(item.get("url")),
+                "dedupe_key": _display(item.get("dedupe_key")),
             }
         )
     return items
@@ -889,10 +953,7 @@ def _related_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
     items: list[dict[str, Any]] = []
-    for item in raw_items[:8]:
-        if not isinstance(item, dict):
-            continue
-
+    for item in _dedupe_report_news_items(raw_items):
         title = _clean_text(item.get("title"))
         if not title:
             continue
@@ -912,6 +973,79 @@ def _related_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
     return items
 
 
+def _news_dedupe_key(item: dict[str, Any]) -> str:
+    return _clean_text(
+        item.get("dedupe_key")
+        or item.get("normalized_url")
+        or item.get("url")
+        or item.get("normalized_title")
+        or item.get("title")
+    ).lower()
+
+
+def _dedupe_report_news_items(items: list[Any]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    output: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = _clean_text(item.get("title"))
+        if not title:
+            continue
+        key = _news_dedupe_key(item) or title.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+    return output
+
+
+def _full_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
+    impact = _as_dict(result.get("news_impact"))
+    related_news = _as_dict(result.get("related_news"))
+
+    has_full_news_list = isinstance(impact.get("full_news_list"), list) if impact else False
+    raw_items = impact.get("full_news_list") if has_full_news_list else related_news.get("items", [])
+    high_items = impact.get("high_impact_news", []) if impact else []
+
+    if not isinstance(raw_items, list):
+        raw_items = []
+    if not isinstance(high_items, list):
+        high_items = []
+
+    high_keys = {
+        _news_dedupe_key(item)
+        for item in high_items
+        if isinstance(item, dict) and _news_dedupe_key(item)
+    }
+
+    items: list[dict[str, Any]] = []
+    for item in _dedupe_report_news_items(raw_items):
+        key = _news_dedupe_key(item)
+        if key and key in high_keys:
+            continue
+        items.append(
+            {
+                "title": _display(item.get("title")),
+                "publisher": _display(item.get("publisher")),
+                "published_at": _display(item.get("published_at")),
+                "source": _display(item.get("source")),
+                "event_type": _display(item.get("event_type") or item.get("materiality_category")),
+                "materiality_category": _display(item.get("materiality_category")),
+                "news_scope": _display(item.get("scope_label") or item.get("news_scope")),
+                "source_confidence_label": _display(item.get("source_confidence_label")),
+                "impact": _display(item.get("impact")),
+                "impact_score": _display(item.get("impact_score")),
+                "relevance_score": _display(item.get("relevance_score")),
+                "summary": _display(item.get("summary")),
+                "impact_reason": _display(item.get("impact_reason") or item.get("relevance_reason")),
+                "url": _safe_external_http_url(item.get("url")),
+                "dedupe_key": _display(item.get("dedupe_key")),
+            }
+        )
+    return items
+
+
 def _safe_external_http_url(value: Any) -> str | None:
     text = _clean_text(value)
     if not text:
@@ -925,11 +1059,24 @@ def _safe_external_http_url(value: Any) -> str | None:
     return text if parts.scheme.lower() in {"http", "https"} and hostname else None
 
 
+def _normalize_financial_highlight_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "label": _clean_text(row.get("label")) or _clean_text(row.get("key")) or "Metric",
+        "unit": _clean_text(row.get("unit")) or "-",
+        "values": row.get("values") if isinstance(row.get("values"), dict) else {},
+    }
+
+
 def _financial_highlights(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
     periods = [period for period in value.get("periods", []) if isinstance(period, dict) and period.get("key")]
-    rows = [row for row in value.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)]
+    rows = [
+        _normalize_financial_highlight_row(row)
+        for row in value.get("rows", [])
+        if isinstance(row, dict) and isinstance(row.get("values"), dict)
+    ]
     if not periods or not rows:
         return None
     sections = []
@@ -937,7 +1084,9 @@ def _financial_highlights(value: Any) -> dict[str, Any] | None:
         if not isinstance(section, dict):
             continue
         section_rows = [
-            row for row in section.get("rows", []) if isinstance(row, dict) and isinstance(row.get("values"), dict)
+            _normalize_financial_highlight_row(row)
+            for row in section.get("rows", [])
+            if isinstance(row, dict) and isinstance(row.get("values"), dict)
         ]
         if section_rows:
             sections.append({**section, "rows": section_rows})
@@ -973,27 +1122,31 @@ def _metric_detail_display(value: Any, fallback: Any = None) -> str:
 def _financial_trend_rows(value: Any) -> list[dict[str, Any]]:
     payload = _as_dict(value)
     details = _as_dict(payload.get("metric_details"))
+    periods = [period for period in payload.get("periods", []) if isinstance(period, dict) and period.get("key")]
     definitions = [
-        ("revenue", "Revenue"),
-        ("revenue_growth_percent", "Revenue Growth"),
-        ("ebitda", "EBITDA"),
-        ("ebitda_margin_percent", "EBITDA Margin"),
-        ("net_profit", "Net Profit"),
-        ("net_profit_growth_percent", "Net Profit Growth"),
-        ("net_profit_margin_percent", "Net Profit Margin"),
-        ("roe_percent", "ROE"),
-        ("eps", "EPS"),
-        ("bvps", "BVPS"),
-        ("der", "DER"),
+        ("revenue", "Revenue", payload.get("scale_label") or ""),
+        ("revenue_growth_percent", "Revenue Growth", "%"),
+        ("ebitda", "EBITDA", payload.get("scale_label") or ""),
+        ("ebitda_margin_percent", "EBITDA Margin", "%"),
+        ("net_profit", "Net Profit", payload.get("scale_label") or ""),
+        ("net_profit_growth_percent", "Net Profit Growth", "%"),
+        ("net_profit_margin_percent", "Net Profit Margin", "%"),
+        ("roe_percent", "ROE", "%"),
+        ("eps", "EPS", f"{payload.get('currency') or ''}/share"),
+        ("bvps", "BVPS", f"{payload.get('currency') or ''}/share"),
+        ("der", "DER", "x"),
     ]
-    return [
-        {
-            "label": label,
-            "values": [_metric_detail_display(cell) for cell in details.get(key, [])],
-        }
-        for key, label in definitions
-        if isinstance(details.get(key), list)
-    ]
+    rows = []
+    for key, label, unit in definitions:
+        cells = details.get(key)
+        if not isinstance(cells, list):
+            continue
+        values = [
+            _metric_detail_display(cells[index] if index < len(cells) else None)
+            for index, _period in enumerate(periods or cells)
+        ]
+        rows.append({"label": label, "unit": unit or "-", "values": values})
+    return rows
 
 
 def _scenario_rows(value: Any) -> list[dict[str, str]]:

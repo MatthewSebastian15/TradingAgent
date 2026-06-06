@@ -1,194 +1,388 @@
 # Technical Decisions
 
-A log of important technical decisions made in this project and the reasoning
-behind them. Read this before proposing architectural changes. If a decision
-already exists here, understand why it was made before suggesting an alternative.
+Terakhir disinkronkan: 2026-06-03.
 
----
+Dokumen ini mencatat keputusan teknis yang membentuk kode saat ini. Baca ini
+sebelum mengusulkan perubahan arsitektur.
 
-## ADR-001: Process Pool for Pipeline Execution
+## ADR-001: Process Pool untuk Pipeline
 
-**Decision:** Run the agent pipeline in a `concurrent.futures.ProcessPoolExecutor`,
-not inside the FastAPI async event loop.
+Decision: Backend menjalankan pipeline agent di `concurrent.futures.ProcessPoolExecutor`,
+bukan langsung di event loop FastAPI.
 
-**Reason:** LangGraph state machines and LangChain LLM calls mix sync and async
-code in ways that conflict with uvicorn's asyncio loop. Running in a separate
-process isolates the LangGraph state, avoids event loop conflicts, and allows
-the FastAPI process to remain responsive while long-running (2-5 min) pipeline
-jobs execute.
+Reason:
 
-**Implication:** Do not use `asyncio.run()` or `loop.run_until_complete()` inside
-pipeline code. The pipeline runs synchronously inside the worker process.
+- Pipeline memakai LangGraph, LangChain, provider SDK, dan blocking call.
+- Proses terpisah menjaga FastAPI tetap responsif.
+- Process pool mengurangi konflik event loop.
+- Spawn context cocok untuk Windows dan Docker.
+- `PROCESS_POOL_MAX_TASKS_PER_CHILD=1` membantu membersihkan state provider/LLM
+  setelah satu task.
 
----
+Implication:
 
-## ADR-002: Gemma 4 31B Rejected for Pipeline Use
+- Jangan panggil pipeline blocking langsung dari route.
+- Gunakan helper di `backend/routes/pipeline_runner.py`.
+- Cancellation harus lewat cancel event, bukan kill process manual.
+- Timeout utama tetap `PIPELINE_TIMEOUT_SECONDS`.
 
-**Decision:** Gemma 4 31B is not used as a pipeline LLM.
+## ADR-002: Job API Menjadi Flow Canonical
 
-**Reason:** Tested against IDX stock analysis tasks. Findings:
-- Inconsistent structured output (fails JSON schema compliance randomly)
-- Poor adversarial reasoning in Bull/Bear debate stages
-- Context degradation on long agent chains
-- High latency for the quality produced
+Decision: Flow frontend utama memakai job API:
 
-**Minimum viable:** Gemini 2.5 Flash for `quick_think_llm`. Gemini 2.5 Pro
-or equivalent for `deep_think_llm`.
+```text
+POST /api/analysis/jobs
+GET  /api/analysis/jobs/{job_id}/events
+GET  /api/analysis/jobs/{job_id}
+DELETE /api/analysis/jobs/{job_id}
+```
 
----
+Reason:
 
-## ADR-003: SQLite for All Persistence
+- Analysis bisa berjalan beberapa menit.
+- User perlu melihat progress.
+- User perlu membatalkan job.
+- Browser perlu membuka ulang hasil lewat `/analysis/:resourceId`.
+- Job store bisa menyimpan event replay dan terminal result.
 
-**Decision:** Use SQLite (via Python's built-in `sqlite3`) for all persistence:
-job store, result cache, analysis history, market data cache, news cache.
+Implication:
 
-**Reason:** This is a personal/single-user tool. SQLite has zero ops overhead,
-no separate service to run, and is perfectly adequate for the expected load
-(single user, dozens of analyses per day at most). PostgreSQL adds complexity
-with no benefit at this scale.
+- `POST /api/analyze` dan `POST /api/analyze/stream` hanya legacy.
+- Fitur frontend baru harus memakai job API.
+- Report canonical memakai `job_id`.
+- History tetap memakai `request_id` sebagai primary key SQLite, dan menyimpan
+  `job_id` saat tersedia.
 
-**Implication:** All `.sqlite3` files live in `backend/.cache/`. This directory
-is gitignored. Do not add a migration framework. Schema changes are managed
-via `CREATE TABLE IF NOT EXISTS` in the repository layer.
+## ADR-003: SSE, Bukan WebSocket
 
----
+Decision: Backend memakai Server-Sent Events untuk progress streaming.
 
-## ADR-004: SSE Instead of WebSocket for Job Streaming
+Reason:
 
-**Decision:** Use Server-Sent Events (SSE) for streaming job progress to the
-browser, not WebSocket.
+- Komunikasi hanya server-to-browser setelah request dimulai.
+- SSE lebih sederhana dari WebSocket.
+- SSE cocok dengan `StreamingResponse` dan `sse-starlette`.
+- Frontend bisa membaca SSE lewat `fetch()` stream agar tetap bisa mengirim
+  header `x-owner-token`.
 
-**Reason:** SSE is simpler for server-push-only communication. The browser
-never needs to send data after the initial HTTP request. SSE reconnects
-automatically. SSE works cleanly with FastAPI's `StreamingResponse`. No
-WebSocket library needed on either side.
+Implication:
 
-**Implication:** The SSE path must bypass gzip compression (`SkipSseCompressionMiddleware`).
-Do not remove this middleware.
+- Event format harus tetap sinkron dengan `frontend/src/hooks/useAnalysisJob.js`.
+- SSE path tidak boleh dikompresi.
+- `SkipSseCompressionMiddleware` harus tetap ada.
+- Native `EventSource` tidak dipakai karena tidak bisa mengirim custom auth
+  header dengan aman.
 
----
+## ADR-004: Owner Session untuk Resource Isolation
 
-## ADR-005: Two LLM Tiers (deep_think vs quick_think)
+Decision: Browser mendapat signed owner token dari `POST /api/session`, lalu
+mengirim `x-owner-token` untuk job, SSE, cancel, report, history, market, news,
+dan status.
 
-**Decision:** Use two separate LLM configurations: `deep_think_llm` and
-`quick_think_llm`.
+Reason:
 
-**Reason:** Research Manager and Portfolio Manager need stronger reasoning for
-the synthesis and final decision steps. The three analyst agents and researchers
-can use a faster, cheaper model. This reduces cost and latency while keeping
-quality where it matters most.
+- Aplikasi personal tetap butuh memisahkan job antar browser session.
+- API key adalah credential service/proxy, bukan identitas browser.
+- Owner token memberi scope untuk rate limit dan resource access tanpa login.
+- Token bisa disimpan di `sessionStorage`.
 
-**Implication:** Both must be set in `.env`. The backend has no hardcoded fallback.
-Missing either causes startup failure by design.
+Implication:
 
----
+- Protected endpoint harus memakai `limit_request()`.
+- Frontend fetch harus memakai `buildAuthHeaders()` atau `buildHeaders()`.
+- Production wajib mengisi `OWNER_SESSION_SECRET`.
+- Docker nginx boleh menyisipkan `x-api-key`, tetapi browser tetap memakai
+  owner token.
 
-## ADR-006: No Global State in Frontend
+## ADR-005: SQLite untuk Persistence
 
-**Decision:** No Redux, no Zustand, no React Context for global state. Each
-page component manages its own state via hooks.
+Decision: Backend memakai SQLite untuk job cache, analysis history, market cache,
+news cache, dan LLM cache.
 
-**Reason:** The app has two main pages. Global state management adds complexity
-that is not justified. `useAnalysisJob.js` encapsulates all the job-polling
-and SSE logic. `useAnalysisHistory.js` handles history. Props drill is minimal.
+Reason:
 
-**Implication:** If the app grows to 5+ pages with shared state needs, reconsider.
+- Project ini personal/single-user.
+- SQLite tidak perlu service tambahan.
+- SQLite cukup untuk puluhan analisis per hari.
+- Docker volume bisa menyimpan database antar restart.
 
----
+Implication:
 
-## ADR-007: Vite Over Create React App
+- Jangan tambahkan PostgreSQL atau migration framework tanpa kebutuhan nyata.
+- Repository memakai `CREATE TABLE IF NOT EXISTS`.
+- Schema change harus ditangani di repository layer dan test.
+- `.sqlite3`, `.sqlite`, `.db`, dan `.cache/` tidak boleh commit.
 
-**Decision:** Use Vite instead of Create React App.
+## ADR-006: `VITE_API_BASE_URL` Menjadi Env Frontend Utama
 
-**Reason:** CRA is unmaintained. Vite is faster to start, faster to build, and
-has a cleaner config model. The migration from CRA was completed. All JSX files
-use `.jsx` extension. There is only one `index.html` at `frontend/index.html`.
+Decision: Frontend memakai `VITE_API_BASE_URL` sebagai env utama. `VITE_API_URL`
+tetap ada sebagai legacy alias.
 
-**Implication:** Use `import.meta.env.VITE_XXX` for env vars, not `process.env.REACT_APP_XXX`.
+Reason:
 
----
+- Nama `API_BASE_URL` lebih jelas untuk local dev dan Docker.
+- Docker/nginx memakai relative `/api`.
+- Local Vite butuh absolute backend URL karena tidak ada proxy.
+- Backward compatibility tetap dijaga.
 
-## ADR-008: yfinance as Primary Data Source
+Implication:
 
-**Decision:** yfinance is the primary data vendor. Finnhub and Alpha Vantage
-are secondary/fallback.
+- Dokumentasi baru harus memakai `VITE_API_BASE_URL`.
+- Untuk local Vite, set `VITE_API_BASE_URL=http://localhost:8000`.
+- Untuk Docker, pakai `VITE_API_BASE_URL=/api`.
+- Jangan menaruh backend `API_KEY` ke `VITE_*`.
 
-**Reason:** yfinance is free, covers Indonesian IDX stocks (`.JK` suffix), and
-provides adequate OHLCV + fundamental data for the analysis use case. Paid
-APIs are fallbacks for enrichment, not primary sources.
+## ADR-007: Nginx Proxy di Docker Frontend
 
-**Implication:** The pipeline can run with only yfinance if no Finnhub/Alpha Vantage
-keys are configured. Data quality warnings are added to the response when
-fallbacks are used or data is partial.
+Decision: Docker frontend memakai nginx runtime. Nginx serve static build dan
+proxy `/api/` ke `http://backend:8000/api/`.
 
----
+Reason:
 
-## ADR-009: Mock Route Behind Feature Flag
+- Browser cukup mengakses `http://localhost:3000`.
+- Frontend tidak perlu tahu backend container hostname.
+- Nginx bisa menyisipkan server-side `x-api-key` dari `BACKEND_API_KEY`.
+- Nginx bisa mematikan buffering untuk SSE.
 
-**Decision:** The mock route (`/analysis.test`) is only active when
-`VITE_ENABLE_MOCK=true`.
+Implication:
 
-**Reason:** Mock data must never appear in a production build or confuse
-non-developer users. The flag is not set in `.env.example` for frontend
-production builds.
+- Docker frontend host port adalah 3000, container port 80.
+- Backend host port tetap 8000 untuk direct debug.
+- `frontend/nginx.conf` harus dijaga saat mengubah auth/proxy/SSE.
+- `proxy_read_timeout` harus cukup panjang untuk pipeline. Saat ini 900 detik.
 
-**Implication:** The mock data files (`dev/mockData.js`, `src/utils/mockReport.js`)
-stay in the repo for dev convenience but are tree-shaken out of production bundles.
+## ADR-008: Dua Tier LLM
 
----
+Decision: Pipeline memakai `quick_think_llm` dan `deep_think_llm`.
 
-## ADR-010: Multi-Stage Docker Build for Backend
+Reason:
 
-**Decision:** Use a multi-stage Docker build for the backend image.
+- Research Manager dan Portfolio Manager butuh reasoning lebih kuat.
+- Analyst, debate awal, trader, dan risk bisa memakai model lebih cepat.
+- Biaya dan latency turun tanpa mengorbankan final synthesis.
 
-**Reason:** Single-stage builds with all dev/build tools included produced
-~1.28 GB images. Multi-stage builds separate the build environment from the
-runtime environment, targeting ~700-900 MB.
+Implication:
 
-**Implication:** The `Dockerfile.backend` has a `builder` stage and a `runtime`
-stage. When adding new dependencies, verify they are installed in the correct stage.
+- `DEEP_THINK_LLM` dan `QUICK_THINK_LLM` wajib.
+- Backend tidak punya hardcoded model fallback.
+- Startup gagal jika model kosong.
+- Google model dinormalisasi lowercase.
 
----
+## ADR-009: Balanced Pipeline Saja untuk API Server
 
-## ADR-011: Parallel Analyst Stage, Sequential Debate Stage
+Decision: API server hanya mendukung `ANALYSIS_MODE=balanced`.
 
-**Decision:** Market Analyst, News Analyst, and Fundamentals Analyst run in
-parallel. Everything from Bull Researcher onward runs sequentially.
+Reason:
 
-**Reason:** The three analyst agents are independent. Running them in parallel
-cuts the data collection + analysis phase from ~90s to ~30s. The debate and
-decision stages are sequential because each agent needs the previous agent's
-full output.
+- Frontend, serializer, report, dan tests disusun untuk balanced result shape.
+- Balanced pipeline sudah memuat fast/balanced/deep depth di dalam satu flow.
+- Mode lain akan membuat kontrak result lebih sulit dijaga.
 
-**Implication:** Do not add dependencies between the analyst agents. If an agent
-needs another analyst's output, it belongs in the debate or decision stage.
+Implication:
 
----
+- `config_validation.py` menolak `ANALYSIS_MODE` selain `balanced`.
+- Jangan tambah mode pipeline baru tanpa kontrak API dan frontend lengkap.
+- `analysis_depth` adalah pilihan user yang valid, bukan `ANALYSIS_MODE`.
 
-## ADR-012: `extra="allow"` on All Response Schemas
+## ADR-010: Parallel Data dan Analyst, Sequential Decision
 
-**Decision:** All Pydantic response schemas use `extra="allow"` (via `ApiSchema`
-base class).
+Decision: Data collection berjalan paralel. Market, news, dan fundamentals analyst
+juga berjalan paralel. Debate dan decision berjalan sequential.
 
-**Reason:** The pipeline output evolves. New fields get added over time.
-`extra="forbid"` would cause validation errors when the pipeline adds a field
-that the schema doesn't declare. `extra="allow"` lets the API grow forward-compatibly
-without breaking existing clients.
+Reason:
 
-**Implication:** Never set `extra="forbid"` on response models. The frontend reads
-specific known fields and ignores unknown ones. This is intentional.
+- Data source independen bisa dikumpulkan bersamaan.
+- Tiga analyst awal membaca data yang sama dan tidak saling bergantung.
+- Bull, bear, manager, trader, risk, dan portfolio perlu membaca output tahap
+  sebelumnya.
 
----
+Implication:
 
-## ADR-013: Ticker Auto-Normalization for Indonesian Stocks
+- Jangan buat dependency antar analyst awal.
+- Jika agent butuh output analyst lain, logic itu masuk debate atau decision.
+- `DATA_COLLECTION_WORKERS` dan `ANALYST_PARALLEL_WORKERS` mengontrol parallelism.
 
-**Decision:** A known set of IDX ticker codes (BBCA, BMRI, TLKM, etc.) are
-automatically suffixed with `.JK` when submitted without the suffix.
+## ADR-011: Fast, Balanced, Deep Mengontrol Budget dan Debate
 
-**Reason:** Users entering IDX tickers in a UI form should not need to know
-the yfinance suffix convention. The auto-suffix list covers the most common
-IDX large-cap and mid-cap stocks.
+Decision: `analysis_depth` mengatur LLM budget, retry, debate round, dan risk
+round.
 
-**Implication:** The auto-suffix list is in `backend/routes/validation.py`
-(`_IDX_AUTO_SUFFIX`). Add new tickers to this set when expanding IDX coverage.
-Tickers with explicit `.JK` suffix pass through unchanged.
+Defaults:
+
+| Depth | Budget | Retries | Debate rounds | Risk rounds |
+|---|---:|---:|---:|---:|
+| `fast` | 6 | 1 | 1 | 1 |
+| `balanced` | 9 | 2 | 2 | 2 |
+| `deep` | 12 | 3 | 3 | 3 |
+
+Reason:
+
+- User bisa memilih biaya/latency.
+- Fast mode tetap mengembalikan result shape yang sama.
+- Deep mode memberi ruang untuk review tambahan.
+
+Implication:
+
+- Fast mode boleh skip debate/risk committee penuh dan memakai fallback
+  konservatif.
+- Deep mode bisa menambah extra bull/bear/risk review.
+- `max_debate_rounds` tetap divalidasi 1 sampai 5.
+
+## ADR-012: `extra="allow"` pada Response Schema
+
+Decision: Semua response schema inherit dari `ApiSchema` yang memakai
+`extra="allow"`.
+
+Reason:
+
+- Pipeline output berkembang.
+- Field tambahan tidak boleh mematahkan response validation.
+- Frontend membaca field yang dikenal dan mengabaikan field baru.
+
+Implication:
+
+- Jangan set `extra="forbid"` pada response model pipeline.
+- Jangan hapus field stabil tanpa rencana migrasi.
+- Test kontrak harus fokus pada field yang wajib stabil.
+
+## ADR-013: IDX Auto-Normalization
+
+Decision: Backend menambahkan suffix `.JK` untuk daftar ticker IDX umum saat
+user mengirim plain code.
+
+Reason:
+
+- User IDX tidak perlu tahu konvensi yfinance.
+- UI market `ID` mengarahkan user untuk input kode plain seperti `BBCA`.
+- yfinance butuh `.JK` untuk saham IDX.
+
+Implication:
+
+- Daftar auto suffix ada di `backend/routes/validation.py`.
+- Ticker dengan `market=ID` akan dipaksa menjadi `.JK`.
+- Jika menambah ticker IDX populer, update `_IDX_AUTO_SUFFIX` dan test.
+
+## ADR-014: Market Support Dibatasi ke US dan ID
+
+Decision: Backend menolak exchange suffix non-ID seperti `.HK`, `.T`, `.DE`,
+`.L`, `.AX`, dan `.TO`.
+
+Reason:
+
+- Data vendor, validation, UI contract, dan result assumptions saat ini hanya
+  stabil untuk US dan IDX.
+- Global exchange suffix memerlukan mapping vendor dan rules yang berbeda.
+- Mengizinkan suffix global tanpa support penuh akan membuat data quality dan
+  report menyesatkan.
+
+Implication:
+
+- `market` valid hanya `US` dan `ID`.
+- Dashboard atau UI yang masih menyebut market lain harus dianggap stale.
+- Untuk menambah market baru, update backend validation, frontend contract,
+  vendor routing, tests, docs, dan report assumptions.
+
+## ADR-015: yfinance Tetap Primary Data Source
+
+Decision: yfinance menjadi primary source untuk price/OHLCV dan banyak data
+fundamental. Finnhub dan Alpha Vantage menjadi fallback/enrichment sesuai env.
+
+Reason:
+
+- yfinance gratis.
+- yfinance mendukung IDX dengan suffix `.JK`.
+- yfinance cukup untuk personal research.
+- Paid vendor quota harus dijaga.
+
+Implication:
+
+- Finnhub dilewati jika `FINNHUB_API_KEY` kosong.
+- `DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS=false` default untuk hemat quota.
+- Data quality warning wajib dipertahankan saat fallback/partial data terjadi.
+
+## ADR-016: Structured News Service
+
+Decision: Company news memakai `NewsService` dengan Google News Light sebagai
+provider structured utama, MarketAux/NewsData.io sebagai fallback, lalu
+yfinance fallback jika diaktifkan.
+
+Reason:
+
+- LLM prompt butuh news yang relevan dan deduplicated.
+- Provider status dan relevance score penting untuk data quality.
+- UI perlu structured article list.
+
+Implication:
+
+- `NEWS_PROVIDER_PRIORITY` dan `NEWS_ENABLED_PROVIDERS` mengontrol provider.
+- `NEWS_MAX_ARTICLES_FOR_PROMPT` membatasi prompt cost.
+- `NEWS_MAX_ARTICLES_FOR_UI` membatasi UI payload.
+- Debug news route hanya aktif di development.
+
+## ADR-017: Report Export dari Snapshot
+
+Decision: HTML dan PDF report dibuat dari completed result snapshot, bukan
+menjalankan pipeline ulang.
+
+Reason:
+
+- Report harus merepresentasikan hasil yang user lihat.
+- Export tidak boleh memicu biaya LLM/vendor tambahan.
+- History snapshot memberi hasil reproducible.
+
+Implication:
+
+- Report canonical memakai `job_id`.
+- Fallback report menerima compact payload dari frontend.
+- Export mencatat `exported_html_at` dan `exported_pdf_at` best effort.
+- Disclaimer tidak boleh dihapus.
+
+## ADR-018: Mock Route Gated by Build-Time Env
+
+Decision: Mock UI route hanya aktif saat `VITE_ENABLE_MOCK=true`.
+
+Reason:
+
+- Mock data tidak boleh muncul di production build normal.
+- UI development tetap bisa berjalan tanpa backend/LLM/vendor.
+- Docker mock overlay bisa mengaktifkan fixture dengan eksplisit.
+
+Implication:
+
+- `AnalysisMock` diload lazy hanya jika flag true.
+- `docker-compose.mock.yml` hanya override `VITE_ENABLE_MOCK=true`.
+- Jangan import mock fixture dari production component.
+
+## ADR-019: Multi-Stage Docker Build
+
+Decision: Backend dan frontend memakai multi-stage Docker build.
+
+Reason:
+
+- Backend perlu build wheels dan runtime dependencies terpisah.
+- Frontend perlu Node untuk build, tetapi runtime cukup nginx.
+- Image runtime lebih kecil dan lebih jelas.
+
+Implication:
+
+- `Dockerfile.backend` punya stage `builder` dan `runtime`.
+- `Dockerfile.frontend` punya stage `build` dan `runtime`.
+- Dependency baru harus dipasang di stage yang tepat.
+- WeasyPrint system libraries harus tetap ada di backend runtime.
+
+## ADR-020: Backtest Folder Saat Ini Hanya Env Template
+
+Decision: Folder `backtest/` saat ini didokumentasikan sebagai konfigurasi
+backtest, bukan sebagai modul runtime aplikasi.
+
+Reason:
+
+- Folder hanya berisi `.env.backtest.example` dan `.env.backtest`.
+- Tidak ada runner kode backtest di repo saat audit ini.
+- `.env.backtest` bisa berisi secret dan tidak boleh dipakai sebagai sumber docs.
+
+Implication:
+
+- Gunakan `backtest/.env.backtest.example` untuk dokumentasi.
+- Jangan mengklaim ada command backtest sebelum runner tersedia.
+- Jika menambah runner, update `ai/setup.md`, README, dan tests.

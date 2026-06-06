@@ -5,6 +5,8 @@ import re
 from typing import Any
 
 from .news_models import NormalizedNewsArticle
+from .news_noise_filter import route_news_bucket
+from .news_relevance import score_news_relevance
 
 
 def map_sentiment_label(score: float | None) -> str | None:
@@ -80,8 +82,19 @@ def score_news_article(article: NormalizedNewsArticle, ticker_profile: dict[str,
         score = min(score, 45)
         reasons.append("market_context_only")
 
+    rule_score = score_news_relevance(
+        {"title": article.title, "summary": article.summary or ""},
+        ticker,
+        company_name,
+        str(ticker_profile.get("sector") or ""),
+    )
+    score = max(score, float(rule_score.get("relevance_score") or 0))
     article.relevance_score = round(min(100.0, score), 2)
-    article.relevance_reasons = list(dict.fromkeys(reasons))
+    article.relevance_category = str(rule_score.get("category") or article.relevance_category or "market_noise")
+    article.entity_match = str(rule_score.get("entity_match") or article.entity_match or "none")
+    article.matched_terms = list(rule_score.get("matched_terms") or [])
+    article.relevance_reasons = list(dict.fromkeys([*reasons, *(rule_score.get("reasons") or [])]))
+    article.bucket = route_news_bucket({"relevance_category": article.relevance_category, "relevance_score": article.relevance_score})
     article.content_hash = article.content_hash or content_hash(article.title, article.url)
     if article.sentiment_label is None:
         article.sentiment_label = map_sentiment_label(article.sentiment_score)

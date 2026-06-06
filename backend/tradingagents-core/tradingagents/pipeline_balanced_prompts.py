@@ -344,7 +344,7 @@ Use the market report for entry and stop context.
 - If a setup cannot support a valid 1:3 Risk:Reward structure, recommend Hold, Wait for better entry, or Avoid new entry.
 - Do not invent current_price.
 - Allowed volatility_level values are only Low, Medium, High, or Very High.
-- Allowed rebalancing_action values are only Open new position, Add position, Maintain position, Trim position, Exit position, or Avoid new entry.
+- Allowed rebalancing_action values are only Open new position, Add position, Maintain position, Trim position, Exit position, Avoid new entry, or No position to rebalance.
 
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
@@ -438,6 +438,10 @@ Keep language simple and practical. Include an action plan, risk controls, price
 [STATIC PORTFOLIO DECISION RULES]
 - Return all actionable dashboard fields: suggested_allocation_percent, max_drawdown_estimate, volatility_level, position_sizing_reason, rebalancing_action, key_reasons, key_catalysts, and invalidation_conditions.
 - Use key_reasons for the primary reasons supporting the recommendation.
+- Write key_reasons so they can be combined into one coherent dashboard paragraph.
+- The final Key Reasons paragraph must be 75-125 words, practical, non-repetitive, and directly tied to the recommendation.
+- Do not output vague reasons such as "market conditions" unless the specific condition is explained.
+- Do not make key_reasons a short bullet-only checklist. Each item should read like a sentence fragment that can be merged into a paragraph.
 - Backend validation is the final source of entry_price, stop_loss, take_profit, risk_reward_ratio, risk_reward_display, and actionability.
 - Reduce confidence and allocation when data_quality has partial, unavailable, or missing inputs.
 - Use LAST CLOSE PRICE as the current market price anchor in reasoning only.
@@ -455,14 +459,25 @@ Keep language simple and practical. Include an action plan, risk controls, price
 - If a setup cannot support a valid 1:3 Risk:Reward structure, recommend Hold, Wait for better entry, or Avoid new entry.
 - Use price_target as the analyst or fair target. Use take_profit as the trade execution target based on risk/reward.
 - Allowed volatility_level values only: Low, Medium, High, Very High.
-- Allowed rebalancing_action values only: Open new position, Add position, Maintain position, Trim position, Exit position, Avoid new entry.
+- Allowed rebalancing_action values only: Open new position, Add position, Maintain position, Trim position, Exit position, Avoid new entry, No position to rebalance.
 - When has_existing_position is true, do not recommend Open new position as the portfolio action. Use Add position, Maintain position, Trim position, or Exit position.
-- When has_existing_position is false, do not recommend Add position, Maintain position, Trim position, or Exit position. Use Open new position only for valid Buy setups and Avoid new entry otherwise.
+- When has_existing_position is false, do not recommend Add position, Maintain position, Trim position, or Exit position. Use Open new position only for valid Buy setups and No position to rebalance otherwise.
 - NEW ENTRY ACTION must describe whether a new exposure should be opened. For existing positions, it must not imply a separate new trade. It should describe add-only, maintain, trim, or exit context.
 - Backend validation remains the final source of truth for position action fields.
 - Use Hold when no safe actionable setup exists.
-- executive_summary must be 150-200 words in one paragraph. No bullet points.
-- investment_thesis must be 250-350 words as flowing paragraphs. No bullet points and no headers.
+- executive_summary must be 250-300 words in exactly 5 parts, written as continuous paragraphs without headers, section numbers, or bullet points.
+  Part 1 — Recommendation (1-2 sentences): State the signal and the single most important reason behind it.
+  Part 2 — Price Action (2-3 sentences): Describe recent price movement and distinguish fundamental-driven movement from speculative movement.
+  Part 3 — Fundamental Context (2-3 sentences): Briefly state revenue trend, profitability, and financial health.
+  Part 4 — Risk View (2-3 sentences): State the overall risk level and name the top 2 risk factors.
+  Part 5 — Final Action (1-2 sentences): State clearly and concisely what the user should do right now.
+- investment_thesis must be 400-450 words in exactly 6 parts, written as continuous paragraphs without headers, section numbers, or bullet points.
+  Part 1 — Business Overview (2-3 sentences): Describe what the company does, main segments, and market position.
+  Part 2 — Recent Price Movement (3-4 sentences): Explain recent price action and whether the movement is fundamentally supported or speculative.
+  Part 3 — Fundamental View (4-5 sentences): Cover revenue growth, profit margins, cashflow quality, and balance sheet strength with numbers where available.
+  Part 4 — Technical View (3-4 sentences): Identify support, resistance, moving average conditions, and trend direction.
+  Part 5 — Risk Assessment (3-4 sentences): Explain the top 3 risks: one macro risk, one sector risk, and one company-specific risk.
+  Part 6 — Final Positioning (2-3 sentences): State the recommended action and the conditions that would upgrade or downgrade the recommendation.
 - Do not return short placeholder text. These fields are displayed directly in the analysis dashboard and report.
 
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}

@@ -147,6 +147,8 @@ def build_fundamentals_context(data: Any) -> dict[str, Any]:
             "data_quality": profile.get("data_quality"),
         },
         "financial_highlights": _compact_financial_highlights(data.financial_highlights),
+        "normalized_period_rows": _compact_list(getattr(data, "normalized_period_rows", None), max_items=8),
+        "derived_fundamentals": _compact_list(getattr(data, "derived_fundamentals", None), max_items=8),
         "fundamental_analysis": _compact_mapping(data.fundamental_analysis, max_items=16),
         "event_risk": _compact_text_block(data.event_risk, max_chars=1200),
         "recommendation_trends": _compact_text_block(data.recommendation_trends, max_chars=1200),
@@ -206,6 +208,9 @@ def _compact_financial_highlights(value: dict[str, Any] | None) -> dict[str, Any
         "currency": value.get("currency"),
         "scale": value.get("scale"),
         "analysis_date": value.get("analysis_date"),
+        "period": value.get("period"),
+        "source": value.get("source"),
+        "status": value.get("status"),
         "periods": value.get("periods"),
         "point_in_time": value.get("point_in_time"),
         "rows": _compact_list(value.get("rows"), max_items=24),
@@ -249,4 +254,3 @@ def _model_dump(value: Any) -> dict[str, Any]:
     if hasattr(value, "model_dump"):
         return value.model_dump()
     return value if isinstance(value, dict) else {}
-

@@ -17,7 +17,12 @@ from logging_config import request_id_ctx
 from rate_limiter import limit_request, request_policy, stream_policy
 from routes import jobs, pipeline_runner, serializers, sse
 from routes.sse import EventSourceResponse
-from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
+from routes.validation import (
+    AnalysisRequest,
+    normalize_and_validate_analysis_request,
+    normalize_market,
+    normalize_ticker_for_market,
+)
 from schemas import (
     AnalysisJobCreateResponse,
     AnalysisJobSummaryResponse,
@@ -41,6 +46,17 @@ _with_data_fetched_at = serializers.with_data_fetched_at
 _request_warnings = serializers.request_warnings
 _response_payload = serializers.response_payload
 _log_request_accepted = serializers.log_request_accepted
+
+# Public aliases kept in this route module for tests and route-level callers.
+def normalize_ticker(ticker: str, market: str | None) -> str:
+    """Normalize a user ticker before analysis work starts."""
+    return normalize_ticker_for_market(ticker, normalize_market(market))
+
+
+resolve_display_signal = serializers.resolve_display_signal
+get_confidence_label = serializers.get_confidence_label
+sanitize_text = serializers.sanitize_text
+get_market_status = serializers.get_market_status
 
 _sse_event = sse.sse_event
 _sse_error = sse.sse_error

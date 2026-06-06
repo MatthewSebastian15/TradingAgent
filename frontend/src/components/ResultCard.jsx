@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
+import ConfidenceBreakdown from './ConfidenceBreakdown';
+import DisclaimerFooter from './DisclaimerFooter';
 import ExportReportButtons from './ExportReportButtons';
+import RerunPanel from './RerunPanel';
 import MetricBox from './results/MetricBox';
 import NoticeBox from './results/NoticeBox';
 import SectionHeader from './results/SectionHeader';
@@ -10,10 +13,9 @@ import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
 import RiskDataQualityTab from './results/tabs/RiskDataQualityTab';
 import ResultTabs from './results/tabs/ResultTabs';
-import { REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
-const ACTIONABLE_DECISIONS = new Set(['Buy', 'Overweight', 'Sell', 'Underweight']);
+const ACTIONABLE_DECISIONS = new Set(['BUY', 'SELL', 'Buy', 'Overweight', 'Sell', 'Underweight']);
 
 function formatWarningDetail(warning) {
   if (!hasDisplayValue(warning)) return null;
@@ -107,13 +109,28 @@ function formatRiskReward(result) {
     : result.risk_reward_ratio;
 }
 
+function normalizeSignal(signal) {
+  const normalized = String(signal || 'HOLD')
+    .trim()
+    .toUpperCase();
+  if (normalized === 'OVERWEIGHT') return 'BUY';
+  if (normalized === 'UNDERWEIGHT' || normalized === 'AVOID') return 'SELL';
+  if (['BUY', 'HOLD', 'WAIT', 'REDUCE', 'SELL', 'NEUTRAL'].includes(normalized)) return normalized;
+  return 'HOLD';
+}
+
 function getFinalDecision(result) {
-  return result.final_decision ?? result.decision ?? result.rating ?? 'Hold';
+  return normalizeSignal(
+    result.display_signal ?? result.final_decision ?? result.decision ?? result.rating
+  );
 }
 
 function getCurrentPrice(result) {
   if (!result) return null;
 
+  if (Object.prototype.hasOwnProperty.call(result, 'last_price')) {
+    return hasDisplayValue(result.last_price) ? result.last_price : null;
+  }
   if (Object.prototype.hasOwnProperty.call(result, 'current_price')) {
     return hasDisplayValue(result.current_price) ? result.current_price : null;
   }
@@ -121,30 +138,191 @@ function getCurrentPrice(result) {
   return coalesceDisplayValue(result.last_close_price);
 }
 
+function normalizeConfidencePercent(value) {
+  if (!hasDisplayValue(value)) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value;
+  return numeric <= 1 ? Math.round(numeric * 100) : Math.round(numeric);
+}
+
+function formatConfidenceDisplay(score, label) {
+  const percent = normalizeConfidencePercent(score);
+  if (!hasDisplayValue(percent)) return null;
+  const scoreText = typeof percent === 'number' ? `${percent}%` : percent;
+  return label ? `${scoreText} — ${label}` : scoreText;
+}
+
+function confidenceTone(tier) {
+  return (
+    {
+      very_low: 'red',
+      low: 'yellow',
+      moderate: 'orange',
+      high: 'lime',
+      very_high: 'green',
+    }[tier] || undefined
+  );
+}
+
+function formatWibPriceTimestamp(value, includeTime = true) {
+  if (!hasDisplayValue(value)) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(date)
+    .reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+
+  const dateText = `${parts.year}-${parts.month}-${parts.day}`;
+  return includeTime ? `${dateText}  ${parts.hour}:${parts.minute} WIB` : dateText;
+}
+
+function formatPriceAsOf(result, fallbackValue) {
+  const timestamp = result.price_timestamp || fallbackValue;
+  if (!hasDisplayValue(timestamp)) return null;
+  if (result.price_is_fallback) {
+    return `${formatWibPriceTimestamp(timestamp, false)}  (Previous Close — Fallback)`;
+  }
+  const label = formatWibPriceTimestamp(timestamp, true);
+  if (result.market_status === 'open') return `${label}  (Intraday)`;
+  if (result.market_status === 'closed') return `${label}  (Closing Price)`;
+  return label;
+}
+
+function truncateWords(text, limit) {
+  const words = String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length <= limit) return String(text || '').trim();
+  return `${words.slice(0, limit).join(' ')}…`;
+}
+
+function wordCount(text) {
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function normalizeInlineText(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+function truncateKeyReasonWords(text, maxWords = 125) {
+  const words = normalizeInlineText(text).split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(' ');
+  return `${words.slice(0, maxWords).join(' ')}.`.replace(/\.\.$/, '.');
+}
+
+function normalizeReasonItems(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeInlineText(item)).filter(Boolean);
+  }
+
+  const text = normalizeInlineText(value);
+  return text ? [text] : [];
+}
+
+function buildKeyReasonsParagraph({
+  paragraph,
+  reasons,
+  catalysts,
+  miniRiskSummary,
+  decisionReason,
+}) {
+  const directParagraph = normalizeInlineText(paragraph);
+  if (directParagraph) return truncateKeyReasonWords(directParagraph, 125);
+
+  const items = [
+    ...normalizeReasonItems(reasons),
+    ...normalizeReasonItems(catalysts),
+    normalizeInlineText(miniRiskSummary),
+    normalizeInlineText(decisionReason),
+  ].filter(Boolean);
+
+  const uniqueItems = Array.from(new Set(items));
+  const joined = uniqueItems.join('. ');
+  if (!joined) return '';
+
+  const normalized = joined.endsWith('.') ? joined : `${joined}.`;
+  return truncateKeyReasonWords(normalized, 125);
+}
+
+function formatDataSourcePriceLabel(result) {
+  const priceSource = result.data_sources?.price;
+  if (priceSource?.provider) {
+    const timestamp = priceSource.timestamp || result.price_timestamp || result.current_price_as_of;
+    const dateLabel = formatWibPriceTimestamp(timestamp, !priceSource.is_fallback);
+    const fallback = priceSource.is_fallback ? '⚠  ' : '';
+    const fallbackText = priceSource.is_fallback ? ' (previous close fallback)' : '';
+    return `${fallback}Price: ${priceSource.provider}${fallbackText}${dateLabel ? ` · ${dateLabel}` : ''}`;
+  }
+
+  const source = coalesceDisplayValue(result.price_source, result.current_price_source);
+  if (!source) return null;
+  const provider = String(source).toLowerCase().includes('yfinance')
+    ? 'Yahoo Finance'
+    : String(source);
+  const timestamp = result.price_timestamp || result.current_price_as_of;
+  const dateLabel = formatWibPriceTimestamp(timestamp, !result.price_is_fallback);
+  const fallback = result.price_is_fallback ? '⚠  ' : '';
+  const fallbackText = result.price_is_fallback ? ' (previous close fallback)' : '';
+  return `${fallback}Price: ${provider}${fallbackText}${dateLabel ? ` · ${dateLabel}` : ''}`;
+}
+
+function formatVolatilityValue(result) {
+  if (!hasDisplayValue(result.volatility_score)) return null;
+  const score =
+    typeof result.volatility_score === 'number'
+      ? result.volatility_score.toFixed(2).replace(/\.00$/, '')
+      : result.volatility_score;
+  return `${score} / 100`;
+}
+
+function volatilitySubValue(result) {
+  const classification = result.volatility_classification;
+  const lookback = result.volatility_lookback_days;
+  if (classification && lookback) return `${classification} · ${lookback}-day lookback`;
+  if (classification) return classification;
+  if (lookback) return `${lookback}-day lookback`;
+  return null;
+}
+
 function DecisionBadge({ decision }) {
+  const signal = normalizeSignal(decision);
   const cfg = {
-    Buy: {
+    BUY: {
       classes: 'bg-bloomberg-green-dim border-bloomberg-green text-bloomberg-green',
       label: '▲ BUY',
     },
-    Sell: {
+    SELL: {
       classes: 'bg-bloomberg-red-dim border-bloomberg-red text-bloomberg-red',
       label: '▼ SELL',
     },
-    Hold: {
+    HOLD: {
       classes: 'bg-bloomberg-amber-dim border-bloomberg-amber text-bloomberg-amber',
       label: '◆ HOLD',
     },
-    Overweight: {
-      classes: 'bg-bloomberg-green-dim border-bloomberg-green text-bloomberg-green',
-      label: '▲ OVERWEIGHT',
+    WAIT: {
+      classes: 'bg-bloomberg-surface border-bloomberg-border text-bloomberg-muted',
+      label: '◇ WAIT',
     },
-    Underweight: {
-      classes: 'bg-bloomberg-red-dim border-bloomberg-red text-bloomberg-red',
-      label: '▼ UNDERWEIGHT',
+    REDUCE: {
+      classes: 'bg-bloomberg-amber-dim border-bloomberg-amber text-bloomberg-amber',
+      label: '◒ REDUCE',
     },
   };
-  const c = cfg[decision] || cfg.Hold;
+  const c = cfg[signal] || cfg.HOLD;
   return (
     <span
       className={`inline-block border px-4 py-1.5 font-mono text-sm font-bold tracking-widest ${c.classes}`}
@@ -313,25 +491,27 @@ function getActionPlanMetrics({ result, currentPrice, riskReward }) {
   return [
     {
       label: 'CURRENT PRICE',
-      value: hasDisplayValue(currentPrice) ? formatPrice(currentPrice, result.ticker) : 'N/A',
+      value: hasDisplayValue(currentPrice)
+        ? formatPrice(currentPrice, result.ticker, result.price_currency || result.currency)
+        : 'N/A',
       highlight: true,
     },
     {
       label: 'ENTRY',
       value: hasDisplayValue(result.entry_price)
-        ? formatPrice(result.entry_price, result.ticker)
+        ? formatPrice(result.entry_price, result.ticker, result.price_currency || result.currency)
         : 'N/A',
     },
     {
       label: 'STOP LOSS',
       value: hasDisplayValue(result.stop_loss)
-        ? formatPrice(result.stop_loss, result.ticker)
+        ? formatPrice(result.stop_loss, result.ticker, result.price_currency || result.currency)
         : 'N/A',
     },
     {
       label: 'TAKE PROFIT',
       value: hasDisplayValue(result.take_profit)
-        ? formatPrice(result.take_profit, result.ticker)
+        ? formatPrice(result.take_profit, result.ticker, result.price_currency || result.currency)
         : 'N/A',
     },
     {
@@ -344,7 +524,11 @@ function getActionPlanMetrics({ result, currentPrice, riskReward }) {
     },
     {
       label: 'VOLATILITY SCORE',
-      value: hasDisplayValue(result.volatility_score) ? result.volatility_score : 'N/A',
+      value: formatVolatilityValue(result) || 'N/A',
+      subValue: volatilitySubValue(result),
+      tooltip:
+        result.volatility_method ||
+        'Calculated from annualized daily return volatility, normalized to 0–100 scale. Higher score means higher price swings.',
     },
     {
       label: 'REBALANCING',
@@ -386,6 +570,9 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
             label={metric.label}
             value={metric.value}
             highlight={metric.highlight}
+            subValue={metric.subValue}
+            tooltip={metric.tooltip}
+            tone={metric.tone}
             preserveSlot
             dataTestId="action-plan-metric"
           />
@@ -425,7 +612,11 @@ function HoldMetrics({ result, currentPrice }) {
         {hasDisplayValue(currentPrice) && (
           <MetricBox
             label="CURRENT PRICE"
-            value={formatPrice(currentPrice, result.ticker)}
+            value={formatPrice(
+              currentPrice,
+              result.ticker,
+              result.price_currency || result.currency
+            )}
             highlight
           />
         )}
@@ -433,7 +624,15 @@ function HoldMetrics({ result, currentPrice }) {
           <MetricBox label="VOLATILITY" value={result.volatility_level} />
         )}
         {hasDisplayValue(result.volatility_score) && (
-          <MetricBox label="VOLATILITY SCORE" value={result.volatility_score} />
+          <MetricBox
+            label="VOLATILITY SCORE"
+            value={formatVolatilityValue(result)}
+            subValue={volatilitySubValue(result)}
+            tooltip={
+              result.volatility_method ||
+              'Calculated from annualized daily return volatility, normalized to 0–100 scale. Higher score means higher price swings.'
+            }
+          />
         )}
         {result.rebalancing_action && (
           <MetricBox label="REBALANCING" value={result.rebalancing_action} />
@@ -457,21 +656,150 @@ HoldMetrics.propTypes = {
   currentPrice: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
 };
 
-function ReportDisclaimer() {
+function ExpandableTextSection({
+  label,
+  text,
+  expanded,
+  onToggle,
+  collapsedWords,
+  expandedMaxClass,
+  expandLabel,
+}) {
+  if (!hasDisplayValue(text)) return null;
+
+  const needsToggle = wordCount(text) > collapsedWords;
+  const visibleText = expanded || !needsToggle ? text : truncateWords(text, collapsedWords);
+
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border bg-black bg-opacity-20">
-      <SectionHeader label="DISCLAIMER" />
-      <p className="font-mono text-[11px] text-bloomberg-muted leading-relaxed whitespace-pre-line">
-        {REPORT_DISCLAIMER}
-      </p>
+    <div className="px-4 py-4 border-b border-bloomberg-border">
+      <SectionHeader label={label} />
+      <div
+        className={`relative ${expanded ? `${expandedMaxClass} overflow-y-auto pr-2` : 'overflow-hidden'}`}
+      >
+        <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+          {parseBold(visibleText)}
+        </p>
+        {!expanded && needsToggle && (
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-bloomberg-card to-transparent" />
+        )}
+      </div>
+      {needsToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mt-2 font-mono text-xs text-bloomberg-orange hover:text-orange-300 transition-colors tracking-wider"
+        >
+          {expanded ? 'Collapse' : expandLabel}
+        </button>
+      )}
     </div>
   );
 }
 
-export default function ResultCard({ result, enableReportExport = true, mockReport = false }) {
+ExpandableTextSection.propTypes = {
+  label: PropTypes.string.isRequired,
+  text: PropTypes.string,
+  expanded: PropTypes.bool.isRequired,
+  onToggle: PropTypes.func.isRequired,
+  collapsedWords: PropTypes.number.isRequired,
+  expandedMaxClass: PropTypes.string.isRequired,
+  expandLabel: PropTypes.string.isRequired,
+};
+
+function pipelineStatusMeta(status) {
+  const normalized = String(status || 'ok').toLowerCase();
+  if (normalized === 'partial') return { icon: '⚠', classes: 'text-bloomberg-amber' };
+  if (normalized === 'fallback') return { icon: 'ℹ', classes: 'text-bloomberg-orange' };
+  if (normalized === 'error') return { icon: '✗', classes: 'text-bloomberg-red' };
+  return { icon: '✓', classes: 'text-bloomberg-green' };
+}
+
+function AgentPipeline({ pipeline = [], agents = [], totalSeconds }) {
+  const [expandedRows, setExpandedRows] = useState({});
+
+  if (Array.isArray(pipeline) && pipeline.length > 0) {
+    return (
+      <div className="px-4 py-4 border-b border-bloomberg-border">
+        <SectionHeader label="AGENT PIPELINE" />
+        <div className="flex flex-col gap-1.5">
+          {pipeline.map((agent) => {
+            const statusMeta = pipelineStatusMeta(agent.status);
+            const warning = agent.warning;
+            const rowKey = agent.name;
+            return (
+              <button
+                type="button"
+                key={rowKey}
+                onClick={() =>
+                  warning && setExpandedRows((prev) => ({ ...prev, [rowKey]: !prev[rowKey] }))
+                }
+                className="text-left border border-bloomberg-border px-2.5 py-2 bg-black bg-opacity-10 hover:bg-bloomberg-surface transition-colors"
+              >
+                <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center font-mono text-xs">
+                  <span className="text-bloomberg-muted">{agent.name}</span>
+                  <span className={statusMeta.classes}>{statusMeta.icon}</span>
+                  <span className="text-bloomberg-white">
+                    {hasDisplayValue(agent.duration_seconds)
+                      ? `${Number(agent.duration_seconds).toFixed(1)}s`
+                      : '—'}
+                  </span>
+                </div>
+                {warning && (
+                  <div className="mt-1 font-mono text-[11px] text-bloomberg-amber">
+                    {expandedRows[rowKey] ? warning : 'Warning available'}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {hasDisplayValue(totalSeconds) && (
+          <div className="mt-3 font-mono text-xs text-bloomberg-white">
+            Total pipeline time: {Number(totalSeconds).toFixed(1)}s
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!agents.length) return null;
+
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border">
+      <SectionHeader label="AGENT PIPELINE" />
+      <div className="flex flex-wrap gap-1.5">
+        {agents.map((agent, index) => (
+          <span
+            key={`${agent}-${index}`}
+            className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted"
+          >
+            <span className="text-bloomberg-green mr-1.5">✓</span>
+            {agent}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+AgentPipeline.propTypes = {
+  pipeline: PropTypes.array,
+  agents: PropTypes.array,
+  totalSeconds: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+};
+
+export default function ResultCard({
+  result,
+  enableReportExport = true,
+  mockReport = false,
+  onRerunSubmit = null,
+  rerunRunning = false,
+}) {
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [thesisExpanded, setThesisExpanded] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [activeTab, setActiveTab] = useState('analisis');
+  const [showRerunPanel, setShowRerunPanel] = useState(false);
   const disabledTabs = [];
 
   if (!result) return null;
@@ -493,7 +821,12 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
     );
   }
 
+  const displayTicker = result.normalized_ticker || result.ticker;
+  const displayResult = { ...result, ticker: displayTicker };
   const finalDecision = getFinalDecision(result);
+  const rawAiSignal = normalizeSignal(
+    result.raw_ai_signal || result.llm_decision || result.final_decision || result.decision
+  );
   const isActionable = ACTIONABLE_DECISIONS.has(finalDecision);
   const tradePlanValid = Boolean(result.trade_plan_valid);
   const shouldShowActionPlan = isActionable && tradePlanValid;
@@ -504,18 +837,32 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
   const thesis = analysisOverview.investment_thesis || result.investment_thesis;
   const currentPrice = getCurrentPrice(result);
   const currentPriceAsOf = coalesceDisplayValue(
+    result.price_timestamp,
     result.current_price_as_of,
     result.last_close_price_as_of
   );
-  const currentPriceSource = coalesceDisplayValue(result.current_price_source);
+  const priceAsOfLabel = formatPriceAsOf(result, currentPriceAsOf);
+  const priceTimestampLabel = formatWibPriceTimestamp(currentPriceAsOf);
+  const currentPriceSource = formatDataSourcePriceLabel(result);
   const timeHorizon = formatAnalysisHorizon(result.time_horizon_months, result.time_horizon);
   const confidence = result.confidence_score ?? null;
+  const confidenceDisplay = formatConfidenceDisplay(confidence, result.confidence_label);
   const allocation = result.suggested_allocation_percent ?? null;
   const riskReward = formatRiskReward(result);
   const catalysts = result.key_catalysts || [];
-  const keyReasons = analysisOverview.key_reasons || result.key_reasons || catalysts;
   const invalidations = result.invalidation_conditions || [];
   const riskSummary = analysisOverview.risk_summary || null;
+  const miniRiskSummary = result.mini_risk_summary;
+  const keyReasonsParagraph = buildKeyReasonsParagraph({
+    paragraph: analysisOverview.key_reasons_paragraph || result.key_reasons_paragraph,
+    reasons: analysisOverview.key_reasons || result.key_reasons,
+    catalysts,
+    miniRiskSummary,
+    decisionReason: result.decision_adjusted_reason,
+  });
+  const signalPositionLabel = result.has_existing_position
+    ? 'Existing position'
+    : 'No existing position';
   const agents = result.agents_used || [];
   const budgetExhausted = Boolean(result.budget_exhausted);
   const agentsSkipped = result.agents_skipped || [];
@@ -524,11 +871,11 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
 
   const decisionColor =
     {
-      Buy: 'text-bloomberg-green',
-      Overweight: 'text-bloomberg-green',
-      Sell: 'text-bloomberg-red',
-      Underweight: 'text-bloomberg-red',
-      Hold: 'text-bloomberg-amber',
+      BUY: 'text-bloomberg-green',
+      SELL: 'text-bloomberg-red',
+      HOLD: 'text-bloomberg-amber',
+      WAIT: 'text-bloomberg-muted',
+      REDUCE: 'text-bloomberg-amber',
     }[finalDecision] || 'text-bloomberg-white';
 
   return (
@@ -555,10 +902,20 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
               Created: {createdAtLabel}
             </span>
           )}
+          {onRerunSubmit && (
+            <button
+              type="button"
+              disabled={rerunRunning}
+              onClick={() => setShowRerunPanel((value) => !value)}
+              className="font-mono text-xs border border-bloomberg-border px-2.5 py-1.5 tracking-wider text-bloomberg-muted hover:text-bloomberg-white disabled:opacity-50"
+            >
+              ↺ RE-RUN
+            </button>
+          )}
           {enableReportExport && (result.job_id || result.request_id) && (
             <ExportReportButtons
               resourceId={result.job_id || result.request_id}
-              result={result}
+              result={displayResult}
               disabled={Boolean(result.error)}
               mockReport={mockReport}
             />
@@ -566,7 +923,22 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
         </div>
       </div>
 
-      <ResultTabs activeTab={activeTab} onTabChange={setActiveTab} disabledTabs={disabledTabs} />
+      {onRerunSubmit && (
+        <RerunPanel
+          result={result}
+          open={showRerunPanel}
+          onClose={() => setShowRerunPanel(false)}
+          onSubmit={onRerunSubmit}
+          running={rerunRunning}
+        />
+      )}
+
+      <ResultTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        disabledTabs={disabledTabs}
+        tabStatus={result.tab_status}
+      />
 
       {activeTab === 'analisis' && (
         <>
@@ -574,25 +946,29 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
           <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
             <div>
               <div className={`font-display text-5xl font-bold tracking-wider ${decisionColor}`}>
-                {formatTickerLabel(result.ticker)}
+                {formatTickerLabel(displayTicker)}
               </div>
               <div className="mt-3">
                 <DecisionBadge decision={finalDecision} />
               </div>
               {finalDecision && (
                 <div className="mt-2 font-mono text-xs text-bloomberg-muted tracking-wider">
-                  RECOMMENDATION: {finalDecision.toUpperCase()}
+                  RECOMMENDATION: {String(finalDecision).toUpperCase()}
+                </div>
+              )}
+              {finalDecision && (
+                <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider">
+                  Signal adapted · {signalPositionLabel} · Raw AI signal: {rawAiSignal}
                 </div>
               )}
               {currentPriceSource && (
                 <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
-                  SOURCE: <span className="text-bloomberg-white">{currentPriceSource}</span>
+                  <span className="text-bloomberg-white">{currentPriceSource}</span>
                 </div>
               )}
-              {result.llm_decision && result.llm_decision !== finalDecision && (
+              {rawAiSignal && rawAiSignal !== finalDecision && (
                 <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
-                  LLM: {String(result.llm_decision).toUpperCase()} → FINAL:{' '}
-                  {String(finalDecision).toUpperCase()}
+                  LLM: {rawAiSignal} → FINAL: {String(finalDecision).toUpperCase()}
                 </div>
               )}
             </div>
@@ -603,26 +979,39 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
                 {hasDisplayValue(currentPrice) && (
                   <MetricBox
                     label="LAST PRICE"
-                    value={formatPrice(currentPrice, result.ticker)}
+                    value={formatPrice(
+                      currentPrice,
+                      displayTicker,
+                      result.price_currency || result.currency
+                    )}
+                    subValue={
+                      result.price_is_fallback || !priceTimestampLabel
+                        ? null
+                        : `as of ${priceTimestampLabel}`
+                    }
                     highlight
                   />
                 )}
-                {currentPriceAsOf && <MetricBox label="PRICE AS OF" value={currentPriceAsOf} />}
+                {priceAsOfLabel && <MetricBox label="PRICE AS OF" value={priceAsOfLabel} />}
                 {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
-                {confidence !== null && (
+                {confidenceDisplay && (
                   <MetricBox
                     label="CONFIDENCE"
-                    value={
-                      typeof confidence === 'number'
-                        ? `${Math.round(confidence * 100)}%`
-                        : confidence
-                    }
+                    value={confidenceDisplay}
+                    tone={confidenceTone(result.confidence_tier)}
+                    tooltip="Score reflects combined signal strength from all 9 agents."
                   />
                 )}
                 {allocation !== null && (
                   <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
                 )}
               </div>
+              <ConfidenceBreakdown breakdown={result.confidence_breakdown} />
+              {result.price_is_fallback && (
+                <div className="mt-2 font-mono text-[11px] text-bloomberg-amber leading-relaxed">
+                  ⚠ Harga tidak tersedia saat analisis dibuat. Menampilkan harga penutupan terakhir.
+                </div>
+              )}
             </div>
           </div>
 
@@ -654,13 +1043,15 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
 
           {shouldShowActionPlan && (
             <ActionableMetrics
-              result={result}
+              result={displayResult}
               currentPrice={currentPrice}
               riskReward={riskReward}
             />
           )}
 
-          {shouldShowHoldMetrics && <HoldMetrics result={result} currentPrice={currentPrice} />}
+          {shouldShowHoldMetrics && (
+            <HoldMetrics result={displayResult} currentPrice={currentPrice} />
+          )}
 
           {budgetExhausted && (
             <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
@@ -717,80 +1108,50 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
             </div>
           )}
 
-          {/* Executive Summary */}
-          {summary && (
+          <ExpandableTextSection
+            label="EXECUTIVE SUMMARY"
+            text={summary}
+            expanded={summaryExpanded}
+            onToggle={() => setSummaryExpanded(!summaryExpanded)}
+            collapsedWords={100}
+            expandedMaxClass="max-h-[300px]"
+            expandLabel="Read More"
+          />
+
+          {keyReasonsParagraph && (
             <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="EXECUTIVE SUMMARY" />
+              <SectionHeader label="KEY REASONS" />
               <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                {parseBold(summary)}
+                {keyReasonsParagraph}
               </p>
             </div>
           )}
 
-          {keyReasons.length > 0 && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="KEY REASONS" />
-              <ul className="flex flex-col gap-1.5">
-                {keyReasons.map((reason, index) => (
-                  <li key={`${reason}-${index}`} className="font-mono text-xs text-bloomberg-muted">
-                    + {reason}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {riskSummary && (
+          {(miniRiskSummary || riskSummary) && (
             <div className="px-4 py-4 border-b border-bloomberg-border">
               <SectionHeader label="MINI RISK SUMMARY" />
               <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                {riskSummary.overall_risk || 'N/A'}: {riskSummary.short_reason || 'N/A'}
+                {miniRiskSummary ||
+                  `${riskSummary.overall_risk || 'N/A'}: ${riskSummary.short_reason || 'N/A'}`}
               </p>
             </div>
           )}
 
-          {/* Investment Thesis */}
-          {thesis && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="INVESTMENT THESIS" />
-              <div
-                className={`overflow-hidden transition-all duration-300 ${thesisExpanded ? '' : 'max-h-24'} relative`}
-              >
-                <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                  {parseBold(thesis)}
-                </p>
-                {!thesisExpanded && (
-                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-bloomberg-card to-transparent" />
-                )}
-              </div>
-              <button
-                onClick={() => setThesisExpanded(!thesisExpanded)}
-                className="mt-2 font-mono text-xs text-bloomberg-orange hover:text-orange-300 transition-colors tracking-wider"
-              >
-                {thesisExpanded ? '↑ COLLAPSE' : '↓ EXPAND FULL THESIS'}
-              </button>
-            </div>
-          )}
+          <ExpandableTextSection
+            label="INVESTMENT THESIS"
+            text={thesis}
+            expanded={thesisExpanded}
+            onToggle={() => setThesisExpanded(!thesisExpanded)}
+            collapsedWords={150}
+            expandedMaxClass="max-h-[500px]"
+            expandLabel="Read Full Thesis"
+          />
 
-          {/* Agents used */}
-          {agents.length > 0 && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="AGENT PIPELINE" />
-              <div className="flex flex-wrap gap-1.5">
-                {agents.map((a, i) => (
-                  <span
-                    key={i}
-                    className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted"
-                  >
-                    <span className="text-bloomberg-green mr-1.5">✓</span>
-                    {a}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <ReportDisclaimer />
+          <AgentPipeline
+            pipeline={result.agent_pipeline}
+            agents={agents}
+            totalSeconds={result.total_pipeline_seconds}
+          />
 
           {/* Raw JSON debug */}
           {canShowRaw && (
@@ -811,7 +1172,7 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
         </>
       )}
 
-      {activeTab === 'profile' && <ProfileTab profile={result.company_profile} />}
+      {activeTab === 'profile' && <ProfileTab profile={result.company_profile} result={result} />}
 
       {activeTab === 'fundamental' && (
         <FundamentalTab financialHighlights={result.financial_highlights} result={result} />
@@ -822,6 +1183,8 @@ export default function ResultCard({ result, enableReportExport = true, mockRepo
       {activeTab === 'news' && <NewsTab result={result} />}
 
       {activeTab === 'risk_data_quality' && <RiskDataQualityTab result={result} />}
+
+      <DisclaimerFooter />
     </div>
   );
 }
@@ -830,4 +1193,6 @@ ResultCard.propTypes = {
   result: PropTypes.object,
   enableReportExport: PropTypes.bool,
   mockReport: PropTypes.bool,
+  onRerunSubmit: PropTypes.func,
+  rerunRunning: PropTypes.bool,
 };

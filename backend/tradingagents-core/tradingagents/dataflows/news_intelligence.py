@@ -4,7 +4,11 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_title, normalize_url, rank_news
+from tradingagents.dataflows.news_aggregator import normalize_title, normalize_url, rank_news
+from tradingagents.dataflows.news_dedup import dedup_news_articles_with_metadata
+from tradingagents.dataflows.news_impact import classify_news_impact
+from tradingagents.dataflows.news_noise_filter import route_news_bucket
+from tradingagents.dataflows.news_relevance import score_news_relevance
 
 MATERIAL_KEYWORDS = {
     "earnings": ["earnings", "profit", "revenue", "margin", "guidance", "eps"],
@@ -126,6 +130,8 @@ def _source_confidence(source: Any) -> int:
     text = str(source or "").lower()
     if "finnhub" in text:
         return 85
+    if "google news light" in text or "google_news_light" in text:
+        return 80
     if "marketaux" in text:
         return 82
     if "newsdata" in text:
@@ -218,7 +224,7 @@ def build_news_impact(
     related_news: dict[str, Any] | None = None,
     news_context: dict[str, Any] | None = None,
     *,
-    limit: int = 20,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     raw_articles = _collect_articles(related_news, news_context)
     if not raw_articles:
@@ -233,16 +239,22 @@ def build_news_impact(
             "data_quality": {"status": "unavailable", "sources_used": []},
         }
 
-    deduped = deduplicate_news(raw_articles)
+    deduped, dedup_metadata = dedup_news_articles_with_metadata(raw_articles)
     ranked = rank_news(deduped, ticker=ticker)
     scored: list[dict[str, Any]] = []
     sentiment_values: list[float] = []
     for item in ranked:
+        relevance_payload = score_news_relevance(item, ticker, str(item.get("company_name") or ""), str(item.get("sector") or ""))
         relevance = _safe_float(item.get("relevance_score"))
+        calculated_relevance = _safe_float(relevance_payload.get("relevance_score")) or 0
         if relevance is None or relevance <= 0:
             text = f"{item.get('title') or ''} {item.get('summary') or ''}".upper()
-            relevance = 70 if ticker.upper().removesuffix(".JK") in text else 45
+            relevance = max(calculated_relevance, 70 if ticker.upper().removesuffix(".JK") in text else 45)
+        else:
+            relevance = max(relevance, calculated_relevance)
         relevance = max(0, min(100, relevance))
+        relevance_category = str(relevance_payload.get("category") or "market_noise")
+        entity_match = str(relevance_payload.get("entity_match") or "none")
         sentiment = _infer_sentiment_label(item)
         sentiment_value = _sentiment_numeric(item, sentiment)
         sentiment_values.append(sentiment_value)
@@ -259,36 +271,52 @@ def build_news_impact(
             + (materiality * 0.10),
             2,
         )
-        impact = "high" if impact_score >= 70 else "medium" if impact_score >= 45 else "low"
-        scored.append(
+        base_impact = "high" if impact_score >= 70 else "medium" if impact_score >= 45 else "low"
+        enriched = classify_news_impact(
             {
                 "title": str(item.get("title") or "").strip(),
                 "source": str(source or "unknown"),
                 "published_at": str(item.get("published_at") or "")[:10] or None,
                 "sentiment": sentiment,
-                "impact": impact,
+                "impact": base_impact,
                 "impact_score": impact_score,
                 "relevance_score": round(relevance, 2),
+                "relevance_category": relevance_category,
+                "entity_match": entity_match,
+                "matched_terms": relevance_payload.get("matched_terms") or [],
                 "recency_score": recency,
                 "materiality_score": materiality,
                 "materiality_category": category,
+                "event_type": item.get("event_type") or category,
                 "summary": _clean_summary(item.get("summary")),
                 "url": str(item.get("url") or ""),
                 "normalized_url": normalize_url(str(item.get("url") or "")),
             }
         )
+        bucket = route_news_bucket(enriched)
+        enriched["bucket"] = bucket
+        strict_high = enriched.get("impact_rule") == "HIGH" or (
+            base_impact == "high"
+            and relevance_category in {"company_specific", "subsidiary_related", "sector_related"}
+            and entity_match in {"company_exact", "subsidiary"}
+        )
+        enriched["impact"] = "high" if strict_high else base_impact
+        if bucket != "discard":
+            scored.append(enriched)
     scored = sorted(scored, key=lambda item: (item["impact_score"], item["published_at"] or ""), reverse=True)
     average_sentiment = sum(sentiment_values) / len(sentiment_values) if sentiment_values else 0
     overall_sentiment = "positive" if average_sentiment > 0.1 else "negative" if average_sentiment < -0.1 else "neutral"
     sources_used = list(dict.fromkeys(str(item.get("source") or "unknown") for item in scored))
+    full_limit = len(scored) if limit is None else max(1, int(limit or 1))
     return {
         "available": True,
         "overall_sentiment": overall_sentiment,
         "sentiment_score": round(50 + (average_sentiment * 50)),
-        "high_impact_news": [item for item in scored if item["impact"] == "high"][:5],
-        "full_news_list": scored[: max(1, int(limit or 20))],
+        "high_impact_news": [item for item in scored if item["impact"] == "high"],
+        "full_news_list": scored[:full_limit],
         "news_count": len(raw_articles),
         "deduplicated_count": len(scored),
+        "dedup_removed_count": dedup_metadata.get("dedup_removed_count", 0),
         "data_quality": {"status": "complete", "sources_used": sources_used},
     }
 

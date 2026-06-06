@@ -69,7 +69,7 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         vendor_payloads=_vendor_payloads(),
     )
 
-    assert [period.key for period in highlights.periods] == ["FY23", "FY24", "FY25", "FY26Q1"]
+    assert [period.key for period in highlights.periods] == ["FY22", "FY23", "FY24", "FY25", "FY26Q1"]
     assert [row.key for row in highlights.rows] == [
         "revenue",
         "ebitda",
@@ -93,6 +93,12 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         "Dividends",
     ]
 
+    assert highlights.period_logic == "fy22_to_analysis_quarter"
+    revenue_rows = [row for row in highlights.rows if row.key == "revenue"]
+    assert len(revenue_rows) == 1
+    assert set(revenue_rows[0].values.keys()) == {"FY22", "FY23", "FY24", "FY25", "FY26Q1"}
+
+
 
 def test_builder_marks_reported_calculated_and_unavailable_cells():
     highlights = build_financial_highlights(
@@ -102,6 +108,8 @@ def test_builder_marks_reported_calculated_and_unavailable_cells():
     )
     rows = _rows(highlights)
 
+    assert rows["revenue"].values["FY22"].status == "reported"
+    assert rows["revenue"].values["FY22"].display == "100,000.0"
     assert rows["revenue"].values["FY23"].status == "reported"
     assert rows["revenue"].values["FY23"].display == "120,000.0"
     assert rows["revenue_growth"].values["FY23"].status == "calculated"
@@ -226,6 +234,7 @@ def test_builder_uses_idr_billion_and_point_in_time_market_cap():
 
     rows = _rows(highlights)
     assert highlights.scale_label == "IDR Bn"
+    assert rows["revenue"].unit == "IDR Bn"
     assert rows["revenue"].values["FY23"].value == 120.0
     assert highlights.point_in_time[0].display == "1,205,000.0"
     assert highlights.point_in_time[0].unit == "IDR Bn"

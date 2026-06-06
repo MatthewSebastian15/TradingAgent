@@ -59,6 +59,10 @@ function historySummary(overrides = {}) {
     trade_date: null,
     status: 'completed',
     decision: null,
+    display_signal:
+      overrides.display_signal ?? overrides.final_decision ?? overrides.decision ?? null,
+    confidence_score: overrides.confidence_score ?? null,
+    confidence_tier: overrides.confidence_tier ?? null,
     time_horizon_months: null,
     analysis_created_at: null,
     saved_at: expect.any(String),

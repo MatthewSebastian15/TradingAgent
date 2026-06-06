@@ -74,8 +74,16 @@ class CollectedData:
     analyst_consensus: dict[str, Any] | None = None
     data_sources: dict[str, str] | None = None
     data_limitations: list[str] | None = None
+    field_sources: dict[str, Any] | None = None
+    validation_summary: dict[str, Any] | None = None
+    warnings: list[str] | None = None
     vendor_attempts: dict[str, list[str]] | None = None
     request_budget: dict[str, Any] | None = None
+    data_freshness: dict[str, Any] | None = None
+    data_completeness: dict[str, Any] | None = None
+    fundamental_gap_report: dict[str, Any] | None = None
+    normalized_period_rows: list[dict[str, Any]] | None = None
+    derived_fundamentals: list[dict[str, Any]] | None = None
     financial_highlights: dict[str, Any] | None = None
     fundamental_analysis: dict[str, Any] | None = None
     prompt_context: dict[str, Any] | None = None

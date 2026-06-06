@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-FinancialPeriodType = Literal["annual", "quarter"]
+FinancialPeriodType = Literal["annual", "quarter", "quarterly", "ttm"]
 FinancialValueStatus = Literal["reported", "calculated", "estimated", "unavailable"]
 FinancialFormatType = Literal["currency_scaled", "per_share", "percent", "ratio", "number"]
 

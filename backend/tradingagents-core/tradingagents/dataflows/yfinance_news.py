@@ -121,12 +121,15 @@ def get_global_news_yfinance(
     Returns:
         Formatted string containing global news articles
     """
-    # Search queries for macro/global news
+    # Search queries for macro/global news. Keep broad global context, but add
+    # Asia/Indonesia/commodity/DXY terms so IDX analysis is not fed only US noise.
     search_queries = [
-        "stock market economy",
-        "Federal Reserve interest rates",
-        "inflation economic outlook",
-        "global markets trading",
+        "global stock market economy",
+        "Federal Reserve interest rates inflation",
+        "Asia Pacific markets emerging economy",
+        "Indonesia economy Rupiah Bank Indonesia",
+        "crude palm oil coal nickel commodity price",
+        "US dollar DXY forex emerging markets",
     ]
 
     all_news = []
