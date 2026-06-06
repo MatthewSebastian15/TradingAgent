@@ -61,30 +61,30 @@ Date,Open,High,Low,Close,Volume
     chart = _build_price_chart("TEST", "2026-05-30", price_data, 1, source="yfinance")
 
     assert chart["available"] is True
-    assert chart["lookback_days"] == 60
-    assert [point["date"] for point in chart["points"]] == ["2026-05-18", "2026-05-19"]
+    assert chart["lookback_days"] == 365
+    assert [point["date"] for point in chart["points"]] == ["2026-03-01", "2026-05-18", "2026-05-19"]
     assert chart["data"] == chart["points"]
-    assert chart["points"][0]["adjusted_close"] == 10.5
+    assert chart["points"][0]["adjusted_close"] == 8.5
     assert chart["stats"] == {
-        "start_price": 10.5,
+        "start_price": 8.5,
         "end_price": 11.25,
-        "change": 0.75,
-        "change_percent": 7.14,
+        "change": 2.75,
+        "change_percent": 32.35,
         "high": 12.0,
-        "low": 9.0,
-        "average_close": 10.88,
-        "average_volume": 1050,
-        "point_count": 2,
+        "low": 7.0,
+        "average_close": 10.08,
+        "average_volume": 867,
+        "point_count": 3,
     }
     assert chart["summary"] == {
-        "period_return_percent": 7.14,
+        "period_return_percent": 32.35,
         "period_high": 12.0,
-        "period_low": 9.0,
+        "period_low": 7.0,
         "max_drawdown_percent": 0.0,
-        "average_volume": 1050,
+        "average_volume": 867,
         "latest_volume": 1100,
         "latest_close": 11.25,
-        "volume_trend": "average",
+        "volume_trend": "above_average",
         "performance_label": "positive",
     }
 
@@ -125,8 +125,8 @@ Date,Open,High,Low,Close,Volume
     assert chart["stats"]["low"] == 9.0
 
 
-@pytest.mark.parametrize(("months", "lookback_days"), [(1, 60), (2, 90), (3, 120)])
-def test_build_price_chart_uses_horizon_lookback_and_returns_empty_state(months, lookback_days):
+@pytest.mark.parametrize(("months", "lookback_days"), [(1, 365), (2, 365), (3, 365)])
+def test_build_price_chart_uses_yoy_lookback_and_returns_empty_state(months, lookback_days):
     chart = _build_price_chart("TEST", "2026-05-30", "", months)
 
     assert chart["available"] is False
@@ -349,9 +349,9 @@ def test_build_related_news_returns_empty_state_when_news_is_missing():
     }
 
 
-def test_date_window_scales_with_time_horizon():
-    assert _date_window("2026-05-15", 1) == ("2026-03-16", "2026-04-15", "2026-05-16")
-    assert _date_window("2026-05-15", 3) == ("2026-01-15", "2026-02-14", "2026-05-16")
+def test_date_window_uses_yoy_price_window_and_horizon_news_window():
+    assert _date_window("2026-05-15", 1) == ("2025-05-15", "2026-04-15", "2026-05-16")
+    assert _date_window("2026-05-15", 3) == ("2025-05-15", "2026-02-14", "2026-05-16")
 
 
 def test_call_with_timeout_returns_without_waiting_for_hung_call():

@@ -244,21 +244,30 @@ def _volatility_classification(score: float | None) -> str | None:
     return "Very High"
 
 
-def calculate_volatility(symbol: str, lookback_days: int = 20) -> dict[str, Any]:
+def calculate_volatility(symbol: str, trade_date: str | None = None) -> dict[str, Any]:
     """Calculate annualized daily-return volatility on a 0-100 scale."""
     normalized = normalize_ticker(symbol)
+    end_dt = datetime.strptime(trade_date, "%Y-%m-%d") if trade_date else datetime.now()
+    start_dt = end_dt - relativedelta(years=1)
+    end_exclusive = end_dt + relativedelta(days=1)
     metadata = {
         "volatility_score": None,
         "volatility_scale": "0–100",
         "volatility_method": "Annualized standard deviation of daily returns, normalized to 0–100",
-        "volatility_lookback_days": lookback_days,
+        "volatility_lookback_days": 365,
+        "volatility_window": "YoY",
+        "volatility_start_date": start_dt.strftime("%Y-%m-%d"),
+        "volatility_end_date": end_exclusive.strftime("%Y-%m-%d"),
         "volatility_classification": None,
     }
     try:
-        hist = yf.Ticker(normalized).history(period=f"{lookback_days + 5}d")
+        hist = yf.Ticker(normalized).history(
+            start=start_dt.strftime("%Y-%m-%d"),
+            end=end_exclusive.strftime("%Y-%m-%d"),
+        )
         if hist is None or hist.empty or "Close" not in hist:
             return metadata
-        returns = hist["Close"].pct_change().dropna().tail(lookback_days)
+        returns = hist["Close"].pct_change().dropna()
         if len(returns) < 2:
             return metadata
         annual_vol = float(returns.std()) * math.sqrt(252)
@@ -344,9 +353,8 @@ def get_stock_stats_indicators_window(
     if indicator not in best_ind_params:
         raise ValueError(f"Indicator {indicator} is not supported. Please choose from: {list(best_ind_params.keys())}")
 
-    end_date = curr_date
     curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
-    before = curr_date_dt - relativedelta(days=look_back_days)
+    before = curr_date_dt - relativedelta(years=1)
 
     # Optimized: Get stock data once and calculate indicators for all dates
     try:
@@ -384,7 +392,7 @@ def get_stock_stats_indicators_window(
             curr_date_dt = curr_date_dt - relativedelta(days=1)
 
     result_str = (
-        f"## {indicator} values from {before.strftime('%Y-%m-%d')} to {end_date}:\n\n"
+        f"## {indicator} values from {before.strftime('%Y-%m-%d')} to {curr_date}:\n\n"
         + ind_string
         + "\n\n"
         + best_ind_params.get(indicator, "No description available.")

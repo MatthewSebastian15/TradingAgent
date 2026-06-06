@@ -1,9 +1,10 @@
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from io import StringIO
 from typing import Any
 
 import pandas as pd
+from dateutil.relativedelta import relativedelta
 
 from tradingagents.utils_resilience import TTLCache, call_with_retry, call_with_timeout
 
@@ -208,16 +209,22 @@ def _parse_last_quote_from_csv(raw: str, symbol: str, source: str) -> dict[str, 
 
 def get_yfinance_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
     end_dt = datetime.strptime(curr_date, "%Y-%m-%d") if curr_date else datetime.now()
-    start_dt = end_dt - timedelta(days=10)
-    raw = get_YFin_data_online(symbol, start_dt.strftime("%Y-%m-%d"), (end_dt + timedelta(days=1)).strftime("%Y-%m-%d"))
+    start_dt = end_dt - relativedelta(years=1)
+    raw = get_YFin_data_online(
+        symbol,
+        start_dt.strftime("%Y-%m-%d"),
+        (end_dt + relativedelta(days=1)).strftime("%Y-%m-%d"),
+    )
     return _parse_last_quote_from_csv(raw, symbol, "yfinance")
 
 
 def get_alpha_vantage_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
     end_dt = datetime.strptime(curr_date, "%Y-%m-%d") if curr_date else datetime.now()
-    start_dt = end_dt - timedelta(days=10)
+    start_dt = end_dt - relativedelta(years=1)
     raw = get_alpha_vantage_stock(
-        symbol, start_dt.strftime("%Y-%m-%d"), (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        symbol,
+        start_dt.strftime("%Y-%m-%d"),
+        (end_dt + relativedelta(days=1)).strftime("%Y-%m-%d"),
     )
     return _parse_last_quote_from_csv(raw, symbol, "alpha_vantage")
 

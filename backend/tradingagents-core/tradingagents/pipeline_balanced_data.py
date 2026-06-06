@@ -11,6 +11,8 @@ from io import StringIO
 from typing import Any, TypeVar
 from urllib.parse import urlsplit
 
+from dateutil.relativedelta import relativedelta
+
 from tradingagents.company_profile.builder import build_company_profile
 from tradingagents.dataflows.config import get_config, set_config, use_config
 from tradingagents.dataflows.corporate_actions import apply_corporate_action_adjustments
@@ -61,6 +63,7 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 VALID_TIME_HORIZON_MONTHS = {1, 2, 3}
+YEAR_ON_YEAR_PRICE_WINDOW_DAYS = 365
 
 
 def _quality_warning(code: str, severity: str, message: str, blocking: bool = False) -> dict[str, Any]:
@@ -106,7 +109,7 @@ def _horizon_days(time_horizon_months: int) -> int:
 
 
 def _price_lookback_days(time_horizon_months: int) -> int:
-    return _horizon_days(time_horizon_months) + 30
+    return YEAR_ON_YEAR_PRICE_WINDOW_DAYS
 
 
 def _check_cancel(cancel_check: Callable[[], bool] | None) -> None:
@@ -748,10 +751,9 @@ def _build_price_chart(
     source: str | None = None,
 ) -> dict[str, Any]:
     """Build frontend-ready OHLCV chart data from collected CSV price data."""
-    months = _normalize_time_horizon_months(time_horizon_months)
-    lookback_days = _price_lookback_days(months)
-    window_label = f"{months} Month{'s' if months > 1 else ''} Analysis / {lookback_days}D Price Window"
-    window = f"{months}M"
+    lookback_days = _price_lookback_days(time_horizon_months)
+    window_label = "Year-on-Year Price Window"
+    window = "YoY"
     currency = _currency_for_ticker(ticker)
 
     base_payload: dict[str, Any] = {
@@ -776,7 +778,7 @@ def _build_price_chart(
 
     try:
         cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
-        start_cutoff = cutoff - timedelta(days=lookback_days)
+        start_cutoff = cutoff - relativedelta(years=1)
     except ValueError:
         cutoff = None
         start_cutoff = None
@@ -887,9 +889,9 @@ def _build_price_chart(
 
 def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, str, str]:
     current = datetime.strptime(trade_date, "%Y-%m-%d")
-    start_price = (current - timedelta(days=_price_lookback_days(time_horizon_months))).strftime("%Y-%m-%d")
+    start_price = (current - relativedelta(years=1)).strftime("%Y-%m-%d")
     start_news = (current - timedelta(days=_horizon_days(time_horizon_months))).strftime("%Y-%m-%d")
-    end = (current + timedelta(days=1)).strftime("%Y-%m-%d")
+    end = (current + relativedelta(days=1)).strftime("%Y-%m-%d")
     return start_price, start_news, end
 
 
@@ -1136,7 +1138,7 @@ def _classify_price_data(
         return "missing"
     if len(price_dates) < 10:
         warnings.append(
-            f"Only {len(price_dates)} price rows found in the {price_lookback_days}-day configured vendor window."
+            f"Only {len(price_dates)} price rows found in the Year-on-Year configured vendor window."
         )
         return "partial"
     return "ok"
