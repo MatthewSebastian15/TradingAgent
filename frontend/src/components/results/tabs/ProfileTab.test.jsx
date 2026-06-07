@@ -41,10 +41,17 @@ describe('ProfileTab', () => {
           available: true,
           ticker: 'BBCA.JK',
           company_name: 'PT Bank Central Asia Tbk',
+          exchange: 'IDX',
           currency: 'IDR',
+          country: 'Indonesia',
+          sector: 'Financial Services',
+          industry: 'Banks',
           market_cap: 1205000000000000,
           shares_outstanding: 123275050000,
           current_price: 9800,
+          fiscal_year_end: 'December',
+          full_time_employees: 27000,
+          website: 'https://www.bca.co.id',
           data_quality: { status: 'partial' },
         }}
       />
@@ -55,6 +62,12 @@ describe('ProfileTab', () => {
     expect(screen.getByText('1,205,000.0 IDR Bn')).toBeTruthy();
     expect(screen.getByText('123,275,050,000')).toBeTruthy();
     expect(screen.getByText('Rp 9,800')).toBeTruthy();
+    expect(screen.getByText('27,000')).toBeTruthy();
+    expect(screen.getByText('Websites')).toBeTruthy();
+    expect(screen.queryByText('Exchange')).toBeNull();
+    expect(screen.queryByText('IDX')).toBeNull();
+    expect(screen.queryByText('Fiscal Year End')).toBeNull();
+    expect(screen.queryByText('December')).toBeNull();
     expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
   });
 });

@@ -4,6 +4,7 @@ import json
 import logging
 import queue
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -56,6 +57,70 @@ from tradingagents.pipeline_balanced_types import (
 from tradingagents.trade_levels import normalize_trade_levels
 
 logger = logging.getLogger(__name__)
+
+PIPELINE_TIMING_ORDER = [
+    "data_collection",
+    "market_analyst",
+    "news_analyst",
+    "fundamentals",
+    "bull_researcher",
+    "bear_researcher",
+    "research_manager",
+    "trader",
+    "risk_analysts",
+    "portfolio_manager",
+]
+
+
+def _record_skipped_timing(
+    timings: dict[str, dict[str, Any]],
+    agent_id: str,
+    name: str,
+    reason: str,
+) -> None:
+    timings[agent_id] = {
+        "name": name,
+        "status": "skipped",
+        "duration_seconds": 0.0,
+        "warning": reason,
+    }
+
+
+def _build_agent_pipeline_rows(timings: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def append_row(agent_id: str, timing: dict[str, Any]) -> None:
+        status = str(timing.get("status") or "ok").lower()
+        warning = str(timing.get("warning") or "").strip()
+        if status == "skipped":
+            output_summary = warning or "Skipped by the selected analysis mode."
+        elif status in {"error", "failed", "fail"}:
+            output_summary = warning or "Agent failed before producing a summary."
+        else:
+            output_summary = warning or "Completed successfully."
+
+        rows.append(
+            {
+                "id": agent_id,
+                "name": timing.get("name") or agent_id.replace("_", " ").title(),
+                "status": status,
+                "duration_seconds": timing.get("duration_seconds"),
+                "output_summary": output_summary,
+            }
+        )
+        seen.add(agent_id)
+
+    for agent_id in PIPELINE_TIMING_ORDER:
+        timing = timings.get(agent_id)
+        if timing:
+            append_row(agent_id, timing)
+
+    for agent_id, timing in timings.items():
+        if agent_id not in seen:
+            append_row(agent_id, timing)
+
+    return rows
 
 
 def _limit_unique_text_items(items: list[str], limit: int = 5) -> list[str]:
@@ -191,6 +256,7 @@ def _build_initial_analyst_reports(
     llm_budget: LLMBudget,
     progress_callback: ProgressCallback | None,
     cancel_check: Callable[[], bool] | None,
+    timings: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[AnalystReport, AnalystReport, AnalystReport]:
     analyst_event_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
     analyst_forwarder: threading.Thread | None = None
@@ -237,6 +303,7 @@ def _build_initial_analyst_reports(
                 llm_budget,
                 cancel_check,
             ),
+            timings=timings,
         )
 
     def build_news_social_report_parallel() -> AnalystReport:
@@ -256,6 +323,7 @@ def _build_initial_analyst_reports(
                 llm_budget,
                 cancel_check,
             ),
+            timings=timings,
         )
 
     def build_fundamentals_report_parallel() -> AnalystReport:
@@ -275,6 +343,7 @@ def _build_initial_analyst_reports(
                 llm_budget,
                 cancel_check,
             ),
+            timings=timings,
         )
 
     try:
@@ -315,6 +384,8 @@ def run_balanced_pipeline(
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
     time_horizon_text = _time_horizon_label(time_horizon_months)
     llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
+    pipeline_started_at = time.perf_counter()
+    pipeline_timings: dict[str, dict[str, Any]] = {}
     _emit_progress(
         progress_callback, "news_fetch", "started", "Fetching normalized company news from configured providers..."
     )
@@ -324,6 +395,7 @@ def run_balanced_pipeline(
         "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
         lambda: collect_market_data(ticker, trade_date, config, cancel_check=cancel_check),
         cancel_check=cancel_check,
+        timings=pipeline_timings,
     )
     _emit_progress(
         progress_callback,
@@ -347,6 +419,7 @@ def run_balanced_pipeline(
         llm_budget,
         progress_callback,
         cancel_check,
+        pipeline_timings,
     )
 
     market_md = _report_to_markdown(market_report)
@@ -358,6 +431,18 @@ def run_balanced_pipeline(
     if analysis_depth == "fast":
         _emit_progress(progress_callback, "bull_researcher", "completed", "Bull debate skipped in fast mode.")
         _emit_progress(progress_callback, "bear_researcher", "completed", "Bear debate skipped in fast mode.")
+        _record_skipped_timing(
+            pipeline_timings,
+            "bull_researcher",
+            "Bull Researcher",
+            "Skipped in fast mode to reduce LLM calls.",
+        )
+        _record_skipped_timing(
+            pipeline_timings,
+            "bear_researcher",
+            "Bear Researcher",
+            "Skipped in fast mode to reduce LLM calls.",
+        )
         bull = DebateArgument(
             stance="bull",
             thesis=f"Fast mode uses the analyst reports directly for {ticker} instead of a separate bull debate.",
@@ -424,6 +509,7 @@ def run_balanced_pipeline(
                 llm_budget,
                 cancel_check,
             ),
+            timings=pipeline_timings,
         )
 
         bear = _run_tracked(
@@ -459,6 +545,7 @@ def run_balanced_pipeline(
                 llm_budget,
                 cancel_check,
             ),
+            timings=pipeline_timings,
         )
         debate_history.extend(
             [
@@ -501,6 +588,7 @@ def run_balanced_pipeline(
                     llm_budget,
                     cancel_check,
                 ),
+                timings=pipeline_timings,
             )
             debate_history.append(render_debate_argument(bull, f"Bull Researcher R{round_number}"))
 
@@ -538,6 +626,7 @@ def run_balanced_pipeline(
                     llm_budget,
                     cancel_check,
                 ),
+                timings=pipeline_timings,
             )
             debate_history.append(render_debate_argument(bear, f"Bear Researcher R{round_number}"))
 
@@ -570,6 +659,7 @@ def run_balanced_pipeline(
             llm_budget,
             cancel_check,
         ),
+        timings=pipeline_timings,
     )
     investment_plan = _research_plan_to_markdown(research_plan)
 
@@ -598,6 +688,7 @@ def run_balanced_pipeline(
             llm_budget,
             cancel_check,
         ),
+        timings=pipeline_timings,
     )
     trader_plan = render_trader_proposal(trader_proposal)
 
@@ -607,6 +698,12 @@ def run_balanced_pipeline(
             "risk_analysts",
             "completed",
             "Risk committee skipped in fast mode; conservative risk fallback applied.",
+        )
+        _record_skipped_timing(
+            pipeline_timings,
+            "risk_analysts",
+            "Risk Analysts",
+            "Skipped in fast mode; conservative risk fallback applied.",
         )
         risk_report = RiskCommitteeReport(
             overall_risk_level="Medium" if data.data_quality.price_data == "ok" else "High",
@@ -660,6 +757,7 @@ def run_balanced_pipeline(
                 llm_budget,
                 cancel_check,
             ),
+            timings=pipeline_timings,
         )
         for round_number in range(2, extra_risk_rounds + 2):
             prior_risk_md = _risk_to_markdown(risk_report)
@@ -695,6 +793,7 @@ def run_balanced_pipeline(
                     llm_budget,
                     cancel_check,
                 ),
+                timings=pipeline_timings,
             )
     risk_md = _risk_to_markdown(risk_report)
 
@@ -732,6 +831,7 @@ def run_balanced_pipeline(
             llm_budget,
             cancel_check,
         ),
+        timings=pipeline_timings,
     )
 
     portfolio_decision = normalize_trade_levels(
@@ -748,6 +848,7 @@ def run_balanced_pipeline(
     )
 
     budget_snapshot = llm_budget.snapshot()
+    total_pipeline_seconds = round(time.perf_counter() - pipeline_started_at, 1)
 
     return {
         "company_of_interest": ticker,
@@ -817,4 +918,6 @@ def run_balanced_pipeline(
         "balanced_gemini_calls_used": budget_snapshot["used"],
         "budget_exhausted": budget_snapshot["budget_exhausted"],
         "agents_skipped": budget_snapshot["agents_skipped"],
+        "agent_pipeline": _build_agent_pipeline_rows(pipeline_timings),
+        "total_pipeline_seconds": total_pipeline_seconds,
     }

@@ -91,7 +91,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(paragraph.textContent).toContain('Main risks include earnings miss');
     expect(countWords(paragraph.textContent)).toBeGreaterThanOrEqual(100);
     expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(150);
-    expect(container.textContent).not.toContain('KEY REASONS');
+    expect(container.textContent).toContain('KEY REASONS & RISK SUMMARY');
     expect(container.textContent).not.toContain('MINI RISK SUMMARY');
   });
 
@@ -101,7 +101,8 @@ describe('ResultCard risk-engine contract', () => {
     const result = {
       ...MOCK_RESPONSE,
       key_reasons_paragraph: longParagraph,
-      mini_risk_summary: 'Risk remains elevated while source freshness and execution levels need confirmation.',
+      mini_risk_summary:
+        'Risk remains elevated while source freshness and execution levels need confirmation.',
       analysis_overview: {
         ...MOCK_RESPONSE.analysis_overview,
         key_reasons_paragraph: longParagraph,
@@ -141,8 +142,8 @@ describe('ResultCard risk-engine contract', () => {
     fireEvent.click(screen.getByText('Agent Pipeline'));
 
     expect(screen.getByText('Custom Risk Agent')).toBeTruthy();
-    expect(screen.getByText('Checks drawdown, liquidity, and sizing limits.')).toBeTruthy();
-    expect(screen.getByText('selesai')).toBeTruthy();
+    expect(screen.getByText('completed')).toBeTruthy();
+    expect(screen.getByText('Execution: 4.3s')).toBeTruthy();
     expect(screen.getByText('Risk is acceptable with moderate allocation.')).toBeTruthy();
     expect(screen.getAllByText('4.3s').length).toBeGreaterThan(0);
   });
