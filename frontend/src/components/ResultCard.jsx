@@ -731,29 +731,31 @@ ExpandableTextSection.propTypes = {
 };
 
 const AGENT_ROLE_FALLBACKS = {
-  'Data Collection': 'Mengambil harga, fundamental, berita, dan metadata awal.',
-  'Market Analyst': 'Menganalisis tren harga, momentum, volume, volatilitas, dan level teknikal.',
-  'News Analyst': 'Meringkas berita, sentimen, katalis, dan risiko headline.',
-  'Fundamentals Analyst': 'Mengevaluasi laporan keuangan, rasio, kualitas laba, dan valuasi.',
-  'Bull Researcher': 'Menyusun argumen pendukung rekomendasi dan katalis positif.',
-  'Bear Researcher': 'Menguji risiko, kontra-argumen, dan kondisi invalidasi.',
-  'Research Manager': 'Menimbang argumen bull/bear dan memilih tesis paling kuat.',
-  Trader: 'Menerjemahkan tesis menjadi rencana entry, stop, target, dan sizing.',
-  'Risk Analysts': 'Memeriksa drawdown, volatilitas, leverage, likuiditas, dan kelayakan risiko.',
-  'Risk Manager': 'Memeriksa risiko portofolio dan batas eksposur.',
-  'Portfolio Manager': 'Menetapkan keputusan akhir, alokasi, dan konteks posisi.',
+  'Data Collection': 'Collects prices, fundamentals, news, and source metadata.',
+  'Market Analyst': 'Reviews trend, momentum, volume, volatility, and technical levels.',
+  'News Analyst': 'Summarizes news, sentiment, catalysts, and headline risk.',
+  'News + Social Analyst': 'Summarizes news, sentiment, catalysts, and headline risk.',
+  'Fundamentals Analyst': 'Reviews financial statements, ratios, earnings quality, and valuation.',
+  'Bull Researcher': 'Builds the upside case and positive catalyst view.',
+  'Bear Researcher': 'Tests downside risk, counterarguments, and invalidation points.',
+  'Research Manager': 'Compares bull and bear arguments and selects the strongest thesis.',
+  Trader: 'Turns the thesis into entry, stop, target, and sizing guidance.',
+  'Risk Analysts': 'Checks drawdown, volatility, leverage, liquidity, and risk fit.',
+  'Risk Manager': 'Checks portfolio risk and exposure limits.',
+  'Portfolio Manager': 'Sets the final decision, allocation, and position context.',
 };
 
 function normalizePipelineStatus(status) {
   const normalized = String(status || 'completed').toLowerCase();
-  if (['error', 'failed', 'fail'].includes(normalized)) return 'gagal';
-  if (['skip', 'skipped'].includes(normalized)) return 'skip';
-  return 'selesai';
+  if (['error', 'failed', 'fail'].includes(normalized)) return 'failed';
+  if (['skip', 'skipped'].includes(normalized)) return 'skipped';
+  return 'completed';
 }
 
 function pipelineStatusClasses(status) {
-  if (status === 'gagal') return 'border-bloomberg-red text-bloomberg-red bg-bloomberg-red-dim';
-  if (status === 'skip') return 'border-bloomberg-amber text-bloomberg-amber bg-bloomberg-amber-dim';
+  if (status === 'failed') return 'border-bloomberg-red text-bloomberg-red bg-bloomberg-red-dim';
+  if (status === 'skipped')
+    return 'border-bloomberg-amber text-bloomberg-amber bg-bloomberg-amber-dim';
   return 'border-bloomberg-green text-bloomberg-green bg-bloomberg-green-dim';
 }
 
@@ -778,11 +780,11 @@ function normalizePipelineRows(pipeline = [], agents = []) {
           agent.summary ||
           agent.status_message ||
           warning ||
-          (status === 'skip'
-            ? 'Agent dilewati oleh pipeline.'
-            : status === 'gagal'
-              ? 'Agent gagal menghasilkan output.'
-              : 'Agent selesai tanpa output ringkas dari backend.')
+          (status === 'skipped'
+            ? 'Skipped by the selected pipeline mode.'
+            : status === 'failed'
+              ? 'Agent failed before producing a summary.'
+              : 'Completed. No compact backend summary was provided.')
       );
 
       return {
@@ -791,11 +793,15 @@ function normalizePipelineRows(pipeline = [], agents = []) {
         role:
           normalizeInlineText(agent.role || agent.function || agent.description) ||
           AGENT_ROLE_FALLBACKS[name] ||
-          'Menjalankan tahap analisis sesuai pipeline.',
+          'Runs the assigned analysis step in the pipeline.',
         status,
         output,
         duration: formatDuration(
-          agent.duration_seconds || agent.elapsed_seconds || agent.execution_seconds
+          coalesceDisplayValue(
+            agent.duration_seconds,
+            agent.elapsed_seconds,
+            agent.execution_seconds
+          )
         ),
       };
     });
@@ -806,9 +812,9 @@ function normalizePipelineRows(pipeline = [], agents = []) {
     return {
       key: `${name}-${index}`,
       name,
-      role: AGENT_ROLE_FALLBACKS[name] || 'Menjalankan tahap analisis sesuai pipeline.',
-      status: 'selesai',
-      output: 'Agent tercatat selesai. Backend tidak mengirim output ringkas terpisah.',
+      role: AGENT_ROLE_FALLBACKS[name] || 'Runs the assigned analysis step in the pipeline.',
+      status: 'completed',
+      output: 'Completed. No compact backend summary was provided.',
       duration: 'N/A',
     };
   });
@@ -828,47 +834,41 @@ function AgentPipeline({ pipeline = [], agents = [], totalSeconds }) {
           className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left font-mono text-[11px] tracking-wider text-bloomberg-muted hover:text-bloomberg-white"
         >
           <span>Agent Pipeline</span>
-          <span>{expanded ? '▲ Hide' : '▾ Details'}</span>
+          <span className="flex items-center gap-3">
+            <span>Execution: {formatDuration(totalSeconds)}</span>
+            <span>{expanded ? '▲ Hide' : '▾ Details'}</span>
+          </span>
         </button>
         {expanded && (
           <div className="border-t border-bloomberg-border px-3 py-3">
-            <div className="grid grid-cols-1 gap-2">
+            <div className="flex flex-col gap-1.5">
               {rows.map((agent) => (
                 <article
                   key={agent.key}
-                  className="border border-bloomberg-border bg-black px-3 py-2"
+                  className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border border-bloomberg-border bg-black px-3 py-2"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <div className="font-mono text-xs font-semibold text-bloomberg-white">
-                        {agent.name}
-                      </div>
-                      <div className="mt-1 font-mono text-[11px] text-bloomberg-muted leading-relaxed">
-                        {agent.role}
-                      </div>
+                  <div className="min-w-0">
+                    <div className="font-mono text-xs font-semibold text-bloomberg-white truncate">
+                      {agent.name}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${pipelineStatusClasses(agent.status)}`}
-                      >
-                        {agent.status}
-                      </span>
-                      <span className="border border-bloomberg-border px-2 py-1 font-mono text-[10px] text-bloomberg-muted">
-                        {agent.duration}
-                      </span>
+                    <div className="mt-0.5 font-mono text-[11px] text-bloomberg-muted leading-relaxed truncate">
+                      {agent.output || agent.role}
                     </div>
                   </div>
-                  <p className="mt-2 font-mono text-xs text-bloomberg-muted leading-relaxed">
-                    {agent.output}
-                  </p>
+                  <span
+                    className={`border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${pipelineStatusClasses(agent.status)}`}
+                  >
+                    {agent.status}
+                  </span>
+                  <span
+                    className="border border-bloomberg-border px-2 py-1 font-mono text-[10px] text-bloomberg-muted"
+                    title="Execution time"
+                  >
+                    {agent.duration}
+                  </span>
                 </article>
               ))}
             </div>
-            {hasDisplayValue(totalSeconds) && (
-              <div className="mt-3 border-t border-bloomberg-border pt-2 font-mono text-xs text-bloomberg-white">
-                Total pipeline time: {formatDuration(totalSeconds)}
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1215,6 +1215,7 @@ export default function ResultCard({
 
           {recommendationRiskParagraph && (
             <div className="px-4 py-4 border-b border-bloomberg-border">
+              <SectionHeader label="KEY REASONS & RISK SUMMARY" />
               <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
                 {recommendationRiskParagraph}
               </p>

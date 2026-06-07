@@ -106,11 +106,6 @@ export default function ProfileTab({ profile, result }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <ProfileField label="Company Name" value={companyName} quality={profileQuality} />
           <ProfileField label="Ticker" value={profile.ticker} />
-          <ProfileField
-            label="Exchange"
-            value={profile.exchange}
-            quality={getFieldQuality(dataQuality, 'exchange') || profileQuality}
-          />
           <ProfileField label="Currency" value={profile.currency} />
           <ProfileField
             label="Country"
@@ -141,14 +136,13 @@ export default function ProfileTab({ profile, result }) {
             value={formatCurrentPrice(profile.current_price, profile.currency)}
             quality={getFieldQuality(dataQuality, 'last_price')}
           />
-          <ProfileField label="Fiscal Year End" value={profile.fiscal_year_end} />
           <ProfileField
             label="Employees"
             value={formatNumber(employeeCount)}
             quality={profileQuality}
           />
           <ProfileField
-            label="Website"
+            label="Websites"
             value={
               websiteUrl ? (
                 <a
