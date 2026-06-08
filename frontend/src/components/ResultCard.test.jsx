@@ -309,7 +309,10 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('PERIOD HIGH')).toBeNull();
     expect(screen.queryByText('PERIOD LOW')).toBeNull();
     expect(screen.queryByText('LATEST CLOSE')).toBeNull();
-    expect(screen.getByText('120 Days Price')).toBeTruthy();
+    expect(screen.getByText('YOY Price Window (2025-05-18 to 2026-05-18)')).toBeTruthy();
+    expect(
+      screen.getByText(/Window: YOY · Start Date: 2025-05-18 · End Date: 2026-05-18/)
+    ).toBeTruthy();
     expect(screen.getByText(/Source:/)).toBeTruthy();
     expect(screen.queryByText('POINTS')).toBeNull();
     expect(screen.queryByText('TECHNICAL ENTRY QUALITY')).toBeNull();

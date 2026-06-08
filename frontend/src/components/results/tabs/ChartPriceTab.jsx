@@ -29,8 +29,41 @@ function displayPrice(value, ticker) {
   return formatPrice(unwrapValue(value), ticker) || 'N/A';
 }
 
-function formatWindowLabel(chart) {
-  if (hasValue(chart.lookback_days)) return `${chart.lookback_days} Days Price`;
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function daysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function subtractOneYear(dateValue) {
+  if (!isIsoDate(dateValue)) return null;
+  const [year, month, day] = String(dateValue).split('-').map(Number);
+  const targetYear = year - 1;
+  const safeDay = Math.min(day, daysInMonth(targetYear, month));
+  return `${targetYear}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`;
+}
+
+function yoyWindowDates(chart, points) {
+  const endDate = isIsoDate(chart.end_date)
+    ? chart.end_date
+    : isIsoDate(chart.trade_date)
+      ? chart.trade_date
+      : points.at(-1)?.date;
+  const startDate = isIsoDate(chart.start_date)
+    ? chart.start_date
+    : subtractOneYear(endDate) || points[0]?.date;
+
+  return { startDate, endDate };
+}
+
+function formatWindowLabel(chart, points) {
+  if (String(chart.window || '').toUpperCase() === 'YOY' || hasValue(chart.lookback_days)) {
+    const { startDate, endDate } = yoyWindowDates(chart, points);
+    if (startDate && endDate) return `YOY Price Window (${startDate} to ${endDate})`;
+    return 'YOY Price Window';
+  }
   return chart.window_label || 'N/A';
 }
 
@@ -40,6 +73,7 @@ export default function ChartPriceTab({ result }) {
   const stats = chart.stats || {};
   const performance = result?.price_performance || chart.summary || {};
   const ticker = chart.ticker || result?.ticker;
+  const { startDate, endDate } = yoyWindowDates(chart, points);
 
   if (chart.available !== true || points.length < 2) {
     return (
@@ -57,10 +91,13 @@ export default function ChartPriceTab({ result }) {
         <SectionHeader label="CHART & PRICE" />
         <div>
           <div className="font-mono text-sm font-semibold text-bloomberg-white">
-            {formatWindowLabel(chart)}
+            {formatWindowLabel(chart, points)}
           </div>
           <div className="mt-1 font-mono text-[11px] text-bloomberg-muted">
             Source: {chart.source || 'N/A'}
+          </div>
+          <div className="mt-1 font-mono text-[11px] text-bloomberg-muted">
+            Window: YOY · Start Date: {startDate || 'N/A'} · End Date: {endDate || 'N/A'}
           </div>
         </div>
       </section>

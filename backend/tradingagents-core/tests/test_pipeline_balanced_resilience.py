@@ -61,7 +61,11 @@ Date,Open,High,Low,Close,Volume
     chart = _build_price_chart("TEST", "2026-05-30", price_data, 1, source="yfinance")
 
     assert chart["available"] is True
+    assert chart["window"] == "YOY"
+    assert chart["window_label"] == "YOY Price Window"
     assert chart["lookback_days"] == 365
+    assert chart["start_date"] == "2025-05-30"
+    assert chart["end_date"] == "2026-05-30"
     assert [point["date"] for point in chart["points"]] == ["2026-03-01", "2026-05-18", "2026-05-19"]
     assert chart["data"] == chart["points"]
     assert chart["points"][0]["adjusted_close"] == 8.5
@@ -130,7 +134,11 @@ def test_build_price_chart_uses_yoy_lookback_and_returns_empty_state(months, loo
     chart = _build_price_chart("TEST", "2026-05-30", "", months)
 
     assert chart["available"] is False
+    assert chart["window"] == "YOY"
+    assert chart["window_label"] == "YOY Price Window"
     assert chart["lookback_days"] == lookback_days
+    assert chart["start_date"] == "2025-05-30"
+    assert chart["end_date"] == "2026-05-30"
     assert chart["points"] == []
     assert chart["data"] == []
     assert chart["stats"] == {}

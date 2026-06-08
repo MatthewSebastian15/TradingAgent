@@ -1289,16 +1289,29 @@ function formatTimeHorizon(months) {
   return `${normalized} Month${normalized > 1 ? 's' : ''}`;
 }
 
-function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', months = 1 } = {}) {
-  const lookbackDays = normalizeTimeHorizonMonths(months) * 30 + 30;
+const YEAR_ON_YEAR_PRICE_WINDOW_DAYS = 365;
+
+function daysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function subtractOneYearIsoDate(dateValue) {
+  const [year, month, day] = String(dateValue).split('-').map(Number);
+  const targetYear = year - 1;
+  const safeDay = Math.min(day, daysInMonth(targetYear, month));
+  return `${targetYear}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`;
+}
+
+function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30' } = {}) {
+  const lookbackDays = YEAR_ON_YEAR_PRICE_WINDOW_DAYS;
   const points = [];
   const end = new Date(`${tradeDate}T00:00:00Z`);
+  const startDate = subtractOneYearIsoDate(tradeDate);
+  const start = new Date(`${startDate}T00:00:00Z`);
   let previousClose = ticker.endsWith('.JK') ? 9000 : 900;
 
-  for (let i = lookbackDays - 1; i >= 0; i -= 1) {
-    const date = new Date(end);
-    date.setUTCDate(end.getUTCDate() - i);
-    const sequence = lookbackDays - i;
+  for (let date = new Date(start); date <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+    const sequence = points.length + 1;
     const scale = ticker.endsWith('.JK') ? 1 : 0.1;
     const direction = sequence % 7 === 0 || sequence % 11 === 0 ? -1 : 1;
     const bodyMove = direction * (20 + (sequence % 6) * 8) * scale;
@@ -1357,9 +1370,11 @@ function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', mo
     ticker,
     trade_date: tradeDate,
     currency: ticker.endsWith('.JK') ? 'IDR' : 'USD',
-    window: `${normalizeTimeHorizonMonths(months)}M`,
-    window_label: `${normalizeTimeHorizonMonths(months)} Month${normalizeTimeHorizonMonths(months) > 1 ? 's' : ''} Analysis / ${lookbackDays}D Price Window`,
+    window: 'YOY',
+    window_label: 'YOY Price Window',
     lookback_days: lookbackDays,
+    start_date: startDate,
+    end_date: tradeDate,
     points,
     data: points,
     stats: {

@@ -752,15 +752,27 @@ def _build_price_chart(
 ) -> dict[str, Any]:
     """Build frontend-ready OHLCV chart data from collected CSV price data."""
     lookback_days = _price_lookback_days(time_horizon_months)
-    window_label = "Year-on-Year Price Window"
-    window = "YoY"
+    window_label = "YOY Price Window"
+    window = "YOY"
     currency = _currency_for_ticker(ticker)
+
+    try:
+        cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
+        start_cutoff = cutoff - relativedelta(years=1)
+    except ValueError:
+        cutoff = None
+        start_cutoff = None
+
+    start_date = start_cutoff.strftime("%Y-%m-%d") if start_cutoff is not None else None
+    end_date = cutoff.strftime("%Y-%m-%d") if cutoff is not None else trade_date
 
     base_payload: dict[str, Any] = {
         "available": False,
         "source": source or "unavailable",
         "ticker": ticker,
         "trade_date": trade_date,
+        "start_date": start_date,
+        "end_date": end_date,
         "currency": currency,
         "window": window,
         "window_label": window_label,
@@ -775,13 +787,6 @@ def _build_price_chart(
     lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if not lines:
         return {**base_payload, "warning": "Price chart data is unavailable."}
-
-    try:
-        cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
-        start_cutoff = cutoff - relativedelta(years=1)
-    except ValueError:
-        cutoff = None
-        start_cutoff = None
 
     points: list[dict[str, Any]] = []
 

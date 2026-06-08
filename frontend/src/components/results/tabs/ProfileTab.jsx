@@ -163,7 +163,7 @@ export default function ProfileTab({ profile, result }) {
 
       <section>
         <SectionHeader label="BUSINESS DESCRIPTION" />
-        <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+        <p className="font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">
           {display(businessSummary)}
         </p>
       </section>
