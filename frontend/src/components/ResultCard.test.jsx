@@ -117,7 +117,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(150);
   });
 
-  it('renders detailed Agent Pipeline as collapsed by default and expands on click', () => {
+  it('renders compact Agent Pipeline without expanded detail rows', () => {
     render(
       <ResultCard
         result={{
@@ -137,15 +137,10 @@ describe('ResultCard risk-engine contract', () => {
     );
 
     expect(screen.getByText('Agent Pipeline')).toBeTruthy();
-    expect(screen.queryByText('Custom Risk Agent')).toBeNull();
-
-    fireEvent.click(screen.getByText('Agent Pipeline'));
-
     expect(screen.getByText('Custom Risk Agent')).toBeTruthy();
-    expect(screen.getByText('completed')).toBeTruthy();
-    expect(screen.getByText('Execution: 4.3s')).toBeTruthy();
-    expect(screen.getByText('Risk is acceptable with moderate allocation.')).toBeTruthy();
+    expect(screen.getByText(/Execution: 4\.3s · 1\/1 completed/)).toBeTruthy();
     expect(screen.getAllByText('4.3s').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Risk is acceptable with moderate allocation.')).toBeNull();
   });
 
   it('renders financial highlights only inside Fundamental', () => {
