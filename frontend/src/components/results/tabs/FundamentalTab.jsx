@@ -1,67 +1,138 @@
 import PropTypes from 'prop-types';
 
 import FinancialHighlightsTable from '../FinancialHighlightsTable';
-import MetricBox from '../MetricBox';
 import SectionHeader from '../SectionHeader';
 
-function displayMetric(metric) {
-  const status = String(metric?.status || '').toLowerCase();
-  if (
-    !metric ||
-    [
-      'unavailable',
-      'source_unavailable',
-      'no_dividend_history',
-      'not_applicable_negative_earnings',
-    ].includes(status)
-  ) {
-    return null;
-  }
-  const value =
-    metric.status === 'estimated'
-      ? `${metric.display ?? 'N/A'} EST`
-      : (metric.display ?? metric.value ?? null);
-  return formatInlineValue(value);
+const UNAVAILABLE_CELL = { value: null, display: '-', status: 'unavailable' };
+
+const LEGACY_FUNDAMENTAL_SECTIONS = [
+  {
+    key: 'valuation_multiples',
+    title: 'VALUATION MULTIPLES',
+    payloadKey: 'valuation_multiples',
+    rows: [
+      ['market_cap', 'Market Cap', 'currency_scaled'],
+      ['enterprise_value', 'Enterprise Value', 'currency_scaled'],
+      ['pe', 'P/E', 'ratio'],
+      ['pbv', 'P/BV', 'ratio'],
+      ['ps', 'P/S', 'ratio'],
+      ['ev_ebitda', 'EV/EBITDA', 'ratio'],
+    ],
+  },
+  {
+    key: 'quality_of_earnings',
+    title: 'QUALITY OF EARNINGS',
+    payloadKey: 'quality_of_earnings',
+    rows: [
+      ['cfo_to_net_income', 'CFO / Net Income', 'ratio'],
+      ['free_cash_flow', 'Free Cash Flow', 'currency_scaled'],
+      ['capex_intensity_percent', 'Capex Intensity (%)', 'percent'],
+    ],
+  },
+  {
+    key: 'balance_sheet_risk',
+    title: 'BALANCE SHEET RISK',
+    payloadKey: 'balance_sheet_risk',
+    rows: [
+      ['der', 'DER', 'ratio'],
+      ['net_debt', 'Net Debt', 'currency_scaled'],
+      ['debt_to_ebitda', 'Debt / EBITDA', 'ratio'],
+      ['cash_ratio', 'Cash Ratio', 'ratio'],
+      ['equity_ratio', 'Equity Ratio', 'ratio'],
+    ],
+  },
+  {
+    key: 'dividend_quality',
+    title: 'DIVIDEND QUALITY',
+    payloadKey: 'dividend_quality',
+    rows: [
+      ['dividend_yield_percent', 'Dividend Yield', 'percent'],
+      ['payout_ratio_percent', 'Payout Ratio', 'percent'],
+      ['fcf_coverage', 'FCF Coverage', 'ratio'],
+    ],
+  },
+];
+
+function unavailableText(value) {
+  if (value === null || value === undefined || value === '') return '-';
+  const text = String(value).trim();
+  return ['n/a', 'na', 'source unavailable', 'none', 'null'].includes(text.toLowerCase()) ? '-' : text;
 }
 
 function displayPercent(value) {
-  return value === null || value === undefined ? 'N/A' : `${value} %`;
+  const text = unavailableText(value);
+  return text === '-' ? '-' : `${text} %`;
 }
 
-function formatInlineValue(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const text = String(value);
-  if (text.toLowerCase() === 'source unavailable') return null;
-  return text.replace(/\s*%/g, ' %');
+function unitForFormat(formatType, financialHighlights) {
+  if (formatType === 'currency_scaled') {
+    return financialHighlights?.scale_label || financialHighlights?.currency || '';
+  }
+  if (formatType === 'percent') return '%';
+  if (formatType === 'ratio') return 'x';
+  if (formatType === 'per_share') return `${financialHighlights?.currency || ''}/share`;
+  return '';
 }
 
-function MetricSection({ title, payload, metrics, summary }) {
-  if (!payload) return null;
-  return (
-    <section className="px-4 py-4 border-b border-bloomberg-border space-y-3">
-      <SectionHeader label={title} />
-      {summary}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {metrics.map(([key, label]) => (
-          <MetricBox
-            key={key}
-            label={label}
-            value={displayMetric(payload.metric_details?.[key])}
-            compact
-            preserveSlot
-          />
-        ))}
-      </div>
-    </section>
-  );
+function legacyCell(payload, key) {
+  const details = payload?.metric_details || {};
+  const detail = details[key];
+  if (detail && typeof detail === 'object') return detail;
+  if (payload && Object.prototype.hasOwnProperty.call(payload, key)) {
+    const value = payload[key];
+    return value === null || value === undefined
+      ? UNAVAILABLE_CELL
+      : { value, display: String(value), status: 'reported' };
+  }
+  return UNAVAILABLE_CELL;
 }
 
-MetricSection.propTypes = {
-  title: PropTypes.string.isRequired,
-  payload: PropTypes.object,
-  metrics: PropTypes.array.isRequired,
-  summary: PropTypes.node,
-};
+function appendLegacyFundamentalSections(financialHighlights, result) {
+  const periods = Array.isArray(financialHighlights?.periods) ? financialHighlights.periods : [];
+  const sections = Array.isArray(financialHighlights?.sections) ? financialHighlights.sections : [];
+  if (!periods.length) return financialHighlights;
+
+  const existingKeys = new Set(sections.map((section) => section?.key));
+  const latestPeriodKey = periods[periods.length - 1]?.key;
+  const extraSections = [];
+  const extraRows = [];
+
+  for (const sectionDefinition of LEGACY_FUNDAMENTAL_SECTIONS) {
+    if (existingKeys.has(sectionDefinition.key)) continue;
+    const payload = result?.[sectionDefinition.payloadKey];
+    if (!payload) continue;
+
+    const rows = sectionDefinition.rows.map(([key, label, formatType]) => {
+      const row = {
+        key,
+        label,
+        unit: unitForFormat(formatType, financialHighlights),
+        format_type: formatType,
+        section_key: sectionDefinition.key,
+        values: Object.fromEntries(periods.map((period) => [period.key, { ...UNAVAILABLE_CELL }])),
+      };
+      if (latestPeriodKey) {
+        row.values[latestPeriodKey] = legacyCell(payload, key);
+      }
+      extraRows.push(row);
+      return row;
+    });
+
+    extraSections.push({
+      key: sectionDefinition.key,
+      title: sectionDefinition.title,
+      rows,
+    });
+  }
+
+  if (!extraSections.length) return financialHighlights;
+
+  return {
+    ...financialHighlights,
+    rows: [...(financialHighlights.rows || []), ...extraRows],
+    sections: [...sections, ...extraSections],
+  };
+}
 
 function PeerComparison({ payload }) {
   if (!payload?.metrics?.length) return null;
@@ -91,13 +162,13 @@ function PeerComparison({ payload }) {
           <tbody>
             {payload.metrics.map((item) => (
               <tr key={item.ticker} className="border-b border-bloomberg-border border-opacity-50">
-                <td className="px-3 py-2">{item.ticker || 'N/A'}</td>
-                <td className="px-3 py-2">{item.company_name || 'N/A'}</td>
-                <td className="px-3 py-2">{item.pe ?? 'N/A'}</td>
-                <td className="px-3 py-2">{item.pbv ?? 'N/A'}</td>
+                <td className="px-3 py-2">{unavailableText(item.ticker)}</td>
+                <td className="px-3 py-2">{unavailableText(item.company_name)}</td>
+                <td className="px-3 py-2">{unavailableText(item.pe)}</td>
+                <td className="px-3 py-2">{unavailableText(item.pbv)}</td>
                 <td className="px-3 py-2">{displayPercent(item.roe_percent)}</td>
                 <td className="px-3 py-2">{displayPercent(item.net_profit_margin_percent)}</td>
-                <td className="px-3 py-2">{item.der ?? 'N/A'}</td>
+                <td className="px-3 py-2">{unavailableText(item.der)}</td>
                 <td className="px-3 py-2">{displayPercent(item.dividend_yield_percent)}</td>
               </tr>
             ))}
@@ -113,80 +184,10 @@ PeerComparison.propTypes = {
 };
 
 export default function FundamentalTab({ financialHighlights, result = {} }) {
+  const tablePayload = appendLegacyFundamentalSections(financialHighlights, result);
   return (
     <>
-      <FinancialHighlightsTable financialHighlights={financialHighlights} />
-      <MetricSection
-        title="VALUATION MULTIPLES"
-        payload={result.valuation_multiples}
-        metrics={[
-          ['market_cap', 'Market Cap'],
-          ['enterprise_value', 'Enterprise Value'],
-          ['pe', 'P/E'],
-          ['pbv', 'P/BV'],
-          ['ps', 'P/S'],
-          ['ev_ebitda', 'EV/EBITDA'],
-        ]}
-        summary={
-          result.valuation_multiples?.interpretation && (
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Label: {result.valuation_multiples.interpretation.valuation_label || 'N/A'}.{' '}
-              {result.valuation_multiples.interpretation.main_reason}
-            </p>
-          )
-        }
-      />
-      <MetricSection
-        title="QUALITY OF EARNINGS"
-        payload={result.quality_of_earnings}
-        metrics={[
-          ['cfo_to_net_income', 'CFO / Net Income'],
-          ['free_cash_flow', 'Free Cash Flow'],
-          ['capex_intensity_percent', 'Capex Intensity'],
-        ]}
-        summary={
-          result.quality_of_earnings && (
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Rating: {result.quality_of_earnings.rating || 'N/A'} | Accrual risk:{' '}
-              {result.quality_of_earnings.accrual_risk || 'N/A'}
-            </p>
-          )
-        }
-      />
-      <MetricSection
-        title="BALANCE SHEET RISK"
-        payload={result.balance_sheet_risk}
-        metrics={[
-          ['der', 'DER'],
-          ['net_debt', 'Net Debt'],
-          ['debt_to_ebitda', 'Debt / EBITDA'],
-          ['cash_ratio', 'Cash Ratio'],
-          ['equity_ratio', 'Equity Ratio'],
-        ]}
-        summary={
-          result.balance_sheet_risk && (
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Risk level: {result.balance_sheet_risk.risk_level || 'N/A'}
-            </p>
-          )
-        }
-      />
-      <MetricSection
-        title="DIVIDEND QUALITY"
-        payload={result.dividend_quality}
-        metrics={[
-          ['dividend_yield_percent', 'Dividend Yield'],
-          ['payout_ratio_percent', 'Payout Ratio'],
-          ['fcf_coverage', 'FCF Coverage'],
-        ]}
-        summary={
-          result.dividend_quality && (
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Sustainability: {result.dividend_quality.sustainability || 'N/A'}
-            </p>
-          )
-        }
-      />
+      <FinancialHighlightsTable financialHighlights={tablePayload} />
       <PeerComparison payload={result.peer_comparison} />
     </>
   );

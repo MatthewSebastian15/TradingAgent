@@ -719,6 +719,26 @@ const FINANCIAL_SECTIONS = [
   ['profitability', 'Profitability', ['ebitda_margin', 'net_profit_margin', 'roe']],
   ['per_share_balance_sheet', 'Per Share & Balance Sheet', ['eps', 'bvps', 'der']],
   ['dividends', 'Dividends', ['dividend_yield', 'payout_ratio']],
+  [
+    'valuation_multiples',
+    'VALUATION MULTIPLES',
+    ['market_cap', 'enterprise_value', 'pe', 'pbv', 'ps', 'ev_ebitda'],
+  ],
+  [
+    'quality_of_earnings',
+    'QUALITY OF EARNINGS',
+    ['cfo_to_net_income', 'free_cash_flow', 'capex_intensity_percent'],
+  ],
+  [
+    'balance_sheet_risk',
+    'BALANCE SHEET RISK',
+    ['balance_der', 'net_debt', 'debt_to_ebitda', 'cash_ratio', 'equity_ratio'],
+  ],
+  [
+    'dividend_quality',
+    'DIVIDEND QUALITY',
+    ['dividend_yield_percent', 'payout_ratio_percent', 'fcf_coverage'],
+  ],
 ];
 
 function createMockFinancialHighlights({ currency = 'USD', currencyLabel = 'US Dollar' } = {}) {
@@ -737,8 +757,32 @@ function createMockFinancialHighlights({ currency = 'USD', currencyLabel = 'US D
     'roe',
     'dividend_yield',
     'payout_ratio',
+    'dividend_yield_percent',
+    'payout_ratio_percent',
+    'capex_intensity_percent',
   ]);
-  const currencyKeys = new Set(['revenue', 'ebitda', 'net_profit']);
+  const currencyKeys = new Set([
+    'revenue',
+    'ebitda',
+    'net_profit',
+    'market_cap',
+    'enterprise_value',
+    'free_cash_flow',
+    'net_debt',
+  ]);
+  const ratioKeys = new Set([
+    'der',
+    'balance_der',
+    'pe',
+    'pbv',
+    'ps',
+    'ev_ebitda',
+    'cfo_to_net_income',
+    'debt_to_ebitda',
+    'cash_ratio',
+    'equity_ratio',
+    'fcf_coverage',
+  ]);
 
   payload.rows.push({
     key: 'payout_ratio',
@@ -752,12 +796,45 @@ function createMockFinancialHighlights({ currency = 'USD', currencyLabel = 'US D
     ),
   });
 
+  [
+    ['market_cap', 'Market Cap'],
+    ['enterprise_value', 'Enterprise Value'],
+    ['pe', 'P/E'],
+    ['pbv', 'P/BV'],
+    ['ps', 'P/S'],
+    ['ev_ebitda', 'EV/EBITDA'],
+    ['cfo_to_net_income', 'CFO / Net Income'],
+    ['free_cash_flow', 'Free Cash Flow'],
+    ['capex_intensity_percent', 'Capex Intensity (%)'],
+    ['balance_der', 'DER'],
+    ['net_debt', 'Net Debt'],
+    ['debt_to_ebitda', 'Debt / EBITDA'],
+    ['cash_ratio', 'Cash Ratio'],
+    ['equity_ratio', 'Equity Ratio'],
+    ['dividend_yield_percent', 'Dividend Yield'],
+    ['payout_ratio_percent', 'Payout Ratio'],
+    ['fcf_coverage', 'FCF Coverage'],
+  ].forEach(([key, label]) => {
+    if (payload.rows.some((row) => row.key === key)) return;
+    payload.rows.push({
+      key,
+      label,
+      unit: '',
+      values: Object.fromEntries(
+        payload.periods.map((period) => [
+          period.key,
+          { value: null, display: 'N/A', status: 'unavailable' },
+        ])
+      ),
+    });
+  });
+
   payload.rows = payload.rows.map((row) => {
     const formatType = currencyKeys.has(row.key)
       ? 'currency_scaled'
       : percentKeys.has(row.key)
         ? 'percent'
-        : row.key === 'der'
+        : ratioKeys.has(row.key)
           ? 'ratio'
           : 'per_share';
     const unit =

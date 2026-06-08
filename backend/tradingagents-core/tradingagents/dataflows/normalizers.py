@@ -81,8 +81,15 @@ FINANCIAL_FIELDS = {
     "shares_outstanding",
     "eps",
     "dividend_per_share",
+    "dividend_paid",
     "reference_price",
     "dividend_yield",
+    "market_cap",
+    "enterprise_value",
+    "pe",
+    "pbv",
+    "ps",
+    "ev_ebitda",
 }
 
 _FIELD_ALIASES = {
@@ -97,6 +104,23 @@ _FIELD_ALIASES = {
     "net_income": "net_profit",
     "net_income_common_stockholders": "net_profit",
     "total_revenue": "revenue",
+    "cash_dividends_paid": "dividend_paid",
+    "dividends_paid": "dividend_paid",
+    "dividend_payout": "dividend_paid",
+    "market_capitalization": "market_cap",
+    "market_cap": "market_cap",
+    "enterprise_value": "enterprise_value",
+    "p_e": "pe",
+    "pe_ratio": "pe",
+    "p_bv": "pbv",
+    "p_b": "pbv",
+    "pb_ratio": "pbv",
+    "price_to_book": "pbv",
+    "p_s": "ps",
+    "ps_ratio": "ps",
+    "price_to_sales": "ps",
+    "ev_ebitda": "ev_ebitda",
+    "enterprise_value_to_ebitda": "ev_ebitda",
 }
 
 
@@ -502,11 +526,131 @@ def _dataclass_to_dict(value: Any) -> Any:
     return value
 
 
+
+
+def _number_like(value: Any) -> float | None:
+    if value in (None, "", "N/A", "n/a", "NA", "-") or isinstance(value, bool):
+        return None
+    try:
+        number = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None
+
+
+def _merge_table_metric(
+    normalized: dict[str, Any],
+    period_key: str | None,
+    field: str,
+    value: Any,
+    *,
+    source_vendor: str,
+    source_field: str,
+    source_unit: str = "raw",
+    accumulate: bool = False,
+) -> None:
+    number = _number_like(value)
+    if not period_key or number is None:
+        return
+    if field in {"capex", "dividend_paid"}:
+        number = abs(number)
+    bucket = normalized.setdefault("periods", {}).setdefault(period_key, {})
+    if field in bucket:
+        if accumulate and isinstance(bucket[field].get("value"), (int, float)):
+            bucket[field]["value"] = float(bucket[field]["value"]) + number
+        return
+    bucket[field] = {
+        "value": number,
+        "source_vendor": source_vendor,
+        "source_field": source_field,
+        "source_unit": source_unit,
+    }
+    sources = normalized.setdefault("sources_used", [])
+    if source_vendor not in sources:
+        sources.append(source_vendor)
+
+
+def _dividend_rows(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [dict(item) for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        for key in ("dividends", "corporate_actions", "corporateActions", "data", "rows"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [dict(item) for item in value if isinstance(item, dict)]
+    return []
+
+
+def _event_period_keys(row: dict[str, Any]) -> list[str]:
+    from datetime import datetime
+
+    date_value = next(
+        (row.get(key) for key in ("ex_date", "date", "payment_date", "record_date", "announcement_date") if row.get(key)),
+        None,
+    )
+    try:
+        parsed = datetime.fromisoformat(str(date_value)[:10])
+    except (TypeError, ValueError):
+        return []
+    annual = f"FY{str(parsed.year)[-2:]}"
+    quarterly = f"{annual}Q{((parsed.month - 1) // 3) + 1}"
+    return list(dict.fromkeys([annual, quarterly]))
+
+
+def _dividend_amount(row: dict[str, Any]) -> float | None:
+    for key in ("dividend_per_share", "cash_amount", "amount", "dividend", "cash_dividend"):
+        amount = _number_like(row.get(key))
+        if amount is not None:
+            return abs(amount)
+    return None
+
+
+def _dividend_total(row: dict[str, Any]) -> float | None:
+    for key in ("dividend_paid", "total", "total_amount", "dividend_total", "cash_total", "value"):
+        total = _number_like(row.get(key))
+        if total is not None:
+            return abs(total)
+    return None
+
+
+def _merge_dividend_events(normalized: dict[str, Any], dividends: Any) -> None:
+    for row in _dividend_rows(dividends):
+        amount = _dividend_amount(row)
+        total = _dividend_total(row)
+        for period_key in _event_period_keys(row):
+            if amount is not None:
+                _merge_table_metric(
+                    normalized,
+                    period_key,
+                    "dividend_per_share",
+                    amount,
+                    source_vendor="corporate_actions",
+                    source_field="dividend_event.amount",
+                    accumulate=True,
+                )
+            if total is not None:
+                _merge_table_metric(
+                    normalized,
+                    period_key,
+                    "dividend_paid",
+                    total,
+                    source_vendor="corporate_actions",
+                    source_field="dividend_event.total",
+                    accumulate=True,
+                )
+
+
+def _latest_period_key(periods: list[Any]) -> str | None:
+    return periods[-1].key if periods else None
+
 def build_financial_highlights_from_normalized_rows(
     normalized_rows: list[dict[str, Any]],
     *,
     analysis_date: str | None = None,
     currency: str | None = None,
+    current_price: float | int | None = None,
+    company_profile: dict[str, Any] | None = None,
+    dividends: Any | None = None,
 ) -> dict[str, Any]:
     rows = sorted([dict(row) for row in (normalized_rows or [])], key=_period_sort_key)
     allowed_keys: set[str] | None = None
@@ -590,6 +734,35 @@ def build_financial_highlights_from_normalized_rows(
         if resolved_periods is not None
         else sorted(periods_by_key.values(), key=lambda period: str(period.sort_key or ""))
     )
+    latest_key = _latest_period_key(periods)
+    profile = company_profile or {}
+    if latest_key:
+        _merge_table_metric(
+            normalized_for_table,
+            latest_key,
+            "reference_price",
+            current_price,
+            source_vendor="price_data",
+            source_field="current_price",
+        )
+        _merge_table_metric(
+            normalized_for_table,
+            latest_key,
+            "shares_outstanding",
+            profile.get("shares_outstanding"),
+            source_vendor="company_profile",
+            source_field="shares_outstanding",
+        )
+        _merge_table_metric(
+            normalized_for_table,
+            latest_key,
+            "market_cap",
+            profile.get("market_cap"),
+            source_vendor="company_profile",
+            source_field="market_cap",
+        )
+    if dividends is not None:
+        _merge_dividend_events(normalized_for_table, dividends)
     if periods:
         metric_rows, sections, data_quality = build_metric_rows(periods=periods, normalized=normalized_for_table)
         metadata = currency_metadata(currency)

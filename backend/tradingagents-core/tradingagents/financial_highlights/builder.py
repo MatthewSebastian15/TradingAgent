@@ -72,11 +72,11 @@ def build_financial_highlights(
         rows=rows,
         notes=[
             "Periods start from FY23 and extend dynamically based on the analysis date quarter.",
-            "Older historical periods remain visible even when vendor data is unavailable; missing values are shown as N/A.",
+            "Older historical periods remain visible even when vendor data is unavailable; missing values are shown as -.",
             f"Amount figures are displayed in {metadata['scale']}s unless the row unit states otherwise.",
             "Percentage values are displayed with the % symbol.",
             "Market Cap is shown as a point-in-time snapshot unless historical period-end market cap is available.",
-            "Unavailable values are shown as N/A.",
+            "Unavailable values are shown as -.",
         ],
         data_quality=data_quality,
     )

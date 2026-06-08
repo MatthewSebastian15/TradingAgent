@@ -88,6 +88,13 @@ FIELD_ALIASES = {
     "dividend_per_share": ("dividend per share", "dividendpershare", "DividendPerShare"),
     "reference_price": ("reference price", "referenceprice"),
     "dividend_yield": ("dividend yield", "dividendyield", "DividendYield"),
+    "free_cash_flow": ("free cash flow", "freecashflow", "freeCashFlow"),
+    "market_cap": ("market cap", "marketcap", "market capitalization", "marketcapitalization"),
+    "enterprise_value": ("enterprise value", "enterprisevalue"),
+    "pe": ("p/e", "pe", "pe ratio", "peratio", "trailingPE"),
+    "pbv": ("p/bv", "pbv", "p/b", "pb", "price to book", "pricebook", "priceToBook"),
+    "ps": ("p/s", "ps", "price to sales", "pricetosales", "priceToSalesTrailing12Months"),
+    "ev_ebitda": ("ev/ebitda", "evebitda", "enterprise value to ebitda", "enterprisevaluetoebitda"),
 }
 
 NORMALIZED_ALIAS_MAP = {
@@ -160,6 +167,7 @@ def _merge_value(
     source_vendor: str,
     source_field: str,
     source_unit: str | None = None,
+    accumulate: bool = False,
 ) -> None:
     number = _number(value)
     if not period_key or not field or number is None:
@@ -168,6 +176,9 @@ def _merge_value(
         number = abs(number)
     period_values = normalized["periods"].setdefault(period_key, {})
     if field in period_values:
+        if accumulate and isinstance(period_values[field].get("value"), (int, float)):
+            period_values[field]["value"] = float(period_values[field]["value"]) + number
+            period_values[field]["source_field"] = f"{period_values[field].get('source_field')}; {source_field}"
         return
     period_values[field] = {
         "value": number,
@@ -355,6 +366,89 @@ def _parse_finnhub_statement(
     return found
 
 
+
+
+def _dividend_event_rows(payload: Any) -> list[Mapping[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, Mapping)]
+    mapping = _load_mapping(payload)
+    if not isinstance(mapping, Mapping):
+        return []
+    for key in ("dividends", "corporate_actions", "corporateActions", "data", "rows"):
+        value = mapping.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, Mapping)]
+    return []
+
+
+def _event_period_keys(row: Mapping[str, Any]) -> list[str]:
+    date_value = next(
+        (row.get(key) for key in ("ex_date", "date", "payment_date", "record_date", "announcement_date") if row.get(key)),
+        None,
+    )
+    try:
+        parsed = datetime.fromisoformat(str(date_value)[:10])
+    except (TypeError, ValueError):
+        return []
+    annual = _fy_key(parsed.year)
+    quarterly = f"{annual}Q{((parsed.month - 1) // 3) + 1}"
+    return list(dict.fromkeys([annual, quarterly]))
+
+
+def _event_amount(row: Mapping[str, Any]) -> float | None:
+    for key in ("dividend_per_share", "cash_amount", "amount", "dividend", "cash_dividend"):
+        amount = _number(row.get(key))
+        if amount is not None:
+            return abs(amount)
+    return None
+
+
+def _event_total(row: Mapping[str, Any]) -> float | None:
+    for key in ("dividend_paid", "total", "total_amount", "dividend_total", "cash_total", "value"):
+        total = _number(row.get(key))
+        if total is not None:
+            return abs(total)
+    return None
+
+
+def _parse_dividend_events(payload: Any, normalized: dict[str, Any], vendor: str) -> bool:
+    rows = _dividend_event_rows(payload)
+    if not rows:
+        return False
+    found = False
+    for row in rows:
+        period_keys = _event_period_keys(row)
+        if not period_keys:
+            continue
+        amount = _event_amount(row)
+        total = _event_total(row)
+        for period_key in period_keys:
+            if amount is not None:
+                _merge_value(
+                    normalized,
+                    period_key,
+                    "dividend_per_share",
+                    amount,
+                    source_vendor=vendor,
+                    source_field="dividend_event.amount",
+                    source_unit="raw",
+                    accumulate=True,
+                )
+                found = True
+            if total is not None:
+                _merge_value(
+                    normalized,
+                    period_key,
+                    "dividend_paid",
+                    total,
+                    source_vendor=vendor,
+                    source_field="dividend_event.total",
+                    source_unit="raw",
+                    accumulate=True,
+                )
+                found = True
+    return found
+
 def _parse_statement(
     payload: Any,
     normalized: dict[str, Any],
@@ -369,6 +463,8 @@ def _parse_statement(
             return
         if _parse_finnhub_statement(mapping, normalized, vendor):
             return
+    if _parse_dividend_events(payload, normalized, vendor):
+        return
     _parse_tabular_statement(payload, normalized, vendor, frequency)
 
 

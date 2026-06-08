@@ -31,11 +31,15 @@ describe('FinancialHighlightsTable', () => {
     expect(screen.getByText('Profitability')).toBeTruthy();
     expect(screen.getByText('Per Share & Balance Sheet')).toBeTruthy();
     expect(screen.getByText('Dividends')).toBeTruthy();
+    expect(screen.getByText('VALUATION MULTIPLES')).toBeTruthy();
+    expect(screen.getByText('QUALITY OF EARNINGS')).toBeTruthy();
+    expect(screen.getByText('BALANCE SHEET RISK')).toBeTruthy();
+    expect(screen.getByText('DIVIDEND QUALITY')).toBeTruthy();
     expect(screen.getByText(/Currency: USD \(US Dollar\)/)).toBeTruthy();
     expect(screen.getByText('126.00 %')).toBeTruthy();
     expect(screen.getByText('0.45x')).toBeTruthy();
     expect(screen.queryByText('Source unavailable')).toBeNull();
-    expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
     expect(
       Array.from(container.querySelectorAll('tbody tr td:first-child')).map(
         (cell) => cell.textContent
@@ -54,6 +58,23 @@ describe('FinancialHighlightsTable', () => {
       'DER',
       'Dividend Yield (%)',
       'Payout Ratio (%)',
+      'Market Cap',
+      'Enterprise Value',
+      'P/E',
+      'P/BV',
+      'P/S',
+      'EV/EBITDA',
+      'CFO / Net Income',
+      'Free Cash Flow',
+      'Capex Intensity (%)',
+      'DER',
+      'Net Debt',
+      'Debt / EBITDA',
+      'Cash Ratio',
+      'Equity Ratio',
+      'Dividend Yield',
+      'Payout Ratio',
+      'FCF Coverage',
     ]);
   });
 

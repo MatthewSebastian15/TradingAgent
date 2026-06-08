@@ -84,6 +84,23 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         "der",
         "dividend_yield",
         "payout_ratio",
+        "market_cap",
+        "enterprise_value",
+        "pe",
+        "pbv",
+        "ps",
+        "ev_ebitda",
+        "cfo_to_net_income",
+        "free_cash_flow",
+        "capex_intensity_percent",
+        "balance_der",
+        "net_debt",
+        "debt_to_ebitda",
+        "cash_ratio",
+        "equity_ratio",
+        "dividend_yield_percent",
+        "payout_ratio_percent",
+        "fcf_coverage",
     ]
     assert [section.title for section in highlights.sections] == [
         "Market & Scale",
@@ -91,6 +108,10 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         "Profitability",
         "Per Share & Balance Sheet",
         "Dividends",
+        "VALUATION MULTIPLES",
+        "QUALITY OF EARNINGS",
+        "BALANCE SHEET RISK",
+        "DIVIDEND QUALITY",
     ]
 
     assert highlights.period_logic == "fy23_to_analysis_quarter"
@@ -126,8 +147,8 @@ def test_builder_does_not_crash_when_vendor_payloads_are_missing():
     payload = to_dict(build_financial_highlights(ticker="TEST", analysis_date="2026-01-15"))
 
     assert payload is not None
-    assert len(payload["rows"]) == 13
-    assert len(payload["sections"]) == 5
+    assert len(payload["rows"]) == 30
+    assert len(payload["sections"]) == 9
     assert payload["data_quality"]["status"] == "unavailable"
     assert all(cell["display"] == "N/A" for row in payload["rows"] for cell in row["values"].values())
 

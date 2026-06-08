@@ -57,8 +57,14 @@ function unitSuffix(unit) {
   return '';
 }
 
+function isUnavailableDisplay(value) {
+  if (value === null || value === undefined || value === '') return true;
+  const text = String(value).trim().toLowerCase();
+  return ['n/a', 'na', 'source unavailable', 'none', 'null', '-'].includes(text);
+}
+
 function appendUnit(value, unit) {
-  if (value === 'N/A') return value;
+  if (isUnavailableDisplay(value)) return '-';
   const suffix = unitSuffix(unit);
   if (!suffix) return value;
   const trimmed = String(value).trim();
@@ -69,15 +75,10 @@ function appendUnit(value, unit) {
 }
 
 function formatCellValue(cell, unit) {
-  if (!cell || cell.status === 'unavailable') return 'N/A';
+  if (!cell || cell.status === 'unavailable') return '-';
   const value = cell.display ?? cell.value;
-  if (
-    value === null ||
-    value === undefined ||
-    value === '' ||
-    String(value).toLowerCase() === 'source unavailable'
-  ) {
-    return 'N/A';
+  if (isUnavailableDisplay(value)) {
+    return '-';
   }
   const text = cell.status === 'estimated' ? `${value} EST` : String(value);
   return appendUnit(text, unit);
@@ -164,7 +165,7 @@ export default function FinancialHighlightsTable({ financialHighlights }) {
                   {formatCellValue(item, item.unit)}
                 </div>
                 <div className="font-mono text-[10px] text-bloomberg-muted mt-1">
-                  As of: {item.as_of || 'N/A'}
+                  As of: {item.as_of || '-'}
                 </div>
               </div>
             ))}

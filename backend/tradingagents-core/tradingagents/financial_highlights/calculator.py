@@ -54,6 +54,51 @@ METRIC_SECTIONS = [
             ("payout_ratio", "Payout Ratio (%)", "percent"),
         ],
     },
+    {
+        "key": "valuation_multiples",
+        "title": "VALUATION MULTIPLES",
+        "description": "Period valuation ratios using market value, debt, cash, and earnings inputs.",
+        "rows": [
+            ("market_cap", "Market Cap", "currency_scaled"),
+            ("enterprise_value", "Enterprise Value", "currency_scaled"),
+            ("pe", "P/E", "ratio"),
+            ("pbv", "P/BV", "ratio"),
+            ("ps", "P/S", "ratio"),
+            ("ev_ebitda", "EV/EBITDA", "ratio"),
+        ],
+    },
+    {
+        "key": "quality_of_earnings",
+        "title": "QUALITY OF EARNINGS",
+        "description": "Cash conversion and reinvestment quality metrics.",
+        "rows": [
+            ("cfo_to_net_income", "CFO / Net Income", "ratio"),
+            ("free_cash_flow", "Free Cash Flow", "currency_scaled"),
+            ("capex_intensity_percent", "Capex Intensity (%)", "percent"),
+        ],
+    },
+    {
+        "key": "balance_sheet_risk",
+        "title": "BALANCE SHEET RISK",
+        "description": "Leverage, liquidity, and balance sheet resilience metrics.",
+        "rows": [
+            ("balance_der", "DER", "ratio"),
+            ("net_debt", "Net Debt", "currency_scaled"),
+            ("debt_to_ebitda", "Debt / EBITDA", "ratio"),
+            ("cash_ratio", "Cash Ratio", "ratio"),
+            ("equity_ratio", "Equity Ratio", "ratio"),
+        ],
+    },
+    {
+        "key": "dividend_quality",
+        "title": "DIVIDEND QUALITY",
+        "description": "Dividend yield, payout, and cash-flow coverage metrics.",
+        "rows": [
+            ("dividend_yield_percent", "Dividend Yield", "percent"),
+            ("payout_ratio_percent", "Payout Ratio", "percent"),
+            ("fcf_coverage", "FCF Coverage", "ratio"),
+        ],
+    },
 ]
 
 
@@ -93,6 +138,10 @@ def _number(normalized: dict[str, Any], period_key: str, field: str) -> float | 
     return float(value) if isinstance(value, (int, float)) else None
 
 
+def _amount(value: float | None) -> float | None:
+    return abs(value) if value is not None else None
+
+
 def _reported_cell(
     record: dict[str, Any] | None,
     *,
@@ -118,12 +167,44 @@ def _reported_cell(
     )
 
 
-def _calculated_cell(value: float | None, formula: str, *, format_type: str = "number") -> FinancialCell:
+def _reported_or_calculated_cell(
+    record: dict[str, Any] | None,
+    calculated_value: float | None,
+    formula: str,
+    *,
+    format_type: str = "number",
+    scale_divisor: float = 1,
+    percent_ratio: bool = False,
+) -> FinancialCell:
+    reported = _reported_cell(
+        record,
+        format_type=format_type,
+        scale_divisor=scale_divisor,
+        percent_ratio=percent_ratio,
+    )
+    if reported.status != "unavailable":
+        return reported
+    return _calculated_cell(
+        calculated_value,
+        formula,
+        format_type=format_type,
+        scale_divisor=scale_divisor,
+    )
+
+
+def _calculated_cell(
+    value: float | None,
+    formula: str,
+    *,
+    format_type: str = "number",
+    scale_divisor: float = 1,
+) -> FinancialCell:
     if value is None:
         return _unavailable_cell()
+    display_value = value / scale_divisor if format_type == "currency_scaled" else value
     return FinancialCell(
-        value=value,
-        display=format_financial_value(value, format_type),
+        value=display_value,
+        display=format_financial_value(display_value, format_type),
         status="calculated",
         formula=formula,
     )
@@ -151,11 +232,20 @@ def _build_period_cells(
     revenue = _number(normalized, key, "revenue")
     previous_revenue = _number(normalized, previous_key, "revenue")
     ebitda = _number(normalized, key, "ebitda")
+    operating_income = _number(normalized, key, "operating_income")
+    effective_ebitda = ebitda if ebitda is not None else operating_income
     net_profit = _number(normalized, key, "net_profit")
     previous_net_profit = _number(normalized, previous_key, "net_profit")
     total_equity = _number(normalized, key, "total_equity")
     previous_equity = _number(normalized, _previous_equity_period_key(period), "total_equity")
     total_debt = _number(normalized, key, "total_debt")
+    cash = _number(normalized, key, "cash")
+    current_liabilities = _number(normalized, key, "current_liabilities")
+    total_liabilities = _number(normalized, key, "total_liabilities")
+    total_assets = _number(normalized, key, "total_assets")
+    operating_cash_flow = _number(normalized, key, "operating_cash_flow")
+    capex = _amount(_number(normalized, key, "capex"))
+    dividend_paid = _amount(_number(normalized, key, "dividend_paid"))
     shares_outstanding = _number(normalized, key, "shares_outstanding")
     dividend_per_share = _number(normalized, key, "dividend_per_share")
     reference_price = _number(normalized, key, "reference_price")
@@ -167,6 +257,20 @@ def _build_period_cells(
     eps_cell = _reported_cell(_record(normalized, key, "eps"), format_type="per_share")
     if eps_cell.status == "unavailable":
         eps_cell = _calculated_cell(eps_value, "Net Profit / Shares Outstanding", format_type="per_share")
+
+    market_cap_from_price = (
+        reference_price * shares_outstanding if reference_price is not None and shares_outstanding is not None else None
+    )
+    market_cap_record = _record(normalized, key, "market_cap")
+    market_cap_value = _number(normalized, key, "market_cap") or market_cap_from_price
+    enterprise_value_value = _number(normalized, key, "enterprise_value")
+    if enterprise_value_value is None and market_cap_value is not None and total_debt is not None and cash is not None:
+        enterprise_value_value = market_cap_value + total_debt - cash
+
+    free_cash_flow_value = _number(normalized, key, "free_cash_flow")
+    if free_cash_flow_value is None and operating_cash_flow is not None and capex is not None:
+        free_cash_flow_value = operating_cash_flow - capex
+
     dividend_yield_cell = _reported_cell(
         _record(normalized, key, "dividend_yield"),
         format_type="percent",
@@ -178,7 +282,15 @@ def _build_period_cells(
             "Dividend per Share / Reference Price * 100",
             format_type="percent",
         )
-    return {
+    payout_ratio_cell = _calculated_cell(
+        calculate_payout_ratio(dividend_per_share, eps_value),
+        "Dividend per Share / EPS * 100",
+        format_type="percent",
+    )
+    fcf_coverage = safe_divide(free_cash_flow_value, dividend_paid)
+    der = safe_divide(total_debt, total_equity)
+
+    cells = {
         "revenue": _reported_cell(
             _record(normalized, key, "revenue"),
             format_type="currency_scaled",
@@ -225,16 +337,91 @@ def _build_period_cells(
             "Total Equity / Shares Outstanding",
             format_type="per_share",
         ),
-        "der": _calculated_cell(
-            safe_divide(total_debt, total_equity), "Total Debt / Total Equity", format_type="ratio"
-        ),
+        "der": _calculated_cell(der, "Total Debt / Total Equity", format_type="ratio"),
         "dividend_yield": dividend_yield_cell,
-        "payout_ratio": _calculated_cell(
-            calculate_payout_ratio(dividend_per_share, eps_value),
-            "Dividend per Share / EPS * 100",
+        "payout_ratio": payout_ratio_cell,
+        "market_cap": _reported_or_calculated_cell(
+            market_cap_record,
+            market_cap_from_price,
+            "Reference Price * Shares Outstanding",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "enterprise_value": _reported_or_calculated_cell(
+            _record(normalized, key, "enterprise_value"),
+            enterprise_value_value,
+            "Market Cap + Total Debt - Cash",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "pe": _reported_or_calculated_cell(
+            _record(normalized, key, "pe"),
+            safe_divide(market_cap_value, net_profit),
+            "Market Cap / Net Profit",
+            format_type="ratio",
+        ),
+        "pbv": _reported_or_calculated_cell(
+            _record(normalized, key, "pbv"),
+            safe_divide(market_cap_value, total_equity),
+            "Market Cap / Total Equity",
+            format_type="ratio",
+        ),
+        "ps": _reported_or_calculated_cell(
+            _record(normalized, key, "ps"),
+            safe_divide(market_cap_value, revenue),
+            "Market Cap / Revenue",
+            format_type="ratio",
+        ),
+        "ev_ebitda": _reported_or_calculated_cell(
+            _record(normalized, key, "ev_ebitda"),
+            safe_divide(enterprise_value_value, effective_ebitda),
+            "Enterprise Value / EBITDA; fallback to Operating Income when EBITDA is unavailable",
+            format_type="ratio",
+        ),
+        "cfo_to_net_income": _calculated_cell(
+            safe_divide(operating_cash_flow, net_profit),
+            "Operating Cash Flow / Net Income",
+            format_type="ratio",
+        ),
+        "free_cash_flow": _reported_or_calculated_cell(
+            _record(normalized, key, "free_cash_flow"),
+            operating_cash_flow - capex if operating_cash_flow is not None and capex is not None else None,
+            "Operating Cash Flow - Capex",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "capex_intensity_percent": _calculated_cell(
+            safe_percent(capex, revenue),
+            "Capex / Revenue * 100",
             format_type="percent",
         ),
+        "balance_der": _calculated_cell(der, "Total Debt / Total Equity", format_type="ratio"),
+        "net_debt": _calculated_cell(
+            total_debt - cash if total_debt is not None and cash is not None else None,
+            "Total Debt - Cash",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "debt_to_ebitda": _calculated_cell(
+            safe_divide(total_debt, effective_ebitda),
+            "Total Debt / EBITDA; fallback to Operating Income when EBITDA is unavailable",
+            format_type="ratio",
+        ),
+        "cash_ratio": _calculated_cell(
+            safe_divide(cash, current_liabilities if current_liabilities is not None else total_liabilities),
+            "Cash / Current Liabilities; fallback to Total Liabilities",
+            format_type="ratio",
+        ),
+        "equity_ratio": _calculated_cell(
+            safe_divide(total_equity, total_assets),
+            "Total Equity / Total Assets",
+            format_type="ratio",
+        ),
+        "dividend_yield_percent": dividend_yield_cell,
+        "payout_ratio_percent": payout_ratio_cell,
+        "fcf_coverage": _calculated_cell(fcf_coverage, "Free Cash Flow / Dividend Paid", format_type="ratio"),
     }
+    return cells
 
 
 def build_metric_rows(
