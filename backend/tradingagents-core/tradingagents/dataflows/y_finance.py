@@ -515,6 +515,21 @@ def get_fundamentals(
         return f"Error retrieving fundamentals for {ticker}: {str(e)}"
 
 
+
+def _clean_ownership_ratio(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    if number > 1:
+        number = number / 100
+    return max(0, min(number, 1))
+
+
 def _clean_profile_text(value: Any, max_length: int | None = None) -> str | None:
     if value is None:
         return None
@@ -560,6 +575,14 @@ def get_company_profile(
                 if name:
                     executives.append({"name": name, "title": title or "N/A"})
 
+        shares_out = info.get("sharesOutstanding")
+        insider_pct = _clean_ownership_ratio(info.get("heldPercentInsiders"))
+        institution_pct = _clean_ownership_ratio(info.get("heldPercentInstitutions"))
+        short_ratio = info.get("shortRatio")
+        public_pct = None
+        if insider_pct is not None and institution_pct is not None:
+            public_pct = max(0, 1 - insider_pct - institution_pct)
+
         profile = {
             "available": True,
             "ticker": ticker,
@@ -573,18 +596,46 @@ def get_company_profile(
             "phone": _clean_profile_text(info.get("phone")),
             "website": _clean_profile_text(info.get("website") or info.get("ir_website")),
             "market_cap": info.get("marketCap"),
-            "shares_outstanding": info.get("sharesOutstanding"),
-            "insider_percent": info.get("heldPercentInsiders"),
-            "institution_percent": info.get("heldPercentInstitutions"),
-            "short_ratio": info.get("shortRatio"),
+            "shares_outstanding": shares_out,
+            "shares_out": shares_out,
+            "insider_percent": insider_pct,
+            "insider_pct": insider_pct,
+            "institution_percent": institution_pct,
+            "institution_pct": institution_pct,
+            "public_percent": public_pct,
+            "public_pct": public_pct,
+            "short_ratio": short_ratio,
             "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
             "fiscal_year_end": info.get("lastFiscalYearEnd"),
             "full_time_employees": info.get("fullTimeEmployees"),
             "description": _clean_profile_text(info.get("longBusinessSummary"), max_length=2000),
             "executives": executives,
+            "shares_ownership": {
+                "shares_out": shares_out,
+                "insider_pct": insider_pct,
+                "institution_pct": institution_pct,
+                "public_pct": public_pct,
+                "short_ratio": short_ratio,
+            },
         }
 
-        return {key: value for key, value in profile.items() if value not in (None, "")}
+        ownership_keys = {
+            "shares_outstanding",
+            "shares_out",
+            "insider_percent",
+            "insider_pct",
+            "institution_percent",
+            "institution_pct",
+            "public_percent",
+            "public_pct",
+            "short_ratio",
+            "shares_ownership",
+        }
+        return {
+            key: value
+            for key, value in profile.items()
+            if value not in (None, "") or key in ownership_keys
+        }
 
     except Exception as exc:
         logger.warning("Error retrieving company profile for %s: %s", ticker, exc)

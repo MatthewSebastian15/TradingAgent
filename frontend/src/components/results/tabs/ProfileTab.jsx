@@ -33,6 +33,46 @@ function ownershipRatio(value) {
   return Math.max(0, Math.min(ratio, 1));
 }
 
+function ownershipSourceObjects(profile) {
+  return [profile, profile?.shares_ownership, profile?.ownership].filter(
+    (source) => source && typeof source === 'object'
+  );
+}
+
+function firstProfileValue(profile, keys) {
+  for (const source of ownershipSourceObjects(profile)) {
+    for (const key of keys) {
+      const value = source[key];
+      if (value !== null && value !== undefined && value !== '') return value;
+    }
+  }
+  return null;
+}
+
+function profileSharesOut(profile) {
+  return firstProfileValue(profile, ['shares_out', 'shares_outstanding', 'sharesOutstanding']);
+}
+
+function profileInsiderPct(profile) {
+  return firstProfileValue(profile, ['insider_pct', 'insider_percent', 'heldPercentInsiders']);
+}
+
+function profileInstitutionPct(profile) {
+  return firstProfileValue(profile, [
+    'institution_pct',
+    'institution_percent',
+    'heldPercentInstitutions',
+  ]);
+}
+
+function profilePublicPct(profile) {
+  return firstProfileValue(profile, ['public_pct', 'public_percent']);
+}
+
+function profileShortRatio(profile) {
+  return firstProfileValue(profile, ['short_ratio', 'shortRatio']);
+}
+
 function formatNumber(value) {
   const number = numberOrNull(value);
   return number === null ? 'N/A' : number.toLocaleString('en-US');
@@ -90,11 +130,9 @@ function formatCurrentPrice(value, currency) {
 }
 
 function buildOwnershipData(profile) {
-  const insider = ownershipRatio(profile.insider_percent ?? profile.heldPercentInsiders);
-  const institution = ownershipRatio(
-    profile.institution_percent ?? profile.heldPercentInstitutions
-  );
-  const publicOwnership = ownershipRatio(profile.public_percent);
+  const insider = ownershipRatio(profileInsiderPct(profile));
+  const institution = ownershipRatio(profileInstitutionPct(profile));
+  const publicOwnership = ownershipRatio(profilePublicPct(profile));
   const publicRatio =
     publicOwnership ??
     (insider !== null && institution !== null ? Math.max(0, 1 - insider - institution) : null);
@@ -104,15 +142,12 @@ function buildOwnershipData(profile) {
 
 function OwnershipPieChart({ profile }) {
   const ownership = buildOwnershipData(profile);
-  const completeOwnership = OWNERSHIP_SEGMENTS.every(
-    (segment) => ownership[segment.key] !== null
-  );
   const rawSegments = OWNERSHIP_SEGMENTS.map((segment) => ({
     ...segment,
     value: ownership[segment.key],
   })).filter((segment) => segment.value !== null && segment.value > 0);
   const totalOwnership = rawSegments.reduce((sum, segment) => sum + segment.value, 0);
-  const hasChartData = completeOwnership && totalOwnership > 0;
+  const hasChartData = totalOwnership > 0;
   let cursor = 0;
   const gradient = hasChartData
     ? rawSegments
@@ -172,13 +207,10 @@ OwnershipPieChart.propTypes = {
 
 function SharesOwnershipSection({ profile }) {
   const rows = [
-    ['SHARES OUT', formatNumberDash(profile.shares_outstanding)],
-    ['INSIDER %', formatPercentDash(profile.insider_percent ?? profile.heldPercentInsiders)],
-    [
-      'INSTITUTION %',
-      formatPercentDash(profile.institution_percent ?? profile.heldPercentInstitutions),
-    ],
-    ['SHORT RATIO', formatRatioDash(profile.short_ratio ?? profile.shortRatio)],
+    ['SHARES OUT', formatNumberDash(profileSharesOut(profile))],
+    ['INSIDER %', formatPercentDash(profileInsiderPct(profile))],
+    ['INSTITUTION %', formatPercentDash(profileInstitutionPct(profile))],
+    ['SHORT RATIO', formatRatioDash(profileShortRatio(profile))],
   ];
 
   return (
@@ -296,7 +328,7 @@ export default function ProfileTab({ profile, result }) {
           />
           <ProfileField
             label="Shares Outstanding"
-            value={formatNumber(profile.shares_outstanding)}
+            value={formatNumber(profileSharesOut(profile))}
           />
           <ProfileField
             label="Current Price"
