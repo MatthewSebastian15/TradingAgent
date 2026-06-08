@@ -9,6 +9,14 @@ export function reportPdfUrl(resourceId) {
   return buildApiUrl(`/analysis/jobs/${encodeURIComponent(resourceId)}/report.pdf`);
 }
 
+export function reportHtmlRequestUrl(requestId) {
+  return buildApiUrl(`/analysis/${encodeURIComponent(requestId)}/report.html`);
+}
+
+export function reportPdfRequestUrl(requestId) {
+  return buildApiUrl(`/analysis/${encodeURIComponent(requestId)}/report.pdf`);
+}
+
 function reportHtmlPayloadUrl() {
   return buildApiUrl('/analysis/report.html');
 }
@@ -19,6 +27,10 @@ function reportPdfPayloadUrl() {
 
 function isReportNotFound(errorMessage) {
   return /not found|expired|report_not_found/i.test(String(errorMessage || ''));
+}
+
+function requestIdFromResult(result) {
+  return typeof result?.request_id === 'string' && result.request_id.trim() ? result.request_id.trim() : null;
 }
 
 function compactReportPayload(result) {
@@ -140,8 +152,8 @@ function compactReportPayload(result) {
   }, {});
 }
 
-async function fetchReportHtmlByResourceId(resourceId) {
-  const response = await fetch(reportHtmlUrl(resourceId), {
+async function fetchReportHtml(url) {
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       ...(await buildAuthHeaders()),
@@ -154,6 +166,14 @@ async function fetchReportHtmlByResourceId(resourceId) {
   }
 
   return response.text();
+}
+
+async function fetchReportHtmlByResourceId(resourceId) {
+  return fetchReportHtml(reportHtmlUrl(resourceId));
+}
+
+async function fetchReportHtmlByRequestId(requestId) {
+  return fetchReportHtml(reportHtmlRequestUrl(requestId));
 }
 
 async function fetchReportHtmlByPayload(result) {
@@ -198,14 +218,32 @@ export async function openAnalysisHtmlReport({ resourceId, result, mock = false 
   try {
     const html = await fetchReportHtmlByResourceId(resourceId);
     openHtmlBlob(html);
+    return;
   } catch (error) {
-    if (!result || !isReportNotFound(error.message)) {
+    if (!isReportNotFound(error.message)) {
       throw error;
     }
-
-    const html = await fetchReportHtmlByPayload(result);
-    openHtmlBlob(html);
   }
+
+  const requestId = requestIdFromResult(result);
+  if (requestId) {
+    try {
+      const html = await fetchReportHtmlByRequestId(requestId);
+      openHtmlBlob(html);
+      return;
+    } catch (error) {
+      if (!isReportNotFound(error.message)) {
+        throw error;
+      }
+    }
+  }
+
+  if (!result) {
+    throw new Error('Report result payload is unavailable.');
+  }
+
+  const html = await fetchReportHtmlByPayload(result);
+  openHtmlBlob(html);
 }
 
 function filenameFromContentDisposition(headerValue) {
@@ -224,8 +262,8 @@ function filenameFromContentDisposition(headerValue) {
   return asciiMatch?.[1] || null;
 }
 
-async function fetchPdfByResourceId(resourceId) {
-  const response = await fetch(reportPdfUrl(resourceId), {
+async function fetchPdf(url) {
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       ...(await buildAuthHeaders()),
@@ -238,6 +276,14 @@ async function fetchPdfByResourceId(resourceId) {
   }
 
   return response;
+}
+
+async function fetchPdfByResourceId(resourceId) {
+  return fetchPdf(reportPdfUrl(resourceId));
+}
+
+async function fetchPdfByRequestId(requestId) {
+  return fetchPdf(reportPdfRequestUrl(requestId));
 }
 
 async function fetchPdfByPayload(result) {
@@ -285,12 +331,30 @@ export async function downloadAnalysisPdf(resourceId, options = {}) {
   try {
     const response = await fetchPdfByResourceId(resourceId);
     await downloadPdfResponse(response, `TradingAgent_${resourceId}.pdf`);
+    return;
   } catch (error) {
-    if (!options.result || !isReportNotFound(error.message)) {
+    if (!isReportNotFound(error.message)) {
       throw error;
     }
-
-    const response = await fetchPdfByPayload(options.result);
-    await downloadPdfResponse(response, `TradingAgent_${resourceId}.pdf`);
   }
+
+  const requestId = requestIdFromResult(options.result);
+  if (requestId) {
+    try {
+      const response = await fetchPdfByRequestId(requestId);
+      await downloadPdfResponse(response, `TradingAgent_${requestId}.pdf`);
+      return;
+    } catch (error) {
+      if (!isReportNotFound(error.message)) {
+        throw error;
+      }
+    }
+  }
+
+  if (!options.result) {
+    throw new Error('Report result payload is unavailable.');
+  }
+
+  const response = await fetchPdfByPayload(options.result);
+  await downloadPdfResponse(response, `TradingAgent_${resourceId}.pdf`);
 }
