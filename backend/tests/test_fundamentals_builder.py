@@ -227,11 +227,11 @@ def test_missing_fundamental_data_returns_na_without_crash():
         financial_highlights=highlights,
     )
 
-    assert bundle["valuation_multiples"]["metric_details"]["pe"]["display"] == "N/A"
-    assert bundle["fair_value_range"]["metric_details"]["base"]["display"] == "N/A"
-    assert bundle["quality_of_earnings"]["metric_details"]["free_cash_flow"]["display"] == "N/A"
-    assert bundle["balance_sheet_risk"]["metric_details"]["net_debt"]["display"] == "N/A"
-    assert bundle["dividend_quality"]["metric_details"]["fcf_coverage"]["display"] == "N/A"
+    assert bundle["valuation_multiples"]["metric_details"]["pe"]["display"] == "-"
+    assert bundle["fair_value_range"]["metric_details"]["base"]["display"] == "-"
+    assert bundle["quality_of_earnings"]["metric_details"]["free_cash_flow"]["display"] == "-"
+    assert bundle["balance_sheet_risk"]["metric_details"]["net_debt"]["display"] == "-"
+    assert bundle["dividend_quality"]["metric_details"]["fcf_coverage"]["display"] == "-"
     assert bundle["peer_comparison"] is None
 
 

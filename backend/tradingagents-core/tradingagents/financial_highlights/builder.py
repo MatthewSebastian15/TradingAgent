@@ -35,6 +35,7 @@ def build_financial_highlights(
         analysis_date=analysis_date,
         dividends=dividends,
         vendor_payloads=vendor_payloads,
+        company_profile=company_profile,
     )
     rows, sections, data_quality = build_metric_rows(periods=periods, normalized=normalized)
     metadata = currency_metadata(data_quality.get("currency"))

@@ -551,10 +551,10 @@ def _unit_suffix(unit: Any) -> str:
 
 def _append_financial_unit(value: Any, unit: Any) -> str:
     if value is None or value == "":
-        return "N/A"
+        return "-"
     text = str(value).strip()
-    if text == "N/A" or text.lower() == "source unavailable":
-        return "N/A"
+    if text in {"-", "N/A"} or text.lower() in {"source unavailable", "none", "null", "nan"}:
+        return "-"
     suffix = _unit_suffix(unit)
     if not suffix:
         return re.sub(r"\s*%", " %", text)
@@ -571,10 +571,10 @@ def _append_financial_unit(value: Any, unit: Any) -> str:
 def _financial_cell_display(cell: Any, unit: Any = "") -> str:
     if isinstance(cell, dict):
         if cell.get("status") in {"unavailable", "source_unavailable"}:
-            return "N/A"
+            return "-"
         value = cell.get("display") if cell.get("display") is not None else cell.get("value")
         displayed = _append_financial_unit(value, unit)
-        return f"{displayed} EST" if cell.get("status") == "estimated" and displayed != "N/A" else displayed
+        return f"{displayed} EST" if cell.get("status") == "estimated" and displayed != "-" else displayed
     return _append_financial_unit(cell, unit)
 
 
@@ -1174,7 +1174,9 @@ def _metric_detail_display(value: Any, fallback: Any = None, unit: Any = "") -> 
     displayed = _display(detail.get("display") or fallback)
     if unit:
         displayed = _append_financial_unit(displayed, unit)
-    return f"{displayed} EST" if detail.get("status") == "estimated" and displayed != "N/A" else displayed
+    if displayed == "N/A":
+        displayed = "-"
+    return f"{displayed} EST" if detail.get("status") == "estimated" and displayed != "-" else displayed
 
 
 def _financial_trend_rows(value: Any) -> list[dict[str, Any]]:

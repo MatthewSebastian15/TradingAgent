@@ -147,7 +147,7 @@
                   <tr>
                     <td>{{ row.label }}</td>
                     {% for period in report.financial_highlights.periods %}
-                      <td>{{ row.display_values.get(period.key, 'N/A') }}</td>
+                      <td>{{ row.display_values.get(period.key, '-') }}</td>
                     {% endfor %}
                   </tr>
                 {% endfor %}
