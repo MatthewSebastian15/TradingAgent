@@ -8,6 +8,7 @@ import {
   DOWN_COLOR,
   NEUTRAL_COLOR,
   normalizePricePoints,
+  resolveYoyPriceWindow,
   UP_COLOR,
 } from './priceChartUtils';
 import VolumeChart from './VolumeChart';
@@ -64,6 +65,21 @@ describe('CandlestickPriceChart', () => {
         volume: 200,
       },
     ]);
+  });
+
+  it('resolves the YOY window from requested trade date to the latest available trade row', () => {
+    const window = resolveYoyPriceWindow({ trade_date: '2026-06-08', window: 'YOY' }, [
+      { date: '2025-06-04', open: 9, high: 10, low: 8, close: 9.5, volume: 900 },
+      { date: '2025-06-05', open: 10, high: 11, low: 9, close: 10.5, volume: 1000 },
+      { date: '2026-06-05', open: 12, high: 13, low: 11, close: 12.5, volume: 1200 },
+      { date: '2026-06-09', open: 13, high: 14, low: 12, close: 13.5, volume: 1300 },
+    ]);
+
+    expect(window.requestedTradeDate).toBe('2026-06-08');
+    expect(window.startDate).toBe('2025-06-05');
+    expect(window.endDate).toBe('2026-06-05');
+    expect(window.fallbackToLastTrade).toBe(true);
+    expect(window.points.map((point) => point.date)).toEqual(['2025-06-05', '2026-06-05']);
   });
 
   it('builds sparse x-axis labels while keeping the first and last dates', () => {
