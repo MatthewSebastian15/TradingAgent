@@ -34,6 +34,33 @@ describe('ProfileTab', () => {
     }
   );
 
+
+
+  it('renders shares and ownership data above the business description', () => {
+    render(
+      <ProfileTab
+        profile={{
+          available: true,
+          ticker: 'BBCA.JK',
+          shares_outstanding: 123275050000,
+          insider_percent: 0.0503,
+          institution_percent: 0.4444,
+          short_ratio: 1.25,
+          business_summary: 'Banking profile.',
+        }}
+      />
+    );
+
+    expect(screen.getByText('SHARES & OWNERSHIP')).toBeTruthy();
+    expect(screen.getByText('OWNERSHIPS')).toBeTruthy();
+    expect(screen.getByText('SHARES OUT')).toBeTruthy();
+    expect(screen.getAllByText('123,275,050,000').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('5.03%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('44.44%').length).toBeGreaterThan(0);
+    expect(screen.getByText('1.25')).toBeTruthy();
+    expect(screen.getByText('50.53%')).toBeTruthy();
+  });
+
   it('renders canonical fields and N/A for missing values', () => {
     render(
       <ProfileTab
