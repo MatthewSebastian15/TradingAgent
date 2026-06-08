@@ -5,8 +5,18 @@ import { getDisplayValue, getFieldQuality } from '../../../utils/dataStatus';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 
+const OWNERSHIP_SEGMENTS = [
+  { key: 'insider', label: 'INSIDER', color: '#f97316' },
+  { key: 'institution', label: 'INSTITUTION', color: '#3b82f6' },
+  { key: 'public', label: 'PUBLIC', color: '#22c55e' },
+];
+
 function display(value) {
   return value === null || value === undefined || value === '' ? 'N/A' : value;
+}
+
+function displayDash(value) {
+  return value === null || value === undefined || value === '' ? '-' : value;
 }
 
 function numberOrNull(value) {
@@ -15,9 +25,40 @@ function numberOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function ownershipRatio(value) {
+  const number = numberOrNull(value);
+  if (number === null) return null;
+  const ratio = Math.abs(number) > 1 ? number / 100 : number;
+  if (!Number.isFinite(ratio)) return null;
+  return Math.max(0, Math.min(ratio, 1));
+}
+
 function formatNumber(value) {
   const number = numberOrNull(value);
   return number === null ? 'N/A' : number.toLocaleString('en-US');
+}
+
+function formatNumberDash(value) {
+  const number = numberOrNull(value);
+  return number === null ? '-' : number.toLocaleString('en-US');
+}
+
+function formatPercentDash(value) {
+  const ratio = ownershipRatio(value);
+  if (ratio === null) return '-';
+  return `${(ratio * 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
+function formatRatioDash(value) {
+  const number = numberOrNull(value);
+  if (number === null) return '-';
+  return number.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatMarketCap(value, currency) {
@@ -47,6 +88,132 @@ function formatCurrentPrice(value, currency) {
     maximumFractionDigits: 2,
   })}`;
 }
+
+function buildOwnershipData(profile) {
+  const insider = ownershipRatio(profile.insider_percent ?? profile.heldPercentInsiders);
+  const institution = ownershipRatio(
+    profile.institution_percent ?? profile.heldPercentInstitutions
+  );
+  const publicOwnership = ownershipRatio(profile.public_percent);
+  const publicRatio =
+    publicOwnership ??
+    (insider !== null && institution !== null ? Math.max(0, 1 - insider - institution) : null);
+
+  return { insider, institution, public: publicRatio };
+}
+
+function OwnershipPieChart({ profile }) {
+  const ownership = buildOwnershipData(profile);
+  const completeOwnership = OWNERSHIP_SEGMENTS.every(
+    (segment) => ownership[segment.key] !== null
+  );
+  const rawSegments = OWNERSHIP_SEGMENTS.map((segment) => ({
+    ...segment,
+    value: ownership[segment.key],
+  })).filter((segment) => segment.value !== null && segment.value > 0);
+  const totalOwnership = rawSegments.reduce((sum, segment) => sum + segment.value, 0);
+  const hasChartData = completeOwnership && totalOwnership > 0;
+  let cursor = 0;
+  const gradient = hasChartData
+    ? rawSegments
+        .map((segment) => {
+          const start = cursor;
+          cursor += (segment.value / totalOwnership) * 100;
+          return `${segment.color} ${start}% ${cursor}%`;
+        })
+        .join(', ')
+    : '#242424 0% 100%';
+
+  return (
+    <div className="border border-bloomberg-border bg-black px-3 py-3">
+      <div className="font-mono text-[10px] text-bloomberg-muted uppercase tracking-wider mb-3">
+        OWNERSHIPS
+      </div>
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-center">
+        <div
+          className="relative h-36 w-36 rounded-full border border-bloomberg-border-light"
+          role="img"
+          aria-label="Ownership pie chart"
+          style={{ background: `conic-gradient(${gradient})` }}
+        >
+          <div className="absolute inset-8 rounded-full border border-bloomberg-border bg-black flex items-center justify-center">
+            <span className="font-mono text-xs text-bloomberg-white">
+              {hasChartData ? '100%' : '-'}
+            </span>
+          </div>
+        </div>
+        <div className="w-full max-w-xs space-y-2">
+          {OWNERSHIP_SEGMENTS.map((segment) => (
+            <div
+              key={segment.key}
+              className="flex items-center justify-between gap-4 font-mono text-xs"
+            >
+              <div className="flex items-center gap-2 text-bloomberg-muted">
+                <span
+                  className="h-2.5 w-2.5 border border-bloomberg-border"
+                  style={{ backgroundColor: segment.color }}
+                />
+                <span>{segment.label}</span>
+              </div>
+              <span className="text-bloomberg-white">
+                {formatPercentDash(ownership[segment.key])}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+OwnershipPieChart.propTypes = {
+  profile: PropTypes.object.isRequired,
+};
+
+function SharesOwnershipSection({ profile }) {
+  const rows = [
+    ['SHARES OUT', formatNumberDash(profile.shares_outstanding)],
+    ['INSIDER %', formatPercentDash(profile.insider_percent ?? profile.heldPercentInsiders)],
+    [
+      'INSTITUTION %',
+      formatPercentDash(profile.institution_percent ?? profile.heldPercentInstitutions),
+    ],
+    ['SHORT RATIO', formatRatioDash(profile.short_ratio ?? profile.shortRatio)],
+  ];
+
+  return (
+    <section>
+      <SectionHeader label="SHARES & OWNERSHIP" />
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-stretch">
+        <div className="overflow-x-auto border border-bloomberg-border bg-black">
+          <table className="w-full text-left font-mono text-xs">
+            <thead className="bg-bloomberg-surface text-bloomberg-muted uppercase tracking-wider">
+              <tr>
+                <th className="px-3 py-2">Metric</th>
+                <th className="px-3 py-2 text-right">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([label, value]) => (
+                <tr key={label} className="border-t border-bloomberg-border">
+                  <td className="px-3 py-2 text-bloomberg-white">{label}</td>
+                  <td className="px-3 py-2 text-right text-bloomberg-white">
+                    {displayDash(value)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <OwnershipPieChart profile={profile} />
+      </div>
+    </section>
+  );
+}
+
+SharesOwnershipSection.propTypes = {
+  profile: PropTypes.object.isRequired,
+};
 
 function ProfileField({ label, value, quality }) {
   const displayPayload = quality
@@ -160,6 +327,8 @@ export default function ProfileTab({ profile, result }) {
           />
         </div>
       </section>
+
+      <SharesOwnershipSection profile={profile} />
 
       <section>
         <SectionHeader label="BUSINESS DESCRIPTION" />

@@ -17,6 +17,10 @@ def test_get_company_profile_returns_clean_frontend_payload(monkeypatch):
         "website": " https://example.com ",
         "fullTimeEmployees": 1234,
         "longBusinessSummary": "x" * 2100,
+        "sharesOutstanding": 123_275_050_000,
+        "heldPercentInsiders": 0.0503,
+        "heldPercentInstitutions": 0.4444,
+        "shortRatio": 1.25,
         "companyOfficers": officers,
     }
     monkeypatch.setattr(y_finance, "_get_ticker", lambda _ticker: SimpleNamespace(info=info))
@@ -28,6 +32,10 @@ def test_get_company_profile_returns_clean_frontend_payload(monkeypatch):
     assert profile["ticker"] == "BBCA.JK"
     assert profile["name"] == "Example Company"
     assert profile["address"] == "Main Street, Jakarta, Indonesia"
+    assert profile["shares_outstanding"] == 123_275_050_000
+    assert profile["insider_percent"] == 0.0503
+    assert profile["institution_percent"] == 0.4444
+    assert profile["short_ratio"] == 1.25
     assert len(profile["description"]) == 2000
     assert profile["description"].endswith("...")
     assert len(profile["executives"]) == 10

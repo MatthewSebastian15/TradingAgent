@@ -60,3 +60,41 @@ def test_profile_builder_stops_after_complete_yfinance_payload():
 
     assert calls == ["yfinance"]
     assert profile["data_quality"]["status"] == "complete"
+
+
+def test_profile_builder_normalizes_ownership_fields_and_computes_public_float():
+    profile = build_company_profile(
+        ticker="BBCA.JK",
+        vendor_payloads={
+            "yfinance": {
+                "available": True,
+                "name": "Bank BCA",
+                "heldPercentInsiders": 0.0503,
+                "heldPercentInstitutions": 0.4444,
+                "shortRatio": 1.25,
+            }
+        },
+        vendor_order=["yfinance"],
+    )
+
+    assert profile["insider_percent"] == 0.0503
+    assert profile["institution_percent"] == 0.4444
+    assert round(profile["public_percent"], 4) == 0.5053
+    assert profile["short_ratio"] == 1.25
+
+
+def test_profile_builder_computes_public_from_percent_values_above_one():
+    profile = build_company_profile(
+        ticker="BBCA.JK",
+        vendor_payloads={
+            "yfinance": {
+                "available": True,
+                "name": "Bank BCA",
+                "insider_percent": 5.03,
+                "institution_percent": 44.44,
+            }
+        },
+        vendor_order=["yfinance"],
+    )
+
+    assert round(profile["public_percent"], 4) == 0.5053
