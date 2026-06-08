@@ -124,7 +124,7 @@ def calculate_payout_ratio(dividend_per_share: float | None, eps: float | None) 
 
 
 def _unavailable_cell() -> FinancialCell:
-    return FinancialCell(value=None, display="N/A", status="unavailable")
+    return FinancialCell(value=None, display="-", status="unavailable")
 
 
 def _record(normalized: dict[str, Any], period_key: str, field: str) -> dict[str, Any] | None:
@@ -282,9 +282,14 @@ def _build_period_cells(
             "Dividend per Share / Reference Price * 100",
             format_type="percent",
         )
+    payout_ratio_value = calculate_payout_ratio(dividend_per_share, eps_value)
+    payout_ratio_formula = "Dividend per Share / EPS * 100"
+    if payout_ratio_value is None:
+        payout_ratio_value = safe_percent(dividend_paid, net_profit)
+        payout_ratio_formula = "Dividend Paid / Net Income * 100"
     payout_ratio_cell = _calculated_cell(
-        calculate_payout_ratio(dividend_per_share, eps_value),
-        "Dividend per Share / EPS * 100",
+        payout_ratio_value,
+        payout_ratio_formula,
         format_type="percent",
     )
     fcf_coverage = safe_divide(free_cash_flow_value, dividend_paid)
@@ -385,8 +390,8 @@ def _build_period_cells(
         ),
         "free_cash_flow": _reported_or_calculated_cell(
             _record(normalized, key, "free_cash_flow"),
-            operating_cash_flow - capex if operating_cash_flow is not None and capex is not None else None,
-            "Operating Cash Flow - Capex",
+            free_cash_flow_value,
+            "Operating Cash Flow - abs(Capex)",
             format_type="currency_scaled",
             scale_divisor=scale_divisor,
         ),

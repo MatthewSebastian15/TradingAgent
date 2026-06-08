@@ -2177,6 +2177,7 @@ def collect_market_data(
         analysis_date=trade_date,
         currency=financial_currency,
         current_price=last_close_price,
+        price_data=price.value,
         company_profile=company_profile,
         dividends=dividend_events,
     )
@@ -2198,6 +2199,7 @@ def collect_market_data(
             balance_sheet={"quarterly": balance_sheet.value, "annual": annual_balance_sheet.value},
             cashflow={"quarterly": cashflow.value, "annual": annual_cashflow.value},
             dividends=dividend_events,
+            price_data=price.value,
             company_profile=company_profile,
             current_price=last_close_price,
         )

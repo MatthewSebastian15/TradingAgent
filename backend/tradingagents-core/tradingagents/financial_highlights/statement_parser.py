@@ -13,11 +13,21 @@ from .models import FinancialPeriod
 VENDOR_PRIORITY = ("yfinance", "alpha_vantage", "finnhub")
 
 FIELD_ALIASES = {
-    "revenue": ("total revenue", "totalrevenue", "revenue", "revenues", "totalRevenue"),
+    "revenue": (
+        "total revenue",
+        "totalrevenue",
+        "operating revenue",
+        "operatingrevenue",
+        "revenue",
+        "revenues",
+        "totalRevenue",
+    ),
     "ebitda": ("normalized ebitda", "normalizedebitda", "ebitda"),
     "net_profit": (
         "net income common stockholders",
         "netincomecommonstockholders",
+        "net income continuous operations",
+        "netincomecontinuousoperations",
         "net income",
         "netincome",
         "netIncome",
@@ -26,25 +36,46 @@ FIELD_ALIASES = {
     "total_equity": (
         "stockholders equity",
         "stockholdersequity",
+        "total equity gross minority interest",
+        "totalequitygrossminorityinterest",
+        "common stock equity",
+        "commonstockequity",
         "total stockholder equity",
         "totalstockholderequity",
+        "total shareholder equity",
+        "totalshareholderequity",
         "total shareholders equity",
+        "totalshareholdersequity",
         "totalShareholderEquity",
         "total equity",
         "totalequity",
     ),
-    "total_debt": ("total debt", "totaldebt", "shortLongTermDebtTotal"),
+    "total_debt": (
+        "total debt",
+        "totaldebt",
+        "long term debt and capital lease obligation",
+        "longtermdebtandcapitalleaseobligation",
+        "long term debt",
+        "longtermdebt",
+        "short long term debt total",
+        "shortlongtermdebttotal",
+        "shortLongTermDebtTotal",
+    ),
     "cash": (
-        "cash cash equivalents and short term investments",
-        "cashcashequivalentsandshortterminvestments",
         "cash and cash equivalents",
         "cashandcashequivalents",
+        "cash cash equivalents and short term investments",
+        "cashcashequivalentsandshortterminvestments",
+        "cash financial",
+        "cashfinancial",
+        "cash equivalents",
+        "cashequivalents",
         "cash and short term investments",
         "cashandshortterminvestments",
         "cashAndCashEquivalentsAtCarryingValue",
         "cash",
     ),
-    "current_liabilities": ("current liabilities", "currentliabilities", "totalCurrentLiabilities"),
+    "current_liabilities": ("current liabilities", "currentliabilities", "total current liabilities", "totalcurrentliabilities", "totalCurrentLiabilities"),
     "total_liabilities": (
         "total liabilities net minority interest",
         "totalliabilitiesnetminorityinterest",
@@ -71,6 +102,10 @@ FIELD_ALIASES = {
     "dividend_paid": (
         "cash dividends paid",
         "cashdividendspaid",
+        "common stock dividend paid",
+        "commonstockdividendpaid",
+        "cash dividends paid direct",
+        "cashdividendspaiddirect",
         "dividends paid",
         "dividendspaid",
         "dividendPayout",
@@ -80,13 +115,15 @@ FIELD_ALIASES = {
         "ordinarysharesnumber",
         "share issued",
         "shareissued",
+        "common stock shares outstanding",
+        "commonstocksharesoutstanding",
         "commonStockSharesOutstanding",
         "shares outstanding",
         "sharesoutstanding",
     ),
-    "eps": ("diluted eps", "dilutedeps", "basic eps", "basiceps", "reportedEPS", "eps"),
+    "eps": ("diluted eps", "dilutedeps", "basic eps", "basiceps", "reported eps", "reportedeps", "reportedEPS", "eps"),
     "dividend_per_share": ("dividend per share", "dividendpershare", "DividendPerShare"),
-    "reference_price": ("reference price", "referenceprice"),
+    "reference_price": ("reference price", "referenceprice", "close", "last close", "lastclose"),
     "dividend_yield": ("dividend yield", "dividendyield", "DividendYield"),
     "free_cash_flow": ("free cash flow", "freecashflow", "freeCashFlow"),
     "market_cap": ("market cap", "marketcap", "market capitalization", "marketcapitalization"),
@@ -368,22 +405,72 @@ def _parse_finnhub_statement(
 
 
 
+def _dict_date_rows(mapping: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    rows: list[Mapping[str, Any]] = []
+    for raw_date, raw_value in mapping.items():
+        try:
+            datetime.fromisoformat(str(raw_date)[:10])
+        except (TypeError, ValueError):
+            return []
+        if isinstance(raw_value, Mapping):
+            item = dict(raw_value)
+            item.setdefault("date", raw_date)
+            rows.append(item)
+        else:
+            rows.append({"date": raw_date, "dividend_per_share": raw_value})
+    return rows
+
+
+def _csv_event_rows(payload: str) -> list[Mapping[str, Any]]:
+    lines = [line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if len(lines) < 2 or "," not in payload:
+        return []
+    try:
+        reader = csv.DictReader(StringIO("\n".join(lines)))
+    except csv.Error:
+        return []
+    rows: list[Mapping[str, Any]] = []
+    for row in reader:
+        if not row:
+            continue
+        item = dict(row)
+        if "" in item and item[""] and not item.get("date"):
+            item["date"] = item[""]
+        rows.append(item)
+    return rows
+
+
 def _dividend_event_rows(payload: Any) -> list[Mapping[str, Any]]:
+    if hasattr(payload, "to_csv"):
+        payload = payload.to_csv()
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, Mapping)]
-    mapping = _load_mapping(payload)
-    if not isinstance(mapping, Mapping):
+    if isinstance(payload, str):
+        mapping = _load_mapping(payload)
+        if isinstance(mapping, Mapping):
+            payload = mapping
+        else:
+            return _csv_event_rows(payload)
+    if not isinstance(payload, Mapping):
         return []
-    for key in ("dividends", "corporate_actions", "corporateActions", "data", "rows"):
-        value = mapping.get(key)
+    for key in ("dividends", "Dividends", "corporate_actions", "corporateActions", "data", "rows"):
+        value = payload.get(key)
         if isinstance(value, list):
             return [item for item in value if isinstance(item, Mapping)]
-    return []
+        if isinstance(value, Mapping):
+            return _dict_date_rows(value)
+        if isinstance(value, str):
+            return _csv_event_rows(value)
+    return _dict_date_rows(payload)
 
 
 def _event_period_keys(row: Mapping[str, Any]) -> list[str]:
     date_value = next(
-        (row.get(key) for key in ("ex_date", "date", "payment_date", "record_date", "announcement_date") if row.get(key)),
+        (
+            row.get(key)
+            for key in ("ex_date", "date", "Date", "payment_date", "record_date", "announcement_date", "")
+            if row.get(key)
+        ),
         None,
     )
     try:
@@ -396,7 +483,7 @@ def _event_period_keys(row: Mapping[str, Any]) -> list[str]:
 
 
 def _event_amount(row: Mapping[str, Any]) -> float | None:
-    for key in ("dividend_per_share", "cash_amount", "amount", "dividend", "cash_dividend"):
+    for key in ("dividend_per_share", "Dividend Per Share", "Dividends", "cash_amount", "amount", "dividend", "cash_dividend"):
         amount = _number(row.get(key))
         if amount is not None:
             return abs(amount)
@@ -517,36 +604,62 @@ def _currency_from_payload(payload: Any) -> str | None:
     return str(currency).upper() if currency else None
 
 
-def _last_close_on_or_before(price_data: Any, analysis_date: Any) -> float | None:
+def _price_rows(price_data: Any) -> list[tuple[Any, Any]]:
     if hasattr(price_data, "to_csv"):
         price_data = price_data.to_csv()
-    if not isinstance(price_data, str) or "," not in price_data:
-        return None
-    lines = [line for line in price_data.splitlines() if line.strip() and not line.lstrip().startswith("#")]
-    if len(lines) < 2:
-        return None
+    if isinstance(price_data, list):
+        rows = [item for item in price_data if isinstance(item, Mapping)]
+    elif isinstance(price_data, Mapping):
+        nested = next(
+            (price_data.get(key) for key in ("data", "rows", "prices", "points") if isinstance(price_data.get(key), list)),
+            None,
+        )
+        if isinstance(nested, list):
+            rows = [item for item in nested if isinstance(item, Mapping)]
+        elif all(_number(value) is not None for value in price_data.values()):
+            return list(price_data.items())
+        else:
+            rows = [price_data]
+    elif isinstance(price_data, str) and "," in price_data:
+        lines = [line for line in price_data.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+        if len(lines) < 2:
+            return []
+        try:
+            rows = list(csv.DictReader(StringIO("\n".join(lines))))
+        except csv.Error:
+            return []
+    else:
+        return []
+
+    parsed_rows: list[tuple[Any, Any]] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        field_map = {re.sub(r"[^a-z0-9]", "", str(field).lower()): field for field in row}
+        date_field = next((field_map[key] for key in ("date", "datetime", "timestamp") if key in field_map), None)
+        close_field = next(
+            (field_map[key] for key in ("close", "adjclose", "lastclose", "price") if key in field_map),
+            None,
+        )
+        if date_field and close_field:
+            parsed_rows.append((row.get(date_field), row.get(close_field)))
+    return parsed_rows
+
+
+def _last_close_on_or_before(price_rows: list[tuple[Any, Any]], cutoff_value: Any) -> float | None:
     try:
-        rows = csv.DictReader(StringIO("\n".join(lines)))
-        field_map = {re.sub(r"[^a-z0-9]", "", field.lower()): field for field in rows.fieldnames or []}
-    except csv.Error:
-        return None
-    date_field = next((field_map[key] for key in ("date", "datetime", "timestamp") if key in field_map), None)
-    close_field = field_map.get("close")
-    if not date_field or not close_field:
-        return None
-    try:
-        cutoff = datetime.fromisoformat(str(analysis_date)[:10]).date()
+        cutoff = datetime.fromisoformat(str(cutoff_value)[:10]).date()
     except (TypeError, ValueError):
-        cutoff = None
+        return None
     last_date = None
     last_close = None
-    for row in rows:
+    for raw_date, raw_close in price_rows:
         try:
-            row_date = datetime.fromisoformat(str(row.get(date_field) or "")[:10]).date()
-        except ValueError:
+            row_date = datetime.fromisoformat(str(raw_date)[:10]).date()
+        except (TypeError, ValueError):
             continue
-        close = _number(row.get(close_field))
-        if close is None or (cutoff is not None and row_date > cutoff):
+        close = _number(raw_close)
+        if close is None or row_date > cutoff:
             continue
         if last_date is None or row_date >= last_date:
             last_date = row_date
@@ -554,31 +667,76 @@ def _last_close_on_or_before(price_data: Any, analysis_date: Any) -> float | Non
     return last_close
 
 
-def _add_reference_price(
+def reference_prices_by_period(
+    periods: list[FinancialPeriod],
+    price_data: Any,
+    analysis_date: Any = None,
+) -> dict[str, float]:
+    rows = _price_rows(price_data)
+    if not rows or not periods:
+        return {}
+    try:
+        analysis_cutoff = datetime.fromisoformat(str(analysis_date)[:10]).date() if analysis_date else None
+    except (TypeError, ValueError):
+        analysis_cutoff = None
+    prices: dict[str, float] = {}
+    for period in periods:
+        cutoff_value = period.sort_key or (f"{period.year}-12-31" if period.type == "annual" else None)
+        try:
+            period_cutoff = datetime.fromisoformat(str(cutoff_value)[:10]).date()
+        except (TypeError, ValueError):
+            continue
+        if analysis_cutoff is not None and period_cutoff > analysis_cutoff:
+            period_cutoff = analysis_cutoff
+        close = _last_close_on_or_before(rows, period_cutoff.isoformat())
+        if close is not None:
+            prices[period.key] = close
+    return prices
+
+
+def _add_reference_prices(
     normalized: dict[str, Any],
     periods: list[FinancialPeriod],
     price_data: Any,
     analysis_date: Any,
 ) -> None:
-    reference_price = _last_close_on_or_before(price_data, analysis_date)
-    if reference_price is None or not periods:
+    for period_key, reference_price in reference_prices_by_period(periods, price_data, analysis_date).items():
+        _merge_value(
+            normalized,
+            period_key,
+            "reference_price",
+            reference_price,
+            source_vendor="price_data",
+            source_field="last_close_on_or_before_period_end",
+        )
+
+
+def _add_profile_fallbacks(
+    normalized: dict[str, Any],
+    periods: list[FinancialPeriod],
+    company_profile: Mapping[str, Any] | None,
+) -> None:
+    if not isinstance(company_profile, Mapping):
         return
-    target_period = next(
-        (
-            period
-            for period in reversed(periods)
-            if normalized.get("periods", {}).get(period.key, {}).get("dividend_per_share")
-        ),
-        periods[-1],
-    )
-    _merge_value(
-        normalized,
-        target_period.key,
-        "reference_price",
-        reference_price,
-        source_vendor="price_data",
-        source_field="last_close_on_or_before_analysis_date",
-    )
+    shares_outstanding = company_profile.get("shares_outstanding") or company_profile.get("sharesOutstanding")
+    for period in periods:
+        _merge_value(
+            normalized,
+            period.key,
+            "shares_outstanding",
+            shares_outstanding,
+            source_vendor="company_profile",
+            source_field="shares_outstanding",
+        )
+    if periods:
+        _merge_value(
+            normalized,
+            periods[-1].key,
+            "market_cap",
+            company_profile.get("market_cap") or company_profile.get("marketCap"),
+            source_vendor="company_profile",
+            source_field="market_cap",
+        )
 
 
 def parse_vendor_financials(
@@ -593,6 +751,7 @@ def parse_vendor_financials(
     analysis_date: Any | None = None,
     dividends: Any | None = None,
     vendor_payloads: dict[str, Any] | None = None,
+    company_profile: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized = _new_normalized()
     grouped: dict[str, list[tuple[Any, str | None]]] = {vendor: [] for vendor in VENDOR_PRIORITY}
@@ -614,5 +773,6 @@ def parse_vendor_financials(
         for payload, frequency in grouped.get(vendor, []):
             _parse_statement(payload, normalized, vendor, frequency)
 
-    _add_reference_price(normalized, periods, price_data, analysis_date)
+    _add_reference_prices(normalized, periods, price_data, analysis_date)
+    _add_profile_fallbacks(normalized, periods, company_profile)
     return normalized
