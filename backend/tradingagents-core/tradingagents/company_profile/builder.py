@@ -47,6 +47,12 @@ OPTIONAL_PROFILE_FIELDS = (
     "short_ratio",
 )
 
+OWNERSHIP_ENRICHMENT_FIELDS = (
+    "shares_outstanding",
+    "insider_percent",
+    "institution_percent",
+)
+
 FIELD_ALIASES = {
     "company_name": ("company_name", "name", "Name", "longName", "shortName"),
     "ticker": ("ticker", "symbol", "Symbol"),
@@ -60,6 +66,7 @@ FIELD_ALIASES = {
     "market_cap": ("market_cap", "marketCap", "MarketCapitalization", "marketCapitalization"),
     "shares_outstanding": (
         "shares_outstanding",
+        "shares_out",
         "sharesOutstanding",
         "SharesOutstanding",
         "share_outstanding",
@@ -67,17 +74,19 @@ FIELD_ALIASES = {
     ),
     "insider_percent": (
         "insider_percent",
+        "insider_pct",
         "heldPercentInsiders",
         "insiderOwnership",
         "insider_ownership",
     ),
     "institution_percent": (
         "institution_percent",
+        "institution_pct",
         "heldPercentInstitutions",
         "institutionOwnership",
         "institution_ownership",
     ),
-    "public_percent": ("public_percent", "publicOwnership", "public_ownership"),
+    "public_percent": ("public_percent", "public_pct", "publicOwnership", "public_ownership"),
     "short_ratio": ("short_ratio", "shortRatio"),
     "current_price": ("current_price", "currentPrice", "regularMarketPrice"),
     "fiscal_year_end": ("fiscal_year_end", "FiscalYearEnd"),
@@ -200,7 +209,27 @@ def _normalize_vendor_payload(payload: Any, vendor: str) -> dict[str, Any]:
 
 
 def _needs_enrichment(profile: Mapping[str, Any]) -> bool:
-    return any(_blank(profile.get(field)) for field in ENRICHMENT_FIELDS)
+    return any(_blank(profile.get(field)) for field in ENRICHMENT_FIELDS + OWNERSHIP_ENRICHMENT_FIELDS)
+
+
+def _attach_ownership_aliases(profile: dict[str, Any]) -> None:
+    shares_out = profile.get("shares_outstanding")
+    insider_pct = profile.get("insider_percent")
+    institution_pct = profile.get("institution_percent")
+    public_pct = profile.get("public_percent")
+    short_ratio = profile.get("short_ratio")
+
+    profile["shares_out"] = shares_out
+    profile["insider_pct"] = insider_pct
+    profile["institution_pct"] = institution_pct
+    profile["public_pct"] = public_pct
+    profile["shares_ownership"] = {
+        "shares_out": shares_out,
+        "insider_pct": insider_pct,
+        "institution_pct": institution_pct,
+        "public_pct": public_pct,
+        "short_ratio": short_ratio,
+    }
 
 
 def build_company_profile(
@@ -256,4 +285,5 @@ def build_company_profile(
         profile["data_quality"]["warnings"] = warnings
     if not available:
         profile["warning"] = "Company profile data is not available for this ticker."
+    _attach_ownership_aliases(profile)
     return profile

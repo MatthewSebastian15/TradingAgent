@@ -107,10 +107,15 @@ class CompanyProfile(ApiSchema):
     website: str | None = None
     market_cap: float | None = None
     shares_outstanding: float | None = None
+    shares_out: float | None = None
     insider_percent: float | None = None
+    insider_pct: float | None = None
     institution_percent: float | None = None
+    institution_pct: float | None = None
     public_percent: float | None = None
+    public_pct: float | None = None
     short_ratio: float | None = None
+    shares_ownership: dict[str, Any] | None = None
     current_price: float | None = None
     fiscal_year_end: str | None = None
     employee_count: int | None = None

@@ -42,10 +42,13 @@ describe('ProfileTab', () => {
         profile={{
           available: true,
           ticker: 'BBCA.JK',
-          shares_outstanding: 123275050000,
-          insider_percent: 0.0503,
-          institution_percent: 0.4444,
-          short_ratio: 1.25,
+          shares_ownership: {
+            shares_out: 122876240600,
+            insider_pct: 0.60814,
+            institution_pct: 0.20815,
+            public_pct: 0.18371,
+            short_ratio: null,
+          },
           business_summary: 'Banking profile.',
         }}
       />
@@ -54,11 +57,32 @@ describe('ProfileTab', () => {
     expect(screen.getByText('SHARES & OWNERSHIP')).toBeTruthy();
     expect(screen.getByText('OWNERSHIPS')).toBeTruthy();
     expect(screen.getByText('SHARES OUT')).toBeTruthy();
-    expect(screen.getAllByText('123,275,050,000').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('5.03%').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('44.44%').length).toBeGreaterThan(0);
-    expect(screen.getByText('1.25')).toBeTruthy();
-    expect(screen.getByText('50.53%')).toBeTruthy();
+    expect(screen.getAllByText('122,876,240,600').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('60.81%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('20.82%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    expect(screen.getByText('18.37%')).toBeTruthy();
+    expect(screen.getByText('INSIDER')).toBeTruthy();
+    expect(screen.getByText('INSTITUTION')).toBeTruthy();
+    expect(screen.getByText('PUBLIC')).toBeTruthy();
+  });
+
+  it('renders ownership pie when at least one ownership data point is valid', () => {
+    render(
+      <ProfileTab
+        profile={{
+          available: true,
+          ticker: 'PARTIAL.JK',
+          shares_out: 1000,
+          insider_pct: 0.25,
+          business_summary: 'Partial ownership profile.',
+        }}
+      />
+    );
+
+    expect(screen.getByText('25.00%')).toBeTruthy();
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    expect(screen.getByText('100%')).toBeTruthy();
   });
 
   it('renders canonical fields and N/A for missing values', () => {
