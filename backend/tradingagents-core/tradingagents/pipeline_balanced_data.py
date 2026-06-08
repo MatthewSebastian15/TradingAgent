@@ -2176,6 +2176,9 @@ def collect_market_data(
         normalized_period_rows,
         analysis_date=trade_date,
         currency=financial_currency,
+        current_price=last_close_price,
+        company_profile=company_profile,
+        dividends=dividend_events,
     )
     financial_highlights["derived_fundamentals"] = derived_fundamentals
     data_freshness = _build_runtime_freshness_metadata(
@@ -2194,6 +2197,7 @@ def collect_market_data(
             income_statement={"quarterly": income_statement.value, "annual": annual_income_statement.value},
             balance_sheet={"quarterly": balance_sheet.value, "annual": annual_balance_sheet.value},
             cashflow={"quarterly": cashflow.value, "annual": annual_cashflow.value},
+            dividends=dividend_events,
             company_profile=company_profile,
             current_price=last_close_price,
         )
