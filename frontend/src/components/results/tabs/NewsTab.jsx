@@ -56,16 +56,55 @@ function dedupeNewsItems(items) {
   return result;
 }
 
-function excludeNewsItems(items, excludedItems) {
-  const excludedKeys = new Set(
-    dedupeNewsItems(excludedItems)
-      .map((item) => newsDedupeKey(item) || newsFallbackKey(item))
-      .filter(Boolean)
-  );
+const IMPACT_RANK = {
+  critical: 5,
+  very_high: 5,
+  high: 4,
+  medium: 3,
+  moderate: 3,
+  low: 2,
+  minimal: 1,
+  none: 0,
+};
 
-  return dedupeNewsItems(items).filter(
-    (item) => !excludedKeys.has(newsDedupeKey(item) || newsFallbackKey(item))
-  );
+function impactRank(item) {
+  const impact = String(item?.impact || item?.impact_rule || item?.risk_level || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+  if (impact in IMPACT_RANK) return IMPACT_RANK[impact];
+  return item?.is_high_impact ? IMPACT_RANK.high : 0;
+}
+
+function impactScore(item) {
+  const number = Number(item?.impact_score ?? item?.score ?? item?.relevance_score);
+  return Number.isFinite(number) ? number : -Infinity;
+}
+
+function sortNewsByImpact(items) {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const rankDiff = impactRank(right.item) - impactRank(left.item);
+      if (rankDiff !== 0) return rankDiff;
+
+      const scoreDiff = impactScore(right.item) - impactScore(left.item);
+      if (scoreDiff !== 0) return scoreDiff;
+
+      return left.index - right.index;
+    })
+    .map(({ item }) => item);
+}
+
+function buildUnifiedNewsItems(newsImpact, relatedItems) {
+  const highImpactItemsRaw = Array.isArray(newsImpact?.high_impact_news)
+    ? newsImpact.high_impact_news
+    : [];
+  const fullNewsItemsRaw = Array.isArray(newsImpact?.full_news_list)
+    ? newsImpact.full_news_list
+    : relatedItems;
+
+  return sortNewsByImpact(dedupeNewsItems([...highImpactItemsRaw, ...fullNewsItemsRaw]));
 }
 
 function hasNewsPayload(result) {
@@ -212,14 +251,7 @@ export default function NewsTab({ result }) {
   const tracker = result?.catalyst_tracker || {};
   const analystConsensus = result?.analyst_consensus || {};
   const relatedItems = Array.isArray(relatedNews.items) ? relatedNews.items : [];
-  const hasNewsImpactFullList = Array.isArray(newsImpact.full_news_list);
-  const impactFullNewsItems = hasNewsImpactFullList ? newsImpact.full_news_list : [];
-  const highImpactItemsRaw = Array.isArray(newsImpact.high_impact_news)
-    ? newsImpact.high_impact_news
-    : [];
-  const fullNewsItemsRaw = hasNewsImpactFullList ? impactFullNewsItems : relatedItems;
-  const highImpactItems = dedupeNewsItems(highImpactItemsRaw);
-  const fullNewsItems = excludeNewsItems(fullNewsItemsRaw, highImpactItems);
+  const newsItems = buildUnifiedNewsItems(newsImpact, relatedItems);
   const companyNewsQuality = getFieldQuality(result?.data_quality, 'company_news');
   if (!hasNewsPayload(result)) {
     return (
@@ -234,10 +266,10 @@ export default function NewsTab({ result }) {
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border space-y-4">
       <section>
-        <SectionHeader label="HIGH-IMPACT NEWS" />
-        {highImpactItems.length > 0 ? (
+        <SectionHeader label="NEWS" />
+        {newsItems.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {highImpactItems.map((item, index) => (
+            {newsItems.map((item, index) => (
               <NewsCard
                 key={newsDedupeKey(item) || `${item.title}-${index}`}
                 item={item}
@@ -247,8 +279,8 @@ export default function NewsTab({ result }) {
             ))}
           </div>
         ) : (
-          <NoticeBox title="NO HIGH-IMPACT NEWS" tone="amber">
-            No articles passed the strict high-impact filter for this analysis window.
+          <NoticeBox title="NO NEWS" tone="amber">
+            No usable related news was returned for this analysis.
           </NoticeBox>
         )}
       </section>
@@ -285,31 +317,6 @@ export default function NewsTab({ result }) {
           </p>
         </section>
       )}
-
-      <section>
-        <SectionHeader label="FULL NEWS LIST" />
-        <div className="font-mono text-xs text-bloomberg-muted leading-relaxed mb-2">
-          Includes company, index, sector, and market-context news that did not qualify as high
-          impact.
-        </div>
-        {fullNewsItems.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {fullNewsItems.map((item, index) => (
-              <NewsCard
-                key={newsDedupeKey(item) || `${item.title}-${index}`}
-                item={item}
-                index={index}
-                quality={companyNewsQuality}
-              />
-            ))}
-          </div>
-        ) : (
-          <NoticeBox title="NO ADDITIONAL NEWS" tone="amber">
-            All valid articles are already classified as high impact or no additional related
-            articles were available.
-          </NoticeBox>
-        )}
-      </section>
     </div>
   );
 }

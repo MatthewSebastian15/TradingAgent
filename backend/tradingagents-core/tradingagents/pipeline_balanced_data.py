@@ -64,6 +64,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 VALID_TIME_HORIZON_MONTHS = {1, 2, 3}
 YEAR_ON_YEAR_PRICE_WINDOW_DAYS = 365
+PRICE_CHART_FALLBACK_BUFFER_DAYS = 14
 
 
 def _quality_warning(code: str, severity: str, message: str, blocking: bool = False) -> dict[str, Any]:
@@ -750,29 +751,37 @@ def _build_price_chart(
     time_horizon_months: int,
     source: str | None = None,
 ) -> dict[str, Any]:
-    """Build frontend-ready OHLCV chart data from collected CSV price data."""
+    """Build frontend-ready YOY OHLCV chart data anchored to the latest tradable date."""
     lookback_days = _price_lookback_days(time_horizon_months)
     window_label = "YOY Price Window"
     window = "YOY"
     currency = _currency_for_ticker(ticker)
 
     try:
-        cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
-        start_cutoff = cutoff - relativedelta(years=1)
+        requested_cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
+        requested_start_cutoff = requested_cutoff - relativedelta(years=1)
     except ValueError:
-        cutoff = None
-        start_cutoff = None
+        requested_cutoff = None
+        requested_start_cutoff = None
 
-    start_date = start_cutoff.strftime("%Y-%m-%d") if start_cutoff is not None else None
-    end_date = cutoff.strftime("%Y-%m-%d") if cutoff is not None else trade_date
+    requested_start_date = (
+        requested_start_cutoff.strftime("%Y-%m-%d") if requested_start_cutoff is not None else None
+    )
+    requested_end_date = requested_cutoff.strftime("%Y-%m-%d") if requested_cutoff is not None else trade_date
 
     base_payload: dict[str, Any] = {
         "available": False,
         "source": source or "unavailable",
         "ticker": ticker,
         "trade_date": trade_date,
-        "start_date": start_date,
-        "end_date": end_date,
+        "requested_trade_date": trade_date,
+        "effective_trade_date": None,
+        "price_as_of_date": None,
+        "last_trade_date": None,
+        "last_available_trade_date": None,
+        "fallback_to_last_trade": False,
+        "start_date": requested_start_date,
+        "end_date": requested_end_date,
         "currency": currency,
         "window": window,
         "window_label": window_label,
@@ -788,7 +797,7 @@ def _build_price_chart(
     if not lines:
         return {**base_payload, "warning": "Price chart data is unavailable."}
 
-    points: list[dict[str, Any]] = []
+    parsed_points: list[dict[str, Any]] = []
 
     try:
         reader = csv.DictReader(StringIO("\n".join(lines)))
@@ -805,11 +814,6 @@ def _build_price_chart(
             except ValueError:
                 continue
 
-            if cutoff is not None and row_date > cutoff:
-                continue
-            if start_cutoff is not None and row_date < start_cutoff:
-                continue
-
             open_price = _safe_float(row.get("Open"))
             high_price = _safe_float(row.get("High"))
             low_price = _safe_float(row.get("Low"))
@@ -818,8 +822,9 @@ def _build_price_chart(
             if any(value is None for value in [open_price, high_price, low_price, close_price]):
                 continue
 
-            points.append(
+            parsed_points.append(
                 {
+                    "_row_date": row_date,
                     "date": row_date.strftime("%Y-%m-%d"),
                     "open": open_price,
                     "high": max(high_price, open_price, close_price, low_price),
@@ -833,10 +838,49 @@ def _build_price_chart(
         logger.warning("Failed to build price chart for %s: %s", ticker, exc)
         return {**base_payload, "warning": "Price chart data could not be parsed."}
 
-    points = sorted(points, key=lambda item: item["date"])
+    parsed_points = sorted(parsed_points, key=lambda item: item["_row_date"])
+
+    if not parsed_points:
+        return {**base_payload, "warning": "No usable price rows were available for the selected window."}
+
+    last_available_trade_date = parsed_points[-1]["date"]
+    eligible_points = [
+        item for item in parsed_points if requested_cutoff is None or item["_row_date"] <= requested_cutoff
+    ]
+
+    if not eligible_points:
+        return {
+            **base_payload,
+            "last_available_trade_date": last_available_trade_date,
+            "warning": "No usable price rows were available at or before the trade date.",
+        }
+
+    effective_cutoff = eligible_points[-1]["_row_date"]
+    effective_start_cutoff = effective_cutoff - relativedelta(years=1)
+    effective_start_date = effective_start_cutoff.strftime("%Y-%m-%d")
+    effective_end_date = effective_cutoff.strftime("%Y-%m-%d")
+    fallback_to_last_trade = bool(
+        requested_cutoff is not None and effective_cutoff.date() != requested_cutoff.date()
+    )
+
+    points = [
+        {key: value for key, value in item.items() if key != "_row_date"}
+        for item in parsed_points
+        if effective_start_cutoff <= item["_row_date"] <= effective_cutoff
+    ]
 
     if not points:
-        return {**base_payload, "warning": "No usable price rows were available for the selected window."}
+        return {
+            **base_payload,
+            "start_date": effective_start_date,
+            "end_date": effective_end_date,
+            "effective_trade_date": effective_end_date,
+            "price_as_of_date": effective_end_date,
+            "last_trade_date": effective_end_date,
+            "last_available_trade_date": last_available_trade_date,
+            "fallback_to_last_trade": fallback_to_last_trade,
+            "warning": "No usable price rows were available for the selected YOY window.",
+        }
 
     closes = [float(item["close"]) for item in points if item.get("close") is not None]
     highs = [float(item["high"]) for item in points if item.get("high") is not None]
@@ -881,6 +925,13 @@ def _build_price_chart(
         **base_payload,
         "available": True,
         "source": source or "yfinance",
+        "start_date": effective_start_date,
+        "end_date": effective_end_date,
+        "effective_trade_date": effective_end_date,
+        "price_as_of_date": effective_end_date,
+        "last_trade_date": effective_end_date,
+        "last_available_trade_date": last_available_trade_date,
+        "fallback_to_last_trade": fallback_to_last_trade,
         "points": points,
         "data": points,
         "stats": stats,
@@ -891,10 +942,11 @@ def _build_price_chart(
         },
     }
 
-
 def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, str, str]:
     current = datetime.strptime(trade_date, "%Y-%m-%d")
-    start_price = (current - relativedelta(years=1)).strftime("%Y-%m-%d")
+    start_price = (
+        current - relativedelta(years=1) - timedelta(days=PRICE_CHART_FALLBACK_BUFFER_DAYS)
+    ).strftime("%Y-%m-%d")
     start_news = (current - timedelta(days=_horizon_days(time_horizon_months))).strftime("%Y-%m-%d")
     end = (current + relativedelta(days=1)).strftime("%Y-%m-%d")
     return start_price, start_news, end
