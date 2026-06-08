@@ -171,6 +171,8 @@ class PriceChart(ApiSchema):
     source: str | None = None
     ticker: str | None = None
     trade_date: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
     currency: str | None = None
     window: str | None = None
     window_label: str | None = None

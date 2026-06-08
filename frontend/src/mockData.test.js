@@ -83,10 +83,14 @@ describe('mockData', () => {
       available: true,
       ticker: 'NVDA',
       trade_date: '2026-05-18',
-      lookback_days: 120,
+      lookback_days: 365,
+      start_date: '2025-05-18',
+      end_date: '2026-05-18',
     });
-    expect(result.price_chart.points).toHaveLength(120);
-    expect(result.price_chart.data).toHaveLength(120);
+    expect(result.price_chart.points[0].date).toBe('2025-05-18');
+    expect(result.price_chart.points.at(-1).date).toBe('2026-05-18');
+    expect(result.price_chart.points).toHaveLength(366);
+    expect(result.price_chart.data).toHaveLength(366);
     expect(result.price_chart.points[0]).toHaveProperty('adjusted_close');
     expect(result.price_performance).toHaveProperty('period_return_percent');
     expect(result.price_chart.points.some((point) => point.close >= point.open)).toBe(true);
