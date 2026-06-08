@@ -463,7 +463,7 @@ def test_html_report_succeeds_without_financial_highlights():
     assert "Key Financial Highlights" not in html
 
 
-def test_html_report_renders_phase_2_fundamental_sections_and_optional_peers():
+def test_html_report_renders_trimmed_fundamental_sections_and_optional_peers():
     metric = {"value": 10, "display": "10.00x", "status": "calculated", "formula": "Mock formula"}
     quality = {"status": "complete", "missing_fields": [], "fallback_used": [], "warnings": []}
     report = build_report_context(
@@ -502,11 +502,15 @@ def test_html_report_renders_phase_2_fundamental_sections_and_optional_peers():
     )
     html = render_analysis_report_html(report)
 
-    for heading in (
+    for hidden_heading in (
         "Financial Trend Analysis",
-        "Valuation Multiples",
         "Fair Value Range",
         "Bull / Base / Bear Scenario",
+    ):
+        assert hidden_heading not in html
+
+    for heading in (
+        "Valuation Multiples",
         "Quality of Earnings",
         "Balance Sheet Risk",
         "Dividend Quality",

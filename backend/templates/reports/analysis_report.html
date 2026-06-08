@@ -157,47 +157,11 @@
         </section>
       {% endif %}
 
-      {% if report.financial_trend_rows %}
-        <section class="section">
-          <h2>Financial Trend Analysis</h2>
-          {% if report.financial_trends.unit_note %}<p class="muted">{{ report.financial_trends.unit_note }}</p>{% endif %}
-          <table class="financial-highlights-table">
-            <thead><tr><th>Metric</th>{% for period in report.financial_trends.periods %}<th>{{ period.label }}</th>{% endfor %}</tr></thead>
-            <tbody>
-              {% for row in report.financial_trend_rows %}
-                <tr><td>{{ row.label }}</td>{% for value in row['values'] %}<td>{{ value }}</td>{% endfor %}</tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          {{ fundamental_quality(report.financial_trends) }}
-        </section>
-      {% endif %}
-
       {% if report.valuation_rows %}
         <section class="section">
           <h2>Valuation Multiples</h2>
           <table class="metric-table"><tbody>{% for row in report.valuation_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}</tbody></table>
           {{ fundamental_quality(report.valuation_multiples) }}
-        </section>
-      {% endif %}
-
-      {% if report.fair_value_rows %}
-        <section class="section">
-          <h2>Fair Value Range</h2>
-          <p>Primary method: {{ report.fair_value_range.primary_method or 'N/A' }}</p>
-          <table class="metric-table"><tbody>{% for row in report.fair_value_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}</tbody></table>
-          {% if report.fair_value_range.assumptions %}<ul>{% for note in report.fair_value_range.assumptions %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
-          {{ fundamental_quality(report.fair_value_range) }}
-        </section>
-      {% endif %}
-
-      {% if report.scenario_rows %}
-        <section class="section">
-          <h2>Bull / Base / Bear Scenario</h2>
-          <table class="metric-table">
-            <thead><tr><th>Scenario</th><th>Fair Value</th><th>Upside / Downside</th><th>Growth</th><th>Margin</th><th>Multiple</th><th>Assumption</th></tr></thead>
-            <tbody>{% for row in report.scenario_rows %}<tr><td>{{ row.scenario }}</td><td>{{ row.fair_value }}</td><td>{{ row.upside }}</td><td>{{ row.growth }}</td><td>{{ row.margin }}</td><td>{{ row.multiple }}</td><td>{{ row.assumption }}</td></tr>{% endfor %}</tbody>
-          </table>
         </section>
       {% endif %}
 

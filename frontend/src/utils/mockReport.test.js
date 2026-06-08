@@ -248,15 +248,15 @@ describe('mockReport', () => {
     expect(html).toContain('Market &amp; Scale');
   });
 
-  it('renders Phase 2 fundamental sections and hides Peer Comparison without a payload', () => {
+  it('renders trimmed fundamental sections in mock HTML output', () => {
     const html = buildMockReportHtml(MOCK_RESPONSE);
     const withoutPeer = buildMockReportHtml({ ...MOCK_RESPONSE, peer_comparison: null });
 
-    expect(html).toContain('Financial Trend Analysis');
+    expect(html).not.toContain('Financial Trend Analysis');
     expect(html).not.toContain('<th>Unit</th>');
     expect(html).toContain('Valuation Multiples');
-    expect(html).toContain('Fair Value Range');
-    expect(html).toContain('Bull / Base / Bear Scenario');
+    expect(html).not.toContain('Fair Value Range');
+    expect(html).not.toContain('Bull / Base / Bear Scenario');
     expect(html).toContain('Quality of Earnings');
     expect(html).toContain('Balance Sheet Risk');
     expect(html).toContain('Dividend Quality');

@@ -153,14 +153,14 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getAllByText('Revenue').length).toBeGreaterThan(0);
   });
 
-  it('renders Phase 2 fundamental sections and hides Peer Comparison without a payload', () => {
+  it('renders the trimmed Fundamental sections and hides removed valuation detail blocks', () => {
     const { rerender } = render(<ResultCard result={MOCK_RESPONSE} />);
 
     fireEvent.click(screen.getByText('Fundamental'));
-    expect(screen.getByText('FINANCIAL TREND ANALYSIS')).toBeTruthy();
+    expect(screen.queryByText('FINANCIAL TREND ANALYSIS')).toBeNull();
     expect(screen.getByText('VALUATION MULTIPLES')).toBeTruthy();
-    expect(screen.getByText('FAIR VALUE RANGE')).toBeTruthy();
-    expect(screen.getByText('BULL / BASE / BEAR SCENARIO')).toBeTruthy();
+    expect(screen.queryByText('FAIR VALUE RANGE')).toBeNull();
+    expect(screen.queryByText('BULL / BASE / BEAR SCENARIO')).toBeNull();
     expect(screen.getByText('QUALITY OF EARNINGS')).toBeTruthy();
     expect(screen.getByText('BALANCE SHEET RISK')).toBeTruthy();
     expect(screen.getByText('DIVIDEND QUALITY')).toBeTruthy();
