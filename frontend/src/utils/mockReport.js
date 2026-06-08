@@ -846,67 +846,6 @@ function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
   </section>`;
 }
 
-function renderFinancialTrends(payload) {
-  if (!payload?.periods?.length || !payload?.metric_details) return '';
-  const displayPeriods = sortFinancialPeriods(payload.periods);
-  const metrics = [
-    ['revenue', 'Revenue', payload.scale_label || ''],
-    ['revenue_growth_percent', 'Revenue Growth', '%'],
-    ['ebitda', 'EBITDA', payload.scale_label || ''],
-    ['ebitda_margin_percent', 'EBITDA Margin', '%'],
-    ['net_profit', 'Net Profit', payload.scale_label || ''],
-    ['net_profit_growth_percent', 'Net Profit Growth', '%'],
-    ['net_profit_margin_percent', 'Net Profit Margin', '%'],
-    ['roe_percent', 'ROE', '%'],
-    ['eps', 'EPS', `${payload.currency || ''}/share`],
-    ['bvps', 'BVPS', `${payload.currency || ''}/share`],
-    ['der', 'DER', 'x'],
-  ];
-  return `<section class="section">
-    <h2>Financial Trend Analysis</h2>
-    ${payload.unit_note ? `<p class="muted">${escapeHtml(payload.unit_note)}</p>` : ''}
-    <table class="financial-highlights-table">
-      <thead><tr><th>Metric</th>${displayPeriods.map((period) => `<th>${escapeHtml(displayPeriodLabel(period))}</th>`).join('')}</tr></thead>
-      <tbody>${metrics
-        .map(
-          ([key, label, unit]) =>
-            `<tr><td>${escapeHtml(label)}</td>${displayPeriods
-              .map((period) => {
-                const index = payload.periods.findIndex((item) => item.key === period.key);
-                return `<td>${escapeHtml(metricDetailDisplay(payload.metric_details[key]?.[index], unit))}</td>`;
-              })
-              .join('')}</tr>`
-        )
-        .join('')}</tbody>
-    </table>
-  </section>`;
-}
-
-function renderScenarioAnalysis(payload) {
-  if (!payload) return '';
-  const rows = ['bear', 'base', 'bull'].map((key) => ({ scenario: key, ...(payload[key] || {}) }));
-  return `<section class="section">
-    <h2>Bull / Base / Bear Scenario</h2>
-    <table>
-      <thead><tr><th>Scenario</th><th>Fair Value</th><th>Upside / Downside</th><th>Growth</th><th>Margin</th><th>Multiple</th><th>Assumption</th></tr></thead>
-      <tbody>${rows
-        .map(
-          (item) => `<tr>
-            <td>${escapeHtml(item.scenario)}</td>
-            <td>${escapeHtml(item.fair_value_display)}</td>
-            <td>${escapeHtml(item.upside_downside_display)}</td>
-            <td>${escapeHtml(hasValue(item.revenue_growth_assumption_percent) ? `${item.revenue_growth_assumption_percent}%` : null)}</td>
-            <td>${escapeHtml(hasValue(item.margin_assumption_percent) ? `${item.margin_assumption_percent}%` : null)}</td>
-            <td>${escapeHtml(item.valuation_multiple)}</td>
-            <td>${escapeHtml(item.assumption)}</td>
-          </tr>`
-        )
-        .join('')}</tbody>
-    </table>
-    ${renderFundamentalQuality(payload)}
-  </section>`;
-}
-
 function renderPeerComparison(payload) {
   if (!payload?.metrics?.length) return '';
   return `<section class="section">
@@ -1257,8 +1196,6 @@ export function renderMockReportHtml(report) {
 
       ${renderFinancialHighlights(report.financial_highlights)}
 
-      ${renderFinancialTrends(report.financial_trends)}
-
       ${renderFundamentalMetricSection(
         'Valuation Multiples',
         report.valuation_multiples,
@@ -1272,25 +1209,6 @@ export function renderMockReportHtml(report) {
         ],
         ''
       )}
-
-      ${renderFundamentalMetricSection(
-        'Fair Value Range',
-        report.fair_value_range,
-        [
-          ['current_price', 'Current Price'],
-          ['bear', 'Bear Fair Value'],
-          ['base', 'Base Fair Value'],
-          ['bull', 'Bull Fair Value'],
-          ['bear_upside_percent', 'Bear Upside / Downside'],
-          ['base_upside_percent', 'Base Upside / Downside'],
-          ['bull_upside_percent', 'Bull Upside / Downside'],
-        ],
-        report.fair_value_range
-          ? `<p>Primary method: ${escapeHtml(report.fair_value_range.primary_method)}</p>`
-          : ''
-      )}
-
-      ${renderScenarioAnalysis(report.scenario_analysis)}
 
       ${renderFundamentalMetricSection('Quality of Earnings', report.quality_of_earnings, [
         ['cfo_to_net_income', 'CFO / Net Income'],
