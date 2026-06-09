@@ -54,6 +54,7 @@ DEFAULT_CONFIG = {
     "analysis_mode": "balanced",
     "max_gemini_calls": 9,
     "data_collection_workers": int(_env("DATA_COLLECTION_WORKERS") or "12"),
+    "price_max_fallback_days": int(_env("PRICE_MAX_FALLBACK_DAYS") or "7"),
     # Reasoning effort (provider-specific, None = default)
     "google_thinking_level": None,
     "openai_reasoning_effort": None,

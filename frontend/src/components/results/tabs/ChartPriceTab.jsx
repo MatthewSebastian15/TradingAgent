@@ -58,6 +58,12 @@ export default function ChartPriceTab({ result }) {
         </div>
       </section>
 
+      {chart.warning && (
+        <NoticeBox title="CHART DATA WARNING" tone="amber">
+          {chart.warning}
+        </NoticeBox>
+      )}
+
       <section>
         <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-2">
           CHART

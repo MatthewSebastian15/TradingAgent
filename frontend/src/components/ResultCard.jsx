@@ -128,10 +128,16 @@ function getCurrentPrice(result) {
   if (!result) return null;
 
   if (Object.prototype.hasOwnProperty.call(result, 'last_price')) {
-    return hasDisplayValue(result.last_price) ? result.last_price : null;
+    if (hasDisplayValue(result.last_price)) return result.last_price;
   }
   if (Object.prototype.hasOwnProperty.call(result, 'current_price')) {
-    return hasDisplayValue(result.current_price) ? result.current_price : null;
+    if (hasDisplayValue(result.current_price)) return result.current_price;
+  }
+  const stalePriceData =
+    result.data_quality?.price_data === 'stale' ||
+    result.price_chart?.data_quality?.status === 'stale';
+  if (stalePriceData && hasDisplayValue(result.company_profile?.current_price)) {
+    return result.company_profile.current_price;
   }
 
   return coalesceDisplayValue(result.last_close_price);
@@ -165,8 +171,17 @@ function confidenceTone(tier) {
 
 function formatWibPriceTimestamp(value, includeTime = true) {
   if (!hasDisplayValue(value)) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
+  const rawValue = String(value).trim();
+
+  // Backend price rows are daily candles. A date-only value such as
+  // 2026-05-12 must stay date-only; parsing it through JavaScript Date treats
+  // it as midnight UTC and renders a misleading 07:00 WIB timestamp.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawValue)) {
+    return rawValue;
+  }
+
+  const date = new Date(rawValue);
+  if (Number.isNaN(date.getTime())) return rawValue;
 
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Jakarta',

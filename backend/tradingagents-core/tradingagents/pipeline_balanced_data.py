@@ -65,6 +65,14 @@ T = TypeVar("T")
 VALID_TIME_HORIZON_MONTHS = {1, 2, 3}
 YEAR_ON_YEAR_PRICE_WINDOW_DAYS = 365
 PRICE_CHART_FALLBACK_BUFFER_DAYS = 14
+DEFAULT_PRICE_MAX_FALLBACK_DAYS = 7
+
+
+def _price_max_fallback_days() -> int:
+    try:
+        return max(0, int(get_config().get("price_max_fallback_days", DEFAULT_PRICE_MAX_FALLBACK_DAYS)))
+    except (TypeError, ValueError):
+        return DEFAULT_PRICE_MAX_FALLBACK_DAYS
 
 
 def _quality_warning(code: str, severity: str, message: str, blocking: bool = False) -> dict[str, Any]:
@@ -73,6 +81,8 @@ def _quality_warning(code: str, severity: str, message: str, blocking: bool = Fa
 
 def _warning_detail_from_message(message: str) -> dict[str, Any]:
     lowered = message.lower()
+    if "ohlcv_stale" in lowered or ("latest ohlcv row" in lowered and "maximum allowed fallback" in lowered):
+        return _quality_warning("OHLCV_STALE", "error", message, True)
     if "exact ohlcv date not found" in lowered or "ohlcv_fallback_used" in lowered:
         return _quality_warning("OHLCV_FALLBACK_USED", "warning", message, False)
     if "ohlcv" in lowered and "no available" in lowered:
@@ -237,6 +247,60 @@ def _safe_data_field(label: str, func: Callable[[], Any], limit: int = 12_000) -
     except Exception as exc:
         logger.warning("Balanced pipeline data call failed for %s: %s", label, exc)
         return DataField.unavailable(label, exc)
+
+
+def _safe_payload(label: str, func: Callable[[], Any]) -> dict[str, Any]:
+    try:
+        raw_value = _call_yfinance_with_resilience(func)
+        return dict(raw_value) if isinstance(raw_value, dict) else {}
+    except Exception as exc:
+        logger.warning("Balanced pipeline payload call failed for %s: %s", label, exc)
+        return {"available": False, "source": "unavailable", "reason": str(exc)}
+
+
+def _positive_price(value: Any) -> float | None:
+    number = _safe_float(value)
+    return number if number is not None and number > 0 else None
+
+
+def _resolve_current_price_anchor(
+    *,
+    ohlcv_price: float | None,
+    ohlcv_as_of: str | None,
+    ohlcv_source: str | None,
+    quote: dict[str, Any] | None,
+    profile: dict[str, Any] | None,
+    trade_date: str,
+) -> dict[str, Any]:
+    if ohlcv_price is not None:
+        return {
+            "price": ohlcv_price,
+            "as_of": ohlcv_as_of,
+            "source": ohlcv_source,
+            "is_fallback": False,
+        }
+
+    profile_price = _positive_price((profile or {}).get("current_price"))
+    if profile_price is not None:
+        return {
+            "price": profile_price,
+            "as_of": (profile or {}).get("current_price_as_of") or (profile or {}).get("price_timestamp") or trade_date,
+            "source": (profile or {}).get("current_price_source") or "company_profile.current_price",
+            "is_fallback": True,
+        }
+
+    quote_price = _positive_price(
+        (quote or {}).get("current_price") or (quote or {}).get("price") or (quote or {}).get("c")
+    )
+    if quote_price is not None:
+        return {
+            "price": quote_price,
+            "as_of": (quote or {}).get("timestamp") or (quote or {}).get("price_timestamp") or trade_date,
+            "source": (quote or {}).get("source") or (quote or {}).get("price_source") or "quote",
+            "is_fallback": True,
+        }
+
+    return {"price": None, "as_of": None, "source": None, "is_fallback": False}
 
 
 def _deduplicate_news_sections(parts: list[str]) -> list[str]:
@@ -633,8 +697,12 @@ def _safe_local_indicator_field(price_field: DataField) -> DataField:
         return DataField(value=message, status="missing", warning=message)
 
 
-def _extract_last_close_price_and_date(price_data: str, trade_date: str) -> tuple[float | None, str | None]:
-    """Parse the last Close value and row date at or before trade_date from yfinance CSV."""
+def _extract_last_close_price_and_date(
+    price_data: str,
+    trade_date: str,
+    max_fallback_days: int | None = None,
+) -> tuple[float | None, str | None]:
+    """Parse the last fresh Close value and row date at or before trade_date from OHLCV CSV."""
     lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if not lines:
         return None, None
@@ -664,7 +732,13 @@ def _extract_last_close_price_and_date(price_data: str, trade_date: str) -> tupl
         if last_date is None or row_date >= last_date:
             last_date = row_date
             last_close = close
-    return last_close, last_date.strftime("%Y-%m-%d") if last_date is not None else None
+    if last_date is None:
+        return None, None
+    if cutoff is not None:
+        allowed_gap = _price_max_fallback_days() if max_fallback_days is None else max(0, int(max_fallback_days))
+        if (cutoff - last_date).days > allowed_gap:
+            return None, None
+    return last_close, last_date.strftime("%Y-%m-%d")
 
 
 def _extract_last_close_price(price_data: str, trade_date: str) -> float | None:
@@ -751,11 +825,12 @@ def _build_price_chart(
     time_horizon_months: int,
     source: str | None = None,
 ) -> dict[str, Any]:
-    """Build frontend-ready YOY OHLCV chart data anchored to the latest tradable date."""
+    """Build frontend-ready YOY OHLCV chart data anchored to trade_date with bounded last-trade fallback."""
     lookback_days = _price_lookback_days(time_horizon_months)
     window_label = "YOY Price Window"
     window = "YOY"
     currency = _currency_for_ticker(ticker)
+    max_fallback_days = _price_max_fallback_days()
 
     try:
         requested_cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
@@ -856,9 +931,19 @@ def _build_price_chart(
         }
 
     effective_cutoff = eligible_points[-1]["_row_date"]
+    effective_end_date = effective_cutoff.strftime("%Y-%m-%d")
+    fallback_gap_days = (requested_cutoff - effective_cutoff).days if requested_cutoff is not None else 0
+    is_stale = requested_cutoff is not None and fallback_gap_days > max_fallback_days
+    stale_warning = (
+        "OHLCV_STALE - Latest OHLCV row "
+        f"{effective_end_date} is {fallback_gap_days} days before trade_date {trade_date}; "
+        f"maximum allowed fallback is {max_fallback_days} days."
+        if is_stale
+        else None
+    )
+
     effective_start_cutoff = effective_cutoff - relativedelta(years=1)
     effective_start_date = effective_start_cutoff.strftime("%Y-%m-%d")
-    effective_end_date = effective_cutoff.strftime("%Y-%m-%d")
     fallback_to_last_trade = bool(
         requested_cutoff is not None and effective_cutoff.date() != requested_cutoff.date()
     )
@@ -920,10 +1005,27 @@ def _build_price_chart(
     missing_fields = []
     if not volumes:
         missing_fields.append("volume")
+    warnings: list[str] = []
+    if stale_warning:
+        warnings.append(stale_warning)
+    elif fallback_to_last_trade:
+        warnings.append(
+            "OHLCV_FALLBACK_USED - Exact OHLCV date not found; using latest available "
+            f"trading day {effective_end_date} ({fallback_gap_days} days before trade_date {trade_date})."
+        )
+    if is_stale:
+        missing_fields.append("fresh_ohlcv")
+
+    available = len(points) >= 2
+    data_quality_status = "stale" if is_stale else "complete"
+    if not available:
+        data_quality_status = "unavailable"
+    elif missing_fields or fallback_to_last_trade:
+        data_quality_status = "partial" if not is_stale else "stale"
 
     return {
         **base_payload,
-        "available": True,
+        "available": available,
         "source": source or "yfinance",
         "start_date": effective_start_date,
         "end_date": effective_end_date,
@@ -937,9 +1039,15 @@ def _build_price_chart(
         "stats": stats,
         "summary": summary,
         "data_quality": {
-            "status": "complete" if not missing_fields else "partial",
-            "missing_fields": missing_fields,
+            "status": data_quality_status,
+            "missing_fields": list(dict.fromkeys(missing_fields)),
+            "max_fallback_days": max_fallback_days,
+            "fallback_gap_days": fallback_gap_days,
+            "warnings": warnings,
         },
+        "warning": warnings[0] if warnings else (
+            None if available else "Valid OHLC price chart data is not available for this analysis."
+        ),
     }
 
 def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, str, str]:
@@ -1170,8 +1278,11 @@ def _classify_price_data(
     trade_date: str,
     price_lookback_days: int,
     warnings: list[str],
+    max_fallback_days: int | None = None,
 ) -> str:
+    _ = price_lookback_days
     price_dates = extract_price_dates(price.value)
+    allowed_gap = _price_max_fallback_days() if max_fallback_days is None else max(0, int(max_fallback_days))
     if price.status == "missing":
         return "invalid_ticker" if fundamentals.status == "missing" else "missing"
     if trade_date not in price_dates:
@@ -1184,8 +1295,20 @@ def _classify_price_data(
             available_before_or_on_target = []
         if available_before_or_on_target:
             fallback_date = max(available_before_or_on_target)
+            try:
+                gap_days = (cutoff - datetime.strptime(fallback_date, "%Y-%m-%d")).days
+            except ValueError:
+                gap_days = allowed_gap + 1
+            if gap_days > allowed_gap:
+                warnings.append(
+                    "OHLCV_STALE - Latest OHLCV row "
+                    f"{fallback_date} is {gap_days} days before trade_date {trade_date}; "
+                    f"maximum allowed fallback is {allowed_gap} days."
+                )
+                return "stale"
             warnings.append(
-                f"OHLCV_FALLBACK_USED - Exact OHLCV date not found; using latest available trading day {fallback_date}."
+                "OHLCV_FALLBACK_USED - Exact OHLCV date not found; using latest available "
+                f"trading day {fallback_date} ({gap_days} days before trade_date {trade_date})."
             )
             return "market_closed"
         warnings.append(
@@ -1251,7 +1374,14 @@ def _build_data_quality(
     price_lookback_days: int,
 ) -> DataQualityReport:
     warnings = _warnings_from_fields(all_fields)
-    price_status = _classify_price_data(price, fundamentals, trade_date, price_lookback_days, warnings)
+    price_status = _classify_price_data(
+        price,
+        fundamentals,
+        trade_date,
+        price_lookback_days,
+        warnings,
+        max_fallback_days=_price_max_fallback_days(),
+    )
     fundamentals_status = _classify_fundamentals(fundamentals, balance_sheet, cashflow, income_statement, warnings)
     news_status = _classify_news(company_news, global_news, warnings)
     deduped_warnings = list(dict.fromkeys(warnings))[:20]
@@ -1313,12 +1443,13 @@ def _build_data_source_metadata(
     event_risk: DataField,
     recommendation_trends: DataField,
     last_close_price: float | None,
+    last_close_price_source: str | None = None,
     vendor_attempts: dict[str, list[str]] | None = None,
     request_budget: dict[str, Any] | None = None,
 ) -> tuple[dict[str, str], list[str], dict[str, Any]]:
     data_sources = {
         "quote": "routed:yfinance->finnhub->alpha_vantage",
-        "price": _price_source_label(price.value, last_close_price) or "unavailable",
+        "price": last_close_price_source or _price_source_label(price.value, last_close_price) or "unavailable",
         "ohlcv": _source_label(price.value),
         "technical": "configured_ohlcv:local_calculation",
         "fundamental_profile_metrics": _source_label(fundamentals.value),
@@ -1954,13 +2085,42 @@ def collect_market_data(
     )
 
     _check_cancel(cancel_check)
-    last_close_price, last_close_price_as_of = _extract_last_close_price_and_date(price.value, trade_date)
+    ohlcv_last_close_price, ohlcv_last_close_price_as_of = _extract_last_close_price_and_date(
+        price.value,
+        trade_date,
+        max_fallback_days=_price_max_fallback_days(),
+    )
+    ohlcv_price_source = _price_source_label(price.value, ohlcv_last_close_price)
+    quote_payload: dict[str, Any] = {}
+    if ohlcv_last_close_price is None and _positive_price((company_profile or {}).get("current_price")) is None:
+        quote_payload = _safe_payload(
+            "quote",
+            lambda: route_to_vendor(
+                "get_quote",
+                ticker,
+                trade_date,
+                vendor_order=get_field_vendor_order("quote", ticker),
+                field_name="quote",
+            ),
+        )
+    price_anchor = _resolve_current_price_anchor(
+        ohlcv_price=ohlcv_last_close_price,
+        ohlcv_as_of=ohlcv_last_close_price_as_of,
+        ohlcv_source=ohlcv_price_source,
+        quote=quote_payload,
+        profile=company_profile,
+        trade_date=trade_date,
+    )
+    last_close_price = price_anchor["price"]
+    last_close_price_as_of = price_anchor["as_of"]
+    last_close_price_source = price_anchor["source"]
+    last_close_price_is_fallback = bool(price_anchor["is_fallback"])
     price_chart = _build_price_chart(
         ticker=ticker,
         trade_date=trade_date,
         price_data=price.value,
         time_horizon_months=time_horizon_months,
-        source=_price_source_label(price.value, last_close_price) or "yfinance",
+        source=ohlcv_price_source or _source_label(price.value, "yfinance"),
     )
     corporate_actions_result = _safe_corporate_actions(ticker, start_price, end)
     corporate_actions_rows = (
@@ -2051,6 +2211,7 @@ def collect_market_data(
         event_risk,
         recommendation_trends,
         last_close_price,
+        last_close_price_source=last_close_price_source,
         vendor_attempts=vendor_attempts,
         request_budget=request_budget,
     )
@@ -2079,7 +2240,7 @@ def collect_market_data(
         price_performance=price_performance,
         vendor_attempts=vendor_attempts,
         news_context=news_context,
-        last_close_price_as_of=technical_as_of,
+        last_close_price_as_of=last_close_price_as_of,
         financial_as_of_date=financial_as_of,
         latest_revenue=latest_revenue,
         latest_ebitda=latest_ebitda,
@@ -2184,7 +2345,7 @@ def collect_market_data(
     financial_highlights["derived_fundamentals"] = derived_fundamentals
     data_freshness = _build_runtime_freshness_metadata(
         trade_date=trade_date,
-        last_close_price_as_of=technical_as_of,
+        last_close_price_as_of=last_close_price_as_of,
         news_context=news_context,
         financial_highlights=financial_highlights,
     )
@@ -2299,7 +2460,8 @@ def collect_market_data(
         data_quality=data_quality,
         last_close_price=last_close_price,
         last_close_price_as_of=last_close_price_as_of,
-        last_close_price_source=data_sources.get("price") if last_close_price is not None else None,
+        last_close_price_source=last_close_price_source if last_close_price is not None else None,
+        last_close_price_is_fallback=last_close_price_is_fallback,
         company_profile=company_profile,
         price_chart=price_chart,
         price_performance=price_performance,
