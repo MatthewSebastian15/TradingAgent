@@ -3,7 +3,7 @@ import math
 import os
 import threading
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any
 
 import pandas as pd
@@ -249,6 +249,8 @@ def calculate_volatility(symbol: str, trade_date: str | None = None) -> dict[str
     normalized = normalize_ticker(symbol)
     end_dt = datetime.strptime(trade_date, "%Y-%m-%d") if trade_date else datetime.now()
     start_dt = end_dt - relativedelta(years=1)
+    # yfinance end is exclusive — add 1 day so trade_date row is included
+    fetch_end_dt = end_dt + timedelta(days=1)
     metadata = {
         "volatility_score": None,
         "volatility_scale": "0–100",
@@ -262,7 +264,7 @@ def calculate_volatility(symbol: str, trade_date: str | None = None) -> dict[str
     try:
         hist = yf.Ticker(normalized).history(
             start=start_dt.strftime("%Y-%m-%d"),
-            end=end_dt.strftime("%Y-%m-%d"),
+            end=fetch_end_dt.strftime("%Y-%m-%d"),
         )
         if hist is None or hist.empty or "Close" not in hist:
             return metadata
@@ -293,6 +295,10 @@ def get_YFin_data_online(
     # Normalize ticker (handles IDX suffix e.g. BBCA -> BBCA.JK)
     symbol = normalize_ticker(symbol)
 
+    # yfinance end is exclusive (fetches up to end_date - 1 day).
+    # Add 1 day so the trade_date row itself is always included.
+    fetch_end_date = (datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+
     # Historical OHLCV must be fetched with yf.download rather than the shared
     # yf.Ticker object cache. The cached Ticker object is useful for profile and
     # statement calls, but price windows are trade_date-sensitive and must not
@@ -301,7 +307,7 @@ def get_YFin_data_online(
         lambda: yf.download(
             symbol,
             start=start_date,
-            end=end_date,
+            end=fetch_end_date,
             multi_level_index=False,
             progress=False,
             auto_adjust=False,
@@ -313,7 +319,7 @@ def get_YFin_data_online(
     # not use _get_ticker() here, because this path is explicitly about avoiding
     # stale cached price history.
     if data is None or data.empty:
-        data = yf_retry(lambda: yf.Ticker(symbol).history(start=start_date, end=end_date, auto_adjust=False))
+        data = yf_retry(lambda: yf.Ticker(symbol).history(start=start_date, end=fetch_end_date, auto_adjust=False))
 
     # Check if data is empty
     if data is None or data.empty:
