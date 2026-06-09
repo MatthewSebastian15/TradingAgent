@@ -13,12 +13,14 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
 });
 
 const NAV_ITEMS = [
-  { label: 'DASHBOARD', path: '/home', paths: ['/home'] },
+  { label: 'Home', path: '/home', matchPrefixes: ['/home'] },
   {
-    label: 'ANALYSIS',
+    label: 'AI Agent',
     path: '/analysis',
-    paths: ['/analysis', '/analysis-live', '/analysis.test'],
+    matchPrefixes: ['/analysis', '/analysis-live', '/analysis.test'],
   },
+  { label: 'News', path: '/news', matchPrefixes: ['/news'] },
+  { label: 'Market', path: '/market', matchPrefixes: ['/market'] },
 ];
 
 function formatDate(value) {
@@ -58,12 +60,18 @@ function LiveStatus() {
   );
 }
 
+function isNavItemActive(item, pathname) {
+  return item.matchPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
 function NavButton({ item, active, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative h-10 border-r border-bloomberg-border px-4 font-mono text-xs font-medium tracking-wider transition-colors duration-150 ${
+      className={`relative h-10 border-r border-bloomberg-border px-4 font-mono text-xs font-medium tracking-wider transition-colors duration-150 first:border-l sm:px-5 ${
         active
           ? 'bg-bloomberg-orange text-black'
           : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
@@ -79,7 +87,7 @@ NavButton.propTypes = {
   item: PropTypes.shape({
     label: PropTypes.string.isRequired,
     path: PropTypes.string.isRequired,
-    paths: PropTypes.arrayOf(PropTypes.string).isRequired,
+    matchPrefixes: PropTypes.arrayOf(PropTypes.string).isRequired,
   }).isRequired,
   active: PropTypes.bool.isRequired,
   onClick: PropTypes.func.isRequired,
@@ -90,24 +98,22 @@ export default function Navbar() {
   const location = useLocation();
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-bloomberg-border bg-bloomberg-bg">
-      <div className="flex items-center justify-end px-4 h-7 border-b border-bloomberg-border bg-black">
-        <div className="flex items-center gap-4">
-          <LiveStatus />
-          <Clock />
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between px-4 h-10">
-        <div className="flex items-center gap-0">
+    <nav className="sticky top-0 z-50 border-b border-bloomberg-border bg-black">
+      <div className="flex h-10 items-center justify-between border-b border-bloomberg-border">
+        <div className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto">
           {NAV_ITEMS.map((item) => (
             <NavButton
               key={item.path}
               item={item}
-              active={item.paths.includes(location.pathname)}
+              active={isNavItemActive(item, location.pathname)}
               onClick={() => navigate(item.path)}
             />
           ))}
+        </div>
+
+        <div className="ml-auto flex min-w-max items-center gap-4 px-4">
+          <LiveStatus />
+          <Clock />
         </div>
       </div>
     </nav>
