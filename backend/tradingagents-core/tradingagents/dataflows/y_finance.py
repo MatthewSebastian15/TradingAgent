@@ -249,7 +249,6 @@ def calculate_volatility(symbol: str, trade_date: str | None = None) -> dict[str
     normalized = normalize_ticker(symbol)
     end_dt = datetime.strptime(trade_date, "%Y-%m-%d") if trade_date else datetime.now()
     start_dt = end_dt - relativedelta(years=1)
-    end_exclusive = end_dt + relativedelta(days=1)
     metadata = {
         "volatility_score": None,
         "volatility_scale": "0–100",
@@ -257,13 +256,13 @@ def calculate_volatility(symbol: str, trade_date: str | None = None) -> dict[str
         "volatility_lookback_days": 365,
         "volatility_window": "YoY",
         "volatility_start_date": start_dt.strftime("%Y-%m-%d"),
-        "volatility_end_date": end_exclusive.strftime("%Y-%m-%d"),
+        "volatility_end_date": end_dt.strftime("%Y-%m-%d"),
         "volatility_classification": None,
     }
     try:
         hist = yf.Ticker(normalized).history(
             start=start_dt.strftime("%Y-%m-%d"),
-            end=end_exclusive.strftime("%Y-%m-%d"),
+            end=end_dt.strftime("%Y-%m-%d"),
         )
         if hist is None or hist.empty or "Close" not in hist:
             return metadata
@@ -603,7 +602,14 @@ def get_company_profile(
         short_ratio = info.get("shortRatio")
         public_pct = None
         if insider_pct is not None and institution_pct is not None:
-            public_pct = max(0, 1 - insider_pct - institution_pct)
+            public_pct = max(0, 1 - (insider_pct + institution_pct))
+
+        current_price_payload = fetch_current_price(ticker)
+        current_price = (
+            current_price_payload.get("price")
+            or info.get("currentPrice")
+            or info.get("regularMarketPrice")
+        )
 
         profile = {
             "available": True,
@@ -627,7 +633,9 @@ def get_company_profile(
             "public_percent": public_pct,
             "public_pct": public_pct,
             "short_ratio": short_ratio,
-            "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
+            "current_price": current_price,
+            "current_price_source": current_price_payload.get("price_source"),
+            "current_price_as_of": current_price_payload.get("price_timestamp"),
             "fiscal_year_end": info.get("lastFiscalYearEnd"),
             "full_time_employees": info.get("fullTimeEmployees"),
             "description": _clean_profile_text(info.get("longBusinessSummary"), max_length=2000),

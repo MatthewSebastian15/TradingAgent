@@ -293,7 +293,7 @@ def preflight_market_data_worker(
     )
     trade_dt = datetime.strptime(trade_date, "%Y-%m-%d")
     start = (trade_dt - relativedelta(years=1)).strftime("%Y-%m-%d")
-    end = (trade_dt + relativedelta(days=1)).strftime("%Y-%m-%d")
+    end = trade_dt.strftime("%Y-%m-%d")
 
     with use_config(config):
         return str(route_to_vendor("get_stock_data", ticker, start, end))

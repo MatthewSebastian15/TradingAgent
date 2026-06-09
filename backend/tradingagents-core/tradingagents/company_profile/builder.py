@@ -21,6 +21,8 @@ PROFILE_FIELDS = (
     "public_percent",
     "short_ratio",
     "current_price",
+    "current_price_source",
+    "current_price_as_of",
     "fiscal_year_end",
     "employee_count",
     "officers",
@@ -45,6 +47,8 @@ OPTIONAL_PROFILE_FIELDS = (
     "institution_percent",
     "public_percent",
     "short_ratio",
+    "current_price_source",
+    "current_price_as_of",
 )
 
 OWNERSHIP_ENRICHMENT_FIELDS = (
@@ -89,6 +93,8 @@ FIELD_ALIASES = {
     "public_percent": ("public_percent", "public_pct", "publicOwnership", "public_ownership"),
     "short_ratio": ("short_ratio", "shortRatio"),
     "current_price": ("current_price", "currentPrice", "regularMarketPrice"),
+    "current_price_source": ("current_price_source", "price_source"),
+    "current_price_as_of": ("current_price_as_of", "price_timestamp"),
     "fiscal_year_end": ("fiscal_year_end", "FiscalYearEnd"),
     "employee_count": ("employee_count", "full_time_employees", "fullTimeEmployees"),
     "officers": ("officers", "executives", "companyOfficers"),
@@ -177,6 +183,8 @@ def _normalize_vendor_payload(payload: Any, vendor: str) -> dict[str, Any]:
         "sector",
         "industry",
         "website",
+        "current_price_source",
+        "current_price_as_of",
         "fiscal_year_end",
     ):
         values[field] = _text(values[field])

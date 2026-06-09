@@ -91,7 +91,7 @@ def _clean_dataframe(data: pd.DataFrame) -> pd.DataFrame:
 def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     """Fetch OHLCV data with caching, filtered to prevent look-ahead bias.
 
-    Downloads the Year-on-Year window ending after curr_date and caches per
+    Downloads the Year-on-Year window ending at curr_date and caches per
     symbol/window. Rows after curr_date are filtered out so backtests never see
     future prices.
     """
@@ -104,7 +104,7 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
 
     current_dt = curr_date_dt.to_pydatetime()
     start_dt = current_dt - relativedelta(years=1)
-    end_dt = current_dt + relativedelta(days=1)
+    end_dt = current_dt
     start_str = start_dt.strftime("%Y-%m-%d")
     end_str = end_dt.strftime("%Y-%m-%d")
 

@@ -272,21 +272,34 @@ def _resolve_current_price_anchor(
     profile: dict[str, Any] | None,
     trade_date: str,
 ) -> dict[str, Any]:
-    if ohlcv_price is not None:
+    profile_price = _positive_price((profile or {}).get("current_price"))
+    if profile_price is not None:
+        profile_source = (
+            ((profile or {}).get("data_quality") or {}).get("field_sources") or {}
+        ).get("current_price")
+        profile_method = (profile or {}).get("current_price_source")
         return {
-            "price": ohlcv_price,
-            "as_of": ohlcv_as_of,
-            "source": ohlcv_source,
+            "price": profile_price,
+            "as_of": trade_date,
+            "source": (
+                f"{profile_source}:{profile_method}"
+                if profile_source and profile_method
+                else profile_method
+            )
+            or (
+                f"{profile_source}:company_profile.current_price"
+                if profile_source
+                else "company_profile.current_price"
+            ),
             "is_fallback": False,
         }
 
-    profile_price = _positive_price((profile or {}).get("current_price"))
-    if profile_price is not None:
+    if ohlcv_price is not None:
         return {
-            "price": profile_price,
-            "as_of": (profile or {}).get("current_price_as_of") or (profile or {}).get("price_timestamp") or trade_date,
-            "source": (profile or {}).get("current_price_source") or "company_profile.current_price",
-            "is_fallback": True,
+            "price": ohlcv_price,
+            "as_of": trade_date,
+            "source": ohlcv_source,
+            "is_fallback": False,
         }
 
     quote_price = _positive_price(
@@ -295,7 +308,7 @@ def _resolve_current_price_anchor(
     if quote_price is not None:
         return {
             "price": quote_price,
-            "as_of": (quote or {}).get("timestamp") or (quote or {}).get("price_timestamp") or trade_date,
+            "as_of": trade_date,
             "source": (quote or {}).get("source") or (quote or {}).get("price_source") or "quote",
             "is_fallback": True,
         }
@@ -931,12 +944,13 @@ def _build_price_chart(
         }
 
     effective_cutoff = eligible_points[-1]["_row_date"]
-    effective_end_date = effective_cutoff.strftime("%Y-%m-%d")
+    actual_end_date = effective_cutoff.strftime("%Y-%m-%d")
+    display_end_date = requested_end_date or actual_end_date
     fallback_gap_days = (requested_cutoff - effective_cutoff).days if requested_cutoff is not None else 0
     is_stale = requested_cutoff is not None and fallback_gap_days > max_fallback_days
     stale_warning = (
         "OHLCV_STALE - Latest OHLCV row "
-        f"{effective_end_date} is {fallback_gap_days} days before trade_date {trade_date}; "
+        f"{actual_end_date} is {fallback_gap_days} days before trade_date {trade_date}; "
         f"maximum allowed fallback is {max_fallback_days} days."
         if is_stale
         else None
@@ -958,10 +972,10 @@ def _build_price_chart(
         return {
             **base_payload,
             "start_date": effective_start_date,
-            "end_date": effective_end_date,
-            "effective_trade_date": effective_end_date,
-            "price_as_of_date": effective_end_date,
-            "last_trade_date": effective_end_date,
+            "end_date": display_end_date,
+            "effective_trade_date": display_end_date,
+            "price_as_of_date": display_end_date,
+            "last_trade_date": display_end_date,
             "last_available_trade_date": last_available_trade_date,
             "fallback_to_last_trade": fallback_to_last_trade,
             "warning": "No usable price rows were available for the selected YOY window.",
@@ -1011,7 +1025,7 @@ def _build_price_chart(
     elif fallback_to_last_trade:
         warnings.append(
             "OHLCV_FALLBACK_USED - Exact OHLCV date not found; using latest available "
-            f"trading day {effective_end_date} ({fallback_gap_days} days before trade_date {trade_date})."
+            f"trading day {actual_end_date} ({fallback_gap_days} days before trade_date {trade_date})."
         )
     if is_stale:
         missing_fields.append("fresh_ohlcv")
@@ -1028,10 +1042,10 @@ def _build_price_chart(
         "available": available,
         "source": source or "yfinance",
         "start_date": effective_start_date,
-        "end_date": effective_end_date,
-        "effective_trade_date": effective_end_date,
-        "price_as_of_date": effective_end_date,
-        "last_trade_date": effective_end_date,
+        "end_date": display_end_date,
+        "effective_trade_date": display_end_date,
+        "price_as_of_date": display_end_date,
+        "last_trade_date": display_end_date,
         "last_available_trade_date": last_available_trade_date,
         "fallback_to_last_trade": fallback_to_last_trade,
         "points": points,
@@ -1056,7 +1070,7 @@ def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, st
         current - relativedelta(years=1) - timedelta(days=PRICE_CHART_FALLBACK_BUFFER_DAYS)
     ).strftime("%Y-%m-%d")
     start_news = (current - timedelta(days=_horizon_days(time_horizon_months))).strftime("%Y-%m-%d")
-    end = (current + relativedelta(days=1)).strftime("%Y-%m-%d")
+    end = current.strftime("%Y-%m-%d")
     return start_price, start_news, end
 
 

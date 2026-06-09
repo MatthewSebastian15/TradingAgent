@@ -70,10 +70,10 @@ Date,Open,High,Low,Close,Volume
     assert chart["window_label"] == "YOY Price Window"
     assert chart["lookback_days"] == 365
     assert chart["start_date"] == "2025-05-19"
-    assert chart["end_date"] == "2026-05-19"
+    assert chart["end_date"] == "2026-05-30"
     assert chart["requested_trade_date"] == "2026-05-30"
-    assert chart["effective_trade_date"] == "2026-05-19"
-    assert chart["price_as_of_date"] == "2026-05-19"
+    assert chart["effective_trade_date"] == "2026-05-30"
+    assert chart["price_as_of_date"] == "2026-05-30"
     assert chart["fallback_to_last_trade"] is True
     assert [point["date"] for point in chart["points"]] == ["2026-03-01", "2026-05-18", "2026-05-19"]
     assert chart["data"] == chart["points"]
@@ -115,11 +115,11 @@ Date,Open,High,Low,Close,Volume
 
     assert chart["available"] is True
     assert chart["requested_trade_date"] == "2026-06-08"
-    assert chart["effective_trade_date"] == "2026-06-05"
-    assert chart["price_as_of_date"] == "2026-06-05"
-    assert chart["last_trade_date"] == "2026-06-05"
+    assert chart["effective_trade_date"] == "2026-06-08"
+    assert chart["price_as_of_date"] == "2026-06-08"
+    assert chart["last_trade_date"] == "2026-06-08"
     assert chart["start_date"] == "2025-06-05"
-    assert chart["end_date"] == "2026-06-05"
+    assert chart["end_date"] == "2026-06-08"
     assert chart["fallback_to_last_trade"] is True
     assert [point["date"] for point in chart["points"]] == ["2025-06-05", "2026-06-05"]
     assert chart["stats"]["start_price"] == 10.5
@@ -392,8 +392,8 @@ def test_build_related_news_returns_empty_state_when_news_is_missing():
 
 
 def test_date_window_uses_yoy_price_window_and_horizon_news_window():
-    assert _date_window("2026-05-15", 1) == ("2025-05-01", "2026-04-15", "2026-05-16")
-    assert _date_window("2026-05-15", 3) == ("2025-05-01", "2026-02-14", "2026-05-16")
+    assert _date_window("2026-05-15", 1) == ("2025-05-01", "2026-04-15", "2026-05-15")
+    assert _date_window("2026-05-15", 3) == ("2025-05-01", "2026-02-14", "2026-05-15")
 
 
 def test_call_with_timeout_returns_without_waiting_for_hung_call():
@@ -713,7 +713,7 @@ Date,Open,High,Low,Close,Volume
 
     assert chart["available"] is True
     assert chart["data_quality"]["status"] == "stale"
-    assert chart["last_trade_date"] == "2026-05-12"
+    assert chart["last_trade_date"] == "2026-06-09"
     assert [point["date"] for point in chart["points"]] == ["2025-05-12", "2026-05-12"]
     assert "OHLCV_STALE" in chart["warning"]
 
@@ -735,25 +735,30 @@ Date,Open,High,Low,Close,Volume
 
     assert chart["available"] is True
     assert chart["fallback_to_last_trade"] is True
-    assert chart["effective_trade_date"] == "2026-06-08"
+    assert chart["effective_trade_date"] == "2026-06-09"
     assert chart["data_quality"]["fallback_gap_days"] == 1
 
 
-def test_current_price_anchor_uses_profile_when_ohlcv_is_stale():
+def test_current_price_anchor_uses_profile_first():
     anchor = _resolve_current_price_anchor(
-        ohlcv_price=None,
-        ohlcv_as_of=None,
-        ohlcv_source=None,
+        ohlcv_price=1605,
+        ohlcv_as_of="2026-06-08",
+        ohlcv_source="yfinance:last_close",
         quote={},
-        profile={"current_price": 2690, "currency": "IDR"},
+        profile={
+            "current_price": 2690,
+            "current_price_source": "fast_info.last_price",
+            "currency": "IDR",
+            "data_quality": {"field_sources": {"current_price": "yfinance"}},
+        },
         trade_date="2026-06-09",
     )
 
     assert anchor == {
         "price": 2690.0,
         "as_of": "2026-06-09",
-        "source": "company_profile.current_price",
-        "is_fallback": True,
+        "source": "yfinance:fast_info.last_price",
+        "is_fallback": False,
     }
 
 
