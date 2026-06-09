@@ -234,8 +234,7 @@ def get_stock(symbol: str, start_date: str, end_date: str) -> str:
 def _load_stock_dataframe(symbol: str, curr_date: str, look_back_days: int) -> pd.DataFrame:
     curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
     start_dt = curr_dt - relativedelta(years=1)
-    end_dt = curr_dt + relativedelta(days=1)
-    raw = get_stock(symbol, start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d"))
+    raw = get_stock(symbol, start_dt.strftime("%Y-%m-%d"), curr_dt.strftime("%Y-%m-%d"))
     if raw.lower().startswith("finnhub unavailable"):
         raise FinnhubUnavailableError(raw)
     lines = [line for line in raw.splitlines() if line.strip() and not line.lstrip().startswith("#")]

@@ -56,7 +56,7 @@ def _mock_market_data(monkeypatch: pytest.MonkeyPatch, sample: str | Exception) 
         assert analysis_depth == "fast"
         trade_dt = datetime.strptime(trade_date, "%Y-%m-%d")
         start = (trade_dt - relativedelta(years=1)).strftime("%Y-%m-%d")
-        end = (trade_dt + relativedelta(days=1)).strftime("%Y-%m-%d")
+        end = trade_dt.strftime("%Y-%m-%d")
         calls.append(("get_stock_data", ticker, start, end))
         if isinstance(sample, Exception):
             raise sample
@@ -72,13 +72,13 @@ def test_preflight_market_data_accepts_valid_ticker(monkeypatch):
 
     asyncio.run(_preflight_market_data(_analysis_request()))
 
-    assert calls == [("get_stock_data", "BBCA.JK", "2025-05-14", "2026-05-15")]
+    assert calls == [("get_stock_data", "BBCA.JK", "2025-05-14", "2026-05-14")]
 
 
 def test_preflight_market_data_rejects_missing_ticker(monkeypatch):
     _mock_market_data(
         monkeypatch,
-        "No data found for symbol 'NOPE.JK' between 2025-05-14 and 2026-05-15",
+        "No data found for symbol 'NOPE.JK' between 2025-05-14 and 2026-05-14",
     )
 
     with pytest.raises(BadRequestError) as exc_info:

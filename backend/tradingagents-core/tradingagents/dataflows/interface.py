@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from io import StringIO
 from typing import Any
 
@@ -216,7 +216,7 @@ def get_yfinance_quote(symbol: str, curr_date: str | None = None) -> dict[str, A
     raw = get_YFin_data_online(
         symbol,
         start_dt.strftime("%Y-%m-%d"),
-        (end_dt + relativedelta(days=1)).strftime("%Y-%m-%d"),
+        end_dt.strftime("%Y-%m-%d"),
     )
     return _parse_last_quote_from_csv(raw, symbol, "yfinance")
 
@@ -227,7 +227,7 @@ def get_alpha_vantage_quote(symbol: str, curr_date: str | None = None) -> dict[s
     raw = get_alpha_vantage_stock(
         symbol,
         start_dt.strftime("%Y-%m-%d"),
-        (end_dt + relativedelta(days=1)).strftime("%Y-%m-%d"),
+        end_dt.strftime("%Y-%m-%d"),
     )
     return _parse_last_quote_from_csv(raw, symbol, "alpha_vantage")
 
@@ -497,7 +497,7 @@ def _expected_trade_date_for_result(method: str, args: tuple) -> str | None:
     if method == "get_stock_data" and len(args) >= 3:
         end_date = str(args[2] or "").strip()
         try:
-            return (datetime.strptime(end_date[:10], "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+            return datetime.strptime(end_date[:10], "%Y-%m-%d").strftime("%Y-%m-%d")
         except ValueError:
             return None
     if method == "get_quote" and len(args) >= 2 and args[1]:
