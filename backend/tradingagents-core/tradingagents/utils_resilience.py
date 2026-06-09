@@ -379,6 +379,10 @@ class TTLCache:
             while len(self._data) > self.maxsize:
                 self._data.popitem(last=False)
 
+    def delete(self, key: Hashable) -> None:
+        with self._lock:
+            self._data.pop(key, None)
+
     def clear_expired(self) -> None:
         now = time.monotonic()
         with self._lock:

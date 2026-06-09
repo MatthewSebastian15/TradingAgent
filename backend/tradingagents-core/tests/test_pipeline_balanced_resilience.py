@@ -17,7 +17,12 @@ from tradingagents.pipeline_balanced import (
     _extract_last_close_price,
     _invoke_once,
 )
-from tradingagents.pipeline_balanced_data import _build_price_chart, _build_related_news, _parse_markdown_news_items
+from tradingagents.pipeline_balanced_data import (
+    _build_price_chart,
+    _build_related_news,
+    _parse_markdown_news_items,
+    _resolve_current_price_anchor,
+)
 from tradingagents.technical.entry_quality import build_technical_entry
 from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout, get_timeout_stats
 
@@ -689,3 +694,119 @@ def test_invoke_once_returns_fallback_when_llm_timeout_is_raised():
     )
 
     assert result == fallback
+
+
+def test_price_chart_rejects_stale_ohlcv_before_trade_date(monkeypatch):
+    import tradingagents.pipeline_balanced_data as pipeline_data
+
+    monkeypatch.setattr(pipeline_data, "get_config", lambda: {"price_max_fallback_days": 7})
+
+    price_data = """# Stock data for TEST
+# Total records: 2
+
+Date,Open,High,Low,Close,Volume
+2025-05-12,10,11,9,10.5,1000
+2026-05-12,11,12,10,11.5,1200
+"""
+
+    chart = _build_price_chart("TEST", "2026-06-09", price_data, 1, source="yfinance:last_close")
+
+    assert chart["available"] is True
+    assert chart["data_quality"]["status"] == "stale"
+    assert chart["last_trade_date"] == "2026-05-12"
+    assert [point["date"] for point in chart["points"]] == ["2025-05-12", "2026-05-12"]
+    assert "OHLCV_STALE" in chart["warning"]
+
+
+def test_price_chart_allows_bounded_last_trade_fallback(monkeypatch):
+    import tradingagents.pipeline_balanced_data as pipeline_data
+
+    monkeypatch.setattr(pipeline_data, "get_config", lambda: {"price_max_fallback_days": 7})
+
+    price_data = """# Stock data for TEST
+# Total records: 3
+
+Date,Open,High,Low,Close,Volume
+2025-06-09,10,11,9,10.5,1000
+2026-06-08,11,12,10,11.5,1200
+"""
+
+    chart = _build_price_chart("TEST", "2026-06-09", price_data, 1, source="yfinance:last_close")
+
+    assert chart["available"] is True
+    assert chart["fallback_to_last_trade"] is True
+    assert chart["effective_trade_date"] == "2026-06-08"
+    assert chart["data_quality"]["fallback_gap_days"] == 1
+
+
+def test_current_price_anchor_uses_profile_when_ohlcv_is_stale():
+    anchor = _resolve_current_price_anchor(
+        ohlcv_price=None,
+        ohlcv_as_of=None,
+        ohlcv_source=None,
+        quote={},
+        profile={"current_price": 2690, "currency": "IDR"},
+        trade_date="2026-06-09",
+    )
+
+    assert anchor == {
+        "price": 2690.0,
+        "as_of": "2026-06-09",
+        "source": "company_profile.current_price",
+        "is_fallback": True,
+    }
+
+
+def test_router_falls_back_and_does_not_cache_stale_ohlcv(monkeypatch):
+    from tradingagents.dataflows import interface
+
+    stale_csv = "\n".join(
+        [
+            "Date,Open,High,Low,Close,Volume",
+            "2026-05-12,10,11,9,10.5,1000",
+        ]
+    )
+    fresh_csv = "\n".join(
+        [
+            "Date,Open,High,Low,Close,Volume",
+            "2026-06-09,20,21,19,20.5,2000",
+        ]
+    )
+    calls = {"yfinance": 0, "alpha_vantage": 0}
+
+    monkeypatch.setattr(
+        interface,
+        "get_config",
+        lambda: {
+            "tool_timeout_seconds": 1,
+            "tool_max_retries": 2,
+            "cache_ttl_seconds": 60,
+            "cache_max_entries": 10,
+            "circuit_breaker_failure_threshold": 5,
+            "circuit_recovery_seconds": 60,
+            "price_max_fallback_days": 7,
+        },
+    )
+    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage")
+
+    def yf_payload(*args, **kwargs):
+        calls["yfinance"] += 1
+        return stale_csv
+
+    def av_payload(*args, **kwargs):
+        calls["alpha_vantage"] += 1
+        return fresh_csv
+
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", yf_payload)
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "alpha_vantage", av_payload)
+    monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
+    monkeypatch.setattr(interface, "call_with_retry", lambda func, **kwargs: func())
+    interface._TOOL_CACHE._data.clear()
+
+    result_1 = interface.route_to_vendor("get_stock_data", "TEST", "2025-06-09", "2026-06-10")
+    result_2 = interface.route_to_vendor("get_stock_data", "TEST", "2025-06-09", "2026-06-10")
+
+    assert result_1 == fresh_csv
+    assert result_2 == fresh_csv
+    assert calls["alpha_vantage"] == 1
+    assert calls["yfinance"] == 2

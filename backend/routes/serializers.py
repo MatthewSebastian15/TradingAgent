@@ -192,7 +192,8 @@ def _get_current_price_fields(final_state: dict[str, Any], pd_obj: object | None
     current_price_as_of = price_timestamp or final_state.get("last_close_price_as_of")
     if current_price_as_of is None and pd_obj is not None:
         current_price_as_of = getattr(pd_obj, "current_price_as_of", None)
-    current_price_as_of = current_price_as_of or final_state.get("trade_date")
+    if current_price_as_of is None and current_price is not None:
+        current_price_as_of = final_state.get("trade_date")
 
     current_price_source = final_state.get("price_source") or final_state.get("last_close_price_source")
     if current_price_source is None and current_price is not None:

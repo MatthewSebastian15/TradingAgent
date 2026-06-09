@@ -1,5 +1,6 @@
+import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import StringIO
 from typing import Any
 
@@ -7,6 +8,8 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 
 from tradingagents.utils_resilience import TTLCache, call_with_retry, call_with_timeout
+
+logger = logging.getLogger(__name__)
 
 from .alpha_vantage import (
     get_balance_sheet as get_alpha_vantage_balance_sheet,
@@ -482,10 +485,44 @@ def _is_unusable_result(result: Any) -> bool:
     return False
 
 
-def _quality_for_result(method: str, result: Any) -> dict[str, Any] | None:
+def _max_price_fallback_days(config: dict[str, Any] | None = None) -> int:
+    cfg = config or get_config()
+    try:
+        return max(0, int(cfg.get("price_max_fallback_days", 7)))
+    except (TypeError, ValueError):
+        return 7
+
+
+def _expected_trade_date_for_result(method: str, args: tuple) -> str | None:
+    if method == "get_stock_data" and len(args) >= 3:
+        end_date = str(args[2] or "").strip()
+        try:
+            return (datetime.strptime(end_date[:10], "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+    if method == "get_quote" and len(args) >= 2 and args[1]:
+        return str(args[1])[:10]
+    return None
+
+
+def _quality_for_result(
+    method: str,
+    result: Any,
+    args: tuple | None = None,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if method == "get_stock_data":
+        try:
+            return validate_ohlcv(
+                result,
+                expected_trade_date=_expected_trade_date_for_result(method, args or ()),
+                max_fallback_days=_max_price_fallback_days(config),
+            )
+        except Exception as exc:
+            return {"available": False, "confidence": "unavailable", "warnings": [sanitize_error(exc)]}
+
     validators = {
         "get_quote": validate_quote,
-        "get_stock_data": validate_ohlcv,
         "get_fundamentals": validate_fundamentals,
         "get_news": validate_news,
         "get_global_news": validate_news,
@@ -499,6 +536,32 @@ def _quality_for_result(method: str, result: Any) -> dict[str, Any] | None:
         return validator(result)
     except Exception as exc:
         return {"available": False, "confidence": "unavailable", "warnings": [sanitize_error(exc)]}
+
+
+def _delete_cache_key(cache: Any, key: tuple) -> None:
+    if hasattr(cache, "delete"):
+        try:
+            cache.delete(key)
+            return
+        except Exception:
+            logger.debug("Unable to delete vendor cache key through delete(); falling back if possible.", exc_info=True)
+    data = getattr(cache, "_data", None)
+    lock = getattr(cache, "_lock", None)
+    if isinstance(data, dict):
+        if lock is not None:
+            with lock:
+                data.pop(key, None)
+        else:
+            data.pop(key, None)
+
+
+def _purge_cached_vendor_result(method: str, vendor: str, args: tuple, kwargs: dict, config: dict[str, Any]) -> None:
+    try:
+        vendor_args = _normalize_args_for_vendor(method, vendor, args)
+        cache_key = _cache_key(method, vendor, vendor_args, kwargs)
+        _delete_cache_key(_active_cache(config), cache_key)
+    except Exception:
+        logger.debug("Unable to purge stale vendor cache entry for %s/%s", vendor, method, exc_info=True)
 
 
 def _record_attempt(
@@ -580,7 +643,12 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
         should_retry=lambda exc: not isinstance(exc, (AlphaVantagePermanentError, FinnhubUnavailableError)),
     )
-    cache.set(cache_key, result)
+    quality = _quality_for_result(method, result, vendor_args, config)
+    if quality is None or quality.get("available") is not False:
+        cache.set(cache_key, result)
+    else:
+        detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or ["quality unavailable"])
+        logger.info("Not caching unusable %s/%s result: %s", vendor, method, detail)
     return result
 
 
@@ -736,12 +804,13 @@ def route_to_vendor(
         try:
             result = _call_vendor(method, vendor, args, kwargs, config)
             duration_ms = int((time.perf_counter() - start) * 1000)
-            quality = _quality_for_result(method, result)
+            quality = _quality_for_result(method, result, args, config)
             if quality is not None and quality.get("available") is False:
                 if first_unusable_result is None:
                     first_unusable_result = result
                 detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or ["quality unavailable"])
                 errors.append(f"{vendor}: invalid quality: {detail}")
+                _purge_cached_vendor_result(method, vendor, args, kwargs, config)
                 record(vendor, "unavailable", detail, duration_ms=duration_ms)
                 continue
             if _is_unusable_result(result):
@@ -823,7 +892,7 @@ def route_to_all_vendors(
         try:
             result = _call_vendor(method, vendor, args, kwargs, config)
             duration_ms = int((time.perf_counter() - start) * 1000)
-            quality = _quality_for_result(method, result)
+            quality = _quality_for_result(method, result, args, config)
             if (quality is not None and quality.get("available") is False) or _is_unusable_result(result):
                 if first_unusable is None:
                     first_unusable = (vendor, result)
@@ -831,6 +900,7 @@ def route_to_all_vendors(
                 if quality is not None:
                     detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or [detail])
                 errors.append(f"{vendor}: {detail}")
+                _purge_cached_vendor_result(method, vendor, args, kwargs, config)
                 _record_attempt(config, method, vendor, "empty", detail, duration_ms=duration_ms)
                 continue
             _record_attempt(config, method, vendor, "success", duration_ms=duration_ms)

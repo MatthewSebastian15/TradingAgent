@@ -294,28 +294,50 @@ def get_YFin_data_online(
     # Normalize ticker (handles IDX suffix e.g. BBCA -> BBCA.JK)
     symbol = normalize_ticker(symbol)
 
-    # Create ticker object
-    ticker = _get_ticker(symbol)
+    # Historical OHLCV must be fetched with yf.download rather than the shared
+    # yf.Ticker object cache. The cached Ticker object is useful for profile and
+    # statement calls, but price windows are trade_date-sensitive and must not
+    # reuse an object/session that can surface stale history.
+    data = yf_retry(
+        lambda: yf.download(
+            symbol,
+            start=start_date,
+            end=end_date,
+            multi_level_index=False,
+            progress=False,
+            auto_adjust=False,
+            threads=False,
+        )
+    )
 
-    # Fetch historical data for the specified date range
-    data = yf_retry(lambda: ticker.history(start=start_date, end=end_date))
+    # Fallback to a fresh Ticker instance only if download returns nothing. Do
+    # not use _get_ticker() here, because this path is explicitly about avoiding
+    # stale cached price history.
+    if data is None or data.empty:
+        data = yf_retry(lambda: yf.Ticker(symbol).history(start=start_date, end=end_date, auto_adjust=False))
 
     # Check if data is empty
-    if data.empty:
+    if data is None or data.empty:
         return f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
 
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = [str(col[-1] if col[-1] else col[0]) for col in data.columns]
+
+    data = data.sort_index()
+    data = data[~data.index.duplicated(keep="last")]
+
     # Remove timezone info from index for cleaner output
-    if data.index.tz is not None:
+    if getattr(data.index, "tz", None) is not None:
         data.index = data.index.tz_localize(None)
 
     # Round numerical values to 2 decimal places for cleaner display
     numeric_columns = ["Open", "High", "Low", "Close", "Adj Close"]
     for col in numeric_columns:
         if col in data.columns:
-            data[col] = data[col].round(2)
+            data[col] = pd.to_numeric(data[col], errors="coerce").round(2)
 
     # Convert DataFrame to CSV string
-    csv_string = data.to_csv()
+    csv_string = data.to_csv(index_label="Date")
 
     # Add header information
     header = f"# Stock data for {symbol.upper()} from {start_date} to {end_date}\n"

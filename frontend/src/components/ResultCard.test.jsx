@@ -271,6 +271,29 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('Chart fetch failed.')).toBeTruthy();
   });
 
+  it('renders stale Chart & Price data with a warning when enough candles exist', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          price_chart: {
+            ...MOCK_RESPONSE.price_chart,
+            available: true,
+            warning: 'OHLCV_STALE - Latest OHLCV row 2026-05-29 is stale.',
+            data_quality: { status: 'stale', missing_fields: ['fresh_ohlcv'] },
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.queryByText('CHART DATA UNAVAILABLE')).toBeNull();
+    expect(screen.getByText('CHART DATA WARNING')).toBeTruthy();
+    expect(screen.getByText('OHLCV_STALE - Latest OHLCV row 2026-05-29 is stale.')).toBeTruthy();
+    expect(screen.getByLabelText(/OHLC candlestick price chart/i)).toBeTruthy();
+  });
+
   it('renders Chart & Price empty state when fewer than two valid OHLC points remain', () => {
     render(
       <ResultCard
@@ -561,6 +584,31 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText(/NaN/)).toBeNull();
     expect(screen.queryByText('ACTION PLAN')).toBeNull();
     expect(screen.queryByText('ENTRY')).toBeNull();
+  });
+
+  it('uses profile current price for stale OHLCV Analysis fallback', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          current_price: null,
+          last_price: null,
+          last_close_price: null,
+          current_price_as_of: null,
+          price_timestamp: null,
+          price_source: null,
+          data_quality: { ...MOCK_RESPONSE.data_quality, price_data: 'stale' },
+          company_profile: { ...MOCK_RESPONSE.company_profile, current_price: 2690 },
+          price_chart: {
+            ...MOCK_RESPONSE.price_chart,
+            warning: 'OHLCV_STALE - Latest OHLCV row 2026-05-29 is stale.',
+            data_quality: { ...MOCK_RESPONSE.price_chart.data_quality, status: 'stale' },
+          },
+        }}
+      />
+    );
+
+    expect(screen.queryByText('PRICE DATA MISSING')).toBeNull();
   });
 
   it('does not crash when backend sends invalid optional fields', () => {

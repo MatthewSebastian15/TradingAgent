@@ -21,7 +21,7 @@ class DataQualityWarning(BaseModel):
 class DataQualityReport(BaseModel):
     """Compact API-facing data quality summary for a yfinance collection run."""
 
-    price_data: str = Field(default="missing", description="ok, partial, missing, invalid_ticker, or market_closed")
+    price_data: str = Field(default="missing", description="ok, partial, missing, stale, invalid_ticker, or market_closed")
     fundamentals: str = Field(default="missing", description="ok, partial, or missing")
     news: str = Field(default="missing", description="ok, partial, unavailable, or missing")
     warnings: list[str] = Field(default_factory=list)
@@ -150,7 +150,90 @@ def validate_quote(result: dict) -> dict:
     return _quality(available=not missing, confidence=confidence, missing_fields=missing, warnings=warnings)
 
 
-def validate_ohlcv(result) -> dict:
+def _parse_yyyy_mm_dd(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if len(text) < 10:
+        return None
+    try:
+        return datetime.strptime(text[:10], "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _ohlcv_freshness_quality(
+    dates: set[str],
+    *,
+    expected_trade_date: str | None = None,
+    max_fallback_days: int = 7,
+) -> dict[str, Any]:
+    warnings: list[str] = [] if len(dates) >= 10 else [f"Only {len(dates)} OHLCV rows detected."]
+    if not dates:
+        return _quality(
+            available=False,
+            is_empty=True,
+            missing_fields=["rows"],
+            warnings=warnings or ["No OHLCV rows detected."],
+        )
+
+    expected_dt = _parse_yyyy_mm_dd(expected_trade_date)
+    if expected_dt is None:
+        return _quality(
+            available=True,
+            confidence="high" if len(dates) >= 30 else "medium",
+            warnings=warnings,
+        )
+
+    parsed_dates = sorted(item for item in (_parse_yyyy_mm_dd(date) for date in dates) if item is not None)
+    eligible_dates = [item for item in parsed_dates if item <= expected_dt]
+    if not eligible_dates:
+        return _quality(
+            available=False,
+            confidence="unavailable",
+            is_stale=True,
+            missing_fields=["rows_on_or_before_trade_date"],
+            warnings=[
+                "OHLCV_STALE - No OHLCV row found on or before "
+                f"trade_date {expected_dt.strftime('%Y-%m-%d')}."
+            ],
+        )
+
+    latest_dt = eligible_dates[-1]
+    gap_days = max(0, (expected_dt - latest_dt).days)
+    latest_date = latest_dt.strftime("%Y-%m-%d")
+    expected_date = expected_dt.strftime("%Y-%m-%d")
+
+    if gap_days > max_fallback_days:
+        return _quality(
+            available=False,
+            confidence="unavailable",
+            is_stale=True,
+            missing_fields=["fresh_ohlcv"],
+            warnings=[
+                "OHLCV_STALE - Latest OHLCV row "
+                f"{latest_date} is {gap_days} days before trade_date {expected_date}; "
+                f"maximum allowed fallback is {max_fallback_days} days."
+            ],
+        )
+
+    if gap_days > 0:
+        warnings.append(
+            "OHLCV_FALLBACK_USED - Exact OHLCV date not found; using latest available "
+            f"trading day {latest_date} ({gap_days} days before trade_date {expected_date})."
+        )
+
+    return _quality(
+        available=True,
+        confidence="high" if len(dates) >= 30 and gap_days == 0 else "medium",
+        warnings=warnings,
+    )
+
+
+def validate_ohlcv(
+    result,
+    *,
+    expected_trade_date: str | None = None,
+    max_fallback_days: int = 7,
+) -> dict:
     if isinstance(result, str):
         if looks_missing(result):
             return _quality(
@@ -160,12 +243,10 @@ def validate_ohlcv(result) -> dict:
                 warnings=[result.splitlines()[0] if result else "empty OHLCV"],
             )
         dates = extract_price_dates(result)
-        warnings = [] if len(dates) >= 10 else [f"Only {len(dates)} OHLCV rows detected."]
-        return _quality(
-            available=bool(dates),
-            confidence="high" if len(dates) >= 30 else "medium",
-            is_empty=not bool(dates),
-            warnings=warnings,
+        return _ohlcv_freshness_quality(
+            dates,
+            expected_trade_date=expected_trade_date,
+            max_fallback_days=max_fallback_days,
         )
     if not isinstance(result, dict):
         return _quality(available=False, is_empty=True, missing_fields=["rows"])
@@ -173,15 +254,29 @@ def validate_ohlcv(result) -> dict:
     missing = [] if rows else ["rows"]
     warnings = [] if len(rows) >= 30 else ["Partial OHLCV history: fewer than 30 candles returned."]
     required = {"date", "open", "high", "low", "close", "volume"}
+    dates: set[str] = set()
+    for row in rows:
+        if isinstance(row, dict):
+            parsed = _parse_yyyy_mm_dd(row.get("date") or row.get("Date") or row.get("timestamp"))
+            if parsed is not None:
+                dates.add(parsed.strftime("%Y-%m-%d"))
     if rows:
-        row_missing = sorted(required - set(rows[-1].keys()))
+        row_missing = sorted(required - set(str(key).lower() for key in rows[-1].keys()))
         missing.extend(row_missing)
+    freshness = _ohlcv_freshness_quality(
+        dates,
+        expected_trade_date=expected_trade_date,
+        max_fallback_days=max_fallback_days,
+    )
+    warnings.extend(freshness.get("warnings") or [])
+    available = not missing and freshness.get("available") is not False
     return _quality(
-        available=not missing,
-        confidence="high" if len(rows) >= 30 else "medium",
+        available=available,
+        confidence="high" if len(rows) >= 30 and freshness.get("confidence") == "high" else "medium",
         is_empty=not rows,
-        missing_fields=missing,
-        warnings=warnings,
+        is_stale=bool(freshness.get("is_stale")),
+        missing_fields=list(dict.fromkeys(missing + list(freshness.get("missing_fields") or []))),
+        warnings=list(dict.fromkeys(warnings)),
     )
 
 
