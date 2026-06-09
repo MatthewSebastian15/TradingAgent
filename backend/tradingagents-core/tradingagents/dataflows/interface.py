@@ -224,6 +224,8 @@ def get_yfinance_quote(symbol: str, curr_date: str | None = None) -> dict[str, A
 def get_alpha_vantage_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
     end_dt = datetime.strptime(curr_date, "%Y-%m-%d") if curr_date else datetime.now()
     start_dt = end_dt - relativedelta(years=1)
+    # Alpha Vantage uses inclusive end; keep consistent with yfinance convention
+    # by passing end_dt directly (no +1 needed here, but align label for clarity)
     raw = get_alpha_vantage_stock(
         symbol,
         start_dt.strftime("%Y-%m-%d"),

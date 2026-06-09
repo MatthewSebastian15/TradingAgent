@@ -956,7 +956,11 @@ def _build_price_chart(
         else None
     )
 
-    effective_start_cutoff = effective_cutoff - relativedelta(years=1)
+    # start_date must always be anchored to trade_date - 1 year, never to the
+    # fallback effective_cutoff, so the YOY window is always exactly
+    # [trade_date - 1 year, trade_date] regardless of market holiday/weekend fallback.
+    yoy_anchor = requested_cutoff if requested_cutoff is not None else effective_cutoff
+    effective_start_cutoff = yoy_anchor - relativedelta(years=1)
     effective_start_date = effective_start_cutoff.strftime("%Y-%m-%d")
     fallback_to_last_trade = bool(
         requested_cutoff is not None and effective_cutoff.date() != requested_cutoff.date()
