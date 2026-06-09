@@ -20,7 +20,7 @@ describe('App', () => {
   it('renders the dashboard route', async () => {
     await renderApp('/', false);
 
-    expect(await screen.findByRole('button', { name: /dashboard/i })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /home/i })).toBeTruthy();
   });
 
   it('does not register mock routes when mock mode is disabled', async () => {

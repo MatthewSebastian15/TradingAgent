@@ -542,7 +542,7 @@ export default function AnalysisWorkspace({
     <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
 
-      <div className="flex flex-col lg:flex-row" style={{ minHeight: 'calc(100vh - 68px)' }}>
+      <div className="flex flex-col lg:flex-row" style={{ minHeight: 'calc(100vh - 40px)' }}>
         <div className="w-full flex-shrink-0 border-b border-bloomberg-border flex flex-col lg:w-80 lg:border-b-0 lg:border-r">
           <div className="flex-1">
             <div className="border-b border-bloomberg-border bg-bloomberg-card">
