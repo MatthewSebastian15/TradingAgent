@@ -118,7 +118,8 @@ Date,Open,High,Low,Close,Volume
     assert chart["effective_trade_date"] == "2026-06-08"
     assert chart["price_as_of_date"] == "2026-06-08"
     assert chart["last_trade_date"] == "2026-06-08"
-    assert chart["start_date"] == "2025-06-05"
+    assert chart["start_date"] == "2025-06-08"
+    assert chart["start_price_as_of_date"] == "2025-06-05"
     assert chart["end_date"] == "2026-06-08"
     assert chart["fallback_to_last_trade"] is True
     assert [point["date"] for point in chart["points"]] == ["2025-06-05", "2026-06-05"]
@@ -392,8 +393,8 @@ def test_build_related_news_returns_empty_state_when_news_is_missing():
 
 
 def test_date_window_uses_yoy_price_window_and_horizon_news_window():
-    assert _date_window("2026-05-15", 1) == ("2025-05-01", "2026-04-15", "2026-05-15")
-    assert _date_window("2026-05-15", 3) == ("2025-05-01", "2026-02-14", "2026-05-15")
+    assert _date_window("2026-05-15", 1) == ("2025-05-15", "2026-04-15", "2026-05-15")
+    assert _date_window("2026-05-15", 3) == ("2025-05-15", "2026-02-14", "2026-05-15")
 
 
 def test_call_with_timeout_returns_without_waiting_for_hung_call():
@@ -737,9 +738,11 @@ Date,Open,High,Low,Close,Volume
     assert chart["fallback_to_last_trade"] is True
     assert chart["effective_trade_date"] == "2026-06-09"
     assert chart["data_quality"]["fallback_gap_days"] == 1
+    assert chart["data_quality"]["status"] == "complete"
+    assert chart["warning"] is None
 
 
-def test_current_price_anchor_uses_profile_first():
+def test_current_price_anchor_uses_ohlcv_before_profile():
     anchor = _resolve_current_price_anchor(
         ohlcv_price=1605,
         ohlcv_as_of="2026-06-08",
@@ -755,14 +758,15 @@ def test_current_price_anchor_uses_profile_first():
     )
 
     assert anchor == {
-        "price": 2690.0,
+        "price": 1605,
         "as_of": "2026-06-09",
-        "source": "yfinance:fast_info.last_price",
+        "actual_price_as_of": "2026-06-08",
+        "source": "yfinance:last_close",
         "is_fallback": False,
     }
 
 
-def test_router_falls_back_and_does_not_cache_stale_ohlcv(monkeypatch):
+def test_router_falls_back_and_does_not_cache_price_ohlcv(monkeypatch):
     from tradingagents.dataflows import interface
 
     stale_csv = "\n".join(
@@ -813,5 +817,5 @@ def test_router_falls_back_and_does_not_cache_stale_ohlcv(monkeypatch):
 
     assert result_1 == fresh_csv
     assert result_2 == fresh_csv
-    assert calls["alpha_vantage"] == 1
+    assert calls["alpha_vantage"] == 2
     assert calls["yfinance"] == 2

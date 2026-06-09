@@ -272,6 +272,31 @@ def _resolve_current_price_anchor(
     profile: dict[str, Any] | None,
     trade_date: str,
 ) -> dict[str, Any]:
+    # Historical OHLCV is the canonical Analysis/Chart price snapshot. It is
+    # already selected as the last valid close at or before trade_date, so keep
+    # the user-facing as_of anchored to trade_date and expose the actual candle
+    # date through chart metadata. Do not let profile fast_info override this.
+    if ohlcv_price is not None:
+        return {
+            "price": ohlcv_price,
+            "as_of": trade_date,
+            "actual_price_as_of": ohlcv_as_of,
+            "source": ohlcv_source or "yfinance:last_close",
+            "is_fallback": False,
+        }
+
+    quote_price = _positive_price(
+        (quote or {}).get("current_price") or (quote or {}).get("price") or (quote or {}).get("c")
+    )
+    if quote_price is not None:
+        return {
+            "price": quote_price,
+            "as_of": trade_date,
+            "actual_price_as_of": (quote or {}).get("timestamp") or trade_date,
+            "source": (quote or {}).get("source") or (quote or {}).get("price_source") or "quote",
+            "is_fallback": False,
+        }
+
     profile_price = _positive_price((profile or {}).get("current_price"))
     if profile_price is not None:
         profile_source = (
@@ -281,6 +306,7 @@ def _resolve_current_price_anchor(
         return {
             "price": profile_price,
             "as_of": trade_date,
+            "actual_price_as_of": (profile or {}).get("current_price_as_of") or trade_date,
             "source": (
                 f"{profile_source}:{profile_method}"
                 if profile_source and profile_method
@@ -294,26 +320,7 @@ def _resolve_current_price_anchor(
             "is_fallback": False,
         }
 
-    if ohlcv_price is not None:
-        return {
-            "price": ohlcv_price,
-            "as_of": trade_date,
-            "source": ohlcv_source,
-            "is_fallback": False,
-        }
-
-    quote_price = _positive_price(
-        (quote or {}).get("current_price") or (quote or {}).get("price") or (quote or {}).get("c")
-    )
-    if quote_price is not None:
-        return {
-            "price": quote_price,
-            "as_of": trade_date,
-            "source": (quote or {}).get("source") or (quote or {}).get("price_source") or "quote",
-            "is_fallback": True,
-        }
-
-    return {"price": None, "as_of": None, "source": None, "is_fallback": False}
+    return {"price": None, "as_of": None, "actual_price_as_of": None, "source": None, "is_fallback": False}
 
 
 def _deduplicate_news_sections(parts: list[str]) -> list[str]:
@@ -966,10 +973,25 @@ def _build_price_chart(
         requested_cutoff is not None and effective_cutoff.date() != requested_cutoff.date()
     )
 
+    start_anchor_candidates = [item for item in parsed_points if item["_row_date"] <= effective_start_cutoff]
+    start_anchor = start_anchor_candidates[-1] if start_anchor_candidates else None
+    selected_points = [
+        item
+        for item in parsed_points
+        if effective_start_cutoff < item["_row_date"] <= effective_cutoff
+    ]
+    if start_anchor is not None:
+        selected_points = [start_anchor, *selected_points]
+    elif requested_start_cutoff is not None:
+        selected_points = [
+            item
+            for item in parsed_points
+            if effective_start_cutoff <= item["_row_date"] <= effective_cutoff
+        ]
+
     points = [
         {key: value for key, value in item.items() if key != "_row_date"}
-        for item in parsed_points
-        if effective_start_cutoff <= item["_row_date"] <= effective_cutoff
+        for item in selected_points
     ]
 
     if not points:
@@ -1026,11 +1048,6 @@ def _build_price_chart(
     warnings: list[str] = []
     if stale_warning:
         warnings.append(stale_warning)
-    elif fallback_to_last_trade:
-        warnings.append(
-            "OHLCV_FALLBACK_USED - Exact OHLCV date not found; using latest available "
-            f"trading day {actual_end_date} ({fallback_gap_days} days before trade_date {trade_date})."
-        )
     if is_stale:
         missing_fields.append("fresh_ohlcv")
 
@@ -1038,7 +1055,7 @@ def _build_price_chart(
     data_quality_status = "stale" if is_stale else "complete"
     if not available:
         data_quality_status = "unavailable"
-    elif missing_fields or fallback_to_last_trade:
+    elif missing_fields:
         data_quality_status = "partial" if not is_stale else "stale"
 
     return {
@@ -1046,6 +1063,7 @@ def _build_price_chart(
         "available": available,
         "source": source or "yfinance",
         "start_date": effective_start_date,
+        "start_price_as_of_date": points[0].get("date") if points else effective_start_date,
         "end_date": display_end_date,
         "effective_trade_date": display_end_date,
         "price_as_of_date": display_end_date,
@@ -1070,9 +1088,7 @@ def _build_price_chart(
 
 def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, str, str]:
     current = datetime.strptime(trade_date, "%Y-%m-%d")
-    start_price = (
-        current - relativedelta(years=1) - timedelta(days=PRICE_CHART_FALLBACK_BUFFER_DAYS)
-    ).strftime("%Y-%m-%d")
+    start_price = (current - relativedelta(years=1)).strftime("%Y-%m-%d")
     start_news = (current - timedelta(days=_horizon_days(time_horizon_months))).strftime("%Y-%m-%d")
     end = current.strftime("%Y-%m-%d")
     return start_price, start_news, end
@@ -1324,11 +1340,7 @@ def _classify_price_data(
                     f"maximum allowed fallback is {allowed_gap} days."
                 )
                 return "stale"
-            warnings.append(
-                "OHLCV_FALLBACK_USED - Exact OHLCV date not found; using latest available "
-                f"trading day {fallback_date} ({gap_days} days before trade_date {trade_date})."
-            )
-            return "market_closed"
+            return "ok"
         warnings.append(
             "OHLCV_MISSING - No available OHLCV row found on or before "
             f"{trade_date}; current price cannot be validated."
@@ -2110,7 +2122,7 @@ def collect_market_data(
     )
     ohlcv_price_source = _price_source_label(price.value, ohlcv_last_close_price)
     quote_payload: dict[str, Any] = {}
-    if ohlcv_last_close_price is None and _positive_price((company_profile or {}).get("current_price")) is None:
+    if ohlcv_last_close_price is None:
         quote_payload = _safe_payload(
             "quote",
             lambda: route_to_vendor(

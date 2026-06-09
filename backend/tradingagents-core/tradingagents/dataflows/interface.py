@@ -412,6 +412,17 @@ TICKER_FIRST_ARG_METHODS = {
     "get_corporate_actions",
 }
 
+# Price-sensitive calls must never be served from the app/tool cache. Historical
+# OHLCV, quote, and indicator payloads are anchored to the requested trade_date
+# and a stale cached response can make the Analysis and Chart & Price tabs show
+# different anchors. Fundamentals/news may still use the regular cache.
+PRICE_CACHE_DISABLED_METHODS = {"get_stock_data", "get_quote", "get_indicators"}
+
+
+def _is_price_cache_disabled(method: str) -> bool:
+    return method in PRICE_CACHE_DISABLED_METHODS
+
+
 
 def _normalize_args_for_vendor(method: str, vendor: str, args: tuple) -> tuple:
     if method not in TICKER_FIRST_ARG_METHODS or not args:
@@ -609,12 +620,13 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
     """Call one concrete vendor with timeout, retry, cache, and budget control."""
     vendor_args = _normalize_args_for_vendor(method, vendor, args)
 
-    cache = _active_cache(config)
+    cache = None if _is_price_cache_disabled(method) else _active_cache(config)
     cache_key = _cache_key(method, vendor, vendor_args, kwargs)
-    cached = cache.get(cache_key)
-    if cached is not None:
-        _record_attempt(config, method, vendor, "cache_hit")
-        return cached
+    if cache is not None:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            _record_attempt(config, method, vendor, "cache_hit")
+            return cached
 
     allowed, blocked_reason = _consume_budget(config, method, vendor)
     if not allowed:
@@ -646,11 +658,12 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         should_retry=lambda exc: not isinstance(exc, (AlphaVantagePermanentError, FinnhubUnavailableError)),
     )
     quality = _quality_for_result(method, result, vendor_args, config)
-    if quality is None or quality.get("available") is not False:
-        cache.set(cache_key, result)
-    else:
-        detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or ["quality unavailable"])
-        logger.info("Not caching unusable %s/%s result: %s", vendor, method, detail)
+    if cache is not None:
+        if quality is None or quality.get("available") is not False:
+            cache.set(cache_key, result)
+        else:
+            detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or ["quality unavailable"])
+            logger.info("Not caching unusable %s/%s result: %s", vendor, method, detail)
     return result
 
 

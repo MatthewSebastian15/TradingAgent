@@ -1,6 +1,6 @@
 import logging
-import os
 import time
+from datetime import timedelta
 from typing import Annotated
 
 import pandas as pd
@@ -10,8 +10,6 @@ from yfinance.exceptions import YFRateLimitError
 
 from tradingagents.yfinance_runtime import yf
 
-from .config import get_config
-from .utils import safe_ticker_component
 
 logger = logging.getLogger(__name__)
 
@@ -89,50 +87,49 @@ def _clean_dataframe(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
-    """Fetch OHLCV data with caching, filtered to prevent look-ahead bias.
+    """Fetch OHLCV data without cache, filtered to prevent look-ahead bias.
 
-    Downloads the Year-on-Year window ending at curr_date and caches per
-    symbol/window. Rows after curr_date are filtered out so backtests never see
-    future prices.
+    Price and indicator data must be anchored to the requested trade_date on
+    every run. The old file cache could serve a stale YoY window and make local
+    indicators disagree with the Analysis/Chart price snapshot, so this path
+    always downloads fresh data.
     """
-    # Reject ticker values that would escape the cache directory when
-    # interpolated into the cache filename (e.g. ``../../tmp/x``).
-    safe_symbol = safe_ticker_component(symbol)
-
-    config = get_config()
     curr_date_dt = pd.to_datetime(curr_date)
 
     current_dt = curr_date_dt.to_pydatetime()
     start_dt = current_dt - relativedelta(years=1)
-    end_dt = current_dt
+    fetch_end_dt = current_dt + timedelta(days=1)
     start_str = start_dt.strftime("%Y-%m-%d")
-    end_str = end_dt.strftime("%Y-%m-%d")
+    fetch_end_str = fetch_end_dt.strftime("%Y-%m-%d")
 
-    os.makedirs(config["data_cache_dir"], exist_ok=True)
-    data_file = os.path.join(
-        config["data_cache_dir"],
-        f"{safe_symbol}-YFin-data-{start_str}-{end_str}.csv",
+    data = yf_retry(
+        lambda: yf.download(
+            symbol,
+            start=start_str,
+            end=fetch_end_str,
+            multi_level_index=False,
+            progress=False,
+            auto_adjust=True,
+            threads=False,
+        )
     )
 
-    if os.path.exists(data_file):
-        data = pd.read_csv(data_file, on_bad_lines="skip", encoding="utf-8")
-    else:
+    if data is None or data.empty:
         data = yf_retry(
-            lambda: yf.download(
-                symbol,
+            lambda: yf.Ticker(symbol).history(
                 start=start_str,
-                end=end_str,
-                multi_level_index=False,
-                progress=False,
+                end=fetch_end_str,
                 auto_adjust=True,
             )
         )
-        data = data.reset_index()
-        data.to_csv(data_file, index=False, encoding="utf-8")
 
+    if data is None or data.empty:
+        return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+
+    data = data.reset_index()
     data = _clean_dataframe(data)
 
-    # Filter to curr_date to prevent look-ahead bias in backtesting
+    # Filter to curr_date to prevent look-ahead bias in backtesting.
     data = data[data["Date"] <= curr_date_dt]
 
     return data

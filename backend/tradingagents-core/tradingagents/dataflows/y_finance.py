@@ -165,18 +165,136 @@ def _coerce_positive_float(value: Any) -> float | None:
     return number
 
 
-def fetch_current_price(symbol: str) -> dict[str, Any]:
-    """Fetch the latest available quote once at the start of an analysis run.
+def _inclusive_fetch_end(end_dt: datetime) -> str:
+    """Return yfinance's exclusive end date that includes *end_dt*."""
+    return (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    The first choice is yfinance ``fast_info.last_price`` because it represents
-    the freshest quote yfinance exposes for the instrument. If that is missing,
-    the function falls back to the latest available historical close and marks
-    the result as a fallback so the UI can warn the user clearly.
+
+def _normalize_price_dataframe(data: pd.DataFrame | None) -> pd.DataFrame:
+    """Normalize raw yfinance OHLCV data without using any price cache."""
+    if data is None or data.empty:
+        return pd.DataFrame()
+
+    normalized = data.copy()
+    if isinstance(normalized.columns, pd.MultiIndex):
+        normalized.columns = [str(col[0] if col[0] else col[-1]) for col in normalized.columns]
+
+    normalized = normalized.sort_index()
+    normalized = normalized[~normalized.index.duplicated(keep="last")]
+    if getattr(normalized.index, "tz", None) is not None:
+        normalized.index = normalized.index.tz_localize(None)
+    normalized.index = pd.to_datetime(normalized.index, errors="coerce")
+    normalized = normalized[normalized.index.notna()]
+
+    numeric_columns = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
+    for col in numeric_columns:
+        if col in normalized.columns:
+            normalized[col] = pd.to_numeric(normalized[col], errors="coerce")
+    if "Close" in normalized.columns:
+        normalized = normalized.dropna(subset=["Close"])
+    return normalized
+
+
+def _download_price_history(symbol: str, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
+    """Download historical OHLCV with trade_date-inclusive end and no cache."""
+    start_str = start_dt.strftime("%Y-%m-%d")
+    fetch_end_str = _inclusive_fetch_end(end_dt)
+    data = yf_retry(
+        lambda: yf.download(
+            symbol,
+            start=start_str,
+            end=fetch_end_str,
+            multi_level_index=False,
+            progress=False,
+            auto_adjust=False,
+            threads=False,
+        )
+    )
+
+    if data is None or data.empty:
+        data = yf_retry(
+            lambda: yf.Ticker(symbol).history(
+                start=start_str,
+                end=fetch_end_str,
+                auto_adjust=False,
+            )
+        )
+    return _normalize_price_dataframe(data)
+
+
+def _with_start_anchor_row(data: pd.DataFrame, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
+    """Keep rows through end_dt and prepend last close <= start_dt when needed."""
+    if data is None or data.empty:
+        return pd.DataFrame()
+
+    eligible = data[data.index <= end_dt]
+    if eligible.empty:
+        return pd.DataFrame()
+
+    window_rows = eligible[eligible.index >= start_dt]
+    start_candidates = eligible[eligible.index <= start_dt]
+    if not start_candidates.empty:
+        anchor_row = start_candidates.tail(1)
+        anchor_index = anchor_row.index[-1]
+        has_exact_start = not window_rows.empty and window_rows.index[0] == anchor_index
+        if not has_exact_start:
+            window_rows = pd.concat([anchor_row, window_rows])
+            window_rows = window_rows[~window_rows.index.duplicated(keep="first")]
+
+    return window_rows.sort_index()
+
+
+def _last_close_at_or_before(data: pd.DataFrame, cutoff_dt: datetime) -> tuple[float | None, str | None]:
+    """Return the last valid close and date at or before cutoff_dt."""
+    if data is None or data.empty or "Close" not in data.columns:
+        return None, None
+    eligible = data[data.index <= cutoff_dt].dropna(subset=["Close"])
+    if eligible.empty:
+        return None, None
+    row = eligible.iloc[-1]
+    price = _coerce_positive_float(row.get("Close"))
+    if price is None:
+        return None, None
+    row_date = eligible.index[-1]
+    return price, row_date.strftime("%Y-%m-%d")
+
+
+def fetch_current_price(symbol: str, trade_date: str | None = None) -> dict[str, Any]:
+    """Fetch the analysis price anchor once using trade_date as the end date.
+
+    When trade_date is supplied, this intentionally uses the latest historical
+    daily close at or before trade_date. This keeps Analysis, trade levels, and
+    Chart & Price on the same snapshot instead of mixing a live fast_info quote
+    with a daily YOY price window. No price result is served from cache here.
     """
     normalized = normalize_ticker(symbol)
     wib = pytz.timezone("Asia/Jakarta")
     now = datetime.now(wib)
     currency = _currency_for_symbol(normalized)
+
+    if trade_date:
+        try:
+            cutoff_dt = datetime.strptime(str(trade_date)[:10], "%Y-%m-%d")
+            start_dt = cutoff_dt - timedelta(days=14)
+            hist = _download_price_history(normalized, start_dt, cutoff_dt)
+            price, price_date = _last_close_at_or_before(hist, cutoff_dt)
+            if price is None:
+                raise ValueError("No historical Close row found at or before trade_date")
+            return {
+                "price": price,
+                "price_currency": currency,
+                "price_source": "yfinance:daily:last_close",
+                "price_timestamp": price_date,
+                "requested_trade_date": cutoff_dt.strftime("%Y-%m-%d"),
+                "price_is_fallback": False,
+            }
+        except Exception as trade_date_exc:
+            logger.warning(
+                "Unable to fetch trade-date anchored price for %s on %s: %s",
+                normalized,
+                trade_date,
+                trade_date_exc,
+            )
 
     try:
         ticker = yf.Ticker(normalized)
@@ -196,27 +314,22 @@ def fetch_current_price(symbol: str) -> dict[str, Any]:
         }
     except Exception as primary_exc:
         try:
-            ticker = yf.Ticker(normalized)
-            hist = ticker.history(period="2d")
-            if hist is None or hist.empty or "Close" not in hist:
-                raise ValueError("history fallback returned no Close rows") from primary_exc
-
-            price = _coerce_positive_float(hist["Close"].iloc[-1])
+            now_naive = now.replace(tzinfo=None)
+            hist = _download_price_history(
+                normalized,
+                now_naive - timedelta(days=7),
+                now_naive,
+            )
+            price, price_date = _last_close_at_or_before(hist, now_naive)
             if price is None:
-                raise ValueError("history fallback returned invalid Close value") from primary_exc
-
-            price_date = hist.index[-1]
-            try:
-                price_timestamp = price_date.isoformat()
-            except AttributeError:
-                price_timestamp = str(price_date)
+                raise ValueError("history fallback returned no valid Close rows") from primary_exc
 
             return {
                 "price": price,
                 "price_currency": currency,
-                "price_source": "history_close_fallback",
-                "price_timestamp": price_timestamp,
-                "price_is_fallback": True,
+                "price_source": "yfinance:daily:last_close",
+                "price_timestamp": price_date,
+                "price_is_fallback": False,
             }
         except Exception as fallback_exc:
             logger.warning("Unable to fetch current price for %s: %s", normalized, fallback_exc)
@@ -225,7 +338,7 @@ def fetch_current_price(symbol: str) -> dict[str, Any]:
                 "price_currency": currency,
                 "price_source": "unavailable",
                 "price_timestamp": now.isoformat(),
-                "price_is_fallback": True,
+                "price_is_fallback": False,
                 "warning": str(fallback_exc),
             }
 
@@ -295,45 +408,20 @@ def get_YFin_data_online(
     # Normalize ticker (handles IDX suffix e.g. BBCA -> BBCA.JK)
     symbol = normalize_ticker(symbol)
 
-    # yfinance end is exclusive (fetches up to end_date - 1 day).
-    # Add 1 day so the trade_date row itself is always included.
-    fetch_end_date = (datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    requested_start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    requested_end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-    # Historical OHLCV must be fetched with yf.download rather than the shared
-    # yf.Ticker object cache. The cached Ticker object is useful for profile and
-    # statement calls, but price windows are trade_date-sensitive and must not
-    # reuse an object/session that can surface stale history.
-    data = yf_retry(
-        lambda: yf.download(
-            symbol,
-            start=start_date,
-            end=fetch_end_date,
-            multi_level_index=False,
-            progress=False,
-            auto_adjust=False,
-            threads=False,
-        )
-    )
-
-    # Fallback to a fresh Ticker instance only if download returns nothing. Do
-    # not use _get_ticker() here, because this path is explicitly about avoiding
-    # stale cached price history.
-    if data is None or data.empty:
-        data = yf_retry(lambda: yf.Ticker(symbol).history(start=start_date, end=fetch_end_date, auto_adjust=False))
+    # Fetch a small internal pre-start buffer so a non-trading YOY anchor such as
+    # a weekend/holiday can still use the last close at or before start_date.
+    # The requested business window remains start_date -> end_date; this buffer
+    # is only to locate the anchor close and is never used as the displayed end.
+    internal_start_dt = requested_start_dt - timedelta(days=14)
+    data = _download_price_history(symbol, internal_start_dt, requested_end_dt)
+    data = _with_start_anchor_row(data, requested_start_dt, requested_end_dt)
 
     # Check if data is empty
     if data is None or data.empty:
         return f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
-
-    if isinstance(data.columns, pd.MultiIndex):
-        data.columns = [str(col[-1] if col[-1] else col[0]) for col in data.columns]
-
-    data = data.sort_index()
-    data = data[~data.index.duplicated(keep="last")]
-
-    # Remove timezone info from index for cleaner output
-    if getattr(data.index, "tz", None) is not None:
-        data.index = data.index.tz_localize(None)
 
     # Round numerical values to 2 decimal places for cleaner display
     numeric_columns = ["Open", "High", "Low", "Close", "Adj Close"]
@@ -610,7 +698,7 @@ def get_company_profile(
         if insider_pct is not None and institution_pct is not None:
             public_pct = max(0, 1 - (insider_pct + institution_pct))
 
-        current_price_payload = fetch_current_price(ticker)
+        current_price_payload = fetch_current_price(ticker, curr_date)
         current_price = (
             current_price_payload.get("price")
             or info.get("currentPrice")
