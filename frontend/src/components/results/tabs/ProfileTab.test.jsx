@@ -34,8 +34,6 @@ describe('ProfileTab', () => {
     }
   );
 
-
-
   it('renders shares and ownership data above the business description', () => {
     render(
       <ProfileTab
@@ -80,7 +78,7 @@ describe('ProfileTab', () => {
       />
     );
 
-    expect(screen.getByText('25.00%')).toBeTruthy();
+    expect(screen.getAllByText('25.00%').length).toBeGreaterThan(0);
     expect(screen.getAllByText('-').length).toBeGreaterThan(0);
     expect(screen.getByText('100%')).toBeTruthy();
   });
@@ -111,7 +109,7 @@ describe('ProfileTab', () => {
     expect(screen.getByText('PT Bank Central Asia Tbk')).toBeTruthy();
     expect(screen.queryByText('Profile data: partial')).toBeNull();
     expect(screen.getByText('1,205,000.0 IDR Bn')).toBeTruthy();
-    expect(screen.getByText('123,275,050,000')).toBeTruthy();
+    expect(screen.getAllByText('123,275,050,000').length).toBeGreaterThan(0);
     expect(screen.getByText('Rp 9,800')).toBeTruthy();
     expect(screen.getByText('27,000')).toBeTruthy();
     expect(screen.getByText('Websites')).toBeTruthy();

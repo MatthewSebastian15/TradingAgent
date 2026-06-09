@@ -26,6 +26,64 @@ const PIPELINE_AGENTS = [
 
 const MOCK_ANALYSIS_CREATED_AT = '2026-05-18T09:00:00.000Z';
 
+export const MOCK_TICKER_SEARCH_RESULTS = [
+  {
+    symbol: 'NVDA',
+    name: 'NVIDIA Corporation',
+    exchange: 'NASDAQ',
+    type: 'EQUITY',
+    price: 940.0,
+  },
+  {
+    symbol: 'BBCA.JK',
+    name: 'Bank Central Asia Tbk PT',
+    exchange: 'IDX',
+    type: 'EQUITY',
+    price: 9800.0,
+  },
+  {
+    symbol: 'BBRI.JK',
+    name: 'Bank Rakyat Indonesia Persero Tbk PT',
+    exchange: 'IDX',
+    type: 'EQUITY',
+    price: 4320.0,
+  },
+  {
+    symbol: 'TLKM.JK',
+    name: 'Telkom Indonesia Persero Tbk PT',
+    exchange: 'IDX',
+    type: 'EQUITY',
+    price: 2820.0,
+  },
+  {
+    symbol: '700.HK',
+    name: 'Tencent Holdings Limited',
+    exchange: 'HKSE',
+    type: 'EQUITY',
+    price: 381.4,
+  },
+];
+
+export async function searchMockTickers({ query, limit = 10, signal } = {}) {
+  if (signal?.aborted) {
+    const error = new Error('Aborted');
+    error.name = 'AbortError';
+    throw error;
+  }
+
+  const needle = String(query || '')
+    .trim()
+    .toUpperCase();
+  if (needle.length < 2) return { results: [] };
+
+  return {
+    results: MOCK_TICKER_SEARCH_RESULTS.filter((item) => {
+      const haystack = `${item.symbol} ${item.name} ${item.exchange} ${item.type}`.toUpperCase();
+      return haystack.includes(needle);
+    }).slice(0, limit),
+  };
+}
+
 export function resolveDisplaySignal(rawAiSignal, hasExistingPosition, rebalancingAction = null) {
   const signal = String(rawAiSignal || 'HOLD')
     .toUpperCase()

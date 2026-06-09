@@ -12,7 +12,7 @@ export default function AnalysisMock() {
     <AnalysisWorkspace
       FormComponent={StockFormMock}
       historyKey="ta_analysis_mock_history"
-      emptyDescription="Select a market tab, configure parameters on the left, and execute analysis to receive a structured trade decision."
+      emptyDescription="Search a mock yfinance ticker, configure the terminal controls at the top, then execute the mock agent pipeline for a structured trade decision."
       resultPathBase="/analysis.test"
       lookupResult={lookupMockResult}
       backendHistoryEnabled={false}

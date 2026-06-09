@@ -2,77 +2,187 @@ import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 
 import {
+  AGENT_ALIASES,
   buildAnalysisPayload,
   DEFAULT_DEBATE_ROUNDS,
   DEPTH_OPTIONS,
   HORIZON_OPTIONS,
-  MARKETS,
-  normalizeTickerInput,
+  PIPELINE,
+  PIPELINE_IDS,
   today,
   validateAnalysisInput,
 } from '../domain/analysisContract';
 import { useAnalysisJob } from '../hooks/useAnalysisJob';
+import TickerSearchBar from './TickerSearchBar';
 
-function MarketTab({ id, market, active, disabled, onClick }) {
+function normalizeAgentId(id = '') {
+  const normalized = String(id)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return AGENT_ALIASES[normalized] || normalized;
+}
+
+function normalizeAgentStatus(status = '') {
+  const normalized = String(status).trim().toLowerCase();
+  if (['start', 'running', 'in_progress'].includes(normalized)) return 'started';
+  if (['done', 'complete', 'success', 'finished'].includes(normalized)) return 'completed';
+  if (['error', 'failed', 'fail'].includes(normalized)) return 'failed';
+  return normalized || 'started';
+}
+
+function FieldLabel({ children, hint = null }) {
   return (
-    <button
-      type="button"
-      onClick={() => onClick(id)}
-      disabled={disabled}
-      className={`
-        flex-1 py-2.5 font-mono text-xs font-semibold tracking-wider
-        border-b-2 transition-colors duration-150
-        disabled:opacity-40 disabled:cursor-not-allowed
-        ${
-          active
-            ? 'border-bloomberg-orange text-bloomberg-orange bg-bloomberg-orange-dim'
-            : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white hover:border-bloomberg-subtle'
-        }
-      `}
-    >
-      <span className="mr-1">{market.flag}</span>
-      {market.label}
-    </button>
+    <label className="mb-2 flex items-center justify-between gap-2 font-mono text-[10px] text-bloomberg-muted tracking-[0.2em] uppercase">
+      <span>{children}</span>
+      {hint && <span className="normal-case tracking-wider text-bloomberg-border">{hint}</span>}
+    </label>
   );
 }
 
-MarketTab.propTypes = {
-  id: PropTypes.string.isRequired,
-  market: PropTypes.shape({
-    flag: PropTypes.string.isRequired,
-    label: PropTypes.string.isRequired,
-  }).isRequired,
-  active: PropTypes.bool.isRequired,
-  disabled: PropTypes.bool,
-  onClick: PropTypes.func.isRequired,
+FieldLabel.propTypes = {
+  children: PropTypes.node.isRequired,
+  hint: PropTypes.string,
 };
 
-function TickerChip({ label, active, onClick, disabled }) {
+function AgentPipelineStrip({ agentProgress, running, status }) {
+  const [activeIds, setActiveIds] = useState(new Set());
+  const [doneIds, setDoneIds] = useState(new Set());
+
+  useEffect(() => {
+    if (!running && agentProgress === null) {
+      setActiveIds(new Set());
+      setDoneIds(new Set());
+      return;
+    }
+
+    if (!agentProgress?.agent_id) return;
+
+    const agentId = normalizeAgentId(agentProgress.agent_id);
+    const agentStatus = normalizeAgentStatus(agentProgress.status);
+    const isPipelineAgent = PIPELINE_IDS.has(agentId);
+    if (!isPipelineAgent) return;
+
+    setActiveIds((prev) => {
+      const next = new Set(prev);
+      if (agentStatus === 'started') next.add(agentId);
+      if (agentStatus === 'completed' || agentStatus === 'failed') next.delete(agentId);
+      return next;
+    });
+
+    setDoneIds((prev) => {
+      const next = new Set(prev);
+      if (agentStatus === 'completed') next.add(agentId);
+      if (agentStatus === 'failed') next.delete(agentId);
+      return next;
+    });
+  }, [agentProgress, running]);
+
+  const doneCount = Math.min(doneIds.size, PIPELINE.length);
+  const progressPct = Math.round((doneCount / PIPELINE.length) * 100);
+  const headline = running
+    ? agentProgress?.status_message || status || 'PIPELINE RUNNING'
+    : 'READY FOR ANALYSIS';
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`
-        px-2.5 py-1 text-xs font-mono border transition-colors duration-150
-        disabled:opacity-40 disabled:cursor-not-allowed
-        ${
-          active
-            ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
-            : 'border-bloomberg-border bg-bloomberg-surface text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'
-        }
-      `}
-    >
-      {label}
-    </button>
+    <div className="border-b border-bloomberg-border bg-black">
+      <div className="flex flex-col gap-2 border-b border-bloomberg-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            className={`h-2 w-2 flex-shrink-0 rounded-full ${
+              running ? 'bg-bloomberg-orange animate-pulse-dot' : 'bg-bloomberg-border'
+            }`}
+          />
+          <div className="min-w-0">
+            <div className="font-mono text-xs font-semibold text-bloomberg-orange tracking-[0.22em]">
+              AGENT PIPELINE
+            </div>
+            <div className="mt-1 truncate font-mono text-[10px] text-bloomberg-muted tracking-wider uppercase">
+              {headline}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 font-mono text-[10px] tracking-[0.18em] text-bloomberg-muted">
+          <span>
+            {doneCount}/{PIPELINE.length} AGENTS
+          </span>
+          <span className={running ? 'text-bloomberg-orange' : 'text-bloomberg-border'}>
+            {progressPct}% COMPLETE
+          </span>
+        </div>
+      </div>
+
+      <div className="h-0.5 bg-bloomberg-surface">
+        <div
+          className="h-full bg-bloomberg-orange transition-all duration-500"
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 divide-x divide-y divide-bloomberg-border sm:grid-cols-5 xl:grid-cols-10 xl:divide-y-0">
+        {PIPELINE.map((step, index) => {
+          const active = activeIds.has(step.id);
+          const done = doneIds.has(step.id);
+          const failed =
+            agentProgress?.agent_id &&
+            normalizeAgentId(agentProgress.agent_id) === step.id &&
+            normalizeAgentStatus(agentProgress.status) === 'failed';
+          return (
+            <div
+              key={step.id}
+              className={`min-w-0 px-3 py-2 transition-colors duration-200 ${
+                active
+                  ? 'bg-bloomberg-orange-dim'
+                  : done
+                    ? 'bg-bloomberg-green-dim'
+                    : failed
+                      ? 'bg-bloomberg-red-dim'
+                      : 'bg-black'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[9px] text-bloomberg-border">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <span
+                  className={`font-mono text-[9px] ${
+                    active
+                      ? 'text-bloomberg-orange'
+                      : done
+                        ? 'text-bloomberg-green'
+                        : failed
+                          ? 'text-bloomberg-red'
+                          : 'text-bloomberg-muted'
+                  }`}
+                >
+                  {done ? 'DONE' : active ? 'LIVE' : failed ? 'FAIL' : 'IDLE'}
+                </span>
+              </div>
+              <div
+                className={`mt-1 truncate font-mono text-[11px] font-semibold tracking-wider ${
+                  active
+                    ? 'text-bloomberg-white'
+                    : done
+                      ? 'text-bloomberg-green'
+                      : 'text-bloomberg-muted'
+                }`}
+                title={step.label}
+              >
+                {step.short}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-TickerChip.propTypes = {
-  label: PropTypes.string.isRequired,
-  active: PropTypes.bool,
-  onClick: PropTypes.func.isRequired,
-  disabled: PropTypes.bool,
+AgentPipelineStrip.propTypes = {
+  agentProgress: PropTypes.object,
+  running: PropTypes.bool.isRequired,
+  status: PropTypes.string,
 };
 
 export default function StockForm({
@@ -82,9 +192,11 @@ export default function StockForm({
   onAgentProgress,
   useAnalysisJobHook = useAnalysisJob,
   selectedResult = null,
+  agentProgress = null,
+  status = '',
+  tickerSearch = null,
 }) {
-  const [activeMarket, setActiveMarket] = useState('US');
-  const [ticker, setTicker] = useState(MARKETS.US.defaultTicker);
+  const [ticker, setTicker] = useState('');
   const [date, setDate] = useState(today());
   const [rounds, setRounds] = useState(DEFAULT_DEBATE_ROUNDS);
   const [timeHorizonMonths, setTimeHorizonMonths] = useState(1);
@@ -104,13 +216,13 @@ export default function StockForm({
   useEffect(() => {
     if (!selectedResult || selectedResult.error || running) return;
 
-    const resultMarket = String(selectedResult.market || '').toUpperCase();
-    const resultTicker = String(selectedResult.ticker || '').toUpperCase();
-    const nextMarket =
-      resultMarket in MARKETS ? resultMarket : resultTicker.endsWith('.JK') ? 'ID' : activeMarket;
+    const resultTicker = String(
+      selectedResult.normalized_ticker || selectedResult.ticker || selectedResult.input_ticker || ''
+    )
+      .trim()
+      .toUpperCase();
 
-    setActiveMarket(nextMarket);
-    if (resultTicker) setTicker(normalizeTickerInput(resultTicker, nextMarket));
+    if (resultTicker) setTicker(resultTicker);
     if (selectedResult.trade_date) setDate(selectedResult.trade_date);
     if (selectedResult.time_horizon_months) {
       setTimeHorizonMonths(Number(selectedResult.time_horizon_months));
@@ -136,16 +248,7 @@ export default function StockForm({
         : ''
     );
     setError('');
-    // Only resync when the displayed analysis changes; user edits after that remain local.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedResult?.request_id]);
-
-  function handleMarketSwitch(marketId) {
-    if (running) return;
-    setActiveMarket(marketId);
-    setTicker(MARKETS[marketId].defaultTicker);
-    setError('');
-  }
+  }, [running, selectedResult]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -156,7 +259,6 @@ export default function StockForm({
     }
 
     const validationError = validateAnalysisInput({
-      activeMarket,
       ticker,
       date,
       timeHorizonMonths,
@@ -173,7 +275,6 @@ export default function StockForm({
     setError('');
     await startAnalysis(
       buildAnalysisPayload({
-        activeMarket,
         ticker,
         date,
         timeHorizonMonths,
@@ -189,93 +290,46 @@ export default function StockForm({
 
   const selectedDepth = DEPTH_OPTIONS.find((item) => item.value === analysisDepth);
   const selectedHorizon = HORIZON_OPTIONS.find((item) => item.value === Number(timeHorizonMonths));
-  const currentMarket = MARKETS[activeMarket];
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-0">
-      {/* Header */}
-      <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center gap-2">
-        <span className="text-bloomberg-muted font-mono text-xs">CONFIGURE PARAMETERS</span>
-      </div>
+    <form
+      onSubmit={handleSubmit}
+      className="mx-auto w-full max-w-7xl overflow-visible border border-bloomberg-border bg-bloomberg-card shadow-2xl shadow-black"
+    >
+      <AgentPipelineStrip agentProgress={agentProgress} running={running} status={status} />
 
-      {/* Market tabs */}
-      <div className="flex border-b border-bloomberg-border bg-bloomberg-surface">
-        {Object.entries(MARKETS).map(([id, market]) => (
-          <MarketTab
-            key={id}
-            id={id}
-            market={market}
-            active={activeMarket === id}
-            disabled={running}
-            onClick={handleMarketSwitch}
-          />
-        ))}
-      </div>
-
-      <div className="p-4 flex flex-col gap-4">
-        {/* Ticker input */}
-        <div>
-          <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
-            TICKER SYMBOL
-            <span className="ml-2 text-bloomberg-border normal-case font-normal">
-              {activeMarket === 'ID' ? '· IDX code' : '· NYSE / NASDAQ'}
-            </span>
-          </label>
-          <input
+      <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-12">
+        <div className="xl:col-span-4">
+          <FieldLabel hint="YFINANCE ONLY">Ticker symbol</FieldLabel>
+          <TickerSearchBar
             value={ticker}
-            onChange={(e) => setTicker(normalizeTickerInput(e.target.value, activeMarket))}
-            placeholder={currentMarket.defaultTicker}
-            required
             disabled={running}
-            className="
-              w-full bg-black border border-bloomberg-border px-3 py-2.5
-              font-mono text-sm text-bloomberg-white tracking-wider
-              focus:outline-none focus:border-bloomberg-orange
-              disabled:opacity-50 transition-colors duration-150
-              placeholder:text-bloomberg-muted
-            "
+            searchTickers={tickerSearch}
+            onClear={() => {
+              setTicker('');
+              setError('');
+            }}
+            onSelect={(item) => {
+              setTicker(item.symbol);
+              setError('');
+            }}
           />
-
-          {/* Quick-pick chips */}
-          <div className="mt-2">
-            <div className="text-xs font-mono text-bloomberg-muted mb-1.5 tracking-wider">
-              {currentMarket.flag} QUICK-PICK
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {currentMarket.tickers.map((t) => (
-                <TickerChip
-                  key={t}
-                  label={t}
-                  active={ticker === t}
-                  onClick={() => setTicker(t)}
-                  disabled={running}
-                />
-              ))}
-            </div>
-          </div>
         </div>
 
-        {/* Horizon */}
-        <div>
-          <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
-            ANALYSIS HORIZON
-          </label>
-          <div className="grid grid-cols-3 gap-1.5">
+        <div className="xl:col-span-3">
+          <FieldLabel>Analysis horizon</FieldLabel>
+          <div className="grid grid-cols-3 gap-1">
             {HORIZON_OPTIONS.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => setTimeHorizonMonths(option.value)}
                 disabled={running}
-                className={`
-                  px-2 py-2 text-xs font-mono border tracking-wider transition-colors duration-150
-                  disabled:opacity-40 disabled:cursor-not-allowed
-                  ${
-                    Number(timeHorizonMonths) === option.value
-                      ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
-                      : 'border-bloomberg-border bg-black text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'
-                  }
-                `}
+                className={`border px-2 py-3 font-mono text-[11px] tracking-wider transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${
+                  Number(timeHorizonMonths) === option.value
+                    ? 'border-bloomberg-orange bg-bloomberg-orange-dim text-bloomberg-orange'
+                    : 'border-bloomberg-border bg-black text-bloomberg-muted hover:border-bloomberg-subtle hover:text-bloomberg-white'
+                }`}
               >
                 {option.label}
               </button>
@@ -283,107 +337,72 @@ export default function StockForm({
           </div>
         </div>
 
-        {/* Date + Rounds */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
-              TRADE DATE
-            </label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              disabled={running}
-              required
-              className="
-                w-full bg-black border border-bloomberg-border px-3 py-2.5
-                font-mono text-xs text-bloomberg-white tracking-wider
-                focus:outline-none focus:border-bloomberg-orange
-                disabled:opacity-50 transition-colors duration-150
-              "
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
-              DEBATE ROUNDS
-            </label>
-            <select
-              value={rounds}
-              onChange={(e) => setRounds(Number(e.target.value))}
-              disabled={running}
-              className="
-                w-full bg-black border border-bloomberg-border px-3 py-2.5
-                font-mono text-xs text-bloomberg-white tracking-wider
-                focus:outline-none focus:border-bloomberg-orange
-                disabled:opacity-50 transition-colors duration-150 cursor-pointer
-              "
-            >
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n} className="bg-black">
-                  {n} ROUND{n > 1 ? 'S' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="xl:col-span-2">
+          <FieldLabel>Trade date</FieldLabel>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            disabled={running}
+            required
+            className="w-full border border-bloomberg-border bg-black px-3 py-3 font-mono text-xs text-bloomberg-white tracking-wider transition-colors duration-150 focus:border-bloomberg-orange focus:outline-none disabled:opacity-50"
+          />
         </div>
 
-        {/* Depth + Detail */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
-              ANALYSIS DEPTH
-            </label>
-            <select
-              value={analysisDepth}
-              onChange={(e) => setDepth(e.target.value)}
-              disabled={running}
-              className="
-                w-full bg-black border border-bloomberg-border px-3 py-2.5
-                font-mono text-xs text-bloomberg-white tracking-wider
-                focus:outline-none focus:border-bloomberg-orange
-                disabled:opacity-50 transition-colors duration-150 cursor-pointer
-              "
-            >
-              {DEPTH_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value} className="bg-black">
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2">
-              RESPONSE
-            </label>
-            <select
-              value={responseDetail}
-              onChange={(e) => setDetail(e.target.value)}
-              disabled={running}
-              className="
-                w-full bg-black border border-bloomberg-border px-3 py-2.5
-                font-mono text-xs text-bloomberg-white tracking-wider
-                focus:outline-none focus:border-bloomberg-orange
-                disabled:opacity-50 transition-colors duration-150 cursor-pointer
-              "
-            >
-              <option value="summary" className="bg-black">
-                SUMMARY
+        <div className="xl:col-span-3">
+          <FieldLabel>Debate rounds</FieldLabel>
+          <select
+            value={rounds}
+            onChange={(e) => setRounds(Number(e.target.value))}
+            disabled={running}
+            className="w-full cursor-pointer border border-bloomberg-border bg-black px-3 py-3 font-mono text-xs text-bloomberg-white tracking-wider transition-colors duration-150 focus:border-bloomberg-orange focus:outline-none disabled:opacity-50"
+          >
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n} className="bg-black">
+                {n} ROUND{n > 1 ? 'S' : ''}
               </option>
-              <option value="full" className="bg-black">
-                FULL
-              </option>
-              <option value="debug" className="bg-black">
-                DEBUG
-              </option>
-            </select>
-          </div>
+            ))}
+          </select>
         </div>
 
-        {/* Existing position */}
-        <div className="border border-bloomberg-border bg-bloomberg-surface px-3 py-3">
-          <label className="flex items-start gap-3 cursor-pointer">
+        <div className="xl:col-span-3">
+          <FieldLabel>Analysis depth</FieldLabel>
+          <select
+            value={analysisDepth}
+            onChange={(e) => setDepth(e.target.value)}
+            disabled={running}
+            className="w-full cursor-pointer border border-bloomberg-border bg-black px-3 py-3 font-mono text-xs text-bloomberg-white tracking-wider transition-colors duration-150 focus:border-bloomberg-orange focus:outline-none disabled:opacity-50"
+          >
+            {DEPTH_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value} className="bg-black">
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="xl:col-span-2">
+          <FieldLabel>Response</FieldLabel>
+          <select
+            value={responseDetail}
+            onChange={(e) => setDetail(e.target.value)}
+            disabled={running}
+            className="w-full cursor-pointer border border-bloomberg-border bg-black px-3 py-3 font-mono text-xs text-bloomberg-white tracking-wider transition-colors duration-150 focus:border-bloomberg-orange focus:outline-none disabled:opacity-50"
+          >
+            <option value="summary" className="bg-black">
+              SUMMARY
+            </option>
+            <option value="full" className="bg-black">
+              FULL
+            </option>
+            <option value="debug" className="bg-black">
+              DEBUG
+            </option>
+          </select>
+        </div>
+
+        <div className="border border-bloomberg-border bg-black px-4 py-3 xl:col-span-4">
+          <label className="flex cursor-pointer items-start gap-3">
             <input
               type="checkbox"
               checked={hasExistingPosition}
@@ -391,23 +410,24 @@ export default function StockForm({
               disabled={running}
               className="mt-0.5 accent-bloomberg-orange"
             />
-            <span>
-              <span className="block text-xs font-mono text-bloomberg-white tracking-wider uppercase">
-                EXISTING POSITION
+            <span className="min-w-0 flex-1">
+              <span className="block font-mono text-xs text-bloomberg-white tracking-wider uppercase">
+                Existing position
               </span>
-              <span className="block mt-1 text-xs font-mono text-bloomberg-muted leading-relaxed">
-                Already have a position in this ticker. If this is not checked, the system will assume there is no position.
+              <span className="mt-1 block font-mono text-[10px] text-bloomberg-muted leading-relaxed">
+                Checked means the decision can become HOLD, REDUCE, or SELL against your current
+                position.
               </span>
             </span>
           </label>
           {hasExistingPosition && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label
                   htmlFor="position-quantity"
-                  className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2"
+                  className="mb-1 block font-mono text-[10px] text-bloomberg-muted tracking-wider uppercase"
                 >
-                  POSITION QTY
+                  Position qty
                 </label>
                 <input
                   id="position-quantity"
@@ -418,21 +438,15 @@ export default function StockForm({
                   onChange={(e) => setPositionQuantity(e.target.value)}
                   disabled={running}
                   placeholder="Optional"
-                  className="
-                    w-full bg-black border border-bloomberg-border px-3 py-2.5
-                    font-mono text-xs text-bloomberg-white tracking-wider
-                    focus:outline-none focus:border-bloomberg-orange
-                    disabled:opacity-50 transition-colors duration-150
-                    placeholder:text-bloomberg-muted
-                  "
+                  className="w-full border border-bloomberg-border bg-bloomberg-bg px-3 py-2.5 font-mono text-xs text-bloomberg-white tracking-wider transition-colors duration-150 placeholder:text-bloomberg-muted focus:border-bloomberg-orange focus:outline-none disabled:opacity-50"
                 />
               </div>
               <div>
                 <label
                   htmlFor="average-entry-price"
-                  className="block text-xs font-mono text-bloomberg-muted tracking-wider uppercase mb-2"
+                  className="mb-1 block font-mono text-[10px] text-bloomberg-muted tracking-wider uppercase"
                 >
-                  AVG ENTRY
+                  Avg entry
                 </label>
                 <input
                   id="average-entry-price"
@@ -443,45 +457,37 @@ export default function StockForm({
                   onChange={(e) => setAverageEntryPrice(e.target.value)}
                   disabled={running}
                   placeholder="Optional"
-                  className="
-                    w-full bg-black border border-bloomberg-border px-3 py-2.5
-                    font-mono text-xs text-bloomberg-white tracking-wider
-                    focus:outline-none focus:border-bloomberg-orange
-                    disabled:opacity-50 transition-colors duration-150
-                    placeholder:text-bloomberg-muted
-                  "
+                  className="w-full border border-bloomberg-border bg-bloomberg-bg px-3 py-2.5 font-mono text-xs text-bloomberg-white tracking-wider transition-colors duration-150 placeholder:text-bloomberg-muted focus:border-bloomberg-orange focus:outline-none disabled:opacity-50"
                 />
               </div>
             </div>
           )}
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="border border-bloomberg-red bg-bloomberg-red-dim px-3 py-2">
-            <span className="font-mono text-xs text-bloomberg-red">ERR: {error}</span>
-          </div>
-        )}
+        <div className="flex flex-col gap-3 xl:col-span-3">
+          {error && (
+            <div className="border border-bloomberg-red bg-bloomberg-red-dim px-3 py-2">
+              <span className="font-mono text-[10px] text-bloomberg-red tracking-wider">
+                ERR: {error}
+              </span>
+            </div>
+          )}
 
-        {/* Submit */}
-        <button
-          type="submit"
-          className={`
-            w-full py-3 font-mono text-xs font-semibold tracking-widest uppercase
-            transition-all duration-150 border active:scale-[0.99]
-            ${
+          <button
+            type="submit"
+            className={`min-h-[48px] w-full border px-4 py-3 font-mono text-xs font-semibold tracking-widest uppercase transition-all duration-150 active:scale-[0.99] ${
               running
-                ? 'bg-bloomberg-red-dim border-bloomberg-red text-bloomberg-red hover:bg-bloomberg-red hover:text-black'
-                : 'bg-bloomberg-orange border-bloomberg-orange text-black hover:bg-orange-400 hover:border-orange-400'
-            }
-          `}
-        >
-          {running ? '■ STOP ANALYSIS' : '▶ EXECUTE ANALYSIS'}
-        </button>
+                ? 'border-bloomberg-red bg-bloomberg-red-dim text-bloomberg-red hover:bg-bloomberg-red hover:text-black'
+                : 'border-bloomberg-orange bg-bloomberg-orange text-black hover:border-orange-400 hover:bg-orange-400'
+            }`}
+          >
+            {running ? '■ STOP ANALYSIS' : '▶ EXECUTE ANALYSIS'}
+          </button>
 
-        <div className="text-center font-mono text-xs text-bloomberg-muted tracking-wider">
-          {selectedHorizon?.label || '1 MONTH'} / {selectedDepth?.label || 'BALANCED'} /{' '}
-          {selectedDepth?.runtime || 'DEFAULT PIPELINE'}
+          <div className="border border-bloomberg-border bg-black px-3 py-2 text-center font-mono text-[10px] text-bloomberg-muted tracking-wider">
+            {selectedHorizon?.label || '1 MONTH'} / {selectedDepth?.label || 'BALANCED'} /{' '}
+            {selectedDepth?.runtime || 'DEFAULT PIPELINE'}
+          </div>
         </div>
       </div>
     </form>
@@ -495,4 +501,7 @@ StockForm.propTypes = {
   onAgentProgress: PropTypes.func.isRequired,
   useAnalysisJobHook: PropTypes.func,
   selectedResult: PropTypes.object,
+  agentProgress: PropTypes.object,
+  status: PropTypes.string,
+  tickerSearch: PropTypes.func,
 };
