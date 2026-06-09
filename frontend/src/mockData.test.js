@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   getMockAnalysisResponseByRequestId,
   MOCK_RESPONSES_BY_REQUEST_ID,
+  MOCK_TICKER_SEARCH_RESULTS,
   mockConflictDataQuality,
   mockFreshnessAndQuality,
   resolveDisplaySignal,
+  searchMockTickers,
 } from '../dev/mockData';
 
 function countWords(text) {
@@ -42,8 +44,8 @@ describe('mockData', () => {
       currency: 'IDR',
       unit: 'raw',
     });
-    expect(result.financial_highlights.rows).toHaveLength(13);
-    expect(result.financial_highlights.sections).toHaveLength(5);
+    expect(result.financial_highlights.rows).toHaveLength(30);
+    expect(result.financial_highlights.sections).toHaveLength(9);
     expect(result.financial_highlights.point_in_time[0]).toMatchObject({
       key: 'market_cap',
       unit: 'USD Mn',
@@ -340,6 +342,20 @@ describe('mockData', () => {
     expect(fieldQuality.sma_20.status).toBe('calculated');
     expect(fieldQuality.sma_200.status).toBe('source_unavailable');
     expect(fieldQuality.dividend_yield.status).toBe('no_dividend_history');
+  });
+
+  it('provides mock ticker autocomplete results for the terminal search bar', async () => {
+    expect(MOCK_TICKER_SEARCH_RESULTS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ symbol: 'NVDA', exchange: 'NASDAQ', type: 'EQUITY' }),
+        expect.objectContaining({ symbol: 'BBCA.JK', exchange: 'IDX', type: 'EQUITY' }),
+        expect.objectContaining({ symbol: '700.HK', exchange: 'HKSE', type: 'EQUITY' }),
+      ])
+    );
+
+    await expect(searchMockTickers({ query: 'bbc', limit: 10 })).resolves.toMatchObject({
+      results: [expect.objectContaining({ symbol: 'BBCA.JK' })],
+    });
   });
 
   it('returns cloned mock objects so tests cannot mutate the registry', () => {

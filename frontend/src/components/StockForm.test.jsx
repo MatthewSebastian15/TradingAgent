@@ -14,6 +14,31 @@ function callbacks() {
   };
 }
 
+function selectedTicker(overrides = {}) {
+  return {
+    ticker: 'NVDA',
+    trade_date: '2026-05-14',
+    time_horizon_months: 1,
+    max_debate_rounds: 3,
+    analysis_depth: 'balanced',
+    response_detail: 'full',
+    ...overrides,
+  };
+}
+
+async function selectTickerFromAutocomplete(query, result) {
+  fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), {
+    target: { value: query },
+  });
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(350);
+  });
+
+  const option = screen.getByRole('option', { name: new RegExp(result.symbol, 'i') });
+  fireEvent.mouseDown(option);
+}
+
 describe('StockForm cleanup', () => {
   beforeEach(() => {
     sessionStorage.setItem('_ta_owner_token', 'test-owner-token');
@@ -63,7 +88,7 @@ describe('StockForm cleanup', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { unmount } = render(<StockForm {...props} />);
+    const { unmount } = render(<StockForm {...props} selectedResult={selectedTicker()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
 
@@ -124,7 +149,7 @@ describe('StockForm cleanup', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<StockForm {...props} />);
+    render(<StockForm {...props} selectedResult={selectedTicker()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
 
@@ -134,10 +159,27 @@ describe('StockForm cleanup', () => {
     expect(props.onLoading).toHaveBeenLastCalledWith(false);
   });
 
-  it('submits Indonesian tickers as plain codes with market context', async () => {
+  it('submits only the canonical yfinance ticker selected from autocomplete', async () => {
+    vi.useFakeTimers();
     const props = callbacks();
     const encoder = new TextEncoder();
+    const searchResult = {
+      symbol: 'UNVR.JK',
+      name: 'Unilever Indonesia Tbk PT',
+      exchange: 'IDX',
+      type: 'EQUITY',
+      price: 1780,
+    };
     const fetchMock = vi.fn((url, options = {}) => {
+      if (String(url).includes('/market/search')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ results: [searchResult] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      }
+
       if (options.method === 'POST') {
         return Promise.resolve({
           ok: true,
@@ -166,14 +208,10 @@ describe('StockForm cleanup', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(<StockForm {...props} />);
+    await selectTickerFromAutocomplete('unvr', searchResult);
+    expect(screen.getByPlaceholderText(/search ticker symbol/i).value).toBe('UNVR.JK');
 
-    fireEvent.click(screen.getByRole('button', { name: /indonesia/i }));
-    expect(screen.queryByRole('button', { name: 'BBCA.JK' })).toBeNull();
-
-    const tickerInput = screen.getByRole('textbox');
-    fireEvent.change(tickerInput, { target: { value: 'UNVR.JK' } });
-    expect(tickerInput.value).toBe('UNVR');
-
+    vi.useRealTimers();
     fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
 
     await waitFor(() => {
@@ -183,11 +221,25 @@ describe('StockForm cleanup', () => {
       );
     });
     const [, postOptions] = fetchMock.mock.calls.find(([, options]) => options?.method === 'POST');
-    expect(JSON.parse(postOptions.body)).toMatchObject({ ticker: 'UNVR', market: 'ID' });
+    expect(JSON.parse(postOptions.body)).toMatchObject({ ticker: 'UNVR.JK', market: 'ID' });
     await waitFor(() => {
       expect(props.onResult).toHaveBeenCalledWith(
         expect.objectContaining({ ticker: 'UNVR.JK', decision: 'Hold' })
       );
+    });
+  });
+
+  it('rejects manual ticker typing when the user does not choose a search result', () => {
+    const props = callbacks();
+    render(<StockForm {...props} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), {
+      target: { value: 'NVDA' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
+
+    expect(props.onResult).toHaveBeenCalledWith({
+      error: 'Select a ticker from the search results.',
     });
   });
 
@@ -220,7 +272,7 @@ describe('StockForm cleanup', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<StockForm {...props} />);
+    render(<StockForm {...props} selectedResult={selectedTicker()} />);
 
     fireEvent.click(screen.getByLabelText(/existing position/i));
     fireEvent.change(screen.getByLabelText(/position qty/i), { target: { value: '10' } });
@@ -245,7 +297,7 @@ describe('StockForm cleanup', () => {
     vi.useFakeTimers();
     const props = callbacks();
 
-    const { unmount } = render(<StockFormMock {...props} />);
+    const { unmount } = render(<StockFormMock {...props} selectedResult={selectedTicker()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
     expect(props.onResult).toHaveBeenCalledWith(null);
@@ -258,12 +310,14 @@ describe('StockForm cleanup', () => {
     expect(props.onResult).toHaveBeenCalledTimes(1);
   });
 
-  it('only shows US and Indonesia market tabs', () => {
+  it('renders the Bloomberg search bar and removes legacy market tabs', () => {
     const props = callbacks();
     render(<StockForm {...props} />);
 
-    expect(screen.getByRole('button', { name: /us/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /indonesia/i })).toBeTruthy();
+    expect(screen.getByText(/agent pipeline/i)).toBeTruthy();
+    expect(screen.getByPlaceholderText(/search ticker symbol/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /us/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /indonesia/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /global/i })).toBeNull();
   });
 });

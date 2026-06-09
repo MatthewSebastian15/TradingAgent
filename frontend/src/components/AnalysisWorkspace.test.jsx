@@ -375,7 +375,7 @@ describe('AnalysisWorkspace history storage', () => {
     expect(await screen.findByText('Result expired. Please submit a new analysis.')).toBeTruthy();
   });
 
-  it('removes global recent analyses from localStorage history', () => {
+  it('keeps global recent analyses in localStorage history', () => {
     localStorage.setItem(
       'analysis-history-test',
       JSON.stringify([
@@ -412,12 +412,16 @@ describe('AnalysisWorkspace history storage', () => {
 
     renderWorkspace(EmptyForm);
 
-    expect(screen.queryByText('700.HK')).toBeNull();
+    expect(screen.getByText('700.HK')).toBeTruthy();
     expect(screen.getByText('AAPL')).toBeTruthy();
     expect(screen.getByText('BBCA.JK')).toBeTruthy();
 
     const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
-    expect(stored.map((item) => item.request_id)).toEqual(['us-request', 'id-request']);
+    expect(stored.map((item) => item.request_id)).toEqual([
+      'global-request',
+      'us-request',
+      'id-request',
+    ]);
     expect(stored.every((item) => item.schema_version === 2)).toBe(true);
   });
 
@@ -450,7 +454,7 @@ describe('AnalysisWorkspace history storage', () => {
       'analysis-history-test:result:request-clear',
       JSON.stringify({ raw_agent_state: { internal: true } })
     );
-    fireEvent.click(screen.getByRole('button', { name: /clear history/i }));
+    fireEvent.click(screen.getByRole('button', { name: /clear/i }));
 
     expect(localStorage.getItem('analysis-history-test')).toBeNull();
     expect(localStorage.getItem('analysis-history-test:result:request-clear')).toBeNull();
@@ -629,7 +633,7 @@ describe('AnalysisWorkspace history storage', () => {
     });
 
     expect(await screen.findByText('AAPL')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /clear history/i }));
+    fireEvent.click(screen.getByRole('button', { name: /clear/i }));
 
     await waitFor(() => expect(localStorage.getItem('analysis-history-test')).toBeNull());
     expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/history');
@@ -664,7 +668,7 @@ describe('AnalysisWorkspace history storage', () => {
     });
 
     expect(await screen.findByText('AAPL')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /clear history/i }));
+    fireEvent.click(screen.getByRole('button', { name: /clear/i }));
 
     expect(await screen.findByText('Database unavailable')).toBeTruthy();
     expect(localStorage.getItem('analysis-history-test')).not.toBeNull();

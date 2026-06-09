@@ -205,7 +205,8 @@ describe('ResultCard risk-engine contract', () => {
 
     fireEvent.click(screen.getByText('News'));
 
-    expect(screen.getByText('HIGH-IMPACT NEWS')).toBeTruthy();
+    expect(screen.getByText('NEWS')).toBeTruthy();
+    expect(screen.getAllByText(/High Impact NVDA News/i).length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(/NVDA earnings outlook remains constructive/i).length
     ).toBeGreaterThan(0);
@@ -332,10 +333,16 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('PERIOD HIGH')).toBeNull();
     expect(screen.queryByText('PERIOD LOW')).toBeNull();
     expect(screen.queryByText('LATEST CLOSE')).toBeNull();
-    expect(screen.getByText('YOY Price Window (2025-05-18 to 2026-05-18)')).toBeTruthy();
-    expect(
-      screen.getByText(/Window: YOY · Start Date: 2025-05-18 · End Date: 2026-05-18/)
-    ).toBeTruthy();
+    expect(screen.getByText('CHART')).toBeTruthy();
+    expect(screen.getByText('VOLUME')).toBeTruthy();
+    expect(screen.getByText('START PRICE')).toBeTruthy();
+    expect(screen.getByText('END PRICE')).toBeTruthy();
+    expect(screen.getByText('HIGH')).toBeTruthy();
+    expect(screen.getByText('LOW')).toBeTruthy();
+    expect(screen.getByText('AVG VOLUME')).toBeTruthy();
+    expect(screen.getByText('LATEST VOLUME')).toBeTruthy();
+    expect(screen.getByText('PERIOD RETURN')).toBeTruthy();
+    expect(screen.getByText('MAX DRAWDOWN')).toBeTruthy();
     expect(screen.getByText(/Source:/)).toBeTruthy();
     expect(screen.queryByText('POINTS')).toBeNull();
     expect(screen.queryByText('TECHNICAL ENTRY QUALITY')).toBeNull();
@@ -348,10 +355,11 @@ describe('ResultCard risk-engine contract', () => {
 
     fireEvent.click(screen.getByText('News'));
 
-    expect(screen.getByText('HIGH-IMPACT NEWS')).toBeTruthy();
+    expect(screen.getByText('NEWS')).toBeTruthy();
+    expect(screen.getAllByText(/High Impact NVDA News/i).length).toBeGreaterThan(0);
     expect(screen.getByText('POSITIVE CATALYSTS')).toBeTruthy();
     expect(screen.getByText('ANALYST RECOMMENDATION TREND')).toBeTruthy();
-    expect(screen.getByText('FULL NEWS LIST')).toBeTruthy();
+    expect(screen.getByText('CATALYST SUMMARY')).toBeTruthy();
   });
 
   it('renders Profile empty state when company profile is unavailable', () => {
