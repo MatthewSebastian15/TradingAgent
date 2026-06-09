@@ -215,15 +215,14 @@ def _ohlcv_freshness_quality(
             ],
         )
 
-    if gap_days > 0:
-        warnings.append(
-            "OHLCV_FALLBACK_USED - Exact OHLCV date not found; using latest available "
-            f"trading day {latest_date} ({gap_days} days before trade_date {expected_date})."
-        )
-
+    # A recent non-exact row usually means the requested trade_date was not yet
+    # published by the provider or the market was closed. That is an accepted
+    # last-close rule, not a user-facing warning. Only stale gaps are blocked
+    # above.
+    _ = latest_date, expected_date
     return _quality(
         available=True,
-        confidence="high" if len(dates) >= 30 and gap_days == 0 else "medium",
+        confidence="high" if len(dates) >= 30 else "medium",
         warnings=warnings,
     )
 
