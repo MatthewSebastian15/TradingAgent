@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createClockFormatter, resolveClockConfig } from '../utils/clock';
+import {
+  AI_RESEARCH_MOCK_PATH,
+  AI_RESEARCH_PATH,
+  LEGACY_ANALYSIS_LIVE_PATH,
+  LEGACY_ANALYSIS_MOCK_ALIAS_PATH,
+  LEGACY_ANALYSIS_MOCK_PATH,
+  LEGACY_ANALYSIS_PATH,
+} from '../constants/routes';
 
 const CLOCK_CONFIG = resolveClockConfig();
 const CLOCK_FORMATTER = createClockFormatter(CLOCK_CONFIG);
@@ -12,12 +20,23 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 });
 
+const AI_RESEARCH_MATCH_PREFIXES = [
+  AI_RESEARCH_PATH,
+  encodeURI(AI_RESEARCH_PATH),
+  AI_RESEARCH_MOCK_PATH,
+  encodeURI(AI_RESEARCH_MOCK_PATH),
+  LEGACY_ANALYSIS_PATH,
+  LEGACY_ANALYSIS_LIVE_PATH,
+  LEGACY_ANALYSIS_MOCK_PATH,
+  LEGACY_ANALYSIS_MOCK_ALIAS_PATH,
+];
+
 const NAV_ITEMS = [
   { label: 'Home', path: '/home', matchPrefixes: ['/home'] },
   {
-    label: 'AI Agent',
-    path: '/analysis',
-    matchPrefixes: ['/analysis', '/analysis-live', '/analysis.test'],
+    label: 'AI Research',
+    path: AI_RESEARCH_PATH,
+    matchPrefixes: AI_RESEARCH_MATCH_PREFIXES,
   },
   { label: 'News', path: '/news', matchPrefixes: ['/news'] },
   { label: 'Market', path: '/market', matchPrefixes: ['/market'] },

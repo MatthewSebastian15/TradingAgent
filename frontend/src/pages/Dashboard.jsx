@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AI_RESEARCH_PATH } from '../constants/routes';
 import Navbar from '../components/Navbar';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 import { formatTickerLabel } from '../utils/formatting';
@@ -109,10 +110,7 @@ function writeTickerCache(quotes) {
   if (typeof window === 'undefined' || !Array.isArray(quotes) || quotes.length === 0) return;
 
   try {
-    window.localStorage.setItem(
-      tickerCacheKey(),
-      JSON.stringify({ savedAt: Date.now(), quotes })
-    );
+    window.localStorage.setItem(tickerCacheKey(), JSON.stringify({ savedAt: Date.now(), quotes }));
   } catch {
     // Ignore cache failures. The fallback ticker tape still renders immediately.
   }
@@ -423,7 +421,7 @@ export default function Dashboard() {
               </p>
 
               <button
-                onClick={() => navigate('/analysis')}
+                onClick={() => navigate(AI_RESEARCH_PATH)}
                 className="w-full py-3 bg-bloomberg-orange text-black font-mono text-xs font-bold tracking-widest hover:bg-orange-400 transition-colors duration-150 active:scale-[0.99] mb-3"
               >
                 ▶ OPEN TERMINAL

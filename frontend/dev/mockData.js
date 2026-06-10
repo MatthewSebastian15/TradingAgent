@@ -1,5 +1,5 @@
 // frontend/dev/mockData.js
-// Central mock source for /analysis.test.
+// Central mock source for /AI-Research.test.
 // Mock mode mirrors the backend analysis contract so UI, HTML preview, PDF print,
 // direct mock URLs, and history can be debugged without spending API calls.
 
