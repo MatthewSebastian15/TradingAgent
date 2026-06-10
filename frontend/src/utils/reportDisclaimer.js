@@ -6,6 +6,7 @@ export async function fetchReportDisclaimer() {
   if (!disclaimerPromise) {
     disclaimerPromise = fetch(buildApiUrl('/reports/disclaimer'), {
       headers: { Accept: 'application/json' },
+      credentials: 'include',
     })
       .then(async (response) => {
         if (!response.ok) return '';

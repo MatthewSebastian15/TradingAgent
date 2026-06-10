@@ -41,6 +41,7 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
       await fetch(buildApiUrl(`/analysis/jobs/${jobId}`), {
         method: 'DELETE',
         headers: await buildAuthHeaders(),
+        credentials: 'include',
         signal: controller?.signal,
         keepalive,
       });
@@ -117,6 +118,7 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
       const createRes = await fetch(buildApiUrl('/analysis/jobs'), {
         method: 'POST',
         headers: await buildHeaders(),
+        credentials: 'include',
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
@@ -135,6 +137,7 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
           Accept: 'text/event-stream',
           'Cache-Control': 'no-cache',
         },
+        credentials: 'include',
         signal: controller.signal,
       });
 

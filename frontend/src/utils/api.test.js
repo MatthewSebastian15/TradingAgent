@@ -8,7 +8,7 @@ describe('owner session API', () => {
     vi.unstubAllGlobals();
   });
 
-  it('bootstraps one signed owner token per browser tab', async () => {
+  it('bootstraps one HttpOnly owner session cookie per browser tab', async () => {
     const expiresAt = Math.floor(Date.now() / 1000) + 3600;
     const fetchMock = vi.fn(
       async () =>
@@ -22,12 +22,13 @@ describe('owner session API', () => {
     const first = await buildAuthHeaders();
     const second = await buildAuthHeaders();
 
-    expect(first).toEqual({ 'x-owner-token': 'signed-owner-token' });
+    expect(first).toEqual({});
     expect(second).toEqual(first);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith('/api/session', {
       method: 'POST',
       headers: { Accept: 'application/json' },
+      credentials: 'include',
     });
   });
 });

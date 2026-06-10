@@ -24,11 +24,11 @@ async def list_analysis_history(
     ticker: str | None = None,
     limit: int = Query(default=ANALYSIS_HISTORY_DEFAULT_LIMIT, ge=1, le=100),
 ):
-    """Return global personal-app analysis history metadata."""
+    """Return owner-scoped analysis history metadata."""
 
-    async with limit_request(request, request_policy()):
+    async with limit_request(request, request_policy()) as lease:
         repository = get_analysis_repository()
-        items = await asyncio.to_thread(repository.list_analyses, ticker=ticker, limit=limit)
+        items = await asyncio.to_thread(repository.list_analyses, ticker=ticker, limit=limit, owner_id=lease.identifier)
         return {"items": items}
 
 
@@ -36,9 +36,9 @@ async def list_analysis_history(
 async def get_analysis_history_result(request_id: str, request: Request):
     """Return one full stored analysis snapshot."""
 
-    async with limit_request(request, request_policy()):
+    async with limit_request(request, request_policy()) as lease:
         repository = get_analysis_repository()
-        result = await asyncio.to_thread(repository.get_analysis, request_id)
+        result = await asyncio.to_thread(repository.get_analysis, request_id, owner_id=lease.identifier)
         if result is None:
             raise _history_not_found(request_id)
         return result
@@ -48,9 +48,9 @@ async def get_analysis_history_result(request_id: str, request: Request):
 async def delete_analysis_history_result(request_id: str, request: Request):
     """Delete one stored analysis snapshot."""
 
-    async with limit_request(request, request_policy()):
+    async with limit_request(request, request_policy()) as lease:
         repository = get_analysis_repository()
-        deleted = await asyncio.to_thread(repository.delete_analysis, request_id)
+        deleted = await asyncio.to_thread(repository.delete_analysis, request_id, owner_id=lease.identifier)
         if not deleted:
             raise _history_not_found(request_id)
         return {"deleted": True, "request_id": request_id}
@@ -58,9 +58,9 @@ async def delete_analysis_history_result(request_id: str, request: Request):
 
 @router.delete("/analysis/history")
 async def clear_analysis_history(request: Request):
-    """Delete all stored analysis snapshots for this personal app."""
+    """Delete all stored analysis snapshots for this owner session."""
 
-    async with limit_request(request, request_policy()):
+    async with limit_request(request, request_policy()) as lease:
         repository = get_analysis_repository()
-        deleted_count = await asyncio.to_thread(repository.delete_all_analyses)
+        deleted_count = await asyncio.to_thread(repository.delete_all_analyses, owner_id=lease.identifier)
         return {"deleted": True, "deleted_count": deleted_count}

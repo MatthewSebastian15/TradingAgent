@@ -15,6 +15,7 @@ from config import OWNER_SESSION_SECRET, OWNER_SESSION_TTL_SECONDS
 from errors import AuthenticationError
 
 _TOKEN_VERSION = 1
+OWNER_SESSION_COOKIE_NAME = "ta_owner_token"
 _DEV_SIGNING_SECRET = secrets.token_bytes(32)
 
 

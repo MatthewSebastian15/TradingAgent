@@ -85,6 +85,7 @@ export default function TickerSearchBar({
             buildApiUrl(`/market/search?q=${encodeURIComponent(trimmedQuery)}&limit=10`),
             {
               headers: await buildAuthHeaders(),
+              credentials: 'include',
               signal: controller.signal,
             }
           );

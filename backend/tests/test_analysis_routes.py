@@ -9,7 +9,9 @@ from datetime import datetime
 import pytest
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
-from owner_session import issue_owner_session, owner_identifier_from_token
+from owner_session import issue_owner_session, owner_identifier, owner_identifier_from_token
+
+_TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
 
 def _mock_result() -> dict:
@@ -465,7 +467,7 @@ def test_analysis_result_endpoint_falls_back_to_history_repository(client, monke
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     monkeypatch.setattr("routes.analysis._JOB_STORE", store)
     result = {"request_id": "history-request", "ticker": "MSFT", "market": "US", "trade_date": "2026-05-14"}
-    analysis_repository.save_analysis(result=result)
+    analysis_repository.save_analysis(result=result, owner_id=_TEST_OWNER_IDENTIFIER)
 
     response = client.get("/api/analysis/history-request")
 
@@ -483,6 +485,7 @@ def test_analysis_job_endpoint_falls_back_to_history_repository(client, monkeypa
         result=result,
         request_payload={"ticker": "MSFT", "trade_date": "2026-05-14"},
         job_id="history-job",
+        owner_id=_TEST_OWNER_IDENTIFIER,
     )
 
     response = client.get("/api/analysis/jobs/history-job")

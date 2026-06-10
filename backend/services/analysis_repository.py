@@ -11,7 +11,7 @@ from typing import Any
 
 from config import ANALYSIS_DB_PATH, ANALYSIS_HISTORY_MAX_ROWS
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _WRITE_LOCKS: dict[Path, threading.RLock] = {}
 _WRITE_LOCKS_GUARD = threading.Lock()
@@ -68,6 +68,7 @@ class AnalysisRepository:
         result: dict[str, Any],
         request_payload: dict[str, Any] | None = None,
         job_id: str | None = None,
+        owner_id: str | None = None,
     ) -> bool:
         """Save one valid completed result and return whether it was stored."""
 
@@ -84,6 +85,7 @@ class AnalysisRepository:
         decision = result.get("final_decision") or result.get("decision") or result.get("recommendation")
         values = {
             "request_id": request_id,
+            "owner_id": str(owner_id).strip() if owner_id else None,
             "job_id": str(job_id).strip() if job_id else None,
             "ticker": ticker,
             "market": result.get("market"),
@@ -111,19 +113,20 @@ class AnalysisRepository:
             conn.execute(
                 """
                 INSERT INTO analyses (
-                    request_id, job_id, ticker, market, trade_date,
+                    request_id, owner_id, job_id, ticker, market, trade_date,
                     time_horizon_months, analysis_depth, response_detail,
                     decision, recommendation, current_price, entry_price,
                     stop_loss, take_profit, rr_ratio, source_summary,
                     status, result_json, request_json, created_at, updated_at
                 ) VALUES (
-                    :request_id, :job_id, :ticker, :market, :trade_date,
+                    :request_id, :owner_id, :job_id, :ticker, :market, :trade_date,
                     :time_horizon_months, :analysis_depth, :response_detail,
                     :decision, :recommendation, :current_price, :entry_price,
                     :stop_loss, :take_profit, :rr_ratio, :source_summary,
                     :status, :result_json, :request_json, :created_at, :updated_at
                 )
                 ON CONFLICT(request_id) DO UPDATE SET
+                    owner_id = COALESCE(excluded.owner_id, analyses.owner_id),
                     job_id = COALESCE(excluded.job_id, analyses.job_id),
                     ticker = excluded.ticker,
                     market = excluded.market,
@@ -149,16 +152,16 @@ class AnalysisRepository:
             self._evict_old_rows(conn)
         return True
 
-    def get_analysis(self, request_id: str) -> dict[str, Any] | None:
-        row = self._fetch_record("request_id", request_id)
+    def get_analysis(self, request_id: str, *, owner_id: str | None = None) -> dict[str, Any] | None:
+        row = self._fetch_record("request_id", request_id, owner_id=owner_id)
         return self._result_from_row(row)
 
-    def get_analysis_by_job_id(self, job_id: str) -> dict[str, Any] | None:
-        row = self._fetch_record("job_id", job_id)
+    def get_analysis_by_job_id(self, job_id: str, *, owner_id: str | None = None) -> dict[str, Any] | None:
+        row = self._fetch_record("job_id", job_id, owner_id=owner_id)
         return self._result_from_row(row)
 
-    def get_analysis_record_by_job_id(self, job_id: str) -> dict[str, Any] | None:
-        row = self._fetch_record("job_id", job_id)
+    def get_analysis_record_by_job_id(self, job_id: str, *, owner_id: str | None = None) -> dict[str, Any] | None:
+        row = self._fetch_record("job_id", job_id, owner_id=owner_id)
         if row is None:
             return None
         record = dict(row)
@@ -170,13 +173,23 @@ class AnalysisRepository:
         record["request_payload"] = request_payload or {}
         return record
 
-    def list_analyses(self, *, ticker: str | None = None, limit: int = 25) -> list[dict[str, Any]]:
+    def list_analyses(
+        self,
+        *,
+        ticker: str | None = None,
+        limit: int = 25,
+        owner_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         safe_limit = max(1, min(int(limit), 100))
         params: list[Any] = []
-        where = ""
+        filters: list[str] = []
+        if owner_id is not None:
+            filters.append("owner_id = ?")
+            params.append(owner_id)
         if ticker:
-            where = "WHERE ticker = ?"
+            filters.append("ticker = ?")
             params.append(ticker.strip().upper())
+        where = f"WHERE {' AND '.join(filters)}" if filters else ""
         params.append(safe_limit)
 
         with self._connect() as conn:
@@ -206,26 +219,38 @@ class AnalysisRepository:
             items.append(item)
         return items
 
-    def delete_analysis(self, request_id: str) -> bool:
+    def delete_analysis(self, request_id: str, *, owner_id: str | None = None) -> bool:
         with self._write_lock, self._connect() as conn:
-            cursor = conn.execute("DELETE FROM analyses WHERE request_id = ?", (request_id,))
+            if owner_id is None:
+                cursor = conn.execute("DELETE FROM analyses WHERE request_id = ?", (request_id,))
+            else:
+                cursor = conn.execute("DELETE FROM analyses WHERE request_id = ? AND owner_id = ?", (request_id, owner_id))
             return cursor.rowcount > 0
 
-    def delete_all_analyses(self) -> int:
+    def delete_all_analyses(self, *, owner_id: str | None = None) -> int:
         with self._write_lock, self._connect() as conn:
-            cursor = conn.execute("DELETE FROM analyses")
+            if owner_id is None:
+                cursor = conn.execute("DELETE FROM analyses")
+            else:
+                cursor = conn.execute("DELETE FROM analyses WHERE owner_id = ?", (owner_id,))
             return max(0, cursor.rowcount)
 
-    def mark_exported(self, request_id: str, export_type: str) -> bool:
+    def mark_exported(self, request_id: str, export_type: str, *, owner_id: str | None = None) -> bool:
         if export_type not in {"html", "pdf"}:
             return False
         column = "exported_html_at" if export_type == "html" else "exported_pdf_at"
         now = utc_now_iso()
         with self._write_lock, self._connect() as conn:
-            cursor = conn.execute(
-                f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ?",
-                (now, now, request_id),
-            )
+            if owner_id is None:
+                cursor = conn.execute(
+                    f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ?",
+                    (now, now, request_id),
+                )
+            else:
+                cursor = conn.execute(
+                    f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ? AND owner_id = ?",
+                    (now, now, request_id, owner_id),
+                )
             return cursor.rowcount > 0
 
     def _connect(self) -> sqlite3.Connection:
@@ -247,6 +272,7 @@ class AnalysisRepository:
                 """
                 CREATE TABLE IF NOT EXISTS analyses (
                     request_id TEXT PRIMARY KEY,
+                    owner_id TEXT,
                     job_id TEXT,
                     ticker TEXT NOT NULL,
                     market TEXT,
@@ -272,6 +298,12 @@ class AnalysisRepository:
                 )
                 """
             )
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(analyses)").fetchall()}
+            if "owner_id" not in columns:
+                conn.execute("ALTER TABLE analyses ADD COLUMN owner_id TEXT")
+
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_owner_created_at ON analyses (owner_id, created_at DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_owner_job_id ON analyses (owner_id, job_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_job_id ON analyses (job_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_created_at ON analyses (created_at DESC)")
             conn.execute(
@@ -282,23 +314,28 @@ class AnalysisRepository:
             )
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
-    def _fetch_record(self, column: str, value: str) -> sqlite3.Row | None:
+    def _fetch_record(self, column: str, value: str, *, owner_id: str | None = None) -> sqlite3.Row | None:
         if column not in {"request_id", "job_id"}:
             raise ValueError(f"Unsupported lookup column: {column}")
+        params: list[Any] = [value]
+        owner_filter = ""
+        if owner_id is not None:
+            owner_filter = " AND owner_id = ?"
+            params.append(owner_id)
         with self._connect() as conn:
             return conn.execute(
                 f"""
                 SELECT
-                    request_id, job_id, ticker, market, trade_date,
+                    request_id, owner_id, job_id, ticker, market, trade_date,
                     time_horizon_months, analysis_depth, response_detail,
                     decision, recommendation, current_price, entry_price,
                     stop_loss, take_profit, rr_ratio, source_summary,
                     status, result_json, request_json, created_at, updated_at,
                     exported_html_at, exported_pdf_at
                 FROM analyses
-                WHERE {column} = ?
+                WHERE {column} = ?{owner_filter}
                 """,
-                (value,),
+                params,
             ).fetchone()
 
     def _evict_old_rows(self, conn: sqlite3.Connection) -> None:

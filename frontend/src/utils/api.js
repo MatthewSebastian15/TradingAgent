@@ -1,9 +1,9 @@
 const API_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
-const OWNER_TOKEN_KEY = '_ta_owner_token';
-const OWNER_TOKEN_EXPIRES_AT_KEY = '_ta_owner_token_expires_at';
-const OWNER_TOKEN_REFRESH_SKEW_SECONDS = 30;
+const OWNER_SESSION_EXPIRES_AT_KEY = '_ta_owner_session_expires_at';
+const OWNER_SESSION_REFRESH_SKEW_SECONDS = 30;
 
-let ownerTokenPromise = null;
+let ownerSessionPromise = null;
+let ownerSessionExpiresAt = 0;
 
 export function buildApiUrl(path) {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
@@ -13,64 +13,65 @@ export function buildApiUrl(path) {
   return `${cleanBase}/api${cleanPath}`;
 }
 
-function readStoredOwnerToken() {
-  const token = sessionStorage.getItem(OWNER_TOKEN_KEY);
-  const expiresAt = Number(sessionStorage.getItem(OWNER_TOKEN_EXPIRES_AT_KEY));
-  const now = Math.floor(Date.now() / 1000);
-
-  if (!token) return null;
-  if (Number.isFinite(expiresAt) && expiresAt > now + OWNER_TOKEN_REFRESH_SKEW_SECONDS) {
-    return token;
+function storedOwnerSessionExpiresAt() {
+  try {
+    return Number(sessionStorage.getItem(OWNER_SESSION_EXPIRES_AT_KEY)) || 0;
+  } catch {
+    return 0;
   }
-
-  sessionStorage.removeItem(OWNER_TOKEN_KEY);
-  sessionStorage.removeItem(OWNER_TOKEN_EXPIRES_AT_KEY);
-  return null;
 }
 
-async function bootstrapOwnerToken() {
+function hasFreshOwnerSession() {
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = Math.max(ownerSessionExpiresAt, storedOwnerSessionExpiresAt());
+  return expiresAt > now + OWNER_SESSION_REFRESH_SKEW_SECONDS;
+}
+
+async function bootstrapOwnerSession() {
   const response = await fetch(buildApiUrl('/session'), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
     },
+    credentials: 'include',
   });
 
   if (!response.ok) throw new Error(await readHttpError(response));
 
   const session = await response.json();
-  if (!session.owner_token || !session.expires_at) {
+  if (!session.expires_at) {
     throw new Error('Backend owner session response is invalid.');
   }
 
-  sessionStorage.setItem(OWNER_TOKEN_KEY, session.owner_token);
-  sessionStorage.setItem(OWNER_TOKEN_EXPIRES_AT_KEY, String(session.expires_at));
-  return session.owner_token;
+  ownerSessionExpiresAt = Number(session.expires_at) || 0;
+  try {
+    sessionStorage.setItem(OWNER_SESSION_EXPIRES_AT_KEY, String(ownerSessionExpiresAt));
+  } catch {
+    // Browser storage can be unavailable in private or locked-down contexts.
+  }
 }
 
-export async function getOwnerToken() {
-  const storedToken = readStoredOwnerToken();
-  if (storedToken) return storedToken;
+export async function ensureOwnerSession() {
+  if (hasFreshOwnerSession()) return;
 
-  if (!ownerTokenPromise) {
-    ownerTokenPromise = bootstrapOwnerToken().finally(() => {
-      ownerTokenPromise = null;
+  if (!ownerSessionPromise) {
+    ownerSessionPromise = bootstrapOwnerSession().finally(() => {
+      ownerSessionPromise = null;
     });
   }
-  return ownerTokenPromise;
+  await ownerSessionPromise;
 }
 
 export async function buildHeaders() {
+  await ensureOwnerSession();
   return {
     'Content-Type': 'application/json',
-    ...(await buildAuthHeaders()),
   };
 }
 
 export async function buildAuthHeaders() {
-  return {
-    'x-owner-token': await getOwnerToken(),
-  };
+  await ensureOwnerSession();
+  return {};
 }
 
 export async function readHttpError(res) {

@@ -192,7 +192,7 @@ def test_post_pdf_report_succeeds_without_profile_or_financial_highlights(client
 
 def test_html_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, analysis_repository):
     result = _result(request_id="rid-history-html")
-    analysis_repository.save_analysis(result=result, job_id="job-history-html")
+    analysis_repository.save_analysis(result=result, job_id="job-history-html", owner_id=_TEST_OWNER_IDENTIFIER)
     monkeypatch.setattr(
         "services.report_service.jobs.JOB_STORE",
         AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10),
@@ -207,7 +207,7 @@ def test_html_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, 
 
 def test_pdf_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, analysis_repository):
     result = _result(request_id="rid-history-pdf")
-    analysis_repository.save_analysis(result=result, job_id="job-history-pdf")
+    analysis_repository.save_analysis(result=result, job_id="job-history-pdf", owner_id=_TEST_OWNER_IDENTIFIER)
     monkeypatch.setattr(
         "services.report_service.jobs.JOB_STORE",
         AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10),
@@ -223,7 +223,7 @@ def test_pdf_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, a
 
 def test_request_id_report_alias_falls_back_to_sqlite(client, monkeypatch, analysis_repository):
     result = _result(request_id="rid-history-alias")
-    analysis_repository.save_analysis(result=result)
+    analysis_repository.save_analysis(result=result, owner_id=_TEST_OWNER_IDENTIFIER)
     monkeypatch.setattr(
         "services.report_service.jobs.JOB_STORE",
         AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10),

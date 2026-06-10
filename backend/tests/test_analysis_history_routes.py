@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from owner_session import issue_owner_session
+from owner_session import issue_owner_session, owner_identifier
+
+_TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
 
 def _result(request_id: str, ticker: str = "AAPL"):
@@ -16,8 +18,8 @@ def _result(request_id: str, ticker: str = "AAPL"):
 
 
 def test_history_list_detail_filter_and_limit(client, analysis_repository):
-    analysis_repository.save_analysis(result=_result("req-aapl", "AAPL"), job_id="job-aapl")
-    analysis_repository.save_analysis(result=_result("req-msft", "MSFT"), job_id="job-msft")
+    analysis_repository.save_analysis(result=_result("req-aapl", "AAPL"), job_id="job-aapl", owner_id=_TEST_OWNER_IDENTIFIER)
+    analysis_repository.save_analysis(result=_result("req-msft", "MSFT"), job_id="job-msft", owner_id=_TEST_OWNER_IDENTIFIER)
 
     response = client.get("/api/analysis/history", params={"ticker": "aapl", "limit": 1})
 
@@ -57,19 +59,19 @@ def test_history_list_detail_filter_and_limit(client, analysis_repository):
     assert detail.json() == _result("req-aapl", "AAPL")
 
 
-def test_history_is_global_across_valid_owner_sessions(client, analysis_repository):
-    analysis_repository.save_analysis(result=_result("req-global"))
+def test_history_is_isolated_across_valid_owner_sessions(client, analysis_repository):
+    analysis_repository.save_analysis(result=_result("req-owner"), owner_id=_TEST_OWNER_IDENTIFIER)
     other_headers = {"x-owner-token": issue_owner_session()["owner_token"]}
 
-    response = client.get("/api/analysis/history/req-global", headers=other_headers)
+    response = client.get("/api/analysis/history/req-owner", headers=other_headers)
 
-    assert response.status_code == 200
-    assert response.json()["request_id"] == "req-global"
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
 def test_history_delete_one_and_clear_all(client, analysis_repository):
-    analysis_repository.save_analysis(result=_result("req-1"))
-    analysis_repository.save_analysis(result=_result("req-2"))
+    analysis_repository.save_analysis(result=_result("req-1"), owner_id=_TEST_OWNER_IDENTIFIER)
+    analysis_repository.save_analysis(result=_result("req-2"), owner_id=_TEST_OWNER_IDENTIFIER)
 
     deleted = client.delete("/api/analysis/history/req-1")
     cleared = client.delete("/api/analysis/history")
