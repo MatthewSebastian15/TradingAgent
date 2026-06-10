@@ -142,6 +142,7 @@ function useTickerQuotes() {
           buildApiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols)}`),
           {
             headers: await buildAuthHeaders(),
+            credentials: 'include',
             signal: controller.signal,
           }
         );
@@ -302,6 +303,7 @@ export default function Dashboard() {
       try {
         const response = await fetch(buildApiUrl('/status'), {
           headers: await buildAuthHeaders(),
+          credentials: 'include',
           signal: controller.signal,
         });
 

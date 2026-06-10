@@ -82,6 +82,7 @@ async def _save_analysis_result_async(
     result: dict[str, Any],
     req: AnalysisRequest,
     job_id: str | None = None,
+    owner_id: str | None = None,
 ) -> None:
     """Persist a completed result without making analysis delivery depend on SQLite."""
 
@@ -94,6 +95,7 @@ async def _save_analysis_result_async(
             result=result,
             request_payload=req.model_dump(),
             job_id=job_id,
+            owner_id=owner_id,
         )
     except Exception:
         logger.error(
@@ -114,9 +116,9 @@ def _timestamp_from_iso(value: str | None) -> float:
         return 0.0
 
 
-async def _completed_job_summary_from_history(job_id: str) -> dict[str, Any] | None:
+async def _completed_job_summary_from_history(job_id: str, *, owner_id: str) -> dict[str, Any] | None:
     repository = get_analysis_repository()
-    record = await asyncio.to_thread(repository.get_analysis_record_by_job_id, job_id)
+    record = await asyncio.to_thread(repository.get_analysis_record_by_job_id, job_id, owner_id=owner_id)
     if record is None:
         return None
     return {
@@ -247,7 +249,7 @@ async def _execute_analysis(
     policy,
 ) -> dict:
     """Run cached/deduplicated JSON analysis."""
-    async with limit_request(request, policy):
+    async with limit_request(request, policy) as lease:
 
         async def factory() -> dict[str, Any]:
             return await _compute_result_fields(req, request_id, request)
@@ -259,7 +261,7 @@ async def _execute_analysis(
             use_deduplication=ROUTE_DEPS.enable_cache_deduplication,
         )
         payload = _response_payload(request_id, req, fields)
-        await _save_analysis_result_async(payload, req)
+        await _save_analysis_result_async(payload, req, owner_id=lease.identifier)
         return payload
 
 
@@ -407,7 +409,7 @@ async def get_analysis_job(job_id: str, request: Request):
         if job is None:
             if await _JOB_STORE.get(job_id) is not None:
                 raise _job_not_found(job_id)
-            history_summary = await _completed_job_summary_from_history(job_id)
+            history_summary = await _completed_job_summary_from_history(job_id, owner_id=lease.identifier)
             if history_summary is None:
                 raise _job_not_found(job_id)
             return history_summary
@@ -430,7 +432,7 @@ async def get_analysis_result_by_request_id(request_id: str, request: Request):
             raise _analysis_result_not_found(request_id)
 
         repository = get_analysis_repository()
-        result = await asyncio.to_thread(repository.get_analysis, request_id)
+        result = await asyncio.to_thread(repository.get_analysis, request_id, owner_id=lease.identifier)
         if result is None:
             raise _analysis_result_not_found(request_id)
         return result

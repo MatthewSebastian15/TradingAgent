@@ -41,9 +41,8 @@ async function selectTickerFromAutocomplete(query, result) {
 
 describe('StockForm cleanup', () => {
   beforeEach(() => {
-    sessionStorage.setItem('_ta_owner_token', 'test-owner-token');
     sessionStorage.setItem(
-      '_ta_owner_token_expires_at',
+      '_ta_owner_session_expires_at',
       String(Math.floor(Date.now() / 1000) + 3600)
     );
   });

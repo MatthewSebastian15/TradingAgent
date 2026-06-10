@@ -96,6 +96,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_credentials=True,
     # Whitelist the headers used by normal JSON requests and the fetch-based
     # SSE job stream. The events endpoint sends Cache-Control on the browser
     # request, so omitting it makes CORS preflight fail with 400 before the

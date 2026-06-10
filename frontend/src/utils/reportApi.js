@@ -158,6 +158,7 @@ async function fetchReportHtml(url) {
       ...(await buildAuthHeaders()),
       Accept: 'text/html',
     },
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -185,6 +186,7 @@ async function fetchReportHtmlByPayload(result) {
       ...(await buildHeaders()),
       Accept: 'text/html',
     },
+    credentials: 'include',
     body: JSON.stringify(payload),
   });
 
@@ -268,6 +270,7 @@ async function fetchPdf(url) {
       ...(await buildAuthHeaders()),
       Accept: 'application/pdf',
     },
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -295,6 +298,7 @@ async function fetchPdfByPayload(result) {
       ...(await buildHeaders()),
       Accept: 'application/pdf',
     },
+    credentials: 'include',
     body: JSON.stringify(payload),
   });
 

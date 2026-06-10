@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import ipaddress
 import json
 import os
 import re
-import shutil
+import socket
 import tempfile
 import urllib.request
 import zipfile
@@ -23,6 +24,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 from xml.etree import ElementTree as ET
 
 from .normalizers import normalize_financial_value
@@ -72,6 +74,12 @@ _FIELD_ALIASES = {
     "capex": "capex",
     "free_cash_flow": "free_cash_flow",
 }
+
+_IDX_ALLOWED_HOST = "idx.co.id"
+_IDX_USER_AGENT = "TradingAgent-IDX-Parser/1.0"
+_IDX_JSON_MAX_BYTES = 5 * 1024 * 1024
+_IDX_REPORT_MAX_BYTES = 25 * 1024 * 1024
+_IDX_DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 def _env(name: str) -> str | None:
@@ -131,10 +139,109 @@ def _load_json_from_path(path: Path) -> Any:
         return json.load(handle)
 
 
+def _is_allowed_idx_host(hostname: str | None) -> bool:
+    host = str(hostname or "").strip().lower().rstrip(".")
+    return host == _IDX_ALLOWED_HOST or host.endswith(f".{_IDX_ALLOWED_HOST}")
+
+
+def _is_public_ip(address: str) -> bool:
+    ip = ipaddress.ip_address(address)
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _validate_https_idx_url(url: str) -> str:
+    parsed = urlsplit(str(url))
+    if parsed.scheme.lower() != "https":
+        raise ValueError("IDX URL must use HTTPS")
+    if not _is_allowed_idx_host(parsed.hostname):
+        raise ValueError("IDX URL host is not allowed")
+
+    host = parsed.hostname or ""
+    port = parsed.port or 443
+    resolved = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    addresses = {item[4][0] for item in resolved}
+    if not addresses or any(not _is_public_ip(address) for address in addresses):
+        raise ValueError("IDX URL resolved to a non-public address")
+    return url
+
+
+def _content_type(response: Any) -> str:
+    return str(response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+
+
+def _content_length(response: Any) -> int | None:
+    value = response.headers.get("Content-Length")
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _validate_content_length(response: Any, max_bytes: int) -> None:
+    length = _content_length(response)
+    if length is not None and length > max_bytes:
+        raise ValueError("IDX response exceeds the allowed size")
+
+
+def _read_limited(response: Any, max_bytes: int) -> bytes:
+    payload = response.read(max_bytes + 1)
+    if len(payload) > max_bytes:
+        raise ValueError("IDX response exceeds the allowed size")
+    return payload
+
+
+def _copy_limited_response(response: Any, destination) -> None:
+    total = 0
+    while True:
+        chunk = response.read(_IDX_DOWNLOAD_CHUNK_SIZE)
+        if not chunk:
+            return
+        total += len(chunk)
+        if total > _IDX_REPORT_MAX_BYTES:
+            raise ValueError("IDX report exceeds the allowed size")
+        destination.write(chunk)
+
+
+def _validate_json_response(response: Any) -> None:
+    _validate_content_length(response, _IDX_JSON_MAX_BYTES)
+    content_type = _content_type(response)
+    if content_type and "json" not in content_type and content_type not in {"text/plain"}:
+        raise ValueError("IDX index response content type is not JSON")
+
+
+def _validate_report_response(response: Any, source_url: str) -> None:
+    _validate_content_length(response, _IDX_REPORT_MAX_BYTES)
+    content_type = _content_type(response)
+    if not content_type:
+        return
+    fmt = _report_format({"url": source_url})
+    allowed_by_format = {
+        "csv": ("csv", "text/plain"),
+        "json": ("json", "text/plain"),
+        "pdf": ("pdf",),
+        "xbrl": ("xml", "text/plain"),
+        "xml": ("xml", "text/plain"),
+        "xls": ("excel", "spreadsheet", "octet-stream"),
+        "xlsx": ("excel", "spreadsheet", "zip", "octet-stream"),
+    }
+    allowed = allowed_by_format.get(fmt, ("octet-stream",))
+    if not any(part in content_type for part in allowed):
+        raise ValueError("IDX report response content type is not allowed")
+
+
 def _load_json_from_url(url: str, timeout: int = 20) -> Any:
-    request = urllib.request.Request(url, headers={"User-Agent": "TradingAgent-IDX-Parser/1.0"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - controlled by config/env
-        return json.loads(response.read().decode("utf-8"))
+    safe_url = _validate_https_idx_url(url)
+    request = urllib.request.Request(safe_url, headers={"User-Agent": _IDX_USER_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - validated IDX HTTPS URL
+        _validate_json_response(response)
+        return json.loads(_read_limited(response, _IDX_JSON_MAX_BYTES).decode("utf-8"))
 
 
 def _load_report_index(index_path: str | None = None, index_url: str | None = None) -> list[dict[str, Any]]:
@@ -270,16 +377,21 @@ def download_idx_report(report_meta: dict[str, Any], cache_dir: str | None = Non
     cache_root.mkdir(parents=True, exist_ok=True)
     filename = _safe_filename(Path(str(source_url).split("?", 1)[0]).name or hashlib.sha1(str(source_url).encode()).hexdigest())
     destination = cache_root / filename
+    tmp_path: Path | None = None
     try:
-        request = urllib.request.Request(str(source_url), headers={"User-Agent": "TradingAgent-IDX-Parser/1.0"})
+        safe_url = _validate_https_idx_url(str(source_url))
+        request = urllib.request.Request(safe_url, headers={"User-Agent": _IDX_USER_AGENT})
         with (
-            urllib.request.urlopen(request, timeout=30) as response,  # noqa: S310 - controlled by report metadata
+            urllib.request.urlopen(request, timeout=30) as response,  # noqa: S310 - validated IDX HTTPS URL
             tempfile.NamedTemporaryFile(delete=False, dir=cache_root) as tmp,
         ):
-            shutil.copyfileobj(response, tmp)
+            _validate_report_response(response, safe_url)
+            _copy_limited_response(response, tmp)
             tmp_path = Path(tmp.name)
         tmp_path.replace(destination)
     except Exception as exc:  # pragma: no cover - network disabled in CI; contract remains explicit
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
         return _unavailable(f"IDX report download failed: {exc}", source_url=source_url)
 
     return {

@@ -20,7 +20,7 @@ from config import (
     llm,
 )
 from errors import AuthenticationError, RateLimitError
-from owner_session import owner_identifier_from_token
+from owner_session import OWNER_SESSION_COOKIE_NAME, owner_identifier_from_token
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -116,7 +116,10 @@ def validate_service_credential(request: Request) -> str:
 def get_client_identifier(request: Request) -> str:
     """Return the signed browser owner scope used for resources and quotas."""
     validate_service_credential(request)
-    owner_token = request.headers.get("x-owner-token", "").strip()
+    owner_token = (
+        request.headers.get("x-owner-token", "").strip()
+        or str(request.cookies.get(OWNER_SESSION_COOKIE_NAME) or "").strip()
+    )
     if not owner_token:
         raise AuthenticationError("Missing owner session token. Call POST /api/session first.")
     return owner_identifier_from_token(owner_token)

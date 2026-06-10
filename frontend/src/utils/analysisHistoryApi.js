@@ -11,6 +11,7 @@ export async function fetchAnalysisHistory({ ticker = '', limit = 25, signal } =
       ...(await buildAuthHeaders()),
       Accept: 'application/json',
     },
+    credentials: 'include',
     signal,
   });
 
@@ -26,6 +27,7 @@ export async function fetchAnalysisHistoryResult(requestId, { signal } = {}) {
       ...(await buildAuthHeaders()),
       Accept: 'application/json',
     },
+    credentials: 'include',
     signal,
   });
 
@@ -37,6 +39,7 @@ export async function deleteAnalysisHistoryResult(requestId) {
   const response = await fetch(buildApiUrl(`/analysis/history/${encodeURIComponent(requestId)}`), {
     method: 'DELETE',
     headers: await buildAuthHeaders(),
+    credentials: 'include',
   });
 
   if (!response.ok) throw new Error(await readHttpError(response));
@@ -47,6 +50,7 @@ export async function clearAnalysisHistory() {
   const response = await fetch(buildApiUrl('/analysis/history'), {
     method: 'DELETE',
     headers: await buildAuthHeaders(),
+    credentials: 'include',
   });
 
   if (!response.ok) throw new Error(await readHttpError(response));

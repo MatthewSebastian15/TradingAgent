@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 import os
 
 from config_env import BASE_DIR, env, env_bool, env_float, env_int
 
-logger = logging.getLogger("config")
 
 # App
 APP_NAME = "TradingAgents API"
@@ -100,10 +98,7 @@ MAX_CONCURRENT_STREAMS_PER_KEY = env_int("MAX_CONCURRENT_STREAMS_PER_KEY", 1, mi
 REQUEST_BODY_MAX_BYTES = env_int("REQUEST_BODY_MAX_BYTES", 16 * 1024 * 1024, min_value=1024)
 REQUIRE_API_KEY_FOR_RATE_LIMIT = env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", IS_PRODUCTION)
 if IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
-    logger.warning(
-        "APP_ENV=production but REQUIRE_API_KEY_FOR_RATE_LIMIT is disabled; "
-        "proxy requests without an API key will be accepted. Browser owner tokens are still required."
-    )
+    raise ValueError("REQUIRE_API_KEY_FOR_RATE_LIMIT=false is not allowed in production.")
 
 # LLM resilience
 LLM_TIMEOUT_SECONDS = env_int("LLM_TIMEOUT_SECONDS", 60, min_value=1)

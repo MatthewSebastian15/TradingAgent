@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import logging
 from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
@@ -308,6 +307,7 @@ def test_production_requires_cors_origins(monkeypatch):
 
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "true")
     monkeypatch.delenv("CORS_ORIGINS", raising=False)
 
     try:
@@ -337,6 +337,7 @@ def test_production_requires_owner_session_secret(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "true")
     monkeypatch.delenv("OWNER_SESSION_SECRET", raising=False)
 
     try:
@@ -363,6 +364,7 @@ def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("API_KEY", "test-api-key")
     monkeypatch.setenv("OWNER_SESSION_SECRET", "test-owner-session-secret")
+    monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "true")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com, https://admin.example.com")
 
     import config
@@ -374,7 +376,7 @@ def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
         _restore_test_config(monkeypatch)
 
 
-def test_production_logs_warning_when_api_key_requirement_is_disabled(monkeypatch, caplog):
+def test_production_rejects_disabled_api_key_requirement(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("API_KEY", "test-api-key")
     monkeypatch.setenv("OWNER_SESSION_SECRET", "test-owner-session-secret")
@@ -383,11 +385,9 @@ def test_production_logs_warning_when_api_key_requirement_is_disabled(monkeypatc
 
     import config
 
-    with caplog.at_level(logging.WARNING, logger="config"):
-        reloaded = importlib.reload(config)
     try:
-        assert reloaded.REQUIRE_API_KEY_FOR_RATE_LIMIT is False
-        assert "APP_ENV=production but REQUIRE_API_KEY_FOR_RATE_LIMIT is disabled" in caplog.text
+        with pytest.raises(ValueError, match="REQUIRE_API_KEY_FOR_RATE_LIMIT=false is not allowed in production"):
+            importlib.reload(config)
     finally:
         _restore_test_config(monkeypatch)
 

@@ -96,7 +96,7 @@ class StreamContext:
     run_stream_pipeline_func: Callable[..., Awaitable[dict[str, Any]]] | None = None
     get_or_start_analysis_func: Callable[..., Awaitable[dict[str, Any]]] | None = None
     use_cache: bool = False
-    persist_result_func: Callable[[dict[str, Any], AnalysisRequest, str | None], Awaitable[None]] | None = None
+    persist_result_func: Callable[[dict[str, Any], AnalysisRequest, str | None, str | None], Awaitable[None]] | None = None
     use_deduplication: bool = True
 
 
@@ -318,7 +318,8 @@ async def _yield_cached_result(ctx: StreamContext, cached: dict[str, Any]):
     assert ctx.response_payload_func is not None
     payload = ctx.response_payload_func(ctx.request_id, ctx.req, cached)
     if ctx.persist_result_func is not None:
-        await ctx.persist_result_func(payload, ctx.req, None)
+        owner_id = ctx.rate_limit_lease.identifier if ctx.rate_limit_lease is not None else None
+        await ctx.persist_result_func(payload, ctx.req, None, owner_id)
     yield sse_event(
         SseEvent.PROGRESS.value,
         {
@@ -350,7 +351,8 @@ async def _run_stream_result_job(ctx: StreamContext, queue: asyncio.Queue, cance
         )
         payload = ctx.response_payload_func(ctx.request_id, ctx.req, result_fields)
         if ctx.persist_result_func is not None:
-            await ctx.persist_result_func(payload, ctx.req, None)
+            owner_id = ctx.rate_limit_lease.identifier if ctx.rate_limit_lease is not None else None
+            await ctx.persist_result_func(payload, ctx.req, None, owner_id)
         await queue.put({"type": SseEvent.RESULT.value, "payload": payload})
     except TimeoutError:
         await queue.put(sse_error(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)))

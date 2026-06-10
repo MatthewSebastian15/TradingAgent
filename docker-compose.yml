@@ -16,11 +16,11 @@ services:
       REQUIRE_API_KEY_FOR_RATE_LIMIT: "false"
       REQUEST_BODY_MAX_BYTES: "16777216"
       OLLAMA_BASE_URL: http://ollama:11434
-      XDG_CACHE_HOME: /root/.tradingagents/cache
-      YFINANCE_CACHE_DIR: /root/.tradingagents/cache/py-yfinance
-      ANALYSIS_JOB_CACHE_DB_PATH: /root/.tradingagents/cache/analysis_jobs.sqlite3
-      ANALYSIS_DB_PATH: /root/.tradingagents/cache/analysis_history.sqlite3
-      DATA_CACHE_DB_PATH: /root/.tradingagents/cache/market_data.sqlite3
+      XDG_CACHE_HOME: /home/tradingagent/.tradingagents/cache
+      YFINANCE_CACHE_DIR: /home/tradingagent/.tradingagents/cache/py-yfinance
+      ANALYSIS_JOB_CACHE_DB_PATH: /home/tradingagent/.tradingagents/cache/analysis_jobs.sqlite3
+      ANALYSIS_DB_PATH: /home/tradingagent/.tradingagents/cache/analysis_history.sqlite3
+      DATA_CACHE_DB_PATH: /home/tradingagent/.tradingagents/cache/market_data.sqlite3
     command: >
       uvicorn main:app --host 0.0.0.0 --port 8000
       --reload --reload-dir /app/backend
@@ -28,8 +28,8 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app/backend
-      - tradingagent-cache:/root/.tradingagents/cache
-      - tradingagent-results:/root/.tradingagents/logs
+      - tradingagent-cache:/home/tradingagent/.tradingagents/cache
+      - tradingagent-results:/home/tradingagent/.tradingagents/logs
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -48,8 +48,8 @@ services:
       - 1.1.1.1
       - 1.0.0.1
     environment:
-      VITE_DEV_HOST: 0.0.0.0
       VITE_DEV_PORT: "3000"
+    command: npm run dev:lan
     depends_on:
       backend:
         condition: service_healthy

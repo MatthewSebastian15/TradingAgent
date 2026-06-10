@@ -483,6 +483,7 @@ async function fetchResultLookup(resourceId, signal) {
   const options = {
     method: 'GET',
     headers,
+    credentials: 'include',
     signal,
   };
   const encodedResourceId = encodeURIComponent(resourceId);
