@@ -21,9 +21,13 @@ services:
       ANALYSIS_JOB_CACHE_DB_PATH: /root/.tradingagents/cache/analysis_jobs.sqlite3
       ANALYSIS_DB_PATH: /root/.tradingagents/cache/analysis_history.sqlite3
       DATA_CACHE_DB_PATH: /root/.tradingagents/cache/market_data.sqlite3
+    command: >
+      uvicorn main:app --host 0.0.0.0 --port 8000
+      --reload --reload-dir /app/backend
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
+      - ./backend:/app/backend
       - tradingagent-cache:/root/.tradingagents/cache
       - tradingagent-results:/root/.tradingagents/logs
     restart: unless-stopped
@@ -33,47 +37,34 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
-    develop:
-      watch:
-        - action: sync
-          path: ./backend
-          target: /app
-          ignore:
-            - __pycache__/
-            - .venv/
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-      args:
-        VITE_API_BASE_URL: /api
-        VITE_ENABLE_MOCK: "false"
+      target: dev
     container_name: tradingagent-frontend
     dns:
       - 1.1.1.1
       - 1.0.0.1
     environment:
-      BACKEND_API_KEY: ${BACKEND_API_KEY:-}
+      VITE_DEV_HOST: 0.0.0.0
+      VITE_DEV_PORT: "3000"
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "127.0.0.1:3000:80"
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
-    develop:
-      watch:
-        - action: sync
-          path: ./frontend
-          target: /app
-          ignore:
-            - node_modules/
 
   ollama:
     image: ollama/ollama:0.24.0
@@ -92,4 +83,5 @@ services:
 volumes:
   tradingagent-cache:
   tradingagent-results:
+  frontend-node-modules:
   ollama-data:
