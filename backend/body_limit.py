@@ -7,6 +7,16 @@ from fastapi.responses import JSONResponse
 from errors import ApiError, error_payload
 
 
+class InvalidContentLength(ApiError):
+    def __init__(self, raw_value: str) -> None:
+        super().__init__(
+            400,
+            "INVALID_CONTENT_LENGTH",
+            "Content-Length must be a non-negative integer.",
+            details={"content_length": raw_value},
+        )
+
+
 class RequestBodyTooLarge(ApiError):
     def __init__(self, max_bytes: int) -> None:
         super().__init__(
@@ -33,11 +43,16 @@ class RequestBodyLimitMiddleware:
         content_length = headers.get(b"content-length")
         if content_length:
             try:
-                if int(content_length) > self.max_bytes:
-                    await self._send_error(send)
-                    return
+                content_length_value = int(content_length)
             except ValueError:
-                pass
+                await self._send_invalid_content_length(send, content_length.decode("latin1", errors="replace"))
+                return
+            if content_length_value < 0:
+                await self._send_invalid_content_length(send, str(content_length_value))
+                return
+            if content_length_value > self.max_bytes:
+                await self._send_error(send)
+                return
 
         received = 0
 
@@ -54,6 +69,11 @@ class RequestBodyLimitMiddleware:
             await self.app(scope, limited_receive, send)
         except RequestBodyTooLarge:
             await self._send_error(send)
+
+    async def _send_invalid_content_length(self, send, raw_value: str) -> None:
+        error = InvalidContentLength(raw_value)
+        response = JSONResponse(status_code=error.status_code, content=error_payload(error))
+        await response({"type": "http"}, None, send)
 
     async def _send_error(self, send) -> None:
         response = JSONResponse(

@@ -29,6 +29,7 @@ from routes.market import router as market_router
 from routes.news import include_news_routes
 from routes.reports import router as reports_router
 from routes.session import router as session_router
+from services.report_service import report_asset_health
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -126,7 +127,7 @@ app.include_router(session_router, prefix="/api")
 @app.get("/health", tags=["ops"])
 async def health_check() -> dict:
     """Lightweight liveness probe for Docker healthcheck and load balancers."""
-    return {"status": "ok", "provider": llm.provider}
+    return {"status": "ok", "provider": llm.provider, "report_assets": report_asset_health()}
 
 
 @app.get("/api/debug/llm-cache", tags=["debug"])

@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from pydantic import ValidationError
+
 from analysis_cache import AnalysisCacheKey
 from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
 from routes.event_contract import PipelineAgent
@@ -1120,17 +1122,18 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
     }
 
 
-def _coerce_portfolio_decision(full_decision: str, pd_obj: object | None) -> tuple[str, object | None]:
+def _coerce_portfolio_decision(full_decision: str, pd_obj: object | None) -> tuple[str, object | None, list[str]]:
     if pd_obj is None:
-        return full_decision, None
+        return full_decision, None, []
     try:
         from tradingagents.agents.schemas import PortfolioDecision
 
         if isinstance(pd_obj, dict):
             pd_obj = PortfolioDecision.model_validate(pd_obj)
-        return full_decision, pd_obj
-    except Exception:
-        return full_decision or "", None
+        return full_decision, pd_obj, []
+    except (ImportError, AttributeError, TypeError, ValueError, ValidationError):
+        logger.warning("Portfolio decision payload could not be parsed; using fallback response", exc_info=True)
+        return full_decision or "", None, ["Portfolio decision payload could not be parsed; fallback response was used."]
 
 
 def _build_common_result_fields(final_state: dict[str, Any], pd_obj: object | None) -> dict[str, Any]:
@@ -1366,8 +1369,16 @@ def parse_final_result(
     final_state: dict | None = None,
 ) -> dict:
     """Convert the final agent state into API response fields."""
-    final_state = final_state or {}
-    full_decision, pd_obj = _coerce_portfolio_decision(full_decision, pd_obj)
+    final_state = dict(final_state or {})
+    full_decision, pd_obj, coercion_warnings = _coerce_portfolio_decision(full_decision, pd_obj)
+    if coercion_warnings:
+        existing_warnings = final_state.get("warnings")
+        if isinstance(existing_warnings, list):
+            final_state["warnings"] = [*existing_warnings, *coercion_warnings]
+        elif existing_warnings:
+            final_state["warnings"] = [str(existing_warnings), *coercion_warnings]
+        else:
+            final_state["warnings"] = coercion_warnings
     common = _build_common_result_fields(final_state, pd_obj)
     payload = (
         _missing_portfolio_payload(full_decision=full_decision, final_state=final_state, common=common)

@@ -29,8 +29,8 @@ try:  # requests is a direct dependency, but keep import defensive for packaging
             requests_exceptions.ReadTimeout,
         ]
     )
-except Exception:  # pragma: no cover - dependency absence only
-    pass
+except ImportError:  # pragma: no cover - dependency absence only
+    logger.warning("requests exception classes are unavailable for Yahoo Finance retry mapping", exc_info=True)
 
 try:  # yfinance may surface curl_cffi request exceptions on newer versions.
     from curl_cffi.requests import exceptions as curl_exceptions
@@ -42,8 +42,8 @@ try:  # yfinance may surface curl_cffi request exceptions on newer versions.
             curl_exceptions.RequestsError,
         ]
     )
-except Exception:  # pragma: no cover - optional dependency shape varies
-    pass
+except (ImportError, AttributeError):  # pragma: no cover - optional dependency shape varies
+    logger.warning("curl_cffi exception classes are unavailable for Yahoo Finance retry mapping", exc_info=True)
 
 _RETRYABLE_YF_EXCEPTIONS = tuple(dict.fromkeys(_retryable_yf_errors))
 

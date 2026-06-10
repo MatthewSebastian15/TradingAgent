@@ -326,10 +326,9 @@ async def _wait_for_job_progress(source_queue: asyncio.Queue) -> None:
     await jobs.wait_for_job_progress(source_queue)
 
 
-async def _start_job(job, rate_limit_lease) -> None:
+async def _start_job(job) -> None:
     await jobs.start_job(
         job,
-        rate_limit_lease,
         result_cache=_RESULT_CACHE,
         run_stream_pipeline_func=_run_stream_pipeline,
         response_payload_func=_response_payload,
@@ -368,40 +367,37 @@ async def analyze(req: AnalysisRequest, request: Request):
     return await _execute_analysis(request, req, request_id, request_policy())
 
 
-@router.post("/analysis/jobs", response_model=AnalysisJobCreateResponse)
-async def create_analysis_job(req: AnalysisRequest, request: Request):
-    """Create a cancellable analysis job and return its job_id immediately."""
-    req = normalize_and_validate_analysis_request(req)
-    request_id = request_id_ctx.get()
-
-    rate_limit_lease = limit_request(request, stream_policy())
-    await rate_limit_lease.__aenter__()
-    release_lease = True
-    try:
-        job = await _JOB_STORE.create(
-            owner_id=rate_limit_lease.identifier,
-            request_id=request_id,
-            cache_key=_cache_key(req),
-            payload=req.model_dump(),
-        )
-        job.task = asyncio.create_task(_start_job(job, rate_limit_lease))
-        release_lease = False
-        _log_request_accepted("job", request_id, req)
-    except AnalysisJobLimitError as exc:
-        raise RateLimitError(
-            "Too many analysis jobs are already queued or running.",
-            details={"max_active_jobs": exc.max_active_jobs},
-        ) from exc
-    finally:
-        if release_lease:
-            await rate_limit_lease.__aexit__(None, None, None)
-
+async def _create_analysis_job_response(req: AnalysisRequest, request_id: str, owner_id: str) -> dict[str, str]:
+    job = await _JOB_STORE.create(
+        owner_id=owner_id,
+        request_id=request_id,
+        cache_key=_cache_key(req),
+        payload=req.model_dump(),
+    )
+    job.task = asyncio.create_task(_start_job(job))
+    _log_request_accepted("job", request_id, req)
     return {
         "job_id": job.id,
         "request_id": request_id,
         "status": job.status,
         "events_url": f"/api/analysis/jobs/{job.id}/events",
     }
+
+
+@router.post("/analysis/jobs", response_model=AnalysisJobCreateResponse)
+async def create_analysis_job(req: AnalysisRequest, request: Request):
+    """Create a cancellable analysis job and return its job_id immediately."""
+    req = normalize_and_validate_analysis_request(req)
+    request_id = request_id_ctx.get()
+
+    try:
+        async with limit_request(request, stream_policy()) as lease:
+            return await _create_analysis_job_response(req, request_id, lease.identifier)
+    except AnalysisJobLimitError as exc:
+        raise RateLimitError(
+            "Too many analysis jobs are already queued or running.",
+            details={"max_active_jobs": exc.max_active_jobs},
+        ) from exc
 
 
 @router.get("/analysis/jobs/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)

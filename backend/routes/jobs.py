@@ -147,7 +147,6 @@ async def wait_for_job_progress(source_queue: asyncio.Queue) -> None:
 
 async def start_job(
     job: AnalysisJob,
-    rate_limit_lease: RateLimitLease,
     *,
     result_cache: AnalysisResultCache,
     run_stream_pipeline_func: Callable[..., Awaitable[dict[str, Any]]],
@@ -204,15 +203,12 @@ async def start_job(
         except TimeoutError:
             progress_task.cancel()
         job.updated_at = time.time()
-        await rate_limit_lease.__aexit__(None, None, None)
 
 
 async def stream_job_events_with_lease(request, job: AnalysisJob, rate_limit_lease: RateLimitLease):
-    try:
+    async with rate_limit_lease:
         async for event in stream_job_events(request, job):
             yield event
-    finally:
-        await rate_limit_lease.__aexit__(None, None, None)
 
 
 async def stream_job_events(request, job: AnalysisJob):
