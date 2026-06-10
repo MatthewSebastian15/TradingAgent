@@ -302,7 +302,7 @@ export default function ProfileTab({ profile, result }) {
     <div className="px-4 py-4 border-b border-bloomberg-border space-y-5">
       <section>
         <SectionHeader label="COMPANY PROFILE" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
           <ProfileField label="Company Name" value={companyName} quality={profileQuality} />
           <ProfileField label="Ticker" value={profile.ticker} />
           <ProfileField label="Currency" value={profile.currency} />
@@ -325,10 +325,6 @@ export default function ProfileTab({ profile, result }) {
             label="Market Cap"
             value={formatMarketCap(profile.market_cap, profile.currency)}
             quality={getFieldQuality(dataQuality, 'market_cap') || profileQuality}
-          />
-          <ProfileField
-            label="Shares Outstanding"
-            value={formatNumber(profileSharesOut(profile))}
           />
           <ProfileField
             label="Current Price"
