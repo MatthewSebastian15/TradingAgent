@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from rate_limiter import limit_request, request_policy
 from services.analysis_repository import get_analysis_repository
+from services.report_disclaimer import REPORT_DISCLAIMER
 from services.report_service import (
     analysis_report_filename,
     build_report_context,
@@ -21,6 +22,13 @@ from services.report_service import (
 
 router = APIRouter(tags=["reports"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/reports/disclaimer")
+async def get_analysis_disclaimer() -> dict[str, str]:
+    """Return the canonical analysis report disclaimer."""
+
+    return {"disclaimer": REPORT_DISCLAIMER}
 
 
 async def _mark_exported_best_effort(result: dict[str, Any], export_type: str) -> None:

@@ -1,6 +1,7 @@
 import { formatPrice } from './formatting';
 import { safeExternalUrl } from './url';
-import { MOCK_REPORT_DISCLAIMER } from '../constants/reportDisclaimer';
+
+import { fetchReportDisclaimer } from './reportDisclaimer';
 
 const ACTIONABLE_DECISIONS = new Set(['BUY', 'Buy', 'Overweight', 'SELL', 'Sell', 'Underweight']);
 const LEGACY_REPORT_FIELD_PATTERN = /\b(price target|risk per share|reward per share)\b/i;
@@ -558,7 +559,7 @@ export function buildMockReportContext(result = {}) {
     trade_date: display(result.trade_date),
     analysis_created_at: display(result.analysis_created_at || result.saved_at),
     generated_at: new Date().toISOString(),
-    disclaimer: MOCK_REPORT_DISCLAIMER,
+    disclaimer: result.disclaimer || '',
     current_price: result.current_price ?? result.last_price,
     current_price_display: price(result.current_price ?? result.last_price, result),
     current_price_as_of: display(
@@ -1272,16 +1273,23 @@ export function buildMockReportHtml(result) {
   return renderMockReportHtml(buildMockReportContext(result));
 }
 
-export function openMockReportPreview(result) {
-  const html = buildMockReportHtml(result);
+async function withBackendDisclaimer(result) {
+  if (typeof result?.disclaimer === 'string' && result.disclaimer.trim()) return result;
+
+  const disclaimer = await fetchReportDisclaimer();
+  return { ...result, disclaimer };
+}
+
+export async function openMockReportPreview(result) {
+  const html = buildMockReportHtml(await withBackendDisclaimer(result));
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank', 'noopener,noreferrer');
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-export function exportMockReportPdf(result) {
-  const html = buildMockReportHtml(result);
+export async function exportMockReportPdf(result) {
+  const html = buildMockReportHtml(await withBackendDisclaimer(result));
   const printWindow = window.open('', '_blank');
   if (!printWindow) throw new Error('Popup was blocked. Allow popups to export mock report.');
   printWindow.document.open();

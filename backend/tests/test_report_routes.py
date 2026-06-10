@@ -108,6 +108,14 @@ def _store_with_result(result: dict) -> tuple[AnalysisJobStore, str]:
     return asyncio.run(main())
 
 
+
+def test_disclaimer_endpoint_returns_canonical_backend_disclaimer(client):
+    response = client.get("/api/reports/disclaimer")
+
+    assert response.status_code == 200
+    assert response.json()["disclaimer"].startswith("This analysis report is provided")
+    assert "automated AI-assisted analysis system" in response.json()["disclaimer"]
+
 def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypatch):
     store, job_id = _store_with_result(_result())
     monkeypatch.setattr("services.report_service.jobs.JOB_STORE", store)
@@ -120,8 +128,8 @@ def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypat
     assert "Final Decision" in response.text
     assert "TAKE_PROFIT_RECOMPUTED" not in response.text
     assert "Entry" in response.text
-    assert "automated AI-assisted analysis engine" in response.text
-    assert "may contain errors" in response.text
+    assert "automated AI-assisted analysis system" in response.text
+    assert "may contain errors, inaccuracies, omissions" in response.text
     assert "Key Financial Highlights" in response.text
     assert "FY26Q1" in response.text
     assert "Price Target" not in response.text
@@ -145,7 +153,7 @@ def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(clien
     assert "attachment" in response.headers["content-disposition"]
     assert "TradingAgent_BBCA.JK_2026-05-26.pdf" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
-    assert "automated AI-assisted analysis engine" in rendered_report["disclaimer"]
+    assert "automated AI-assisted analysis system" in rendered_report["disclaimer"]
     assert rendered_report["company_profile_rows"][0]["value"] == "NVIDIA Corporation"
     assert rendered_report["financial_highlights"]["sections"][0]["title"] == "Market & Scale"
 

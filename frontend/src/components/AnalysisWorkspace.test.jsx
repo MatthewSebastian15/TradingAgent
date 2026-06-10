@@ -172,7 +172,7 @@ describe('AnalysisWorkspace history storage', () => {
     expect(screen.getByText(/history/i)).toBeTruthy();
   });
 
-  it('closes the active panel when the same icon is clicked again', () => {
+  it('closes the active panel when the same icon is clicked again', async () => {
     function EmptyForm() {
       return null;
     }
@@ -183,7 +183,9 @@ describe('AnalysisWorkspace history storage', () => {
 
     openConfigPanel();
 
-    expect(screen.queryByText(/configuration/i)).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText(/configuration/i)).toBeNull();
+    });
   });
 
   it('switches from config panel to history panel when history icon is clicked while config is open', () => {
@@ -201,7 +203,7 @@ describe('AnalysisWorkspace history storage', () => {
     expect(screen.queryByText(/configuration/i)).toBeNull();
   });
 
-  it('closes the active panel when backdrop is clicked', () => {
+  it('closes the active panel when the drawer close button is clicked', async () => {
     function EmptyForm() {
       return null;
     }
@@ -210,10 +212,26 @@ describe('AnalysisWorkspace history storage', () => {
     openConfigPanel();
     expect(screen.getByText(/configuration/i)).toBeTruthy();
 
-    const backdrop = document.querySelector('div.fixed.inset-0');
-    fireEvent.click(backdrop);
+    fireEvent.click(screen.getByLabelText(/close configuration panel/i));
 
-    expect(screen.queryByText(/configuration/i)).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText(/configuration/i)).toBeNull();
+    });
+  });
+
+  it('offsets the analysis content while a side panel is open', () => {
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm);
+    const main = screen.getByTestId('analysis-main');
+    expect(main.className).toContain('ml-10');
+    expect(main.className).not.toContain('md:ml-[20.5rem]');
+
+    openConfigPanel();
+
+    expect(main.className).toContain('md:ml-[20.5rem]');
   });
 
   it('stores only version 2 summary fields for debug responses', () => {

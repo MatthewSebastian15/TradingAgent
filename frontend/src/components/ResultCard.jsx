@@ -638,53 +638,48 @@ function HoldMetrics({ result, currentPrice }) {
     result.volatility_level ||
     hasDisplayValue(result.volatility_score) ||
     result.rebalancing_action ||
-    result.position_action ||
     result.new_entry_action ||
     result.position_size_hint;
 
   if (!hasHoldMetrics) return null;
 
+  const metrics = [
+    {
+      label: 'CURRENT PRICE',
+      value: hasDisplayValue(currentPrice)
+        ? formatPrice(currentPrice, result.ticker, result.price_currency || result.currency)
+        : 'N/A',
+      highlight: true,
+    },
+    { label: 'VOLATILITY', value: result.volatility_level || 'N/A' },
+    {
+      label: 'VOLATILITY SCORE',
+      value: formatVolatilityValue(result) || 'N/A',
+      subValue: volatilitySubValue(result),
+      tooltip:
+        result.volatility_method ||
+        'Calculated from annualized daily return volatility, normalized to 0–100 scale. Higher score means higher price swings.',
+    },
+    { label: 'REBALANCING', value: result.rebalancing_action || 'N/A' },
+    { label: 'NEW ENTRY ACTION', value: result.new_entry_action || 'N/A' },
+    { label: 'POSITION SIZE HINT', value: result.position_size_hint || 'N/A' },
+  ];
+
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border">
       <SectionHeader label="ACTION STATUS" />
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {hasDisplayValue(currentPrice) && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
+        {metrics.map((metric) => (
           <MetricBox
-            label="CURRENT PRICE"
-            value={formatPrice(
-              currentPrice,
-              result.ticker,
-              result.price_currency || result.currency
-            )}
-            highlight
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            highlight={metric.highlight}
+            subValue={metric.subValue}
+            tooltip={metric.tooltip}
+            preserveSlot
           />
-        )}
-        {result.volatility_level && (
-          <MetricBox label="VOLATILITY" value={result.volatility_level} />
-        )}
-        {hasDisplayValue(result.volatility_score) && (
-          <MetricBox
-            label="VOLATILITY SCORE"
-            value={formatVolatilityValue(result)}
-            subValue={volatilitySubValue(result)}
-            tooltip={
-              result.volatility_method ||
-              'Calculated from annualized daily return volatility, normalized to 0–100 scale. Higher score means higher price swings.'
-            }
-          />
-        )}
-        {result.rebalancing_action && (
-          <MetricBox label="REBALANCING" value={result.rebalancing_action} />
-        )}
-        {result.position_action && (
-          <MetricBox label="POSITION ACTION" value={result.position_action} />
-        )}
-        {result.new_entry_action && (
-          <MetricBox label="NEW ENTRY ACTION" value={result.new_entry_action} />
-        )}
-        {result.position_size_hint && (
-          <MetricBox label="POSITION SIZE HINT" value={result.position_size_hint} />
-        )}
+        ))}
       </div>
     </div>
   );
@@ -1245,7 +1240,7 @@ export default function ResultCard({
 
       {activeTab === 'news' && <NewsTab result={result} />}
 
-      <DisclaimerFooter />
+      <DisclaimerFooter disclaimer={result?.disclaimer} />
     </div>
   );
 }
