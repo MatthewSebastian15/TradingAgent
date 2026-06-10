@@ -7,7 +7,6 @@ import SectionHeader from '../SectionHeader';
 import { getFieldQuality } from '../../../utils/dataStatus';
 import CandlestickPriceChart from './CandlestickPriceChart';
 import { formatCompactNumber, resolveYoyPriceWindow } from './priceChartUtils';
-import VolumeChart from './VolumeChart';
 
 function hasValue(value) {
   return value !== null && value !== undefined && value !== '';
@@ -31,13 +30,14 @@ function displayPrice(value, ticker) {
 }
 
 const EMPTY_PRICE_CHART = {};
+const MIN_ZOOM_DAYS = 7;
 
 const PRICE_RANGE_OPTIONS = [
-  { key: '1Y', label: '1Y', months: 12 },
-  { key: '6M', label: '6M', months: 6 },
-  { key: '3M', label: '3M', months: 3 },
-  { key: '1M', label: '1M', months: 1 },
-  { key: '1W', label: '1W', days: 7 },
+  { key: '1Y', label: '1Y', days: 365 },
+  { key: '6M', label: '6M', days: 183 },
+  { key: '3M', label: '3M', days: 92 },
+  { key: '1M', label: '1M', days: 31 },
+  { key: '1W', label: '1W', days: MIN_ZOOM_DAYS },
 ];
 
 function parseIsoDate(dateValue) {
@@ -46,51 +46,69 @@ function parseIsoDate(dateValue) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function subtractMonths(date, months) {
-  const result = new Date(date);
-  const day = result.getUTCDate();
-  result.setUTCDate(1);
-  result.setUTCMonth(result.getUTCMonth() - months);
-  const maxDay = new Date(
-    Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)
-  ).getUTCDate();
-  result.setUTCDate(Math.min(day, maxDay));
-  return result;
-}
-
 function toIsoDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
-function filterPointsByRange(points, rangeKey) {
+function daysBetween(startDate, endDate) {
+  const start = parseIsoDate(startDate);
+  const end = parseIsoDate(endDate);
+  if (!start || !end) return MIN_ZOOM_DAYS;
+  return Math.max(MIN_ZOOM_DAYS, Math.round((end - start) / 86_400_000));
+}
+
+function clampZoomDays(days, maxDays) {
+  return Math.max(MIN_ZOOM_DAYS, Math.min(Math.round(days), maxDays));
+}
+
+function filterPointsByDays(points, days) {
   if (!Array.isArray(points) || points.length < 2) return points || [];
-  const selectedRange = PRICE_RANGE_OPTIONS.find((option) => option.key === rangeKey);
-  if (!selectedRange || rangeKey === '1Y') return points;
 
   const endPoint = points.at(-1);
   const endDate = parseIsoDate(endPoint?.date);
   if (!endDate) return points;
 
-  const startDate = selectedRange.days
-    ? new Date(endDate.getTime() - selectedRange.days * 24 * 60 * 60 * 1000)
-    : subtractMonths(endDate, selectedRange.months);
+  const startDate = new Date(endDate.getTime() - days * 86_400_000);
   const startIso = toIsoDate(startDate);
   const filtered = points.filter((point) => point.date >= startIso && point.date <= endPoint.date);
 
   return filtered.length >= 2 ? filtered : points.slice(-2);
 }
 
+function activeRangeKey(days, maxDays) {
+  if (days >= maxDays) return '1Y';
+  const match = PRICE_RANGE_OPTIONS.find((option) => Math.abs(option.days - days) <= 1);
+  return match?.key || null;
+}
+
 export default function ChartPriceTab({ result }) {
-  const [activeRange, setActiveRange] = useState('1Y');
+  const [zoomDays, setZoomDays] = useState(365);
   const chart = result?.price_chart || EMPTY_PRICE_CHART;
   const yoyWindow = useMemo(() => resolveYoyPriceWindow(chart, chart.points), [chart]);
-  const points = useMemo(
-    () => filterPointsByRange(yoyWindow.points, activeRange),
-    [activeRange, yoyWindow.points]
+  const maxZoomDays = useMemo(
+    () => Math.min(365, daysBetween(yoyWindow.points[0]?.date, yoyWindow.points.at(-1)?.date)),
+    [yoyWindow.points]
   );
+  const effectiveZoomDays = clampZoomDays(zoomDays, maxZoomDays);
+  const points = useMemo(
+    () => filterPointsByDays(yoyWindow.points, effectiveZoomDays),
+    [effectiveZoomDays, yoyWindow.points]
+  );
+  const activeRange = activeRangeKey(effectiveZoomDays, maxZoomDays);
   const stats = chart.stats || {};
   const performance = result?.price_performance || chart.summary || {};
   const ticker = chart.ticker || result?.ticker;
+
+  const setRange = (days) => {
+    setZoomDays(clampZoomDays(days, maxZoomDays));
+  };
+
+  const zoomChart = (direction) => {
+    setZoomDays((currentDays) => {
+      const nextDays = direction === 'in' ? currentDays * 0.72 : currentDays * 1.28;
+      return clampZoomDays(nextDays, maxZoomDays);
+    });
+  };
 
   if (chart.available !== true || points.length < 2) {
     return (
@@ -124,35 +142,58 @@ export default function ChartPriceTab({ result }) {
           <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
             CHART
           </div>
-          <div className="flex flex-wrap gap-1" aria-label="Chart range selector">
-            {PRICE_RANGE_OPTIONS.map((option) => {
-              const active = activeRange === option.key;
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => setActiveRange(option.key)}
-                  className={`border px-2.5 py-1 font-mono text-[11px] tracking-wider transition-colors ${
-                    active
-                      ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                      : 'border-bloomberg-border bg-black text-bloomberg-muted hover:text-bloomberg-white'
-                  }`}
-                  aria-pressed={active}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="inline-flex overflow-hidden rounded-sm border border-bloomberg-border bg-black"
+              aria-label="Chart range selector"
+            >
+              {PRICE_RANGE_OPTIONS.map((option) => {
+                const active = activeRange === option.key;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setRange(option.days)}
+                    className={`min-w-10 px-3 py-1.5 font-mono text-[11px] tracking-wider transition-all duration-150 ${
+                      active
+                        ? 'bg-bloomberg-orange text-black shadow-[inset_0_-2px_0_rgba(0,0,0,0.35)]'
+                        : 'text-bloomberg-muted hover:bg-white/5 hover:text-bloomberg-white'
+                    }`}
+                    aria-pressed={active}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="inline-flex overflow-hidden rounded-sm border border-bloomberg-border bg-black">
+              <button
+                type="button"
+                onClick={() => zoomChart('in')}
+                className="h-7 w-8 font-mono text-sm text-bloomberg-muted transition-colors hover:bg-white/5 hover:text-bloomberg-white disabled:opacity-35"
+                disabled={effectiveZoomDays <= MIN_ZOOM_DAYS}
+                aria-label="Zoom in chart"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => zoomChart('out')}
+                className="h-7 w-8 border-l border-bloomberg-border font-mono text-sm text-bloomberg-muted transition-colors hover:bg-white/5 hover:text-bloomberg-white disabled:opacity-35"
+                disabled={effectiveZoomDays >= maxZoomDays}
+                aria-label="Zoom out chart"
+              >
+                −
+              </button>
+            </div>
           </div>
         </div>
-        <CandlestickPriceChart points={points} ticker={ticker} />
-      </section>
-
-      <section>
-        <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-2">
-          VOLUME
-        </div>
-        <VolumeChart points={points} />
+        <CandlestickPriceChart
+          points={points}
+          allPoints={yoyWindow.points}
+          ticker={ticker}
+          onZoom={zoomChart}
+        />
       </section>
 
       <section>
