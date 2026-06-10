@@ -197,6 +197,31 @@ export function movementColor(point, previousPoint = null) {
   return NEUTRAL_COLOR;
 }
 
+export function buildHistoricalMarketCapPoints(points, sharesOutstanding) {
+  const shares = toNumber(sharesOutstanding);
+  if (shares === null || shares <= 0) return [];
+
+  return normalizePricePoints(points).map((point) => ({
+    date: point.date,
+    value: Number((point.close * shares).toFixed(2)),
+  }));
+}
+
+export function buildMaxDrawdownPoints(points) {
+  const normalizedPoints = normalizePricePoints(points);
+  if (normalizedPoints.length < 2) return [];
+
+  let peak = normalizedPoints[0].close;
+  return normalizedPoints.map((point) => {
+    if (point.close > peak) peak = point.close;
+    const drawdown = peak ? ((point.close - peak) / peak) * 100 : 0;
+    return {
+      date: point.date,
+      value: Number(drawdown.toFixed(2)),
+    };
+  });
+}
+
 export function movementLabel(point, previousPoint = null) {
   const reference = previousPoint?.close ?? point.open;
   if (point.close > reference) return 'UP';

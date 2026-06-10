@@ -1,32 +1,47 @@
 import { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { formatPrice } from '../../../utils/formatting';
-import MetricBox from '../MetricBox';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
-import { getFieldQuality } from '../../../utils/dataStatus';
 import CandlestickPriceChart from './CandlestickPriceChart';
-import { formatCompactNumber, resolveYoyPriceWindow } from './priceChartUtils';
+import PriceMetricLineChart from './PriceMetricLineChart';
+import {
+  buildHistoricalMarketCapPoints,
+  buildMaxDrawdownPoints,
+  resolveYoyPriceWindow,
+  toNumber,
+} from './priceChartUtils';
 
-function hasValue(value) {
-  return value !== null && value !== undefined && value !== '';
-}
-
-function formatPercent(value) {
-  const number = Number(value);
-  if (!hasValue(value) || !Number.isFinite(number)) return 'N/A';
-  return `${number.toFixed(2)}%`;
-}
-
-function unwrapValue(value) {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value.value ?? value.normalized_value ?? null;
+function firstNumber(...values) {
+  for (const value of values) {
+    const number = toNumber(value);
+    if (number !== null && number > 0) return number;
   }
-  return value;
+  return null;
 }
 
-function displayPrice(value, ticker) {
-  return formatPrice(unwrapValue(value), ticker) || 'N/A';
+function resolveSharesOutstanding(result, chart, points) {
+  const profile = result?.company_profile || {};
+  const directShares = firstNumber(
+    profile.shares_outstanding,
+    profile.shares_out,
+    profile.sharesOutstanding,
+    profile.shares_ownership?.shares_out,
+    profile.ownership?.shares_out
+  );
+  if (directShares) return directShares;
+
+  const latestClose = firstNumber(
+    result?.current_price,
+    chart?.summary?.latest_close,
+    chart?.stats?.end_price,
+    points?.at(-1)?.close
+  );
+  const marketCap = firstNumber(
+    profile.market_cap,
+    result?.financial_highlights?.point_in_time?.find?.((item) => item?.key === 'market_cap')?.value
+  );
+
+  return marketCap && latestClose ? marketCap / latestClose : null;
 }
 
 const EMPTY_PRICE_CHART = {};
@@ -95,9 +110,20 @@ export default function ChartPriceTab({ result }) {
     [effectiveZoomDays, yoyWindow.points]
   );
   const activeRange = activeRangeKey(effectiveZoomDays, maxZoomDays);
-  const stats = chart.stats || {};
-  const performance = result?.price_performance || chart.summary || {};
   const ticker = chart.ticker || result?.ticker;
+  const chartCurrency = chart.currency || result?.company_profile?.currency || '';
+  const sharesOutstanding = useMemo(
+    () => resolveSharesOutstanding(result, chart, yoyWindow.points),
+    [chart, result, yoyWindow.points]
+  );
+  const historicalMarketCapPoints = useMemo(
+    () => buildHistoricalMarketCapPoints(yoyWindow.points, sharesOutstanding),
+    [sharesOutstanding, yoyWindow.points]
+  );
+  const maxDrawdownPoints = useMemo(
+    () => buildMaxDrawdownPoints(yoyWindow.points),
+    [yoyWindow.points]
+  );
 
   const setRange = (days) => {
     setZoomDays(clampZoomDays(days, maxZoomDays));
@@ -124,11 +150,6 @@ export default function ChartPriceTab({ result }) {
     <div className="px-4 py-4 border-b border-bloomberg-border space-y-4">
       <section>
         <SectionHeader label="CHART & PRICE" />
-        <div>
-          <div className="mt-1 font-mono text-[11px] text-bloomberg-muted">
-            Source: {chart.source || 'N/A'}
-          </div>
-        </div>
       </section>
 
       {chart.warning && (
@@ -197,27 +218,23 @@ export default function ChartPriceTab({ result }) {
       </section>
 
       <section>
-        <SectionHeader label="PRICE STATISTICS" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <MetricBox label="START PRICE" value={displayPrice(stats.start_price, ticker)} />
-          <MetricBox label="END PRICE" value={displayPrice(stats.end_price, ticker)} />
-          <MetricBox label="HIGH" value={displayPrice(stats.high, ticker)} />
-          <MetricBox label="LOW" value={displayPrice(stats.low, ticker)} />
-          <MetricBox
-            label="AVG VOLUME"
-            value={formatCompactNumber(performance.average_volume ?? stats.average_volume)}
+        <SectionHeader label="MARKET CAP & DRAWDOWN" />
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <PriceMetricLineChart
+            title="Historical Market Cap"
+            subtitle="YOY window anchored to trade date"
+            points={historicalMarketCapPoints}
+            valueType="currency"
+            currency={chartCurrency}
+            emptyMessage="Shares outstanding or market cap is unavailable. Historical market cap cannot be calculated."
           />
-          <MetricBox label="LATEST VOLUME" value={formatCompactNumber(performance.latest_volume)} />
-          <MetricBox
-            label="PERIOD RETURN"
-            value={formatPercent(performance.period_return_percent ?? stats.change_percent)}
-            highlight
-          />
-          <MetricBox
-            label="MAX DRAWDOWN"
-            value={formatPercent(performance.max_drawdown_percent)}
-            quality={getFieldQuality(result?.data_quality, 'drawdown')}
-            preserveSlot
+          <PriceMetricLineChart
+            title="Max Drawdown"
+            subtitle="Rolling peak-to-trough drawdown across the YOY window"
+            points={maxDrawdownPoints}
+            valueType="percent"
+            currency={chartCurrency}
+            emptyMessage="Drawdown data is unavailable."
           />
         </div>
       </section>

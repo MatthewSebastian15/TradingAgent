@@ -216,7 +216,10 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('CHART & PRICE')).toBeTruthy();
     expect(screen.getByLabelText(/OHLC candlestick price chart/i)).toBeTruthy();
     expect(screen.getByText('VOLUME')).toBeTruthy();
-    expect(screen.getByText('PRICE STATISTICS')).toBeTruthy();
+    expect(screen.queryByText('PRICE STATISTICS')).toBeNull();
+    expect(screen.getByText('MARKET CAP & DRAWDOWN')).toBeTruthy();
+    expect(screen.getByText('Historical Market Cap')).toBeTruthy();
+    expect(screen.getByText('Max Drawdown')).toBeTruthy();
     expect(screen.getByText('News').disabled).toBe(false);
     expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
   });
@@ -340,12 +343,12 @@ describe('ResultCard risk-engine contract', () => {
     ).toBeTruthy();
   });
 
-  it('renders Phase 3 price statistics without technical entry quality', () => {
+  it('renders chart metrics without the removed price statistics block', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
     fireEvent.click(screen.getByText('Chart & Price'));
 
-    expect(screen.getByText('PRICE STATISTICS')).toBeTruthy();
+    expect(screen.queryByText('PRICE STATISTICS')).toBeNull();
     expect(screen.queryByText('PRICE PERFORMANCE')).toBeNull();
     expect(screen.queryByText('AVG CLOSE')).toBeNull();
     expect(screen.queryByText('LOOKBACK')).toBeNull();
@@ -356,14 +359,14 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('LATEST CLOSE')).toBeNull();
     expect(screen.getByText('CHART')).toBeTruthy();
     expect(screen.getByText('VOLUME')).toBeTruthy();
-    expect(screen.getByText('START PRICE')).toBeTruthy();
-    expect(screen.getByText('END PRICE')).toBeTruthy();
-    expect(screen.getByText('HIGH')).toBeTruthy();
-    expect(screen.getByText('LOW')).toBeTruthy();
-    expect(screen.getByText('AVG VOLUME')).toBeTruthy();
-    expect(screen.getByText('LATEST VOLUME')).toBeTruthy();
-    expect(screen.getByText('PERIOD RETURN')).toBeTruthy();
-    expect(screen.getByText('MAX DRAWDOWN')).toBeTruthy();
+    expect(screen.getByText('MARKET CAP & DRAWDOWN')).toBeTruthy();
+    expect(screen.getByText('Historical Market Cap')).toBeTruthy();
+    expect(screen.getByText('Max Drawdown')).toBeTruthy();
+    expect(screen.queryByText('START PRICE')).toBeNull();
+    expect(screen.queryByText('END PRICE')).toBeNull();
+    expect(screen.queryByText('AVG VOLUME')).toBeNull();
+    expect(screen.queryByText('LATEST VOLUME')).toBeNull();
+    expect(screen.queryByText('PERIOD RETURN')).toBeNull();
     expect(screen.getByText(/Source:/)).toBeTruthy();
     expect(screen.queryByText('POINTS')).toBeNull();
     expect(screen.queryByText('TECHNICAL ENTRY QUALITY')).toBeNull();
