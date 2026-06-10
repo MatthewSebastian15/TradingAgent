@@ -314,7 +314,6 @@ describe('StockForm cleanup', () => {
     const props = callbacks();
     render(<StockForm {...props} />);
 
-    expect(screen.getByText(/agent pipeline/i)).toBeTruthy();
     expect(screen.getByPlaceholderText(/search ticker symbol/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /us/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /indonesia/i })).toBeNull();

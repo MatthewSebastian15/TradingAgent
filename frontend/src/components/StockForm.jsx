@@ -2,35 +2,15 @@ import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 
 import {
-  AGENT_ALIASES,
   buildAnalysisPayload,
   DEFAULT_DEBATE_ROUNDS,
   DEPTH_OPTIONS,
   HORIZON_OPTIONS,
-  PIPELINE,
-  PIPELINE_IDS,
   today,
   validateAnalysisInput,
 } from '../domain/analysisContract';
 import { useAnalysisJob } from '../hooks/useAnalysisJob';
 import TickerSearchBar from './TickerSearchBar';
-
-function normalizeAgentId(id = '') {
-  const normalized = String(id)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  return AGENT_ALIASES[normalized] || normalized;
-}
-
-function normalizeAgentStatus(status = '') {
-  const normalized = String(status).trim().toLowerCase();
-  if (['start', 'running', 'in_progress'].includes(normalized)) return 'started';
-  if (['done', 'complete', 'success', 'finished'].includes(normalized)) return 'completed';
-  if (['error', 'failed', 'fail'].includes(normalized)) return 'failed';
-  return normalized || 'started';
-}
 
 function FieldLabel({ children, hint = null }) {
   return (
@@ -46,145 +26,6 @@ FieldLabel.propTypes = {
   hint: PropTypes.string,
 };
 
-function AgentPipelineStrip({ agentProgress, running, status }) {
-  const [activeIds, setActiveIds] = useState(new Set());
-  const [doneIds, setDoneIds] = useState(new Set());
-
-  useEffect(() => {
-    if (!running && agentProgress === null) {
-      setActiveIds(new Set());
-      setDoneIds(new Set());
-      return;
-    }
-
-    if (!agentProgress?.agent_id) return;
-
-    const agentId = normalizeAgentId(agentProgress.agent_id);
-    const agentStatus = normalizeAgentStatus(agentProgress.status);
-    const isPipelineAgent = PIPELINE_IDS.has(agentId);
-    if (!isPipelineAgent) return;
-
-    setActiveIds((prev) => {
-      const next = new Set(prev);
-      if (agentStatus === 'started') next.add(agentId);
-      if (agentStatus === 'completed' || agentStatus === 'failed') next.delete(agentId);
-      return next;
-    });
-
-    setDoneIds((prev) => {
-      const next = new Set(prev);
-      if (agentStatus === 'completed') next.add(agentId);
-      if (agentStatus === 'failed') next.delete(agentId);
-      return next;
-    });
-  }, [agentProgress, running]);
-
-  const doneCount = Math.min(doneIds.size, PIPELINE.length);
-  const progressPct = Math.round((doneCount / PIPELINE.length) * 100);
-  const headline = running
-    ? agentProgress?.status_message || status || 'PIPELINE RUNNING'
-    : 'READY FOR ANALYSIS';
-
-  return (
-    <div className="border-b border-bloomberg-border bg-black">
-      <div className="flex flex-col gap-2 border-b border-bloomberg-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <span
-            className={`h-2 w-2 flex-shrink-0 rounded-full ${
-              running ? 'bg-bloomberg-orange animate-pulse-dot' : 'bg-bloomberg-border'
-            }`}
-          />
-          <div className="min-w-0">
-            <div className="font-mono text-xs font-semibold text-bloomberg-orange tracking-[0.22em]">
-              AGENT PIPELINE
-            </div>
-            <div className="mt-1 truncate font-mono text-[10px] text-bloomberg-muted tracking-wider uppercase">
-              {headline}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 font-mono text-[10px] tracking-[0.18em] text-bloomberg-muted">
-          <span>
-            {doneCount}/{PIPELINE.length} AGENTS
-          </span>
-          <span className={running ? 'text-bloomberg-orange' : 'text-bloomberg-border'}>
-            {progressPct}% COMPLETE
-          </span>
-        </div>
-      </div>
-
-      <div className="h-0.5 bg-bloomberg-surface">
-        <div
-          className="h-full bg-bloomberg-orange transition-all duration-500"
-          style={{ width: `${progressPct}%` }}
-        />
-      </div>
-
-      <div className="grid grid-cols-5 divide-x divide-bloomberg-border">
-        {PIPELINE.map((step, index) => {
-          const active = activeIds.has(step.id);
-          const done = doneIds.has(step.id);
-          const failed =
-            agentProgress?.agent_id &&
-            normalizeAgentId(agentProgress.agent_id) === step.id &&
-            normalizeAgentStatus(agentProgress.status) === 'failed';
-          return (
-            <div
-              key={step.id}
-              className={`min-w-0 px-3 py-2 transition-colors duration-200 ${
-                active
-                  ? 'bg-bloomberg-orange-dim'
-                  : done
-                    ? 'bg-bloomberg-green-dim'
-                    : failed
-                      ? 'bg-bloomberg-red-dim'
-                      : 'bg-black'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-[9px] text-bloomberg-border">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <span
-                  className={`font-mono text-[9px] ${
-                    active
-                      ? 'text-bloomberg-orange'
-                      : done
-                        ? 'text-bloomberg-green'
-                        : failed
-                          ? 'text-bloomberg-red'
-                          : 'text-bloomberg-muted'
-                  }`}
-                >
-                  {done ? 'DONE' : active ? 'LIVE' : failed ? 'FAIL' : 'IDLE'}
-                </span>
-              </div>
-              <div
-                className={`mt-1 truncate font-mono text-[11px] font-semibold tracking-wider ${
-                  active
-                    ? 'text-bloomberg-white'
-                    : done
-                      ? 'text-bloomberg-green'
-                      : 'text-bloomberg-muted'
-                }`}
-                title={step.label}
-              >
-                {step.short}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-AgentPipelineStrip.propTypes = {
-  agentProgress: PropTypes.object,
-  running: PropTypes.bool.isRequired,
-  status: PropTypes.string,
-};
-
 export default function StockForm({
   onResult,
   onLoading,
@@ -192,8 +33,6 @@ export default function StockForm({
   onAgentProgress,
   useAnalysisJobHook = useAnalysisJob,
   selectedResult = null,
-  agentProgress = null,
-  status = '',
   tickerSearch = null,
 }) {
   const [ticker, setTicker] = useState('');
@@ -293,8 +132,6 @@ export default function StockForm({
 
   return (
     <form onSubmit={handleSubmit}>
-      <AgentPipelineStrip agentProgress={agentProgress} running={running} status={status} />
-
       <div className="flex flex-col gap-3 p-4">
         <div className="w-full">
           <FieldLabel hint="YFINANCE ONLY">Ticker symbol</FieldLabel>
@@ -500,7 +337,5 @@ StockForm.propTypes = {
   onAgentProgress: PropTypes.func.isRequired,
   useAnalysisJobHook: PropTypes.func,
   selectedResult: PropTypes.object,
-  agentProgress: PropTypes.object,
-  status: PropTypes.string,
   tickerSearch: PropTypes.func,
 };
