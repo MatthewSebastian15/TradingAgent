@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+from dataclasses import dataclass, fields
 import multiprocessing
 from collections.abc import Callable
 from datetime import datetime
@@ -20,6 +21,7 @@ from config import (
     build_tradingagents_config,
 )
 from errors import ApiError, BadRequestError, PipelineExecutionError, PipelineTimeoutError, sanitize_message
+from routes.event_contract import SseEvent
 from routes.serializers import parse_final_result
 from routes.validation import AnalysisRequest
 
@@ -254,7 +256,7 @@ def run_pipeline_with_progress_worker(
             "trade_date": trade_date,
             **event,
         }
-        progress_queue.put({"type": "progress", "payload": payload})
+        progress_queue.put({"type": SseEvent.PROGRESS.value, "payload": payload})
 
     def is_cancelled() -> bool:
         return is_cancel_event_set(cancel_event)
@@ -372,92 +374,141 @@ async def shutdown_executor() -> None:
     await get_pipeline_runtime().shutdown()
 
 
-async def run_pipeline_async(
-    req: AnalysisRequest,
-    request_id: str,
-    request: Request | None = None,
-    *,
-    get_executor_func: Callable[[], Any] = get_executor,
-    new_cancel_event_func: Callable[[], Any] = new_cancel_event,
-    run_pipeline_func: Callable[..., dict] = run_pipeline,
-    set_cancel_event_func: Callable[[Any | None], None] = set_cancel_event,
-    watch_request_disconnect_func: Callable[..., Any] = watch_request_disconnect,
-) -> dict:
-    """Run the blocking pipeline with one shared timeout path."""
-    loop = asyncio.get_running_loop()
-    executor = await get_executor_func()
-    cancel_event = await new_cancel_event_func()
-    future = loop.run_in_executor(
-        executor,
-        run_pipeline_func,
+@dataclass(slots=True)
+class PipelineRunContext:
+    req: AnalysisRequest
+    request_id: str
+    request: Request | None = None
+    get_executor_func: Callable[[], Any] = get_executor
+    new_cancel_event_func: Callable[[], Any] = new_cancel_event
+    run_pipeline_func: Callable[..., dict] = run_pipeline
+    set_cancel_event_func: Callable[[Any | None], None] = set_cancel_event
+    watch_request_disconnect_func: Callable[..., Any] = watch_request_disconnect
+
+
+def _coerce_pipeline_run_context(
+    context_or_req: PipelineRunContext | AnalysisRequest,
+    request_id: str | None,
+    request: Request | None,
+    overrides: dict[str, Any],
+) -> PipelineRunContext:
+    if isinstance(context_or_req, PipelineRunContext):
+        context = context_or_req
+    else:
+        if request_id is None:
+            raise TypeError("request_id is required when passing AnalysisRequest")
+        context = PipelineRunContext(req=context_or_req, request_id=request_id, request=request)
+    valid_fields = {field.name for field in fields(PipelineRunContext)}
+    for name, value in overrides.items():
+        if name not in valid_fields:
+            raise TypeError(f"Unexpected pipeline context override: {name}")
+        setattr(context, name, value)
+    return context
+
+
+def _pipeline_worker_args(ctx: PipelineRunContext, cancel_event: Any | None) -> tuple[Any, ...]:
+    req = ctx.req
+    return (
         req.ticker,
         req.trade_date,
         req.time_horizon_months,
         req.max_debate_rounds,
         req.analysis_depth,
         req.response_detail,
-        request_id,
+        ctx.request_id,
         req.has_existing_position if req.has_existing_position is not None else False,
         req.position_quantity,
         req.average_entry_price,
         cancel_event,
     )
-    disconnect_task = (
-        asyncio.create_task(
-            watch_request_disconnect_func(
-                request,
-                req,
-                request_id,
-                cancel_event,
-                future,
-                set_cancel_event_func=set_cancel_event_func,
-            )
+
+
+def _start_pipeline_future(ctx: PipelineRunContext, executor: Any, cancel_event: Any | None) -> asyncio.Future:
+    loop = asyncio.get_running_loop()
+    return loop.run_in_executor(executor, ctx.run_pipeline_func, *_pipeline_worker_args(ctx, cancel_event))
+
+
+def _start_disconnect_watch(ctx: PipelineRunContext, cancel_event: Any | None, future: asyncio.Future) -> asyncio.Task | None:
+    if ctx.request is None:
+        return None
+    return asyncio.create_task(
+        ctx.watch_request_disconnect_func(
+            ctx.request,
+            ctx.req,
+            ctx.request_id,
+            cancel_event,
+            future,
+            set_cancel_event_func=ctx.set_cancel_event_func,
         )
-        if request is not None
-        else None
     )
+
+
+def _log_pipeline_timeout(ctx: PipelineRunContext) -> None:
+    logger.error(
+        "Pipeline timeout",
+        extra={
+            "event": "pipeline_timeout",
+            "request_id": ctx.request_id,
+            "ticker": ctx.req.ticker,
+            "trade_date": ctx.req.trade_date,
+            "duration_ms": PIPELINE_TIMEOUT_SECONDS * 1000,
+        },
+    )
+
+
+def _log_pipeline_cancelled(ctx: PipelineRunContext) -> None:
+    logger.info(
+        "Pipeline request cancelled",
+        extra={
+            "event": "pipeline_cancelled",
+            "request_id": ctx.request_id,
+            "ticker": ctx.req.ticker,
+            "trade_date": ctx.req.trade_date,
+        },
+    )
+
+
+def _log_pipeline_failed(ctx: PipelineRunContext) -> None:
+    logger.error(
+        "Pipeline failed",
+        extra={
+            "event": "pipeline_failed",
+            "request_id": ctx.request_id,
+            "ticker": ctx.req.ticker,
+            "trade_date": ctx.req.trade_date,
+        },
+        exc_info=True,
+    )
+
+
+async def run_pipeline_async(
+    context: PipelineRunContext | AnalysisRequest,
+    request_id: str | None = None,
+    request: Request | None = None,
+    **overrides: Any,
+) -> dict:
+    """Run the blocking pipeline with one shared timeout path."""
+    ctx = _coerce_pipeline_run_context(context, request_id, request, overrides)
+    executor = await ctx.get_executor_func()
+    cancel_event = await ctx.new_cancel_event_func()
+    future = _start_pipeline_future(ctx, executor, cancel_event)
+    disconnect_task = _start_disconnect_watch(ctx, cancel_event, future)
     try:
         return await asyncio.wait_for(future, timeout=PIPELINE_TIMEOUT_SECONDS)
     except TimeoutError as exc:
-        set_cancel_event_func(cancel_event)
+        ctx.set_cancel_event_func(cancel_event)
         future.cancel()
-        logger.error(
-            "Pipeline timeout",
-            extra={
-                "event": "pipeline_timeout",
-                "request_id": request_id,
-                "ticker": req.ticker,
-                "trade_date": req.trade_date,
-                "duration_ms": PIPELINE_TIMEOUT_SECONDS * 1000,
-            },
-        )
+        _log_pipeline_timeout(ctx)
         raise PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS) from exc
     except asyncio.CancelledError:
-        set_cancel_event_func(cancel_event)
+        ctx.set_cancel_event_func(cancel_event)
         future.cancel()
-        logger.info(
-            "Pipeline request cancelled",
-            extra={
-                "event": "pipeline_cancelled",
-                "request_id": request_id,
-                "ticker": req.ticker,
-                "trade_date": req.trade_date,
-            },
-        )
+        _log_pipeline_cancelled(ctx)
         raise
     except ApiError:
         raise
     except Exception as exc:
-        logger.error(
-            "Pipeline failed",
-            extra={
-                "event": "pipeline_failed",
-                "request_id": request_id,
-                "ticker": req.ticker,
-                "trade_date": req.trade_date,
-            },
-            exc_info=True,
-        )
+        _log_pipeline_failed(ctx)
         raise PipelineExecutionError(internal_message=str(exc)) from exc
     finally:
         if disconnect_task is not None and not disconnect_task.done():

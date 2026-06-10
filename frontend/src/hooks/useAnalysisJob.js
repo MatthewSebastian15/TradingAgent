@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { SSE_EVENTS, PIPELINE_STATUSES } from '../domain/analysisContract';
 import { buildApiUrl, buildAuthHeaders, buildHeaders, readHttpError } from '../utils/api';
 import { parseSseBlock } from '../utils/sse';
 
@@ -86,20 +87,20 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
       }
     }
 
-    if (event.type === 'heartbeat') {
+    if (event.type === SSE_EVENTS.HEARTBEAT) {
       callbacksRef.current.onStatus(
-        `Pipeline heartbeat: ${(event.payload.status || 'running').toUpperCase()}`
+        `Pipeline heartbeat: ${(event.payload.status || PIPELINE_STATUSES.RUNNING).toUpperCase()}`
       );
     }
-    if (event.type === 'progress') {
+    if (event.type === SSE_EVENTS.PROGRESS) {
       callbacksRef.current.onStatus(event.payload.status_message || 'Running...');
       if (emitAgentProgress) emitAgentProgress(event.payload);
     }
-    if (event.type === 'result') {
+    if (event.type === SSE_EVENTS.RESULT) {
       emitResult({ job_id: jobIdRef.current, ...event.payload });
       return true;
     }
-    if (event.type === 'error') {
+    if (event.type === SSE_EVENTS.ERROR) {
       const message = errorMessageFromPayload(event.payload);
       const rid = event.payload.request_id ? ` [${event.payload.request_id}]` : '';
       emitResult({ error: `${message}${rid}` });

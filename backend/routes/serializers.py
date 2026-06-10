@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from analysis_cache import AnalysisCacheKey
 from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
+from routes.event_contract import PipelineAgent
 from routes.validation import AnalysisRequest
 from services.report_disclaimer import REPORT_DISCLAIMER
 
@@ -130,16 +131,16 @@ SUMMARY_FIELDS = {
 }
 
 AGENT_SEQUENCE = [
-    ("data_collection", "Data Collection", "Fetching market data..."),
-    ("market_analyst", "Market Analyst", "Reading price data and technical indicators..."),
-    ("news_analyst", "News + Social Analyst", "Scanning headlines, macro events, and sentiment signals..."),
-    ("fundamentals", "Fundamentals Analyst", "Reviewing financial statements and ratios..."),
-    ("bull_researcher", "Bull Researcher", "Building or skipping the bullish investment case..."),
-    ("bear_researcher", "Bear Researcher", "Building or skipping the bearish counterarguments..."),
-    ("research_manager", "Research Manager", "Evaluating the debate and forming an investment plan..."),
-    ("trader", "Trader", "Translating the plan into a transaction proposal..."),
-    ("risk_analysts", "Risk Analysts", "Running or skipping risk debate..."),
-    ("portfolio_manager", "Portfolio Manager", "Synthesizing all inputs into the final decision..."),
+    (PipelineAgent.DATA_COLLECTION.value, "Data Collection", "Fetching market data..."),
+    (PipelineAgent.MARKET_ANALYST.value, "Market Analyst", "Reading price data and technical indicators..."),
+    (PipelineAgent.NEWS_ANALYST.value, "News + Social Analyst", "Scanning headlines, macro events, and sentiment signals..."),
+    (PipelineAgent.FUNDAMENTALS.value, "Fundamentals Analyst", "Reviewing financial statements and ratios..."),
+    (PipelineAgent.BULL_RESEARCHER.value, "Bull Researcher", "Building or skipping the bullish investment case..."),
+    (PipelineAgent.BEAR_RESEARCHER.value, "Bear Researcher", "Building or skipping the bearish counterarguments..."),
+    (PipelineAgent.RESEARCH_MANAGER.value, "Research Manager", "Evaluating the debate and forming an investment plan..."),
+    (PipelineAgent.TRADER.value, "Trader", "Translating the plan into a transaction proposal..."),
+    (PipelineAgent.RISK_ANALYSTS.value, "Risk Analysts", "Running or skipping risk debate..."),
+    (PipelineAgent.PORTFOLIO_MANAGER.value, "Portfolio Manager", "Synthesizing all inputs into the final decision..."),
 ]
 
 
@@ -755,10 +756,10 @@ def _price_momentum_score(payload: dict[str, Any]) -> int:
 
 def _fundamental_quality_score(payload: dict[str, Any]) -> int:
     data_quality = _coerce_data_quality(payload.get("data_quality"))
-    if data_quality.get("fundamentals"):
-        return _status_to_score(data_quality.get("fundamentals"))
+    if data_quality.get(PipelineAgent.FUNDAMENTALS.value):
+        return _status_to_score(data_quality.get(PipelineAgent.FUNDAMENTALS.value))
     data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
-    fundamentals = data_sources.get("fundamentals") if isinstance(data_sources.get("fundamentals"), dict) else {}
+    fundamentals = data_sources.get(PipelineAgent.FUNDAMENTALS.value) if isinstance(data_sources.get(PipelineAgent.FUNDAMENTALS.value), dict) else {}
     return _status_to_score(fundamentals.get("completeness"))
 
 
@@ -805,7 +806,7 @@ def _data_quality_score(payload: dict[str, Any]) -> int:
     data_quality = _coerce_data_quality(payload.get("data_quality"))
     statuses = [
         data_quality.get("price_data"),
-        data_quality.get("fundamentals"),
+        data_quality.get(PipelineAgent.FUNDAMENTALS.value),
         data_quality.get("news"),
         data_quality.get("volatility_data"),
         data_quality.get("llm_output"),
@@ -972,7 +973,7 @@ def _build_data_freshness(payload: dict[str, Any], final_state: dict[str, Any]) 
 
     data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
     price_source = data_sources.get("price") if isinstance(data_sources.get("price"), dict) else {}
-    fundamentals = data_sources.get("fundamentals") if isinstance(data_sources.get("fundamentals"), dict) else {}
+    fundamentals = data_sources.get(PipelineAgent.FUNDAMENTALS.value) if isinstance(data_sources.get(PipelineAgent.FUNDAMENTALS.value), dict) else {}
     news_source = data_sources.get("news") if isinstance(data_sources.get("news"), dict) else {}
     macro_source = data_sources.get("macro") if isinstance(data_sources.get("macro"), dict) else {}
 
@@ -1030,16 +1031,16 @@ def _build_tab_status(payload: dict[str, Any]) -> dict[str, str]:
         "risk_data_quality": "ok",
     }
     data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
-    fundamentals = data_sources.get("fundamentals") if isinstance(data_sources.get("fundamentals"), dict) else {}
+    fundamentals = data_sources.get(PipelineAgent.FUNDAMENTALS.value) if isinstance(data_sources.get(PipelineAgent.FUNDAMENTALS.value), dict) else {}
     data_quality = _coerce_data_quality(payload.get("data_quality"))
     completeness = payload.get("data_completeness") if isinstance(payload.get("data_completeness"), dict) else {}
     gap_report = payload.get("fundamental_gap_report") if isinstance(payload.get("fundamental_gap_report"), dict) else {}
-    fundamental_completeness = completeness.get("fundamental_data") or completeness.get("fundamentals") or {}
+    fundamental_completeness = completeness.get("fundamental_data") or completeness.get(PipelineAgent.FUNDAMENTALS.value) or {}
     pct = None
     if isinstance(fundamental_completeness, dict):
         pct = fundamental_completeness.get("percent") or fundamental_completeness.get("score")
     if (
-        str(fundamentals.get("completeness") or data_quality.get("fundamentals") or "").lower() == "partial"
+        str(fundamentals.get("completeness") or data_quality.get(PipelineAgent.FUNDAMENTALS.value) or "").lower() == "partial"
         or bool(gap_report.get("missing_fields") or gap_report.get("missing"))
         or (isinstance(pct, (int, float)) and pct < 80)
     ):
@@ -1119,27 +1120,23 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
     }
 
 
-def parse_final_result(
-    full_decision: str,
-    pd_obj: object | None,
-    portfolio_rating: object | None = None,
-    final_state: dict | None = None,
-) -> dict:
-    """Convert the final agent state into API response fields."""
-    final_state = final_state or {}
-    if pd_obj is not None:
-        try:
-            from tradingagents.agents.schemas import PortfolioDecision
+def _coerce_portfolio_decision(full_decision: str, pd_obj: object | None) -> tuple[str, object | None]:
+    if pd_obj is None:
+        return full_decision, None
+    try:
+        from tradingagents.agents.schemas import PortfolioDecision
 
-            if isinstance(pd_obj, dict):
-                pd_obj = PortfolioDecision.model_validate(pd_obj)
-        except Exception:
-            full_decision = full_decision or ""
-            pd_obj = None
+        if isinstance(pd_obj, dict):
+            pd_obj = PortfolioDecision.model_validate(pd_obj)
+        return full_decision, pd_obj
+    except Exception:
+        return full_decision or "", None
+
+
+def _build_common_result_fields(final_state: dict[str, Any], pd_obj: object | None) -> dict[str, Any]:
     data_quality = final_state.get("data_quality")
-    current_price_fields_for_common = _get_current_price_fields(final_state, pd_obj)
-    configured_time_horizon = final_state.get("time_horizon")
-    common = {
+    current_price_fields = _get_current_price_fields(final_state, pd_obj)
+    return {
         "analysis_depth": final_state.get("analysis_depth", DEFAULT_ANALYSIS_DEPTH),
         "time_horizon_months": final_state.get("time_horizon_months"),
         "data_fetched_at": final_state.get("data_fetched_at") or _utc_now_iso(),
@@ -1147,6 +1144,27 @@ def parse_final_result(
         "llm_calls_used": final_state.get("balanced_gemini_calls_used"),
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
+        **_build_common_fundamental_fields(final_state),
+        **_build_common_market_fields(final_state),
+        **_build_common_quality_fields(final_state),
+        "data_quality": _complete_risk_engine_data_quality(
+            data_quality
+            or {
+                PipelineAgent.FUNDAMENTALS.value: "missing",
+                "news": "missing",
+                "warnings": ["Pipeline did not return data quality metadata."],
+            },
+            current_price=current_price_fields["current_price"],
+            trade_plan_valid=False,
+            decision_adjusted=False,
+            volatility_score=None,
+            llm_output_fallback="fallback",
+        ),
+    }
+
+
+def _build_common_fundamental_fields(final_state: dict[str, Any]) -> dict[str, Any]:
+    return {
         "financial_highlights": final_state.get("financial_highlights"),
         "normalized_period_rows": final_state.get("normalized_period_rows") or [],
         "derived_fundamentals": final_state.get("derived_fundamentals") or [],
@@ -1159,6 +1177,11 @@ def parse_final_result(
         "dividend_quality": final_state.get("dividend_quality"),
         "peer_comparison": final_state.get("peer_comparison"),
         "company_profile": final_state.get("company_profile") or {},
+    }
+
+
+def _build_common_market_fields(final_state: dict[str, Any]) -> dict[str, Any]:
+    return {
         "price_chart": final_state.get("price_chart") or {},
         "price_performance": final_state.get("price_performance") or {},
         "technical_entry": final_state.get("technical_entry") or {},
@@ -1168,6 +1191,14 @@ def parse_final_result(
         "analyst_consensus": final_state.get("analyst_consensus") or {},
         "news": final_state.get("news") or final_state.get("news_context") or {},
         "news_context": final_state.get("news_context") or final_state.get("news") or {},
+        "technical_levels": final_state.get("technical_levels") or {},
+        "agent_pipeline": final_state.get("agent_pipeline") or [],
+        "total_pipeline_seconds": final_state.get("total_pipeline_seconds"),
+    }
+
+
+def _build_common_quality_fields(final_state: dict[str, Any]) -> dict[str, Any]:
+    return {
         "data_sources": _normalize_data_sources_for_response(final_state.get("data_sources") or {}),
         "field_sources": final_state.get("field_sources") or {},
         "validation_summary": final_state.get("validation_summary") or {},
@@ -1178,57 +1209,92 @@ def parse_final_result(
         "vendor_attempts": final_state.get("vendor_attempts") or {},
         "request_budget": final_state.get("request_budget") or {},
         "warnings": _build_response_warnings(final_state, final_state),
-        "technical_levels": final_state.get("technical_levels") or {},
-        "agent_pipeline": final_state.get("agent_pipeline") or [],
-        "total_pipeline_seconds": final_state.get("total_pipeline_seconds"),
-        "data_quality": _complete_risk_engine_data_quality(
-            data_quality
-            or {
-                "fundamentals": "missing",
-                "news": "missing",
-                "warnings": ["Pipeline did not return data quality metadata."],
-            },
-            current_price=current_price_fields_for_common["current_price"],
-            trade_plan_valid=False,
-            decision_adjusted=False,
-            volatility_score=None,
-            llm_output_fallback="fallback",
-        ),
     }
 
-    if pd_obj is None:
-        return _with_analysis_overview_and_risk_data_quality(
-            {
-                "decision": "Hold",
-                "full_decision": full_decision,
-                "executive_summary": None,
-                "investment_thesis": None,
-                "price_target": None,
-                "time_horizon": configured_time_horizon,
-                "confidence_score": None,
-                "suggested_allocation_percent": None,
-                "entry_price": None,
-                "stop_loss": None,
-                "take_profit": None,
-                "risk_reward_ratio": None,
-                "max_drawdown_estimate": None,
-                "volatility_level": "Medium",
-                "position_sizing_reason": None,
-                "rebalancing_action": "No position to rebalance",
-                "key_catalysts": [],
-                "key_reasons": [],
-                "invalidation_conditions": [],
-                **_empty_trade_contract(final_state),
-                **common,
-            },
-            final_state,
-        )
 
-    rating = getattr(pd_obj, "rating", None)
-    fallback_rating = _enum_value(rating)
-    final_decision = getattr(pd_obj, "final_decision", None) or getattr(pd_obj, "decision", None) or fallback_rating
-    current_price_fields = _get_current_price_fields(final_state, pd_obj)
-    pd_data_quality = _complete_risk_engine_data_quality(
+def _missing_portfolio_payload(
+    *,
+    full_decision: str,
+    final_state: dict[str, Any],
+    common: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "decision": "Hold",
+        "full_decision": full_decision,
+        "executive_summary": None,
+        "investment_thesis": None,
+        "price_target": None,
+        "time_horizon": final_state.get("time_horizon"),
+        "confidence_score": None,
+        "suggested_allocation_percent": None,
+        "entry_price": None,
+        "stop_loss": None,
+        "take_profit": None,
+        "risk_reward_ratio": None,
+        "max_drawdown_estimate": None,
+        "volatility_level": "Medium",
+        "position_sizing_reason": None,
+        "rebalancing_action": "No position to rebalance",
+        "key_catalysts": [],
+        "key_reasons": [],
+        "invalidation_conditions": [],
+        **_empty_trade_contract(final_state),
+        **common,
+    }
+
+
+def _portfolio_trade_fields(pd_obj: object, final_decision: Any) -> dict[str, Any]:
+    trade_plan_valid = bool(getattr(pd_obj, "trade_plan_valid", False))
+    has_valid_actionable_trade = trade_plan_valid and final_decision in ACTIONABLE_DECISIONS
+    has_existing_position = bool(getattr(pd_obj, "has_existing_position", False))
+    position_action = getattr(pd_obj, "position_action", None) if has_existing_position else None
+    return {
+        "trade_plan_valid": trade_plan_valid,
+        "has_existing_position": has_existing_position,
+        "position_quantity": getattr(pd_obj, "position_quantity", None),
+        "average_entry_price": getattr(pd_obj, "average_entry_price", None),
+        "position_action": position_action,
+        "new_entry_action": _new_entry_action(pd_obj, has_existing_position),
+        "risk_reward_ratio": FIXED_RR if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_ratio", None),
+        "risk_reward_display": RISK_REWARD_DISPLAY
+        if has_valid_actionable_trade
+        else getattr(pd_obj, "risk_reward_display", None),
+        "rebalancing_action": _rebalancing_action(pd_obj, has_existing_position),
+        "position_size_hint": _position_size_hint(pd_obj, has_existing_position),
+    }
+
+
+def _new_entry_action(pd_obj: object, has_existing_position: bool) -> str:
+    value = getattr(pd_obj, "new_entry_action", None)
+    if value:
+        return value
+    return "No new entry; maintain existing position" if has_existing_position else "Wait for valid entry setup"
+
+
+def _rebalancing_action(pd_obj: object, has_existing_position: bool) -> str:
+    value = _enum_value(getattr(pd_obj, "rebalancing_action", None))
+    if value:
+        return value
+    return "Maintain position" if has_existing_position else "No position to rebalance"
+
+
+def _position_size_hint(pd_obj: object, has_existing_position: bool) -> str:
+    value = getattr(pd_obj, "position_size_hint", None)
+    if value:
+        return value
+    return (
+        "Maintain current position size; no additional exposure suggested."
+        if has_existing_position
+        else "0% allocation until setup improves."
+    )
+
+
+def _portfolio_data_quality(
+    pd_obj: object,
+    common: dict[str, Any],
+    current_price_fields: dict[str, Any],
+) -> dict[str, Any]:
+    return _complete_risk_engine_data_quality(
         getattr(pd_obj, "data_quality", None) or common["data_quality"],
         current_price=current_price_fields["current_price"],
         trade_plan_valid=bool(getattr(pd_obj, "trade_plan_valid", False)),
@@ -1237,86 +1303,83 @@ def parse_final_result(
         llm_output_fallback="ok",
     )
 
-    trade_plan_valid = bool(getattr(pd_obj, "trade_plan_valid", False))
-    has_valid_actionable_trade = trade_plan_valid and final_decision in ACTIONABLE_DECISIONS
-    risk_reward_ratio = FIXED_RR if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_ratio", None)
-    risk_reward_display = (
-        RISK_REWARD_DISPLAY if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_display", None)
-    )
-    has_existing_position_value = bool(getattr(pd_obj, "has_existing_position", False))
-    position_action_value = getattr(pd_obj, "position_action", None)
-    if not has_existing_position_value:
-        position_action_value = None
-    new_entry_action_value = getattr(pd_obj, "new_entry_action", None)
-    if not new_entry_action_value:
-        new_entry_action_value = (
-            "No new entry; maintain existing position"
-            if has_existing_position_value
-            else "Wait for valid entry setup"
-        )
-    rebalancing_action_value = _enum_value(getattr(pd_obj, "rebalancing_action", None))
-    if not rebalancing_action_value:
-        rebalancing_action_value = (
-            "Maintain position"
-            if has_existing_position_value
-            else "No position to rebalance"
-        )
-    position_size_hint_value = getattr(pd_obj, "position_size_hint", None)
-    if not position_size_hint_value:
-        position_size_hint_value = (
-            "Maintain current position size; no additional exposure suggested."
-            if has_existing_position_value
-            else "0% allocation until setup improves."
-        )
 
-    return _with_analysis_overview_and_risk_data_quality(
-        {
-            "decision": final_decision,
-            "llm_decision": getattr(pd_obj, "llm_decision", None) or fallback_rating,
-            "final_decision": final_decision,
-            "decision_adjusted": bool(getattr(pd_obj, "decision_adjusted", False)),
-            "decision_adjusted_reason": getattr(pd_obj, "decision_adjusted_reason", None),
-            "trade_plan_valid": trade_plan_valid,
-            "has_existing_position": has_existing_position_value,
-            "position_quantity": getattr(pd_obj, "position_quantity", None),
-            "average_entry_price": getattr(pd_obj, "average_entry_price", None),
-            "position_action": position_action_value,
-            "new_entry_action": new_entry_action_value,
-            **current_price_fields,
-            "full_decision": full_decision,
-            "executive_summary": getattr(pd_obj, "executive_summary", None),
-            "investment_thesis": getattr(pd_obj, "investment_thesis", None),
-            "price_target": getattr(pd_obj, "price_target", None),
-            "time_horizon": configured_time_horizon or getattr(pd_obj, "time_horizon", None),
-            "confidence_score": getattr(pd_obj, "confidence_score", None),
-            "confidence_breakdown": _model_to_dict(getattr(pd_obj, "confidence_breakdown", None)) or None,
-            "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
-            "entry_price": getattr(pd_obj, "entry_price", None),
-            "stop_loss": getattr(pd_obj, "stop_loss", None),
-            "take_profit": getattr(pd_obj, "take_profit", None),
-            "risk_per_share": getattr(pd_obj, "risk_per_share", None),
-            "reward_per_share": getattr(pd_obj, "reward_per_share", None),
-            "risk_reward_ratio": risk_reward_ratio,
-            "risk_reward_display": risk_reward_display,
-            "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
-            "max_drawdown_min_pct": getattr(pd_obj, "max_drawdown_min_pct", None),
-            "max_drawdown_max_pct": getattr(pd_obj, "max_drawdown_max_pct", None),
-            "volatility_level": _enum_value(getattr(pd_obj, "volatility_level", None)),
-            "volatility_score": getattr(pd_obj, "volatility_score", None),
-            "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
-            "rebalancing_action": rebalancing_action_value,
-            "position_size_hint": position_size_hint_value,
-            "key_reasons": getattr(pd_obj, "key_reasons", []) or [],
-            "key_reasons_paragraph": getattr(pd_obj, "key_reasons_paragraph", None),
-            "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
-            "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
-            "data_quality": pd_data_quality,
-            "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
-            "validation_warning_details": _validation_warning_details(getattr(pd_obj, "validation_warnings", []) or []),
-            **{key: value for key, value in common.items() if key != "data_quality"},
-        },
-        final_state,
+def _portfolio_payload(
+    *,
+    full_decision: str,
+    pd_obj: object,
+    final_state: dict[str, Any],
+    common: dict[str, Any],
+) -> dict[str, Any]:
+    rating = getattr(pd_obj, "rating", None)
+    fallback_rating = _enum_value(rating)
+    final_decision = getattr(pd_obj, "final_decision", None) or getattr(pd_obj, "decision", None) or fallback_rating
+    current_price_fields = _get_current_price_fields(final_state, pd_obj)
+    return {
+        "decision": final_decision,
+        "llm_decision": getattr(pd_obj, "llm_decision", None) or fallback_rating,
+        "final_decision": final_decision,
+        "decision_adjusted": bool(getattr(pd_obj, "decision_adjusted", False)),
+        "decision_adjusted_reason": getattr(pd_obj, "decision_adjusted_reason", None),
+        **_portfolio_trade_fields(pd_obj, final_decision),
+        **current_price_fields,
+        **_portfolio_summary_fields(full_decision, pd_obj, final_state),
+        "data_quality": _portfolio_data_quality(pd_obj, common, current_price_fields),
+        "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
+        "validation_warning_details": _validation_warning_details(getattr(pd_obj, "validation_warnings", []) or []),
+        **{key: value for key, value in common.items() if key != "data_quality"},
+    }
+
+
+def _portfolio_summary_fields(full_decision: str, pd_obj: object, final_state: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "full_decision": full_decision,
+        "executive_summary": getattr(pd_obj, "executive_summary", None),
+        "investment_thesis": getattr(pd_obj, "investment_thesis", None),
+        "price_target": getattr(pd_obj, "price_target", None),
+        "time_horizon": final_state.get("time_horizon") or getattr(pd_obj, "time_horizon", None),
+        "confidence_score": getattr(pd_obj, "confidence_score", None),
+        "confidence_breakdown": _model_to_dict(getattr(pd_obj, "confidence_breakdown", None)) or None,
+        "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
+        "entry_price": getattr(pd_obj, "entry_price", None),
+        "stop_loss": getattr(pd_obj, "stop_loss", None),
+        "take_profit": getattr(pd_obj, "take_profit", None),
+        "risk_per_share": getattr(pd_obj, "risk_per_share", None),
+        "reward_per_share": getattr(pd_obj, "reward_per_share", None),
+        "max_drawdown_estimate": getattr(pd_obj, "max_drawdown_estimate", None),
+        "max_drawdown_min_pct": getattr(pd_obj, "max_drawdown_min_pct", None),
+        "max_drawdown_max_pct": getattr(pd_obj, "max_drawdown_max_pct", None),
+        "volatility_level": _enum_value(getattr(pd_obj, "volatility_level", None)),
+        "volatility_score": getattr(pd_obj, "volatility_score", None),
+        "position_sizing_reason": getattr(pd_obj, "position_sizing_reason", None),
+        "key_reasons": getattr(pd_obj, "key_reasons", []) or [],
+        "key_reasons_paragraph": getattr(pd_obj, "key_reasons_paragraph", None),
+        "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
+        "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
+    }
+
+
+def parse_final_result(
+    full_decision: str,
+    pd_obj: object | None,
+    portfolio_rating: object | None = None,
+    final_state: dict | None = None,
+) -> dict:
+    """Convert the final agent state into API response fields."""
+    final_state = final_state or {}
+    full_decision, pd_obj = _coerce_portfolio_decision(full_decision, pd_obj)
+    common = _build_common_result_fields(final_state, pd_obj)
+    payload = (
+        _missing_portfolio_payload(full_decision=full_decision, final_state=final_state, common=common)
+        if pd_obj is None
+        else _portfolio_payload(
+            full_decision=full_decision,
+            pd_obj=pd_obj,
+            final_state=final_state,
+            common=common,
+        )
     )
+    return _with_analysis_overview_and_risk_data_quality(payload, final_state)
 
 
 def cache_key(req: AnalysisRequest) -> AnalysisCacheKey:

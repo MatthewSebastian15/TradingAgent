@@ -46,6 +46,41 @@ export const PIPELINE = [
 
 export const PIPELINE_IDS = new Set(PIPELINE.map((step) => step.id));
 
+export const PIPELINE_AGENT_IDS = Object.freeze({
+  DATA_COLLECTION: 'data_collection',
+  MARKET_ANALYST: 'market_analyst',
+  NEWS_ANALYST: 'news_analyst',
+  FUNDAMENTALS: 'fundamentals',
+  BULL_RESEARCHER: 'bull_researcher',
+  BEAR_RESEARCHER: 'bear_researcher',
+  RESEARCH_MANAGER: 'research_manager',
+  TRADER: 'trader',
+  RISK_ANALYSTS: 'risk_analysts',
+  PORTFOLIO_MANAGER: 'portfolio_manager',
+  CACHE: 'cache',
+  PIPELINE: 'pipeline',
+});
+
+export const PIPELINE_STATUSES = Object.freeze({
+  STARTED: 'started',
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  ERROR: 'error',
+  SKIPPED: 'skipped',
+});
+
+export const SSE_EVENTS = Object.freeze({
+  PROGRESS: 'progress',
+  RESULT: 'result',
+  ERROR: 'error',
+  HEARTBEAT: 'heartbeat',
+});
+
+export const KNOWN_PIPELINE_AGENT_IDS = new Set(Object.values(PIPELINE_AGENT_IDS));
+export const KNOWN_PIPELINE_STATUSES = new Set(Object.values(PIPELINE_STATUSES));
+export const KNOWN_SSE_EVENTS = new Set(Object.values(SSE_EVENTS));
+
 export const AGENT_ALIASES = {
   data: 'data_collection',
   data_quality: 'data_quality',

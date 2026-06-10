@@ -12,6 +12,7 @@ import FundamentalTab from './results/tabs/FundamentalTab';
 import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
 import ResultTabs from './results/tabs/ResultTabs';
+import { PIPELINE_STATUSES } from '../domain/analysisContract';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['BUY', 'SELL', 'Buy', 'Overweight', 'Sell', 'Underweight']);
@@ -756,15 +757,22 @@ const AGENT_ROLE_FALLBACKS = {
 };
 
 function normalizePipelineStatus(status) {
-  const normalized = String(status || 'completed').toLowerCase();
-  if (['error', 'failed', 'fail'].includes(normalized)) return 'failed';
-  if (['skip', 'skipped'].includes(normalized)) return 'skipped';
-  return 'completed';
+  const normalized = String(status || PIPELINE_STATUSES.COMPLETED).toLowerCase();
+  if ([PIPELINE_STATUSES.ERROR, PIPELINE_STATUSES.FAILED, 'fail'].includes(normalized)) {
+    return PIPELINE_STATUSES.FAILED;
+  }
+  if ([PIPELINE_STATUSES.RUNNING, PIPELINE_STATUSES.STARTED, 'in_progress'].includes(normalized)) {
+    return PIPELINE_STATUSES.RUNNING;
+  }
+  if ([PIPELINE_STATUSES.SKIPPED, 'skip', 'cancelled'].includes(normalized)) {
+    return PIPELINE_STATUSES.SKIPPED;
+  }
+  return PIPELINE_STATUSES.COMPLETED;
 }
 
 function pipelineStatusClasses(status) {
-  if (status === 'failed') return 'border-bloomberg-red text-bloomberg-red bg-bloomberg-red-dim';
-  if (status === 'skipped')
+  if (status === PIPELINE_STATUSES.FAILED) return 'border-bloomberg-red text-bloomberg-red bg-bloomberg-red-dim';
+  if (status === PIPELINE_STATUSES.SKIPPED)
     return 'border-bloomberg-amber text-bloomberg-amber bg-bloomberg-amber-dim';
   return 'border-bloomberg-green text-bloomberg-green bg-bloomberg-green-dim';
 }
@@ -790,9 +798,9 @@ function normalizePipelineRows(pipeline = [], agents = []) {
           agent.summary ||
           agent.status_message ||
           warning ||
-          (status === 'skipped'
+          (status === PIPELINE_STATUSES.SKIPPED
             ? 'Skipped by the selected pipeline mode.'
-            : status === 'failed'
+            : status === PIPELINE_STATUSES.FAILED
               ? 'Agent failed before producing a summary.'
               : 'Completed. No compact backend summary was provided.')
       );
@@ -823,7 +831,7 @@ function normalizePipelineRows(pipeline = [], agents = []) {
       key: `${name}-${index}`,
       name,
       role: AGENT_ROLE_FALLBACKS[name] || 'Runs the assigned analysis step in the pipeline.',
-      status: 'completed',
+      status: PIPELINE_STATUSES.COMPLETED,
       output: 'Completed. No compact backend summary was provided.',
       duration: 'N/A',
     };
@@ -834,7 +842,7 @@ function AgentPipeline({ pipeline = [], agents = [], totalSeconds }) {
   const rows = normalizePipelineRows(pipeline, agents);
   if (!rows.length) return null;
 
-  const completedCount = rows.filter((agent) => agent.status === 'completed').length;
+  const completedCount = rows.filter((agent) => agent.status === PIPELINE_STATUSES.COMPLETED).length;
 
   return (
     <div className="px-4 py-3 border-b border-bloomberg-border">
@@ -868,6 +876,376 @@ AgentPipeline.propTypes = {
   totalSeconds: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
 };
 
+function buildResultViewModel(result) {
+  const displayTicker = result.normalized_ticker || result.ticker;
+  const displayResult = { ...result, ticker: displayTicker };
+  const finalDecision = getFinalDecision(result);
+  const rawAiSignal = normalizeSignal(
+    result.raw_ai_signal || result.llm_decision || result.final_decision || result.decision
+  );
+  const isActionable = ACTIONABLE_DECISIONS.has(finalDecision);
+  const tradePlanValid = Boolean(result.trade_plan_valid);
+  const analysisOverview = result.analysis_overview || {};
+  const currentPrice = getCurrentPrice(result);
+  const currentPriceAsOf = coalesceDisplayValue(
+    result.price_timestamp,
+    result.current_price_as_of,
+    result.last_close_price_as_of
+  );
+  const catalysts = result.key_catalysts || [];
+  const riskSummary = analysisOverview.risk_summary || null;
+  const miniRiskSummary = result.mini_risk_summary;
+  return {
+    displayTicker,
+    displayResult,
+    finalDecision,
+    rawAiSignal,
+    isActionable,
+    tradePlanValid,
+    shouldShowActionPlan: isActionable && tradePlanValid,
+    shouldShowHoldMetrics: !(isActionable && tradePlanValid),
+    summary: analysisOverview.executive_summary || result.executive_summary,
+    thesis: analysisOverview.investment_thesis || result.investment_thesis,
+    currentPrice,
+    priceAsOfLabel: formatPriceAsOf(result, currentPriceAsOf),
+    priceTimestampLabel: formatWibPriceTimestamp(currentPriceAsOf),
+    currentPriceSource: formatDataSourcePriceLabel(result),
+    timeHorizon: formatAnalysisHorizon(result.time_horizon_months, result.time_horizon),
+    confidenceDisplay: formatConfidenceDisplay(result.confidence_score ?? null, result.confidence_label),
+    allocation: result.suggested_allocation_percent ?? null,
+    riskReward: formatRiskReward(result),
+    catalysts,
+    invalidations: result.invalidation_conditions || [],
+    recommendationRiskParagraph: buildRecommendationRiskParagraph({
+      paragraph: analysisOverview.key_reasons_paragraph || result.key_reasons_paragraph,
+      reasons: analysisOverview.key_reasons || result.key_reasons,
+      catalysts,
+      miniRiskSummary,
+      riskSummary,
+      decisionReason: result.decision_adjusted_reason,
+    }),
+    agents: result.agents_used || [],
+    budgetExhausted: Boolean(result.budget_exhausted),
+    agentsSkipped: result.agents_skipped || [],
+    canShowRaw: result.response_detail === 'debug',
+    createdAtLabel: formatDateTimeLabel(result.analysis_created_at || result.saved_at),
+    decisionColor:
+      {
+        BUY: 'text-bloomberg-green',
+        SELL: 'text-bloomberg-red',
+        HOLD: 'text-bloomberg-amber',
+        WAIT: 'text-bloomberg-muted',
+        REDUCE: 'text-bloomberg-amber',
+      }[finalDecision] || 'text-bloomberg-white',
+  };
+}
+
+function ResultError({ error }) {
+  return (
+    <div className="border border-bloomberg-red bg-bloomberg-red-dim animate-fade-up">
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-bloomberg-red border-opacity-30">
+        <span className="font-mono text-xs font-semibold text-bloomberg-red tracking-wider">
+          PIPELINE ERROR
+        </span>
+      </div>
+      <div className="px-4 py-4">
+        <pre className="font-mono text-xs text-bloomberg-red leading-relaxed whitespace-pre-wrap">
+          {getError(error)}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+ResultError.propTypes = {
+  error: PropTypes.oneOfType([PropTypes.object, PropTypes.string]),
+};
+
+function ResultCardHeader({
+  result,
+  displayResult,
+  timeHorizon,
+  createdAtLabel,
+  enableReportExport,
+  mockReport,
+  onRerunSubmit,
+  rerunRunning,
+  onToggleRerun,
+}) {
+  return (
+    <div className="bg-black px-4 py-2 border-b border-bloomberg-border flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <span className="font-mono text-xs text-bloomberg-muted tracking-wider">
+          ANALYSIS COMPLETE
+        </span>
+        <span className="font-mono text-xs text-bloomberg-green">●</span>
+      </div>
+      <div className="flex items-center gap-3 min-w-0 flex-wrap justify-end">
+        {timeHorizon && (
+          <span className="font-mono text-xs text-bloomberg-orange truncate">
+            Analysis Horizon: {timeHorizon}
+          </span>
+        )}
+        <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
+          Trade Date: {result.trade_date}
+        </span>
+        {createdAtLabel && (
+          <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
+            Created: {createdAtLabel}
+          </span>
+        )}
+        {onRerunSubmit && (
+          <button
+            type="button"
+            disabled={rerunRunning}
+            onClick={onToggleRerun}
+            className="font-mono text-xs border border-bloomberg-border px-2.5 py-1.5 tracking-wider text-bloomberg-muted hover:text-bloomberg-white disabled:opacity-50"
+          >
+            ↺ RE-RUN
+          </button>
+        )}
+        {enableReportExport && (result.job_id || result.request_id) && (
+          <ExportReportButtons
+            resourceId={result.job_id || result.request_id}
+            result={displayResult}
+            disabled={Boolean(result.error)}
+            mockReport={mockReport}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DecisionHero({ result, vm }) {
+  return (
+    <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
+      <div>
+        <div className={`font-display text-5xl font-bold tracking-wider ${vm.decisionColor}`}>
+          {formatTickerLabel(vm.displayTicker)}
+        </div>
+        <div className="mt-3">
+          <DecisionBadge decision={vm.finalDecision} />
+        </div>
+        {vm.currentPriceSource && (
+          <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
+            <span className="text-bloomberg-white">{vm.currentPriceSource}</span>
+          </div>
+        )}
+        {vm.rawAiSignal && vm.rawAiSignal !== vm.finalDecision && (
+          <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
+            LLM: {vm.rawAiSignal} → FINAL: {String(vm.finalDecision).toUpperCase()}
+          </div>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-shrink-0 w-full lg:w-[43rem] max-w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {hasDisplayValue(vm.currentPrice) && (
+            <MetricBox
+              label="LAST PRICE"
+              value={formatPrice(
+                vm.currentPrice,
+                vm.displayTicker,
+                result.price_currency || result.currency
+              )}
+              subValue={
+                result.price_is_fallback || !vm.priceTimestampLabel
+                  ? null
+                  : `as of ${vm.priceTimestampLabel}`
+              }
+              highlight
+            />
+          )}
+          {vm.priceAsOfLabel && <MetricBox label="PRICE AS OF" value={vm.priceAsOfLabel} />}
+          {vm.timeHorizon && <MetricBox label="HORIZON" value={vm.timeHorizon} />}
+          {vm.confidenceDisplay && (
+            <MetricBox
+              label="CONFIDENCE"
+              value={vm.confidenceDisplay}
+              tone={confidenceTone(result.confidence_tier)}
+              tooltip="Score reflects combined signal strength from all 9 agents."
+            />
+          )}
+          {vm.allocation !== null && (
+            <MetricBox label="ALLOCATION" value={formatPercent(vm.allocation)} />
+          )}
+        </div>
+        <ConfidenceBreakdown breakdown={result.confidence_breakdown} />
+        {result.price_is_fallback && (
+          <div className="mt-2 font-mono text-[11px] text-bloomberg-amber leading-relaxed">
+            ⚠ Harga tidak tersedia saat analisis dibuat. Menampilkan harga penutupan terakhir.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ValidationNotices({ result, vm }) {
+  if (!result.decision_adjusted && !(vm.isActionable && !vm.tradePlanValid)) return null;
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border">
+      {result.decision_adjusted && (
+        <NoticeBox title="DECISION ADJUSTED">
+          {result.decision_adjusted_reason || 'Backend validation changed the final decision.'}
+        </NoticeBox>
+      )}
+      {vm.isActionable && !vm.tradePlanValid && (
+        <div className={result.decision_adjusted ? 'mt-3' : ''}>
+          <NoticeBox title="TRADE PLAN NOT VALID" tone="red">
+            Backend validation did not approve a complete actionable trade plan.
+          </NoticeBox>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PipelineLimitNotice({ agentsSkipped }) {
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
+      <SectionHeader label="PIPELINE LIMIT" />
+      <p className="font-mono text-xs text-bloomberg-amber leading-relaxed">
+        LLM call budget exhausted before all stages completed. Treat this analysis as incomplete.
+      </p>
+      {agentsSkipped.length > 0 && (
+        <div className="mt-2 font-mono text-xs text-bloomberg-muted">
+          SKIPPED: {agentsSkipped.join(', ')}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CatalystInvalidationGrid({ catalysts, invalidations }) {
+  if (!catalysts.length && !invalidations.length) return null;
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border grid grid-cols-2 gap-4">
+      {catalysts.length > 0 && (
+        <div>
+          <SectionHeader label="KEY CATALYSTS" />
+          <ul className="flex flex-col gap-1.5">
+            {catalysts.map((c, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="font-mono text-xs text-bloomberg-green flex-shrink-0 mt-0.5">
+                  +
+                </span>
+                <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">{c}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {invalidations.length > 0 && (
+        <div>
+          <SectionHeader label="INVALIDATION CONDITIONS" />
+          <ul className="flex flex-col gap-1.5">
+            {invalidations.map((inv, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="font-mono text-xs text-bloomberg-red flex-shrink-0 mt-0.5">
+                  ✕
+                </span>
+                <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">{inv}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RecommendationRiskSection({ text }) {
+  if (!text) return null;
+  return (
+    <div className="px-4 py-4 border-b border-bloomberg-border">
+      <SectionHeader label="KEY REASONS & RISK SUMMARY" />
+      <p className="font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">{text}</p>
+    </div>
+  );
+}
+
+function RawJsonDebug({ result, showRaw, onToggle }) {
+  return (
+    <div className="px-4 py-3">
+      <button
+        onClick={onToggle}
+        className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white tracking-wider transition-colors"
+      >
+        {showRaw ? '▲ HIDE' : '▼ RAW JSON'} (DEBUG)
+      </button>
+      {showRaw && (
+        <pre className="mt-3 bg-black border border-bloomberg-border p-3 text-xs font-mono text-bloomberg-muted overflow-x-auto leading-relaxed whitespace-pre-wrap">
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function AnalysisTab({ result, vm, summaryExpanded, thesisExpanded, showRaw, onToggleSummary, onToggleThesis, onToggleRaw }) {
+  return (
+    <>
+      <DecisionHero result={result} vm={vm} />
+
+      {!hasDisplayValue(vm.currentPrice) && (
+        <div className="px-4 py-4 border-b border-bloomberg-border">
+          <NoticeBox title="PRICE DATA MISSING" tone="red">
+            Last price is unavailable, so no synthetic price is shown.
+          </NoticeBox>
+        </div>
+      )}
+
+      <ValidationNotices result={result} vm={vm} />
+
+      {vm.shouldShowActionPlan && (
+        <ActionableMetrics
+          result={vm.displayResult}
+          currentPrice={vm.currentPrice}
+          riskReward={vm.riskReward}
+        />
+      )}
+
+      {vm.shouldShowHoldMetrics && <HoldMetrics result={vm.displayResult} currentPrice={vm.currentPrice} />}
+
+      {vm.budgetExhausted && <PipelineLimitNotice agentsSkipped={vm.agentsSkipped} />}
+
+      <CatalystInvalidationGrid catalysts={vm.catalysts} invalidations={vm.invalidations} />
+
+      <ExpandableTextSection
+        label="EXECUTIVE SUMMARY"
+        text={vm.summary}
+        expanded={summaryExpanded}
+        onToggle={onToggleSummary}
+        collapsedWords={100}
+        expandedMaxClass="max-h-[300px]"
+        expandLabel="Read More"
+      />
+
+      <RecommendationRiskSection text={vm.recommendationRiskParagraph} />
+
+      <ExpandableTextSection
+        label="INVESTMENT THESIS"
+        text={vm.thesis}
+        expanded={thesisExpanded}
+        onToggle={onToggleThesis}
+        collapsedWords={150}
+        expandedMaxClass="max-h-[500px]"
+        expandLabel="Read Full Thesis"
+      />
+
+      <AgentPipeline
+        pipeline={result.agent_pipeline}
+        agents={vm.agents}
+        totalSeconds={result.total_pipeline_seconds}
+      />
+
+      {vm.canShowRaw && <RawJsonDebug result={result} showRaw={showRaw} onToggle={onToggleRaw} />}
+    </>
+  );
+}
+
 export default function ResultCard({
   result,
   enableReportExport = true,
@@ -880,126 +1258,26 @@ export default function ResultCard({
   const [showRaw, setShowRaw] = useState(false);
   const [activeTab, setActiveTab] = useState('analisis');
   const [showRerunPanel, setShowRerunPanel] = useState(false);
-  const disabledTabs = [];
 
   if (!result) return null;
+  if (result.error) return <ResultError error={result.error} />;
 
-  if (result.error) {
-    return (
-      <div className="border border-bloomberg-red bg-bloomberg-red-dim animate-fade-up">
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-bloomberg-red border-opacity-30">
-          <span className="font-mono text-xs font-semibold text-bloomberg-red tracking-wider">
-            PIPELINE ERROR
-          </span>
-        </div>
-        <div className="px-4 py-4">
-          <pre className="font-mono text-xs text-bloomberg-red leading-relaxed whitespace-pre-wrap">
-            {getError(result.error)}
-          </pre>
-        </div>
-      </div>
-    );
-  }
-
-  const displayTicker = result.normalized_ticker || result.ticker;
-  const displayResult = { ...result, ticker: displayTicker };
-  const finalDecision = getFinalDecision(result);
-  const rawAiSignal = normalizeSignal(
-    result.raw_ai_signal || result.llm_decision || result.final_decision || result.decision
-  );
-  const isActionable = ACTIONABLE_DECISIONS.has(finalDecision);
-  const tradePlanValid = Boolean(result.trade_plan_valid);
-  const shouldShowActionPlan = isActionable && tradePlanValid;
-  const shouldShowHoldMetrics = !shouldShowActionPlan;
-
-  const analysisOverview = result.analysis_overview || {};
-  const summary = analysisOverview.executive_summary || result.executive_summary;
-  const thesis = analysisOverview.investment_thesis || result.investment_thesis;
-  const currentPrice = getCurrentPrice(result);
-  const currentPriceAsOf = coalesceDisplayValue(
-    result.price_timestamp,
-    result.current_price_as_of,
-    result.last_close_price_as_of
-  );
-  const priceAsOfLabel = formatPriceAsOf(result, currentPriceAsOf);
-  const priceTimestampLabel = formatWibPriceTimestamp(currentPriceAsOf);
-  const currentPriceSource = formatDataSourcePriceLabel(result);
-  const timeHorizon = formatAnalysisHorizon(result.time_horizon_months, result.time_horizon);
-  const confidence = result.confidence_score ?? null;
-  const confidenceDisplay = formatConfidenceDisplay(confidence, result.confidence_label);
-  const allocation = result.suggested_allocation_percent ?? null;
-  const riskReward = formatRiskReward(result);
-  const catalysts = result.key_catalysts || [];
-  const invalidations = result.invalidation_conditions || [];
-  const riskSummary = analysisOverview.risk_summary || null;
-  const miniRiskSummary = result.mini_risk_summary;
-  const recommendationRiskParagraph = buildRecommendationRiskParagraph({
-    paragraph: analysisOverview.key_reasons_paragraph || result.key_reasons_paragraph,
-    reasons: analysisOverview.key_reasons || result.key_reasons,
-    catalysts,
-    miniRiskSummary,
-    riskSummary,
-    decisionReason: result.decision_adjusted_reason,
-  });
-  const agents = result.agents_used || [];
-  const budgetExhausted = Boolean(result.budget_exhausted);
-  const agentsSkipped = result.agents_skipped || [];
-  const canShowRaw = result.response_detail === 'debug';
-  const createdAtLabel = formatDateTimeLabel(result.analysis_created_at || result.saved_at);
-
-  const decisionColor =
-    {
-      BUY: 'text-bloomberg-green',
-      SELL: 'text-bloomberg-red',
-      HOLD: 'text-bloomberg-amber',
-      WAIT: 'text-bloomberg-muted',
-      REDUCE: 'text-bloomberg-amber',
-    }[finalDecision] || 'text-bloomberg-white';
+  const vm = buildResultViewModel(result);
+  const disabledTabs = [];
 
   return (
     <div className="border border-bloomberg-border bg-bloomberg-card animate-fade-up">
-      {/* Header bar */}
-      <div className="bg-black px-4 py-2 border-b border-bloomberg-border flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-bloomberg-muted tracking-wider">
-            ANALYSIS COMPLETE
-          </span>
-          <span className="font-mono text-xs text-bloomberg-green">●</span>
-        </div>
-        <div className="flex items-center gap-3 min-w-0 flex-wrap justify-end">
-          {timeHorizon && (
-            <span className="font-mono text-xs text-bloomberg-orange truncate">
-              Analysis Horizon: {timeHorizon}
-            </span>
-          )}
-          <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
-            Trade Date: {result.trade_date}
-          </span>
-          {createdAtLabel && (
-            <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
-              Created: {createdAtLabel}
-            </span>
-          )}
-          {onRerunSubmit && (
-            <button
-              type="button"
-              disabled={rerunRunning}
-              onClick={() => setShowRerunPanel((value) => !value)}
-              className="font-mono text-xs border border-bloomberg-border px-2.5 py-1.5 tracking-wider text-bloomberg-muted hover:text-bloomberg-white disabled:opacity-50"
-            >
-              ↺ RE-RUN
-            </button>
-          )}
-          {enableReportExport && (result.job_id || result.request_id) && (
-            <ExportReportButtons
-              resourceId={result.job_id || result.request_id}
-              result={displayResult}
-              disabled={Boolean(result.error)}
-              mockReport={mockReport}
-            />
-          )}
-        </div>
-      </div>
+      <ResultCardHeader
+        result={result}
+        displayResult={vm.displayResult}
+        timeHorizon={vm.timeHorizon}
+        createdAtLabel={vm.createdAtLabel}
+        enableReportExport={enableReportExport}
+        mockReport={mockReport}
+        onRerunSubmit={onRerunSubmit}
+        rerunRunning={rerunRunning}
+        onToggleRerun={() => setShowRerunPanel((value) => !value)}
+      />
 
       {onRerunSubmit && (
         <RerunPanel
@@ -1019,215 +1297,16 @@ export default function ResultCard({
       />
 
       {activeTab === 'analisis' && (
-        <>
-          {/* Decision hero */}
-          <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
-            <div>
-              <div className={`font-display text-5xl font-bold tracking-wider ${decisionColor}`}>
-                {formatTickerLabel(displayTicker)}
-              </div>
-              <div className="mt-3">
-                <DecisionBadge decision={finalDecision} />
-              </div>
-              {currentPriceSource && (
-                <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
-                  <span className="text-bloomberg-white">{currentPriceSource}</span>
-                </div>
-              )}
-              {rawAiSignal && rawAiSignal !== finalDecision && (
-                <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
-                  LLM: {rawAiSignal} → FINAL: {String(finalDecision).toUpperCase()}
-                </div>
-              )}
-            </div>
-
-            {/* Key metrics — PRICE TARGET removed */}
-            <div className="min-w-0 flex-shrink-0 w-full lg:w-[43rem] max-w-full">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {hasDisplayValue(currentPrice) && (
-                  <MetricBox
-                    label="LAST PRICE"
-                    value={formatPrice(
-                      currentPrice,
-                      displayTicker,
-                      result.price_currency || result.currency
-                    )}
-                    subValue={
-                      result.price_is_fallback || !priceTimestampLabel
-                        ? null
-                        : `as of ${priceTimestampLabel}`
-                    }
-                    highlight
-                  />
-                )}
-                {priceAsOfLabel && <MetricBox label="PRICE AS OF" value={priceAsOfLabel} />}
-                {timeHorizon && <MetricBox label="HORIZON" value={timeHorizon} />}
-                {confidenceDisplay && (
-                  <MetricBox
-                    label="CONFIDENCE"
-                    value={confidenceDisplay}
-                    tone={confidenceTone(result.confidence_tier)}
-                    tooltip="Score reflects combined signal strength from all 9 agents."
-                  />
-                )}
-                {allocation !== null && (
-                  <MetricBox label="ALLOCATION" value={formatPercent(allocation)} />
-                )}
-              </div>
-              <ConfidenceBreakdown breakdown={result.confidence_breakdown} />
-              {result.price_is_fallback && (
-                <div className="mt-2 font-mono text-[11px] text-bloomberg-amber leading-relaxed">
-                  ⚠ Harga tidak tersedia saat analisis dibuat. Menampilkan harga penutupan terakhir.
-                </div>
-              )}
-            </div>
-          </div>
-
-          {!hasDisplayValue(currentPrice) && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <NoticeBox title="PRICE DATA MISSING" tone="red">
-                Last price is unavailable, so no synthetic price is shown.
-              </NoticeBox>
-            </div>
-          )}
-
-          {(result.decision_adjusted || (isActionable && !tradePlanValid)) && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              {result.decision_adjusted && (
-                <NoticeBox title="DECISION ADJUSTED">
-                  {result.decision_adjusted_reason ||
-                    'Backend validation changed the final decision.'}
-                </NoticeBox>
-              )}
-              {isActionable && !tradePlanValid && (
-                <div className={result.decision_adjusted ? 'mt-3' : ''}>
-                  <NoticeBox title="TRADE PLAN NOT VALID" tone="red">
-                    Backend validation did not approve a complete actionable trade plan.
-                  </NoticeBox>
-                </div>
-              )}
-            </div>
-          )}
-
-          {shouldShowActionPlan && (
-            <ActionableMetrics
-              result={displayResult}
-              currentPrice={currentPrice}
-              riskReward={riskReward}
-            />
-          )}
-
-          {shouldShowHoldMetrics && (
-            <HoldMetrics result={displayResult} currentPrice={currentPrice} />
-          )}
-
-          {budgetExhausted && (
-            <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
-              <SectionHeader label="PIPELINE LIMIT" />
-              <p className="font-mono text-xs text-bloomberg-amber leading-relaxed">
-                LLM call budget exhausted before all stages completed. Treat this analysis as
-                incomplete.
-              </p>
-              {agentsSkipped.length > 0 && (
-                <div className="mt-2 font-mono text-xs text-bloomberg-muted">
-                  SKIPPED: {agentsSkipped.join(', ')}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Catalysts + Invalidations */}
-          {(catalysts.length > 0 || invalidations.length > 0) && (
-            <div className="px-4 py-4 border-b border-bloomberg-border grid grid-cols-2 gap-4">
-              {catalysts.length > 0 && (
-                <div>
-                  <SectionHeader label="KEY CATALYSTS" />
-                  <ul className="flex flex-col gap-1.5">
-                    {catalysts.map((c, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <span className="font-mono text-xs text-bloomberg-green flex-shrink-0 mt-0.5">
-                          +
-                        </span>
-                        <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                          {c}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {invalidations.length > 0 && (
-                <div>
-                  <SectionHeader label="INVALIDATION CONDITIONS" />
-                  <ul className="flex flex-col gap-1.5">
-                    {invalidations.map((inv, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <span className="font-mono text-xs text-bloomberg-red flex-shrink-0 mt-0.5">
-                          ✕
-                        </span>
-                        <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-                          {inv}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          <ExpandableTextSection
-            label="EXECUTIVE SUMMARY"
-            text={summary}
-            expanded={summaryExpanded}
-            onToggle={() => setSummaryExpanded(!summaryExpanded)}
-            collapsedWords={100}
-            expandedMaxClass="max-h-[300px]"
-            expandLabel="Read More"
-          />
-
-          {recommendationRiskParagraph && (
-            <div className="px-4 py-4 border-b border-bloomberg-border">
-              <SectionHeader label="KEY REASONS & RISK SUMMARY" />
-              <p className="font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">
-                {recommendationRiskParagraph}
-              </p>
-            </div>
-          )}
-
-          <ExpandableTextSection
-            label="INVESTMENT THESIS"
-            text={thesis}
-            expanded={thesisExpanded}
-            onToggle={() => setThesisExpanded(!thesisExpanded)}
-            collapsedWords={150}
-            expandedMaxClass="max-h-[500px]"
-            expandLabel="Read Full Thesis"
-          />
-
-          <AgentPipeline
-            pipeline={result.agent_pipeline}
-            agents={agents}
-            totalSeconds={result.total_pipeline_seconds}
-          />
-
-          {/* Raw JSON debug */}
-          {canShowRaw && (
-            <div className="px-4 py-3">
-              <button
-                onClick={() => setShowRaw(!showRaw)}
-                className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white tracking-wider transition-colors"
-              >
-                {showRaw ? '▲ HIDE' : '▼ RAW JSON'} (DEBUG)
-              </button>
-              {showRaw && (
-                <pre className="mt-3 bg-black border border-bloomberg-border p-3 text-xs font-mono text-bloomberg-muted overflow-x-auto leading-relaxed whitespace-pre-wrap">
-                  {JSON.stringify(result, null, 2)}
-                </pre>
-              )}
-            </div>
-          )}
-        </>
+        <AnalysisTab
+          result={result}
+          vm={vm}
+          summaryExpanded={summaryExpanded}
+          thesisExpanded={thesisExpanded}
+          showRaw={showRaw}
+          onToggleSummary={() => setSummaryExpanded(!summaryExpanded)}
+          onToggleThesis={() => setThesisExpanded(!thesisExpanded)}
+          onToggleRaw={() => setShowRaw(!showRaw)}
+        />
       )}
 
       {activeTab === 'profile' && <ProfileTab profile={result.company_profile} result={result} />}
