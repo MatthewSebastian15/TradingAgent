@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-import { AGENT_ALIASES, PIPELINE, PIPELINE_IDS } from '../domain/analysisContract';
+import { AGENT_ALIASES, PIPELINE, PIPELINE_IDS, PIPELINE_STATUSES } from '../domain/analysisContract';
 
 function normalizeAgentId(id = '') {
   const normalized = String(id)
@@ -13,10 +13,16 @@ function normalizeAgentId(id = '') {
 
 function normalizeStatus(status = '') {
   const normalized = String(status).trim().toLowerCase();
-  if (['start', 'running', 'in_progress'].includes(normalized)) return 'started';
-  if (['done', 'complete', 'success', 'finished'].includes(normalized)) return 'completed';
-  if (['error', 'failed', 'fail'].includes(normalized)) return 'failed';
-  return normalized || 'started';
+  if (['start', PIPELINE_STATUSES.RUNNING, 'in_progress'].includes(normalized)) {
+    return PIPELINE_STATUSES.STARTED;
+  }
+  if (['done', 'complete', 'success', 'finished'].includes(normalized)) {
+    return PIPELINE_STATUSES.COMPLETED;
+  }
+  if ([PIPELINE_STATUSES.ERROR, PIPELINE_STATUSES.FAILED, 'fail'].includes(normalized)) {
+    return PIPELINE_STATUSES.FAILED;
+  }
+  return normalized || PIPELINE_STATUSES.STARTED;
 }
 
 function formatTime(s) {
@@ -71,15 +77,15 @@ export default function AgentLog({ status, agentProgress }) {
 
     setActiveIds((prev) => {
       const next = new Set(prev);
-      if (isPipelineAgent && eventStatus === 'started') next.add(agentId);
-      if (isPipelineAgent && (eventStatus === 'completed' || eventStatus === 'failed'))
+      if (isPipelineAgent && eventStatus === PIPELINE_STATUSES.STARTED) next.add(agentId);
+      if (isPipelineAgent && (eventStatus === PIPELINE_STATUSES.COMPLETED || eventStatus === PIPELINE_STATUSES.FAILED))
         next.delete(agentId);
       return next;
     });
 
     setDoneIds((prev) => {
       const next = new Set(prev);
-      if (isPipelineAgent && eventStatus === 'completed') next.add(agentId);
+      if (isPipelineAgent && eventStatus === PIPELINE_STATUSES.COMPLETED) next.add(agentId);
       return next;
     });
 
@@ -204,7 +210,7 @@ export default function AgentLog({ status, agentProgress }) {
                       {ev.agent}
                     </div>
                     <div
-                      className={`font-mono text-xs ${ev.status === 'completed' ? 'text-bloomberg-green' : ev.status === 'failed' ? 'text-bloomberg-red' : 'text-bloomberg-orange'}`}
+                      className={`font-mono text-xs ${ev.status === PIPELINE_STATUSES.COMPLETED ? 'text-bloomberg-green' : ev.status === PIPELINE_STATUSES.FAILED ? 'text-bloomberg-red' : 'text-bloomberg-orange'}`}
                     >
                       {(ev.status || '').toUpperCase()}
                     </div>

@@ -6,6 +6,7 @@ import logging
 import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from io import StringIO
 from typing import Any, TypeVar
@@ -1757,300 +1758,271 @@ def _corporate_action_summary(corporate_actions_result: dict[str, Any], rows: li
     return summary
 
 
-def _build_field_quality_metadata(
-    *,
-    trade_date: str,
-    data_sources: dict[str, str],
-    price: DataField,
-    fundamentals: DataField,
-    balance_sheet: DataField,
-    cashflow: DataField,
-    income_statement: DataField,
-    company_news: DataField,
-    global_news: DataField,
-    insider_transactions: DataField,
-    news_sentiment: DataField,
-    social_sentiment: DataField,
-    technical_indicators: DataField,
-    event_risk: DataField,
-    recommendation_trends: DataField,
-    last_close_price: float | None,
-    company_profile: dict[str, Any] | None,
-    price_performance: dict[str, Any] | None,
-    vendor_attempts: dict[str, Any] | None = None,
-    news_context: dict[str, Any] | None = None,
-    last_close_price_as_of: str | None = None,
-    financial_as_of_date: str | None = None,
-    latest_revenue: float | None = None,
-    latest_ebitda: float | None = None,
-    latest_net_profit: float | None = None,
-    validation_summary: dict[str, Any] | None = None,
-) -> dict[str, dict[str, Any]]:
-    profile = company_profile or {}
-    performance = price_performance or {}
-    latest_news_as_of = _latest_news_date(news_context)
-    price_as_of = last_close_price_as_of
-    profile_as_of = profile.get("source_published_date") or profile.get("reported_date") or profile.get("fetched_at")
-    validation_summary = validation_summary or {}
+@dataclass(slots=True)
+class FieldQualityContext:
+    trade_date: str
+    data_sources: dict[str, str]
+    price: DataField
+    fundamentals: DataField
+    balance_sheet: DataField
+    cashflow: DataField
+    income_statement: DataField
+    company_news: DataField
+    global_news: DataField
+    insider_transactions: DataField
+    news_sentiment: DataField
+    social_sentiment: DataField
+    technical_indicators: DataField
+    event_risk: DataField
+    recommendation_trends: DataField
+    last_close_price: float | None
+    company_profile: dict[str, Any] | None
+    price_performance: dict[str, Any] | None
+    vendor_attempts: dict[str, Any] | None = None
+    news_context: dict[str, Any] | None = None
+    last_close_price_as_of: str | None = None
+    financial_as_of_date: str | None = None
+    latest_revenue: float | None = None
+    latest_ebitda: float | None = None
+    latest_net_profit: float | None = None
+    validation_summary: dict[str, Any] | None = None
+
+
+def _coerce_field_quality_context(
+    context: FieldQualityContext | None,
+    legacy_kwargs: dict[str, Any],
+) -> FieldQualityContext:
+    return context if context is not None else FieldQualityContext(**legacy_kwargs)
+
+
+def _field_quality_common(ctx: FieldQualityContext) -> dict[str, Any]:
+    profile = ctx.company_profile or {}
+    validation_summary = ctx.validation_summary or {}
     last_price_validation = (
         validation_summary.get("last_price") if isinstance(validation_summary.get("last_price"), dict) else {}
     )
-    last_price_warnings = list(last_price_validation.get("warnings") or [])
-    last_price_vendor_values = dict(last_price_validation.get("vendor_values") or {})
+    return {
+        "profile": profile,
+        "performance": ctx.price_performance or {},
+        "latest_news_as_of": _latest_news_date(ctx.news_context),
+        "price_as_of": ctx.last_close_price_as_of,
+        "profile_as_of": profile.get("source_published_date") or profile.get("reported_date") or profile.get("fetched_at"),
+        "last_price_warnings": list(last_price_validation.get("warnings") or []),
+        "last_price_vendor_values": dict(last_price_validation.get("vendor_values") or {}),
+    }
+
+
+def _price_quality_fields(ctx: FieldQualityContext, common: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    data_sources = ctx.data_sources
+    price_as_of = common["price_as_of"]
     return {
         "quote": build_field_quality(
             "quote",
-            last_close_price,
+            ctx.last_close_price,
             data_sources.get("quote", "unavailable"),
             as_of_date=price_as_of,
-            conflict_warnings=last_price_warnings,
-            vendor_values=last_price_vendor_values,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "quote"),
+            conflict_warnings=common["last_price_warnings"],
+            vendor_values=common["last_price_vendor_values"],
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "quote"),
         ),
         "last_price": build_field_quality(
             "last_price",
-            last_close_price,
+            ctx.last_close_price,
             data_sources.get("price", "unavailable"),
             as_of_date=price_as_of,
-            conflict_warnings=last_price_warnings,
-            vendor_values=last_price_vendor_values,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "quote"),
+            conflict_warnings=common["last_price_warnings"],
+            vendor_values=common["last_price_vendor_values"],
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "quote"),
         ),
         "stock_price": build_field_quality(
             "stock_price",
-            last_close_price,
+            ctx.last_close_price,
             data_sources.get("price", "unavailable"),
             as_of_date=price_as_of,
-            conflict_warnings=last_price_warnings,
-            vendor_values=last_price_vendor_values,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv"),
+            conflict_warnings=common["last_price_warnings"],
+            vendor_values=common["last_price_vendor_values"],
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "ohlcv"),
         ),
+        "volume": build_field_quality(
+            "volume",
+            common["performance"].get("latest_volume"),
+            data_sources.get("ohlcv", "unavailable"),
+            as_of_date=price_as_of,
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "ohlcv"),
+        ),
+        "historical_price": build_field_quality(
+            "historical_price",
+            ctx.price.value,
+            data_sources.get("ohlcv", "unavailable"),
+            warnings=[ctx.price.warning] if ctx.price.warning else [],
+            as_of_date=price_as_of,
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "ohlcv"),
+        ),
+        "technical_indicators": build_field_quality(
+            "technical_indicators",
+            ctx.technical_indicators.value,
+            data_sources.get("technical", "unavailable"),
+            warnings=[ctx.technical_indicators.warning] if ctx.technical_indicators.warning else [],
+            as_of_date=price_as_of,
+            calculated=True,
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "ohlcv"),
+        ),
+    }
+
+
+def _profile_quality_fields(ctx: FieldQualityContext, common: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    profile = common["profile"]
+    profile_as_of = common["profile_as_of"]
+    quality: dict[str, dict[str, Any]] = {
         "market_cap": build_field_quality(
             "market_cap",
             profile.get("market_cap"),
             "company_profile",
             as_of_date=profile_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "profile"),
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "profile"),
         ),
         "company_profile": build_field_quality(
             "company_profile",
             profile if profile.get("available") else None,
             "company_profile",
             as_of_date=profile_as_of,
-            status=profile.get("data_quality", {}).get("status")
-            if isinstance(profile.get("data_quality"), dict)
-            else None,
-            warnings=(profile.get("data_quality", {}) or {}).get("warnings")
-            if isinstance(profile.get("data_quality"), dict)
-            else [],
-            vendor_attempts=_attempts_for_field(vendor_attempts, "profile"),
+            status=profile.get("data_quality", {}).get("status") if isinstance(profile.get("data_quality"), dict) else None,
+            warnings=(profile.get("data_quality", {}) or {}).get("warnings") if isinstance(profile.get("data_quality"), dict) else [],
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "profile"),
         ),
-        "sector": build_field_quality(
-            "sector",
-            profile.get("sector"),
+    }
+    for field_name, profile_key in (
+        ("sector", "sector"),
+        ("industry", "industry"),
+        ("country", "country"),
+        ("exchange", "exchange"),
+        ("executives", "officers"),
+        ("shareholders", "shareholders"),
+    ):
+        quality[field_name] = build_field_quality(
+            field_name,
+            profile.get(profile_key),
             "company_profile",
             as_of_date=profile_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "profile"),
-        ),
-        "industry": build_field_quality(
-            "industry",
-            profile.get("industry"),
-            "company_profile",
-            as_of_date=profile_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "profile"),
-        ),
-        "country": build_field_quality(
-            "country",
-            profile.get("country"),
-            "company_profile",
-            as_of_date=profile_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "profile"),
-        ),
-        "exchange": build_field_quality(
-            "exchange",
-            profile.get("exchange"),
-            "company_profile",
-            as_of_date=profile_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "profile"),
-        ),
-        "executives": build_field_quality(
-            "executives",
-            profile.get("officers"),
-            "company_profile",
-            as_of_date=profile_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "profile"),
-        ),
-        "shareholders": build_field_quality(
-            "shareholders",
-            profile.get("shareholders"),
-            "company_profile",
-            as_of_date=profile_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "profile"),
-        ),
-        "volume": build_field_quality(
-            "volume",
-            performance.get("latest_volume"),
-            data_sources.get("ohlcv", "unavailable"),
-            as_of_date=price_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv"),
-        ),
-        "historical_price": build_field_quality(
-            "historical_price",
-            price.value,
-            data_sources.get("ohlcv", "unavailable"),
-            warnings=[price.warning] if price.warning else [],
-            as_of_date=price_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv"),
-        ),
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "profile"),
+        )
+    return quality
+
+
+def _financial_quality_fields(ctx: FieldQualityContext) -> dict[str, dict[str, Any]]:
+    data_sources = ctx.data_sources
+    financials_source = data_sources.get("financial_statement", "normalized_financial_rows")
+    income_source = data_sources.get("income_statement", "normalized_financial_rows")
+    quality = {
         "financial_statement": build_field_quality(
             "financial_statement",
-            latest_revenue or latest_ebitda or latest_net_profit,
-            data_sources.get("financial_statement", "normalized_financial_rows"),
-            as_of_date=financial_as_of_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements"),
+            ctx.latest_revenue or ctx.latest_ebitda or ctx.latest_net_profit,
+            financials_source,
+            as_of_date=ctx.financial_as_of_date,
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "financial_statements"),
         ),
         "financial_metrics": build_field_quality(
             "financial_metrics",
-            fundamentals.value,
+            ctx.fundamentals.value,
             data_sources.get("fundamental_profile_metrics", "unavailable"),
-            warnings=[fundamentals.warning] if fundamentals.warning else [],
-            as_of_date=financial_as_of_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "fundamentals"),
-        ),
-        "revenue": build_field_quality(
-            "revenue",
-            latest_revenue,
-            data_sources.get("income_statement", "normalized_financial_rows"),
-            as_of_date=financial_as_of_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements"),
-        ),
-        "ebitda": build_field_quality(
-            "ebitda",
-            latest_ebitda,
-            data_sources.get("income_statement", "normalized_financial_rows"),
-            as_of_date=financial_as_of_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements"),
-        ),
-        "net_profit": build_field_quality(
-            "net_profit",
-            latest_net_profit,
-            data_sources.get("income_statement", "normalized_financial_rows"),
-            as_of_date=financial_as_of_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements"),
-        ),
-        "balance_sheet": build_field_quality(
-            "balance_sheet",
-            balance_sheet.value,
-            data_sources.get("balance_sheet", "unavailable"),
-            warnings=[balance_sheet.warning] if balance_sheet.warning else [],
-            as_of_date=financial_as_of_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements"),
-        ),
-        "cashflow": build_field_quality(
-            "cashflow",
-            cashflow.value,
-            data_sources.get("cashflow", "unavailable"),
-            warnings=[cashflow.warning] if cashflow.warning else [],
-            as_of_date=financial_as_of_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements"),
-        ),
-        "income_statement": build_field_quality(
-            "income_statement",
-            income_statement.value,
-            data_sources.get("income_statement", "unavailable"),
-            warnings=[income_statement.warning] if income_statement.warning else [],
-            as_of_date=financial_as_of_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "financial_statements"),
-        ),
-        "company_news": build_field_quality(
-            "company_news",
-            company_news.value,
-            data_sources.get("company_news", "unavailable"),
-            warnings=[company_news.warning] if company_news.warning else [],
-            as_of_date=latest_news_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "news"),
-        ),
-        "global_news": build_field_quality(
-            "global_news",
-            global_news.value,
-            data_sources.get("global_news", "unavailable"),
-            warnings=[global_news.warning] if global_news.warning else [],
-            as_of_date=latest_news_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "news"),
-        ),
-        "news_sentiment": build_field_quality(
-            "news_sentiment",
-            news_sentiment.value,
-            data_sources.get("news_sentiment", "unavailable"),
-            warnings=[news_sentiment.warning] if news_sentiment.warning else [],
-            as_of_date=latest_news_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "news_sentiment"),
-        ),
-        "social_sentiment": build_field_quality(
-            "social_sentiment",
-            social_sentiment.value,
-            data_sources.get("social_sentiment", "unavailable"),
-            warnings=[social_sentiment.warning] if social_sentiment.warning else [],
-            as_of_date=latest_news_as_of,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "social_sentiment"),
-        ),
-        "event_risk": build_field_quality(
-            "event_risk",
-            event_risk.value,
-            data_sources.get("event_risk", "unavailable"),
-            warnings=[event_risk.warning] if event_risk.warning else [],
-            as_of_date=trade_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "event_risk"),
-        ),
-        "recommendation_trends": build_field_quality(
-            "recommendation_trends",
-            recommendation_trends.value,
-            data_sources.get("recommendation_trends", "unavailable"),
-            warnings=[recommendation_trends.warning] if recommendation_trends.warning else [],
-            as_of_date=trade_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "event_risk"),
-        ),
-        "insider_transactions": build_field_quality(
-            "insider_transactions",
-            insider_transactions.value,
-            data_sources.get("insider", "unavailable"),
-            warnings=[insider_transactions.warning] if insider_transactions.warning else [],
-            as_of_date=trade_date,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "insider"),
-        ),
-        "technical_indicators": build_field_quality(
-            "technical_indicators",
-            technical_indicators.value,
-            data_sources.get("technical", "unavailable"),
-            warnings=[technical_indicators.warning] if technical_indicators.warning else [],
-            as_of_date=price_as_of,
-            calculated=True,
-            vendor_attempts=_attempts_for_field(vendor_attempts, "ohlcv"),
+            warnings=[ctx.fundamentals.warning] if ctx.fundamentals.warning else [],
+            as_of_date=ctx.financial_as_of_date,
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "fundamentals"),
         ),
     }
+    for field_name, value in (
+        ("revenue", ctx.latest_revenue),
+        ("ebitda", ctx.latest_ebitda),
+        ("net_profit", ctx.latest_net_profit),
+    ):
+        quality[field_name] = build_field_quality(
+            field_name,
+            value,
+            income_source,
+            as_of_date=ctx.financial_as_of_date,
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "financial_statements"),
+        )
+    for field_name, field, source_name in (
+        ("balance_sheet", ctx.balance_sheet, "balance_sheet"),
+        ("cashflow", ctx.cashflow, "cashflow"),
+        ("income_statement", ctx.income_statement, "income_statement"),
+    ):
+        quality[field_name] = build_field_quality(
+            field_name,
+            field.value,
+            data_sources.get(source_name, "unavailable"),
+            warnings=[field.warning] if field.warning else [],
+            as_of_date=ctx.financial_as_of_date,
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "financial_statements"),
+        )
+    return quality
 
 
-def collect_market_data(
+def _news_quality_fields(ctx: FieldQualityContext, common: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    data_sources = ctx.data_sources
+    latest_news_as_of = common["latest_news_as_of"]
+    quality: dict[str, dict[str, Any]] = {}
+    for field_name, field, source_key, attempts_key in (
+        ("company_news", ctx.company_news, "company_news", "news"),
+        ("global_news", ctx.global_news, "global_news", "news"),
+        ("news_sentiment", ctx.news_sentiment, "news_sentiment", "news_sentiment"),
+        ("social_sentiment", ctx.social_sentiment, "social_sentiment", "social_sentiment"),
+    ):
+        quality[field_name] = build_field_quality(
+            field_name,
+            field.value,
+            data_sources.get(source_key, "unavailable"),
+            warnings=[field.warning] if field.warning else [],
+            as_of_date=latest_news_as_of,
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, attempts_key),
+        )
+    return quality
+
+
+def _signal_quality_fields(ctx: FieldQualityContext) -> dict[str, dict[str, Any]]:
+    quality: dict[str, dict[str, Any]] = {}
+    for field_name, field, source_key, attempts_key in (
+        ("event_risk", ctx.event_risk, "event_risk", "event_risk"),
+        ("recommendation_trends", ctx.recommendation_trends, "recommendation_trends", "event_risk"),
+        ("insider_transactions", ctx.insider_transactions, "insider", "insider"),
+    ):
+        quality[field_name] = build_field_quality(
+            field_name,
+            field.value,
+            ctx.data_sources.get(source_key, "unavailable"),
+            warnings=[field.warning] if field.warning else [],
+            as_of_date=ctx.trade_date,
+            vendor_attempts=_attempts_for_field(ctx.vendor_attempts, attempts_key),
+        )
+    return quality
+
+
+def _build_field_quality_metadata(
+    context: FieldQualityContext | None = None,
+    **legacy_kwargs: Any,
+) -> dict[str, dict[str, Any]]:
+    ctx = _coerce_field_quality_context(context, legacy_kwargs)
+    common = _field_quality_common(ctx)
+    return {
+        **_price_quality_fields(ctx, common),
+        **_profile_quality_fields(ctx, common),
+        **_financial_quality_fields(ctx),
+        **_news_quality_fields(ctx, common),
+        **_signal_quality_fields(ctx),
+    }
+
+def _run_market_collection_tasks(
+    *,
     ticker: str,
     trade_date: str,
+    start_price: str,
+    start_news: str,
+    end: str,
+    news_lookback_days: int,
+    news_context: dict[str, Any],
     config: dict[str, Any],
-    cancel_check: Callable[[], bool] | None = None,
-) -> CollectedData:
-    """Collect external data in parallel and classify yfinance data quality."""
-    _check_cancel(cancel_check)
-    budget_id, budget = create_budget_from_config(config)
-    attempt_id, attempt_recorder = create_attempt_recorder()
-    config = dict(config)
-    config["_vendor_budget_id"] = budget_id
-    config["_vendor_attempt_recorder_id"] = attempt_id
-    set_config(config)
-    ticker = normalize_ticker(ticker)
-    time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
-    news_lookback_days = _horizon_days(time_horizon_months)
-    price_lookback = _price_lookback_days(time_horizon_months)
-    start_price, start_news, end = _date_window(trade_date, time_horizon_months)
-
-    news_context: dict[str, Any] = {}
+    cancel_check: Callable[[], bool] | None,
+) -> tuple[dict[str, DataField], dict[str, DataField]]:
     primary_tasks = _build_collection_tasks(
         ticker,
         trade_date,
@@ -2068,53 +2040,57 @@ def collect_market_data(
         key: all_results.get(key, DataField.unavailable(key, RuntimeError("annual statement task did not complete")))
         for key in annual_task_names
     }
+    return results, annual_statement_results
 
+
+def _collection_field_bundle(results: dict[str, DataField], annual_results: dict[str, DataField]) -> dict[str, Any]:
     price = results["price_data"]
-    fundamentals = results["fundamentals"]
-    balance_sheet = results["balance_sheet"]
-    cashflow = results["cashflow"]
-    income_statement = results["income_statement"]
-    annual_balance_sheet = annual_statement_results["annual_balance_sheet"]
-    annual_income_statement = annual_statement_results["annual_income_statement"]
-    annual_cashflow = annual_statement_results["annual_cashflow"]
-    company_profile = _safe_company_profile(ticker, trade_date)
-    company_news = results["company_news"]
-    global_news = results["global_news"]
-    insider_transactions = results["insider_transactions"]
-    news_sentiment = results.get("news_sentiment", DataField.from_text(""))
-    social_sentiment = results.get("social_sentiment", DataField.from_text(""))
-    event_risk = results.get("event_risk", DataField.from_text(""))
-    recommendation_trends = results.get("recommendation_trends", DataField.from_text(""))
-    technical_indicators = _safe_local_indicator_field(price)
-    all_fields = [
-        price,
-        fundamentals,
-        balance_sheet,
-        cashflow,
-        income_statement,
-        company_news,
-        global_news,
-        insider_transactions,
-        news_sentiment,
-        social_sentiment,
-        event_risk,
-        recommendation_trends,
-        technical_indicators,
+    bundle = {
+        "price": price,
+        "fundamentals": results["fundamentals"],
+        "balance_sheet": results["balance_sheet"],
+        "cashflow": results["cashflow"],
+        "income_statement": results["income_statement"],
+        "annual_balance_sheet": annual_results["annual_balance_sheet"],
+        "annual_income_statement": annual_results["annual_income_statement"],
+        "annual_cashflow": annual_results["annual_cashflow"],
+        "company_news": results["company_news"],
+        "global_news": results["global_news"],
+        "insider_transactions": results["insider_transactions"],
+        "news_sentiment": results.get("news_sentiment", DataField.from_text("")),
+        "social_sentiment": results.get("social_sentiment", DataField.from_text("")),
+        "event_risk": results.get("event_risk", DataField.from_text("")),
+        "recommendation_trends": results.get("recommendation_trends", DataField.from_text("")),
+        "technical_indicators": _safe_local_indicator_field(price),
+    }
+    bundle["all_fields"] = [
+        bundle["price"],
+        bundle["fundamentals"],
+        bundle["balance_sheet"],
+        bundle["cashflow"],
+        bundle["income_statement"],
+        bundle["company_news"],
+        bundle["global_news"],
+        bundle["insider_transactions"],
+        bundle["news_sentiment"],
+        bundle["social_sentiment"],
+        bundle["event_risk"],
+        bundle["recommendation_trends"],
+        bundle["technical_indicators"],
     ]
-    data_quality = _build_data_quality(
-        trade_date,
-        price,
-        fundamentals,
-        balance_sheet,
-        cashflow,
-        income_statement,
-        company_news,
-        global_news,
-        all_fields,
-        price_lookback,
-    )
+    return bundle
 
-    _check_cancel(cancel_check)
+
+def _resolve_price_runtime(
+    *,
+    ticker: str,
+    trade_date: str,
+    start_price: str,
+    end: str,
+    time_horizon_months: int,
+    price: DataField,
+    company_profile: dict[str, Any],
+) -> dict[str, Any]:
     ohlcv_last_close_price, ohlcv_last_close_price_as_of = _extract_last_close_price_and_date(
         price.value,
         trade_date,
@@ -2141,10 +2117,6 @@ def collect_market_data(
         profile=company_profile,
         trade_date=trade_date,
     )
-    last_close_price = price_anchor["price"]
-    last_close_price_as_of = price_anchor["as_of"]
-    last_close_price_source = price_anchor["source"]
-    last_close_price_is_fallback = bool(price_anchor["is_fallback"])
     price_chart = _build_price_chart(
         ticker=ticker,
         trade_date=trade_date,
@@ -2158,16 +2130,7 @@ def collect_market_data(
         if isinstance(corporate_actions_result.get("corporate_actions"), list)
         else []
     )
-    if isinstance(price_chart, dict) and price_chart.get("available"):
-        adjusted_rows = apply_corporate_action_adjustments(price_chart.get("points") or [], corporate_actions_rows)
-        price_chart["adjusted_price_history"] = adjusted_rows
-        price_chart["corporate_action_adjustment"] = {
-            "status": "available" if corporate_actions_rows else "source_unavailable",
-            "source": corporate_actions_result.get("source") or "idx_official/yfinance",
-            "action_count": len(corporate_actions_rows),
-            "warnings": corporate_actions_result.get("warnings") or [],
-            "reason": corporate_actions_result.get("reason"),
-        }
+    _attach_corporate_action_adjustments(price_chart, corporate_actions_result, corporate_actions_rows)
     price_performance = dict(price_chart.get("summary") or {}) if isinstance(price_chart, dict) else {}
     if isinstance(price_chart, dict):
         price_performance["adjusted_price_history"] = price_chart.get("adjusted_price_history") or []
@@ -2179,10 +2142,186 @@ def collect_market_data(
     technical_history = price_chart.get("data") or price_chart.get("points") or price.value
     technical_entry = build_technical_entry(
         technical_history,
-        current_price=last_close_price,
+        current_price=price_anchor["price"],
         config={"time_horizon_months": time_horizon_months},
     )
     technical_entry = _apply_technical_fallback(technical_entry, technical_history)
+    return {
+        "last_close_price": price_anchor["price"],
+        "last_close_price_as_of": price_anchor["as_of"],
+        "last_close_price_source": price_anchor["source"],
+        "last_close_price_is_fallback": bool(price_anchor["is_fallback"]),
+        "ohlcv_price_source": ohlcv_price_source,
+        "price_chart": price_chart,
+        "corporate_actions_result": corporate_actions_result,
+        "corporate_actions_rows": corporate_actions_rows,
+        "price_performance": price_performance,
+        "technical_history": technical_history,
+        "technical_entry": technical_entry,
+    }
+
+
+def _attach_corporate_action_adjustments(
+    price_chart: dict[str, Any],
+    corporate_actions_result: dict[str, Any],
+    corporate_actions_rows: list[dict[str, Any]],
+) -> None:
+    if not isinstance(price_chart, dict) or not price_chart.get("available"):
+        return
+    adjusted_rows = apply_corporate_action_adjustments(price_chart.get("points") or [], corporate_actions_rows)
+    price_chart["adjusted_price_history"] = adjusted_rows
+    price_chart["corporate_action_adjustment"] = {
+        "status": "available" if corporate_actions_rows else "source_unavailable",
+        "source": corporate_actions_result.get("source") or "idx_official/yfinance",
+        "action_count": len(corporate_actions_rows),
+        "warnings": corporate_actions_result.get("warnings") or [],
+        "reason": corporate_actions_result.get("reason"),
+    }
+
+
+def _release_collection_runtime(budget_id: str, attempt_id: str) -> None:
+    try:
+        release_budget(budget_id)
+        release_attempt_recorder(attempt_id)
+    except Exception:
+        pass
+
+
+def _build_collected_market_data(ctx: dict[str, Any]) -> CollectedData:
+    collected = CollectedData(
+        ticker=ctx["ticker"],
+        trade_date=ctx["trade_date"],
+        time_horizon_months=ctx["time_horizon_months"],
+        price_data=ctx["price"].value,
+        technical_indicators=ctx["technical_indicators"].value,
+        fundamentals=ctx["fundamentals"].value,
+        balance_sheet=ctx["balance_sheet"].value,
+        cashflow=ctx["cashflow"].value,
+        income_statement=ctx["income_statement"].value,
+        company_news=ctx["company_news"].value,
+        global_news=ctx["global_news"].value,
+        insider_transactions=ctx["insider_transactions"].value,
+        news_sentiment=ctx["news_sentiment"].value,
+        social_sentiment=ctx["social_sentiment"].value,
+        event_risk=ctx["event_risk"].value,
+        recommendation_trends=ctx["recommendation_trends"].value,
+        data_quality=ctx["data_quality"],
+        last_close_price=ctx["last_close_price"],
+        last_close_price_as_of=ctx["last_close_price_as_of"],
+        last_close_price_source=ctx["last_close_price_source"] if ctx["last_close_price"] is not None else None,
+        last_close_price_is_fallback=ctx["last_close_price_is_fallback"],
+        company_profile=ctx["company_profile"],
+        price_chart=ctx["price_chart"],
+        price_performance=ctx["price_performance"],
+        technical_entry=ctx["technical_entry"],
+        news_context=ctx["news_context"],
+        related_news=ctx["related_news"],
+        news_impact=ctx["news_impact"],
+        catalyst_tracker=ctx["catalyst_tracker"],
+        analyst_consensus=ctx["analyst_consensus"],
+        data_sources=ctx["data_sources"],
+        data_limitations=ctx["data_limitations"],
+        field_sources=ctx["field_sources"],
+        validation_summary=ctx["validation_summary"],
+        warnings=ctx["data_quality"].warnings,
+        vendor_attempts=ctx["runtime_metadata"].get("vendor_attempts", {}),
+        request_budget=ctx["runtime_metadata"].get("request_budget", {}),
+        data_freshness=ctx["data_freshness"],
+        data_completeness=ctx["data_completeness"],
+        fundamental_gap_report=ctx["fundamental_gap_report"],
+        normalized_period_rows=ctx["normalized_period_rows"],
+        derived_fundamentals=ctx["derived_fundamentals"],
+        financial_highlights=ctx["financial_highlights"],
+        fundamental_analysis=ctx["fundamental_analysis"],
+    )
+    collected.prompt_context = build_prompt_context(collected)
+    return collected
+
+
+def collect_market_data(
+    ticker: str,
+    trade_date: str,
+    config: dict[str, Any],
+    cancel_check: Callable[[], bool] | None = None,
+) -> CollectedData:
+    """Collect external data in parallel and classify yfinance data quality."""
+    _check_cancel(cancel_check)
+    budget_id, budget = create_budget_from_config(config)
+    attempt_id, attempt_recorder = create_attempt_recorder()
+    config = dict(config)
+    config["_vendor_budget_id"] = budget_id
+    config["_vendor_attempt_recorder_id"] = attempt_id
+    set_config(config)
+    ticker = normalize_ticker(ticker)
+    time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
+    news_lookback_days = _horizon_days(time_horizon_months)
+    price_lookback = _price_lookback_days(time_horizon_months)
+    start_price, start_news, end = _date_window(trade_date, time_horizon_months)
+
+    news_context: dict[str, Any] = {}
+    results, annual_statement_results = _run_market_collection_tasks(
+        ticker=ticker,
+        trade_date=trade_date,
+        start_price=start_price,
+        start_news=start_news,
+        end=end,
+        news_lookback_days=news_lookback_days,
+        news_context=news_context,
+        config=config,
+        cancel_check=cancel_check,
+    )
+    fields = _collection_field_bundle(results, annual_statement_results)
+    price = fields["price"]
+    fundamentals = fields["fundamentals"]
+    balance_sheet = fields["balance_sheet"]
+    cashflow = fields["cashflow"]
+    income_statement = fields["income_statement"]
+    annual_balance_sheet = fields["annual_balance_sheet"]
+    annual_income_statement = fields["annual_income_statement"]
+    annual_cashflow = fields["annual_cashflow"]
+    company_news = fields["company_news"]
+    global_news = fields["global_news"]
+    insider_transactions = fields["insider_transactions"]
+    news_sentiment = fields["news_sentiment"]
+    social_sentiment = fields["social_sentiment"]
+    event_risk = fields["event_risk"]
+    recommendation_trends = fields["recommendation_trends"]
+    technical_indicators = fields["technical_indicators"]
+    company_profile = _safe_company_profile(ticker, trade_date)
+    data_quality = _build_data_quality(
+        trade_date,
+        price,
+        fundamentals,
+        balance_sheet,
+        cashflow,
+        income_statement,
+        company_news,
+        global_news,
+        fields["all_fields"],
+        price_lookback,
+    )
+
+    _check_cancel(cancel_check)
+    price_runtime = _resolve_price_runtime(
+        ticker=ticker,
+        trade_date=trade_date,
+        start_price=start_price,
+        end=end,
+        time_horizon_months=time_horizon_months,
+        price=price,
+        company_profile=company_profile,
+    )
+    last_close_price = price_runtime["last_close_price"]
+    last_close_price_as_of = price_runtime["last_close_price_as_of"]
+    last_close_price_source = price_runtime["last_close_price_source"]
+    last_close_price_is_fallback = price_runtime["last_close_price_is_fallback"]
+    ohlcv_price_source = price_runtime["ohlcv_price_source"]
+    price_chart = price_runtime["price_chart"]
+    corporate_actions_result = price_runtime["corporate_actions_result"]
+    corporate_actions_rows = price_runtime["corporate_actions_rows"]
+    price_performance = price_runtime["price_performance"]
+    technical_history = price_runtime["technical_history"]
+    technical_entry = price_runtime["technical_entry"]
 
     financial_currency = _currency_for_ticker(ticker)
     normalized_period_rows = build_normalized_period_rows(
@@ -2250,32 +2389,34 @@ def collect_market_data(
         data_quality.warning_details = [_warning_detail_from_message(message) for message in data_quality.warnings]
     field_sources = _build_field_sources(ticker, data_sources)
     data_quality.field_quality = _build_field_quality_metadata(
-        trade_date=trade_date,
-        data_sources=data_sources,
-        price=price,
-        fundamentals=fundamentals,
-        balance_sheet=balance_sheet,
-        cashflow=cashflow,
-        income_statement=income_statement,
-        company_news=company_news,
-        global_news=global_news,
-        insider_transactions=insider_transactions,
-        news_sentiment=news_sentiment,
-        social_sentiment=social_sentiment,
-        technical_indicators=technical_indicators,
-        event_risk=event_risk,
-        recommendation_trends=recommendation_trends,
-        last_close_price=last_close_price,
-        company_profile=company_profile,
-        price_performance=price_performance,
-        vendor_attempts=vendor_attempts,
-        news_context=news_context,
-        last_close_price_as_of=last_close_price_as_of,
-        financial_as_of_date=financial_as_of,
-        latest_revenue=latest_revenue,
-        latest_ebitda=latest_ebitda,
-        latest_net_profit=latest_net_profit,
-        validation_summary=validation_summary,
+        FieldQualityContext(
+            trade_date=trade_date,
+            data_sources=data_sources,
+            price=price,
+            fundamentals=fundamentals,
+            balance_sheet=balance_sheet,
+            cashflow=cashflow,
+            income_statement=income_statement,
+            company_news=company_news,
+            global_news=global_news,
+            insider_transactions=insider_transactions,
+            news_sentiment=news_sentiment,
+            social_sentiment=social_sentiment,
+            technical_indicators=technical_indicators,
+            event_risk=event_risk,
+            recommendation_trends=recommendation_trends,
+            last_close_price=last_close_price,
+            company_profile=company_profile,
+            price_performance=price_performance,
+            vendor_attempts=vendor_attempts,
+            news_context=news_context,
+            last_close_price_as_of=last_close_price_as_of,
+            financial_as_of_date=financial_as_of,
+            latest_revenue=latest_revenue,
+            latest_ebitda=latest_ebitda,
+            latest_net_profit=latest_net_profit,
+            validation_summary=validation_summary,
+        )
     )
     derived_quality_fields = {
         "revenue_growth_percent": "revenue_growth_percent",
@@ -2465,56 +2606,5 @@ def collect_market_data(
     }
     fundamental_gap_report = map_fundamental_gaps(fundamental_payload_for_gap)
 
-    try:
-        release_budget(budget_id)
-        release_attempt_recorder(attempt_id)
-    except Exception:
-        pass
-    collected = CollectedData(
-        ticker=ticker,
-        trade_date=trade_date,
-        time_horizon_months=time_horizon_months,
-        price_data=price.value,
-        technical_indicators=technical_indicators.value,
-        fundamentals=fundamentals.value,
-        balance_sheet=balance_sheet.value,
-        cashflow=cashflow.value,
-        income_statement=income_statement.value,
-        company_news=company_news.value,
-        global_news=global_news.value,
-        insider_transactions=insider_transactions.value,
-        news_sentiment=news_sentiment.value,
-        social_sentiment=social_sentiment.value,
-        event_risk=event_risk.value,
-        recommendation_trends=recommendation_trends.value,
-        data_quality=data_quality,
-        last_close_price=last_close_price,
-        last_close_price_as_of=last_close_price_as_of,
-        last_close_price_source=last_close_price_source if last_close_price is not None else None,
-        last_close_price_is_fallback=last_close_price_is_fallback,
-        company_profile=company_profile,
-        price_chart=price_chart,
-        price_performance=price_performance,
-        technical_entry=technical_entry,
-        news_context=news_context,
-        related_news=related_news,
-        news_impact=news_impact,
-        catalyst_tracker=catalyst_tracker,
-        analyst_consensus=analyst_consensus,
-        data_sources=data_sources,
-        data_limitations=data_limitations,
-        field_sources=field_sources,
-        validation_summary=validation_summary,
-        warnings=data_quality.warnings,
-        vendor_attempts=runtime_metadata.get("vendor_attempts", {}),
-        request_budget=runtime_metadata.get("request_budget", {}),
-        data_freshness=data_freshness,
-        data_completeness=data_completeness,
-        fundamental_gap_report=fundamental_gap_report,
-        normalized_period_rows=normalized_period_rows,
-        derived_fundamentals=derived_fundamentals,
-        financial_highlights=financial_highlights,
-        fundamental_analysis=fundamental_analysis,
-    )
-    collected.prompt_context = build_prompt_context(collected)
-    return collected
+    _release_collection_runtime(budget_id, attempt_id)
+    return _build_collected_market_data(locals())

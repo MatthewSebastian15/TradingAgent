@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { PIPELINE_STATUSES } from '../domain/analysisContract';
+
 function makeMockAbortError() {
   const error = new Error('Analysis cancelled.');
   error.name = 'AbortError';
@@ -86,7 +88,7 @@ export function useMockAnalysisJob({ onResult, onLoading, onStatus, onAgentProgr
             callbacksRef.current.onAgentProgress({
               agent_id: step.agent_id,
               agent_name: step.agent_name,
-              status: 'started',
+              status: PIPELINE_STATUSES.STARTED,
               status_message: step.running,
             });
           }
@@ -98,7 +100,7 @@ export function useMockAnalysisJob({ onResult, onLoading, onStatus, onAgentProgr
             callbacksRef.current.onAgentProgress({
               agent_id: step.agent_id,
               agent_name: step.agent_name,
-              status: 'completed',
+              status: PIPELINE_STATUSES.COMPLETED,
               status_message: step.completed,
             });
           }
