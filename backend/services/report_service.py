@@ -403,7 +403,15 @@ def _read_report_css() -> str:
     try:
         return REPORT_CSS_PATH.read_text(encoding="utf-8")
     except OSError:
+        logger.warning("Report CSS could not be read", exc_info=True)
         return ""
+
+
+def report_asset_health() -> dict[str, Any]:
+    return {
+        "css": "ok" if REPORT_CSS_PATH.is_file() else "missing",
+        "css_path": str(REPORT_CSS_PATH),
+    }
 
 
 def _clean_text(value: Any) -> str | None:

@@ -3,6 +3,7 @@ import logging
 import os
 from datetime import datetime
 from io import StringIO
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import pandas as pd
 import requests
@@ -11,6 +12,30 @@ from .config import get_config
 
 API_BASE_URL = "https://www.alphavantage.co/query"
 logger = logging.getLogger(__name__)
+
+
+def _redact_url_query(url: str) -> str:
+    """Return a URL with secret query values redacted before logging/raising."""
+    try:
+        parts = urlsplit(str(url or ""))
+        query = parse_qsl(parts.query, keep_blank_values=True)
+        secret_keys = {"apikey", "api_key", "token", "secret", "password"}
+        redacted_query = urlencode(
+            [(key, "[redacted]" if key.lower() in secret_keys else value) for key, value in query],
+            doseq=True,
+        )
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, redacted_query, parts.fragment))
+    except (TypeError, ValueError):  # pragma: no cover - defensive sanitizer fallback
+        return "[redacted-url]"
+
+
+def _sanitize_response_url(response: requests.Response) -> str:
+    safe_url = _redact_url_query(getattr(response, "url", ""))
+    response.url = safe_url
+    request = getattr(response, "request", None)
+    if request is not None and getattr(request, "url", None):
+        request.url = _redact_url_query(request.url)
+    return safe_url
 
 
 def get_api_key() -> str:
@@ -83,7 +108,14 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
 
     timeout_seconds = max(1, int(get_config().get("tool_timeout_seconds", 45)))
     response = requests.get(API_BASE_URL, params=api_params, timeout=(5, timeout_seconds))
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        safe_url = _sanitize_response_url(response)
+        raise requests.HTTPError(
+            f"Alpha Vantage HTTP error {response.status_code} for URL: {safe_url}",
+            response=response,
+        ) from exc
 
     response_text = response.text
 

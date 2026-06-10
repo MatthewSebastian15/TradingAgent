@@ -495,3 +495,12 @@ def test_parse_final_result_completes_legacy_data_quality_contract():
     assert parsed["data_quality"]["trade_levels"] == "invalid"
     assert parsed["data_quality"]["llm_output"] == "ok"
     assert parsed["data_quality"]["volatility_data"] == "missing"
+
+
+def test_parse_final_result_warns_when_portfolio_payload_falls_back(caplog):
+    from routes.analysis import _parse_final_result
+
+    parsed = _parse_final_result("fallback text", {}, None, {"last_close_price": 100.0})
+
+    assert "Portfolio decision payload could not be parsed; fallback response was used." in parsed["warnings"]
+    assert "Portfolio decision payload could not be parsed" in caplog.text
