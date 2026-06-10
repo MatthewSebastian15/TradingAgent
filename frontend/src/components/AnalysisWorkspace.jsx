@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAnalysisJob } from '../hooks/useAnalysisJob';
@@ -13,6 +13,8 @@ const HISTORY_PANEL_MAX_HEIGHT = 304;
 const HISTORY_SCHEMA_VERSION = 2;
 const HISTORY_TTL_DAYS = 30;
 const RESULT_EXPIRED_MESSAGE = 'Result expired. Please submit a new analysis.';
+const SIDEBAR_EXPANDED_WIDTH = 288;
+const SIDEBAR_COLLAPSED_WIDTH = 48;
 
 function isExpired(entry) {
   if (!entry?.saved_at) return false;
@@ -40,7 +42,6 @@ function removeLegacyStoredResults(historyKey) {
 
     keys.forEach((key) => localStorage.removeItem(key));
   } catch {
-    // Storage can be unavailable in private browsing or when quota is exceeded.
   }
 }
 
@@ -126,7 +127,6 @@ function readHistory(historyKey) {
     try {
       localStorage.removeItem(historyKey);
     } catch {
-      // Storage can be unavailable in private browsing or when quota is exceeded.
     }
     return [];
   }
@@ -141,7 +141,6 @@ function writeHistory(historyKey, entries) {
       localStorage.removeItem(historyKey);
     }
   } catch {
-    // Storage can be unavailable in private browsing or when quota is exceeded.
   }
 }
 
@@ -150,7 +149,6 @@ function clearHistory(historyKey) {
     removeLegacyStoredResults(historyKey);
     localStorage.removeItem(historyKey);
   } catch {
-    // Storage can be unavailable in private browsing or when quota is exceeded.
   }
 }
 
@@ -204,7 +202,34 @@ function formatHistoryHorizon(months) {
   return `${value}M`;
 }
 
-function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, onSelect }) {
+const NAVBAR_HEIGHT = 40;
+
+function ChevronIcon({ direction }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {direction === 'left' ? (
+        <polyline points="6.5,1.5 2.5,5 6.5,8.5" />
+      ) : (
+        <polyline points="3.5,1.5 7.5,5 3.5,8.5" />
+      )}
+    </svg>
+  );
+}
+
+ChevronIcon.propTypes = {
+  direction: PropTypes.oneOf(['left', 'right']).isRequired,
+};
+
+function SidebarHistory({ backendHistoryEnabled, currentResourceId, historyKey, onSelect }) {
   const [history, setHistory] = useState([]);
   const [clearError, setClearError] = useState('');
   const [clearing, setClearing] = useState(false);
@@ -253,112 +278,77 @@ function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, on
   if (!history.length) return null;
 
   return (
-    <div className="min-w-0 border border-bloomberg-border bg-bloomberg-card shadow-xl shadow-black/50">
-      <div className="flex items-center justify-between border-b border-bloomberg-border bg-black px-4 py-2.5">
-        <div className="min-w-0">
-          <span className="block font-mono text-xs text-bloomberg-orange tracking-[0.2em] uppercase">
-            Recent analyses
-          </span>
-          <span className="mt-1 block font-mono text-[10px] text-bloomberg-muted tracking-wider uppercase">
-            3 x 2 terminal history grid with contained scrolling
-          </span>
-        </div>
-        <div className="flex flex-shrink-0 items-center gap-3">
-          <span className="border border-bloomberg-border bg-bloomberg-surface px-2 py-1 font-mono text-[10px] text-bloomberg-muted">
-            {history.length} ITEMS
+    <>
+      <div className="flex items-center justify-between border-b border-bloomberg-border px-3 py-2">
+        <span className="font-mono text-[10px] text-bloomberg-orange tracking-[0.2em] uppercase">
+          RECENT
+        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[9px] text-bloomberg-muted">
+            {history.length}
           </span>
           <button
             type="button"
             disabled={clearing}
             onClick={handleClearHistory}
-            className="border border-bloomberg-border px-2 py-1 font-mono text-[10px] text-bloomberg-muted tracking-wider transition-colors duration-150 hover:border-bloomberg-orange hover:text-bloomberg-orange disabled:opacity-40"
+            className="font-mono text-[9px] text-bloomberg-muted tracking-wider transition-colors duration-150 hover:text-bloomberg-orange disabled:opacity-40"
           >
             {clearing ? 'CLEARING...' : 'CLEAR'}
           </button>
         </div>
       </div>
       {clearError && (
-        <div className="border-b border-bloomberg-border px-4 py-2 font-mono text-[10px] text-bloomberg-red">
+        <div className="border-b border-bloomberg-border px-3 py-1.5 font-mono text-[9px] text-bloomberg-red">
           {clearError}
         </div>
       )}
-      <div className="overflow-y-auto p-3" style={{ maxHeight: HISTORY_PANEL_MAX_HEIGHT }}>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {history.map((item, index) => {
-            const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
-            const displaySignal = item.display_signal || item.decision;
-            const confidenceScore =
-              item.confidence_score !== null && item.confidence_score !== undefined
-                ? `${item.confidence_score}%`
-                : '—';
-            return (
-              <button
-                key={
-                  historyResourceId(item) || `${item.ticker || 'item'}-${item.trade_date || index}`
-                }
-                onClick={() => onSelect(item)}
-                className="group min-h-[126px] border border-bloomberg-border bg-black px-3 py-3 text-left transition-colors duration-150 hover:border-bloomberg-orange hover:bg-bloomberg-surface"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate font-mono text-sm font-semibold text-bloomberg-white group-hover:text-bloomberg-orange">
-                      {item.ticker || 'N/A'}
-                    </div>
-                    <div className="mt-1 font-mono text-[10px] text-bloomberg-muted tracking-wider uppercase">
-                      {item.market || 'GLOBAL'}
-                    </div>
-                  </div>
-                  <span
-                    className={`flex-shrink-0 border px-2 py-1 font-mono text-[10px] font-semibold tracking-wider ${decisionStyle(displaySignal)}`}
-                  >
-                    {(displaySignal || 'N/A').toUpperCase()}
-                  </span>
+      <div className="overflow-y-auto" style={{ maxHeight: '8rem' }}>
+        {history.map((item, index) => {
+          const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
+          const displaySignal = item.display_signal || item.decision;
+          const confidenceScore =
+            item.confidence_score !== null && item.confidence_score !== undefined
+              ? `${item.confidence_score}%`
+              : '—';
+          return (
+            <button
+              key={
+                historyResourceId(item) || `${item.ticker || 'item'}-${item.trade_date || index}`
+              }
+              onClick={() => onSelect(item)}
+              className="w-full border-b border-bloomberg-border px-3 py-2 text-left transition-colors duration-150 hover:bg-bloomberg-surface"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate font-mono text-[11px] font-semibold text-bloomberg-white">
+                  {item.ticker || 'N/A'}
+                </span>
+                <span
+                  className={`flex-shrink-0 border px-1.5 py-0.5 font-mono text-[8px] font-semibold tracking-wider ${decisionStyle(displaySignal)}`}
+                >
+                  {(displaySignal || 'N/A').toUpperCase()}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center gap-3 font-mono text-[9px] text-bloomberg-muted">
+                <span>{item.trade_date || '—'}</span>
+                <span>{formatHistoryHorizon(item.time_horizon_months) || '—'}</span>
+                <span className={confidenceScoreStyle(item.confidence_tier)}>
+                  {confidenceScore}
+                </span>
+              </div>
+              {createdAtLabel && (
+                <div className="mt-0.5 font-mono text-[8px] text-bloomberg-border truncate">
+                  {createdAtLabel}
                 </div>
-
-                <div className="mt-4 grid grid-cols-3 gap-2 border-t border-bloomberg-border pt-3">
-                  <div>
-                    <div className="font-mono text-[9px] text-bloomberg-border tracking-wider">
-                      DATE
-                    </div>
-                    <div className="mt-1 truncate font-mono text-[10px] text-bloomberg-muted">
-                      {item.trade_date || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-mono text-[9px] text-bloomberg-border tracking-wider">
-                      HOR
-                    </div>
-                    <div className="mt-1 font-mono text-[10px] text-bloomberg-muted">
-                      {formatHistoryHorizon(item.time_horizon_months) || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-mono text-[9px] text-bloomberg-border tracking-wider">
-                      CONF
-                    </div>
-                    <div
-                      className={`mt-1 font-mono text-[10px] font-semibold ${confidenceScoreStyle(item.confidence_tier)}`}
-                    >
-                      {confidenceScore}
-                    </div>
-                  </div>
-                </div>
-
-                {createdAtLabel && (
-                  <div className="mt-3 truncate font-mono text-[9px] text-bloomberg-border tracking-wider uppercase">
-                    CREATED: {createdAtLabel}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
+              )}
+            </button>
+          );
+        })}
       </div>
-    </div>
+    </>
   );
 }
 
-HistoryPanel.propTypes = {
+SidebarHistory.propTypes = {
   backendHistoryEnabled: PropTypes.bool.isRequired,
   currentResourceId: PropTypes.string,
   historyKey: PropTypes.string.isRequired,
@@ -454,6 +444,22 @@ export default function AnalysisWorkspace({
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [status, setStatus] = useState(resourceId ? 'Loading saved analysis...' : '');
   const [agentProgress, setAgentProgress] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const sidebarRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+
+    const mql = window.matchMedia('(max-width: 767px)');
+    const handler = (e) => {
+      setIsMobile(e.matches);
+      if (e.matches) setSidebarOpen(false);
+    };
+    handler(mql);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     if (!resourceId) return undefined;
@@ -559,73 +565,103 @@ export default function AnalysisWorkspace({
     <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
 
-      <main className="mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-3 py-4 sm:px-4 lg:px-6">
-        <section className="mx-auto w-full max-w-7xl">
-          <FormComponent
-            onResult={handleResult}
-            onLoading={setLoading}
-            onStatus={setStatus}
-            onAgentProgress={setAgentProgress}
-            selectedResult={result && !result.error ? result : null}
-            agentProgress={agentProgress}
-            status={status}
+      <div className="flex" style={{ paddingTop: NAVBAR_HEIGHT }}>
+        {isMobile && sidebarOpen && (
+          <div
+            className="fixed inset-0 z-20 bg-black/60"
+            onClick={() => setSidebarOpen(false)}
           />
-        </section>
+        )}
 
-        <section className="mx-auto w-full max-w-7xl">
-          <HistoryPanel
-            backendHistoryEnabled={backendHistoryEnabled}
-            currentResourceId={historyResourceId(result)}
-            historyKey={historyKey}
-            onSelect={(item) => {
-              const nextPath = resultPath(resultPathBase, historyResourceId(item));
-              if (nextPath) navigate(nextPath);
-            }}
-          />
-        </section>
+        <aside
+          ref={sidebarRef}
+          className={`fixed left-0 z-30 flex flex-col bg-bloomberg-card border-r border-bloomberg-border transition-all duration-200 ease-in-out ${
+            sidebarOpen ? 'w-72' : 'w-12'
+          }`}
+          style={{ top: NAVBAR_HEIGHT, bottom: 0 }}
+        >
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="absolute -right-3 top-3 z-40 flex h-6 w-6 items-center justify-center rounded-full border border-bloomberg-border bg-black text-bloomberg-muted transition-colors duration-150 hover:text-bloomberg-orange"
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            <ChevronIcon direction={sidebarOpen ? 'left' : 'right'} />
+          </button>
 
-        <section className="mx-auto w-full max-w-7xl">
-          <StatusBar loading={loading} status={status} />
-        </section>
+          <div className={`flex-1 overflow-y-auto ${sidebarOpen ? 'block' : 'hidden'}`}>
+            <FormComponent
+              onResult={handleResult}
+              onLoading={setLoading}
+              onStatus={setStatus}
+              onAgentProgress={setAgentProgress}
+              selectedResult={result && !result.error ? result : null}
+              agentProgress={agentProgress}
+              status={status}
+            />
+          </div>
 
-        <section className="mx-auto w-full max-w-7xl min-w-0">
-          {!loading && !result && (
-            <div className="border border-bloomberg-border bg-bloomberg-card p-6 text-center shadow-xl shadow-black/40 sm:p-8">
-              <div className="font-display text-4xl font-bold text-bloomberg-border tracking-widest sm:text-6xl">
-                READY
-              </div>
-              <div className="mx-auto mt-4 max-w-2xl font-mono text-xs text-bloomberg-muted tracking-wider sm:text-sm">
-                {emptyDescription}
-              </div>
-              <div className="mx-auto mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
-                {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
-                  <div
-                    key={step}
-                    className="border border-bloomberg-border bg-black p-4 text-center"
-                  >
-                    <div className="font-mono text-2xl text-bloomberg-border">{index + 1}</div>
-                    <div className="mt-2 font-mono text-xs text-bloomberg-muted tracking-wider">
-                      {step}
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {sidebarOpen && (
+            <div className="border-t border-bloomberg-border overflow-y-auto" style={{ maxHeight: '10rem' }}>
+              <SidebarHistory
+                backendHistoryEnabled={backendHistoryEnabled}
+                currentResourceId={historyResourceId(result)}
+                historyKey={historyKey}
+                onSelect={(item) => {
+                  const nextPath = resultPath(resultPathBase, historyResourceId(item));
+                  if (nextPath) navigate(nextPath);
+                }}
+              />
             </div>
           )}
+        </aside>
 
-          {loading && <AgentLog status={status} agentProgress={agentProgress} />}
+        <main
+          className={`flex-1 min-w-0 transition-all duration-200 ease-in-out`}
+          style={{
+            marginLeft: sidebarOpen ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH,
+          }}
+        >
+          <div className="p-4 space-y-4">
+            <StatusBar loading={loading} status={status} />
 
-          {result && !loading && (
-            <ResultCard
-              result={result}
-              enableReportExport={enableReportExport && Boolean(resultPathBase)}
-              mockReport={mockReportExport}
-              onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
-              rerunRunning={rerunJob.running || loading}
-            />
-          )}
-        </section>
-      </main>
+            {!loading && !result && (
+              <div className="border border-bloomberg-border bg-bloomberg-card p-6 text-center shadow-xl shadow-black/40 sm:p-8">
+                <div className="font-display text-4xl font-bold text-bloomberg-border tracking-widest sm:text-6xl">
+                  READY
+                </div>
+                <div className="mx-auto mt-4 max-w-2xl font-mono text-xs text-bloomberg-muted tracking-wider sm:text-sm">
+                  {emptyDescription}
+                </div>
+                <div className="mx-auto mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
+                  {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
+                    <div
+                      key={step}
+                      className="border border-bloomberg-border bg-black p-4 text-center"
+                    >
+                      <div className="font-mono text-2xl text-bloomberg-border">{index + 1}</div>
+                      <div className="mt-2 font-mono text-xs text-bloomberg-muted tracking-wider">
+                        {step}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {loading && <AgentLog status={status} agentProgress={agentProgress} />}
+
+            {result && !loading && (
+              <ResultCard
+                result={result}
+                enableReportExport={enableReportExport && Boolean(resultPathBase)}
+                mockReport={mockReportExport}
+                onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
+                rerunRunning={rerunJob.running || loading}
+              />
+            )}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

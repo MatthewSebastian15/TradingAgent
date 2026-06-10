@@ -120,7 +120,7 @@ function AgentPipelineStrip({ agentProgress, running, status }) {
         />
       </div>
 
-      <div className="grid grid-cols-2 divide-x divide-y divide-bloomberg-border sm:grid-cols-5 xl:grid-cols-10 xl:divide-y-0">
+      <div className="grid grid-cols-5 divide-x divide-bloomberg-border">
         {PIPELINE.map((step, index) => {
           const active = activeIds.has(step.id);
           const done = doneIds.has(step.id);
@@ -292,10 +292,7 @@ export default function StockForm({
   const selectedHorizon = HORIZON_OPTIONS.find((item) => item.value === Number(timeHorizonMonths));
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mx-auto w-full max-w-7xl overflow-visible border border-bloomberg-border bg-bloomberg-card shadow-2xl shadow-black"
-    >
+    <form onSubmit={handleSubmit}>
       <AgentPipelineStrip agentProgress={agentProgress} running={running} status={status} />
 
       <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-12">
