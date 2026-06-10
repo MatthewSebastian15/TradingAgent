@@ -21,8 +21,6 @@ dependencies = [
     "parsel==1.11.0",
     "pytz==2026.2",
     "requests==2.33.1",
-    "rich==14.3.4",
-    "typer==0.25.1",
     "setuptools==82.0.1",
     "stockstats==0.6.8",
     "tqdm==4.67.3",
@@ -31,10 +29,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-cli = [
-    "questionary==2.1.1",
-    "redis==7.4.0",
-]
 backtesting = [
     "backtrader==1.9.78.123",
 ]
@@ -42,14 +36,10 @@ dev = [
     "ruff>=0.8,<1",
 ]
 
-[project.scripts]
-tradingagents = "cli.main:app"
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*"]
+include = ["tradingagents*"]
 
-[tool.setuptools.package-data]
-cli = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -62,7 +52,6 @@ markers = [
 ]
 filterwarnings = [
     "error::DeprecationWarning:tradingagents.*",
-    "error::DeprecationWarning:cli.*",
     "ignore::DeprecationWarning:pydantic.*",
     "ignore::DeprecationWarning:langchain.*",
 ]

@@ -534,6 +534,50 @@ def _format_percent(value: Any) -> str:
     return str(value)
 
 
+def _unit_suffix(unit: Any) -> str:
+    text = str(unit or "")
+    if re.search(r"\bBn\b", text, re.IGNORECASE):
+        return "Bn"
+    if re.search(r"\bMn\b", text, re.IGNORECASE):
+        return "Mn"
+    if "%" in text:
+        return "%"
+    if "/share" in text.lower():
+        return text
+    if re.search(r"\bx\b", text, re.IGNORECASE) or "ratio" in text.lower():
+        return "x"
+    return ""
+
+
+def _append_financial_unit(value: Any, unit: Any) -> str:
+    if value is None or value == "":
+        return "-"
+    text = str(value).strip()
+    if text in {"-", "N/A"} or text.lower() in {"source unavailable", "none", "null", "nan"}:
+        return "-"
+    suffix = _unit_suffix(unit)
+    if not suffix:
+        return re.sub(r"\s*%", " %", text)
+    if suffix == "%":
+        base = re.sub(r"\s*%$", "", text)
+        return f"{base} %"
+    if suffix == "x":
+        return text if re.search(r"\s*x$", text, re.IGNORECASE) else f"{text}x"
+    if text.lower().endswith(suffix.lower()):
+        return text
+    return f"{text} {suffix}"
+
+
+def _financial_cell_display(cell: Any, unit: Any = "") -> str:
+    if isinstance(cell, dict):
+        if cell.get("status") in {"unavailable", "source_unavailable"}:
+            return "-"
+        value = cell.get("display") if cell.get("display") is not None else cell.get("value")
+        displayed = _append_financial_unit(value, unit)
+        return f"{displayed} EST" if cell.get("status") == "estimated" and displayed != "-" else displayed
+    return _append_financial_unit(cell, unit)
+
+
 def _risk_reward_display(result: dict[str, Any]) -> str:
     if result.get("risk_reward_display"):
         return str(result["risk_reward_display"])
@@ -1060,12 +1104,20 @@ def _safe_external_http_url(value: Any) -> str | None:
 
 
 def _normalize_financial_highlight_row(row: dict[str, Any]) -> dict[str, Any]:
+    unit = _clean_text(row.get("unit")) or ""
+    values = row.get("values") if isinstance(row.get("values"), dict) else {}
     return {
         **row,
         "label": _clean_text(row.get("label")) or _clean_text(row.get("key")) or "Metric",
-        "unit": _clean_text(row.get("unit")) or "-",
-        "values": row.get("values") if isinstance(row.get("values"), dict) else {},
+        "unit": unit or "-",
+        "values": values,
+        "display_values": {str(key): _financial_cell_display(cell, unit) for key, cell in values.items()},
     }
+
+
+def _normalize_financial_highlight_snapshot(item: dict[str, Any]) -> dict[str, Any]:
+    unit = _clean_text(item.get("unit")) or ""
+    return {**item, "unit": unit or "-", "display": _financial_cell_display(item, unit)}
 
 
 def _financial_highlights(value: Any) -> dict[str, Any] | None:
@@ -1096,7 +1148,11 @@ def _financial_highlights(value: Any) -> dict[str, Any] | None:
         "title": _clean_text(value.get("title")) or "Key Financial Highlights",
         "unit_note": _clean_text(value.get("unit_note")),
         "periods": periods,
-        "point_in_time": [item for item in value.get("point_in_time", []) if isinstance(item, dict)],
+        "point_in_time": [
+            _normalize_financial_highlight_snapshot(item)
+            for item in value.get("point_in_time", [])
+            if isinstance(item, dict)
+        ],
         "sections": sections,
         "rows": rows,
     }
@@ -1113,10 +1169,14 @@ def _metric_detail_rows(value: Any, definitions: list[tuple[str, str]]) -> list[
     ]
 
 
-def _metric_detail_display(value: Any, fallback: Any = None) -> str:
+def _metric_detail_display(value: Any, fallback: Any = None, unit: Any = "") -> str:
     detail = _as_dict(value)
     displayed = _display(detail.get("display") or fallback)
-    return f"{displayed} EST" if detail.get("status") == "estimated" and displayed != "N/A" else displayed
+    if unit:
+        displayed = _append_financial_unit(displayed, unit)
+    if displayed == "N/A":
+        displayed = "-"
+    return f"{displayed} EST" if detail.get("status") == "estimated" and displayed != "-" else displayed
 
 
 def _financial_trend_rows(value: Any) -> list[dict[str, Any]]:
@@ -1142,10 +1202,10 @@ def _financial_trend_rows(value: Any) -> list[dict[str, Any]]:
         if not isinstance(cells, list):
             continue
         values = [
-            _metric_detail_display(cells[index] if index < len(cells) else None)
+            _metric_detail_display(cells[index] if index < len(cells) else None, unit=unit)
             for index, _period in enumerate(periods or cells)
         ]
-        rows.append({"label": label, "unit": unit or "-", "values": values})
+        rows.append({"label": label, "values": values})
     return rows
 
 

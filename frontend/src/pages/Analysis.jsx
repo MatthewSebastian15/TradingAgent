@@ -7,7 +7,7 @@ export default function Analysis() {
     <AnalysisWorkspace
       FormComponent={StockForm}
       historyKey="ta_analysis_history"
-      emptyDescription="Select a market tab, configure parameters on the left, and execute analysis to receive a structured trade decision."
+      emptyDescription="Search a yfinance ticker, configure the terminal controls at the top, then execute the agent pipeline for a structured trade decision."
     />
   );
 }

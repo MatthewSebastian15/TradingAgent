@@ -49,6 +49,14 @@ function renderWorkspace(
   );
 }
 
+function openConfigPanel() {
+  fireEvent.click(screen.getByTitle('Configuration'));
+}
+
+function openHistoryPanel() {
+  fireEvent.click(screen.getByTitle('History'));
+}
+
 function historySummary(overrides = {}) {
   return {
     schema_version: 2,
@@ -123,6 +131,91 @@ describe('AnalysisWorkspace history storage', () => {
     vi.restoreAllMocks();
   });
 
+  it('renders the config icon button and opens the config panel on click', () => {
+    function StubForm() {
+      return <div>FORM CONTENT</div>;
+    }
+
+    renderWorkspace(StubForm);
+
+    expect(screen.getByTitle('Configuration')).toBeTruthy();
+    openConfigPanel();
+
+    expect(screen.getByText(/configuration/i)).toBeTruthy();
+    expect(screen.getByText('FORM CONTENT')).toBeTruthy();
+  });
+
+  it('renders the history icon button and opens the history panel on click', () => {
+    localStorage.setItem(
+      'analysis-history-test',
+      JSON.stringify([
+        {
+          request_id: 'request-history',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-14',
+          decision: 'Buy',
+          saved_at: new Date().toISOString(),
+        },
+      ])
+    );
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm);
+
+    expect(screen.getByTitle('History')).toBeTruthy();
+    openHistoryPanel();
+
+    expect(screen.getByText(/history/i)).toBeTruthy();
+  });
+
+  it('closes the active panel when the same icon is clicked again', () => {
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm);
+    openConfigPanel();
+    expect(screen.getByText(/configuration/i)).toBeTruthy();
+
+    openConfigPanel();
+
+    expect(screen.queryByText(/configuration/i)).toBeNull();
+  });
+
+  it('switches from config panel to history panel when history icon is clicked while config is open', () => {
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm);
+    openConfigPanel();
+    expect(screen.getByText(/configuration/i)).toBeTruthy();
+
+    openHistoryPanel();
+
+    expect(screen.getByText(/history/i)).toBeTruthy();
+    expect(screen.queryByText(/configuration/i)).toBeNull();
+  });
+
+  it('closes the active panel when backdrop is clicked', () => {
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm);
+    openConfigPanel();
+    expect(screen.getByText(/configuration/i)).toBeTruthy();
+
+    const backdrop = document.querySelector('div.fixed.inset-0');
+    fireEvent.click(backdrop);
+
+    expect(screen.queryByText(/configuration/i)).toBeNull();
+  });
+
   it('stores only version 2 summary fields for debug responses', () => {
     function DebugForm({ onResult }) {
       return (
@@ -152,6 +245,7 @@ describe('AnalysisWorkspace history storage', () => {
     }
 
     renderWorkspace(DebugForm, 'analysis-history-test', '/analysis', { resultPathBase: null });
+    openConfigPanel();
     fireEvent.click(screen.getByRole('button', { name: /emit debug/i }));
 
     const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
@@ -199,6 +293,7 @@ describe('AnalysisWorkspace history storage', () => {
     }
 
     renderWorkspace(BatchForm, 'analysis-history-test', '/analysis', { resultPathBase: null });
+    openConfigPanel();
     fireEvent.click(screen.getByRole('button', { name: /emit batch/i }));
 
     const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
@@ -246,6 +341,7 @@ describe('AnalysisWorkspace history storage', () => {
     }
 
     renderWorkspace(FullForm);
+    openConfigPanel();
     fireEvent.click(screen.getByRole('button', { name: /emit full/i }));
 
     await waitFor(() => {
@@ -280,6 +376,7 @@ describe('AnalysisWorkspace history storage', () => {
     }
 
     renderWorkspace(EmptyForm);
+    openHistoryPanel();
 
     expect(JSON.parse(localStorage.getItem('analysis-history-test'))).toEqual([
       historySummary({
@@ -375,7 +472,7 @@ describe('AnalysisWorkspace history storage', () => {
     expect(await screen.findByText('Result expired. Please submit a new analysis.')).toBeTruthy();
   });
 
-  it('removes global recent analyses from localStorage history', () => {
+  it('keeps global recent analyses in localStorage history', () => {
     localStorage.setItem(
       'analysis-history-test',
       JSON.stringify([
@@ -411,13 +508,18 @@ describe('AnalysisWorkspace history storage', () => {
     }
 
     renderWorkspace(EmptyForm);
+    openHistoryPanel();
 
-    expect(screen.queryByText('700.HK')).toBeNull();
+    expect(screen.getByText('700.HK')).toBeTruthy();
     expect(screen.getByText('AAPL')).toBeTruthy();
     expect(screen.getByText('BBCA.JK')).toBeTruthy();
 
     const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
-    expect(stored.map((item) => item.request_id)).toEqual(['us-request', 'id-request']);
+    expect(stored.map((item) => item.request_id)).toEqual([
+      'global-request',
+      'us-request',
+      'id-request',
+    ]);
     expect(stored.every((item) => item.schema_version === 2)).toBe(true);
   });
 
@@ -446,11 +548,12 @@ describe('AnalysisWorkspace history storage', () => {
     }
 
     renderWorkspace(EmptyForm);
+    openHistoryPanel();
     localStorage.setItem(
       'analysis-history-test:result:request-clear',
       JSON.stringify({ raw_agent_state: { internal: true } })
     );
-    fireEvent.click(screen.getByRole('button', { name: /clear history/i }));
+    fireEvent.click(screen.getByRole('button', { name: /clear/i }));
 
     expect(localStorage.getItem('analysis-history-test')).toBeNull();
     expect(localStorage.getItem('analysis-history-test:result:request-clear')).toBeNull();
@@ -487,6 +590,7 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
       backendHistoryEnabled: true,
     });
+    openHistoryPanel();
 
     expect(await screen.findByText('MSFT')).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -556,6 +660,7 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
       backendHistoryEnabled: true,
     });
+    openHistoryPanel();
 
     fireEvent.click(await screen.findByText('MSFT'));
 
@@ -592,6 +697,7 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
       backendHistoryEnabled: true,
     });
+    openHistoryPanel();
 
     expect(await screen.findByText('AAPL')).toBeTruthy();
   });
@@ -627,9 +733,10 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
       backendHistoryEnabled: true,
     });
+    openHistoryPanel();
 
     expect(await screen.findByText('AAPL')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /clear history/i }));
+    fireEvent.click(screen.getByRole('button', { name: /clear/i }));
 
     await waitFor(() => expect(localStorage.getItem('analysis-history-test')).toBeNull());
     expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/history');
@@ -662,9 +769,10 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis', {
       backendHistoryEnabled: true,
     });
+    openHistoryPanel();
 
     expect(await screen.findByText('AAPL')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /clear history/i }));
+    fireEvent.click(screen.getByRole('button', { name: /clear/i }));
 
     expect(await screen.findByText('Database unavailable')).toBeTruthy();
     expect(localStorage.getItem('analysis-history-test')).not.toBeNull();

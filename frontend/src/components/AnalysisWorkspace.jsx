@@ -9,13 +9,9 @@ import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 import { clearAnalysisHistory, fetchAnalysisHistory } from '../utils/analysisHistoryApi';
 import { formatDateTimeLabel } from '../utils/formatting';
 
-const HISTORY_PANEL_MAX_HEIGHT = 560;
 const HISTORY_SCHEMA_VERSION = 2;
 const HISTORY_TTL_DAYS = 30;
 const RESULT_EXPIRED_MESSAGE = 'Result expired. Please submit a new analysis.';
-
-const SUPPORTED_HISTORY_MARKETS = new Set(['US', 'ID']);
-const GLOBAL_EXCHANGE_SUFFIX_RE = /\.(?!JK$)[A-Z0-9]{1,5}$/i;
 
 function isExpired(entry) {
   if (!entry?.saved_at) return false;
@@ -23,19 +19,8 @@ function isExpired(entry) {
   return ageMs > HISTORY_TTL_DAYS * 24 * 60 * 60 * 1000;
 }
 
-function isGlobalHistoryEntry(entry) {
-  if (!entry) return false;
-  const market = String(entry.market || '').toUpperCase();
-  const ticker = String(entry.ticker || '').toUpperCase();
-
-  if (market === 'GLOBAL') return true;
-  if (market && !SUPPORTED_HISTORY_MARKETS.has(market)) return true;
-
-  return GLOBAL_EXCHANGE_SUFFIX_RE.test(ticker);
-}
-
 function isSupportedHistoryEntry(entry) {
-  return entry && !isExpired(entry) && !isGlobalHistoryEntry(entry);
+  return entry && !isExpired(entry);
 }
 
 function legacyResultStoragePrefix(historyKey) {
@@ -54,7 +39,7 @@ function removeLegacyStoredResults(historyKey) {
 
     keys.forEach((key) => localStorage.removeItem(key));
   } catch {
-    // Storage can be unavailable in private browsing or when quota is exceeded.
+    // Ignore unavailable or restricted localStorage during cleanup.
   }
 }
 
@@ -140,7 +125,7 @@ function readHistory(historyKey) {
     try {
       localStorage.removeItem(historyKey);
     } catch {
-      // Storage can be unavailable in private browsing or when quota is exceeded.
+      // Ignore unavailable or restricted localStorage during recovery.
     }
     return [];
   }
@@ -155,7 +140,7 @@ function writeHistory(historyKey, entries) {
       localStorage.removeItem(historyKey);
     }
   } catch {
-    // Storage can be unavailable in private browsing or when quota is exceeded.
+    // Ignore unavailable or restricted localStorage during history writes.
   }
 }
 
@@ -164,7 +149,7 @@ function clearHistory(historyKey) {
     removeLegacyStoredResults(historyKey);
     localStorage.removeItem(historyKey);
   } catch {
-    // Storage can be unavailable in private browsing or when quota is exceeded.
+    // Ignore unavailable or restricted localStorage during history clears.
   }
 }
 
@@ -218,6 +203,99 @@ function formatHistoryHorizon(months) {
   return `${value}M`;
 }
 
+function ConfigIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M4 7h10" />
+      <path d="M18 7h2" />
+      <path d="M4 17h2" />
+      <path d="M10 17h10" />
+      <path d="M14 5v4" />
+      <path d="M10 15v4" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function PanelButton({ active, title, onClick, children }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      onClick={onClick}
+      className={`flex h-10 w-10 items-center justify-center border-l-2 transition-colors duration-150 ${
+        active
+          ? 'border-bloomberg-orange bg-bloomberg-surface text-bloomberg-orange'
+          : 'border-transparent text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+PanelButton.propTypes = {
+  active: PropTypes.bool.isRequired,
+  title: PropTypes.string.isRequired,
+  onClick: PropTypes.func.isRequired,
+  children: PropTypes.node.isRequired,
+};
+
+function DrawerPanel({ title, onClose, children }) {
+  return (
+    <aside className="fixed bottom-0 left-10 top-10 z-[35] flex w-72 flex-col border-r border-bloomberg-border bg-bloomberg-card shadow-2xl shadow-black/50">
+      <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-bloomberg-border px-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
+          {title}
+        </span>
+        <button
+          type="button"
+          aria-label={`Close ${title.toLowerCase()} panel`}
+          onClick={onClose}
+          className="flex h-7 w-7 items-center justify-center font-mono text-lg leading-none text-bloomberg-muted transition-colors duration-150 hover:bg-bloomberg-surface hover:text-bloomberg-orange"
+        >
+          ×
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto">{children}</div>
+    </aside>
+  );
+}
+
+DrawerPanel.propTypes = {
+  title: PropTypes.string.isRequired,
+  onClose: PropTypes.func.isRequired,
+  children: PropTypes.node.isRequired,
+};
+
 function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, onSelect }) {
   const [history, setHistory] = useState([]);
   const [clearError, setClearError] = useState('');
@@ -267,29 +345,31 @@ function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, on
   if (!history.length) return null;
 
   return (
-    <div className="border border-bloomberg-border bg-bloomberg-card min-w-0">
-      <div className="px-4 py-2.5 border-b border-bloomberg-border flex items-center justify-between bg-black">
-        <span className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
-          RECENT ANALYSES
+    <>
+      <div className="flex items-center justify-between border-b border-bloomberg-border px-3 py-2">
+        <span className="font-mono text-[10px] text-bloomberg-orange tracking-[0.2em] uppercase">
+          RECENT
         </span>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-bloomberg-muted">{history.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[9px] text-bloomberg-muted">
+            {history.length}
+          </span>
           <button
             type="button"
             disabled={clearing}
             onClick={handleClearHistory}
-            className="font-mono text-[10px] text-bloomberg-muted tracking-wider hover:text-bloomberg-white"
+            className="font-mono text-[9px] text-bloomberg-muted tracking-wider transition-colors duration-150 hover:text-bloomberg-orange disabled:opacity-40"
           >
-            {clearing ? 'CLEARING...' : 'CLEAR HISTORY'}
+            {clearing ? 'CLEARING...' : 'CLEAR'}
           </button>
         </div>
       </div>
       {clearError && (
-        <div className="border-b border-bloomberg-border px-4 py-2 font-mono text-[10px] text-bloomberg-red">
+        <div className="border-b border-bloomberg-border px-3 py-1.5 font-mono text-[9px] text-bloomberg-red">
           {clearError}
         </div>
       )}
-      <div className="overflow-y-auto" style={{ maxHeight: HISTORY_PANEL_MAX_HEIGHT }}>
+      <div className="overflow-y-auto">
         {history.map((item, index) => {
           const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
           const displaySignal = item.display_signal || item.decision;
@@ -303,41 +383,35 @@ function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, on
                 historyResourceId(item) || `${item.ticker || 'item'}-${item.trade_date || index}`
               }
               onClick={() => onSelect(item)}
-              className="w-full flex flex-col gap-3 px-4 py-3 border-b border-bloomberg-border last:border-b-0 hover:bg-bloomberg-surface transition-colors duration-150 text-left sm:flex-row sm:items-center sm:justify-between"
+              className="w-full border-b border-bloomberg-border px-3 py-2 text-left transition-colors duration-150 hover:bg-bloomberg-surface"
             >
-              <div className="min-w-0">
-                <div className="font-mono text-sm font-semibold text-bloomberg-white">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate font-mono text-[11px] font-semibold text-bloomberg-white">
                   {item.ticker || 'N/A'}
-                </div>
-                <div className="font-mono text-xs text-bloomberg-muted">
-                  {item.trade_date}
-                  {formatHistoryHorizon(item.time_horizon_months)
-                    ? ` / ${formatHistoryHorizon(item.time_horizon_months)}`
-                    : ''}
-                </div>
-                {createdAtLabel && (
-                  <div className="mt-1 font-mono text-[10px] text-bloomberg-muted tracking-wider uppercase">
-                    CREATED: {createdAtLabel}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-3 self-stretch justify-between sm:self-auto sm:justify-end">
+                </span>
                 <span
-                  className={`font-mono text-xs border px-2.5 py-1 tracking-wider font-semibold ${decisionStyle(displaySignal)}`}
+                  className={`flex-shrink-0 border px-1.5 py-0.5 font-mono text-[8px] font-semibold tracking-wider ${decisionStyle(displaySignal)}`}
                 >
                   {(displaySignal || 'N/A').toUpperCase()}
                 </span>
-                <span
-                  className={`font-mono text-xs font-semibold ${confidenceScoreStyle(item.confidence_tier)}`}
-                >
+              </div>
+              <div className="mt-1 flex items-center gap-3 font-mono text-[9px] text-bloomberg-muted">
+                <span>{item.trade_date || '—'}</span>
+                <span>{formatHistoryHorizon(item.time_horizon_months) || '—'}</span>
+                <span className={confidenceScoreStyle(item.confidence_tier)}>
                   {confidenceScore}
                 </span>
               </div>
+              {createdAtLabel && (
+                <div className="mt-0.5 font-mono text-[8px] text-bloomberg-border truncate">
+                  {createdAtLabel}
+                </div>
+              )}
             </button>
           );
         })}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -437,6 +511,11 @@ export default function AnalysisWorkspace({
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [status, setStatus] = useState(resourceId ? 'Loading saved analysis...' : '');
   const [agentProgress, setAgentProgress] = useState(null);
+  const [activePanel, setActivePanel] = useState(null);
+
+  function togglePanel(name) {
+    setActivePanel((prev) => (prev === name ? null : name));
+  }
 
   useEffect(() => {
     if (!resourceId) return undefined;
@@ -542,49 +621,79 @@ export default function AnalysisWorkspace({
     <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
 
-      <div className="flex flex-col lg:flex-row" style={{ minHeight: 'calc(100vh - 68px)' }}>
-        <div className="w-full flex-shrink-0 border-b border-bloomberg-border flex flex-col lg:w-80 lg:border-b-0 lg:border-r">
-          <div className="flex-1">
-            <div className="border-b border-bloomberg-border bg-bloomberg-card">
-              <FormComponent
-                onResult={handleResult}
-                onLoading={setLoading}
-                onStatus={setStatus}
-                onAgentProgress={setAgentProgress}
-                selectedResult={result && !result.error ? result : null}
-              />
-            </div>
+      {activePanel && (
+        <div
+          className="fixed inset-0 z-[25] bg-black/30"
+          onClick={() => setActivePanel(null)}
+        />
+      )}
 
-            <div className="p-4">
-              <HistoryPanel
-                backendHistoryEnabled={backendHistoryEnabled}
-                currentResourceId={historyResourceId(result)}
-                historyKey={historyKey}
-                onSelect={(item) => {
-                  const nextPath = resultPath(resultPathBase, historyResourceId(item));
-                  if (nextPath) navigate(nextPath);
-                }}
-              />
-            </div>
-          </div>
+      <div className="fixed bottom-0 left-0 top-10 z-[45] w-10 border-bloomberg-border border-r bg-black">
+        <PanelButton
+          active={activePanel === 'config'}
+          title="Configuration"
+          onClick={() => togglePanel('config')}
+        >
+          <ConfigIcon />
+        </PanelButton>
+        <PanelButton
+          active={activePanel === 'history'}
+          title="History"
+          onClick={() => togglePanel('history')}
+        >
+          <ClockIcon />
+        </PanelButton>
+      </div>
 
+      {activePanel === 'config' && (
+        <DrawerPanel title="CONFIGURATION" onClose={() => setActivePanel(null)}>
+          <FormComponent
+            onResult={handleResult}
+            onLoading={setLoading}
+            onStatus={setStatus}
+            onAgentProgress={setAgentProgress}
+            selectedResult={result && !result.error ? result : null}
+            agentProgress={agentProgress}
+            status={status}
+          />
+        </DrawerPanel>
+      )}
+
+      {activePanel === 'history' && (
+        <DrawerPanel title="HISTORY" onClose={() => setActivePanel(null)}>
+          <HistoryPanel
+            backendHistoryEnabled={backendHistoryEnabled}
+            currentResourceId={historyResourceId(result)}
+            historyKey={historyKey}
+            onSelect={(item) => {
+              const nextPath = resultPath(resultPathBase, historyResourceId(item));
+              if (nextPath) navigate(nextPath);
+              setActivePanel(null);
+            }}
+          />
+        </DrawerPanel>
+      )}
+
+      <main className="ml-10 min-h-screen min-w-0 pt-10">
+        <div className="space-y-4 p-4">
           <StatusBar loading={loading} status={status} />
-        </div>
 
-        <div className="flex-1 min-w-0 overflow-y-auto">
           {!loading && !result && (
-            <div className="flex flex-col items-center justify-center min-h-[480px] p-4 text-center sm:p-8 lg:h-full">
-              <div className="font-display text-4xl font-bold text-bloomberg-border tracking-widest mb-4 sm:text-6xl">
+            <div className="border border-bloomberg-border bg-bloomberg-card p-6 text-center shadow-xl shadow-black/40 sm:p-8">
+              <div className="font-display text-4xl font-bold tracking-widest text-bloomberg-border sm:text-6xl">
                 READY
               </div>
-              <div className="font-mono text-sm text-bloomberg-muted tracking-wider max-w-xs">
+              <div className="mx-auto mt-4 max-w-2xl font-mono text-xs tracking-wider text-bloomberg-muted sm:text-sm">
                 {emptyDescription}
               </div>
-              <div className="mt-8 grid grid-cols-1 gap-3 w-full max-w-md sm:grid-cols-3 sm:gap-4">
+              <div className="mx-auto mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
                 {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
-                  <div key={step} className="border border-bloomberg-border p-3 text-center">
-                    <div className="font-mono text-2xl text-bloomberg-border mb-2">{index + 1}</div>
-                    <div className="font-mono text-xs text-bloomberg-muted tracking-wider">
+                  <div
+                    key={step}
+                    className="border border-bloomberg-border bg-black p-4 text-center"
+                  >
+                    <div className="font-mono text-2xl text-bloomberg-border">{index + 1}</div>
+                    <div className="mt-2 font-mono text-xs tracking-wider text-bloomberg-muted">
                       {step}
                     </div>
                   </div>
@@ -593,25 +702,19 @@ export default function AnalysisWorkspace({
             </div>
           )}
 
-          {loading && (
-            <div className="p-4 sm:p-6">
-              <AgentLog status={status} agentProgress={agentProgress} />
-            </div>
-          )}
+          {loading && <AgentLog status={status} agentProgress={agentProgress} />}
 
           {result && !loading && (
-            <div className="p-4 sm:p-6">
-              <ResultCard
-                result={result}
-                enableReportExport={enableReportExport && Boolean(resultPathBase)}
-                mockReport={mockReportExport}
-                onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
-                rerunRunning={rerunJob.running || loading}
-              />
-            </div>
+            <ResultCard
+              result={result}
+              enableReportExport={enableReportExport && Boolean(resultPathBase)}
+              mockReport={mockReportExport}
+              onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
+              rerunRunning={rerunJob.running || loading}
+            />
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

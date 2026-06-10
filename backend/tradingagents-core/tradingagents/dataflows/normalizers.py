@@ -81,22 +81,78 @@ FINANCIAL_FIELDS = {
     "shares_outstanding",
     "eps",
     "dividend_per_share",
+    "dividend_paid",
     "reference_price",
     "dividend_yield",
+    "market_cap",
+    "enterprise_value",
+    "pe",
+    "pbv",
+    "ps",
+    "ev_ebitda",
 }
 
 _FIELD_ALIASES = {
     "total_assets": "assets",
     "total_equity": "equity",
+    "total_equity_gross_minority_interest": "equity",
     "stockholders_equity": "equity",
     "shareholders_equity": "equity",
+    "common_stock_equity": "equity",
+    "total_shareholder_equity": "equity",
+    "total_shareholders_equity": "equity",
     "total_debt": "debt",
+    "long_term_debt_and_capital_lease_obligation": "debt",
+    "long_term_debt": "debt",
+    "short_long_term_debt_total": "debt",
     "cash_from_operations": "operating_cash_flow",
+    "total_cash_from_operating_activities": "operating_cash_flow",
+    "operating_cashflow": "operating_cash_flow",
     "capital_expenditure": "capex",
     "capital_expenditures": "capex",
     "net_income": "net_profit",
     "net_income_common_stockholders": "net_profit",
+    "net_income_continuous_operations": "net_profit",
     "total_revenue": "revenue",
+    "operating_revenue": "revenue",
+    "cash_and_cash_equivalents": "cash",
+    "cash_cash_equivalents_and_short_term_investments": "cash",
+    "cash_financial": "cash",
+    "cash_equivalents": "cash",
+    "cash_and_short_term_investments": "cash",
+    "total_current_liabilities": "current_liabilities",
+    "total_liabilities_net_minority_interest": "total_liabilities",
+    "ordinary_shares_number": "shares_outstanding",
+    "share_issued": "shares_outstanding",
+    "common_stock_shares_outstanding": "shares_outstanding",
+    "shares_outstanding": "shares_outstanding",
+    "diluted_eps": "eps",
+    "basic_eps": "eps",
+    "reported_eps": "eps",
+    "cash_dividends_paid": "dividend_paid",
+    "common_stock_dividend_paid": "dividend_paid",
+    "cash_dividends_paid_direct": "dividend_paid",
+    "dividends_paid": "dividend_paid",
+    "dividend_payout": "dividend_paid",
+    "dividend_per_share": "dividend_per_share",
+    "dividendpershare": "dividend_per_share",
+    "reference_price": "reference_price",
+    "last_close": "reference_price",
+    "close": "reference_price",
+    "market_capitalization": "market_cap",
+    "market_cap": "market_cap",
+    "enterprise_value": "enterprise_value",
+    "p_e": "pe",
+    "pe_ratio": "pe",
+    "p_bv": "pbv",
+    "p_b": "pbv",
+    "pb_ratio": "pbv",
+    "price_to_book": "pbv",
+    "p_s": "ps",
+    "ps_ratio": "ps",
+    "price_to_sales": "ps",
+    "ev_ebitda": "ev_ebitda",
+    "enterprise_value_to_ebitda": "ev_ebitda",
 }
 
 
@@ -167,7 +223,9 @@ def parse_numeric_value(value: object) -> float | None:
     return numeric * UNIT_MULTIPLIER.get(detected_unit, 1)
 
 
-def normalize_financial_value(value: float | int | str | None, unit: str = "raw", currency: str = "IDR") -> dict[str, Any]:
+def normalize_financial_value(
+    value: float | int | str | None, unit: str = "raw", currency: str = "IDR"
+) -> dict[str, Any]:
     raw_unit = _normalize_unit(unit)
     normalized_currency = _normalize_currency(currency)
     numeric, detected_unit, warning = _parse_numeric_and_unit(value, raw_unit)
@@ -176,7 +234,11 @@ def normalize_financial_value(value: float | int | str | None, unit: str = "raw"
         warnings.append("Value cannot be normalized")
     normalized_value = None if numeric is None else numeric * UNIT_MULTIPLIER.get(detected_unit, 1)
     payload = {
-        "raw_value": numeric if numeric is not None else value if value not in (None, "", "N/A", "n/a", "NA", "-") else None,
+        "raw_value": numeric
+        if numeric is not None
+        else value
+        if value not in (None, "", "N/A", "n/a", "NA", "-")
+        else None,
         "raw_unit": detected_unit,
         "raw_currency": normalized_currency,
         "normalized_value": normalized_value,
@@ -271,7 +333,9 @@ def _row_from_period_mapping(period_label: str, values: Any, period_type_hint: s
             value = raw_value.get("normalized_value", raw_value.get("value", raw_value.get("raw_value")))
             row[_canonical_field(raw_key)] = value
             if raw_value.get("source_unit") or raw_value.get("unit") or raw_value.get("raw_unit"):
-                row.setdefault("unit", raw_value.get("source_unit") or raw_value.get("unit") or raw_value.get("raw_unit"))
+                row.setdefault(
+                    "unit", raw_value.get("source_unit") or raw_value.get("unit") or raw_value.get("raw_unit")
+                )
             if raw_value.get("currency") or raw_value.get("raw_currency") or raw_value.get("normalized_currency"):
                 row.setdefault(
                     "currency",
@@ -286,7 +350,11 @@ def _extract_statement_rows(payload: Any, default_period_type: str) -> list[dict
     if payload is None:
         return []
     if isinstance(payload, list):
-        return [dict(item, period_type=item.get("period_type") or default_period_type) for item in payload if isinstance(item, dict)]
+        return [
+            dict(item, period_type=item.get("period_type") or default_period_type)
+            for item in payload
+            if isinstance(item, dict)
+        ]
     mapping = _load_mapping(payload)
     if not mapping:
         return []
@@ -317,7 +385,10 @@ def _extract_statement_rows(payload: Any, default_period_type: str) -> list[dict
             if row:
                 rows.append(row)
 
-    if not rows and any(_canonical_field(key) in FINANCIAL_FIELDS or key in {"period", "period_label", "fiscalDateEnding"} for key in mapping):
+    if not rows and any(
+        _canonical_field(key) in FINANCIAL_FIELDS or key in {"period", "period_label", "fiscalDateEnding"}
+        for key in mapping
+    ):
         item = dict(mapping)
         item.setdefault("period_type", default_period_type)
         rows.append(item)
@@ -350,7 +421,7 @@ def _rows_from_vendor_parser(
         return []
 
     rows: list[dict[str, Any]] = []
-    currency = parsed.get("currency") or default_currency
+    currency = default_currency or parsed.get("currency") or "IDR"
     for period_key, values in periods.items():
         if not isinstance(values, dict):
             continue
@@ -464,12 +535,18 @@ def _financial_period_from_metadata(period: dict[str, Any]) -> Any | None:
     period_type = str(period.get("period_type") or "annual")
     if period_type not in {"annual", "quarter", "quarterly"}:
         return None
+    quarter = period.get("fiscal_quarter")
+    is_quarterly = period_type in {"quarter", "quarterly"}
+    key = f"FY{str(year)[-2:]}Q{quarter}" if is_quarterly and quarter else f"FY{str(year)[-2:]}"
+    label = f"Q{quarter} {year}" if is_quarterly and quarter else f"FY {year}"
     return FinancialPeriod(
-        key=str(period.get("period_label") or f"FY{year}"),
-        label=str(period.get("period_label") or f"FY{year}"),
-        type="quarterly" if period_type in {"quarter", "quarterly"} else "annual",
+        key=key,
+        label=label,
+        type="quarterly" if is_quarterly else "annual",
         year=year,
-        quarter=period.get("fiscal_quarter"),
+        quarter=quarter,
+        display_period=label,
+        sort_key=period.get("period_end"),
     )
 
 
@@ -481,11 +558,209 @@ def _dataclass_to_dict(value: Any) -> Any:
     return value
 
 
-def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[str, Any]]) -> dict[str, Any]:
+
+
+def _number_like(value: Any) -> float | None:
+    if value in (None, "", "N/A", "n/a", "NA", "-") or isinstance(value, bool):
+        return None
+    try:
+        number = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None
+
+
+def _merge_table_metric(
+    normalized: dict[str, Any],
+    period_key: str | None,
+    field: str,
+    value: Any,
+    *,
+    source_vendor: str,
+    source_field: str,
+    source_unit: str = "raw",
+    accumulate: bool = False,
+) -> None:
+    number = _number_like(value)
+    if not period_key or number is None:
+        return
+    if field in {"capex", "dividend_paid"}:
+        number = abs(number)
+    bucket = normalized.setdefault("periods", {}).setdefault(period_key, {})
+    if field in bucket:
+        if accumulate and isinstance(bucket[field].get("value"), (int, float)):
+            bucket[field]["value"] = float(bucket[field]["value"]) + number
+        return
+    bucket[field] = {
+        "value": number,
+        "source_vendor": source_vendor,
+        "source_field": source_field,
+        "source_unit": source_unit,
+    }
+    sources = normalized.setdefault("sources_used", [])
+    if source_vendor not in sources:
+        sources.append(source_vendor)
+
+
+def _date_key_rows(mapping: dict[Any, Any]) -> list[dict[str, Any]]:
+    from datetime import datetime
+
+    rows: list[dict[str, Any]] = []
+    for raw_date, raw_value in mapping.items():
+        try:
+            datetime.fromisoformat(str(raw_date)[:10])
+        except (TypeError, ValueError):
+            return []
+        if isinstance(raw_value, dict):
+            item = dict(raw_value)
+            item.setdefault("date", raw_date)
+            rows.append(item)
+        else:
+            rows.append({"date": raw_date, "dividend_per_share": raw_value})
+    return rows
+
+
+def _csv_dividend_rows(payload: str) -> list[dict[str, Any]]:
+    import csv
+    from io import StringIO
+
+    lines = [line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if len(lines) < 2 or "," not in payload:
+        return []
+    try:
+        reader = csv.DictReader(StringIO("\n".join(lines)))
+    except csv.Error:
+        return []
+    rows: list[dict[str, Any]] = []
+    for row in reader:
+        item = dict(row or {})
+        if item.get("") and not item.get("date"):
+            item["date"] = item[""]
+        rows.append(item)
+    return rows
+
+
+def _dividend_rows(payload: Any) -> list[dict[str, Any]]:
+    if hasattr(payload, "to_csv"):
+        payload = payload.to_csv()
+    if isinstance(payload, list):
+        return [dict(item) for item in payload if isinstance(item, dict)]
+    if isinstance(payload, str):
+        loaded = _load_mapping(payload)
+        if isinstance(loaded, dict):
+            payload = loaded
+        else:
+            return _csv_dividend_rows(payload)
+    if isinstance(payload, dict):
+        for key in ("dividends", "Dividends", "corporate_actions", "corporateActions", "data", "rows"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [dict(item) for item in value if isinstance(item, dict)]
+            if isinstance(value, dict):
+                return _date_key_rows(value)
+            if isinstance(value, str):
+                return _csv_dividend_rows(value)
+        return _date_key_rows(payload)
+    return []
+
+
+def _event_period_keys(row: dict[str, Any]) -> list[str]:
+    from datetime import datetime
+
+    date_value = next(
+        (
+            row.get(key)
+            for key in ("ex_date", "date", "Date", "payment_date", "record_date", "announcement_date", "")
+            if row.get(key)
+        ),
+        None,
+    )
+    try:
+        parsed = datetime.fromisoformat(str(date_value)[:10])
+    except (TypeError, ValueError):
+        return []
+    annual = f"FY{str(parsed.year)[-2:]}"
+    quarterly = f"{annual}Q{((parsed.month - 1) // 3) + 1}"
+    return list(dict.fromkeys([annual, quarterly]))
+
+
+def _dividend_amount(row: dict[str, Any]) -> float | None:
+    for key in ("dividend_per_share", "Dividend Per Share", "Dividends", "cash_amount", "amount", "dividend", "cash_dividend"):
+        amount = _number_like(row.get(key))
+        if amount is not None:
+            return abs(amount)
+    return None
+
+
+def _dividend_total(row: dict[str, Any]) -> float | None:
+    for key in ("dividend_paid", "total", "total_amount", "dividend_total", "cash_total", "value"):
+        total = _number_like(row.get(key))
+        if total is not None:
+            return abs(total)
+    return None
+
+
+def _merge_dividend_events(normalized: dict[str, Any], dividends: Any) -> None:
+    for row in _dividend_rows(dividends):
+        amount = _dividend_amount(row)
+        total = _dividend_total(row)
+        for period_key in _event_period_keys(row):
+            if amount is not None:
+                _merge_table_metric(
+                    normalized,
+                    period_key,
+                    "dividend_per_share",
+                    amount,
+                    source_vendor="corporate_actions",
+                    source_field="dividend_event.amount",
+                    accumulate=True,
+                )
+            if total is not None:
+                _merge_table_metric(
+                    normalized,
+                    period_key,
+                    "dividend_paid",
+                    total,
+                    source_vendor="corporate_actions",
+                    source_field="dividend_event.total",
+                    accumulate=True,
+                )
+
+
+def _latest_period_key(periods: list[Any]) -> str | None:
+    return periods[-1].key if periods else None
+
+def build_financial_highlights_from_normalized_rows(
+    normalized_rows: list[dict[str, Any]],
+    *,
+    analysis_date: str | None = None,
+    currency: str | None = None,
+    current_price: float | int | None = None,
+    price_data: Any | None = None,
+    company_profile: dict[str, Any] | None = None,
+    dividends: Any | None = None,
+) -> dict[str, Any]:
     rows = sorted([dict(row) for row in (normalized_rows or [])], key=_period_sort_key)
-    latest = rows[-1] if rows else {}
+    allowed_keys: set[str] | None = None
+    resolved_periods: list[Any] | None = None
+    if analysis_date:
+        try:
+            from tradingagents.financial_highlights.period_resolver import resolve_financial_highlight_periods
+
+            resolved_periods = resolve_financial_highlight_periods(analysis_date)
+            allowed_keys = {period.key for period in resolved_periods}
+        except Exception:
+            resolved_periods = None
+            allowed_keys = None
+    display_rows = []
+    for row in rows:
+        period = row.get("period") if isinstance(row.get("period"), dict) else {}
+        financial_period = _financial_period_from_metadata(period)
+        if financial_period is not None and (allowed_keys is None or financial_period.key in allowed_keys):
+            display_rows.append(row)
+    latest = display_rows[-1] if display_rows else rows[-1] if rows else {}
     latest_period = latest.get("period") if isinstance(latest.get("period"), dict) else {}
-    currency = latest_period.get("currency") or latest.get("currency") or "IDR"
+    currency = currency or latest_period.get("currency") or latest.get("currency") or "IDR"
 
     highlights: dict[str, Any] = {
         "period": latest_period,
@@ -496,7 +771,9 @@ def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[s
         "equity": unwrap_normalized_value(latest.get("equity") or latest.get("total_equity")),
         "cash": unwrap_normalized_value(latest.get("cash") or latest.get("cash_and_equivalents")),
         "debt": unwrap_normalized_value(latest.get("debt") or latest.get("total_debt")),
-        "operating_cash_flow": unwrap_normalized_value(latest.get("operating_cash_flow") or latest.get("cash_from_operations")),
+        "operating_cash_flow": unwrap_normalized_value(
+            latest.get("operating_cash_flow") or latest.get("cash_from_operations")
+        ),
         "capex": unwrap_normalized_value(latest.get("capex") or latest.get("capital_expenditure")),
         "normalized_period_rows": rows,
         "source": "normalized_financial_rows",
@@ -509,7 +786,7 @@ def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[s
     except Exception:
         return highlights
 
-    periods = []
+    periods_by_key: dict[str, Any] = {period.key: period for period in resolved_periods or []}
     normalized_for_table: dict[str, Any] = {
         "currency": currency,
         "periods": {},
@@ -520,8 +797,9 @@ def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[s
         financial_period = _financial_period_from_metadata(period)
         if financial_period is None:
             continue
-        periods.append(financial_period)
         period_key = financial_period.key
+        if allowed_keys is None or (period_key in allowed_keys and resolved_periods is None):
+            periods_by_key[period_key] = financial_period
         period_values: dict[str, Any] = {}
         for field in FINANCIAL_FIELDS:
             record = _field_record(row, field)
@@ -539,6 +817,66 @@ def build_financial_highlights_from_normalized_rows(normalized_rows: list[dict[s
             period_values.setdefault("capital_expenditure", period_values["capex"])
         normalized_for_table["periods"][period_key] = period_values
 
+    periods = (
+        resolved_periods
+        if resolved_periods is not None
+        else sorted(periods_by_key.values(), key=lambda period: str(period.sort_key or ""))
+    )
+    profile = company_profile or {}
+    if periods and price_data is not None:
+        try:
+            from tradingagents.financial_highlights.statement_parser import reference_prices_by_period
+
+            for period_key, reference_price in reference_prices_by_period(periods, price_data, analysis_date).items():
+                _merge_table_metric(
+                    normalized_for_table,
+                    period_key,
+                    "reference_price",
+                    reference_price,
+                    source_vendor="price_data",
+                    source_field="last_close_on_or_before_period_end",
+                )
+        except Exception:
+            pass
+    shares_outstanding = profile.get("shares_outstanding") or profile.get("sharesOutstanding")
+    for period in periods:
+        _merge_table_metric(
+            normalized_for_table,
+            period.key,
+            "shares_outstanding",
+            shares_outstanding,
+            source_vendor="company_profile",
+            source_field="shares_outstanding",
+        )
+
+    latest_key = _latest_period_key(periods)
+    if latest_key:
+        _merge_table_metric(
+            normalized_for_table,
+            latest_key,
+            "reference_price",
+            current_price,
+            source_vendor="price_data",
+            source_field="current_price",
+        )
+        _merge_table_metric(
+            normalized_for_table,
+            latest_key,
+            "shares_outstanding",
+            profile.get("shares_outstanding"),
+            source_vendor="company_profile",
+            source_field="shares_outstanding",
+        )
+        _merge_table_metric(
+            normalized_for_table,
+            latest_key,
+            "market_cap",
+            profile.get("market_cap"),
+            source_vendor="company_profile",
+            source_field="market_cap",
+        )
+    if dividends is not None:
+        _merge_dividend_events(normalized_for_table, dividends)
     if periods:
         metric_rows, sections, data_quality = build_metric_rows(periods=periods, normalized=normalized_for_table)
         metadata = currency_metadata(currency)

@@ -9,7 +9,7 @@ export default function NotFound() {
       <Navbar />
       <div
         className="flex flex-col items-center justify-center"
-        style={{ minHeight: 'calc(100vh - 68px)' }}
+        style={{ minHeight: 'calc(100vh - 40px)' }}
       >
         <div className="text-center">
           <div className="font-display text-8xl font-bold text-bloomberg-border tracking-widest mb-4">
@@ -22,7 +22,7 @@ export default function NotFound() {
             onClick={() => navigate('/home')}
             className="font-mono text-xs text-bloomberg-orange border border-bloomberg-orange px-6 py-2.5 hover:bg-bloomberg-orange-dim transition-colors tracking-wider"
           >
-            ← RETURN TO DASHBOARD
+            ← RETURN TO HOME
           </button>
         </div>
       </div>

@@ -15,6 +15,8 @@ class FinancialPeriod:
     type: FinancialPeriodType
     year: int
     quarter: int | None = None
+    display_period: str | None = None
+    sort_key: str | None = None
 
 
 @dataclass

@@ -77,6 +77,11 @@ class SQLiteTTLCache:
             )
             self._evict(conn)
 
+    def delete(self, key: Any) -> None:
+        key_hash = self._hash_key(key)
+        with self._write_lock, self._connect() as conn:
+            conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
+
     def stats(self) -> dict[str, int | str]:
         with self._connect() as conn:
             count = conn.execute("SELECT COUNT(*) FROM cache WHERE expires_at > ?", (time.time(),)).fetchone()[0]

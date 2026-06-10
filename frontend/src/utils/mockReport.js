@@ -691,6 +691,79 @@ function renderAnalystSections(sections) {
   </section>`;
 }
 
+function expandFinancialYear(value) {
+  const year = Number(value);
+  if (!Number.isFinite(year)) return null;
+  if (year < 100) return year < 50 ? 2000 + year : 1900 + year;
+  return year;
+}
+
+function displayPeriodLabel(period) {
+  const raw = String(period?.display_period || period?.label || period?.period || '').trim();
+  let match = raw.match(/^FY\s?(\d{2}|\d{4})$/i);
+  if (match) {
+    const year = expandFinancialYear(match[1]);
+    return year ? `FY ${year}` : '-';
+  }
+
+  match = raw.match(/^FY\s?(\d{2}|\d{4})Q([1-4])$/i) || raw.match(/^Q([1-4])\s?(\d{2}|\d{4})$/i);
+  if (match) {
+    const isLegacyQuarter = match[0].toUpperCase().startsWith('FY');
+    const quarter = isLegacyQuarter ? match[2] : match[1];
+    const year = expandFinancialYear(isLegacyQuarter ? match[1] : match[2]);
+    return year ? `Q${quarter} ${year}` : '-';
+  }
+
+  return raw || '-';
+}
+
+function periodSortValue(period) {
+  if (period?.sort_key) return String(period.sort_key);
+  const label = displayPeriodLabel(period);
+  const annual = label.match(/^FY\s(\d{4})$/i);
+  if (annual) return `${annual[1]}1231`;
+  const quarter = label.match(/^Q([1-4])\s(\d{4})$/i);
+  if (quarter) return `${quarter[2]}${String(Number(quarter[1]) * 3).padStart(2, '0')}31`;
+  const year = Number(period?.year || period?.fiscal_year || 0);
+  const fiscalQuarter = Number(period?.quarter || period?.fiscal_quarter || 0);
+  return `${String(year).padStart(4, '0')}${String(fiscalQuarter).padStart(2, '0')}`;
+}
+
+function sortFinancialPeriods(periods) {
+  return [...periods].sort((left, right) =>
+    periodSortValue(right).localeCompare(periodSortValue(left))
+  );
+}
+
+function unitSuffix(unit) {
+  const text = String(unit || '');
+  if (/\bBn\b/i.test(text)) return 'Bn';
+  if (/\bMn\b/i.test(text)) return 'Mn';
+  if (text.includes('%')) return '%';
+  if (/\/share/i.test(text)) return text;
+  if (/\bx\b/i.test(text) || /ratio/i.test(text)) return 'x';
+  return '';
+}
+
+function appendFinancialUnit(value, unit) {
+  if (value === null || value === undefined || value === '') return 'N/A';
+  const text = String(value).trim();
+  if (text === 'N/A' || text.toLowerCase() === 'source unavailable') return 'N/A';
+  const suffix = unitSuffix(unit);
+  if (!suffix) return text.replace(/\s*%/g, ' %');
+  if (suffix === '%') return `${text.replace(/\s*%$/, '')} %`;
+  if (suffix === 'x') return /\s*x$/i.test(text) ? text : `${text}x`;
+  if (text.toLowerCase().endsWith(suffix.toLowerCase())) return text;
+  return `${text} ${suffix}`;
+}
+
+function financialCellDisplay(cell, unit) {
+  if (!cell || cell.status === 'unavailable' || cell.status === 'source_unavailable') return 'N/A';
+  const value = cell.display ?? cell.value;
+  const display = appendFinancialUnit(value, unit);
+  return cell.status === 'estimated' && display !== 'N/A' ? `${display} EST` : display;
+}
+
 function renderFinancialHighlights(financialHighlights) {
   const periods = financialHighlights?.periods;
   const sections = Array.isArray(financialHighlights?.sections)
@@ -703,12 +776,12 @@ function renderFinancialHighlights(financialHighlights) {
   const snapshot = Array.isArray(financialHighlights.point_in_time)
     ? financialHighlights.point_in_time
     : [];
+  const displayPeriods = sortFinancialPeriods(periods);
   const renderTable = (rows) => `<table class="financial-highlights-table">
     <thead>
       <tr>
         <th>Metric</th>
-        <th>Unit</th>
-        ${periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}
+        ${displayPeriods.map((period) => `<th>${escapeHtml(displayPeriodLabel(period))}</th>`).join('')}
       </tr>
     </thead>
     <tbody>
@@ -716,11 +789,10 @@ function renderFinancialHighlights(financialHighlights) {
         .map(
           (item) => `<tr>
             <td>${escapeHtml(item.label)}</td>
-            <td>${escapeHtml(item.unit || '-')}</td>
-            ${periods
+            ${displayPeriods
               .map((period) => {
                 const cell = item.values?.[period.key];
-                return `<td>${escapeHtml(cell?.status === 'unavailable' ? 'N/A' : cell?.display || 'N/A')}</td>`;
+                return `<td>${escapeHtml(financialCellDisplay(cell, item.unit))}</td>`;
               })
               .join('')}
           </tr>`
@@ -737,7 +809,7 @@ function renderFinancialHighlights(financialHighlights) {
           <table><tbody>${snapshot
             .map(
               (item) =>
-                `<tr><th>${escapeHtml(item.label)}</th><td>${escapeHtml(item.status === 'unavailable' ? 'N/A' : `${item.display} ${item.unit}`)}</td></tr>`
+                `<tr><th>${escapeHtml(item.label)}</th><td>${escapeHtml(financialCellDisplay(item, item.unit))}</td></tr>`
             )
             .join('')}</tbody></table>`
         : ''
@@ -752,18 +824,15 @@ function renderFinancialHighlights(financialHighlights) {
   </section>`;
 }
 
-function metricDetailDisplay(detail) {
-  if (!detail || detail.status === 'unavailable') return 'N/A';
-  return detail.status === 'estimated' ? `${detail.display || 'N/A'} EST` : detail.display || 'N/A';
+function metricDetailDisplay(detail, unit) {
+  return financialCellDisplay(detail, unit);
 }
 
 function renderFundamentalQuality(payload) {
   const quality = payload?.data_quality;
   if (!quality || quality.status === 'complete') return '';
   const notes = [...(quality.fallback_used || []), ...(quality.warnings || [])];
-  return `<div class="warning"><strong>Data quality: ${escapeHtml(quality.status || 'N/A')}</strong>
-    ${notes.length ? renderList(notes) : '<p>Some values are unavailable. Missing values are shown as N/A.</p>'}
-  </div>`;
+  return notes.length ? `<div class="warning">${renderList(notes)}</div>` : '';
 }
 
 function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
@@ -774,68 +843,6 @@ function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
     <table><tbody>${renderRows(
       metrics.map(([key, label]) => row(label, metricDetailDisplay(payload.metric_details[key])))
     )}</tbody></table>
-    ${renderFundamentalQuality(payload)}
-  </section>`;
-}
-
-function renderFinancialTrends(payload) {
-  if (!payload?.periods?.length || !payload?.metric_details) return '';
-  const metrics = [
-    ['revenue', 'Revenue', payload.scale_label || ''],
-    ['revenue_growth_percent', 'Revenue Growth', '%'],
-    ['ebitda', 'EBITDA', payload.scale_label || ''],
-    ['ebitda_margin_percent', 'EBITDA Margin', '%'],
-    ['net_profit', 'Net Profit', payload.scale_label || ''],
-    ['net_profit_growth_percent', 'Net Profit Growth', '%'],
-    ['net_profit_margin_percent', 'Net Profit Margin', '%'],
-    ['roe_percent', 'ROE', '%'],
-    ['eps', 'EPS', `${payload.currency || ''}/share`],
-    ['bvps', 'BVPS', `${payload.currency || ''}/share`],
-    ['der', 'DER', 'x'],
-  ];
-  return `<section class="section">
-    <h2>Financial Trend Analysis</h2>
-    ${payload.unit_note ? `<p class="muted">${escapeHtml(payload.unit_note)}</p>` : ''}
-    <table class="financial-highlights-table">
-      <thead><tr><th>Metric</th><th>Unit</th>${payload.periods.map((period) => `<th>${escapeHtml(period.label)}</th>`).join('')}</tr></thead>
-      <tbody>${metrics
-        .map(
-          ([key, label, unit]) =>
-            `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(unit || '-')}</td>${payload.periods
-              .map(
-                (period, index) =>
-                  `<td>${escapeHtml(metricDetailDisplay(payload.metric_details[key]?.[index]))}</td>`
-              )
-              .join('')}</tr>`
-        )
-        .join('')}</tbody>
-    </table>
-    ${renderFundamentalQuality(payload)}
-  </section>`;
-}
-
-function renderScenarioAnalysis(payload) {
-  if (!payload) return '';
-  const rows = ['bear', 'base', 'bull'].map((key) => ({ scenario: key, ...(payload[key] || {}) }));
-  return `<section class="section">
-    <h2>Bull / Base / Bear Scenario</h2>
-    <table>
-      <thead><tr><th>Scenario</th><th>Fair Value</th><th>Upside / Downside</th><th>Growth</th><th>Margin</th><th>Multiple</th><th>Assumption</th></tr></thead>
-      <tbody>${rows
-        .map(
-          (item) => `<tr>
-            <td>${escapeHtml(item.scenario)}</td>
-            <td>${escapeHtml(item.fair_value_display)}</td>
-            <td>${escapeHtml(item.upside_downside_display)}</td>
-            <td>${escapeHtml(hasValue(item.revenue_growth_assumption_percent) ? `${item.revenue_growth_assumption_percent}%` : null)}</td>
-            <td>${escapeHtml(hasValue(item.margin_assumption_percent) ? `${item.margin_assumption_percent}%` : null)}</td>
-            <td>${escapeHtml(item.valuation_multiple)}</td>
-            <td>${escapeHtml(item.assumption)}</td>
-          </tr>`
-        )
-        .join('')}</tbody>
-    </table>
-    ${renderFundamentalQuality(payload)}
   </section>`;
 }
 
@@ -897,40 +904,6 @@ function renderPriceChartSummary(rows) {
   </section>`;
 }
 
-function renderTechnicalEntry(rows) {
-  if (!rows.length) return '';
-  return `<section class="section">
-    <h2>Technical Entry Quality</h2>
-    <table><tbody>${renderRows(rows)}</tbody></table>
-  </section>`;
-}
-
-function renderNewsImpact(report) {
-  if (!report.news_impact_rows.length) return '';
-  return `<section class="section">
-    <h2>News Impact Summary</h2>
-    <table><tbody>${renderRows(report.news_impact_rows)}</tbody></table>
-    ${
-      report.high_impact_news_items.length
-        ? `<h3>High Impact News</h3>
-          <div class="news-list">
-            ${report.high_impact_news_items
-              .map(
-                (item) => `<article class="news-item">
-                  <h3>${escapeHtml(item.title)}</h3>
-                  <p class="muted">Source: ${escapeHtml(item.source)} | Published: ${escapeHtml(item.published_at)} | Scope: ${escapeHtml(item.news_scope)} | Category: ${escapeHtml(item.materiality_category)} | Source Confidence: ${escapeHtml(item.source_confidence_label)} | Sentiment: ${escapeHtml(item.sentiment)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)} | Relevance: ${escapeHtml(item.relevance_score)}</p>
-                  ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
-                  ${item.impact_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.impact_reason)}</p>` : ''}
-                  ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
-                </article>`
-              )
-              .join('')}
-          </div>`
-        : ''
-    }
-  </section>`;
-}
-
 function renderCatalystList(title, items) {
   if (!items.length) return '';
   return `<h3>${escapeHtml(title)}</h3>
@@ -977,71 +950,13 @@ function valuePercent(value) {
   return text.endsWith('%') ? text : `${text}%`;
 }
 
-function tableFromObjects(columns, rows) {
-  if (!Array.isArray(rows) || !rows.length) return '<p class="muted">N/A</p>';
-  return `<table>
-    <thead><tr>${columns.map(([_key, label]) => `<th>${escapeHtml(label)}</th>`).join('')}</tr></thead>
-    <tbody>${rows
-      .map(
-        (item) =>
-          `<tr>${columns.map(([key]) => `<td>${escapeHtml(Array.isArray(item?.[key]) ? item[key].join(', ') : item?.[key])}</td>`).join('')}</tr>`
-      )
-      .join('')}</tbody>
-  </table>`;
-}
-
 function renderRiskDataQuality(report) {
   const payload = report.risk_data_quality || {};
   if (!Object.keys(payload).length) return '';
-  const summary = payload.risk_summary || {};
-  const balance = payload.balance_sheet_risk_summary || {};
   const market = payload.market_risk || {};
   const riskReturn = payload.risk_adjusted_return || {};
-  const monitor = payload.thesis_monitor || {};
-  const quality = payload.data_quality || {};
-  const breakdown = quality.score_breakdown || {};
-  const vendorRows = Object.entries(payload.vendor_status || {}).map(([vendor, item]) => ({
-    vendor,
-    status: item.status,
-    used_for: item.used_for,
-    missing_fields: item.missing_fields,
-  }));
 
   return `
-    <section class="section">
-      <h2>Risk Summary</h2>
-      <table><tbody>${renderRows([
-        row('Overall Risk', summary.overall_risk),
-        row('Risk Score', summary.risk_score),
-        row('Main Risks', (summary.main_risks || []).join(', ')),
-        row('Risk Flags', (summary.risk_flags || []).join(', ')),
-        row('Explanation', summary.risk_explanation),
-      ])}</tbody></table>
-      <h3>Balance Sheet Risk Summary</h3>
-      <table><tbody>${renderRows([
-        row('DER', balance.der),
-        row('Net Debt', balance.net_debt),
-        row('Debt / EBITDA', balance.debt_to_ebitda),
-        row('Cash Ratio', balance.cash_ratio),
-        row('Risk Level', balance.risk_level),
-        row('Interpretation', balance.interpretation),
-      ])}</tbody></table>
-      ${
-        payload.catalyst_risk?.length
-          ? `<h3>Catalyst Risk</h3>${tableFromObjects(
-              [
-                ['type', 'Type'],
-                ['label', 'Label'],
-                ['impact', 'Impact'],
-                ['date', 'Date'],
-                ['source', 'Source'],
-                ['reason', 'Reason'],
-              ],
-              payload.catalyst_risk
-            )}`
-          : ''
-      }
-    </section>
     <section class="section">
       <h2>Market Risk</h2>
       <table><tbody>${renderRows([
@@ -1062,74 +977,6 @@ function renderRiskDataQuality(report) {
         row('Expected Return', riskReturn.expected_return_label),
       ])}</tbody></table>
       ${renderList(riskReturn.notes || [])}
-    </section>
-    <section class="section">
-      <h2>Thesis Monitor</h2>
-      <table><tbody>${renderRows([row('Overall Thesis Status', monitor.overall_thesis_status)])}</tbody></table>
-      ${tableFromObjects(
-        [
-          ['category', 'Category'],
-          ['condition', 'Condition'],
-          ['status', 'Status'],
-          ['reason', 'Reason'],
-        ],
-        monitor.checklist || []
-      )}
-    </section>
-    <section class="section">
-      <h2>Source Confidence &amp; Data Quality</h2>
-      <table><tbody>${renderRows([
-        row('Score', quality.score),
-        row('Confidence', quality.confidence),
-        row('Summary', quality.summary),
-        row('Price Data', breakdown.price_data),
-        row('Financial Data', breakdown.financial_data),
-        row('Valuation Data', breakdown.valuation_data),
-        row('News Data', breakdown.news_data),
-        row('Vendor Success', breakdown.vendor_success),
-        row('Freshness', breakdown.freshness),
-      ])}</tbody></table>
-      <h3>Vendor Status</h3>
-      ${tableFromObjects(
-        [
-          ['vendor', 'Vendor'],
-          ['status', 'Status'],
-          ['used_for', 'Used For'],
-          ['missing_fields', 'Missing Fields'],
-        ],
-        vendorRows
-      )}
-      <h3>Missing Fields</h3>
-      ${tableFromObjects(
-        [
-          ['module', 'Module'],
-          ['field', 'Field'],
-          ['impact', 'Impact'],
-          ['fallback_available', 'Fallback Available'],
-        ],
-        payload.missing_fields || []
-      )}
-      <h3>Fallback Used</h3>
-      ${tableFromObjects(
-        [
-          ['field', 'Field'],
-          ['method', 'Method'],
-          ['confidence', 'Confidence'],
-        ],
-        payload.fallback_used || []
-      )}
-      <h3>Stale Data Warning</h3>
-      ${tableFromObjects(
-        [
-          ['module', 'Module'],
-          ['field', 'Field'],
-          ['warning', 'Warning'],
-          ['severity', 'Severity'],
-        ],
-        payload.stale_data_warning || []
-      )}
-      <h3>Calculation Notes</h3>
-      ${renderList(payload.calculation_notes || [])}
     </section>`;
 }
 
@@ -1349,8 +1196,6 @@ export function renderMockReportHtml(report) {
 
       ${renderFinancialHighlights(report.financial_highlights)}
 
-      ${renderFinancialTrends(report.financial_trends)}
-
       ${renderFundamentalMetricSection(
         'Valuation Multiples',
         report.valuation_multiples,
@@ -1362,29 +1207,8 @@ export function renderMockReportHtml(report) {
           ['ps', 'P/S'],
           ['ev_ebitda', 'EV/EBITDA'],
         ],
-        report.valuation_multiples?.interpretation
-          ? `<p>Label: ${escapeHtml(report.valuation_multiples.interpretation.valuation_label)}. ${escapeHtml(report.valuation_multiples.interpretation.main_reason)}</p>`
-          : ''
+        ''
       )}
-
-      ${renderFundamentalMetricSection(
-        'Fair Value Range',
-        report.fair_value_range,
-        [
-          ['current_price', 'Current Price'],
-          ['bear', 'Bear Fair Value'],
-          ['base', 'Base Fair Value'],
-          ['bull', 'Bull Fair Value'],
-          ['bear_upside_percent', 'Bear Upside / Downside'],
-          ['base_upside_percent', 'Base Upside / Downside'],
-          ['bull_upside_percent', 'Bull Upside / Downside'],
-        ],
-        report.fair_value_range
-          ? `<p>Primary method: ${escapeHtml(report.fair_value_range.primary_method)}</p>`
-          : ''
-      )}
-
-      ${renderScenarioAnalysis(report.scenario_analysis)}
 
       ${renderFundamentalMetricSection('Quality of Earnings', report.quality_of_earnings, [
         ['cfo_to_net_income', 'CFO / Net Income'],
@@ -1409,10 +1233,6 @@ export function renderMockReportHtml(report) {
       ${renderPeerComparison(report.peer_comparison)}
 
       ${renderPriceChartSummary(report.price_chart_rows)}
-
-      ${renderTechnicalEntry(report.technical_entry_rows)}
-
-      ${renderNewsImpact(report)}
 
       ${renderCatalystTracker(report)}
 

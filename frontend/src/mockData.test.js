@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   getMockAnalysisResponseByRequestId,
   MOCK_RESPONSES_BY_REQUEST_ID,
+  MOCK_TICKER_SEARCH_RESULTS,
   mockConflictDataQuality,
   mockFreshnessAndQuality,
   resolveDisplaySignal,
+  searchMockTickers,
 } from '../dev/mockData';
 
 function countWords(text) {
@@ -31,10 +33,9 @@ describe('mockData', () => {
     expect(result.agents_used.length).toBeGreaterThan(0);
     expect(result.data_quality.warnings[0]).toContain('Mock data only');
     expect(result.financial_highlights.periods.map((period) => period.label)).toEqual([
-      'FY22',
-      'FY23',
-      'FY24',
-      'FY25',
+      'FY 2023',
+      'FY 2024',
+      'FY 2025',
       'Q1 2026',
     ]);
     expect(result.normalized_period_rows[0].period).toMatchObject({
@@ -43,8 +44,8 @@ describe('mockData', () => {
       currency: 'IDR',
       unit: 'raw',
     });
-    expect(result.financial_highlights.rows).toHaveLength(13);
-    expect(result.financial_highlights.sections).toHaveLength(5);
+    expect(result.financial_highlights.rows).toHaveLength(30);
+    expect(result.financial_highlights.sections).toHaveLength(9);
     expect(result.financial_highlights.point_in_time[0]).toMatchObject({
       key: 'market_cap',
       unit: 'USD Mn',
@@ -84,10 +85,14 @@ describe('mockData', () => {
       available: true,
       ticker: 'NVDA',
       trade_date: '2026-05-18',
-      lookback_days: 120,
+      lookback_days: 365,
+      start_date: '2025-05-18',
+      end_date: '2026-05-18',
     });
-    expect(result.price_chart.points).toHaveLength(120);
-    expect(result.price_chart.data).toHaveLength(120);
+    expect(result.price_chart.points[0].date).toBe('2025-05-18');
+    expect(result.price_chart.points.at(-1).date).toBe('2026-05-18');
+    expect(result.price_chart.points).toHaveLength(366);
+    expect(result.price_chart.data).toHaveLength(366);
     expect(result.price_chart.points[0]).toHaveProperty('adjusted_close');
     expect(result.price_performance).toHaveProperty('period_return_percent');
     expect(result.price_chart.points.some((point) => point.close >= point.open)).toBe(true);
@@ -147,6 +152,26 @@ describe('mockData', () => {
     expect(result.risk_data_quality.calculation_notes).toContain(
       'Risk/reward ratio = expected upside / expected downside'
     );
+  });
+
+  it('keeps IDX fundamental mock values in IDR', () => {
+    const result = getMockAnalysisResponseByRequestId('mock-bbca-id-buy');
+    const serializedFundamentals = JSON.stringify({
+      financial_highlights: result.financial_highlights,
+      financial_trends: result.financial_trends,
+      valuation_multiples: result.valuation_multiples,
+      fair_value_range: result.fair_value_range,
+      scenario_analysis: result.scenario_analysis,
+      quality_of_earnings: result.quality_of_earnings,
+      balance_sheet_risk: result.balance_sheet_risk,
+      dividend_quality: result.dividend_quality,
+    });
+
+    expect(result.financial_highlights.currency).toBe('IDR');
+    expect(result.financial_highlights.scale_label).toBe('IDR Bn');
+    expect(serializedFundamentals).toContain('IDR');
+    expect(serializedFundamentals).not.toContain('USD Mn');
+    expect(serializedFundamentals).not.toContain('USD/share');
   });
 
   it('supports required direct mock routes', () => {
@@ -317,6 +342,20 @@ describe('mockData', () => {
     expect(fieldQuality.sma_20.status).toBe('calculated');
     expect(fieldQuality.sma_200.status).toBe('source_unavailable');
     expect(fieldQuality.dividend_yield.status).toBe('no_dividend_history');
+  });
+
+  it('provides mock ticker autocomplete results for the terminal search bar', async () => {
+    expect(MOCK_TICKER_SEARCH_RESULTS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ symbol: 'NVDA', exchange: 'NASDAQ', type: 'EQUITY' }),
+        expect.objectContaining({ symbol: 'BBCA.JK', exchange: 'IDX', type: 'EQUITY' }),
+        expect.objectContaining({ symbol: '700.HK', exchange: 'HKSE', type: 'EQUITY' }),
+      ])
+    );
+
+    await expect(searchMockTickers({ query: 'bbc', limit: 10 })).resolves.toMatchObject({
+      results: [expect.objectContaining({ symbol: 'BBCA.JK' })],
+    });
   });
 
   it('returns cloned mock objects so tests cannot mutate the registry', () => {
