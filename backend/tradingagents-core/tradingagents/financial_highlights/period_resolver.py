@@ -4,8 +4,7 @@ from datetime import date, datetime
 
 from .models import FinancialPeriod
 
-
-FUNDAMENTAL_HISTORY_START_YEAR = 2022
+FUNDAMENTAL_HISTORY_START_YEAR = 2023
 
 
 def parse_analysis_date(value: str | date | None) -> date:
@@ -28,12 +27,30 @@ def _fy_key(year: int) -> str:
 
 def _annual_period(year: int) -> FinancialPeriod:
     key = _fy_key(year)
-    return FinancialPeriod(key=key, label=key, type="annual", year=year)
+    label = f"FY {year}"
+    return FinancialPeriod(
+        key=key,
+        label=label,
+        type="annual",
+        year=year,
+        display_period=label,
+        sort_key=f"{year}-12-31",
+    )
 
 
 def _quarter_period(year: int, quarter: int) -> FinancialPeriod:
     key = f"{_fy_key(year)}Q{quarter}"
-    return FinancialPeriod(key=key, label=key, type="quarter", year=year, quarter=quarter)
+    label = f"Q{quarter} {year}"
+    quarter_end = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}[quarter]
+    return FinancialPeriod(
+        key=key,
+        label=label,
+        type="quarterly",
+        year=year,
+        quarter=quarter,
+        display_period=label,
+        sort_key=f"{year}-{quarter_end}",
+    )
 
 
 def resolve_financial_highlight_periods(analysis_date: str | date | None) -> list[FinancialPeriod]:

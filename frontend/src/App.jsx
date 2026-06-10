@@ -2,6 +2,8 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Analysis from './pages/Analysis';
+import News from './pages/News';
+import Market from './pages/Market';
 import NotFound from './pages/NotFound';
 import './index.css';
 
@@ -28,6 +30,8 @@ function App() {
           <Route path="/analysis" element={<Analysis />} />
           <Route path="/analysis/:resourceId" element={<Analysis />} />
           <Route path="/analysis-live" element={<Navigate to="/analysis" replace />} />
+          <Route path="/news" element={<News />} />
+          <Route path="/market" element={<Market />} />
           {ENABLE_MOCK_ROUTE && AnalysisMock && (
             <Route path="/analysis.test" element={<AnalysisMock />} />
           )}

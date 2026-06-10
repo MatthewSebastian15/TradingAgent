@@ -26,6 +26,64 @@ const PIPELINE_AGENTS = [
 
 const MOCK_ANALYSIS_CREATED_AT = '2026-05-18T09:00:00.000Z';
 
+export const MOCK_TICKER_SEARCH_RESULTS = [
+  {
+    symbol: 'NVDA',
+    name: 'NVIDIA Corporation',
+    exchange: 'NASDAQ',
+    type: 'EQUITY',
+    price: 940.0,
+  },
+  {
+    symbol: 'BBCA.JK',
+    name: 'Bank Central Asia Tbk PT',
+    exchange: 'IDX',
+    type: 'EQUITY',
+    price: 9800.0,
+  },
+  {
+    symbol: 'BBRI.JK',
+    name: 'Bank Rakyat Indonesia Persero Tbk PT',
+    exchange: 'IDX',
+    type: 'EQUITY',
+    price: 4320.0,
+  },
+  {
+    symbol: 'TLKM.JK',
+    name: 'Telkom Indonesia Persero Tbk PT',
+    exchange: 'IDX',
+    type: 'EQUITY',
+    price: 2820.0,
+  },
+  {
+    symbol: '700.HK',
+    name: 'Tencent Holdings Limited',
+    exchange: 'HKSE',
+    type: 'EQUITY',
+    price: 381.4,
+  },
+];
+
+export async function searchMockTickers({ query, limit = 10, signal } = {}) {
+  if (signal?.aborted) {
+    const error = new Error('Aborted');
+    error.name = 'AbortError';
+    throw error;
+  }
+
+  const needle = String(query || '')
+    .trim()
+    .toUpperCase();
+  if (needle.length < 2) return { results: [] };
+
+  return {
+    results: MOCK_TICKER_SEARCH_RESULTS.filter((item) => {
+      const haystack = `${item.symbol} ${item.name} ${item.exchange} ${item.type}`.toUpperCase();
+      return haystack.includes(needle);
+    }).slice(0, limit),
+  };
+}
+
 export function resolveDisplaySignal(rawAiSignal, hasExistingPosition, rebalancingAction = null) {
   const signal = String(rawAiSignal || 'HOLD')
     .toUpperCase()
@@ -352,6 +410,21 @@ const MOCK_COMPANY_PROFILE = {
   website: 'https://www.nvidia.com',
   market_cap: 2300000000000,
   shares_outstanding: 24400000000,
+  shares_out: 24400000000,
+  insider_percent: 0.0425,
+  insider_pct: 0.0425,
+  institution_percent: 0.671,
+  institution_pct: 0.671,
+  public_percent: 0.2865,
+  public_pct: 0.2865,
+  short_ratio: null,
+  shares_ownership: {
+    shares_out: 24400000000,
+    insider_pct: 0.0425,
+    institution_pct: 0.671,
+    public_pct: 0.2865,
+    short_ratio: null,
+  },
   current_price: 940,
   fiscal_year_end: 'January',
   employee_count: 36000,
@@ -375,7 +448,22 @@ const MOCK_IDX_COMPANY_PROFILE = {
   industry: 'Banks - Regional',
   website: 'https://www.bca.co.id',
   market_cap: 1205000000000000,
-  shares_outstanding: 123275050000,
+  shares_outstanding: 122876240600,
+  shares_out: 122876240600,
+  insider_percent: 0.60814,
+  insider_pct: 0.60814,
+  institution_percent: 0.20815,
+  institution_pct: 0.20815,
+  public_percent: 0.18371,
+  public_pct: 0.18371,
+  short_ratio: null,
+  shares_ownership: {
+    shares_out: 122876240600,
+    insider_pct: 0.60814,
+    institution_pct: 0.20815,
+    public_pct: 0.18371,
+    short_ratio: null,
+  },
   current_price: 9800,
   fiscal_year_end: 'December',
   employee_count: 27682,
@@ -447,12 +535,11 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
   currency: 'USD',
   scale: 'billion',
   analysis_date: '2026-05-18',
-  period_logic: 'fy22_to_analysis_quarter',
+  period_logic: 'fy23_to_analysis_quarter',
   periods: [
-    { key: 'FY22', label: 'FY22', type: 'annual', year: 2022, quarter: null },
-    { key: 'FY23', label: 'FY23', type: 'annual', year: 2023, quarter: null },
-    { key: 'FY24', label: 'FY24', type: 'annual', year: 2024, quarter: null },
-    { key: 'FY25', label: 'FY25', type: 'annual', year: 2025, quarter: null },
+    { key: 'FY23', label: 'FY 2023', type: 'annual', year: 2023, quarter: null },
+    { key: 'FY24', label: 'FY 2024', type: 'annual', year: 2024, quarter: null },
+    { key: 'FY25', label: 'FY 2025', type: 'annual', year: 2025, quarter: null },
     { key: 'FY26Q1', label: 'Q1 2026', type: 'quarterly', year: 2026, quarter: 1 },
   ],
   rows: [
@@ -702,14 +789,14 @@ const MOCK_FINANCIAL_HIGHLIGHTS_BASE = {
     },
   ],
   notes: [
-    'Periods start from FY22 and extend dynamically based on the analysis date quarter.',
+    'Periods start from FY23 and extend dynamically based on the analysis date quarter.',
     'Older historical periods remain visible even when vendor data is unavailable; missing values are shown as N/A.',
     'Unavailable values are shown as N/A.',
   ],
   data_quality: {
     status: 'partial',
     missing_metrics: [],
-    missing_periods: ['FY22', 'Q1 2026'],
+    missing_periods: ['Q1 2026'],
     sources_used: ['mock'],
   },
 };
@@ -720,6 +807,26 @@ const FINANCIAL_SECTIONS = [
   ['profitability', 'Profitability', ['ebitda_margin', 'net_profit_margin', 'roe']],
   ['per_share_balance_sheet', 'Per Share & Balance Sheet', ['eps', 'bvps', 'der']],
   ['dividends', 'Dividends', ['dividend_yield', 'payout_ratio']],
+  [
+    'valuation_multiples',
+    'VALUATION MULTIPLES',
+    ['market_cap', 'enterprise_value', 'pe', 'pbv', 'ps', 'ev_ebitda'],
+  ],
+  [
+    'quality_of_earnings',
+    'QUALITY OF EARNINGS',
+    ['cfo_to_net_income', 'free_cash_flow', 'capex_intensity_percent'],
+  ],
+  [
+    'balance_sheet_risk',
+    'BALANCE SHEET RISK',
+    ['balance_der', 'net_debt', 'debt_to_ebitda', 'cash_ratio', 'equity_ratio'],
+  ],
+  [
+    'dividend_quality',
+    'DIVIDEND QUALITY',
+    ['dividend_yield_percent', 'payout_ratio_percent', 'fcf_coverage'],
+  ],
 ];
 
 function createMockFinancialHighlights({ currency = 'USD', currencyLabel = 'US Dollar' } = {}) {
@@ -738,8 +845,32 @@ function createMockFinancialHighlights({ currency = 'USD', currencyLabel = 'US D
     'roe',
     'dividend_yield',
     'payout_ratio',
+    'dividend_yield_percent',
+    'payout_ratio_percent',
+    'capex_intensity_percent',
   ]);
-  const currencyKeys = new Set(['revenue', 'ebitda', 'net_profit']);
+  const currencyKeys = new Set([
+    'revenue',
+    'ebitda',
+    'net_profit',
+    'market_cap',
+    'enterprise_value',
+    'free_cash_flow',
+    'net_debt',
+  ]);
+  const ratioKeys = new Set([
+    'der',
+    'balance_der',
+    'pe',
+    'pbv',
+    'ps',
+    'ev_ebitda',
+    'cfo_to_net_income',
+    'debt_to_ebitda',
+    'cash_ratio',
+    'equity_ratio',
+    'fcf_coverage',
+  ]);
 
   payload.rows.push({
     key: 'payout_ratio',
@@ -753,12 +884,45 @@ function createMockFinancialHighlights({ currency = 'USD', currencyLabel = 'US D
     ),
   });
 
+  [
+    ['market_cap', 'Market Cap'],
+    ['enterprise_value', 'Enterprise Value'],
+    ['pe', 'P/E'],
+    ['pbv', 'P/BV'],
+    ['ps', 'P/S'],
+    ['ev_ebitda', 'EV/EBITDA'],
+    ['cfo_to_net_income', 'CFO / Net Income'],
+    ['free_cash_flow', 'Free Cash Flow'],
+    ['capex_intensity_percent', 'Capex Intensity (%)'],
+    ['balance_der', 'DER'],
+    ['net_debt', 'Net Debt'],
+    ['debt_to_ebitda', 'Debt / EBITDA'],
+    ['cash_ratio', 'Cash Ratio'],
+    ['equity_ratio', 'Equity Ratio'],
+    ['dividend_yield_percent', 'Dividend Yield'],
+    ['payout_ratio_percent', 'Payout Ratio'],
+    ['fcf_coverage', 'FCF Coverage'],
+  ].forEach(([key, label]) => {
+    if (payload.rows.some((row) => row.key === key)) return;
+    payload.rows.push({
+      key,
+      label,
+      unit: '',
+      values: Object.fromEntries(
+        payload.periods.map((period) => [
+          period.key,
+          { value: null, display: 'N/A', status: 'unavailable' },
+        ])
+      ),
+    });
+  });
+
   payload.rows = payload.rows.map((row) => {
     const formatType = currencyKeys.has(row.key)
       ? 'currency_scaled'
       : percentKeys.has(row.key)
         ? 'percent'
-        : row.key === 'der'
+        : ratioKeys.has(row.key)
           ? 'ratio'
           : 'per_share';
     const unit =
@@ -1290,16 +1454,29 @@ function formatTimeHorizon(months) {
   return `${normalized} Month${normalized > 1 ? 's' : ''}`;
 }
 
-function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', months = 1 } = {}) {
-  const lookbackDays = normalizeTimeHorizonMonths(months) * 30 + 30;
+const YEAR_ON_YEAR_PRICE_WINDOW_DAYS = 365;
+
+function daysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function subtractOneYearIsoDate(dateValue) {
+  const [year, month, day] = String(dateValue).split('-').map(Number);
+  const targetYear = year - 1;
+  const safeDay = Math.min(day, daysInMonth(targetYear, month));
+  return `${targetYear}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`;
+}
+
+function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30' } = {}) {
+  const lookbackDays = YEAR_ON_YEAR_PRICE_WINDOW_DAYS;
   const points = [];
   const end = new Date(`${tradeDate}T00:00:00Z`);
+  const startDate = subtractOneYearIsoDate(tradeDate);
+  const start = new Date(`${startDate}T00:00:00Z`);
   let previousClose = ticker.endsWith('.JK') ? 9000 : 900;
 
-  for (let i = lookbackDays - 1; i >= 0; i -= 1) {
-    const date = new Date(end);
-    date.setUTCDate(end.getUTCDate() - i);
-    const sequence = lookbackDays - i;
+  for (let date = new Date(start); date <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+    const sequence = points.length + 1;
     const scale = ticker.endsWith('.JK') ? 1 : 0.1;
     const direction = sequence % 7 === 0 || sequence % 11 === 0 ? -1 : 1;
     const bodyMove = direction * (20 + (sequence % 6) * 8) * scale;
@@ -1357,10 +1534,18 @@ function createMockPriceChart({ ticker = 'BBCA.JK', tradeDate = '2026-05-30', mo
     source: 'mock:yfinance',
     ticker,
     trade_date: tradeDate,
+    requested_trade_date: tradeDate,
+    effective_trade_date: tradeDate,
+    price_as_of_date: tradeDate,
+    last_trade_date: tradeDate,
+    last_available_trade_date: tradeDate,
+    fallback_to_last_trade: false,
     currency: ticker.endsWith('.JK') ? 'IDR' : 'USD',
-    window: `${normalizeTimeHorizonMonths(months)}M`,
-    window_label: `${normalizeTimeHorizonMonths(months)} Month${normalizeTimeHorizonMonths(months) > 1 ? 's' : ''} Analysis / ${lookbackDays}D Price Window`,
+    window: 'YOY',
+    window_label: 'YOY Price Window',
     lookback_days: lookbackDays,
+    start_date: startDate,
+    end_date: tradeDate,
     points,
     data: points,
     stats: {

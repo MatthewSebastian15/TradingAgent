@@ -34,6 +34,55 @@ describe('ProfileTab', () => {
     }
   );
 
+  it('renders shares and ownership data above the business description', () => {
+    render(
+      <ProfileTab
+        profile={{
+          available: true,
+          ticker: 'BBCA.JK',
+          shares_ownership: {
+            shares_out: 122876240600,
+            insider_pct: 0.60814,
+            institution_pct: 0.20815,
+            public_pct: 0.18371,
+            short_ratio: null,
+          },
+          business_summary: 'Banking profile.',
+        }}
+      />
+    );
+
+    expect(screen.getByText('SHARES & OWNERSHIP')).toBeTruthy();
+    expect(screen.getByText('OWNERSHIPS')).toBeTruthy();
+    expect(screen.getByText('SHARES OUT')).toBeTruthy();
+    expect(screen.getAllByText('122,876,240,600').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('60.81%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('20.82%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    expect(screen.getByText('18.37%')).toBeTruthy();
+    expect(screen.getByText('INSIDER')).toBeTruthy();
+    expect(screen.getByText('INSTITUTION')).toBeTruthy();
+    expect(screen.getByText('PUBLIC')).toBeTruthy();
+  });
+
+  it('renders ownership pie when at least one ownership data point is valid', () => {
+    render(
+      <ProfileTab
+        profile={{
+          available: true,
+          ticker: 'PARTIAL.JK',
+          shares_out: 1000,
+          insider_pct: 0.25,
+          business_summary: 'Partial ownership profile.',
+        }}
+      />
+    );
+
+    expect(screen.getAllByText('25.00%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    expect(screen.getByText('100%')).toBeTruthy();
+  });
+
   it('renders canonical fields and N/A for missing values', () => {
     render(
       <ProfileTab
@@ -41,20 +90,33 @@ describe('ProfileTab', () => {
           available: true,
           ticker: 'BBCA.JK',
           company_name: 'PT Bank Central Asia Tbk',
+          exchange: 'IDX',
           currency: 'IDR',
+          country: 'Indonesia',
+          sector: 'Financial Services',
+          industry: 'Banks',
           market_cap: 1205000000000000,
           shares_outstanding: 123275050000,
           current_price: 9800,
+          fiscal_year_end: 'December',
+          full_time_employees: 27000,
+          website: 'https://www.bca.co.id',
           data_quality: { status: 'partial' },
         }}
       />
     );
 
     expect(screen.getByText('PT Bank Central Asia Tbk')).toBeTruthy();
-    expect(screen.getByText('Profile data: partial')).toBeTruthy();
+    expect(screen.queryByText('Profile data: partial')).toBeNull();
     expect(screen.getByText('1,205,000.0 IDR Bn')).toBeTruthy();
-    expect(screen.getByText('123,275,050,000')).toBeTruthy();
+    expect(screen.getAllByText('123,275,050,000').length).toBeGreaterThan(0);
     expect(screen.getByText('Rp 9,800')).toBeTruthy();
+    expect(screen.getByText('27,000')).toBeTruthy();
+    expect(screen.getByText('Websites')).toBeTruthy();
+    expect(screen.queryByText('Exchange')).toBeNull();
+    expect(screen.queryByText('IDX')).toBeNull();
+    expect(screen.queryByText('Fiscal Year End')).toBeNull();
+    expect(screen.queryByText('December')).toBeNull();
     expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
   });
 });

@@ -46,6 +46,8 @@ def test_profile_builder_stops_after_complete_yfinance_payload():
         "website": "https://example.com",
         "market_cap": 1_000_000,
         "shares_outstanding": 100_000,
+        "insider_percent": 0.1,
+        "institution_percent": 0.2,
         "current_price": 10,
         "fiscal_year_end": "December",
         "employee_count": 100,
@@ -60,3 +62,99 @@ def test_profile_builder_stops_after_complete_yfinance_payload():
 
     assert calls == ["yfinance"]
     assert profile["data_quality"]["status"] == "complete"
+
+
+def test_profile_builder_normalizes_ownership_fields_and_computes_public_float():
+    profile = build_company_profile(
+        ticker="BBCA.JK",
+        vendor_payloads={
+            "yfinance": {
+                "available": True,
+                "name": "Bank BCA",
+                "sharesOutstanding": 122_876_240_600,
+                "heldPercentInsiders": 0.60814,
+                "heldPercentInstitutions": 0.20815,
+                "shortRatio": None,
+            }
+        },
+        vendor_order=["yfinance"],
+    )
+
+    assert profile["shares_outstanding"] == 122_876_240_600
+    assert profile["shares_out"] == 122_876_240_600
+    assert profile["insider_percent"] == 0.60814
+    assert profile["insider_pct"] == 0.60814
+    assert profile["institution_percent"] == 0.20815
+    assert profile["institution_pct"] == 0.20815
+    assert round(profile["public_percent"], 5) == 0.18371
+    assert round(profile["public_pct"], 5) == 0.18371
+    assert profile["short_ratio"] is None
+    assert profile["shares_ownership"] == {
+        "shares_out": 122_876_240_600,
+        "insider_pct": 0.60814,
+        "institution_pct": 0.20815,
+        "public_pct": profile["public_percent"],
+        "short_ratio": None,
+    }
+
+
+def test_profile_builder_computes_public_from_percent_values_above_one():
+    profile = build_company_profile(
+        ticker="BBCA.JK",
+        vendor_payloads={
+            "yfinance": {
+                "available": True,
+                "name": "Bank BCA",
+                "insider_percent": 5.03,
+                "institution_percent": 44.44,
+            }
+        },
+        vendor_order=["yfinance"],
+    )
+
+    assert round(profile["public_percent"], 4) == 0.5053
+
+
+def test_profile_builder_fetches_yfinance_ownership_after_profile_core_is_filled():
+    calls = []
+
+    def fetch(vendor):
+        calls.append(vendor)
+        if vendor == "idx_official":
+            return {
+                "available": True,
+                "company_name": "PT Bank Central Asia Tbk",
+                "ticker": "BBCA.JK",
+                "exchange": "IDX",
+                "currency": "IDR",
+                "country": "Indonesia",
+                "sector": "Financial Services",
+                "industry": "Banks",
+                "business_summary": "Bank profile.",
+                "website": "https://www.bca.co.id",
+                "market_cap": 1_205_000_000_000,
+                "shares_outstanding": 122_876_240_600,
+                "current_price": 9800,
+                "fiscal_year_end": "December",
+                "employee_count": 27_000,
+                "officers": [{"name": "Executive", "title": "Director"}],
+            }
+        return {
+            "available": True,
+            "ticker": "BBCA.JK",
+            "heldPercentInsiders": 0.60814,
+            "heldPercentInstitutions": 0.20815,
+            "shortRatio": None,
+        }
+
+    profile = build_company_profile(
+        ticker="BBCA.JK",
+        fetch_vendor=fetch,
+        vendor_order=["idx_official", "yfinance"],
+    )
+
+    assert calls == ["idx_official", "yfinance"]
+    assert profile["company_name"] == "PT Bank Central Asia Tbk"
+    assert profile["insider_pct"] == 0.60814
+    assert profile["institution_pct"] == 0.20815
+    assert round(profile["public_pct"], 5) == 0.18371

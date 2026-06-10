@@ -38,6 +38,67 @@ export function formatXAxisDate(date) {
   return text.length >= 10 ? text.slice(5, 10) : text;
 }
 
+export function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function daysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+export function subtractOneYearIsoDate(dateValue) {
+  if (!isIsoDate(dateValue)) return null;
+  const [year, month, day] = String(dateValue).split('-').map(Number);
+  const targetYear = year - 1;
+  const safeDay = Math.min(day, daysInMonth(targetYear, month));
+  return `${targetYear}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`;
+}
+
+function firstIsoDate(...values) {
+  return values.find((value) => isIsoDate(value)) || null;
+}
+
+function lastPointOnOrBefore(points, dateValue) {
+  if (!Array.isArray(points) || points.length === 0) return null;
+  if (!isIsoDate(dateValue)) return points.at(-1) || null;
+  return points.filter((point) => point.date <= dateValue).at(-1) || null;
+}
+
+export function resolveYoyPriceWindow(chart = {}, points = []) {
+  const normalizedPoints = normalizePricePoints(points);
+  const requestedTradeDate = firstIsoDate(
+    chart.requested_trade_date,
+    chart.trade_date,
+    chart.analysis_trade_date,
+    chart.end_date
+  );
+  const latestPointAtOrBeforeRequest = lastPointOnOrBefore(normalizedPoints, requestedTradeDate);
+  const metadataEndDate = firstIsoDate(
+    chart.effective_trade_date,
+    chart.price_as_of_date,
+    chart.last_trade_date,
+    chart.last_available_trade_date,
+    chart.end_date
+  );
+  const endDate = latestPointAtOrBeforeRequest?.date || metadataEndDate || requestedTradeDate;
+  const startDate =
+    subtractOneYearIsoDate(endDate) || firstIsoDate(chart.start_date) || normalizedPoints[0]?.date;
+  const windowPoints =
+    startDate && endDate
+      ? normalizedPoints.filter((point) => point.date >= startDate && point.date <= endDate)
+      : normalizedPoints;
+
+  return {
+    requestedTradeDate,
+    startDate,
+    endDate,
+    points: windowPoints,
+    fallbackToLastTrade:
+      Boolean(requestedTradeDate && endDate && requestedTradeDate !== endDate) ||
+      Boolean(chart.fallback_to_last_trade),
+  };
+}
+
 export function normalizePricePoint(point) {
   if (!point || !point.date) return null;
 

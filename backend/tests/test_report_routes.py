@@ -118,7 +118,7 @@ def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypat
     assert response.headers["content-type"].startswith("text/html")
     assert "TradingAgent Analysis Report" in response.text
     assert "Final Decision" in response.text
-    assert "TAKE_PROFIT_RECOMPUTED" in response.text
+    assert "TAKE_PROFIT_RECOMPUTED" not in response.text
     assert "Entry" in response.text
     assert "automated AI-assisted analysis engine" in response.text
     assert "may contain errors" in response.text

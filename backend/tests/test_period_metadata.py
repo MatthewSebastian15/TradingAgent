@@ -35,6 +35,18 @@ def test_infer_period_metadata_from_quarter_date():
     assert period["period_type"] == "quarterly"
 
 
+def test_annual_hint_keeps_year_end_date_as_fy_period():
+    period = infer_period_metadata("2025-12-31", period_type_hint="annual")
+    assert period["period_label"] == "FY2025"
+    assert period["period_type"] == "annual"
+
+
+def test_quarter_hint_keeps_quarter_display_period():
+    period = infer_period_metadata("2026-03-31", period_type_hint="quarterly")
+    assert period["period_label"] == "Q1 2026"
+    assert period["period_type"] == "quarterly"
+
+
 def test_attach_period_metadata_to_rows():
     rows = [{"fiscalDateEnding": "2024-12-31", "revenue": 100}]
     result = attach_period_metadata_to_rows(rows, default_period_type="annual")

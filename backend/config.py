@@ -54,6 +54,7 @@ from config_defaults import (
     DATA_CACHE_MAX_ENTRIES,
     DATA_CACHE_TTL_SECONDS,
     DATA_COLLECTION_WORKERS,
+    PRICE_MAX_FALLBACK_DAYS,
     DATA_VENDOR_ANALYST_RATING,
     DATA_VENDOR_CORE_STOCK_APIS,
     DATA_VENDOR_CRYPTO_DATA,
@@ -144,6 +145,7 @@ class _BackendSettingsShim:
     preflight_timeout_seconds = PREFLIGHT_TIMEOUT_SECONDS
     process_pool_workers = PROCESS_POOL_WORKERS
     data_collection_workers = DATA_COLLECTION_WORKERS
+    price_max_fallback_days = PRICE_MAX_FALLBACK_DAYS
     analyst_parallel_workers = ANALYST_PARALLEL_WORKERS
     default_max_debate_rounds = DEFAULT_MAX_DEBATE_ROUNDS
     max_risk_discuss_rounds = MAX_RISK_DISCUSS_ROUNDS
