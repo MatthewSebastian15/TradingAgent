@@ -11,7 +11,6 @@ import {
   resolveYoyPriceWindow,
   UP_COLOR,
 } from './priceChartUtils';
-import VolumeChart from './VolumeChart';
 
 const POINTS = [
   { date: '2026-01-01', open: 10, high: 13, low: 9, close: 12, volume: 1_000_000 },
@@ -100,9 +99,9 @@ describe('CandlestickPriceChart', () => {
   it('renders up, down, and flat candles with a minimum body height', () => {
     const { container } = render(<CandlestickPriceChart points={POINTS} ticker="TEST" />);
 
-    expect(screen.getByRole('img', { name: 'OHLC candlestick price chart' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'OHLC candlestick price chart with integrated volume' })).toBeTruthy();
 
-    const bodies = Array.from(container.querySelectorAll('rect'));
+    const bodies = Array.from(container.querySelectorAll('rect:not([data-testid="volume-bar"])')).slice(1);
     expect(bodies).toHaveLength(3);
     expect(bodies.map((body) => body.getAttribute('fill'))).toEqual([
       UP_COLOR,
@@ -112,47 +111,33 @@ describe('CandlestickPriceChart', () => {
     expect(Number(bodies[2].getAttribute('height'))).toBeGreaterThanOrEqual(2);
   });
 
-  it('shows complete OHLCV detail for the nearest hovered candle', () => {
+  it('shows compact OHLCV detail for the nearest hovered candle', () => {
     render(<CandlestickPriceChart points={POINTS} ticker="TEST" />);
-    const chart = screen.getByRole('img', { name: 'OHLC candlestick price chart' });
+    const chart = screen.getByRole('img', { name: 'OHLC candlestick price chart with integrated volume' });
     mockChartRect(chart, 1000, 320);
 
     fireEvent.mouseMove(chart, { clientX: 460, clientY: 100 });
 
     const tooltip = screen.getByTestId('candlestick-tooltip');
     expect(within(tooltip).getByText('2026-01-02')).toBeTruthy();
-    expect(within(tooltip).getByText('Open')).toBeTruthy();
-    expect(within(tooltip).getByText('High')).toBeTruthy();
-    expect(within(tooltip).getByText('Low')).toBeTruthy();
-    expect(within(tooltip).getByText('Close')).toBeTruthy();
-    expect(within(tooltip).getByText('Adjusted Close')).toBeTruthy();
-    expect(within(tooltip).getByText('Range')).toBeTruthy();
-    expect(within(tooltip).getByText('Change')).toBeTruthy();
-    expect(within(tooltip).getByText('Change %')).toBeTruthy();
-    expect(within(tooltip).getByText('Volume')).toBeTruthy();
+    expect(within(tooltip).getByText('O')).toBeTruthy();
+    expect(within(tooltip).getByText('H')).toBeTruthy();
+    expect(within(tooltip).getByText('L')).toBeTruthy();
+    expect(within(tooltip).getByText('C')).toBeTruthy();
+    expect(within(tooltip).getByText('Prev')).toBeTruthy();
+    expect(within(tooltip).getByText('Vol')).toBeTruthy();
+    expect(within(tooltip).getByText('Chg')).toBeTruthy();
   });
+
+  it('renders integrated volume bars and the right trading data panel', () => {
+    const { container } = render(<CandlestickPriceChart points={POINTS} ticker="TEST" />);
+
+    const volumeBars = Array.from(container.querySelectorAll('[data-testid="volume-bar"]'));
+    expect(volumeBars).toHaveLength(3);
+    expect(screen.getByText('Trading Data')).toBeTruthy();
+    expect(screen.getByText('Prev Close')).toBeTruthy();
+    expect(screen.getByText('Vol')).toBeTruthy();
+  });
+
 });
 
-describe('VolumeChart', () => {
-  afterEach(() => cleanup());
-
-  it('colors volume bars by candle direction and shows hover detail', () => {
-    const { container } = render(<VolumeChart points={POINTS} />);
-    const chart = screen.getByRole('img', { name: 'Trading volume chart' });
-    mockChartRect(chart, 1000, 220);
-
-    const bars = Array.from(container.querySelectorAll('rect'));
-    expect(bars.map((bar) => bar.getAttribute('fill'))).toEqual([
-      UP_COLOR,
-      DOWN_COLOR,
-      NEUTRAL_COLOR,
-    ]);
-
-    fireEvent.mouseMove(chart, { clientX: 466, clientY: 100 });
-
-    const tooltip = screen.getByTestId('volume-tooltip');
-    expect(within(tooltip).getByText('2026-01-02')).toBeTruthy();
-    expect(within(tooltip).getByText('2.0M')).toBeTruthy();
-    expect(within(tooltip).getByText('DOWN')).toBeTruthy();
-  });
-});

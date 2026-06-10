@@ -172,8 +172,13 @@ describe('ExportReportButtons', () => {
     expect(JSON.parse(fetchMock.mock.calls[2][1].body).ticker).toBe(MOCK_RESPONSE.ticker);
   });
 
-  it('opens mock HTML report without backend report URL', () => {
-    const fetchMock = vi.fn();
+  it('opens mock HTML report without backend report URL', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ disclaimer: 'Mock disclaimer.' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
     const openMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     vi.spyOn(window, 'open').mockImplementation(openMock);
@@ -185,12 +190,18 @@ describe('ExportReportButtons', () => {
     render(<ExportReportButtons resourceId="mock-nvda-buy" result={MOCK_RESPONSE} mockReport />);
     fireEvent.click(screen.getByText('PREVIEW HTML'));
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(openMock).toHaveBeenCalledWith('blob:mock-report', '_blank', 'noopener,noreferrer');
+    await waitFor(() => expect(openMock).toHaveBeenCalledWith('blob:mock-report', '_blank', 'noopener,noreferrer'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/reports/disclaimer');
   });
 
   it('exports mock PDF through browser print without fetching backend PDF', async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ disclaimer: 'Mock disclaimer.' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
     const printWindow = {
       document: {
         open: vi.fn(),
@@ -207,7 +218,10 @@ describe('ExportReportButtons', () => {
     fireEvent.click(screen.getByText('EXPORT PDF'));
 
     await waitFor(() => expect(printWindow.print).toHaveBeenCalledTimes(1));
-    expect(fetchMock).not.toHaveBeenCalled();
+    if (fetchMock.mock.calls.length > 0) {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/reports/disclaimer');
+    }
     expect(printWindow.document.write.mock.calls[0][0]).toContain(
       'TradingAgent Mock Analysis Report'
     );

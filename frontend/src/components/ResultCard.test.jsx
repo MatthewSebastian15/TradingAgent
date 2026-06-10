@@ -215,7 +215,7 @@ describe('ResultCard risk-engine contract', () => {
 
     expect(screen.getByText('CHART & PRICE')).toBeTruthy();
     expect(screen.getByLabelText(/OHLC candlestick price chart/i)).toBeTruthy();
-    expect(screen.getByLabelText(/Trading volume chart/i)).toBeTruthy();
+    expect(screen.getByText('VOLUME')).toBeTruthy();
     expect(screen.getByText('PRICE STATISTICS')).toBeTruthy();
     expect(screen.getByText('News').disabled).toBe(false);
     expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { formatPrice } from '../../../utils/formatting';
 import {
@@ -16,59 +16,105 @@ import {
 } from './priceChartUtils';
 
 const WIDTH = 1000;
-const HEIGHT = 320;
+const HEIGHT = 420;
+const PRICE_HEIGHT = 292;
+const VOLUME_HEIGHT = 82;
+const VOLUME_TOP = 312;
 const PADDING = {
   top: 24,
-  right: 96,
-  bottom: 38,
-  left: 16,
+  right: 24,
+  bottom: 30,
+  left: 112,
 };
 
 function displayPrice(value, ticker) {
   return formatPrice(value, ticker) || 'N/A';
 }
 
-function formatChangePercent(point) {
-  if (!point.open) return 'N/A';
-  const value = ((point.close - point.open) / point.open) * 100;
+function formatChangePercent(point, previousPoint) {
+  const reference = previousPoint?.close ?? point.open;
+  if (!reference) return 'N/A';
+  const value = ((point.close - reference) / reference) * 100;
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 }
 
-function CandlestickTooltip({ point, ticker }) {
-  const change = point.close - point.open;
-  const up = isUpCandle(point);
+function TradingDataPanel({ point, previousPoint, ticker }) {
+  const change = point.close - (previousPoint?.close ?? point.open);
+  const up = isUpCandle(point, previousPoint);
+  const changeClass = up ? 'text-green-400' : 'text-red-400';
+  const rows = [
+    ['Open', displayPrice(point.open, ticker)],
+    ['High', displayPrice(point.high, ticker)],
+    ['Low', displayPrice(point.low, ticker)],
+    ['Prev Close', displayPrice(previousPoint?.close, ticker)],
+    ['Vol', formatCompactNumber(point.volume)],
+  ];
+
+  return (
+    <aside className="flex h-full basis-1/5 flex-col border-l border-bloomberg-border bg-[#050505] p-3 font-mono text-[11px]">
+      <div className="mb-2 text-bloomberg-orange tracking-wider uppercase">Trading Data</div>
+      <div className="mb-3 text-bloomberg-muted">{point.date}</div>
+      <div className="space-y-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between gap-2 border-b border-white/5 pb-1">
+            <span className="text-bloomberg-muted">{label}</span>
+            <span className="text-right text-white">{value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-auto grid grid-cols-2 gap-x-2 gap-y-1 border-t border-bloomberg-border pt-3">
+        <span className="text-bloomberg-muted">Change</span>
+        <span className={`text-right ${changeClass}`}>{displayPrice(change, ticker)}</span>
+        <span className="text-bloomberg-muted">Change %</span>
+        <span className={`text-right ${changeClass}`}>{formatChangePercent(point, previousPoint)}</span>
+      </div>
+    </aside>
+  );
+}
+
+TradingDataPanel.propTypes = {
+  point: PropTypes.object.isRequired,
+  previousPoint: PropTypes.object,
+  ticker: PropTypes.string,
+};
+
+function CandlestickTooltip({ point, previousPoint, ticker, position }) {
+  const change = point.close - (previousPoint?.close ?? point.open);
+  const up = isUpCandle(point, previousPoint);
+  const changeClass = up ? 'text-green-400' : 'text-red-400';
+  const transformX = position.x > 0.72 ? 'calc(-100% - 10px)' : '10px';
+  const transformY = position.y > 0.6 ? 'calc(-100% - 10px)' : '10px';
+  const rows = [
+    ['O', displayPrice(point.open, ticker)],
+    ['H', displayPrice(point.high, ticker)],
+    ['L', displayPrice(point.low, ticker)],
+    ['C', displayPrice(point.close, ticker)],
+    ['Prev', displayPrice(previousPoint?.close, ticker)],
+    ['Vol', formatCompactNumber(point.volume)],
+    ['Chg', displayPrice(change, ticker), changeClass],
+  ];
 
   return (
     <div
       data-testid="candlestick-tooltip"
-      className="pointer-events-none absolute left-4 top-4 z-10 border border-bloomberg-border bg-black/95 p-3 font-mono text-xs shadow-lg"
+      className="pointer-events-none absolute z-20 w-[162px] border border-bloomberg-border bg-black/95 p-2 font-mono text-[10px] leading-4 shadow-lg"
+      style={{
+        left: `${position.x * 100}%`,
+        top: `${position.y * 100}%`,
+        transform: `translate(${transformX}, ${transformY})`,
+      }}
     >
-      <div className="mb-2 text-bloomberg-orange tracking-wider uppercase">{point.date}</div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-        <span className="text-bloomberg-muted">Open</span>
-        <span className="text-right text-white">{displayPrice(point.open, ticker)}</span>
-        <span className="text-bloomberg-muted">High</span>
-        <span className="text-right text-white">{displayPrice(point.high, ticker)}</span>
-        <span className="text-bloomberg-muted">Low</span>
-        <span className="text-right text-white">{displayPrice(point.low, ticker)}</span>
-        <span className="text-bloomberg-muted">Close</span>
-        <span className="text-right text-white">{displayPrice(point.close, ticker)}</span>
-        <span className="text-bloomberg-muted">Adjusted Close</span>
-        <span className="text-right text-white">{displayPrice(point.adjusted_close, ticker)}</span>
-        <span className="text-bloomberg-muted">Range</span>
-        <span className="text-right text-white">
-          {displayPrice(point.high - point.low, ticker)}
-        </span>
-        <span className="text-bloomberg-muted">Change</span>
-        <span className={up ? 'text-right text-green-400' : 'text-right text-red-400'}>
-          {displayPrice(change, ticker)}
-        </span>
-        <span className="text-bloomberg-muted">Change %</span>
-        <span className={up ? 'text-right text-green-400' : 'text-right text-red-400'}>
-          {formatChangePercent(point)}
-        </span>
-        <span className="text-bloomberg-muted">Volume</span>
-        <span className="text-right text-white">{formatCompactNumber(point.volume)}</span>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-bloomberg-orange tracking-wider">{point.date}</span>
+        <span className={changeClass}>{formatChangePercent(point, previousPoint)}</span>
+      </div>
+      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+        {rows.map(([label, value, valueClass]) => (
+          <React.Fragment key={label}>
+            <span className="text-bloomberg-muted">{label}</span>
+            <span className={`text-right ${valueClass || 'text-white'}`}>{value}</span>
+          </React.Fragment>
+        ))}
       </div>
     </div>
   );
@@ -76,11 +122,16 @@ function CandlestickTooltip({ point, ticker }) {
 
 CandlestickTooltip.propTypes = {
   point: PropTypes.object.isRequired,
+  previousPoint: PropTypes.object,
   ticker: PropTypes.string,
+  position: PropTypes.shape({
+    x: PropTypes.number.isRequired,
+    y: PropTypes.number.isRequired,
+  }).isRequired,
 };
 
-export default function CandlestickPriceChart({ points, ticker = '' }) {
-  const [hoverIndex, setHoverIndex] = useState(null);
+export default function CandlestickPriceChart({ points, allPoints = null, ticker = '', onZoom }) {
+  const [hover, setHover] = useState(null);
   const chart = useMemo(() => {
     const normalizedPoints = normalizePricePoints(points);
     if (normalizedPoints.length < 2) return null;
@@ -92,38 +143,57 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
     const yTicks = buildYAxisTicks(rawMin - paddingValue, rawMax + paddingValue);
     const minPrice = Math.min(...yTicks);
     const maxPrice = Math.max(...yTicks);
+    const maxVolume = Math.max(...normalizedPoints.map((point) => point.volume || 0), 1);
+    const volumeTicks = [maxVolume, maxVolume / 2, 0];
 
     return {
       points: normalizedPoints,
       minPrice,
       maxPrice,
+      maxVolume,
       xTicks: buildXAxisTicks(normalizedPoints),
       yTicks,
+      volumeTicks,
     };
   }, [points]);
 
+  const previousByDate = useMemo(() => {
+    const normalizedAllPoints = normalizePricePoints(allPoints || points);
+    const map = new Map();
+    normalizedAllPoints.forEach((point, index) => {
+      map.set(point.date, normalizedAllPoints[index - 1] || null);
+    });
+    return map;
+  }, [allPoints, points]);
+
   if (!chart) {
     return (
-      <div className="h-80 border border-bloomberg-border bg-black p-3 font-mono text-xs text-bloomberg-muted">
-        Valid OHLC price chart data is not available for this analysis.
+      <div className="h-[420px] border border-bloomberg-border bg-black p-3 font-mono text-xs text-bloomberg-muted">
+        Valid OHLCV price chart data is not available for this analysis.
       </div>
     );
   }
 
   const plotWidth = WIDTH - PADDING.left - PADDING.right;
-  const plotHeight = HEIGHT - PADDING.top - PADDING.bottom;
+  const pricePlotHeight = PRICE_HEIGHT - PADDING.top;
+  const volumePlotHeight = VOLUME_HEIGHT;
   const step = plotWidth / chart.points.length;
-  const candleWidth = Math.max(3, Math.min(14, step * 0.64));
+  const candleWidth = Math.max(3, Math.min(18, step * 0.72));
+  const barWidth = Math.max(1, Math.min(18, step * 0.72));
   const priceToY = (price) => {
     const ratio = (chart.maxPrice - price) / (chart.maxPrice - chart.minPrice || 1);
-    return PADDING.top + ratio * plotHeight;
+    return PADDING.top + ratio * pricePlotHeight;
   };
+  const volumeToY = (volume) => VOLUME_TOP + ((chart.maxVolume - volume) / chart.maxVolume) * volumePlotHeight;
   const indexToX = (index) => PADDING.left + step * index + step / 2;
   const lastPoint = chart.points[chart.points.length - 1];
   const lastCloseY = priceToY(lastPoint.close);
+  const hoverIndex = hover?.index ?? null;
   const hoverPoint = hoverIndex === null ? null : chart.points[hoverIndex];
+  const activePoint = hoverPoint || lastPoint;
+  const activePreviousPoint = previousByDate.get(activePoint.date) || null;
 
-  const handleMouseMove = (event) => {
+  const resolveHoverIndex = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const relativeX = ((event.clientX - rect.left) / rect.width) * WIDTH;
     const relativeY = ((event.clientY - rect.top) / rect.height) * HEIGHT;
@@ -134,26 +204,52 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
       relativeY < PADDING.top ||
       relativeY > HEIGHT - PADDING.bottom
     ) {
-      setHoverIndex(null);
+      setHover(null);
       return;
     }
 
     const index = Math.round((relativeX - PADDING.left - step / 2) / step);
-    setHoverIndex(index >= 0 && index < chart.points.length ? index : null);
+    if (index >= 0 && index < chart.points.length) {
+      setHover({
+        index,
+        x: Math.min(0.98, Math.max(0.02, relativeX / WIDTH)),
+        y: Math.min(0.96, Math.max(0.04, relativeY / HEIGHT)),
+      });
+      return;
+    }
+
+    setHover(null);
+  };
+
+  const handleWheel = (event) => {
+    if (!onZoom) return;
+    event.preventDefault();
+    onZoom(event.deltaY > 0 ? 'out' : 'in');
   };
 
   return (
-    <div className="relative h-80 border border-bloomberg-border bg-black p-3">
-      {hoverPoint && <CandlestickTooltip point={hoverPoint} ticker={ticker} />}
-      <svg
-        role="img"
-        aria-label="OHLC candlestick price chart"
-        className="h-full w-full"
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        preserveAspectRatio="none"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHoverIndex(null)}
-      >
+    <div className="relative flex h-[420px] overflow-hidden border border-bloomberg-border bg-black">
+      <div className="relative h-full min-w-0 basis-4/5">
+        {hoverPoint && hover && (
+          <CandlestickTooltip
+            point={hoverPoint}
+            previousPoint={previousByDate.get(hoverPoint.date) || null}
+            ticker={ticker}
+            position={hover}
+          />
+        )}
+        <svg
+          role="img"
+          aria-label="OHLC candlestick price chart with integrated volume"
+          className="h-full w-full"
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          preserveAspectRatio="none"
+          onMouseMove={resolveHoverIndex}
+          onMouseLeave={() => setHover(null)}
+          onWheel={handleWheel}
+        >
+        <rect x="0" y="0" width={WIDTH} height={HEIGHT} fill="black" />
+
         {chart.yTicks.map((tick) => {
           const y = priceToY(tick);
           return (
@@ -167,11 +263,12 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
                 strokeDasharray="5 6"
               />
               <text
-                x={WIDTH - PADDING.right + 12}
+                x={PADDING.left - 12}
                 y={y + 4}
                 fill={TEXT_COLOR}
                 fontFamily="monospace"
                 fontSize="11"
+                textAnchor="end"
               >
                 {displayPrice(tick, ticker)}
               </text>
@@ -180,21 +277,52 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
         })}
 
         <line
-          x1={WIDTH - PADDING.right}
-          x2={WIDTH - PADDING.right}
+          x1={PADDING.left}
+          x2={PADDING.left}
           y1={PADDING.top}
-          y2={HEIGHT - PADDING.bottom}
+          y2={VOLUME_TOP + VOLUME_HEIGHT}
+          stroke={AXIS_COLOR}
+        />
+        <text
+          x={PADDING.left - 12}
+          y={PADDING.top - 8}
+          fill={TEXT_COLOR}
+          fontFamily="monospace"
+          fontSize="10"
+          textAnchor="end"
+        >
+          PRICE
+        </text>
+        <text
+          x={PADDING.left + 8}
+          y={VOLUME_TOP - 18}
+          fill={TEXT_COLOR}
+          fontFamily="monospace"
+          fontSize="10"
+          textAnchor="start"
+        >
+          VOLUME
+        </text>
+        <line
+          x1={PADDING.left}
+          x2={WIDTH - PADDING.right}
+          y1={VOLUME_TOP - 12}
+          y2={VOLUME_TOP - 12}
           stroke={AXIS_COLOR}
         />
 
         {chart.points.map((point, index) => {
+          const previousPoint = previousByDate.get(point.date) || null;
           const x = indexToX(index);
           const openY = priceToY(point.open);
           const closeY = priceToY(point.close);
           const rawBodyHeight = Math.abs(closeY - openY);
           const bodyHeight = Math.max(rawBodyHeight, 2);
           const bodyY = Math.min(openY, closeY) - (bodyHeight - rawBodyHeight) / 2;
-          const color = movementColor(point, chart.points[index - 1]);
+          const color = movementColor(point, previousPoint);
+          const volume = point.volume || 0;
+          const volumeY = volumeToY(volume);
+          const volumeHeight = VOLUME_TOP + VOLUME_HEIGHT - volumeY;
 
           return (
             <g key={`${point.date}-${index}`}>
@@ -213,7 +341,18 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
                 fill={color}
                 stroke={color}
               >
-                <title>{`${point.date}: O ${point.open}, H ${point.high}, L ${point.low}, C ${point.close}, Adj ${point.adjusted_close ?? 'N/A'}, V ${point.volume ?? 'N/A'}`}</title>
+                <title>{`${point.date}: O ${point.open}, H ${point.high}, L ${point.low}, C ${point.close}, Prev ${previousPoint?.close ?? 'N/A'}, Adj ${point.adjusted_close ?? 'N/A'}, V ${point.volume ?? 'N/A'}`}</title>
+              </rect>
+              <rect
+                data-testid="volume-bar"
+                x={x - barWidth / 2}
+                y={volumeY}
+                width={barWidth}
+                height={Math.max(volumeHeight, 1)}
+                fill={color}
+                opacity="0.72"
+              >
+                <title>{`${point.date}: Volume ${formatCompactNumber(point.volume)}`}</title>
               </rect>
             </g>
           );
@@ -228,14 +367,41 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
           strokeDasharray="3 5"
         />
         <text
-          x={WIDTH - PADDING.right + 12}
+          x={PADDING.left - 12}
           y={lastCloseY - 6}
           fill={LAST_PRICE_COLOR}
           fontFamily="monospace"
           fontSize="11"
+          textAnchor="end"
         >
           {displayPrice(lastPoint.close, ticker)}
         </text>
+
+        {chart.volumeTicks.map((tick) => {
+          const y = volumeToY(tick);
+          return (
+            <g key={`volume-${tick}`}>
+              <line
+                x1={PADDING.left}
+                x2={WIDTH - PADDING.right}
+                y1={y}
+                y2={y}
+                stroke={GRID_COLOR}
+                strokeDasharray="4 6"
+              />
+              <text
+                x={PADDING.left - 12}
+                y={y + 4}
+                fill={TEXT_COLOR}
+                fontFamily="monospace"
+                fontSize="10"
+                textAnchor="end"
+              >
+                {formatCompactNumber(tick)}
+              </text>
+            </g>
+          );
+        })}
 
         {hoverPoint && (
           <g>
@@ -243,7 +409,7 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
               x1={indexToX(hoverIndex)}
               x2={indexToX(hoverIndex)}
               y1={PADDING.top}
-              y2={HEIGHT - PADDING.bottom}
+              y2={VOLUME_TOP + VOLUME_HEIGHT}
               stroke={CROSSHAIR_COLOR}
               strokeDasharray="4 4"
             />
@@ -262,7 +428,7 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
           <text
             key={`${index}-${label}`}
             x={indexToX(index)}
-            y={HEIGHT - 10}
+            y={HEIGHT - 8}
             fill={TEXT_COLOR}
             fontFamily="monospace"
             fontSize="10"
@@ -271,12 +437,16 @@ export default function CandlestickPriceChart({ points, ticker = '' }) {
             {label}
           </text>
         ))}
-      </svg>
+        </svg>
+      </div>
+      <TradingDataPanel point={activePoint} previousPoint={activePreviousPoint} ticker={ticker} />
     </div>
   );
 }
 
 CandlestickPriceChart.propTypes = {
   points: PropTypes.arrayOf(PropTypes.object).isRequired,
+  allPoints: PropTypes.arrayOf(PropTypes.object),
   ticker: PropTypes.string,
+  onZoom: PropTypes.func,
 };
