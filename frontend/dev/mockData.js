@@ -2755,7 +2755,7 @@ function createMockProductionContract(result, overrides = {}) {
     disclaimer:
       overrides.disclaimer ||
       result.disclaimer ||
-      'AI-generated mock analysis. Not financial advice. Verify all data and assumptions before making any investment decision.',
+      '',
   };
 }
 

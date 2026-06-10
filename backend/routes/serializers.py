@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from analysis_cache import AnalysisCacheKey
 from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
 from routes.validation import AnalysisRequest
+from services.report_disclaimer import REPORT_DISCLAIMER
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ RISK_REWARD_DISPLAY = "1:3"
 
 SUMMARY_FIELDS = {
     "decision",
+    "disclaimer",
     "llm_decision",
     "final_decision",
     "decision_adjusted",
@@ -1397,6 +1399,7 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
         "analysis_params": analysis_params,
         "agents_used": [agent[1] for agent in AGENT_SEQUENCE],
         **result_fields,
+        "disclaimer": REPORT_DISCLAIMER,
         "time_horizon_months": req.time_horizon_months,
     }
     warnings = request_warnings(req)

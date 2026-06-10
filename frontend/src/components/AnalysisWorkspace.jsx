@@ -269,9 +269,16 @@ PanelButton.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-function DrawerPanel({ title, onClose, children }) {
+function DrawerPanel({ open, title, onClose, children }) {
   return (
-    <aside className="fixed bottom-0 left-10 top-10 z-[35] flex w-72 flex-col border-r border-bloomberg-border bg-bloomberg-card shadow-2xl shadow-black/50">
+    <aside
+      aria-hidden={!open}
+      className={`fixed bottom-0 left-10 top-10 z-[35] flex w-72 flex-col border-r border-bloomberg-border bg-bloomberg-card shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200 ease-out will-change-transform ${
+        open
+          ? 'pointer-events-auto translate-x-0 opacity-100'
+          : 'pointer-events-none -translate-x-full opacity-0'
+      }`}
+    >
       <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-bloomberg-border px-3">
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
           {title}
@@ -291,6 +298,7 @@ function DrawerPanel({ title, onClose, children }) {
 }
 
 DrawerPanel.propTypes = {
+  open: PropTypes.bool.isRequired,
   title: PropTypes.string.isRequired,
   onClose: PropTypes.func.isRequired,
   children: PropTypes.node.isRequired,
@@ -512,10 +520,29 @@ export default function AnalysisWorkspace({
   const [status, setStatus] = useState(resourceId ? 'Loading saved analysis...' : '');
   const [agentProgress, setAgentProgress] = useState(null);
   const [activePanel, setActivePanel] = useState(null);
+  const [visiblePanel, setVisiblePanel] = useState(null);
 
   function togglePanel(name) {
-    setActivePanel((prev) => (prev === name ? null : name));
+    if (activePanel === name) {
+      setActivePanel(null);
+      return;
+    }
+
+    setVisiblePanel(name);
+    setActivePanel(name);
   }
+
+  useEffect(() => {
+    if (activePanel) {
+      setVisiblePanel(activePanel);
+      return undefined;
+    }
+
+    if (!visiblePanel) return undefined;
+
+    const timeoutId = setTimeout(() => setVisiblePanel(null), 200);
+    return () => clearTimeout(timeoutId);
+  }, [activePanel, visiblePanel]);
 
   useEffect(() => {
     if (!resourceId) return undefined;
@@ -617,16 +644,12 @@ export default function AnalysisWorkspace({
     onAgentProgress: setAgentProgress,
   });
 
+  const panelOpen = Boolean(activePanel);
+  const mainOffsetClass = panelOpen ? 'ml-10 md:ml-[20.5rem]' : 'ml-10';
+
   return (
     <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
-
-      {activePanel && (
-        <div
-          className="fixed inset-0 z-[25] bg-black/30"
-          onClick={() => setActivePanel(null)}
-        />
-      )}
 
       <div className="fixed bottom-0 left-0 top-10 z-[45] w-10 border-bloomberg-border border-r bg-black">
         <PanelButton
@@ -645,8 +668,12 @@ export default function AnalysisWorkspace({
         </PanelButton>
       </div>
 
-      {activePanel === 'config' && (
-        <DrawerPanel title="CONFIGURATION" onClose={() => setActivePanel(null)}>
+      {visiblePanel === 'config' && (
+        <DrawerPanel
+          open={activePanel === 'config'}
+          title="CONFIGURATION"
+          onClose={() => setActivePanel(null)}
+        >
           <FormComponent
             onResult={handleResult}
             onLoading={setLoading}
@@ -659,8 +686,12 @@ export default function AnalysisWorkspace({
         </DrawerPanel>
       )}
 
-      {activePanel === 'history' && (
-        <DrawerPanel title="HISTORY" onClose={() => setActivePanel(null)}>
+      {visiblePanel === 'history' && (
+        <DrawerPanel
+          open={activePanel === 'history'}
+          title="HISTORY"
+          onClose={() => setActivePanel(null)}
+        >
           <HistoryPanel
             backendHistoryEnabled={backendHistoryEnabled}
             currentResourceId={historyResourceId(result)}
@@ -674,7 +705,10 @@ export default function AnalysisWorkspace({
         </DrawerPanel>
       )}
 
-      <main className="ml-10 min-h-screen min-w-0 pt-10">
+      <main
+        data-testid="analysis-main"
+        className={`${mainOffsetClass} min-h-screen min-w-0 pt-10 transition-[margin-left] duration-200 ease-out will-change-[margin-left]`}
+      >
         <div className="space-y-4 p-4">
           <StatusBar loading={loading} status={status} />
 

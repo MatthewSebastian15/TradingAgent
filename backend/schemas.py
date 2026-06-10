@@ -149,6 +149,7 @@ class AnalysisOverview(ApiSchema):
     investment_thesis: str | None = None
     key_reasons: list[str] = Field(default_factory=list)
     key_reasons_paragraph: str | None = None
+    disclaimer: str | None = None
     action_plan: AnalysisOverviewActionPlan
     risk_summary: AnalysisOverviewRiskSummary
 

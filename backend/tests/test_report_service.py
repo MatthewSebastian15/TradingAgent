@@ -410,16 +410,16 @@ def test_report_context_contains_disclaimer():
     report = build_report_context(_base_result())
 
     assert "disclaimer" in report
-    assert "automated AI-assisted analysis engine" in report["disclaimer"]
-    assert "may contain errors" in report["disclaimer"]
+    assert "automated AI-assisted analysis system" in report["disclaimer"]
+    assert "may contain errors, inaccuracies, omissions" in report["disclaimer"]
 
 
 def test_html_report_renders_disclaimer():
     html = render_analysis_report_html(build_report_context(_base_result()))
 
     assert "Disclaimer" in html
-    assert "automated AI-assisted analysis engine" in html
-    assert "may contain errors" in html
+    assert "automated AI-assisted analysis system" in html
+    assert "may contain errors, inaccuracies, omissions" in html
     assert html.rfind("Disclaimer") > html.find("Executive Summary")
 
 

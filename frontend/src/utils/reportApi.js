@@ -75,7 +75,6 @@ function compactReportPayload(result) {
     'fundamentals',
     'chart_price',
     'news_items',
-    'disclaimer',
     'volatility_scale',
     'volatility_method',
     'volatility_lookback_days',
@@ -211,7 +210,7 @@ function openHtmlBlob(html) {
 export async function openAnalysisHtmlReport({ resourceId, result, mock = false }) {
   if (mock) {
     if (!result) throw new Error('Mock report result is unavailable.');
-    openMockReportPreview(result);
+    await openMockReportPreview(result);
     return;
   }
 
@@ -324,7 +323,7 @@ async function downloadPdfResponse(response, fallbackFilename) {
 export async function downloadAnalysisPdf(resourceId, options = {}) {
   if (options.mock) {
     if (!options.result) throw new Error('Mock report result is unavailable.');
-    exportMockReportPdf(options.result);
+    await exportMockReportPdf(options.result);
     return;
   }
 

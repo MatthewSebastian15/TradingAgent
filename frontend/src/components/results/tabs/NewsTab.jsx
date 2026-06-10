@@ -111,16 +111,22 @@ function hasNewsPayload(result) {
   const relatedItems = result?.related_news?.items;
   const impactItems = result?.news_impact?.full_news_list;
   const highImpact = result?.news_impact?.high_impact_news;
-  const tracker = result?.catalyst_tracker || {};
   return (
     (Array.isArray(relatedItems) && relatedItems.length > 0) ||
     (Array.isArray(impactItems) && impactItems.length > 0) ||
     (Array.isArray(highImpact) && highImpact.length > 0) ||
-    (Array.isArray(tracker.positive_catalysts) && tracker.positive_catalysts.length > 0) ||
-    (Array.isArray(tracker.negative_catalysts) && tracker.negative_catalysts.length > 0) ||
-    (Array.isArray(tracker.upcoming_events) && tracker.upcoming_events.length > 0) ||
     result?.analyst_consensus?.available
   );
+}
+
+function withoutConfidenceFields(value) {
+  if (!value || typeof value !== 'object') return value;
+  const sanitized = { ...value };
+  delete sanitized.confidence;
+  delete sanitized.confidence_score;
+  delete sanitized.confidenceScore;
+  delete sanitized.score;
+  return sanitized;
 }
 
 function SummaryMetric({ label, value }) {
@@ -151,7 +157,7 @@ function NewsCard({ item, index, quality }) {
           </h3>
         </div>
         <span className="font-mono text-[10px] border border-bloomberg-border text-bloomberg-muted px-2 py-1 uppercase flex-shrink-0">
-          {shortLabel(item.source || item.publisher || item.source_confidence_label || 'vendor')}
+          {shortLabel(item.source || item.publisher || 'vendor')}
         </span>
       </div>
 
@@ -160,9 +166,6 @@ function NewsCard({ item, index, quality }) {
         <span>Provider: {item.provider || item.source || 'Unknown'}</span>
         <span>Published: {formatDate(item.published_at)}</span>
         <span>Scope: {displayLabel(item.scope_label || item.news_scope || 'company')}</span>
-        {item.source_confidence_label && (
-          <span>Source Confidence: {displayLabel(item.source_confidence_label)}</span>
-        )}
         {item.impact && <span>Impact: {displayLabel(item.impact)}</span>}
         {item.sentiment && <span>Sentiment: {displayLabel(item.sentiment)}</span>}
         {item.impact_status && <span>Impact Status: {displayLabel(item.impact_status)}</span>}
@@ -175,7 +178,6 @@ function NewsCard({ item, index, quality }) {
           status={quality ? undefined : item.status || 'available'}
           source={item.source || item.publisher}
           reason={item.impact_reason || item.relevance_reason}
-          confidenceScore={item.source_confidence_score}
         />
       </div>
 
@@ -205,54 +207,15 @@ NewsCard.propTypes = {
   quality: PropTypes.object,
 };
 
-function CatalystList({ title, items }) {
-  if (!Array.isArray(items) || items.length === 0) return null;
-
-  return (
-    <section>
-      <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-2">
-        {title}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        {items.slice(0, 6).map((item, index) => (
-          <article
-            key={`${item.label || item.related_news_title || title}-${index}`}
-            className="border border-bloomberg-border bg-black px-3 py-2"
-          >
-            <div className="font-mono text-sm text-bloomberg-white font-semibold">
-              {item.label || item.related_news_title || 'Catalyst'}
-            </div>
-            <div className="mt-1 flex flex-wrap gap-2 font-mono text-[11px] text-bloomberg-muted">
-              <span>Type: {displayLabel(item.type)}</span>
-              <span>Impact: {displayLabel(item.impact || item.risk_level)}</span>
-              <span>Source: {item.source || 'N/A'}</span>
-              <span>Date: {formatDate(item.date)}</span>
-            </div>
-            {item.related_news_title && (
-              <p className="mt-2 font-mono text-xs text-bloomberg-muted leading-relaxed">
-                {item.related_news_title}
-              </p>
-            )}
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-CatalystList.propTypes = {
-  title: PropTypes.string.isRequired,
-  items: PropTypes.array,
-};
-
 export default function NewsTab({ result }) {
   const relatedNews = result?.related_news || {};
   const newsImpact = result?.news_impact || {};
-  const tracker = result?.catalyst_tracker || {};
   const analystConsensus = result?.analyst_consensus || {};
   const relatedItems = Array.isArray(relatedNews.items) ? relatedNews.items : [];
   const newsItems = buildUnifiedNewsItems(newsImpact, relatedItems);
-  const companyNewsQuality = getFieldQuality(result?.data_quality, 'company_news');
+  const companyNewsQuality = withoutConfidenceFields(
+    getFieldQuality(result?.data_quality, 'company_news')
+  );
   if (!hasNewsPayload(result)) {
     return (
       <div className="px-4 py-4 border-b border-bloomberg-border">
@@ -268,7 +231,7 @@ export default function NewsTab({ result }) {
       <section>
         <SectionHeader label="NEWS" />
         {newsItems.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {newsItems.map((item, index) => (
               <NewsCard
                 key={newsDedupeKey(item) || `${item.title}-${index}`}
@@ -284,11 +247,6 @@ export default function NewsTab({ result }) {
           </NoticeBox>
         )}
       </section>
-
-      <CatalystList title="POSITIVE CATALYSTS" items={tracker.positive_catalysts} />
-      <CatalystList title="NEGATIVE CATALYSTS" items={tracker.negative_catalysts} />
-      <CatalystList title="UPCOMING EVENTS" items={tracker.upcoming_events} />
-
       {analystConsensus.available && (
         <section>
           <SectionHeader label="ANALYST RECOMMENDATION TREND" />
@@ -306,15 +264,6 @@ export default function NewsTab({ result }) {
             />
             <SummaryMetric label="TREND" value={displayLabel(analystConsensus.trend)} />
           </div>
-        </section>
-      )}
-
-      {tracker.summary?.main_message && (
-        <section>
-          <SectionHeader label="CATALYST SUMMARY" />
-          <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
-            {tracker.summary.main_message}
-          </p>
         </section>
       )}
     </div>
