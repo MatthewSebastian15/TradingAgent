@@ -43,6 +43,7 @@ class AnalysisCacheKey:
     has_existing_position: bool = False
     position_quantity: float | None = None
     average_entry_price: float | None = None
+    cache_version: int = 2
 
     def as_tuple(self) -> tuple[Hashable, ...]:
         return (
@@ -59,6 +60,7 @@ class AnalysisCacheKey:
             self.has_existing_position,
             self.position_quantity,
             self.average_entry_price,
+            self.cache_version,
         )
 
 

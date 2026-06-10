@@ -8,7 +8,6 @@ import {
   MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE,
   MOCK_MISSING_PRICE_RESPONSE,
   MOCK_PTRO_WAIT_RESPONSE,
-  MOCK_REPAIRED_RESPONSE,
   MOCK_RESPONSE,
   MOCK_SELL_RESPONSE,
   MOCK_TPIA_REDUCE_SCENARIO_RESPONSE,
@@ -50,9 +49,6 @@ describe('ResultCard risk-engine contract', () => {
 
     fireEvent.click(screen.getByText('News'));
     expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
-
-    fireEvent.click(screen.getByText('Risk / Data Quality'));
-    expect(screen.getByText(/automated AI-assisted analysis engine/i)).toBeTruthy();
   });
 
   it('does not render Key Levels in the Analisis tab', () => {
@@ -65,13 +61,16 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('Invalidation Level')).toBeNull();
   });
 
-  it('renders Key Reasons as a single paragraph between 75 and 125 words', () => {
+  it('renders recommendation reasons and risk summary as one paragraph between 100 and 150 words', () => {
     const keyReasonsParagraph =
       'The recommendation is supported by improving earnings visibility, resilient margin structure, disciplined balance sheet quality, and a more balanced risk/reward setup. Price momentum remains constructive, but the model still requires confirmation from fresh market data and reliable vendor inputs before increasing conviction. News flow and catalyst quality should be monitored because valuation sensitivity can reduce upside if earnings delivery weakens. Position sizing should remain controlled until volatility, liquidity, thesis confirmation, entry timing, and source reliability improve together.';
+    const miniRiskSummary =
+      'Main risks include earnings miss, crowded positioning, valuation compression, stale market data, weaker liquidity, and negative catalyst surprises, so sizing must stay moderate and stop discipline must remain active.';
 
     const result = {
       ...MOCK_RESPONSE,
       key_reasons_paragraph: keyReasonsParagraph,
+      mini_risk_summary: miniRiskSummary,
       analysis_overview: {
         ...MOCK_RESPONSE.analysis_overview,
         key_reasons_paragraph: keyReasonsParagraph,
@@ -80,25 +79,30 @@ describe('ResultCard risk-engine contract', () => {
 
     const { container } = render(<ResultCard result={result} />);
 
-    const heading = screen.getByText('KEY REASONS');
-    const section = heading.closest('.px-4');
-    const paragraph = section.querySelector('p');
+    const paragraph = screen.getByText((content) =>
+      content.includes('The recommendation is supported by improving earnings visibility')
+    );
+    const section = paragraph.closest('.px-4');
 
     expect(paragraph).toBeTruthy();
     expect(section.querySelector('ul')).toBeNull();
     expect(section.querySelector('li')).toBeNull();
     expect(paragraph.textContent).not.toContain('+');
-    expect(countWords(paragraph.textContent)).toBeGreaterThanOrEqual(75);
-    expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(125);
-    expect(container.textContent).toContain('KEY REASONS');
+    expect(paragraph.textContent).toContain('Main risks include earnings miss');
+    expect(countWords(paragraph.textContent)).toBeGreaterThanOrEqual(100);
+    expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(150);
+    expect(container.textContent).toContain('KEY REASONS & RISK SUMMARY');
+    expect(container.textContent).not.toContain('MINI RISK SUMMARY');
   });
 
-  it('truncates an overly long Key Reasons paragraph to 125 words', () => {
-    const longParagraph = Array.from({ length: 150 }, (_, index) => `word${index + 1}`).join(' ');
+  it('truncates an overly long recommendation and risk paragraph to 150 words', () => {
+    const longParagraph = Array.from({ length: 180 }, (_, index) => `word${index + 1}`).join(' ');
 
     const result = {
       ...MOCK_RESPONSE,
       key_reasons_paragraph: longParagraph,
+      mini_risk_summary:
+        'Risk remains elevated while source freshness and execution levels need confirmation.',
       analysis_overview: {
         ...MOCK_RESPONSE.analysis_overview,
         key_reasons_paragraph: longParagraph,
@@ -107,11 +111,36 @@ describe('ResultCard risk-engine contract', () => {
 
     render(<ResultCard result={result} />);
 
-    const section = screen.getByText('KEY REASONS').closest('.px-4');
-    const paragraph = section.querySelector('p');
+    const paragraph = screen.getByText((content) => content.startsWith('word1 word2 word3'));
 
     expect(paragraph).toBeTruthy();
-    expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(125);
+    expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(150);
+  });
+
+  it('renders compact Agent Pipeline without expanded detail rows', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          agent_pipeline: [
+            {
+              name: 'Custom Risk Agent',
+              role: 'Checks drawdown, liquidity, and sizing limits.',
+              status: 'ok',
+              output_summary: 'Risk is acceptable with moderate allocation.',
+              duration_seconds: 4.25,
+            },
+          ],
+          total_pipeline_seconds: 4.25,
+        }}
+      />
+    );
+
+    expect(screen.getByText('Agent Pipeline')).toBeTruthy();
+    expect(screen.getByText('Custom Risk Agent')).toBeTruthy();
+    expect(screen.getByText(/Execution: 4\.3s · 1\/1 completed/)).toBeTruthy();
+    expect(screen.getAllByText('4.3s').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Risk is acceptable with moderate allocation.')).toBeNull();
   });
 
   it('renders financial highlights only inside Fundamental', () => {
@@ -124,14 +153,14 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getAllByText('Revenue').length).toBeGreaterThan(0);
   });
 
-  it('renders Phase 2 fundamental sections and hides Peer Comparison without a payload', () => {
+  it('renders the trimmed Fundamental sections and hides removed valuation detail blocks', () => {
     const { rerender } = render(<ResultCard result={MOCK_RESPONSE} />);
 
     fireEvent.click(screen.getByText('Fundamental'));
-    expect(screen.getByText('FINANCIAL TREND ANALYSIS')).toBeTruthy();
+    expect(screen.queryByText('FINANCIAL TREND ANALYSIS')).toBeNull();
     expect(screen.getByText('VALUATION MULTIPLES')).toBeTruthy();
-    expect(screen.getByText('FAIR VALUE RANGE')).toBeTruthy();
-    expect(screen.getByText('BULL / BASE / BEAR SCENARIO')).toBeTruthy();
+    expect(screen.queryByText('FAIR VALUE RANGE')).toBeNull();
+    expect(screen.queryByText('BULL / BASE / BEAR SCENARIO')).toBeNull();
     expect(screen.getByText('QUALITY OF EARNINGS')).toBeTruthy();
     expect(screen.getByText('BALANCE SHEET RISK')).toBeTruthy();
     expect(screen.getByText('DIVIDEND QUALITY')).toBeTruthy();
@@ -145,6 +174,7 @@ describe('ResultCard risk-engine contract', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
     expect(screen.getByText('Analisis')).toBeTruthy();
+    expect(screen.queryByText('Risk / Data Quality')).toBeNull();
     expect(screen.getByText('EXECUTIVE SUMMARY')).toBeTruthy();
     expect(screen.getByText('Chart & Price').disabled).toBe(false);
     expect(screen.getByText('News').disabled).toBe(false);
@@ -163,8 +193,8 @@ describe('ResultCard risk-engine contract', () => {
     fireEvent.click(screen.getByText('Chart & Price'));
 
     expect(screen.getByText('CHART & PRICE')).toBeTruthy();
-    expect(screen.getByText('OHLC Candlestick')).toBeTruthy();
-    expect(screen.getByText('Volume')).toBeTruthy();
+    expect(screen.getByLabelText(/OHLC candlestick price chart/i)).toBeTruthy();
+    expect(screen.getByLabelText(/Trading volume chart/i)).toBeTruthy();
     expect(screen.getByText('PRICE STATISTICS')).toBeTruthy();
     expect(screen.getByText('News').disabled).toBe(false);
     expect(screen.queryByText('EXECUTIVE SUMMARY')).toBeNull();
@@ -176,6 +206,7 @@ describe('ResultCard risk-engine contract', () => {
     fireEvent.click(screen.getByText('News'));
 
     expect(screen.getByText('NEWS')).toBeTruthy();
+    expect(screen.getAllByText(/High Impact NVDA News/i).length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(/NVDA earnings outlook remains constructive/i).length
     ).toBeGreaterThan(0);
@@ -241,6 +272,29 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('Chart fetch failed.')).toBeTruthy();
   });
 
+  it('renders stale Chart & Price data with a warning when enough candles exist', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          price_chart: {
+            ...MOCK_RESPONSE.price_chart,
+            available: true,
+            warning: 'OHLCV_STALE - Latest OHLCV row 2026-05-29 is stale.',
+            data_quality: { status: 'stale', missing_fields: ['fresh_ohlcv'] },
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Chart & Price'));
+
+    expect(screen.queryByText('CHART DATA UNAVAILABLE')).toBeNull();
+    expect(screen.getByText('CHART DATA WARNING')).toBeTruthy();
+    expect(screen.getByText('OHLCV_STALE - Latest OHLCV row 2026-05-29 is stale.')).toBeTruthy();
+    expect(screen.getByLabelText(/OHLC candlestick price chart/i)).toBeTruthy();
+  });
+
   it('renders Chart & Price empty state when fewer than two valid OHLC points remain', () => {
     render(
       <ResultCard
@@ -265,17 +319,35 @@ describe('ResultCard risk-engine contract', () => {
     ).toBeTruthy();
   });
 
-  it('renders Phase 3 price performance and technical entry sections', () => {
+  it('renders Phase 3 price statistics without technical entry quality', () => {
     render(<ResultCard result={MOCK_RESPONSE} />);
 
     fireEvent.click(screen.getByText('Chart & Price'));
 
-    expect(screen.getByText('PRICE PERFORMANCE')).toBeTruthy();
-    expect(screen.getByText('TECHNICAL ENTRY QUALITY')).toBeTruthy();
-    expect(screen.getByText('ENTRY QUALITY')).toBeTruthy();
-    expect(screen.getByText('RSI SIGNAL')).toBeTruthy();
-    expect(screen.getByText('SUPPORT')).toBeTruthy();
-    expect(screen.getByText('RESISTANCE')).toBeTruthy();
+    expect(screen.getByText('PRICE STATISTICS')).toBeTruthy();
+    expect(screen.queryByText('PRICE PERFORMANCE')).toBeNull();
+    expect(screen.queryByText('AVG CLOSE')).toBeNull();
+    expect(screen.queryByText('LOOKBACK')).toBeNull();
+    expect(screen.queryByText('TRADE DATE')).toBeNull();
+    expect(screen.queryByText('AVERAGE VOLUME')).toBeNull();
+    expect(screen.queryByText('PERIOD HIGH')).toBeNull();
+    expect(screen.queryByText('PERIOD LOW')).toBeNull();
+    expect(screen.queryByText('LATEST CLOSE')).toBeNull();
+    expect(screen.getByText('CHART')).toBeTruthy();
+    expect(screen.getByText('VOLUME')).toBeTruthy();
+    expect(screen.getByText('START PRICE')).toBeTruthy();
+    expect(screen.getByText('END PRICE')).toBeTruthy();
+    expect(screen.getByText('HIGH')).toBeTruthy();
+    expect(screen.getByText('LOW')).toBeTruthy();
+    expect(screen.getByText('AVG VOLUME')).toBeTruthy();
+    expect(screen.getByText('LATEST VOLUME')).toBeTruthy();
+    expect(screen.getByText('PERIOD RETURN')).toBeTruthy();
+    expect(screen.getByText('MAX DRAWDOWN')).toBeTruthy();
+    expect(screen.getByText(/Source:/)).toBeTruthy();
+    expect(screen.queryByText('POINTS')).toBeNull();
+    expect(screen.queryByText('TECHNICAL ENTRY QUALITY')).toBeNull();
+    expect(screen.queryByText('ENTRY QUALITY')).toBeNull();
+    expect(screen.queryByText('RSI SIGNAL')).toBeNull();
   });
 
   it('renders Phase 3 news impact, catalyst, and analyst consensus sections', () => {
@@ -283,10 +355,11 @@ describe('ResultCard risk-engine contract', () => {
 
     fireEvent.click(screen.getByText('News'));
 
-    expect(screen.getByText('HIGH-IMPACT NEWS')).toBeTruthy();
+    expect(screen.getByText('NEWS')).toBeTruthy();
+    expect(screen.getAllByText(/High Impact NVDA News/i).length).toBeGreaterThan(0);
     expect(screen.getByText('POSITIVE CATALYSTS')).toBeTruthy();
     expect(screen.getByText('ANALYST RECOMMENDATION TREND')).toBeTruthy();
-    expect(screen.getByText('FULL NEWS LIST')).toBeTruthy();
+    expect(screen.getByText('CATALYST SUMMARY')).toBeTruthy();
   });
 
   it('renders Profile empty state when company profile is unavailable', () => {
@@ -496,42 +569,17 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText(/LLM: BUY → FINAL: WAIT/)).toBeTruthy();
   });
 
-  it('shows Phase 4 data quality score and vendor status', () => {
-    render(<ResultCard result={MOCK_REPAIRED_RESPONSE} />);
-
-    fireEvent.click(screen.getByText('Risk / Data Quality'));
-    expect(screen.getByText('DATA QUALITY SCORE')).toBeTruthy();
-    expect(screen.getByText('VENDOR STATUS')).toBeTruthy();
-    expect(screen.getByText('CALCULATION NOTES')).toBeTruthy();
-    expect(screen.getByText('yfinance')).toBeTruthy();
-  });
-
   it('renders IDX news unavailable as non-blocking while keeping trade plan valid', () => {
     render(<ResultCard result={MOCK_IDX_NEWS_UNAVAILABLE_RESPONSE} />);
 
     expect(screen.getAllByTestId('action-plan-metric')).toHaveLength(12);
-    fireEvent.click(screen.getByText('Risk / Data Quality'));
-    expect(screen.getByText('DATA QUALITY SCORE')).toBeTruthy();
-    expect(screen.getByText('VENDOR STATUS')).toBeTruthy();
-    expect(screen.getAllByText('rate_limited').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/news coverage is unavailable/i).length).toBeGreaterThan(0);
-  });
-
-  it('shows thesis monitor checklist in risk tab', () => {
-    render(<ResultCard result={MOCK_REPAIRED_RESPONSE} />);
-
-    fireEvent.click(screen.getByText('Risk / Data Quality'));
-    expect(screen.getByText('THESIS INVALIDATION CHECKLIST')).toBeTruthy();
-    expect(screen.getByText('Revenue growth turns negative')).toBeTruthy();
-    expect(screen.getByText('Price breaks stop loss')).toBeTruthy();
+    expect(screen.queryByText('Risk / Data Quality')).toBeNull();
   });
 
   it('does not render action plan for invalid actionable trade plan', () => {
     render(<ResultCard result={{ ...MOCK_RESPONSE, trade_plan_valid: false }} />);
 
     expect(screen.getByText('TRADE PLAN NOT VALID')).toBeTruthy();
-    fireEvent.click(screen.getByText('Risk / Data Quality'));
-    expect(screen.getByText('RISK SUMMARY')).toBeTruthy();
     expect(screen.queryByText('ACTION PLAN')).toBeNull();
     expect(screen.queryByText('ENTRY')).toBeNull();
   });
@@ -540,19 +588,35 @@ describe('ResultCard risk-engine contract', () => {
     render(<ResultCard result={MOCK_MISSING_PRICE_RESPONSE} />);
 
     expect(screen.getByText('PRICE DATA MISSING')).toBeTruthy();
-    fireEvent.click(screen.getByText('Risk / Data Quality'));
-    expect(screen.getByText('RISK SUMMARY')).toBeTruthy();
-    expect(screen.getByText('RISK-ADJUSTED RETURN')).toBeTruthy();
+    expect(screen.queryByText('Risk / Data Quality')).toBeNull();
     expect(screen.queryByText(/NaN/)).toBeNull();
     expect(screen.queryByText('ACTION PLAN')).toBeNull();
     expect(screen.queryByText('ENTRY')).toBeNull();
   });
 
-  it('shows a friendly empty state when risk_data_quality is missing', () => {
-    render(<ResultCard result={{ ...MOCK_RESPONSE, risk_data_quality: null }} />);
+  it('uses profile current price for stale OHLCV Analysis fallback', () => {
+    render(
+      <ResultCard
+        result={{
+          ...MOCK_RESPONSE,
+          current_price: null,
+          last_price: null,
+          last_close_price: null,
+          current_price_as_of: null,
+          price_timestamp: null,
+          price_source: null,
+          data_quality: { ...MOCK_RESPONSE.data_quality, price_data: 'stale' },
+          company_profile: { ...MOCK_RESPONSE.company_profile, current_price: 2690 },
+          price_chart: {
+            ...MOCK_RESPONSE.price_chart,
+            warning: 'OHLCV_STALE - Latest OHLCV row 2026-05-29 is stale.',
+            data_quality: { ...MOCK_RESPONSE.price_chart.data_quality, status: 'stale' },
+          },
+        }}
+      />
+    );
 
-    fireEvent.click(screen.getByText('Risk / Data Quality'));
-    expect(screen.getByText('RISK DATA QUALITY UNAVAILABLE')).toBeTruthy();
+    expect(screen.queryByText('PRICE DATA MISSING')).toBeNull();
   });
 
   it('does not crash when backend sends invalid optional fields', () => {

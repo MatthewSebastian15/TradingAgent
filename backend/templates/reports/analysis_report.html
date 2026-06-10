@@ -8,7 +8,6 @@
   <body>
     {% macro fundamental_quality(payload) %}
       {% if payload.data_quality %}
-        <p class="muted">Data quality: {{ payload.data_quality.status or 'N/A' }}</p>
         {% if payload.data_quality.fallback_used %}
           <ul>{% for note in payload.data_quality.fallback_used %}<li>{{ note }}</li>{% endfor %}</ul>
         {% endif %}
@@ -128,7 +127,7 @@
                 {% for item in report.financial_highlights.point_in_time %}
                   <tr>
                     <th>{{ item.label }}</th>
-                    <td>{{ 'N/A' if item.status == 'unavailable' else item.display }} {{ item.unit }}</td>
+                    <td>{{ item.display }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -140,7 +139,6 @@
               <thead>
                 <tr>
                   <th>Metric</th>
-                  <th>Unit</th>
                   {% for period in report.financial_highlights.periods %}<th>{{ period.label }}</th>{% endfor %}
                 </tr>
               </thead>
@@ -148,10 +146,8 @@
                 {% for row in section.rows %}
                   <tr>
                     <td>{{ row.label }}</td>
-                    <td>{{ row.unit or '-' }}</td>
                     {% for period in report.financial_highlights.periods %}
-                      {% set cell = row['values'].get(period.key) %}
-                      <td>{{ cell.display if cell else 'N/A' }}</td>
+                      <td>{{ row.display_values.get(period.key, '-') }}</td>
                     {% endfor %}
                   </tr>
                 {% endfor %}
@@ -161,48 +157,11 @@
         </section>
       {% endif %}
 
-      {% if report.financial_trend_rows %}
-        <section class="section">
-          <h2>Financial Trend Analysis</h2>
-          {% if report.financial_trends.unit_note %}<p class="muted">{{ report.financial_trends.unit_note }}</p>{% endif %}
-          <table class="financial-highlights-table">
-            <thead><tr><th>Metric</th><th>Unit</th>{% for period in report.financial_trends.periods %}<th>{{ period.label }}</th>{% endfor %}</tr></thead>
-            <tbody>
-              {% for row in report.financial_trend_rows %}
-                <tr><td>{{ row.label }}</td><td>{{ row.unit or '-' }}</td>{% for value in row['values'] %}<td>{{ value }}</td>{% endfor %}</tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          {{ fundamental_quality(report.financial_trends) }}
-        </section>
-      {% endif %}
-
       {% if report.valuation_rows %}
         <section class="section">
           <h2>Valuation Multiples</h2>
           <table class="metric-table"><tbody>{% for row in report.valuation_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}</tbody></table>
-          <p>Label: {{ report.valuation_multiples.interpretation.valuation_label or 'N/A' }}. {{ report.valuation_multiples.interpretation.main_reason or '' }}</p>
           {{ fundamental_quality(report.valuation_multiples) }}
-        </section>
-      {% endif %}
-
-      {% if report.fair_value_rows %}
-        <section class="section">
-          <h2>Fair Value Range</h2>
-          <p>Primary method: {{ report.fair_value_range.primary_method or 'N/A' }}</p>
-          <table class="metric-table"><tbody>{% for row in report.fair_value_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}</tbody></table>
-          {% if report.fair_value_range.assumptions %}<ul>{% for note in report.fair_value_range.assumptions %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
-          {{ fundamental_quality(report.fair_value_range) }}
-        </section>
-      {% endif %}
-
-      {% if report.scenario_rows %}
-        <section class="section">
-          <h2>Bull / Base / Bear Scenario</h2>
-          <table class="metric-table">
-            <thead><tr><th>Scenario</th><th>Fair Value</th><th>Upside / Downside</th><th>Growth</th><th>Margin</th><th>Multiple</th><th>Assumption</th></tr></thead>
-            <tbody>{% for row in report.scenario_rows %}<tr><td>{{ row.scenario }}</td><td>{{ row.fair_value }}</td><td>{{ row.upside }}</td><td>{{ row.growth }}</td><td>{{ row.margin }}</td><td>{{ row.multiple }}</td><td>{{ row.assumption }}</td></tr>{% endfor %}</tbody>
-          </table>
         </section>
       {% endif %}
 
@@ -246,48 +205,6 @@
           <table class="metric-table"><tbody>
             {% for row in report.price_chart_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
           </tbody></table>
-        </section>
-      {% endif %}
-
-      {% if report.technical_entry_rows %}
-        <section class="section">
-          <h2>Technical Entry Quality</h2>
-          <table class="metric-table"><tbody>
-            {% for row in report.technical_entry_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
-          </tbody></table>
-        </section>
-      {% endif %}
-
-      {% if report.news_impact_rows %}
-        <section class="section">
-          <h2>News Impact Summary</h2>
-          <table class="metric-table"><tbody>
-            {% for row in report.news_impact_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
-          </tbody></table>
-          {% if report.high_impact_news_items %}
-            <h3>High Impact News</h3>
-            <div class="news-list">
-              {% for item in report.high_impact_news_items %}
-                <article class="news-item">
-                  <h3>{{ item.title }}</h3>
-                  <p class="muted">
-                    Source: {{ item.source }} |
-                    Published: {{ item.published_at }} |
-                    Scope: {{ item.news_scope }} |
-                    Category: {{ item.materiality_category }} |
-                    Source Confidence: {{ item.source_confidence_label }} |
-                    Sentiment: {{ item.sentiment }} |
-                    Impact: {{ item.impact }} |
-                    Score: {{ item.impact_score }} |
-                    Relevance: {{ item.relevance_score }}
-                  </p>
-                  {% if item.summary and item.summary != 'N/A' %}<p>{{ item.summary }}</p>{% endif %}
-                  {% if item.impact_reason and item.impact_reason != 'N/A' %}<p><strong>Why it matters:</strong> {{ item.impact_reason }}</p>{% endif %}
-                  {% if item.url %}<p><a href="{{ item.url }}">Open original source</a></p>{% endif %}
-                </article>
-              {% endfor %}
-            </div>
-          {% endif %}
         </section>
       {% endif %}
 
@@ -382,32 +299,6 @@
         </section>
       {% endif %}
 
-      {% if report.risk_summary_rows %}
-        <section class="section">
-          <h2>Risk Summary</h2>
-          <table class="metric-table"><tbody>
-            {% for row in report.risk_summary_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
-          </tbody></table>
-          {% if report.balance_sheet_risk_summary_rows %}
-            <h3>Balance Sheet Risk Summary</h3>
-            <table class="metric-table"><tbody>
-              {% for row in report.balance_sheet_risk_summary_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
-            </tbody></table>
-          {% endif %}
-          {% if report.catalyst_risk_rows %}
-            <h3>Catalyst Risk</h3>
-            <table class="metric-table">
-              <thead><tr><th>Type</th><th>Label</th><th>Impact</th><th>Date</th><th>Source</th><th>Reason</th></tr></thead>
-              <tbody>
-                {% for row in report.catalyst_risk_rows %}
-                  <tr><td>{{ row.type }}</td><td>{{ row.label }}</td><td>{{ row.impact }}</td><td>{{ row.date }}</td><td>{{ row.source }}</td><td>{{ row.reason }}</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          {% endif %}
-        </section>
-      {% endif %}
-
       {% if report.market_risk_rows %}
         <section class="section">
           <h2>Market Risk</h2>
@@ -427,85 +318,6 @@
           {% if report.risk_adjusted_return_notes %}<ul>{% for note in report.risk_adjusted_return_notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
         </section>
       {% endif %}
-
-      {% if report.thesis_monitor_rows %}
-        <section class="section">
-          <h2>Thesis Monitor</h2>
-          <table class="metric-table">
-            <thead><tr><th>Category</th><th>Condition</th><th>Status</th><th>Reason</th></tr></thead>
-            <tbody>
-              {% for row in report.thesis_monitor_rows %}
-                <tr><td>{{ row.category }}</td><td>{{ row.condition }}</td><td>{{ row.status }}</td><td>{{ row.reason }}</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </section>
-      {% endif %}
-
-      <section class="section">
-        <h2>Source Confidence &amp; Data Quality</h2>
-        {% if report.source_quality_rows %}
-          <table class="metric-table"><tbody>
-            {% for row in report.source_quality_rows %}<tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>{% endfor %}
-          </tbody></table>
-        {% endif %}
-        {% if report.vendor_status_rows %}
-          <h3>Vendor Status</h3>
-          <table class="metric-table">
-            <thead><tr><th>Vendor</th><th>Status</th><th>Used For</th><th>Missing Fields</th></tr></thead>
-            <tbody>
-              {% for row in report.vendor_status_rows %}
-                <tr><td>{{ row.vendor }}</td><td>{{ row.status }}</td><td>{{ row.used_for }}</td><td>{{ row.missing_fields }}</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% endif %}
-        {% if report.missing_fields_rows %}
-          <h3>Missing Fields</h3>
-          <table class="metric-table">
-            <thead><tr><th>Module</th><th>Field</th><th>Impact</th><th>Fallback Available</th></tr></thead>
-            <tbody>
-              {% for row in report.missing_fields_rows %}
-                <tr><td>{{ row.module }}</td><td>{{ row.field }}</td><td>{{ row.impact }}</td><td>{{ row.fallback_available }}</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% endif %}
-        {% if report.fallback_used_rows %}
-          <h3>Fallback Used</h3>
-          <table class="metric-table">
-            <thead><tr><th>Field</th><th>Method</th><th>Confidence</th></tr></thead>
-            <tbody>
-              {% for row in report.fallback_used_rows %}
-                <tr><td>{{ row.field }}</td><td>{{ row.method }}</td><td>{{ row.confidence }}</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% endif %}
-        {% if report.stale_warning_rows %}
-          <h3>Stale Data Warning</h3>
-          <table class="metric-table">
-            <thead><tr><th>Module</th><th>Field</th><th>Warning</th><th>Severity</th></tr></thead>
-            <tbody>
-              {% for row in report.stale_warning_rows %}
-                <tr><td>{{ row.module }}</td><td>{{ row.field }}</td><td>{{ row.warning }}</td><td>{{ row.severity }}</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% endif %}
-        {% if report.calculation_notes %}
-          <h3>Calculation Notes</h3>
-          <ul>{% for note in report.calculation_notes %}<li>{{ note }}</li>{% endfor %}</ul>
-        {% endif %}
-        {% if report.validation_warnings %}
-          <h3>Validation Warnings</h3>
-          <ul>{% for warning in report.validation_warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
-        {% endif %}
-        {% if report.data_quality_warnings %}
-          <h3>Data Quality Notes</h3>
-          <ul>{% for warning in report.data_quality_warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
-        {% endif %}
-      </section>
 
       {% if report.analyst_sections %}
         <section class="section page-break-soft">

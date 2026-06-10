@@ -5,6 +5,7 @@ from io import StringIO
 from typing import Any
 
 import pandas as pd
+from dateutil.relativedelta import relativedelta
 
 from .finnhub_common import (
     FinnhubUnavailableError,
@@ -231,8 +232,9 @@ def get_stock(symbol: str, start_date: str, end_date: str) -> str:
 
 
 def _load_stock_dataframe(symbol: str, curr_date: str, look_back_days: int) -> pd.DataFrame:
-    start_dt = datetime.strptime(curr_date, "%Y-%m-%d") - pd.Timedelta(days=max(look_back_days + 260, 320))
-    raw = get_stock(symbol, start_dt.strftime("%Y-%m-%d"), curr_date)
+    curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+    start_dt = curr_dt - relativedelta(years=1)
+    raw = get_stock(symbol, start_dt.strftime("%Y-%m-%d"), curr_dt.strftime("%Y-%m-%d"))
     if raw.lower().startswith("finnhub unavailable"):
         raise FinnhubUnavailableError(raw)
     lines = [line for line in raw.splitlines() if line.strip() and not line.lstrip().startswith("#")]
@@ -290,12 +292,12 @@ def _indicator_series(df: pd.DataFrame, indicator: str) -> pd.Series:
     raise ValueError(f"Indicator {indicator} is not supported by Finnhub fallback.")
 
 
-def get_indicator(symbol: str, indicator: str, curr_date: str, look_back_days: int = 30) -> str:
+def get_indicator(symbol: str, indicator: str, curr_date: str, look_back_days: int = 365) -> str:
     """Calculate supported technical indicators locally from Finnhub candles."""
     df = _load_stock_dataframe(symbol, curr_date, look_back_days)
     values = _indicator_series(df, indicator)
     df = df.assign(value=values)
-    cutoff = datetime.strptime(curr_date, "%Y-%m-%d") - pd.Timedelta(days=look_back_days)
+    cutoff = datetime.strptime(curr_date, "%Y-%m-%d") - relativedelta(years=1)
     recent = df[(df["Date"] >= cutoff) & (df["Date"] <= pd.to_datetime(curr_date))]
 
     lines = []

@@ -12,8 +12,8 @@ def test_format_percent_adds_percent_symbol():
     assert format_percent(7.4) == "7.40%"
 
 
-def test_format_percent_none_returns_na():
-    assert format_percent(None) == "N/A"
+def test_format_percent_none_returns_dash():
+    assert format_percent(None) == "-"
 
 
 def test_format_ratio_adds_x_symbol():

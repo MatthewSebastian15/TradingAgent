@@ -27,6 +27,7 @@ def build_fundamental_analysis(
     balance_sheet: Any | None = None,
     cashflow: Any | None = None,
     dividends: Any | None = None,
+    price_data: Any | None = None,
     vendor_payloads: dict[str, Any] | None = None,
     company_profile: dict[str, Any] | None = None,
     current_price: float | None = None,
@@ -40,9 +41,11 @@ def build_fundamental_analysis(
         income_statement=income_statement,
         balance_sheet=balance_sheet,
         cashflow=cashflow,
+        price_data=price_data,
         analysis_date=analysis_date,
         dividends=dividends,
         vendor_payloads=vendor_payloads,
+        company_profile=company_profile,
     )
     snapshot = build_snapshot(
         normalized=normalized,

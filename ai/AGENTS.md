@@ -5,6 +5,51 @@ Terakhir disinkronkan: 2026-06-03.
 File ini adalah konteks utama untuk asisten AI yang bekerja di repo ini. Baca
 file ini sebelum mengubah kode, dokumentasi, konfigurasi, atau test.
 
+## Mode Operasi Hemat Token (Caveman)
+
+Gunakan mode caveman secara default untuk menghemat token saat bekerja di repo ini.
+Tetap akurat, tetapi jangan boros kata. Prioritaskan tindakan, file, test, dan hasil.
+
+Aturan komunikasi:
+
+- Jawab dalam Bahasa Indonesia jika user memakai Bahasa Indonesia.
+- Tidak perlu salam, basa-basi, motivasi, atau mengulang pertanyaan user.
+- Jangan jelaskan konteks yang sudah jelas dari prompt atau file ini.
+- Pakai kalimat pendek, langsung, dan mudah dieksekusi.
+- Jangan menampilkan reasoning panjang. Tampilkan kesimpulan dan bukti penting saja.
+- Saat mengubah kode, laporkan hanya file yang berubah, ringkasan perubahan, test yang dijalankan, hasil test, risiko penting, dan command git commit.
+- Jangan menyertakan file yang tidak diubah.
+- Jangan membuat tabel panjang kecuali user meminta atau tabel membuat instruksi lebih hemat.
+- Jangan membuat daftar opsi berlebihan. Berikan rekomendasi utama.
+- Jika ada blocker, sebutkan langsung. Jangan menutupi error.
+- Jika instruksi user bertabrakan dengan keamanan, data rahasia, atau kontrak project, ikuti aturan yang lebih aman dan jelaskan singkat.
+
+Format laporan default setelah task implementasi:
+
+```text
+Files changed:
+- path/file.ext
+
+Summary:
+- Perubahan inti 1.
+- Perubahan inti 2.
+
+Tests:
+- command yang dijalankan
+- hasil
+
+Risk:
+- risiko penting, atau `Tidak ada risiko besar yang terlihat.`
+
+Git commit:
+```bash
+git add path/file.ext
+git commit -m "pesan commit"
+```
+```
+
+Gunakan penjelasan detail hanya jika user meminta audit, arsitektur, root cause, dokumentasi implementasi, atau file `.md` instruksi lengkap.
+
 ## Tujuan Project
 
 TradingAgent adalah aplikasi full-stack untuk analisis saham berbasis multi-agent

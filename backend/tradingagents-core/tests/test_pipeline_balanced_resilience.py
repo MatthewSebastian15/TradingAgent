@@ -17,7 +17,12 @@ from tradingagents.pipeline_balanced import (
     _extract_last_close_price,
     _invoke_once,
 )
-from tradingagents.pipeline_balanced_data import _build_price_chart, _build_related_news, _parse_markdown_news_items
+from tradingagents.pipeline_balanced_data import (
+    _build_price_chart,
+    _build_related_news,
+    _parse_markdown_news_items,
+    _resolve_current_price_anchor,
+)
 from tradingagents.technical.entry_quality import build_technical_entry
 from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout, get_timeout_stats
 
@@ -61,32 +66,65 @@ Date,Open,High,Low,Close,Volume
     chart = _build_price_chart("TEST", "2026-05-30", price_data, 1, source="yfinance")
 
     assert chart["available"] is True
-    assert chart["lookback_days"] == 60
-    assert [point["date"] for point in chart["points"]] == ["2026-05-18", "2026-05-19"]
+    assert chart["window"] == "YOY"
+    assert chart["window_label"] == "YOY Price Window"
+    assert chart["lookback_days"] == 365
+    assert chart["start_date"] == "2025-05-19"
+    assert chart["end_date"] == "2026-05-30"
+    assert chart["requested_trade_date"] == "2026-05-30"
+    assert chart["effective_trade_date"] == "2026-05-30"
+    assert chart["price_as_of_date"] == "2026-05-30"
+    assert chart["fallback_to_last_trade"] is True
+    assert [point["date"] for point in chart["points"]] == ["2026-03-01", "2026-05-18", "2026-05-19"]
     assert chart["data"] == chart["points"]
-    assert chart["points"][0]["adjusted_close"] == 10.5
+    assert chart["points"][0]["adjusted_close"] == 8.5
     assert chart["stats"] == {
-        "start_price": 10.5,
+        "start_price": 8.5,
         "end_price": 11.25,
-        "change": 0.75,
-        "change_percent": 7.14,
+        "change": 2.75,
+        "change_percent": 32.35,
         "high": 12.0,
-        "low": 9.0,
-        "average_close": 10.88,
-        "average_volume": 1050,
-        "point_count": 2,
+        "low": 7.0,
+        "average_close": 10.08,
+        "average_volume": 867,
+        "point_count": 3,
     }
     assert chart["summary"] == {
-        "period_return_percent": 7.14,
+        "period_return_percent": 32.35,
         "period_high": 12.0,
-        "period_low": 9.0,
+        "period_low": 7.0,
         "max_drawdown_percent": 0.0,
-        "average_volume": 1050,
+        "average_volume": 867,
         "latest_volume": 1100,
         "latest_close": 11.25,
-        "volume_trend": "average",
+        "volume_trend": "above_average",
         "performance_label": "positive",
     }
+
+
+def test_build_price_chart_anchors_yoy_to_last_trade_when_trade_date_has_no_row():
+    price_data = """# Stock data for TEST
+Date,Open,High,Low,Close,Volume
+2025-06-04,9,10,8,9.5,900
+2025-06-05,10,11,9,10.5,1000
+2026-06-05,12,13,11,12.5,1200
+2026-06-09,13,14,12,13.5,1300
+"""
+
+    chart = _build_price_chart("TEST", "2026-06-08", price_data, 1, source="yfinance")
+
+    assert chart["available"] is True
+    assert chart["requested_trade_date"] == "2026-06-08"
+    assert chart["effective_trade_date"] == "2026-06-08"
+    assert chart["price_as_of_date"] == "2026-06-08"
+    assert chart["last_trade_date"] == "2026-06-08"
+    assert chart["start_date"] == "2025-06-08"
+    assert chart["start_price_as_of_date"] == "2025-06-05"
+    assert chart["end_date"] == "2026-06-08"
+    assert chart["fallback_to_last_trade"] is True
+    assert [point["date"] for point in chart["points"]] == ["2025-06-05", "2026-06-05"]
+    assert chart["stats"]["start_price"] == 10.5
+    assert chart["stats"]["end_price"] == 12.5
 
 
 def test_build_price_chart_filters_incomplete_rows_and_sanitizes_high_low():
@@ -125,12 +163,17 @@ Date,Open,High,Low,Close,Volume
     assert chart["stats"]["low"] == 9.0
 
 
-@pytest.mark.parametrize(("months", "lookback_days"), [(1, 60), (2, 90), (3, 120)])
-def test_build_price_chart_uses_horizon_lookback_and_returns_empty_state(months, lookback_days):
+@pytest.mark.parametrize(("months", "lookback_days"), [(1, 365), (2, 365), (3, 365)])
+def test_build_price_chart_uses_yoy_lookback_and_returns_empty_state(months, lookback_days):
     chart = _build_price_chart("TEST", "2026-05-30", "", months)
 
     assert chart["available"] is False
+    assert chart["window"] == "YOY"
+    assert chart["window_label"] == "YOY Price Window"
     assert chart["lookback_days"] == lookback_days
+    assert chart["start_date"] == "2025-05-30"
+    assert chart["end_date"] == "2026-05-30"
+    assert chart["effective_trade_date"] is None
     assert chart["points"] == []
     assert chart["data"] == []
     assert chart["stats"] == {}
@@ -349,9 +392,9 @@ def test_build_related_news_returns_empty_state_when_news_is_missing():
     }
 
 
-def test_date_window_scales_with_time_horizon():
-    assert _date_window("2026-05-15", 1) == ("2026-03-16", "2026-04-15", "2026-05-16")
-    assert _date_window("2026-05-15", 3) == ("2026-01-15", "2026-02-14", "2026-05-16")
+def test_date_window_uses_yoy_price_window_and_horizon_news_window():
+    assert _date_window("2026-05-15", 1) == ("2025-05-15", "2026-04-15", "2026-05-15")
+    assert _date_window("2026-05-15", 3) == ("2025-05-15", "2026-02-14", "2026-05-15")
 
 
 def test_call_with_timeout_returns_without_waiting_for_hung_call():
@@ -652,3 +695,127 @@ def test_invoke_once_returns_fallback_when_llm_timeout_is_raised():
     )
 
     assert result == fallback
+
+
+def test_price_chart_rejects_stale_ohlcv_before_trade_date(monkeypatch):
+    import tradingagents.pipeline_balanced_data as pipeline_data
+
+    monkeypatch.setattr(pipeline_data, "get_config", lambda: {"price_max_fallback_days": 7})
+
+    price_data = """# Stock data for TEST
+# Total records: 2
+
+Date,Open,High,Low,Close,Volume
+2025-05-12,10,11,9,10.5,1000
+2026-05-12,11,12,10,11.5,1200
+"""
+
+    chart = _build_price_chart("TEST", "2026-06-09", price_data, 1, source="yfinance:last_close")
+
+    assert chart["available"] is True
+    assert chart["data_quality"]["status"] == "stale"
+    assert chart["last_trade_date"] == "2026-06-09"
+    assert [point["date"] for point in chart["points"]] == ["2025-05-12", "2026-05-12"]
+    assert "OHLCV_STALE" in chart["warning"]
+
+
+def test_price_chart_allows_bounded_last_trade_fallback(monkeypatch):
+    import tradingagents.pipeline_balanced_data as pipeline_data
+
+    monkeypatch.setattr(pipeline_data, "get_config", lambda: {"price_max_fallback_days": 7})
+
+    price_data = """# Stock data for TEST
+# Total records: 3
+
+Date,Open,High,Low,Close,Volume
+2025-06-09,10,11,9,10.5,1000
+2026-06-08,11,12,10,11.5,1200
+"""
+
+    chart = _build_price_chart("TEST", "2026-06-09", price_data, 1, source="yfinance:last_close")
+
+    assert chart["available"] is True
+    assert chart["fallback_to_last_trade"] is True
+    assert chart["effective_trade_date"] == "2026-06-09"
+    assert chart["data_quality"]["fallback_gap_days"] == 1
+    assert chart["data_quality"]["status"] == "complete"
+    assert chart["warning"] is None
+
+
+def test_current_price_anchor_uses_ohlcv_before_profile():
+    anchor = _resolve_current_price_anchor(
+        ohlcv_price=1605,
+        ohlcv_as_of="2026-06-08",
+        ohlcv_source="yfinance:last_close",
+        quote={},
+        profile={
+            "current_price": 2690,
+            "current_price_source": "fast_info.last_price",
+            "currency": "IDR",
+            "data_quality": {"field_sources": {"current_price": "yfinance"}},
+        },
+        trade_date="2026-06-09",
+    )
+
+    assert anchor == {
+        "price": 1605,
+        "as_of": "2026-06-09",
+        "actual_price_as_of": "2026-06-08",
+        "source": "yfinance:last_close",
+        "is_fallback": False,
+    }
+
+
+def test_router_falls_back_and_does_not_cache_price_ohlcv(monkeypatch):
+    from tradingagents.dataflows import interface
+
+    stale_csv = "\n".join(
+        [
+            "Date,Open,High,Low,Close,Volume",
+            "2026-05-12,10,11,9,10.5,1000",
+        ]
+    )
+    fresh_csv = "\n".join(
+        [
+            "Date,Open,High,Low,Close,Volume",
+            "2026-06-09,20,21,19,20.5,2000",
+        ]
+    )
+    calls = {"yfinance": 0, "alpha_vantage": 0}
+
+    monkeypatch.setattr(
+        interface,
+        "get_config",
+        lambda: {
+            "tool_timeout_seconds": 1,
+            "tool_max_retries": 2,
+            "cache_ttl_seconds": 60,
+            "cache_max_entries": 10,
+            "circuit_breaker_failure_threshold": 5,
+            "circuit_recovery_seconds": 60,
+            "price_max_fallback_days": 7,
+        },
+    )
+    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage")
+
+    def yf_payload(*args, **kwargs):
+        calls["yfinance"] += 1
+        return stale_csv
+
+    def av_payload(*args, **kwargs):
+        calls["alpha_vantage"] += 1
+        return fresh_csv
+
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", yf_payload)
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "alpha_vantage", av_payload)
+    monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
+    monkeypatch.setattr(interface, "call_with_retry", lambda func, **kwargs: func())
+    interface._TOOL_CACHE._data.clear()
+
+    result_1 = interface.route_to_vendor("get_stock_data", "TEST", "2025-06-09", "2026-06-10")
+    result_2 = interface.route_to_vendor("get_stock_data", "TEST", "2025-06-09", "2026-06-10")
+
+    assert result_1 == fresh_csv
+    assert result_2 == fresh_csv
+    assert calls["alpha_vantage"] == 2
+    assert calls["yfinance"] == 2

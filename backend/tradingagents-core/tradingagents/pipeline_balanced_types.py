@@ -63,6 +63,7 @@ class CollectedData:
     recommendation_trends: str = ""
     last_close_price_as_of: str | None = None
     last_close_price_source: str | None = None
+    last_close_price_is_fallback: bool = False
     company_profile: dict[str, Any] | None = None
     price_chart: dict[str, Any] | None = None
     price_performance: dict[str, Any] | None = None

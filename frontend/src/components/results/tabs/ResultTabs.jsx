@@ -6,7 +6,6 @@ const TABS = [
   { id: 'fundamental', statusKey: 'fundamental', label: 'Fundamental' },
   { id: 'chart_price', statusKey: 'chart_price', label: 'Chart & Price' },
   { id: 'news', statusKey: 'news', label: 'News' },
-  { id: 'risk_data_quality', statusKey: 'risk_data_quality', label: 'Risk / Data Quality' },
 ];
 
 function statusMeta(status, label) {

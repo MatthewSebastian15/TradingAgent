@@ -31,6 +31,8 @@ class FinancialHighlightPeriod(ApiSchema):
     type: Literal["annual", "quarter", "quarterly", "ttm"]
     year: int
     quarter: int | None = None
+    display_period: str | None = None
+    sort_key: str | None = None
 
 
 class FinancialHighlightCell(ApiSchema):
@@ -105,6 +107,15 @@ class CompanyProfile(ApiSchema):
     website: str | None = None
     market_cap: float | None = None
     shares_outstanding: float | None = None
+    shares_out: float | None = None
+    insider_percent: float | None = None
+    insider_pct: float | None = None
+    institution_percent: float | None = None
+    institution_pct: float | None = None
+    public_percent: float | None = None
+    public_pct: float | None = None
+    short_ratio: float | None = None
+    shares_ownership: dict[str, Any] | None = None
     current_price: float | None = None
     fiscal_year_end: str | None = None
     employee_count: int | None = None
@@ -169,6 +180,14 @@ class PriceChart(ApiSchema):
     source: str | None = None
     ticker: str | None = None
     trade_date: str | None = None
+    requested_trade_date: str | None = None
+    effective_trade_date: str | None = None
+    price_as_of_date: str | None = None
+    last_trade_date: str | None = None
+    last_available_trade_date: str | None = None
+    fallback_to_last_trade: bool = False
+    start_date: str | None = None
+    end_date: str | None = None
     currency: str | None = None
     window: str | None = None
     window_label: str | None = None

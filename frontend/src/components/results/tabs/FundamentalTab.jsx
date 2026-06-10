@@ -1,316 +1,138 @@
 import PropTypes from 'prop-types';
 
-import DataSourceBadge from '../../DataSourceBadge';
-import DataStatusBadge from '../../DataStatusBadge';
 import FinancialHighlightsTable from '../FinancialHighlightsTable';
-import MetricBox from '../MetricBox';
-import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
-import { getFieldQuality } from '../../../utils/dataStatus';
 
-function displayMetric(metric, quality) {
-  const status = String(metric?.status || quality?.status || '').toLowerCase();
-  if (!metric || ['unavailable', 'source_unavailable', 'no_dividend_history', 'not_applicable_negative_earnings'].includes(status)) return null;
-  return metric.status === 'estimated'
-    ? `${metric.display ?? 'N/A'} EST`
-    : (metric.display ?? metric.value ?? null);
+const UNAVAILABLE_CELL = { value: null, display: '-', status: 'unavailable' };
+
+const LEGACY_FUNDAMENTAL_SECTIONS = [
+  {
+    key: 'valuation_multiples',
+    title: 'VALUATION MULTIPLES',
+    payloadKey: 'valuation_multiples',
+    rows: [
+      ['market_cap', 'Market Cap', 'currency_scaled'],
+      ['enterprise_value', 'Enterprise Value', 'currency_scaled'],
+      ['pe', 'P/E', 'ratio'],
+      ['pbv', 'P/BV', 'ratio'],
+      ['ps', 'P/S', 'ratio'],
+      ['ev_ebitda', 'EV/EBITDA', 'ratio'],
+    ],
+  },
+  {
+    key: 'quality_of_earnings',
+    title: 'QUALITY OF EARNINGS',
+    payloadKey: 'quality_of_earnings',
+    rows: [
+      ['cfo_to_net_income', 'CFO / Net Income', 'ratio'],
+      ['free_cash_flow', 'Free Cash Flow', 'currency_scaled'],
+      ['capex_intensity_percent', 'Capex Intensity (%)', 'percent'],
+    ],
+  },
+  {
+    key: 'balance_sheet_risk',
+    title: 'BALANCE SHEET RISK',
+    payloadKey: 'balance_sheet_risk',
+    rows: [
+      ['der', 'DER', 'ratio'],
+      ['net_debt', 'Net Debt', 'currency_scaled'],
+      ['debt_to_ebitda', 'Debt / EBITDA', 'ratio'],
+      ['cash_ratio', 'Cash Ratio', 'ratio'],
+      ['equity_ratio', 'Equity Ratio', 'ratio'],
+    ],
+  },
+  {
+    key: 'dividend_quality',
+    title: 'DIVIDEND QUALITY',
+    payloadKey: 'dividend_quality',
+    rows: [
+      ['dividend_yield_percent', 'Dividend Yield', 'percent'],
+      ['payout_ratio_percent', 'Payout Ratio', 'percent'],
+      ['fcf_coverage', 'FCF Coverage', 'ratio'],
+    ],
+  },
+];
+
+function unavailableText(value) {
+  if (value === null || value === undefined || value === '') return '-';
+  const text = String(value).trim();
+  return ['n/a', 'na', 'source unavailable', 'none', 'null'].includes(text.toLowerCase()) ? '-' : text;
 }
 
 function displayPercent(value) {
-  return value === null || value === undefined ? 'N/A' : `${value}%`;
+  const text = unavailableText(value);
+  return text === '-' ? '-' : `${text} %`;
 }
 
-
-function normalizeMetricStatus(status) {
-  const normalized = String(status || '').toLowerCase();
-  if (normalized === 'estimated') return 'calculated';
-  if (normalized === 'unavailable') return 'source_unavailable';
-  return normalized || null;
+function unitForFormat(formatType, financialHighlights) {
+  if (formatType === 'currency_scaled') {
+    return financialHighlights?.scale_label || financialHighlights?.currency || '';
+  }
+  if (formatType === 'percent') return '%';
+  if (formatType === 'ratio') return 'x';
+  if (formatType === 'per_share') return `${financialHighlights?.currency || ''}/share`;
+  return '';
 }
 
-function SectionQualityStatus({ payload }) {
-  const quality = payload?.data_quality;
-  if (!quality || typeof quality !== 'object') return null;
-  return <DataStatusBadge quality={quality} />;
+function legacyCell(payload, key) {
+  const details = payload?.metric_details || {};
+  const detail = details[key];
+  if (detail && typeof detail === 'object') return detail;
+  if (payload && Object.prototype.hasOwnProperty.call(payload, key)) {
+    const value = payload[key];
+    return value === null || value === undefined
+      ? UNAVAILABLE_CELL
+      : { value, display: String(value), status: 'reported' };
+  }
+  return UNAVAILABLE_CELL;
 }
 
-SectionQualityStatus.propTypes = {
-  payload: PropTypes.object,
-};
+function appendLegacyFundamentalSections(financialHighlights, result) {
+  const periods = Array.isArray(financialHighlights?.periods) ? financialHighlights.periods : [];
+  const sections = Array.isArray(financialHighlights?.sections) ? financialHighlights.sections : [];
+  if (!periods.length) return financialHighlights;
 
-function FundamentalQualitySummary({ result }) {
-  const dataQuality = result?.data_quality || {};
-  const completeness = result?.data_completeness || {};
-  const gapReport = result?.fundamental_gap_report || {};
-  const sources = result?.data_sources?.fundamentals || result?.data_sources?.fundamental;
-  const fundamentalStatus = dataQuality?.fundamentals || dataQuality?.fundamental_data || null;
-  const fundamentalCompleteness = completeness?.fundamental_data || completeness?.fundamentals || null;
-  const missing = gapReport?.missing_fields || gapReport?.missing || [];
+  const existingKeys = new Set(sections.map((section) => section?.key));
+  const latestPeriodKey = periods[periods.length - 1]?.key;
+  const extraSections = [];
+  const extraRows = [];
 
-  if (!fundamentalStatus && !fundamentalCompleteness && !sources && !missing.length) return null;
+  for (const sectionDefinition of LEGACY_FUNDAMENTAL_SECTIONS) {
+    if (existingKeys.has(sectionDefinition.key)) continue;
+    const payload = result?.[sectionDefinition.payloadKey];
+    if (!payload) continue;
 
-  return (
-    <section className="px-4 py-3 border-b border-bloomberg-border space-y-2">
-      <SectionHeader label="FUNDAMENTAL DATA STATUS" />
-      <div className="flex flex-col gap-2">
-        {sources && <DataSourceBadge sources={sources} label="Fundamental sources" />}
-        {fundamentalStatus && (
-          <DataStatusBadge
-            status={typeof fundamentalStatus === 'string' ? fundamentalStatus : fundamentalStatus.status}
-            quality={typeof fundamentalStatus === 'object' ? fundamentalStatus : undefined}
-            reason={typeof fundamentalStatus === 'string' && fundamentalStatus !== 'ok' ? fundamentalStatus : undefined}
-          />
-        )}
-        {fundamentalCompleteness && (
-          <DataStatusBadge
-            quality={typeof fundamentalCompleteness === 'object' ? fundamentalCompleteness : undefined}
-            status={typeof fundamentalCompleteness === 'object' ? fundamentalCompleteness.status || 'partial' : 'partial'}
-            reason={
-              typeof fundamentalCompleteness === 'object'
-                ? `Completeness: ${fundamentalCompleteness.completeness_pct ?? fundamentalCompleteness.completeness_percent ?? fundamentalCompleteness.percent ?? fundamentalCompleteness.score ?? 'N/A'}`
-                : String(fundamentalCompleteness)
-            }
-          />
-        )}
-        {missing.length > 0 && (
-          <p className="font-mono text-[11px] text-bloomberg-amber">
-            Missing fundamentals: {missing.length}. See Risk / Data Quality for fallback details.
-          </p>
-        )}
-      </div>
-    </section>
-  );
+    const rows = sectionDefinition.rows.map(([key, label, formatType]) => {
+      const row = {
+        key,
+        label,
+        unit: unitForFormat(formatType, financialHighlights),
+        format_type: formatType,
+        section_key: sectionDefinition.key,
+        values: Object.fromEntries(periods.map((period) => [period.key, { ...UNAVAILABLE_CELL }])),
+      };
+      if (latestPeriodKey) {
+        row.values[latestPeriodKey] = legacyCell(payload, key);
+      }
+      extraRows.push(row);
+      return row;
+    });
+
+    extraSections.push({
+      key: sectionDefinition.key,
+      title: sectionDefinition.title,
+      rows,
+    });
+  }
+
+  if (!extraSections.length) return financialHighlights;
+
+  return {
+    ...financialHighlights,
+    rows: [...(financialHighlights.rows || []), ...extraRows],
+    sections: [...sections, ...extraSections],
+  };
 }
-
-FundamentalQualitySummary.propTypes = {
-  result: PropTypes.object,
-};
-
-function FundamentalDataSourceBadge({ dataSources }) {
-  const fundamentals = dataSources?.fundamentals;
-  if (!fundamentals || fundamentals.completeness !== 'partial') return null;
-
-  return (
-    <div className="px-4 pt-4">
-      <div className="inline-flex items-center gap-2 border border-bloomberg-amber bg-bloomberg-amber-dim px-2.5 py-1 font-mono text-xs text-bloomberg-amber">
-        ⚠ Partial data · {fundamentals.last_period || 'Latest period'}
-      </div>
-    </div>
-  );
-}
-
-FundamentalDataSourceBadge.propTypes = {
-  dataSources: PropTypes.object,
-};
-
-function QualityNotice({ payload }) {
-  const quality = payload?.data_quality;
-  if (!quality || quality.status === 'complete') return null;
-  const notes = [...(quality.fallback_used || []), ...(quality.warnings || [])];
-  return (
-    <NoticeBox title={`DATA QUALITY: ${quality.status}`}>
-      {notes.length
-        ? notes.join(' | ')
-        : 'Some values are unavailable. Missing values are shown as N/A.'}
-    </NoticeBox>
-  );
-}
-
-QualityNotice.propTypes = {
-  payload: PropTypes.object,
-};
-
-function MetricSection({ title, payload, metrics, summary, dataQuality }) {
-  if (!payload) return null;
-  return (
-    <section className="px-4 py-4 border-b border-bloomberg-border space-y-3">
-      <SectionHeader label={title} />
-      {summary}
-      <SectionQualityStatus payload={payload} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {metrics.map(([key, label]) => {
-          const detail = payload.metric_details?.[key];
-          const fieldQuality = getFieldQuality(dataQuality, key);
-          const metricStatus = normalizeMetricStatus(detail?.status || fieldQuality?.status);
-          return (
-            <div key={key} className="space-y-1">
-              <MetricBox
-                label={label}
-                value={displayMetric(detail, fieldQuality)}
-                quality={fieldQuality}
-                compact
-                preserveSlot
-              />
-              {(fieldQuality || metricStatus || detail?.source || detail?.reason) && (
-                <DataStatusBadge
-                  compact
-                  quality={fieldQuality || undefined}
-                  status={metricStatus || fieldQuality?.status || 'available'}
-                  source={detail?.source || detail?.source_field || fieldQuality?.source}
-                  reason={detail?.reason || detail?.formula || fieldQuality?.reason}
-                  confidenceScore={detail?.confidence_score ?? fieldQuality?.confidence_score}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <QualityNotice payload={payload} />
-    </section>
-  );
-}
-
-MetricSection.propTypes = {
-  title: PropTypes.string.isRequired,
-  payload: PropTypes.object,
-  metrics: PropTypes.array.isRequired,
-  summary: PropTypes.node,
-  dataQuality: PropTypes.object,
-};
-
-function FinancialTrends({ payload, dataQuality }) {
-  if (!payload?.periods?.length || !payload?.metric_details) return null;
-  const rows = [
-    ['revenue', 'Revenue', payload.scale_label || ''],
-    ['revenue_growth_percent', 'Revenue Growth', '%'],
-    ['ebitda', 'EBITDA', payload.scale_label || ''],
-    ['ebitda_margin_percent', 'EBITDA Margin', '%'],
-    ['net_profit', 'Net Profit', payload.scale_label || ''],
-    ['net_profit_growth_percent', 'Net Profit Growth', '%'],
-    ['net_profit_margin_percent', 'Net Profit Margin', '%'],
-    ['roe_percent', 'ROE', '%'],
-    ['eps', 'EPS', `${payload.currency || ''}/share`],
-    ['bvps', 'BVPS', `${payload.currency || ''}/share`],
-    ['der', 'DER', 'x'],
-  ];
-  return (
-    <section className="px-4 py-4 border-b border-bloomberg-border space-y-3">
-      <SectionHeader label="FINANCIAL TREND ANALYSIS" />
-      {payload.unit_note && (
-        <p className="font-mono text-[11px] text-bloomberg-muted">{payload.unit_note}</p>
-      )}
-      <SectionQualityStatus payload={payload} />
-      <div className="overflow-x-auto border border-bloomberg-border">
-        <table className="min-w-[980px] w-full text-xs font-mono border-collapse">
-          <thead>
-            <tr className="text-bloomberg-muted border-b border-bloomberg-border">
-              <th className="sticky left-0 z-20 bg-black text-left px-3 py-2 whitespace-nowrap min-w-[190px]">
-                Metric
-              </th>
-              <th className="sticky left-[190px] z-20 bg-black text-left px-3 py-2 whitespace-nowrap min-w-[90px] border-r border-bloomberg-border">
-                Unit
-              </th>
-              {payload.periods.map((period) => (
-                <th
-                  key={period.key}
-                  className="text-right px-3 py-2 whitespace-nowrap min-w-[86px]"
-                >
-                  {period.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([key, label, unit]) => (
-              <tr key={key} className="border-b border-bloomberg-border border-opacity-50">
-                <td className="sticky left-0 z-10 bg-black px-3 py-2 text-bloomberg-white whitespace-nowrap min-w-[190px]">
-                  {label}
-                </td>
-                <td className="sticky left-[190px] z-10 bg-black px-3 py-2 text-bloomberg-muted whitespace-nowrap min-w-[90px] border-r border-bloomberg-border">
-                  {unit || '-'}
-                </td>
-                {payload.periods.map((period, index) => {
-                  const cell = payload.metric_details[key]?.[index];
-                  return (
-                    <td
-                      key={`${key}-${period.key}`}
-                      className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap min-w-[86px]"
-                    >
-                      <div>{displayMetric(cell, getFieldQuality(dataQuality, key)) || 'N/A'}</div>
-                      {getFieldQuality(dataQuality, key) && (
-                        <div className="mt-1 flex justify-end">
-                          <DataStatusBadge compact quality={getFieldQuality(dataQuality, key)} />
-                        </div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        {Object.entries(payload.summary || {}).map(([key, value]) => (
-          <MetricBox
-            key={key}
-            label={key.replaceAll('_', ' ')}
-            value={value}
-            compact
-            preserveSlot
-          />
-        ))}
-      </div>
-      <QualityNotice payload={payload} />
-    </section>
-  );
-}
-
-FinancialTrends.propTypes = {
-  payload: PropTypes.object,
-  dataQuality: PropTypes.object,
-};
-
-function ScenarioAnalysis({ payload }) {
-  if (!payload) return null;
-  return (
-    <section className="px-4 py-4 border-b border-bloomberg-border space-y-3">
-      <SectionHeader label="BULL / BASE / BEAR SCENARIO" />
-      <div className="overflow-x-auto border border-bloomberg-border">
-        <table className="min-w-full text-xs font-mono">
-          <thead>
-            <tr className="text-bloomberg-muted border-b border-bloomberg-border">
-              <th className="text-left px-3 py-2">Scenario</th>
-              <th className="text-right px-3 py-2">Fair Value</th>
-              <th className="text-right px-3 py-2">Upside / Downside</th>
-              <th className="text-right px-3 py-2">Growth</th>
-              <th className="text-right px-3 py-2">Margin</th>
-              <th className="text-left px-3 py-2">Multiple</th>
-              <th className="text-left px-3 py-2">Assumption</th>
-            </tr>
-          </thead>
-          <tbody>
-            {['bear', 'base', 'bull'].map((key) => {
-              const scenario = payload[key] || {};
-              return (
-                <tr key={key} className="border-b border-bloomberg-border border-opacity-50">
-                  <td className="px-3 py-2 text-bloomberg-orange uppercase">{key}</td>
-                  <td className="px-3 py-2 text-right">{scenario.fair_value_display || 'N/A'}</td>
-                  <td className="px-3 py-2 text-right">
-                    {scenario.upside_downside_display || 'N/A'}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {displayPercent(scenario.revenue_growth_assumption_percent)}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {displayPercent(scenario.margin_assumption_percent)}
-                  </td>
-                  <td className="px-3 py-2">{scenario.valuation_multiple || 'N/A'}</td>
-                  <td className="px-3 py-2">{scenario.assumption || 'N/A'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <QualityNotice payload={payload} />
-    </section>
-  );
-}
-
-ScenarioAnalysis.propTypes = {
-  payload: PropTypes.object,
-};
 
 function PeerComparison({ payload }) {
   if (!payload?.metrics?.length) return null;
@@ -340,20 +162,19 @@ function PeerComparison({ payload }) {
           <tbody>
             {payload.metrics.map((item) => (
               <tr key={item.ticker} className="border-b border-bloomberg-border border-opacity-50">
-                <td className="px-3 py-2">{item.ticker || 'N/A'}</td>
-                <td className="px-3 py-2">{item.company_name || 'N/A'}</td>
-                <td className="px-3 py-2">{item.pe ?? 'N/A'}</td>
-                <td className="px-3 py-2">{item.pbv ?? 'N/A'}</td>
+                <td className="px-3 py-2">{unavailableText(item.ticker)}</td>
+                <td className="px-3 py-2">{unavailableText(item.company_name)}</td>
+                <td className="px-3 py-2">{unavailableText(item.pe)}</td>
+                <td className="px-3 py-2">{unavailableText(item.pbv)}</td>
                 <td className="px-3 py-2">{displayPercent(item.roe_percent)}</td>
                 <td className="px-3 py-2">{displayPercent(item.net_profit_margin_percent)}</td>
-                <td className="px-3 py-2">{item.der ?? 'N/A'}</td>
+                <td className="px-3 py-2">{unavailableText(item.der)}</td>
                 <td className="px-3 py-2">{displayPercent(item.dividend_yield_percent)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <QualityNotice payload={payload} />
     </section>
   );
 }
@@ -363,109 +184,10 @@ PeerComparison.propTypes = {
 };
 
 export default function FundamentalTab({ financialHighlights, result = {} }) {
+  const tablePayload = appendLegacyFundamentalSections(financialHighlights, result);
   return (
     <>
-      <FundamentalDataSourceBadge dataSources={result.data_sources} />
-      <FundamentalQualitySummary result={result} />
-      <FinancialHighlightsTable financialHighlights={financialHighlights} dataQuality={result?.data_quality} />
-      <FinancialTrends payload={result.financial_trends} dataQuality={result?.data_quality} />
-      <MetricSection
-        dataQuality={result?.data_quality}
-        title="VALUATION MULTIPLES"
-        payload={result.valuation_multiples}
-        metrics={[
-          ['market_cap', 'Market Cap'],
-          ['enterprise_value', 'Enterprise Value'],
-          ['pe', 'P/E'],
-          ['pbv', 'P/BV'],
-          ['ps', 'P/S'],
-          ['ev_ebitda', 'EV/EBITDA'],
-        ]}
-        summary={
-          result.valuation_multiples?.interpretation && (
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Label: {result.valuation_multiples.interpretation.valuation_label || 'N/A'}.{' '}
-              {result.valuation_multiples.interpretation.main_reason}
-            </p>
-          )
-        }
-      />
-      <MetricSection
-        dataQuality={result?.data_quality}
-        title="FAIR VALUE RANGE"
-        payload={result.fair_value_range}
-        metrics={[
-          ['current_price', 'Current Price'],
-          ['bear', 'Bear Fair Value'],
-          ['base', 'Base Fair Value'],
-          ['bull', 'Bull Fair Value'],
-          ['bear_upside_percent', 'Bear Upside / Downside'],
-          ['base_upside_percent', 'Base Upside / Downside'],
-          ['bull_upside_percent', 'Bull Upside / Downside'],
-        ]}
-        summary={
-          result.fair_value_range && (
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Primary method: {result.fair_value_range.primary_method || 'N/A'}
-            </p>
-          )
-        }
-      />
-      <ScenarioAnalysis payload={result.scenario_analysis} />
-      <MetricSection
-        dataQuality={result?.data_quality}
-        title="QUALITY OF EARNINGS"
-        payload={result.quality_of_earnings}
-        metrics={[
-          ['cfo_to_net_income', 'CFO / Net Income'],
-          ['free_cash_flow', 'Free Cash Flow'],
-          ['capex_intensity_percent', 'Capex Intensity'],
-        ]}
-        summary={
-          result.quality_of_earnings && (
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Rating: {result.quality_of_earnings.rating || 'N/A'} | Accrual risk:{' '}
-              {result.quality_of_earnings.accrual_risk || 'N/A'}
-            </p>
-          )
-        }
-      />
-      <MetricSection
-        dataQuality={result?.data_quality}
-        title="BALANCE SHEET RISK"
-        payload={result.balance_sheet_risk}
-        metrics={[
-          ['der', 'DER'],
-          ['net_debt', 'Net Debt'],
-          ['debt_to_ebitda', 'Debt / EBITDA'],
-          ['cash_ratio', 'Cash Ratio'],
-          ['equity_ratio', 'Equity Ratio'],
-        ]}
-        summary={
-          result.balance_sheet_risk && (
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Risk level: {result.balance_sheet_risk.risk_level || 'N/A'}
-            </p>
-          )
-        }
-      />
-      <MetricSection
-        dataQuality={result?.data_quality}
-        title="DIVIDEND QUALITY"
-        payload={result.dividend_quality}
-        metrics={[
-          ['dividend_yield_percent', 'Dividend Yield'],
-          ['payout_ratio_percent', 'Payout Ratio'],
-          ['fcf_coverage', 'FCF Coverage'],
-        ]}
-        summary={
-          result.dividend_quality && (
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Sustainability: {result.dividend_quality.sustainability || 'N/A'}
-            </p>
-          )
-        }
-      />
+      <FinancialHighlightsTable financialHighlights={tablePayload} />
       <PeerComparison payload={result.peer_comparison} />
     </>
   );

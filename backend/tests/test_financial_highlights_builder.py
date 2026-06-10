@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from tradingagents.financial_highlights.builder import build_financial_highlights
 from tradingagents.financial_highlights.models import to_dict
 from tradingagents.financial_highlights.period_resolver import resolve_financial_highlight_periods
@@ -69,7 +71,7 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         vendor_payloads=_vendor_payloads(),
     )
 
-    assert [period.key for period in highlights.periods] == ["FY22", "FY23", "FY24", "FY25", "FY26Q1"]
+    assert [period.key for period in highlights.periods] == ["FY23", "FY24", "FY25", "FY26Q1"]
     assert [row.key for row in highlights.rows] == [
         "revenue",
         "ebitda",
@@ -84,6 +86,23 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         "der",
         "dividend_yield",
         "payout_ratio",
+        "market_cap",
+        "enterprise_value",
+        "pe",
+        "pbv",
+        "ps",
+        "ev_ebitda",
+        "cfo_to_net_income",
+        "free_cash_flow",
+        "capex_intensity_percent",
+        "balance_der",
+        "net_debt",
+        "debt_to_ebitda",
+        "cash_ratio",
+        "equity_ratio",
+        "dividend_yield_percent",
+        "payout_ratio_percent",
+        "fcf_coverage",
     ]
     assert [section.title for section in highlights.sections] == [
         "Market & Scale",
@@ -91,13 +110,16 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         "Profitability",
         "Per Share & Balance Sheet",
         "Dividends",
+        "VALUATION MULTIPLES",
+        "QUALITY OF EARNINGS",
+        "BALANCE SHEET RISK",
+        "DIVIDEND QUALITY",
     ]
 
-    assert highlights.period_logic == "fy22_to_analysis_quarter"
+    assert highlights.period_logic == "fy23_to_analysis_quarter"
     revenue_rows = [row for row in highlights.rows if row.key == "revenue"]
     assert len(revenue_rows) == 1
-    assert set(revenue_rows[0].values.keys()) == {"FY22", "FY23", "FY24", "FY25", "FY26Q1"}
-
+    assert set(revenue_rows[0].values.keys()) == {"FY23", "FY24", "FY25", "FY26Q1"}
 
 
 def test_builder_marks_reported_calculated_and_unavailable_cells():
@@ -108,8 +130,6 @@ def test_builder_marks_reported_calculated_and_unavailable_cells():
     )
     rows = _rows(highlights)
 
-    assert rows["revenue"].values["FY22"].status == "reported"
-    assert rows["revenue"].values["FY22"].display == "100,000.0"
     assert rows["revenue"].values["FY23"].status == "reported"
     assert rows["revenue"].values["FY23"].display == "120,000.0"
     assert rows["revenue_growth"].values["FY23"].status == "calculated"
@@ -118,7 +138,7 @@ def test_builder_marks_reported_calculated_and_unavailable_cells():
     assert rows["eps"].values["FY23"].status == "calculated"
     assert rows["roe"].values["FY26Q1"].value == 5.88235294117647
     assert rows["dividend_yield"].values["FY23"].status == "unavailable"
-    assert rows["dividend_yield"].values["FY23"].display == "N/A"
+    assert rows["dividend_yield"].values["FY23"].display == "-"
     assert rows["dividend_yield"].values["FY26Q1"].value == 2.0
     assert rows["der"].values["FY23"].display == "0.20x"
     assert rows["payout_ratio"].values["FY26Q1"].display == "50.00%"
@@ -129,10 +149,10 @@ def test_builder_does_not_crash_when_vendor_payloads_are_missing():
     payload = to_dict(build_financial_highlights(ticker="TEST", analysis_date="2026-01-15"))
 
     assert payload is not None
-    assert len(payload["rows"]) == 13
-    assert len(payload["sections"]) == 5
+    assert len(payload["rows"]) == 30
+    assert len(payload["sections"]) == 9
     assert payload["data_quality"]["status"] == "unavailable"
-    assert all(cell["display"] == "N/A" for row in payload["rows"] for cell in row["values"].values())
+    assert all(cell["display"] == "-" for row in payload["rows"] for cell in row["values"].values())
 
 
 def test_builder_parses_annual_and_quarterly_yfinance_statement_bundle():
@@ -168,6 +188,14 @@ def test_statement_parser_uses_vendor_priority_for_duplicate_values():
 
     assert normalized["periods"]["FY25"]["revenue"]["value"] == 150_000_000_000
     assert normalized["periods"]["FY25"]["revenue"]["source_vendor"] == "yfinance"
+
+
+def test_statement_parser_sets_currency_from_ticker_market():
+    idr = parse_vendor_financials(ticker="BBCA.JK", periods=[])
+    usd = parse_vendor_financials(ticker="AAPL", periods=[])
+
+    assert idr["currency"] == "IDR"
+    assert usd["currency"] == "USD"
 
 
 def test_builder_parses_alpha_vantage_statement_payload():
@@ -271,11 +299,7 @@ def test_builder_uses_last_close_on_or_before_analysis_date_for_dividend_yield()
         ticker="TEST",
         analysis_date="2026-01-15",
         dividends={"FY25": {"dividend_per_share": 1}},
-        price_data=(
-            "Date,Open,High,Low,Close,Volume\n"
-            "2026-01-14,9,11,8,10,100\n"
-            "2026-01-16,18,22,17,20,200"
-        ),
+        price_data=("Date,Open,High,Low,Close,Volume\n2025-12-31,9,11,8,10,100\n2026-01-14,18,22,17,20,200"),
     )
 
     assert _rows(highlights)["dividend_yield"].values["FY25"].value == 10
@@ -296,3 +320,82 @@ def test_builder_preserves_reported_zero_eps():
 
     assert eps.value == 0
     assert eps.status == "reported"
+
+
+def test_statement_parser_reads_expanded_yfinance_aliases_and_profile_shares():
+    normalized = parse_vendor_financials(
+        ticker="TEST",
+        periods=resolve_financial_highlight_periods("2026-01-15"),
+        income_statement=(
+            "# Financial statement frequency: annual\n"
+            ",2025-12-31\n"
+            "Operating Revenue,1000\n"
+            "Net Income Continuous Operations,100\n"
+            "Reported EPS,2"
+        ),
+        balance_sheet=(
+            "# Financial statement frequency: annual\n"
+            ",2025-12-31\n"
+            "Total Equity Gross Minority Interest,500\n"
+            "Long Term Debt And Capital Lease Obligation,200\n"
+            "Cash Financial,80\n"
+            "Total Current Liabilities,100\n"
+            "Common Stock Shares Outstanding,50"
+        ),
+        cashflow=(
+            "# Financial statement frequency: annual\n"
+            ",2025-12-31\n"
+            "Total Cash From Operating Activities,160\n"
+            "Cash Dividends Paid Direct,-30"
+        ),
+    )
+    period = normalized["periods"]["FY25"]
+
+    assert period["revenue"]["value"] == 1000
+    assert period["net_profit"]["value"] == 100
+    assert period["eps"]["value"] == 2
+    assert period["total_equity"]["value"] == 500
+    assert period["total_debt"]["value"] == 200
+    assert period["cash"]["value"] == 80
+    assert period["current_liabilities"]["value"] == 100
+    assert period["operating_cash_flow"]["value"] == 160
+    assert period["dividend_paid"]["value"] == 30
+
+
+def test_builder_maps_dividend_series_and_reference_prices_per_period():
+    highlights = build_financial_highlights(
+        ticker="TEST",
+        analysis_date="2026-05-15",
+        dividends={
+            "2023-02-01": 1.0,
+            "2023-08-01": 2.0,
+            "2026-03-01": 1.5,
+        },
+        price_data=(
+            "Date,Close\n"
+            "2023-12-29,30\n"
+            "2025-12-31,50\n"
+            "2026-03-28,55\n"
+            "2026-04-01,99"
+        ),
+    )
+    rows = _rows(highlights)
+
+    assert rows["dividend_yield"].values["FY23"].value == 10
+    assert rows["dividend_yield"].values["FY26Q1"].value == pytest.approx(1.5 / 55 * 100)
+    assert rows["dividend_yield"].values["FY25"].status == "unavailable"
+
+
+def test_builder_uses_payout_ratio_fallback_from_dividend_paid_and_net_profit():
+    highlights = build_financial_highlights(
+        ticker="TEST",
+        analysis_date="2026-01-15",
+        vendor_payloads={
+            "yfinance": {
+                "income_statement": {"FY25": {"net_profit": 100}},
+                "cashflow": {"FY25": {"dividend_paid": -25}},
+            }
+        },
+    )
+
+    assert _rows(highlights)["payout_ratio"].values["FY25"].value == 25
