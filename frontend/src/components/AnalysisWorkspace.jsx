@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAnalysisJob } from '../hooks/useAnalysisJob';
@@ -9,12 +9,9 @@ import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 import { clearAnalysisHistory, fetchAnalysisHistory } from '../utils/analysisHistoryApi';
 import { formatDateTimeLabel } from '../utils/formatting';
 
-const HISTORY_PANEL_MAX_HEIGHT = 304;
 const HISTORY_SCHEMA_VERSION = 2;
 const HISTORY_TTL_DAYS = 30;
 const RESULT_EXPIRED_MESSAGE = 'Result expired. Please submit a new analysis.';
-const SIDEBAR_EXPANDED_WIDTH = 288;
-const SIDEBAR_COLLAPSED_WIDTH = 48;
 
 function isExpired(entry) {
   if (!entry?.saved_at) return false;
@@ -42,6 +39,7 @@ function removeLegacyStoredResults(historyKey) {
 
     keys.forEach((key) => localStorage.removeItem(key));
   } catch {
+    // Ignore unavailable or restricted localStorage during cleanup.
   }
 }
 
@@ -127,6 +125,7 @@ function readHistory(historyKey) {
     try {
       localStorage.removeItem(historyKey);
     } catch {
+      // Ignore unavailable or restricted localStorage during recovery.
     }
     return [];
   }
@@ -141,6 +140,7 @@ function writeHistory(historyKey, entries) {
       localStorage.removeItem(historyKey);
     }
   } catch {
+    // Ignore unavailable or restricted localStorage during history writes.
   }
 }
 
@@ -149,6 +149,7 @@ function clearHistory(historyKey) {
     removeLegacyStoredResults(historyKey);
     localStorage.removeItem(historyKey);
   } catch {
+    // Ignore unavailable or restricted localStorage during history clears.
   }
 }
 
@@ -202,34 +203,100 @@ function formatHistoryHorizon(months) {
   return `${value}M`;
 }
 
-const NAVBAR_HEIGHT = 40;
-
-function ChevronIcon({ direction }) {
+function ConfigIcon() {
   return (
     <svg
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
+      aria-hidden="true"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth="1.7"
       strokeLinecap="round"
       strokeLinejoin="round"
+      className="h-4 w-4"
     >
-      {direction === 'left' ? (
-        <polyline points="6.5,1.5 2.5,5 6.5,8.5" />
-      ) : (
-        <polyline points="3.5,1.5 7.5,5 3.5,8.5" />
-      )}
+      <path d="M4 7h10" />
+      <path d="M18 7h2" />
+      <path d="M4 17h2" />
+      <path d="M10 17h10" />
+      <path d="M14 5v4" />
+      <path d="M10 15v4" />
     </svg>
   );
 }
 
-ChevronIcon.propTypes = {
-  direction: PropTypes.oneOf(['left', 'right']).isRequired,
+function ClockIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function PanelButton({ active, title, onClick, children }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      onClick={onClick}
+      className={`flex h-10 w-10 items-center justify-center border-l-2 transition-colors duration-150 ${
+        active
+          ? 'border-bloomberg-orange bg-bloomberg-surface text-bloomberg-orange'
+          : 'border-transparent text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+PanelButton.propTypes = {
+  active: PropTypes.bool.isRequired,
+  title: PropTypes.string.isRequired,
+  onClick: PropTypes.func.isRequired,
+  children: PropTypes.node.isRequired,
 };
 
-function SidebarHistory({ backendHistoryEnabled, currentResourceId, historyKey, onSelect }) {
+function DrawerPanel({ title, onClose, children }) {
+  return (
+    <aside className="fixed bottom-0 left-10 top-10 z-[35] flex w-72 flex-col border-r border-bloomberg-border bg-bloomberg-card shadow-2xl shadow-black/50">
+      <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-bloomberg-border px-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
+          {title}
+        </span>
+        <button
+          type="button"
+          aria-label={`Close ${title.toLowerCase()} panel`}
+          onClick={onClose}
+          className="flex h-7 w-7 items-center justify-center font-mono text-lg leading-none text-bloomberg-muted transition-colors duration-150 hover:bg-bloomberg-surface hover:text-bloomberg-orange"
+        >
+          ×
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto">{children}</div>
+    </aside>
+  );
+}
+
+DrawerPanel.propTypes = {
+  title: PropTypes.string.isRequired,
+  onClose: PropTypes.func.isRequired,
+  children: PropTypes.node.isRequired,
+};
+
+function HistoryPanel({ backendHistoryEnabled, currentResourceId, historyKey, onSelect }) {
   const [history, setHistory] = useState([]);
   const [clearError, setClearError] = useState('');
   const [clearing, setClearing] = useState(false);
@@ -302,7 +369,7 @@ function SidebarHistory({ backendHistoryEnabled, currentResourceId, historyKey, 
           {clearError}
         </div>
       )}
-      <div className="overflow-y-auto" style={{ maxHeight: '8rem' }}>
+      <div className="overflow-y-auto">
         {history.map((item, index) => {
           const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
           const displaySignal = item.display_signal || item.decision;
@@ -348,7 +415,7 @@ function SidebarHistory({ backendHistoryEnabled, currentResourceId, historyKey, 
   );
 }
 
-SidebarHistory.propTypes = {
+HistoryPanel.propTypes = {
   backendHistoryEnabled: PropTypes.bool.isRequired,
   currentResourceId: PropTypes.string,
   historyKey: PropTypes.string.isRequired,
@@ -444,22 +511,11 @@ export default function AnalysisWorkspace({
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [status, setStatus] = useState(resourceId ? 'Loading saved analysis...' : '');
   const [agentProgress, setAgentProgress] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
-  const sidebarRef = useRef(null);
+  const [activePanel, setActivePanel] = useState(null);
 
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
-
-    const mql = window.matchMedia('(max-width: 767px)');
-    const handler = (e) => {
-      setIsMobile(e.matches);
-      if (e.matches) setSidebarOpen(false);
-    };
-    handler(mql);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, []);
+  function togglePanel(name) {
+    setActivePanel((prev) => (prev === name ? null : name));
+  }
 
   useEffect(() => {
     if (!resourceId) return undefined;
@@ -565,103 +621,100 @@ export default function AnalysisWorkspace({
     <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
 
-      <div className="flex" style={{ paddingTop: NAVBAR_HEIGHT }}>
-        {isMobile && sidebarOpen && (
-          <div
-            className="fixed inset-0 z-20 bg-black/60"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
+      {activePanel && (
+        <div
+          className="fixed inset-0 z-[25] bg-black/30"
+          onClick={() => setActivePanel(null)}
+        />
+      )}
 
-        <aside
-          ref={sidebarRef}
-          className={`fixed left-0 z-30 flex flex-col bg-bloomberg-card border-r border-bloomberg-border transition-all duration-200 ease-in-out ${
-            sidebarOpen ? 'w-72' : 'w-12'
-          }`}
-          style={{ top: NAVBAR_HEIGHT, bottom: 0 }}
+      <div className="fixed bottom-0 left-0 top-10 z-[45] w-10 border-bloomberg-border border-r bg-black">
+        <PanelButton
+          active={activePanel === 'config'}
+          title="Configuration"
+          onClick={() => togglePanel('config')}
         >
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="absolute -right-3 top-3 z-40 flex h-6 w-6 items-center justify-center rounded-full border border-bloomberg-border bg-black text-bloomberg-muted transition-colors duration-150 hover:text-bloomberg-orange"
-            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-          >
-            <ChevronIcon direction={sidebarOpen ? 'left' : 'right'} />
-          </button>
+          <ConfigIcon />
+        </PanelButton>
+        <PanelButton
+          active={activePanel === 'history'}
+          title="History"
+          onClick={() => togglePanel('history')}
+        >
+          <ClockIcon />
+        </PanelButton>
+      </div>
 
-          <div className={`flex-1 overflow-y-auto ${sidebarOpen ? 'block' : 'hidden'}`}>
-            <FormComponent
-              onResult={handleResult}
-              onLoading={setLoading}
-              onStatus={setStatus}
-              onAgentProgress={setAgentProgress}
-              selectedResult={result && !result.error ? result : null}
-              agentProgress={agentProgress}
-              status={status}
-            />
-          </div>
+      {activePanel === 'config' && (
+        <DrawerPanel title="CONFIGURATION" onClose={() => setActivePanel(null)}>
+          <FormComponent
+            onResult={handleResult}
+            onLoading={setLoading}
+            onStatus={setStatus}
+            onAgentProgress={setAgentProgress}
+            selectedResult={result && !result.error ? result : null}
+            agentProgress={agentProgress}
+            status={status}
+          />
+        </DrawerPanel>
+      )}
 
-          {sidebarOpen && (
-            <div className="border-t border-bloomberg-border overflow-y-auto" style={{ maxHeight: '10rem' }}>
-              <SidebarHistory
-                backendHistoryEnabled={backendHistoryEnabled}
-                currentResourceId={historyResourceId(result)}
-                historyKey={historyKey}
-                onSelect={(item) => {
-                  const nextPath = resultPath(resultPathBase, historyResourceId(item));
-                  if (nextPath) navigate(nextPath);
-                }}
-              />
+      {activePanel === 'history' && (
+        <DrawerPanel title="HISTORY" onClose={() => setActivePanel(null)}>
+          <HistoryPanel
+            backendHistoryEnabled={backendHistoryEnabled}
+            currentResourceId={historyResourceId(result)}
+            historyKey={historyKey}
+            onSelect={(item) => {
+              const nextPath = resultPath(resultPathBase, historyResourceId(item));
+              if (nextPath) navigate(nextPath);
+              setActivePanel(null);
+            }}
+          />
+        </DrawerPanel>
+      )}
+
+      <main className="ml-10 min-h-screen min-w-0 pt-10">
+        <div className="space-y-4 p-4">
+          <StatusBar loading={loading} status={status} />
+
+          {!loading && !result && (
+            <div className="border border-bloomberg-border bg-bloomberg-card p-6 text-center shadow-xl shadow-black/40 sm:p-8">
+              <div className="font-display text-4xl font-bold tracking-widest text-bloomberg-border sm:text-6xl">
+                READY
+              </div>
+              <div className="mx-auto mt-4 max-w-2xl font-mono text-xs tracking-wider text-bloomberg-muted sm:text-sm">
+                {emptyDescription}
+              </div>
+              <div className="mx-auto mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
+                {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
+                  <div
+                    key={step}
+                    className="border border-bloomberg-border bg-black p-4 text-center"
+                  >
+                    <div className="font-mono text-2xl text-bloomberg-border">{index + 1}</div>
+                    <div className="mt-2 font-mono text-xs tracking-wider text-bloomberg-muted">
+                      {step}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-        </aside>
 
-        <main
-          className={`flex-1 min-w-0 transition-all duration-200 ease-in-out`}
-          style={{
-            marginLeft: sidebarOpen ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH,
-          }}
-        >
-          <div className="p-4 space-y-4">
-            <StatusBar loading={loading} status={status} />
+          {loading && <AgentLog status={status} agentProgress={agentProgress} />}
 
-            {!loading && !result && (
-              <div className="border border-bloomberg-border bg-bloomberg-card p-6 text-center shadow-xl shadow-black/40 sm:p-8">
-                <div className="font-display text-4xl font-bold text-bloomberg-border tracking-widest sm:text-6xl">
-                  READY
-                </div>
-                <div className="mx-auto mt-4 max-w-2xl font-mono text-xs text-bloomberg-muted tracking-wider sm:text-sm">
-                  {emptyDescription}
-                </div>
-                <div className="mx-auto mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
-                  {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
-                    <div
-                      key={step}
-                      className="border border-bloomberg-border bg-black p-4 text-center"
-                    >
-                      <div className="font-mono text-2xl text-bloomberg-border">{index + 1}</div>
-                      <div className="mt-2 font-mono text-xs text-bloomberg-muted tracking-wider">
-                        {step}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {loading && <AgentLog status={status} agentProgress={agentProgress} />}
-
-            {result && !loading && (
-              <ResultCard
-                result={result}
-                enableReportExport={enableReportExport && Boolean(resultPathBase)}
-                mockReport={mockReportExport}
-                onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
-                rerunRunning={rerunJob.running || loading}
-              />
-            )}
-          </div>
-        </main>
-      </div>
+          {result && !loading && (
+            <ResultCard
+              result={result}
+              enableReportExport={enableReportExport && Boolean(resultPathBase)}
+              mockReport={mockReportExport}
+              onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
+              rerunRunning={rerunJob.running || loading}
+            />
+          )}
+        </div>
+      </main>
     </div>
   );
 }

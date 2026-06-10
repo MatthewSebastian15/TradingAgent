@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 async function renderApp(path, enableMock) {
@@ -32,6 +32,7 @@ describe('App', () => {
   it('registers mock routes when mock mode is enabled', async () => {
     await renderApp('/analysis.test', true);
 
+    fireEvent.click(await screen.findByTitle('Configuration'));
     expect(await screen.findByRole('button', { name: /execute analysis/i })).toBeTruthy();
   });
 });
