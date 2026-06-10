@@ -1,13 +1,22 @@
 import PropTypes from 'prop-types';
-import DataSourceBadge from '../../DataSourceBadge';
 import DataStatusBadge from '../../DataStatusBadge';
 import { safeExternalUrl } from '../../../utils/url';
 import { getDisplayValue, getFieldQuality } from '../../../utils/dataStatus';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 
+const OWNERSHIP_SEGMENTS = [
+  { key: 'insider', label: 'INSIDER', color: '#f97316' },
+  { key: 'institution', label: 'INSTITUTION', color: '#3b82f6' },
+  { key: 'public', label: 'PUBLIC', color: '#22c55e' },
+];
+
 function display(value) {
   return value === null || value === undefined || value === '' ? 'N/A' : value;
+}
+
+function displayDash(value) {
+  return value === null || value === undefined || value === '' ? '-' : value;
 }
 
 function numberOrNull(value) {
@@ -16,9 +25,80 @@ function numberOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function ownershipRatio(value) {
+  const number = numberOrNull(value);
+  if (number === null) return null;
+  const ratio = Math.abs(number) > 1 ? number / 100 : number;
+  if (!Number.isFinite(ratio)) return null;
+  return Math.max(0, Math.min(ratio, 1));
+}
+
+function ownershipSourceObjects(profile) {
+  return [profile, profile?.shares_ownership, profile?.ownership].filter(
+    (source) => source && typeof source === 'object'
+  );
+}
+
+function firstProfileValue(profile, keys) {
+  for (const source of ownershipSourceObjects(profile)) {
+    for (const key of keys) {
+      const value = source[key];
+      if (value !== null && value !== undefined && value !== '') return value;
+    }
+  }
+  return null;
+}
+
+function profileSharesOut(profile) {
+  return firstProfileValue(profile, ['shares_out', 'shares_outstanding', 'sharesOutstanding']);
+}
+
+function profileInsiderPct(profile) {
+  return firstProfileValue(profile, ['insider_pct', 'insider_percent', 'heldPercentInsiders']);
+}
+
+function profileInstitutionPct(profile) {
+  return firstProfileValue(profile, [
+    'institution_pct',
+    'institution_percent',
+    'heldPercentInstitutions',
+  ]);
+}
+
+function profilePublicPct(profile) {
+  return firstProfileValue(profile, ['public_pct', 'public_percent']);
+}
+
+function profileShortRatio(profile) {
+  return firstProfileValue(profile, ['short_ratio', 'shortRatio']);
+}
+
 function formatNumber(value) {
   const number = numberOrNull(value);
   return number === null ? 'N/A' : number.toLocaleString('en-US');
+}
+
+function formatNumberDash(value) {
+  const number = numberOrNull(value);
+  return number === null ? '-' : number.toLocaleString('en-US');
+}
+
+function formatPercentDash(value) {
+  const ratio = ownershipRatio(value);
+  if (ratio === null) return '-';
+  return `${(ratio * 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
+function formatRatioDash(value) {
+  const number = numberOrNull(value);
+  if (number === null) return '-';
+  return number.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatMarketCap(value, currency) {
@@ -49,22 +129,139 @@ function formatCurrentPrice(value, currency) {
   })}`;
 }
 
+function buildOwnershipData(profile) {
+  const insider = ownershipRatio(profileInsiderPct(profile));
+  const institution = ownershipRatio(profileInstitutionPct(profile));
+  const publicOwnership = ownershipRatio(profilePublicPct(profile));
+  const publicRatio =
+    publicOwnership ??
+    (insider !== null && institution !== null ? Math.max(0, 1 - insider - institution) : null);
+
+  return { insider, institution, public: publicRatio };
+}
+
+function OwnershipPieChart({ profile }) {
+  const ownership = buildOwnershipData(profile);
+  const rawSegments = OWNERSHIP_SEGMENTS.map((segment) => ({
+    ...segment,
+    value: ownership[segment.key],
+  })).filter((segment) => segment.value !== null && segment.value > 0);
+  const totalOwnership = rawSegments.reduce((sum, segment) => sum + segment.value, 0);
+  const hasChartData = totalOwnership > 0;
+  let cursor = 0;
+  const gradient = hasChartData
+    ? rawSegments
+        .map((segment) => {
+          const start = cursor;
+          cursor += (segment.value / totalOwnership) * 100;
+          return `${segment.color} ${start}% ${cursor}%`;
+        })
+        .join(', ')
+    : '#242424 0% 100%';
+
+  return (
+    <div className="border border-bloomberg-border bg-black px-3 py-3">
+      <div className="font-mono text-[10px] text-bloomberg-muted uppercase tracking-wider mb-3">
+        OWNERSHIPS
+      </div>
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-center">
+        <div
+          className="relative h-36 w-36 rounded-full border border-bloomberg-border-light"
+          role="img"
+          aria-label="Ownership pie chart"
+          style={{ background: `conic-gradient(${gradient})` }}
+        >
+          <div className="absolute inset-8 rounded-full border border-bloomberg-border bg-black flex items-center justify-center">
+            <span className="font-mono text-xs text-bloomberg-white">
+              {hasChartData ? '100%' : '-'}
+            </span>
+          </div>
+        </div>
+        <div className="w-full max-w-xs space-y-2">
+          {OWNERSHIP_SEGMENTS.map((segment) => (
+            <div
+              key={segment.key}
+              className="flex items-center justify-between gap-4 font-mono text-xs"
+            >
+              <div className="flex items-center gap-2 text-bloomberg-muted">
+                <span
+                  className="h-2.5 w-2.5 border border-bloomberg-border"
+                  style={{ backgroundColor: segment.color }}
+                />
+                <span>{segment.label}</span>
+              </div>
+              <span className="text-bloomberg-white">
+                {formatPercentDash(ownership[segment.key])}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+OwnershipPieChart.propTypes = {
+  profile: PropTypes.object.isRequired,
+};
+
+function SharesOwnershipSection({ profile }) {
+  const rows = [
+    ['SHARES OUT', formatNumberDash(profileSharesOut(profile))],
+    ['INSIDER %', formatPercentDash(profileInsiderPct(profile))],
+    ['INSTITUTION %', formatPercentDash(profileInstitutionPct(profile))],
+    ['SHORT RATIO', formatRatioDash(profileShortRatio(profile))],
+  ];
+
+  return (
+    <section>
+      <SectionHeader label="SHARES & OWNERSHIP" />
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-stretch">
+        <div className="overflow-x-auto border border-bloomberg-border bg-black">
+          <table className="w-full text-left font-mono text-xs">
+            <thead className="bg-bloomberg-surface text-bloomberg-muted uppercase tracking-wider">
+              <tr>
+                <th className="px-3 py-2">Metric</th>
+                <th className="px-3 py-2 text-right">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([label, value]) => (
+                <tr key={label} className="border-t border-bloomberg-border">
+                  <td className="px-3 py-2 text-bloomberg-white">{label}</td>
+                  <td className="px-3 py-2 text-right text-bloomberg-white">
+                    {displayDash(value)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <OwnershipPieChart profile={profile} />
+      </div>
+    </section>
+  );
+}
+
+SharesOwnershipSection.propTypes = {
+  profile: PropTypes.object.isRequired,
+};
+
 function ProfileField({ label, value, quality }) {
-  const displayPayload = quality ? getDisplayValue(value, quality) : { text: display(value), reason: null };
+  const displayPayload = quality
+    ? getDisplayValue(value, quality)
+    : { text: display(value), reason: null };
   return (
     <div className="border border-bloomberg-border bg-black px-3 py-2">
       <div className="font-mono text-[10px] text-bloomberg-muted uppercase tracking-wider mb-1">
         {label}
       </div>
-      <div className="font-mono text-xs text-bloomberg-white break-words">{displayPayload.text}</div>
+      <div className="font-mono text-xs text-bloomberg-white break-words">
+        {displayPayload.text}
+      </div>
       {displayPayload.reason && (
         <div className="mt-1 font-mono text-[11px] text-bloomberg-muted">
           Reason: {displayPayload.reason}
-        </div>
-      )}
-      {quality && (
-        <div className="mt-2">
-          <DataStatusBadge compact quality={quality} />
         </div>
       )}
     </div>
@@ -105,32 +302,42 @@ export default function ProfileTab({ profile, result }) {
     <div className="px-4 py-4 border-b border-bloomberg-border space-y-5">
       <section>
         <SectionHeader label="COMPANY PROFILE" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
           <ProfileField label="Company Name" value={companyName} quality={profileQuality} />
           <ProfileField label="Ticker" value={profile.ticker} />
-          <ProfileField label="Exchange" value={profile.exchange} quality={getFieldQuality(dataQuality, 'exchange') || profileQuality} />
           <ProfileField label="Currency" value={profile.currency} />
-          <ProfileField label="Country" value={profile.country} quality={getFieldQuality(dataQuality, 'country') || profileQuality} />
-          <ProfileField label="Sector" value={profile.sector} quality={getFieldQuality(dataQuality, 'sector') || profileQuality} />
-          <ProfileField label="Industry" value={profile.industry} quality={getFieldQuality(dataQuality, 'industry') || profileQuality} />
+          <ProfileField
+            label="Country"
+            value={profile.country}
+            quality={getFieldQuality(dataQuality, 'country') || profileQuality}
+          />
+          <ProfileField
+            label="Sector"
+            value={profile.sector}
+            quality={getFieldQuality(dataQuality, 'sector') || profileQuality}
+          />
+          <ProfileField
+            label="Industry"
+            value={profile.industry}
+            quality={getFieldQuality(dataQuality, 'industry') || profileQuality}
+          />
           <ProfileField
             label="Market Cap"
             value={formatMarketCap(profile.market_cap, profile.currency)}
             quality={getFieldQuality(dataQuality, 'market_cap') || profileQuality}
           />
           <ProfileField
-            label="Shares Outstanding"
-            value={formatNumber(profile.shares_outstanding)}
-          />
-          <ProfileField
             label="Current Price"
             value={formatCurrentPrice(profile.current_price, profile.currency)}
             quality={getFieldQuality(dataQuality, 'last_price')}
           />
-          <ProfileField label="Fiscal Year End" value={profile.fiscal_year_end} />
-          <ProfileField label="Employees" value={formatNumber(employeeCount)} quality={profileQuality} />
           <ProfileField
-            label="Website"
+            label="Employees"
+            value={formatNumber(employeeCount)}
+            quality={profileQuality}
+          />
+          <ProfileField
+            label="Websites"
             value={
               websiteUrl ? (
                 <a
@@ -147,24 +354,13 @@ export default function ProfileTab({ profile, result }) {
             }
           />
         </div>
-        <div className="mt-2 space-y-2">
-          <div className="font-mono text-[11px] text-bloomberg-muted">
-            Profile data: {profile.data_quality?.status || 'N/A'}
-          </div>
-          <DataStatusBadge
-            quality={profile.data_quality}
-            status={profile.data_quality?.status}
-            source={profile.data_quality?.source || profile.source}
-            reason={profile.data_quality?.reason || profile.warning}
-            confidenceScore={profile.data_quality?.confidence_score}
-          />
-          <DataSourceBadge sources={profile.data_sources || result?.data_sources?.profile || profile.sources || profile.source} label="Profile sources" />
-        </div>
       </section>
+
+      <SharesOwnershipSection profile={profile} />
 
       <section>
         <SectionHeader label="BUSINESS DESCRIPTION" />
-        <p className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+        <p className="font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">
           {display(businessSummary)}
         </p>
       </section>
@@ -193,14 +389,8 @@ export default function ProfileTab({ profile, result }) {
               </tbody>
             </table>
           </div>
-          {(getFieldQuality(dataQuality, 'executives') || profileQuality) && (
-            <div className="mt-2">
-              <DataStatusBadge compact quality={getFieldQuality(dataQuality, 'executives') || profileQuality} />
-            </div>
-          )}
         </section>
       )}
-
 
       {shareholders.length > 0 && (
         <section>
@@ -221,10 +411,18 @@ export default function ProfileTab({ profile, result }) {
                     key={`${holder.name || 'shareholder'}-${index}`}
                     className="border-t border-bloomberg-border"
                   >
-                    <td className="px-3 py-2 text-bloomberg-white">{holder.name || holder.shareholder || 'N/A'}</td>
-                    <td className="px-3 py-2 text-bloomberg-muted">{holder.ownership_percent ?? holder.percent ?? holder.percentage ?? 'N/A'}</td>
-                    <td className="px-3 py-2 text-bloomberg-muted">{formatNumber(holder.shares ?? holder.share_count)}</td>
-                    <td className="px-3 py-2 text-bloomberg-muted">{holder.source || profile.source || 'N/A'}</td>
+                    <td className="px-3 py-2 text-bloomberg-white">
+                      {holder.name || holder.shareholder || 'N/A'}
+                    </td>
+                    <td className="px-3 py-2 text-bloomberg-muted">
+                      {holder.ownership_percent ?? holder.percent ?? holder.percentage ?? 'N/A'}
+                    </td>
+                    <td className="px-3 py-2 text-bloomberg-muted">
+                      {formatNumber(holder.shares ?? holder.share_count)}
+                    </td>
+                    <td className="px-3 py-2 text-bloomberg-muted">
+                      {holder.source || profile.source || 'N/A'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -232,7 +430,12 @@ export default function ProfileTab({ profile, result }) {
           </div>
           {(getFieldQuality(dataQuality, 'shareholders') || profile.shareholders_quality) && (
             <div className="mt-2">
-              <DataStatusBadge compact quality={getFieldQuality(dataQuality, 'shareholders') || profile.shareholders_quality} />
+              <DataStatusBadge
+                compact
+                quality={
+                  getFieldQuality(dataQuality, 'shareholders') || profile.shareholders_quality
+                }
+              />
             </div>
           )}
         </section>

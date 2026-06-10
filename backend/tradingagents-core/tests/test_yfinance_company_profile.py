@@ -17,6 +17,10 @@ def test_get_company_profile_returns_clean_frontend_payload(monkeypatch):
         "website": " https://example.com ",
         "fullTimeEmployees": 1234,
         "longBusinessSummary": "x" * 2100,
+        "sharesOutstanding": 122_876_240_600,
+        "heldPercentInsiders": 0.60814,
+        "heldPercentInstitutions": 0.20815,
+        "shortRatio": None,
         "companyOfficers": officers,
     }
     monkeypatch.setattr(y_finance, "_get_ticker", lambda _ticker: SimpleNamespace(info=info))
@@ -28,6 +32,22 @@ def test_get_company_profile_returns_clean_frontend_payload(monkeypatch):
     assert profile["ticker"] == "BBCA.JK"
     assert profile["name"] == "Example Company"
     assert profile["address"] == "Main Street, Jakarta, Indonesia"
+    assert profile["shares_outstanding"] == 122_876_240_600
+    assert profile["shares_out"] == 122_876_240_600
+    assert profile["insider_percent"] == 0.60814
+    assert profile["insider_pct"] == 0.60814
+    assert profile["institution_percent"] == 0.20815
+    assert profile["institution_pct"] == 0.20815
+    assert profile["public_percent"] == 0.18371000000000004
+    assert profile["public_pct"] == 0.18371000000000004
+    assert profile["short_ratio"] is None
+    assert profile["shares_ownership"] == {
+        "shares_out": 122_876_240_600,
+        "insider_pct": 0.60814,
+        "institution_pct": 0.20815,
+        "public_pct": 0.18371000000000004,
+        "short_ratio": None,
+    }
     assert len(profile["description"]) == 2000
     assert profile["description"].endswith("...")
     assert len(profile["executives"]) == 10

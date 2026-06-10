@@ -5,10 +5,11 @@ import concurrent.futures
 import logging
 import multiprocessing
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import datetime
 from multiprocessing.managers import SyncManager
 from typing import Any
 
+from dateutil.relativedelta import relativedelta
 from fastapi import Request
 
 from config import (
@@ -291,8 +292,8 @@ def preflight_market_data_worker(
         response_detail=response_detail,
     )
     trade_dt = datetime.strptime(trade_date, "%Y-%m-%d")
-    start = (trade_dt - timedelta(days=10)).strftime("%Y-%m-%d")
-    end = (trade_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+    start = (trade_dt - relativedelta(years=1)).strftime("%Y-%m-%d")
+    end = trade_dt.strftime("%Y-%m-%d")
 
     with use_config(config):
         return str(route_to_vendor("get_stock_data", ticker, start, end))

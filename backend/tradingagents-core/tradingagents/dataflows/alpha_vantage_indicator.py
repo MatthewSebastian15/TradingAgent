@@ -146,7 +146,7 @@ def get_indicator(
 
     try:
         curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
-        start_date = curr_date_dt - relativedelta(days=look_back_days)
+        start_date = curr_date_dt - relativedelta(years=1)
         function_name, params = _build_indicator_params(symbol, indicator, interval, time_period, series_type)
         data = _make_api_request(function_name, params)
         if not isinstance(data, str) or not data.strip():

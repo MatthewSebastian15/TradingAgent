@@ -74,16 +74,69 @@ const DEFAULT_TICKERS = [
   'ASII',
 ];
 
-const TICKER_REFRESH_MS = 5 * 60 * 1000;
+const TICKER_REFRESH_MS = 2 * 60 * 1000;
+const TICKER_CACHE_KEY = 'tradingagents:ticker-quotes:v1';
+const TICKER_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const TICKER_GROUP_MIN_ITEMS = 24;
+const EMPTY_CHANGE = '...';
+
+function fallbackTickerQuotes() {
+  return DEFAULT_TICKERS.map((sym) => ({
+    sym,
+    chg: EMPTY_CHANGE,
+    pos: true,
+  }));
+}
+
+function tickerCacheKey() {
+  return `${TICKER_CACHE_KEY}:${DEFAULT_TICKERS.join('|')}`;
+}
+
+function readTickerCache() {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const cached = JSON.parse(window.localStorage.getItem(tickerCacheKey()) || 'null');
+    if (!cached || !Array.isArray(cached.quotes)) return null;
+    if (Date.now() - Number(cached.savedAt || 0) > TICKER_CACHE_MAX_AGE_MS) return null;
+    return cached.quotes.length > 0 ? cached.quotes : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeTickerCache(quotes) {
+  if (typeof window === 'undefined' || !Array.isArray(quotes) || quotes.length === 0) return;
+
+  try {
+    window.localStorage.setItem(
+      tickerCacheKey(),
+      JSON.stringify({ savedAt: Date.now(), quotes })
+    );
+  } catch {
+    // Ignore cache failures. The fallback ticker tape still renders immediately.
+  }
+}
+
+function repeatToMinLength(items, minLength) {
+  if (!items.length) return [];
+
+  const repeats = Math.max(1, Math.ceil(minLength / items.length));
+  return Array.from({ length: repeats }, () => items).flat();
+}
 
 function useTickerQuotes() {
-  const [quotes, setQuotes] = useState([]);
+  const [quotes, setQuotes] = useState(() => readTickerCache() || fallbackTickerQuotes());
   const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    let controller = null;
 
     async function load() {
+      controller?.abort();
+      controller = new AbortController();
+
       try {
         const symbols = DEFAULT_TICKERS.join(',');
 
@@ -91,6 +144,7 @@ function useTickerQuotes() {
           buildApiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols)}`),
           {
             headers: await buildAuthHeaders(),
+            signal: controller.signal,
           }
         );
 
@@ -101,10 +155,17 @@ function useTickerQuotes() {
         const data = await res.json();
 
         if (!cancelled) {
-          setQuotes(data.quotes || []);
+          const nextQuotes =
+            Array.isArray(data.quotes) && data.quotes.length > 0
+              ? data.quotes
+              : fallbackTickerQuotes();
+          setQuotes(nextQuotes);
+          writeTickerCache(nextQuotes);
           setFetchError(false);
         }
-      } catch {
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+
         if (!cancelled) {
           setFetchError(true);
         }
@@ -117,6 +178,7 @@ function useTickerQuotes() {
 
     return () => {
       cancelled = true;
+      controller?.abort();
       clearInterval(interval);
     };
   }, []);
@@ -126,47 +188,52 @@ function useTickerQuotes() {
 
 function TickerTape() {
   const { quotes, fetchError } = useTickerQuotes();
-
-  const items =
-    quotes.length > 0
-      ? quotes
-      : DEFAULT_TICKERS.map((sym) => ({
-          sym,
-          chg: '…',
-          pos: true,
-        }));
+  const items = repeatToMinLength(
+    quotes.length > 0 ? quotes : fallbackTickerQuotes(),
+    TICKER_GROUP_MIN_ITEMS
+  );
 
   return (
     <div className="border-b border-bloomberg-border bg-black overflow-hidden">
       {fetchError && (
         <div className="font-mono text-xs text-bloomberg-amber text-center py-0.5 bg-bloomberg-surface">
-          ◐ MARKET DATA UNAVAILABLE — backend offline or yfinance error
+          MARKET DATA UNAVAILABLE - backend offline or yfinance error
         </div>
       )}
 
-      <div
-        className="flex gap-8 py-1.5 animate-marquee whitespace-nowrap"
-        style={{ width: 'max-content' }}
-      >
-        {[...items, ...items].map((t, i) => (
-          <span key={i} className="flex items-center gap-2 font-mono text-xs">
-            <span className="text-bloomberg-white font-semibold tracking-wider">
-              {formatTickerLabel(t.sym)}
-            </span>
+      <div className="ticker-tape py-1.5" aria-label="Market ticker tape">
+        <div className="ticker-tape__track">
+          {[0, 1].map((group) => (
+            <div key={group} className="ticker-tape__group" aria-hidden={group === 1}>
+              {items.map((t, index) => {
+                const isLoading = t.chg === EMPTY_CHANGE;
 
-            <span
-              className={
-                t.chg === '…'
-                  ? 'text-bloomberg-muted'
-                  : t.pos
-                    ? 'text-bloomberg-green'
-                    : 'text-bloomberg-red'
-              }
-            >
-              {t.chg === '…' ? '…' : `${t.pos ? '▲' : '▼'} ${t.chg}`}
-            </span>
-          </span>
-        ))}
+                return (
+                  <span
+                    key={`${group}-${t.sym}-${index}`}
+                    className="flex items-center gap-2 font-mono text-xs"
+                  >
+                    <span className="text-bloomberg-white font-semibold tracking-wider">
+                      {formatTickerLabel(t.sym)}
+                    </span>
+
+                    <span
+                      className={
+                        isLoading
+                          ? 'text-bloomberg-muted'
+                          : t.pos
+                            ? 'text-bloomberg-green'
+                            : 'text-bloomberg-red'
+                      }
+                    >
+                      {isLoading ? EMPTY_CHANGE : t.chg}
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

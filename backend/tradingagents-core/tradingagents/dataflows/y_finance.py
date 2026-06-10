@@ -3,7 +3,7 @@ import math
 import os
 import threading
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any
 
 import pandas as pd
@@ -165,18 +165,136 @@ def _coerce_positive_float(value: Any) -> float | None:
     return number
 
 
-def fetch_current_price(symbol: str) -> dict[str, Any]:
-    """Fetch the latest available quote once at the start of an analysis run.
+def _inclusive_fetch_end(end_dt: datetime) -> str:
+    """Return yfinance's exclusive end date that includes *end_dt*."""
+    return (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    The first choice is yfinance ``fast_info.last_price`` because it represents
-    the freshest quote yfinance exposes for the instrument. If that is missing,
-    the function falls back to the latest available historical close and marks
-    the result as a fallback so the UI can warn the user clearly.
+
+def _normalize_price_dataframe(data: pd.DataFrame | None) -> pd.DataFrame:
+    """Normalize raw yfinance OHLCV data without using any price cache."""
+    if data is None or data.empty:
+        return pd.DataFrame()
+
+    normalized = data.copy()
+    if isinstance(normalized.columns, pd.MultiIndex):
+        normalized.columns = [str(col[0] if col[0] else col[-1]) for col in normalized.columns]
+
+    normalized = normalized.sort_index()
+    normalized = normalized[~normalized.index.duplicated(keep="last")]
+    if getattr(normalized.index, "tz", None) is not None:
+        normalized.index = normalized.index.tz_localize(None)
+    normalized.index = pd.to_datetime(normalized.index, errors="coerce")
+    normalized = normalized[normalized.index.notna()]
+
+    numeric_columns = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
+    for col in numeric_columns:
+        if col in normalized.columns:
+            normalized[col] = pd.to_numeric(normalized[col], errors="coerce")
+    if "Close" in normalized.columns:
+        normalized = normalized.dropna(subset=["Close"])
+    return normalized
+
+
+def _download_price_history(symbol: str, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
+    """Download historical OHLCV with trade_date-inclusive end and no cache."""
+    start_str = start_dt.strftime("%Y-%m-%d")
+    fetch_end_str = _inclusive_fetch_end(end_dt)
+    data = yf_retry(
+        lambda: yf.download(
+            symbol,
+            start=start_str,
+            end=fetch_end_str,
+            multi_level_index=False,
+            progress=False,
+            auto_adjust=False,
+            threads=False,
+        )
+    )
+
+    if data is None or data.empty:
+        data = yf_retry(
+            lambda: yf.Ticker(symbol).history(
+                start=start_str,
+                end=fetch_end_str,
+                auto_adjust=False,
+            )
+        )
+    return _normalize_price_dataframe(data)
+
+
+def _with_start_anchor_row(data: pd.DataFrame, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
+    """Keep rows through end_dt and prepend last close <= start_dt when needed."""
+    if data is None or data.empty:
+        return pd.DataFrame()
+
+    eligible = data[data.index <= end_dt]
+    if eligible.empty:
+        return pd.DataFrame()
+
+    window_rows = eligible[eligible.index >= start_dt]
+    start_candidates = eligible[eligible.index <= start_dt]
+    if not start_candidates.empty:
+        anchor_row = start_candidates.tail(1)
+        anchor_index = anchor_row.index[-1]
+        has_exact_start = not window_rows.empty and window_rows.index[0] == anchor_index
+        if not has_exact_start:
+            window_rows = pd.concat([anchor_row, window_rows])
+            window_rows = window_rows[~window_rows.index.duplicated(keep="first")]
+
+    return window_rows.sort_index()
+
+
+def _last_close_at_or_before(data: pd.DataFrame, cutoff_dt: datetime) -> tuple[float | None, str | None]:
+    """Return the last valid close and date at or before cutoff_dt."""
+    if data is None or data.empty or "Close" not in data.columns:
+        return None, None
+    eligible = data[data.index <= cutoff_dt].dropna(subset=["Close"])
+    if eligible.empty:
+        return None, None
+    row = eligible.iloc[-1]
+    price = _coerce_positive_float(row.get("Close"))
+    if price is None:
+        return None, None
+    row_date = eligible.index[-1]
+    return price, row_date.strftime("%Y-%m-%d")
+
+
+def fetch_current_price(symbol: str, trade_date: str | None = None) -> dict[str, Any]:
+    """Fetch the analysis price anchor once using trade_date as the end date.
+
+    When trade_date is supplied, this intentionally uses the latest historical
+    daily close at or before trade_date. This keeps Analysis, trade levels, and
+    Chart & Price on the same snapshot instead of mixing a live fast_info quote
+    with a daily YOY price window. No price result is served from cache here.
     """
     normalized = normalize_ticker(symbol)
     wib = pytz.timezone("Asia/Jakarta")
     now = datetime.now(wib)
     currency = _currency_for_symbol(normalized)
+
+    if trade_date:
+        try:
+            cutoff_dt = datetime.strptime(str(trade_date)[:10], "%Y-%m-%d")
+            start_dt = cutoff_dt - timedelta(days=14)
+            hist = _download_price_history(normalized, start_dt, cutoff_dt)
+            price, price_date = _last_close_at_or_before(hist, cutoff_dt)
+            if price is None:
+                raise ValueError("No historical Close row found at or before trade_date")
+            return {
+                "price": price,
+                "price_currency": currency,
+                "price_source": "yfinance:daily:last_close",
+                "price_timestamp": price_date,
+                "requested_trade_date": cutoff_dt.strftime("%Y-%m-%d"),
+                "price_is_fallback": False,
+            }
+        except Exception as trade_date_exc:
+            logger.warning(
+                "Unable to fetch trade-date anchored price for %s on %s: %s",
+                normalized,
+                trade_date,
+                trade_date_exc,
+            )
 
     try:
         ticker = yf.Ticker(normalized)
@@ -196,27 +314,22 @@ def fetch_current_price(symbol: str) -> dict[str, Any]:
         }
     except Exception as primary_exc:
         try:
-            ticker = yf.Ticker(normalized)
-            hist = ticker.history(period="2d")
-            if hist is None or hist.empty or "Close" not in hist:
-                raise ValueError("history fallback returned no Close rows") from primary_exc
-
-            price = _coerce_positive_float(hist["Close"].iloc[-1])
+            now_naive = now.replace(tzinfo=None)
+            hist = _download_price_history(
+                normalized,
+                now_naive - timedelta(days=7),
+                now_naive,
+            )
+            price, price_date = _last_close_at_or_before(hist, now_naive)
             if price is None:
-                raise ValueError("history fallback returned invalid Close value") from primary_exc
-
-            price_date = hist.index[-1]
-            try:
-                price_timestamp = price_date.isoformat()
-            except AttributeError:
-                price_timestamp = str(price_date)
+                raise ValueError("history fallback returned no valid Close rows") from primary_exc
 
             return {
                 "price": price,
                 "price_currency": currency,
-                "price_source": "history_close_fallback",
-                "price_timestamp": price_timestamp,
-                "price_is_fallback": True,
+                "price_source": "yfinance:daily:last_close",
+                "price_timestamp": price_date,
+                "price_is_fallback": False,
             }
         except Exception as fallback_exc:
             logger.warning("Unable to fetch current price for %s: %s", normalized, fallback_exc)
@@ -225,7 +338,7 @@ def fetch_current_price(symbol: str) -> dict[str, Any]:
                 "price_currency": currency,
                 "price_source": "unavailable",
                 "price_timestamp": now.isoformat(),
-                "price_is_fallback": True,
+                "price_is_fallback": False,
                 "warning": str(fallback_exc),
             }
 
@@ -244,21 +357,31 @@ def _volatility_classification(score: float | None) -> str | None:
     return "Very High"
 
 
-def calculate_volatility(symbol: str, lookback_days: int = 20) -> dict[str, Any]:
+def calculate_volatility(symbol: str, trade_date: str | None = None) -> dict[str, Any]:
     """Calculate annualized daily-return volatility on a 0-100 scale."""
     normalized = normalize_ticker(symbol)
+    end_dt = datetime.strptime(trade_date, "%Y-%m-%d") if trade_date else datetime.now()
+    start_dt = end_dt - relativedelta(years=1)
+    # yfinance end is exclusive — add 1 day so trade_date row is included
+    fetch_end_dt = end_dt + timedelta(days=1)
     metadata = {
         "volatility_score": None,
         "volatility_scale": "0–100",
         "volatility_method": "Annualized standard deviation of daily returns, normalized to 0–100",
-        "volatility_lookback_days": lookback_days,
+        "volatility_lookback_days": 365,
+        "volatility_window": "YoY",
+        "volatility_start_date": start_dt.strftime("%Y-%m-%d"),
+        "volatility_end_date": end_dt.strftime("%Y-%m-%d"),
         "volatility_classification": None,
     }
     try:
-        hist = yf.Ticker(normalized).history(period=f"{lookback_days + 5}d")
+        hist = yf.Ticker(normalized).history(
+            start=start_dt.strftime("%Y-%m-%d"),
+            end=fetch_end_dt.strftime("%Y-%m-%d"),
+        )
         if hist is None or hist.empty or "Close" not in hist:
             return metadata
-        returns = hist["Close"].pct_change().dropna().tail(lookback_days)
+        returns = hist["Close"].pct_change().dropna()
         if len(returns) < 2:
             return metadata
         annual_vol = float(returns.std()) * math.sqrt(252)
@@ -285,28 +408,29 @@ def get_YFin_data_online(
     # Normalize ticker (handles IDX suffix e.g. BBCA -> BBCA.JK)
     symbol = normalize_ticker(symbol)
 
-    # Create ticker object
-    ticker = _get_ticker(symbol)
+    requested_start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    requested_end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-    # Fetch historical data for the specified date range
-    data = yf_retry(lambda: ticker.history(start=start_date, end=end_date))
+    # Fetch a small internal pre-start buffer so a non-trading YOY anchor such as
+    # a weekend/holiday can still use the last close at or before start_date.
+    # The requested business window remains start_date -> end_date; this buffer
+    # is only to locate the anchor close and is never used as the displayed end.
+    internal_start_dt = requested_start_dt - timedelta(days=14)
+    data = _download_price_history(symbol, internal_start_dt, requested_end_dt)
+    data = _with_start_anchor_row(data, requested_start_dt, requested_end_dt)
 
     # Check if data is empty
-    if data.empty:
+    if data is None or data.empty:
         return f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
-
-    # Remove timezone info from index for cleaner output
-    if data.index.tz is not None:
-        data.index = data.index.tz_localize(None)
 
     # Round numerical values to 2 decimal places for cleaner display
     numeric_columns = ["Open", "High", "Low", "Close", "Adj Close"]
     for col in numeric_columns:
         if col in data.columns:
-            data[col] = data[col].round(2)
+            data[col] = pd.to_numeric(data[col], errors="coerce").round(2)
 
     # Convert DataFrame to CSV string
-    csv_string = data.to_csv()
+    csv_string = data.to_csv(index_label="Date")
 
     # Add header information
     header = f"# Stock data for {symbol.upper()} from {start_date} to {end_date}\n"
@@ -344,9 +468,8 @@ def get_stock_stats_indicators_window(
     if indicator not in best_ind_params:
         raise ValueError(f"Indicator {indicator} is not supported. Please choose from: {list(best_ind_params.keys())}")
 
-    end_date = curr_date
     curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
-    before = curr_date_dt - relativedelta(days=look_back_days)
+    before = curr_date_dt - relativedelta(years=1)
 
     # Optimized: Get stock data once and calculate indicators for all dates
     try:
@@ -384,7 +507,7 @@ def get_stock_stats_indicators_window(
             curr_date_dt = curr_date_dt - relativedelta(days=1)
 
     result_str = (
-        f"## {indicator} values from {before.strftime('%Y-%m-%d')} to {end_date}:\n\n"
+        f"## {indicator} values from {before.strftime('%Y-%m-%d')} to {curr_date}:\n\n"
         + ind_string
         + "\n\n"
         + best_ind_params.get(indicator, "No description available.")
@@ -507,6 +630,21 @@ def get_fundamentals(
         return f"Error retrieving fundamentals for {ticker}: {str(e)}"
 
 
+
+def _clean_ownership_ratio(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    if number > 1:
+        number = number / 100
+    return max(0, min(number, 1))
+
+
 def _clean_profile_text(value: Any, max_length: int | None = None) -> str | None:
     if value is None:
         return None
@@ -552,6 +690,21 @@ def get_company_profile(
                 if name:
                     executives.append({"name": name, "title": title or "N/A"})
 
+        shares_out = info.get("sharesOutstanding")
+        insider_pct = _clean_ownership_ratio(info.get("heldPercentInsiders"))
+        institution_pct = _clean_ownership_ratio(info.get("heldPercentInstitutions"))
+        short_ratio = info.get("shortRatio")
+        public_pct = None
+        if insider_pct is not None and institution_pct is not None:
+            public_pct = max(0, 1 - (insider_pct + institution_pct))
+
+        current_price_payload = fetch_current_price(ticker, curr_date)
+        current_price = (
+            current_price_payload.get("price")
+            or info.get("currentPrice")
+            or info.get("regularMarketPrice")
+        )
+
         profile = {
             "available": True,
             "ticker": ticker,
@@ -565,15 +718,48 @@ def get_company_profile(
             "phone": _clean_profile_text(info.get("phone")),
             "website": _clean_profile_text(info.get("website") or info.get("ir_website")),
             "market_cap": info.get("marketCap"),
-            "shares_outstanding": info.get("sharesOutstanding"),
-            "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
+            "shares_outstanding": shares_out,
+            "shares_out": shares_out,
+            "insider_percent": insider_pct,
+            "insider_pct": insider_pct,
+            "institution_percent": institution_pct,
+            "institution_pct": institution_pct,
+            "public_percent": public_pct,
+            "public_pct": public_pct,
+            "short_ratio": short_ratio,
+            "current_price": current_price,
+            "current_price_source": current_price_payload.get("price_source"),
+            "current_price_as_of": current_price_payload.get("price_timestamp"),
             "fiscal_year_end": info.get("lastFiscalYearEnd"),
             "full_time_employees": info.get("fullTimeEmployees"),
             "description": _clean_profile_text(info.get("longBusinessSummary"), max_length=2000),
             "executives": executives,
+            "shares_ownership": {
+                "shares_out": shares_out,
+                "insider_pct": insider_pct,
+                "institution_pct": institution_pct,
+                "public_pct": public_pct,
+                "short_ratio": short_ratio,
+            },
         }
 
-        return {key: value for key, value in profile.items() if value not in (None, "")}
+        ownership_keys = {
+            "shares_outstanding",
+            "shares_out",
+            "insider_percent",
+            "insider_pct",
+            "institution_percent",
+            "institution_pct",
+            "public_percent",
+            "public_pct",
+            "short_ratio",
+            "shares_ownership",
+        }
+        return {
+            key: value
+            for key, value in profile.items()
+            if value not in (None, "") or key in ownership_keys
+        }
 
     except Exception as exc:
         logger.warning("Error retrieving company profile for %s: %s", ticker, exc)

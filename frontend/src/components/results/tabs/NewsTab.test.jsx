@@ -113,12 +113,52 @@ describe('NewsTab', () => {
   it('renders all high impact news without display limit', () => {
     render(<NewsTab result={makeNewsResult({ highImpactCount: 7, fullCount: 0 })} />);
 
+    expect(screen.getByText('NEWS')).toBeInTheDocument();
+    expect(screen.queryByText('HIGH-IMPACT NEWS')).not.toBeInTheDocument();
+    expect(screen.queryByText('FULL NEWS LIST')).not.toBeInTheDocument();
     expect(screen.getByText('High Impact Article 1')).toBeInTheDocument();
     expect(screen.getByText('High Impact Article 7')).toBeInTheDocument();
     expect(screen.getAllByText(/NEWS #/i).length).toBeGreaterThanOrEqual(7);
   });
 
-  it('renders all full news list items without display limit', () => {
+  it('sorts the unified news list by highest impact first', () => {
+    const result = makeNewsResult({ highImpactCount: 0, fullCount: 0 });
+    result.news_impact.full_news_list = [
+      makeArticle('Low Impact', 1, { impact: 'low', impact_score: 95 }),
+      makeArticle('High Impact', 1, { impact: 'high', impact_score: 20 }),
+      makeArticle('Medium Impact', 1, { impact: 'medium', impact_score: 90 }),
+    ];
+
+    render(<NewsTab result={result} />);
+
+    expect(screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent)).toEqual([
+      'High Impact Article 1',
+      'Medium Impact Article 1',
+      'Low Impact Article 1',
+    ]);
+  });
+
+  it('hides the top news summary and source status block', () => {
+    render(<NewsTab result={makeNewsResult({ highImpactCount: 1, fullCount: 1 })} />);
+
+    expect(screen.queryByText('News summary for GOTO.JK.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/NEWS SOURCES/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/LOOKBACK:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/FETCHED:/i)).not.toBeInTheDocument();
+    expect(screen.getByText('High Impact Article 1')).toBeInTheDocument();
+  });
+
+  it('hides low-value news card metadata', () => {
+    render(<NewsTab result={makeNewsResult({ highImpactCount: 1, fullCount: 1 })} />);
+
+    expect(screen.queryByText(/Category:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Impact Score:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Relevance:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Duplicate Removed:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Why it matters:/i)).not.toBeInTheDocument();
+  });
+
+  it('renders all full news list items in the unified news list without display limit', () => {
     render(<NewsTab result={makeNewsResult({ highImpactCount: 0, fullCount: 11 })} />);
 
     expect(screen.getByText('Full News Article 1')).toBeInTheDocument();
@@ -137,7 +177,7 @@ describe('NewsTab', () => {
     expect(screen.getAllByText(result.news_impact.high_impact_news[0].title)).toHaveLength(1);
   });
 
-  it('renders market context items inside full news list with scope label', () => {
+  it('renders market context items inside the unified news list with scope label', () => {
     render(<NewsTab result={makeNewsResultWithMarketContext()} />);
 
     expect(screen.getByText('Asian Markets Rally on US Inflation Data')).toBeInTheDocument();

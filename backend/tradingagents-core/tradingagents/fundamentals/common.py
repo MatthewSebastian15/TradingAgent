@@ -72,6 +72,9 @@ def build_snapshot(
         "shares_outstanding",
         "eps",
         "dividend_per_share",
+        "reference_price",
+        "free_cash_flow",
+        "market_cap",
     )
     snapshot: dict[str, Any] = {
         "currency": str(normalized.get("currency") or profile.get("currency") or "USD").upper(),
@@ -88,6 +91,9 @@ def build_snapshot(
         snapshot["period_keys"][field] = period_key
         snapshot[field] = _record_value(record)
 
+    if snapshot.get("current_price") is None and snapshot.get("reference_price") is not None:
+        snapshot["current_price"] = snapshot["reference_price"]
+
     if snapshot["shares_outstanding"] is None and isinstance(profile.get("shares_outstanding"), (int, float)):
         snapshot["shares_outstanding"] = float(profile["shares_outstanding"])
         snapshot["records"]["shares_outstanding"] = {
@@ -96,13 +102,16 @@ def build_snapshot(
             "source_field": "shares_outstanding",
         }
 
-    market_cap = None
-    market_cap_status = "unavailable"
-    market_cap_formula = "Current Price * Shares Outstanding"
-    if current_price is not None and snapshot["shares_outstanding"] is not None:
-        market_cap = current_price * snapshot["shares_outstanding"]
+    market_cap = snapshot.get("market_cap")
+    market_cap_record = snapshot.get("records", {}).get("market_cap") if isinstance(snapshot.get("records"), dict) else None
+    market_cap_is_profile = isinstance(market_cap_record, dict) and market_cap_record.get("source_vendor") == "company_profile"
+    market_cap_status = "estimated" if market_cap_is_profile else "reported" if market_cap is not None else "unavailable"
+    market_cap_formula = "Company profile market cap fallback" if market_cap_is_profile else "Reported period market cap"
+    if market_cap is None and snapshot.get("current_price") is not None and snapshot["shares_outstanding"] is not None:
+        market_cap = snapshot["current_price"] * snapshot["shares_outstanding"]
         market_cap_status = "calculated"
-    elif isinstance(profile.get("market_cap"), (int, float)):
+        market_cap_formula = "Current Price * Shares Outstanding"
+    elif market_cap is None and isinstance(profile.get("market_cap"), (int, float)):
         market_cap = float(profile["market_cap"])
         market_cap_status = "estimated"
         market_cap_formula = "Company profile market cap fallback"
@@ -145,7 +154,7 @@ def select_primary_method(snapshot: dict[str, Any]) -> str | None:
 
 def _display(value: float | None, format_type: str, currency: str) -> str:
     if value is None:
-        return "N/A"
+        return "-"
     if format_type == "percent":
         return format_percent(value)
     if format_type == "ratio":

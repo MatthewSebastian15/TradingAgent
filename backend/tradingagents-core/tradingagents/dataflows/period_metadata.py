@@ -259,7 +259,7 @@ def infer_period_metadata(
 
     if end_date:
         parsed = date.fromisoformat(end_date)
-        if normalized_hint == "quarterly" or _is_quarter_end(end_date):
+        if normalized_hint == "quarterly" or (normalized_hint != "annual" and _is_quarter_end(end_date)):
             return build_quarter_period_metadata(
                 parsed.year,
                 infer_quarter_from_date(end_date) or 4,
@@ -272,6 +272,17 @@ def infer_period_metadata(
             )
         return build_annual_period_metadata(
             parsed.year,
+            reported_date=reported_date,
+            as_of_date=as_of_date,
+            currency=currency,
+            unit=unit,
+            is_restated=is_restated,
+            audit_status=audit_status or "audited",
+        )
+
+    if normalized_hint == "annual" and year:
+        return build_annual_period_metadata(
+            year,
             reported_date=reported_date,
             as_of_date=as_of_date,
             currency=currency,

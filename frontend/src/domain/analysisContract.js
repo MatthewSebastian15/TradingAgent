@@ -2,6 +2,8 @@ export const DEFAULT_DEBATE_ROUNDS = 3;
 export const MIN_DEBATE_ROUNDS = 1;
 export const MAX_DEBATE_ROUNDS = 5;
 
+// Legacy exports kept for rerun/history panels that still import them.
+// The primary StockForm no longer uses market tabs or quick-pick tickers.
 export const MARKETS = {
   US: {
     label: 'US',
@@ -68,8 +70,7 @@ export const AGENT_ALIASES = {
 const ANALYSIS_DEPTHS = new Set(DEPTH_OPTIONS.map((item) => item.value));
 const HORIZON_VALUES = new Set(HORIZON_OPTIONS.map((item) => item.value));
 const RESPONSE_DETAILS = new Set(['summary', 'full', 'debug']);
-const IDX_TICKER_RE = /^[A-Z0-9]{1,10}$/;
-const TICKER_RE = /^[A-Z0-9]{1,10}([.-][A-Z0-9]{1,5})?$/;
+const YFINANCE_TICKER_RE = /^[A-Z0-9^][A-Z0-9^._=-]{0,24}$/;
 
 export function today() {
   const d = new Date();
@@ -79,18 +80,31 @@ export function today() {
 }
 
 export function normalizeTickerInput(value, marketId) {
-  const upperValue = value.toUpperCase();
+  const upperValue = String(value || '').toUpperCase();
   if (marketId === 'ID') {
     return upperValue
       .replace(/\.JK$/, '')
       .replace(/[^A-Z0-9]/g, '')
       .slice(0, 10);
   }
-  return upperValue.replace(/[^A-Z0-9.-]/g, '').slice(0, 12);
+  return upperValue.replace(/[^A-Z0-9^._=-]/g, '').slice(0, 25);
+}
+
+function normalizeSelectedTicker(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase();
+}
+
+function inferMarketFromTicker(ticker, activeMarket = null) {
+  const legacyMarket = String(activeMarket || '').toUpperCase();
+  if (legacyMarket === 'ID' || legacyMarket === 'US') return legacyMarket;
+  if (ticker.endsWith('.JK')) return 'ID';
+  if (/\.[A-Z0-9]{1,5}$/.test(ticker) || ticker.includes('=')) return 'GLOBAL';
+  return 'US';
 }
 
 export function validateAnalysisInput({
-  activeMarket,
   ticker,
   date,
   timeHorizonMonths,
@@ -98,12 +112,10 @@ export function validateAnalysisInput({
   analysisDepth,
   responseDetail,
 }) {
-  const normalizedTicker = ticker.trim().toUpperCase();
-  if (activeMarket === 'ID' && !IDX_TICKER_RE.test(normalizedTicker)) {
-    return 'Invalid IDX ticker. Enter code only, for example BBCA or UNVR.';
-  }
-  if (!TICKER_RE.test(normalizedTicker)) {
-    return 'Invalid ticker. Examples: BBCA, NVDA, AAPL, MSFT';
+  const normalizedTicker = normalizeSelectedTicker(ticker);
+  if (!normalizedTicker) return 'Select a ticker from the search results.';
+  if (!YFINANCE_TICKER_RE.test(normalizedTicker)) {
+    return 'Invalid ticker. Select a valid yfinance search result.';
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date must be YYYY-MM-DD';
   if (!HORIZON_VALUES.has(Number(timeHorizonMonths))) return 'Invalid analysis horizon.';
@@ -127,7 +139,7 @@ function optionalNumber(value) {
 }
 
 export function buildAnalysisPayload({
-  activeMarket,
+  activeMarket = null,
   ticker,
   date,
   timeHorizonMonths,
@@ -138,11 +150,12 @@ export function buildAnalysisPayload({
   positionQuantity = null,
   averageEntryPrice = null,
 }) {
+  const normalizedTicker = normalizeSelectedTicker(ticker);
   const hasPosition = Boolean(hasExistingPosition);
 
   return {
-    ticker: ticker.trim().toUpperCase(),
-    market: activeMarket,
+    ticker: normalizedTicker,
+    market: inferMarketFromTicker(normalizedTicker, activeMarket),
     trade_date: date,
     time_horizon_months: Number(timeHorizonMonths),
     max_debate_rounds: Number(rounds),

@@ -45,7 +45,7 @@ def convert_amount(value: float | None, *, source_unit: str | None, scale_diviso
 
 def format_number(value: float | None, decimals: int = 2) -> str:
     if value is None:
-        return "N/A"
+        return "-"
     return f"{value:,.{decimals}f}"
 
 
@@ -55,13 +55,13 @@ def format_currency_scaled(value: float | None, decimals: int = 1) -> str:
 
 def format_percent(value: float | None, decimals: int = 2) -> str:
     if value is None:
-        return "N/A"
+        return "-"
     return f"{value:,.{decimals}f}%"
 
 
 def format_ratio(value: float | None, decimals: int = 2) -> str:
     if value is None:
-        return "N/A"
+        return "-"
     return f"{value:,.{decimals}f}x"
 
 

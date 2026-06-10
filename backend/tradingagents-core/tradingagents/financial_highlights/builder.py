@@ -35,6 +35,7 @@ def build_financial_highlights(
         analysis_date=analysis_date,
         dividends=dividends,
         vendor_payloads=vendor_payloads,
+        company_profile=company_profile,
     )
     rows, sections, data_quality = build_metric_rows(periods=periods, normalized=normalized)
     metadata = currency_metadata(data_quality.get("currency"))
@@ -65,18 +66,18 @@ def build_financial_highlights(
         scale_label=str(metadata["scale_label"]),
         unit_note=str(metadata["unit_note"]),
         analysis_date=parse_analysis_date(analysis_date).isoformat(),
-        period_logic="fy22_to_analysis_quarter",
+        period_logic="fy23_to_analysis_quarter",
         periods=periods,
         point_in_time=point_in_time,
         sections=sections,
         rows=rows,
         notes=[
-            "Periods start from FY22 and extend dynamically based on the analysis date quarter.",
-            "Older historical periods remain visible even when vendor data is unavailable; missing values are shown as N/A.",
+            "Periods start from FY23 and extend dynamically based on the analysis date quarter.",
+            "Older historical periods remain visible even when vendor data is unavailable; missing values are shown as -.",
             f"Amount figures are displayed in {metadata['scale']}s unless the row unit states otherwise.",
             "Percentage values are displayed with the % symbol.",
             "Market Cap is shown as a point-in-time snapshot unless historical period-end market cap is available.",
-            "Unavailable values are shown as N/A.",
+            "Unavailable values are shown as -.",
         ],
         data_quality=data_quality,
     )

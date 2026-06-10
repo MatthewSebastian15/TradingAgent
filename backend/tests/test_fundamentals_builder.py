@@ -227,11 +227,11 @@ def test_missing_fundamental_data_returns_na_without_crash():
         financial_highlights=highlights,
     )
 
-    assert bundle["valuation_multiples"]["metric_details"]["pe"]["display"] == "N/A"
-    assert bundle["fair_value_range"]["metric_details"]["base"]["display"] == "N/A"
-    assert bundle["quality_of_earnings"]["metric_details"]["free_cash_flow"]["display"] == "N/A"
-    assert bundle["balance_sheet_risk"]["metric_details"]["net_debt"]["display"] == "N/A"
-    assert bundle["dividend_quality"]["metric_details"]["fcf_coverage"]["display"] == "N/A"
+    assert bundle["valuation_multiples"]["metric_details"]["pe"]["display"] == "-"
+    assert bundle["fair_value_range"]["metric_details"]["base"]["display"] == "-"
+    assert bundle["quality_of_earnings"]["metric_details"]["free_cash_flow"]["display"] == "-"
+    assert bundle["balance_sheet_risk"]["metric_details"]["net_debt"]["display"] == "-"
+    assert bundle["dividend_quality"]["metric_details"]["fcf_coverage"]["display"] == "-"
     assert bundle["peer_comparison"] is None
 
 
@@ -256,6 +256,6 @@ def test_peer_comparison_is_only_returned_for_optional_payload():
 def test_financial_trends_keep_period_alignment_and_metric_detail_formula():
     trends = _bundle()["financial_trends"]
 
-    assert [period["key"] for period in trends["periods"]] == ["FY22", "FY23", "FY24", "FY25"]
-    assert len(trends["metric_details"]["revenue"]) == 4
+    assert [period["key"] for period in trends["periods"]] == ["FY23", "FY24", "FY25"]
+    assert len(trends["metric_details"]["revenue"]) == 3
     assert trends["metric_details"]["revenue"][-1]["formula"] == "Reported financial statement value"

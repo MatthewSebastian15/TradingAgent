@@ -370,7 +370,7 @@ def test_parse_final_result_fallback_contract_is_non_actionable():
     parsed = _parse_final_result("", None, PortfolioRating, {"trade_date": "2026-05-18"})
 
     assert parsed["current_price"] is None
-    assert parsed["current_price_as_of"] == "2026-05-18"
+    assert parsed["current_price_as_of"] is None
     assert parsed["trade_plan_valid"] is False
     assert parsed["decision"] == "Hold"
     assert parsed["final_decision"] == "Hold"
@@ -379,6 +379,33 @@ def test_parse_final_result_fallback_contract_is_non_actionable():
     assert parsed["decision_adjusted"] is False
     assert parsed["validation_warnings"] == []
     assert parsed["data_quality"]["price_data"] == "missing"
+
+
+def test_parse_final_result_preserves_profile_price_fallback_fields():
+    from tradingagents.agents.schemas import PortfolioRating
+
+    from routes.analysis import _parse_final_result
+
+    parsed = _parse_final_result(
+        "",
+        None,
+        PortfolioRating,
+        {
+            "trade_date": "2026-06-09",
+            "last_close_price": 2690.0,
+            "last_close_price_as_of": "2026-06-09",
+            "last_close_price_source": "company_profile.current_price",
+            "price_source": "company_profile.current_price",
+            "price_timestamp": "2026-06-09",
+            "price_is_fallback": True,
+        },
+    )
+
+    assert parsed["current_price"] == 2690.0
+    assert parsed["current_price_as_of"] == "2026-06-09"
+    assert parsed["current_price_source"] == "company_profile.current_price"
+    assert parsed["price_timestamp"] == "2026-06-09"
+    assert parsed["price_is_fallback"] is True
     assert parsed["data_quality"]["trade_levels"] == "invalid"
     assert parsed["data_quality"]["llm_output"] == "fallback"
     assert parsed["data_quality"]["volatility_data"] == "missing"

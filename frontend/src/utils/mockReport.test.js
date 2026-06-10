@@ -198,11 +198,11 @@ describe('mockReport', () => {
     expect(report.full_news_items.some((item) => item.news_scope === 'MARKET CONTEXT')).toBe(true);
   });
 
-  it('renders the last high impact and full news item in report html', () => {
+  it('renders the last full news item in report html', () => {
     const result = makeMockResultWithNews({ highImpactCount: 7, fullCount: 11 });
     const html = buildMockReportHtml(result);
 
-    expect(html).toContain('High Impact GOTO News 7');
+    expect(html).not.toContain('High Impact GOTO News 7');
     expect(html).toContain('Full News GOTO News 11');
   });
 
@@ -236,9 +236,10 @@ describe('mockReport', () => {
     const html = buildMockReportHtml(MOCK_RESPONSE);
 
     expect(html).toContain('Key Financial Highlights');
-    expect(html).toContain('FY22');
+    expect(html).not.toContain('FY 2022');
+    expect(html).toContain('FY 2023');
     expect(html).toContain('Q1 2026');
-    expect(html).toContain('<th>Unit</th>');
+    expect(html).not.toContain('<th>Unit</th>');
     expect(html).toContain('USD Mn');
     expect(html).toContain('Revenue');
     expect(html).toContain('N/A');
@@ -247,15 +248,15 @@ describe('mockReport', () => {
     expect(html).toContain('Market &amp; Scale');
   });
 
-  it('renders Phase 2 fundamental sections and hides Peer Comparison without a payload', () => {
+  it('renders trimmed fundamental sections in mock HTML output', () => {
     const html = buildMockReportHtml(MOCK_RESPONSE);
     const withoutPeer = buildMockReportHtml({ ...MOCK_RESPONSE, peer_comparison: null });
 
-    expect(html).toContain('Financial Trend Analysis');
-    expect(html).toContain('<th>Unit</th>');
+    expect(html).not.toContain('Financial Trend Analysis');
+    expect(html).not.toContain('<th>Unit</th>');
     expect(html).toContain('Valuation Multiples');
-    expect(html).toContain('Fair Value Range');
-    expect(html).toContain('Bull / Base / Bear Scenario');
+    expect(html).not.toContain('Fair Value Range');
+    expect(html).not.toContain('Bull / Base / Bear Scenario');
     expect(html).toContain('Quality of Earnings');
     expect(html).toContain('Balance Sheet Risk');
     expect(html).toContain('Dividend Quality');
@@ -285,8 +286,8 @@ describe('mockReport', () => {
   it('renders Phase 3 summaries in mock HTML output', () => {
     const html = buildMockReportHtml(MOCK_RESPONSE);
 
-    expect(html).toContain('Technical Entry Quality');
-    expect(html).toContain('News Impact Summary');
+    expect(html).not.toContain('Technical Entry Quality');
+    expect(html).not.toContain('News Impact Summary');
     expect(html).toContain('Catalyst Tracker');
     expect(html).toContain('Analyst Recommendation Trend');
   });
@@ -294,13 +295,22 @@ describe('mockReport', () => {
   it('renders Phase 4 risk data quality sections in mock HTML output', () => {
     const html = buildMockReportHtml(MOCK_RESPONSE);
 
-    expect(html).toContain('Risk Summary');
     expect(html).toContain('Market Risk');
     expect(html).toContain('Risk-Adjusted Return');
-    expect(html).toContain('Thesis Monitor');
-    expect(html).toContain('Source Confidence &amp; Data Quality');
-    expect(html).toContain('Vendor Status');
-    expect(html).toContain('Calculation Notes');
+    expect(html).not.toContain('Risk Summary');
+    expect(html).not.toContain('Thesis Monitor');
+    expect(html).not.toContain('Source Confidence &amp; Data Quality');
+    expect(html).not.toContain('Vendor Status');
+    expect(html).not.toContain('Missing Fields');
+    expect(html).not.toContain('Stale Data Warning');
+    expect(html).not.toContain('Calculation Notes');
+    expect(html).not.toContain('Validation Warnings');
+    expect(html).not.toContain('Data Quality Notes');
+    expect(html).not.toContain('Data quality: partial');
+    expect(html).not.toContain('Data quality: complete');
+    expect(html).not.toContain(
+      'Label: expensive. EV/EBITDA is compared with the documented base policy multiple.'
+    );
   });
 
   it('renders static Full News List items in mock HTML output', () => {
