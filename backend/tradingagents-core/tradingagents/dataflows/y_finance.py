@@ -12,7 +12,7 @@ from dateutil.relativedelta import relativedelta
 
 from tradingagents.yfinance_runtime import yf
 
-from .stockstats_utils import StockstatsUtils, filter_financials_by_date, load_ohlcv, yf_retry
+from .stockstats_utils import StockstatsUtils, filter_financials_by_date, load_ohlcv, yf_deadline, yf_retry
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +199,7 @@ def _download_price_history(symbol: str, start_dt: datetime, end_dt: datetime) -
     """Download historical OHLCV with trade_date-inclusive end and no cache."""
     start_str = start_dt.strftime("%Y-%m-%d")
     fetch_end_str = _inclusive_fetch_end(end_dt)
+    deadline = yf_deadline()
     data = yf_retry(
         lambda: yf.download(
             symbol,
@@ -208,7 +209,9 @@ def _download_price_history(symbol: str, start_dt: datetime, end_dt: datetime) -
             progress=False,
             auto_adjust=False,
             threads=False,
-        )
+        ),
+        deadline=deadline,
+        service_name="yfinance.download",
     )
 
     if data is None or data.empty:
@@ -217,7 +220,9 @@ def _download_price_history(symbol: str, start_dt: datetime, end_dt: datetime) -
                 start=start_str,
                 end=fetch_end_str,
                 auto_adjust=False,
-            )
+            ),
+            deadline=deadline,
+            service_name="yfinance.history",
         )
     return _normalize_price_dataframe(data)
 
