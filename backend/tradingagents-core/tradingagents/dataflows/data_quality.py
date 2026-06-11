@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from tradingagents.utils.normalization import number as _number
+
 
 class DataQualityWarning(BaseModel):
     """Structured data-quality warning for API/UI severity rendering."""
@@ -118,13 +120,6 @@ def _quality(
         "warnings": warnings or [],
     }
 
-
-def _number(value) -> float | None:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if number == number else None
 
 
 def validate_quote(result: dict) -> dict:

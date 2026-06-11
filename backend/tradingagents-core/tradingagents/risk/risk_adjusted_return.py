@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-import math
 from typing import Any
 
+from tradingagents.utils.normalization import number as _number
 
-def _number(value: Any) -> float | None:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if math.isfinite(number) else None
 
 
 def _metric_value(payload: dict[str, Any] | None, key: str) -> float | None:

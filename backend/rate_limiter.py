@@ -57,7 +57,11 @@ class RateLimiterState:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
-_RATE_LIMITER_STATE = RateLimiterState()
+def create_rate_limiter_state() -> RateLimiterState:
+    return RateLimiterState()
+
+
+_RATE_LIMITER_STATE = create_rate_limiter_state()
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +73,11 @@ def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:24]
 
 
-def get_rate_limiter_state() -> RateLimiterState:
+def get_rate_limiter_state(request: Request | None = None) -> RateLimiterState:
+    if request is not None:
+        state = getattr(request.app.state, "rate_limiter_state", None)
+        if isinstance(state, RateLimiterState):
+            return state
     return _RATE_LIMITER_STATE
 
 
@@ -217,7 +225,7 @@ def limit_request(
     policy: RateLimitPolicy,
     limiter_state: RateLimiterState | None = None,
 ) -> RateLimitLease:
-    return RateLimitLease(get_client_identifier(request), policy, limiter_state)
+    return RateLimitLease(get_client_identifier(request), policy, limiter_state or get_rate_limiter_state(request))
 
 
 # ---------------------------------------------------------------------------
@@ -228,4 +236,4 @@ def limit_request(
 def reset_rate_limiter_for_tests() -> None:
     """Clear in-memory limiter state for deterministic tests."""
     global _RATE_LIMITER_STATE
-    _RATE_LIMITER_STATE = RateLimiterState()
+    _RATE_LIMITER_STATE = create_rate_limiter_state()

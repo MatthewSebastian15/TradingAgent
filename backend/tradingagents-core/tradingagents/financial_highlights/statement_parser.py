@@ -8,6 +8,8 @@ from datetime import datetime
 from io import StringIO
 from typing import Any
 
+from tradingagents.utils.normalization import number as _number
+
 from .models import FinancialPeriod
 
 VENDOR_PRIORITY = ("yfinance", "alpha_vantage", "finnhub")
@@ -142,23 +144,6 @@ NORMALIZED_ALIAS_MAP = {
 def _blank(value: Any) -> bool:
     return value is None or value == "" or value == "None" or value == "null"
 
-
-def _number(value: Any) -> float | None:
-    if isinstance(value, bool) or _blank(value):
-        return None
-    if isinstance(value, (int, float)):
-        number = float(value)
-    else:
-        text = str(value).strip().replace(",", "")
-        if not text:
-            return None
-        try:
-            number = float(text)
-        except ValueError:
-            return None
-    if number != number or number in {float("inf"), float("-inf")}:
-        return None
-    return number
 
 
 def _canonical_field(label: Any) -> str | None:

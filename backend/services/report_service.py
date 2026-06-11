@@ -14,6 +14,7 @@ from errors import ApiError, sanitize_message
 from routes import jobs
 from services.analysis_repository import get_analysis_repository
 from services.report_disclaimer import REPORT_DISCLAIMER
+from tradingagents.utils.normalization import as_dict as _as_dict, as_list as _as_list, clean_text as _clean_text
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +72,14 @@ class ReportGenerationError(ApiError):
         )
 
 
-async def get_analysis_result_for_report(job_id: str, *, owner_id: str) -> dict[str, Any]:
+async def get_analysis_result_for_report(job_id: str, *, owner_id: str, job_store: Any | None = None) -> dict[str, Any]:
     """Return a completed analysis payload by canonical job_id."""
 
-    job = await jobs.JOB_STORE.get(job_id, owner_id=owner_id)
+    store = job_store or jobs.get_analysis_runtime().job_store
+    job = await store.get(job_id, owner_id=owner_id)
     if job is not None and isinstance(job.result, dict):
         return dict(job.result)
-    if await jobs.JOB_STORE.get(job_id) is not None:
+    if await store.get(job_id) is not None:
         raise ReportNotFoundError(job_id)
 
     repository = get_analysis_repository()
@@ -87,13 +89,19 @@ async def get_analysis_result_for_report(job_id: str, *, owner_id: str) -> dict[
     raise ReportNotFoundError(job_id)
 
 
-async def get_analysis_result_for_report_by_request_id(request_id: str, *, owner_id: str) -> dict[str, Any]:
+async def get_analysis_result_for_report_by_request_id(
+    request_id: str,
+    *,
+    owner_id: str,
+    job_store: Any | None = None,
+) -> dict[str, Any]:
     """Return a completed analysis payload through the migration alias."""
 
-    job = await jobs.JOB_STORE.get_by_request_id(request_id, owner_id=owner_id)
+    store = job_store or jobs.get_analysis_runtime().job_store
+    job = await store.get_by_request_id(request_id, owner_id=owner_id)
     if job is not None and isinstance(job.result, dict):
         return dict(job.result)
-    if await jobs.JOB_STORE.get_by_request_id(request_id) is not None:
+    if await store.get_by_request_id(request_id) is not None:
         raise ReportNotFoundError(request_id)
 
     repository = get_analysis_repository()
@@ -420,12 +428,6 @@ def report_asset_health() -> dict[str, Any]:
     }
 
 
-def _clean_text(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
 
 def _strip_legacy_report_fields(value: Any) -> str | None:
     text = _clean_text(value)
@@ -442,13 +444,6 @@ def _coalesce(*values: Any) -> Any:
             return value
     return None
 
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _as_text_list(value: Any) -> list[str]:

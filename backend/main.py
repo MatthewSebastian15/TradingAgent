@@ -22,6 +22,8 @@ from errors import (
     validation_exception_handler,
 )
 from logging_config import RequestIdMiddleware, configure_logging
+from rate_limiter import create_rate_limiter_state
+from routes.jobs import create_analysis_runtime, install_analysis_runtime
 from routes.analysis import router as analysis_router
 from routes.analysis import shutdown_executor
 from routes.analysis_history import router as analysis_history_router
@@ -79,6 +81,8 @@ async def shutdown_resources() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.analysis_runtime = install_analysis_runtime(create_analysis_runtime())
+    app.state.rate_limiter_state = create_rate_limiter_state()
     await validate_config()
     try:
         yield

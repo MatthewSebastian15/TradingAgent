@@ -4,6 +4,8 @@ import json
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from tradingagents.utils.normalization import number_or_int as _number
+
 PROFILE_FIELDS = (
     "company_name",
     "ticker",
@@ -116,17 +118,6 @@ def _load_mapping(value: Any) -> Mapping[str, Any]:
         return parsed if isinstance(parsed, Mapping) else {}
     return {}
 
-
-def _number(value: Any) -> float | int | None:
-    if isinstance(value, bool) or _blank(value):
-        return None
-    try:
-        number = float(str(value).replace(",", ""))
-    except (TypeError, ValueError):
-        return None
-    if number != number or number in {float("inf"), float("-inf")}:
-        return None
-    return int(number) if number.is_integer() else number
 
 
 def _text(value: Any) -> str | None:
