@@ -33,7 +33,7 @@ backtesting = [
     "backtrader==1.9.78.123",
 ]
 dev = [
-    "ruff>=0.8,<1",
+    "ruff==0.15.14",
 ]
 
 

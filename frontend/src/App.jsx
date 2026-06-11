@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Analysis from './pages/Analysis';
 import News from './pages/News';
@@ -20,6 +20,29 @@ import './index.css';
 const ENABLE_MOCK_ROUTE = import.meta.env.VITE_ENABLE_MOCK === 'true';
 const AnalysisMock = ENABLE_MOCK_ROUTE ? lazy(() => import('./pages/AnalysisMock')) : null;
 
+
+function buildResourceRedirectPath(basePath, resourceId) {
+  const normalizedResourceId = typeof resourceId === 'string' ? resourceId.trim() : '';
+
+  if (!normalizedResourceId) {
+    return basePath;
+  }
+
+  return `${basePath}/${encodeURIComponent(normalizedResourceId)}`;
+}
+
+function LegacyAnalysisRedirect() {
+  const { resourceId } = useParams();
+
+  return <Navigate to={buildResourceRedirectPath(AI_RESEARCH_PATH, resourceId)} replace />;
+}
+
+function LegacyAnalysisMockRedirect() {
+  const { resourceId } = useParams();
+
+  return <Navigate to={buildResourceRedirectPath(AI_RESEARCH_MOCK_PATH, resourceId)} replace />;
+}
+
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-bloomberg-bg flex items-center justify-center">
@@ -38,15 +61,7 @@ function App() {
           <Route path={AI_RESEARCH_PATH} element={<Analysis />} />
           <Route path={`${AI_RESEARCH_PATH}/:resourceId`} element={<Analysis />} />
           <Route path={LEGACY_ANALYSIS_PATH} element={<Navigate to={AI_RESEARCH_PATH} replace />} />
-          <Route
-            path={`${LEGACY_ANALYSIS_PATH}/:resourceId`}
-            element={
-              <Navigate
-                to={`${AI_RESEARCH_PATH}${window.location.pathname.slice(LEGACY_ANALYSIS_PATH.length)}`}
-                replace
-              />
-            }
-          />
+          <Route path={`${LEGACY_ANALYSIS_PATH}/:resourceId`} element={<LegacyAnalysisRedirect />} />
           <Route
             path={LEGACY_ANALYSIS_LIVE_PATH}
             element={<Navigate to={AI_RESEARCH_PATH} replace />}
@@ -68,12 +83,7 @@ function App() {
           {ENABLE_MOCK_ROUTE && AnalysisMock && (
             <Route
               path={`${LEGACY_ANALYSIS_MOCK_PATH}/:resourceId`}
-              element={
-                <Navigate
-                  to={`${AI_RESEARCH_MOCK_PATH}${window.location.pathname.slice(LEGACY_ANALYSIS_MOCK_PATH.length)}`}
-                  replace
-                />
-              }
+              element={<LegacyAnalysisMockRedirect />}
             />
           )}
           {ENABLE_MOCK_ROUTE && AnalysisMock && (

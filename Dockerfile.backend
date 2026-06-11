@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0 AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DEFAULT_TIMEOUT=300 \
@@ -11,19 +11,18 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip setuptools wheel
+RUN pip install pip==25.3 setuptools==82.0.1 wheel==0.45.1
 
 COPY backend/requirements.txt /build/backend/requirements.txt
 COPY backend/tradingagents-core /build/backend/tradingagents-core
 
 WORKDIR /build/backend
 
-RUN grep -vE '^-e[[:space:]]+\./tradingagents-core[[:space:]]*$' requirements.txt > /build/requirements-api.txt \
-    && pip wheel --wheel-dir=/wheels -r /build/requirements-api.txt \
+RUN pip wheel --wheel-dir=/wheels -r requirements.txt \
     && pip wheel --wheel-dir=/wheels ./tradingagents-core
 
 
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -56,7 +55,7 @@ COPY --chown=tradingagent:tradingagent backend /app/backend
 
 WORKDIR /app/backend
 
-RUN pip install --no-index --find-links=/wheels -r requirements.txt \
+RUN pip install --no-index --find-links=/wheels -r requirements.txt tradingagents==0.2.4 \
     && rm -rf /wheels \
     && chown -R tradingagent:tradingagent /app /home/tradingagent
 
