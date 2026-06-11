@@ -89,7 +89,7 @@ def test_analyze_persists_completed_result(client, monkeypatch, analysis_reposit
     )
 
     assert response.status_code == 200
-    stored = analysis_repository.get_analysis(response.json()["request_id"])
+    stored = analysis_repository.get_analysis(response.json()["request_id"], owner_id=_TEST_OWNER_IDENTIFIER)
     assert stored is not None
     assert stored["request_id"] == response.json()["request_id"]
     assert stored["ticker"] == "AAPL"

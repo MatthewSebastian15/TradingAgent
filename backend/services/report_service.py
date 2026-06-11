@@ -87,7 +87,6 @@ async def get_analysis_result_for_report(job_id: str, *, owner_id: str, job_stor
         repository.get_analysis_by_job_id,
         job_id,
         owner_id=owner_id,
-        bind_legacy_owner=True,
     )
     if isinstance(result, dict):
         return result
@@ -114,7 +113,6 @@ async def get_analysis_result_for_report_by_request_id(
         repository.get_analysis,
         request_id,
         owner_id=owner_id,
-        bind_legacy_owner=True,
     )
     if isinstance(result, dict):
         return result

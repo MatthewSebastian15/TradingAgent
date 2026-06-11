@@ -42,7 +42,6 @@ async def get_analysis_history_result(request_id: str, request: Request):
             repository.get_analysis,
             request_id,
             owner_id=lease.identifier,
-            bind_legacy_owner=True,
         )
         if result is None:
             raise _history_not_found(request_id)
