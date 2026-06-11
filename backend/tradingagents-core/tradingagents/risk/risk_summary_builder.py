@@ -3,26 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from tradingagents.data_quality import build_source_confidence
+from tradingagents.utils.normalization import as_dict as _as_dict, as_list as _as_list, number as _number
 
 from .market_risk_builder import build_market_risk
 from .risk_adjusted_return import build_risk_adjusted_return
 from .thesis_monitor import build_thesis_monitor
 
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _number(value: Any) -> float | None:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if number == number else None
 
 
 def _metric_display(payload: dict[str, Any], key: str) -> str:

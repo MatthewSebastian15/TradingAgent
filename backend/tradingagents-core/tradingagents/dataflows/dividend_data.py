@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from tradingagents.utils.normalization import number as _number
+
 DIVIDEND_STATUSES = {
     "available",
     "partial",
@@ -13,15 +15,6 @@ DIVIDEND_STATUSES = {
     "period_mismatch",
 }
 
-
-def _number(value: Any) -> float | None:
-    if value in (None, "", "N/A", "n/a", "NA", "-") or isinstance(value, bool):
-        return None
-    try:
-        number = float(str(value).replace(",", ""))
-    except (TypeError, ValueError):
-        return None
-    return number if number == number else None
 
 
 def _cash_dividend_amount(row: dict[str, Any]) -> float | None:

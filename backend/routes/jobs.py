@@ -7,6 +7,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from fastapi import Request
+
 from analysis_cache import (
     AnalysisJob,
     AnalysisJobStore,
@@ -71,7 +73,11 @@ IN_FLIGHT = _RUNTIME.in_flight
 JOB_STORE = _RUNTIME.job_store
 
 
-def get_analysis_runtime() -> AnalysisRuntimeState:
+def get_analysis_runtime(request: Request | None = None) -> AnalysisRuntimeState:
+    if request is not None:
+        runtime = getattr(request.app.state, "analysis_runtime", None)
+        if isinstance(runtime, AnalysisRuntimeState):
+            return runtime
     return _RUNTIME
 
 

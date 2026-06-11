@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+from tradingagents.utils.normalization import as_dict as _as_dict, as_list as _as_list, number as _number
+
 KNOWN_VENDORS = ("idx_official", "yfinance", "alpha_vantage", "finnhub", "google_news_light", "marketaux", "newsdata")
 SUCCESS_STATUSES = {"success", "cache_hit", "ok", "complete"}
 PARTIAL_STATUSES = {"partial", "fallback"}
@@ -32,21 +34,6 @@ IMPORTANT_FIELDS = {
     "sections": "medium",
 }
 
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _number(value: Any) -> float | None:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if number == number else None
 
 
 def _impact(field: str) -> str:

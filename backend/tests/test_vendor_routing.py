@@ -140,12 +140,12 @@ def test_build_config_preserves_environment_vendor_order_for_every_category(monk
             for category, env_name in _DATA_VENDOR_ENV_BY_CATEGORY.items():
                 env.setenv(env_name, expected[category])
             importlib.reload(default_config)
-            reloaded_config = importlib.reload(config)
+            reloaded_config = config.reload_config_for_tests()
 
             assert reloaded_config.build_tradingagents_config()["data_vendors"] == expected
     finally:
         importlib.reload(default_config)
-        importlib.reload(config)
+        config.reload_config_for_tests()
 
 
 def test_news_relevance_thresholds_use_separate_environment_keys(monkeypatch):
@@ -158,14 +158,14 @@ def test_news_relevance_thresholds_use_separate_environment_keys(monkeypatch):
             env.setenv("NEWS_MIN_RELEVANCE_SCORE", "72")
             env.setenv("DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE", "0.42")
             importlib.reload(default_config)
-            reloaded_config = importlib.reload(config)
+            reloaded_config = config.reload_config_for_tests()
             built_config = reloaded_config.build_tradingagents_config()
 
             assert built_config["news"]["min_relevance_score"] == 72
             assert built_config["news_min_relevance_score"] == pytest.approx(0.42)
     finally:
         importlib.reload(default_config)
-        importlib.reload(config)
+        config.reload_config_for_tests()
 
 
 def test_vendor_order_skips_vendor_without_method(monkeypatch):

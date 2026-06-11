@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from rate_limiter import limit_request, request_policy
+from routes import jobs
 from services.analysis_repository import get_analysis_repository
 from services.report_disclaimer import REPORT_DISCLAIMER
 from services.report_service import (
@@ -143,7 +144,9 @@ async def get_analysis_report_html(job_id: str, request: Request) -> HTMLRespons
     """Preview an existing completed analysis result as a professional HTML report."""
 
     async with limit_request(request, request_policy()) as lease:
-        result = await get_analysis_result_for_report(job_id, owner_id=lease.identifier)
+        result = await get_analysis_result_for_report(
+            job_id, owner_id=lease.identifier, job_store=jobs.get_analysis_runtime(request).job_store
+        )
         response = _html_response_from_result(result)
         await _mark_exported_best_effort(result, "html", owner_id=lease.identifier)
         return response
@@ -154,7 +157,9 @@ async def get_analysis_report_pdf(job_id: str, request: Request) -> Response:
     """Download an existing completed analysis result as a PDF report."""
 
     async with limit_request(request, request_policy()) as lease:
-        result = await get_analysis_result_for_report(job_id, owner_id=lease.identifier)
+        result = await get_analysis_result_for_report(
+            job_id, owner_id=lease.identifier, job_store=jobs.get_analysis_runtime(request).job_store
+        )
         response = await _pdf_response_from_result_async(result)
         await _mark_exported_best_effort(result, "pdf", owner_id=lease.identifier)
         return response
@@ -165,7 +170,9 @@ async def get_analysis_report_html_alias(request_id: str, request: Request) -> H
     """Preview a report through the owner-checked request_id migration alias."""
 
     async with limit_request(request, request_policy()) as lease:
-        result = await get_analysis_result_for_report_by_request_id(request_id, owner_id=lease.identifier)
+        result = await get_analysis_result_for_report_by_request_id(
+            request_id, owner_id=lease.identifier, job_store=jobs.get_analysis_runtime(request).job_store
+        )
         response = _html_response_from_result(result)
         await _mark_exported_best_effort(result, "html", owner_id=lease.identifier)
         return response
@@ -176,7 +183,9 @@ async def get_analysis_report_pdf_alias(request_id: str, request: Request) -> Re
     """Download a report through the owner-checked request_id migration alias."""
 
     async with limit_request(request, request_policy()) as lease:
-        result = await get_analysis_result_for_report_by_request_id(request_id, owner_id=lease.identifier)
+        result = await get_analysis_result_for_report_by_request_id(
+            request_id, owner_id=lease.identifier, job_store=jobs.get_analysis_runtime(request).job_store
+        )
         response = await _pdf_response_from_result_async(result)
         await _mark_exported_best_effort(result, "pdf", owner_id=lease.identifier)
         return response

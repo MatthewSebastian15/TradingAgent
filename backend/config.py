@@ -6,8 +6,8 @@ The concrete settings live in focused modules:
 - config_llm.py: provider/model settings and TradingAgents config builder
 - config_validation.py: startup validation
 
-This module preserves the existing `from config import ...` API while keeping
-test reloads deterministic when environment variables change.
+This module preserves the existing `from config import ...` API. Tests that need
+environment-sensitive settings must call `reload_config_for_tests()` explicitly.
 """
 
 from __future__ import annotations
@@ -19,9 +19,14 @@ import sys
 
 _CONFIG_MODULES = ("config_env", "config_defaults", "config_llm", "config_validation")
 
-for _module_name in _CONFIG_MODULES:
-    if _module_name in sys.modules:
-        importlib.reload(sys.modules[_module_name])
+
+def reload_config_for_tests():
+    """Reload config modules only when tests explicitly request fresh env state."""
+    for module_name in _CONFIG_MODULES:
+        module = importlib.import_module(module_name)
+        importlib.reload(module)
+    return importlib.reload(sys.modules[__name__])
+
 
 from config_defaults import (
     ADAPTIVE_DEBATE_ENABLED,

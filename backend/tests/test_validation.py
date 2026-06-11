@@ -66,9 +66,9 @@ def test_startup_rejects_invalid_data_vendor_news_relevance_score(monkeypatch):
         with monkeypatch.context() as env:
             env.setenv("DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE", "1.5")
             with pytest.raises(ValueError, match="DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE"):
-                importlib.reload(config)
+                config.reload_config_for_tests()
     finally:
-        importlib.reload(config)
+        config.reload_config_for_tests()
 
 
 def test_ticker_bbcajk_is_valid():
@@ -192,13 +192,13 @@ def test_deepseek_provider_is_valid_when_api_key_exists(monkeypatch):
 
     import config
 
-    reloaded = importlib.reload(config)
+    reloaded = config.reload_config_for_tests()
     errors = reloaded.validate_startup_config()
 
     assert not [error for error in errors if "DEEPSEEK_API_KEY" in error or "LLM_PROVIDER" in error]
 
     monkeypatch.setenv("LLM_PROVIDER", "google")
-    importlib.reload(config)
+    config.reload_config_for_tests()
 
 
 def test_startup_config_requires_model_env(monkeypatch):
@@ -209,7 +209,7 @@ def test_startup_config_requires_model_env(monkeypatch):
 
     import config
 
-    reloaded = importlib.reload(config)
+    reloaded = config.reload_config_for_tests()
     try:
         errors = reloaded.validate_startup_config()
         assert "DEEP_THINK_LLM must not be empty." in errors
@@ -226,7 +226,7 @@ def test_google_model_env_values_are_normalized_to_lowercase(monkeypatch):
 
     import config
 
-    reloaded = importlib.reload(config)
+    reloaded = config.reload_config_for_tests()
     try:
         assert reloaded.llm.deep_think_llm == "gemini-3.5-flash"
         assert reloaded.llm.quick_think_llm == "gemini-3.1-flash-lite"
@@ -245,7 +245,7 @@ def _restore_test_config(monkeypatch):
 
     import config
 
-    importlib.reload(config)
+    config.reload_config_for_tests()
 
 
 def test_production_defaults_require_api_key_and_rate_limit(monkeypatch):
@@ -257,7 +257,7 @@ def test_production_defaults_require_api_key_and_rate_limit(monkeypatch):
 
     import config
 
-    reloaded = importlib.reload(config)
+    reloaded = config.reload_config_for_tests()
     try:
         assert reloaded.APP_ENV == "production"
         assert reloaded.IS_PRODUCTION is True
@@ -275,7 +275,7 @@ def test_missing_app_env_uses_development_defaults(monkeypatch):
 
     import config
 
-    reloaded = importlib.reload(config)
+    reloaded = config.reload_config_for_tests()
     try:
         assert reloaded.APP_ENV == "development"
         assert reloaded.IS_DEVELOPMENT is True
@@ -297,7 +297,7 @@ def test_invalid_app_env_is_rejected(monkeypatch):
 
     try:
         with pytest.raises(ValueError, match="Invalid APP_ENV"):
-            importlib.reload(config)
+            config.reload_config_for_tests()
     finally:
         _restore_test_config(monkeypatch)
 
@@ -312,7 +312,7 @@ def test_production_requires_cors_origins(monkeypatch):
 
     try:
         with pytest.raises(ValueError, match="CORS_ORIGINS must be explicitly configured"):
-            importlib.reload(config)
+            config.reload_config_for_tests()
     finally:
         _restore_test_config(monkeypatch)
 
@@ -326,7 +326,7 @@ def test_production_requires_api_key(monkeypatch):
 
     try:
         with pytest.raises(ValueError, match="API_KEY must be configured in production"):
-            importlib.reload(config)
+            config.reload_config_for_tests()
     finally:
         _restore_test_config(monkeypatch)
 
@@ -342,7 +342,7 @@ def test_production_requires_owner_session_secret(monkeypatch):
 
     try:
         with pytest.raises(ValueError, match="OWNER_SESSION_SECRET must be configured in production"):
-            importlib.reload(config)
+            config.reload_config_for_tests()
     finally:
         _restore_test_config(monkeypatch)
 
@@ -355,7 +355,7 @@ def test_wildcard_cors_is_rejected(monkeypatch):
 
     try:
         with pytest.raises(ValueError, match=r"CORS_ORIGINS='\*' is not allowed"):
-            importlib.reload(config)
+            config.reload_config_for_tests()
     finally:
         _restore_test_config(monkeypatch)
 
@@ -369,7 +369,7 @@ def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
 
     import config
 
-    reloaded = importlib.reload(config)
+    reloaded = config.reload_config_for_tests()
     try:
         assert reloaded.CORS_ORIGINS == ["https://app.example.com", "https://admin.example.com"]
     finally:
@@ -387,7 +387,7 @@ def test_production_rejects_disabled_api_key_requirement(monkeypatch):
 
     try:
         with pytest.raises(ValueError, match="REQUIRE_API_KEY_FOR_RATE_LIMIT=false is not allowed in production"):
-            importlib.reload(config)
+            config.reload_config_for_tests()
     finally:
         _restore_test_config(monkeypatch)
 

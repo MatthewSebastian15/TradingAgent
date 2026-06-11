@@ -38,6 +38,24 @@ logger = logging.getLogger(__name__)
 _RESULT_CACHE = jobs.RESULT_CACHE
 _IN_FLIGHT = jobs.IN_FLIGHT
 _JOB_STORE = jobs.JOB_STORE
+_DEFAULT_RESULT_CACHE = _RESULT_CACHE
+_DEFAULT_IN_FLIGHT = _IN_FLIGHT
+_DEFAULT_JOB_STORE = _JOB_STORE
+
+
+def _runtime_for_request(request: Request | None = None) -> jobs.AnalysisRuntimeState:
+    if (
+        _RESULT_CACHE is not _DEFAULT_RESULT_CACHE
+        or _IN_FLIGHT is not _DEFAULT_IN_FLIGHT
+        or _JOB_STORE is not _DEFAULT_JOB_STORE
+    ):
+        return jobs.AnalysisRuntimeState(_RESULT_CACHE, _IN_FLIGHT, _JOB_STORE)
+    return jobs.get_analysis_runtime(request)
+
+
+def _job_store_for_request(request: Request | None = None):
+    return _runtime_for_request(request).job_store if request is not None else _JOB_STORE
+
 
 _parse_final_result = serializers.parse_final_result
 _cache_key = serializers.cache_key
@@ -199,11 +217,15 @@ async def _preflight_market_data(req: AnalysisRequest) -> None:
 
 
 def _callable_accepts_request_argument(func: Callable[..., Any]) -> bool:
+    return _callable_accepts_named_argument(func, "request")
+
+
+def _callable_accepts_named_argument(func: Callable[..., Any], name: str) -> bool:
     try:
         params = signature(func).parameters
     except (TypeError, ValueError):
         return True
-    if "request" in params:
+    if name in params:
         return True
     return any(param.kind == Parameter.VAR_KEYWORD for param in params.values())
 
@@ -212,6 +234,18 @@ async def _call_run_pipeline_async(req: AnalysisRequest, request_id: str, reques
     if _callable_accepts_request_argument(_run_pipeline_async):
         return await _run_pipeline_async(req, request_id, request=request)
     return await _run_pipeline_async(req, request_id)
+
+
+async def _call_run_stream_pipeline(
+    req: AnalysisRequest,
+    request_id: str,
+    queue: asyncio.Queue,
+    cancel_event: asyncio.Event | None,
+    runtime: jobs.AnalysisRuntimeState,
+) -> dict[str, Any]:
+    if _callable_accepts_named_argument(_run_stream_pipeline, "runtime"):
+        return await _run_stream_pipeline(req, request_id, queue, cancel_event, runtime=runtime)
+    return await _run_stream_pipeline(req, request_id, queue, cancel_event)
 
 
 async def _compute_result_fields(
@@ -230,14 +264,16 @@ async def _get_or_start_analysis(
     *,
     use_cache: bool,
     use_deduplication: bool = True,
+    runtime: jobs.AnalysisRuntimeState | None = None,
 ) -> dict[str, Any]:
+    runtime = runtime or _runtime_for_request()
     return await jobs.get_or_start_analysis(
         req,
         factory,
         use_cache=use_cache,
         use_in_flight=use_deduplication,
-        result_cache=_RESULT_CACHE,
-        in_flight=_IN_FLIGHT,
+        result_cache=runtime.result_cache,
+        in_flight=runtime.in_flight,
         cache_key_func=_cache_key,
     )
 
@@ -250,6 +286,7 @@ async def _execute_analysis(
 ) -> dict:
     """Run cached/deduplicated JSON analysis."""
     async with limit_request(request, policy) as lease:
+        runtime = _runtime_for_request(request)
 
         async def factory() -> dict[str, Any]:
             return await _compute_result_fields(req, request_id, request)
@@ -259,6 +296,7 @@ async def _execute_analysis(
             factory,
             use_cache=ROUTE_DEPS.enable_result_cache,
             use_deduplication=ROUTE_DEPS.enable_cache_deduplication,
+            runtime=runtime,
         )
         payload = _response_payload(request_id, req, fields)
         await _save_analysis_result_async(payload, req, owner_id=lease.identifier)
@@ -270,7 +308,9 @@ async def _run_stream_pipeline(
     request_id: str,
     queue: asyncio.Queue,
     cancel_event: asyncio.Event | None = None,
+    runtime: jobs.AnalysisRuntimeState | None = None,
 ) -> dict[str, Any]:
+    runtime = runtime or _runtime_for_request()
     return await sse.run_stream_pipeline(
         req,
         request_id,
@@ -280,7 +320,7 @@ async def _run_stream_pipeline(
         get_cancel_manager_func=_get_cancel_manager,
         get_executor_func=_get_executor,
         pipeline_worker_func=_run_pipeline_with_progress_worker,
-        result_cache=_RESULT_CACHE,
+        result_cache=runtime.result_cache,
         cache_key_func=_cache_key,
         shape_result_func=_shape_result,
         with_data_fetched_at_func=_with_data_fetched_at,
@@ -295,16 +335,30 @@ async def _stream_progress_and_result(
     request_id: str,
     rate_limit_lease=None,
 ):
+    runtime = _runtime_for_request(request)
+
+    async def run_stream_pipeline_with_runtime(req, request_id, queue, cancel_event):
+        return await _call_run_stream_pipeline(req, request_id, queue, cancel_event, runtime)
+
+    async def get_or_start_analysis_with_runtime(req, factory, *, use_cache, use_deduplication=True):
+        return await _get_or_start_analysis(
+            req,
+            factory,
+            use_cache=use_cache,
+            use_deduplication=use_deduplication,
+            runtime=runtime,
+        )
+
     async for event in sse.stream_progress_and_result(
         request,
         req,
         request_id,
         rate_limit_lease,
-        result_cache=_RESULT_CACHE,
+        result_cache=runtime.result_cache,
         cache_key_func=_cache_key,
         response_payload_func=_response_payload,
-        run_stream_pipeline_func=_run_stream_pipeline,
-        get_or_start_analysis_func=_get_or_start_analysis,
+        run_stream_pipeline_func=run_stream_pipeline_with_runtime,
+        get_or_start_analysis_func=get_or_start_analysis_with_runtime,
         persist_result_func=_save_analysis_result_async,
         use_cache=ROUTE_DEPS.enable_result_cache,
         use_deduplication=ROUTE_DEPS.enable_cache_deduplication,
@@ -328,11 +382,16 @@ async def _wait_for_job_progress(source_queue: asyncio.Queue) -> None:
     await jobs.wait_for_job_progress(source_queue)
 
 
-async def _start_job(job) -> None:
+async def _start_job(job, runtime: jobs.AnalysisRuntimeState | None = None) -> None:
+    runtime = runtime or _runtime_for_request()
+
+    async def run_stream_pipeline_with_runtime(req, request_id, queue, cancel_event):
+        return await _call_run_stream_pipeline(req, request_id, queue, cancel_event, runtime)
+
     await jobs.start_job(
         job,
-        result_cache=_RESULT_CACHE,
-        run_stream_pipeline_func=_run_stream_pipeline,
+        result_cache=runtime.result_cache,
+        run_stream_pipeline_func=run_stream_pipeline_with_runtime,
         response_payload_func=_response_payload,
         persist_result_func=_save_analysis_result_async,
         use_cache=ROUTE_DEPS.enable_result_cache,
@@ -369,14 +428,19 @@ async def analyze(req: AnalysisRequest, request: Request):
     return await _execute_analysis(request, req, request_id, request_policy())
 
 
-async def _create_analysis_job_response(req: AnalysisRequest, request_id: str, owner_id: str) -> dict[str, str]:
-    job = await _JOB_STORE.create(
+async def _create_analysis_job_response(
+    req: AnalysisRequest,
+    request_id: str,
+    owner_id: str,
+    runtime: jobs.AnalysisRuntimeState,
+) -> dict[str, str]:
+    job = await runtime.job_store.create(
         owner_id=owner_id,
         request_id=request_id,
         cache_key=_cache_key(req),
         payload=req.model_dump(),
     )
-    job.task = asyncio.create_task(_start_job(job))
+    job.task = asyncio.create_task(_start_job(job, runtime=runtime))
     _log_request_accepted("job", request_id, req)
     return {
         "job_id": job.id,
@@ -394,7 +458,8 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
 
     try:
         async with limit_request(request, stream_policy()) as lease:
-            return await _create_analysis_job_response(req, request_id, lease.identifier)
+            runtime = _runtime_for_request(request)
+            return await _create_analysis_job_response(req, request_id, lease.identifier, runtime)
     except AnalysisJobLimitError as exc:
         raise RateLimitError(
             "Too many analysis jobs are already queued or running.",
@@ -405,9 +470,10 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
 @router.get("/analysis/jobs/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
 async def get_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
-        job = await _JOB_STORE.get(job_id, owner_id=lease.identifier)
+        job_store = _job_store_for_request(request)
+        job = await job_store.get(job_id, owner_id=lease.identifier)
         if job is None:
-            if await _JOB_STORE.get(job_id) is not None:
+            if await job_store.get(job_id) is not None:
                 raise _job_not_found(job_id)
             history_summary = await _completed_job_summary_from_history(job_id, owner_id=lease.identifier)
             if history_summary is None:
@@ -425,10 +491,11 @@ async def get_analysis_job(job_id: str, request: Request):
 )
 async def get_analysis_result_by_request_id(request_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
-        job = await _JOB_STORE.get_by_request_id(request_id, owner_id=lease.identifier)
+        job_store = _job_store_for_request(request)
+        job = await job_store.get_by_request_id(request_id, owner_id=lease.identifier)
         if job is not None and job.result is not None:
             return job.result
-        if await _JOB_STORE.get_by_request_id(request_id) is not None:
+        if await job_store.get_by_request_id(request_id) is not None:
             raise _analysis_result_not_found(request_id)
 
         repository = get_analysis_repository()
@@ -443,7 +510,7 @@ async def analysis_job_events(job_id: str, request: Request):
     rate_limit_lease = limit_request(request, request_policy())
     await rate_limit_lease.__aenter__()
     try:
-        job = await _JOB_STORE.get(job_id, owner_id=rate_limit_lease.identifier)
+        job = await _job_store_for_request(request).get(job_id, owner_id=rate_limit_lease.identifier)
         if job is None:
             raise _job_not_found(job_id)
     except BaseException:
@@ -455,7 +522,7 @@ async def analysis_job_events(job_id: str, request: Request):
 @router.delete("/analysis/jobs/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
 async def cancel_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
-        job = await _JOB_STORE.cancel(job_id, owner_id=lease.identifier)
+        job = await _job_store_for_request(request).cancel(job_id, owner_id=lease.identifier)
         if job is None:
             raise _job_not_found(job_id)
         return job.public_summary()
@@ -498,10 +565,10 @@ async def validate_ticker(ticker: str, trade_date: str, request: Request, market
 @router.get("/status", response_model=ApiStatusResponse)
 async def api_status(request: Request):
     async with limit_request(request, request_policy()):
-        return await _api_status_payload()
+        return await _api_status_payload(_runtime_for_request(request))
 
 
-async def _api_status_payload():
+async def _api_status_payload(runtime: jobs.AnalysisRuntimeState | None = None):
     try:
         from tradingagents.dataflows.interface import get_tool_cache_stats
 
@@ -538,9 +605,10 @@ async def _api_status_payload():
         circuits = {"error": sanitize_message(str(exc))}
         timeout_workers = {"error": sanitize_message(str(exc))}
 
-    cache_stats = await _RESULT_CACHE.stats()
-    inflight_stats = await _IN_FLIGHT.stats()
-    job_stats = await _JOB_STORE.stats()
+    runtime = runtime or _runtime_for_request()
+    cache_stats = await runtime.result_cache.stats()
+    inflight_stats = await runtime.in_flight.stats()
+    job_stats = await runtime.job_store.stats()
     return {
         "provider": llm.provider,
         "quick_model": llm.quick_think_llm,

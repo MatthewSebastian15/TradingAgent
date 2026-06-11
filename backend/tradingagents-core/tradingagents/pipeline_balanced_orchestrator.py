@@ -6,6 +6,7 @@ import queue
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
@@ -25,7 +26,7 @@ from tradingagents.pipeline_balanced_data import (
     _normalize_time_horizon_months,
     _run_with_config,
     _time_horizon_label,
-    collect_market_data,
+    collect_market_data as _collect_raw_market_data,
 )
 from tradingagents.pipeline_balanced_llm import (
     _create_llms,
@@ -360,7 +361,65 @@ def _build_initial_analyst_reports(
             analyst_forwarder.join(timeout=1)
 
 
-def run_balanced_pipeline(
+@dataclass(frozen=True)
+class PipelineContext:
+    ticker: str
+    trade_date: str
+    config: dict[str, Any]
+    quick_llm: Any
+    deep_llm: Any
+    analysis_depth: str
+    depth_config: dict[str, Any]
+    depth_debate_rounds: int
+    depth_risk_rounds: int
+    extra_debate_rounds: int
+    extra_risk_rounds: int
+    time_horizon_months: int
+    time_horizon_text: str
+    llm_budget: LLMBudget
+    pipeline_started_at: float
+    pipeline_timings: dict[str, dict[str, Any]]
+    progress_callback: ProgressCallback | None
+    cancel_check: Callable[[], bool] | None
+    has_existing_position: bool
+    position_quantity: float | None
+    average_entry_price: float | None
+
+
+@dataclass(frozen=True)
+class MarketDataStageResult:
+    data: Any
+    data_fetched_at: str
+    data_quality_json: str
+    last_close_text: str
+
+
+@dataclass(frozen=True)
+class AgentStageResult:
+    market_report: AnalystReport
+    news_social_report: AnalystReport
+    fundamentals_report: AnalystReport
+    market_md: str
+    news_social_md: str
+    fundamentals_md: str
+    bull: DebateArgument
+    bear: DebateArgument
+    debate_history: list[str]
+    debate_md: str
+    investment_plan: str
+    trader_plan: str
+    risk_report: RiskCommitteeReport
+    risk_md: str
+    portfolio_decision: PortfolioDecision
+
+
+@dataclass(frozen=True)
+class PipelineMetrics:
+    budget_snapshot: dict[str, Any]
+    total_pipeline_seconds: float
+
+
+def prepare_context(
     ticker: str,
     trade_date: str,
     config: dict[str, Any],
@@ -369,8 +428,7 @@ def run_balanced_pipeline(
     has_existing_position: bool = False,
     position_quantity: float | None = None,
     average_entry_price: float | None = None,
-) -> dict[str, Any]:
-    """Run the balanced 9-call pipeline and return classic-compatible state."""
+) -> PipelineContext:
     set_config(config)
     quick_llm, deep_llm = _create_llms(config)
     analysis_depth = str(config.get("analysis_depth", "balanced")).lower()
@@ -386,6 +444,38 @@ def run_balanced_pipeline(
     llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
     pipeline_started_at = time.perf_counter()
     pipeline_timings: dict[str, dict[str, Any]] = {}
+    return PipelineContext(
+        ticker=ticker,
+        trade_date=trade_date,
+        config=config,
+        quick_llm=quick_llm,
+        deep_llm=deep_llm,
+        analysis_depth=analysis_depth,
+        depth_config=depth_config,
+        depth_debate_rounds=depth_debate_rounds,
+        depth_risk_rounds=depth_risk_rounds,
+        extra_debate_rounds=extra_debate_rounds,
+        extra_risk_rounds=extra_risk_rounds,
+        time_horizon_months=time_horizon_months,
+        time_horizon_text=time_horizon_text,
+        llm_budget=llm_budget,
+        pipeline_started_at=pipeline_started_at,
+        pipeline_timings=pipeline_timings,
+        progress_callback=progress_callback,
+        cancel_check=cancel_check,
+        has_existing_position=has_existing_position,
+        position_quantity=position_quantity,
+        average_entry_price=average_entry_price,
+    )
+
+
+def collect_market_data(context: PipelineContext) -> MarketDataStageResult:
+    ticker = context.ticker
+    trade_date = context.trade_date
+    config = context.config
+    progress_callback = context.progress_callback
+    cancel_check = context.cancel_check
+    pipeline_timings = context.pipeline_timings
     _emit_progress(
         progress_callback, "news_fetch", "started", "Fetching normalized company news from configured providers..."
     )
@@ -393,7 +483,7 @@ def run_balanced_pipeline(
         progress_callback,
         "data_collection",
         "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
-        lambda: collect_market_data(ticker, trade_date, config, cancel_check=cancel_check),
+        lambda: _collect_raw_market_data(ticker, trade_date, config, cancel_check=cancel_check),
         cancel_check=cancel_check,
         timings=pipeline_timings,
     )
@@ -408,6 +498,34 @@ def run_balanced_pipeline(
     last_close_text = f"{data.last_close_price:.2f}" if data.last_close_price is not None else "Unavailable"
     _emit_data_quality(progress_callback, data.data_quality)
 
+    return MarketDataStageResult(
+        data=data,
+        data_fetched_at=data_fetched_at,
+        data_quality_json=data_quality_json,
+        last_close_text=last_close_text,
+    )
+
+
+def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> AgentStageResult:
+    ticker = context.ticker
+    trade_date = context.trade_date
+    config = context.config
+    quick_llm = context.quick_llm
+    deep_llm = context.deep_llm
+    analysis_depth = context.analysis_depth
+    extra_debate_rounds = context.extra_debate_rounds
+    extra_risk_rounds = context.extra_risk_rounds
+    time_horizon_text = context.time_horizon_text
+    llm_budget = context.llm_budget
+    pipeline_timings = context.pipeline_timings
+    progress_callback = context.progress_callback
+    cancel_check = context.cancel_check
+    has_existing_position = context.has_existing_position
+    position_quantity = context.position_quantity
+    average_entry_price = context.average_entry_price
+    data = data_stage.data
+    data_quality_json = data_stage.data_quality_json
+    last_close_text = data_stage.last_close_text
     market_report, news_social_report, fundamentals_report = _build_initial_analyst_reports(
         ticker,
         trade_date,
@@ -834,6 +952,36 @@ def run_balanced_pipeline(
         timings=pipeline_timings,
     )
 
+    return AgentStageResult(
+        market_report=market_report,
+        news_social_report=news_social_report,
+        fundamentals_report=fundamentals_report,
+        market_md=market_md,
+        news_social_md=news_social_md,
+        fundamentals_md=fundamentals_md,
+        bull=bull,
+        bear=bear,
+        debate_history=debate_history,
+        debate_md=debate_md,
+        investment_plan=investment_plan,
+        trader_plan=trader_plan,
+        risk_report=risk_report,
+        risk_md=risk_md,
+        portfolio_decision=portfolio_decision,
+    )
+
+
+def aggregate_decision(
+    context: PipelineContext,
+    data_stage: MarketDataStageResult,
+    agent_stage: AgentStageResult,
+) -> PortfolioDecision:
+    ticker = context.ticker
+    has_existing_position = context.has_existing_position
+    position_quantity = context.position_quantity
+    average_entry_price = context.average_entry_price
+    data = data_stage.data
+    portfolio_decision = agent_stage.portfolio_decision
     portfolio_decision = normalize_trade_levels(
         portfolio_decision,
         current_price=data.last_close_price,
@@ -847,9 +995,54 @@ def run_balanced_pipeline(
         data_quality=data.data_quality.model_dump(),
     )
 
+    return portfolio_decision
+
+
+def persist_metrics(context: PipelineContext) -> PipelineMetrics:
+    llm_budget = context.llm_budget
+    pipeline_started_at = context.pipeline_started_at
     budget_snapshot = llm_budget.snapshot()
     total_pipeline_seconds = round(time.perf_counter() - pipeline_started_at, 1)
 
+    return PipelineMetrics(
+        budget_snapshot=budget_snapshot,
+        total_pipeline_seconds=total_pipeline_seconds,
+    )
+
+
+def build_response(
+    context: PipelineContext,
+    data_stage: MarketDataStageResult,
+    agent_stage: AgentStageResult,
+    portfolio_decision: PortfolioDecision,
+    metrics: PipelineMetrics,
+) -> dict[str, Any]:
+    ticker = context.ticker
+    trade_date = context.trade_date
+    time_horizon_months = context.time_horizon_months
+    time_horizon_text = context.time_horizon_text
+    analysis_depth = context.analysis_depth
+    depth_config = context.depth_config
+    depth_debate_rounds = context.depth_debate_rounds
+    depth_risk_rounds = context.depth_risk_rounds
+    extra_risk_rounds = context.extra_risk_rounds
+    llm_budget = context.llm_budget
+    pipeline_timings = context.pipeline_timings
+    data = data_stage.data
+    data_fetched_at = data_stage.data_fetched_at
+    market_md = agent_stage.market_md
+    news_social_md = agent_stage.news_social_md
+    fundamentals_md = agent_stage.fundamentals_md
+    bull = agent_stage.bull
+    bear = agent_stage.bear
+    debate_history = agent_stage.debate_history
+    debate_md = agent_stage.debate_md
+    investment_plan = agent_stage.investment_plan
+    trader_plan = agent_stage.trader_plan
+    risk_report = agent_stage.risk_report
+    risk_md = agent_stage.risk_md
+    budget_snapshot = metrics.budget_snapshot
+    total_pipeline_seconds = metrics.total_pipeline_seconds
     return {
         "company_of_interest": ticker,
         "trade_date": trade_date,
@@ -925,3 +1118,31 @@ def run_balanced_pipeline(
         "agent_pipeline": _build_agent_pipeline_rows(pipeline_timings),
         "total_pipeline_seconds": total_pipeline_seconds,
     }
+
+
+def run_balanced_pipeline(
+    ticker: str,
+    trade_date: str,
+    config: dict[str, Any],
+    progress_callback: ProgressCallback | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+    has_existing_position: bool = False,
+    position_quantity: float | None = None,
+    average_entry_price: float | None = None,
+) -> dict[str, Any]:
+    """Run the balanced pipeline through explicit maintainable stages."""
+    context = prepare_context(
+        ticker=ticker,
+        trade_date=trade_date,
+        config=config,
+        progress_callback=progress_callback,
+        cancel_check=cancel_check,
+        has_existing_position=has_existing_position,
+        position_quantity=position_quantity,
+        average_entry_price=average_entry_price,
+    )
+    data_stage = collect_market_data(context)
+    agent_stage = run_agents(context, data_stage)
+    portfolio_decision = aggregate_decision(context, data_stage, agent_stage)
+    metrics = persist_metrics(context)
+    return build_response(context, data_stage, agent_stage, portfolio_decision, metrics)

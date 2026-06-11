@@ -4,13 +4,8 @@ import math
 import statistics
 from typing import Any
 
+from tradingagents.utils.normalization import number as _number
 
-def _number(value: Any) -> float | None:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if math.isfinite(number) else None
 
 
 def _round(value: float | None, digits: int = 2) -> float | None:

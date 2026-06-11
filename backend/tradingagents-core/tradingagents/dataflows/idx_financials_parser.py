@@ -25,6 +25,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+
+from tradingagents.utils.normalization import as_dict as _as_dict, as_list as _as_list
 from xml.etree import ElementTree as ET
 
 from .normalizers import normalize_financial_value
@@ -103,13 +105,6 @@ def _ticker_variants(ticker: str | None) -> set[str]:
     bare = key.removesuffix(".JK")
     return {key, bare, f"{bare}.JK"} if bare else {key}
 
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _safe_filename(value: str) -> str:
