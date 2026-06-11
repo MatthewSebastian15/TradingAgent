@@ -52,7 +52,7 @@ from tradingagents.pipeline_balanced_types import (
 def run_balanced_pipeline(*args, **kwargs):
     """Run the balanced pipeline while preserving patchable facade symbols."""
     _orchestrator._create_llms = _create_llms
-    _orchestrator.collect_market_data = collect_market_data
+    _orchestrator._collect_raw_market_data = collect_market_data
     _orchestrator._invoke_once = _invoke_once
     return _orchestrator.run_balanced_pipeline(*args, **kwargs)
 

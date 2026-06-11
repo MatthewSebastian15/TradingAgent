@@ -40,13 +40,15 @@ try:  # yfinance may surface curl_cffi request exceptions on newer versions.
     from curl_cffi.requests import exceptions as curl_exceptions
 
     _retryable_yf_errors.extend(
-        [
-            curl_exceptions.ConnectionError,
-            curl_exceptions.Timeout,
-            curl_exceptions.RequestsError,
-        ]
+        error_cls
+        for error_cls in (
+            getattr(curl_exceptions, "ConnectionError", None),
+            getattr(curl_exceptions, "Timeout", None),
+            getattr(curl_exceptions, "RequestsError", None),
+        )
+        if isinstance(error_cls, type) and issubclass(error_cls, BaseException)
     )
-except (ImportError, AttributeError):  # pragma: no cover - optional dependency shape varies
+except ImportError:  # pragma: no cover - optional dependency absence only
     logger.warning("curl_cffi exception classes are unavailable for Yahoo Finance retry mapping", exc_info=True)
 
 _RETRYABLE_YF_EXCEPTIONS = tuple(dict.fromkeys(_retryable_yf_errors))
