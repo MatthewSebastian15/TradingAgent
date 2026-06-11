@@ -38,7 +38,12 @@ async def get_analysis_history_result(request_id: str, request: Request):
 
     async with limit_request(request, request_policy()) as lease:
         repository = get_analysis_repository()
-        result = await asyncio.to_thread(repository.get_analysis, request_id, owner_id=lease.identifier)
+        result = await asyncio.to_thread(
+            repository.get_analysis,
+            request_id,
+            owner_id=lease.identifier,
+            bind_legacy_owner=True,
+        )
         if result is None:
             raise _history_not_found(request_id)
         return result

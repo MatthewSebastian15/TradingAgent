@@ -69,6 +69,35 @@ def test_history_is_isolated_across_valid_owner_sessions(client, analysis_reposi
     assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
+def test_history_delete_is_isolated_across_valid_owner_sessions(client, analysis_repository):
+    analysis_repository.save_analysis(result=_result("req-delete-owner"), owner_id=_TEST_OWNER_IDENTIFIER)
+    other_headers = {"x-owner-token": issue_owner_session()["owner_token"]}
+
+    response = client.delete("/api/analysis/history/req-delete-owner", headers=other_headers)
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+    assert analysis_repository.get_analysis("req-delete-owner", owner_id=_TEST_OWNER_IDENTIFIER) == _result(
+        "req-delete-owner"
+    )
+
+
+def test_legacy_ownerless_history_is_bound_on_first_valid_detail_access(client, analysis_repository):
+    analysis_repository.save_analysis(result=_result("req-legacy"))
+
+    assert analysis_repository.get_analysis("req-legacy", owner_id=_TEST_OWNER_IDENTIFIER) is None
+
+    response = client.get("/api/analysis/history/req-legacy")
+    other_headers = {"x-owner-token": issue_owner_session()["owner_token"]}
+    other_response = client.get("/api/analysis/history/req-legacy", headers=other_headers)
+
+    assert response.status_code == 200
+    assert response.json() == _result("req-legacy")
+    assert analysis_repository.get_analysis("req-legacy", owner_id=_TEST_OWNER_IDENTIFIER) == _result("req-legacy")
+    assert other_response.status_code == 404
+    assert other_response.json()["error"]["code"] == "NOT_FOUND"
+
+
 def test_history_delete_one_and_clear_all(client, analysis_repository):
     analysis_repository.save_analysis(result=_result("req-1"), owner_id=_TEST_OWNER_IDENTIFIER)
     analysis_repository.save_analysis(result=_result("req-2"), owner_id=_TEST_OWNER_IDENTIFIER)

@@ -152,16 +152,49 @@ class AnalysisRepository:
             self._evict_old_rows(conn)
         return True
 
-    def get_analysis(self, request_id: str, *, owner_id: str | None = None) -> dict[str, Any] | None:
-        row = self._fetch_record("request_id", request_id, owner_id=owner_id)
+    def get_analysis(
+        self,
+        request_id: str,
+        *,
+        owner_id: str | None = None,
+        bind_legacy_owner: bool = False,
+    ) -> dict[str, Any] | None:
+        row = self._fetch_record(
+            "request_id",
+            request_id,
+            owner_id=owner_id,
+            bind_legacy_owner=bind_legacy_owner,
+        )
         return self._result_from_row(row)
 
-    def get_analysis_by_job_id(self, job_id: str, *, owner_id: str | None = None) -> dict[str, Any] | None:
-        row = self._fetch_record("job_id", job_id, owner_id=owner_id)
+    def get_analysis_by_job_id(
+        self,
+        job_id: str,
+        *,
+        owner_id: str | None = None,
+        bind_legacy_owner: bool = False,
+    ) -> dict[str, Any] | None:
+        row = self._fetch_record(
+            "job_id",
+            job_id,
+            owner_id=owner_id,
+            bind_legacy_owner=bind_legacy_owner,
+        )
         return self._result_from_row(row)
 
-    def get_analysis_record_by_job_id(self, job_id: str, *, owner_id: str | None = None) -> dict[str, Any] | None:
-        row = self._fetch_record("job_id", job_id, owner_id=owner_id)
+    def get_analysis_record_by_job_id(
+        self,
+        job_id: str,
+        *,
+        owner_id: str | None = None,
+        bind_legacy_owner: bool = False,
+    ) -> dict[str, Any] | None:
+        row = self._fetch_record(
+            "job_id",
+            job_id,
+            owner_id=owner_id,
+            bind_legacy_owner=bind_legacy_owner,
+        )
         if row is None:
             return None
         record = dict(row)
@@ -314,9 +347,27 @@ class AnalysisRepository:
             )
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
-    def _fetch_record(self, column: str, value: str, *, owner_id: str | None = None) -> sqlite3.Row | None:
+    def _fetch_record(
+        self,
+        column: str,
+        value: str,
+        *,
+        owner_id: str | None = None,
+        bind_legacy_owner: bool = False,
+    ) -> sqlite3.Row | None:
         if column not in {"request_id", "job_id"}:
             raise ValueError(f"Unsupported lookup column: {column}")
+
+        row = self._fetch_record_once(column, value, owner_id=owner_id)
+        if row is not None:
+            return row
+        if owner_id is None or not bind_legacy_owner:
+            return None
+        if not self._bind_ownerless_record(column, value, owner_id):
+            return None
+        return self._fetch_record_once(column, value, owner_id=owner_id)
+
+    def _fetch_record_once(self, column: str, value: str, *, owner_id: str | None = None) -> sqlite3.Row | None:
         params: list[Any] = [value]
         owner_filter = ""
         if owner_id is not None:
@@ -337,6 +388,16 @@ class AnalysisRepository:
                 """,
                 params,
             ).fetchone()
+
+    def _bind_ownerless_record(self, column: str, value: str, owner_id: str) -> bool:
+        now = utc_now_iso()
+        with self._write_lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.execute(
+                f"UPDATE analyses SET owner_id = ?, updated_at = ? WHERE {column} = ? AND owner_id IS NULL",
+                (owner_id, now, value),
+            )
+            return cursor.rowcount > 0
 
     def _evict_old_rows(self, conn: sqlite3.Connection) -> None:
         rows = conn.execute(
