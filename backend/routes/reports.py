@@ -7,11 +7,13 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from rate_limiter import limit_request, request_policy
 from services.analysis_repository import get_analysis_repository
 from services.report_disclaimer import REPORT_DISCLAIMER
 from services.report_service import (
+    ReportGenerationError,
     analysis_report_filename,
     build_report_context,
     get_analysis_result_for_report,
@@ -22,6 +24,75 @@ from services.report_service import (
 
 router = APIRouter(tags=["reports"])
 logger = logging.getLogger(__name__)
+
+REPORT_EXPORT_MAX_DEPTH = 12
+REPORT_EXPORT_MAX_LIST_ITEMS = 750
+REPORT_EXPORT_MAX_DICT_KEYS = 300
+REPORT_EXPORT_MAX_STRING_LENGTH = 20_000
+REPORT_EXPORT_MAX_TOTAL_NODES = 20_000
+REPORT_PDF_RENDER_TIMEOUT_SECONDS = 30
+REPORT_PDF_RENDER_CONCURRENCY = 2
+
+_pdf_render_semaphore = asyncio.Semaphore(REPORT_PDF_RENDER_CONCURRENCY)
+
+
+class AnalysisReportExportPayload(BaseModel):
+    """Bounded direct report payload accepted by legacy POST export endpoints."""
+
+    model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_bounded_payload(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            raise ValueError("Report export payload must be an object.")
+        _validate_report_export_value(value, depth=0, node_count=[0])
+        return value
+
+    def to_result_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="python")
+
+
+def _validate_report_export_value(value: Any, *, depth: int, node_count: list[int]) -> None:
+    node_count[0] += 1
+    if node_count[0] > REPORT_EXPORT_MAX_TOTAL_NODES:
+        raise ValueError("Report export payload is too large.")
+    if depth > REPORT_EXPORT_MAX_DEPTH:
+        raise ValueError("Report export payload is too deeply nested.")
+
+    if isinstance(value, str):
+        if len(value) > REPORT_EXPORT_MAX_STRING_LENGTH:
+            raise ValueError("Report export payload contains a string that is too long.")
+        return
+    if isinstance(value, list):
+        if len(value) > REPORT_EXPORT_MAX_LIST_ITEMS:
+            raise ValueError("Report export payload contains too many list items.")
+        for item in value:
+            _validate_report_export_value(item, depth=depth + 1, node_count=node_count)
+        return
+    if isinstance(value, dict):
+        if len(value) > REPORT_EXPORT_MAX_DICT_KEYS:
+            raise ValueError("Report export payload contains too many object keys.")
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError("Report export payload object keys must be strings.")
+            if len(key) > 200:
+                raise ValueError("Report export payload contains an object key that is too long.")
+            _validate_report_export_value(item, depth=depth + 1, node_count=node_count)
+
+
+async def _pdf_response_from_result_async(result: dict[str, Any]) -> Response:
+    async with _pdf_render_semaphore:
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(_pdf_response_from_result, result),
+                timeout=REPORT_PDF_RENDER_TIMEOUT_SECONDS,
+            )
+        except TimeoutError as exc:
+            raise ReportGenerationError(
+                "PDF export timed out while rendering the report. Use HTML export or retry with a smaller report.",
+                internal_message="report_pdf_render_timeout",
+            ) from exc
 
 
 @router.get("/reports/disclaimer")
@@ -84,7 +155,7 @@ async def get_analysis_report_pdf(job_id: str, request: Request) -> Response:
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report(job_id, owner_id=lease.identifier)
-        response = _pdf_response_from_result(result)
+        response = await _pdf_response_from_result_async(result)
         await _mark_exported_best_effort(result, "pdf", owner_id=lease.identifier)
         return response
 
@@ -106,13 +177,13 @@ async def get_analysis_report_pdf_alias(request_id: str, request: Request) -> Re
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report_by_request_id(request_id, owner_id=lease.identifier)
-        response = _pdf_response_from_result(result)
+        response = await _pdf_response_from_result_async(result)
         await _mark_exported_best_effort(result, "pdf", owner_id=lease.identifier)
         return response
 
 
 @router.post("/analysis/report.html", response_class=HTMLResponse)
-async def post_analysis_report_html(result: dict[str, Any], request: Request) -> HTMLResponse:
+async def post_analysis_report_html(result: AnalysisReportExportPayload, request: Request) -> HTMLResponse:
     """Preview a report from an analysis payload supplied by the client.
 
     This fallback is used when the result is visible in browser storage but the
@@ -120,18 +191,18 @@ async def post_analysis_report_html(result: dict[str, Any], request: Request) ->
     """
 
     async with limit_request(request, request_policy()) as lease:
-        result = dict(result)
-        response = _html_response_from_result(result)
-        await _mark_exported_best_effort(result, "html", owner_id=lease.identifier)
+        result_payload = result.to_result_dict()
+        response = _html_response_from_result(result_payload)
+        await _mark_exported_best_effort(result_payload, "html", owner_id=lease.identifier)
         return response
 
 
 @router.post("/analysis/report.pdf")
-async def post_analysis_report_pdf(result: dict[str, Any], request: Request) -> Response:
+async def post_analysis_report_pdf(result: AnalysisReportExportPayload, request: Request) -> Response:
     """Download a PDF report from an analysis payload supplied by the client."""
 
     async with limit_request(request, request_policy()) as lease:
-        result = dict(result)
-        response = _pdf_response_from_result(result)
-        await _mark_exported_best_effort(result, "pdf", owner_id=lease.identifier)
+        result_payload = result.to_result_dict()
+        response = await _pdf_response_from_result_async(result_payload)
+        await _mark_exported_best_effort(result_payload, "pdf", owner_id=lease.identifier)
         return response

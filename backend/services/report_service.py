@@ -26,6 +26,7 @@ ACTIONABLE_DECISIONS = {"Buy", "Sell", "Overweight", "Underweight"}
 NON_ID_EXCHANGE_SUFFIX_RE = re.compile(r"\.(?!JK$)[A-Z0-9]{1,5}$")
 SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 LEGACY_REPORT_FIELD_RE = re.compile(r"\b(price target|risk per share|reward per share)\b", re.IGNORECASE)
+REPORT_PDF_MAX_HTML_CHARS = 1_000_000
 
 _REPORT_ENV = Environment(
     loader=FileSystemLoader(str(TEMPLATE_DIR)),
@@ -372,6 +373,11 @@ def render_analysis_report_html(report: dict[str, Any]) -> str:
 
 def render_analysis_report_pdf(report: dict[str, Any]) -> bytes:
     html = render_analysis_report_html(report)
+    if len(html) > REPORT_PDF_MAX_HTML_CHARS:
+        raise ReportGenerationError(
+            "PDF export is too large to render safely. Use HTML export or retry with a smaller report.",
+            internal_message="report_pdf_html_too_large",
+        )
     try:
         from weasyprint import HTML  # noqa: PLC0415
     except Exception as exc:  # pragma: no cover - depends on optional OS libraries

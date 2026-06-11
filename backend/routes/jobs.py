@@ -26,7 +26,7 @@ from config import (
 from errors import ApiError, BadRequestError, PipelineExecutionError, PipelineTimeoutError, error_payload
 from persistent_cache import SQLiteTTLCache
 from rate_limiter import RateLimitLease
-from routes.sse import sse_event
+from routes.sse import bounded_progress_queue, put_stream_item, sse_event
 from routes.validation import AnalysisRequest
 
 logger = logging.getLogger(__name__)
@@ -154,7 +154,7 @@ async def start_job(
     use_cache: bool = True,
     persist_result_func: Callable[[dict[str, Any], AnalysisRequest, str | None, str | None], Awaitable[None]] | None = None,
 ) -> None:
-    progress_queue: asyncio.Queue = asyncio.Queue()
+    progress_queue: asyncio.Queue = bounded_progress_queue()
     progress_task = asyncio.create_task(forward_job_progress(job, progress_queue))
     try:
         req = AnalysisRequest(**job.payload)
@@ -197,7 +197,7 @@ async def start_job(
             logger.error("Analysis job failed", extra={"event": "analysis_job_failed", "job_id": job.id}, exc_info=True)
             await job.fail(error_payload(PipelineExecutionError(internal_message=str(exc))))
     finally:
-        await progress_queue.put(None)
+        await put_stream_item(progress_queue, None)
         try:
             await asyncio.wait_for(progress_task, timeout=2)
         except TimeoutError:

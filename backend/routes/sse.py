@@ -41,6 +41,54 @@ from routes.validation import AnalysisRequest
 
 logger = logging.getLogger(__name__)
 
+STREAM_PROGRESS_QUEUE_MAXSIZE = 128
+
+
+def bounded_progress_queue() -> asyncio.Queue:
+    return asyncio.Queue(maxsize=STREAM_PROGRESS_QUEUE_MAXSIZE)
+
+
+def _is_terminal_stream_item(item: Any) -> bool:
+    if item is None:
+        return True
+    if not isinstance(item, dict):
+        return False
+    event_type = item.get("event") or item.get("type")
+    return event_type in {SseEvent.RESULT.value, SseEvent.ERROR.value}
+
+
+def _drop_one_stream_item(queue: asyncio.Queue) -> bool:
+    try:
+        queue.get_nowait()
+    except asyncio.QueueEmpty:
+        return False
+    try:
+        queue.task_done()
+    except ValueError:
+        logger.debug("SSE progress queue task counter was already balanced")
+    return True
+
+
+async def put_stream_item(queue: asyncio.Queue, item: Any) -> None:
+    try:
+        queue.put_nowait(item)
+        return
+    except asyncio.QueueFull:
+        pass
+
+    is_terminal = _is_terminal_stream_item(item)
+    while queue.full() and _drop_one_stream_item(queue):
+        if not is_terminal:
+            break
+
+    try:
+        queue.put_nowait(item)
+    except asyncio.QueueFull:
+        if is_terminal:
+            await queue.put(item)
+        else:
+            logger.warning("Dropped SSE progress event because the client progress queue is full")
+
 
 def sse_event(event: str, payload: dict) -> dict:
     return {"event": event, "data": json.dumps(payload)}
@@ -137,7 +185,8 @@ def _require_stream_pipeline_dependencies(ctx: StreamPipelineContext) -> None:
 async def _run_stream_preflight(ctx: StreamPipelineContext) -> None:
     if not ctx.run_preflight:
         return
-    await ctx.queue.put(
+    await put_stream_item(
+        ctx.queue,
         {
             "type": SseEvent.PROGRESS.value,
             "payload": {
@@ -149,7 +198,7 @@ async def _run_stream_preflight(ctx: StreamPipelineContext) -> None:
                 "status": PipelineStatus.STARTED.value,
                 "status_message": "Preparing market data preflight...",
             },
-        }
+        },
     )
     await ctx.preflight_market_data_func(ctx.req)
 
@@ -201,7 +250,7 @@ async def _pump_worker_progress(loop: asyncio.AbstractEventLoop, future: asyncio
             await asyncio.sleep(0)
             continue
         empty_after_done = 0
-        await queue.put(item)
+        await put_stream_item(queue, item)
 
 
 async def _watch_stream_cancel(
@@ -353,12 +402,12 @@ async def _run_stream_result_job(ctx: StreamContext, queue: asyncio.Queue, cance
         if ctx.persist_result_func is not None:
             owner_id = ctx.rate_limit_lease.identifier if ctx.rate_limit_lease is not None else None
             await ctx.persist_result_func(payload, ctx.req, None, owner_id)
-        await queue.put({"type": SseEvent.RESULT.value, "payload": payload})
+        await put_stream_item(queue, {"type": SseEvent.RESULT.value, "payload": payload})
     except TimeoutError:
-        await queue.put(sse_error(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)))
+        await put_stream_item(queue, sse_error(PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS)))
     except asyncio.CancelledError as exc:
         cancel_event.set()
-        await queue.put(sse_error(exc))
+        await put_stream_item(queue, sse_error(exc))
     except Exception as exc:
         if not isinstance(exc, ApiError):
             logger.error(
@@ -366,7 +415,7 @@ async def _run_stream_result_job(ctx: StreamContext, queue: asyncio.Queue, cance
                 extra={"event": "streaming_pipeline_failed", "request_id": ctx.request_id},
                 exc_info=True,
             )
-        await queue.put(sse_error(exc))
+        await put_stream_item(queue, sse_error(exc))
 
 
 def _initial_stream_progress(ctx: StreamContext) -> dict[str, Any]:
@@ -397,7 +446,7 @@ def _heartbeat(ctx: StreamContext) -> dict[str, Any]:
 
 
 async def _yield_live_stream(ctx: StreamContext):
-    queue: asyncio.Queue[dict] = asyncio.Queue()
+    queue: asyncio.Queue[dict] = bounded_progress_queue()
     cancel_event = asyncio.Event()
     task = asyncio.create_task(_run_stream_result_job(ctx, queue, cancel_event))
     try:
@@ -416,15 +465,18 @@ async def _yield_live_stream(ctx: StreamContext):
             except TimeoutError:
                 yield _heartbeat(ctx)
                 continue
-            if "event" in item and "data" in item:
-                yield item
-                if item["event"] in {SseEvent.RESULT.value, SseEvent.ERROR.value}:
+            try:
+                if "event" in item and "data" in item:
+                    yield item
+                    if item["event"] in {SseEvent.RESULT.value, SseEvent.ERROR.value}:
+                        return
+                    continue
+                event_type = item["type"]
+                yield sse_event(event_type, item["payload"])
+                if event_type in {SseEvent.RESULT.value, SseEvent.ERROR.value}:
                     return
-                continue
-            event_type = item["type"]
-            yield sse_event(event_type, item["payload"])
-            if event_type in {SseEvent.RESULT.value, SseEvent.ERROR.value}:
-                return
+            finally:
+                queue.task_done()
     finally:
         if not task.done():
             cancel_event.set()

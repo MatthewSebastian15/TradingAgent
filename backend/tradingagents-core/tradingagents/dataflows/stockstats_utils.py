@@ -1,4 +1,7 @@
 import logging
+import math
+import os
+import random
 import time
 from datetime import timedelta
 from typing import Annotated
@@ -8,6 +11,7 @@ from dateutil.relativedelta import relativedelta
 from stockstats import wrap
 from yfinance.exceptions import YFRateLimitError
 
+from tradingagents.utils_resilience import call_with_timeout
 from tradingagents.yfinance_runtime import yf
 
 
@@ -48,29 +52,87 @@ except (ImportError, AttributeError):  # pragma: no cover - optional dependency 
 _RETRYABLE_YF_EXCEPTIONS = tuple(dict.fromkeys(_retryable_yf_errors))
 
 
-def yf_retry(func, max_retries=3, base_delay=2.0):
-    """Execute a yfinance call with exponential backoff on transient failures.
+def _env_float(name: str, default: float, *, min_value: float = 0.0) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return max(min_value, float(raw))
+    except ValueError:
+        logger.warning("Invalid float for %s=%r; using default %s", name, raw, default)
+        return default
+
+
+_YFINANCE_CALL_TIMEOUT_SECONDS = _env_float("YFINANCE_CALL_TIMEOUT_SECONDS", 20.0, min_value=1.0)
+_YFINANCE_TOTAL_TIMEOUT_SECONDS = _env_float("YFINANCE_TOTAL_TIMEOUT_SECONDS", 45.0, min_value=1.0)
+_YFINANCE_RETRY_MAX_DELAY_SECONDS = _env_float("YFINANCE_RETRY_MAX_DELAY_SECONDS", 8.0, min_value=0.0)
+
+
+def yf_deadline(total_timeout_seconds: float | None = None) -> float:
+    """Return a shared deadline for one Yahoo Finance provider attempt chain."""
+
+    budget = _YFINANCE_TOTAL_TIMEOUT_SECONDS if total_timeout_seconds is None else max(1.0, total_timeout_seconds)
+    return time.monotonic() + budget
+
+
+def _remaining_budget(deadline: float | None) -> float:
+    if deadline is None:
+        return _YFINANCE_TOTAL_TIMEOUT_SECONDS
+    return max(0.0, deadline - time.monotonic())
+
+
+def _retry_delay(attempt: int, base_delay: float, remaining: float) -> float:
+    base = min(_YFINANCE_RETRY_MAX_DELAY_SECONDS, base_delay * (2**attempt))
+    jitter = random.uniform(0.0, min(1.0, base * 0.25))
+    return min(remaining, base + jitter)
+
+
+def yf_retry(
+    func,
+    max_retries=3,
+    base_delay=2.0,
+    *,
+    timeout_seconds: float | None = None,
+    deadline: float | None = None,
+    service_name: str = "yfinance",
+):
+    """Execute a yfinance call with hard timeout, total budget, and jittered backoff.
 
     yfinance raises YFRateLimitError on HTTP 429 responses and can also surface
     network timeouts/connection errors from requests or curl_cffi. Retry only
     those transient failures; other exceptions still propagate immediately.
     """
+
+    call_timeout = _YFINANCE_CALL_TIMEOUT_SECONDS if timeout_seconds is None else max(1.0, timeout_seconds)
+    deadline = yf_deadline() if deadline is None else deadline
+
     for attempt in range(max_retries + 1):
+        remaining = _remaining_budget(deadline)
+        if remaining <= 0:
+            raise TimeoutError(f"{service_name} exceeded total timeout budget")
+
         try:
-            return func()
+            return call_with_timeout(
+                func,
+                timeout_seconds=max(1, math.ceil(min(call_timeout, remaining))),
+                service_name=service_name,
+            )
         except _RETRYABLE_YF_EXCEPTIONS as exc:
-            if attempt < max_retries:
-                delay = base_delay * (2**attempt)
-                logger.warning(
-                    "Yahoo Finance transient failure (%s), retrying in %.0fs (attempt %d/%d)",
-                    exc,
-                    delay,
-                    attempt + 1,
-                    max_retries,
-                )
-                time.sleep(delay)
-            else:
+            if attempt >= max_retries:
                 raise
+
+            remaining = _remaining_budget(deadline)
+            delay = _retry_delay(attempt, base_delay, remaining)
+            if delay <= 0:
+                raise TimeoutError(f"{service_name} exceeded total timeout budget") from exc
+            logger.warning(
+                "Yahoo Finance transient failure (%s), retrying in %.2fs (attempt %d/%d)",
+                exc,
+                delay,
+                attempt + 1,
+                max_retries,
+            )
+            time.sleep(delay)
 
 
 def _clean_dataframe(data: pd.DataFrame) -> pd.DataFrame:
@@ -102,6 +164,7 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     start_str = start_dt.strftime("%Y-%m-%d")
     fetch_end_str = fetch_end_dt.strftime("%Y-%m-%d")
 
+    deadline = yf_deadline()
     data = yf_retry(
         lambda: yf.download(
             symbol,
@@ -111,7 +174,9 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
             progress=False,
             auto_adjust=True,
             threads=False,
-        )
+        ),
+        deadline=deadline,
+        service_name="yfinance.download",
     )
 
     if data is None or data.empty:
@@ -120,7 +185,9 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
                 start=start_str,
                 end=fetch_end_str,
                 auto_adjust=True,
-            )
+            ),
+            deadline=deadline,
+            service_name="yfinance.history",
         )
 
     if data is None or data.empty:
