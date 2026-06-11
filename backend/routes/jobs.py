@@ -18,6 +18,7 @@ from analysis_cache import (
 from config import (
     ANALYSIS_JOB_CACHE_DB_PATH,
     ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
+    ANALYSIS_JOB_STORE_BACKEND,
     ANALYSIS_JOB_MAX_ACTIVE,
     ANALYSIS_JOB_MAX_ENTRIES,
     ANALYSIS_JOB_TTL_SECONDS,
@@ -26,7 +27,7 @@ from config import (
     PIPELINE_TIMEOUT_SECONDS,
 )
 from errors import ApiError, BadRequestError, PipelineExecutionError, PipelineTimeoutError, error_payload
-from persistent_cache import SQLiteTTLCache
+from storage_backends import build_runtime_storage
 from rate_limiter import RateLimitLease
 from routes.sse import bounded_progress_queue, put_stream_item, sse_event
 from routes.validation import AnalysisRequest
@@ -44,6 +45,7 @@ class AnalysisRuntimeState:
 
 
 def create_analysis_runtime() -> AnalysisRuntimeState:
+    storage = build_runtime_storage(ANALYSIS_JOB_STORE_BACKEND)
     return AnalysisRuntimeState(
         result_cache=AnalysisResultCache(
             ttl_seconds=ANALYSIS_RESULT_CACHE_TTL_SECONDS,
@@ -55,11 +57,12 @@ def create_analysis_runtime() -> AnalysisRuntimeState:
             max_entries=ANALYSIS_JOB_MAX_ENTRIES,
             max_active_jobs=ANALYSIS_JOB_MAX_ACTIVE,
             max_event_history=ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
-            persistent_cache=SQLiteTTLCache(
+            persistent_cache=storage.ttl_cache(
                 ANALYSIS_JOB_CACHE_DB_PATH,
                 ttl_seconds=ANALYSIS_JOB_TTL_SECONDS,
                 max_entries=ANALYSIS_JOB_MAX_ENTRIES * 2,
             ),
+            persist_active_jobs=True,
         ),
     )
 

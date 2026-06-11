@@ -15,6 +15,12 @@ services:
       CORS_ORIGINS: http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173
       REQUIRE_API_KEY_FOR_RATE_LIMIT: "false"
       REQUEST_BODY_MAX_BYTES: "16777216"
+      RATE_LIMIT_STORAGE_BACKEND: sqlite
+      RATE_LIMIT_DB_PATH: /home/tradingagent/.tradingagents/cache/rate_limits.sqlite3
+      ANALYSIS_JOB_STORE_BACKEND: sqlite
+      ANALYSIS_JOB_ROUTING_MODE: sticky_sessions
+      ANALYSIS_STORAGE_BACKEND: sqlite
+      DATA_CACHE_BACKEND: sqlite
       OLLAMA_BASE_URL: http://ollama:11434
       XDG_CACHE_HOME: /home/tradingagent/.tradingagents/cache
       YFINANCE_CACHE_DIR: /home/tradingagent/.tradingagents/cache/py-yfinance

@@ -262,7 +262,8 @@ class AnalysisJob:
             if self.status in TERMINAL_ANALYSIS_STATUSES and event_type not in {"result", "error"}:
                 return False
             await self._append_event(event_type, payload)
-            return True
+        await self._persist()
+        return True
 
     async def events_since(self, sequence: int) -> list[dict[str, Any]]:
         async with self.event_condition:
@@ -274,7 +275,8 @@ class AnalysisJob:
                 return False
             self.status = "running"
             self.updated_at = time.time()
-            return True
+        await self._persist()
+        return True
 
     async def complete(self, result: dict[str, Any]) -> bool:
         async with self.state_lock:
@@ -327,8 +329,10 @@ class AnalysisJob:
 class AnalysisJobStore:
     """Job registry for job-based API and cancellation.
 
-    Active jobs live in memory. Terminal jobs can also be written through the
-    optional persistent cache so completed results survive backend restarts.
+    Active job metadata and replayable events can be mirrored through the
+    optional persistent cache so worker refreshes and sticky-session failover can
+    still resolve job summaries. Live cancellation and live SSE still require the
+    same running worker, which is why deployment routing is explicit.
     """
 
     def __init__(
@@ -338,12 +342,14 @@ class AnalysisJobStore:
         max_active_jobs: int | None = None,
         max_event_history: int = DEFAULT_JOB_EVENT_REPLAY_LIMIT,
         persistent_cache: Any | None = None,
+        persist_active_jobs: bool = False,
     ) -> None:
         self.ttl_seconds = ttl_seconds
         self.max_entries = max_entries
         self.max_active_jobs = max_active_jobs if max_active_jobs is not None else max_entries
         self.max_event_history = max(1, int(max_event_history))
         self.persistent_cache = persistent_cache
+        self.persist_active_jobs = bool(persist_active_jobs)
         self._jobs: dict[str, AnalysisJob] = {}
         self._job_ids_by_request_id: dict[str, str] = {}
         self._lock = asyncio.Lock()
@@ -364,10 +370,11 @@ class AnalysisJobStore:
                 cache_key=cache_key,
                 payload=payload,
                 max_event_history=self.max_event_history,
-                persist_callback=self._persist_terminal_job,
+                persist_callback=self._persist_job,
             )
             self._register_job_locked(job)
             await self._evict_locked()
+        await self._persist_job(job)
         return job
 
     async def get(self, job_id: str, *, owner_id: str | None = None) -> AnalysisJob | None:
@@ -460,8 +467,10 @@ class AnalysisJobStore:
             if job.status in {"completed", "failed", "cancelled"}:
                 self._remove_job_locked(job.id)
 
-    async def _persist_terminal_job(self, job: AnalysisJob) -> None:
-        if self.persistent_cache is None or job.status not in TERMINAL_ANALYSIS_STATUSES:
+    async def _persist_job(self, job: AnalysisJob) -> None:
+        if self.persistent_cache is None:
+            return
+        if not self.persist_active_jobs and job.status not in TERMINAL_ANALYSIS_STATUSES:
             return
 
         snapshot = job.to_snapshot()
@@ -477,7 +486,7 @@ class AnalysisJobStore:
             return None
 
         try:
-            job = AnalysisJob.from_snapshot(snapshot, persist_callback=self._persist_terminal_job)
+            job = AnalysisJob.from_snapshot(snapshot, persist_callback=self._persist_job)
         except (KeyError, TypeError, ValueError):
             return None
 

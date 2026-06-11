@@ -7,11 +7,17 @@ import os
 from pathlib import Path
 
 from config_defaults import (
+    ANALYSIS_DB_PATH,
     ANALYSIS_DEPTHS,
+    ANALYSIS_JOB_CACHE_DB_PATH,
+    ANALYSIS_JOB_ROUTING_MODE,
     ANALYSIS_MODE,
+    DATA_CACHE_DB_PATH,
     DEFAULT_ANALYSIS_DEPTH,
     IS_PRODUCTION,
     OWNER_SESSION_SECRET,
+    RATE_LIMIT_DB_PATH,
+    RATE_LIMIT_STORAGE_BACKEND,
     REQUIRE_API_KEY_FOR_RATE_LIMIT,
 )
 from config_llm import SUPPORTED_PROVIDERS, build_tradingagents_config, llm
@@ -32,6 +38,10 @@ def _validate_writable_dir(path: str, key: str, errors: list[str]) -> None:
         test_file.unlink(missing_ok=True)
     except Exception:
         errors.append(f"Directory for {key} is not writable.")
+
+
+def _validate_writable_parent(path: str, key: str, errors: list[str]) -> None:
+    _validate_writable_dir(str(Path(path).expanduser().parent), key, errors)
 
 
 PROVIDER_KEY_REQUIREMENTS: dict[str, tuple[tuple[str, ...], str]] = {
@@ -78,6 +88,16 @@ def validate_startup_config() -> list[str]:
         errors.append("API_KEY is required when REQUIRE_API_KEY_FOR_RATE_LIMIT=true.")
     if IS_PRODUCTION and not OWNER_SESSION_SECRET:
         errors.append("OWNER_SESSION_SECRET is required when APP_ENV=production.")
+    if IS_PRODUCTION and RATE_LIMIT_STORAGE_BACKEND == "memory":
+        errors.append("RATE_LIMIT_STORAGE_BACKEND=memory is not allowed in production.")
+    if ANALYSIS_JOB_ROUTING_MODE == "single_instance" and IS_PRODUCTION:
+        logger.warning("ANALYSIS_JOB_ROUTING_MODE=single_instance requires exactly one backend instance.")
+
+    _validate_writable_parent(ANALYSIS_DB_PATH, "ANALYSIS_DB_PATH", errors)
+    _validate_writable_parent(ANALYSIS_JOB_CACHE_DB_PATH, "ANALYSIS_JOB_CACHE_DB_PATH", errors)
+    _validate_writable_parent(DATA_CACHE_DB_PATH, "DATA_CACHE_DB_PATH", errors)
+    if RATE_LIMIT_STORAGE_BACKEND == "sqlite":
+        _validate_writable_parent(RATE_LIMIT_DB_PATH, "RATE_LIMIT_DB_PATH", errors)
 
     if ANALYSIS_MODE != "balanced":
         errors.append("ANALYSIS_MODE must be balanced. The API server only supports the balanced pipeline.")

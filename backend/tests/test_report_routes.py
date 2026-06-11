@@ -209,7 +209,7 @@ def test_html_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, 
 
     assert response.status_code == 200
     assert "TradingAgent Analysis Report" in response.text
-    assert analysis_repository.list_analyses()[0]["exported_html_at"]
+    assert analysis_repository.list_analyses(owner_id=_TEST_OWNER_IDENTIFIER)[0]["exported_html_at"]
 
 
 def test_pdf_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, analysis_repository):
@@ -222,7 +222,7 @@ def test_pdf_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, a
 
     assert response.status_code == 200
     assert response.content.startswith(b"%PDF")
-    assert analysis_repository.list_analyses()[0]["exported_pdf_at"]
+    assert analysis_repository.list_analyses(owner_id=_TEST_OWNER_IDENTIFIER)[0]["exported_pdf_at"]
 
 
 def test_request_id_report_alias_falls_back_to_sqlite(client, monkeypatch, analysis_repository):
@@ -246,24 +246,6 @@ def test_request_id_report_alias_sqlite_rejects_other_owner(client, monkeypatch,
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "report_not_found"
-
-
-def test_request_id_report_alias_binds_legacy_ownerless_sqlite_result(client, monkeypatch, analysis_repository):
-    result = _result(request_id="rid-history-alias-legacy")
-    analysis_repository.save_analysis(result=result)
-    _install_report_store(monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10))
-
-    assert analysis_repository.get_analysis("rid-history-alias-legacy", owner_id=_TEST_OWNER_IDENTIFIER) is None
-
-    response = client.get("/api/analysis/rid-history-alias-legacy/report.html")
-    other_headers = {"x-owner-token": issue_owner_session()["owner_token"]}
-    other_response = client.get("/api/analysis/rid-history-alias-legacy/report.html", headers=other_headers)
-
-    assert response.status_code == 200
-    assert "TradingAgent Analysis Report" in response.text
-    assert analysis_repository.get_analysis("rid-history-alias-legacy", owner_id=_TEST_OWNER_IDENTIFIER) == result
-    assert other_response.status_code == 404
-    assert other_response.json()["error"]["code"] == "report_not_found"
 
 
 def test_report_endpoint_returns_404_for_missing_request_id(client):

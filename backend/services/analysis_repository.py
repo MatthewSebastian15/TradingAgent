@@ -9,9 +9,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from config import ANALYSIS_DB_PATH, ANALYSIS_HISTORY_MAX_ROWS
+from config import ANALYSIS_DB_PATH, ANALYSIS_HISTORY_MAX_ROWS, ANALYSIS_STORAGE_BACKEND
+from storage_backends import build_runtime_storage
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+LEGACY_OWNER_ID = "__legacy_unowned__"
 
 _WRITE_LOCKS: dict[Path, threading.RLock] = {}
 _WRITE_LOCKS_GUARD = threading.Lock()
@@ -42,6 +44,15 @@ def _history_signal(result: dict[str, Any] | None, fallback: Any) -> str | None:
     return str(fallback).strip() if fallback else None
 
 
+
+
+def _require_owner_id(owner_id: str | None) -> str:
+    owner = str(owner_id or "").strip()
+    if not owner:
+        raise ValueError("owner_id is required for analysis history access.")
+    return owner
+
+
 def _write_lock_for_path(path: Path) -> threading.RLock:
     resolved = path.resolve(strict=False)
     with _WRITE_LOCKS_GUARD:
@@ -56,7 +67,8 @@ class AnalysisRepository:
     """Store completed analysis results independently from short-lived caches."""
 
     def __init__(self, db_path: str, max_rows: int = 1000) -> None:
-        self.db_path = Path(db_path)
+        storage = build_runtime_storage(ANALYSIS_STORAGE_BACKEND)
+        self.db_path = Path(storage.sqlite_path(db_path))
         self.max_rows = max(1, int(max_rows))
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._write_lock = _write_lock_for_path(self.db_path)
@@ -68,7 +80,7 @@ class AnalysisRepository:
         result: dict[str, Any],
         request_payload: dict[str, Any] | None = None,
         job_id: str | None = None,
-        owner_id: str | None = None,
+        owner_id: str,
     ) -> bool:
         """Save one valid completed result and return whether it was stored."""
 
@@ -80,12 +92,13 @@ class AnalysisRepository:
         if not request_id or not ticker:
             return False
 
+        owner = _require_owner_id(owner_id)
         now = utc_now_iso()
         created_at = str(result.get("analysis_created_at") or result.get("created_at") or now)
         decision = result.get("final_decision") or result.get("decision") or result.get("recommendation")
         values = {
             "request_id": request_id,
-            "owner_id": str(owner_id).strip() if owner_id else None,
+            "owner_id": owner,
             "job_id": str(job_id).strip() if job_id else None,
             "ticker": ticker,
             "market": result.get("market"),
@@ -126,7 +139,7 @@ class AnalysisRepository:
                     :status, :result_json, :request_json, :created_at, :updated_at
                 )
                 ON CONFLICT(request_id) DO UPDATE SET
-                    owner_id = COALESCE(excluded.owner_id, analyses.owner_id),
+                    owner_id = excluded.owner_id,
                     job_id = COALESCE(excluded.job_id, analyses.job_id),
                     ticker = excluded.ticker,
                     market = excluded.market,
@@ -156,45 +169,27 @@ class AnalysisRepository:
         self,
         request_id: str,
         *,
-        owner_id: str | None = None,
-        bind_legacy_owner: bool = False,
+        owner_id: str,
     ) -> dict[str, Any] | None:
-        row = self._fetch_record(
-            "request_id",
-            request_id,
-            owner_id=owner_id,
-            bind_legacy_owner=bind_legacy_owner,
-        )
+        row = self._fetch_record("request_id", request_id, owner_id=owner_id)
         return self._result_from_row(row)
 
     def get_analysis_by_job_id(
         self,
         job_id: str,
         *,
-        owner_id: str | None = None,
-        bind_legacy_owner: bool = False,
+        owner_id: str,
     ) -> dict[str, Any] | None:
-        row = self._fetch_record(
-            "job_id",
-            job_id,
-            owner_id=owner_id,
-            bind_legacy_owner=bind_legacy_owner,
-        )
+        row = self._fetch_record("job_id", job_id, owner_id=owner_id)
         return self._result_from_row(row)
 
     def get_analysis_record_by_job_id(
         self,
         job_id: str,
         *,
-        owner_id: str | None = None,
-        bind_legacy_owner: bool = False,
+        owner_id: str,
     ) -> dict[str, Any] | None:
-        row = self._fetch_record(
-            "job_id",
-            job_id,
-            owner_id=owner_id,
-            bind_legacy_owner=bind_legacy_owner,
-        )
+        row = self._fetch_record("job_id", job_id, owner_id=owner_id)
         if row is None:
             return None
         record = dict(row)
@@ -211,14 +206,12 @@ class AnalysisRepository:
         *,
         ticker: str | None = None,
         limit: int = 25,
-        owner_id: str | None = None,
+        owner_id: str,
     ) -> list[dict[str, Any]]:
         safe_limit = max(1, min(int(limit), 100))
         params: list[Any] = []
-        filters: list[str] = []
-        if owner_id is not None:
-            filters.append("owner_id = ?")
-            params.append(owner_id)
+        filters: list[str] = ["owner_id = ?"]
+        params.append(_require_owner_id(owner_id))
         if ticker:
             filters.append("ticker = ?")
             params.append(ticker.strip().upper())
@@ -252,38 +245,29 @@ class AnalysisRepository:
             items.append(item)
         return items
 
-    def delete_analysis(self, request_id: str, *, owner_id: str | None = None) -> bool:
+    def delete_analysis(self, request_id: str, *, owner_id: str) -> bool:
+        owner = _require_owner_id(owner_id)
         with self._write_lock, self._connect() as conn:
-            if owner_id is None:
-                cursor = conn.execute("DELETE FROM analyses WHERE request_id = ?", (request_id,))
-            else:
-                cursor = conn.execute("DELETE FROM analyses WHERE request_id = ? AND owner_id = ?", (request_id, owner_id))
+            cursor = conn.execute("DELETE FROM analyses WHERE request_id = ? AND owner_id = ?", (request_id, owner))
             return cursor.rowcount > 0
 
-    def delete_all_analyses(self, *, owner_id: str | None = None) -> int:
+    def delete_all_analyses(self, *, owner_id: str) -> int:
+        owner = _require_owner_id(owner_id)
         with self._write_lock, self._connect() as conn:
-            if owner_id is None:
-                cursor = conn.execute("DELETE FROM analyses")
-            else:
-                cursor = conn.execute("DELETE FROM analyses WHERE owner_id = ?", (owner_id,))
+            cursor = conn.execute("DELETE FROM analyses WHERE owner_id = ?", (owner,))
             return max(0, cursor.rowcount)
 
-    def mark_exported(self, request_id: str, export_type: str, *, owner_id: str | None = None) -> bool:
+    def mark_exported(self, request_id: str, export_type: str, *, owner_id: str) -> bool:
         if export_type not in {"html", "pdf"}:
             return False
         column = "exported_html_at" if export_type == "html" else "exported_pdf_at"
+        owner = _require_owner_id(owner_id)
         now = utc_now_iso()
         with self._write_lock, self._connect() as conn:
-            if owner_id is None:
-                cursor = conn.execute(
-                    f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ?",
-                    (now, now, request_id),
-                )
-            else:
-                cursor = conn.execute(
-                    f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ? AND owner_id = ?",
-                    (now, now, request_id, owner_id),
-                )
+            cursor = conn.execute(
+                f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ? AND owner_id = ?",
+                (now, now, request_id, owner),
+            )
             return cursor.rowcount > 0
 
     def _connect(self) -> sqlite3.Connection:
@@ -305,7 +289,7 @@ class AnalysisRepository:
                 """
                 CREATE TABLE IF NOT EXISTS analyses (
                     request_id TEXT PRIMARY KEY,
-                    owner_id TEXT,
+                    owner_id TEXT NOT NULL,
                     job_id TEXT,
                     ticker TEXT NOT NULL,
                     market TEXT,
@@ -331,11 +315,10 @@ class AnalysisRepository:
                 )
                 """
             )
-            columns = {row["name"] for row in conn.execute("PRAGMA table_info(analyses)").fetchall()}
-            if "owner_id" not in columns:
-                conn.execute("ALTER TABLE analyses ADD COLUMN owner_id TEXT")
+            self._migrate_owner_id_not_null(conn)
 
             conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_owner_created_at ON analyses (owner_id, created_at DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_owner_request_id ON analyses (owner_id, request_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_owner_job_id ON analyses (owner_id, job_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_job_id ON analyses (job_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_created_at ON analyses (created_at DESC)")
@@ -352,27 +335,12 @@ class AnalysisRepository:
         column: str,
         value: str,
         *,
-        owner_id: str | None = None,
-        bind_legacy_owner: bool = False,
+        owner_id: str,
     ) -> sqlite3.Row | None:
         if column not in {"request_id", "job_id"}:
             raise ValueError(f"Unsupported lookup column: {column}")
 
-        row = self._fetch_record_once(column, value, owner_id=owner_id)
-        if row is not None:
-            return row
-        if owner_id is None or not bind_legacy_owner:
-            return None
-        if not self._bind_ownerless_record(column, value, owner_id):
-            return None
-        return self._fetch_record_once(column, value, owner_id=owner_id)
-
-    def _fetch_record_once(self, column: str, value: str, *, owner_id: str | None = None) -> sqlite3.Row | None:
-        params: list[Any] = [value]
-        owner_filter = ""
-        if owner_id is not None:
-            owner_filter = " AND owner_id = ?"
-            params.append(owner_id)
+        owner = _require_owner_id(owner_id)
         with self._connect() as conn:
             return conn.execute(
                 f"""
@@ -384,20 +352,75 @@ class AnalysisRepository:
                     status, result_json, request_json, created_at, updated_at,
                     exported_html_at, exported_pdf_at
                 FROM analyses
-                WHERE {column} = ?{owner_filter}
+                WHERE {column} = ? AND owner_id = ?
                 """,
-                params,
+                (value, owner),
             ).fetchone()
 
-    def _bind_ownerless_record(self, column: str, value: str, owner_id: str) -> bool:
-        now = utc_now_iso()
-        with self._write_lock, self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            cursor = conn.execute(
-                f"UPDATE analyses SET owner_id = ?, updated_at = ? WHERE {column} = ? AND owner_id IS NULL",
-                (owner_id, now, value),
+    def _migrate_owner_id_not_null(self, conn: sqlite3.Connection) -> None:
+        rows = conn.execute("PRAGMA table_info(analyses)").fetchall()
+        columns = {row["name"] for row in rows}
+        if "owner_id" not in columns:
+            conn.execute("ALTER TABLE analyses ADD COLUMN owner_id TEXT NOT NULL DEFAULT '__legacy_unowned__'")
+            return
+        owner_column = next(row for row in rows if row["name"] == "owner_id")
+        conn.execute("UPDATE analyses SET owner_id = ? WHERE owner_id IS NULL OR TRIM(owner_id) = ''", (LEGACY_OWNER_ID,))
+        if int(owner_column["notnull"]):
+            return
+
+        conn.execute("ALTER TABLE analyses RENAME TO analyses_legacy_owner_nullable")
+        conn.execute(
+            """
+            CREATE TABLE analyses (
+                request_id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                job_id TEXT,
+                ticker TEXT NOT NULL,
+                market TEXT,
+                trade_date TEXT,
+                time_horizon_months INTEGER,
+                analysis_depth TEXT,
+                response_detail TEXT,
+                decision TEXT,
+                recommendation TEXT,
+                current_price REAL,
+                entry_price REAL,
+                stop_loss REAL,
+                take_profit REAL,
+                rr_ratio TEXT,
+                source_summary TEXT,
+                status TEXT NOT NULL DEFAULT 'completed',
+                result_json TEXT NOT NULL,
+                request_json TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                exported_html_at TEXT,
+                exported_pdf_at TEXT
             )
-            return cursor.rowcount > 0
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO analyses (
+                request_id, owner_id, job_id, ticker, market, trade_date,
+                time_horizon_months, analysis_depth, response_detail,
+                decision, recommendation, current_price, entry_price,
+                stop_loss, take_profit, rr_ratio, source_summary,
+                status, result_json, request_json, created_at, updated_at,
+                exported_html_at, exported_pdf_at
+            )
+            SELECT
+                request_id, COALESCE(NULLIF(TRIM(owner_id), ''), ?), job_id, ticker, market, trade_date,
+                time_horizon_months, analysis_depth, response_detail,
+                decision, recommendation, current_price, entry_price,
+                stop_loss, take_profit, rr_ratio, source_summary,
+                status, result_json, request_json, created_at, updated_at,
+                exported_html_at, exported_pdf_at
+            FROM analyses_legacy_owner_nullable
+            """,
+            (LEGACY_OWNER_ID,),
+        )
+        conn.execute("DROP TABLE analyses_legacy_owner_nullable")
 
     def _evict_old_rows(self, conn: sqlite3.Connection) -> None:
         rows = conn.execute(

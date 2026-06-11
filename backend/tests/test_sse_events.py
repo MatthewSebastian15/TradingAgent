@@ -5,6 +5,9 @@ import json
 import os
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
+from owner_session import owner_identifier
+
+_TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
 
 def _stream_result() -> dict:
@@ -107,7 +110,7 @@ def test_sse_sends_progress_and_final_result(client, monkeypatch, analysis_repos
     assert result_payload["ticker"] == "AAPL"
     assert result_payload["decision"] == "Buy"
     assert result_payload["data_quality"]["price_data"] == "ok"
-    assert analysis_repository.get_analysis(result_payload["request_id"])["ticker"] == "AAPL"
+    assert analysis_repository.get_analysis(result_payload["request_id"], owner_id=_TEST_OWNER_IDENTIFIER)["ticker"] == "AAPL"
 
 
 def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch, analysis_repository):
@@ -153,7 +156,7 @@ def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch, a
     assert [name for name, _ in second] == ["job", "progress", "result"]
     assert first[1][1]["agent_id"] == "market_analyst"
     assert second[2][1]["decision"] == "Buy"
-    assert analysis_repository.get_analysis_by_job_id(job_id)["ticker"] == "AAPL"
+    assert analysis_repository.get_analysis_by_job_id(job_id, owner_id=_TEST_OWNER_IDENTIFIER)["ticker"] == "AAPL"
 
 
 def test_job_event_stream_is_not_gzipped(client, monkeypatch):

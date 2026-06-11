@@ -100,6 +100,19 @@ REQUIRE_API_KEY_FOR_RATE_LIMIT = env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", IS_P
 if IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
     raise ValueError("REQUIRE_API_KEY_FOR_RATE_LIMIT=false is not allowed in production.")
 
+RATE_LIMIT_STORAGE_BACKEND = env(
+    "RATE_LIMIT_STORAGE_BACKEND",
+    "sqlite" if IS_PRODUCTION else "memory",
+).lower().strip()
+if RATE_LIMIT_STORAGE_BACKEND not in {"memory", "sqlite"}:
+    raise ValueError("RATE_LIMIT_STORAGE_BACKEND must be one of: memory, sqlite.")
+if IS_PRODUCTION and RATE_LIMIT_STORAGE_BACKEND == "memory":
+    raise ValueError("RATE_LIMIT_STORAGE_BACKEND=memory is not allowed in production.")
+RATE_LIMIT_DB_PATH = env(
+    "RATE_LIMIT_DB_PATH",
+    str(BASE_DIR / ".cache" / "rate_limits.sqlite3"),
+)
+
 # LLM resilience
 LLM_TIMEOUT_SECONDS = env_int("LLM_TIMEOUT_SECONDS", 60, min_value=1)
 LLM_MAX_RETRIES = env_int("LLM_MAX_RETRIES", 2, min_value=1)
@@ -144,17 +157,28 @@ ANALYSIS_JOB_CACHE_DB_PATH = env(
     "ANALYSIS_JOB_CACHE_DB_PATH",
     str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3"),
 )
+ANALYSIS_JOB_STORE_BACKEND = env("ANALYSIS_JOB_STORE_BACKEND", "sqlite").lower().strip()
+if ANALYSIS_JOB_STORE_BACKEND not in {"sqlite"}:
+    raise ValueError("ANALYSIS_JOB_STORE_BACKEND must be sqlite.")
+ANALYSIS_JOB_ROUTING_MODE = env("ANALYSIS_JOB_ROUTING_MODE", "sticky_sessions").lower().strip()
+if ANALYSIS_JOB_ROUTING_MODE not in {"single_instance", "sticky_sessions"}:
+    raise ValueError("ANALYSIS_JOB_ROUTING_MODE must be one of: single_instance, sticky_sessions.")
 ANALYSIS_DB_PATH = env(
     "ANALYSIS_DB_PATH",
     str(BASE_DIR / ".cache" / "analysis_history.sqlite3"),
 )
+ANALYSIS_STORAGE_BACKEND = env("ANALYSIS_STORAGE_BACKEND", "sqlite").lower().strip()
+if ANALYSIS_STORAGE_BACKEND not in {"sqlite"}:
+    raise ValueError("ANALYSIS_STORAGE_BACKEND must be sqlite.")
 ANALYSIS_HISTORY_MAX_ROWS = env_int("ANALYSIS_HISTORY_MAX_ROWS", 1000, min_value=1)
 ANALYSIS_HISTORY_DEFAULT_LIMIT = env_int("ANALYSIS_HISTORY_DEFAULT_LIMIT", 25, min_value=1)
 OWNER_SESSION_SECRET = env("OWNER_SESSION_SECRET", "")
 if IS_PRODUCTION and not OWNER_SESSION_SECRET:
     raise ValueError("OWNER_SESSION_SECRET must be configured in production.")
 OWNER_SESSION_TTL_SECONDS = env_int("OWNER_SESSION_TTL_SECONDS", ANALYSIS_JOB_TTL_SECONDS, min_value=60)
-DATA_CACHE_BACKEND = "sqlite"
+DATA_CACHE_BACKEND = env("DATA_CACHE_BACKEND", "sqlite").lower().strip()
+if DATA_CACHE_BACKEND not in {"sqlite"}:
+    raise ValueError("DATA_CACHE_BACKEND must be sqlite.")
 DATA_CACHE_DB_PATH = env(
     "DATA_CACHE_DB_PATH",
     str(BASE_DIR / ".cache" / "market_data.sqlite3"),

@@ -37,6 +37,8 @@ from config_defaults import (
     ANALYSIS_HISTORY_DEFAULT_LIMIT,
     ANALYSIS_HISTORY_MAX_ROWS,
     ANALYSIS_JOB_CACHE_DB_PATH,
+    ANALYSIS_JOB_ROUTING_MODE,
+    ANALYSIS_JOB_STORE_BACKEND,
     ANALYSIS_JOB_EVENT_REPLAY_LIMIT,
     ANALYSIS_JOB_MAX_ACTIVE,
     ANALYSIS_JOB_MAX_ENTRIES,
@@ -44,6 +46,7 @@ from config_defaults import (
     ANALYSIS_MODE,
     ANALYSIS_RESULT_CACHE_MAX_ENTRIES,
     ANALYSIS_RESULT_CACHE_TTL_SECONDS,
+    ANALYSIS_STORAGE_BACKEND,
     ANALYST_PARALLEL_WORKERS,
     API_KEY,
     APP_ENV,
@@ -118,6 +121,8 @@ from config_defaults import (
     PROCESS_POOL_MAX_TASKS_PER_CHILD,
     PROCESS_POOL_WORKERS,
     PROVIDER_SDK_MAX_RETRIES,
+    RATE_LIMIT_DB_PATH,
+    RATE_LIMIT_STORAGE_BACKEND,
     REQUEST_BODY_MAX_BYTES,
     REQUEST_RATE_LIMIT_PER_MINUTE,
     REQUIRE_API_KEY_FOR_RATE_LIMIT,
@@ -188,6 +193,11 @@ class _BackendSettingsShim:
     analysis_history_default_limit = ANALYSIS_HISTORY_DEFAULT_LIMIT
     analysis_job_ttl_seconds = ANALYSIS_JOB_TTL_SECONDS
     analysis_job_cache_db_path = ANALYSIS_JOB_CACHE_DB_PATH
+    analysis_job_store_backend = ANALYSIS_JOB_STORE_BACKEND
+    analysis_job_routing_mode = ANALYSIS_JOB_ROUTING_MODE
+    analysis_storage_backend = ANALYSIS_STORAGE_BACKEND
+    rate_limit_storage_backend = RATE_LIMIT_STORAGE_BACKEND
+    rate_limit_db_path = RATE_LIMIT_DB_PATH
     owner_session_secret = OWNER_SESSION_SECRET
     owner_session_ttl_seconds = OWNER_SESSION_TTL_SECONDS
     data_vendor_core_stock_apis = DATA_VENDOR_CORE_STOCK_APIS

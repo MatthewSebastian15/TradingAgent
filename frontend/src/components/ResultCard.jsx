@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import ConfidenceBreakdown from './ConfidenceBreakdown';
 import DisclaimerFooter from './DisclaimerFooter';
-import ExportReportButtons from './ExportReportButtons';
 import RerunPanel from './RerunPanel';
+import AnalysisStatusRow from './results/AnalysisStatusRow';
 import MetricBox from './results/MetricBox';
 import NoticeBox from './results/NoticeBox';
 import SectionHeader from './results/SectionHeader';
@@ -11,8 +11,10 @@ import ChartPriceTab from './results/tabs/ChartPriceTab';
 import FundamentalTab from './results/tabs/FundamentalTab';
 import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
+import ReportActions from './results/ReportActions';
 import ResultTabs from './results/tabs/ResultTabs';
 import { PIPELINE_STATUSES } from '../domain/analysisContract';
+import { useResultSections } from '../hooks/useResultSections';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['BUY', 'SELL', 'Buy', 'Overweight', 'Sell', 'Underweight']);
@@ -595,35 +597,19 @@ function getActionPlanMetrics({ result, currentPrice, riskReward }) {
 }
 
 function ActionableMetrics({ result, currentPrice, riskReward }) {
-  const metrics = getActionPlanMetrics({ result, currentPrice, riskReward });
+  const metrics = getActionPlanMetrics({ result, currentPrice, riskReward }).map((metric) => ({
+    ...metric,
+    dataTestId: 'action-plan-metric',
+  }));
 
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border">
-      <SectionHeader label="ACTION PLAN" />
-      <div
-        data-testid="action-plan-grid"
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2"
-      >
-        {metrics.map((metric) => (
-          <MetricBox
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            highlight={metric.highlight}
-            subValue={metric.subValue}
-            tooltip={metric.tooltip}
-            tone={metric.tone}
-            preserveSlot
-            dataTestId="action-plan-metric"
-          />
-        ))}
-      </div>
-      {result.position_sizing_reason && (
-        <p className="mt-3 font-mono text-xs text-bloomberg-muted leading-relaxed">
-          {parseBold(result.position_sizing_reason)}
-        </p>
-      )}
-    </div>
+    <AnalysisStatusRow
+      label="ACTION PLAN"
+      metrics={metrics}
+      columnsClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2"
+      reason={result.position_sizing_reason}
+      reasonRenderer={parseBold}
+    />
   );
 }
 
@@ -667,22 +653,11 @@ function HoldMetrics({ result, currentPrice }) {
   ];
 
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border">
-      <SectionHeader label="ACTION STATUS" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
-        {metrics.map((metric) => (
-          <MetricBox
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            highlight={metric.highlight}
-            subValue={metric.subValue}
-            tooltip={metric.tooltip}
-            preserveSlot
-          />
-        ))}
-      </div>
-    </div>
+    <AnalysisStatusRow
+      label="ACTION STATUS"
+      metrics={metrics}
+      columnsClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2"
+    />
   );
 }
 
@@ -994,24 +969,15 @@ function ResultCardHeader({
             Created: {createdAtLabel}
           </span>
         )}
-        {onRerunSubmit && (
-          <button
-            type="button"
-            disabled={rerunRunning}
-            onClick={onToggleRerun}
-            className="font-mono text-xs border border-bloomberg-border px-2.5 py-1.5 tracking-wider text-bloomberg-muted hover:text-bloomberg-white disabled:opacity-50"
-          >
-            ↺ RE-RUN
-          </button>
-        )}
-        {enableReportExport && (result.job_id || result.request_id) && (
-          <ExportReportButtons
-            resourceId={result.job_id || result.request_id}
-            result={displayResult}
-            disabled={Boolean(result.error)}
-            mockReport={mockReport}
-          />
-        )}
+        <ReportActions
+          result={result}
+          displayResult={displayResult}
+          enableReportExport={enableReportExport}
+          mockReport={mockReport}
+          onRerunSubmit={onRerunSubmit}
+          rerunRunning={rerunRunning}
+          onToggleRerun={onToggleRerun}
+        />
       </div>
     </div>
   );
@@ -1259,11 +1225,10 @@ export default function ResultCard({
   const [activeTab, setActiveTab] = useState('analisis');
   const [showRerunPanel, setShowRerunPanel] = useState(false);
 
+  const { vm, disabledTabs } = useResultSections(result, buildResultViewModel);
+
   if (!result) return null;
   if (result.error) return <ResultError error={result.error} />;
-
-  const vm = buildResultViewModel(result);
-  const disabledTabs = [];
 
   return (
     <div className="border border-bloomberg-border bg-bloomberg-card animate-fade-up">
