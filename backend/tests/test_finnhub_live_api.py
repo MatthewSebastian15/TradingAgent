@@ -9,6 +9,8 @@ from tradingagents.dataflows.finnhub_stock import get_quote
 
 @pytest.mark.live_api
 def test_finnhub_live_quote_smoke():
+    if os.environ.get("RUN_LIVE_API_TESTS") != "1":
+        pytest.skip("RUN_LIVE_API_TESTS=1 is required for live API smoke tests.")
     api_key = os.environ.get("FINNHUB_API_KEY")
     if not api_key:
         pytest.skip("FINNHUB_API_KEY is not configured; live API smoke test skipped by default.")
