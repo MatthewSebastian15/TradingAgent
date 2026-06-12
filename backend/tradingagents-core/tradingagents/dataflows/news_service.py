@@ -14,6 +14,7 @@ from .google_news_light import GoogleNewsLightProvider
 from .marketaux_news import MarketAuxProvider
 from .news_deduplication import deduplicate_news_articles
 from .news_models import NewsEntity, NormalizedNewsArticle, article_to_dict
+from .news_relevance import is_relevant_news
 from .news_scoring import score_news_article
 from .news_ticker_aliases import resolve_news_ticker
 from .newsdata_news import NewsDataProvider
@@ -154,9 +155,20 @@ class NewsService:
         articles = _filter_articles_by_window(articles, as_of_date=as_of_date, window_days=window_days)
         deduped = deduplicate_news_articles(articles)
         dedup_removed_count = max(0, len(articles) - len(deduped))
-        ui_articles = [
+        relevant_articles = [
             article
             for article in deduped
+            if article.market_context_only
+            or is_relevant_news(
+                article_to_dict(article),
+                profile["ticker"],
+                profile.get("company_name"),
+                profile.get("aliases"),
+            )
+        ]
+        ui_articles = [
+            article
+            for article in relevant_articles
             if (article.relevance_score >= min_relevance or article.market_context_only)
             and (article.bucket or "full_news") != "discard"
         ][:ui_limit]

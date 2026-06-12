@@ -1,81 +1,212 @@
-"""Field-aware vendor priority helpers.
-
-Global vendor order is too blunt for mixed IDX/US data. These helpers keep
-routing choices explicit per field while preserving the existing router
-fallback model.
-"""
+"""Market-aware yfinance-first source priority helpers."""
 
 from __future__ import annotations
 
-FIELD_SOURCE_PRIORITY: dict[str, list[str]] = {
-    "price": ["yfinance", "finnhub", "alpha_vantage"],
-    "quote": ["yfinance", "finnhub", "alpha_vantage"],
-    "last_price": ["yfinance", "finnhub", "alpha_vantage"],
-    "historical_price": ["yfinance", "alpha_vantage", "finnhub"],
-    "financial_statement_idx": ["idx_official", "yfinance", "alpha_vantage", "finnhub"],
-    "financial_statement_us": ["alpha_vantage", "finnhub", "yfinance"],
-    "company_news": ["google_news_light", "marketaux", "newsdata", "yfinance"],
-    "global_news": ["finnhub", "alpha_vantage", "yfinance"],
-    "news_sentiment": ["finnhub", "internal_rule_scoring", "alpha_vantage"],
-    "insider_idx": ["yfinance", "alpha_vantage", "finnhub"],
-    "insider_us": ["finnhub", "alpha_vantage", "yfinance"],
-    "shareholders_idx": ["idx_official", "yfinance"],
-    "executives_idx": ["idx_official", "yfinance"],
-    "corporate_actions_idx": ["idx_official", "yfinance"],
-    "dividend_idx": ["idx_official", "yfinance"],
-    "profile_idx": ["idx_official", "yfinance", "finnhub"],
-    "profile_us": ["finnhub", "yfinance", "alpha_vantage"],
+from .vendor_capabilities import VENDOR_CAPABILITIES, supports_vendor
+
+NEWS_PRIORITY = ["yfinance", "google_news_light", "newsdata", "marketaux"]
+
+SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
+    "IDX": {
+        "symbol_search": ["yfinance"],
+        "quote": ["yfinance", "finnhub", "alpha_vantage"],
+        "history": ["yfinance", "alpha_vantage"],
+        "chart": ["yfinance", "alpha_vantage"],
+        "profile": ["yfinance", "finnhub"],
+        "financials": ["yfinance", "finnhub"],
+        "ratios": ["yfinance"],
+        "key_metrics": ["yfinance"],
+        "market_cap": ["yfinance"],
+        "historical_market_cap": ["yfinance"],
+        "dividends": ["yfinance"],
+        "splits": ["yfinance"],
+        "ownership": ["yfinance"],
+        "news": NEWS_PRIORITY,
+    },
+    "ID": {
+        "symbol_search": ["yfinance"],
+        "quote": ["yfinance", "finnhub", "alpha_vantage"],
+        "history": ["yfinance", "alpha_vantage"],
+        "chart": ["yfinance", "alpha_vantage"],
+        "profile": ["yfinance", "finnhub"],
+        "financials": ["yfinance", "finnhub"],
+        "ratios": ["yfinance"],
+        "key_metrics": ["yfinance"],
+        "market_cap": ["yfinance"],
+        "historical_market_cap": ["yfinance"],
+        "dividends": ["yfinance"],
+        "splits": ["yfinance"],
+        "ownership": ["yfinance"],
+        "news": NEWS_PRIORITY,
+    },
+    "US": {
+        "symbol_search": ["yfinance"],
+        "quote": ["yfinance", "finnhub", "alpha_vantage"],
+        "history": ["yfinance", "alpha_vantage"],
+        "chart": ["yfinance", "alpha_vantage"],
+        "profile": ["yfinance", "finnhub"],
+        "financials": ["yfinance", "finnhub"],
+        "ratios": ["yfinance"],
+        "key_metrics": ["yfinance"],
+        "market_cap": ["yfinance"],
+        "historical_market_cap": ["yfinance"],
+        "dividends": ["yfinance"],
+        "splits": ["yfinance"],
+        "ownership": ["yfinance"],
+        "news": NEWS_PRIORITY,
+    },
+    "GLOBAL": {
+        "symbol_search": ["yfinance"],
+        "quote": ["yfinance", "finnhub"],
+        "history": ["yfinance"],
+        "chart": ["yfinance"],
+        "profile": ["yfinance", "finnhub"],
+        "financials": ["yfinance", "finnhub"],
+        "ratios": ["yfinance"],
+        "key_metrics": ["yfinance"],
+        "market_cap": ["yfinance"],
+        "historical_market_cap": ["yfinance"],
+        "dividends": ["yfinance"],
+        "splits": ["yfinance"],
+        "ownership": ["yfinance"],
+        "news": NEWS_PRIORITY,
+    },
+    "CRYPTO": {
+        "symbol_search": ["yfinance"],
+        "quote": ["yfinance"],
+        "history": ["yfinance"],
+        "chart": ["yfinance"],
+        "profile": ["yfinance"],
+        "market_cap": ["yfinance"],
+        "news": NEWS_PRIORITY,
+    },
+    "ETF": {
+        "symbol_search": ["yfinance"],
+        "quote": ["yfinance"],
+        "history": ["yfinance"],
+        "chart": ["yfinance"],
+        "profile": ["yfinance"],
+        "financials": ["yfinance"],
+        "ratios": ["yfinance"],
+        "key_metrics": ["yfinance"],
+        "market_cap": ["yfinance"],
+        "dividends": ["yfinance"],
+        "news": NEWS_PRIORITY,
+    },
+    "FUND": {
+        "symbol_search": ["yfinance"],
+        "quote": ["yfinance"],
+        "history": ["yfinance"],
+        "chart": ["yfinance"],
+        "profile": ["yfinance"],
+        "financials": ["yfinance"],
+        "ratios": ["yfinance"],
+        "key_metrics": ["yfinance"],
+        "market_cap": ["yfinance"],
+        "dividends": ["yfinance"],
+        "news": NEWS_PRIORITY,
+    },
+    "UNKNOWN": {
+        "symbol_search": ["yfinance"],
+        "quote": ["yfinance"],
+        "history": ["yfinance"],
+        "chart": ["yfinance"],
+        "profile": ["yfinance"],
+        "financials": ["yfinance"],
+        "ratios": ["yfinance"],
+        "key_metrics": ["yfinance"],
+        "market_cap": ["yfinance"],
+        "news": ["yfinance", "google_news_light"],
+    },
+}
+
+_FIELD_ALIASES = {
+    "price": "quote",
+    "last_price": "quote",
+    "historical": "history",
+    "historical_price": "history",
+    "price_history": "history",
+    "stock_data": "history",
+    "ohlcv": "history",
+    "financial_statement": "financials",
+    "financial_statements": "financials",
+    "income_statement": "financials",
+    "annual_income_statement": "financials",
+    "balance_sheet": "financials",
+    "annual_balance_sheet": "financials",
+    "cashflow": "financials",
+    "cash_flow": "financials",
+    "annual_cashflow": "financials",
+    "fundamentals": "financials",
+    "financial_metrics": "financials",
+    "company_profile": "profile",
+    "company_news": "news",
+    "global_news": "news",
+    "news_sentiment": "news",
+    "shareholders": "ownership",
+    "shareholder": "ownership",
+    "insider": "ownership",
+    "insider_transactions": "ownership",
+    "insider_sentiment": "ownership",
+    "executives": "profile",
+    "executive": "profile",
+    "corporate_actions": "dividends",
+    "corporate_action": "dividends",
+    "dividend": "dividends",
 }
 
 
-def is_idx_ticker(ticker: str | None) -> bool:
-    return str(ticker or "").upper().endswith(".JK")
+def normalize_market(market: str | None) -> str:
+    value = str(market or "").strip().upper()
+    if value in SOURCE_PRIORITY:
+        return value
+    if value in {"INDONESIA", "IDN"}:
+        return "ID"
+    if value in {"USA", "UNITED_STATES", "NYSE", "NASDAQ"}:
+        return "US"
+    return "UNKNOWN"
 
 
-def get_field_vendor_order(field_name: str, ticker: str | None = None) -> list[str]:
-    """Return the preferred vendor order for a field and ticker market."""
+def market_from_symbol(symbol: str | None) -> str:
+    value = str(symbol or "").strip().upper()
+    if not value:
+        return "UNKNOWN"
+    if value.endswith(".JK"):
+        return "IDX"
+    if "-USD" in value or value.endswith("-USDT"):
+        return "CRYPTO"
+    if "." in value:
+        return "GLOBAL"
+    return "US"
+
+
+def _canonical_field(field_name: str | None) -> str:
     key = str(field_name or "").strip().lower()
-    is_idx = is_idx_ticker(ticker)
+    return _FIELD_ALIASES.get(key, key or "quote")
 
-    if key in {"price", "quote", "last_price"}:
-        return list(FIELD_SOURCE_PRIORITY["quote"])
 
-    if key in {"historical", "historical_price", "price_history", "stock_data", "ohlcv"}:
-        return list(FIELD_SOURCE_PRIORITY["historical_price"])
+def get_source_priority(market: str | None, field_name: str) -> list[str]:
+    """Return configured vendor priority for one normalized market and field."""
+    market_key = normalize_market(market)
+    field_key = _canonical_field(field_name)
+    vendors = SOURCE_PRIORITY.get(market_key, SOURCE_PRIORITY["UNKNOWN"]).get(field_key)
+    if vendors is None and market_key != "UNKNOWN":
+        vendors = SOURCE_PRIORITY["UNKNOWN"].get(field_key)
+    return list(vendors or ["yfinance"])
 
-    if key in {
-        "financial_statement",
-        "financial_statements",
-        "income_statement",
-        "annual_income_statement",
-        "balance_sheet",
-        "annual_balance_sheet",
-        "cashflow",
-        "cash_flow",
-        "annual_cashflow",
-        "fundamentals",
-        "financial_metrics",
-    }:
-        return list(FIELD_SOURCE_PRIORITY["financial_statement_idx" if is_idx else "financial_statement_us"])
 
-    if key in {"insider", "insider_transactions", "insider_sentiment"}:
-        return list(FIELD_SOURCE_PRIORITY["insider_idx" if is_idx else "insider_us"])
+def get_field_vendor_order(field_name: str, ticker: str | None = None, market: str | None = None) -> list[str]:
+    """Return yfinance-first vendor order for a field and ticker market."""
+    market_key = normalize_market(market) if market is not None else market_from_symbol(ticker)
+    field_key = _canonical_field(field_name)
+    priority = get_source_priority(market_key, field_key)
+    supported = [
+        vendor
+        for vendor in priority
+        if vendor in VENDOR_CAPABILITIES and supports_vendor(vendor, market_key, field_key)
+    ]
+    return supported or ["yfinance"]
 
-    idx_aliases = {
-        "shareholders": "shareholders",
-        "shareholder": "shareholders",
-        "executives": "executives",
-        "executive": "executives",
-        "corporate_actions": "corporate_actions",
-        "corporate_action": "corporate_actions",
-        "dividend": "dividend",
-        "dividends": "dividend",
-    }
-    if key in idx_aliases and is_idx:
-        normalized_key = idx_aliases[key]
-        return list(FIELD_SOURCE_PRIORITY.get(f"{normalized_key}_idx", ["idx_official", "yfinance"]))
 
-    if key in {"profile", "company_profile"}:
-        return list(FIELD_SOURCE_PRIORITY["profile_idx" if is_idx else "profile_us"])
-
-    return list(FIELD_SOURCE_PRIORITY.get(key, ["yfinance", "finnhub", "alpha_vantage"]))
+def is_idx_ticker(ticker: str | None) -> bool:
+    return market_from_symbol(ticker) == "IDX"
