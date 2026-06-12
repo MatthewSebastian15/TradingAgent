@@ -4,70 +4,17 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from config import ANALYSIS_DEPTHS, DEFAULT_ANALYSIS_DEPTH, DEFAULT_MAX_DEBATE_ROUNDS, RESPONSE_DETAILS
 from errors import BadRequestError
 
-# Accepts plain tickers (AAPL, NVDA, 0700) and exchange-suffixed tickers
-# (BBCA.JK, BRK-B). Only US tickers and Indonesian IDX tickers are supported.
-_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$")
-_IDX_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}\.JK$")
-_NON_ID_EXCHANGE_SUFFIX_RE = re.compile(r"\.(?!JK$)[A-Z0-9]{1,5}$")
-_SUPPORTED_MARKETS = {"US", "ID"}
-
-
-_IDX_AUTO_SUFFIX = {
-    "AALI",
-    "ACES",
-    "ADRO",
-    "AKRA",
-    "AMMN",
-    "ANTM",
-    "ARTO",
-    "ASII",
-    "BBCA",
-    "BBNI",
-    "BBRI",
-    "BBTN",
-    "BMRI",
-    "BRIS",
-    "BRPT",
-    "CPIN",
-    "ESSA",
-    "EXCL",
-    "GOTO",
-    "ICBP",
-    "INCO",
-    "INDF",
-    "INKP",
-    "INTP",
-    "ISAT",
-    "ITMG",
-    "KLBF",
-    "MDKA",
-    "MEDC",
-    "PGAS",
-    "PTBA",
-    "SMGR",
-    "TLKM",
-    "UNTR",
-    "UNVR",
-}
-
-
-def normalize_ticker(ticker: str) -> str:
-    """Normalize one supported ticker without importing yfinance runtime dependencies."""
-
-    cleaned = ticker.strip().upper()
-    if "." in cleaned:
-        return cleaned
-    if cleaned in _IDX_AUTO_SUFFIX:
-        return f"{cleaned}.JK"
-    return cleaned
-
+# Accept canonical Yahoo/yfinance symbols selected by the frontend search bar:
+# BBCA.JK, AAPL, BTC-USD, 0700.HK, 9984.T, SPY, mutual funds, and ETFs.
+_SYMBOL_RE = re.compile(r"^[A-Z0-9]{1,15}(?:[.-][A-Z0-9]{1,10}){0,2}$")
+_SUPPORTED_MARKETS = {"IDX", "ID", "US", "GLOBAL", "CRYPTO", "ETF", "FUND", "UNKNOWN"}
 
 AnalysisDepth = Literal["fast", "balanced", "deep"]
 ResponseDetail = Literal["summary", "full", "debug"]
@@ -76,7 +23,15 @@ ResponseDetail = Literal["summary", "full", "debug"]
 class AnalysisRequest(BaseModel):
     """Payload accepted by analysis API entry points."""
 
-    ticker: str = Field(..., min_length=1, max_length=12)
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    ticker: str = Field(
+        ...,
+        validation_alias=AliasChoices("ticker", "symbol"),
+        serialization_alias="ticker",
+        min_length=1,
+        max_length=64,
+    )
     input_ticker: str | None = None
     trade_date: str
     time_horizon_months: int = Field(default=1)
@@ -84,14 +39,25 @@ class AnalysisRequest(BaseModel):
     analysis_depth: AnalysisDepth = Field(default=DEFAULT_ANALYSIS_DEPTH)
     response_detail: ResponseDetail = Field(default="full")
     market: str | None = Field(default=None, max_length=16)
+    search_metadata: dict[str, Any] | None = None
     has_existing_position: bool | None = Field(default=False)
     position_quantity: float | None = Field(default=None, ge=0)
     average_entry_price: float | None = Field(default=None, ge=0)
 
 
-def is_non_id_exchange_ticker(ticker: str) -> bool:
-    """Return True if ticker has a non-IDX exchange suffix like .HK, .T, .DE."""
-    return bool(_NON_ID_EXCHANGE_SUFFIX_RE.search(ticker.upper()))
+def _canonical_from_search_metadata(search_metadata: dict[str, Any] | None) -> str | None:
+    if not isinstance(search_metadata, dict):
+        return None
+    for key in ("canonical", "symbol", "ticker"):
+        value = search_metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().upper()
+    return None
+
+
+def normalize_ticker(ticker: str) -> str:
+    """Normalize one canonical yfinance symbol without adding exchange suffixes."""
+    return ticker.strip().upper()
 
 
 def normalize_market(market: str | None) -> str | None:
@@ -101,33 +67,33 @@ def normalize_market(market: str | None) -> str | None:
     if not isinstance(market, str):
         return None
     normalized = market.strip().upper()
-    if normalized in {"INDONESIA", "IDX", "IDN"}:
-        return "ID"
-    if normalized in {"UNITED_STATES", "USA", "US_MARKET", "NYSE", "NASDAQ"}:
-        return "US"
-    return normalized or None
+    aliases = {
+        "INDONESIA": "ID",
+        "IDN": "ID",
+        "UNITED_STATES": "US",
+        "USA": "US",
+        "US_MARKET": "US",
+        "NYSE": "US",
+        "NASDAQ": "US",
+    }
+    return aliases.get(normalized, normalized) or None
 
 
 def normalize_ticker_for_market(ticker: str, market: str | None) -> str:
-    """Normalize ticker using explicit market context when supplied."""
-    cleaned = ticker.strip().upper()
-    if market == "ID":
-        base = cleaned.removesuffix(".JK")
-        return f"{base}.JK"
-    if market == "US":
-        return cleaned
+    """Normalize ticker using explicit market context without auto-mapping."""
+    _ = market
     return normalize_ticker(ticker)
 
 
 def normalize_ticker_symbol(ticker: str) -> str:
-    """Normalize and validate one user-supplied ticker symbol."""
+    """Normalize and validate one canonical ticker symbol."""
     normalized = normalize_ticker(ticker) if isinstance(ticker, str) else ticker
-    if not isinstance(normalized, str) or not _TICKER_RE.fullmatch(normalized):
+    if not isinstance(normalized, str) or not _SYMBOL_RE.fullmatch(normalized):
         raise BadRequestError(
             "Invalid ticker symbol.",
             details={
                 "fields": {
-                    "ticker": "Ticker must be a supported US or Indonesian symbol, for example AAPL, NVDA, BBCA, BBRI, TLKM, or BBCA.JK."
+                    "ticker": "Ticker must be a canonical yfinance symbol, for example BBCA.JK, AAPL, BTC-USD, 0700.HK, 9984.T, or SPY."
                 }
             },
         )
@@ -137,9 +103,12 @@ def normalize_ticker_symbol(ticker: str) -> str:
 def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisRequest:
     """Validate user input before the expensive agent pipeline starts."""
 
+    search_metadata = req.search_metadata if isinstance(req.search_metadata, dict) else None
+    canonical_from_search = _canonical_from_search_metadata(search_metadata)
+    raw_ticker = canonical_from_search or req.ticker
     input_ticker = req.input_ticker or (req.ticker if isinstance(req.ticker, str) else None)
     market = normalize_market(req.market)
-    ticker = normalize_ticker_for_market(req.ticker, market) if isinstance(req.ticker, str) else req.ticker
+    ticker = normalize_ticker_for_market(raw_ticker, market) if isinstance(raw_ticker, str) else raw_ticker
     trade_date = req.trade_date.strip() if isinstance(req.trade_date, str) else req.trade_date
     analysis_depth = str(req.analysis_depth or DEFAULT_ANALYSIS_DEPTH).strip().lower()
     response_detail = str(req.response_detail or "full").strip().lower()
@@ -151,17 +120,11 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     errors: dict[str, str] = {}
 
     if market is not None and market not in _SUPPORTED_MARKETS:
-        errors["market"] = "market must be one of: US, ID."
+        errors["market"] = "market must be one of: IDX, ID, US, GLOBAL, CRYPTO, ETF, FUND, UNKNOWN."
 
-    if not isinstance(ticker, str) or not _TICKER_RE.fullmatch(ticker):
+    if not isinstance(ticker, str) or not _SYMBOL_RE.fullmatch(ticker):
         errors["ticker"] = (
-            "Ticker must be a supported US or Indonesian symbol, for example AAPL, NVDA, BBCA, BBRI, TLKM, or BBCA.JK."
-        )
-    elif market == "ID" and not _IDX_TICKER_RE.fullmatch(ticker):
-        errors["ticker"] = "IDX ticker must be submitted as a plain stock code, for example BBCA or UNVR."
-    elif is_non_id_exchange_ticker(ticker):
-        errors["ticker"] = (
-            "Only US tickers and Indonesian IDX tickers are supported. Global exchange suffixes are no longer supported."
+            "Ticker must be a canonical yfinance symbol, for example BBCA.JK, AAPL, BTC-USD, 0700.HK, 9984.T, or SPY."
         )
 
     if not isinstance(trade_date, str):
@@ -210,6 +173,7 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
         analysis_depth=analysis_depth,  # type: ignore[arg-type]
         response_detail=response_detail,  # type: ignore[arg-type]
         market=market,
+        search_metadata=search_metadata,
         has_existing_position=has_existing_position,
         position_quantity=position_quantity,
         average_entry_price=average_entry_price,

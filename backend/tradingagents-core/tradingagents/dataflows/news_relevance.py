@@ -1,10 +1,13 @@
-"""Company-specific news relevance scoring."""
+"""Company-specific news relevance scoring and hard filtering."""
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .news_entity_resolver import resolve_news_entities
+
+NEWS_PRIORITY = ["yfinance", "google_news_light", "newsdata", "marketaux"]
 
 NEWS_RELEVANCE_CATEGORIES = {
     "company_specific",
@@ -36,11 +39,103 @@ MARKET_MOVING_KEYWORDS = {
 }
 
 MACRO_KEYWORDS = {"rupiah", "bank indonesia", "fed", "interest rate", "inflation", "commodity", "coal", "cpo", "nickel"}
+_ENTITY_FIELDS = ("entities", "symbols", "tickers", "keywords")
+_TEXT_FIELDS = ("title", "description", "summary", "content", "publisher", "url")
+_STOPWORDS = {"pt", "tbk", "inc", "corp", "corporation", "ltd", "plc", "llc", "co", "company"}
+
+
+def _base_symbol(symbol: str) -> str:
+    value = str(symbol or "").strip().upper()
+    if not value:
+        return ""
+    base = value.split(".", 1)[0]
+    if "-" in base and base.endswith(("-USD", "-USDT")):
+        return base.split("-", 1)[0]
+    return base
+
+
+def _clean_term(value: Any) -> str | None:
+    text = " ".join(str(value or "").split()).strip()
+    if len(text) < 2:
+        return None
+    return text
+
+
+def _company_aliases(company_name: str | None) -> list[str]:
+    if not company_name:
+        return []
+    clean = re.sub(r"\b(PT|TBK|Tbk|Inc|Corp|Corporation|Ltd|PLC|LLC|Co)\b\.?", "", company_name).strip()
+    clean = " ".join(clean.split())
+    aliases = [company_name]
+    if clean and clean.lower() != company_name.lower():
+        aliases.append(clean)
+    words = [word for word in re.split(r"[^A-Za-z0-9]+", clean) if word and word.lower() not in _STOPWORDS]
+    acronym = "".join(word[0] for word in words if word)
+    if len(acronym) >= 2:
+        aliases.append(acronym.upper())
+    return aliases
+
+
+def build_news_relevance_terms(
+    symbol: str,
+    company_name: str | None = None,
+    aliases: list[str] | None = None,
+) -> set[str]:
+    """Build ticker, company, and alias terms for article relevance filtering."""
+    terms: list[str] = []
+    canonical = str(symbol or "").strip().upper()
+    base = _base_symbol(canonical)
+    terms.extend([canonical, base])
+    terms.extend(_company_aliases(company_name))
+    terms.extend(str(alias or "").strip() for alias in aliases or [])
+    return {term for raw in terms if (term := _clean_term(raw))}
+
+
+def _article_text(article: dict[str, Any]) -> str:
+    chunks: list[str] = []
+    for field in _TEXT_FIELDS:
+        value = article.get(field)
+        if isinstance(value, (str, int, float)):
+            chunks.append(str(value))
+    for field in _ENTITY_FIELDS:
+        value = article.get(field)
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    chunks.extend(str(item.get(key) or "") for key in ("symbol", "ticker", "name", "title"))
+                else:
+                    chunks.append(str(item))
+        elif isinstance(value, dict):
+            chunks.extend(str(item) for item in value.values())
+        elif isinstance(value, str):
+            chunks.append(value)
+    return " ".join(chunks)
+
+
+def _contains_term(text: str, term: str) -> bool:
+    value = str(term or "").strip()
+    if len(value) < 2:
+        return False
+    if re.fullmatch(r"[A-Za-z0-9]+", value):
+        return bool(re.search(rf"(?<![a-z0-9]){re.escape(value.lower())}(?![a-z0-9])", text.lower()))
+    return value.lower() in text.lower()
+
+
+def is_relevant_news(
+    article: dict,
+    symbol: str,
+    company_name: str | None = None,
+    aliases: list[str] | None = None,
+) -> bool:
+    """Return True only if article text or entities match the analyzed ticker/company."""
+    terms = build_news_relevance_terms(symbol, company_name, aliases)
+    text = _article_text(article)
+    return any(_contains_term(text, term) for term in terms)
 
 
 def score_news_relevance(article: dict[str, Any], ticker: str, company_name: str = "", sector: str = "") -> dict[str, Any]:
     title = str(article.get("title") or "")
-    body = str(article.get("summary") or article.get("description") or "")
+    body = str(article.get("summary") or article.get("description") or article.get("content") or "")
     text = f"{title} {body}".lower()
     entity = resolve_news_entities(article, ticker, company_name)
     score = 0
@@ -55,14 +150,14 @@ def score_news_relevance(article: dict[str, Any], ticker: str, company_name: str
     elif entity["entity_match"] == "negative":
         return {"relevance_score": 0, "category": "irrelevant", "reasons": ["negative_entity_term"], **entity}
 
-    short_ticker = str(ticker or "").upper().removesuffix(".JK").lower()
-    if short_ticker and short_ticker in text:
+    short_ticker = _base_symbol(ticker).lower()
+    if short_ticker and _contains_term(text, short_ticker):
         score += 20
         reasons.append("ticker_match")
-    if company_name and company_name.lower() in text:
+    if company_name and _contains_term(text, company_name):
         score += 25
         reasons.append("company_name_match")
-    if sector and sector.lower() in text:
+    if sector and _contains_term(text, sector):
         score += 15
         reasons.append("sector_match")
     if any(keyword in text for keyword in MARKET_MOVING_KEYWORDS):

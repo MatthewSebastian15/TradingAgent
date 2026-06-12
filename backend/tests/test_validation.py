@@ -100,30 +100,30 @@ def test_time_horizon_months_rejects_unsupported_values():
     assert "time_horizon_months" in exc_info.value.details["fields"]
 
 
-def test_ticker_bbca_is_valid_and_normalized():
+def test_plain_idx_like_symbol_is_not_auto_suffixed():
     req = normalize_and_validate_analysis_request(
         AnalysisRequest(ticker="bbca", trade_date="2026-05-14", max_debate_rounds=1)
     )
 
-    assert req.ticker == "BBCA.JK"
+    assert req.ticker == "BBCA"
 
 
-def test_indonesia_market_appends_jk_for_plain_symbol():
+def test_indonesia_market_does_not_append_jk_for_plain_symbol():
     req = normalize_and_validate_analysis_request(
         AnalysisRequest(ticker="unvr", market="ID", trade_date="2026-05-14", max_debate_rounds=1)
     )
 
-    assert req.ticker == "UNVR.JK"
+    assert req.ticker == "UNVR"
     assert req.market == "ID"
 
 
-def test_indonesia_market_appends_jk_for_symbol_outside_common_allowlist():
+def test_idx_market_accepts_canonical_yfinance_symbol():
     req = normalize_and_validate_analysis_request(
-        AnalysisRequest(ticker="bren", market="id", trade_date="2026-05-14", max_debate_rounds=1)
+        AnalysisRequest(ticker="bbca.jk", market="IDX", trade_date="2026-05-14", max_debate_rounds=1)
     )
 
-    assert req.ticker == "BREN.JK"
-    assert req.market == "ID"
+    assert req.ticker == "BBCA.JK"
+    assert req.market == "IDX"
 
 
 def test_us_ticker_is_not_normalized_to_idx_suffix():
@@ -134,12 +134,52 @@ def test_us_ticker_is_not_normalized_to_idx_suffix():
     assert req.ticker == "AAPL"
 
 
-def test_explicit_us_market_does_not_apply_idx_allowlist():
+def test_search_metadata_canonical_symbol_wins():
     req = normalize_and_validate_analysis_request(
-        AnalysisRequest(ticker="bbca", market="US", trade_date="2026-05-14", max_debate_rounds=1)
+        AnalysisRequest(
+            ticker="bbca",
+            market="IDX",
+            trade_date="2026-05-14",
+            max_debate_rounds=1,
+            search_metadata={
+                "canonical": "BBCA.JK",
+                "company_name": "PT Bank Central Asia Tbk",
+                "exchange": "JKT",
+                "quote_type": "EQUITY",
+                "source": "yfinance",
+            },
+        )
     )
 
-    assert req.ticker == "BBCA"
+    assert req.ticker == "BBCA.JK"
+    assert req.search_metadata["canonical"] == "BBCA.JK"
+
+
+def test_symbol_alias_payload_is_accepted():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(symbol="BTC-USD", market="CRYPTO", trade_date="2026-05-14", max_debate_rounds=1)
+    )
+
+    assert req.ticker == "BTC-USD"
+    assert req.market == "CRYPTO"
+
+
+def test_global_suffix_tickers_are_valid():
+    for ticker in ["0700.HK", "9984.T"]:
+        req = normalize_and_validate_analysis_request(
+            AnalysisRequest(ticker=ticker, market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
+        )
+        assert req.ticker == ticker
+        assert req.market == "GLOBAL"
+
+
+def test_etf_and_fund_markets_are_valid():
+    for ticker, market in [("SPY", "ETF"), ("VFIAX", "FUND")]:
+        req = normalize_and_validate_analysis_request(
+            AnalysisRequest(ticker=ticker, market=market, trade_date="2026-05-14", max_debate_rounds=1)
+        )
+        assert req.ticker == ticker
+        assert req.market == market
 
 
 def test_single_character_ticker_is_valid():
@@ -392,31 +432,37 @@ def test_production_rejects_disabled_api_key_requirement(monkeypatch):
         _restore_test_config(monkeypatch)
 
 
-def test_global_market_is_rejected():
-    with pytest.raises(BadRequestError) as exc_info:
-        normalize_and_validate_analysis_request(
-            AnalysisRequest(ticker="700.HK", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
-        )
+def test_global_market_is_accepted():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(ticker="0700.HK", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
+    )
 
-    assert exc_info.value.status_code == 400
-    assert "market" in exc_info.value.details["fields"]
-
-
-def test_non_id_exchange_suffix_is_rejected():
-    with pytest.raises(BadRequestError) as exc_info:
-        normalize_and_validate_analysis_request(
-            AnalysisRequest(ticker="SAP.DE", market="US", trade_date="2026-05-14", max_debate_rounds=1)
-        )
-
-    assert exc_info.value.status_code == 400
-    assert "ticker" in exc_info.value.details["fields"]
+    assert req.ticker == "0700.HK"
+    assert req.market == "GLOBAL"
 
 
-def test_hk_suffix_ticker_is_rejected():
-    with pytest.raises(BadRequestError) as exc_info:
-        normalize_and_validate_analysis_request(
-            AnalysisRequest(ticker="700.HK", market="US", trade_date="2026-05-14", max_debate_rounds=1)
-        )
+def test_non_id_exchange_suffix_is_accepted():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(ticker="SAP.DE", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
+    )
 
-    assert exc_info.value.status_code == 400
-    assert "ticker" in exc_info.value.details["fields"]
+    assert req.ticker == "SAP.DE"
+
+
+def test_hk_suffix_ticker_is_accepted():
+    req = normalize_and_validate_analysis_request(
+        AnalysisRequest(ticker="0700.HK", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
+    )
+
+    assert req.ticker == "0700.HK"
+
+
+def test_invalid_symbols_are_rejected():
+    invalid_values = ["<script>", "AAPL; DROP TABLE", "../../BBCA.JK", "SYMBOL-WITH-UNREASONABLY-LONG-NAME"]
+    for ticker in invalid_values:
+        with pytest.raises(BadRequestError) as exc_info:
+            normalize_and_validate_analysis_request(
+                AnalysisRequest(ticker=ticker, trade_date="2026-05-14", max_debate_rounds=1)
+            )
+        assert exc_info.value.status_code == 400
+        assert "ticker" in exc_info.value.details["fields"]
