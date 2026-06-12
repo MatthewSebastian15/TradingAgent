@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from time import monotonic
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
 
+from errors import BadRequestError
 from rate_limiter import limit_request, request_policy
-from routes.validation import normalize_ticker_symbol
 from schemas import MarketQuotesResponse
 
 logger = logging.getLogger(__name__)
@@ -19,21 +20,37 @@ router = APIRouter()
 
 # Default tickers shown on the dashboard ticker tape.
 _DEFAULT_TICKERS: list[str] = [
-    "BBCA.JK",
-    "BBRI.JK",
-    "TLKM.JK",
-    "NVDA",
-    "AAPL",
-    "TSLA",
-    "MSFT",
-    "META",
-    "GOTO.JK",
-    "ASII.JK",
+    "ES=F",
+    "NQ=F",
+    "^VIX",
+    "DX-Y.NYB",
+    "^TNX",
+    "BTC-USD",
+    "CL=F",
+    "GC=F",
+    "^N225",
+    "^JKSE",
 ]
+_QUOTE_SYMBOL_RE = re.compile(r"^[A-Z0-9^]{1,15}(?:[.=:-][A-Z0-9]{1,12}){0,3}$")
 _QUOTE_CACHE_TTL_SECONDS = 60.0
 _SEARCH_CACHE_TTL_SECONDS = 60.0
 _QUOTE_CACHE: dict[tuple[str, ...], tuple[float, list[dict]]] = {}
 _SEARCH_CACHE: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
+
+
+def _normalize_quote_symbol(symbol: str) -> str:
+    """Normalize symbols used by the global ticker tape without blocking Yahoo index/future syntax."""
+    normalized = symbol.strip().upper() if isinstance(symbol, str) else symbol
+    if not isinstance(normalized, str) or not _QUOTE_SYMBOL_RE.fullmatch(normalized):
+        raise BadRequestError(
+            "Invalid ticker symbol.",
+            details={
+                "fields": {
+                    "ticker": "Ticker must be a canonical yfinance quote symbol, for example ES=F, ^VIX, DX-Y.NYB, BTC-USD, or AAPL."
+                }
+            },
+        )
+    return normalized
 
 
 def _clone_quotes(quotes: list[dict]) -> list[dict]:
@@ -226,7 +243,7 @@ async def get_market_quotes(
     request: Request,
     symbols: str = Query(
         default=",".join(_DEFAULT_TICKERS),
-        description="Comma-separated list of ticker symbols, e.g. BBCA.JK,NVDA",
+        description="Comma-separated list of yfinance symbols, e.g. ES=F,^VIX,BTC-USD",
     ),
 ) -> dict:
     """Return latest price-change data for a list of ticker symbols.
@@ -239,7 +256,7 @@ async def get_market_quotes(
         raw_symbols = [s.strip() for s in symbols.split(",") if s.strip()]
 
         # Cap at 20 to avoid overloading yfinance on a single request.
-        capped = [normalize_ticker_symbol(sym) for sym in raw_symbols[:20]]
+        capped = [_normalize_quote_symbol(sym) for sym in raw_symbols[:20]]
 
         cache_key = tuple(capped)
         cached_at, cached_quotes = _QUOTE_CACHE.get(cache_key, (0.0, []))
