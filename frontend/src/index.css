@@ -103,14 +103,6 @@ body::after {
   }
 }
 
-@keyframes ticker-marquee {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(-50%, 0, 0);
-  }
-}
 
 @keyframes spin {
   from {
@@ -156,25 +148,52 @@ body::after {
   animation: marquee 30s linear infinite;
 }
 .ticker-tape {
-  overflow: hidden;
-  width: 100%;
-}
-.ticker-tape__track {
-  display: flex;
-  width: max-content;
-  animation: ticker-marquee 72s linear infinite;
-  transform: translate3d(0, 0, 0);
-  backface-visibility: hidden;
-  contain: content;
-  will-change: transform;
-}
-.ticker-tape__group {
-  display: flex;
-  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   align-items: center;
-  gap: 2rem;
-  padding-right: 2rem;
+  width: 100%;
+  height: 28px;
+  overflow: hidden;
+}
+.ticker-tape__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  gap: 4px;
+  padding: 0 5px;
+  overflow: hidden;
   white-space: nowrap;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  font-size: 11px;
+  line-height: 28px;
+}
+.ticker-tape__item:last-child {
+  border-right: 0;
+}
+.ticker-tape__label {
+  flex: 0 0 auto;
+  min-width: 34px;
+  color: #f59e0b;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: right;
+}
+.ticker-tape__price {
+  flex: 0 1 auto;
+  min-width: 34px;
+  overflow: hidden;
+  color: #e5e7eb;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+.ticker-tape__change {
+  flex: 0 0 auto;
+  min-width: 45px;
+  font-weight: 600;
+  text-align: right;
 }
 
 /* Terminal cursor */

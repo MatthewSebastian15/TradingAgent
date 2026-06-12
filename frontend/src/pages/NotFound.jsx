@@ -1,15 +1,17 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import TickerTape from '../components/TickerTape';
 
 export default function NotFound() {
   const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
+      <TickerTape />
       <div
         className="flex flex-col items-center justify-center"
-        style={{ minHeight: 'calc(100vh - 40px)' }}
+        style={{ minHeight: 'calc(100vh - 68px)' }}
       >
         <div className="text-center">
           <div className="font-display text-8xl font-bold text-bloomberg-border tracking-widest mb-4">

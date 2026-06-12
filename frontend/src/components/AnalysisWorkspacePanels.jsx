@@ -83,7 +83,7 @@ export function DrawerPanel({ open, title, onClose, children }) {
   return (
     <aside
       aria-hidden={!open}
-      className={`fixed bottom-0 left-10 top-10 z-[35] flex w-72 flex-col border-r border-bloomberg-border bg-bloomberg-card shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200 ease-out will-change-transform ${
+      className={`fixed bottom-0 left-10 top-[68px] z-[35] flex w-72 flex-col border-r border-bloomberg-border bg-bloomberg-card shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200 ease-out will-change-transform ${
         open
           ? 'pointer-events-auto translate-x-0 opacity-100'
           : 'pointer-events-none -translate-x-full opacity-0'

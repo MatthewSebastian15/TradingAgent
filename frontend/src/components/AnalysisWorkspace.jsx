@@ -12,6 +12,7 @@ import {
   StatusBar,
 } from './AnalysisWorkspacePanels';
 import Navbar from './Navbar';
+import TickerTape from './TickerTape';
 import ResultCard from './ResultCard';
 import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 import {
@@ -226,8 +227,9 @@ export default function AnalysisWorkspace({
   return (
     <div className="min-h-screen bg-bloomberg-bg">
       <Navbar />
+      <TickerTape />
 
-      <div className="fixed bottom-0 left-0 top-10 z-[45] w-10 border-bloomberg-border border-r bg-black">
+      <div className="fixed bottom-0 left-0 top-[68px] z-[45] w-10 border-bloomberg-border border-r bg-black">
         <PanelButton
           active={activePanel === 'config'}
           title="Configuration"
