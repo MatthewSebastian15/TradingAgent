@@ -93,6 +93,7 @@ SUMMARY_FIELDS = {
     "data_limitations",
     "vendor_attempts",
     "request_budget",
+    "vendor_budget",
     "warnings",
     "validation_warnings",
     "validation_warning_details",
@@ -1143,8 +1144,8 @@ def _build_common_result_fields(final_state: dict[str, Any], pd_obj: object | No
         "analysis_depth": final_state.get("analysis_depth", DEFAULT_ANALYSIS_DEPTH),
         "time_horizon_months": final_state.get("time_horizon_months"),
         "data_fetched_at": final_state.get("data_fetched_at") or _utc_now_iso(),
-        "llm_call_budget": final_state.get("balanced_gemini_request_budget"),
-        "llm_calls_used": final_state.get("balanced_gemini_calls_used"),
+        "llm_call_budget": final_state.get("llm_call_budget") or final_state.get("balanced_gemini_request_budget"),
+        "llm_calls_used": final_state.get("llm_calls_used") or final_state.get("balanced_gemini_calls_used"),
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
         **_build_common_fundamental_fields(final_state),
@@ -1211,6 +1212,7 @@ def _build_common_quality_fields(final_state: dict[str, Any]) -> dict[str, Any]:
         "data_limitations": final_state.get("data_limitations") or [],
         "vendor_attempts": final_state.get("vendor_attempts") or {},
         "request_budget": final_state.get("request_budget") or {},
+        "vendor_budget": final_state.get("vendor_budget") or {},
         "warnings": _build_response_warnings(final_state, final_state),
     }
 
@@ -1478,7 +1480,7 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
     }
     warnings = request_warnings(req)
     if warnings:
-        payload["warnings"] = warnings
+        payload["warnings"] = list(dict.fromkeys([*(payload.get("warnings") or []), *warnings]))
     return payload
 
 

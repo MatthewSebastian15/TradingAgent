@@ -200,7 +200,9 @@ def test_shared_proxy_key_uses_separate_owner_session_quotas(client, monkeypatch
     )
 
     proxy_headers = {"x-api-key": "shared-proxy-key"}
+    client.headers.pop("x-owner-token", None)
     owner_a = client.post("/api/session", headers=proxy_headers).json()["owner_token"]
+    client.cookies.clear()
     owner_b = client.post("/api/session", headers=proxy_headers).json()["owner_token"]
 
     first_a = client.get("/api/status", headers={**proxy_headers, "x-owner-token": owner_a})
@@ -238,3 +240,42 @@ def test_market_quotes_endpoint_is_rate_limited(client, monkeypatch):
     assert [item["sym"] for item in first.json()["quotes"]] == ["BBCA.JK", "AAPL"]
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "RATE_LIMITED"
+
+
+def test_job_event_stream_does_not_consume_request_limit(client, monkeypatch):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+        return {
+            "decision": "Hold",
+            "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []},
+        }
+
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
+    monkeypatch.setattr(
+        "routes.analysis.request_policy",
+        lambda: RateLimitPolicy(scope="job-events-request-test", max_per_minute=1, max_concurrent=1),
+    )
+    monkeypatch.setattr(
+        "routes.analysis.stream_policy",
+        lambda: RateLimitPolicy(scope="job-events-stream-test", max_per_minute=10, max_concurrent=1),
+    )
+
+    headers = {"x-api-key": "same-job-events-key"}
+    create = client.post(
+        "/api/analysis/jobs",
+        json={"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1},
+        headers=headers,
+    )
+    assert create.status_code == 200
+
+    job_id = create.json()["job_id"]
+    with client.stream("GET", f"/api/analysis/jobs/{job_id}/events", headers=headers) as response:
+        assert response.status_code == 200
+        response.read()
+
+    first_status = client.get("/api/status", headers=headers)
+    second_status = client.get("/api/status", headers=headers)
+
+    assert first_status.status_code == 200
+    assert second_status.status_code == 429

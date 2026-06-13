@@ -56,6 +56,7 @@ from .data_quality import (
     validate_quote,
     validate_sentiment,
 )
+from .errors import ErrorCode
 from .finnhub_common import (
     FinnhubRateLimitError,
     FinnhubUnavailableError,
@@ -595,7 +596,7 @@ def _consume_budget(config: dict, method: str, vendor: str) -> tuple[bool, str |
     if budget is None:
         return True, None
     if not budget.can_call(vendor):
-        reason = "request budget exceeded"
+        reason = ErrorCode.VENDOR_BUDGET_EXCEEDED
         budget.record_blocked(vendor, method, reason)
         return False, reason
     budget.record_call(vendor, method)
@@ -625,6 +626,9 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
     if cache is not None:
         cached = cache.get(cache_key)
         if cached is not None:
+            budget = get_budget(config.get("_vendor_budget_id"))
+            if budget is not None:
+                budget.record_cache_hit(vendor, method)
             _record_attempt(config, method, vendor, "cache_hit")
             return cached
 

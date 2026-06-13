@@ -60,6 +60,32 @@ def sanitize_validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, A
 # ---------------------------------------------------------------------------
 
 
+class ErrorCode:
+    MISSING_API_KEY = "missing_api_key"
+    VENDOR_TIMEOUT = "vendor_timeout"
+    VENDOR_QUOTA_ERROR = "vendor_quota_error"
+    VENDOR_EMPTY_RESPONSE = "vendor_empty_response"
+    VENDOR_SCHEMA_ERROR = "vendor_schema_error"
+    VENDOR_AUTH_ERROR = "vendor_auth_error"
+    VENDOR_UNSUPPORTED = "vendor_unsupported_symbol"
+    VENDOR_BUDGET_EXCEEDED = "vendor_budget_exceeded"
+
+    SYMBOL_NOT_FOUND = "symbol_not_found"
+    SYMBOL_NOT_VERIFIED = "symbol_not_verified"
+    SYMBOL_AMBIGUOUS = "symbol_ambiguous"
+
+    PIPELINE_TIMEOUT = "pipeline_timeout"
+    PARTIAL_RESULT = "partial_result"
+    LLM_BUDGET_EXCEEDED = "llm_budget_exceeded"
+    LLM_SCHEMA_INVALID = "llm_schema_invalid"
+    DATA_QUALITY_BLOCKING = "data_quality_blocking"
+
+    DATA_STALE = "data_stale"
+    DATA_PARTIAL = "data_partial"
+    DATA_CONFLICT = "data_conflict"
+    COVERAGE_UNVERIFIED = "coverage_unverified"
+
+
 @dataclass
 class ApiError(Exception):
     status_code: int

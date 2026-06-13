@@ -41,6 +41,10 @@ _SEARCH_CACHE: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
 def _normalize_quote_symbol(symbol: str) -> str:
     """Normalize symbols used by the global ticker tape without blocking Yahoo index/future syntax."""
     normalized = symbol.strip().upper() if isinstance(symbol, str) else symbol
+    if isinstance(normalized, str):
+        from tradingagents.dataflows.y_finance import normalize_ticker as normalize_yfinance_ticker
+
+        normalized = normalize_yfinance_ticker(normalized)
     if not isinstance(normalized, str) or not _QUOTE_SYMBOL_RE.fullmatch(normalized):
         raise BadRequestError(
             "Invalid ticker symbol.",

@@ -59,27 +59,25 @@ def test_history_list_detail_filter_and_limit(client, analysis_repository):
     assert detail.json() == _result("req-aapl", "AAPL")
 
 
-def test_history_is_isolated_across_valid_owner_sessions(client, analysis_repository):
+def test_history_is_global_across_valid_owner_sessions(client, analysis_repository):
     analysis_repository.save_analysis(result=_result("req-owner"), owner_id=_TEST_OWNER_IDENTIFIER)
     other_headers = {"x-owner-token": issue_owner_session()["owner_token"]}
 
     response = client.get("/api/analysis/history/req-owner", headers=other_headers)
 
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "NOT_FOUND"
+    assert response.status_code == 200
+    assert response.json() == _result("req-owner")
 
 
-def test_history_delete_is_isolated_across_valid_owner_sessions(client, analysis_repository):
+def test_history_delete_is_global_across_valid_owner_sessions(client, analysis_repository):
     analysis_repository.save_analysis(result=_result("req-delete-owner"), owner_id=_TEST_OWNER_IDENTIFIER)
     other_headers = {"x-owner-token": issue_owner_session()["owner_token"]}
 
     response = client.delete("/api/analysis/history/req-delete-owner", headers=other_headers)
 
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "NOT_FOUND"
-    assert analysis_repository.get_analysis("req-delete-owner", owner_id=_TEST_OWNER_IDENTIFIER) == _result(
-        "req-delete-owner"
-    )
+    assert response.status_code == 200
+    assert response.json() == {"deleted": True, "request_id": "req-delete-owner"}
+    assert analysis_repository.get_analysis("req-delete-owner") is None
 
 
 def test_history_delete_one_and_clear_all(client, analysis_repository):

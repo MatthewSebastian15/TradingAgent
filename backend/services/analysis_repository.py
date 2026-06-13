@@ -169,7 +169,7 @@ class AnalysisRepository:
         self,
         request_id: str,
         *,
-        owner_id: str,
+        owner_id: str | None = None,
     ) -> dict[str, Any] | None:
         row = self._fetch_record("request_id", request_id, owner_id=owner_id)
         return self._result_from_row(row)
@@ -178,7 +178,7 @@ class AnalysisRepository:
         self,
         job_id: str,
         *,
-        owner_id: str,
+        owner_id: str | None = None,
     ) -> dict[str, Any] | None:
         row = self._fetch_record("job_id", job_id, owner_id=owner_id)
         return self._result_from_row(row)
@@ -187,7 +187,7 @@ class AnalysisRepository:
         self,
         job_id: str,
         *,
-        owner_id: str,
+        owner_id: str | None = None,
     ) -> dict[str, Any] | None:
         row = self._fetch_record("job_id", job_id, owner_id=owner_id)
         if row is None:
@@ -206,12 +206,14 @@ class AnalysisRepository:
         *,
         ticker: str | None = None,
         limit: int = 25,
-        owner_id: str,
+        owner_id: str | None = None,
     ) -> list[dict[str, Any]]:
         safe_limit = max(1, min(int(limit), 100))
         params: list[Any] = []
-        filters: list[str] = ["owner_id = ?"]
-        params.append(_require_owner_id(owner_id))
+        filters: list[str] = []
+        if owner_id is not None:
+            filters.append("owner_id = ?")
+            params.append(_require_owner_id(owner_id))
         if ticker:
             filters.append("ticker = ?")
             params.append(ticker.strip().upper())
@@ -245,29 +247,41 @@ class AnalysisRepository:
             items.append(item)
         return items
 
-    def delete_analysis(self, request_id: str, *, owner_id: str) -> bool:
-        owner = _require_owner_id(owner_id)
+    def delete_analysis(self, request_id: str, *, owner_id: str | None = None) -> bool:
         with self._write_lock, self._connect() as conn:
-            cursor = conn.execute("DELETE FROM analyses WHERE request_id = ? AND owner_id = ?", (request_id, owner))
+            if owner_id is None:
+                cursor = conn.execute("DELETE FROM analyses WHERE request_id = ?", (request_id,))
+            else:
+                cursor = conn.execute(
+                    "DELETE FROM analyses WHERE request_id = ? AND owner_id = ?",
+                    (request_id, _require_owner_id(owner_id)),
+                )
             return cursor.rowcount > 0
 
-    def delete_all_analyses(self, *, owner_id: str) -> int:
-        owner = _require_owner_id(owner_id)
+    def delete_all_analyses(self, *, owner_id: str | None = None) -> int:
         with self._write_lock, self._connect() as conn:
-            cursor = conn.execute("DELETE FROM analyses WHERE owner_id = ?", (owner,))
+            if owner_id is None:
+                cursor = conn.execute("DELETE FROM analyses")
+            else:
+                cursor = conn.execute("DELETE FROM analyses WHERE owner_id = ?", (_require_owner_id(owner_id),))
             return max(0, cursor.rowcount)
 
-    def mark_exported(self, request_id: str, export_type: str, *, owner_id: str) -> bool:
+    def mark_exported(self, request_id: str, export_type: str, *, owner_id: str | None = None) -> bool:
         if export_type not in {"html", "pdf"}:
             return False
         column = "exported_html_at" if export_type == "html" else "exported_pdf_at"
-        owner = _require_owner_id(owner_id)
         now = utc_now_iso()
         with self._write_lock, self._connect() as conn:
-            cursor = conn.execute(
-                f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ? AND owner_id = ?",
-                (now, now, request_id, owner),
-            )
+            if owner_id is None:
+                cursor = conn.execute(
+                    f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ?",
+                    (now, now, request_id),
+                )
+            else:
+                cursor = conn.execute(
+                    f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ? AND owner_id = ?",
+                    (now, now, request_id, _require_owner_id(owner_id)),
+                )
             return cursor.rowcount > 0
 
     def _connect(self) -> sqlite3.Connection:
@@ -335,12 +349,13 @@ class AnalysisRepository:
         column: str,
         value: str,
         *,
-        owner_id: str,
+        owner_id: str | None = None,
     ) -> sqlite3.Row | None:
         if column not in {"request_id", "job_id"}:
             raise ValueError(f"Unsupported lookup column: {column}")
 
-        owner = _require_owner_id(owner_id)
+        owner_filter = "AND owner_id = ?" if owner_id is not None else ""
+        params: tuple[Any, ...] = (value, _require_owner_id(owner_id)) if owner_id is not None else (value,)
         with self._connect() as conn:
             return conn.execute(
                 f"""
@@ -352,9 +367,9 @@ class AnalysisRepository:
                     status, result_json, request_json, created_at, updated_at,
                     exported_html_at, exported_pdf_at
                 FROM analyses
-                WHERE {column} = ? AND owner_id = ?
+                WHERE {column} = ? {owner_filter}
                 """,
-                (value, owner),
+                params,
             ).fetchone()
 
     def _migrate_owner_id_not_null(self, conn: sqlite3.Connection) -> None:

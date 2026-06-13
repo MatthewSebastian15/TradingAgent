@@ -6,9 +6,11 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 from config import OWNER_SESSION_SECRET, OWNER_SESSION_TTL_SECONDS
@@ -16,7 +18,8 @@ from errors import AuthenticationError
 
 _TOKEN_VERSION = 1
 OWNER_SESSION_COOKIE_NAME = "ta_owner_token"
-_DEV_SIGNING_SECRET = secrets.token_bytes(32)
+_DEV_SIGNING_SECRET: bytes | None = None
+_DEV_SIGNING_SECRET_FILE = ".owner_session_secret"
 
 
 def _base64url_encode(value: bytes) -> str:
@@ -30,7 +33,30 @@ def _base64url_decode(value: str) -> bytes:
 
 def _signing_secret() -> bytes:
     configured = OWNER_SESSION_SECRET.encode("utf-8")
-    return configured or _DEV_SIGNING_SECRET
+    return configured or _persistent_dev_signing_secret()
+
+
+def _persistent_dev_signing_secret() -> bytes:
+    global _DEV_SIGNING_SECRET
+    if _DEV_SIGNING_SECRET is not None:
+        return _DEV_SIGNING_SECRET
+
+    cache_home = Path(os.getenv("XDG_CACHE_HOME") or Path.home() / ".tradingagents" / "cache").expanduser()
+    secret_path = cache_home / _DEV_SIGNING_SECRET_FILE
+    try:
+        secret_path.parent.mkdir(parents=True, exist_ok=True)
+        secret = secret_path.read_text(encoding="utf-8").strip() if secret_path.exists() else ""
+        if not secret:
+            secret = secrets.token_hex(32)
+            secret_path.write_text(secret, encoding="utf-8")
+            try:
+                secret_path.chmod(0o600)
+            except OSError:
+                pass
+        _DEV_SIGNING_SECRET = secret.encode("utf-8")
+    except OSError:
+        _DEV_SIGNING_SECRET = secrets.token_bytes(32)
+    return _DEV_SIGNING_SECRET
 
 
 def _signature(payload: str) -> str:
@@ -59,7 +85,7 @@ def issue_owner_session(*, owner_id: str | None = None, now: int | None = None) 
     }
 
 
-def owner_identifier_from_token(token: str, *, now: int | None = None) -> str:
+def read_owner_session(token: str, *, now: int | None = None) -> dict[str, Any]:
     try:
         encoded_payload, supplied_signature = token.split(".", 1)
         if not hmac.compare_digest(supplied_signature, _signature(encoded_payload)):
@@ -77,4 +103,8 @@ def owner_identifier_from_token(token: str, *, now: int | None = None) -> str:
         raise AuthenticationError("Unsupported owner session token.")
     if expires_at <= current_time:
         raise AuthenticationError("Owner session token has expired.")
-    return owner_identifier(owner_id)
+    return {"owner_id": owner_id, "expires_at": expires_at}
+
+
+def owner_identifier_from_token(token: str, *, now: int | None = None) -> str:
+    return owner_identifier(read_owner_session(token, now=now)["owner_id"])

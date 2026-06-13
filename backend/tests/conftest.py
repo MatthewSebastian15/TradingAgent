@@ -44,6 +44,7 @@ _GOOGLE_DEEP_LLM = MODEL_CATALOG["google"]["deep"][0][1]
 _DEFAULT_ENV = {
     "APP_ENV": "development",
     "LLM_PROVIDER": "google",
+    "LLM_API_KEY": "test-llm-key",
     "DEEP_THINK_LLM": _GOOGLE_DEEP_LLM,
     "QUICK_THINK_LLM": _GOOGLE_QUICK_LLM,
     "GOOGLE_API_KEY": "test-google-key",
@@ -58,6 +59,7 @@ _DEFAULT_ENV = {
     "MAX_CONCURRENT_REQUESTS_PER_KEY": "1000",
     "MAX_CONCURRENT_STREAMS_PER_KEY": "1000",
     "REQUIRE_API_KEY_FOR_RATE_LIMIT": "false",
+    "OWNER_SESSION_SECRET": "test-owner-session-secret",
     "TRADINGAGENTS_SKIP_DOTENV": "true",
 }
 

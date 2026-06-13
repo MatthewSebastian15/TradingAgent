@@ -10,6 +10,7 @@ from tradingagents.utils_resilience import TTLCache
 from tradingagents.yfinance_runtime import yf
 
 from .config import get_config
+from .errors import ErrorCode
 from .google_news_light import GoogleNewsLightProvider
 from .marketaux_news import MarketAuxProvider
 from .news_deduplication import deduplicate_news_articles
@@ -240,7 +241,7 @@ class NewsService:
         if budget is None:
             return True
         if not budget.can_call(provider_name):
-            budget.record_blocked(provider_name, "get_news", "request budget exceeded")
+            budget.record_blocked(provider_name, "get_news", ErrorCode.VENDOR_BUDGET_EXCEEDED)
             return False
         budget.record_call(provider_name, "get_news")
         return True

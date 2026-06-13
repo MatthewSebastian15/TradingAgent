@@ -366,10 +366,13 @@ class FieldQuality:
     source: str | None
     status: str
     confidence_score: int | float | None
+    confidence: str = "medium"
     freshness_score: int = 0
     completeness_score: int = 0
     source_reliability_score: int = 0
     cross_vendor_match_score: int = 0
+    coverage_verified: bool = False
+    blocking: bool = False
     warnings: list[str] = field(default_factory=list)
     as_of_date: str | None = None
     freshness_status: dict[str, Any] | None = None
@@ -449,6 +452,27 @@ _ALLOWED_STATUSES = {
 }
 
 _MISSING_SENTINELS = {"", "n/a", "na", "none", "null", "unavailable", "source_unavailable"}
+_BLOCKING_FIELDS = {"quote", "historical", "historical_price", "stock_price", "last_price"}
+
+
+def _confidence_label(score: int | float | None, *, missing: bool, status: str) -> str:
+    if missing or status in {"source_unavailable", "unavailable", "empty", "failed"}:
+        return "unavailable"
+    if status == "stale":
+        return "low"
+    try:
+        numeric = float(score or 0)
+    except (TypeError, ValueError):
+        return "medium-low"
+    if numeric >= 80:
+        return "high"
+    if numeric >= 70:
+        return "medium-high"
+    if numeric >= 55:
+        return "medium"
+    if numeric >= 40:
+        return "medium-low"
+    return "low"
 
 
 def _is_missing_value(value: Any) -> bool:
@@ -556,10 +580,13 @@ def build_field_quality(
         source=source_text,
         status=status,
         confidence_score=confidence,
+        confidence=_confidence_label(confidence, missing=missing, status=status),
         freshness_score=freshness_score,
         completeness_score=completeness_score,
         source_reliability_score=source_reliability_score,
         cross_vendor_match_score=cross_vendor_match_score,
+        coverage_verified=not missing and status not in {"unknown", "source_unavailable", "unavailable"},
+        blocking=str(field_name) in _BLOCKING_FIELDS,
         warnings=list(dict.fromkeys(field_warnings)),
         as_of_date=as_of_date,
         freshness_status=freshness_detail,

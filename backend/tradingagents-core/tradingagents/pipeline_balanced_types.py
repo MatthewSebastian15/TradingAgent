@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from tradingagents.agents.schemas import PortfolioRating
 from tradingagents.dataflows.data_quality import DataQualityReport
+from tradingagents.dataflows.errors import ErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,9 @@ class LLMBudget:
         self.limit = max(0, int(limit))
         self.used = 0
         self.exhausted = False
+        self.agent_calls: dict[str, int] = {}
         self.agents_skipped: list[str] = []
+        self.warnings: list[dict[str, str]] = []
         self._lock = threading.Lock()
 
     def consume(self, agent_name: str) -> bool:
@@ -109,6 +112,12 @@ class LLMBudget:
             if self.used >= self.limit:
                 self.exhausted = True
                 self.agents_skipped.append(agent_name)
+                self.warnings.append(
+                    {
+                        "code": ErrorCode.LLM_BUDGET_EXCEEDED,
+                        "message": f"LLM budget exceeded before {agent_name}. Agent skipped.",
+                    }
+                )
                 logger.warning(
                     "LLM budget exhausted before %s. Used %d/%d calls.",
                     agent_name,
@@ -117,6 +126,7 @@ class LLMBudget:
                 )
                 return False
             self.used += 1
+            self.agent_calls[agent_name] = self.agent_calls.get(agent_name, 0) + 1
             return True
 
     def snapshot(self) -> dict[str, Any]:
@@ -124,6 +134,9 @@ class LLMBudget:
             return {
                 "used": self.used,
                 "limit": self.limit,
+                "max": self.limit,
                 "budget_exhausted": self.exhausted,
+                "agents": {agent: {"used": used} for agent, used in self.agent_calls.items()},
                 "agents_skipped": list(dict.fromkeys(self.agents_skipped)),
+                "warnings": list(self.warnings),
             }

@@ -215,9 +215,11 @@ async def start_job(
 
 
 async def stream_job_events_with_lease(request, job: AnalysisJob, rate_limit_lease: RateLimitLease):
-    async with rate_limit_lease:
+    try:
         async for event in stream_job_events(request, job):
             yield event
+    finally:
+        await rate_limit_lease.__aexit__(None, None, None)
 
 
 async def stream_job_events(request, job: AnalysisJob):

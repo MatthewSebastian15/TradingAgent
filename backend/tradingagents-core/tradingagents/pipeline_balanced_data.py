@@ -607,16 +607,16 @@ def _related_news_items_from_context(news_context: dict[str, Any] | None, ticker
 def _build_related_news(
     ticker: str,
     trade_date: str,
-    time_horizon_months: int,
-    company_news: str,
-    global_news: str,
+    time_horizon_months: int = 1,
+    company_news: str | None = None,
+    global_news: str | None = None,
     source_label: str | None = None,
     news_context: dict[str, Any] | None = None,
-    limit: int = 8,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     months = _normalize_time_horizon_months(time_horizon_months)
     lookback_days = _horizon_days(months)
-    max_items = max(1, min(int(limit or 8), 8))
+    max_items = None if limit is None else max(1, int(limit or 1))
 
     base_payload: dict[str, Any] = {
         "available": False,
@@ -637,10 +637,12 @@ def _build_related_news(
         return {**base_payload, "warning": "Related news is unavailable."}
 
     try:
-        ranked = rank_news(deduplicate_news(merged), ticker=ticker)[:max_items]
+        ranked = rank_news(deduplicate_news(merged), ticker=ticker)
+        if max_items is not None:
+            ranked = ranked[:max_items]
     except Exception as exc:
         logger.warning("Failed to rank related news for %s: %s", ticker, exc)
-        ranked = merged[:max_items]
+        ranked = merged if max_items is None else merged[:max_items]
 
     if not ranked:
         return {**base_payload, "warning": "Related news is unavailable after deduplication."}

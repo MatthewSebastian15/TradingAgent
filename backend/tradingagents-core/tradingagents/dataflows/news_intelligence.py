@@ -11,11 +11,15 @@ from tradingagents.dataflows.news_noise_filter import route_news_bucket
 from tradingagents.dataflows.news_relevance import score_news_relevance
 
 MATERIAL_KEYWORDS = {
-    "earnings": ["earnings", "profit", "revenue", "margin", "guidance", "eps"],
-    "dividend": ["dividend", "payout", "distribution"],
+    "earnings": ["earnings", "profit", "revenue", "margin", "guidance", "eps", "laba", "pendapatan"],
+    "dividend": ["dividend", "payout", "distribution", "dividen"],
     "corporate_action": ["merger", "acquisition", "buyback", "rights issue", "spin off", "tender offer"],
+    "index": ["index inclusion", "index exclusion", "removes", "removed from", "free float"],
     "regulatory": ["investigation", "sanction", "regulation", "lawsuit", "probe", "fine"],
-    "management": ["ceo", "cfo", "resignation", "appointment", "chairman", "director"],
+    "management": ["ceo", "cfo", "resignation", "appointment", "appoints", "chairman", "director"],
+    "shareholder": ["shareholder", "pemegang saham", "ownership change", "kepemilikan saham"],
+    "debt_rating": ["rating", "bond outlook", "peringkat obligasi"],
+    "major_contract": ["major project", "partnership contract", "kontrak proyek"],
     "sector": ["interest rate", "commodity price", "policy", "inflation", "sector", "tariff"],
 }
 
@@ -145,6 +149,28 @@ def _source_confidence(source: Any) -> int:
     return 45
 
 
+def _source_confidence_label(score: int) -> str:
+    if score >= 60:
+        return "HIGH"
+    if score >= 45:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _news_scope(item: dict[str, Any], relevance_category: str, entity_match: str) -> str:
+    event_type = str(item.get("event_type") or "").strip().lower()
+    if event_type == "market_context" or relevance_category in {"macro_related", "market_noise"}:
+        return "market_context"
+    if entity_match in {"company_exact", "subsidiary"} or relevance_category in {
+        "company_specific",
+        "subsidiary_related",
+    }:
+        return "company"
+    if relevance_category == "sector_related":
+        return "sector"
+    return "market_context"
+
+
 def _recency_score(published_at: Any, trade_date: str) -> int:
     published = _parse_datetime(published_at)
     trade = _parse_datetime(trade_date)
@@ -254,6 +280,12 @@ def build_news_impact(
             relevance = max(relevance, calculated_relevance)
         relevance = max(0, min(100, relevance))
         relevance_category = str(relevance_payload.get("category") or "market_noise")
+        if (
+            str(item.get("event_type") or "").strip().lower() == "market_context"
+            and relevance >= 55
+            and relevance_category in {"irrelevant", "market_noise"}
+        ):
+            relevance_category = "macro_related"
         entity_match = str(relevance_payload.get("entity_match") or "none")
         sentiment = _infer_sentiment_label(item)
         sentiment_value = _sentiment_numeric(item, sentiment)
@@ -288,6 +320,10 @@ def build_news_impact(
                 "materiality_score": materiality,
                 "materiality_category": category,
                 "event_type": item.get("event_type") or category,
+                "source_confidence": source_confidence,
+                "source_confidence_label": _source_confidence_label(source_confidence),
+                "news_scope": _news_scope(item, relevance_category, entity_match),
+                "dedupe_key": _article_key(item),
                 "summary": _clean_summary(item.get("summary")),
                 "url": str(item.get("url") or ""),
                 "normalized_url": normalize_url(str(item.get("url") or "")),
@@ -300,24 +336,37 @@ def build_news_impact(
             and relevance_category in {"company_specific", "subsidiary_related", "sector_related"}
             and entity_match in {"company_exact", "subsidiary"}
         )
-        enriched["impact"] = "high" if strict_high else base_impact
+        enriched["impact"] = "high" if strict_high else "medium" if base_impact == "high" else base_impact
+        enriched["is_high_impact"] = enriched["impact"] == "high"
         if bucket != "discard":
             scored.append(enriched)
     scored = sorted(scored, key=lambda item: (item["impact_score"], item["published_at"] or ""), reverse=True)
     average_sentiment = sum(sentiment_values) / len(sentiment_values) if sentiment_values else 0
     overall_sentiment = "positive" if average_sentiment > 0.1 else "negative" if average_sentiment < -0.1 else "neutral"
     sources_used = list(dict.fromkeys(str(item.get("source") or "unknown") for item in scored))
-    full_limit = len(scored) if limit is None else max(1, int(limit or 1))
+    high_impact_news = [item for item in scored if item["is_high_impact"]]
+    full_news_all = [item for item in scored if not item["is_high_impact"]]
+    full_limit = len(full_news_all) if limit is None else max(1, int(limit or 1))
+    full_news_list = full_news_all[:full_limit]
     return {
         "available": True,
         "overall_sentiment": overall_sentiment,
         "sentiment_score": round(50 + (average_sentiment * 50)),
-        "high_impact_news": [item for item in scored if item["impact"] == "high"],
-        "full_news_list": scored[:full_limit],
+        "high_impact_news": high_impact_news,
+        "full_news_list": full_news_list,
+        "high_impact_count": len(high_impact_news),
+        "full_news_count": len(full_news_all),
         "news_count": len(raw_articles),
         "deduplicated_count": len(scored),
         "dedup_removed_count": dedup_metadata.get("dedup_removed_count", 0),
-        "data_quality": {"status": "complete", "sources_used": sources_used},
+        "data_quality": {
+            "status": "complete",
+            "sources_used": sources_used,
+            "rules": {
+                "high_impact_limited": False,
+                "full_news_limited": len(full_news_all) > len(full_news_list),
+            },
+        },
     }
 
 

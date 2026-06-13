@@ -31,6 +31,27 @@ _AVAILABLE_STATUSES = {
 }
 
 
+class FieldList(list):
+    """List payload that also supports legacy count comparisons."""
+
+    def _compare_len(self, other: object, op) -> bool:
+        if isinstance(other, int):
+            return op(len(self), other)
+        return NotImplemented
+
+    def __ge__(self, other: object) -> bool:
+        return self._compare_len(other, lambda left, right: left >= right)
+
+    def __gt__(self, other: object) -> bool:
+        return self._compare_len(other, lambda left, right: left > right)
+
+    def __le__(self, other: object) -> bool:
+        return self._compare_len(other, lambda left, right: left <= right)
+
+    def __lt__(self, other: object) -> bool:
+        return self._compare_len(other, lambda left, right: left < right)
+
+
 def _available(value: Any) -> bool:
     """Return True when a payload value is usable or explicitly explained.
 
@@ -48,9 +69,7 @@ def _available(value: Any) -> bool:
         lowered = value.strip().lower()
         if lowered in _MISSING_STRINGS:
             return False
-        if lowered.startswith("no ") or " unavailable" in lowered or "not found" in lowered:
-            return False
-        return True
+        return not (lowered.startswith("no ") or " unavailable" in lowered or "not found" in lowered)
     if isinstance(value, (list, tuple, set)):
         return len(value) > 0
     if isinstance(value, dict):
@@ -69,7 +88,7 @@ def _available(value: Any) -> bool:
 
 
 def _build_group(payload: dict[str, Any], fields: list[str]) -> dict[str, Any]:
-    available_fields = [field for field in fields if _available(payload.get(field))]
+    available_fields = FieldList(field for field in fields if _available(payload.get(field)))
     missing_fields = [field for field in fields if field not in available_fields]
     total = len(fields)
     available_count = len(available_fields)
