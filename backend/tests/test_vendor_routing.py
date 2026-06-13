@@ -193,3 +193,34 @@ def test_vendor_order_skips_vendor_without_method(monkeypatch):
     summary = recorder.get_summary()["quote"]
     assert summary[0].startswith("idx_official:skipped")
     assert summary[1] == "yfinance:success"
+
+
+def test_alpha_vantage_without_key_is_skipped_before_call(monkeypatch):
+    from tradingagents.dataflows import interface, vendor_router
+
+    recorder = VendorAttemptRecorder()
+    monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
+    monkeypatch.setattr(vendor_router, "get_attempt_recorder", lambda _id: recorder)
+    monkeypatch.setattr(interface, "get_attempt_recorder", lambda _id: recorder)
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS,
+        "get_quote",
+        {
+            "alpha_vantage": lambda *a, **k: pytest.fail("alpha_vantage should be skipped"),
+            "yfinance": lambda *a, **k: _quote("yfinance"),
+        },
+    )
+
+    with use_config({**BASE_CONFIG, "_vendor_attempt_recorder_id": "x"}):
+        result = route_to_vendor(
+            "get_quote",
+            "AAPL",
+            "2026-05-28",
+            vendor_order=["alpha_vantage", "yfinance"],
+            field_name="quote",
+        )
+
+    assert result["source"] == "yfinance"
+    summary = recorder.get_summary()["quote"]
+    assert summary[0].startswith("alpha_vantage:skipped")
+    assert summary[1] == "yfinance:success"

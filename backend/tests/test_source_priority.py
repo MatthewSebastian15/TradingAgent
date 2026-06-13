@@ -19,7 +19,7 @@ def test_yfinance_first_for_main_market_fields_across_markets():
 
 
 def test_news_priority_only_uses_allowed_news_vendors():
-    assert NEWS_PRIORITY == ["yfinance", "google_news_light", "newsdata", "marketaux"]
+    assert NEWS_PRIORITY == ["yfinance", "google_news_light", "newsdata", "marketaux", "finnhub", "alpha_vantage"]
     for market in ["IDX", "ID", "US", "GLOBAL", "CRYPTO", "ETF", "FUND"]:
         order = get_field_vendor_order("company_news", market=market)
         assert order[0] == "yfinance"
@@ -34,3 +34,13 @@ def test_unknown_market_priority_is_safe():
 def test_global_and_crypto_do_not_try_unsupported_fallbacks():
     assert get_field_vendor_order("history", "0700.HK") == ["yfinance"]
     assert get_field_vendor_order("financial_statement", "BTC-USD") == ["yfinance"]
+
+
+def test_us_financial_statement_uses_all_statement_fallbacks():
+    assert get_field_vendor_order("financial_statement", "NVDA") == [
+        "yfinance",
+        "sec_companyfacts",
+        "alpha_vantage",
+        "finnhub",
+    ]
+    assert get_field_vendor_order("news_sentiment", "NVDA") == ["finnhub", "alpha_vantage"]

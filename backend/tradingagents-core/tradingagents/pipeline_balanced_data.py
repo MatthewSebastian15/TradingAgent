@@ -1441,7 +1441,17 @@ def _detect_sources_from_text(text: str) -> list[str]:
         sources.append("finnhub")
     if "alpha vantage" in lowered or "alpha_vantage" in lowered:
         sources.append("alpha_vantage")
-    if "yfinance" in lowered or "stock data for" in lowered or "## global market news" in lowered:
+    if "sec_companyfacts" in lowered or "sec company facts" in lowered:
+        sources.append("sec_companyfacts")
+    if (
+        "yfinance" in lowered
+        or "stock data for" in lowered
+        or "balance sheet data for" in lowered
+        or "cash flow data for" in lowered
+        or "income statement data for" in lowered
+        or "company fundamentals for" in lowered
+        or "## global market news" in lowered
+    ):
         sources.append("yfinance")
     return list(dict.fromkeys(sources))
 

@@ -88,3 +88,10 @@ def test_data_collection_workers_default(monkeypatch):
 
 def test_idx_financial_statement_priority():
     assert get_field_vendor_order("financial_statement", "BBCA.JK")[0] == "idx_official"
+
+
+def test_yfinance_statement_headers_are_detected_as_sources():
+    from tradingagents.pipeline_balanced_data import _source_label
+
+    assert _source_label("# Balance Sheet data for NVDA (quarterly)") == "yfinance"
+    assert _source_label("# Income Statement data for NVDA (quarterly)") == "yfinance"

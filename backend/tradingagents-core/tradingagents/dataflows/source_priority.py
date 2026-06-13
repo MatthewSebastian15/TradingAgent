@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from .vendor_capabilities import VENDOR_CAPABILITIES, supports_vendor
 
-NEWS_PRIORITY = ["yfinance", "google_news_light", "newsdata", "marketaux"]
+NEWS_PRIORITY = ["yfinance", "google_news_light", "newsdata", "marketaux", "finnhub", "alpha_vantage"]
+NEWS_SENTIMENT_PRIORITY = ["finnhub", "alpha_vantage"]
 
 SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
     "IDX": {
@@ -23,6 +24,7 @@ SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
         "splits": ["yfinance"],
         "ownership": ["yfinance", "alpha_vantage", "finnhub"],
         "news": NEWS_PRIORITY,
+        "news_sentiment": NEWS_SENTIMENT_PRIORITY,
     },
     "ID": {
         "symbol_search": ["yfinance"],
@@ -40,6 +42,7 @@ SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
         "splits": ["yfinance"],
         "ownership": ["yfinance", "alpha_vantage", "finnhub"],
         "news": NEWS_PRIORITY,
+        "news_sentiment": NEWS_SENTIMENT_PRIORITY,
     },
     "US": {
         "symbol_search": ["yfinance"],
@@ -47,7 +50,8 @@ SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
         "history": ["yfinance", "alpha_vantage"],
         "chart": ["yfinance", "alpha_vantage"],
         "profile": ["yfinance", "finnhub"],
-        "financials": ["yfinance", "finnhub"],
+        "financials": ["yfinance", "alpha_vantage", "finnhub"],
+        "financial_statement": ["yfinance", "sec_companyfacts", "alpha_vantage", "finnhub"],
         "ratios": ["yfinance"],
         "key_metrics": ["yfinance"],
         "market_cap": ["yfinance"],
@@ -56,6 +60,7 @@ SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
         "splits": ["yfinance"],
         "ownership": ["yfinance", "alpha_vantage", "finnhub"],
         "news": NEWS_PRIORITY,
+        "news_sentiment": NEWS_SENTIMENT_PRIORITY,
     },
     "GLOBAL": {
         "symbol_search": ["yfinance"],
@@ -63,7 +68,8 @@ SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
         "history": ["yfinance"],
         "chart": ["yfinance"],
         "profile": ["yfinance", "finnhub"],
-        "financials": ["yfinance", "finnhub"],
+        "financials": ["yfinance", "alpha_vantage", "finnhub"],
+        "financial_statement": ["yfinance", "sec_companyfacts", "alpha_vantage", "finnhub"],
         "ratios": ["yfinance"],
         "key_metrics": ["yfinance"],
         "market_cap": ["yfinance"],
@@ -72,6 +78,7 @@ SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
         "splits": ["yfinance"],
         "ownership": ["yfinance"],
         "news": NEWS_PRIORITY,
+        "news_sentiment": NEWS_SENTIMENT_PRIORITY,
     },
     "CRYPTO": {
         "symbol_search": ["yfinance"],
@@ -119,6 +126,7 @@ SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
         "key_metrics": ["yfinance"],
         "market_cap": ["yfinance"],
         "news": ["yfinance", "google_news_light"],
+        "news_sentiment": NEWS_SENTIMENT_PRIORITY,
     },
 }
 
@@ -144,7 +152,7 @@ _FIELD_ALIASES = {
     "company_profile": "profile",
     "company_news": "news",
     "global_news": "news",
-    "news_sentiment": "news",
+    "news_sentiment": "news_sentiment",
     "shareholders": "ownership",
     "shareholder": "ownership",
     "insider": "ownership",
