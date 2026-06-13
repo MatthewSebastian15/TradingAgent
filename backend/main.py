@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -23,10 +22,11 @@ from errors import (
 )
 from logging_config import RequestIdMiddleware, configure_logging
 from rate_limiter import create_rate_limiter_state
-from routes.jobs import create_analysis_runtime, install_analysis_runtime
 from routes.analysis import router as analysis_router
 from routes.analysis import shutdown_executor
 from routes.analysis_history import router as analysis_history_router
+from routes.debug import router as debug_router
+from routes.jobs import create_analysis_runtime, install_analysis_runtime
 from routes.market import router as market_router
 from routes.news import include_news_routes
 from routes.reports import router as reports_router
@@ -57,14 +57,14 @@ class SkipSseCompressionMiddleware:
 
 
 async def validate_config() -> None:
-    """Fail fast when provider keys, models, or writable dirs are invalid."""
-    errors = validate_startup_config()
+    """Log sanitized startup config issues without blocking local debug."""
+    issues = validate_startup_config()
 
-    if errors:
-        for msg in errors:
-            logger.critical("STARTUP CONFIG ERROR: %s", msg)
-        logger.critical("%d config error(s) found. Fix them and restart the server.", len(errors))
-        sys.exit(1)
+    if issues:
+        for msg in issues:
+            log = logger.critical if str(msg).startswith("CRITICAL:") else logger.warning
+            log("STARTUP CONFIG ISSUE: %s", msg)
+        logger.warning("%d startup config issue(s) found. Server continues for debugging.", len(issues))
 
     logger.info(
         "Startup validation passed. Provider: %s | deep: %s | quick: %s",
@@ -123,6 +123,7 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(analysis_history_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
+app.include_router(debug_router, prefix="/api")
 app.include_router(market_router, prefix="/api")
 include_news_routes(app, prefix="/api", is_development=IS_DEVELOPMENT)
 app.include_router(reports_router, prefix="/api")

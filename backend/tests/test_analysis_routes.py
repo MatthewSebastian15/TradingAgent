@@ -381,7 +381,9 @@ def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
 
     payload = {"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1}
     shared_proxy_headers = {"x-api-key": "shared-proxy-key"}
+    client.headers.pop("x-owner-token", None)
     owner_token = client.post("/api/session", headers=shared_proxy_headers).json()["owner_token"]
+    client.cookies.clear()
     other_token = client.post("/api/session", headers=shared_proxy_headers).json()["owner_token"]
     owner_headers = {**shared_proxy_headers, "x-owner-token": owner_token}
     other_headers = {**shared_proxy_headers, "x-owner-token": other_token}

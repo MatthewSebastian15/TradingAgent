@@ -7,14 +7,20 @@ import os
 from pathlib import Path
 
 from config_defaults import (
+    ALPHA_VANTAGE_API_KEY,
     ANALYSIS_DB_PATH,
     ANALYSIS_DEPTHS,
     ANALYSIS_JOB_CACHE_DB_PATH,
     ANALYSIS_JOB_ROUTING_MODE,
     ANALYSIS_MODE,
+    API_KEY,
     DATA_CACHE_DB_PATH,
+    DEBUG_ENDPOINTS_ENABLED,
     DEFAULT_ANALYSIS_DEPTH,
+    FINNHUB_API_KEY,
     IS_PRODUCTION,
+    MARKETAUX_API_KEY,
+    NEWSDATA_API_KEY,
     OWNER_SESSION_SECRET,
     RATE_LIMIT_DB_PATH,
     RATE_LIMIT_STORAGE_BACKEND,
@@ -71,20 +77,28 @@ def validate_startup_config() -> list[str]:
 
     provider = llm.provider
     if not provider:
-        errors.append("LLM_PROVIDER must not be empty.")
+        errors.append("CRITICAL: LLM_PROVIDER is not set. LLM routing will fail.")
     elif provider not in SUPPORTED_PROVIDERS:
-        errors.append(f"LLM_PROVIDER must be one of: {', '.join(sorted(SUPPORTED_PROVIDERS))}.")
+        errors.append(f"CRITICAL: LLM_PROVIDER must be one of: {', '.join(sorted(SUPPORTED_PROVIDERS))}.")
 
-    if provider in PROVIDER_KEY_REQUIREMENTS:
-        env_names, message = PROVIDER_KEY_REQUIREMENTS[provider]
-        if not _has_any_env(*env_names):
-            errors.append(message)
+    if not llm.llm_api_key:
+        errors.append("CRITICAL: LLM_API_KEY is not set. LLM calls will fail.")
 
     if not llm.deep_think_llm:
-        errors.append("DEEP_THINK_LLM must not be empty.")
+        errors.append("CRITICAL: DEEP_THINK_LLM is not set. Deep thinking calls will fail.")
     if not llm.quick_think_llm:
-        errors.append("QUICK_THINK_LLM must not be empty.")
-    if REQUIRE_API_KEY_FOR_RATE_LIMIT and not llm.api_key:
+        errors.append("CRITICAL: QUICK_THINK_LLM is not set. Quick thinking calls will fail.")
+    if not MARKETAUX_API_KEY:
+        errors.append("WARNING: MARKETAUX_API_KEY is empty. Marketaux news will be unavailable.")
+    if not NEWSDATA_API_KEY:
+        errors.append("WARNING: NEWSDATA_API_KEY is empty. NewsData will be unavailable.")
+    if not FINNHUB_API_KEY:
+        errors.append("WARNING: FINNHUB_API_KEY is empty. Finnhub fallback will be unavailable.")
+    if not ALPHA_VANTAGE_API_KEY:
+        errors.append("WARNING: ALPHA_VANTAGE_API_KEY is empty. Alpha Vantage will be skipped.")
+    if DEBUG_ENDPOINTS_ENABLED:
+        errors.append("WARNING: DEBUG_ENDPOINTS_ENABLED=true. Debug endpoints are active.")
+    if REQUIRE_API_KEY_FOR_RATE_LIMIT and not API_KEY:
         errors.append("API_KEY is required when REQUIRE_API_KEY_FOR_RATE_LIMIT=true.")
     if IS_PRODUCTION and not OWNER_SESSION_SECRET:
         errors.append("OWNER_SESSION_SECRET is required when APP_ENV=production.")

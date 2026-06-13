@@ -26,7 +26,8 @@ DEFAULT_CONFIG = {
     "llm_provider": _env("LLM_PROVIDER"),
     "deep_think_llm": _env("DEEP_THINK_LLM"),
     "quick_think_llm": _env("QUICK_THINK_LLM"),
-    "backend_url": None,
+    "llm_api_key": _env("LLM_API_KEY"),
+    "backend_url": _env("LLM_BASE_URL") or None,
     # Resilience
     "timeout": 60,
     "llm_max_retries": 1,
@@ -52,7 +53,8 @@ DEFAULT_CONFIG = {
     # Pipeline
     "parallel_analysts": True,
     "analysis_mode": "balanced",
-    "max_gemini_calls": 9,
+    "max_total_llm_calls": int(_env("LLM_BUDGET_BALANCED") or "9"),
+    "max_gemini_calls": int(_env("LLM_BUDGET_BALANCED") or "9"),
     "data_collection_workers": int(_env("DATA_COLLECTION_WORKERS") or "12"),
     "price_max_fallback_days": int(_env("PRICE_MAX_FALLBACK_DAYS") or "7"),
     # Reasoning effort (provider-specific, None = default)
@@ -151,7 +153,7 @@ DEFAULT_CONFIG = {
         "forex_data": _env("DATA_VENDOR_FOREX_DATA") or "finnhub,alpha_vantage",
         "crypto_data": _env("DATA_VENDOR_CRYPTO_DATA") or "finnhub,alpha_vantage",
     },
-    "data_vendor_max_calls_per_analysis": int(_env("DATA_VENDOR_MAX_CALLS_PER_ANALYSIS") or "40"),
+    "data_vendor_max_calls_per_analysis": int(_env("DATA_VENDOR_MAX_CALLS_PER_ANALYSIS") or "25"),
     "data_vendor_enable_multi_source_news": (_env("DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS") or "true").lower() == "true",
     "data_vendor_enable_multi_source_price": (_env("DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE") or "false").lower()
     == "true",

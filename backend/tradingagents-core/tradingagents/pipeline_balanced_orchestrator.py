@@ -6,8 +6,8 @@ import queue
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -22,10 +22,13 @@ from tradingagents.agents.schemas import (
     render_trader_proposal,
 )
 from tradingagents.dataflows.config import set_config
+from tradingagents.llm.LLM_router import llm_metadata
 from tradingagents.pipeline_balanced_data import (
     _normalize_time_horizon_months,
     _run_with_config,
     _time_horizon_label,
+)
+from tradingagents.pipeline_balanced_data import (
     collect_market_data as _collect_raw_market_data,
 )
 from tradingagents.pipeline_balanced_llm import (
@@ -441,7 +444,7 @@ def prepare_context(
     extra_risk_rounds = max(0, depth_risk_rounds - 2) if analysis_depth == "deep" else 0
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
     time_horizon_text = _time_horizon_label(time_horizon_months)
-    llm_budget = LLMBudget(int(config.get("max_gemini_calls", 9)))
+    llm_budget = LLMBudget(int(config.get("max_total_llm_calls") or config.get("max_gemini_calls", 9)))
     pipeline_started_at = time.perf_counter()
     pipeline_timings: dict[str, dict[str, Any]] = {}
     return PipelineContext(
@@ -1042,6 +1045,21 @@ def build_response(
     risk_report = agent_stage.risk_report
     risk_md = agent_stage.risk_md
     budget_snapshot = metrics.budget_snapshot
+    llm_call_summary = {
+        "analysis_depth": analysis_depth,
+        "used": budget_snapshot["used"],
+        "max": budget_snapshot["max"],
+        **llm_metadata(context.config),
+        "budget_source": "env",
+        "agents": budget_snapshot.get("agents", {}),
+    }
+    vendor_budget = dict(data.request_budget or {})
+    vendor_budget["llm_calls"] = llm_call_summary
+    response_warnings = list(data.warnings or [])
+    for warning in budget_snapshot.get("warnings", []):
+        message = warning.get("message") if isinstance(warning, dict) else str(warning)
+        if message:
+            response_warnings.append(message)
     total_pipeline_seconds = metrics.total_pipeline_seconds
     return {
         "company_of_interest": ticker,
@@ -1075,9 +1093,10 @@ def build_response(
         "data_limitations": data.data_limitations or [],
         "field_sources": data.field_sources or {},
         "validation_summary": data.validation_summary or {},
-        "warnings": data.warnings or [],
+        "warnings": list(dict.fromkeys(response_warnings)),
         "vendor_attempts": data.vendor_attempts or {},
         "request_budget": data.request_budget or {},
+        "vendor_budget": vendor_budget,
         "data_freshness": data.data_freshness or {},
         "data_completeness": data.data_completeness or {},
         "fundamental_gap_report": data.fundamental_gap_report or {},
@@ -1113,6 +1132,8 @@ def build_response(
         "analysis_depth_risk_rounds": depth_risk_rounds,
         "balanced_gemini_request_budget": llm_budget.limit,
         "balanced_gemini_calls_used": budget_snapshot["used"],
+        "llm_call_budget": llm_budget.limit,
+        "llm_calls_used": budget_snapshot["used"],
         "budget_exhausted": budget_snapshot["budget_exhausted"],
         "agents_skipped": budget_snapshot["agents_skipped"],
         "agent_pipeline": _build_agent_pipeline_rows(pipeline_timings),

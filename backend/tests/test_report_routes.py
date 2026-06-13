@@ -236,7 +236,7 @@ def test_request_id_report_alias_falls_back_to_sqlite(client, monkeypatch, analy
     assert "TradingAgent Analysis Report" in response.text
 
 
-def test_request_id_report_alias_sqlite_rejects_other_owner(client, monkeypatch, analysis_repository):
+def test_request_id_report_alias_sqlite_is_global_across_valid_owner_sessions(client, monkeypatch, analysis_repository):
     result = _result(request_id="rid-history-alias-owner")
     analysis_repository.save_analysis(result=result, owner_id=_TEST_OWNER_IDENTIFIER)
     _install_report_store(monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10))
@@ -244,8 +244,8 @@ def test_request_id_report_alias_sqlite_rejects_other_owner(client, monkeypatch,
 
     response = client.get("/api/analysis/rid-history-alias-owner/report.html", headers=other_headers)
 
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "report_not_found"
+    assert response.status_code == 200
+    assert "rid-history-alias-owner" in response.text
 
 
 def test_report_endpoint_returns_404_for_missing_request_id(client):

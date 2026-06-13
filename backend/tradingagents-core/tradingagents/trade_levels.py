@@ -8,6 +8,7 @@ from statistics import pstdev
 from typing import Any
 
 from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
+from tradingagents.dataflows.errors import ErrorCode
 
 FIXED_RR = 3.0
 RISK_REWARD_DISPLAY = "1:3"
@@ -89,6 +90,22 @@ def _decision_text(decision: PortfolioDecision) -> str:
 def _append_warning(warnings: list[str], warning: str | None) -> None:
     if warning and warning not in warnings:
         warnings.append(warning)
+
+
+def _blocking_quality_reason(data_quality: dict[str, Any] | None) -> str | None:
+    if not isinstance(data_quality, dict):
+        return None
+    field_quality = data_quality.get("field_quality")
+    if not isinstance(field_quality, dict):
+        return None
+    for field_name, quality in field_quality.items():
+        if not isinstance(quality, dict) or not quality.get("blocking"):
+            continue
+        status = str(quality.get("status") or "").lower()
+        confidence = str(quality.get("confidence") or "").lower()
+        if status in {"source_unavailable", "unavailable", "empty", "failed"} or confidence == "unavailable":
+            return f"Blocking data quality field unavailable: {field_name}"
+    return None
 
 
 def force_fixed_rr(value: float | None) -> tuple[float, str | None]:
@@ -756,6 +773,45 @@ def normalize_trade_levels(
             price_ok=False,
             trade_levels="invalid",
             llm_output="downgraded" if llm_decision in ACTIONABLE_DECISIONS else "ok",
+            volatility_data=volatility_quality,
+        )
+        decision.validation_warnings = list(dict.fromkeys(warnings))
+        return decision
+
+    blocking_reason = _blocking_quality_reason(data_quality)
+    if blocking_reason and final_decision in ACTIONABLE_DECISIONS:
+        _append_warning(warnings, ErrorCode.DATA_QUALITY_BLOCKING)
+        _downgrade_to_hold(decision, blocking_reason, warnings)
+        decision.rebalancing_action = normalize_rebalancing_action(
+            "Hold",
+            resolved_has_existing_position,
+            False,
+            getattr(decision, "confidence_score", None),
+        )
+        decision.position_action = build_position_action(
+            resolved_has_existing_position,
+            decision.rebalancing_action,
+        )
+        decision.new_entry_action = build_new_entry_action(
+            has_existing_position=resolved_has_existing_position,
+            final_decision="Hold",
+            rebalancing_action=decision.rebalancing_action,
+            trade_plan_valid=False,
+            current_price_ok=True,
+        )
+        decision.position_size_hint = build_position_size_hint(
+            has_existing_position=resolved_has_existing_position,
+            final_decision="Hold",
+            rebalancing_action=decision.rebalancing_action,
+            volatility_level=normalized_volatility,
+            trade_plan_valid=False,
+            current_price_ok=True,
+        )
+        decision.data_quality = _merge_data_quality(
+            data_quality or getattr(decision, "data_quality", None),
+            price_ok=True,
+            trade_levels="invalid",
+            llm_output="downgraded",
             volatility_data=volatility_quality,
         )
         decision.validation_warnings = list(dict.fromkeys(warnings))

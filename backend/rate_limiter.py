@@ -17,6 +17,7 @@ from typing import Protocol
 from fastapi import Request
 
 from config import (
+    API_KEY,
     MAX_CONCURRENT_REQUESTS_PER_KEY,
     MAX_CONCURRENT_STREAMS_PER_KEY,
     RATE_LIMIT_DB_PATH,
@@ -24,7 +25,6 @@ from config import (
     REQUEST_RATE_LIMIT_PER_MINUTE,
     REQUIRE_API_KEY_FOR_RATE_LIMIT,
     STREAM_RATE_LIMIT_PER_MINUTE,
-    llm,
 )
 from errors import AuthenticationError, RateLimitError
 from owner_session import OWNER_SESSION_COOKIE_NAME, owner_identifier_from_token
@@ -34,6 +34,15 @@ _TTL_SECONDS = 120
 
 _WRITE_LOCKS: dict[Path, threading.RLock] = {}
 _WRITE_LOCKS_GUARD = threading.Lock()
+
+
+class _ServiceCredential:
+    @property
+    def api_key(self) -> str:
+        return API_KEY
+
+
+llm = _ServiceCredential()
 
 
 @dataclass(frozen=True)

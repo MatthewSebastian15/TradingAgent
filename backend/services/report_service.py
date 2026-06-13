@@ -86,7 +86,6 @@ async def get_analysis_result_for_report(job_id: str, *, owner_id: str, job_stor
     result = await asyncio.to_thread(
         repository.get_analysis_by_job_id,
         job_id,
-        owner_id=owner_id,
     )
     if isinstance(result, dict):
         return result
@@ -112,7 +111,6 @@ async def get_analysis_result_for_report_by_request_id(
     result = await asyncio.to_thread(
         repository.get_analysis,
         request_id,
-        owner_id=owner_id,
     )
     if isinstance(result, dict):
         return result

@@ -48,6 +48,7 @@ from config_defaults import (
     ANALYSIS_RESULT_CACHE_TTL_SECONDS,
     ANALYSIS_STORAGE_BACKEND,
     ANALYST_PARALLEL_WORKERS,
+    ALPHA_VANTAGE_API_KEY,
     API_KEY,
     APP_ENV,
     APP_NAME,
@@ -76,6 +77,7 @@ from config_defaults import (
     DATA_VENDOR_FUNDAMENTAL_DATA,
     DATA_VENDOR_GLOBAL_NEWS_DATA,
     DATA_VENDOR_INSIDER_DATA,
+    DATA_VENDOR_MAX_CALLS_PER_ANALYSIS,
     DATA_VENDOR_NEWS_DATA,
     DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE,
     DATA_VENDOR_QUOTE_DATA,
@@ -87,9 +89,11 @@ from config_defaults import (
     DEBATE_CONFIDENCE_GAP,
     DEBATE_CONSENSUS_THRESHOLD,
     DEBATE_MIN_ROUNDS,
+    DEBUG_ENDPOINTS_ENABLED,
     DEFAULT_ANALYSIS_DEPTH,
     DEFAULT_DEV_CORS_ORIGINS,
     DEFAULT_MAX_DEBATE_ROUNDS,
+    FINNHUB_API_KEY,
     FRONTEND_PORT,
     IS_DEVELOPMENT,
     IS_PRODUCTION,
@@ -98,6 +102,7 @@ from config_defaults import (
     LLM_EXACT_CACHE_ENABLED,
     LLM_EXACT_CACHE_MAX_ENTRIES,
     LLM_EXACT_CACHE_TTL_SECONDS,
+    LLM_BUDGET_BY_ANALYSIS_DEPTH,
     LLM_MAX_RETRIES,
     LLM_RETRIES_BY_DEPTH,
     LLM_RETRY_BASE_DELAY,
@@ -109,11 +114,13 @@ from config_defaults import (
     LLM_SEMANTIC_CACHE_TARGETS,
     LLM_SEMANTIC_CACHE_TTL_SECONDS,
     LLM_TIMEOUT_SECONDS,
+    MARKETAUX_API_KEY,
     MAX_CONCURRENT_LLM_CALLS,
     MAX_CONCURRENT_REQUESTS_PER_KEY,
     MAX_CONCURRENT_STREAMS_PER_KEY,
     MAX_GEMINI_CALLS,
     MAX_RISK_DISCUSS_ROUNDS,
+    NEWSDATA_API_KEY,
     OWNER_SESSION_SECRET,
     OWNER_SESSION_TTL_SECONDS,
     PIPELINE_TIMEOUT_SECONDS,
@@ -163,6 +170,7 @@ class _BackendSettingsShim:
     default_analysis_depth = DEFAULT_ANALYSIS_DEPTH
     analysis_depth_config = ANALYSIS_DEPTH_CONFIG
     analysis_depth_llm_budgets = ANALYSIS_DEPTH_LLM_BUDGETS
+    llm_budget_by_analysis_depth = LLM_BUDGET_BY_ANALYSIS_DEPTH
     max_gemini_calls = MAX_GEMINI_CALLS
     request_rate_limit_per_minute = REQUEST_RATE_LIMIT_PER_MINUTE
     stream_rate_limit_per_minute = STREAM_RATE_LIMIT_PER_MINUTE
@@ -221,6 +229,7 @@ class _BackendSettingsShim:
     data_vendor_enable_finnhub_enrichment = DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT
     data_vendor_require_source_metadata = DATA_VENDOR_REQUIRE_SOURCE_METADATA
     data_vendor_return_partial_on_failure = DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE
+    data_vendor_max_calls_per_analysis = DATA_VENDOR_MAX_CALLS_PER_ANALYSIS
 
     @property
     def llm_provider(self):
@@ -240,7 +249,15 @@ class _BackendSettingsShim:
 
     @property
     def api_key(self):
-        return llm.api_key
+        return API_KEY
+
+    @property
+    def llm_api_key(self):
+        return llm.llm_api_key
+
+    @property
+    def llm_base_url(self):
+        return llm.base_url
 
     def tradingagents_overrides(self):
         return llm.tradingagents_overrides()

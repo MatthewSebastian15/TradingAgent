@@ -8,6 +8,7 @@ from typing import Any
 
 import requests
 
+from .errors import ErrorCode
 from .news_models import NormalizedNewsArticle
 
 logger = logging.getLogger(__name__)
@@ -61,16 +62,16 @@ class BaseNewsProvider:
                 attempt["status_code"] = response.status_code
                 attempt["duration_ms"] = round((time.monotonic() - started) * 1000)
                 if response.status_code in {401, 403}:
-                    attempt["status"] = "invalid_api_key"
+                    attempt["status"] = ErrorCode.VENDOR_AUTH_ERROR
                     return None, attempt
                 if response.status_code in {402, 429}:
-                    attempt["status"] = "rate_limited"
+                    attempt["status"] = ErrorCode.VENDOR_QUOTA_ERROR
                     if retry < self.max_retries:
                         time.sleep(delays[min(retry, len(delays) - 1)])
                         continue
                     return None, attempt
                 if response.status_code >= 500:
-                    attempt["status"] = "server_error"
+                    attempt["status"] = ErrorCode.VENDOR_EMPTY_RESPONSE
                     if retry < self.max_retries:
                         time.sleep(delays[min(retry, len(delays) - 1)])
                         continue
@@ -83,14 +84,14 @@ class BaseNewsProvider:
                 return payload, attempt
             except requests.Timeout:
                 attempt["duration_ms"] = round((time.monotonic() - started) * 1000)
-                attempt["status"] = "timeout"
+                attempt["status"] = ErrorCode.VENDOR_TIMEOUT
                 if retry < self.max_retries:
                     time.sleep(delays[min(retry, len(delays) - 1)])
                     continue
                 return None, attempt
             except Exception as exc:
                 attempt["duration_ms"] = round((time.monotonic() - started) * 1000)
-                attempt["status"] = "unknown_error"
+                attempt["status"] = ErrorCode.VENDOR_SCHEMA_ERROR
                 attempt["error"] = sanitize_error(exc)
                 return None, attempt
 

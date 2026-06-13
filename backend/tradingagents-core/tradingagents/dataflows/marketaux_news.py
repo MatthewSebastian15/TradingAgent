@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .config import get_config
+from .errors import ErrorCode
 from .news_deduplication import deduplicate_news_articles
 from .news_models import NewsEntity, NormalizedNewsArticle
 from .news_provider_base import BaseNewsProvider, ProviderFetchResult
@@ -65,7 +66,7 @@ class MarketAuxProvider(BaseNewsProvider):
                 if normalized:
                     status = "success"
                     break
-            if status in {"invalid_api_key", "rate_limited"}:
+            if status in {ErrorCode.VENDOR_AUTH_ERROR, ErrorCode.VENDOR_QUOTA_ERROR}:
                 break
 
         return ProviderFetchResult(

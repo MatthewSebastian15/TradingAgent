@@ -33,6 +33,7 @@ from config_defaults import (
     DATA_VENDOR_FUNDAMENTAL_DATA,
     DATA_VENDOR_GLOBAL_NEWS_DATA,
     DATA_VENDOR_INSIDER_DATA,
+    DATA_VENDOR_MAX_CALLS_PER_ANALYSIS,
     DATA_VENDOR_NEWS_DATA,
     DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE,
     DATA_VENDOR_QUOTE_DATA,
@@ -50,7 +51,6 @@ from config_defaults import (
     LLM_EXACT_CACHE_MAX_ENTRIES,
     LLM_EXACT_CACHE_TTL_SECONDS,
     LLM_MAX_RETRIES,
-    LLM_RETRIES_BY_DEPTH,
     LLM_RETRY_BASE_DELAY,
     LLM_RETRY_MAX_DELAY,
     LLM_SEMANTIC_CACHE_DB_PATH,
@@ -106,8 +106,9 @@ class LLMSettings:
     provider: str = field(default_factory=lambda: env("LLM_PROVIDER").lower())
     deep_think_llm: str = field(default_factory=lambda: env("DEEP_THINK_LLM"))
     quick_think_llm: str = field(default_factory=lambda: env("QUICK_THINK_LLM"))
+    llm_api_key: str = field(default_factory=lambda: env("LLM_API_KEY", ""))
+    base_url: str = field(default_factory=lambda: env("LLM_BASE_URL", "").rstrip("/"))
     ollama_base_url: str = field(default_factory=lambda: env("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"))
-    api_key: str = field(default_factory=lambda: env("API_KEY", ""))
 
     def __post_init__(self) -> None:
         if self.provider == "google":
@@ -115,9 +116,21 @@ class LLMSettings:
             object.__setattr__(self, "quick_think_llm", self.quick_think_llm.lower())
 
     def backend_url(self) -> str | None:
+        if self.base_url:
+            return self.base_url
         if self.provider == "ollama":
             return self.ollama_base_url
         return None
+
+    def metadata(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider,
+            "models": {
+                "quick_think": self.quick_think_llm,
+                "deep_think": self.deep_think_llm,
+            },
+            "config_source": "env",
+        }
 
     def tradingagents_overrides(
         self,
@@ -126,13 +139,15 @@ class LLMSettings:
         response_detail: str = "full",
     ) -> dict[str, Any]:
         depth_config = ANALYSIS_DEPTH_CONFIG.get(analysis_depth, ANALYSIS_DEPTH_CONFIG[DEFAULT_ANALYSIS_DEPTH])
-        retries = LLM_RETRIES_BY_DEPTH.get(analysis_depth, LLM_MAX_RETRIES)
+        retries = LLM_MAX_RETRIES
         budget = ANALYSIS_DEPTH_LLM_BUDGETS.get(analysis_depth, MAX_GEMINI_CALLS)
         return {
             "llm_provider": self.provider,
             "deep_think_llm": self.deep_think_llm,
             "quick_think_llm": self.quick_think_llm,
             "backend_url": self.backend_url(),
+            "llm_api_key": self.llm_api_key,
+            "llm": self.metadata(),
             "timeout": LLM_TIMEOUT_SECONDS,
             "llm_max_retries": retries,
             "provider_sdk_max_retries": PROVIDER_SDK_MAX_RETRIES,
@@ -184,6 +199,7 @@ class LLMSettings:
             "data_vendor_enable_finnhub_enrichment": DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT,
             "data_vendor_require_source_metadata": DATA_VENDOR_REQUIRE_SOURCE_METADATA,
             "data_vendor_return_partial_on_failure": DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE,
+            "data_vendor_max_calls_per_analysis": DATA_VENDOR_MAX_CALLS_PER_ANALYSIS,
             "news": {
                 "google_news_light_api_key": GOOGLE_NEWS_LIGHT_API_KEY,
                 "marketaux_api_key": MARKETAUX_API_KEY,
@@ -216,6 +232,7 @@ class LLMSettings:
             "analysis_depth_debate_rounds": depth_config["debate_rounds"],
             "analysis_depth_risk_rounds": depth_config["risk_rounds"],
             "response_detail": response_detail,
+            "max_total_llm_calls": budget,
             "max_gemini_calls": budget,
         }
 

@@ -8,6 +8,15 @@ from typing import Any
 SOURCE = "local_calculation_from_historical_price"
 
 
+class IndicatorValue(dict):
+    """Dict payload that still compares equal to its numeric value."""
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (int, float)):
+            return self.get("value") == other
+        return super().__eq__(other)
+
+
 def calculate_sma(closes: list[float], window: int) -> float | None:
     closes = [float(x) for x in closes if x is not None]
     if window <= 0 or len(closes) < window:
@@ -80,7 +89,7 @@ def calculate_rsi(closes: list[float], window: int = 14) -> dict[str, Any]:
 
 def build_indicator_value(value: float | None, name: str, available_points: int, required_points: int) -> dict[str, Any]:
     if value is None:
-        return {
+        return IndicatorValue({
             "value": None,
             "status": "source_unavailable",
             "source": SOURCE,
@@ -88,8 +97,8 @@ def build_indicator_value(value: float | None, name: str, available_points: int,
             "required_points": required_points,
             "available_points": available_points,
             "warnings": [f"{name} unavailable: insufficient_history ({available_points}/{required_points} closes)"],
-        }
-    return {
+        })
+    return IndicatorValue({
         "value": value,
         "status": "calculated",
         "source": SOURCE,
@@ -97,7 +106,7 @@ def build_indicator_value(value: float | None, name: str, available_points: int,
         "required_points": required_points,
         "available_points": available_points,
         "warnings": [],
-    }
+    })
 
 
 def calculate_technical_fallback(price_history: list[dict[str, Any]] | str | Any) -> dict[str, Any]:

@@ -6,7 +6,6 @@ import os
 
 from config_env import BASE_DIR, env, env_bool, env_float, env_int
 
-
 # App
 APP_NAME = "TradingAgents API"
 APP_ENV = env("APP_ENV", "development").lower().strip()
@@ -67,21 +66,32 @@ RESPONSE_DETAILS: tuple[str, ...] = ("summary", "full", "debug")
 # Analysis depth controls both the LLM budget and the intended debate depth.
 # Fast skips debate/risk committee, balanced runs the standard flow, and deep
 # has enough budget for extra debate/risk passes when the pipeline supports them.
+LLM_BUDGET_BY_ANALYSIS_DEPTH: dict[str, dict[str, int]] = {
+    "fast": {
+        "max_total_llm_calls": env_int("LLM_BUDGET_FAST", 6, min_value=0),
+    },
+    "balanced": {
+        "max_total_llm_calls": env_int("LLM_BUDGET_BALANCED", 9, min_value=0),
+    },
+    "deep": {
+        "max_total_llm_calls": env_int("LLM_BUDGET_DEEP", 12, min_value=0),
+    },
+}
 ANALYSIS_DEPTH_CONFIG: dict[str, dict[str, int]] = {
     "fast": {
-        "llm_budget": 6,
+        "llm_budget": LLM_BUDGET_BY_ANALYSIS_DEPTH["fast"]["max_total_llm_calls"],
         "llm_retries": 1,
         "debate_rounds": 1,
         "risk_rounds": 1,
     },
     "balanced": {
-        "llm_budget": 9,
+        "llm_budget": LLM_BUDGET_BY_ANALYSIS_DEPTH["balanced"]["max_total_llm_calls"],
         "llm_retries": 2,
         "debate_rounds": 2,
         "risk_rounds": 2,
     },
     "deep": {
-        "llm_budget": 12,
+        "llm_budget": LLM_BUDGET_BY_ANALYSIS_DEPTH["deep"]["max_total_llm_calls"],
         "llm_retries": 3,
         "debate_rounds": 3,
         "risk_rounds": 3,
@@ -214,12 +224,15 @@ DATA_VENDOR_ENABLE_FINNHUB_FALLBACK = env_bool("DATA_VENDOR_ENABLE_FINNHUB_FALLB
 DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT = env_bool("DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT", True)
 DATA_VENDOR_REQUIRE_SOURCE_METADATA = env_bool("DATA_VENDOR_REQUIRE_SOURCE_METADATA", True)
 DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE = env_bool("DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE", True)
+DATA_VENDOR_MAX_CALLS_PER_ANALYSIS = env_int("DATA_VENDOR_MAX_CALLS_PER_ANALYSIS", 25, min_value=0)
 
 
 # Structured news providers
 GOOGLE_NEWS_LIGHT_API_KEY = env("GOOGLE_NEWS_LIGHT_API_KEY", "")
 MARKETAUX_API_KEY = env("MARKETAUX_API_KEY", "")
 NEWSDATA_API_KEY = env("NEWSDATA_API_KEY", "")
+FINNHUB_API_KEY = env("FINNHUB_API_KEY", "")
+ALPHA_VANTAGE_API_KEY = env("ALPHA_VANTAGE_API_KEY", "")
 NEWS_PROVIDER_PRIORITY = env("NEWS_PROVIDER_PRIORITY", "google_news_light,marketaux,newsdata")
 NEWS_ENABLED_PROVIDERS = env("NEWS_ENABLED_PROVIDERS", "google_news_light,marketaux,newsdata")
 NEWS_DEFAULT_WINDOW_DAYS = env_int("NEWS_DEFAULT_WINDOW_DAYS", 30, min_value=1)
@@ -255,3 +268,6 @@ DEBATE_CONSENSUS_THRESHOLD = 0.72
 RISK_MIN_ROUNDS = 2
 RISK_CONSENSUS_THRESHOLD = 0.72
 ADAPTIVE_DEBATE_ENABLED = True
+
+# Debug routes
+DEBUG_ENDPOINTS_ENABLED = env_bool("DEBUG_ENDPOINTS_ENABLED", False)

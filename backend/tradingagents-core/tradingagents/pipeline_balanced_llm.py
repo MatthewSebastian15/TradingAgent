@@ -8,9 +8,11 @@ from pydantic import BaseModel
 
 from tradingagents.agents.utils.structured import bind_structured
 from tradingagents.dataflows.config import get_config
+from tradingagents.dataflows.errors import ErrorCode
+from tradingagents.llm.LLM_router import create_llms as _router_create_llms
+from tradingagents.llm.LLM_router import provider_kwargs as _router_provider_kwargs
 from tradingagents.llm_cache.exact_cache import get_exact_llm_cache
 from tradingagents.llm_cache.keys import build_exact_cache_key
-from tradingagents.llm_clients import create_llm_client
 from tradingagents.llm_optimization.usage import (
     LLMUsageRecord,
     Timer,
@@ -35,37 +37,11 @@ T = TypeVar("T", bound=BaseModel)
 
 
 def _provider_kwargs(config: dict[str, Any]) -> dict[str, Any]:
-    kwargs: dict[str, Any] = {}
-    if config.get("timeout"):
-        kwargs["timeout"] = config.get("timeout")
-    if config.get("provider_sdk_max_retries") is not None:
-        kwargs["max_retries"] = config.get("provider_sdk_max_retries")
-
-    provider = str(config.get("llm_provider", "")).lower()
-    if provider == "google" and config.get("google_thinking_level"):
-        kwargs["thinking_level"] = config.get("google_thinking_level")
-    if provider == "openai" and config.get("openai_reasoning_effort"):
-        kwargs["reasoning_effort"] = config.get("openai_reasoning_effort")
-    if provider == "anthropic" and config.get("anthropic_effort"):
-        kwargs["effort"] = config.get("anthropic_effort")
-    return kwargs
+    return _router_provider_kwargs(config)
 
 
 def _create_llms(config: dict[str, Any]) -> tuple[Any, Any]:
-    kwargs = _provider_kwargs(config)
-    quick_client = create_llm_client(
-        provider=config["llm_provider"],
-        model=config["quick_think_llm"],
-        base_url=config.get("backend_url"),
-        **kwargs,
-    )
-    deep_client = create_llm_client(
-        provider=config["llm_provider"],
-        model=config["deep_think_llm"],
-        base_url=config.get("backend_url"),
-        **kwargs,
-    )
-    return quick_client.get_llm(), deep_client.get_llm()
+    return _router_create_llms(config)
 
 
 def _coerce_structured(raw: Any, schema: type[T]) -> T | None:
@@ -134,7 +110,7 @@ def _invoke_once(
 
     if budget is not None and not budget.consume(agent_name):
         usage_record.fallback_used = True
-        usage_record.error = "llm_budget_exhausted"
+        usage_record.error = ErrorCode.LLM_BUDGET_EXCEEDED
         usage_record.latency_ms = timer.elapsed_ms()
         log_usage(usage_record)
         return fallback

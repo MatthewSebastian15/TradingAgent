@@ -4,6 +4,7 @@ from __future__ import annotations
 
 SPRINT_1_VENDORS = {
     "yfinance",
+    "idx_official",
     "finnhub",
     "alpha_vantage",
     "google_news_light",
@@ -22,6 +23,7 @@ VENDOR_CAPABILITIES: dict[str, dict[str, object]] = {
             "chart": "best",
             "profile": "best",
             "financials": "good",
+            "financial_statement": "good",
             "ratios": "partial",
             "key_metrics": "partial",
             "market_cap": "best",
@@ -32,6 +34,14 @@ VENDOR_CAPABILITIES: dict[str, dict[str, object]] = {
             "news": "partial",
         },
     },
+    "idx_official": {
+        "markets": ["IDX", "ID"],
+        "requires_api_key": False,
+        "fields": {
+            "financials": "best",
+            "financial_statement": "best",
+        },
+    },
     "finnhub": {
         "markets": ["US", "GLOBAL", "IDX", "ID"],
         "requires_api_key": True,
@@ -39,6 +49,8 @@ VENDOR_CAPABILITIES: dict[str, dict[str, object]] = {
             "quote": "good",
             "profile": "good",
             "financials": "partial",
+            "financial_statement": "partial",
+            "ownership": "partial",
         },
     },
     "alpha_vantage": {
@@ -48,6 +60,7 @@ VENDOR_CAPABILITIES: dict[str, dict[str, object]] = {
             "quote": "partial",
             "history": "partial",
             "chart": "partial",
+            "ownership": "partial",
             "technical_indicators": "good",
         },
     },
@@ -106,6 +119,8 @@ def supports_vendor(vendor: str, market: str, field: str) -> bool:
         return False
 
     market_key = _normalize_market(market)
+    if vendor_key == "alpha_vantage" and str(field or "") == "ownership" and market_key in {"IDX", "ID"}:
+        return True
     markets = capability.get("markets")
     fields = _fields_for(vendor_key)
     return market_key in set(markets if isinstance(markets, list) else []) and str(field or "") in fields

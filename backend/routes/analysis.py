@@ -134,9 +134,9 @@ def _timestamp_from_iso(value: str | None) -> float:
         return 0.0
 
 
-async def _completed_job_summary_from_history(job_id: str, *, owner_id: str) -> dict[str, Any] | None:
+async def _completed_job_summary_from_history(job_id: str) -> dict[str, Any] | None:
     repository = get_analysis_repository()
-    record = await asyncio.to_thread(repository.get_analysis_record_by_job_id, job_id, owner_id=owner_id)
+    record = await asyncio.to_thread(repository.get_analysis_record_by_job_id, job_id)
     if record is None:
         return None
     return {
@@ -475,7 +475,7 @@ async def get_analysis_job(job_id: str, request: Request):
         if job is None:
             if await job_store.get(job_id) is not None:
                 raise _job_not_found(job_id)
-            history_summary = await _completed_job_summary_from_history(job_id, owner_id=lease.identifier)
+            history_summary = await _completed_job_summary_from_history(job_id)
             if history_summary is None:
                 raise _job_not_found(job_id)
             return history_summary
@@ -499,7 +499,7 @@ async def get_analysis_result_by_request_id(request_id: str, request: Request):
             raise _analysis_result_not_found(request_id)
 
         repository = get_analysis_repository()
-        result = await asyncio.to_thread(repository.get_analysis, request_id, owner_id=lease.identifier)
+        result = await asyncio.to_thread(repository.get_analysis, request_id)
         if result is None:
             raise _analysis_result_not_found(request_id)
         return result
@@ -507,7 +507,7 @@ async def get_analysis_result_by_request_id(request_id: str, request: Request):
 
 @router.get("/analysis/jobs/{job_id}/events")
 async def analysis_job_events(job_id: str, request: Request):
-    rate_limit_lease = limit_request(request, request_policy())
+    rate_limit_lease = limit_request(request, stream_policy())
     await rate_limit_lease.__aenter__()
     try:
         job = await _job_store_for_request(request).get(job_id, owner_id=rate_limit_lease.identifier)
@@ -542,9 +542,11 @@ async def cancel_analysis_job_alias(job_id: str, request: Request):
 
 @router.get("/ticker/validate", response_model=TickerValidationResponse)
 async def validate_ticker(ticker: str, trade_date: str, request: Request, market: str | None = None):
+    from tradingagents.dataflows.y_finance import normalize_ticker as normalize_yfinance_ticker
+
     req = normalize_and_validate_analysis_request(
         AnalysisRequest(
-            ticker=ticker,
+            ticker=normalize_yfinance_ticker(ticker),
             trade_date=trade_date,
             max_debate_rounds=1,
             analysis_depth="fast",
