@@ -7,14 +7,15 @@ from typing import Any
 from .errors import ErrorCode
 
 DEFAULT_VENDOR_BUDGET = {
-    "max_total_data_calls": 25,
+    "max_total_data_calls": 60,
     "per_vendor": {
-        "yfinance": 8,
-        "alpha_vantage": 3,
-        "google_news_light": 4,
-        "marketaux": 4,
-        "newsdata": 4,
-        "finnhub": 5,
+        "yfinance": 24,
+        "sec_companyfacts": 12,
+        "alpha_vantage": 8,
+        "google_news_light": 6,
+        "marketaux": 6,
+        "newsdata": 6,
+        "finnhub": 12,
     },
 }
 

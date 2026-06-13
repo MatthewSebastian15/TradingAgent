@@ -103,7 +103,7 @@ DEFAULT_CONFIG = {
         "forex_cache_ttl_seconds": int(_env("FINNHUB_FOREX_CACHE_TTL_SECONDS") or "300"),
         "crypto_cache_ttl_seconds": int(_env("FINNHUB_CRYPTO_CACHE_TTL_SECONDS") or "120"),
         "symbol_cache_ttl_seconds": int(_env("FINNHUB_SYMBOL_CACHE_TTL_SECONDS") or "2592000"),
-        "max_calls_per_analysis": int(_env("FINNHUB_MAX_CALLS_PER_ANALYSIS") or "8"),
+        "max_calls_per_analysis": int(_env("FINNHUB_MAX_CALLS_PER_ANALYSIS") or "12"),
     },
     "idx_official": {
         "enabled": _env_bool("IDX_OFFICIAL_ENABLED", True),
@@ -142,7 +142,7 @@ DEFAULT_CONFIG = {
         "quote_data": _env("DATA_VENDOR_QUOTE_DATA") or "yfinance,finnhub,alpha_vantage",
         "technical_indicators": _env("DATA_VENDOR_TECHNICAL_INDICATORS") or "yfinance,finnhub,alpha_vantage",
         "fundamental_data": _env("DATA_VENDOR_FUNDAMENTAL_DATA") or "yfinance,finnhub,alpha_vantage",
-        "financial_statements": _env("DATA_VENDOR_FINANCIAL_STATEMENTS") or "yfinance,alpha_vantage,finnhub",
+        "financial_statements": _env("DATA_VENDOR_FINANCIAL_STATEMENTS") or "yfinance,sec_companyfacts,alpha_vantage,finnhub",
         "news_data": _env("DATA_VENDOR_NEWS_DATA") or "google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage",
         "global_news_data": _env("DATA_VENDOR_GLOBAL_NEWS_DATA") or "finnhub,alpha_vantage,yfinance",
         "sentiment_data": _env("DATA_VENDOR_SENTIMENT_DATA") or "finnhub,alpha_vantage",
@@ -153,7 +153,7 @@ DEFAULT_CONFIG = {
         "forex_data": _env("DATA_VENDOR_FOREX_DATA") or "finnhub,alpha_vantage",
         "crypto_data": _env("DATA_VENDOR_CRYPTO_DATA") or "finnhub,alpha_vantage",
     },
-    "data_vendor_max_calls_per_analysis": int(_env("DATA_VENDOR_MAX_CALLS_PER_ANALYSIS") or "25"),
+    "data_vendor_max_calls_per_analysis": int(_env("DATA_VENDOR_MAX_CALLS_PER_ANALYSIS") or "60"),
     "data_vendor_enable_multi_source_news": (_env("DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS") or "true").lower() == "true",
     "data_vendor_enable_multi_source_price": (_env("DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE") or "false").lower()
     == "true",

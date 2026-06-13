@@ -14,6 +14,15 @@ def test_vendor_budget_counts_all_active_vendors():
     assert set(DEFAULT_VENDOR_BUDGET["per_vendor"]).issubset(summary["data_calls"]["per_vendor"])
 
 
+def test_vendor_budget_default_allows_full_analysis_batch():
+    _, budget = create_budget_from_config({})
+
+    summary = budget.get_summary()
+
+    assert summary["data_calls"]["max"] == 60
+    assert summary["data_calls"]["per_vendor"]["yfinance"]["limit"] >= 24
+
+
 def test_cache_hit_does_not_count_as_vendor_call(monkeypatch):
     from tradingagents.dataflows import interface
 

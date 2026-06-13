@@ -25,6 +25,7 @@ def test_supports_vendor_checks_market_and_field():
 
 def test_vendor_requires_api_key_flags():
     assert vendor_requires_api_key("yfinance") is False
+    assert vendor_requires_api_key("sec_companyfacts") is False
     assert vendor_requires_api_key("google_news_light") is False
     assert vendor_requires_api_key("finnhub") is True
     assert vendor_requires_api_key("alpha_vantage") is True
@@ -33,9 +34,12 @@ def test_vendor_requires_api_key_flags():
 
 
 def test_get_vendor_strength_and_supported_vendors():
+    assert get_vendor_strength("sec_companyfacts", "US", "financial_statement") == "best"
     assert get_vendor_strength("yfinance", "US", "history") == "best"
     assert get_vendor_strength("alpha_vantage", "IDX", "history") is None
+    assert get_vendor_strength("alpha_vantage", "US", "financial_statement") == "good"
     assert get_supported_vendors("US", "quote") == ["yfinance", "finnhub", "alpha_vantage"]
+    assert get_supported_vendors("US", "news_sentiment") == ["finnhub", "alpha_vantage"]
 
 
 def test_resolver_keeps_canonical_symbol_and_search_metadata():

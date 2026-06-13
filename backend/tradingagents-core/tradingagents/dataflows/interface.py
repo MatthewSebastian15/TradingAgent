@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from datetime import datetime
 from io import StringIO
@@ -119,6 +120,15 @@ from .idx_official import (
 )
 from .marketaux_news import get_news as get_marketaux_news
 from .newsdata_news import get_news as get_newsdata_news
+from .sec_companyfacts import (
+    get_balance_sheet as get_sec_balance_sheet,
+)
+from .sec_companyfacts import (
+    get_cashflow as get_sec_cashflow,
+)
+from .sec_companyfacts import (
+    get_income_statement as get_sec_income_statement,
+)
 from .source_priority import get_field_vendor_order
 from .vendor_budget import get_budget
 from .vendor_router import VendorAttempt, get_attempt_recorder, sanitize_error
@@ -293,6 +303,7 @@ _PERSISTENT_TOOL_CACHE_CONFIG = None
 
 VENDOR_LIST = [
     "idx_official",
+    "sec_companyfacts",
     "google_news_light",
     "marketaux",
     "newsdata",
@@ -334,18 +345,21 @@ VENDOR_METHODS = {
     },
     "get_balance_sheet": {
         "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
+        "sec_companyfacts": get_sec_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "finnhub": get_finnhub_balance_sheet,
     },
     "get_cashflow": {
         "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
+        "sec_companyfacts": get_sec_cashflow,
         "yfinance": get_yfinance_cashflow,
         "alpha_vantage": get_alpha_vantage_cashflow,
         "finnhub": get_finnhub_cashflow,
     },
     "get_income_statement": {
         "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
+        "sec_companyfacts": get_sec_income_statement,
         "yfinance": get_yfinance_income_statement,
         "alpha_vantage": get_alpha_vantage_income_statement,
         "finnhub": get_finnhub_income_statement,
@@ -604,6 +618,8 @@ def _consume_budget(config: dict, method: str, vendor: str) -> tuple[bool, str |
 
 
 def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, str | None]:
+    if vendor == "alpha_vantage" and not os.getenv("ALPHA_VANTAGE_API_KEY", "").strip():
+        return False, "Alpha Vantage disabled: ALPHA_VANTAGE_API_KEY is not configured."
     if vendor != "finnhub":
         return True, None
     fallback_methods = {"get_stock_data", "get_quote", "get_indicators"}

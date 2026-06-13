@@ -5,6 +5,7 @@ from __future__ import annotations
 SPRINT_1_VENDORS = {
     "yfinance",
     "idx_official",
+    "sec_companyfacts",
     "finnhub",
     "alpha_vantage",
     "google_news_light",
@@ -42,6 +43,14 @@ VENDOR_CAPABILITIES: dict[str, dict[str, object]] = {
             "financial_statement": "best",
         },
     },
+    "sec_companyfacts": {
+        "markets": ["US", "GLOBAL"],
+        "requires_api_key": False,
+        "fields": {
+            "financials": "best",
+            "financial_statement": "best",
+        },
+    },
     "finnhub": {
         "markets": ["US", "GLOBAL", "IDX", "ID"],
         "requires_api_key": True,
@@ -51,6 +60,8 @@ VENDOR_CAPABILITIES: dict[str, dict[str, object]] = {
             "financials": "partial",
             "financial_statement": "partial",
             "ownership": "partial",
+            "news": "good",
+            "news_sentiment": "good",
         },
     },
     "alpha_vantage": {
@@ -60,7 +71,15 @@ VENDOR_CAPABILITIES: dict[str, dict[str, object]] = {
             "quote": "partial",
             "history": "partial",
             "chart": "partial",
+            "profile": "good",
+            "financials": "good",
+            "financial_statement": "good",
+            "ratios": "good",
+            "key_metrics": "good",
+            "market_cap": "good",
             "ownership": "partial",
+            "news": "good",
+            "news_sentiment": "good",
             "technical_indicators": "good",
         },
     },
