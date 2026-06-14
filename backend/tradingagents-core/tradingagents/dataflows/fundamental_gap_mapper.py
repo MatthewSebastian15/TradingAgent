@@ -2,7 +2,35 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
+from dataclasses import field as dataclass_field
 from typing import Any
+
+from .financial_rows import FINANCIAL_ROW_FIELDS, FinancialRow
+
+
+@dataclass
+class DataGapReport:
+    symbol: str
+    period: str
+    missing_fields: list[str]
+    fallback_fields: list[str]
+    estimated_fields: list[str]
+    estimation_methods: dict[str, str]
+    unresolvable_fields: list[str]
+    warnings: list[str] = dataclass_field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+FALLBACK_CALCULATION_MAP = {
+    "net_profit": {"method": "eps * shares_outstanding", "confidence": "low"},
+    "equity": {"method": "total_assets - total_liabilities", "confidence": "low"},
+    "free_cash_flow": {"method": "operating_cash_flow - capex", "confidence": "medium"},
+    "der": {"method": "total_liabilities / equity", "confidence": "medium-low"},
+    "revenue": {"method": "gross_profit / gross_margin", "confidence": "low"},
+}
 
 GAP_RULES: dict[str, dict[str, str]] = {
     "dividend_yield": {"impact": "medium", "fallback": "dividend_source"},
@@ -31,6 +59,104 @@ _AVAILABLE_STATUSES = {
     "no_history",
 }
 _MISSING_STATUSES = {"source_unavailable", "unavailable", "missing", "failed", "empty"}
+
+
+def _copy_row(row: FinancialRow) -> FinancialRow:
+    return FinancialRow(**row.to_dict())
+
+
+def _missing_financial_fields(row: FinancialRow) -> list[str]:
+    return [field for field in sorted(FINANCIAL_ROW_FIELDS) if getattr(row, field) is None]
+
+
+def _estimate_field(row: FinancialRow, field_name: str, gross_margin: float | None = None) -> float | None:
+    if field_name == "net_profit" and row.eps is not None and row.shares_outstanding is not None:
+        return row.eps * row.shares_outstanding
+    if field_name == "equity" and row.total_assets is not None and row.total_liabilities is not None:
+        return row.total_assets - row.total_liabilities
+    if field_name == "free_cash_flow" and row.operating_cash_flow is not None and row.capex is not None:
+        return row.operating_cash_flow - row.capex
+    if field_name == "revenue" and row.gross_profit is not None and gross_margin not in (None, 0):
+        return row.gross_profit / gross_margin
+    return None
+
+
+def estimate_financial_row_fields(
+    row: FinancialRow,
+    *,
+    fallback_fields: list[str] | None = None,
+    gross_margin: float | None = None,
+) -> tuple[FinancialRow, DataGapReport]:
+    """Return row with safe estimates plus explicit gap report."""
+    estimated = _copy_row(row)
+    missing_before = _missing_financial_fields(row)
+    estimated_fields: list[str] = []
+    estimation_methods: dict[str, str] = {}
+    warnings: list[str] = []
+
+    for field_name in ("net_profit", "equity", "free_cash_flow", "revenue"):
+        if getattr(estimated, field_name) is not None:
+            continue
+        value = _estimate_field(estimated, field_name, gross_margin=gross_margin)
+        if value is None:
+            continue
+        setattr(estimated, field_name, value)
+        estimated_fields.append(field_name)
+        estimation_methods[field_name] = FALLBACK_CALCULATION_MAP[field_name]["method"]
+
+    if estimated.total_debt is None and estimated.total_liabilities is not None and estimated.equity not in (None, 0):
+        estimated_fields.append("der")
+        estimation_methods["der"] = FALLBACK_CALCULATION_MAP["der"]["method"]
+
+    if estimated_fields:
+        estimated.estimated_fields = list(dict.fromkeys([*estimated.estimated_fields, *estimated_fields]))
+        warnings.append("Estimated fields use low or medium-low confidence and are not reported data.")
+
+    unresolvable = _missing_financial_fields(estimated)
+    return estimated, DataGapReport(
+        symbol=estimated.symbol,
+        period=estimated.period,
+        missing_fields=missing_before,
+        fallback_fields=sorted(set(fallback_fields or [])),
+        estimated_fields=sorted(set(estimated_fields)),
+        estimation_methods=estimation_methods,
+        unresolvable_fields=unresolvable,
+        warnings=warnings,
+    )
+
+
+def build_data_gap_report(
+    row: FinancialRow | None,
+    *,
+    fallback_fields: list[str] | None = None,
+    estimated_fields: list[str] | None = None,
+    estimation_methods: dict[str, str] | None = None,
+    unavailable_fields: list[str] | None = None,
+    warnings: list[str] | None = None,
+) -> DataGapReport:
+    if row is None:
+        missing = sorted(FINANCIAL_ROW_FIELDS)
+        return DataGapReport(
+            symbol="",
+            period="unknown",
+            missing_fields=missing,
+            fallback_fields=sorted(set(fallback_fields or [])),
+            estimated_fields=sorted(set(estimated_fields or [])),
+            estimation_methods=dict(estimation_methods or {}),
+            unresolvable_fields=sorted(set([*missing, *(unavailable_fields or [])])),
+            warnings=list(warnings or ["No normalized financial row available."]),
+        )
+    missing = _missing_financial_fields(row)
+    return DataGapReport(
+        symbol=row.symbol,
+        period=row.period,
+        missing_fields=missing,
+        fallback_fields=sorted(set(fallback_fields or [])),
+        estimated_fields=sorted(set([*(estimated_fields or []), *row.estimated_fields])),
+        estimation_methods=dict(estimation_methods or {}),
+        unresolvable_fields=sorted(set([*missing, *(unavailable_fields or [])])),
+        warnings=list(warnings or row.warnings or []),
+    )
 
 
 def _lookup(payload: dict[str, Any], dotted_key: str) -> Any:

@@ -5,8 +5,20 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, is_dataclass
+from datetime import UTC, datetime
 from typing import Any
 
+from .financial_rows import (
+    FINANCIAL_ROW_FIELDS,
+    FinancialRow,
+    build_period_label,
+)
+from .financial_rows import (
+    normalize_currency as normalize_row_currency,
+)
+from .financial_rows import (
+    normalize_unit as normalize_row_unit,
+)
 from .period_metadata import attach_period_metadata_to_rows, merge_period_metadata
 
 UNIT_MULTIPLIER = {
@@ -60,9 +72,11 @@ _SUFFIX_PATTERN = re.compile(
 FINANCIAL_FIELDS = {
     "revenue",
     "gross_profit",
+    "operating_profit",
     "ebitda",
     "operating_income",
     "net_profit",
+    "interest_expense",
     "operating_cash_flow",
     "cash_from_operations",
     "capex",
@@ -77,6 +91,7 @@ FINANCIAL_FIELDS = {
     "assets",
     "total_assets",
     "total_liabilities",
+    "current_assets",
     "current_liabilities",
     "shares_outstanding",
     "eps",
@@ -114,12 +129,26 @@ _FIELD_ALIASES = {
     "net_income_common_stockholders": "net_profit",
     "net_income_continuous_operations": "net_profit",
     "total_revenue": "revenue",
+    "revenue": "revenue",
     "operating_revenue": "revenue",
+    "gross_profit": "gross_profit",
+    "gross_profit_loss": "gross_profit",
+    "operating_income": "operating_income",
+    "operating_profit": "operating_profit",
+    "income_from_operations": "operating_income",
+    "ebit": "operating_income",
+    "ebitda": "ebitda",
+    "interest_expense": "interest_expense",
+    "interest_expense_non_operating": "interest_expense",
     "cash_and_cash_equivalents": "cash",
     "cash_cash_equivalents_and_short_term_investments": "cash",
     "cash_financial": "cash",
     "cash_equivalents": "cash",
     "cash_and_short_term_investments": "cash",
+    "cash_and_equivalents": "cash",
+    "cash_cash_equivalents_and_federal_funds_sold": "cash",
+    "current_assets": "current_assets",
+    "total_current_assets": "current_assets",
     "total_current_liabilities": "current_liabilities",
     "total_liabilities_net_minority_interest": "total_liabilities",
     "ordinary_shares_number": "shares_outstanding",
@@ -129,6 +158,8 @@ _FIELD_ALIASES = {
     "diluted_eps": "eps",
     "basic_eps": "eps",
     "reported_eps": "eps",
+    "eps_basic": "eps",
+    "eps_diluted": "eps",
     "cash_dividends_paid": "dividend_paid",
     "common_stock_dividend_paid": "dividend_paid",
     "cash_dividends_paid_direct": "dividend_paid",
@@ -556,6 +587,465 @@ def _dataclass_to_dict(value: Any) -> Any:
     if isinstance(value, list):
         return [_dataclass_to_dict(item) for item in value]
     return value
+
+
+_FINANCIAL_ROW_FIELD_ALIASES = {
+    "assets": "total_assets",
+    "total_assets": "total_assets",
+    "liabilities": "total_liabilities",
+    "total_liabilities": "total_liabilities",
+    "equity": "equity",
+    "total_equity": "equity",
+    "debt": "total_debt",
+    "total_debt": "total_debt",
+    "cash": "cash_and_equivalents",
+    "cash_and_equivalents": "cash_and_equivalents",
+    "cash_from_operations": "operating_cash_flow",
+    "operating_cash_flow": "operating_cash_flow",
+    "capital_expenditure": "capex",
+    "capital_expenditures": "capex",
+    "capex": "capex",
+    "operating_income": "operating_profit",
+    "operating_profit": "operating_profit",
+}
+
+_FINNHUB_FIELD_ALIASES = {
+    "revenue": "revenue",
+    "revenues": "revenue",
+    "total_revenue": "revenue",
+    "totalrevenue": "revenue",
+    "gross_profit": "gross_profit",
+    "grossprofit": "gross_profit",
+    "operating_income": "operating_profit",
+    "operatingincome": "operating_profit",
+    "ebit": "operating_profit",
+    "ebitda": "ebitda",
+    "net_income": "net_profit",
+    "netincome": "net_profit",
+    "net_profit": "net_profit",
+    "eps": "eps",
+    "eps_basic": "eps",
+    "eps_diluted": "eps",
+    "interest_expense": "interest_expense",
+    "interestexpense": "interest_expense",
+    "total_assets": "total_assets",
+    "totalassets": "total_assets",
+    "total_liabilities": "total_liabilities",
+    "totalliabilities": "total_liabilities",
+    "total_equity": "equity",
+    "totalequity": "equity",
+    "shareholders_equity": "equity",
+    "stockholders_equity": "equity",
+    "current_assets": "current_assets",
+    "total_current_assets": "current_assets",
+    "totalcurrentassets": "current_assets",
+    "current_liabilities": "current_liabilities",
+    "total_current_liabilities": "current_liabilities",
+    "totalcurrentliabilities": "current_liabilities",
+    "total_debt": "total_debt",
+    "totaldebt": "total_debt",
+    "cash": "cash_and_equivalents",
+    "cash_and_equivalents": "cash_and_equivalents",
+    "cashandcashequivalents": "cash_and_equivalents",
+    "operating_cash_flow": "operating_cash_flow",
+    "cash_from_operations": "operating_cash_flow",
+    "net_cash_provided_by_operating_activities": "operating_cash_flow",
+    "netcashprovidedbyoperatingactivities": "operating_cash_flow",
+    "capex": "capex",
+    "capital_expenditure": "capex",
+    "capitalexpenditure": "capex",
+    "capital_expenditures": "capex",
+    "free_cash_flow": "free_cash_flow",
+    "freecashflow": "free_cash_flow",
+    "shares_outstanding": "shares_outstanding",
+    "shareoutstanding": "shares_outstanding",
+    "weighted_average_shs_out": "shares_outstanding",
+}
+
+
+def _utc_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _market_for_financial_row(symbol: str | None, info: dict[str, Any] | None = None) -> str:
+    value = str(symbol or "").upper()
+    quote_type = str((info or {}).get("quoteType") or (info or {}).get("quote_type") or "").upper()
+    if value.endswith(".JK"):
+        return "IDX"
+    if value.endswith("-USD") or value.endswith("-USDT") or "CRYPTO" in quote_type:
+        return "CRYPTO"
+    if "ETF" in quote_type:
+        return "ETF"
+    if "FUND" in quote_type:
+        return "FUND"
+    if "." in value:
+        return "GLOBAL"
+    return "US"
+
+
+def _financial_row_source_confidence(source: str, warnings: list[str] | None = None) -> str:
+    if warnings:
+        return "medium"
+    if source == "yfinance":
+        return "high"
+    if source == "finnhub":
+        return "medium"
+    return "medium"
+
+
+def _financial_row_value(row: dict[str, Any], field: str) -> float | None:
+    candidates = [field]
+    candidates.extend(alias for alias, target in _FINANCIAL_ROW_FIELD_ALIASES.items() if target == field)
+    for candidate in candidates:
+        value = unwrap_normalized_value(row.get(candidate))
+        if value is not None:
+            return value
+    return None
+
+
+def _has_financial_row_values(row: FinancialRow) -> bool:
+    return any(getattr(row, field) is not None for field in FINANCIAL_ROW_FIELDS)
+
+
+def _financial_row_from_normalized_dict(
+    row: dict[str, Any],
+    *,
+    symbol: str,
+    source: str,
+    market: str,
+    fallback: bool = False,
+    fallback_source: str | None = None,
+    default_currency: str | None = None,
+    default_unit: str | None = None,
+) -> FinancialRow:
+    period = row.get("period") if isinstance(row.get("period"), dict) else {}
+    currency = normalize_row_currency(
+        row.get("currency") or period.get("currency") or default_currency,
+        market,
+    )
+    unit = normalize_row_unit(row.get("unit") or period.get("unit") or default_unit)
+    as_of_date = period.get("as_of_date") or period.get("period_end") or row.get("as_of_date")
+    warnings = list(row.get("warnings") or [])
+    field_values = {field: _financial_row_value(row, field) for field in FINANCIAL_ROW_FIELDS}
+    financial_row = FinancialRow(
+        symbol=str(symbol or row.get("symbol") or "").upper(),
+        period=str(period.get("period_label") or row.get("period_label") or build_period_label(as_of_date, "annual")),
+        period_type=str(period.get("period_type") or row.get("period_type") or "annual"),
+        currency=currency,
+        unit=unit,
+        source=source,
+        source_confidence=_financial_row_source_confidence(source, warnings),
+        fallback=fallback,
+        fallback_source=fallback_source,
+        as_of_date=as_of_date,
+        retrieved_at=_utc_iso(),
+        warnings=warnings,
+        **field_values,
+    )
+    if not _has_financial_row_values(financial_row):
+        financial_row.warnings.append("No usable financial statement fields were normalized.")
+    return financial_row
+
+
+def _info_value(info: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in info and info.get(key) not in (None, "", "N/A"):
+            return info.get(key)
+    return None
+
+
+def _row_from_yfinance_info(info: dict[str, Any], *, symbol: str, market: str, currency: str) -> FinancialRow | None:
+    if not isinstance(info, dict) or not info:
+        return None
+    values = {
+        "revenue": _number_like(_info_value(info, "totalRevenue")),
+        "gross_profit": _number_like(_info_value(info, "grossProfits")),
+        "ebitda": _number_like(_info_value(info, "ebitda")),
+        "net_profit": _number_like(_info_value(info, "netIncomeToCommon")),
+        "eps": _number_like(_info_value(info, "trailingEps", "forwardEps")),
+        "total_debt": _number_like(_info_value(info, "totalDebt")),
+        "cash_and_equivalents": _number_like(_info_value(info, "totalCash")),
+        "free_cash_flow": _number_like(_info_value(info, "freeCashflow")),
+        "shares_outstanding": _number_like(_info_value(info, "sharesOutstanding")),
+    }
+    row = FinancialRow(
+        symbol=symbol,
+        period=build_period_label(str(info.get("mostRecentQuarter") or info.get("lastFiscalYearEnd") or ""), "annual"),
+        period_type="annual",
+        currency=normalize_row_currency(currency, market),
+        unit="raw",
+        source="yfinance",
+        source_confidence="medium",
+        as_of_date=str(info.get("mostRecentQuarter") or info.get("lastFiscalYearEnd") or "") or None,
+        retrieved_at=_utc_iso(),
+        **values,
+    )
+    return row if _has_financial_row_values(row) else None
+
+
+def normalize_yfinance_financials(
+    financials: dict,
+    balance_sheet: dict,
+    cashflow: dict,
+    info: dict | None = None,
+) -> list[FinancialRow]:
+    """Map yfinance financial data into FinancialRow list."""
+    info = info if isinstance(info, dict) else {}
+    symbol = str(info.get("symbol") or info.get("ticker") or "").upper()
+    market = _market_for_financial_row(symbol, info)
+    currency = normalize_row_currency(info.get("financialCurrency") or info.get("currency"), market)
+    rows = build_normalized_period_rows(
+        income_statement=financials,
+        balance_sheet=balance_sheet,
+        cashflow=cashflow,
+        default_unit="raw",
+        default_currency=currency,
+    )
+    normalized = [
+        _financial_row_from_normalized_dict(
+            row,
+            symbol=symbol,
+            source="yfinance",
+            market=market,
+            default_currency=currency,
+            default_unit="raw",
+        )
+        for row in rows
+    ]
+    shares_outstanding = _number_like(_info_value(info, "sharesOutstanding", "impliedSharesOutstanding"))
+    for row in normalized:
+        if not row.shares_outstanding and shares_outstanding is not None:
+            row.shares_outstanding = shares_outstanding
+    if not normalized:
+        info_row = _row_from_yfinance_info(info, symbol=symbol, market=market, currency=currency)
+        if info_row is not None:
+            normalized.append(info_row)
+    return normalized
+
+
+def _flatten_finnhub_values(value: Any, output: dict[str, Any]) -> None:
+    if isinstance(value, dict):
+        concept = value.get("concept") or value.get("label") or value.get("name") or value.get("field")
+        if concept and any(key in value for key in ("value", "amount", "v")):
+            output[str(concept)] = value.get("value", value.get("amount", value.get("v")))
+            return
+        for key, item in value.items():
+            if key in {"report", "bs", "ic", "cf"} or isinstance(item, (dict, list)):
+                _flatten_finnhub_values(item, output)
+            else:
+                output[str(key)] = item
+        return
+    if isinstance(value, list):
+        for item in value:
+            _flatten_finnhub_values(item, output)
+
+
+def _finnhub_period_type(report: dict[str, Any], default_type: str) -> str:
+    text = " ".join(str(report.get(key) or "") for key in ("freq", "period", "fp", "form", "quarter")).upper()
+    if "Q" in text or report.get("quarter") not in (None, ""):
+        return "quarterly"
+    if "FY" in text or report.get("year") not in (None, ""):
+        return "annual"
+    return default_type
+
+
+def _finnhub_field_name(raw_key: str) -> str | None:
+    canonical = _canonical_field(raw_key)
+    if canonical.startswith("us_gaap_"):
+        canonical = canonical.removeprefix("us_gaap_")
+    compact = canonical.replace("_", "")
+    return (
+        _FINANCIAL_ROW_FIELD_ALIASES.get(canonical)
+        or _FINNHUB_FIELD_ALIASES.get(canonical)
+        or _FINNHUB_FIELD_ALIASES.get(compact)
+    )
+
+
+def _finnhub_reports(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    for key in ("reports", "data", "financials"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    return [payload] if payload else []
+
+
+def normalize_finnhub_financials(
+    reported: dict,
+    profile: dict | None = None,
+) -> list[FinancialRow]:
+    """Map Finnhub financial data into FinancialRow list."""
+    payload = _load_mapping(reported) if isinstance(reported, str) else reported
+    if not isinstance(payload, dict):
+        return []
+    profile = profile if isinstance(profile, dict) else {}
+    company = profile.get("company") if isinstance(profile.get("company"), dict) else profile
+    symbol = str(payload.get("symbol") or company.get("ticker") or company.get("symbol") or "").upper()
+    market = _market_for_financial_row(symbol, company)
+    currency = normalize_row_currency(
+        payload.get("currency") or company.get("currency") or company.get("currency_symbol"),
+        market,
+    )
+    rows: list[FinancialRow] = []
+    for report in _finnhub_reports(payload):
+        flat: dict[str, Any] = {}
+        _flatten_finnhub_values(report, flat)
+        period_type = _finnhub_period_type(report, str(payload.get("freq") or "annual"))
+        end_date = (
+            report.get("endDate")
+            or report.get("end_date")
+            or report.get("period")
+            or report.get("fiscalDateEnding")
+            or report.get("year")
+        )
+        values = {field: None for field in FINANCIAL_ROW_FIELDS}
+        for raw_key, raw_value in flat.items():
+            field = _finnhub_field_name(raw_key)
+            if field in values:
+                values[field] = _number_like(raw_value)
+        if values.get("shares_outstanding") is None:
+            values["shares_outstanding"] = _number_like(company.get("shareOutstanding") or company.get("shares_outstanding"))
+        row = FinancialRow(
+            symbol=symbol,
+            period=build_period_label(str(end_date or ""), period_type),
+            period_type=period_type,
+            currency=currency,
+            unit="raw",
+            source="finnhub",
+            source_confidence="medium",
+            fallback=True,
+            fallback_source="finnhub",
+            as_of_date=str(end_date) if end_date else None,
+            retrieved_at=_utc_iso(),
+            **values,
+        )
+        if _has_financial_row_values(row):
+            rows.append(row)
+    return rows
+
+
+def _copy_financial_row(row: FinancialRow) -> FinancialRow:
+    return FinancialRow(**row.to_dict())
+
+
+def _period_key(row: FinancialRow) -> tuple[str, str]:
+    return (str(row.period_type or ""), str(row.period or ""))
+
+
+def _field_quality_entry(
+    *,
+    source: str | None,
+    confidence: str,
+    fallback: bool = False,
+    fallback_source: str | None = None,
+    estimated: bool = False,
+    as_of_date: str | None = None,
+    unavailable_reason: str | None = None,
+) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "source": source,
+        "confidence": confidence,
+        "estimated": estimated,
+        "fallback": fallback,
+        "as_of_date": as_of_date,
+    }
+    if fallback_source:
+        entry["fallback_source"] = fallback_source
+    if unavailable_reason:
+        entry["unavailable_reason"] = unavailable_reason
+    return entry
+
+
+def merge_financial_rows_yfinance_first(
+    yfinance_rows: list[FinancialRow] | None,
+    finnhub_rows: list[FinancialRow] | None,
+) -> dict[str, Any]:
+    """Merge normalized rows with YFinance primary and Finnhub fallback only."""
+    primary_rows = list(yfinance_rows or [])
+    fallback_rows = list(finnhub_rows or [])
+    fallback_by_period = {_period_key(row): row for row in fallback_rows}
+    merged_rows: list[FinancialRow] = []
+    filled_by_fallback: list[str] = []
+    warnings: list[str] = []
+    field_quality: dict[str, dict[str, Any]] = {}
+
+    for primary in primary_rows:
+        merged = _copy_financial_row(primary)
+        fallback = fallback_by_period.pop(_period_key(primary), None)
+        for field in FINANCIAL_ROW_FIELDS:
+            primary_value = getattr(merged, field)
+            fallback_value = getattr(fallback, field) if fallback else None
+            if primary_value is not None:
+                field_quality[field] = _field_quality_entry(
+                    source="yfinance",
+                    confidence=merged.source_confidence or "high",
+                    fallback=False,
+                    as_of_date=merged.as_of_date,
+                )
+                if fallback_value is not None:
+                    message = f"{field} available from yfinance and finnhub; kept yfinance."
+                    warnings.append(message)
+                    merged.warnings.append(message)
+                continue
+            if fallback_value is not None:
+                setattr(merged, field, fallback_value)
+                merged.fallback = True
+                merged.fallback_source = "finnhub"
+                merged.source = "mixed"
+                merged.source_confidence = "medium"
+                filled_by_fallback.append(field)
+                field_quality[field] = _field_quality_entry(
+                    source="finnhub",
+                    confidence="medium",
+                    fallback=True,
+                    fallback_source="finnhub",
+                    as_of_date=fallback.as_of_date,
+                )
+                continue
+            field_quality.setdefault(
+                field,
+                _field_quality_entry(
+                    source=None,
+                    confidence="unavailable",
+                    as_of_date=merged.as_of_date,
+                    unavailable_reason="field_not_returned_by_yfinance_or_finnhub",
+                ),
+            )
+        merged_rows.append(merged)
+
+    for fallback in fallback_by_period.values():
+        row = _copy_financial_row(fallback)
+        row.fallback = True
+        row.fallback_source = "finnhub"
+        row.warnings.append("Entire period supplied by Finnhub fallback because YFinance period was unavailable.")
+        for field in FINANCIAL_ROW_FIELDS:
+            if getattr(row, field) is not None:
+                filled_by_fallback.append(field)
+                field_quality.setdefault(
+                    field,
+                    _field_quality_entry(
+                        source="finnhub",
+                        confidence="medium",
+                        fallback=True,
+                        fallback_source="finnhub",
+                        as_of_date=row.as_of_date,
+                    ),
+                )
+        merged_rows.append(row)
+
+    missing_fields = sorted(
+        field for field in FINANCIAL_ROW_FIELDS if not any(getattr(row, field) is not None for row in merged_rows)
+    )
+    fallback_used = bool(filled_by_fallback)
+    metadata = {
+        "source": "mixed" if fallback_used else "yfinance" if primary_rows else "finnhub" if fallback_rows else "unavailable",
+        "source_priority": ["yfinance", "finnhub"],
+        "fallback_used": fallback_used,
+        "fallback_source": "finnhub" if fallback_used else None,
+        "missing_fields": missing_fields,
+        "filled_by_fallback": sorted(set(filled_by_fallback)),
+        "warnings": list(dict.fromkeys(warnings)),
+    }
+    return {"rows": merged_rows, "metadata": metadata, "field_quality": field_quality}
 
 
 
