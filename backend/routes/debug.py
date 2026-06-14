@@ -8,6 +8,7 @@ from tradingagents.dataflows.source_priority import get_source_priority
 from tradingagents.dataflows.vendor_budget import DEFAULT_VENDOR_BUDGET
 from tradingagents.dataflows.vendor_capabilities import VENDOR_CAPABILITIES, vendor_requires_api_key
 from tradingagents.dataflows.vendor_symbol import resolve_symbol
+from tradingagents.observability.health_aggregator import get_observability_summary, get_vendor_stats
 
 import config as app_config
 from routes.validation import normalize_ticker_symbol
@@ -119,3 +120,15 @@ async def debug_symbol(ticker: str) -> dict[str, Any]:
             "news": get_source_priority(resolution.market, "news"),
         },
     }
+
+
+@router.get("/debug/metrics")
+async def debug_metrics() -> dict[str, Any]:
+    _guard_debug_enabled()
+    return get_observability_summary()
+
+
+@router.get("/debug/vendor-stats")
+async def debug_vendor_stats() -> dict[str, Any]:
+    _guard_debug_enabled()
+    return get_vendor_stats()
