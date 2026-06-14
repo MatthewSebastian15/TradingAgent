@@ -90,6 +90,14 @@ SUMMARY_FIELDS = {
     "data_quality",
     "data_completeness",
     "fundamental_gap_report",
+    "fundamental_field_quality",
+    "sector_classification",
+    "metrics_profile",
+    "included_metrics",
+    "excluded_metrics",
+    "gap_report",
+    "source_metadata",
+    "fallback_metadata",
     "data_limitations",
     "vendor_attempts",
     "request_budget",
@@ -230,6 +238,91 @@ def _coerce_data_quality(value: Any) -> dict[str, Any]:
         except Exception:
             value = None
     return dict(value) if isinstance(value, dict) else {}
+
+
+def _quality_from_state(final_state: dict[str, Any]) -> dict[str, Any]:
+    data_quality = _coerce_data_quality(final_state.get("data_quality"))
+    field_quality = final_state.get("fundamental_field_quality") or data_quality.get("fundamental_field_quality")
+    if isinstance(field_quality, dict):
+        return field_quality
+    field_quality = data_quality.get("field_quality") or final_state.get("field_quality")
+    if isinstance(field_quality, dict):
+        return {
+            str(key): value
+            for key, value in field_quality.items()
+            if isinstance(value, dict)
+        }
+    return {}
+
+
+def _sector_classification_from_state(final_state: dict[str, Any]) -> dict[str, Any]:
+    existing = final_state.get("sector_classification")
+    if isinstance(existing, dict) and existing.get("sector"):
+        return existing
+    profile = final_state.get("company_profile") if isinstance(final_state.get("company_profile"), dict) else {}
+    sector = profile.get("sector") or profile.get("industry")
+    if sector:
+        return {"sector": str(sector).strip().lower(), "source": "yfinance", "confidence": "medium"}
+    return {"sector": "unknown", "source": "unknown", "confidence": "low"}
+
+
+def _metrics_profile_from_sector(sector_classification: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from tradingagents.dataflows.financial_rows import metrics_profile_for_sector
+
+        return metrics_profile_for_sector(str(sector_classification.get("sector") or "unknown"))
+    except Exception:
+        return {
+            "metrics_profile": "unknown",
+            "included_metrics": ["revenue", "net_profit", "roe", "roa", "der"],
+            "excluded_metrics": [],
+        }
+
+
+def _gap_report_from_state(final_state: dict[str, Any]) -> dict[str, Any]:
+    gap_report = final_state.get("gap_report") or final_state.get("fundamental_gap_report")
+    if isinstance(gap_report, dict):
+        return gap_report
+    return {
+        "missing_fields": [],
+        "fallback_fields": [],
+        "estimated_fields": [],
+        "unresolvable_fields": [],
+        "warnings": [],
+    }
+
+
+def _source_metadata_from_state(final_state: dict[str, Any], field_quality: dict[str, Any]) -> dict[str, Any]:
+    existing = final_state.get("source_metadata")
+    if isinstance(existing, dict):
+        return existing
+    data_sources = final_state.get("data_sources") if isinstance(final_state.get("data_sources"), dict) else {}
+    sources = [
+        value.get("source")
+        for value in field_quality.values()
+        if isinstance(value, dict) and value.get("source")
+    ]
+    return {
+        "source": data_sources.get("fundamentals") or data_sources.get("financials") or data_sources.get("fundamental_data"),
+        "source_priority": ["yfinance", "finnhub"],
+        "sources_used": list(dict.fromkeys(str(source) for source in sources if source)),
+    }
+
+
+def _fallback_metadata_from_state(final_state: dict[str, Any], field_quality: dict[str, Any]) -> dict[str, Any]:
+    existing = final_state.get("fallback_metadata")
+    if isinstance(existing, dict):
+        return existing
+    fallback_fields = [
+        key
+        for key, value in field_quality.items()
+        if isinstance(value, dict) and value.get("fallback")
+    ]
+    return {
+        "fallback_used": bool(fallback_fields),
+        "fallback_source": "finnhub" if fallback_fields else None,
+        "filled_by_fallback": fallback_fields,
+    }
 
 
 VALIDATION_WARNING_META: dict[str, dict[str, Any]] = {
@@ -1168,10 +1261,22 @@ def _build_common_result_fields(final_state: dict[str, Any], pd_obj: object | No
 
 
 def _build_common_fundamental_fields(final_state: dict[str, Any]) -> dict[str, Any]:
+    field_quality = _quality_from_state(final_state)
+    sector_classification = _sector_classification_from_state(final_state)
+    metrics_profile = _metrics_profile_from_sector(sector_classification)
+    gap_report = _gap_report_from_state(final_state)
     return {
         "financial_highlights": final_state.get("financial_highlights"),
         "normalized_period_rows": final_state.get("normalized_period_rows") or [],
         "derived_fundamentals": final_state.get("derived_fundamentals") or [],
+        "fundamental_field_quality": field_quality,
+        "sector_classification": sector_classification,
+        "metrics_profile": final_state.get("metrics_profile") or metrics_profile.get("metrics_profile"),
+        "included_metrics": final_state.get("included_metrics") or metrics_profile.get("included_metrics") or [],
+        "excluded_metrics": final_state.get("excluded_metrics") or metrics_profile.get("excluded_metrics") or [],
+        "gap_report": gap_report,
+        "source_metadata": _source_metadata_from_state(final_state, field_quality),
+        "fallback_metadata": _fallback_metadata_from_state(final_state, field_quality),
         "financial_trends": final_state.get("financial_trends"),
         "valuation_multiples": final_state.get("valuation_multiples"),
         "fair_value_range": final_state.get("fair_value_range"),

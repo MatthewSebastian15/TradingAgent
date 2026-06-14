@@ -1,3 +1,5 @@
+import json
+
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from tradingagents.agents.utils.agent_utils import (
@@ -5,13 +7,22 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
 )
 from tradingagents.agents.utils.event_data_tools import get_earnings_calendar, get_recommendation_trends
-from tradingagents.agents.utils.fundamental_data_tools import (
-    get_balance_sheet,
-    get_cashflow,
-    get_company_profile,
-    get_fundamentals,
-    get_income_statement,
-)
+from tradingagents.agents.utils.fundamental_data_tools import get_company_profile
+
+
+def _normalized_fundamentals_context(state: dict) -> str:
+    payload = {
+        "normalized_rows": state.get("normalized_period_rows") or [],
+        "metrics": state.get("derived_fundamentals") or state.get("fundamental_metrics") or [],
+        "gap_report": state.get("gap_report") or state.get("fundamental_gap_report") or {},
+        "field_quality": state.get("fundamental_field_quality") or {},
+        "sector_classification": state.get("sector_classification") or {},
+        "source_metadata": state.get("source_metadata") or {},
+        "fallback_metadata": state.get("fallback_metadata") or {},
+        "limitations": state.get("data_limitations") or [],
+        "financial_highlights": state.get("financial_highlights") or {},
+    }
+    return json.dumps(payload, ensure_ascii=False, default=str)[:12000]
 
 
 def create_fundamentals_analyst(llm):
@@ -21,18 +32,15 @@ def create_fundamentals_analyst(llm):
 
         tools = [
             get_company_profile,
-            get_fundamentals,
-            get_balance_sheet,
-            get_cashflow,
-            get_income_statement,
             get_earnings_calendar,
             get_recommendation_trends,
         ]
 
         system_message = (
-            "You are a researcher tasked with analyzing fundamental information over the past week about a company. Please write a comprehensive report of the company's fundamental information such as financial documents, company profile, basic company financials, and company financial history to gain a full view of the company's fundamental information to inform traders. Make sure to include as much detail as possible. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
+            "You are a researcher tasked with analyzing normalized fundamental information about a company. Use normalized FinancialRow data, FundamentalMetrics, DataGapReport, fundamental_field_quality, source metadata, fallback metadata, unavailable field reasons, estimated field limitations, and sector classification as the source of truth."
             + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."
-            + " Use the available tools: `get_company_profile` for business context, `get_fundamentals` for comprehensive company analysis, `get_balance_sheet`, `get_cashflow`, and `get_income_statement` for specific financial statements. Use `get_earnings_calendar` as event risk context. Use `get_recommendation_trends` only as external comparison, not as the final decision. If upcoming earnings are close, warn that position sizing should be more conservative."
+            + " Use the available tools only for company context, event risk, and external recommendation comparison. Do not treat raw tool financial statements as primary data."
+            + " YFinance is the primary source. Finnhub is fallback only. Fallback fields are not primary. Estimated fields are not actual reported data. Unavailable fields must be named as data limitations. ETF, FUND, and crypto instruments must not be forced to have operating financial statement metrics. Banks must not be forced to have EBITDA or interest coverage. No third provider is used in this Sprint 3 fundamental pipeline."
             + get_language_instruction()
         )
 
@@ -47,7 +55,8 @@ def create_fundamentals_analyst(llm):
                     " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
                     " You have access to the following tools: {tool_names}.\n{system_message}"
-                    "For your reference, the current date is {current_date}. {instrument_context}",
+                    "For your reference, the current date is {current_date}. {instrument_context}"
+                    "\nNormalized fundamentals context:\n{normalized_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
@@ -57,6 +66,7 @@ def create_fundamentals_analyst(llm):
         prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)
+        prompt = prompt.partial(normalized_context=_normalized_fundamentals_context(state))
 
         chain = prompt | llm.bind_tools(tools)
 
