@@ -306,6 +306,27 @@ function buildUnifiedNewsItems(newsImpact, relatedItems) {
   return sortNewsByImpact(dedupeNewsItems([...highImpactItemsRaw, ...fullNewsItemsRaw]));
 }
 
+function strictNewsPayload(result) {
+  const candidates = [result?.news_context, result?.news];
+  return candidates.find(
+    (candidate) =>
+      candidate &&
+      typeof candidate === 'object' &&
+      (Array.isArray(candidate.decision_company_news) ||
+        Array.isArray(candidate.market_context_news))
+  );
+}
+
+function hasStrictNewsPayload(payload) {
+  if (!payload) return false;
+  return (
+    (Array.isArray(payload.decision_company_news) && payload.decision_company_news.length > 0) ||
+    (Array.isArray(payload.market_context_news) && payload.market_context_news.length > 0) ||
+    (Array.isArray(payload.debug?.strict_news_filter?.excluded_news) &&
+      payload.debug.strict_news_filter.excluded_news.length > 0)
+  );
+}
+
 function hasNewsPayload(result) {
   const relatedItems = result?.related_news?.items;
   const impactItems = result?.news_impact?.full_news_list;
@@ -400,12 +421,99 @@ NewsRow.propTypes = {
   item: PropTypes.object.isRequired,
 };
 
+function StrictNewsSection({ label, items, emptyText }) {
+  return (
+    <section>
+      <SectionHeader label={label} />
+      {items.length > 0 ? (
+        <div className="space-y-1">
+          {items.map((item, index) => (
+            <NewsRow key={newsDedupeKey(item) || `${item.title}-${index}`} item={item} />
+          ))}
+        </div>
+      ) : (
+        <NoticeBox title="NO NEWS" tone="amber">
+          {emptyText}
+        </NoticeBox>
+      )}
+    </section>
+  );
+}
+
+StrictNewsSection.propTypes = {
+  emptyText: PropTypes.string.isRequired,
+  items: PropTypes.arrayOf(PropTypes.object).isRequired,
+  label: PropTypes.string.isRequired,
+};
+
 export default function NewsTab({ result }) {
   const [activeSort, setActiveSort] = useState('Date');
   const relatedNews = result?.related_news || {};
   const newsImpact = result?.news_impact || {};
   const analystConsensus = result?.analyst_consensus || {};
   const relatedItems = Array.isArray(relatedNews.items) ? relatedNews.items : [];
+  const strictPayload = strictNewsPayload(result);
+  if (hasStrictNewsPayload(strictPayload)) {
+    const decisionItems = Array.isArray(strictPayload.decision_company_news)
+      ? strictPayload.decision_company_news.filter((item) => !item?.market_context_only)
+      : [];
+    const contextItems = Array.isArray(strictPayload.market_context_news)
+      ? strictPayload.market_context_news
+      : [];
+    const excludedItems = Array.isArray(strictPayload.debug?.strict_news_filter?.excluded_news)
+      ? strictPayload.debug.strict_news_filter.excluded_news
+          .filter((item) => item?.title)
+          .map((item) => ({
+            ...item,
+            summary: item.reason,
+            source: item.provider,
+            impact: 'debug',
+            sentiment: 'unavailable',
+          }))
+      : [];
+
+    return (
+      <div className="px-4 py-4 border-b border-bloomberg-border space-y-4">
+        <StrictNewsSection
+          label="Company News Used for Decision"
+          items={decisionItems}
+          emptyText="No company-specific decision news was returned."
+        />
+        <StrictNewsSection
+          label="Market Context News"
+          items={contextItems}
+          emptyText="No market context news was returned."
+        />
+        {excludedItems.length > 0 && (
+          <StrictNewsSection
+            label="Excluded News Debug"
+            items={excludedItems}
+            emptyText="No excluded news debug rows were returned."
+          />
+        )}
+        {analystConsensus.available && (
+          <section>
+            <SectionHeader label="ANALYST RECOMMENDATION TREND" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 font-mono text-xs">
+              <SummaryMetric label="PERIOD" value={analystConsensus.period || 'N/A'} />
+              <SummaryMetric label="STRONG BUY" value={analystConsensus.strong_buy ?? 0} />
+              <SummaryMetric label="BUY" value={analystConsensus.buy ?? 0} />
+              <SummaryMetric label="HOLD" value={analystConsensus.hold ?? 0} />
+              <SummaryMetric label="SELL" value={analystConsensus.sell ?? 0} />
+              <SummaryMetric label="STRONG SELL" value={analystConsensus.strong_sell ?? 0} />
+              <SummaryMetric label="TOTAL" value={analystConsensus.total ?? 0} />
+              <SummaryMetric
+                label="CONSENSUS"
+                value={displayLabel(analystConsensus.consensus_label)}
+              />
+              <SummaryMetric label="TREND" value={displayLabel(analystConsensus.trend)} />
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  }
+
   const newsItems = buildUnifiedNewsItems(newsImpact, relatedItems);
   const sortedNewsItems = sortNewsItems(newsItems, activeSort);
   if (!hasNewsPayload(result)) {

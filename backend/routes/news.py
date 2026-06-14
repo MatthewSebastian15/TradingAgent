@@ -13,7 +13,7 @@ from schemas import NewsResponse
 
 router = APIRouter(tags=["news"])
 debug_router = APIRouter(tags=["news"])
-_SUPPORTED_DEBUG_PROVIDERS = {"google_news_light", "marketaux", "newsdata"}
+_SUPPORTED_DEBUG_PROVIDERS = {"google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"}
 
 
 def _fetch_news(
@@ -57,13 +57,13 @@ async def get_news(
 async def debug_news(
     ticker: str,
     request: Request,
-    provider: str = Query(...),
+    provider: str | None = Query(default=None),
     window_days: int = Query(default=30, ge=1, le=365),
     limit: int = Query(default=20, ge=1, le=100),
     include_raw: bool = Query(default=False),
 ):
-    normalized_provider = provider.strip().lower()
-    if normalized_provider not in _SUPPORTED_DEBUG_PROVIDERS:
+    normalized_provider = provider.strip().lower() if provider else None
+    if normalized_provider is not None and normalized_provider not in _SUPPORTED_DEBUG_PROVIDERS:
         raise BadRequestError(
             "Unsupported news provider.",
             details={"provider": provider, "supported_providers": sorted(_SUPPORTED_DEBUG_PROVIDERS)},

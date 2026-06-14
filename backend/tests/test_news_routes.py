@@ -92,3 +92,32 @@ def test_debug_news_endpoint_accepts_google_news_light(monkeypatch):
 
     assert response.status_code == 200
     assert calls[0]["provider"] == "google_news_light"
+
+
+def test_debug_news_endpoint_accepts_rss_context_and_yfinance(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "routes.news._fetch_news",
+        lambda ticker, **kwargs: calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker),
+    )
+
+    rss_response = _news_client(is_development=True).get("/api/debug/news/BBCA.JK?provider=rss_context")
+    yfinance_response = _news_client(is_development=True).get("/api/debug/news/BBCA.JK?provider=yfinance")
+
+    assert rss_response.status_code == 200
+    assert yfinance_response.status_code == 200
+    assert [call["provider"] for call in calls] == ["rss_context", "yfinance"]
+
+
+def test_debug_news_endpoint_runs_full_pipeline_without_provider(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "routes.news._fetch_news",
+        lambda ticker, **kwargs: calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker),
+    )
+
+    response = _news_client(is_development=True).get("/api/debug/news/BBCA.JK")
+
+    assert response.status_code == 200
+    assert calls[0]["provider"] is None
+    assert calls[0]["debug"] is True

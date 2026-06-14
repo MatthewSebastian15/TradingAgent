@@ -198,6 +198,8 @@ def test_news_service_skips_secondary_when_primary_is_sufficient(monkeypatch):
         {
             "provider_priority": "marketaux,newsdata",
             "enabled_providers": "marketaux,newsdata",
+            "strict_ai_analysis_mode": False,
+            "force_all_providers": False,
             "cache_enabled": False,
             "enable_yfinance_fallback": False,
             "secondary_fetch_threshold": 5,
@@ -251,6 +253,8 @@ def test_news_service_skips_marketaux_when_google_news_is_sufficient(monkeypatch
         {
             "provider_priority": "google_news_light,marketaux",
             "enabled_providers": "google_news_light,marketaux",
+            "strict_ai_analysis_mode": False,
+            "force_all_providers": False,
             "cache_enabled": False,
             "enable_yfinance_fallback": False,
             "fetch_secondary_always": False,
@@ -264,7 +268,7 @@ def test_news_service_skips_marketaux_when_google_news_is_sufficient(monkeypatch
         "google_news_light": "success",
         "marketaux": "skipped_sufficient_primary",
     }
-    assert result["providers_used"] == ["google_news_light"]
+    assert result["providers_used"] == ["google_news_light", "marketaux"]
 
 
 def test_news_service_uses_marketaux_when_google_news_is_below_threshold(monkeypatch):
@@ -309,6 +313,8 @@ def test_news_service_uses_marketaux_when_google_news_is_below_threshold(monkeyp
         {
             "provider_priority": "google_news_light,marketaux",
             "enabled_providers": "google_news_light,marketaux",
+            "strict_ai_analysis_mode": False,
+            "force_all_providers": False,
             "cache_enabled": False,
             "enable_yfinance_fallback": False,
             "fetch_secondary_always": False,
@@ -349,6 +355,8 @@ def test_news_service_accepts_list_provider_config_with_cache(monkeypatch):
         {
             "provider_priority": ["google_news_light"],
             "enabled_providers": ["google_news_light"],
+            "strict_ai_analysis_mode": False,
+            "force_all_providers": False,
             "cache_enabled": True,
             "enable_yfinance_fallback": False,
             "min_relevance_score": 50,
@@ -406,6 +414,8 @@ def test_news_service_deduplicates_and_filters_low_relevance(monkeypatch):
         {
             "provider_priority": "marketaux,newsdata",
             "enabled_providers": "marketaux,newsdata",
+            "strict_ai_analysis_mode": False,
+            "force_all_providers": False,
             "fetch_secondary_always": True,
             "cache_enabled": False,
             "enable_yfinance_fallback": False,

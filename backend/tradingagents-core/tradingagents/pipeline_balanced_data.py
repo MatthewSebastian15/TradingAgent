@@ -57,8 +57,8 @@ from tradingagents.dataflows.vendor_budget import create_budget_from_config, rel
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
 from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.fundamentals.builder import build_fundamental_analysis
-from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 from tradingagents.graph.prompt_context_builder import build_prompt_context as build_safety_prompt_context
+from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 from tradingagents.prompt_context import build_prompt_context as build_legacy_prompt_context
 from tradingagents.technical.entry_quality import build_technical_entry
 
@@ -425,12 +425,18 @@ def _safe_structured_company_news(
     try:
         vendor_order = get_field_vendor_order("company_news", ticker)
         news_config = dict(get_config().get("news") or {})
-        provider_priority = [
-            vendor for vendor in vendor_order if vendor in {"google_news_light", "marketaux", "newsdata"}
-        ]
-        if provider_priority:
-            news_config["provider_priority"] = provider_priority
-        news_config["enable_yfinance_fallback"] = "yfinance" in vendor_order
+        if bool(news_config.get("strict_ai_analysis_mode", True)):
+            strict_order = "google_news_light,marketaux,rss_context,newsdata,yfinance"
+            news_config["provider_priority"] = strict_order
+            news_config["enabled_providers"] = news_config.get("enabled_providers") or strict_order
+            news_config["enable_yfinance_fallback"] = True
+        else:
+            provider_priority = [
+                vendor for vendor in vendor_order if vendor in {"google_news_light", "marketaux", "newsdata"}
+            ]
+            if provider_priority:
+                news_config["provider_priority"] = provider_priority
+            news_config["enable_yfinance_fallback"] = "yfinance" in vendor_order
         context = NewsService(config=news_config).fetch_news(ticker, as_of_date=trade_date, window_days=window_days)
         holder.update(context)
         compact_context = build_news_context(
@@ -589,7 +595,9 @@ def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -
 
 
 def _related_news_items_from_context(news_context: dict[str, Any] | None, ticker: str) -> list[dict[str, Any]]:
-    articles = news_context.get("articles") if isinstance(news_context, dict) else []
+    if not isinstance(news_context, dict):
+        return []
+    articles = news_context.get("decision_company_news") or news_context.get("prompt_articles") or news_context.get("articles")
     if not isinstance(articles, list):
         return []
 
