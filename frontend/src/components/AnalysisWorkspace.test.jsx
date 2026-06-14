@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -50,6 +50,13 @@ function renderWorkspace(
 }
 
 function openConfigPanel() {
+  const configButton = screen.getByTitle('Configuration');
+  if (configButton.getAttribute('aria-pressed') !== 'true') {
+    fireEvent.click(configButton);
+  }
+}
+
+function clickConfigPanel() {
   fireEvent.click(screen.getByTitle('Configuration'));
 }
 
@@ -130,18 +137,23 @@ describe('AnalysisWorkspace history storage', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the config icon button and opens the config panel on click', () => {
+  it('auto-opens the config panel in the ready state', async () => {
     function StubForm() {
-      return <div>FORM CONTENT</div>;
+      return (
+        <>
+          <input aria-label="Ticker" />
+          <button type="button">Execute Analysis</button>
+        </>
+      );
     }
 
     renderWorkspace(StubForm);
 
     expect(screen.getByTitle('Configuration')).toBeTruthy();
-    openConfigPanel();
-
-    expect(screen.getByText(/configuration/i)).toBeTruthy();
-    expect(screen.getByText('FORM CONTENT')).toBeTruthy();
+    expect(await screen.findByText(/configuration/i)).toBeTruthy();
+    expect(screen.getByLabelText('Ticker')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /execute analysis/i })).toBeTruthy();
+    expect(screen.getByText('READY')).toBeTruthy();
   });
 
   it('renders the history icon button and opens the history panel on click', () => {
@@ -177,24 +189,22 @@ describe('AnalysisWorkspace history storage', () => {
     }
 
     renderWorkspace(EmptyForm);
-    openConfigPanel();
-    expect(screen.getByText(/configuration/i)).toBeTruthy();
+    expect(await screen.findByText(/configuration/i)).toBeTruthy();
 
-    openConfigPanel();
+    clickConfigPanel();
 
     await waitFor(() => {
       expect(screen.queryByText(/configuration/i)).toBeNull();
     });
   });
 
-  it('switches from config panel to history panel when history icon is clicked while config is open', () => {
+  it('switches from config panel to history panel when history icon is clicked while config is open', async () => {
     function EmptyForm() {
       return null;
     }
 
     renderWorkspace(EmptyForm);
-    openConfigPanel();
-    expect(screen.getByText(/configuration/i)).toBeTruthy();
+    expect(await screen.findByText(/configuration/i)).toBeTruthy();
 
     openHistoryPanel();
 
@@ -208,8 +218,7 @@ describe('AnalysisWorkspace history storage', () => {
     }
 
     renderWorkspace(EmptyForm);
-    openConfigPanel();
-    expect(screen.getByText(/configuration/i)).toBeTruthy();
+    expect(await screen.findByText(/configuration/i)).toBeTruthy();
 
     fireEvent.click(screen.getByLabelText(/close configuration panel/i));
 
@@ -218,7 +227,106 @@ describe('AnalysisWorkspace history storage', () => {
     });
   });
 
-  it('offsets the analysis content while a side panel is open', () => {
+  it('auto-hides the config panel when an analysis result is active', async () => {
+    function ResultForm({ onResult }) {
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            onResult({
+              request_id: 'request-active',
+              ticker: 'AAPL',
+              market: 'US',
+              trade_date: '2026-05-14',
+              decision: 'Buy',
+            })
+          }
+        >
+          Emit result
+        </button>
+      );
+    }
+
+    renderWorkspace(ResultForm, 'analysis-history-test', '/analysis', { resultPathBase: null });
+    fireEvent.click(screen.getByRole('button', { name: /emit result/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/configuration/i)).toBeNull();
+    });
+  });
+
+  it('keeps the config panel hidden when opening an item from history', async () => {
+    localStorage.setItem(
+      'analysis-history-test',
+      JSON.stringify([
+        {
+          request_id: 'request-history',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-14',
+          decision: 'Buy',
+          saved_at: new Date().toISOString(),
+        },
+      ])
+    );
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => notFoundResponse());
+
+    function EmptyForm() {
+      return null;
+    }
+
+    renderWorkspace(EmptyForm);
+    openHistoryPanel();
+    fireEvent.click(screen.getByText('AAPL'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe('/analysis/request-history');
+    });
+    expect(screen.queryByText(/configuration/i)).toBeNull();
+  });
+
+  it('auto-opens the config panel again after clearing back to ready', async () => {
+    let clearResult;
+
+    function ResultForm({ onResult }) {
+      React.useEffect(() => {
+        clearResult = () => onResult(null);
+      }, [onResult]);
+
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            onResult({
+              request_id: 'request-reset',
+              ticker: 'AAPL',
+              market: 'US',
+              trade_date: '2026-05-14',
+              decision: 'Buy',
+            })
+          }
+        >
+          Emit result
+        </button>
+      );
+    }
+
+    renderWorkspace(ResultForm, 'analysis-history-test', '/analysis', { resultPathBase: null });
+    fireEvent.click(screen.getByRole('button', { name: /emit result/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/configuration/i)).toBeNull();
+    });
+
+    act(() => {
+      clearResult();
+    });
+
+    expect(screen.getByText('READY')).toBeTruthy();
+    expect(await screen.findByText(/configuration/i)).toBeTruthy();
+  });
+
+  it('offsets the analysis content while a side panel is open', async () => {
     function EmptyForm() {
       return null;
     }
@@ -226,11 +334,9 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(EmptyForm);
     const main = screen.getByTestId('analysis-main');
     expect(main.className).toContain('ml-10');
-    expect(main.className).not.toContain('md:ml-[20.5rem]');
-
-    openConfigPanel();
-
-    expect(main.className).toContain('md:ml-[20.5rem]');
+    await waitFor(() => {
+      expect(main.className).toContain('md:ml-[20.5rem]');
+    });
   });
 
   it('stores only version 2 summary fields for debug responses', () => {

@@ -140,6 +140,11 @@ li {
   text-align: justify;
 }
 
+.summary-paragraph {
+  line-height: 1.6;
+  margin: 0 0 3mm;
+}
+
 .investment-thesis p {
   margin-bottom: 2.5mm;
   white-space: normal;
@@ -151,6 +156,15 @@ li {
 
 .profile-table th {
   width: 34%;
+}
+
+.shares-ownership .profile-table th {
+  width: 50%;
+  text-align: left;
+}
+
+.shares-ownership .profile-table td {
+  text-align: right;
 }
 
 .news-article {
@@ -258,7 +272,7 @@ footer {
 
 .ownership-chart {
   display: grid;
-  grid-template-columns: 42mm 1fr;
+  grid-template-columns: 46mm 1fr;
   gap: 6mm;
   align-items: center;
   margin: 2mm 0 7mm;
@@ -269,42 +283,32 @@ footer {
 .ownership-pie-wrap {
   display: flex;
   justify-content: center;
+  background: transparent;
 }
 
 .ownership-pie {
-  width: 38mm;
-  height: 38mm;
-}
-
-.ownership-pie-bg {
-  fill: none;
-  stroke: #e5e7eb;
-  stroke-width: 8;
-}
-
-.ownership-pie-segment {
-  fill: none;
-  stroke-width: 8;
-  transform: rotate(-90deg);
-  transform-origin: center;
-}
-
-.ownership-pie-label {
-  fill: #111;
-  font-size: 6px;
-  font-weight: 700;
+  width: 44mm;
+  height: 44mm;
+  display: block;
+  background: transparent;
+  overflow: visible;
 }
 
 .ownership-legend {
   display: grid;
   gap: 2mm;
+  align-content: center;
 }
 
 .ownership-legend-row {
   display: grid;
-  grid-template-columns: 4mm 1fr auto;
+  grid-template-columns: 4mm 1fr 22mm;
   gap: 2mm;
   align-items: center;
+}
+
+.ownership-legend-row strong {
+  text-align: right;
 }
 
 .ownership-swatch {

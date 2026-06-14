@@ -28,6 +28,26 @@ function displayDash(value) {
   return text === 'N/A' ? '-' : text;
 }
 
+function filenameDate(value) {
+  const match = String(value || '').match(/\d{4}-\d{2}-\d{2}/);
+  return match?.[0] || '';
+}
+
+function filenameSafePart(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^A-Za-z0-9_.-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function reportFilenameBase(result) {
+  const ticker = filenameSafePart(result.normalized_ticker || result.ticker || result.input_ticker);
+  const analysisDate = filenameDate(
+    result.trade_date || result.analysis_created_at || result.created_at || result.saved_at
+  );
+  return ticker && analysisDate ? `${ticker}_${analysisDate}` : '';
+}
+
 function escapeHtml(value) {
   return display(value)
     .replace(/&/g, '&amp;')
@@ -45,6 +65,31 @@ function textOrNull(value) {
     .join('\n')
     .trim();
   return text || null;
+}
+
+function textParagraphs(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (textOrNull(item) || '').replace(/\r\n/g, '\n').replace(/\n+/g, ' ').trim())
+      .filter(Boolean);
+  }
+
+  const normalized = (textOrNull(value) || '').replace(/\r\n/g, '\n').trim();
+  if (!normalized) return [];
+
+  let paragraphs = normalized
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.replace(/\n+/g, ' ').trim())
+    .filter(Boolean);
+
+  if (paragraphs.length <= 1 && normalized.includes('\n')) {
+    paragraphs = normalized
+      .split(/\n+/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
+  }
+
+  return paragraphs;
 }
 
 function arrayOfText(value) {
@@ -199,10 +244,6 @@ function profilePublicPct(profile) {
   return firstProfileValue(profile, ['public_pct', 'public_percent', 'publicOwnership']);
 }
 
-function profileShortRatio(profile) {
-  return firstProfileValue(profile, ['short_ratio', 'shortRatio']);
-}
-
 function ownershipData(profile) {
   const insider = ownershipRatio(profileInsiderPct(profile));
   const institution = ownershipRatio(profileInstitutionPct(profile));
@@ -223,15 +264,6 @@ function formatOwnershipPercent(value) {
   })}%`;
 }
 
-function formatOwnershipRatio(value) {
-  const number = numberOrNull(value);
-  if (number === null) return '-';
-  return number.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 function buildSharesOwnershipRows(profile) {
   if (!profile?.available) return [];
 
@@ -240,40 +272,85 @@ function buildSharesOwnershipRows(profile) {
     ['Shares Outstanding', profileSharesOut(profile), profileNumber],
     ['Insider Ownership', profileInsiderPct(profile), formatOwnershipPercent],
     ['Institutional Ownership', profileInstitutionPct(profile), formatOwnershipPercent],
-    ['Public / Other Ownership', ownership.public, formatOwnershipPercent],
-    ['Short Ratio', profileShortRatio(profile), formatOwnershipRatio],
+    ['Public/Other Ownership', ownership.public, formatOwnershipPercent],
   ];
 
-  return definitions
-    .filter(([, value]) => hasValue(value))
-    .map(([label, value, formatter]) => profileRow(label, formatter(value)));
+  return definitions.map(([label, value, formatter]) => profileRow(label, formatter(value)));
 }
 
 const OWNERSHIP_SEGMENTS = [
-  { key: 'insider', label: 'Insider', color: '#f97316' },
-  { key: 'institution', label: 'Institution', color: '#2563eb' },
-  { key: 'public', label: 'Public / Other', color: '#16a34a' },
+  { key: 'insider', label: 'Insider Ownership', color: '#f97316' },
+  { key: 'institution', label: 'Institutional Ownership', color: '#2563eb' },
+  { key: 'public', label: 'Public/Other Ownership', color: '#16a34a' },
 ];
+
+function svgPoint(cx, cy, radius, degrees) {
+  const radians = (degrees * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians),
+  };
+}
+
+function svgNumber(value) {
+  return Number(value.toFixed(3));
+}
+
+function ownershipSlicePath(startDegrees, endDegrees) {
+  const cx = 100;
+  const cy = 100;
+  const outerRadius = 88;
+  const innerRadius = 48;
+  const span = endDegrees - startDegrees;
+
+  if (span >= 359.999) {
+    return [
+      `M ${cx} ${cy - outerRadius}`,
+      `A ${outerRadius} ${outerRadius} 0 1 1 ${cx} ${cy + outerRadius}`,
+      `A ${outerRadius} ${outerRadius} 0 1 1 ${cx} ${cy - outerRadius}`,
+      `M ${cx} ${cy - innerRadius}`,
+      `A ${innerRadius} ${innerRadius} 0 1 0 ${cx} ${cy + innerRadius}`,
+      `A ${innerRadius} ${innerRadius} 0 1 0 ${cx} ${cy - innerRadius}`,
+      'Z',
+    ].join(' ');
+  }
+
+  const outerStart = svgPoint(cx, cy, outerRadius, startDegrees);
+  const outerEnd = svgPoint(cx, cy, outerRadius, endDegrees);
+  const innerEnd = svgPoint(cx, cy, innerRadius, endDegrees);
+  const innerStart = svgPoint(cx, cy, innerRadius, startDegrees);
+  const largeArc = span > 180 ? 1 : 0;
+
+  return [
+    `M ${svgNumber(outerStart.x)} ${svgNumber(outerStart.y)}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${svgNumber(outerEnd.x)} ${svgNumber(outerEnd.y)}`,
+    `L ${svgNumber(innerEnd.x)} ${svgNumber(innerEnd.y)}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${svgNumber(innerStart.x)} ${svgNumber(innerStart.y)}`,
+    'Z',
+  ].join(' ');
+}
 
 function buildOwnershipSegments(profile) {
   const ownership = ownershipData(profile);
   const rawSegments = OWNERSHIP_SEGMENTS.map((segment) => ({
     ...segment,
     value: ownership[segment.key],
-  })).filter((segment) => segment.value !== null && segment.value > 0);
+  }));
+  if (rawSegments.some((segment) => segment.value === null)) return [];
+
   const total = rawSegments.reduce((sum, segment) => sum + segment.value, 0);
   if (!total) return [];
 
-  let offset = 0;
+  let startDegrees = -90;
   return rawSegments.map((segment) => {
-    const share = (segment.value / total) * 100;
+    const span = (segment.value / total) * 360;
+    const endDegrees = startDegrees + span;
     const item = {
       ...segment,
       display: formatOwnershipPercent(segment.value),
-      dasharray: `${share.toFixed(4)} ${(100 - share).toFixed(4)}`,
-      dashoffset: (-offset).toFixed(4),
+      path: span > 0 ? ownershipSlicePath(startDegrees, endDegrees) : '',
     };
-    offset += share;
+    startDegrees = endDegrees;
     return item;
   });
 }
@@ -661,9 +738,14 @@ export function buildMockReportContext(result = {}) {
   const dataQuality = result.data_quality || {};
   const validationWarnings = arrayOfText(result.validation_warnings);
   const dataQualityWarnings = arrayOfText(dataQuality.warnings);
+  const executiveSummaryParagraphs = textParagraphs(result.executive_summary);
+  const executiveSummary = executiveSummaryParagraphs.length
+    ? executiveSummaryParagraphs.join('\n\n')
+    : 'N/A';
 
   return {
     title: 'TradingAgent Mock Analysis Report',
+    pdf_filename: reportFilenameBase(result),
     request_id: display(result.request_id || result.id),
     ticker: display(result.normalized_ticker || result.ticker),
     market: display(result.market),
@@ -689,7 +771,10 @@ export function buildMockReportContext(result = {}) {
     trade_plan_valid: tradePlanValid,
     has_existing_position: Boolean(result.has_existing_position),
     show_trade_plan: showTradePlan,
-    executive_summary: textOrNull(result.executive_summary) || 'N/A',
+    executive_summary: executiveSummary,
+    executive_summary_paragraphs: executiveSummaryParagraphs.length
+      ? executiveSummaryParagraphs
+      : ['N/A'],
     key_reasons_paragraph: buildKeyReasonsParagraph(result),
     decision_rows: [
       row('Display Signal', result.display_signal || decision),
@@ -793,22 +878,9 @@ function renderMetricGrid(rows) {
 
 function renderTextParagraphs(text, className = '') {
   const classAttribute = className ? ` class="${className}"` : '';
-  const normalized = String(text || '')
-    .replace(/\r\n/g, '\n')
-    .trim();
-  let paragraphs = normalized
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.replace(/\n+/g, ' ').trim())
-    .filter(Boolean);
-
-  if (paragraphs.length <= 1 && normalized.includes('\n')) {
-    paragraphs = normalized
-      .split(/\n+/)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean);
-  }
-
-  return paragraphs.map((paragraph) => `<p${classAttribute}>${escapeHtml(paragraph)}</p>`).join('');
+  return textParagraphs(text)
+    .map((paragraph) => `<p${classAttribute}>${escapeHtml(paragraph)}</p>`)
+    .join('');
 }
 
 function renderAnalystSections(sections) {
@@ -1022,24 +1094,25 @@ function renderOwnershipPieChart(profile) {
 
   return `<div class="ownership-chart">
     <div class="ownership-pie-wrap">
-      <svg class="ownership-pie" viewBox="0 0 42 42" role="img" aria-label="Ownership composition pie chart">
-        <circle class="ownership-pie-bg" cx="21" cy="21" r="15.9155"></circle>
+      <svg class="ownership-pie" viewBox="0 0 200 200" role="img" aria-label="Ownership composition donut chart">
+        <circle cx="100" cy="100" r="88" fill="#f3f4f6"></circle>
+        <circle cx="100" cy="100" r="48" fill="#ffffff"></circle>
         ${segments
+          .filter((segment) => segment.path)
           .map(
-            (segment) => `<circle
+            (segment) => `<path
               class="ownership-pie-segment"
-              cx="21"
-              cy="21"
-              r="15.9155"
-              stroke="${segment.color}"
-              stroke-dasharray="${segment.dasharray}"
-              stroke-dashoffset="${segment.dashoffset}"
+              d="${segment.path}"
+              fill="${segment.color}"
+              stroke="#ffffff"
+              stroke-width="1"
+              fill-rule="evenodd"
             >
               <title>${escapeHtml(segment.label)} ${escapeHtml(segment.display)}</title>
-            </circle>`
+            </path>`
           )
           .join('')}
-        <text x="21" y="22.5" text-anchor="middle" class="ownership-pie-label">100%</text>
+        <circle cx="100" cy="100" r="48" fill="#ffffff"></circle>
       </svg>
     </div>
     <div class="ownership-legend">
@@ -1063,7 +1136,7 @@ function renderSharesOwnership(profile, rows) {
   return `<section class="section shares-ownership">
     <h2>SHARES &amp; OWNERSHIP</h2>
     ${rows.length ? `<table class="profile-table"><tbody>${renderRows(rows)}</tbody></table>` : ''}
-    ${chart || '<p class="muted">Ownership data is not available.</p>'}
+    ${chart || '<p class="muted">Ownership chart is not available.</p>'}
   </section>`;
 }
 
@@ -1168,33 +1241,12 @@ function renderRiskDataQuality(report) {
     </section>`;
 }
 
-function renderRelatedNews(relatedNews, items) {
-  if (!items.length) return '';
-  return `<section class="section">
-    <h2>Related News</h2>
-    ${relatedNews.summary ? `<p>${escapeHtml(relatedNews.summary)}</p>` : ''}
-    <div class="news-list">
-      ${items
-        .map(
-          (item) => `<article class="news-item">
-            <h3>${escapeHtml(item.title)}</h3>
-            <p class="muted">Publisher: ${escapeHtml(item.publisher)} | Published: ${escapeHtml(item.published_at)} | Source: ${escapeHtml(item.source)} | Event: ${escapeHtml(item.event_type)}</p>
-            ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
-            ${item.relevance_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.relevance_reason)}</p>` : ''}
-            ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
-          </article>`
-        )
-        .join('')}
-    </div>
-  </section>`;
-}
-
 export function renderMockReportHtml(report) {
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>${escapeHtml(report.title)} - ${escapeHtml(report.ticker)}</title>
+    <title>${escapeHtml(report.pdf_filename || `${report.title} - ${report.ticker}`)}</title>
     <style>
       * { box-sizing: border-box; }
       body {
@@ -1223,6 +1275,7 @@ export function renderMockReportHtml(report) {
       h2, h3 { break-after: avoid; page-break-after: avoid; }
       p { margin: 0 0 12px; }
       .justified-text { text-align: justify; }
+      .summary-paragraph { line-height: 1.65; margin: 0 0 10px; }
       .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 18px; }
       .meta-grid div { border: 1px solid #e5e7eb; padding: 10px; min-height: 58px; }
       .meta-grid span, .metric-label {
@@ -1236,7 +1289,7 @@ export function renderMockReportHtml(report) {
       table { width: 100%; border-collapse: collapse; margin: 8px 0 18px; }
       th, td { border: 1px solid #d1d5db; padding: 9px 10px; vertical-align: top; }
       th { width: 32%; background: #f3f4f6; text-align: left; }
-      table, tr, .metric-card, .news-item { break-inside: avoid; page-break-inside: avoid; }
+      table, tr, .metric-card { break-inside: avoid; page-break-inside: avoid; }
       .profile-table { table-layout: fixed; }
       .profile-table th { width: 34%; }
       .financial-highlights-table { font-size: 12px; table-layout: fixed; }
@@ -1252,14 +1305,14 @@ export function renderMockReportHtml(report) {
       .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0 18px; }
       .metric-card { border: 1px solid #d1d5db; padding: 12px; min-height: 78px; break-inside: avoid; }
       .metric-value { font-weight: 700; color: #111827; word-break: break-word; }
-      .ownership-chart { display: grid; grid-template-columns: 190px 1fr; gap: 18px; align-items: center; margin: 4px 0 18px; }
-      .ownership-pie-wrap { display: flex; justify-content: center; }
-      .ownership-pie { width: 160px; height: 160px; }
-      .ownership-pie-bg { fill: none; stroke: #e5e7eb; stroke-width: 8; }
-      .ownership-pie-segment { fill: none; stroke-width: 8; transform: rotate(-90deg); transform-origin: center; }
-      .ownership-pie-label { fill: #111827; font-size: 6px; font-weight: 700; }
-      .ownership-legend { display: grid; gap: 8px; }
-      .ownership-legend-row { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; }
+      .shares-ownership .profile-table th { width: 50%; text-align: left; }
+      .shares-ownership .profile-table td { text-align: right; }
+      .ownership-chart { display: grid; grid-template-columns: 190px 1fr; gap: 22px; align-items: center; margin: 4px 0 18px; }
+      .ownership-pie-wrap { display: flex; justify-content: center; background: transparent; }
+      .ownership-pie { width: 180px; height: 180px; display: block; background: transparent; overflow: visible; }
+      .ownership-legend { display: grid; gap: 9px; align-content: center; }
+      .ownership-legend-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) 76px; gap: 8px; align-items: center; }
+      .ownership-legend-row strong { text-align: right; }
       .ownership-swatch { width: 12px; height: 12px; border: 1px solid #d1d5db; }
       .warning { border: 1px solid #f59e0b; background: #fffbeb; padding: 10px 12px; margin: 12px 0; }
       .muted { color: #6b7280; }
@@ -1269,10 +1322,6 @@ export function renderMockReportHtml(report) {
       .section, .analyst-note { break-inside: avoid; }
       .analyst-note p { white-space: pre-wrap; }
       .investment-thesis p { white-space: normal; margin-bottom: 9px; }
-      .news-list { display: grid; gap: 12px; }
-      .news-item { border: 1px solid #d1d5db; padding: 12px; break-inside: avoid; }
-      .news-item h3 { margin: 0 0 6px; font-size: 13px; }
-      .news-item p { margin: 4px 0; }
       .disclaimer {
         margin-top: 28px;
         padding: 16px;
@@ -1329,7 +1378,7 @@ export function renderMockReportHtml(report) {
 
       <section class="section">
         <h2>Executive Summary</h2>
-        <p class="justified-text">${escapeHtml(report.executive_summary)}</p>
+        ${renderTextParagraphs(report.executive_summary_paragraphs, 'justified-text summary-paragraph')}
       </section>
 
       ${
@@ -1428,8 +1477,6 @@ export function renderMockReportHtml(report) {
       ${renderCatalystTracker(report)}
 
       ${renderAnalystConsensus(report.analyst_consensus_rows)}
-
-      ${renderRelatedNews(report.related_news, report.related_news_items)}
 
       ${renderRiskDataQuality(report)}
 

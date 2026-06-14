@@ -85,6 +85,26 @@ function TrendingUpIcon() {
   );
 }
 
+function LandmarkIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4 flex-shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M3 22h18" />
+      <path d="M6 18v-7" />
+      <path d="M10 18v-7" />
+      <path d="M14 18v-7" />
+      <path d="M18 18v-7" />
+      <path d="m12 2 8 5H4Z" />
+    </svg>
+  );
+}
+
 const AI_RESEARCH_MATCH_PREFIXES = [
   AI_RESEARCH_PATH,
   encodeURI(AI_RESEARCH_PATH),
@@ -106,6 +126,7 @@ const NAV_ITEMS = [
   },
   { label: 'News', path: '/news', matchPrefixes: ['/news'], Icon: NewspaperIcon },
   { label: 'Market', path: '/market', matchPrefixes: ['/market'], Icon: TrendingUpIcon },
+  { label: 'ECON', path: '/economic', matchPrefixes: ['/economic'], Icon: LandmarkIcon },
 ];
 
 function formatDate(value) {
