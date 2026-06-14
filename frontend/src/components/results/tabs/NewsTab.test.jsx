@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import React from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import NewsTab from './NewsTab';
@@ -107,6 +107,45 @@ function makeNewsResultWithMarketContext() {
   return result;
 }
 
+function makeStrictNewsResult({ includeExcluded = true } = {}) {
+  return {
+    ticker: 'BBCA.JK',
+    news_context: {
+      decision_company_news: [
+        makeArticle('Decision Company', 1, {
+          title: 'Bank Central Asia Reports Profit Growth',
+          provider: 'marketaux',
+          market_context_only: false,
+          summary: 'Bank Central Asia reports resilient earnings growth.',
+        }),
+      ],
+      market_context_news: [
+        makeArticle('Market Context', 1, {
+          title: 'Asian Markets Rise Before Fed Decision',
+          provider: 'rss_context',
+          market_context_only: true,
+          summary: 'Regional markets rose before the Fed decision.',
+        }),
+      ],
+      debug: includeExcluded
+        ? {
+            strict_news_filter: {
+              excluded_news: [
+                {
+                  title: 'Weak RSS Item Without Company Match',
+                  provider: 'rss_context',
+                  reason: 'rss_without_company_match',
+                  relevance_score: 45,
+                },
+              ],
+            },
+          }
+        : {},
+    },
+    analyst_consensus: {},
+  };
+}
+
 describe('NewsTab', () => {
   afterEach(() => cleanup());
 
@@ -182,6 +221,29 @@ describe('NewsTab', () => {
 
     expect(screen.getByText('Asian Markets Rally on US Inflation Data')).toBeInTheDocument();
     expect(screen.getByText('Jakarta Composite Tracks Regional Risk Appetite')).toBeInTheDocument();
+  });
+
+  it('renders strict news split in compact sections', () => {
+    render(<NewsTab result={makeStrictNewsResult()} />);
+
+    const decisionSection = screen.getByText('Company News Used for Decision').closest('section');
+    const contextSection = screen.getByText('Market Context News').closest('section');
+
+    expect(decisionSection).toBeTruthy();
+    expect(contextSection).toBeTruthy();
+    expect(within(decisionSection).getByText('Bank Central Asia Reports Profit Growth')).toBeInTheDocument();
+    expect(within(decisionSection).queryByText('Asian Markets Rise Before Fed Decision')).not.toBeInTheDocument();
+    expect(within(contextSection).getByText('Asian Markets Rise Before Fed Decision')).toBeInTheDocument();
+    expect(screen.getByText('Excluded News Debug')).toBeInTheDocument();
+    expect(screen.getByText('Weak RSS Item Without Company Match')).toBeInTheDocument();
+  });
+
+  it('hides strict excluded news when debug rows are absent', () => {
+    render(<NewsTab result={makeStrictNewsResult({ includeExcluded: false })} />);
+
+    expect(screen.getByText('Company News Used for Decision')).toBeInTheDocument();
+    expect(screen.getByText('Market Context News')).toBeInTheDocument();
+    expect(screen.queryByText('Excluded News Debug')).not.toBeInTheDocument();
   });
 
   it('falls back to related news only when news impact full list is missing', () => {

@@ -5,8 +5,20 @@ from typing import Any
 
 from tradingagents.dataflows.news_relevance import is_relevant_news
 
-NEWS_CONTEXT_SOURCES = ("yfinance", "google_news_light", "newsdata", "marketaux")
-SOURCE_PRIORITY = {"yfinance": 4, "google_news_light": 3, "marketaux": 2, "newsdata": 1}
+NEWS_CONTEXT_SOURCES = (
+    "google_news_light",
+    "marketaux",
+    "rss_context",
+    "newsdata",
+    "yfinance",
+)
+SOURCE_PRIORITY = {
+    "google_news_light": 5,
+    "marketaux": 4,
+    "newsdata": 3,
+    "yfinance": 2,
+    "rss_context": 1,
+}
 
 
 def build_news_context(
@@ -29,8 +41,8 @@ def build_news_context(
         for article in (_normalize_article(item) for item in articles)
         if article
         and (
-            article.get("market_context_only")
-            or is_relevant_news(article, symbol, str(company_name) if company_name else None, aliases)
+            not article.get("market_context_only")
+            and is_relevant_news(article, symbol, str(company_name) if company_name else None, aliases)
         )
     ]
     ranked = sorted(relevant, key=lambda article: _rank_score(article, symbol), reverse=True)
@@ -52,10 +64,13 @@ def build_news_context(
 
 
 def _candidate_articles(result: dict[str, Any]) -> list[Any]:
+    decision_articles = result.get("decision_company_news")
     prompt_articles = result.get("prompt_articles")
     articles = result.get("articles")
+    if isinstance(decision_articles, list) and decision_articles:
+        return decision_articles
     if isinstance(prompt_articles, list) and prompt_articles:
-        return [*prompt_articles, *([item for item in articles if item not in prompt_articles] if isinstance(articles, list) else [])]
+        return prompt_articles
     return articles if isinstance(articles, list) else []
 
 

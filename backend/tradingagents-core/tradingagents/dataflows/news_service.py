@@ -13,19 +13,22 @@ from .config import get_config
 from .errors import ErrorCode
 from .google_news_light import GoogleNewsLightProvider
 from .marketaux_news import MarketAuxProvider
+from .news_decision_filter import split_ai_analysis_news
 from .news_deduplication import deduplicate_news_articles
 from .news_models import NewsEntity, NormalizedNewsArticle, article_to_dict
 from .news_relevance import is_relevant_news
 from .news_scoring import score_news_article
 from .news_ticker_aliases import resolve_news_ticker
 from .newsdata_news import NewsDataProvider
+from .rss_news import RSSContextProvider
 from .stockstats_utils import yf_retry
 from .vendor_budget import get_budget
 from .vendor_router import get_attempt_recorder
 from .yfinance_news import _extract_article_data
 
 logger = logging.getLogger(__name__)
-STRUCTURED_NEWS_PROVIDERS = {"google_news_light", "marketaux", "newsdata"}
+STRUCTURED_NEWS_PROVIDERS = {"google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"}
+DEFAULT_NEWS_PROVIDER_ORDER = ["google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"]
 _MEMORY_CACHE = TTLCache(maxsize=512, ttl_seconds=6 * 60 * 60)
 _PERSISTENT_CACHE = None
 _PERSISTENT_CACHE_CONFIG = None
@@ -68,6 +71,16 @@ class NewsService:
             provider_filter,
             tuple(_string_list(self.config.get("provider_priority"))),
             tuple(_string_list(self.config.get("enabled_providers"))),
+            bool(self.config.get("strict_ai_analysis_mode", True)),
+            float(self.config.get("decision_min_relevance_score", 70)),
+            float(self.config.get("rss_decision_min_relevance_score", 80)),
+            bool(self.config.get("rss_enabled", True)),
+            int(self.config.get("rss_max_feeds", 10)),
+            int(self.config.get("rss_max_items_per_feed", 20)),
+            bool(self.config.get("rss_include_trial_feeds", False)),
+            bool(self.config.get("rss_google_news_fallback_enabled", True)),
+            str(self.config.get("rss_enabled_feed_ids") or ""),
+            str(self.config.get("rss_disabled_feed_ids") or ""),
         )
         cache = _active_cache(self.config)
 
@@ -78,12 +91,8 @@ class NewsService:
                 result["cache"] = {"hit": True}
                 return result
 
-        enabled_providers = _string_list(
-            self.config.get("enabled_providers", ["google_news_light", "marketaux", "newsdata"])
-        )
-        provider_priority = _string_list(
-            self.config.get("provider_priority", ["google_news_light", "marketaux", "newsdata"])
-        )
+        enabled_providers = _string_list(self.config.get("enabled_providers", DEFAULT_NEWS_PROVIDER_ORDER))
+        provider_priority = _string_list(self.config.get("provider_priority", DEFAULT_NEWS_PROVIDER_ORDER))
         if provider_filter:
             provider_priority = [provider_filter]
             if provider_filter not in enabled_providers:
@@ -96,6 +105,8 @@ class NewsService:
         max_per_provider = max(1, int(self.config.get("max_articles_per_provider", 10)))
         required_primary_count = max(1, int(self.config.get("secondary_fetch_threshold", 5)))
         min_relevance = float(self.config.get("min_relevance_score", 50))
+        force_all = bool(self.config.get("force_all_providers", True))
+        strict_mode = bool(self.config.get("strict_ai_analysis_mode", True))
 
         for index, provider_name in enumerate(provider_priority):
             if provider_name not in STRUCTURED_NEWS_PROVIDERS:
@@ -105,8 +116,34 @@ class NewsService:
                 provider_status[provider_name] = "disabled"
                 provider_health[provider_name] = _provider_health(False, "disabled")
                 continue
+            if provider_name == "yfinance":
+                if not self.config.get("enable_yfinance_fallback", True):
+                    provider_status[provider_name] = "disabled"
+                    provider_health[provider_name] = _provider_health(False, "disabled")
+                    continue
+                if not self._consume_budget("yfinance"):
+                    provider_status[provider_name] = "budget_exceeded"
+                    provider_health[provider_name] = _provider_health(True, "budget_exceeded")
+                    debug_attempts[provider_name] = [{"strategy": "yfinance_get_news", "status": "budget_exceeded"}]
+                    self._record_attempt("yfinance", "budget_exceeded")
+                    continue
+                yfinance_articles = _fetch_yfinance_fallback(profile, limit=max_per_provider)
+                articles.extend(yfinance_articles)
+                provider_status[provider_name] = "success" if yfinance_articles else "unavailable"
+                provider_health[provider_name] = _provider_health(True, provider_status[provider_name])
+                debug_attempts[provider_name] = [
+                    {
+                        "strategy": "yfinance_get_news",
+                        "status": provider_status[provider_name],
+                        "items_used": len(yfinance_articles),
+                    }
+                ]
+                self._record_attempt(provider_name, provider_status[provider_name])
+                continue
             if (
-                index > 0
+                not force_all
+                and not strict_mode
+                and index > 0
                 and not self.config.get("fetch_secondary_always", False)
                 and len([item for item in articles if item.relevance_score >= min_relevance]) >= required_primary_count
             ):
@@ -119,13 +156,21 @@ class NewsService:
                 provider_health[provider_name] = _provider_health(bool(provider.api_key), "budget_exceeded")
                 self._record_attempt(provider_name, "budget_exceeded")
                 continue
-            fetch_result = provider.fetch_news(
-                profile,
-                as_of_date=as_of_date,
-                window_days=window_days,
-                limit=max_per_provider,
-                include_raw=include_raw,
-            )
+            try:
+                fetch_result = provider.fetch_news(
+                    profile,
+                    as_of_date=as_of_date,
+                    window_days=window_days,
+                    limit=max_per_provider,
+                    include_raw=include_raw,
+                )
+            except Exception as exc:
+                logger.info("news provider failed provider=%s ticker=%s error=%s", provider_name, profile["ticker"], exc)
+                provider_status[provider_name] = "unavailable"
+                provider_health[provider_name] = _provider_health(bool(provider.api_key), "unavailable")
+                debug_attempts[provider_name] = [{"strategy": provider_name, "status": "unavailable", "error": str(exc)[:300]}]
+                self._record_attempt(provider_name, "unavailable")
+                continue
             provider_status[provider_name] = fetch_result.status
             provider_health[provider_name] = _provider_health(bool(provider.api_key), fetch_result.status)
             debug_attempts[provider_name] = fetch_result.attempts
@@ -141,50 +186,82 @@ class NewsService:
                 )
 
         if (
-            not provider_filter
+            not strict_mode
+            and "yfinance" not in provider_priority
+            and not provider_filter
             and self.config.get("enable_yfinance_fallback", True)
             and len([item for item in articles if item.relevance_score >= min_relevance]) < required_primary_count
         ):
-            yfinance_articles = (
-                _fetch_yfinance_fallback(profile, limit=max_per_provider) if self._consume_budget("yfinance") else []
-            )
-            articles.extend(yfinance_articles)
-            provider_status["yfinance"] = "success" if yfinance_articles else "unavailable"
+            if self._consume_budget("yfinance"):
+                yfinance_articles = _fetch_yfinance_fallback(profile, limit=max_per_provider)
+                articles.extend(yfinance_articles)
+                provider_status["yfinance"] = "success" if yfinance_articles else "unavailable"
+            else:
+                yfinance_articles = []
+                provider_status["yfinance"] = "budget_exceeded"
             provider_health["yfinance"] = _provider_health(True, provider_status["yfinance"])
+            debug_attempts["yfinance"] = [
+                {
+                    "strategy": "yfinance_get_news",
+                    "status": provider_status["yfinance"],
+                    "items_used": len(yfinance_articles),
+                }
+            ]
             self._record_attempt("yfinance", provider_status["yfinance"])
 
         articles = _filter_articles_by_window(articles, as_of_date=as_of_date, window_days=window_days)
         deduped = deduplicate_news_articles(articles)
         dedup_removed_count = max(0, len(articles) - len(deduped))
-        relevant_articles = [
-            article
-            for article in deduped
-            if article.market_context_only
-            or is_relevant_news(
-                article_to_dict(article),
-                profile["ticker"],
-                profile.get("company_name"),
-                profile.get("aliases"),
-            )
-        ]
-        ui_articles = [
-            article
-            for article in relevant_articles
-            if (article.relevance_score >= min_relevance or article.market_context_only)
-            and (article.bucket or "full_news") != "discard"
-        ][:ui_limit]
-        prompt_min = float(self.config.get("prompt_min_relevance_score", 65))
         prompt_limit = max(1, int(self.config.get("max_articles_for_prompt", 5)))
-        prompt_articles = [
-            article
-            for article in ui_articles
-            if article.relevance_score >= prompt_min
-            and not article.market_context_only
-            and (article.bucket or "full_news") in {"full_news", "macro_context"}
-        ][:prompt_limit]
+        decision_min = float(self.config.get("decision_min_relevance_score", 70))
+        rss_decision_min = float(self.config.get("rss_decision_min_relevance_score", 80))
+        if strict_mode:
+            split_news = split_ai_analysis_news(
+                deduped,
+                profile,
+                decision_min_score=decision_min,
+                rss_decision_min_score=rss_decision_min,
+                prompt_limit=prompt_limit,
+            )
+            decision_company_news = split_news["decision_company_news"]
+            market_context_news = split_news["market_context_news"]
+            excluded_news = split_news["excluded_news"]
+            ui_articles = [*decision_company_news, *market_context_news][:ui_limit]
+            prompt_articles = decision_company_news[:prompt_limit]
+        else:
+            relevant_articles = [
+                article
+                for article in deduped
+                if article.market_context_only
+                or is_relevant_news(
+                    article_to_dict(article),
+                    profile["ticker"],
+                    profile.get("company_name"),
+                    profile.get("aliases"),
+                )
+            ]
+            ui_articles = [
+                article
+                for article in relevant_articles
+                if (article.relevance_score >= min_relevance or article.market_context_only)
+                and (article.bucket or "full_news") != "discard"
+            ][:ui_limit]
+            prompt_min = float(self.config.get("prompt_min_relevance_score", 65))
+            prompt_articles = [
+                article
+                for article in ui_articles
+                if article.relevance_score >= prompt_min
+                and not article.market_context_only
+                and (article.bucket or "full_news") in {"full_news", "macro_context"}
+            ][:prompt_limit]
+            decision_company_news = prompt_articles
+            market_context_news = [article for article in ui_articles if article.market_context_only]
+            excluded_news = []
         serialized_articles = [article_to_dict(article) for article in ui_articles]
         serialized_prompt_articles = [article_to_dict(article) for article in prompt_articles]
-        providers_used = list(dict.fromkeys(article.provider for article in ui_articles))
+        serialized_decision_news = [article_to_dict(article) for article in decision_company_news]
+        serialized_context_news = [article_to_dict(article) for article in market_context_news]
+        providers_used = list(provider_status.keys())
         latest_article_date = max((str(item.get("published_at")) for item in serialized_articles if item.get("published_at")), default=None)
         result = {
             "enabled": bool(enabled_providers or self.config.get("enable_yfinance_fallback", True)),
@@ -201,7 +278,18 @@ class NewsService:
             "duplicate_removed_count": dedup_removed_count,
             "average_sentiment": _average_sentiment(ui_articles),
             "articles": serialized_articles,
+            "decision_company_news": serialized_decision_news,
+            "market_context_news": serialized_context_news,
+            "excluded_news_count": len(excluded_news),
             "prompt_articles": serialized_prompt_articles,
+            "strict_news_filter": {
+                "enabled": strict_mode,
+                "decision_min_relevance_score": decision_min,
+                "rss_decision_min_relevance_score": rss_decision_min,
+                "decision_company_news_count": len(decision_company_news),
+                "market_context_news_count": len(market_context_news),
+                "excluded_news_count": len(excluded_news),
+            },
             "empty_reason": None if ui_articles else "No relevant company-specific news was found.",
             "cache": {"hit": False},
         }
@@ -214,6 +302,19 @@ class NewsService:
                     "articles_after": len(deduped),
                     "articles_for_ui": len(ui_articles),
                     "articles_for_prompt": len(prompt_articles),
+                },
+                "strict_news_filter": {
+                    "excluded_news": [
+                        {
+                            "reason": str(item["reason"]),
+                            "provider": item["article"].provider,
+                            "title": item["article"].title,
+                            "relevance_score": item["article"].relevance_score,
+                            "relevance_category": item["article"].relevance_category,
+                            "market_context_only": item["article"].market_context_only,
+                        }
+                        for item in excluded_news
+                    ]
                 },
             }
             if include_raw:
@@ -234,7 +335,11 @@ class NewsService:
             return GoogleNewsLightProvider(str(self.config.get("google_news_light_api_key") or ""), **kwargs)
         if provider_name == "marketaux":
             return MarketAuxProvider(str(self.config.get("marketaux_api_key") or ""), **kwargs)
-        return NewsDataProvider(str(self.config.get("newsdata_api_key") or ""), **kwargs)
+        if provider_name == "rss_context":
+            return RSSContextProvider("", config=self.config, **kwargs)
+        if provider_name == "newsdata":
+            return NewsDataProvider(str(self.config.get("newsdata_api_key") or ""), **kwargs)
+        raise ValueError(f"Unsupported news provider: {provider_name}")
 
     def _consume_budget(self, provider_name: str) -> bool:
         budget = get_budget(self.full_config.get("_vendor_budget_id"))
@@ -253,27 +358,39 @@ class NewsService:
 
 
 def format_news_for_prompt(context: dict[str, Any]) -> str:
-    articles = context.get("prompt_articles") if isinstance(context, dict) else []
+    if isinstance(context, dict):
+        articles = context.get("decision_company_news") or context.get("prompt_articles") or []
+    else:
+        articles = []
     if not isinstance(articles, list) or not articles:
         ticker = context.get("ticker") if isinstance(context, dict) else "ticker"
         return f"No high-relevance company-specific news found for {ticker}."
 
     lines = [
-        f"## Normalized Company News for {context.get('ticker')}",
+        f"## Company News Used for AI Decision: {context.get('ticker')}",
         "",
-        "Use these normalized headlines only as supporting context. Do not invent missing events or sentiment.",
+        "Use only these company-specific articles as decision news.",
+        "Do not treat market context or excluded news as company-specific evidence.",
+        "Do not invent missing events.",
         "",
     ]
-    for article in articles:
-        lines.append(f"### {article.get('title')} (source: {article.get('source') or 'Unknown'})")
-        lines.append(
-            f"Provider: {article.get('provider')} | Relevance: {article.get('relevance_score')} | "
-            f"Sentiment: {article.get('sentiment_label') or 'unavailable'}"
-        )
-        if article.get("summary"):
-            lines.append(str(article["summary"]))
-        if article.get("url"):
-            lines.append(f"Link: {article['url']}")
+    for index, article in enumerate(articles, start=1):
+        if not isinstance(article, dict):
+            continue
+        title = str(article.get("title") or "").strip()[:160]
+        summary = str(article.get("summary") or "").strip()
+        if len(summary) > 280:
+            summary = summary[:277].rstrip() + "..."
+
+        lines.append(f"### NEWS #{index}: {title}")
+        lines.append(f"Source: {article.get('source') or 'Unknown'}")
+        lines.append(f"Provider: {article.get('provider')}")
+        lines.append(f"Published: {article.get('published_at') or 'Unknown'}")
+        lines.append(f"Relevance: {article.get('relevance_score')}")
+        lines.append(f"Category: {article.get('relevance_category') or 'Unknown'}")
+        lines.append(f"Sentiment: {article.get('sentiment_label') or 'unavailable'}")
+        if summary:
+            lines.append(f"Summary: {summary}")
         lines.append("")
     return "\n".join(lines).strip()
 

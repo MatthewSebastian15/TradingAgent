@@ -1,0 +1,187 @@
+from __future__ import annotations
+
+from tradingagents.dataflows.news_models import NewsEntity, NormalizedNewsArticle
+from tradingagents.dataflows.news_provider_base import ProviderFetchResult
+from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
+
+
+def _article(provider: str = "marketaux", title: str = "Bank Central Asia reports profit growth") -> NormalizedNewsArticle:
+    return NormalizedNewsArticle(
+        provider=provider,
+        ticker="BBCA.JK",
+        company_name="Bank Central Asia",
+        title=title,
+        summary="BBCA reports resilient earnings growth.",
+        url=f"https://example.com/{provider}",
+        source="Reuters",
+        relevance_score=90,
+        relevance_category="company_specific",
+        market_context_only=False,
+        bucket="full_news",
+        entities=[NewsEntity(symbol="BBCA.JK", name="Bank Central Asia")],
+    )
+
+
+def _service_config() -> dict[str, object]:
+    return {
+        "provider_priority": "google_news_light,marketaux,rss_context,newsdata,yfinance",
+        "enabled_providers": "google_news_light,marketaux,rss_context,newsdata,yfinance",
+        "strict_ai_analysis_mode": True,
+        "force_all_providers": True,
+        "cache_enabled": False,
+        "enable_yfinance_fallback": True,
+        "max_articles_for_prompt": 8,
+        "decision_min_relevance_score": 70,
+        "rss_decision_min_relevance_score": 80,
+    }
+
+
+def test_strict_news_pipeline_calls_all_providers(monkeypatch):
+    called: list[str] = []
+    yfinance_called: list[str] = []
+
+    class FakeProvider:
+        def __init__(self, name: str) -> None:
+            self.provider_name = name
+            self.api_key = "key" if name != "rss_context" else ""
+
+        def fetch_news(self, *_args, **_kwargs):
+            called.append(self.provider_name)
+            return ProviderFetchResult(provider=self.provider_name, status="empty", articles=[])
+
+    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service._fetch_yfinance_fallback",
+        lambda *_args, **_kwargs: yfinance_called.append("yfinance") or [],
+    )
+
+    NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
+
+    assert called == ["google_news_light", "marketaux", "rss_context", "newsdata"]
+    assert yfinance_called == ["yfinance"]
+
+
+def test_strict_news_pipeline_does_not_skip_secondary_when_primary_has_articles(monkeypatch):
+    called: list[str] = []
+
+    class FakeProvider:
+        def __init__(self, name: str) -> None:
+            self.provider_name = name
+            self.api_key = "key" if name != "rss_context" else ""
+
+        def fetch_news(self, *_args, **_kwargs):
+            called.append(self.provider_name)
+            articles = [_article("google_news_light")] if self.provider_name == "google_news_light" else []
+            return ProviderFetchResult(provider=self.provider_name, status="success" if articles else "empty", articles=articles)
+
+    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
+    monkeypatch.setattr("tradingagents.dataflows.news_service._fetch_yfinance_fallback", lambda *_args, **_kwargs: [])
+
+    result = NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
+
+    assert called == ["google_news_light", "marketaux", "rss_context", "newsdata"]
+    assert "skipped_sufficient_primary" not in result["provider_status"].values()
+
+
+def test_strict_news_pipeline_provider_failure_continues(monkeypatch):
+    called: list[str] = []
+
+    class FakeProvider:
+        def __init__(self, name: str) -> None:
+            self.provider_name = name
+            self.api_key = "key" if name != "rss_context" else ""
+
+        def fetch_news(self, *_args, **_kwargs):
+            called.append(self.provider_name)
+            if self.provider_name == "marketaux":
+                raise RuntimeError("vendor failed")
+            return ProviderFetchResult(provider=self.provider_name, status="empty", articles=[])
+
+    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
+    monkeypatch.setattr("tradingagents.dataflows.news_service._fetch_yfinance_fallback", lambda *_args, **_kwargs: [])
+
+    result = NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
+
+    assert called == ["google_news_light", "marketaux", "rss_context", "newsdata"]
+    assert result["provider_status"]["marketaux"] == "unavailable"
+    assert "newsdata" in result["provider_status"]
+
+
+def test_yfinance_is_called_last_and_only_once(monkeypatch):
+    call_order: list[str] = []
+
+    class FakeProvider:
+        def __init__(self, name: str) -> None:
+            self.provider_name = name
+            self.api_key = "key" if name != "rss_context" else ""
+
+        def fetch_news(self, *_args, **_kwargs):
+            call_order.append(self.provider_name)
+            return ProviderFetchResult(provider=self.provider_name, status="empty", articles=[])
+
+    def fake_yfinance(*_args, **_kwargs):
+        call_order.append("yfinance")
+        return []
+
+    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
+    monkeypatch.setattr("tradingagents.dataflows.news_service._fetch_yfinance_fallback", fake_yfinance)
+
+    NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
+
+    assert call_order == ["google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"]
+    assert call_order.count("yfinance") == 1
+
+
+def test_format_news_for_prompt_uses_decision_company_news_only():
+    context = {
+        "ticker": "BBCA.JK",
+        "decision_company_news": [
+            {
+                "provider": "marketaux",
+                "title": "Bank Central Asia reports profit growth",
+                "summary": "Profit increased year over year.",
+                "source": "Reuters",
+                "relevance_score": 90,
+                "relevance_category": "company_specific",
+                "sentiment_label": "positive",
+            }
+        ],
+        "market_context_news": [
+            {
+                "provider": "rss_context",
+                "title": "Asian markets rise",
+                "summary": "Macro news.",
+            }
+        ],
+    }
+
+    text = format_news_for_prompt(context)
+
+    assert "Bank Central Asia reports profit growth" in text
+    assert "Asian markets rise" not in text
+    assert "https://example.com" not in text
+
+
+def test_strict_api_response_contract_and_debug(monkeypatch):
+    class FakeProvider:
+        def __init__(self, name: str) -> None:
+            self.provider_name = name
+            self.api_key = "key" if name != "rss_context" else ""
+
+        def fetch_news(self, *_args, **_kwargs):
+            articles = [_article("marketaux")] if self.provider_name == "marketaux" else []
+            return ProviderFetchResult(provider=self.provider_name, status="success" if articles else "empty", articles=articles)
+
+    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
+    monkeypatch.setattr("tradingagents.dataflows.news_service._fetch_yfinance_fallback", lambda *_args, **_kwargs: [])
+
+    result = NewsService(_service_config()).fetch_news("BBCA.JK", debug=True, bypass_cache=True)
+
+    assert result["providers_used"] == ["google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"]
+    assert result["articles_used_in_prompt"] == 1
+    assert len(result["decision_company_news"]) == 1
+    assert result["market_context_news"] == []
+    assert result["strict_news_filter"]["enabled"] is True
+    assert "provider_attempts" in result["debug"]
+    assert "deduplication" in result["debug"]
+    assert "strict_news_filter" in result["debug"]

@@ -209,7 +209,14 @@ def _article_key(item: dict[str, Any]) -> str:
 
 def _collect_articles(related_news: dict[str, Any] | None, news_context: dict[str, Any] | None) -> list[dict[str, Any]]:
     articles: list[dict[str, Any]] = []
-    context_articles = (news_context or {}).get("articles", []) if isinstance(news_context, dict) else []
+    context_articles = []
+    if isinstance(news_context, dict):
+        context_articles = (
+            news_context.get("decision_company_news")
+            or news_context.get("prompt_articles")
+            or news_context.get("articles")
+            or []
+        )
     for item in context_articles:
         if not isinstance(item, dict):
             continue
