@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
+import pandas as pd
+
 import routes.market as market_routes
 
 
@@ -150,3 +152,65 @@ def test_market_search_caches_empty_yfinance_results(client, monkeypatch):
     assert first_response.json() == {"results": []}
     assert second_response.json() == {"results": []}
     assert calls == [("zzzzzz", 5)]
+
+
+def test_market_ohlcv_ytd_uses_january_first_and_daily(client, monkeypatch):
+    market_routes._OHLCV_CACHE.clear()
+    calls: list[tuple[str, str, str, str]] = []
+
+    def fake_download(symbol, start_dt, end_dt, interval):
+        calls.append((symbol, start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d"), interval))
+        return pd.DataFrame(
+            {
+                "Open": [10, 11],
+                "High": [12, 13],
+                "Low": [9, 10],
+                "Close": [11, 12],
+                "Adj Close": [11, 12],
+                "Volume": [1000, 1200],
+            },
+            index=pd.to_datetime(["2026-01-02", "2026-06-08"]),
+        )
+
+    monkeypatch.setattr(market_routes, "_download_ohlcv", fake_download)
+
+    response = client.get("/api/market/ohlcv?ticker=NVDA&range=YTD&trade_date=2026-06-09")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert calls == [("NVDA", "2026-01-01", "2026-06-09", "1d")]
+    assert payload["range"] == "YTD"
+    assert payload["interval"] == "1d"
+    assert payload["start_date"] == "2026-01-01"
+    assert [point["date"] for point in payload["points"]] == ["2026-01-02", "2026-06-08"]
+
+
+def test_market_ohlcv_uses_daily_when_detail_intervals_empty(client, monkeypatch):
+    market_routes._OHLCV_CACHE.clear()
+    calls: list[str] = []
+
+    def fake_download(_symbol, _start_dt, _end_dt, interval):
+        calls.append(interval)
+        if interval != "1d":
+            return pd.DataFrame()
+        return pd.DataFrame(
+            {
+                "Open": [20, 21],
+                "High": [22, 23],
+                "Low": [19, 20],
+                "Close": [21, 22],
+                "Volume": [2000, 2200],
+            },
+            index=pd.to_datetime(["2026-06-08", "2026-06-09"]),
+        )
+
+    monkeypatch.setattr(market_routes, "_download_ohlcv", fake_download)
+
+    response = client.get("/api/market/ohlcv?ticker=AAPL&range=1W&trade_date=2026-06-09")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert calls == ["5m", "15m", "30m", "60m", "1d"]
+    assert payload["interval"] == "1d"
+    assert payload["fallback_to_daily"] is True
+    assert payload["points"][-1]["close"] == 22
