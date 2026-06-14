@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -149,6 +150,10 @@ SUMMARY_FIELDS = {
     "data_freshness",
     "tab_status",
     "analysis_params",
+    "entry_quality",
+    "position_sizing",
+    "data_lineage",
+    "observability",
 }
 
 AGENT_SEQUENCE = [
@@ -1645,6 +1650,177 @@ def request_warnings(req: AnalysisRequest) -> list[str]:
     return []
 
 
+def _dataclass_payload(value: Any) -> dict[str, Any] | None:
+    if is_dataclass(value):
+        return asdict(value)
+    if isinstance(value, dict):
+        return value
+    return None
+
+
+def _sprint5_unavailable_entry_quality(reason: str) -> dict[str, Any]:
+    return {
+        "score": None,
+        "label": None,
+        "action": None,
+        "drivers": [],
+        "unavailable_reason": reason,
+    }
+
+
+def _entry_quality_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    existing = payload.get("entry_quality")
+    if isinstance(existing, dict):
+        return existing
+    try:
+        from tradingagents.technical.entry_quality import calculate_entry_quality
+
+        technical_entry = payload.get("technical_entry") if isinstance(payload.get("technical_entry"), dict) else {}
+        return calculate_entry_quality(
+            {
+                "current_price": payload.get("current_price"),
+                "last_price": payload.get("last_price"),
+                **(payload.get("price_performance") if isinstance(payload.get("price_performance"), dict) else {}),
+            },
+            {
+                "entry_price": payload.get("entry_price"),
+                "stop_loss": payload.get("stop_loss"),
+                "take_profit": payload.get("take_profit"),
+                "decision": payload.get("final_decision") or payload.get("decision"),
+            },
+            technical_entry,
+        )
+    except Exception:
+        logger.exception("Failed to build entry_quality response contract")
+        return _sprint5_unavailable_entry_quality("Entry quality could not be calculated.")
+
+
+def _portfolio_value_from_payload(payload: dict[str, Any]) -> float | None:
+    analysis_params = payload.get("analysis_params") if isinstance(payload.get("analysis_params"), dict) else {}
+    for value in (
+        payload.get("portfolio_value"),
+        payload.get("portfolio_value_used"),
+        payload.get("account_value"),
+        analysis_params.get("portfolio_value"),
+    ):
+        try:
+            if value is None or value == "":
+                continue
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if number > 0:
+            return number
+    return None
+
+
+def _position_sizing_payload(payload: dict[str, Any], req: AnalysisRequest) -> dict[str, Any]:
+    existing = payload.get("position_sizing")
+    if isinstance(existing, dict):
+        return existing
+    try:
+        from tradingagents.dataflows.position_sizing import calculate_position_sizing
+
+        market = req.market or payload.get("exchange") or "UNKNOWN"
+        sizing = calculate_position_sizing(
+            str(market),
+            payload.get("entry_price"),
+            payload.get("stop_loss"),
+            _portfolio_value_from_payload(payload),
+        )
+        return asdict(sizing)
+    except Exception:
+        logger.exception("Failed to build position_sizing response contract")
+        return {
+            "market": req.market or payload.get("exchange") or "UNKNOWN",
+            "quantity": None,
+            "shares": None,
+            "lot_size": None,
+            "estimated_value": None,
+            "risk_amount": None,
+            "risk_per_unit": None,
+            "portfolio_value_used": None,
+            "risk_pct_used": 2.0,
+            "note": None,
+            "unavailable_reason": "Position sizing could not be calculated.",
+        }
+
+
+def _data_lineage_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
+    existing = payload.get("data_lineage")
+    if isinstance(existing, dict):
+        return existing
+    try:
+        from tradingagents.dataflows.lineage_builder import build_data_lineage
+
+        lineage = build_data_lineage(payload)
+        return _dataclass_payload(lineage)
+    except Exception:
+        logger.exception("Failed to build data_lineage response contract")
+        return None
+
+
+def _record_observability_metrics(payload: dict[str, Any]) -> bool:
+    try:
+        from tradingagents.observability.metrics_collector import get_metrics_collector
+
+        collector = get_metrics_collector()
+        vendor_attempts = payload.get("vendor_attempts") if isinstance(payload.get("vendor_attempts"), dict) else {}
+        for data_type, attempts in vendor_attempts.items():
+            if not isinstance(attempts, list):
+                continue
+            previous_failed_vendor = None
+            for attempt in attempts:
+                if not isinstance(attempt, dict):
+                    continue
+                vendor = str(attempt.get("vendor") or "unknown")
+                status = str(attempt.get("status") or "unknown")
+                latency_ms = attempt.get("duration_ms")
+                collector.record_vendor_call(
+                    vendor,
+                    status,
+                    int(latency_ms) if isinstance(latency_ms, int | float) else None,
+                    str(data_type),
+                )
+                if status in {"empty", "failed", "fail", "rate_limited", "skipped"}:
+                    previous_failed_vendor = vendor
+                elif previous_failed_vendor and status in {"success", "cache_hit", "fallback"}:
+                    collector.record_fallback(previous_failed_vendor, vendor, str(data_type))
+                    previous_failed_vendor = None
+
+        vendor_budget = payload.get("vendor_budget") if isinstance(payload.get("vendor_budget"), dict) else {}
+        llm_calls = vendor_budget.get("llm_calls") if isinstance(vendor_budget.get("llm_calls"), dict) else {}
+        for agent_name, usage in (llm_calls.get("agents") or {}).items():
+            if not isinstance(usage, dict):
+                continue
+            used = int(usage.get("used") or 0)
+            model_type = "deep" if str(agent_name) in {"Bull Researcher", "Bear Researcher", "Research Manager", "Risk Committee", "Portfolio Manager"} else "quick"
+            for _ in range(max(0, min(used, 20))):
+                collector.record_llm_call(model_type, True, None)
+        if payload.get("budget_exhausted"):
+            collector.record_llm_call("budget_exceeded", False, None)
+        if payload.get("is_partial"):
+            collector.record_partial_result(str(payload.get("partial_reason") or "partial_result"))
+        for warning in payload.get("warnings") or []:
+            collector.record_warning(str(warning)[:80])
+        return True
+    except Exception:
+        logger.exception("Failed to record observability metrics")
+        return False
+
+
+def _attach_sprint5_fields(payload: dict[str, Any], req: AnalysisRequest) -> dict[str, Any]:
+    enriched = dict(payload)
+    enriched["entry_quality"] = _entry_quality_payload(enriched)
+    enriched["position_sizing"] = _position_sizing_payload(enriched, req)
+    enriched["data_lineage"] = _data_lineage_payload(enriched)
+    enriched["observability"] = {
+        **(enriched.get("observability") if isinstance(enriched.get("observability"), dict) else {}),
+        "metrics_recorded": _record_observability_metrics(enriched),
+    }
+    return enriched
+
+
 def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict) -> dict:
     input_ticker = req.input_ticker or req.ticker
     normalized_ticker = req.ticker
@@ -1690,7 +1866,7 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
     warnings = request_warnings(req)
     if warnings:
         payload["warnings"] = list(dict.fromkeys([*(payload.get("warnings") or []), *warnings]))
-    return payload
+    return _attach_sprint5_fields(payload, req)
 
 
 def log_request_accepted(mode: str, request_id: str, req: AnalysisRequest) -> None:
