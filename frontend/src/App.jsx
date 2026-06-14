@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Analysis from './pages/Analysis';
 import News from './pages/News';
 import Market from './pages/Market';
+import Economic from './pages/Economic';
 import NotFound from './pages/NotFound';
 import {
   AI_RESEARCH_MOCK_PATH,
@@ -19,7 +20,6 @@ import './index.css';
 // development/demo data from leaking into normal Docker builds.
 const ENABLE_MOCK_ROUTE = import.meta.env.VITE_ENABLE_MOCK === 'true';
 const AnalysisMock = ENABLE_MOCK_ROUTE ? lazy(() => import('./pages/AnalysisMock')) : null;
-
 
 function buildResourceRedirectPath(basePath, resourceId) {
   const normalizedResourceId = typeof resourceId === 'string' ? resourceId.trim() : '';
@@ -61,13 +61,17 @@ function App() {
           <Route path={AI_RESEARCH_PATH} element={<Analysis />} />
           <Route path={`${AI_RESEARCH_PATH}/:resourceId`} element={<Analysis />} />
           <Route path={LEGACY_ANALYSIS_PATH} element={<Navigate to={AI_RESEARCH_PATH} replace />} />
-          <Route path={`${LEGACY_ANALYSIS_PATH}/:resourceId`} element={<LegacyAnalysisRedirect />} />
+          <Route
+            path={`${LEGACY_ANALYSIS_PATH}/:resourceId`}
+            element={<LegacyAnalysisRedirect />}
+          />
           <Route
             path={LEGACY_ANALYSIS_LIVE_PATH}
             element={<Navigate to={AI_RESEARCH_PATH} replace />}
           />
           <Route path="/news" element={<News />} />
           <Route path="/market" element={<Market />} />
+          <Route path="/economic" element={<Economic />} />
           {ENABLE_MOCK_ROUTE && AnalysisMock && (
             <Route path={AI_RESEARCH_MOCK_PATH} element={<AnalysisMock />} />
           )}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AI_RESEARCH_MOCK_PATH, AI_RESEARCH_PATH } from './constants/routes';
 
@@ -29,6 +29,7 @@ describe('App', () => {
     await renderApp(AI_RESEARCH_PATH, false);
 
     expect(await screen.findByTitle('Configuration')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /execute analysis/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /ai research/i })).toBeTruthy();
   });
 
@@ -41,7 +42,6 @@ describe('App', () => {
   it('registers mock routes when mock mode is enabled', async () => {
     await renderApp(AI_RESEARCH_MOCK_PATH, true);
 
-    fireEvent.click(await screen.findByTitle('Configuration'));
     expect(await screen.findByRole('button', { name: /execute analysis/i })).toBeTruthy();
   });
 });

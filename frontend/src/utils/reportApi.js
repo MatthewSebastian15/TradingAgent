@@ -30,7 +30,9 @@ function isReportNotFound(errorMessage) {
 }
 
 function requestIdFromResult(result) {
-  return typeof result?.request_id === 'string' && result.request_id.trim() ? result.request_id.trim() : null;
+  return typeof result?.request_id === 'string' && result.request_id.trim()
+    ? result.request_id.trim()
+    : null;
 }
 
 function compactReportPayload(result) {
@@ -263,6 +265,35 @@ function filenameFromContentDisposition(headerValue) {
   return asciiMatch?.[1] || null;
 }
 
+function filenameSafePart(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^A-Za-z0-9_.-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function datePart(value) {
+  const match = String(value || '').match(/\d{4}-\d{2}-\d{2}/);
+  return match?.[0] || '';
+}
+
+function reportPdfFilename(result) {
+  if (!result || typeof result !== 'object') return null;
+
+  const ticker = filenameSafePart(result.normalized_ticker || result.ticker || result.input_ticker);
+  const analysisDate = datePart(
+    result.trade_date || result.analysis_created_at || result.created_at || result.saved_at
+  );
+  return ticker && analysisDate ? `${ticker}_${analysisDate}.pdf` : null;
+}
+
+function normalizePdfFilename(filename) {
+  const match = String(filename || '').match(
+    /^(?:TradingAgent_)?([A-Za-z0-9_.-]+)_(\d{4}-\d{2}-\d{2})\.pdf$/i
+  );
+  return match ? `${match[1]}_${match[2]}.pdf` : filename;
+}
+
 async function fetchPdf(url) {
   const response = await fetch(url, {
     method: 'GET',
@@ -309,11 +340,14 @@ async function fetchPdfByPayload(result) {
   return response;
 }
 
-async function downloadPdfResponse(response, fallbackFilename) {
+async function downloadPdfResponse(response, fallbackFilename, preferredFilename = null) {
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
+  const dispositionFilename = filenameFromContentDisposition(
+    response.headers.get('Content-Disposition')
+  );
   const filename =
-    filenameFromContentDisposition(response.headers.get('Content-Disposition')) || fallbackFilename;
+    preferredFilename || normalizePdfFilename(dispositionFilename) || fallbackFilename;
 
   const link = document.createElement('a');
   link.href = url;
@@ -325,6 +359,9 @@ async function downloadPdfResponse(response, fallbackFilename) {
 }
 
 export async function downloadAnalysisPdf(resourceId, options = {}) {
+  const preferredFilename = reportPdfFilename(options.result);
+  const fallbackFilename = preferredFilename || `TradingAgent_${resourceId}.pdf`;
+
   if (options.mock) {
     if (!options.result) throw new Error('Mock report result is unavailable.');
     await exportMockReportPdf(options.result);
@@ -333,7 +370,7 @@ export async function downloadAnalysisPdf(resourceId, options = {}) {
 
   try {
     const response = await fetchPdfByResourceId(resourceId);
-    await downloadPdfResponse(response, `TradingAgent_${resourceId}.pdf`);
+    await downloadPdfResponse(response, fallbackFilename, preferredFilename);
     return;
   } catch (error) {
     if (!isReportNotFound(error.message)) {
@@ -345,7 +382,11 @@ export async function downloadAnalysisPdf(resourceId, options = {}) {
   if (requestId) {
     try {
       const response = await fetchPdfByRequestId(requestId);
-      await downloadPdfResponse(response, `TradingAgent_${requestId}.pdf`);
+      await downloadPdfResponse(
+        response,
+        preferredFilename || `TradingAgent_${requestId}.pdf`,
+        preferredFilename
+      );
       return;
     } catch (error) {
       if (!isReportNotFound(error.message)) {
@@ -359,5 +400,5 @@ export async function downloadAnalysisPdf(resourceId, options = {}) {
   }
 
   const response = await fetchPdfByPayload(options.result);
-  await downloadPdfResponse(response, `TradingAgent_${resourceId}.pdf`);
+  await downloadPdfResponse(response, fallbackFilename, preferredFilename);
 }

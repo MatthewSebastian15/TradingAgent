@@ -310,7 +310,8 @@ describe('mockReport', () => {
     expect(html).toContain('Shares Outstanding');
     expect(html).toContain('Insider Ownership');
     expect(html).toContain('ownership-pie');
-    expect(html).toContain('Institution');
+    expect(html).toContain('Institutional Ownership');
+    expect(html).not.toContain('Short Ratio');
   });
 
   it('renders ownership fallback text when ownership data is unavailable', () => {
@@ -324,8 +325,22 @@ describe('mockReport', () => {
     });
 
     expect(html).toContain('SHARES &amp; OWNERSHIP');
-    expect(html).toContain('Ownership data is not available.');
+    expect(html).toContain('Ownership chart is not available.');
     expect(html).not.toContain('<svg class="ownership-pie"');
+  });
+
+  it('renders Executive Summary as separated justified paragraphs', () => {
+    const html = buildMockReportHtml({
+      ...MOCK_RESPONSE,
+      executive_summary: 'First summary paragraph.\n\nSecond summary paragraph.',
+    });
+
+    expect(html).toContain(
+      '<p class="justified-text summary-paragraph">First summary paragraph.</p>'
+    );
+    expect(html).toContain(
+      '<p class="justified-text summary-paragraph">Second summary paragraph.</p>'
+    );
   });
 
   it('renders Phase 3 summaries in mock HTML output', () => {
@@ -365,7 +380,7 @@ describe('mockReport', () => {
     expect(html).not.toContain('NVDA earnings outlook remains constructive');
   });
 
-  it('renders Related News text without a link for an unsafe URL', () => {
+  it('omits raw related news from mock HTML output', () => {
     const html = buildMockReportHtml({
       ...MOCK_RESPONSE,
       related_news: {
@@ -386,7 +401,8 @@ describe('mockReport', () => {
       analyst_consensus: { available: false },
     });
 
-    expect(html).toContain('Unsafe mock URL');
+    expect(html).not.toContain('Related News');
+    expect(html).not.toContain('Unsafe mock URL');
     expect(html).not.toContain('javascript:');
     expect(html).not.toContain('Open original source');
   });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAnalysisJob } from '../hooks/useAnalysisJob';
@@ -96,8 +96,11 @@ export default function AnalysisWorkspace({
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [status, setStatus] = useState(resourceId ? 'Loading saved analysis...' : '');
   const [agentProgress, setAgentProgress] = useState(null);
-  const [activePanel, setActivePanel] = useState(null);
-  const [visiblePanel, setVisiblePanel] = useState(null);
+  const initialPanel = resourceId ? null : 'config';
+  const [activePanel, setActivePanel] = useState(initialPanel);
+  const [visiblePanel, setVisiblePanel] = useState(initialPanel);
+  const isReadyState = !loading && !result && !resourceId;
+  const wasReadyState = useRef(isReadyState);
 
   function togglePanel(name) {
     if (activePanel === name) {
@@ -108,6 +111,21 @@ export default function AnalysisWorkspace({
     setVisiblePanel(name);
     setActivePanel(name);
   }
+
+  useEffect(() => {
+    const enteredReadyState = isReadyState && !wasReadyState.current;
+    wasReadyState.current = isReadyState;
+
+    if (enteredReadyState) {
+      setVisiblePanel('config');
+      setActivePanel('config');
+      return;
+    }
+
+    if (result || resourceId) {
+      setActivePanel((currentPanel) => (currentPanel === 'config' ? null : currentPanel));
+    }
+  }, [isReadyState, result, resourceId]);
 
   useEffect(() => {
     if (activePanel) {

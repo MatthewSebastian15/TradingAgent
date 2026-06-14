@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -157,6 +158,8 @@ def _build_base_report_context(result: dict[str, Any], inputs: dict[str, Any]) -
     ticker = inputs["ticker"]
     market = inputs["market"]
     data_quality = inputs["data_quality"]
+    executive_summary_paragraphs = _text_paragraphs(result.get("executive_summary"))
+    executive_summary = "\n\n".join(executive_summary_paragraphs) if executive_summary_paragraphs else "N/A"
     return {
         "request_id": _clean_text(result.get("request_id")),
         "ticker": ticker,
@@ -173,7 +176,8 @@ def _build_base_report_context(result: dict[str, Any], inputs: dict[str, Any]) -
         "llm_decision": _display(inputs["llm_decision"]),
         "final_decision": inputs["final_decision"],
         "decision": inputs["final_decision"],
-        "executive_summary": _display(result.get("executive_summary")),
+        "executive_summary": executive_summary,
+        "executive_summary_paragraphs": executive_summary_paragraphs or ["N/A"],
         "key_reasons_paragraph": _key_reasons_paragraph(result),
         "decision_adjusted": bool(result.get("decision_adjusted")),
         "decision_adjusted_reason": _display(result.get("decision_adjusted_reason")),
@@ -420,7 +424,7 @@ def analysis_report_filename(report: dict[str, Any], extension: str) -> str:
     ticker = SAFE_FILENAME_RE.sub("_", str(report.get("ticker") or "UNKNOWN")).strip("_") or "UNKNOWN"
     trade_date = SAFE_FILENAME_RE.sub("_", str(report.get("trade_date") or "report")).strip("_") or "report"
     ext = extension.lstrip(".") or "pdf"
-    return f"TradingAgent_{ticker}_{trade_date}.{ext}"
+    return f"{ticker}_{trade_date}.{ext}"
 
 
 def _read_report_css() -> str:
@@ -931,10 +935,6 @@ def _profile_public_pct(profile: dict[str, Any]) -> Any:
     return _first_profile_value(profile, ("public_pct", "public_percent", "publicOwnership"))
 
 
-def _profile_short_ratio(profile: dict[str, Any]) -> Any:
-    return _first_profile_value(profile, ("short_ratio", "shortRatio"))
-
-
 def _ownership_data(profile: dict[str, Any]) -> dict[str, float | None]:
     insider = _ownership_ratio(_profile_insider_pct(profile))
     institution = _ownership_ratio(_profile_institution_pct(profile))
@@ -950,11 +950,6 @@ def _format_ownership_percent(value: Any) -> str:
     return "-" if ratio is None else f"{ratio * 100:,.2f}%"
 
 
-def _format_ratio_dash(value: Any) -> str:
-    number = _number_or_none(value)
-    return "-" if number is None else f"{number:,.2f}"
-
-
 def _shares_ownership_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     profile = _as_dict(result.get("company_profile"))
     if not profile or not profile.get("available"):
@@ -965,21 +960,62 @@ def _shares_ownership_rows(result: dict[str, Any]) -> list[dict[str, str]]:
         ("Shares Outstanding", _profile_shares_out(profile), _format_number),
         ("Insider Ownership", _profile_insider_pct(profile), _format_ownership_percent),
         ("Institutional Ownership", _profile_institution_pct(profile), _format_ownership_percent),
-        ("Public / Other Ownership", ownership["public"], _format_ownership_percent),
-        ("Short Ratio", _profile_short_ratio(profile), _format_ratio_dash),
+        ("Public/Other Ownership", ownership["public"], _format_ownership_percent),
     ]
-    return [
-        _profile_row(label, formatter(value))
-        for label, value, formatter in definitions
-        if value is not None and value != ""
-    ]
+    return [_profile_row(label, formatter(value)) for label, value, formatter in definitions]
 
 
 OWNERSHIP_SEGMENTS = (
-    {"key": "insider", "label": "Insider", "color": "#f97316"},
-    {"key": "institution", "label": "Institution", "color": "#2563eb"},
-    {"key": "public", "label": "Public / Other", "color": "#16a34a"},
+    {"key": "insider", "label": "Insider Ownership", "color": "#f97316"},
+    {"key": "institution", "label": "Institutional Ownership", "color": "#2563eb"},
+    {"key": "public", "label": "Public/Other Ownership", "color": "#16a34a"},
 )
+
+
+def _svg_point(cx: float, cy: float, radius: float, degrees: float) -> tuple[float, float]:
+    radians = math.radians(degrees)
+    return cx + radius * math.cos(radians), cy + radius * math.sin(radians)
+
+
+def _svg_number(value: float) -> str:
+    return f"{value:.3f}".rstrip("0").rstrip(".")
+
+
+def _ownership_slice_path(start_degrees: float, end_degrees: float) -> str:
+    cx = 100.0
+    cy = 100.0
+    outer_radius = 88.0
+    inner_radius = 48.0
+    span = end_degrees - start_degrees
+
+    if span >= 359.999:
+        return " ".join(
+            [
+                "M 100 12",
+                "A 88 88 0 1 1 100 188",
+                "A 88 88 0 1 1 100 12",
+                "M 100 52",
+                "A 48 48 0 1 0 100 148",
+                "A 48 48 0 1 0 100 52",
+                "Z",
+            ]
+        )
+
+    outer_start = _svg_point(cx, cy, outer_radius, start_degrees)
+    outer_end = _svg_point(cx, cy, outer_radius, end_degrees)
+    inner_end = _svg_point(cx, cy, inner_radius, end_degrees)
+    inner_start = _svg_point(cx, cy, inner_radius, start_degrees)
+    large_arc = 1 if span > 180 else 0
+
+    return " ".join(
+        [
+            f"M {_svg_number(outer_start[0])} {_svg_number(outer_start[1])}",
+            f"A 88 88 0 {large_arc} 1 {_svg_number(outer_end[0])} {_svg_number(outer_end[1])}",
+            f"L {_svg_number(inner_end[0])} {_svg_number(inner_end[1])}",
+            f"A 48 48 0 {large_arc} 0 {_svg_number(inner_start[0])} {_svg_number(inner_start[1])}",
+            "Z",
+        ]
+    )
 
 
 def _ownership_segments(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -988,28 +1024,27 @@ def _ownership_segments(result: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
     ownership = _ownership_data(profile)
-    raw_segments = [
-        {**segment, "value": ownership.get(segment["key"])}
-        for segment in OWNERSHIP_SEGMENTS
-        if ownership.get(segment["key"]) is not None and ownership.get(segment["key"]) > 0
-    ]
+    raw_segments = [{**segment, "value": ownership.get(segment["key"])} for segment in OWNERSHIP_SEGMENTS]
+    if any(segment["value"] is None for segment in raw_segments):
+        return []
+
     total = sum(float(segment["value"]) for segment in raw_segments)
     if not total:
         return []
 
-    offset = 0.0
+    start_degrees = -90.0
     segments = []
     for segment in raw_segments:
-        share = float(segment["value"]) / total * 100
+        span = float(segment["value"]) / total * 360
+        end_degrees = start_degrees + span
         segments.append(
             {
                 **segment,
                 "display": _format_ownership_percent(segment["value"]),
-                "dasharray": f"{share:.4f} {100 - share:.4f}",
-                "dashoffset": f"{-offset:.4f}",
+                "path": _ownership_slice_path(start_degrees, end_degrees) if span > 0 else "",
             }
         )
-        offset += share
+        start_degrees = end_degrees
     return segments
 
 
@@ -1475,8 +1510,17 @@ def _news_provider_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     return [{"label": str(provider), "value": _display(status)} for provider, status in statuses.items()]
 
 
-def _text_paragraphs(value: str) -> list[str]:
-    normalized = value.replace("\r\n", "\n").strip()
+def _text_paragraphs(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [
+            re.sub(r"\n+", " ", paragraph).strip()
+            for item in value
+            if (paragraph := (_strip_legacy_report_fields(item) or "").replace("\r\n", "\n").strip())
+        ]
+
+    normalized = (_strip_legacy_report_fields(value) or "").replace("\r\n", "\n").strip()
+    if not normalized:
+        return []
     paragraphs = [
         re.sub(r"\n+", " ", paragraph).strip() for paragraph in re.split(r"\n\s*\n", normalized) if paragraph.strip()
     ]

@@ -161,7 +161,7 @@ def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(clien
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert "attachment" in response.headers["content-disposition"]
-    assert "TradingAgent_BBCA.JK_2026-05-26.pdf" in response.headers["content-disposition"]
+    assert "BBCA.JK_2026-05-26.pdf" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
     assert "automated AI-assisted analysis system" in rendered_report["disclaimer"]
     assert rendered_report["company_profile_rows"][0]["value"] == "NVIDIA Corporation"

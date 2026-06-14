@@ -123,6 +123,11 @@ describe('ExportReportButtons', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const originalCreateElement = document.createElement.bind(document);
+    const anchor = originalCreateElement('a');
+    vi.spyOn(document, 'createElement').mockImplementation((tagName, options) =>
+      tagName === 'a' ? anchor : originalCreateElement(tagName, options)
+    );
 
     render(<ExportReportButtons resourceId="rid-report-1" />);
     fireEvent.click(screen.getByText('EXPORT PDF'));
@@ -130,16 +135,25 @@ describe('ExportReportButtons', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock.mock.calls[0][0]).toBe('/api/analysis/jobs/rid-report-1/report.pdf');
     expect(fetchMock.mock.calls[0][1].headers.Accept).toBe('application/pdf');
+    expect(anchor.download).toBe('NVDA_2026-05-26.pdf');
   });
 
   it('downloads request_id PDF when the job_id report is expired', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(mockReportNotFoundResponse()).mockResolvedValueOnce(mockPdfResponse());
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockReportNotFoundResponse())
+      .mockResolvedValueOnce(mockPdfResponse());
     vi.stubGlobal('fetch', fetchMock);
     if (!URL.createObjectURL) URL.createObjectURL = vi.fn();
     if (!URL.revokeObjectURL) URL.revokeObjectURL = vi.fn();
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:request-pdf');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const originalCreateElement = document.createElement.bind(document);
+    const anchor = originalCreateElement('a');
+    vi.spyOn(document, 'createElement').mockImplementation((tagName, options) =>
+      tagName === 'a' ? anchor : originalCreateElement(tagName, options)
+    );
 
     render(<ExportReportButtons resourceId="expired-job" result={MOCK_RESPONSE} />);
     fireEvent.click(screen.getByText('EXPORT PDF'));
@@ -147,6 +161,7 @@ describe('ExportReportButtons', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/mock-nvda-buy/report.pdf');
     expect(fetchMock.mock.calls[1][1].method).toBe('GET');
+    expect(anchor.download).toBe('NVDA_2026-05-18.pdf');
   });
 
   it('falls back to payload PDF export when stored reports are expired', async () => {
@@ -172,11 +187,12 @@ describe('ExportReportButtons', () => {
   });
 
   it('opens mock HTML report without backend report URL', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ disclaimer: 'Mock disclaimer.' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ disclaimer: 'Mock disclaimer.' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
     );
     const openMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -189,17 +205,20 @@ describe('ExportReportButtons', () => {
     render(<ExportReportButtons resourceId="mock-nvda-buy" result={MOCK_RESPONSE} mockReport />);
     fireEvent.click(screen.getByText('PREVIEW HTML'));
 
-    await waitFor(() => expect(openMock).toHaveBeenCalledWith('blob:mock-report', '_blank', 'noopener,noreferrer'));
+    await waitFor(() =>
+      expect(openMock).toHaveBeenCalledWith('blob:mock-report', '_blank', 'noopener,noreferrer')
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe('/api/reports/disclaimer');
   });
 
   it('exports mock PDF through browser print without fetching backend PDF', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ disclaimer: 'Mock disclaimer.' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ disclaimer: 'Mock disclaimer.' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
     );
     const printWindow = {
       document: {

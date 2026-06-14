@@ -461,6 +461,15 @@ def test_html_report_renders_investment_thesis_as_justified_paragraphs():
     assert '<p class="justified-text thesis-paragraph">Second thesis paragraph.</p>' in html
 
 
+def test_html_report_renders_executive_summary_as_justified_paragraphs():
+    html = render_analysis_report_html(
+        build_report_context(_base_result(executive_summary="First summary paragraph.\n\nSecond summary paragraph."))
+    )
+
+    assert '<p class="justified-text summary-paragraph">First summary paragraph.</p>' in html
+    assert '<p class="justified-text summary-paragraph">Second summary paragraph.</p>' in html
+
+
 def test_html_report_renders_dynamic_financial_highlights():
     html = render_analysis_report_html(build_report_context(_base_result()))
 
@@ -571,6 +580,7 @@ def test_html_report_renders_company_profile():
     assert "Executive One" in html
     assert "SHARES &amp; OWNERSHIP" in html
     assert "ownership-pie" in html
+    assert "Short Ratio" not in html
 
 
 def test_html_report_formats_canonical_company_profile_metrics():
@@ -613,7 +623,7 @@ def test_html_report_renders_ownership_fallback_when_unavailable():
     )
 
     assert "SHARES &amp; OWNERSHIP" in html
-    assert "Ownership data is not available." in html
+    assert "Ownership chart is not available." in html
     assert '<svg class="ownership-pie"' not in html
 
 
@@ -761,11 +771,11 @@ def test_html_report_renders_related_news_with_safe_original_vendor_links_only()
 
     assert len(report["full_news_items"]) == 3
     assert "Full News List" not in html
-    assert "Related News" in html
-    assert "NVIDIA earnings remain resilient" in html
-    assert "Open original source" in html
-    assert "Missing original source" in html
-    assert "Unsafe original source" in html
+    assert "Related News" not in html
+    assert "NVIDIA earnings remain resilient" not in html
+    assert "Open original source" not in html
+    assert "Missing original source" not in html
+    assert "Unsafe original source" not in html
     assert "javascript:" not in html
 
 
@@ -792,7 +802,7 @@ def test_html_report_renders_normalized_news_text_without_unsafe_link(unsafe_url
     html = render_analysis_report_html(report)
 
     assert report["news_articles"][0]["url"] is None
-    assert "Unsafe vendor article" in html
+    assert "Unsafe vendor article" not in html
     assert unsafe_url not in html
 
 
@@ -815,10 +825,10 @@ def test_html_report_renders_same_normalized_news_payload():
 
     html = render_analysis_report_html(build_report_context(_base_result(news=news)))
 
-    assert "Market News Context" in html
-    assert "NVIDIA earnings remain resilient" in html
-    assert "newsdata" in html
-    assert "rate_limited" in html
+    assert "Market News Context" not in html
+    assert "NVIDIA earnings remain resilient" not in html
+    assert "newsdata" not in html
+    assert "rate_limited" not in html
 
 
 def test_report_context_hides_trade_plan_for_hold_even_if_levels_exist():
