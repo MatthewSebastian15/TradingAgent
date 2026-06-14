@@ -143,6 +143,11 @@ def _invoke_once(
         logger.warning("%s returned unparseable structured output. Using local fallback.", agent_name)
         usage_record.fallback_used = True
         usage_record.error = "unparseable_structured_output"
+        if budget is not None:
+            budget.record_warning(
+                ErrorCode.LLM_SCHEMA_INVALID,
+                f"{agent_name} returned invalid structured output; fallback used.",
+            )
     except AnalysisCancelledError:
         raise
     except Exception as exc:

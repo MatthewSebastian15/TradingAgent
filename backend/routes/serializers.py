@@ -54,6 +54,7 @@ SUMMARY_FIELDS = {
     "market_status",
     "raw_ai_signal",
     "display_signal",
+    "signal",
     "signal_context",
     "confidence_label",
     "confidence_tier",
@@ -68,6 +69,7 @@ SUMMARY_FIELDS = {
     "time_horizon",
     "data_fetched_at",
     "confidence_score",
+    "confidence",
     "suggested_allocation_percent",
     "entry_price",
     "stop_loss",
@@ -99,6 +101,7 @@ SUMMARY_FIELDS = {
     "source_metadata",
     "fallback_metadata",
     "data_limitations",
+    "limitations",
     "vendor_attempts",
     "request_budget",
     "vendor_budget",
@@ -133,6 +136,13 @@ SUMMARY_FIELDS = {
     "analyst_consensus",
     "news",
     "news_context",
+    "is_partial",
+    "partial_reason",
+    "completed_stages",
+    "missing_stages",
+    "partial_signal",
+    "partial_confidence",
+    "available_data",
     "analysis_overview",
     "risk_data_quality",
     "confidence_breakdown",
@@ -152,6 +162,15 @@ AGENT_SEQUENCE = [
     (PipelineAgent.TRADER.value, "Trader", "Translating the plan into a transaction proposal..."),
     (PipelineAgent.RISK_ANALYSTS.value, "Risk Analysts", "Running or skipping risk debate..."),
     (PipelineAgent.PORTFOLIO_MANAGER.value, "Portfolio Manager", "Synthesizing all inputs into the final decision..."),
+]
+
+PARTIAL_STAGE_SEQUENCE = [
+    "symbol_resolution",
+    "market_data_fetch",
+    "technical_analysis",
+    "news_analysis",
+    "fundamental_analysis",
+    "final_synthesis",
 ]
 
 
@@ -454,6 +473,13 @@ def _clean_data_source_message(message: str) -> str:
 def _data_quality_warning_detail_from_message(message: str) -> dict[str, Any]:
     message = _clean_data_source_message(message)
     lowered = message.lower()
+    if "action downgraded to wait" in lowered:
+        return {
+            "code": "data_quality_blocking",
+            "severity": "warning",
+            "message": message,
+            "blocking": True,
+        }
     if "ohlcv_fallback_used" in lowered or "exact ohlcv date" in lowered:
         return _warning_detail("OHLCV_FALLBACK_USED", message)
     if "ohlcv_missing" in lowered or ("ohlcv" in lowered and "no available" in lowered):
@@ -1241,6 +1267,14 @@ def _build_common_result_fields(final_state: dict[str, Any], pd_obj: object | No
         "llm_calls_used": final_state.get("llm_calls_used") or final_state.get("balanced_gemini_calls_used"),
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
+        "is_partial": bool(final_state.get("is_partial", False)),
+        "partial_reason": final_state.get("partial_reason"),
+        "completed_stages": final_state.get("completed_stages") or [],
+        "missing_stages": final_state.get("missing_stages") or [],
+        "partial_signal": final_state.get("partial_signal"),
+        "partial_confidence": final_state.get("partial_confidence"),
+        "available_data": final_state.get("available_data") or {},
+        "limitations": final_state.get("limitations") or final_state.get("data_limitations") or [],
         **_build_common_fundamental_fields(final_state),
         **_build_common_market_fields(final_state),
         **_build_common_quality_fields(final_state),
@@ -1496,6 +1530,76 @@ def parse_final_result(
             final_state=final_state,
             common=common,
         )
+    )
+    return _with_analysis_overview_and_risk_data_quality(payload, final_state)
+
+
+def build_partial_result(
+    req: AnalysisRequest,
+    *,
+    partial_reason: str,
+    completed_stages: list[str] | None = None,
+    timeout_seconds: int | None = None,
+) -> dict[str, Any]:
+    completed = [stage for stage in PARTIAL_STAGE_SEQUENCE if stage in set(completed_stages or [])]
+    missing = [stage for stage in PARTIAL_STAGE_SEQUENCE if stage not in set(completed)]
+    reason_text = partial_reason or "partial_result"
+    timeout_message = (
+        f"Analysis incomplete: pipeline timeout after {timeout_seconds} seconds."
+        if reason_text == "pipeline_timeout" and timeout_seconds
+        else "Analysis incomplete: partial backend result returned."
+    )
+    warnings = [
+        timeout_message,
+        "Showing partial results from completed stages only.",
+    ]
+    limitations = [
+        "Final synthesis was not completed.",
+        "No actionable AI signal is available from a partial result.",
+    ]
+    available_data = {
+        "price": "market_data_fetch" in completed,
+        "technical": "technical_analysis" in completed,
+        "news": "news_analysis" in completed,
+        "fundamental": "fundamental_analysis" in completed,
+        "ai_signal": False,
+    }
+    final_state = {
+        "trade_date": req.trade_date,
+        "analysis_depth": req.analysis_depth,
+        "time_horizon_months": req.time_horizon_months,
+        "data_quality": {
+            "price_data": "missing" if not available_data["price"] else "partial",
+            "fundamentals": "missing" if not available_data["fundamental"] else "partial",
+            "news": "missing" if not available_data["news"] else "partial",
+            "trade_levels": "invalid",
+            "llm_output": "fallback",
+            "warnings": warnings,
+        },
+        "data_limitations": limitations,
+        "warnings": warnings,
+    }
+    payload = _missing_portfolio_payload(full_decision="", final_state=final_state, common=_build_common_result_fields(final_state, None))
+    payload.update(
+        {
+            "is_partial": True,
+            "partial_reason": reason_text,
+            "completed_stages": completed,
+            "missing_stages": missing,
+            "partial_signal": "WAIT",
+            "partial_confidence": 0,
+            "signal": "WAIT",
+            "confidence": 0,
+            "available_data": available_data,
+            "warnings": warnings,
+            "limitations": limitations,
+            "data_limitations": limitations,
+            "llm_decision": None,
+            "final_decision": "Hold",
+            "decision": "Hold",
+            "display_signal": "WAIT",
+            "trade_plan_valid": False,
+        }
     )
     return _with_analysis_overview_and_risk_data_quality(payload, final_state)
 

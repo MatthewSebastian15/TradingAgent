@@ -477,6 +477,31 @@ def _cache_key(method: str, vendor: str, args: tuple, kwargs: dict) -> tuple:
     return (method, vendor, args, tuple(sorted(kwargs.items())))
 
 
+def _run_cache_key(run_cache: Any, method: str, vendor: str, args: tuple, kwargs: dict) -> str | None:
+    if run_cache is None or not args or not hasattr(run_cache, "build_key"):
+        return None
+    symbol = str(args[0] or "")
+    if not symbol:
+        return None
+    data_type = {
+        "get_quote": "quote",
+        "get_stock_data": "history",
+        "get_fundamentals": "financials",
+        "get_balance_sheet": "financials",
+        "get_cashflow": "financials",
+        "get_income_statement": "financials",
+        "get_news": "news",
+        "get_global_news": "news",
+        "get_news_sentiment": "news",
+        "get_company_profile": "profile",
+        "get_recommendation_trends": "ratios",
+    }.get(method)
+    if data_type is None:
+        return None
+    extras = [method, vendor, *(str(item) for item in args[1:]), *(f"{key}={value}" for key, value in sorted(kwargs.items()))]
+    return str(run_cache.build_key(data_type, symbol, *extras))
+
+
 def _vendor_sequence(method: str, preferred: str | None = None) -> list[str]:
     """Return configured vendors followed by any supported fallback vendors."""
     vendor_config = preferred if preferred is not None else get_vendor(get_category_for_method(method), method)
@@ -636,6 +661,15 @@ def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, st
 def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: dict) -> Any:
     """Call one concrete vendor with timeout, retry, cache, and budget control."""
     vendor_args = _normalize_args_for_vendor(method, vendor, args)
+    run_cache = config.get("_run_cache")
+    run_cache_key = _run_cache_key(run_cache, method, vendor, vendor_args, kwargs)
+    if run_cache is not None and run_cache_key and run_cache.has(run_cache_key):
+        cached = run_cache.get(run_cache_key)
+        budget = get_budget(config.get("_vendor_budget_id"))
+        if budget is not None:
+            budget.record_cache_hit(vendor, method)
+        _record_attempt(config, method, vendor, "cache_hit")
+        return cached
 
     cache = None if _is_price_cache_disabled(method) else _active_cache(config)
     cache_key = _cache_key(method, vendor, vendor_args, kwargs)
@@ -678,6 +712,13 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         should_retry=lambda exc: not isinstance(exc, (AlphaVantagePermanentError, FinnhubUnavailableError)),
     )
     quality = _quality_for_result(method, result, vendor_args, config)
+    if (
+        run_cache is not None
+        and run_cache_key
+        and (quality is None or quality.get("available") is not False)
+        and not _is_unusable_result(result)
+    ):
+        run_cache.set(run_cache_key, result)
     if cache is not None:
         if quality is None or quality.get("available") is not False:
             cache.set(cache_key, result)

@@ -22,7 +22,8 @@ from tradingagents.agents.schemas import (
     render_trader_proposal,
 )
 from tradingagents.dataflows.config import set_config
-from tradingagents.llm.LLM_router import llm_metadata
+from tradingagents.graph.run_cache import RunCache
+from tradingagents.llm.LLM_router import apply_guardrail, llm_metadata
 from tradingagents.pipeline_balanced_data import (
     _normalize_time_horizon_months,
     _run_with_config,
@@ -997,8 +998,70 @@ def aggregate_decision(
         price_data=data.price_data,
         data_quality=data.data_quality.model_dump(),
     )
+    safety_context = getattr(data, "safety_prompt_context", None)
+    if safety_context is not None:
+        guarded_action, guardrail_warnings = apply_guardrail(safety_context, _decision_action(portfolio_decision))
+        if guardrail_warnings:
+            _append_guardrail_warnings(data, portfolio_decision, guardrail_warnings)
+        if guarded_action == "WAIT" and _decision_action(portfolio_decision) in {"BUY", "SELL"}:
+            _downgrade_decision_to_wait(portfolio_decision, guardrail_warnings, has_existing_position)
 
     return portfolio_decision
+
+
+def _decision_action(decision: PortfolioDecision) -> str:
+    raw = (
+        getattr(decision, "final_decision", None)
+        or getattr(decision, "decision", None)
+        or getattr(getattr(decision, "rating", None), "value", None)
+        or getattr(decision, "rating", None)
+        or "Hold"
+    )
+    normalized = str(raw).strip().upper()
+    if normalized == "OVERWEIGHT":
+        return "BUY"
+    if normalized == "UNDERWEIGHT":
+        return "SELL"
+    if normalized in {"BUY", "SELL"}:
+        return normalized
+    return "WAIT"
+
+
+def _append_guardrail_warnings(data: Any, decision: PortfolioDecision, warnings: list[str]) -> None:
+    existing_quality_warnings = list(getattr(data.data_quality, "warnings", []) or [])
+    data.data_quality.warnings = list(dict.fromkeys([*existing_quality_warnings, *warnings]))[:20]
+    existing_data_warnings = list(getattr(data, "warnings", []) or [])
+    data.warnings = list(dict.fromkeys([*existing_data_warnings, *warnings]))[:20]
+    decision.validation_warnings = list(dict.fromkeys([*(decision.validation_warnings or []), *warnings]))[:20]
+
+
+def _downgrade_decision_to_wait(
+    decision: PortfolioDecision,
+    warnings: list[str],
+    has_existing_position: bool,
+) -> None:
+    reason = next((warning for warning in warnings if "Action downgraded" in warning), warnings[0] if warnings else None)
+    decision.rating = PortfolioRating.HOLD
+    decision.decision = "Hold"
+    decision.final_decision = "Hold"
+    decision.decision_adjusted = True
+    decision.decision_adjusted_reason = reason
+    decision.trade_plan_valid = False
+    decision.suggested_allocation_percent = 0.0
+    decision.entry_price = None
+    decision.stop_loss = None
+    decision.take_profit = None
+    decision.risk_reward_ratio = None
+    decision.risk_reward_display = None
+    decision.risk_per_share = None
+    decision.reward_per_share = None
+    decision.rebalancing_action = "Maintain position" if has_existing_position else "No position to rebalance"
+    decision.new_entry_action = "Wait for valid entry setup"
+    decision.position_size_hint = (
+        "Maintain current position size; no additional exposure suggested."
+        if has_existing_position
+        else "0% allocation until setup improves."
+    )
 
 
 def persist_metrics(context: PipelineContext) -> PipelineMetrics:
@@ -1052,15 +1115,48 @@ def build_response(
         **llm_metadata(context.config),
         "budget_source": "env",
         "agents": budget_snapshot.get("agents", {}),
+        "warnings": budget_snapshot.get("warnings", []),
     }
     vendor_budget = dict(data.request_budget or {})
     vendor_budget["llm_calls"] = llm_call_summary
     response_warnings = list(data.warnings or [])
     for warning in budget_snapshot.get("warnings", []):
+        code = warning.get("code") if isinstance(warning, dict) else None
+        if code:
+            response_warnings.append(str(code))
         message = warning.get("message") if isinstance(warning, dict) else str(warning)
         if message:
             response_warnings.append(message)
     total_pipeline_seconds = metrics.total_pipeline_seconds
+    budget_partial = "Portfolio Manager" in set(budget_snapshot.get("agents_skipped", []))
+    limitations = list(data.data_limitations or [])
+    partial_fields = (
+        {
+            "is_partial": True,
+            "partial_reason": "llm_budget_exceeded",
+            "completed_stages": [
+                "symbol_resolution",
+                "market_data_fetch",
+                "technical_analysis",
+                "news_analysis",
+                "fundamental_analysis",
+            ],
+            "missing_stages": ["final_synthesis"],
+            "partial_signal": "WAIT",
+            "partial_confidence": 0,
+            "available_data": {
+                "price": data.last_close_price is not None,
+                "technical": bool(data.technical_entry),
+                "news": bool((data.news_context or {}).get("top_articles") or (data.news_context or {}).get("articles")),
+                "fundamental": bool(data.normalized_period_rows or data.financial_highlights),
+                "ai_signal": False,
+            },
+        }
+        if budget_partial
+        else {"is_partial": False}
+    )
+    if budget_partial:
+        limitations.append("Final synthesis was not completed because LLM budget was exhausted.")
     return {
         "company_of_interest": ticker,
         "trade_date": trade_date,
@@ -1091,6 +1187,7 @@ def build_response(
         "data_quality": data.data_quality.model_dump(),
         "data_sources": data.data_sources or {},
         "data_limitations": data.data_limitations or [],
+        "limitations": list(dict.fromkeys(limitations)),
         "field_sources": data.field_sources or {},
         "validation_summary": data.validation_summary or {},
         "warnings": list(dict.fromkeys(response_warnings)),
@@ -1138,6 +1235,7 @@ def build_response(
         "agents_skipped": budget_snapshot["agents_skipped"],
         "agent_pipeline": _build_agent_pipeline_rows(pipeline_timings),
         "total_pipeline_seconds": total_pipeline_seconds,
+        **partial_fields,
     }
 
 
@@ -1152,18 +1250,24 @@ def run_balanced_pipeline(
     average_entry_price: float | None = None,
 ) -> dict[str, Any]:
     """Run the balanced pipeline through explicit maintainable stages."""
-    context = prepare_context(
-        ticker=ticker,
-        trade_date=trade_date,
-        config=config,
-        progress_callback=progress_callback,
-        cancel_check=cancel_check,
-        has_existing_position=has_existing_position,
-        position_quantity=position_quantity,
-        average_entry_price=average_entry_price,
-    )
-    data_stage = collect_market_data(context)
-    agent_stage = run_agents(context, data_stage)
-    portfolio_decision = aggregate_decision(context, data_stage, agent_stage)
-    metrics = persist_metrics(context)
-    return build_response(context, data_stage, agent_stage, portfolio_decision, metrics)
+    run_cache = RunCache(str(config.get("job_id") or config.get("request_id") or f"{ticker}:{trade_date}:{time.perf_counter_ns()}"))
+    run_config = dict(config)
+    run_config["_run_cache"] = run_cache
+    try:
+        context = prepare_context(
+            ticker=ticker,
+            trade_date=trade_date,
+            config=run_config,
+            progress_callback=progress_callback,
+            cancel_check=cancel_check,
+            has_existing_position=has_existing_position,
+            position_quantity=position_quantity,
+            average_entry_price=average_entry_price,
+        )
+        data_stage = collect_market_data(context)
+        agent_stage = run_agents(context, data_stage)
+        portfolio_decision = aggregate_decision(context, data_stage, agent_stage)
+        metrics = persist_metrics(context)
+        return build_response(context, data_stage, agent_stage, portfolio_decision, metrics)
+    finally:
+        run_cache.clear()

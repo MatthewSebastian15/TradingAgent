@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from tradingagents.agents.schemas import DebateArgument, render_debate_argument
@@ -74,6 +75,21 @@ def _get_context(data: CollectedData, key: str) -> dict[str, Any]:
         return {}
 
 
+def _get_safety_context(data: CollectedData) -> dict[str, Any]:
+    value = getattr(data, "safety_prompt_context", None)
+    if is_dataclass(value):
+        return asdict(value)
+    if isinstance(value, dict):
+        return value
+    if hasattr(value, "model_dump"):
+        try:
+            dumped = value.model_dump()
+            return dumped if isinstance(dumped, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
 def _language_block() -> str:
     instruction = get_language_instruction().strip()
     if not instruction:
@@ -89,6 +105,7 @@ def market_analyst_prompt(
     time_horizon_text: str,
 ) -> str:
     market_context = _prompt_json(_get_context(data, "market"), max_chars=9000)
+    safety_context = _prompt_json(_get_safety_context(data), max_chars=5000)
     return f"""
 [STATIC ROLE]
 You are the Market Analyst.
@@ -108,6 +125,9 @@ Focus on trend, momentum, volatility, volume, support, resistance, and what the 
 [DYNAMIC COMPACT MARKET CONTEXT]
 {market_context}
 
+[DYNAMIC SAFETY CONTEXT]
+{safety_context}
+
 [DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
 """.strip()
@@ -120,6 +140,7 @@ def news_social_prompt(
     time_horizon_text: str,
 ) -> str:
     news_context = _prompt_json(_get_context(data, "news_social"), max_chars=8000)
+    safety_context = _prompt_json(_get_safety_context(data), max_chars=5000)
     return f"""
 [STATIC ROLE]
 You are the combined News and Social Sentiment Analyst.
@@ -142,6 +163,9 @@ Separate company-specific catalysts from broad market and macroeconomic pressure
 [DYNAMIC COMPACT NEWS AND SOCIAL CONTEXT]
 {news_context}
 
+[DYNAMIC SAFETY CONTEXT]
+{safety_context}
+
 [DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
 """.strip()
@@ -155,6 +179,7 @@ def fundamentals_prompt(
     time_horizon_text: str,
 ) -> str:
     fundamentals_context = _prompt_json(_get_context(data, "fundamentals"), max_chars=10000)
+    safety_context = _prompt_json(_get_safety_context(data), max_chars=5000)
     return f"""
 [STATIC ROLE]
 You are the Fundamentals Analyst.
@@ -177,6 +202,9 @@ Focus on revenue quality, profitability, balance sheet strength, cash flow, valu
 
 [DYNAMIC COMPACT FUNDAMENTALS CONTEXT]
 {fundamentals_context}
+
+[DYNAMIC SAFETY CONTEXT]
+{safety_context}
 
 [DYNAMIC DATA QUALITY JSON]
 {data_quality_json}

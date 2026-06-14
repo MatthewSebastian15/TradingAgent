@@ -20,9 +20,9 @@ from config import (
     PROCESS_POOL_WORKERS,
     build_tradingagents_config,
 )
-from errors import ApiError, BadRequestError, PipelineExecutionError, PipelineTimeoutError, sanitize_message
+from errors import ApiError, BadRequestError, PipelineExecutionError, sanitize_message
 from routes.event_contract import SseEvent
-from routes.serializers import parse_final_result
+from routes.serializers import build_partial_result, parse_final_result
 from routes.validation import AnalysisRequest
 
 logger = logging.getLogger(__name__)
@@ -160,6 +160,7 @@ def run_pipeline(
         response_detail=response_detail,
     )
     config["time_horizon_months"] = time_horizon_months
+    config["job_id"] = request_id
 
     if is_cancelled():
         raise RuntimeError("Analysis was cancelled by the client.")
@@ -216,6 +217,7 @@ def run_pipeline_with_progress(
         response_detail=response_detail,
     )
     config["time_horizon_months"] = time_horizon_months
+    config["job_id"] = request_id
 
     final_state = run_balanced_pipeline(
         ticker,
@@ -499,7 +501,12 @@ async def run_pipeline_async(
         ctx.set_cancel_event_func(cancel_event)
         future.cancel()
         _log_pipeline_timeout(ctx)
-        raise PipelineTimeoutError(PIPELINE_TIMEOUT_SECONDS) from exc
+        return build_partial_result(
+            ctx.req,
+            partial_reason="pipeline_timeout",
+            completed_stages=[],
+            timeout_seconds=PIPELINE_TIMEOUT_SECONDS,
+        )
     except asyncio.CancelledError:
         ctx.set_cancel_event_func(cancel_event)
         future.cancel()

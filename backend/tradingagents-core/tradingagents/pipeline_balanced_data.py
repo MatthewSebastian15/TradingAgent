@@ -31,6 +31,7 @@ from tradingagents.dataflows.fundamental_calculator import calculate_derived_fun
 from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
 from tradingagents.dataflows.interface import collect_vendor_values, route_to_all_vendors, route_to_vendor
 from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_url, rank_news
+from tradingagents.dataflows.news_context_builder import build_news_context
 from tradingagents.dataflows.news_intelligence import (
     build_analyst_consensus,
     build_catalyst_tracker,
@@ -57,7 +58,8 @@ from tradingagents.dataflows.vendor_router import create_attempt_recorder, relea
 from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.fundamentals.builder import build_fundamental_analysis
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
-from tradingagents.prompt_context import build_prompt_context
+from tradingagents.graph.prompt_context_builder import build_prompt_context as build_safety_prompt_context
+from tradingagents.prompt_context import build_prompt_context as build_legacy_prompt_context
 from tradingagents.technical.entry_quality import build_technical_entry
 
 logger = logging.getLogger(__name__)
@@ -431,6 +433,13 @@ def _safe_structured_company_news(
         news_config["enable_yfinance_fallback"] = "yfinance" in vendor_order
         context = NewsService(config=news_config).fetch_news(ticker, as_of_date=trade_date, window_days=window_days)
         holder.update(context)
+        compact_context = build_news_context(
+            ticker,
+            "ID" if ticker.upper().endswith(".JK") else "US",
+            context,
+            max_articles=8,
+        ).get("news_context", {})
+        holder.update(compact_context)
         return DataField.from_text(_truncate(format_news_for_prompt(context), limit))
     except Exception as exc:
         logger.warning("Structured company news fetch failed for %s: %s", ticker, exc)
@@ -446,6 +455,14 @@ def _safe_structured_company_news(
                 "articles": [],
                 "empty_reason": "News providers are temporarily unavailable.",
             }
+        )
+        holder.update(
+            build_news_context(
+                ticker,
+                "ID" if ticker.upper().endswith(".JK") else "US",
+                holder,
+                max_articles=8,
+            ).get("news_context", {})
         )
         return DataField.unavailable("company_news", exc)
 
@@ -2246,7 +2263,23 @@ def _build_collected_market_data(ctx: dict[str, Any]) -> CollectedData:
         financial_highlights=ctx["financial_highlights"],
         fundamental_analysis=ctx["fundamental_analysis"],
     )
-    collected.prompt_context = build_prompt_context(collected)
+    safety_context = build_safety_prompt_context(
+        {
+            "symbol": collected.ticker,
+            "market": "ID" if collected.ticker.upper().endswith(".JK") else "US",
+            "field_sources": collected.field_sources or {},
+            "data_quality": collected.data_quality.model_dump(),
+            "field_quality": collected.data_quality.field_quality,
+            "limitations": collected.data_limitations or [],
+            "sector": (collected.company_profile or {}).get("sector") if isinstance(collected.company_profile, dict) else None,
+            "normalized_financials": collected.normalized_period_rows or [],
+            "news_context": collected.news_context or {},
+            "vendor_budget": collected.request_budget or {},
+            "warnings": collected.warnings or [],
+        }
+    )
+    collected.safety_prompt_context = safety_context
+    collected.prompt_context = build_legacy_prompt_context(collected)
     return collected
 
 
