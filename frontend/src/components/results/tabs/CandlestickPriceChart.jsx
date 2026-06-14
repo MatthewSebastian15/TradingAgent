@@ -27,6 +27,13 @@ const PADDING = {
   left: 112,
 };
 
+function dynamicSeriesWidth(step, rangeKey, type = 'candle') {
+  const minimum = type === 'volume' ? 1.5 : 3;
+  const denseGap = rangeKey === '1W' ? 4 : rangeKey === '1M' ? 5 : null;
+  if (denseGap !== null) return Math.max(minimum, step - denseGap);
+  return Math.max(minimum, Math.min(18, step * 0.72));
+}
+
 function displayPrice(value, ticker) {
   return formatPrice(value, ticker) || 'N/A';
 }
@@ -130,7 +137,7 @@ CandlestickTooltip.propTypes = {
   }).isRequired,
 };
 
-export default function CandlestickPriceChart({ points, allPoints = null, ticker = '', onZoom }) {
+export default function CandlestickPriceChart({ points, allPoints = null, ticker = '', onZoom, rangeKey = '1Y' }) {
   const [hover, setHover] = useState(null);
   const chart = useMemo(() => {
     const normalizedPoints = normalizePricePoints(points);
@@ -178,8 +185,8 @@ export default function CandlestickPriceChart({ points, allPoints = null, ticker
   const pricePlotHeight = PRICE_HEIGHT - PADDING.top;
   const volumePlotHeight = VOLUME_HEIGHT;
   const step = plotWidth / chart.points.length;
-  const candleWidth = Math.max(3, Math.min(18, step * 0.72));
-  const barWidth = Math.max(1, Math.min(18, step * 0.72));
+  const candleWidth = dynamicSeriesWidth(step, rangeKey);
+  const barWidth = dynamicSeriesWidth(step, rangeKey, 'volume');
   const priceToY = (price) => {
     const ratio = (chart.maxPrice - price) / (chart.maxPrice - chart.minPrice || 1);
     return PADDING.top + ratio * pricePlotHeight;
@@ -188,10 +195,9 @@ export default function CandlestickPriceChart({ points, allPoints = null, ticker
   const indexToX = (index) => PADDING.left + step * index + step / 2;
   const lastPoint = chart.points[chart.points.length - 1];
   const lastCloseY = priceToY(lastPoint.close);
+  const lastPreviousPoint = previousByDate.get(lastPoint.date) || null;
   const hoverIndex = hover?.index ?? null;
   const hoverPoint = hoverIndex === null ? null : chart.points[hoverIndex];
-  const activePoint = hoverPoint || lastPoint;
-  const activePreviousPoint = previousByDate.get(activePoint.date) || null;
 
   const resolveHoverIndex = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -439,7 +445,7 @@ export default function CandlestickPriceChart({ points, allPoints = null, ticker
         ))}
         </svg>
       </div>
-      <TradingDataPanel point={activePoint} previousPoint={activePreviousPoint} ticker={ticker} />
+      <TradingDataPanel point={lastPoint} previousPoint={lastPreviousPoint} ticker={ticker} />
     </div>
   );
 }
@@ -449,4 +455,5 @@ CandlestickPriceChart.propTypes = {
   allPoints: PropTypes.arrayOf(PropTypes.object),
   ticker: PropTypes.string,
   onZoom: PropTypes.func,
+  rangeKey: PropTypes.string,
 };

@@ -6,6 +6,16 @@ export const AXIS_COLOR = 'rgba(255, 255, 255, 0.18)';
 export const TEXT_COLOR = '#8a8f98';
 export const CROSSHAIR_COLOR = 'rgba(255, 255, 255, 0.35)';
 export const LAST_PRICE_COLOR = 'rgba(255, 153, 0, 0.85)';
+export const MIN_RANGE_DAYS = 7;
+export const PRICE_RANGE_OPTIONS = [
+  { key: 'YTD', label: 'YTD' },
+  { key: '1Y', label: '1Y', days: 365 },
+  { key: '6M', label: '6M', days: 183 },
+  { key: '3M', label: '3M', days: 92 },
+  { key: '1M', label: '1M', days: 31 },
+  { key: '1W', label: '1W', days: MIN_RANGE_DAYS },
+];
+export const DEFAULT_PRICE_RANGE = '1Y';
 
 export function toNumber(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -35,6 +45,9 @@ export function formatCompactNumber(value) {
 export function formatXAxisDate(date) {
   if (!date) return '';
   const text = String(date);
+  if (text.length >= 16 && (text.includes(':') || text.includes('T'))) {
+    return `${text.slice(5, 10)} ${text.slice(11, 16)}`;
+  }
   return text.length >= 10 ? text.slice(5, 10) : text;
 }
 
@@ -97,6 +110,54 @@ export function resolveYoyPriceWindow(chart = {}, points = []) {
       Boolean(requestedTradeDate && endDate && requestedTradeDate !== endDate) ||
       Boolean(chart.fallback_to_last_trade),
   };
+}
+
+export function parsePointDate(dateValue) {
+  if (!dateValue) return null;
+  const date = new Date(`${String(dateValue).slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function toIsoDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+export function daysBetween(startDate, endDate) {
+  const start = parsePointDate(startDate);
+  const end = parsePointDate(endDate);
+  if (!start || !end) return MIN_RANGE_DAYS;
+  return Math.max(MIN_RANGE_DAYS, Math.round((end - start) / 86_400_000));
+}
+
+export function rangeStartIsoDate(rangeKey, endDateValue) {
+  const endDate = parsePointDate(endDateValue);
+  if (!endDate) return null;
+  if (rangeKey === 'YTD') {
+    return `${endDate.getUTCFullYear()}-01-01`;
+  }
+  const range = PRICE_RANGE_OPTIONS.find((option) => option.key === rangeKey);
+  const days = range?.days ?? 365;
+  return toIsoDate(new Date(endDate.getTime() - days * 86_400_000));
+}
+
+export function filterPricePointsByRange(points, rangeKey) {
+  const normalizedPoints = normalizePricePoints(points);
+  if (normalizedPoints.length < 2) return normalizedPoints;
+
+  const endPoint = normalizedPoints.at(-1);
+  const endIso = String(endPoint.date).slice(0, 10);
+  const startIso = rangeStartIsoDate(rangeKey, endIso);
+  if (!startIso) return normalizedPoints;
+
+  const filtered = normalizedPoints.filter((point) => {
+    const pointDate = String(point.date).slice(0, 10);
+    return pointDate >= startIso && pointDate <= endIso;
+  });
+  return filtered.length >= 2 ? filtered : normalizedPoints.slice(-2);
+}
+
+export function rangeNeedsDetailFetch(rangeKey) {
+  return rangeKey === '1W' || rangeKey === '1M';
 }
 
 export function normalizePricePoint(point) {

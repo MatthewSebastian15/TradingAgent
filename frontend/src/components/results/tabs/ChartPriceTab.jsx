@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import { buildApiUrl, buildAuthHeaders, readHttpError } from '../../../utils/api';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 import CandlestickPriceChart from './CandlestickPriceChart';
@@ -7,6 +8,10 @@ import PriceMetricLineChart from './PriceMetricLineChart';
 import {
   buildHistoricalMarketCapPoints,
   buildMaxDrawdownPoints,
+  DEFAULT_PRICE_RANGE,
+  filterPricePointsByRange,
+  PRICE_RANGE_OPTIONS,
+  rangeNeedsDetailFetch,
   resolveYoyPriceWindow,
   toNumber,
 } from './priceChartUtils';
@@ -45,72 +50,36 @@ function resolveSharesOutstanding(result, chart, points) {
 }
 
 const EMPTY_PRICE_CHART = {};
-const MIN_ZOOM_DAYS = 7;
+const ZOOM_RANGE_ORDER = ['1Y', '6M', '3M', '1M', '1W'];
 
-const PRICE_RANGE_OPTIONS = [
-  { key: '1Y', label: '1Y', days: 365 },
-  { key: '6M', label: '6M', days: 183 },
-  { key: '3M', label: '3M', days: 92 },
-  { key: '1M', label: '1M', days: 31 },
-  { key: '1W', label: '1W', days: MIN_ZOOM_DAYS },
-];
-
-function parseIsoDate(dateValue) {
-  if (!dateValue) return null;
-  const date = new Date(`${String(dateValue).slice(0, 10)}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function toIsoDate(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function daysBetween(startDate, endDate) {
-  const start = parseIsoDate(startDate);
-  const end = parseIsoDate(endDate);
-  if (!start || !end) return MIN_ZOOM_DAYS;
-  return Math.max(MIN_ZOOM_DAYS, Math.round((end - start) / 86_400_000));
-}
-
-function clampZoomDays(days, maxDays) {
-  return Math.max(MIN_ZOOM_DAYS, Math.min(Math.round(days), maxDays));
-}
-
-function filterPointsByDays(points, days) {
-  if (!Array.isArray(points) || points.length < 2) return points || [];
-
-  const endPoint = points.at(-1);
-  const endDate = parseIsoDate(endPoint?.date);
-  if (!endDate) return points;
-
-  const startDate = new Date(endDate.getTime() - days * 86_400_000);
-  const startIso = toIsoDate(startDate);
-  const filtered = points.filter((point) => point.date >= startIso && point.date <= endPoint.date);
-
-  return filtered.length >= 2 ? filtered : points.slice(-2);
-}
-
-function activeRangeKey(days, maxDays) {
-  if (days >= maxDays) return '1Y';
-  const match = PRICE_RANGE_OPTIONS.find((option) => Math.abs(option.days - days) <= 1);
-  return match?.key || null;
+function remoteCacheKey(ticker, rangeKey, tradeDate) {
+  return `${ticker || ''}:${rangeKey}:${tradeDate || ''}`;
 }
 
 export default function ChartPriceTab({ result }) {
-  const [zoomDays, setZoomDays] = useState(365);
+  const [activeRange, setActiveRange] = useState(DEFAULT_PRICE_RANGE);
+  const [remoteRanges, setRemoteRanges] = useState({});
   const chart = result?.price_chart || EMPTY_PRICE_CHART;
   const yoyWindow = useMemo(() => resolveYoyPriceWindow(chart, chart.points), [chart]);
-  const maxZoomDays = useMemo(
-    () => Math.min(365, daysBetween(yoyWindow.points[0]?.date, yoyWindow.points.at(-1)?.date)),
-    [yoyWindow.points]
-  );
-  const effectiveZoomDays = clampZoomDays(zoomDays, maxZoomDays);
-  const points = useMemo(
-    () => filterPointsByDays(yoyWindow.points, effectiveZoomDays),
-    [effectiveZoomDays, yoyWindow.points]
-  );
-  const activeRange = activeRangeKey(effectiveZoomDays, maxZoomDays);
   const ticker = chart.ticker || result?.ticker;
+  const tradeDateForFetch = chart.requested_trade_date || chart.trade_date || yoyWindow.endDate;
+  const chartIdentity = `${ticker || ''}:${tradeDateForFetch || ''}:${yoyWindow.endDate || ''}`;
+  const rangeDataKey = remoteCacheKey(ticker, activeRange, tradeDateForFetch);
+  const remoteRange = remoteRanges[rangeDataKey];
+  const localRangePoints = useMemo(
+    () => filterPricePointsByRange(yoyWindow.points, activeRange),
+    [activeRange, yoyWindow.points]
+  );
+  const remotePoints = useMemo(
+    () =>
+      remoteRange?.available === true && Array.isArray(remoteRange.points) && remoteRange.points.length >= 2
+        ? remoteRange.points
+        : [],
+    [remoteRange]
+  );
+  const points = remotePoints.length >= 2 ? remotePoints : localRangePoints;
+  const allPointsForActiveRange = remotePoints.length >= 2 ? remotePoints : yoyWindow.points;
+  const activeSource = remotePoints.length >= 2 ? remoteRange?.source : chart.source;
   const chartCurrency = chart.currency || result?.company_profile?.currency || '';
   const sharesOutstanding = useMemo(
     () => resolveSharesOutstanding(result, chart, yoyWindow.points),
@@ -125,14 +94,55 @@ export default function ChartPriceTab({ result }) {
     [yoyWindow.points]
   );
 
-  const setRange = (days) => {
-    setZoomDays(clampZoomDays(days, maxZoomDays));
-  };
+  useEffect(() => {
+    setActiveRange(DEFAULT_PRICE_RANGE);
+    setRemoteRanges({});
+  }, [chartIdentity]);
+
+  useEffect(() => {
+    if (!ticker || !tradeDateForFetch || !rangeNeedsDetailFetch(activeRange) || remoteRange) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    async function loadRange() {
+      try {
+        const params = new URLSearchParams({
+          ticker,
+          range: activeRange,
+          trade_date: tradeDateForFetch,
+        });
+        const response = await fetch(buildApiUrl(`/market/ohlcv?${params.toString()}`), {
+          headers: await buildAuthHeaders(),
+          credentials: 'include',
+          signal: controller.signal,
+        });
+
+        if (!response.ok) throw new Error(await readHttpError(response));
+        const payload = await response.json();
+        if (!controller.signal.aborted) {
+          setRemoteRanges((current) => ({ ...current, [rangeDataKey]: payload }));
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        setRemoteRanges((current) => ({
+          ...current,
+          [rangeDataKey]: { available: false, points: [], warning: error.message },
+        }));
+      }
+    }
+
+    loadRange();
+    return () => controller.abort();
+  }, [activeRange, rangeDataKey, remoteRange, ticker, tradeDateForFetch]);
 
   const zoomChart = (direction) => {
-    setZoomDays((currentDays) => {
-      const nextDays = direction === 'in' ? currentDays * 0.72 : currentDays * 1.28;
-      return clampZoomDays(nextDays, maxZoomDays);
+    setActiveRange((currentRange) => {
+      if (currentRange === 'YTD') return direction === 'out' ? '1Y' : '1M';
+      const index = ZOOM_RANGE_ORDER.indexOf(currentRange);
+      if (index === -1) return DEFAULT_PRICE_RANGE;
+      const nextIndex = direction === 'in' ? index + 1 : index - 1;
+      return ZOOM_RANGE_ORDER[Math.min(ZOOM_RANGE_ORDER.length - 1, Math.max(0, nextIndex))];
     });
   };
 
@@ -162,6 +172,11 @@ export default function ChartPriceTab({ result }) {
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
             CHART
+            {activeSource && (
+              <span className="ml-2 text-[10px] normal-case tracking-normal text-bloomberg-muted">
+                Source: {activeSource}
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div
@@ -174,7 +189,7 @@ export default function ChartPriceTab({ result }) {
                   <button
                     key={option.key}
                     type="button"
-                    onClick={() => setRange(option.days)}
+                    onClick={() => setActiveRange(option.key)}
                     className={`min-w-10 px-3 py-1.5 font-mono text-[11px] tracking-wider transition-all duration-150 ${
                       active
                         ? 'bg-bloomberg-orange text-black shadow-[inset_0_-2px_0_rgba(0,0,0,0.35)]'
@@ -192,7 +207,7 @@ export default function ChartPriceTab({ result }) {
                 type="button"
                 onClick={() => zoomChart('in')}
                 className="h-7 w-8 font-mono text-sm text-bloomberg-muted transition-colors hover:bg-white/5 hover:text-bloomberg-white disabled:opacity-35"
-                disabled={effectiveZoomDays <= MIN_ZOOM_DAYS}
+                disabled={activeRange === '1W'}
                 aria-label="Zoom in chart"
               >
                 +
@@ -201,7 +216,7 @@ export default function ChartPriceTab({ result }) {
                 type="button"
                 onClick={() => zoomChart('out')}
                 className="h-7 w-8 border-l border-bloomberg-border font-mono text-sm text-bloomberg-muted transition-colors hover:bg-white/5 hover:text-bloomberg-white disabled:opacity-35"
-                disabled={effectiveZoomDays >= maxZoomDays}
+                disabled={activeRange === '1Y'}
                 aria-label="Zoom out chart"
               >
                 −
@@ -211,9 +226,10 @@ export default function ChartPriceTab({ result }) {
         </div>
         <CandlestickPriceChart
           points={points}
-          allPoints={yoyWindow.points}
+          allPoints={allPointsForActiveRange}
           ticker={ticker}
           onZoom={zoomChart}
+          rangeKey={activeRange}
         />
       </section>
 

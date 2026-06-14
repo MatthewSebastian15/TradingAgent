@@ -6,8 +6,10 @@ import CandlestickPriceChart from './CandlestickPriceChart';
 import {
   buildXAxisTicks,
   DOWN_COLOR,
+  filterPricePointsByRange,
   NEUTRAL_COLOR,
   normalizePricePoints,
+  PRICE_RANGE_OPTIONS,
   resolveYoyPriceWindow,
   UP_COLOR,
 } from './priceChartUtils';
@@ -96,6 +98,28 @@ describe('CandlestickPriceChart', () => {
     expect(ticks.length).toBeLessThanOrEqual(9);
   });
 
+  it('orders ranges with YTD first and filters YTD from January 1', () => {
+    expect(PRICE_RANGE_OPTIONS.map((option) => option.key)).toEqual([
+      'YTD',
+      '1Y',
+      '6M',
+      '3M',
+      '1M',
+      '1W',
+    ]);
+
+    const points = filterPricePointsByRange(
+      [
+        { date: '2025-12-31', open: 9, high: 10, low: 8, close: 9.5, volume: 900 },
+        { date: '2026-01-02', open: 10, high: 11, low: 9, close: 10.5, volume: 1000 },
+        { date: '2026-06-05', open: 12, high: 13, low: 11, close: 12.5, volume: 1200 },
+      ],
+      'YTD'
+    );
+
+    expect(points.map((point) => point.date)).toEqual(['2026-01-02', '2026-06-05']);
+  });
+
   it('renders up, down, and flat candles with a minimum body height', () => {
     const { container } = render(<CandlestickPriceChart points={POINTS} ticker="TEST" />);
 
@@ -111,6 +135,23 @@ describe('CandlestickPriceChart', () => {
     expect(Number(bodies[2].getAttribute('height'))).toBeGreaterThanOrEqual(2);
   });
 
+  it('uses dense candle spacing for 1W instead of leaving large gaps', () => {
+    const weekPoints = Array.from({ length: 5 }, (_, index) => ({
+      date: `2026-06-${String(index + 1).padStart(2, '0')}`,
+      open: 10 + index,
+      high: 12 + index,
+      low: 9 + index,
+      close: 11 + index,
+      volume: 1000 + index,
+    }));
+    const { container } = render(
+      <CandlestickPriceChart points={weekPoints} ticker="TEST" rangeKey="1W" />
+    );
+
+    const bodies = Array.from(container.querySelectorAll('rect:not([data-testid="volume-bar"])')).slice(1);
+    expect(Number(bodies[0].getAttribute('width'))).toBeGreaterThan(100);
+  });
+
   it('shows compact OHLCV detail for the nearest hovered candle', () => {
     render(<CandlestickPriceChart points={POINTS} ticker="TEST" />);
     const chart = screen.getByRole('img', { name: 'OHLC candlestick price chart with integrated volume' });
@@ -120,6 +161,7 @@ describe('CandlestickPriceChart', () => {
 
     const tooltip = screen.getByTestId('candlestick-tooltip');
     expect(within(tooltip).getByText('2026-01-02')).toBeTruthy();
+    expect(screen.getByText('2026-01-03')).toBeTruthy();
     expect(within(tooltip).getByText('O')).toBeTruthy();
     expect(within(tooltip).getByText('H')).toBeTruthy();
     expect(within(tooltip).getByText('L')).toBeTruthy();
@@ -140,4 +182,3 @@ describe('CandlestickPriceChart', () => {
   });
 
 });
-
