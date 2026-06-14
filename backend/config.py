@@ -123,7 +123,10 @@ from config_defaults import (
     NEWSDATA_API_KEY,
     OWNER_SESSION_SECRET,
     OWNER_SESSION_TTL_SECONDS,
+    PIPELINE_LLM_CALL_TIMEOUT_SECONDS,
+    PIPELINE_STAGE_TIMEOUT_SECONDS,
     PIPELINE_TIMEOUT_SECONDS,
+    PIPELINE_TOTAL_TIMEOUT_SECONDS,
     PREFLIGHT_TIMEOUT_SECONDS,
     PROCESS_POOL_MAX_TASKS_PER_CHILD,
     PROCESS_POOL_WORKERS,
@@ -159,6 +162,9 @@ class _BackendSettingsShim:
     environment = APP_ENV
     cors_origins = CORS_ORIGINS
     pipeline_timeout_seconds = PIPELINE_TIMEOUT_SECONDS
+    pipeline_total_timeout_seconds = PIPELINE_TOTAL_TIMEOUT_SECONDS
+    pipeline_stage_timeout_seconds = PIPELINE_STAGE_TIMEOUT_SECONDS
+    pipeline_llm_call_timeout_seconds = PIPELINE_LLM_CALL_TIMEOUT_SECONDS
     preflight_timeout_seconds = PREFLIGHT_TIMEOUT_SECONDS
     process_pool_workers = PROCESS_POOL_WORKERS
     data_collection_workers = DATA_COLLECTION_WORKERS

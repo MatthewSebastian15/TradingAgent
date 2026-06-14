@@ -89,6 +89,7 @@ class CollectedData:
     financial_highlights: dict[str, Any] | None = None
     fundamental_analysis: dict[str, Any] | None = None
     prompt_context: dict[str, Any] | None = None
+    safety_prompt_context: Any | None = None
 
 
 class AnalysisCancelledError(RuntimeError):
@@ -140,3 +141,7 @@ class LLMBudget:
                 "agents_skipped": list(dict.fromkeys(self.agents_skipped)),
                 "warnings": list(self.warnings),
             }
+
+    def record_warning(self, code: str, message: str) -> None:
+        with self._lock:
+            self.warnings.append({"code": str(code), "message": str(message)})

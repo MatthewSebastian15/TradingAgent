@@ -117,11 +117,8 @@ def build_news_context(data: Any, *, max_company_items: int = 5, max_macro_items
         "news_impact": _compact_mapping(data.news_impact, max_items=12),
         "catalyst_tracker": _compact_mapping(data.catalyst_tracker, max_items=12),
         "analyst_consensus": _compact_mapping(data.analyst_consensus, max_items=12),
-        "insider_transactions": _compact_text_block(data.insider_transactions, max_chars=1800),
-        "news_sentiment": _compact_text_block(data.news_sentiment, max_chars=1500),
-        "social_sentiment": _compact_text_block(data.social_sentiment, max_chars=1500),
-        "company_news_sample": _compact_text_block(data.company_news, max_chars=2200),
-        "global_news_sample": _compact_text_block(data.global_news, max_chars=1400),
+        "top_articles": news_context.get("top_articles") or news_context.get("prompt_articles") or [],
+        "limitations": news_context.get("limitations") or [],
         "data_quality": _model_dump(data.data_quality),
     }
 
@@ -152,10 +149,6 @@ def build_fundamentals_context(data: Any) -> dict[str, Any]:
         "fundamental_analysis": _compact_mapping(data.fundamental_analysis, max_items=16),
         "event_risk": _compact_text_block(data.event_risk, max_chars=1200),
         "recommendation_trends": _compact_text_block(data.recommendation_trends, max_chars=1200),
-        "fundamentals_sample": _compact_text_block(data.fundamentals, max_chars=2200),
-        "balance_sheet_sample": _compact_text_block(data.balance_sheet, max_chars=1800),
-        "cashflow_sample": _compact_text_block(data.cashflow, max_chars=1800),
-        "income_statement_sample": _compact_text_block(data.income_statement, max_chars=1800),
         "data_quality": _model_dump(data.data_quality),
     }
 
