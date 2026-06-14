@@ -1,18 +1,139 @@
+import { useState } from 'react';
 import PropTypes from 'prop-types';
 
-import DataStatusBadge from '../../DataStatusBadge';
-import { safeExternalUrl } from '../../../utils/url';
-import { getFieldQuality } from '../../../utils/dataStatus';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 
-function formatDate(value) {
-  if (!value) return 'N/A';
-  const text = String(value);
-  if (/^\d{8}T\d{6}/.test(text)) {
-    return `${text.substring(0, 4)}-${text.substring(4, 6)}-${text.substring(6, 8)}`;
+const VENDOR_PUBLISHERS = new Set([
+  'yfinance',
+  'marketaux',
+  'newsdata',
+  'googlenewslight',
+  'rsscontext',
+]);
+
+const MONTH_LABELS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SORT_OPTIONS = ['Date', 'Impact', 'Sentiment'];
+const IMPACT_SORT_RANK = {
+  critical: 3,
+  very_high: 3,
+  high: 3,
+  medium: 2,
+  moderate: 2,
+  low: 1,
+};
+const SENTIMENT_SORT_RANK = {
+  positive: 3,
+  neutral: 2,
+  negative: 1,
+};
+
+function sourceKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function readableText(value) {
+  const text = String(value || '').trim();
+  return text || '';
+}
+
+function normalizedValue(value) {
+  return readableText(value).toLowerCase().replace(/\s+/g, '_');
+}
+
+function parseNewsDate(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  let match = text.match(/^(\d{8})T\d{6}/);
+  if (match) {
+    const date = match[1];
+    return new Date(
+      Number(date.slice(0, 4)),
+      Number(date.slice(4, 6)) - 1,
+      Number(date.slice(6, 8))
+    );
   }
-  return text;
+
+  match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function formatNewsDateFromDate(date) {
+  if (!date) return '-';
+  const publishedDay = startOfDay(date);
+  const today = startOfDay(new Date());
+  const diffDays = Math.floor((today.getTime() - publishedDay.getTime()) / DAY_MS);
+  if (diffDays === 0) return 'Today';
+  if (diffDays > 0 && diffDays <= 7) return `${diffDays} ${diffDays === 1 ? 'Day' : 'Days'}`;
+  return `${publishedDay.getDate()} ${MONTH_LABELS[publishedDay.getMonth()]}`;
+}
+
+function formatAge(value) {
+  const text = String(value || '')
+    .trim()
+    .toLowerCase();
+  if (!text || text === 'n/a') return '-';
+  if (text === 'today' || /(hour|minute|second)s?\b/.test(text)) return 'Today';
+
+  const match = text.match(/(\d+)\s*(day|days|d)\b/);
+  if (!match) return '-';
+
+  const days = Number(match[1]);
+  if (!Number.isFinite(days)) return '-';
+  if (days <= 0) return 'Today';
+  if (days <= 7) return `${days} ${days === 1 ? 'Day' : 'Days'}`;
+
+  return formatNewsDateFromDate(new Date(Date.now() - days * DAY_MS));
+}
+
+function formatDate(value) {
+  const date = parseNewsDate(value);
+  return formatNewsDateFromDate(date);
+}
+
+function newsDateValue(item) {
+  return (
+    item.published_at ||
+    item.publishedAt ||
+    item.published_date ||
+    item.pub_date ||
+    item.datetime ||
+    item.date ||
+    item.created_at
+  );
+}
+
+function publishedLabel(item) {
+  const dateLabel = formatDate(newsDateValue(item));
+  if (dateLabel !== '-') return dateLabel;
+
+  return formatAge(item.published_age || item.published_age_label || item.age);
 }
 
 function displayLabel(value) {
@@ -20,10 +141,42 @@ function displayLabel(value) {
   return String(value).replace(/_/g, ' ').toUpperCase();
 }
 
-function shortLabel(value, max = 18) {
-  const text = String(value || '').trim();
-  if (!text) return 'vendor';
-  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+function publisherLabel(item) {
+  const candidates = [
+    item.publisher,
+    item.source_name,
+    item.sourceName,
+    item.source_label,
+    item.sourceLabel,
+    item.source,
+    item.provider_name,
+    item.provider,
+  ];
+
+  for (const candidate of candidates) {
+    const text = readableText(candidate);
+    if (text && !VENDOR_PUBLISHERS.has(sourceKey(text))) return text;
+  }
+
+  return 'Unknown Source';
+}
+
+function sourceLabel(item) {
+  return (
+    readableText(item.source) ||
+    readableText(item.provider) ||
+    readableText(item.source_name) ||
+    readableText(item.publisher) ||
+    'Unknown Source'
+  );
+}
+
+function summaryText(item) {
+  return readableText(item.summary || item.description || item.impact_reason) || '-';
+}
+
+function itemUrl(item) {
+  return readableText(item.url);
 }
 
 function newsDedupeKey(item) {
@@ -81,6 +234,21 @@ function impactScore(item) {
   return Number.isFinite(number) ? number : -Infinity;
 }
 
+function publishedTimestamp(item) {
+  const date = parseNewsDate(newsDateValue(item));
+  return date ? date.getTime() : null;
+}
+
+function impactSortRank(item) {
+  return (
+    IMPACT_SORT_RANK[normalizedValue(item?.impact || item?.impact_rule || item?.risk_level)] || 0
+  );
+}
+
+function sentimentSortRank(item) {
+  return SENTIMENT_SORT_RANK[normalizedValue(item?.sentiment || item?.sentiment_label)] || 0;
+}
+
 function sortNewsByImpact(items) {
   return items
     .map((item, index) => ({ item, index }))
@@ -93,6 +261,37 @@ function sortNewsByImpact(items) {
 
       return left.index - right.index;
     })
+    .map(({ item }) => item);
+}
+
+function compareByDate(left, right) {
+  const leftTime = publishedTimestamp(left.item);
+  const rightTime = publishedTimestamp(right.item);
+  if (leftTime !== null && rightTime !== null) return rightTime - leftTime;
+  if (leftTime !== null) return -1;
+  if (rightTime !== null) return 1;
+  return 0;
+}
+
+function compareByImpact(left, right) {
+  return impactSortRank(right.item) - impactSortRank(left.item);
+}
+
+function compareBySentiment(left, right) {
+  return sentimentSortRank(right.item) - sentimentSortRank(left.item);
+}
+
+function sortNewsItems(items, sortKey) {
+  const comparators = {
+    Date: compareByDate,
+    Impact: compareByImpact,
+    Sentiment: compareBySentiment,
+  };
+  const compare = comparators[sortKey] || compareByDate;
+
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => compare(left, right) || left.index - right.index)
     .map(({ item }) => item);
 }
 
@@ -119,16 +318,6 @@ function hasNewsPayload(result) {
   );
 }
 
-function withoutConfidenceFields(value) {
-  if (!value || typeof value !== 'object') return value;
-  const sanitized = { ...value };
-  delete sanitized.confidence;
-  delete sanitized.confidence_score;
-  delete sanitized.confidenceScore;
-  delete sanitized.score;
-  return sanitized;
-}
-
 function SummaryMetric({ label, value }) {
   return (
     <span className="border border-bloomberg-border px-2 py-1">
@@ -142,80 +331,83 @@ SummaryMetric.propTypes = {
   value: PropTypes.node,
 };
 
-function NewsCard({ item, index, quality }) {
-  const url = safeExternalUrl(item.url);
+function SortButton({ label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`font-mono text-[11px] uppercase tracking-wider border px-2 py-1 ${
+        active
+          ? 'border-bloomberg-orange text-bloomberg-orange bg-black'
+          : 'border-bloomberg-border text-bloomberg-muted hover:text-bloomberg-white'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+SortButton.propTypes = {
+  active: PropTypes.bool.isRequired,
+  label: PropTypes.string.isRequired,
+  onClick: PropTypes.func.isRequired,
+};
+
+function NewsRow({ item }) {
+  const title = readableText(item.title) || 'Untitled';
+  const url = itemUrl(item);
 
   return (
-    <article className="border border-bloomberg-border bg-black px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-mono text-xs text-bloomberg-orange tracking-wider mb-1">
-            NEWS #{index + 1}
-          </div>
-          <h3 className="font-mono text-sm text-bloomberg-white font-semibold leading-relaxed">
-            {item.title}
-          </h3>
+    <article className="border-b border-bloomberg-border bg-black py-2">
+      <div className="grid grid-cols-[5.25rem_1px_minmax(0,1fr)] gap-3">
+        <div className="flex items-center justify-center text-center font-mono text-[11px] text-bloomberg-orange tracking-wider">
+          {publishedLabel(item)}
         </div>
-        <span className="font-mono text-[10px] border border-bloomberg-border text-bloomberg-muted px-2 py-1 uppercase flex-shrink-0">
-          {shortLabel(item.source || item.publisher || 'vendor')}
-        </span>
+        <div className="bg-bloomberg-border" aria-hidden="true" />
+        <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-1 font-mono text-xs leading-snug">
+            <h3 className="text-bloomberg-white font-semibold">
+              {url ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-bloomberg-orange"
+                >
+                  {title}
+                </a>
+              ) : (
+                title
+              )}
+            </h3>
+            <span className="text-bloomberg-muted">- {publisherLabel(item)}</span>
+          </div>
+          <p className="font-mono text-[11px] text-bloomberg-muted leading-snug">
+            {summaryText(item)}
+          </p>
+          <p className="font-mono text-[11px] text-bloomberg-muted leading-snug">
+            Impact: {displayLabel(item.impact || item.impact_rule || item.risk_level)} - Sentiment:{' '}
+            {displayLabel(item.sentiment || item.sentiment_label)} - Source: {sourceLabel(item)}
+          </p>
+        </div>
       </div>
-
-      <div className="mt-2 flex flex-wrap gap-2 font-mono text-[11px] text-bloomberg-muted">
-        <span>Publisher: {item.publisher || 'Unknown'}</span>
-        <span>Provider: {item.provider || item.source || 'Unknown'}</span>
-        <span>Published: {formatDate(item.published_at)}</span>
-        <span>Scope: {displayLabel(item.scope_label || item.news_scope || 'company')}</span>
-        {item.impact && <span>Impact: {displayLabel(item.impact)}</span>}
-        {item.sentiment && <span>Sentiment: {displayLabel(item.sentiment)}</span>}
-        {item.impact_status && <span>Impact Status: {displayLabel(item.impact_status)}</span>}
-      </div>
-
-      <div className="mt-2">
-        <DataStatusBadge
-          compact
-          quality={quality}
-          status={quality ? undefined : item.status || 'available'}
-          source={item.source || item.publisher}
-          reason={item.impact_reason || item.relevance_reason}
-        />
-      </div>
-
-      {item.summary && (
-        <p className="mt-3 font-mono text-xs text-bloomberg-muted leading-relaxed">
-          {item.summary}
-        </p>
-      )}
-
-      {url && (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block mt-3 font-mono text-xs text-bloomberg-orange hover:text-orange-300 tracking-wider"
-        >
-          OPEN ORIGINAL SOURCE
-        </a>
-      )}
     </article>
   );
 }
 
-NewsCard.propTypes = {
+NewsRow.propTypes = {
   item: PropTypes.object.isRequired,
-  index: PropTypes.number.isRequired,
-  quality: PropTypes.object,
 };
 
 export default function NewsTab({ result }) {
+  const [activeSort, setActiveSort] = useState('Date');
   const relatedNews = result?.related_news || {};
   const newsImpact = result?.news_impact || {};
   const analystConsensus = result?.analyst_consensus || {};
   const relatedItems = Array.isArray(relatedNews.items) ? relatedNews.items : [];
   const newsItems = buildUnifiedNewsItems(newsImpact, relatedItems);
-  const companyNewsQuality = withoutConfidenceFields(
-    getFieldQuality(result?.data_quality, 'company_news')
-  );
+  const sortedNewsItems = sortNewsItems(newsItems, activeSort);
   if (!hasNewsPayload(result)) {
     return (
       <div className="px-4 py-4 border-b border-bloomberg-border">
@@ -231,14 +423,23 @@ export default function NewsTab({ result }) {
       <section>
         <SectionHeader label="NEWS" />
         {newsItems.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {newsItems.map((item, index) => (
-              <NewsCard
-                key={newsDedupeKey(item) || `${item.title}-${index}`}
-                item={item}
-                index={index}
-                quality={companyNewsQuality}
-              />
+          <div className="space-y-1">
+            <div className="mb-2 flex items-center gap-2">
+              {SORT_OPTIONS.map((option, index) => (
+                <span key={option} className="flex items-center gap-2">
+                  <SortButton
+                    label={option}
+                    active={activeSort === option}
+                    onClick={() => setActiveSort(option)}
+                  />
+                  {index < SORT_OPTIONS.length - 1 && (
+                    <span className="font-mono text-[11px] text-bloomberg-muted">|</span>
+                  )}
+                </span>
+              ))}
+            </div>
+            {sortedNewsItems.map((item, index) => (
+              <NewsRow key={newsDedupeKey(item) || `${item.title}-${index}`} item={item} />
             ))}
           </div>
         ) : (

@@ -50,7 +50,7 @@ function resolveSharesOutstanding(result, chart, points) {
 }
 
 const EMPTY_PRICE_CHART = {};
-const ZOOM_RANGE_ORDER = ['1Y', '6M', '3M', '1M', '1W'];
+const ZOOM_RANGE_ORDER = ['1Y', '3M', '1M', '1W'];
 
 function remoteCacheKey(ticker, rangeKey, tradeDate) {
   return `${ticker || ''}:${rangeKey}:${tradeDate || ''}`;
@@ -72,7 +72,9 @@ export default function ChartPriceTab({ result }) {
   );
   const remotePoints = useMemo(
     () =>
-      remoteRange?.available === true && Array.isArray(remoteRange.points) && remoteRange.points.length >= 2
+      remoteRange?.available === true &&
+      Array.isArray(remoteRange.points) &&
+      remoteRange.points.length >= 2
         ? remoteRange.points
         : [],
     [remoteRange]

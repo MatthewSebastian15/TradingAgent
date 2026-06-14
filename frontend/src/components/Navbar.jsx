@@ -20,6 +20,71 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 });
 
+function HomeIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4 flex-shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="m3 10.5 9-7 9 7" />
+      <path d="M5 9.5V21h14V9.5" />
+      <path d="M9 21v-7h6v7" />
+    </svg>
+  );
+}
+
+function SparklesIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4 flex-shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" />
+      <path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" />
+    </svg>
+  );
+}
+
+function NewspaperIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4 flex-shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M4 22h14a2 2 0 0 0 2-2V4H2v16a2 2 0 0 0 2 2Z" />
+      <path d="M8 6h8M8 10h8M8 14h5M6 18h10" />
+    </svg>
+  );
+}
+
+function TrendingUpIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4 flex-shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="m3 17 6-6 4 4 8-8" />
+      <path d="M14 7h7v7" />
+    </svg>
+  );
+}
+
 const AI_RESEARCH_MATCH_PREFIXES = [
   AI_RESEARCH_PATH,
   encodeURI(AI_RESEARCH_PATH),
@@ -32,14 +97,15 @@ const AI_RESEARCH_MATCH_PREFIXES = [
 ];
 
 const NAV_ITEMS = [
-  { label: 'Home', path: '/home', matchPrefixes: ['/home'] },
+  { label: 'Home', path: '/home', matchPrefixes: ['/home'], Icon: HomeIcon },
   {
     label: 'AI Research',
     path: AI_RESEARCH_PATH,
     matchPrefixes: AI_RESEARCH_MATCH_PREFIXES,
+    Icon: SparklesIcon,
   },
-  { label: 'News', path: '/news', matchPrefixes: ['/news'] },
-  { label: 'Market', path: '/market', matchPrefixes: ['/market'] },
+  { label: 'News', path: '/news', matchPrefixes: ['/news'], Icon: NewspaperIcon },
+  { label: 'Market', path: '/market', matchPrefixes: ['/market'], Icon: TrendingUpIcon },
 ];
 
 function formatDate(value) {
@@ -86,16 +152,19 @@ function isNavItemActive(item, pathname) {
 }
 
 function NavButton({ item, active, onClick }) {
+  const Icon = item.Icon;
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative h-10 border-r border-bloomberg-border px-4 font-mono text-xs font-medium tracking-wider transition-colors duration-150 first:border-l sm:px-5 ${
+      className={`relative inline-flex h-10 items-center gap-2 border-r border-bloomberg-border px-4 font-mono text-xs font-medium tracking-wider transition-colors duration-150 first:border-l sm:px-5 ${
         active
           ? 'bg-bloomberg-orange text-black'
           : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
       }`}
     >
+      <Icon />
       {item.label}
       {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-bloomberg-orange" />}
     </button>
@@ -107,6 +176,7 @@ NavButton.propTypes = {
     label: PropTypes.string.isRequired,
     path: PropTypes.string.isRequired,
     matchPrefixes: PropTypes.arrayOf(PropTypes.string).isRequired,
+    Icon: PropTypes.elementType.isRequired,
   }).isRequired,
   active: PropTypes.bool.isRequired,
   onClick: PropTypes.func.isRequired,

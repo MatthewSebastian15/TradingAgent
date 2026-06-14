@@ -9,12 +9,14 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from tradingagents.utils.normalization import as_dict as _as_dict
+from tradingagents.utils.normalization import as_list as _as_list
+from tradingagents.utils.normalization import clean_text as _clean_text
 
 from errors import ApiError, sanitize_message
 from routes import jobs
 from services.analysis_repository import get_analysis_repository
 from services.report_disclaimer import REPORT_DISCLAIMER
-from tradingagents.utils.normalization import as_dict as _as_dict, as_list as _as_list, clean_text as _clean_text
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +198,8 @@ def _attach_market_report_sections(report: dict[str, Any], result: dict[str, Any
             "company_profile": _as_dict(result.get("company_profile")),
             "company_profile_rows": _company_profile_rows(result),
             "company_profile_executives": _company_profile_executives(result),
+            "shares_ownership_rows": _shares_ownership_rows(result),
+            "ownership_segments": _ownership_segments(result),
             "price_chart_rows": _price_chart_rows(result, ticker, market),
             "technical_entry_rows": _technical_entry_rows(result, ticker, market),
             "news_impact": _as_dict(result.get("news_impact")),
@@ -434,7 +438,6 @@ def report_asset_health() -> dict[str, Any]:
     }
 
 
-
 def _strip_legacy_report_fields(value: Any) -> str | None:
     text = _clean_text(value)
     if not text:
@@ -449,7 +452,6 @@ def _coalesce(*values: Any) -> Any:
         if value is not None and value != "":
             return value
     return None
-
 
 
 def _as_text_list(value: Any) -> list[str]:
@@ -538,6 +540,11 @@ def _display(value: Any) -> str:
     if isinstance(value, float):
         return _format_number(value)
     return str(value)
+
+
+def _display_dash(value: Any) -> str:
+    text = _display(value)
+    return "-" if text == "N/A" else text
 
 
 def _format_datetime(value: Any) -> str:
@@ -870,32 +877,158 @@ def _list_payload_rows(risk_data_quality: dict[str, Any], key: str) -> list[dict
     return rows
 
 
+def _profile_row(label: str, value: Any) -> dict[str, str]:
+    return {"label": label, "value": _display_dash(value)}
+
+
+def _number_or_none(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in {float("inf"), float("-inf")}:
+        return None
+    return number
+
+
+def _ownership_source_objects(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    sources = [profile, _as_dict(profile.get("shares_ownership")), _as_dict(profile.get("ownership"))]
+    return [source for source in sources if source]
+
+
+def _first_profile_value(profile: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for source in _ownership_source_objects(profile):
+        for key in keys:
+            value = source.get(key)
+            if value is not None and value != "":
+                return value
+    return None
+
+
+def _ownership_ratio(value: Any) -> float | None:
+    number = _number_or_none(value)
+    if number is None:
+        return None
+    ratio = number / 100 if abs(number) > 1 else number
+    return max(0.0, min(ratio, 1.0))
+
+
+def _profile_shares_out(profile: dict[str, Any]) -> Any:
+    return _first_profile_value(profile, ("shares_out", "shares_outstanding", "sharesOutstanding"))
+
+
+def _profile_insider_pct(profile: dict[str, Any]) -> Any:
+    return _first_profile_value(profile, ("insider_pct", "insider_percent", "heldPercentInsiders"))
+
+
+def _profile_institution_pct(profile: dict[str, Any]) -> Any:
+    return _first_profile_value(profile, ("institution_pct", "institution_percent", "heldPercentInstitutions"))
+
+
+def _profile_public_pct(profile: dict[str, Any]) -> Any:
+    return _first_profile_value(profile, ("public_pct", "public_percent", "publicOwnership"))
+
+
+def _profile_short_ratio(profile: dict[str, Any]) -> Any:
+    return _first_profile_value(profile, ("short_ratio", "shortRatio"))
+
+
+def _ownership_data(profile: dict[str, Any]) -> dict[str, float | None]:
+    insider = _ownership_ratio(_profile_insider_pct(profile))
+    institution = _ownership_ratio(_profile_institution_pct(profile))
+    explicit_public = _ownership_ratio(_profile_public_pct(profile))
+    public = explicit_public
+    if public is None and insider is not None and institution is not None:
+        public = max(0.0, 1.0 - insider - institution)
+    return {"insider": insider, "institution": institution, "public": public}
+
+
+def _format_ownership_percent(value: Any) -> str:
+    ratio = _ownership_ratio(value)
+    return "-" if ratio is None else f"{ratio * 100:,.2f}%"
+
+
+def _format_ratio_dash(value: Any) -> str:
+    number = _number_or_none(value)
+    return "-" if number is None else f"{number:,.2f}"
+
+
+def _shares_ownership_rows(result: dict[str, Any]) -> list[dict[str, str]]:
+    profile = _as_dict(result.get("company_profile"))
+    if not profile or not profile.get("available"):
+        return []
+
+    ownership = _ownership_data(profile)
+    definitions = [
+        ("Shares Outstanding", _profile_shares_out(profile), _format_number),
+        ("Insider Ownership", _profile_insider_pct(profile), _format_ownership_percent),
+        ("Institutional Ownership", _profile_institution_pct(profile), _format_ownership_percent),
+        ("Public / Other Ownership", ownership["public"], _format_ownership_percent),
+        ("Short Ratio", _profile_short_ratio(profile), _format_ratio_dash),
+    ]
+    return [
+        _profile_row(label, formatter(value))
+        for label, value, formatter in definitions
+        if value is not None and value != ""
+    ]
+
+
+OWNERSHIP_SEGMENTS = (
+    {"key": "insider", "label": "Insider", "color": "#f97316"},
+    {"key": "institution", "label": "Institution", "color": "#2563eb"},
+    {"key": "public", "label": "Public / Other", "color": "#16a34a"},
+)
+
+
+def _ownership_segments(result: dict[str, Any]) -> list[dict[str, Any]]:
+    profile = _as_dict(result.get("company_profile"))
+    if not profile or not profile.get("available"):
+        return []
+
+    ownership = _ownership_data(profile)
+    raw_segments = [
+        {**segment, "value": ownership.get(segment["key"])}
+        for segment in OWNERSHIP_SEGMENTS
+        if ownership.get(segment["key"]) is not None and ownership.get(segment["key"]) > 0
+    ]
+    total = sum(float(segment["value"]) for segment in raw_segments)
+    if not total:
+        return []
+
+    offset = 0.0
+    segments = []
+    for segment in raw_segments:
+        share = float(segment["value"]) / total * 100
+        segments.append(
+            {
+                **segment,
+                "display": _format_ownership_percent(segment["value"]),
+                "dasharray": f"{share:.4f} {100 - share:.4f}",
+                "dashoffset": f"{-offset:.4f}",
+            }
+        )
+        offset += share
+    return segments
+
+
 def _company_profile_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     profile = _as_dict(result.get("company_profile"))
     if not profile or not profile.get("available"):
         return []
 
-    ticker = str(profile.get("ticker") or result.get("ticker") or "")
-    market = str(result.get("market") or "")
     currency = profile.get("currency")
     return [
-        {"label": "Company Name", "value": _display(profile.get("company_name") or profile.get("name"))},
-        {"label": "Ticker", "value": _display(profile.get("ticker"))},
-        {"label": "Exchange", "value": _display(profile.get("exchange"))},
-        {"label": "Currency", "value": _display(profile.get("currency"))},
-        {"label": "Country", "value": _display(profile.get("country"))},
-        {"label": "Sector", "value": _display(profile.get("sector"))},
-        {"label": "Industry", "value": _display(profile.get("industry"))},
-        {"label": "Website", "value": _display(profile.get("website"))},
-        {"label": "Market Cap", "value": _format_market_cap(profile.get("market_cap"), currency)},
-        {"label": "Shares Outstanding", "value": _format_number(profile.get("shares_outstanding"))},
-        {"label": "Current Price", "value": _format_price(profile.get("current_price"), ticker, market)},
-        {"label": "Fiscal Year End", "value": _display(profile.get("fiscal_year_end"))},
-        {
-            "label": "Employee Count",
-            "value": _display(profile.get("employee_count") or profile.get("full_time_employees")),
-        },
-        {"label": "Profile Data Quality", "value": _display(_as_dict(profile.get("data_quality")).get("status"))},
+        _profile_row("Company Name", profile.get("company_name") or profile.get("name")),
+        _profile_row("Ticker", profile.get("ticker")),
+        _profile_row("Currency", profile.get("currency")),
+        _profile_row("Country", profile.get("country")),
+        _profile_row("Sector", profile.get("sector")),
+        _profile_row("Industry", profile.get("industry")),
+        _profile_row("Market Cap", _format_market_cap(profile.get("market_cap"), currency)),
+        _profile_row("Employees", _format_number(profile.get("employee_count") or profile.get("full_time_employees"))),
+        _profile_row("Website", profile.get("website")),
     ]
 
 
@@ -1128,11 +1261,7 @@ def _full_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(high_items, list):
         high_items = []
 
-    high_keys = {
-        _news_dedupe_key(item)
-        for item in high_items
-        if isinstance(item, dict) and _news_dedupe_key(item)
-    }
+    high_keys = {_news_dedupe_key(item) for item in high_items if isinstance(item, dict) and _news_dedupe_key(item)}
 
     items: list[dict[str, Any]] = []
     for item in _dedupe_report_news_items(raw_items):
@@ -1346,7 +1475,17 @@ def _news_provider_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     return [{"label": str(provider), "value": _display(status)} for provider, status in statuses.items()]
 
 
-def _analyst_sections(result: dict[str, Any]) -> list[dict[str, str]]:
+def _text_paragraphs(value: str) -> list[str]:
+    normalized = value.replace("\r\n", "\n").strip()
+    paragraphs = [
+        re.sub(r"\n+", " ", paragraph).strip() for paragraph in re.split(r"\n\s*\n", normalized) if paragraph.strip()
+    ]
+    if len(paragraphs) <= 1 and "\n" in normalized:
+        paragraphs = [paragraph.strip() for paragraph in re.split(r"\n+", normalized) if paragraph.strip()]
+    return paragraphs
+
+
+def _analyst_sections(result: dict[str, Any]) -> list[dict[str, Any]]:
     fields = [
         ("Executive Summary", "executive_summary"),
         ("Market Analyst", "market_report"),
@@ -1358,9 +1497,16 @@ def _analyst_sections(result: dict[str, Any]) -> list[dict[str, str]]:
         ("Debate / Reasoning Summary", "debate_summary"),
         ("Final Decision Notes", "full_decision"),
     ]
-    sections: list[dict[str, str]] = []
+    sections: list[dict[str, Any]] = []
     for title, field in fields:
         body = _strip_legacy_report_fields(result.get(field))
         if body:
-            sections.append({"title": title, "body": body})
+            sections.append(
+                {
+                    "title": title,
+                    "body": body,
+                    "paragraphs": _text_paragraphs(body),
+                    "is_investment_thesis": title == "Investment Thesis",
+                }
+            )
     return sections

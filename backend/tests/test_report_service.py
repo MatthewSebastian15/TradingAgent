@@ -148,8 +148,17 @@ def _base_result(**overrides):
             "available": True,
             "ticker": "NVDA",
             "name": "NVIDIA Corporation",
+            "currency": "USD",
+            "country": "United States",
             "sector": "Technology",
             "industry": "Semiconductors",
+            "market_cap": 2_300_000_000_000,
+            "employee_count": 36_000,
+            "website": "https://www.nvidia.com",
+            "shares_outstanding": 24_400_000_000,
+            "insider_pct": 0.0425,
+            "institution_pct": 0.671,
+            "public_pct": 0.2865,
             "description": "Accelerated computing platform company.",
             "executives": [{"name": "Executive One", "title": "CEO"}],
         },
@@ -439,6 +448,17 @@ def test_html_report_renders_key_reasons_as_paragraph():
     assert "<h2>Key Reasons</h2>" in html
     key_reason_section = html.split("Key Reasons", 1)[1].split("</section>", 1)[0]
     assert "<ul" not in key_reason_section
+    assert '<p class="justified-text">' in key_reason_section
+
+
+def test_html_report_renders_investment_thesis_as_justified_paragraphs():
+    html = render_analysis_report_html(
+        build_report_context(_base_result(investment_thesis="First thesis paragraph.\nSecond thesis paragraph."))
+    )
+
+    assert "investment-thesis" in html
+    assert '<p class="justified-text thesis-paragraph">First thesis paragraph.</p>' in html
+    assert '<p class="justified-text thesis-paragraph">Second thesis paragraph.</p>' in html
 
 
 def test_html_report_renders_dynamic_financial_highlights():
@@ -535,9 +555,22 @@ def test_html_report_renders_company_profile():
         "value": "NVIDIA Corporation",
     }
     assert report["company_profile_executives"] == [{"name": "Executive One", "title": "CEO"}]
+    assert [row["label"] for row in report["company_profile_rows"]] == [
+        "Company Name",
+        "Ticker",
+        "Currency",
+        "Country",
+        "Sector",
+        "Industry",
+        "Market Cap",
+        "Employees",
+        "Website",
+    ]
     assert "Company Profile" in html
     assert "Accelerated computing platform company." in html
     assert "Executive One" in html
+    assert "SHARES &amp; OWNERSHIP" in html
+    assert "ownership-pie" in html
 
 
 def test_html_report_formats_canonical_company_profile_metrics():
@@ -554,8 +587,8 @@ def test_html_report_formats_canonical_company_profile_metrics():
     report = build_report_context(_base_result(ticker="BBCA.JK", market="ID", company_profile=company_profile))
 
     assert {"label": "Market Cap", "value": "1,205,000.0 IDR Bn"} in report["company_profile_rows"]
-    assert {"label": "Shares Outstanding", "value": "123,275,050,000"} in report["company_profile_rows"]
-    assert {"label": "Current Price", "value": "Rp 9,800"} in report["company_profile_rows"]
+    assert {"label": "Shares Outstanding", "value": "123,275,050,000"} in report["shares_ownership_rows"]
+    assert not any(row["label"] == "Current Price" for row in report["company_profile_rows"])
 
 
 def test_html_report_hides_unavailable_company_profile():
@@ -566,7 +599,25 @@ def test_html_report_hides_unavailable_company_profile():
     assert "Company Profile" not in html
 
 
-def test_html_report_renders_price_chart_summary():
+def test_html_report_renders_ownership_fallback_when_unavailable():
+    html = render_analysis_report_html(
+        build_report_context(
+            _base_result(
+                company_profile={
+                    "available": True,
+                    "ticker": "NVDA",
+                    "company_name": "NVIDIA Corporation",
+                }
+            )
+        )
+    )
+
+    assert "SHARES &amp; OWNERSHIP" in html
+    assert "Ownership data is not available." in html
+    assert '<svg class="ownership-pie"' not in html
+
+
+def test_html_report_omits_price_chart_summary():
     report = build_report_context(_base_result())
     html = render_analysis_report_html(report)
 
@@ -574,8 +625,8 @@ def test_html_report_renders_price_chart_summary():
         "label": "Window",
         "value": "1 Month Analysis / 60D Price Window",
     }
-    assert "Chart &amp; Price Summary" in html
-    assert "Average Volume" in html
+    assert "Chart &amp; Price Summary" not in html
+    assert "Average Volume" not in html
 
 
 def test_html_report_renders_phase_3_chart_and_news_summaries():
@@ -624,9 +675,7 @@ def test_report_excludes_high_impact_from_full_news_items():
 
 def test_report_does_not_fallback_to_related_when_full_news_list_is_empty():
     result = make_result_with_news(high_count=1, full_count=0)
-    result["related_news"] = {
-        "items": [{"title": "Legacy duplicate", "url": "https://example.com/legacy"}]
-    }
+    result["related_news"] = {"items": [{"title": "Legacy duplicate", "url": "https://example.com/legacy"}]}
     result["news_impact"]["full_news_list"] = []
 
     report = build_report_context(result)
@@ -711,7 +760,8 @@ def test_html_report_renders_related_news_with_safe_original_vendor_links_only()
     html = render_analysis_report_html(report)
 
     assert len(report["full_news_items"]) == 3
-    assert "Full News List" in html
+    assert "Full News List" not in html
+    assert "Related News" in html
     assert "NVIDIA earnings remain resilient" in html
     assert "Open original source" in html
     assert "Missing original source" in html
