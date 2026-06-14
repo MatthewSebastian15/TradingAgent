@@ -118,7 +118,7 @@ describe('NewsTab', () => {
     expect(screen.queryByText('FULL NEWS LIST')).not.toBeInTheDocument();
     expect(screen.getByText('High Impact Article 1')).toBeInTheDocument();
     expect(screen.getByText('High Impact Article 7')).toBeInTheDocument();
-    expect(screen.getAllByText(/NEWS #/i).length).toBeGreaterThanOrEqual(7);
+    expect(screen.getAllByText(/Impact: HIGH/i).length).toBeGreaterThanOrEqual(7);
   });
 
   it('sorts the unified news list by highest impact first', () => {
@@ -177,11 +177,11 @@ describe('NewsTab', () => {
     expect(screen.getAllByText(result.news_impact.high_impact_news[0].title)).toHaveLength(1);
   });
 
-  it('renders market context items inside the unified news list with scope label', () => {
+  it('renders market context items inside the unified news list', () => {
     render(<NewsTab result={makeNewsResultWithMarketContext()} />);
 
     expect(screen.getByText('Asian Markets Rally on US Inflation Data')).toBeInTheDocument();
-    expect(screen.getAllByText(/Scope: MARKET CONTEXT/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Jakarta Composite Tracks Regional Risk Appetite')).toBeInTheDocument();
   });
 
   it('falls back to related news only when news impact full list is missing', () => {

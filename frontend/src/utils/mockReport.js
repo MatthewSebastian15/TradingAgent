@@ -23,6 +23,11 @@ function display(value) {
   return String(value);
 }
 
+function displayDash(value) {
+  const text = display(value);
+  return text === 'N/A' ? '-' : text;
+}
+
 function escapeHtml(value) {
   return display(value)
     .replace(/&/g, '&amp;')
@@ -131,38 +136,146 @@ function profileNumber(value) {
   return number === null ? 'N/A' : number.toLocaleString('en-US');
 }
 
-function profileCurrentPrice(value, profile) {
-  const number = numberOrNull(value);
-  if (number === null) return 'N/A';
-
-  const currencyCode = String(profile?.currency || '').toUpperCase();
-  if (currencyCode === 'IDR') return `Rp ${number.toLocaleString('en-US')}`;
-  if (profile?.ticker) return formatPrice(number, profile.ticker) || 'N/A';
-  if (!currencyCode) return display(number);
-  return `${currencyCode} ${number.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+function profileRow(label, value) {
+  return { label, value: displayDash(value) };
 }
 
 function buildCompanyProfileRows(profile) {
   if (!profile?.available) return [];
   return [
-    row('Company Name', profile.company_name || profile.name),
-    row('Ticker', profile.ticker),
-    row('Exchange', profile.exchange),
-    row('Currency', profile.currency),
-    row('Country', profile.country),
-    row('Sector', profile.sector),
-    row('Industry', profile.industry),
-    row('Website', profile.website),
-    row('Market Cap', profileMarketCap(profile.market_cap, profile.currency)),
-    row('Shares Outstanding', profileNumber(profile.shares_outstanding)),
-    row('Current Price', profileCurrentPrice(profile.current_price, profile)),
-    row('Fiscal Year End', profile.fiscal_year_end),
-    row('Employee Count', profile.employee_count ?? profile.full_time_employees),
-    row('Profile Data Quality', profile.data_quality?.status),
+    profileRow('Company Name', profile.company_name || profile.name),
+    profileRow('Ticker', profile.ticker),
+    profileRow('Currency', profile.currency),
+    profileRow('Country', profile.country),
+    profileRow('Sector', profile.sector),
+    profileRow('Industry', profile.industry),
+    profileRow('Market Cap', profileMarketCap(profile.market_cap, profile.currency)),
+    profileRow('Employees', profileNumber(profile.employee_count ?? profile.full_time_employees)),
+    profileRow('Website', profile.website),
   ];
+}
+
+function ownershipRatio(value) {
+  const number = numberOrNull(value);
+  if (number === null) return null;
+  const ratio = Math.abs(number) > 1 ? number / 100 : number;
+  if (!Number.isFinite(ratio)) return null;
+  return Math.max(0, Math.min(ratio, 1));
+}
+
+function ownershipSourceObjects(profile) {
+  return [profile, profile?.shares_ownership, profile?.ownership].filter(
+    (source) => source && typeof source === 'object'
+  );
+}
+
+function firstProfileValue(profile, keys) {
+  for (const source of ownershipSourceObjects(profile)) {
+    for (const key of keys) {
+      const value = source[key];
+      if (hasValue(value)) return value;
+    }
+  }
+  return null;
+}
+
+function profileSharesOut(profile) {
+  return firstProfileValue(profile, ['shares_out', 'shares_outstanding', 'sharesOutstanding']);
+}
+
+function profileInsiderPct(profile) {
+  return firstProfileValue(profile, ['insider_pct', 'insider_percent', 'heldPercentInsiders']);
+}
+
+function profileInstitutionPct(profile) {
+  return firstProfileValue(profile, [
+    'institution_pct',
+    'institution_percent',
+    'heldPercentInstitutions',
+  ]);
+}
+
+function profilePublicPct(profile) {
+  return firstProfileValue(profile, ['public_pct', 'public_percent', 'publicOwnership']);
+}
+
+function profileShortRatio(profile) {
+  return firstProfileValue(profile, ['short_ratio', 'shortRatio']);
+}
+
+function ownershipData(profile) {
+  const insider = ownershipRatio(profileInsiderPct(profile));
+  const institution = ownershipRatio(profileInstitutionPct(profile));
+  const explicitPublic = ownershipRatio(profilePublicPct(profile));
+  const publicOwnership =
+    explicitPublic ??
+    (insider !== null && institution !== null ? Math.max(0, 1 - insider - institution) : null);
+
+  return { insider, institution, public: publicOwnership };
+}
+
+function formatOwnershipPercent(value) {
+  const ratio = ownershipRatio(value);
+  if (ratio === null) return '-';
+  return `${(ratio * 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
+function formatOwnershipRatio(value) {
+  const number = numberOrNull(value);
+  if (number === null) return '-';
+  return number.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function buildSharesOwnershipRows(profile) {
+  if (!profile?.available) return [];
+
+  const ownership = ownershipData(profile);
+  const definitions = [
+    ['Shares Outstanding', profileSharesOut(profile), profileNumber],
+    ['Insider Ownership', profileInsiderPct(profile), formatOwnershipPercent],
+    ['Institutional Ownership', profileInstitutionPct(profile), formatOwnershipPercent],
+    ['Public / Other Ownership', ownership.public, formatOwnershipPercent],
+    ['Short Ratio', profileShortRatio(profile), formatOwnershipRatio],
+  ];
+
+  return definitions
+    .filter(([, value]) => hasValue(value))
+    .map(([label, value, formatter]) => profileRow(label, formatter(value)));
+}
+
+const OWNERSHIP_SEGMENTS = [
+  { key: 'insider', label: 'Insider', color: '#f97316' },
+  { key: 'institution', label: 'Institution', color: '#2563eb' },
+  { key: 'public', label: 'Public / Other', color: '#16a34a' },
+];
+
+function buildOwnershipSegments(profile) {
+  const ownership = ownershipData(profile);
+  const rawSegments = OWNERSHIP_SEGMENTS.map((segment) => ({
+    ...segment,
+    value: ownership[segment.key],
+  })).filter((segment) => segment.value !== null && segment.value > 0);
+  const total = rawSegments.reduce((sum, segment) => sum + segment.value, 0);
+  if (!total) return [];
+
+  let offset = 0;
+  return rawSegments.map((segment) => {
+    const share = (segment.value / total) * 100;
+    const item = {
+      ...segment,
+      display: formatOwnershipPercent(segment.value),
+      dasharray: `${share.toFixed(4)} ${(100 - share).toFixed(4)}`,
+      dashoffset: (-offset).toFixed(4),
+    };
+    offset += share;
+    return item;
+  });
 }
 
 function buildCompanyProfileExecutives(profile) {
@@ -630,6 +743,7 @@ export function buildMockReportContext(result = {}) {
     company_profile: result.company_profile || {},
     company_profile_rows: buildCompanyProfileRows(result.company_profile),
     company_profile_executives: buildCompanyProfileExecutives(result.company_profile),
+    shares_ownership_rows: buildSharesOwnershipRows(result.company_profile),
     price_chart_rows: buildPriceChartRows(result.price_chart, result),
     technical_entry_rows: buildTechnicalEntryRows(result.technical_entry, result),
     news_impact: result.news_impact || {},
@@ -677,15 +791,41 @@ function renderMetricGrid(rows) {
   </div>`;
 }
 
+function renderTextParagraphs(text, className = '') {
+  const classAttribute = className ? ` class="${className}"` : '';
+  const normalized = String(text || '')
+    .replace(/\r\n/g, '\n')
+    .trim();
+  let paragraphs = normalized
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.replace(/\n+/g, ' ').trim())
+    .filter(Boolean);
+
+  if (paragraphs.length <= 1 && normalized.includes('\n')) {
+    paragraphs = normalized
+      .split(/\n+/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
+  }
+
+  return paragraphs.map((paragraph) => `<p${classAttribute}>${escapeHtml(paragraph)}</p>`).join('');
+}
+
 function renderAnalystSections(sections) {
   if (!sections.length) return '';
   return `<section class="section page-break-soft">
     <h2>Analyst Notes</h2>
     ${sections
       .map(
-        (section) => `<article class="analyst-note">
+        (
+          section
+        ) => `<article class="analyst-note${section.title === 'Investment Thesis' ? ' investment-thesis' : ''}">
           <h3>${escapeHtml(section.title)}</h3>
-          <p>${escapeHtml(section.body)}</p>
+          ${
+            section.title === 'Investment Thesis'
+              ? renderTextParagraphs(section.body, 'justified-text thesis-paragraph')
+              : `<p>${escapeHtml(section.body)}</p>`
+          }
         </article>`
       )
       .join('')}
@@ -779,6 +919,10 @@ function renderFinancialHighlights(financialHighlights) {
     : [];
   const displayPeriods = sortFinancialPeriods(periods);
   const renderTable = (rows) => `<table class="financial-highlights-table">
+    <colgroup>
+      <col style="width: 30%" />
+      ${displayPeriods.map(() => `<col style="width: ${70 / displayPeriods.length}%" />`).join('')}
+    </colgroup>
     <thead>
       <tr>
         <th>Metric</th>
@@ -872,12 +1016,63 @@ function renderPeerComparison(payload) {
   </section>`;
 }
 
+function renderOwnershipPieChart(profile) {
+  const segments = buildOwnershipSegments(profile);
+  if (!segments.length) return '';
+
+  return `<div class="ownership-chart">
+    <div class="ownership-pie-wrap">
+      <svg class="ownership-pie" viewBox="0 0 42 42" role="img" aria-label="Ownership composition pie chart">
+        <circle class="ownership-pie-bg" cx="21" cy="21" r="15.9155"></circle>
+        ${segments
+          .map(
+            (segment) => `<circle
+              class="ownership-pie-segment"
+              cx="21"
+              cy="21"
+              r="15.9155"
+              stroke="${segment.color}"
+              stroke-dasharray="${segment.dasharray}"
+              stroke-dashoffset="${segment.dashoffset}"
+            >
+              <title>${escapeHtml(segment.label)} ${escapeHtml(segment.display)}</title>
+            </circle>`
+          )
+          .join('')}
+        <text x="21" y="22.5" text-anchor="middle" class="ownership-pie-label">100%</text>
+      </svg>
+    </div>
+    <div class="ownership-legend">
+      ${segments
+        .map(
+          (segment) => `<div class="ownership-legend-row">
+            <span class="ownership-swatch" style="background:${segment.color}"></span>
+            <span>${escapeHtml(segment.label)}</span>
+            <strong>${escapeHtml(segment.display)}</strong>
+          </div>`
+        )
+        .join('')}
+    </div>
+  </div>`;
+}
+
+function renderSharesOwnership(profile, rows) {
+  if (!profile?.available) return '';
+  const chart = renderOwnershipPieChart(profile);
+
+  return `<section class="section shares-ownership">
+    <h2>SHARES &amp; OWNERSHIP</h2>
+    ${rows.length ? `<table class="profile-table"><tbody>${renderRows(rows)}</tbody></table>` : ''}
+    ${chart || '<p class="muted">Ownership data is not available.</p>'}
+  </section>`;
+}
+
 function renderCompanyProfile(profile, rows, executives) {
   if (!rows.length) return '';
   return `<section class="section">
     <h2>Company Profile</h2>
-    <table><tbody>${renderRows(rows)}</tbody></table>
-    ${profile.business_summary || profile.description ? `<h3>Business Description</h3><p>${escapeHtml(profile.business_summary || profile.description)}</p>` : ''}
+    <table class="profile-table"><tbody>${renderRows(rows)}</tbody></table>
+    ${profile.business_summary || profile.description ? `<h3>Business Description</h3><p class="justified-text">${escapeHtml(profile.business_summary || profile.description)}</p>` : ''}
     ${
       executives.length
         ? `<h3>Key Executives</h3>
@@ -894,14 +1089,6 @@ function renderCompanyProfile(profile, rows, executives) {
           </table>`
         : ''
     }
-  </section>`;
-}
-
-function renderPriceChartSummary(rows) {
-  if (!rows.length) return '';
-  return `<section class="section">
-    <h2>Chart &amp; Price Summary</h2>
-    <table><tbody>${renderRows(rows)}</tbody></table>
   </section>`;
 }
 
@@ -1002,31 +1189,6 @@ function renderRelatedNews(relatedNews, items) {
   </section>`;
 }
 
-function renderFullNewsList(report) {
-  if (!report.full_news_items?.length) return '';
-
-  return `
-    <section class="section">
-      <h2>Full News List</h2>
-      ${report.related_news?.summary ? `<p>${escapeHtml(report.related_news.summary)}</p>` : ''}
-      <p class="muted">Includes company, index, sector, and market-context news that did not qualify as high impact.</p>
-      <div class="news-list">
-        ${report.full_news_items
-          .map(
-            (item) => `<article class="news-item">
-              <h3>${escapeHtml(item.title)}</h3>
-              <p class="muted">Publisher: ${escapeHtml(item.publisher)} | Published: ${escapeHtml(item.published_at)} | Source: ${escapeHtml(item.source)} | Scope: ${escapeHtml(item.news_scope)} | Category: ${escapeHtml(item.materiality_category)} | Source Confidence: ${escapeHtml(item.source_confidence_label)} | Impact: ${escapeHtml(item.impact)} | Score: ${escapeHtml(item.impact_score)} | Relevance: ${escapeHtml(item.relevance_score)}</p>
-              ${item.summary !== 'N/A' ? `<p>${escapeHtml(item.summary)}</p>` : ''}
-              ${item.impact_reason !== 'N/A' ? `<p><strong>Why it matters:</strong> ${escapeHtml(item.impact_reason)}</p>` : ''}
-              ${item.url ? `<p><a href="${escapeHtml(item.url)}">Open original source</a></p>` : ''}
-            </article>`
-          )
-          .join('')}
-      </div>
-    </section>
-  `;
-}
-
 export function renderMockReportHtml(report) {
   return `<!doctype html>
 <html lang="en">
@@ -1055,10 +1217,12 @@ export function renderMockReportHtml(report) {
         padding-bottom: 20px;
         margin-bottom: 24px;
       }
-      h1 { margin: 0 0 14px; font-size: 28px; letter-spacing: -0.02em; }
+      h1 { margin: 0 0 14px; font-size: 28px; letter-spacing: 0; }
       h2 { margin: 28px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #d1d5db; font-size: 18px; }
       h3 { margin: 16px 0 6px; font-size: 15px; }
+      h2, h3 { break-after: avoid; page-break-after: avoid; }
       p { margin: 0 0 12px; }
+      .justified-text { text-align: justify; }
       .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 18px; }
       .meta-grid div { border: 1px solid #e5e7eb; padding: 10px; min-height: 58px; }
       .meta-grid span, .metric-label {
@@ -1072,13 +1236,31 @@ export function renderMockReportHtml(report) {
       table { width: 100%; border-collapse: collapse; margin: 8px 0 18px; }
       th, td { border: 1px solid #d1d5db; padding: 9px 10px; vertical-align: top; }
       th { width: 32%; background: #f3f4f6; text-align: left; }
-      .financial-highlights-table { font-size: 12px; }
-      .financial-highlights-table th, .financial-highlights-table td { padding: 7px; text-align: right; white-space: nowrap; }
+      table, tr, .metric-card, .news-item { break-inside: avoid; page-break-inside: avoid; }
+      .profile-table { table-layout: fixed; }
+      .profile-table th { width: 34%; }
+      .financial-highlights-table { font-size: 12px; table-layout: fixed; }
+      .financial-highlights-table th, .financial-highlights-table td {
+        padding: 7px;
+        text-align: right;
+        overflow-wrap: anywhere;
+        word-break: normal;
+      }
       .financial-highlights-table th:first-child, .financial-highlights-table td:first-child { text-align: left; }
-      .financial-highlights-table th:first-child { width: auto; }
+      .financial-highlights-table th:first-child { width: 30%; }
+      .financial-highlights-table thead th:not(:first-child) { text-align: center; }
       .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0 18px; }
       .metric-card { border: 1px solid #d1d5db; padding: 12px; min-height: 78px; break-inside: avoid; }
       .metric-value { font-weight: 700; color: #111827; word-break: break-word; }
+      .ownership-chart { display: grid; grid-template-columns: 190px 1fr; gap: 18px; align-items: center; margin: 4px 0 18px; }
+      .ownership-pie-wrap { display: flex; justify-content: center; }
+      .ownership-pie { width: 160px; height: 160px; }
+      .ownership-pie-bg { fill: none; stroke: #e5e7eb; stroke-width: 8; }
+      .ownership-pie-segment { fill: none; stroke-width: 8; transform: rotate(-90deg); transform-origin: center; }
+      .ownership-pie-label { fill: #111827; font-size: 6px; font-weight: 700; }
+      .ownership-legend { display: grid; gap: 8px; }
+      .ownership-legend-row { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; }
+      .ownership-swatch { width: 12px; height: 12px; border: 1px solid #d1d5db; }
       .warning { border: 1px solid #f59e0b; background: #fffbeb; padding: 10px 12px; margin: 12px 0; }
       .muted { color: #6b7280; }
       ul { margin: 8px 0 18px 18px; padding: 0; }
@@ -1086,6 +1268,7 @@ export function renderMockReportHtml(report) {
       .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
       .section, .analyst-note { break-inside: avoid; }
       .analyst-note p { white-space: pre-wrap; }
+      .investment-thesis p { white-space: normal; margin-bottom: 9px; }
       .news-list { display: grid; gap: 12px; }
       .news-item { border: 1px solid #d1d5db; padding: 12px; break-inside: avoid; }
       .news-item h3 { margin: 0 0 6px; font-size: 13px; }
@@ -1107,6 +1290,13 @@ export function renderMockReportHtml(report) {
         body { background: #ffffff; }
         .report { width: auto; margin: 0; padding: 0; box-shadow: none; }
         .metric-grid { grid-template-columns: repeat(4, 1fr); }
+        .ownership-chart { break-inside: avoid; page-break-inside: avoid; }
+      }
+      @media (max-width: 720px) {
+        .report { width: auto; margin: 0; padding: 24px; }
+        .meta-grid { grid-template-columns: 1fr; }
+        .metric-grid { grid-template-columns: repeat(2, 1fr); }
+        .ownership-chart { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -1139,14 +1329,14 @@ export function renderMockReportHtml(report) {
 
       <section class="section">
         <h2>Executive Summary</h2>
-        <p>${escapeHtml(report.executive_summary)}</p>
+        <p class="justified-text">${escapeHtml(report.executive_summary)}</p>
       </section>
 
       ${
         report.key_reasons_paragraph
           ? `<section class="section">
         <h2>Key Reasons</h2>
-        <p>${escapeHtml(report.key_reasons_paragraph)}</p>
+        <p class="justified-text">${escapeHtml(report.key_reasons_paragraph)}</p>
       </section>`
           : ''
       }
@@ -1195,6 +1385,8 @@ export function renderMockReportHtml(report) {
         report.company_profile_executives
       )}
 
+      ${renderSharesOwnership(report.company_profile, report.shares_ownership_rows)}
+
       ${renderFinancialHighlights(report.financial_highlights)}
 
       ${renderFundamentalMetricSection(
@@ -1233,15 +1425,11 @@ export function renderMockReportHtml(report) {
 
       ${renderPeerComparison(report.peer_comparison)}
 
-      ${renderPriceChartSummary(report.price_chart_rows)}
-
       ${renderCatalystTracker(report)}
 
       ${renderAnalystConsensus(report.analyst_consensus_rows)}
 
-      ${renderFullNewsList(report)}
-
-      ${!report.full_news_items?.length ? renderRelatedNews(report.related_news, report.related_news_items) : ''}
+      ${renderRelatedNews(report.related_news, report.related_news_items)}
 
       ${renderRiskDataQuality(report)}
 

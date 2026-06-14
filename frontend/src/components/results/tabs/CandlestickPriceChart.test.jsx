@@ -98,14 +98,13 @@ describe('CandlestickPriceChart', () => {
     expect(ticks.length).toBeLessThanOrEqual(9);
   });
 
-  it('orders ranges with YTD first and filters YTD from January 1', () => {
+  it('orders ranges from smallest to largest and filters YTD from January 1', () => {
     expect(PRICE_RANGE_OPTIONS.map((option) => option.key)).toEqual([
+      '1W',
+      '1M',
+      '3M',
       'YTD',
       '1Y',
-      '6M',
-      '3M',
-      '1M',
-      '1W',
     ]);
 
     const points = filterPricePointsByRange(
@@ -123,9 +122,13 @@ describe('CandlestickPriceChart', () => {
   it('renders up, down, and flat candles with a minimum body height', () => {
     const { container } = render(<CandlestickPriceChart points={POINTS} ticker="TEST" />);
 
-    expect(screen.getByRole('img', { name: 'OHLC candlestick price chart with integrated volume' })).toBeTruthy();
+    expect(
+      screen.getByRole('img', { name: 'OHLC candlestick price chart with integrated volume' })
+    ).toBeTruthy();
 
-    const bodies = Array.from(container.querySelectorAll('rect:not([data-testid="volume-bar"])')).slice(1);
+    const bodies = Array.from(
+      container.querySelectorAll('rect:not([data-testid="volume-bar"])')
+    ).slice(1);
     expect(bodies).toHaveLength(3);
     expect(bodies.map((body) => body.getAttribute('fill'))).toEqual([
       UP_COLOR,
@@ -148,13 +151,17 @@ describe('CandlestickPriceChart', () => {
       <CandlestickPriceChart points={weekPoints} ticker="TEST" rangeKey="1W" />
     );
 
-    const bodies = Array.from(container.querySelectorAll('rect:not([data-testid="volume-bar"])')).slice(1);
+    const bodies = Array.from(
+      container.querySelectorAll('rect:not([data-testid="volume-bar"])')
+    ).slice(1);
     expect(Number(bodies[0].getAttribute('width'))).toBeGreaterThan(100);
   });
 
   it('shows compact OHLCV detail for the nearest hovered candle', () => {
     render(<CandlestickPriceChart points={POINTS} ticker="TEST" />);
-    const chart = screen.getByRole('img', { name: 'OHLC candlestick price chart with integrated volume' });
+    const chart = screen.getByRole('img', {
+      name: 'OHLC candlestick price chart with integrated volume',
+    });
     mockChartRect(chart, 1000, 320);
 
     fireEvent.mouseMove(chart, { clientX: 460, clientY: 100 });
@@ -180,5 +187,4 @@ describe('CandlestickPriceChart', () => {
     expect(screen.getByText('Prev Close')).toBeTruthy();
     expect(screen.getByText('Vol')).toBeTruthy();
   });
-
 });

@@ -8,12 +8,11 @@ export const CROSSHAIR_COLOR = 'rgba(255, 255, 255, 0.35)';
 export const LAST_PRICE_COLOR = 'rgba(255, 153, 0, 0.85)';
 export const MIN_RANGE_DAYS = 7;
 export const PRICE_RANGE_OPTIONS = [
+  { key: '1W', label: '1W', days: MIN_RANGE_DAYS },
+  { key: '1M', label: '1M', days: 31 },
+  { key: '3M', label: '3M', days: 92 },
   { key: 'YTD', label: 'YTD' },
   { key: '1Y', label: '1Y', days: 365 },
-  { key: '6M', label: '6M', days: 183 },
-  { key: '3M', label: '3M', days: 92 },
-  { key: '1M', label: '1M', days: 31 },
-  { key: '1W', label: '1W', days: MIN_RANGE_DAYS },
 ];
 export const DEFAULT_PRICE_RANGE = '1Y';
 
