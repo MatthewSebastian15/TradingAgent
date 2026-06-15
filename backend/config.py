@@ -144,6 +144,35 @@ from config_defaults import (
     MAX_GEMINI_CALLS,
     MAX_RISK_DISCUSS_ROUNDS,
     NEWSDATA_API_KEY,
+    NEWS_CACHE_ENABLED,
+    NEWS_CACHE_MAX_ENTRIES,
+    NEWS_CACHE_TTL_MINUTES,
+    NEWS_DEBUG_RAW_RESPONSE,
+    NEWS_DECISION_MIN_RELEVANCE_SCORE,
+    NEWS_DEFAULT_WINDOW_DAYS,
+    NEWS_ENABLED_PROVIDERS,
+    NEWS_ENABLE_YFINANCE_FALLBACK,
+    NEWS_FETCH_SECONDARY_ALWAYS,
+    NEWS_FORCE_ALL_PROVIDERS,
+    NEWS_LOG_PROVIDER_REQUESTS,
+    NEWS_MAX_ARTICLES_FOR_PROMPT,
+    NEWS_MAX_ARTICLES_FOR_UI,
+    NEWS_MAX_ARTICLES_PER_PROVIDER,
+    NEWS_MIN_RELEVANCE_SCORE,
+    NEWS_PROMPT_MIN_RELEVANCE_SCORE,
+    NEWS_PROVIDER_PRIORITY,
+    NEWS_RSS_DECISION_MIN_RELEVANCE_SCORE,
+    NEWS_RSS_DISABLED_FEED_IDS,
+    NEWS_RSS_ENABLED,
+    NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED,
+    NEWS_RSS_INCLUDE_TRIAL_FEEDS,
+    NEWS_RSS_MAX_FEEDS,
+    NEWS_RSS_MAX_ITEMS_PER_FEED,
+    NEWS_RSS_USER_AGENT,
+    NEWS_SECONDARY_FETCH_THRESHOLD,
+    NEWS_STRICT_AI_ANALYSIS_MODE,
+    NEWS_VENDOR_MAX_RETRIES,
+    NEWS_VENDOR_TIMEOUT_SECONDS,
     OWNER_SESSION_SECRET,
     OWNER_SESSION_TTL_SECONDS,
     PIPELINE_LLM_CALL_TIMEOUT_SECONDS,
@@ -262,6 +291,63 @@ class _BackendSettingsShim:
     data_vendor_require_source_metadata = DATA_VENDOR_REQUIRE_SOURCE_METADATA
     data_vendor_return_partial_on_failure = DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE
     data_vendor_max_calls_per_analysis = DATA_VENDOR_MAX_CALLS_PER_ANALYSIS
+    process_pool_max_tasks_per_child = PROCESS_POOL_MAX_TASKS_PER_CHILD
+    analysis_job_max_entries = ANALYSIS_JOB_MAX_ENTRIES
+    analysis_job_max_active = ANALYSIS_JOB_MAX_ACTIVE
+    analysis_job_event_replay_limit = ANALYSIS_JOB_EVENT_REPLAY_LIMIT
+    data_cache_backend = DATA_CACHE_BACKEND
+    tool_timeout_seconds = TOOL_TIMEOUT_SECONDS
+    tool_max_retries = TOOL_MAX_RETRIES
+    news_strict_ai_analysis_mode = NEWS_STRICT_AI_ANALYSIS_MODE
+    news_provider_priority = NEWS_PROVIDER_PRIORITY
+    news_enabled_providers = NEWS_ENABLED_PROVIDERS
+    news_fetch_secondary_always = NEWS_FETCH_SECONDARY_ALWAYS
+    news_force_all_providers = NEWS_FORCE_ALL_PROVIDERS
+    news_enable_yfinance_fallback = NEWS_ENABLE_YFINANCE_FALLBACK
+    news_default_window_days = NEWS_DEFAULT_WINDOW_DAYS
+    news_max_articles_per_provider = NEWS_MAX_ARTICLES_PER_PROVIDER
+    news_max_articles_for_ui = NEWS_MAX_ARTICLES_FOR_UI
+    news_max_articles_for_prompt = NEWS_MAX_ARTICLES_FOR_PROMPT
+    news_min_relevance_score = NEWS_MIN_RELEVANCE_SCORE
+    news_prompt_min_relevance_score = NEWS_PROMPT_MIN_RELEVANCE_SCORE
+    news_decision_min_relevance_score = NEWS_DECISION_MIN_RELEVANCE_SCORE
+    news_rss_decision_min_relevance_score = NEWS_RSS_DECISION_MIN_RELEVANCE_SCORE
+    news_rss_enabled = NEWS_RSS_ENABLED
+    news_rss_max_feeds = NEWS_RSS_MAX_FEEDS
+    news_rss_max_items_per_feed = NEWS_RSS_MAX_ITEMS_PER_FEED
+    news_rss_include_trial_feeds = NEWS_RSS_INCLUDE_TRIAL_FEEDS
+    news_rss_google_news_fallback_enabled = NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED
+    news_rss_disabled_feed_ids = NEWS_RSS_DISABLED_FEED_IDS
+    news_rss_user_agent = NEWS_RSS_USER_AGENT
+    news_cache_enabled = NEWS_CACHE_ENABLED
+    news_cache_ttl_minutes = NEWS_CACHE_TTL_MINUTES
+    news_cache_max_entries = NEWS_CACHE_MAX_ENTRIES
+    news_debug_raw_response = NEWS_DEBUG_RAW_RESPONSE
+    news_log_provider_requests = NEWS_LOG_PROVIDER_REQUESTS
+    news_vendor_timeout_seconds = NEWS_VENDOR_TIMEOUT_SECONDS
+    news_vendor_max_retries = NEWS_VENDOR_MAX_RETRIES
+    news_secondary_fetch_threshold = NEWS_SECONDARY_FETCH_THRESHOLD
+    general_news_enabled = GENERAL_NEWS_ENABLED
+    general_news_provider_priority = GENERAL_NEWS_PROVIDER_PRIORITY
+    general_news_enabled_providers = GENERAL_NEWS_ENABLED_PROVIDERS
+    general_news_enable_background_refresh = GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH
+    general_news_refresh_interval_seconds = GENERAL_NEWS_REFRESH_INTERVAL_SECONDS
+    general_news_cache_ttl_seconds = GENERAL_NEWS_CACHE_TTL_SECONDS
+    general_news_frontend_poll_seconds = GENERAL_NEWS_FRONTEND_POLL_SECONDS
+    general_news_enable_sse = GENERAL_NEWS_ENABLE_SSE
+    general_news_default_window_days = GENERAL_NEWS_DEFAULT_WINDOW_DAYS
+    general_news_max_articles_per_provider = GENERAL_NEWS_MAX_ARTICLES_PER_PROVIDER
+    general_news_max_articles_for_ui = GENERAL_NEWS_MAX_ARTICLES_FOR_UI
+    general_news_default_limit = GENERAL_NEWS_DEFAULT_LIMIT
+    general_news_default_category = GENERAL_NEWS_DEFAULT_CATEGORY
+    general_news_allowed_categories = GENERAL_NEWS_ALLOWED_CATEGORIES
+    general_news_rss_primary = GENERAL_NEWS_RSS_PRIMARY
+    general_news_rss_max_feeds = GENERAL_NEWS_RSS_MAX_FEEDS
+    general_news_rss_max_items_per_feed = GENERAL_NEWS_RSS_MAX_ITEMS_PER_FEED
+    general_news_vendor_timeout_seconds = GENERAL_NEWS_VENDOR_TIMEOUT_SECONDS
+    general_news_vendor_max_retries = GENERAL_NEWS_VENDOR_MAX_RETRIES
+    general_news_cache_enabled = GENERAL_NEWS_CACHE_ENABLED
+    general_news_cache_max_entries = GENERAL_NEWS_CACHE_MAX_ENTRIES
 
     @property
     def llm_provider(self):

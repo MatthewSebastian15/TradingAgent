@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import os
+from pathlib import Path
 
-from config_env import BASE_DIR, env, env_bool, env_float, env_int
+from config_env import BASE_DIR, env, env_bool, env_float, env_int, env_list
 
 # App
 APP_NAME = "TradingAgents API"
@@ -21,22 +21,14 @@ _IS_PRODUCTION = IS_PRODUCTION
 BACKEND_PORT = 8000
 FRONTEND_PORT = 3000
 
-# CORS. Development gets an explicit local allowlist when CORS_ORIGINS is empty.
-# Production must opt in to allowed frontend origins explicitly.
+# CORS
 DEFAULT_DEV_CORS_ORIGINS: list[str] = [
     f"http://localhost:{FRONTEND_PORT}",
     "http://localhost:5173",
     f"http://127.0.0.1:{FRONTEND_PORT}",
     "http://127.0.0.1:5173",
 ]
-
-_raw_cors_origins = env("CORS_ORIGINS", "")
-if _raw_cors_origins.strip():
-    CORS_ORIGINS: list[str] = [origin.strip() for origin in _raw_cors_origins.split(",") if origin.strip()]
-elif IS_DEVELOPMENT:
-    CORS_ORIGINS = list(DEFAULT_DEV_CORS_ORIGINS)
-else:
-    CORS_ORIGINS = []
+CORS_ORIGINS: list[str] = env_list("CORS_ORIGINS", DEFAULT_DEV_CORS_ORIGINS)
 
 if "*" in CORS_ORIGINS:
     raise ValueError("CORS_ORIGINS='*' is not allowed. Use explicit origins instead.")
@@ -58,7 +50,7 @@ PIPELINE_TIMEOUT_SECONDS = PIPELINE_TOTAL_TIMEOUT_SECONDS
 PIPELINE_STAGE_TIMEOUT_SECONDS = env_int("PIPELINE_STAGE_TIMEOUT_SECONDS", 30, min_value=1)
 PIPELINE_LLM_CALL_TIMEOUT_SECONDS = env_int("PIPELINE_LLM_CALL_TIMEOUT_SECONDS", 45, min_value=1)
 PREFLIGHT_TIMEOUT_SECONDS = min(env_int("PREFLIGHT_TIMEOUT_SECONDS", 30, min_value=1), PIPELINE_TIMEOUT_SECONDS)
-PROCESS_POOL_WORKERS = min(env_int("PROCESS_POOL_WORKERS", 2, min_value=1), os.cpu_count() or 2)
+PROCESS_POOL_WORKERS = env_int("PROCESS_POOL_WORKERS", 2, min_value=1)
 PROCESS_POOL_MAX_TASKS_PER_CHILD = env_int("PROCESS_POOL_MAX_TASKS_PER_CHILD", 1, min_value=1)
 DATA_COLLECTION_WORKERS = env_int("DATA_COLLECTION_WORKERS", 12, min_value=1)
 PRICE_MAX_FALLBACK_DAYS = env_int("PRICE_MAX_FALLBACK_DAYS", 7, min_value=0)
@@ -115,26 +107,20 @@ MAX_CONCURRENT_REQUESTS_PER_KEY = env_int("MAX_CONCURRENT_REQUESTS_PER_KEY", 2, 
 MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY = env_int("MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY", 8, min_value=1)
 MAX_CONCURRENT_STREAMS_PER_KEY = env_int("MAX_CONCURRENT_STREAMS_PER_KEY", 1, min_value=1)
 REQUEST_BODY_MAX_BYTES = env_int("REQUEST_BODY_MAX_BYTES", 16 * 1024 * 1024, min_value=1024)
-REQUIRE_API_KEY_FOR_RATE_LIMIT = env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", IS_PRODUCTION)
+REQUIRE_API_KEY_FOR_RATE_LIMIT = env_bool("REQUIRE_API_KEY_FOR_RATE_LIMIT", False)
 if IS_PRODUCTION and not REQUIRE_API_KEY_FOR_RATE_LIMIT:
     raise ValueError("REQUIRE_API_KEY_FOR_RATE_LIMIT=false is not allowed in production.")
 
-RATE_LIMIT_STORAGE_BACKEND = env(
-    "RATE_LIMIT_STORAGE_BACKEND",
-    "sqlite" if IS_PRODUCTION else "memory",
-).lower().strip()
+RATE_LIMIT_STORAGE_BACKEND = env("RATE_LIMIT_STORAGE_BACKEND", "sqlite").lower().strip()
 if RATE_LIMIT_STORAGE_BACKEND not in {"memory", "sqlite"}:
     raise ValueError("RATE_LIMIT_STORAGE_BACKEND must be one of: memory, sqlite.")
 if IS_PRODUCTION and RATE_LIMIT_STORAGE_BACKEND == "memory":
     raise ValueError("RATE_LIMIT_STORAGE_BACKEND=memory is not allowed in production.")
-RATE_LIMIT_DB_PATH = env(
-    "RATE_LIMIT_DB_PATH",
-    str(BASE_DIR / ".cache" / "rate_limits.sqlite3"),
-)
+RATE_LIMIT_DB_PATH = Path(env("RATE_LIMIT_DB_PATH", ".cache/rate_limits.sqlite3"))
 
 # LLM resilience
 LLM_TIMEOUT_SECONDS = env_int("LLM_TIMEOUT_SECONDS", 60, min_value=1)
-LLM_MAX_RETRIES = env_int("LLM_MAX_RETRIES", 2, min_value=1)
+LLM_MAX_RETRIES = env_int("LLM_MAX_RETRIES", 1, min_value=1)
 PROVIDER_SDK_MAX_RETRIES = env_int("PROVIDER_SDK_MAX_RETRIES", 0, min_value=0)
 LLM_RETRIES_BY_DEPTH: dict[str, int] = {depth: cfg["llm_retries"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()}
 LLM_RETRY_BASE_DELAY = 1.5
@@ -244,8 +230,14 @@ FINNHUB_API_KEY = env("FINNHUB_API_KEY", "")
 ALPHA_VANTAGE_API_KEY = env("ALPHA_VANTAGE_API_KEY", "")
 NEWS_STRICT_AI_ANALYSIS_MODE = env_bool("NEWS_STRICT_AI_ANALYSIS_MODE", True)
 NEWS_FORCE_ALL_PROVIDERS = env_bool("NEWS_FORCE_ALL_PROVIDERS", True)
-NEWS_PROVIDER_PRIORITY = env("NEWS_PROVIDER_PRIORITY", "google_news_light,marketaux,rss_context,newsdata,yfinance")
-NEWS_ENABLED_PROVIDERS = env("NEWS_ENABLED_PROVIDERS", "google_news_light,marketaux,rss_context,newsdata,yfinance")
+NEWS_PROVIDER_PRIORITY: list[str] = env_list(
+    "NEWS_PROVIDER_PRIORITY",
+    ["google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"],
+)
+NEWS_ENABLED_PROVIDERS: list[str] = env_list(
+    "NEWS_ENABLED_PROVIDERS",
+    ["google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"],
+)
 NEWS_DEFAULT_WINDOW_DAYS = env_int("NEWS_DEFAULT_WINDOW_DAYS", 30, min_value=1)
 NEWS_MAX_ARTICLES_PER_PROVIDER = env_int("NEWS_MAX_ARTICLES_PER_PROVIDER", 20, min_value=1)
 NEWS_MAX_ARTICLES_FOR_PROMPT = env_int("NEWS_MAX_ARTICLES_FOR_PROMPT", 8, min_value=1)
@@ -265,7 +257,7 @@ NEWS_RSS_MAX_ITEMS_PER_FEED = env_int("NEWS_RSS_MAX_ITEMS_PER_FEED", 20, min_val
 NEWS_RSS_INCLUDE_TRIAL_FEEDS = env_bool("NEWS_RSS_INCLUDE_TRIAL_FEEDS", False)
 NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED = env_bool("NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED", True)
 NEWS_RSS_ENABLED_FEED_IDS = env("NEWS_RSS_ENABLED_FEED_IDS", "")
-NEWS_RSS_DISABLED_FEED_IDS = env("NEWS_RSS_DISABLED_FEED_IDS", "theblock-trial")
+NEWS_RSS_DISABLED_FEED_IDS: list[str] = env_list("NEWS_RSS_DISABLED_FEED_IDS", ["theblock-trial"])
 NEWS_RSS_USER_AGENT = env("NEWS_RSS_USER_AGENT", "TradingAgent/0.1 RSS Reader")
 NEWS_CACHE_ENABLED = env_bool("NEWS_CACHE_ENABLED", True)
 NEWS_CACHE_TTL_MINUTES = env_int("NEWS_CACHE_TTL_MINUTES", 60, min_value=1)
@@ -281,13 +273,13 @@ NEWS_ENABLE_YFINANCE_FALLBACK = env_bool("NEWS_ENABLE_YFINANCE_FALLBACK", True)
 
 # General News Tab
 GENERAL_NEWS_ENABLED = env_bool("GENERAL_NEWS_ENABLED", True)
-GENERAL_NEWS_PROVIDER_PRIORITY = env(
+GENERAL_NEWS_PROVIDER_PRIORITY: list[str] = env_list(
     "GENERAL_NEWS_PROVIDER_PRIORITY",
-    "rss_context,google_news_light,marketaux,newsdata",
+    ["rss_context", "google_news_light", "marketaux", "newsdata"],
 )
-GENERAL_NEWS_ENABLED_PROVIDERS = env(
+GENERAL_NEWS_ENABLED_PROVIDERS: list[str] = env_list(
     "GENERAL_NEWS_ENABLED_PROVIDERS",
-    "rss_context,google_news_light,marketaux,newsdata",
+    ["rss_context", "google_news_light", "marketaux", "newsdata"],
 )
 
 GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH = env_bool("GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH", True)
@@ -302,9 +294,9 @@ GENERAL_NEWS_MAX_ARTICLES_FOR_UI = env_int("GENERAL_NEWS_MAX_ARTICLES_FOR_UI", 1
 GENERAL_NEWS_DEFAULT_LIMIT = env_int("GENERAL_NEWS_DEFAULT_LIMIT", 50, min_value=1)
 
 GENERAL_NEWS_DEFAULT_CATEGORY = env("GENERAL_NEWS_DEFAULT_CATEGORY", "all")
-GENERAL_NEWS_ALLOWED_CATEGORIES = env(
+GENERAL_NEWS_ALLOWED_CATEGORIES: list[str] = env_list(
     "GENERAL_NEWS_ALLOWED_CATEGORIES",
-    "all,market,macro,crypto,forex,commodities,regulatory,indonesia",
+    ["all", "market", "macro", "crypto", "forex", "commodities", "regulatory", "indonesia"],
 )
 
 GENERAL_NEWS_RSS_PRIMARY = env_bool("GENERAL_NEWS_RSS_PRIMARY", True)
