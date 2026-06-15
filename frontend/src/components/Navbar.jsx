@@ -58,12 +58,10 @@ const NAV_ITEMS = [
     path: '/research',
     matchPrefixes: ['/research'],
     Icon: Microscope,
-    disabled: true,
-    tooltip: 'Coming soon',
   },
   { label: 'News', path: '/news', matchPrefixes: ['/news'], Icon: Newspaper },
   { label: 'Market', path: '/market', matchPrefixes: ['/market'], Icon: TrendingUp },
-  { label: 'ECON', path: '/economic', matchPrefixes: ['/economic'], Icon: Landmark },
+  { label: 'ECON', path: '/econ', matchPrefixes: ['/econ', '/economic'], Icon: Landmark },
 ];
 
 function formatDate(value) {

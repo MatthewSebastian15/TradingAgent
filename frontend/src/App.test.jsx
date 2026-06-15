@@ -23,9 +23,23 @@ describe('App', () => {
 
     expect(await screen.findByRole('button', { name: /home/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /ai agent/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /research/i }).getAttribute('aria-disabled')).toBe(
-      'true'
-    );
+    expect(
+      screen.getByRole('button', { name: /research/i }).getAttribute('aria-disabled')
+    ).toBeNull();
+  });
+
+  it('registers the Research placeholder route', async () => {
+    await renderApp('/research', false);
+
+    expect(await screen.findByText('COMING SOON')).toBeTruthy();
+    expect(screen.getByText('Research module is under development.')).toBeTruthy();
+  });
+
+  it('registers the ECON placeholder route', async () => {
+    await renderApp('/econ', false);
+
+    expect(await screen.findByText('COMING SOON')).toBeTruthy();
+    expect(screen.getByText('Economic dashboard is under development.')).toBeTruthy();
   });
 
   it('registers the AI Agent route', async () => {

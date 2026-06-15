@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 
 import { Input } from '@/components/ui/input';
@@ -6,25 +7,42 @@ import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 
 const MIN_QUERY_LENGTH = 2;
 const SEARCH_DEBOUNCE_MS = 300;
+const DROPDOWN_WIDTH = 520;
 
 function formatPrice(value) {
+  if (value === null || value === undefined || value === '') return '-';
   const numberValue = Number(value);
-  if (!Number.isFinite(numberValue)) return '—';
+  if (!Number.isFinite(numberValue)) return '-';
   return numberValue.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
 
-function displayBadge(item) {
+function tickerName(item) {
+  return String(item.name || item.shortName || item.longName || item.symbol || '-').trim();
+}
+
+function exchangeLabel(item) {
   const exchange = String(item.exchange || '')
     .trim()
     .toUpperCase();
-  const type = String(item.type || '')
+  const type = String(item.quoteType || item.type || '')
     .trim()
     .toUpperCase();
+  const market = String(item.market || '')
+    .trim()
+    .toUpperCase();
+  const source = String(item.source || '')
+    .trim()
+    .toUpperCase();
+
   if (exchange && type) return `${exchange} · ${type}`;
-  return exchange || type || 'YFINANCE';
+  return exchange || type || market || source || '-';
+}
+
+function tickerPrice(item) {
+  return item.regularMarketPrice ?? item.price ?? '-';
 }
 
 export default function TickerSearchBar({
@@ -41,10 +59,29 @@ export default function TickerSearchBar({
   const [searchError, setSearchError] = useState('');
   const [open, setOpen] = useState(false);
   const [userEdited, setUserEdited] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({
+    top: 0,
+    left: 0,
+    width: DROPDOWN_WIDTH,
+  });
   const rootRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   const trimmedQuery = useMemo(() => inputValue.trim(), [inputValue]);
   const canSearch = userEdited && trimmedQuery.length >= MIN_QUERY_LENGTH && !disabled;
+  const showDropdown =
+    open && !disabled && trimmedQuery.length > 0 && Boolean(canSearch || loading || searchError);
+
+  const updateDropdownPosition = useCallback(() => {
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const viewportWidth = window.innerWidth || DROPDOWN_WIDTH;
+    setDropdownPosition({
+      top: rect.bottom + 8,
+      left: rect.left,
+      width: Math.min(DROPDOWN_WIDTH, Math.max(320, viewportWidth - rect.left - 16)),
+    });
+  }, []);
 
   useEffect(() => {
     setInputValue(value || '');
@@ -53,15 +90,27 @@ export default function TickerSearchBar({
 
   useEffect(() => {
     function handleDocumentMouseDown(event) {
-      if (rootRef.current && !rootRef.current.contains(event.target)) {
-        setOpen(false);
-        setActiveIndex(-1);
-      }
+      const target = event.target;
+      if (rootRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      setOpen(false);
+      setActiveIndex(-1);
     }
 
     document.addEventListener('mousedown', handleDocumentMouseDown);
     return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
   }, []);
+
+  useEffect(() => {
+    if (!showDropdown) return undefined;
+
+    updateDropdownPosition();
+    window.addEventListener('resize', updateDropdownPosition);
+    window.addEventListener('scroll', updateDropdownPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateDropdownPosition);
+      window.removeEventListener('scroll', updateDropdownPosition, true);
+    };
+  }, [showDropdown, inputValue, results.length, updateDropdownPosition]);
 
   useEffect(() => {
     if (!canSearch) {
@@ -169,10 +218,71 @@ export default function TickerSearchBar({
     }
   }
 
-  const showDropdown = open && !disabled && (canSearch || loading || searchError);
+  const dropdown = showDropdown ? (
+    <div
+      ref={dropdownRef}
+      role="listbox"
+      className="fixed z-[9999] max-h-[420px] overflow-y-auto border border-bloomberg-border bg-black shadow-xl shadow-black/70"
+      style={{
+        top: dropdownPosition.top,
+        left: dropdownPosition.left,
+        width: dropdownPosition.width,
+      }}
+    >
+      {loading && (
+        <div className="px-4 py-3 font-mono text-xs text-bloomberg-muted tracking-wider">
+          SEARCHING YFINANCE...
+        </div>
+      )}
+
+      {!loading && searchError && (
+        <div className="px-4 py-3 font-mono text-xs text-bloomberg-red tracking-wider">
+          {searchError}
+        </div>
+      )}
+
+      {!loading && !searchError && canSearch && !results.length && (
+        <div className="px-4 py-3 font-mono text-xs text-bloomberg-muted tracking-wider">
+          NO YFINANCE MATCHES
+        </div>
+      )}
+
+      {!loading &&
+        !searchError &&
+        results.map((item, index) => (
+          <button
+            key={`${item.symbol}-${item.exchange || item.quoteType || item.market || index}`}
+            type="button"
+            role="option"
+            aria-selected={activeIndex === index}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              selectResult(item);
+            }}
+            onMouseEnter={() => setActiveIndex(index)}
+            className={`grid w-full grid-cols-[88px_1fr_130px_90px] items-center gap-3 border-b border-bloomberg-border px-4 py-3 text-left last:border-b-0 cursor-pointer transition-colors duration-100 ${
+              activeIndex === index ? 'bg-bloomberg-surface' : 'bg-black hover:bg-bloomberg-surface'
+            }`}
+          >
+            <span className="truncate font-mono text-xs font-bold text-bloomberg-orange">
+              {String(item.symbol || '').toUpperCase()}
+            </span>
+            <span className="truncate font-mono text-xs text-bloomberg-white">
+              {tickerName(item)}
+            </span>
+            <span className="truncate border border-bloomberg-border px-2 py-1 text-center font-mono text-[10px] uppercase text-bloomberg-muted">
+              {exchangeLabel(item)}
+            </span>
+            <span className="truncate text-right font-mono text-xs font-bold text-bloomberg-white">
+              {formatPrice(tickerPrice(item))}
+            </span>
+          </button>
+        ))}
+    </div>
+  ) : null;
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative overflow-visible">
       <div
         className={`flex items-center border bg-black transition-colors duration-150 ${
           open
@@ -198,64 +308,7 @@ export default function TickerSearchBar({
         />
       </div>
 
-      {showDropdown && (
-        <div
-          role="listbox"
-          className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-y-auto border border-bloomberg-border bg-black shadow-2xl shadow-black/70"
-        >
-          {loading && (
-            <div className="px-3 py-3 font-mono text-xs text-bloomberg-muted tracking-wider">
-              SEARCHING YFINANCE...
-            </div>
-          )}
-
-          {!loading && searchError && (
-            <div className="px-3 py-3 font-mono text-xs text-bloomberg-red tracking-wider">
-              {searchError}
-            </div>
-          )}
-
-          {!loading && !searchError && canSearch && !results.length && (
-            <div className="px-3 py-3 font-mono text-xs text-bloomberg-muted tracking-wider">
-              NO YFINANCE MATCHES
-            </div>
-          )}
-
-          {!loading &&
-            !searchError &&
-            results.map((item, index) => (
-              <button
-                key={`${item.symbol}-${item.exchange || index}`}
-                type="button"
-                role="option"
-                aria-selected={activeIndex === index}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  selectResult(item);
-                }}
-                onMouseEnter={() => setActiveIndex(index)}
-                className={`grid w-full grid-cols-[6rem_minmax(0,1fr)_8.5rem_5.5rem] items-center gap-3 border-b border-bloomberg-border px-3 py-2 text-left last:border-b-0 transition-colors duration-100 ${
-                  activeIndex === index
-                    ? 'bg-bloomberg-orange-dim'
-                    : 'bg-black hover:bg-bloomberg-surface'
-                }`}
-              >
-                <span className="truncate font-mono text-xs font-bold text-bloomberg-orange">
-                  {String(item.symbol || '').toUpperCase()}
-                </span>
-                <span className="truncate font-mono text-xs text-bloomberg-white">
-                  {item.name || '—'}
-                </span>
-                <span className="truncate border border-bloomberg-border bg-bloomberg-surface px-2 py-1 text-center font-mono text-[10px] text-bloomberg-muted">
-                  {displayBadge(item)}
-                </span>
-                <span className="truncate text-right font-mono text-xs font-semibold text-bloomberg-white">
-                  {formatPrice(item.price)}
-                </span>
-              </button>
-            ))}
-        </div>
-      )}
+      {dropdown && createPortal(dropdown, document.body)}
     </div>
   );
 }

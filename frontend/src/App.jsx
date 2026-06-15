@@ -5,6 +5,7 @@ import AIAgent from './pages/AIAgent';
 import News from './pages/News';
 import Market from './pages/Market';
 import Economic from './pages/Economic';
+import Research from './pages/Research';
 import NotFound from './pages/NotFound';
 import { frontendConfig } from './config';
 import {
@@ -87,9 +88,11 @@ function App() {
             path={LEGACY_ANALYSIS_LIVE_PATH}
             element={<Navigate to={AI_AGENT_PATH} replace />}
           />
+          <Route path="/research" element={<Research />} />
           <Route path="/news" element={<News />} />
           <Route path="/market" element={<Market />} />
-          <Route path="/economic" element={<Economic />} />
+          <Route path="/econ" element={<Economic />} />
+          <Route path="/economic" element={<Navigate to="/econ" replace />} />
           {ENABLE_MOCK_ROUTE && AIAgentMock && (
             <Route path={AI_AGENT_MOCK_PATH} element={<AIAgentMock />} />
           )}

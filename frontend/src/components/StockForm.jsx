@@ -25,8 +25,14 @@ import TickerSearchBar from './TickerSearchBar';
 
 const TERMINAL_INPUT_CLASS =
   'h-9 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-xs tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
-const TERMINAL_SELECT_TRIGGER_CLASS =
-  'h-9 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-xs tracking-wider text-bloomberg-white focus:ring-1 focus:ring-bloomberg-orange focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+const SETTINGS_LABEL_CLASS =
+  'text-[10px] text-bloomberg-muted font-mono tracking-[0.2em] uppercase leading-tight min-h-[28px] flex items-end';
+const SETTINGS_STACKED_LABEL_CLASS =
+  'text-[10px] text-bloomberg-muted font-mono tracking-[0.2em] uppercase leading-tight min-h-[28px] flex flex-col justify-end';
+const SETTINGS_INPUT_CLASS =
+  'h-[54px] w-full rounded-none border-bloomberg-border bg-black font-mono text-sm tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+const SETTINGS_SELECT_TRIGGER_CLASS =
+  'h-[54px] w-full rounded-none border-bloomberg-border bg-black font-mono text-sm tracking-wider text-bloomberg-white focus:ring-1 focus:ring-bloomberg-orange focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const TERMINAL_PRIMARY_BUTTON_CLASS =
   'h-10 rounded-none border border-bloomberg-orange bg-bloomberg-orange px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-orange-400 focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const TERMINAL_STOP_BUTTON_CLASS =
@@ -80,10 +86,10 @@ FieldLabel.propTypes = {
 
 function SelectField({ label, value, onValueChange, disabled, children }) {
   return (
-    <div className="min-w-0">
-      <FieldLabel>{label}</FieldLabel>
+    <div className="min-w-0 space-y-2">
+      <label className={SETTINGS_LABEL_CLASS}>{label}</label>
       <Select value={String(value)} onValueChange={onValueChange} disabled={disabled}>
-        <SelectTrigger className={TERMINAL_SELECT_TRIGGER_CLASS}>
+        <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>{children}</SelectContent>
@@ -233,8 +239,7 @@ export default function StockForm({
     <form onSubmit={handleSubmit} className="font-mono">
       <div className="flex flex-col gap-3 bg-bloomberg-bg p-3">
         <ConfigSection title="Ticker">
-          <div>
-            <FieldLabel hint="YFINANCE ONLY">Ticker symbol</FieldLabel>
+          <div className="relative overflow-visible">
             <TickerSearchBar
               value={ticker}
               disabled={running}
@@ -275,11 +280,12 @@ export default function StockForm({
         </ConfigSection>
 
         <ConfigSection title="Analysis Settings">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="min-w-0">
-              <FieldLabel hint="DD-MM-YYYY" htmlFor="trade-date">
-                Trade Date
-              </FieldLabel>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0 space-y-2">
+              <label htmlFor="trade-date" className={SETTINGS_STACKED_LABEL_CLASS}>
+                <span>TRADE DATE</span>
+                <span>DD-MM-YYYY</span>
+              </label>
               <Input
                 id="trade-date"
                 value={date}
@@ -287,7 +293,7 @@ export default function StockForm({
                 disabled={running}
                 required
                 placeholder="DD-MM-YYYY"
-                className={TERMINAL_INPUT_CLASS}
+                className={SETTINGS_INPUT_CLASS}
               />
             </div>
 
