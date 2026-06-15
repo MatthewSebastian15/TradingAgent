@@ -1,3 +1,4 @@
+import { resolveClockConfig } from './clock';
 import { formatPrice } from './formatting';
 import { safeExternalUrl } from './url';
 
@@ -617,13 +618,14 @@ function formatConfidence(score, label) {
   return label ? `${percent}% — ${label}` : `${percent}%`;
 }
 
-function formatDateTimeWib(value, includeTime = true) {
+function formatDateTimeDevice(value, includeTime = true) {
   if (!hasValue(value)) return 'N/A';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return display(value);
   if (!includeTime || String(value).length <= 10) return String(value).slice(0, 10);
+  const clockConfig = resolveClockConfig(date);
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jakarta',
+    timeZone: clockConfig.timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -633,7 +635,7 @@ function formatDateTimeWib(value, includeTime = true) {
   })
     .formatToParts(date)
     .reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} WIB`;
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} ${clockConfig.label}`;
 }
 
 function buildConfidenceRows(result) {
@@ -687,7 +689,7 @@ function buildDataFreshnessRows(freshness = {}) {
   return [
     row(
       'Price Data',
-      `${formatDateTimeWib(priceFreshness.timestamp)} | ${display(priceFreshness.freshness_status)}`
+      `${formatDateTimeDevice(priceFreshness.timestamp)} | ${display(priceFreshness.freshness_status)}`
     ),
     row(
       'Financial Reports',

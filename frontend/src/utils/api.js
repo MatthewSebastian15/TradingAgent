@@ -1,13 +1,18 @@
-const API_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+import { frontendConfig } from '../config';
+
 const OWNER_SESSION_EXPIRES_AT_KEY = '_ta_owner_session_expires_at';
 const OWNER_SESSION_REFRESH_SKEW_SECONDS = 30;
 
 let ownerSessionPromise = null;
 let ownerSessionExpiresAt = 0;
 
+function resolveApiBaseUrl() {
+  return (frontendConfig.apiBaseUrl || frontendConfig.apiUrl || '').trim();
+}
+
 export function buildApiUrl(path) {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  const base = API_URL.trim().replace(/\/+$/, '');
+  const base = resolveApiBaseUrl().replace(/\/+$/, '');
   if (!base) return `/api${cleanPath}`;
   const cleanBase = base.endsWith('/api') ? base.slice(0, -4) : base;
   return `${cleanBase}/api${cleanPath}`;

@@ -15,6 +15,7 @@ import ReportActions from './results/ReportActions';
 import ResultTabs from './results/tabs/ResultTabs';
 import { PIPELINE_STATUSES } from '../domain/analysisContract';
 import { useResultSections } from '../hooks/useResultSections';
+import { resolveClockConfig } from '../utils/clock';
 import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['BUY', 'SELL', 'Buy', 'Overweight', 'Sell', 'Underweight']);
@@ -172,13 +173,13 @@ function confidenceTone(tier) {
   );
 }
 
-function formatWibPriceTimestamp(value, includeTime = true) {
+function formatDevicePriceTimestamp(value, includeTime = true) {
   if (!hasDisplayValue(value)) return null;
   const rawValue = String(value).trim();
 
   // Backend price rows are daily candles. A date-only value such as
   // 2026-05-12 must stay date-only; parsing it through JavaScript Date treats
-  // it as midnight UTC and renders a misleading 07:00 WIB timestamp.
+  // it as midnight UTC and renders a misleading time-shifted timestamp.
   if (/^\d{4}-\d{2}-\d{2}$/.test(rawValue)) {
     return rawValue;
   }
@@ -186,8 +187,9 @@ function formatWibPriceTimestamp(value, includeTime = true) {
   const date = new Date(rawValue);
   if (Number.isNaN(date.getTime())) return rawValue;
 
+  const clockConfig = resolveClockConfig(date);
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jakarta',
+    timeZone: clockConfig.timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -199,16 +201,16 @@ function formatWibPriceTimestamp(value, includeTime = true) {
     .reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
 
   const dateText = `${parts.year}-${parts.month}-${parts.day}`;
-  return includeTime ? `${dateText}  ${parts.hour}:${parts.minute} WIB` : dateText;
+  return includeTime ? `${dateText}  ${parts.hour}:${parts.minute} ${clockConfig.label}` : dateText;
 }
 
 function formatPriceAsOf(result, fallbackValue) {
   const timestamp = result.price_timestamp || fallbackValue;
   if (!hasDisplayValue(timestamp)) return null;
   if (result.price_is_fallback) {
-    return `${formatWibPriceTimestamp(timestamp, false)}  (Previous Close — Fallback)`;
+    return `${formatDevicePriceTimestamp(timestamp, false)}  (Previous Close — Fallback)`;
   }
-  const label = formatWibPriceTimestamp(timestamp, true);
+  const label = formatDevicePriceTimestamp(timestamp, true);
   if (result.market_status === 'open') return `${label}  (Intraday)`;
   if (result.market_status === 'closed') return `${label}  (Closing Price)`;
   return label;
@@ -304,7 +306,7 @@ function formatDataSourcePriceLabel(result) {
   const priceSource = result.data_sources?.price;
   if (priceSource?.provider) {
     const timestamp = priceSource.timestamp || result.price_timestamp || result.current_price_as_of;
-    const dateLabel = formatWibPriceTimestamp(timestamp, !priceSource.is_fallback);
+    const dateLabel = formatDevicePriceTimestamp(timestamp, !priceSource.is_fallback);
     const fallback = priceSource.is_fallback ? '⚠  ' : '';
     const fallbackText = priceSource.is_fallback ? ' (previous close fallback)' : '';
     return `${fallback}Price: ${priceSource.provider}${fallbackText}${dateLabel ? ` · ${dateLabel}` : ''}`;
@@ -316,7 +318,7 @@ function formatDataSourcePriceLabel(result) {
     ? 'Yahoo Finance'
     : String(source);
   const timestamp = result.price_timestamp || result.current_price_as_of;
-  const dateLabel = formatWibPriceTimestamp(timestamp, !result.price_is_fallback);
+  const dateLabel = formatDevicePriceTimestamp(timestamp, !result.price_is_fallback);
   const fallback = result.price_is_fallback ? '⚠  ' : '';
   const fallbackText = result.price_is_fallback ? ' (previous close fallback)' : '';
   return `${fallback}Price: ${provider}${fallbackText}${dateLabel ? ` · ${dateLabel}` : ''}`;
@@ -883,7 +885,7 @@ function buildResultViewModel(result) {
     thesis: analysisOverview.investment_thesis || result.investment_thesis,
     currentPrice,
     priceAsOfLabel: formatPriceAsOf(result, currentPriceAsOf),
-    priceTimestampLabel: formatWibPriceTimestamp(currentPriceAsOf),
+    priceTimestampLabel: formatDevicePriceTimestamp(currentPriceAsOf),
     currentPriceSource: formatDataSourcePriceLabel(result),
     timeHorizon: formatAnalysisHorizon(result.time_horizon_months, result.time_horizon),
     confidenceDisplay: formatConfidenceDisplay(result.confidence_score ?? null, result.confidence_label),

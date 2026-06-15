@@ -1,37 +1,29 @@
 import { describe, expect, it } from 'vitest';
 
-import { createClockFormatter, resolveClockConfig } from './clock';
+import {
+  createClockFormatter,
+  resolveClockConfig,
+  resolveDeviceTimeZone,
+  resolveTimeZoneLabel,
+} from './clock';
 
 describe('clock config', () => {
-  it('defaults to Indonesia time without hardcoding the label in Navbar', () => {
-    expect(resolveClockConfig({})).toEqual({
-      timeZone: 'Asia/Jakarta',
-      label: 'WIB',
+  it('detects the timezone from the device', () => {
+    expect(resolveDeviceTimeZone()).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  });
+
+  it('derives the label from the detected timezone offset', () => {
+    const date = new Date('2026-05-23T01:02:03Z');
+    const config = resolveClockConfig(date);
+
+    expect(config).toEqual({
+      timeZone: resolveDeviceTimeZone(),
+      label: resolveTimeZoneLabel(resolveDeviceTimeZone(), date),
     });
   });
 
-  it('uses explicit Vite clock timezone and label overrides', () => {
-    expect(
-      resolveClockConfig({
-        VITE_CLOCK_TIME_ZONE: 'Asia/Singapore',
-        VITE_CLOCK_LABEL: 'SGT',
-      })
-    ).toEqual({
-      timeZone: 'Asia/Singapore',
-      label: 'SGT',
-    });
-  });
-
-  it('falls back to a safe clock config when the timezone is invalid', () => {
-    expect(
-      resolveClockConfig({
-        VITE_CLOCK_TIME_ZONE: 'Not/AZone',
-        VITE_CLOCK_LABEL: 'BAD',
-      })
-    ).toEqual({
-      timeZone: 'Asia/Jakarta',
-      label: 'WIB',
-    });
+  it('falls back to UTC when the timezone is invalid', () => {
+    expect(resolveTimeZoneLabel('Not/AZone')).toBe('UTC');
   });
 
   it('formats using the resolved timezone', () => {
