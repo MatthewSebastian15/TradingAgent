@@ -40,13 +40,24 @@ const PROVIDER_OPTIONS = [
   { value: 'ollama', label: 'Ollama' },
 ];
 
+const TERMINAL_INPUT_CLASS =
+  'h-9 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-xs tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+const TERMINAL_SELECT_TRIGGER_CLASS =
+  'h-9 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-xs tracking-wider text-bloomberg-white focus:ring-1 focus:ring-bloomberg-orange focus:ring-offset-0';
+const TERMINAL_SHEET_BUTTON_CLASS =
+  'h-8 w-8 rounded-none border border-transparent text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange-dim hover:text-bloomberg-orange focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0';
+const TERMINAL_PRIMARY_BUTTON_CLASS =
+  'h-10 rounded-none border border-bloomberg-orange bg-bloomberg-orange px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-orange-400 focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+
 function apiToDisplayDate(value) {
   const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value || '');
 }
 
 function displayToApiDate(value) {
-  const match = String(value || '').trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  const match = String(value || '')
+    .trim()
+    .match(/^(\d{2})-(\d{2})-(\d{4})$/);
   return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
 }
 
@@ -54,7 +65,7 @@ function FieldLabel({ children, hint = null, htmlFor = undefined }) {
   return (
     <label
       htmlFor={htmlFor}
-      className="mb-2 flex items-center justify-between gap-2 font-sans text-xs uppercase tracking-widest text-muted-foreground"
+      className="mb-1.5 flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-bloomberg-muted"
     >
       <span>{children}</span>
       {hint && <span className="font-mono text-xs normal-case tracking-wide">{hint}</span>}
@@ -72,14 +83,25 @@ function SheetIconButton({ title, icon: Icon, children }) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button type="button" variant="ghost" size="icon" aria-label={title} title={title}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={title}
+          title={title}
+          className={TERMINAL_SHEET_BUTTON_CLASS}
+        >
           <Icon className="h-4 w-4" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="border-border bg-background">
+      <SheetContent className="border-bloomberg-border bg-bloomberg-bg font-mono text-bloomberg-white">
         <SheetHeader>
-          <SheetTitle>{title}</SheetTitle>
-          <SheetDescription>Configuration applies to this analysis form.</SheetDescription>
+          <SheetTitle className="font-mono text-sm uppercase tracking-widest text-bloomberg-orange">
+            {title}
+          </SheetTitle>
+          <SheetDescription className="font-mono text-xs text-bloomberg-muted">
+            Configuration applies to this analysis form.
+          </SheetDescription>
         </SheetHeader>
         <div className="mt-6 space-y-5">{children}</div>
       </SheetContent>
@@ -98,7 +120,7 @@ function SelectField({ label, value, onValueChange, disabled, children }) {
     <div>
       <FieldLabel>{label}</FieldLabel>
       <Select value={String(value)} onValueChange={onValueChange} disabled={disabled}>
-        <SelectTrigger className="font-mono">
+        <SelectTrigger className={TERMINAL_SELECT_TRIGGER_CLASS}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>{children}</SelectContent>
@@ -231,12 +253,12 @@ export default function StockForm({
 
   return (
     <form onSubmit={handleSubmit} className="animate-in fade-in slide-in-from-top-2 duration-300">
-      <div className="flex flex-col gap-5 p-4">
+      <div className="flex flex-col gap-4 bg-bloomberg-bg p-4 font-mono">
         <div className="flex items-center justify-between gap-3">
-          <div className="font-sans text-sm font-semibold uppercase tracking-widest text-primary">
+          <div className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-bloomberg-orange">
             Analysis Setup
           </div>
-          <div className="flex items-center gap-1 rounded-md border border-border bg-black p-1">
+          <div className="flex items-center gap-1 rounded-none border border-bloomberg-border bg-black p-1">
             <SheetIconButton title="Ticker input" icon={Search}>
               <div>
                 <FieldLabel hint="YFINANCE ONLY">Ticker symbol</FieldLabel>
@@ -265,7 +287,7 @@ export default function StockForm({
                   disabled={running}
                   required
                   placeholder="DD-MM-YYYY"
-                  className="font-mono"
+                  className={TERMINAL_INPUT_CLASS}
                 />
               </div>
             </SheetIconButton>
@@ -321,20 +343,20 @@ export default function StockForm({
                 <SelectItem value="debug">DEBUG</SelectItem>
               </SelectField>
 
-              <div className="rounded-md border border-border bg-black p-4">
+              <div className="rounded-none border border-bloomberg-border bg-black p-3">
                 <label className="flex cursor-pointer items-start gap-3">
                   <input
                     type="checkbox"
                     checked={hasExistingPosition}
                     onChange={(event) => setHasExistingPosition(event.target.checked)}
                     disabled={running}
-                    className="mt-1 accent-primary"
+                    className="mt-1 accent-bloomberg-orange"
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block font-sans text-sm font-medium text-foreground">
+                    <span className="block font-mono text-xs font-semibold uppercase tracking-wider text-bloomberg-white">
                       Existing position
                     </span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
+                    <span className="mt-1 block font-mono text-[11px] leading-relaxed text-bloomberg-muted">
                       Enables HOLD, REDUCE, or SELL context for current holdings.
                     </span>
                   </span>
@@ -352,7 +374,7 @@ export default function StockForm({
                         onChange={(event) => setPositionQuantity(event.target.value)}
                         disabled={running}
                         placeholder="Optional"
-                        className="font-mono"
+                        className={TERMINAL_INPUT_CLASS}
                       />
                     </div>
                     <div>
@@ -366,7 +388,7 @@ export default function StockForm({
                         onChange={(event) => setAverageEntryPrice(event.target.value)}
                         disabled={running}
                         placeholder="Optional"
-                        className="font-mono"
+                        className={TERMINAL_INPUT_CLASS}
                       />
                     </div>
                   </div>
@@ -387,7 +409,7 @@ export default function StockForm({
                   </SelectItem>
                 ))}
               </SelectField>
-              <div className="rounded-md border border-border bg-black p-3 text-xs text-muted-foreground">
+              <div className="rounded-none border border-bloomberg-border bg-black p-3 font-mono text-[11px] leading-relaxed text-bloomberg-muted">
                 Provider selection is visual only. Backend provider config remains unchanged.
               </div>
             </SheetIconButton>
@@ -420,29 +442,34 @@ export default function StockForm({
               disabled={running}
               required
               placeholder="DD-MM-YYYY"
-              className="font-mono"
+              className={TERMINAL_INPUT_CLASS}
             />
           </div>
         </div>
 
         {error && (
-          <div className="rounded-md border border-destructive bg-destructive/15 px-3 py-2">
-            <span className="font-mono text-xs text-destructive">ERR: {error}</span>
+          <div className="rounded-none border border-bloomberg-red bg-bloomberg-red-dim px-3 py-2">
+            <span className="font-mono text-xs text-bloomberg-red">ERR: {error}</span>
           </div>
         )}
 
-        <Button type="submit" size="lg" variant={running ? 'destructive' : 'default'}>
+        <Button
+          type="submit"
+          size="lg"
+          variant={running ? 'destructive' : 'default'}
+          className={TERMINAL_PRIMARY_BUTTON_CLASS}
+        >
           {running ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           {running ? 'Stop analysis' : 'Execute analysis'}
         </Button>
 
-        <div className="rounded-md border border-border bg-black px-3 py-2 text-center font-mono text-xs text-muted-foreground">
+        <div className="rounded-none border border-bloomberg-border bg-black px-3 py-2 text-center font-mono text-[11px] tracking-wider text-bloomberg-muted">
           {selectedHorizon?.label || '1 MONTH'} / {selectedDepth?.label || 'BALANCED'} /{' '}
           {selectedProvider?.label || 'Gemini'}
         </div>
 
         {running && (
-          <div className="space-y-3 rounded-md border border-border bg-card p-4">
+          <div className="space-y-3 rounded-none border border-bloomberg-border bg-bloomberg-card p-4">
             <Skeleton className="h-4 w-2/3" />
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />

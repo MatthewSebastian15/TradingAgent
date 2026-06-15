@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AI_RESEARCH_PATH } from '../constants/routes';
+import { AI_AGENT_PATH } from '../constants/routes';
 import Navbar from '../components/Navbar';
 import TickerTape from '../components/TickerTape';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
@@ -232,7 +232,7 @@ export default function Dashboard() {
 
             <div className="border border-bloomberg-border bg-bloomberg-card p-5">
               <div className="font-mono text-xs text-bloomberg-orange tracking-widest uppercase mb-4">
-                Multi-Agent AI Research
+                Multi-Agent AI Agent
               </div>
 
               <div className="font-display text-3xl font-bold text-bloomberg-white leading-tight tracking-wide mb-3 sm:text-4xl">
@@ -247,7 +247,7 @@ export default function Dashboard() {
               </p>
 
               <button
-                onClick={() => navigate(AI_RESEARCH_PATH)}
+                onClick={() => navigate(AI_AGENT_PATH)}
                 className="w-full py-3 bg-bloomberg-orange text-black font-mono text-xs font-bold tracking-widest hover:bg-orange-400 transition-colors duration-150 active:scale-[0.99] mb-3"
               >
                 ▶ OPEN TERMINAL

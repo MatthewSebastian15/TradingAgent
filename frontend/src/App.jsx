@@ -1,15 +1,19 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
-import Analysis from './pages/Analysis';
+import AIAgent from './pages/AIAgent';
 import News from './pages/News';
 import Market from './pages/Market';
 import Economic from './pages/Economic';
 import NotFound from './pages/NotFound';
 import { frontendConfig } from './config';
 import {
-  AI_RESEARCH_MOCK_PATH,
-  AI_RESEARCH_PATH,
+  AI_AGENT_MOCK_PATH,
+  AI_AGENT_PATH,
+  LEGACY_AI_AGENT_LOWER_PATH,
+  LEGACY_AI_AGENT_MOCK_LOWER_PATH,
+  LEGACY_AI_AGENT_MOCK_OLD_PATH,
+  LEGACY_AI_AGENT_OLD_PATH,
   LEGACY_ANALYSIS_LIVE_PATH,
   LEGACY_ANALYSIS_MOCK_ALIAS_PATH,
   LEGACY_ANALYSIS_MOCK_PATH,
@@ -20,7 +24,7 @@ import './index.css';
 // Mock UI route is opt-in only. Keeping it behind VITE_ENABLE_MOCK prevents
 // development/demo data from leaking into normal Docker builds.
 const ENABLE_MOCK_ROUTE = frontendConfig.enableMock;
-const AnalysisMock = ENABLE_MOCK_ROUTE ? lazy(() => import('./pages/AnalysisMock')) : null;
+const AIAgentMock = ENABLE_MOCK_ROUTE ? lazy(() => import('./pages/AIAgentMock')) : null;
 
 function buildResourceRedirectPath(basePath, resourceId) {
   const normalizedResourceId = typeof resourceId === 'string' ? resourceId.trim() : '';
@@ -32,16 +36,16 @@ function buildResourceRedirectPath(basePath, resourceId) {
   return `${basePath}/${encodeURIComponent(normalizedResourceId)}`;
 }
 
-function LegacyAnalysisRedirect() {
+function LegacyAIAgentRedirect() {
   const { resourceId } = useParams();
 
-  return <Navigate to={buildResourceRedirectPath(AI_RESEARCH_PATH, resourceId)} replace />;
+  return <Navigate to={buildResourceRedirectPath(AI_AGENT_PATH, resourceId)} replace />;
 }
 
-function LegacyAnalysisMockRedirect() {
+function LegacyAIAgentMockRedirect() {
   const { resourceId } = useParams();
 
-  return <Navigate to={buildResourceRedirectPath(AI_RESEARCH_MOCK_PATH, resourceId)} replace />;
+  return <Navigate to={buildResourceRedirectPath(AI_AGENT_MOCK_PATH, resourceId)} replace />;
 }
 
 function LoadingScreen() {
@@ -59,42 +63,79 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Dashboard />} />
-          <Route path={AI_RESEARCH_PATH} element={<Analysis />} />
-          <Route path={`${AI_RESEARCH_PATH}/:resourceId`} element={<Analysis />} />
-          <Route path={LEGACY_ANALYSIS_PATH} element={<Navigate to={AI_RESEARCH_PATH} replace />} />
+          <Route path={AI_AGENT_PATH} element={<AIAgent />} />
+          <Route path={`${AI_AGENT_PATH}/:resourceId`} element={<AIAgent />} />
           <Route
-            path={`${LEGACY_ANALYSIS_PATH}/:resourceId`}
-            element={<LegacyAnalysisRedirect />}
+            path={LEGACY_AI_AGENT_OLD_PATH}
+            element={<Navigate to={AI_AGENT_PATH} replace />}
           />
           <Route
+            path={LEGACY_AI_AGENT_LOWER_PATH}
+            element={<Navigate to={AI_AGENT_PATH} replace />}
+          />
+          <Route
+            path={`${LEGACY_AI_AGENT_OLD_PATH}/:resourceId`}
+            element={<LegacyAIAgentRedirect />}
+          />
+          <Route
+            path={`${LEGACY_AI_AGENT_LOWER_PATH}/:resourceId`}
+            element={<LegacyAIAgentRedirect />}
+          />
+          <Route path={LEGACY_ANALYSIS_PATH} element={<Navigate to={AI_AGENT_PATH} replace />} />
+          <Route path={`${LEGACY_ANALYSIS_PATH}/:resourceId`} element={<LegacyAIAgentRedirect />} />
+          <Route
             path={LEGACY_ANALYSIS_LIVE_PATH}
-            element={<Navigate to={AI_RESEARCH_PATH} replace />}
+            element={<Navigate to={AI_AGENT_PATH} replace />}
           />
           <Route path="/news" element={<News />} />
           <Route path="/market" element={<Market />} />
           <Route path="/economic" element={<Economic />} />
-          {ENABLE_MOCK_ROUTE && AnalysisMock && (
-            <Route path={AI_RESEARCH_MOCK_PATH} element={<AnalysisMock />} />
+          {ENABLE_MOCK_ROUTE && AIAgentMock && (
+            <Route path={AI_AGENT_MOCK_PATH} element={<AIAgentMock />} />
           )}
-          {ENABLE_MOCK_ROUTE && AnalysisMock && (
-            <Route path={`${AI_RESEARCH_MOCK_PATH}/:resourceId`} element={<AnalysisMock />} />
+          {ENABLE_MOCK_ROUTE && AIAgentMock && (
+            <Route path={`${AI_AGENT_MOCK_PATH}/:resourceId`} element={<AIAgentMock />} />
           )}
-          {ENABLE_MOCK_ROUTE && AnalysisMock && (
+          {ENABLE_MOCK_ROUTE && AIAgentMock && (
+            <Route
+              path={LEGACY_AI_AGENT_MOCK_OLD_PATH}
+              element={<Navigate to={AI_AGENT_MOCK_PATH} replace />}
+            />
+          )}
+          {ENABLE_MOCK_ROUTE && AIAgentMock && (
+            <Route
+              path={LEGACY_AI_AGENT_MOCK_LOWER_PATH}
+              element={<Navigate to={AI_AGENT_MOCK_PATH} replace />}
+            />
+          )}
+          {ENABLE_MOCK_ROUTE && AIAgentMock && (
+            <Route
+              path={`${LEGACY_AI_AGENT_MOCK_OLD_PATH}/:resourceId`}
+              element={<LegacyAIAgentMockRedirect />}
+            />
+          )}
+          {ENABLE_MOCK_ROUTE && AIAgentMock && (
+            <Route
+              path={`${LEGACY_AI_AGENT_MOCK_LOWER_PATH}/:resourceId`}
+              element={<LegacyAIAgentMockRedirect />}
+            />
+          )}
+          {ENABLE_MOCK_ROUTE && AIAgentMock && (
             <Route
               path={LEGACY_ANALYSIS_MOCK_PATH}
-              element={<Navigate to={AI_RESEARCH_MOCK_PATH} replace />}
+              element={<Navigate to={AI_AGENT_MOCK_PATH} replace />}
             />
           )}
-          {ENABLE_MOCK_ROUTE && AnalysisMock && (
+          {ENABLE_MOCK_ROUTE && AIAgentMock && (
             <Route
               path={`${LEGACY_ANALYSIS_MOCK_PATH}/:resourceId`}
-              element={<LegacyAnalysisMockRedirect />}
+              element={<LegacyAIAgentMockRedirect />}
             />
           )}
-          {ENABLE_MOCK_ROUTE && AnalysisMock && (
+          {ENABLE_MOCK_ROUTE && AIAgentMock && (
             <Route
               path={LEGACY_ANALYSIS_MOCK_ALIAS_PATH}
-              element={<Navigate to={AI_RESEARCH_MOCK_PATH} replace />}
+              element={<Navigate to={AI_AGENT_MOCK_PATH} replace />}
             />
           )}
           <Route path="*" element={<NotFound />} />
