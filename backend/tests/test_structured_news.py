@@ -9,6 +9,7 @@ from tradingagents.dataflows.news_provider_base import ProviderFetchResult, sani
 from tradingagents.dataflows.news_service import NewsService, _filter_articles_by_window, format_news_for_prompt
 from tradingagents.dataflows.news_ticker_aliases import resolve_news_ticker
 from tradingagents.dataflows.newsdata_news import NewsDataProvider
+from tradingagents.dataflows.rss_news import _select_feeds, build_company_rss_queries, score_rss_article
 
 
 class FakeResponse:
@@ -153,6 +154,43 @@ def test_newsdata_uses_separate_fallback_queries(monkeypatch):
     assert "qInTitle" not in calls[0]
     assert calls[1]["qInTitle"] == "Bank Central Asia"
     assert "q" not in calls[1]
+
+
+def test_rss_scoring_strong_company_match_reaches_decision_threshold():
+    profile = resolve_news_ticker("BBCA.JK")
+
+    score, matched_terms = score_rss_article(
+        {
+            "title": "Bank Central Asia shares rise after earnings update",
+            "summary": "BBCA revenue growth remains resilient.",
+        },
+        profile,
+    )
+
+    assert score >= 80
+    assert "bbca" in matched_terms
+    assert "bank central asia" in matched_terms
+
+
+def test_rss_dynamic_company_queries_are_added_before_generic_fallbacks():
+    profile = resolve_news_ticker("BBCA.JK")
+
+    queries = build_company_rss_queries(profile)
+    feeds = _select_feeds(
+        {
+            "rss_google_news_fallback_enabled": True,
+            "rss_include_trial_feeds": False,
+            "rss_disabled_feed_ids": ["theblock-trial"],
+            "rss_max_feeds": 10,
+        },
+        profile,
+    )
+
+    assert "BBCA.JK stock" in queries
+    assert "BBCA earnings" in queries
+    assert "Bank Central Asia stock" in queries
+    assert any(feed.id.startswith("company-google-news-") for feed in feeds)
+    assert len(feeds) == 10
 
 
 def test_news_service_skips_secondary_when_primary_is_sufficient(monkeypatch):

@@ -219,6 +219,34 @@ li {
   margin: 4px 0;
 }
 
+.report-news-list {
+  display: block;
+}
+
+.report-news-item {
+  border-bottom: 1px solid #ddd;
+  padding: 2mm 0;
+  break-inside: avoid;
+}
+
+.report-news-item p {
+  margin: 1mm 0;
+}
+
+.report-news-title {
+  font-weight: 700;
+}
+
+.report-news-meta {
+  color: #555;
+  font-size: 9.5pt;
+}
+
+.report-news-item a {
+  color: #1d4ed8;
+  word-break: break-word;
+}
+
 .muted {
   color: #555;
 }

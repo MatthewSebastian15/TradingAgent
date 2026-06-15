@@ -146,6 +146,37 @@ function makeStrictNewsResult({ includeExcluded = true } = {}) {
   };
 }
 
+function makeStrictNewsResultWithEmptyMarketContext() {
+  return {
+    ticker: 'BBCA.JK',
+    news_context: {
+      decision_company_news: [
+        makeArticle('Decision Company', 1, {
+          title: 'Bank Central Asia Reports Profit Growth',
+          provider: 'marketaux',
+          market_context_only: false,
+          summary: 'Bank Central Asia reports resilient earnings growth.',
+        }),
+      ],
+      market_context_news: [],
+      provider_status: {
+        google_news_light: 'empty',
+        marketaux: 'success',
+        rss_context: 'empty',
+      },
+      provider_health: {
+        rss_context: { status: 'empty' },
+      },
+      debug: {
+        provider_attempts: {
+          rss_context: [{ strategy: 'cnbc-business', status: 'empty' }],
+        },
+      },
+    },
+    analyst_consensus: {},
+  };
+}
+
 describe('NewsTab', () => {
   afterEach(() => cleanup());
 
@@ -244,6 +275,40 @@ describe('NewsTab', () => {
     expect(screen.getByText('Company News Used for Decision')).toBeInTheDocument();
     expect(screen.getByText('Market Context News')).toBeInTheDocument();
     expect(screen.queryByText('Excluded News Debug')).not.toBeInTheDocument();
+  });
+
+  it('shows provider status when strict market context is empty', () => {
+    render(<NewsTab result={makeStrictNewsResultWithEmptyMarketContext()} />);
+
+    const contextSection = screen.getByText('Market Context News').closest('section');
+
+    expect(within(contextSection).getByText('No market context news was returned.')).toBeInTheDocument();
+    expect(within(contextSection).getByText('rss_context: EMPTY')).toBeInTheDocument();
+    expect(within(contextSection).getByText('google_news_light: EMPTY')).toBeInTheDocument();
+  });
+
+  it('links titles only when url is valid http or https', () => {
+    const result = {
+      ticker: 'GOTO.JK',
+      related_news: {
+        items: [
+          { title: 'Safe Link News', url: 'https://example.com/safe' },
+          { title: 'Unsafe Link News', url: 'javascript:alert(1)' },
+        ],
+      },
+      news_impact: {
+        high_impact_news: [],
+      },
+    };
+
+    render(<NewsTab result={result} />);
+
+    expect(screen.getByRole('link', { name: 'Safe Link News' })).toHaveAttribute(
+      'href',
+      'https://example.com/safe'
+    );
+    expect(screen.queryByRole('link', { name: 'Unsafe Link News' })).not.toBeInTheDocument();
+    expect(screen.getByText('Unsafe Link News')).toBeInTheDocument();
   });
 
   it('falls back to related news only when news impact full list is missing', () => {

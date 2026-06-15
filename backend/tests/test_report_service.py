@@ -777,10 +777,11 @@ def test_html_report_renders_related_news_with_safe_original_vendor_links_only()
     assert len(report["full_news_items"]) == 3
     assert "Full News List" not in html
     assert "Related News" not in html
-    assert "NVIDIA earnings remain resilient" not in html
+    assert "NVIDIA earnings remain resilient" in html
+    assert "https://example.com/nvda" in html
     assert "Open original source" not in html
-    assert "Missing original source" not in html
-    assert "Unsafe original source" not in html
+    assert "Missing original source" in html
+    assert "Unsafe original source" in html
     assert "javascript:" not in html
 
 
@@ -807,7 +808,7 @@ def test_html_report_renders_normalized_news_text_without_unsafe_link(unsafe_url
     html = render_analysis_report_html(report)
 
     assert report["news_articles"][0]["url"] is None
-    assert "Unsafe vendor article" not in html
+    assert "Unsafe vendor article" in html
     assert unsafe_url not in html
 
 
@@ -831,9 +832,52 @@ def test_html_report_renders_same_normalized_news_payload():
     html = render_analysis_report_html(build_report_context(_base_result(news=news)))
 
     assert "Market News Context" not in html
-    assert "NVIDIA earnings remain resilient" not in html
+    assert "News" in html
+    assert "NVIDIA earnings remain resilient" in html
+    assert "Selected normalized article. - Impact: N/A - Sentiment: N/A" in html
     assert "newsdata" not in html
     assert "rate_limited" not in html
+
+
+def test_html_report_renders_strict_news_sections_from_news_context():
+    news_context = {
+        "decision_company_news": [
+            {
+                "provider": "marketaux",
+                "title": "NVIDIA revenue guidance rises",
+                "summary": "NVIDIA raised revenue guidance.",
+                "url": "https://example.com/nvda-guidance",
+                "source": "MarketAux",
+                "published_at": "2026-05-25T09:30:00Z",
+                "impact_rule": "high",
+                "sentiment_label": "positive",
+            }
+        ],
+        "market_context_news": [
+            {
+                "provider": "rss_context",
+                "title": "Semiconductor shares rally",
+                "description": "Sector context improved.",
+                "url": "https://example.com/chips",
+                "source": "CNBC",
+                "published_at": "2026-05-25T10:00:00Z",
+                "risk_level": "medium",
+                "sentiment": "neutral",
+            }
+        ],
+    }
+
+    report = build_report_context(_base_result(news_context=news_context, news={}))
+    html = render_analysis_report_html(report)
+
+    assert [section["title"] for section in report["report_news_sections"]] == [
+        "Company News Used for Decision",
+        "Market Context News",
+    ]
+    assert "NVIDIA revenue guidance rises" in html
+    assert "NVIDIA raised revenue guidance. - Impact: high - Sentiment: positive" in html
+    assert "Semiconductor shares rally" in html
+    assert "Sector context improved. - Impact: medium - Sentiment: neutral" in html
 
 
 def test_report_context_hides_trade_plan_for_hold_even_if_levels_exist():

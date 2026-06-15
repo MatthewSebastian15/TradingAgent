@@ -176,7 +176,14 @@ function summaryText(item) {
 }
 
 function itemUrl(item) {
-  return readableText(item.url);
+  const text = readableText(item.url);
+  if (!text) return '';
+  try {
+    const parsed = new URL(text);
+    return ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname ? text : '';
+  } catch {
+    return '';
+  }
 }
 
 function newsDedupeKey(item) {
@@ -207,6 +214,38 @@ function dedupeNewsItems(items) {
   });
 
   return result;
+}
+
+function providerStatusRows(payload) {
+  const rows = [];
+  const seen = new Set();
+  const objectEntries = (value) =>
+    value && typeof value === 'object' && !Array.isArray(value) ? Object.entries(value) : [];
+  const addRow = (provider, status) => {
+    const providerText = readableText(provider);
+    const statusText = readableText(status);
+    if (!providerText || !statusText) return;
+    const key = providerText.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push({ provider: providerText, status: statusText });
+  };
+
+  objectEntries(payload?.provider_status).forEach(([provider, status]) => {
+    addRow(provider, status);
+  });
+
+  objectEntries(payload?.provider_health).forEach(([provider, health]) => {
+    addRow(provider, health?.status || health?.last_error);
+  });
+
+  objectEntries(payload?.debug?.provider_attempts).forEach(([provider, attempts]) => {
+    const list = Array.isArray(attempts) ? attempts : [];
+    const latest = [...list].reverse().find((attempt) => attempt?.status);
+    addRow(provider, latest?.status);
+  });
+
+  return rows;
 }
 
 const IMPACT_RANK = {
@@ -381,37 +420,35 @@ function NewsRow({ item }) {
 
   return (
     <article className="border-b border-bloomberg-border bg-black py-2">
-      <div className="grid grid-cols-[5.25rem_1px_minmax(0,1fr)] gap-3">
-        <div className="flex items-center justify-center text-center font-mono text-[11px] text-bloomberg-orange tracking-wider">
-          {publishedLabel(item)}
+      <div className="min-w-0 space-y-1">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1 font-mono text-xs leading-snug">
+          <span className="text-bloomberg-orange text-[11px] tracking-wider">
+            {publishedLabel(item)}
+          </span>
+          <span className="text-bloomberg-muted">|</span>
+          <h3 className="text-bloomberg-white font-semibold">
+            {url ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-bloomberg-orange"
+              >
+                {title}
+              </a>
+            ) : (
+              title
+            )}
+          </h3>
+          <span className="text-bloomberg-muted">- {publisherLabel(item)}</span>
         </div>
-        <div className="bg-bloomberg-border" aria-hidden="true" />
-        <div className="min-w-0 space-y-1">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-1 font-mono text-xs leading-snug">
-            <h3 className="text-bloomberg-white font-semibold">
-              {url ? (
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-bloomberg-orange"
-                >
-                  {title}
-                </a>
-              ) : (
-                title
-              )}
-            </h3>
-            <span className="text-bloomberg-muted">- {publisherLabel(item)}</span>
-          </div>
-          <p className="font-mono text-[11px] text-bloomberg-muted leading-snug">
-            {summaryText(item)}
-          </p>
-          <p className="font-mono text-[11px] text-bloomberg-muted leading-snug">
-            Impact: {displayLabel(item.impact || item.impact_rule || item.risk_level)} - Sentiment:{' '}
-            {displayLabel(item.sentiment || item.sentiment_label)} - Source: {sourceLabel(item)}
-          </p>
-        </div>
+        <p className="font-mono text-[11px] text-bloomberg-muted leading-snug">
+          {summaryText(item)}
+        </p>
+        <p className="font-mono text-[11px] text-bloomberg-muted leading-snug">
+          Impact: {displayLabel(item.impact || item.impact_rule || item.risk_level)} - Sentiment:{' '}
+          {displayLabel(item.sentiment || item.sentiment_label)} - Source: {sourceLabel(item)}
+        </p>
       </div>
     </article>
   );
@@ -421,7 +458,29 @@ NewsRow.propTypes = {
   item: PropTypes.object.isRequired,
 };
 
-function StrictNewsSection({ label, items, emptyText }) {
+function ProviderStatusRows({ rows }) {
+  if (!rows.length) return null;
+  return (
+    <div className="mt-2 space-y-1 font-mono text-[11px] text-bloomberg-muted">
+      {rows.map((row) => (
+        <div key={row.provider}>
+          {row.provider}: {displayLabel(row.status)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+ProviderStatusRows.propTypes = {
+  rows: PropTypes.arrayOf(
+    PropTypes.shape({
+      provider: PropTypes.string.isRequired,
+      status: PropTypes.string.isRequired,
+    })
+  ).isRequired,
+};
+
+function StrictNewsSection({ label, items, emptyText, providerRows = [] }) {
   return (
     <section>
       <SectionHeader label={label} />
@@ -434,6 +493,7 @@ function StrictNewsSection({ label, items, emptyText }) {
       ) : (
         <NoticeBox title="NO NEWS" tone="amber">
           {emptyText}
+          <ProviderStatusRows rows={providerRows} />
         </NoticeBox>
       )}
     </section>
@@ -444,6 +504,12 @@ StrictNewsSection.propTypes = {
   emptyText: PropTypes.string.isRequired,
   items: PropTypes.arrayOf(PropTypes.object).isRequired,
   label: PropTypes.string.isRequired,
+  providerRows: PropTypes.arrayOf(
+    PropTypes.shape({
+      provider: PropTypes.string.isRequired,
+      status: PropTypes.string.isRequired,
+    })
+  ),
 };
 
 export default function NewsTab({ result }) {
@@ -460,6 +526,7 @@ export default function NewsTab({ result }) {
     const contextItems = Array.isArray(strictPayload.market_context_news)
       ? strictPayload.market_context_news
       : [];
+    const contextProviderRows = contextItems.length > 0 ? [] : providerStatusRows(strictPayload);
     const excludedItems = Array.isArray(strictPayload.debug?.strict_news_filter?.excluded_news)
       ? strictPayload.debug.strict_news_filter.excluded_news
           .filter((item) => item?.title)
@@ -483,6 +550,7 @@ export default function NewsTab({ result }) {
           label="Market Context News"
           items={contextItems}
           emptyText="No market context news was returned."
+          providerRows={contextProviderRows}
         />
         {excludedItems.length > 0 && (
           <StrictNewsSection
