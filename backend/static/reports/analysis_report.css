@@ -138,6 +138,9 @@ li {
 
 .justified-text {
   text-align: justify;
+  text-align-last: left;
+  text-justify: inter-word;
+  hyphens: auto;
 }
 
 .summary-paragraph {
@@ -156,6 +159,24 @@ li {
 
 .profile-table th {
   width: 34%;
+}
+
+.report-metric-table {
+  table-layout: fixed;
+  font-size: 9.5pt;
+}
+
+.report-metric-table th {
+  width: 34%;
+}
+
+.report-metric-table th,
+.report-metric-table td {
+  padding: 5px 6px;
+}
+
+.report-metric-notes {
+  font-size: 9.5pt;
 }
 
 .shares-ownership .profile-table th {

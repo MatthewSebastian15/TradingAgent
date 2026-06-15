@@ -279,6 +279,7 @@ describe('mockReport', () => {
     expect(html).toContain('Quality of Earnings');
     expect(html).toContain('Balance Sheet Risk');
     expect(html).toContain('Dividend Quality');
+    expect(html).toContain('<table class="report-metric-table">');
     expect(html).toContain('Peer Comparison');
     expect(withoutPeer).not.toContain('Peer Comparison');
   });
@@ -311,6 +312,9 @@ describe('mockReport', () => {
     expect(html).toContain('Insider Ownership');
     expect(html).toContain('ownership-pie');
     expect(html).toContain('Institutional Ownership');
+    expect(html).not.toContain('<th>Insider Ownership</th>');
+    expect(html).not.toContain('<th>Institutional Ownership</th>');
+    expect(html).not.toContain('<th>Public/Other Ownership</th>');
     expect(html).not.toContain('Short Ratio');
   });
 

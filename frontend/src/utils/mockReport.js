@@ -267,12 +267,8 @@ function formatOwnershipPercent(value) {
 function buildSharesOwnershipRows(profile) {
   if (!profile?.available) return [];
 
-  const ownership = ownershipData(profile);
   const definitions = [
     ['Shares Outstanding', profileSharesOut(profile), profileNumber],
-    ['Insider Ownership', profileInsiderPct(profile), formatOwnershipPercent],
-    ['Institutional Ownership', profileInstitutionPct(profile), formatOwnershipPercent],
-    ['Public/Other Ownership', ownership.public, formatOwnershipPercent],
   ];
 
   return definitions.map(([label, value, formatter]) => profileRow(label, formatter(value)));
@@ -1057,7 +1053,7 @@ function renderFundamentalMetricSection(title, payload, metrics, summary = '') {
   return `<section class="section">
     <h2>${escapeHtml(title)}</h2>
     ${summary}
-    <table><tbody>${renderRows(
+    <table class="report-metric-table"><tbody>${renderRows(
       metrics.map(([key, label]) => row(label, metricDetailDisplay(payload.metric_details[key])))
     )}</tbody></table>
   </section>`;
@@ -1220,7 +1216,7 @@ function renderRiskDataQuality(report) {
   return `
     <section class="section">
       <h2>Market Risk</h2>
-      <table><tbody>${renderRows([
+      <table class="report-metric-table"><tbody>${renderRows([
         row('Volatility', valuePercent(market.volatility_percent)),
         row('Max Drawdown', valuePercent(market.max_drawdown_percent)),
         row('ATR', market.atr),
@@ -1231,7 +1227,7 @@ function renderRiskDataQuality(report) {
     </section>
     <section class="section">
       <h2>Risk-Adjusted Return</h2>
-      <table><tbody>${renderRows([
+      <table class="report-metric-table"><tbody>${renderRows([
         row('Upside', valuePercent(riskReturn.upside_percent)),
         row('Downside', valuePercent(riskReturn.downside_percent)),
         row('Risk/Reward', riskReturn.risk_reward_ratio),
@@ -1274,7 +1270,12 @@ export function renderMockReportHtml(report) {
       h3 { margin: 16px 0 6px; font-size: 15px; }
       h2, h3 { break-after: avoid; page-break-after: avoid; }
       p { margin: 0 0 12px; }
-      .justified-text { text-align: justify; }
+      .justified-text {
+        text-align: justify;
+        text-align-last: left;
+        text-justify: inter-word;
+        hyphens: auto;
+      }
       .summary-paragraph { line-height: 1.65; margin: 0 0 10px; }
       .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 18px; }
       .meta-grid div { border: 1px solid #e5e7eb; padding: 10px; min-height: 58px; }
@@ -1290,6 +1291,9 @@ export function renderMockReportHtml(report) {
       th, td { border: 1px solid #d1d5db; padding: 9px 10px; vertical-align: top; }
       th { width: 32%; background: #f3f4f6; text-align: left; }
       table, tr, .metric-card { break-inside: avoid; page-break-inside: avoid; }
+      .report-metric-table { table-layout: fixed; font-size: 13px; }
+      .report-metric-table th { width: 34%; }
+      .report-metric-table th, .report-metric-table td { padding: 7px 8px; }
       .profile-table { table-layout: fixed; }
       .profile-table th { width: 34%; }
       .financial-highlights-table { font-size: 12px; table-layout: fixed; }
