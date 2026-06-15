@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { clearAnalysisHistory, fetchAnalysisHistory } from '../utils/analysisHistoryApi';
 import { formatDateTimeLabel, formatTradeDateLabel } from '../utils/formatting';
 import {
@@ -55,20 +60,22 @@ export function ClockIcon() {
 
 export function PanelButton({ active, title, onClick, children }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon"
       title={title}
       aria-label={title}
       aria-pressed={active}
       onClick={onClick}
-      className={`flex h-10 w-10 items-center justify-center border-l-2 transition-colors duration-150 ${
+      className={`h-10 w-10 rounded-none border-l-2 transition-colors duration-150 ${
         active
-          ? 'border-bloomberg-orange bg-bloomberg-surface text-bloomberg-orange'
+          ? 'border-bloomberg-orange bg-bloomberg-orange/10 text-bloomberg-orange shadow-[inset_0_0_18px_rgba(249,115,22,0.12)] hover:bg-bloomberg-orange/15 hover:text-bloomberg-orange'
           : 'border-transparent text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
       }`}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -83,26 +90,28 @@ export function DrawerPanel({ open, title, onClose, children }) {
   return (
     <aside
       aria-hidden={!open}
-      className={`fixed bottom-0 left-10 top-[68px] z-[35] flex w-72 flex-col border-r border-bloomberg-border bg-bloomberg-card shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200 ease-out will-change-transform ${
+      className={`fixed bottom-0 left-10 top-[68px] z-[35] flex w-72 flex-col border-r border-bloomberg-border bg-card/95 shadow-2xl shadow-black/60 backdrop-blur transition-[opacity,transform] duration-200 ease-out will-change-transform ${
         open
           ? 'pointer-events-auto translate-x-0 opacity-100'
           : 'pointer-events-none -translate-x-full opacity-0'
       }`}
     >
-      <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-bloomberg-border px-3">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
+      <div className="flex h-11 flex-shrink-0 items-center justify-between border-b border-bloomberg-border bg-bloomberg-surface/70 px-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bloomberg-orange">
           {title}
         </span>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label={`Close ${title.toLowerCase()} panel`}
           onClick={onClose}
-          className="flex h-7 w-7 items-center justify-center font-mono text-lg leading-none text-bloomberg-muted transition-colors duration-150 hover:bg-bloomberg-surface hover:text-bloomberg-orange"
+          className="h-7 w-7 rounded-md font-mono text-lg leading-none text-bloomberg-muted hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
         >
           ×
-        </button>
+        </Button>
       </div>
-      <div className="flex-1 overflow-y-auto">{children}</div>
+      <ScrollArea className="flex-1">{children}</ScrollArea>
     </aside>
   );
 }
@@ -163,67 +172,85 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
   if (!history.length) return null;
 
   return (
-    <>
-      <div className="flex items-center justify-between border-b border-bloomberg-border px-3 py-2">
-        <span className="font-mono text-[10px] text-bloomberg-orange tracking-[0.2em] uppercase">
-          RECENT
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[9px] text-bloomberg-muted">{history.length}</span>
-          <button
-            type="button"
-            disabled={clearing}
-            onClick={handleClearHistory}
-            className="font-mono text-[9px] text-bloomberg-muted tracking-wider transition-colors duration-150 hover:text-bloomberg-orange disabled:opacity-40"
-          >
-            {clearing ? 'CLEARING...' : 'CLEAR'}
-          </button>
-        </div>
-      </div>
-      {clearError && (
-        <div className="border-b border-bloomberg-border px-3 py-1.5 font-mono text-[9px] text-bloomberg-red">
-          {clearError}
-        </div>
-      )}
-      <div className="overflow-y-auto">
-        {history.map((item, index) => {
-          const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
-          const displaySignal = item.display_signal || item.decision;
-          const confidenceScore =
-            item.confidence_score !== null && item.confidence_score !== undefined
-              ? `${item.confidence_score}%`
-              : '—';
-          return (
-            <button
-              key={historyResourceId(item) || `${item.ticker || 'item'}-${item.trade_date || index}`}
-              onClick={() => onSelect(item)}
-              className="w-full border-b border-bloomberg-border px-3 py-2 text-left transition-colors duration-150 hover:bg-bloomberg-surface"
+    <div className="p-2">
+      <Card className="overflow-hidden rounded-xl border-bloomberg-border bg-bloomberg-surface/80 shadow-lg shadow-black/30">
+        <CardContent className="p-0">
+          <div className="flex items-center justify-between px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
+                RECENT
+              </span>
+              <Badge
+                variant="outline"
+                className="rounded-full border-bloomberg-border bg-black/60 px-2 py-0 font-mono text-[9px] text-bloomberg-muted"
+              >
+                {history.length}
+              </Badge>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={clearing}
+              onClick={handleClearHistory}
+              className="h-7 rounded-md px-2 font-mono text-[9px] tracking-wider text-bloomberg-muted hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange disabled:opacity-40"
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-mono text-[11px] font-semibold text-bloomberg-white">
-                  {item.ticker || 'N/A'}
-                </span>
-                <span
-                  className={`flex-shrink-0 border px-1.5 py-0.5 font-mono text-[8px] font-semibold tracking-wider ${decisionStyle(displaySignal)}`}
+              {clearing ? 'CLEARING...' : 'CLEAR'}
+            </Button>
+          </div>
+          <Separator className="bg-bloomberg-border" />
+          {clearError && (
+            <div className="border-b border-bloomberg-border bg-bloomberg-red/10 px-3 py-2 font-mono text-[9px] text-bloomberg-red">
+              {clearError}
+            </div>
+          )}
+          <div className="grid gap-2 p-2">
+            {history.map((item, index) => {
+              const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
+              const displaySignal = item.display_signal || item.decision;
+              const confidenceScore =
+                item.confidence_score !== null && item.confidence_score !== undefined
+                  ? `${item.confidence_score}%`
+                  : '—';
+              return (
+                <button
+                  key={
+                    historyResourceId(item) ||
+                    `${item.ticker || 'item'}-${item.trade_date || index}`
+                  }
+                  onClick={() => onSelect(item)}
+                  className="w-full rounded-lg border border-bloomberg-border bg-black/60 px-3 py-2.5 text-left shadow-sm shadow-black/20 transition-all duration-150 hover:border-bloomberg-orange/50 hover:bg-bloomberg-orange/5"
                 >
-                  {(displaySignal || 'N/A').toUpperCase()}
-                </span>
-              </div>
-              <div className="mt-1 flex items-center gap-3 font-mono text-[9px] text-bloomberg-muted">
-                <span>{formatTradeDateLabel(item.trade_date) || 'N/A'}</span>
-                <span>{formatHistoryHorizon(item.time_horizon_months) || '—'}</span>
-                <span className={confidenceScoreStyle(item.confidence_tier)}>{confidenceScore}</span>
-              </div>
-              {createdAtLabel && (
-                <div className="mt-0.5 font-mono text-[8px] text-bloomberg-border truncate">
-                  {createdAtLabel}
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-mono text-[11px] font-semibold tracking-wide text-bloomberg-white">
+                      {item.ticker || 'N/A'}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={`flex-shrink-0 rounded-full px-2 py-0.5 font-mono text-[8px] font-semibold tracking-wider ${decisionStyle(displaySignal)}`}
+                    >
+                      {(displaySignal || 'N/A').toUpperCase()}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 flex items-center gap-3 font-mono text-[9px] text-bloomberg-muted">
+                    <span>{formatTradeDateLabel(item.trade_date) || 'N/A'}</span>
+                    <span>{formatHistoryHorizon(item.time_horizon_months) || '—'}</span>
+                    <span className={confidenceScoreStyle(item.confidence_tier)}>
+                      {confidenceScore}
+                    </span>
+                  </div>
+                  {createdAtLabel && (
+                    <div className="mt-1 truncate font-mono text-[8px] text-bloomberg-subtle">
+                      {createdAtLabel}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -237,7 +264,7 @@ HistoryPanel.propTypes = {
 export function StatusBar({ loading, status }) {
   if (!loading) return null;
   return (
-    <div className="border-t border-bloomberg-border px-4 py-2 bg-black flex items-center gap-2">
+    <div className="flex items-center gap-2 rounded-lg border border-bloomberg-border bg-card px-4 py-2 shadow-lg shadow-black/30">
       <span className="w-1.5 h-1.5 rounded-full bg-bloomberg-orange animate-pulse-dot flex-shrink-0" />
       <span className="font-mono text-xs text-bloomberg-orange tracking-wider truncate">
         {status || 'RUNNING...'}

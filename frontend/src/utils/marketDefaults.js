@@ -62,7 +62,7 @@ export const MARKET_DEFAULT_SYMBOLS = MARKET_PRESETS.EQUITIES.slice(0, MARKET_MA
   (item) => item.symbol
 );
 
-export const MARKET_LIMIT_OPTIONS = [5, 10, 15, 20];
+export const MARKET_MOVERS_LIMIT = 5;
 
 export const MARKET_EXCHANGE_PRESETS = [
   { country: 'United States', countryCode: 'US', exchange: 'NASDAQ', suffix: '' },

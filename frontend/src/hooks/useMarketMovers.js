@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getMarketMovers } from '../api/market';
+import { MARKET_MOVERS_LIMIT } from '../utils/marketDefaults';
 
 const MOVERS_REFRESH_MS = 120 * 1000;
 const DEFAULT_FILTERS = {
   country: 'United States',
   exchange: 'NASDAQ',
-  limit: 5,
+  limit: MARKET_MOVERS_LIMIT,
 };
 
 export function useMarketMovers() {
   const [country, setCountry] = useState(DEFAULT_FILTERS.country);
   const [exchange, setExchange] = useState(DEFAULT_FILTERS.exchange);
-  const [limit, setLimit] = useState(DEFAULT_FILTERS.limit);
   const [appliedFilters, setAppliedFilters] = useState({ ...DEFAULT_FILTERS, requestId: 0 });
   const [data, setData] = useState({ gainers: [], losers: [] });
   const [loading, setLoading] = useState(true);
@@ -32,21 +32,27 @@ export function useMarketMovers() {
     }
   }, []);
 
-  const refresh = useCallback(() => {
-    const nextCountry = country.trim();
-    const nextExchange = exchange.trim();
-    if (!nextCountry || !nextExchange) {
-      setError('Country and exchange required.');
-      return false;
-    }
-    setAppliedFilters({
-      country: nextCountry,
-      exchange: nextExchange,
-      limit: Number(limit),
-      requestId: Date.now(),
-    });
-    return true;
-  }, [country, exchange, limit]);
+  const refresh = useCallback(
+    (nextFilters = {}) => {
+      const nextCountry = String(nextFilters.country ?? country).trim();
+      const nextExchange = String(nextFilters.exchange ?? exchange).trim();
+      if (!nextCountry || !nextExchange) {
+        setError('Country and exchange required.');
+        return false;
+      }
+
+      setCountry(nextCountry);
+      setExchange(nextExchange);
+      setAppliedFilters({
+        country: nextCountry,
+        exchange: nextExchange,
+        limit: MARKET_MOVERS_LIMIT,
+        requestId: Date.now(),
+      });
+      return true;
+    },
+    [country, exchange]
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -66,8 +72,7 @@ export function useMarketMovers() {
     setCountry,
     exchange,
     setExchange,
-    limit,
-    setLimit,
+    limit: MARKET_MOVERS_LIMIT,
     data,
     loading,
     error,

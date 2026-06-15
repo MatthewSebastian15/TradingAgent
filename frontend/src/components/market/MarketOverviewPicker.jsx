@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import { X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { validateMarketSymbol } from '../../api/market';
 import {
   MARKET_CATEGORIES,
@@ -67,28 +72,36 @@ export default function MarketOverviewPicker({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 px-4 pt-24">
-      <div className="w-full max-w-2xl border border-bloomberg-border bg-black font-mono shadow-2xl shadow-black">
-        <div className="flex items-center justify-between border-b border-bloomberg-border bg-bloomberg-orange px-3 py-2">
-          <div className="text-xs font-bold uppercase tracking-widest text-black">Add Market</div>
-          <button type="button" onClick={onClose} className="text-xs font-bold text-black">
-            X
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 px-4 pt-24 backdrop-blur-sm">
+      <Card className="w-full max-w-2xl overflow-hidden rounded-xl border-bloomberg-border bg-card font-mono text-bloomberg-white shadow-2xl shadow-black">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-bloomberg-border bg-bloomberg-surface/70 px-3 py-2">
+          <CardTitle className="text-xs font-bold uppercase tracking-widest text-bloomberg-orange">
+            Add Market
+          </CardTitle>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8 rounded-md text-bloomberg-muted hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
 
-        <div className="grid gap-3 p-3">
+        <CardContent className="grid gap-3 p-3">
           <div className="grid gap-2 md:grid-cols-[1fr_12rem]">
-            <input
+            <Input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="SEARCH PRESET"
-              className="border border-bloomberg-border bg-black px-3 py-2 text-xs text-bloomberg-white outline-none focus:border-bloomberg-orange"
+              className="h-10 rounded-md border-bloomberg-border bg-black/60 font-mono text-xs text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-bloomberg-orange"
             />
             <select
               value={pickerCategory}
               onChange={(event) => setPickerCategory(event.target.value)}
-              className="border border-bloomberg-border bg-black px-3 py-2 text-xs text-bloomberg-white outline-none focus:border-bloomberg-orange"
+              className="h-10 rounded-md border border-bloomberg-border bg-black/60 px-3 py-2 text-xs text-bloomberg-white outline-none focus:border-bloomberg-orange focus:ring-2 focus:ring-bloomberg-orange/30"
             >
               {MARKET_CATEGORIES.map((category) => (
                 <option key={category} value={category}>
@@ -98,7 +111,7 @@ export default function MarketOverviewPicker({
             </select>
           </div>
 
-          <div className="max-h-72 overflow-y-auto border border-bloomberg-border">
+          <div className="max-h-72 overflow-y-auto rounded-lg border border-bloomberg-border bg-black/40">
             {filteredPresets.map((item) => {
               const disabled = existingSymbols.includes(item.symbol) || validating;
               return (
@@ -110,38 +123,47 @@ export default function MarketOverviewPicker({
                   className={`grid w-full grid-cols-[1fr_8rem_4rem] items-center gap-3 border-b border-bloomberg-border px-3 py-2 text-left text-xs last:border-b-0 ${
                     disabled
                       ? 'cursor-not-allowed text-bloomberg-subtle'
-                      : 'text-bloomberg-white hover:bg-bloomberg-surface'
+                      : 'text-bloomberg-white hover:bg-bloomberg-orange/5'
                   }`}
                 >
                   <span className="truncate font-bold text-bloomberg-orange">{item.label}</span>
                   <span className="truncate text-bloomberg-muted">{item.symbol}</span>
-                  <span className="text-right text-bloomberg-amber">ADD</span>
+                  <Badge
+                    variant="outline"
+                    className="justify-center rounded-full border-bloomberg-border bg-black/60 px-2 py-0 font-mono text-[9px] text-bloomberg-amber"
+                  >
+                    ADD
+                  </Badge>
                 </button>
               );
             })}
           </div>
 
           <div className="grid gap-2 md:grid-cols-[1fr_8rem]">
-            <input
+            <Input
               type="text"
               value={customSymbol}
               onChange={(event) => setCustomSymbol(event.target.value.toUpperCase())}
               placeholder="CUSTOM SYMBOL"
-              className="border border-bloomberg-border bg-black px-3 py-2 text-xs text-bloomberg-white outline-none focus:border-bloomberg-orange"
+              className="h-10 rounded-md border-bloomberg-border bg-black/60 font-mono text-xs text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-bloomberg-orange"
             />
-            <button
+            <Button
               type="button"
               disabled={validating}
               onClick={() => addSymbol(customSymbol)}
-              className="border border-bloomberg-orange bg-bloomberg-orange px-3 py-2 text-xs font-bold text-black disabled:cursor-wait disabled:opacity-60"
+              className="h-10 rounded-md bg-bloomberg-orange px-3 font-mono text-xs font-bold text-black hover:bg-bloomberg-orange/90 disabled:cursor-wait disabled:opacity-60"
             >
               {validating ? 'CHECK' : 'ADD'}
-            </button>
+            </Button>
           </div>
 
-          {message && <div className="text-[11px] text-bloomberg-red">{message}</div>}
-        </div>
-      </div>
+          {message && (
+            <div className="rounded-lg border border-bloomberg-red/40 bg-bloomberg-red/10 px-3 py-2 text-[11px] text-bloomberg-red">
+              {message}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

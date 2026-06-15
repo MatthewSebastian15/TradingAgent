@@ -1,11 +1,8 @@
 import PropTypes from 'prop-types';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 
-const PROVIDER_NAMES = new Set([
-  'marketaux',
-  'newsdata',
-  'google_news_light',
-  'rss_context',
-]);
+const PROVIDER_NAMES = new Set(['marketaux', 'newsdata', 'google_news_light', 'rss_context']);
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -73,7 +70,7 @@ export default function NewsRow({ article }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="font-bold text-bloomberg-white hover:text-bloomberg-orange"
+      className="font-bold text-bloomberg-white transition-colors hover:text-bloomberg-orange"
     >
       {title}
     </a>
@@ -82,9 +79,14 @@ export default function NewsRow({ article }) {
   );
 
   return (
-    <div className="mb-1 border-b border-bloomberg-border px-1 py-2 hover:bg-bloomberg-surface">
-      <div className="text-xs text-neutral-300">
-        <span>{source}</span>
+    <Card className="rounded-lg border-bloomberg-border bg-black/55 px-3 py-2.5 shadow-sm shadow-black/20 transition-all hover:border-bloomberg-orange/40 hover:bg-bloomberg-orange/5">
+      <div className="flex items-center gap-2 text-xs text-neutral-300">
+        <Badge
+          variant="outline"
+          className="rounded-full border-bloomberg-border bg-bloomberg-surface px-2 py-0 font-mono text-[10px] font-semibold text-neutral-300"
+        >
+          {source}
+        </Badge>
         <span className="mx-2 text-bloomberg-muted">-</span>
         <span className="text-[10px] text-bloomberg-muted">{age}</span>
       </div>
@@ -95,7 +97,7 @@ export default function NewsRow({ article }) {
       </div>
 
       <div className="mt-0.5 truncate text-[11px] text-bloomberg-muted">{description}</div>
-    </div>
+    </Card>
   );
 }
 
