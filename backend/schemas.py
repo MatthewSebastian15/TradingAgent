@@ -439,6 +439,74 @@ class MarketQuotesResponse(ApiSchema):
     quotes: list[MarketQuote] = Field(default_factory=list)
 
 
+class MarketOverviewRequest(ApiSchema):
+    symbols: list[str]
+
+
+class MarketOverviewItem(ApiSchema):
+    symbol: str
+    label: str
+    last: float | None = None
+    change: float | None = None
+    change_percent: float | None = None
+    currency: str | None = None
+    sparkline: list[float] = Field(default_factory=list)
+    status: Literal["ok", "error", "unavailable"] = "unavailable"
+    updated_at: str | None = None
+    reason: str | None = None
+
+
+class MarketOverviewResponse(ApiSchema):
+    items: list[MarketOverviewItem] = Field(default_factory=list)
+    message: str | None = None
+
+
+class MarketMoverItem(ApiSchema):
+    symbol: str
+    name: str
+    last: float
+    change: float
+    change_percent: float
+    volume: int | None = None
+    trend: list[float] = Field(default_factory=list)
+
+
+class MarketMoversResponse(ApiSchema):
+    country: str
+    exchange: str
+    limit: int
+    updated_at: str
+    gainers: list[MarketMoverItem] = Field(default_factory=list)
+    losers: list[MarketMoverItem] = Field(default_factory=list)
+    source: str = "yfinance"
+    message: str | None = None
+
+
+class MarketPresetItem(ApiSchema):
+    label: str
+    symbol: str
+
+
+class MarketExchangePreset(ApiSchema):
+    country: str
+    country_code: str
+    exchange: str
+    suffix: str = ""
+
+
+class MarketPresetsResponse(ApiSchema):
+    categories: dict[str, list[MarketPresetItem]]
+    exchanges: list[MarketExchangePreset] = Field(default_factory=list)
+
+
+class SymbolValidationResponse(ApiSchema):
+    symbol: str
+    valid: bool
+    label: str | None = None
+    source: str | None = None
+    reason: str | None = None
+
+
 class ApiStatusResponse(ApiSchema):
     provider: str
     quick_model: str

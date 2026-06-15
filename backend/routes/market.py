@@ -13,7 +13,22 @@ from fastapi import APIRouter, Query, Request
 
 from errors import BadRequestError
 from rate_limiter import limit_request, request_policy
-from schemas import MarketQuotesResponse
+from schemas import (
+    MarketMoversResponse,
+    MarketOverviewRequest,
+    MarketOverviewResponse,
+    MarketPresetsResponse,
+    MarketQuotesResponse,
+    SymbolValidationResponse,
+)
+from services.market_yfinance_service import (
+    dedupe_symbols,
+    get_market_movers,
+    get_market_presets,
+    get_overview_data,
+    normalize_market_symbol,
+    validate_symbol,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +56,7 @@ _SEARCH_CACHE: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
 _OHLCV_CACHE: dict[tuple[str, str, str], tuple[float, dict[str, Any]]] = {}
 _OHLCV_RANGE_DAYS = {"1W": 7, "1M": 31, "3M": 92, "6M": 183, "1Y": 365}
 _OHLCV_RANGE_OPTIONS = {"YTD", *_OHLCV_RANGE_DAYS.keys()}
+_MOVER_LIMITS = {5, 10, 15, 20}
 
 
 def _normalize_quote_symbol(symbol: str) -> str:
@@ -62,6 +78,56 @@ def _normalize_quote_symbol(symbol: str) -> str:
     return normalized
 
 
+def _normalize_market_request_symbols(symbols: list[str]) -> list[str]:
+    if not isinstance(symbols, list):
+        raise BadRequestError(
+            "Invalid market overview request.",
+            details={"fields": {"symbols": "symbols must be an array."}},
+        )
+
+    errors: dict[str, str] = {}
+    normalized: list[str] = []
+    for index, symbol in enumerate(symbols):
+        if not isinstance(symbol, str):
+            errors[f"symbols[{index}]"] = "symbol must be string."
+            continue
+        value = normalize_market_symbol(symbol)
+        if not value:
+            errors[f"symbols[{index}]"] = "symbol must not be empty."
+            continue
+        if not _QUOTE_SYMBOL_RE.fullmatch(value):
+            errors[f"symbols[{index}]"] = "symbol must be a canonical yfinance symbol."
+            continue
+        normalized.append(value)
+
+    normalized = dedupe_symbols(normalized)
+    if len(normalized) < 3:
+        errors["symbols"] = "symbols.length must be >= 3."
+    if len(normalized) > 6:
+        errors["symbols"] = "symbols.length must be <= 6."
+
+    if errors:
+        raise BadRequestError("Invalid market overview request.", details={"fields": errors})
+    return normalized
+
+
+def _validate_movers_query(country: str, exchange: str, limit: int) -> tuple[str, str, int]:
+    normalized_country = str(country or "").strip()
+    normalized_exchange = str(exchange or "").strip()
+    errors: dict[str, str] = {}
+
+    if not normalized_country:
+        errors["country"] = "country required."
+    if not normalized_exchange:
+        errors["exchange"] = "exchange required."
+    if limit not in _MOVER_LIMITS:
+        errors["limit"] = "limit must be one of 5, 10, 15, 20."
+
+    if errors:
+        raise BadRequestError("Invalid market movers request.", details={"fields": errors})
+    return normalized_country, normalized_exchange, limit
+
+
 def _clone_quotes(quotes: list[dict]) -> list[dict]:
     return [dict(item) for item in quotes]
 
@@ -76,6 +142,44 @@ def _clone_ohlcv_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "points": [dict(item) for item in payload.get("points") or []],
         "data": [dict(item) for item in payload.get("data") or []],
     }
+
+
+@router.get("/market/presets", tags=["market"], response_model=MarketPresetsResponse)
+async def get_market_preset_data(request: Request) -> dict[str, Any]:
+    async with limit_request(request, request_policy()):
+        return get_market_presets()
+
+
+@router.get("/market/validate-symbol", tags=["market"], response_model=SymbolValidationResponse)
+async def validate_market_symbol(
+    request: Request,
+    symbol: str = Query(..., min_length=1, description="Yahoo Finance symbol."),
+) -> dict[str, Any]:
+    async with limit_request(request, request_policy()):
+        normalized_symbol = _normalize_quote_symbol(symbol)
+        return await asyncio.to_thread(validate_symbol, normalized_symbol)
+
+
+@router.post("/market/overview", tags=["market"], response_model=MarketOverviewResponse)
+async def get_market_overview(
+    payload: MarketOverviewRequest,
+    request: Request,
+) -> dict[str, Any]:
+    normalized_symbols = _normalize_market_request_symbols(payload.symbols)
+    async with limit_request(request, request_policy()):
+        return await asyncio.to_thread(get_overview_data, normalized_symbols)
+
+
+@router.get("/market/movers", tags=["market"], response_model=MarketMoversResponse)
+async def get_market_mover_data(
+    request: Request,
+    country: str = Query(..., min_length=1),
+    exchange: str = Query(..., min_length=1),
+    limit: int = Query(default=5),
+) -> dict[str, Any]:
+    normalized_country, normalized_exchange, normalized_limit = _validate_movers_query(country, exchange, limit)
+    async with limit_request(request, request_policy()):
+        return await asyncio.to_thread(get_market_movers, normalized_country, normalized_exchange, normalized_limit)
 
 
 def _as_float(value: Any) -> float | None:
