@@ -134,17 +134,11 @@ CACHE_MAX_ENTRIES = env_int("CACHE_MAX_ENTRIES", 512, min_value=1)
 LLM_EXACT_CACHE_ENABLED = env_bool("LLM_EXACT_CACHE_ENABLED", True)
 LLM_EXACT_CACHE_TTL_SECONDS = env_int("LLM_EXACT_CACHE_TTL_SECONDS", 1800, min_value=60)
 LLM_EXACT_CACHE_MAX_ENTRIES = env_int("LLM_EXACT_CACHE_MAX_ENTRIES", 1024, min_value=1)
-LLM_EXACT_CACHE_DB_PATH = env(
-    "LLM_EXACT_CACHE_DB_PATH",
-    str(BASE_DIR / ".cache" / "llm_exact_cache.sqlite3"),
-)
+LLM_EXACT_CACHE_DB_PATH = env("LLM_EXACT_CACHE_DB_PATH", ".cache/llm_exact_cache.sqlite3")
 LLM_SEMANTIC_CACHE_ENABLED = env_bool("LLM_SEMANTIC_CACHE_ENABLED", False)
 LLM_SEMANTIC_CACHE_TTL_SECONDS = env_int("LLM_SEMANTIC_CACHE_TTL_SECONDS", 3600, min_value=60)
 LLM_SEMANTIC_CACHE_MAX_ENTRIES = env_int("LLM_SEMANTIC_CACHE_MAX_ENTRIES", 2048, min_value=1)
-LLM_SEMANTIC_CACHE_DB_PATH = env(
-    "LLM_SEMANTIC_CACHE_DB_PATH",
-    str(BASE_DIR / ".cache" / "llm_semantic_cache.sqlite3"),
-)
+LLM_SEMANTIC_CACHE_DB_PATH = env("LLM_SEMANTIC_CACHE_DB_PATH", ".cache/llm_semantic_cache.sqlite3")
 LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD = env_float(
     "LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD",
     0.97,
@@ -158,20 +152,14 @@ ANALYSIS_JOB_TTL_SECONDS = env_int("ANALYSIS_JOB_TTL_SECONDS", 60 * 60 * 8, min_
 ANALYSIS_JOB_MAX_ENTRIES = env_int("ANALYSIS_JOB_MAX_ENTRIES", 256, min_value=1)
 ANALYSIS_JOB_MAX_ACTIVE = min(env_int("ANALYSIS_JOB_MAX_ACTIVE", 32, min_value=1), ANALYSIS_JOB_MAX_ENTRIES)
 ANALYSIS_JOB_EVENT_REPLAY_LIMIT = env_int("ANALYSIS_JOB_EVENT_REPLAY_LIMIT", 500, min_value=1)
-ANALYSIS_JOB_CACHE_DB_PATH = env(
-    "ANALYSIS_JOB_CACHE_DB_PATH",
-    str(BASE_DIR / ".cache" / "analysis_jobs.sqlite3"),
-)
+ANALYSIS_JOB_CACHE_DB_PATH = env("ANALYSIS_JOB_CACHE_DB_PATH", ".cache/analysis_jobs.sqlite3")
 ANALYSIS_JOB_STORE_BACKEND = env("ANALYSIS_JOB_STORE_BACKEND", "sqlite").lower().strip()
 if ANALYSIS_JOB_STORE_BACKEND not in {"sqlite"}:
     raise ValueError("ANALYSIS_JOB_STORE_BACKEND must be sqlite.")
 ANALYSIS_JOB_ROUTING_MODE = env("ANALYSIS_JOB_ROUTING_MODE", "sticky_sessions").lower().strip()
 if ANALYSIS_JOB_ROUTING_MODE not in {"single_instance", "sticky_sessions"}:
     raise ValueError("ANALYSIS_JOB_ROUTING_MODE must be one of: single_instance, sticky_sessions.")
-ANALYSIS_DB_PATH = env(
-    "ANALYSIS_DB_PATH",
-    str(BASE_DIR / ".cache" / "analysis_history.sqlite3"),
-)
+ANALYSIS_DB_PATH = env("ANALYSIS_DB_PATH", ".cache/analysis_history.sqlite3")
 ANALYSIS_STORAGE_BACKEND = env("ANALYSIS_STORAGE_BACKEND", "sqlite").lower().strip()
 if ANALYSIS_STORAGE_BACKEND not in {"sqlite"}:
     raise ValueError("ANALYSIS_STORAGE_BACKEND must be sqlite.")
@@ -184,10 +172,7 @@ OWNER_SESSION_TTL_SECONDS = env_int("OWNER_SESSION_TTL_SECONDS", ANALYSIS_JOB_TT
 DATA_CACHE_BACKEND = env("DATA_CACHE_BACKEND", "sqlite").lower().strip()
 if DATA_CACHE_BACKEND not in {"sqlite"}:
     raise ValueError("DATA_CACHE_BACKEND must be sqlite.")
-DATA_CACHE_DB_PATH = env(
-    "DATA_CACHE_DB_PATH",
-    str(BASE_DIR / ".cache" / "market_data.sqlite3"),
-)
+DATA_CACHE_DB_PATH = env("DATA_CACHE_DB_PATH", ".cache/market_data.sqlite3")
 DATA_CACHE_TTL_SECONDS = env_int("DATA_CACHE_TTL_SECONDS", CACHE_TTL_SECONDS, min_value=1)
 DATA_CACHE_MAX_ENTRIES = env_int("DATA_CACHE_MAX_ENTRIES", CACHE_MAX_ENTRIES, min_value=1)
 
