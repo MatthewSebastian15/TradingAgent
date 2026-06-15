@@ -1,190 +1,158 @@
 # Setup Guide
 
-Terakhir disinkronkan: 2026-06-03.
+Terakhir disinkronkan: 2026-06-15.
 
-Dokumen ini menjelaskan cara menjalankan TradingAgent secara local, Docker,
-mock mode, test, dan konfigurasi env. Port dan endpoint mengikuti kode aktif.
-
-## Port Map
-
-| Komponen | Local dev | Docker host | Internal container | Source |
-|---|---:|---:|---:|---|
-| Backend FastAPI | `127.0.0.1:8000` | `127.0.0.1:8000` | `0.0.0.0:8000` | `Dockerfile.backend`, `docker-compose.yml`. |
-| Frontend Vite | `127.0.0.1:3000` | tidak dipakai | tidak dipakai | `frontend/vite.config.js`. |
-| Frontend nginx | tidak dipakai | `127.0.0.1:3000` | `80` | `Dockerfile.frontend`, `docker-compose.yml`. |
-| Ollama | `localhost:11434` | `127.0.0.1:11434` | `ollama:11434` | Compose profile `ollama`. |
-| Backend health | `http://127.0.0.1:8000/health` | sama | `http://localhost:8000/health` | Backend healthcheck. |
-| Frontend health | tidak ada di Vite | `http://127.0.0.1:3000/health` | `http://127.0.0.1/health` | Nginx healthcheck. |
+Panduan ini mengikuti kode aktif untuk local dev, Docker, env, test, dan common
+problems.
 
 ## Requirements
 
-| Tool | Version | Catatan |
-|---|---|---|
-| Python | 3.10, 3.11, atau 3.12 | Core package menolak Python 3.13. Docker backend memakai 3.11. |
-| Node.js | 22 recommended | Docker frontend memakai Node 22 alpine. |
-| npm | Versi bawaan Node | `npm ci` dipakai Docker build. |
-| Git | Any current version | Untuk clone dan branch. |
-| Docker | Current Docker Desktop | Untuk Compose. |
-| Conda atau venv | Optional | Disarankan di Windows agar Python tidak bentrok. |
+| Tool | Version |
+|---|---|
+| Python | 3.10, 3.11, atau 3.12 |
+| Backend Docker Python | 3.11 |
+| Node.js | 22 recommended |
+| npm | Versi bawaan Node |
+| Docker | Docker Desktop current |
+| Git | Current |
 
-## Local Setup di Windows
+Python 3.13 tidak didukung oleh `backend/tradingagents-core`.
 
-Jika Python global kamu 3.13, buat environment khusus.
+## Port Map
 
-Conda:
+| Component | Local host | Compose host | Container/internal |
+|---|---:|---:|---:|
+| Backend FastAPI | `127.0.0.1:8000` | `127.0.0.1:8000` | `0.0.0.0:8000` |
+| Frontend Vite | `127.0.0.1:3000` | `127.0.0.1:3000` | `0.0.0.0:3000` |
+| Frontend nginx runtime | manual mapping | not used by default compose | `8080` |
+| Ollama | `localhost:11434` | `127.0.0.1:11434` | `ollama:11434` |
+| Backend health | `http://127.0.0.1:8000/health` | same | `http://localhost:8000/health` |
+| Frontend Compose health | root page | `http://127.0.0.1:3000/` | `http://127.0.0.1:3000/` |
+| Nginx runtime health | manual mapping | not used by default compose | `http://127.0.0.1:8080/health` |
+
+## Local Backend Setup
+
+Create Python env:
 
 ```powershell
-conda create -n tradingagents python=3.11 -y
-conda activate tradingagents
-python --version
-```
-
-venv dengan Python launcher:
-
-```powershell
+cd d:\CODING\TradingAgents
 py -3.11 -m venv backend\.venv
 backend\.venv\Scripts\Activate.ps1
 python --version
 ```
 
-Versi yang valid harus 3.10, 3.11, atau 3.12.
-
-## Backend Local
-
-Masuk ke folder backend:
+Install:
 
 ```powershell
 cd d:\CODING\TradingAgents\backend
-```
-
-Install dependency:
-
-```powershell
 pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-`requirements.txt` sudah berisi:
+`requirements-dev.txt` installs editable `./tradingagents-core`.
 
-```text
--e ./tradingagents-core
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-python-dotenv==1.2.2
-sse-starlette==3.0.3
-python-multipart==0.0.28
-jinja2==3.1.6
-weasyprint==63.1
-```
-
-Buat env:
+Create backend env:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item backend\.env.example backend\.env
 ```
 
-Minimum env untuk Google:
+Minimum Google:
 
 ```env
 APP_ENV=development
 LLM_PROVIDER=google
-DEEP_THINK_LLM=gemini-2.5-pro
-QUICK_THINK_LLM=gemini-2.5-flash
-GOOGLE_API_KEY=your_key_here
+LLM_API_KEY=your_google_or_gemini_key
+QUICK_THINK_LLM=gemini-3.1-flash-lite
+DEEP_THINK_LLM=gemini-3.5-flash
+GOOGLE_API_KEY=your_google_or_gemini_key
 ```
 
-Minimum env untuk DeepSeek:
+Minimum OpenAI:
+
+```env
+APP_ENV=development
+LLM_PROVIDER=openai
+LLM_API_KEY=your_openai_key
+QUICK_THINK_LLM=gpt-4o-mini
+DEEP_THINK_LLM=gpt-4o
+```
+
+Minimum DeepSeek:
 
 ```env
 APP_ENV=development
 LLM_PROVIDER=deepseek
-DEEP_THINK_LLM=deepseek-chat
+LLM_API_KEY=your_deepseek_key
+DEEPSEEK_API_KEY=your_deepseek_key
 QUICK_THINK_LLM=deepseek-chat
-DEEPSEEK_API_KEY=your_key_here
+DEEP_THINK_LLM=deepseek-reasoner
 ```
 
-Minimum env untuk Ollama local:
+Minimum Ollama:
 
 ```env
 APP_ENV=development
 LLM_PROVIDER=ollama
-DEEP_THINK_LLM=llama3:latest
+LLM_API_KEY=ollama
 QUICK_THINK_LLM=llama3:latest
+DEEP_THINK_LLM=llama3:latest
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-Jalankan backend:
+Run backend:
 
 ```powershell
+cd d:\CODING\TradingAgents\backend
 uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Health check:
+Health:
 
 ```powershell
 curl http://127.0.0.1:8000/health
 ```
 
-Expected response:
+Expected shape:
 
 ```json
 {
   "status": "ok",
-  "provider": "google"
+  "provider": "google",
+  "report_assets": {}
 }
 ```
 
-Startup akan gagal jika:
+Startup validation logs issues and continues for local debug. Config import still
+fails for unsafe hard constraints like wildcard CORS or invalid `APP_ENV`.
 
-- `LLM_PROVIDER` kosong atau invalid.
-- API key provider tidak ada, kecuali provider `ollama`.
-- `DEEP_THINK_LLM` kosong.
-- `QUICK_THINK_LLM` kosong.
-- Production tidak punya `API_KEY`.
-- Production tidak punya `OWNER_SESSION_SECRET`.
-- `CORS_ORIGINS=*`.
-- Directory result/cache tidak writable.
+## Local Frontend Setup
 
-## Frontend Local
-
-Masuk ke folder frontend:
+Install:
 
 ```powershell
 cd d:\CODING\TradingAgents\frontend
-```
-
-Install dependency:
-
-```powershell
 npm install
 ```
 
-Buat env:
+There is no `frontend/.env.example` in current repo. Create `frontend/.env`
+manually if needed.
 
-```powershell
-Copy-Item .env.example .env
-```
-
-Untuk local Vite, ubah `frontend/.env`:
+Recommended local Vite env:
 
 ```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_API_URL=
+VITE_API_BASE_URL=/api
+VITE_BACKEND_PROXY_TARGET=http://localhost:8000
 VITE_DEV_HOST=127.0.0.1
 VITE_DEV_PORT=3000
 VITE_ENABLE_MOCK=false
-VITE_CLOCK_TIME_ZONE=Asia/Jakarta
-VITE_CLOCK_LABEL=WIB
 ```
 
-Alasan: Vite config saat ini tidak punya proxy `/api`. Jika kamu membiarkan
-`VITE_API_BASE_URL=/api`, browser akan memanggil Vite di port 3000 untuk API dan
-request gagal.
-
-Jalankan frontend:
+Run:
 
 ```powershell
+cd d:\CODING\TradingAgents\frontend
 npm run dev
 ```
 
@@ -194,77 +162,89 @@ Open:
 http://127.0.0.1:3000
 ```
 
-NPM scripts:
+Primary analysis page:
 
-| Script | Command | Fungsi |
-|---|---|---|
-| `start` | `vite --host 127.0.0.1 --port 3000` | Alias dev. |
-| `dev` | `vite --host 127.0.0.1 --port 3000` | Local dev server. |
-| `build` | `vite build` | Production build. |
-| `preview` | `vite preview --host 127.0.0.1 --port 3000` | Preview build. |
-| `test` | `vitest --environment jsdom` | Test watch. |
-| `lint` | `eslint .` | ESLint. |
-| `format:check` | `prettier --check ...` | Format check. |
-| `quality` | lint, format check, tests | Full frontend quality. |
-| `dev:lan` | `vite --host 0.0.0.0 --port 3000` | LAN dev. |
-| `preview:lan` | `vite preview --host 0.0.0.0 --port 3000` | LAN preview. |
+```text
+http://127.0.0.1:3000/AI-Research
+```
 
-## Local Mock UI
+Alternative direct API env:
 
-Mock UI tidak memanggil backend analysis. Ini berguna untuk UI debugging.
+```env
+VITE_API_BASE_URL=http://localhost:8000
+```
 
-Set:
+Proxy mode is preferred because browser stays on same origin `/api`.
+
+Frontend scripts:
+
+| Script | Command |
+|---|---|
+| `start` | `vite --host 127.0.0.1 --port 3000` |
+| `dev` | `vite --host 127.0.0.1 --port 3000` |
+| `build` | `vite build` |
+| `preview` | `vite preview --host 127.0.0.1 --port 3000` |
+| `test` | `vitest --environment jsdom` |
+| `lint` | `eslint .` |
+| `format:check` | `prettier --check ...` |
+| `quality` | lint, format check, tests |
+| `dev:lan` | `vite --host 0.0.0.0 --port 3000` |
+| `preview:lan` | `vite preview --host 0.0.0.0 --port 3000` |
+
+## Mock UI
+
+Enable:
 
 ```env
 VITE_ENABLE_MOCK=true
 ```
 
-Jalankan:
-
-```powershell
-npm run dev
-```
-
 Open:
 
 ```text
-http://127.0.0.1:3000/analysis.test
+http://127.0.0.1:3000/AI-Research.test
 ```
 
-Mock files:
+Files:
 
-| File | Fungsi |
-|---|---|
-| `frontend/src/pages/AnalysisMock.jsx` | Mock page. |
-| `frontend/src/components/StockFormMock.jsx` | Mock form. |
-| `frontend/src/hooks/useMockAnalysisJob.js` | Simulasi job progress/result. |
-| `frontend/dev/mockData.js` | Fixture result. |
-| `frontend/src/utils/mockReport.js` | Mock HTML/PDF export. |
+```text
+frontend/src/pages/AnalysisMock.jsx
+frontend/src/components/StockFormMock.jsx
+frontend/src/hooks/useMockAnalysisJob.js
+frontend/dev/mockData.js
+frontend/src/utils/mockReport.js
+```
 
-## Docker Setup
+Legacy mock routes redirect:
 
-Buat backend env:
+```text
+/analysis.test
+/analysis-mock
+```
+
+## Docker Compose Setup
+
+Create backend env:
 
 ```powershell
 Copy-Item backend\.env.example backend\.env
 ```
 
-Isi provider dan API key di `backend/.env`.
+Fill LLM provider and keys in `backend/.env`.
 
-Jalankan:
+Run:
 
 ```powershell
 docker compose up --build
 ```
 
-URL:
+URLs:
 
 | Service | URL |
 |---|---|
-| Frontend | `http://localhost:3000` |
+| Frontend Vite | `http://localhost:3000` |
 | Backend | `http://localhost:8000` |
 | Backend health | `http://localhost:8000/health` |
-| Frontend health | `http://localhost:3000/health` |
 
 Stop:
 
@@ -272,80 +252,34 @@ Stop:
 docker compose down
 ```
 
-Lihat log backend:
+Logs:
 
 ```powershell
 docker compose logs -f backend
-```
-
-Lihat log frontend:
-
-```powershell
 docker compose logs -f frontend
 ```
 
-Docker binding:
+Compose details:
 
-| Service | Binding |
+- Backend uses Dockerfile runtime, bind-mounts `./backend`, and runs uvicorn
+  reload.
+- Frontend uses `Dockerfile.frontend` target `dev`, bind-mounts `./frontend`,
+  and runs Vite dev server.
+- Frontend `/api` proxy target defaults to `http://backend:8000`.
+- Compose does not use frontend nginx runtime by default.
+
+Volumes:
+
+| Volume | Path |
 |---|---|
-| backend | `127.0.0.1:8000:8000` |
-| frontend | `127.0.0.1:3000:80` |
-| ollama | `127.0.0.1:11434:11434` |
+| `tradingagent-cache` | `/home/tradingagent/.tradingagents/cache` |
+| `tradingagent-results` | `/home/tradingagent/.tradingagents/logs` |
+| `frontend-node-modules` | `/app/node_modules` |
+| `ollama-data` | `/root/.ollama` |
 
-Docker volumes:
+## Docker with Ollama
 
-| Volume | Path | Fungsi |
-|---|---|---|
-| `tradingagent-cache` | `/root/.tradingagents/cache` | SQLite cache/history, yfinance cache. |
-| `tradingagent-results` | `/root/.tradingagents/logs` | Result/log runtime. |
-| `ollama-data` | `/root/.ollama` | Model Ollama. |
-
-Docker frontend memakai build arg:
-
-```env
-VITE_API_BASE_URL=/api
-VITE_ENABLE_MOCK=false
-```
-
-Nginx proxy:
-
-```text
-/api/* -> http://backend:8000/api/*
-```
-
-Jika backend API key enforcement aktif, set host env:
-
-```powershell
-$env:BACKEND_API_KEY="your_backend_api_key"
-docker compose up --build
-```
-
-Nginx akan menyisipkan header `x-api-key`. Browser tetap mengambil
-`x-owner-token` dari `POST /api/session`.
-
-## Docker Mock Overlay
-
-Jalankan:
-
-```powershell
-docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build
-```
-
-Open:
-
-```text
-http://localhost:3000/analysis.test
-```
-
-Overlay ini hanya mengubah frontend build arg:
-
-```yaml
-VITE_ENABLE_MOCK: "true"
-```
-
-## Docker dengan Ollama
-
-Jalankan Compose dengan profile:
+Run:
 
 ```powershell
 docker compose --profile ollama up --build
@@ -357,44 +291,75 @@ Pull model:
 docker exec -it tradingagent-ollama ollama pull llama3:latest
 ```
 
-Backend env untuk Docker Ollama:
+Backend env:
 
 ```env
 LLM_PROVIDER=ollama
-DEEP_THINK_LLM=llama3:latest
+LLM_API_KEY=ollama
 QUICK_THINK_LLM=llama3:latest
+DEEP_THINK_LLM=llama3:latest
 OLLAMA_BASE_URL=http://ollama:11434
 ```
 
-Compose sudah override `OLLAMA_BASE_URL=http://ollama:11434` untuk container
-backend.
+Compose already sets `OLLAMA_BASE_URL=http://ollama:11434` for backend.
+
+## Docker Frontend Runtime Image
+
+Manual production-style build:
+
+```powershell
+docker build -f Dockerfile.frontend --target runtime -t tradingagent-frontend-runtime .
+```
+
+Runtime nginx listens on container port `8080`.
+
+`frontend/nginx.conf`:
+
+```text
+/api/* -> http://backend:8000/api/*
+/health -> ok
+```
+
+Default compose does not run this target.
+
+## Docker Mock Overlay
+
+Current `docker-compose.mock.yml` only sets build arg `VITE_ENABLE_MOCK=true`.
+Default compose frontend target is `dev`, so use frontend environment
+`VITE_ENABLE_MOCK=true` when you need mock route in Compose.
+
+Local reliable command:
+
+```powershell
+cd frontend
+$env:VITE_ENABLE_MOCK="true"
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000/AI-Research.test
+```
 
 ## Backend Tests
 
-Unit tests:
+Backend unit:
 
 ```powershell
 cd d:\CODING\TradingAgents\backend
 pytest tests/ -m "not integration and not live_api" -v
 ```
 
-Coverage:
+Backend coverage:
 
 ```powershell
 pytest tests/ -m "not integration and not live_api" --cov=. --cov-report=term-missing
 ```
 
-Core package tests:
-
-```powershell
-cd d:\CODING\TradingAgents\backend\tradingagents-core
-pytest tests/ -m "not integration and not live_api" -v
-```
-
 Backend lint/format:
 
 ```powershell
-cd d:\CODING\TradingAgents\backend
 python -m ruff check .
 python -m ruff format --check .
 ```
@@ -402,8 +367,14 @@ python -m ruff format --check .
 PowerShell quality script:
 
 ```powershell
-cd d:\CODING\TradingAgents\backend
 .\scripts\quality.ps1
+```
+
+Core package:
+
+```powershell
+cd d:\CODING\TradingAgents\backend\tradingagents-core
+pytest tests/ -m "not integration and not live_api" -v
 ```
 
 ## Frontend Tests
@@ -421,7 +392,7 @@ Lint:
 npm run lint
 ```
 
-Format check:
+Format:
 
 ```powershell
 npm run format:check
@@ -433,348 +404,323 @@ Full quality:
 npm run quality
 ```
 
-## Seed Development History Snapshot
+## Seed Development History
 
-Untuk menambahkan satu snapshot mock ke SQLite history tanpa memanggil provider
-atau LLM:
+Add one mock snapshot to SQLite history without provider/LLM call:
 
 ```powershell
 cd d:\CODING\TradingAgents\backend
 python scripts\seed_mock_analysis.py
 ```
 
-Snapshot masuk ke `ANALYSIS_DB_PATH`.
+Snapshot goes to `ANALYSIS_DB_PATH`.
 
 ## Backtest Folder
 
-Folder `backtest/` saat ini berisi env template dan env local. Belum ada runner
-kode backtest di repo audit ini.
+`backtest/` currently has env files only. No runner code exists in this repo
+state.
 
-Gunakan template:
+Template:
 
 ```text
 backtest/.env.backtest.example
 ```
 
-Jangan commit:
+Do not commit:
 
 ```text
 backtest/.env.backtest
 ```
 
-Backtest env template:
-
-| Variable | Default contoh | Fungsi |
-|---|---|---|
-| `LLM_PROVIDER` | `google` | Provider LLM. |
-| `LLM_MODEL` | `gemini-3.5-flash` | Legacy single model setting untuk backtest. |
-| `QUICK_THINK_LLM` | `gemini-3.1-flash-lite` | Model cepat. |
-| `DEEP_THINK_LLM` | `gemini-3.5-flash` | Model reasoning. |
-| `GOOGLE_API_KEY` | placeholder | Google key. |
-| `GEMINI_API_KEY` | placeholder | Gemini key alias. |
-| `MAX_PIPELINE_RETRIES` | `3` | Retry pipeline. |
-| `RETRY_BASE_DELAY_SECONDS` | `5.0` | Delay dasar retry. |
-| `DELAY_BETWEEN_CALLS_SECONDS` | `3` | Delay antar call. |
-| `BACKTEST_LOG_LEVEL` | `INFO` | Log level. |
-| `FORCE_REGENERATE_SIGNALS` | `false` | Regenerate signal. |
-| `BACKTEST_START` | `2022-01-03` | Periode mulai. |
-| `BACKTEST_END` | `2024-12-31` | Periode selesai. |
-| `TARGET_TRADES_PER_TICKER` | `50` | Target jumlah trade. |
-| `SIGNAL_FREQUENCY` | `weekly` | Frekuensi signal. |
-| `ENTRY_SIGNAL` | `BUY` | Signal entry. |
-| `EXIT_RULE` | `A` | Rule exit. |
-| `HOLD_WEEKS` | `4` | Lama hold default. |
-| `MAX_HOLD_WEEKS` | `8` | Lama hold maksimum. |
-| `DEFAULT_SL_PCT` | `-0.05` | Stop loss default. |
-| `DEFAULT_TP_PCT` | `0.10` | Take profit default. |
-| `BREAKEVEN_THRESHOLD` | `0.005` | Threshold breakeven. |
-| `ANALYSIS_DEPTH` | `fast` | Depth analisis backtest. |
-| `RESPONSE_DETAIL` | `summary` | Detail response. |
-| `TIME_HORIZON_MONTHS` | `1` | Horizon bulan. |
-| `MAX_DEBATE_ROUNDS` | `1` | Debate round. |
-| `MAX_GEMINI_CALLS` | `5` | Budget Gemini. |
-| `OUTPUT_LANGUAGE` | `English` | Bahasa output. |
-
 ## Backend Env Reference
 
-File canonical:
+Canonical template:
 
 ```text
 backend/.env.example
 ```
 
-### Server dan Security
+### Server and Security
 
-| Variable | Default | Fungsi |
+| Variable | Default | Purpose |
 |---|---|---|
-| `APP_ENV` | `development` | Mode runtime. Valid: `development`, `production`. |
-| `CORS_ORIGINS` | local origins | Origin frontend yang diizinkan. `*` ditolak. |
-| `API_KEY` | blank | Service credential untuk `x-api-key` atau bearer token. Wajib production. |
-| `REQUIRE_API_KEY_FOR_RATE_LIMIT` | `false` | Jika true, request tanpa API key ditolak. |
-| `OWNER_SESSION_SECRET` | blank | HMAC secret owner token. Wajib production. |
-| `OWNER_SESSION_TTL_SECONDS` | blank | Default mengikuti `ANALYSIS_JOB_TTL_SECONDS`. |
+| `APP_ENV` | `development` | `development` or `production`. |
+| `CORS_ORIGINS` | local origins | Explicit frontend origins. `*` rejected. |
+| `API_KEY` | blank | Service credential. Required production. |
+| `REQUIRE_API_KEY_FOR_RATE_LIMIT` | `false` dev, true required production | Require service credential. |
+| `OWNER_SESSION_SECRET` | blank | Owner token signing secret. Required production. |
+| `OWNER_SESSION_TTL_SECONDS` | `ANALYSIS_JOB_TTL_SECONDS` | Cookie/session TTL. |
+| `REQUEST_BODY_MAX_BYTES` | `16777216` | Request body limit. |
 
-### Runtime dan Worker
+### Runtime and Workers
 
-| Variable | Default | Fungsi |
+| Variable | Default | Purpose |
 |---|---:|---|
-| `PIPELINE_TIMEOUT_SECONDS` | `600` | Timeout full analysis. |
-| `PREFLIGHT_TIMEOUT_SECONDS` | `30` | Timeout preflight market data. |
-| `PROCESS_POOL_WORKERS` | `2` | Jumlah process worker, capped CPU count. |
-| `PROCESS_POOL_MAX_TASKS_PER_CHILD` | `1` | Worker diganti setelah task selesai. |
-| `DATA_COLLECTION_WORKERS` | `3` | Thread worker data collection. |
-| `ANALYST_PARALLEL_WORKERS` | `3` | Thread worker analyst awal, capped to 3. |
-| `DEFAULT_MAX_DEBATE_ROUNDS` | `3` | Default debate round. |
+| `PIPELINE_TOTAL_TIMEOUT_SECONDS` | `PIPELINE_TIMEOUT_SECONDS` or 600 | Main pipeline timeout. |
+| `PIPELINE_TIMEOUT_SECONDS` | 600 | Backward-compatible timeout. |
+| `PIPELINE_STAGE_TIMEOUT_SECONDS` | 30 | Stage timeout. |
+| `PIPELINE_LLM_CALL_TIMEOUT_SECONDS` | 45 | LLM call timeout. |
+| `PREFLIGHT_TIMEOUT_SECONDS` | 30 capped by pipeline timeout | Ticker preflight timeout. |
+| `PROCESS_POOL_WORKERS` | 2 | Pipeline process workers. |
+| `PROCESS_POOL_MAX_TASKS_PER_CHILD` | 1 | Replace worker after task. |
+| `DATA_COLLECTION_WORKERS` | 12 | Data collection thread workers. |
+| `PRICE_MAX_FALLBACK_DAYS` | 7 | Price fallback search window. |
+| `ANALYST_PARALLEL_WORKERS` | 3 | Initial analyst workers, capped to 3. |
+| `DEFAULT_MAX_DEBATE_ROUNDS` | 3 | Default debate rounds. |
 
-### Rate Limit dan Body Limit
+### Analysis Depth
 
-| Variable | Default | Fungsi |
-|---|---:|---|
-| `REQUEST_RATE_LIMIT_PER_MINUTE` | `20` | Limit request biasa per owner. |
-| `STREAM_RATE_LIMIT_PER_MINUTE` | `8` | Limit stream/job submit per owner. |
-| `MAX_CONCURRENT_REQUESTS_PER_KEY` | `2` | Concurrent request biasa per owner. |
-| `MAX_CONCURRENT_STREAMS_PER_KEY` | `1` | Concurrent stream/job per owner. |
-| `REQUEST_BODY_MAX_BYTES` | `65536` | Batas payload request. |
+| Variable | Default |
+|---|---:|
+| `LLM_BUDGET_FAST` | 6 |
+| `LLM_BUDGET_BALANCED` | 9 |
+| `LLM_BUDGET_DEEP` | 12 |
 
-### LLM dan Tool Resilience
+Fixed values:
 
-| Variable | Default | Fungsi |
-|---|---:|---|
-| `LLM_TIMEOUT_SECONDS` | `60` | Timeout per LLM call. |
-| `LLM_MAX_RETRIES` | `2` | Retry LLM default. |
-| `PROVIDER_SDK_MAX_RETRIES` | `0` | Retry internal provider SDK. |
-| `TOOL_TIMEOUT_SECONDS` | `45` | Timeout tool/data helper. |
-| `TOOL_MAX_RETRIES` | `2` | Retry tool/data helper. |
+```text
+ANALYSIS_MODE=balanced
+DEFAULT_ANALYSIS_DEPTH=balanced
+ANALYSIS_DEPTHS=fast,balanced,deep
+RESPONSE_DETAILS=summary,full,debug
+```
 
-### Result, Job, dan Data Cache
+### Rate Limit
 
-| Variable | Default | Fungsi |
-|---|---:|---|
-| `CACHE_TTL_SECONDS` | `900` | Default TTL cache umum. |
-| `CACHE_MAX_ENTRIES` | `512` | Default max entry cache umum. |
-| `ANALYSIS_RESULT_CACHE_TTL_SECONDS` | `28800` | TTL result cache in-memory. |
-| `ANALYSIS_RESULT_CACHE_MAX_ENTRIES` | `256` | Max result cache. |
-| `ANALYSIS_JOB_TTL_SECONDS` | `28800` | TTL job terminal. |
-| `ANALYSIS_JOB_MAX_ENTRIES` | `256` | Max job store. |
-| `ANALYSIS_JOB_MAX_ACTIVE` | `32` | Max queued/running job. |
-| `ANALYSIS_JOB_EVENT_REPLAY_LIMIT` | `500` | Max event history per job. |
-| `ANALYSIS_JOB_CACHE_DB_PATH` | `.cache/analysis_jobs.sqlite3` | SQLite TTL cache job terminal. |
-| `ANALYSIS_DB_PATH` | `.cache/analysis_history.sqlite3` | SQLite permanent analysis history. |
-| `ANALYSIS_HISTORY_MAX_ROWS` | `1000` | Max row history. |
-| `ANALYSIS_HISTORY_DEFAULT_LIMIT` | `25` | Default list history limit. |
-| `DATA_CACHE_DB_PATH` | `.cache/market_data.sqlite3` | SQLite market data cache. |
-| `DATA_CACHE_TTL_SECONDS` | `900` | TTL market data cache. |
-| `DATA_CACHE_MAX_ENTRIES` | `512` | Max market data cache. |
+| Variable | Default |
+|---|---:|
+| `REQUEST_RATE_LIMIT_PER_MINUTE` | 20 |
+| `STATUS_RATE_LIMIT_PER_MINUTE` | 120 |
+| `STREAM_RATE_LIMIT_PER_MINUTE` | 8 |
+| `MAX_CONCURRENT_REQUESTS_PER_KEY` | 2 |
+| `MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY` | 8 |
+| `MAX_CONCURRENT_STREAMS_PER_KEY` | 1 |
+| `RATE_LIMIT_STORAGE_BACKEND` | `sqlite` |
+| `RATE_LIMIT_DB_PATH` | `.cache/rate_limits.sqlite3` |
+
+### Cache and Persistence
+
+| Variable | Default |
+|---|---|
+| `CACHE_TTL_SECONDS` | `900` |
+| `CACHE_MAX_ENTRIES` | `512` |
+| `ANALYSIS_RESULT_CACHE_TTL_SECONDS` | `28800` |
+| `ANALYSIS_RESULT_CACHE_MAX_ENTRIES` | `256` |
+| `ANALYSIS_JOB_TTL_SECONDS` | `28800` |
+| `ANALYSIS_JOB_MAX_ENTRIES` | `256` |
+| `ANALYSIS_JOB_MAX_ACTIVE` | min(`32`, max entries) |
+| `ANALYSIS_JOB_EVENT_REPLAY_LIMIT` | `500` |
+| `ANALYSIS_JOB_CACHE_DB_PATH` | `.cache/analysis_jobs.sqlite3` |
+| `ANALYSIS_JOB_STORE_BACKEND` | `sqlite` |
+| `ANALYSIS_JOB_ROUTING_MODE` | `sticky_sessions` |
+| `ANALYSIS_DB_PATH` | `.cache/analysis_history.sqlite3` |
+| `ANALYSIS_STORAGE_BACKEND` | `sqlite` |
+| `ANALYSIS_HISTORY_MAX_ROWS` | `1000` |
+| `ANALYSIS_HISTORY_DEFAULT_LIMIT` | `25` |
+| `DATA_CACHE_BACKEND` | `sqlite` |
+| `DATA_CACHE_DB_PATH` | `.cache/market_data.sqlite3` |
+| `DATA_CACHE_TTL_SECONDS` | `900` |
+| `DATA_CACHE_MAX_ENTRIES` | `512` |
+
+### LLM
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LLM_PROVIDER` | blank | `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, `ollama`. |
+| `LLM_API_KEY` | blank | Primary key for active provider. |
+| `LLM_BASE_URL` | blank | Optional provider/gateway base URL. |
+| `QUICK_THINK_LLM` | blank | Analysts, debate, trader, risk. |
+| `DEEP_THINK_LLM` | blank | Research Manager and Portfolio Manager. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint. |
+| `LLM_TIMEOUT_SECONDS` | 60 | LLM timeout. |
+| `LLM_MAX_RETRIES` | 1 | LLM retry attempts. |
+| `PROVIDER_SDK_MAX_RETRIES` | 0 | SDK internal retries. |
+| `MAX_CONCURRENT_LLM_CALLS` | 3 | Google concurrency limit. |
+
+Provider-specific legacy/fallback keys:
+
+```text
+GOOGLE_API_KEY
+GEMINI_API_KEY
+OPENAI_API_KEY
+ANTHROPIC_API_KEY
+DEEPSEEK_API_KEY
+OPENROUTER_API_KEY
+```
 
 ### LLM Cache
 
-| Variable | Default | Fungsi |
-|---|---:|---|
-| `LLM_EXACT_CACHE_ENABLED` | `true` | Exact prompt/schema/model cache. |
-| `LLM_EXACT_CACHE_TTL_SECONDS` | `1800` | TTL exact LLM cache. |
-| `LLM_EXACT_CACHE_MAX_ENTRIES` | `1024` | Max exact cache. |
-| `LLM_EXACT_CACHE_DB_PATH` | `.cache/llm_exact_cache.sqlite3` | SQLite exact cache path. |
-| `LLM_SEMANTIC_CACHE_ENABLED` | `false` | Semantic cache. Default off. |
-| `LLM_SEMANTIC_CACHE_TTL_SECONDS` | `3600` | TTL semantic cache. |
-| `LLM_SEMANTIC_CACHE_MAX_ENTRIES` | `2048` | Max semantic cache. |
-| `LLM_SEMANTIC_CACHE_DB_PATH` | `.cache/llm_semantic_cache.sqlite3` | SQLite semantic cache path. |
-| `LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD` | `0.97` | Similarity threshold. |
-| `LLM_SEMANTIC_CACHE_TARGETS` | `news_summary,company_profile` | Semantic cache targets. |
+| Variable | Default |
+|---|---|
+| `LLM_EXACT_CACHE_ENABLED` | `true` |
+| `LLM_EXACT_CACHE_TTL_SECONDS` | `1800` |
+| `LLM_EXACT_CACHE_MAX_ENTRIES` | `1024` |
+| `LLM_EXACT_CACHE_DB_PATH` | `.cache/llm_exact_cache.sqlite3` |
+| `LLM_SEMANTIC_CACHE_ENABLED` | `false` |
+| `LLM_SEMANTIC_CACHE_TTL_SECONDS` | `3600` |
+| `LLM_SEMANTIC_CACHE_MAX_ENTRIES` | `2048` |
+| `LLM_SEMANTIC_CACHE_DB_PATH` | `.cache/llm_semantic_cache.sqlite3` |
+| `LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD` | `0.97` |
+| `LLM_SEMANTIC_CACHE_TARGETS` | `news_summary,company_profile` |
 
 ### Runtime Cache Path
 
-| Variable | Default | Fungsi |
-|---|---|---|
-| `XDG_CACHE_HOME` | blank | Runtime cache home. Docker override ke `/root/.tradingagents/cache`. |
-| `YFINANCE_CACHE_DIR` | blank | yfinance cache dir. Docker override ke `/root/.tradingagents/cache/py-yfinance`. |
-| `YFINANCE_TICKER_CACHE_MAX_ENTRIES` | `512` | Max yfinance ticker cache. |
-| `TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS` | blank | Max abandoned timeout call, blank memakai default core. |
+| Variable | Default |
+|---|---|
+| `XDG_CACHE_HOME` | blank, platform default |
+| `YFINANCE_CACHE_DIR` | blank, yfinance default |
+| `YFINANCE_TICKER_CACHE_MAX_ENTRIES` | `512` |
+| `TRADINGAGENTS_TIMEOUT_MAX_ACTIVE_CALLS` | blank |
+| `TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS` | blank |
+| `TRADINGAGENTS_TIMEOUT_CAPACITY_WAIT_SECONDS` | `5` |
 
-### LLM Provider
+### Vendor Keys
 
-| Variable | Default | Fungsi |
-|---|---|---|
-| `LLM_PROVIDER` | blank | Wajib. Valid: `google`, `openai`, `anthropic`, `deepseek`, `openrouter`, `ollama`. |
-| `DEEP_THINK_LLM` | blank | Wajib. Research Manager dan Portfolio Manager. |
-| `QUICK_THINK_LLM` | blank | Wajib. Analyst, debate, trader, risk. |
-| `GOOGLE_API_KEY` | blank | Google/Gemini key. |
-| `GEMINI_API_KEY` | blank | Alias Google/Gemini key. |
-| `OPENAI_API_KEY` | blank | OpenAI key. |
-| `ANTHROPIC_API_KEY` | blank | Anthropic key. |
-| `DEEPSEEK_API_KEY` | blank | DeepSeek key. |
-| `OPENROUTER_API_KEY` | blank | OpenRouter key. |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint. |
-
-### Optional Data Provider Keys
-
-| Variable | Default | Fungsi |
-|---|---|---|
-| `ALPHA_VANTAGE_API_KEY` | blank | Optional market/news/fundamental fallback. |
-| `GOOGLE_NEWS_LIGHT_API_KEY` | blank | SearchAPI.io Google News Light primary. |
-| `MARKETAUX_API_KEY` | blank | Structured company news fallback. |
-| `NEWSDATA_API_KEY` | blank | Structured company news secondary fallback. |
-| `FINNHUB_API_KEY` | blank | Optional Finnhub fallback/enrichment. |
-
-### News Provider
-
-| Variable | Default | Fungsi |
-|---|---:|---|
-| `NEWS_PROVIDER_PRIORITY` | `google_news_light,marketaux,newsdata` | Urutan provider structured news. |
-| `NEWS_ENABLED_PROVIDERS` | `google_news_light,marketaux,newsdata` | Provider news aktif. |
-| `NEWS_DEFAULT_WINDOW_DAYS` | `30` | Window default news. |
-| `NEWS_MAX_ARTICLES_PER_PROVIDER` | `10` | Limit artikel per provider. |
-| `NEWS_MAX_ARTICLES_FOR_PROMPT` | `5` | Artikel masuk prompt. |
-| `NEWS_MAX_ARTICLES_FOR_UI` | `20` | Artikel tampil UI. |
-| `NEWS_MIN_RELEVANCE_SCORE` | `50` | Min relevance umum. |
-| `NEWS_PROMPT_MIN_RELEVANCE_SCORE` | `65` | Min relevance untuk prompt. |
-| `NEWS_CACHE_ENABLED` | `true` | Enable news cache. |
-| `NEWS_CACHE_TTL_MINUTES` | `360` | TTL news cache. |
-| `NEWS_CACHE_DB_PATH` | `.cache/news_data.sqlite3` | SQLite news cache. |
-| `NEWS_CACHE_MAX_ENTRIES` | `512` | Max news cache. |
-| `NEWS_DEBUG_RAW_RESPONSE` | `false` | Include raw debug response. |
-| `NEWS_LOG_PROVIDER_REQUESTS` | `true` | Log provider request. |
-| `NEWS_VENDOR_TIMEOUT_SECONDS` | `15` | Timeout news vendor. |
-| `NEWS_VENDOR_MAX_RETRIES` | `2` | Retry news vendor. |
-| `NEWS_FETCH_SECONDARY_ALWAYS` | `false` | Fetch secondary walau primary cukup. |
-| `NEWS_SECONDARY_FETCH_THRESHOLD` | `5` | Fetch secondary jika artikel di bawah threshold. |
-| `NEWS_ENABLE_YFINANCE_FALLBACK` | `true` | yfinance fallback untuk news. |
-
-### Finnhub
-
-| Variable | Default | Fungsi |
-|---|---:|---|
-| `FINNHUB_BASE_URL` | `https://finnhub.io/api/v1` | Finnhub API base. |
-| `FINNHUB_ENABLED` | `true` | Enable Finnhub globally, tetap skip jika key kosong. |
-| `FINNHUB_TIMEOUT_SECONDS` | `15` | Timeout Finnhub. |
-| `FINNHUB_MAX_RETRIES` | `1` | Retry Finnhub. |
-| `FINNHUB_RETRY_BACKOFF_SECONDS` | `1` | Backoff retry. |
-| `FINNHUB_ENABLE_STOCK_DATA` | `true` | Stock quote/candle. |
-| `FINNHUB_ENABLE_FUNDAMENTALS` | `true` | Fundamentals. |
-| `FINNHUB_ENABLE_NEWS` | `false` | News endpoint. |
-| `FINNHUB_ENABLE_SENTIMENT` | `false` | Sentiment endpoint. |
-| `FINNHUB_ENABLE_EVENTS` | `false` | Events/earnings. |
-| `FINNHUB_ENABLE_INSIDER` | `false` | Insider endpoint. |
-| `FINNHUB_ENABLE_FOREX` | `false` | Forex endpoint. |
-| `FINNHUB_ENABLE_CRYPTO` | `false` | Crypto endpoint. |
-| `FINNHUB_ENABLE_SYMBOL_RESOLVER` | `true` | Symbol resolver. |
-| `FINNHUB_QUOTE_CACHE_TTL_SECONDS` | `120` | Quote cache TTL. |
-| `FINNHUB_OHLCV_CACHE_TTL_SECONDS` | `21600` | OHLCV cache TTL. |
-| `FINNHUB_PROFILE_CACHE_TTL_SECONDS` | `604800` | Profile cache TTL. |
-| `FINNHUB_METRICS_CACHE_TTL_SECONDS` | `604800` | Metrics cache TTL. |
-| `FINNHUB_FINANCIAL_STATEMENT_CACHE_TTL_SECONDS` | `2592000` | Statements cache TTL. |
-| `FINNHUB_NEWS_CACHE_TTL_SECONDS` | `3600` | News cache TTL. |
-| `FINNHUB_SENTIMENT_CACHE_TTL_SECONDS` | `3600` | Sentiment cache TTL. |
-| `FINNHUB_EVENT_CACHE_TTL_SECONDS` | `43200` | Event cache TTL. |
-| `FINNHUB_INSIDER_CACHE_TTL_SECONDS` | `43200` | Insider cache TTL. |
-| `FINNHUB_FOREX_CACHE_TTL_SECONDS` | `300` | Forex cache TTL. |
-| `FINNHUB_CRYPTO_CACHE_TTL_SECONDS` | `120` | Crypto cache TTL. |
-| `FINNHUB_SYMBOL_CACHE_TTL_SECONDS` | `2592000` | Symbol cache TTL. |
-| `FINNHUB_MAX_CALLS_PER_ANALYSIS` | `12` | Per-analysis Finnhub budget. |
+| Variable | Purpose |
+|---|---|
+| `ALPHA_VANTAGE_API_KEY` | Optional fundamentals/news/price fallback. |
+| `SEC_USER_AGENT` | Required by SEC fair-access policy for US companyfacts fallback. |
+| `GOOGLE_NEWS_LIGHT_API_KEY` | Google News Light provider. |
+| `MARKETAUX_API_KEY` | MarketAux provider. |
+| `NEWSDATA_API_KEY` | NewsData provider. |
+| `FINNHUB_API_KEY` | Finnhub fallback/enrichment. |
+| `FINNHUB_BASE_URL` | Finnhub API base. |
+| `FINNHUB_ENABLED` | Enables Finnhub when key exists. |
 
 ### Vendor Routing
 
-| Variable | Default | Fungsi |
-|---|---|---|
-| `DATA_VENDOR_MAX_CALLS_PER_ANALYSIS` | `40` | Total vendor call budget. |
-| `DATA_VENDOR_CORE_STOCK_APIS` | `yfinance,finnhub,alpha_vantage` | Core stock APIs. |
-| `DATA_VENDOR_QUOTE_DATA` | `yfinance,finnhub,alpha_vantage` | Quote/current price. |
-| `DATA_VENDOR_TECHNICAL_INDICATORS` | `yfinance,finnhub,alpha_vantage` | Technical data source before local calculation. |
-| `DATA_VENDOR_FUNDAMENTAL_DATA` | `yfinance,finnhub,alpha_vantage` | Fundamental data. |
-| `DATA_VENDOR_FINANCIAL_STATEMENTS` | `yfinance,alpha_vantage,finnhub` | Financial statements. |
-| `DATA_VENDOR_NEWS_DATA` | `google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage` | Company news. |
-| `DATA_VENDOR_GLOBAL_NEWS_DATA` | `yfinance,finnhub,alpha_vantage` | Global/macro news. |
-| `DATA_VENDOR_SENTIMENT_DATA` | `finnhub,alpha_vantage` | News sentiment. |
-| `DATA_VENDOR_SOCIAL_SENTIMENT` | `finnhub` | Social sentiment. |
-| `DATA_VENDOR_EVENT_DATA` | `finnhub` | Event/earnings. |
-| `DATA_VENDOR_ANALYST_RATING` | `finnhub` | Analyst rating. |
-| `DATA_VENDOR_INSIDER_DATA` | `finnhub,alpha_vantage,yfinance` | Insider data. |
-| `DATA_VENDOR_FOREX_DATA` | `finnhub,alpha_vantage` | Forex, deferred in main app. |
-| `DATA_VENDOR_CRYPTO_DATA` | `finnhub,alpha_vantage` | Crypto, deferred in main app. |
+| Variable | Default |
+|---|---|
+| `DATA_VENDOR_CORE_STOCK_APIS` | `yfinance,finnhub,alpha_vantage` |
+| `DATA_VENDOR_QUOTE_DATA` | `yfinance,finnhub,alpha_vantage` |
+| `DATA_VENDOR_TECHNICAL_INDICATORS` | `yfinance,finnhub,alpha_vantage` |
+| `DATA_VENDOR_FUNDAMENTAL_DATA` | `yfinance,finnhub,alpha_vantage` |
+| `DATA_VENDOR_FINANCIAL_STATEMENTS` | `yfinance,sec_companyfacts,alpha_vantage,finnhub` |
+| `DATA_VENDOR_NEWS_DATA` | `google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage` |
+| `DATA_VENDOR_GLOBAL_NEWS_DATA` | `finnhub,alpha_vantage,yfinance` |
+| `DATA_VENDOR_SENTIMENT_DATA` | `finnhub,alpha_vantage` |
+| `DATA_VENDOR_SOCIAL_SENTIMENT` | `finnhub` |
+| `DATA_VENDOR_EVENT_DATA` | `finnhub` |
+| `DATA_VENDOR_ANALYST_RATING` | `finnhub` |
+| `DATA_VENDOR_INSIDER_DATA` | `finnhub,alpha_vantage,yfinance` |
+| `DATA_VENDOR_FOREX_DATA` | `finnhub,alpha_vantage` |
+| `DATA_VENDOR_CRYPTO_DATA` | `finnhub,alpha_vantage` |
+| `DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE` | `0.35` |
+| `DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS` | `true` |
+| `DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE` | `false` |
+| `DATA_VENDOR_ENABLE_FINNHUB_FALLBACK` | `true` |
+| `DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT` | `true` |
+| `DATA_VENDOR_REQUIRE_SOURCE_METADATA` | `true` |
+| `DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE` | `true` |
+| `DATA_VENDOR_MAX_CALLS_PER_ANALYSIS` | `60` |
 
-### Vendor Guards dan Symbols
+### Company News
 
-| Variable | Default | Fungsi |
-|---|---:|---|
-| `DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS` | `false` | Fetch multiple news vendors at once. |
-| `DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE` | `false` | Multi-source price. |
-| `DATA_VENDOR_ENABLE_FINNHUB_FALLBACK` | `true` | Allow Finnhub fallback. |
-| `DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT` | `false` | Optional Finnhub enrichment. |
-| `DATA_VENDOR_REQUIRE_SOURCE_METADATA` | `true` | Require source metadata. |
-| `DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE` | `true` | Return partial data when vendor fails. |
-| `MAX_NEWS_PER_VENDOR` | `10` | News limit per vendor. |
-| `MAX_TOTAL_NEWS_ITEMS` | `25` | Total news limit. |
-| `NEWS_DEDUP_BY` | `url,title` | News dedupe key. |
-| `DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE` | `0.35` | Min relevance for vendor news. |
-| `DEFAULT_INDONESIA_SUFFIX` | `.JK` | IDX suffix. |
-| `DEFAULT_FOREX_EXCHANGE` | `OANDA` | Forex default, deferred. |
-| `DEFAULT_CRYPTO_EXCHANGE` | `BINANCE` | Crypto default, deferred. |
-| `DEFAULT_US_EXCHANGE` | `US` | US exchange default. |
+| Variable | Default |
+|---|---|
+| `NEWS_STRICT_AI_ANALYSIS_MODE` | `true` |
+| `NEWS_FORCE_ALL_PROVIDERS` | `true` |
+| `NEWS_PROVIDER_PRIORITY` | `google_news_light,marketaux,rss_context,newsdata,yfinance` |
+| `NEWS_ENABLED_PROVIDERS` | `google_news_light,marketaux,rss_context,newsdata,yfinance` |
+| `NEWS_DEFAULT_WINDOW_DAYS` | `30` |
+| `NEWS_MAX_ARTICLES_PER_PROVIDER` | `20` |
+| `NEWS_MAX_ARTICLES_FOR_PROMPT` | `8` |
+| `NEWS_MAX_ARTICLES_FOR_UI` | `30` |
+| `NEWS_MIN_RELEVANCE_SCORE` | `55` |
+| `NEWS_PROMPT_MIN_RELEVANCE_SCORE` | `70` |
+| `NEWS_DECISION_MIN_RELEVANCE_SCORE` | `70` |
+| `NEWS_RSS_DECISION_MIN_RELEVANCE_SCORE` | `80` |
+| `NEWS_RSS_ENABLED` | `true` |
+| `NEWS_RSS_MAX_FEEDS` | `10` |
+| `NEWS_RSS_MAX_ITEMS_PER_FEED` | `20` |
+| `NEWS_RSS_INCLUDE_TRIAL_FEEDS` | `false` |
+| `NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED` | `true` |
+| `NEWS_RSS_ENABLED_FEED_IDS` | blank |
+| `NEWS_RSS_DISABLED_FEED_IDS` | `theblock-trial` |
+| `NEWS_RSS_USER_AGENT` | `TradingAgent/0.1 RSS Reader` |
+| `NEWS_CACHE_ENABLED` | `true` |
+| `NEWS_CACHE_TTL_MINUTES` | `60` |
+| `NEWS_CACHE_DB_PATH` | backend `.cache/news_data.sqlite3` |
+| `NEWS_CACHE_MAX_ENTRIES` | `512` |
+| `NEWS_DEBUG_RAW_RESPONSE` | `false` |
+| `NEWS_LOG_PROVIDER_REQUESTS` | `true` |
+| `NEWS_VENDOR_TIMEOUT_SECONDS` | `10` |
+| `NEWS_VENDOR_MAX_RETRIES` | `1` |
+| `NEWS_FETCH_SECONDARY_ALWAYS` | `true` |
+| `NEWS_SECONDARY_FETCH_THRESHOLD` | `3` |
+| `NEWS_ENABLE_YFINANCE_FALLBACK` | `true` |
+
+### General News
+
+| Variable | Default |
+|---|---|
+| `GENERAL_NEWS_ENABLED` | `true` |
+| `GENERAL_NEWS_PROVIDER_PRIORITY` | `rss_context,google_news_light,marketaux,newsdata` |
+| `GENERAL_NEWS_ENABLED_PROVIDERS` | `rss_context,google_news_light,marketaux,newsdata` |
+| `GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH` | `true` |
+| `GENERAL_NEWS_REFRESH_INTERVAL_SECONDS` | `120` |
+| `GENERAL_NEWS_CACHE_TTL_SECONDS` | `120` |
+| `GENERAL_NEWS_FRONTEND_POLL_SECONDS` | `60` |
+| `GENERAL_NEWS_ENABLE_SSE` | `true` |
+| `GENERAL_NEWS_DEFAULT_WINDOW_DAYS` | `7` |
+| `GENERAL_NEWS_MAX_ARTICLES_PER_PROVIDER` | `30` |
+| `GENERAL_NEWS_MAX_ARTICLES_FOR_UI` | `100` |
+| `GENERAL_NEWS_DEFAULT_LIMIT` | `50` |
+| `GENERAL_NEWS_DEFAULT_CATEGORY` | `all` |
+| `GENERAL_NEWS_ALLOWED_CATEGORIES` | `all,market,macro,crypto,forex,commodities,regulatory,indonesia` |
+| `GENERAL_NEWS_RSS_PRIMARY` | `true` |
+| `GENERAL_NEWS_RSS_MAX_FEEDS` | `20` |
+| `GENERAL_NEWS_RSS_MAX_ITEMS_PER_FEED` | `30` |
+| `GENERAL_NEWS_VENDOR_TIMEOUT_SECONDS` | `10` |
+| `GENERAL_NEWS_VENDOR_MAX_RETRIES` | `1` |
+| `GENERAL_NEWS_CACHE_ENABLED` | `true` |
+| `GENERAL_NEWS_CACHE_DB_PATH` | `.cache/general_news.sqlite3` |
+| `GENERAL_NEWS_CACHE_MAX_ENTRIES` | `1000` |
+
+### Tool and Debug
+
+| Variable | Default |
+|---|---|
+| `TOOL_TIMEOUT_SECONDS` | `45` |
+| `TOOL_MAX_RETRIES` | `2` |
+| `DEBUG_ENDPOINTS_ENABLED` | `false` |
 
 ## Frontend Env Reference
 
-File canonical:
+Resolved by `frontend/src/config.js`:
 
-```text
-frontend/.env.example
-```
+| Variable | Default |
+|---|---|
+| `VITE_API_BASE_URL` | `/api` |
+| `VITE_API_URL` | blank legacy fallback |
+| `VITE_ENABLE_MOCK` | `false` |
 
-| Variable | Default | Fungsi |
-|---|---|---|
-| `VITE_API_BASE_URL` | `/api` | Primary backend base. Docker/nginx memakai `/api`. Local Vite harus override ke `http://localhost:8000`. |
-| `VITE_API_URL` | blank | Legacy alias. Jangan pakai untuk config baru. |
-| `VITE_DEV_HOST` | `127.0.0.1` | Vite dev/preview host. |
-| `VITE_DEV_PORT` | `3000` | Vite dev/preview port. |
-| `VITE_CLOCK_TIME_ZONE` | `Asia/Jakarta` | Timezone navbar clock. |
-| `VITE_CLOCK_LABEL` | `WIB` | Label navbar clock. |
-| `VITE_ENABLE_MOCK` | `false` | Enable mock routes jika `true`. |
+Used by `frontend/vite.config.js`:
+
+| Variable | Default |
+|---|---|
+| `VITE_DEV_HOST` | `127.0.0.1` |
+| `VITE_DEV_PORT` | `3000` |
+| `VITE_BACKEND_PROXY_TARGET` | `http://backend:8000` |
 
 ## Common Problems
 
-### Backend startup gagal
+### Frontend `/api` calls fail in local Vite
 
-Cek log `STARTUP CONFIG ERROR`.
-
-Penyebab umum:
-
-- `LLM_PROVIDER` kosong.
-- Provider key kosong.
-- `DEEP_THINK_LLM` kosong.
-- `QUICK_THINK_LLM` kosong.
-- `APP_ENV=production` tetapi `API_KEY` kosong.
-- `APP_ENV=production` tetapi `OWNER_SESSION_SECRET` kosong.
-- `CORS_ORIGINS=*`.
-- Cache/results directory tidak writable.
-
-### Frontend local memanggil /api di port 3000
-
-Gejala:
-
-```text
-POST http://127.0.0.1:3000/api/session 404
-```
+Cause: default proxy target is `http://backend:8000`.
 
 Fix:
 
 ```env
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=/api
+VITE_BACKEND_PROXY_TARGET=http://localhost:8000
 ```
 
-Restart Vite setelah mengubah env.
-
-### CORS error
-
-Fix:
-
-```env
-APP_ENV=development
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173
-```
-
-Pastikan frontend memakai host yang ada di CORS.
+Restart Vite.
 
 ### Missing owner session token
 
-Gejala:
+Error:
 
 ```json
 {
@@ -785,11 +731,41 @@ Gejala:
 }
 ```
 
-Fix:
+Fix frontend fetch:
 
-- Pakai helper `buildAuthHeaders()` atau `buildHeaders()`.
-- Pastikan `POST /api/session` berhasil.
-- Hapus `sessionStorage` jika token expired setelah backend restart.
+```text
+call buildHeaders() or buildAuthHeaders()
+set credentials: 'include'
+```
+
+For manual curl, call `POST /api/session` first and reuse cookie or
+`x-owner-token`.
+
+### Backend logs startup config issues
+
+Cause examples:
+
+- `LLM_PROVIDER` blank.
+- `LLM_API_KEY` blank.
+- `QUICK_THINK_LLM` blank.
+- `DEEP_THINK_LLM` blank.
+- Optional vendor keys blank.
+
+Local debug server continues. Pipeline/vendor calls can still fail later.
+
+### Production config fails
+
+Required production values:
+
+```env
+APP_ENV=production
+API_KEY=...
+OWNER_SESSION_SECRET=...
+REQUIRE_API_KEY_FOR_RATE_LIMIT=true
+CORS_ORIGINS=https://your.domain
+```
+
+`CORS_ORIGINS=*` is rejected.
 
 ### `tradingagents` module not found
 
@@ -797,32 +773,42 @@ Fix:
 
 ```powershell
 cd d:\CODING\TradingAgents\backend
+pip install -r requirements-dev.txt
+```
+
+or:
+
+```powershell
 pip install -e .\tradingagents-core
 ```
 
-### WeasyPrint PDF gagal local
+### WeasyPrint PDF fails local Windows
 
-Docker backend sudah memasang library system untuk WeasyPrint. Local Windows
-bisa butuh dependency tambahan. Jika PDF penting dan local gagal, jalankan via
-Docker backend.
+Docker backend includes required system libraries. Use Docker backend when local
+Windows system libraries are missing.
 
-### yfinance atau vendor timeout
+### yfinance or vendor timeout
 
-Cek:
+Check:
 
-- `PREFLIGHT_TIMEOUT_SECONDS`
-- `TOOL_TIMEOUT_SECONDS`
-- `DATA_VENDOR_*`
-- API key optional vendor
-- quota vendor
-- network/DNS
+```text
+PREFLIGHT_TIMEOUT_SECONDS
+TOOL_TIMEOUT_SECONDS
+DATA_VENDOR_*
+FINNHUB_API_KEY
+ALPHA_VANTAGE_API_KEY
+GOOGLE_NEWS_LIGHT_API_KEY
+MARKETAUX_API_KEY
+NEWSDATA_API_KEY
+network/DNS/quota
+```
 
 ### Python 3.13 error
 
-Core package requires:
+Core requires:
 
 ```text
 >=3.10,<3.13
 ```
 
-Gunakan Python 3.11 atau 3.12.
+Use Python 3.11 or 3.12.

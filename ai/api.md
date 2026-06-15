@@ -1,55 +1,50 @@
 # API Reference
 
-Terakhir disinkronkan: 2026-06-03.
+Terakhir disinkronkan: 2026-06-15.
 
-Referensi ini mengikuti route aktual di `backend/main.py` dan `backend/routes/*`.
-Semua route aplikasi memakai prefix `/api`, kecuali `/health`.
+Semua app route memakai prefix `/api`, kecuali `/health`.
 
 ## Base URL
 
-| Mode | URL |
-|---|---|
-| Backend local | `http://127.0.0.1:8000` atau `http://localhost:8000` |
-| Frontend local Vite | `http://127.0.0.1:3000` |
-| Docker frontend | `http://localhost:3000` |
-| Docker backend | `http://localhost:8000` |
-| Docker nginx proxy | Browser memanggil `/api/*` di port 3000, nginx meneruskan ke `backend:8000/api/*`. |
+| Mode | Browser URL | API path |
+|---|---|---|
+| Local backend direct | `http://localhost:8000` | `http://localhost:8000/api/*` |
+| Local Vite proxy | `http://127.0.0.1:3000` | `/api/*` proxied to backend |
+| Docker Compose | `http://localhost:3000` | `/api/*` proxied to `backend:8000` |
+| Frontend nginx runtime | host mapped to container `8080` | `/api/*` proxied by nginx |
 
-Frontend membangun URL lewat `frontend/src/utils/api.js`.
+Frontend builds URL through `frontend/src/utils/api.js`.
 
-Urutan env frontend:
+Env precedence:
 
-1. `VITE_API_BASE_URL`
-2. `VITE_API_URL` sebagai legacy alias
-3. kosong, lalu helper memakai `/api`
-
-Gunakan `VITE_API_BASE_URL=http://localhost:8000` untuk local Vite tanpa nginx.
-Gunakan `VITE_API_BASE_URL=/api` untuk Docker/nginx.
+```text
+VITE_API_BASE_URL
+VITE_API_URL
+default /api
+```
 
 ## Authentication
 
-Backend memakai service credential dan owner session.
-
 ### Service Credential
 
-Header yang diterima:
+Accepted headers:
 
 ```http
 x-api-key: <API_KEY>
-```
-
-atau:
-
-```http
 Authorization: Bearer <API_KEY>
 ```
 
-`API_KEY` dibaca dari backend env. Di development, `API_KEY` boleh kosong jika
-`REQUIRE_API_KEY_FOR_RATE_LIMIT=false`. Di production, set `API_KEY`.
+Rules:
+
+- If `API_KEY` is set, request must provide matching credential.
+- If `REQUIRE_API_KEY_FOR_RATE_LIMIT=true`, request must provide credential.
+- Production requires `API_KEY` and rejects
+  `REQUIRE_API_KEY_FOR_RATE_LIMIT=false`.
+- Do not expose `API_KEY` through `VITE_*`.
 
 ### Owner Session
 
-Frontend mengambil owner token dengan:
+Create or refresh browser owner session:
 
 ```http
 POST /api/session
@@ -64,20 +59,30 @@ Response:
 }
 ```
 
-Frontend menyimpan token di `sessionStorage` dengan key `_ta_owner_token`, lalu
-mengirim token ini:
+The response also sets:
+
+```text
+Set-Cookie: ta_owner_token=...; HttpOnly; SameSite=Lax; Path=/api
+```
+
+Frontend uses cookie through `credentials: 'include'`. It stores only expiry in
+`sessionStorage` key `_ta_owner_session_expires_at`.
+
+Backend protected endpoints accept owner token from:
 
 ```http
 x-owner-token: <owner_token>
 ```
 
-Endpoint yang memakai `limit_request()` membutuhkan owner token. Ini mencakup
-job API, status, history, reports, market quotes, news, ticker validate, dan
-legacy analyze.
+or cookie:
+
+```http
+Cookie: ta_owner_token=<owner_token>
+```
 
 ## Error Envelope
 
-Semua error dari `backend/errors.py` memakai bentuk ini:
+Typed errors use:
 
 ```json
 {
@@ -87,151 +92,143 @@ Semua error dari `backend/errors.py` memakai bentuk ini:
     "message": "Invalid analysis request.",
     "details": {
       "fields": {
-        "ticker": "Ticker must be a supported US or Indonesian symbol."
+        "ticker": "Ticker must be a canonical yfinance symbol."
       }
     }
   }
 }
 ```
 
-Kode error utama:
+Common codes:
 
-| HTTP | Code | Sumber |
-|---:|---|---|
-| 400 | `BAD_REQUEST` | Input invalid, job tidak ditemukan, ticker preflight gagal. |
-| 401 | `UNAUTHORIZED` | API key atau owner token hilang/invalid/expired. |
-| 404 | `NOT_FOUND` atau `HTTP_ERROR` | Resource tidak ada atau debug route tertutup. |
-| 422 | `VALIDATION_ERROR` | Pydantic request body invalid. |
-| 429 | `RATE_LIMITED` | Rate limit atau concurrency limit kena. |
-| 500 | `PIPELINE_FAILED` | Pipeline gagal. |
-| 504 | `PIPELINE_TIMEOUT` | Pipeline melewati `PIPELINE_TIMEOUT_SECONDS`. |
+| HTTP | Code |
+|---:|---|
+| 400 | `BAD_REQUEST` |
+| 401 | `UNAUTHORIZED` |
+| 404 | `NOT_FOUND` or `HTTP_ERROR` |
+| 422 | `VALIDATION_ERROR` |
+| 429 | `RATE_LIMITED` |
+| 500 | `PIPELINE_FAILED` |
+| 504 | `PIPELINE_TIMEOUT` |
 
-Backend menyensor secret dan path filesystem sebelum mengirim error ke browser.
+Handlers sanitize secrets and filesystem paths.
 
-## Health dan Status
+## Health and Status
 
 ### GET /health
 
-Liveness probe. Tidak memakai prefix `/api`.
+No `/api` prefix.
 
 Response:
 
 ```json
 {
   "status": "ok",
-  "provider": "google"
+  "provider": "google",
+  "report_assets": {
+    "template": true,
+    "stylesheet": true
+  }
 }
 ```
 
 ### GET /api/status
 
-Status runtime backend. Membutuhkan owner token.
+Protected. Uses status rate policy.
 
-Response berisi provider, quick model, deep model, analysis mode, default depth,
-pipeline timeout, result cache, in-flight registry, job store, tool cache, LLM
-cache, circuit state, dan timeout worker state.
-
-Contoh field:
-
-```json
-{
-  "provider": "google",
-  "quick_model": "gemini-2.5-flash",
-  "deep_model": "gemini-2.5-pro",
-  "analysis_mode": "balanced",
-  "default_analysis_depth": "balanced",
-  "limits": {
-    "pipeline_timeout_seconds": 600
-  },
-  "jobs": {
-    "active": 1,
-    "max_active": 32,
-    "ttl_seconds": 28800
-  }
-}
-```
-
-### GET /api/debug/llm-cache
-
-Development-only route. Aktif hanya saat `APP_ENV=development`.
-
-Response berisi statistik exact LLM cache dan semantic cache config. Saat bukan
-development, route ini mengembalikan 404.
+Response includes provider, models, analysis mode, depth, pipeline timeout,
+result cache, in-flight registry, job store, tool cache, LLM cache, circuit
+state, and timeout worker state.
 
 ## Session
 
 ### POST /api/session
 
-Membuat signed browser owner token. Endpoint ini memvalidasi service credential,
-lalu mengembalikan `owner_token` dan `expires_at`.
+Creates or reuses signed owner session.
 
-Request body kosong.
+Request body: empty.
 
-Header:
+Headers:
 
 ```http
 Accept: application/json
 ```
 
-Jika `API_KEY` aktif, kirim juga `x-api-key` atau `Authorization: Bearer`.
-Jangan taruh `API_KEY` di `VITE_*`. Docker nginx bisa menyisipkan `x-api-key`
-dari env `BACKEND_API_KEY`.
+Add service credential only when backend requires it.
+
+Behavior:
+
+- If valid owner header/cookie exists, returns same session.
+- If missing or invalid, creates a new owner session.
+- Sets `ta_owner_token` cookie.
 
 ## Analysis Request
 
-Model request ada di `backend/routes/validation.py`.
+Model: `backend/routes/validation.py::AnalysisRequest`.
+
+Example:
 
 ```json
 {
-  "ticker": "BBCA",
-  "market": "ID",
-  "trade_date": "2026-05-29",
+  "ticker": "BBCA.JK",
+  "market": "IDX",
+  "trade_date": "2026-06-15",
   "time_horizon_months": 1,
   "max_debate_rounds": 3,
   "analysis_depth": "balanced",
   "response_detail": "full",
   "has_existing_position": false,
   "position_quantity": null,
-  "average_entry_price": null
+  "average_entry_price": null,
+  "search_metadata": {
+    "canonical": "BBCA.JK",
+    "symbol": "BBCA.JK",
+    "source": "yfinance"
+  }
 }
 ```
 
-| Field | Type | Required | Valid value | Default | Detail |
-|---|---|---|---|---|---|
-| `ticker` | string | yes | `AAPL`, `NVDA`, `BBCA`, `BBCA.JK` | none | Uppercase dilakukan frontend/backend. Max 12 char di model. |
-| `market` | string/null | no | `US`, `ID` | `null` | `ID` memaksa suffix `.JK`. `US` tidak menambah suffix. |
-| `trade_date` | string | yes | `YYYY-MM-DD` | none | Tidak boleh lebih dari 1 hari di masa depan. |
-| `time_horizon_months` | int | no | `1`, `2`, `3` | `1` | Dipakai untuk window data dan prompt horizon. |
-| `max_debate_rounds` | int | no | `1` sampai `5` | `3` | Deep mode bisa memakai effective rounds yang lebih tinggi sesuai depth config. |
-| `analysis_depth` | string | no | `fast`, `balanced`, `deep` | `balanced` | Mengontrol budget LLM dan debate/risk behavior. |
-| `response_detail` | string | no | `summary`, `full`, `debug` | `full` | Mengontrol shaping response di serializer. |
-| `has_existing_position` | bool/null | no | `true`, `false` | `false` | Mengaktifkan konteks posisi user. |
-| `position_quantity` | float/null | no | `>= 0` | `null` | Dipakai jika user sudah punya posisi. |
-| `average_entry_price` | float/null | no | `>= 0` | `null` | Dipakai jika user sudah punya posisi. |
+Fields:
+
+| Field | Type | Rule |
+|---|---|---|
+| `ticker` | string | Required unless alias `symbol` is used. Max 64. |
+| `symbol` | string | Alias for `ticker`. |
+| `input_ticker` | string/null | Original input, optional. |
+| `trade_date` | string | `YYYY-MM-DD`, max 1 day in future. |
+| `time_horizon_months` | int | `1`, `2`, or `3`. |
+| `max_debate_rounds` | int | `1` to `5`. |
+| `analysis_depth` | string | `fast`, `balanced`, `deep`. |
+| `response_detail` | string | `summary`, `full`, `debug`. |
+| `market` | string/null | `IDX`, `ID`, `US`, `GLOBAL`, `CRYPTO`, `ETF`, `FUND`, `UNKNOWN`. |
+| `search_metadata` | object/null | Canonical search metadata from frontend. |
+| `has_existing_position` | bool/null | Enables position-aware decision. |
+| `position_quantity` | float/null | `>= 0` if provided. |
+| `average_entry_price` | float/null | `>= 0` if provided. |
 
 Ticker rules:
 
-| Rule | Detail |
-|---|---|
-| Regex umum | `^[A-Z0-9]{1,10}(?:[.-][A-Z0-9]{1,5})?$` |
-| Market | Hanya `US` dan `ID`. |
-| IDX auto suffix | Known IDX ticker seperti `BBCA`, `BBRI`, `TLKM`, `BMRI`, `ASII`, `GOTO`, `UNVR` diubah ke `.JK`. |
-| Non-ID suffix | `.HK`, `.T`, `.DE`, `.L`, `.AX`, `.TO`, dan suffix global lain ditolak. |
-| Ticker validate | `GET /api/ticker/validate` menjalankan preflight data harga sebelum LLM dipanggil. |
+- Regex: `^[A-Z0-9]{1,15}(?:[.-][A-Z0-9]{1,10}){0,2}$`
+- Values are uppercased.
+- `search_metadata.canonical`, `symbol`, or `ticker` wins over raw ticker.
+- Plain IDX ticker is not auto-suffixed.
+- `market=ID` does not append `.JK`.
+- Use `/api/market/search` to get canonical yfinance symbols.
+- Global suffixes such as `.HK`, `.T`, `.DE` are accepted if regex passes.
 
 ## Canonical Analysis Job API
 
 ### POST /api/analysis/jobs
 
-Membuat job analisis yang bisa dibatalkan. Frontend memakai endpoint ini di
-`frontend/src/hooks/useAnalysisJob.js`.
+Creates cancellable job.
 
-Header:
+Headers:
 
 ```http
 Content-Type: application/json
-x-owner-token: <owner_token>
 ```
+
+Cookie carries owner session.
 
 Response:
 
@@ -244,20 +241,19 @@ Response:
 }
 ```
 
-Status yang valid: `queued`, `running`, `completed`, `failed`, `cancelled`.
+Status values:
 
-Rate policy: stream policy, karena job menahan slot stream sampai selesai.
-Default `STREAM_RATE_LIMIT_PER_MINUTE=8` dan
-`MAX_CONCURRENT_STREAMS_PER_KEY=1`.
+```text
+queued, running, completed, failed, cancelled
+```
 
-Jika active job penuh, backend mengembalikan 429 dengan detail
-`max_active_jobs`. Default `ANALYSIS_JOB_MAX_ACTIVE=32`.
+Rate policy: stream.
 
 ### GET /api/analysis/jobs/{job_id}
 
-Mengambil status job. Endpoint ini juga bisa memuat job terminal dari persistent
-job cache. Jika job tidak ada di job store tetapi ada di SQLite history dengan
-`job_id` yang sama, backend mengembalikan summary completed dari history.
+Returns job summary. Owner must match.
+
+If job is not active, backend tries persisted job cache and SQLite history.
 
 Response:
 
@@ -268,246 +264,262 @@ Response:
   "status": "completed",
   "created_at": 1760000000.1,
   "updated_at": 1760000120.2,
-  "payload": {
-    "ticker": "BBCA.JK",
-    "market": "ID",
-    "trade_date": "2026-05-29"
-  },
-  "result": {
-    "request_id": "req_...",
-    "ticker": "BBCA.JK"
-  },
+  "payload": {},
+  "result": {},
   "error": null
 }
 ```
 
 ### GET /api/analysis/jobs/{job_id}/events
 
-Membuka stream SSE untuk progress job.
+SSE stream. Owner must match.
 
-Header:
+Headers:
 
 ```http
 Accept: text/event-stream
 Cache-Control: no-cache
-x-owner-token: <owner_token>
 ```
 
-Event yang dikirim:
+Events:
 
 | Event | Payload |
 |---|---|
-| `job` | Summary job saat stream dibuka. |
-| `progress` | Progress agent atau cache hit. |
-| `heartbeat` | Keep-alive saat tidak ada event baru selama 15 detik. |
-| `result` | Final analysis response. Stream selesai setelah event ini. |
-| `error` | Sanitized error response. Stream selesai setelah event ini. |
+| `job` | Public job summary on connect. |
+| `progress` | Agent progress. |
+| `heartbeat` | Keep-alive every idle 15 seconds. |
+| `result` | Final analysis result, stream ends. |
+| `error` | Error envelope, stream ends. |
 
-Contoh `progress`:
-
-```text
-event: progress
-data: {"request_id":"req_...","ticker":"BBCA.JK","trade_date":"2026-05-29","agent_id":"market_analyst","agent_name":"Market Analyst","status":"started","status_message":"Market Analyst is reading price action and technical indicators...","timestamp":"2026-06-03T09:00:00Z"}
-```
-
-`Last-Event-ID` sudah diizinkan oleh CORS, tetapi implementation saat ini
-melakukan replay dari event history job berdasarkan sequence internal, bukan
-membaca header itu sebagai cursor eksplisit.
-
-SSE tidak boleh dikompresi. `SkipSseCompressionMiddleware` menghapus
-`accept-encoding` untuk path SSE.
-
-### DELETE /api/analysis/jobs/{job_id}
-
-Membatalkan job yang queued atau running.
-
-Response berupa `AnalysisJobSummaryResponse`:
+Progress payload:
 
 ```json
 {
-  "job_id": "0c2c4f50-7ac1-41d7-9efe-22b824fb8745",
   "request_id": "req_...",
-  "status": "cancelled",
-  "created_at": 1760000000.1,
-  "updated_at": 1760000002.2,
-  "payload": {},
-  "result": null,
+  "ticker": "BBCA.JK",
+  "trade_date": "2026-06-15",
+  "agent_id": "market_analyst",
+  "agent_name": "Market Analyst",
+  "status": "started",
+  "status_message": "Market Analyst is reading price action and technical indicators...",
+  "timestamp": "2026-06-15T09:00:00Z"
+}
+```
+
+### DELETE /api/analysis/jobs/{job_id}
+
+Cancels queued/running job.
+
+Response is `AnalysisJobSummaryResponse`.
+
+Error payload for cancellation:
+
+```json
+{
+  "request_id": "req_...",
   "error": {
-    "request_id": "req_...",
-    "error": {
-      "code": "ANALYSIS_CANCELLED",
-      "message": "Analysis was cancelled by the client."
-    }
+    "code": "ANALYSIS_CANCELLED",
+    "message": "Analysis was cancelled by the client."
   }
 }
 ```
 
-### GET /api/analysis/{request_id}
-
-Deprecated alias. Hidden from OpenAPI docs. Dipakai frontend sebagai fallback
-lookup setelah `GET /api/analysis/jobs/{id}` gagal. Route ini mencari job by
-`request_id`, lalu SQLite history by `request_id`.
-
-### DELETE /api/analysis/{job_id}
-
-Deprecated cancel alias. Hidden from OpenAPI docs. Memanggil endpoint canonical
-`DELETE /api/analysis/jobs/{job_id}`.
-
-## Legacy Analyze API
+## Legacy Analysis API
 
 ### POST /api/analyze
 
-Legacy endpoint JSON. Route ini tetap aktif, tetapi frontend utama tidak
-memakainya.
+Runs analysis and returns JSON after completion.
 
-Behavior:
-
-- Validasi request.
-- Preflight market data.
-- Jalankan pipeline di process pool.
-- Pakai result cache dan in-flight dedupe.
-- Simpan hasil ke SQLite history.
-- Return final result setelah pipeline selesai.
-
-Response memakai `AnalysisResponse`.
+Uses validation, preflight, process pool, result cache, in-flight dedupe, and
+SQLite history.
 
 ### POST /api/analyze/stream
 
-Legacy SSE endpoint. Route ini membuat pipeline streaming tanpa job API baru.
-Client menerima `progress`, `heartbeat`, `result`, dan `error`.
+Legacy SSE. Streams progress/result/error without job API.
+
+### GET /api/analysis/{request_id}
+
+Deprecated hidden alias. Looks up active job by request id, then SQLite history.
+
+### DELETE /api/analysis/{job_id}
+
+Deprecated hidden cancel alias.
 
 ## Analysis Response
 
-Stable envelope ada di `backend/schemas.py`. Base schema memakai
-`extra="allow"`, jadi backend boleh menambahkan field baru tanpa mematahkan
-client lama.
+Stable schema: `backend/schemas.py::AnalysisResponse`.
 
-Field stabil utama:
+`ApiSchema` uses `extra="allow"` so pipeline can add fields.
 
-| Field | Type | Detail |
-|---|---|---|
-| `request_id` | string | Request ID dari middleware. |
-| `job_id` | string | Ditambahkan pada result job API. |
-| `ticker` | string | Ticker hasil normalisasi, contoh `BBCA.JK`. |
-| `market` | string/null | `US` atau `ID`. |
-| `trade_date` | string | Tanggal analisis. |
-| `analysis_created_at` | string/null | Waktu hasil dibuat. |
-| `analysis_depth` | string/null | `fast`, `balanced`, `deep`. |
-| `response_detail` | string/null | `summary`, `full`, `debug`. |
-| `time_horizon_months` | int/null | 1, 2, atau 3. |
-| `has_existing_position` | bool/null | Konteks posisi user. |
-| `position_quantity` | float/null | Jumlah posisi user. |
-| `average_entry_price` | float/null | Average entry posisi user. |
-| `agents_used` | list | Agent yang dipakai. |
-| `analysis_overview` | object/null | Recommendation, confidence, summary, thesis, action plan, risk summary. |
-| `financial_highlights` | object/null | Financial table dan point-in-time metrics. |
-| `financial_trends` | object/null | Trend fundamental deterministic. |
-| `valuation_multiples` | object/null | Multiples valuation. |
-| `fair_value_range` | object/null | Estimasi fair value. |
-| `scenario_analysis` | object/null | Scenario analysis. |
-| `quality_of_earnings` | object/null | Earnings quality. |
-| `balance_sheet_risk` | object/null | Balance sheet risk. |
-| `dividend_quality` | object/null | Dividend quality. |
-| `peer_comparison` | object/null | Peer comparison. |
-| `company_profile` | object/null | Profile perusahaan. |
-| `price_chart` | object/null | OHLCV chart data. |
-| `price_performance` | object/null | Performance summary. |
-| `technical_entry` | object/null | RSI, MACD, SMA, ATR, support/resistance. |
-| `related_news` | object/null | Related news list. |
-| `news_impact` | object/null | News impact scoring. |
-| `catalyst_tracker` | object/null | Catalyst dan upcoming events. |
-| `analyst_consensus` | object/null | Analyst rating trend jika tersedia. |
-| `news` | object/null | Structured news context. |
-| `news_context` | object/null | Alias structured news context. |
-| `risk_data_quality` | object/null | Validasi data risk/trade level. |
+Core fields:
+
+```text
+request_id
+job_id
+ticker
+market
+trade_date
+analysis_created_at
+analysis_depth
+response_detail
+time_horizon_months
+has_existing_position
+position_quantity
+average_entry_price
+agents_used
+analysis_overview
+financial_highlights
+normalized_period_rows
+derived_fundamentals
+financial_trends
+valuation_multiples
+fair_value_range
+scenario_analysis
+quality_of_earnings
+balance_sheet_risk
+dividend_quality
+peer_comparison
+company_profile
+price_chart
+price_performance
+technical_entry
+related_news
+news_impact
+catalyst_tracker
+analyst_consensus
+news
+news_context
+risk_data_quality
+```
+
+Pipeline also returns debug/budget/source fields when available:
+
+```text
+data_quality
+data_sources
+data_limitations
+limitations
+field_sources
+validation_summary
+warnings
+vendor_attempts
+vendor_budget
+data_freshness
+data_completeness
+llm_call_budget
+llm_calls_used
+budget_exhausted
+agents_skipped
+agent_pipeline
+total_pipeline_seconds
+```
 
 ## History API
 
-History memakai SQLite repository di `backend/services/analysis_repository.py`.
-Default local path dari `.env.example`: `.cache/analysis_history.sqlite3`.
-Docker override: `/root/.tradingagents/cache/analysis_history.sqlite3`.
+SQLite repository: `backend/services/analysis_repository.py`.
+
+Default path: `.cache/analysis_history.sqlite3`.
 
 ### GET /api/analysis/history
 
-Mengambil metadata hasil analisis terbaru.
+Query:
+
+| Field | Rule |
+|---|---|
+| `ticker` | Optional exact uppercase filter. |
+| `limit` | 1 to 100, default 25. |
+
+### GET /api/analysis/history/{request_id}
+
+Returns full result JSON.
+
+### DELETE /api/analysis/history/{request_id}
+
+Deletes one snapshot.
+
+### DELETE /api/analysis/history
+
+Deletes all history rows.
+
+## Market API
+
+### GET /api/market/search
+
+Yfinance symbol search for autocomplete.
 
 Query:
 
-| Field | Type | Default | Rule |
-|---|---|---:|---|
-| `ticker` | string | none | Optional exact filter setelah uppercase. |
-| `limit` | int | `25` | 1 sampai 100. |
+| Field | Rule |
+|---|---|
+| `q` | Required, min length 2. |
+| `limit` | 1 to 20, default 10. |
 
 Response:
 
 ```json
 {
-  "items": [
+  "results": [
     {
-      "request_id": "req_...",
-      "job_id": "0c2c4f50-7ac1-41d7-9efe-22b824fb8745",
-      "ticker": "BBCA.JK",
-      "market": "ID",
-      "trade_date": "2026-05-29",
-      "time_horizon_months": 1,
-      "analysis_depth": "balanced",
-      "response_detail": "full",
-      "decision": "Buy",
-      "status": "completed",
-      "created_at": "2026-06-03T09:00:00+00:00",
-      "analysis_created_at": "2026-06-03T09:00:00+00:00",
-      "updated_at": "2026-06-03T09:05:00+00:00"
+      "symbol": "BBCA.JK",
+      "name": "Bank Central Asia Tbk PT",
+      "exchange": "IDX",
+      "type": "EQUITY",
+      "price": 9800.0
     }
   ]
 }
 ```
 
-Endpoint ini tidak mendukung `offset` pada kode saat ini.
+Cached in memory for 60 seconds.
 
-### GET /api/analysis/history/{request_id}
+### GET /api/market/ohlcv
 
-Mengambil full result JSON dari SQLite berdasarkan `request_id`.
-
-### DELETE /api/analysis/history/{request_id}
-
-Menghapus satu snapshot.
-
-Response:
-
-```json
-{
-  "deleted": true,
-  "request_id": "req_..."
-}
-```
-
-### DELETE /api/analysis/history
-
-Menghapus semua snapshot SQLite.
-
-Response:
-
-```json
-{
-  "deleted": true,
-  "deleted_count": 10
-}
-```
-
-Frontend button `CLEAR HISTORY` memakai endpoint ini.
-
-## Market API
-
-### GET /api/market/quotes
-
-Quote ringan untuk dashboard ticker tape. Data diambil lewat yfinance
-`fast_info`.
+OHLCV chart data for result chart range controls.
 
 Query:
 
-| Field | Type | Default | Rule |
-|---|---|---|---|
-| `symbols` | string | `BBCA.JK,BBRI.JK,TLKM.JK,NVDA,AAPL,TSLA,MSFT,META,GOTO.JK,ASII.JK` | Comma-separated, max 20 simbol. |
+| Field | Rule |
+|---|---|
+| `ticker` | Required yfinance quote symbol. |
+| `range` | `YTD`, `1Y`, `6M`, `3M`, `1M`, `1W`. Default `1Y`. |
+| `trade_date` | Optional `YYYY-MM-DD` upper bound. |
+
+Response includes:
+
+```text
+available
+source
+ticker
+range
+interval
+fallback_to_daily
+requested_trade_date
+start_date
+end_date
+last_trade_date
+points
+data
+data_quality
+warning
+```
+
+For `1W`, backend tries `5m`, `15m`, `30m`, `60m`, then `1d`.
+
+### GET /api/market/quotes
+
+Ticker tape quotes.
+
+Query:
+
+| Field | Rule |
+|---|---|
+| `symbols` | Comma-separated yfinance quote symbols, max 20. |
+
+Default symbols:
+
+```text
+ES=F,NQ=F,^VIX,DX-Y.NYB,^TNX,BTC-USD,CL=F,GC=F,^N225,^JKSE
+```
 
 Response:
 
@@ -515,185 +527,238 @@ Response:
 {
   "quotes": [
     {
-      "sym": "BBCA.JK",
-      "chg": "+0.54%",
+      "sym": "BTC-USD",
+      "chg": "+1.25%",
       "pos": true,
-      "price": 9250.0,
+      "price": 65000.0,
       "error": false
     }
   ]
 }
 ```
 
-Jika satu simbol gagal, item itu tetap dikembalikan dengan `error=true` dan
-`chg="N/A"`.
-
-Tidak ada endpoint `GET /api/market/quote/{ticker}` di kode saat ini.
-
 ## Ticker Validate API
 
 ### GET /api/ticker/validate
 
-Melakukan validasi ticker dan preflight market data.
+Runs validation and market-data preflight without LLM.
 
 Query:
 
-| Field | Required | Rule |
-|---|---|---|
-| `ticker` | yes | US atau IDX symbol. |
-| `trade_date` | yes | `YYYY-MM-DD`. |
-| `market` | no | `US` atau `ID`. |
+| Field | Rule |
+|---|---|
+| `ticker` | Required. |
+| `trade_date` | Required `YYYY-MM-DD`. |
+| `market` | Optional supported market. |
 
 Response:
 
 ```json
 {
   "ticker": "BBCA.JK",
-  "trade_date": "2026-05-29",
+  "trade_date": "2026-06-15",
   "valid": true,
   "message": "Ticker has usable market data."
 }
 ```
 
-Preflight berjalan di process pool dan tidak memanggil LLM.
-
 ## News API
 
-### GET /api/news/{ticker}
+### GET /api/news/general
 
-Mengambil structured news context dari `NewsService`.
+General news page data.
 
 Query:
 
-| Field | Type | Default | Rule |
-|---|---|---:|---|
-| `window_days` | int | `30` | 1 sampai 365. |
-| `limit` | int | `20` | 1 sampai 100. |
+| Field | Rule |
+|---|---|
+| `category` | Default `all`. |
+| `window_days` | 1 to 365, default 7. |
+| `limit` | 1 to 100, default 50. |
+| `provider` | Optional: `google_news_light`, `marketaux`, `rss_context`, `newsdata`. |
+| `force_refresh` | Optional bool, default false. |
 
-Response mengikuti `NewsResponse`:
+Response shape:
 
-```json
-{
-  "enabled": true,
-  "ticker": "BBCA.JK",
-  "company_name": "Bank Central Asia Tbk",
-  "window_days": 30,
-  "providers_used": ["marketaux"],
-  "provider_status": {
-    "marketaux": "ok"
-  },
-  "articles_found": 5,
-  "articles_used_in_prompt": 5,
-  "average_sentiment": "positive",
-  "articles": [
-    {
-      "provider": "marketaux",
-      "ticker": "BBCA.JK",
-      "title": "Example headline",
-      "url": "https://example.com/news",
-      "summary": "Example summary",
-      "source": "Example Source",
-      "published_at": "2026-06-03T08:00:00Z",
-      "sentiment_label": "positive",
-      "relevance_score": 80
-    }
-  ]
-}
+```text
+enabled
+mode
+category
+window_days
+limit
+last_updated
+refresh_interval_seconds
+cache
+provider_status
+articles_found
+articles
+```
+
+### GET /api/news/general/categories
+
+Returns category list from `general_news_categories.py`.
+
+### GET /api/news/general/stream
+
+SSE updates for General News page.
+
+Event:
+
+```text
+general_news_updated
+```
+
+Returns 404 if `general_news.enable_sse` is false.
+
+### GET /api/news/{ticker}
+
+Company news context used by analysis.
+
+Query:
+
+| Field | Rule |
+|---|---|
+| `window_days` | 1 to 365, default 30. |
+| `limit` | 1 to 100, default 20. |
+
+Response model: `NewsResponse`.
+
+Important fields:
+
+```text
+enabled
+ticker
+company_name
+window_days
+providers_used
+provider_status
+provider_health
+articles_found
+articles_used_in_prompt
+average_sentiment
+articles
+empty_reason
+cache
 ```
 
 ### GET /api/debug/news/{ticker}
 
-Development-only news debug route. Aktif hanya saat `APP_ENV=development`.
+Development-only debug route.
 
 Query:
 
-| Field | Required | Rule |
-|---|---|---|
-| `provider` | yes | `google_news_light`, `marketaux`, atau `newsdata`. |
-| `window_days` | no | 1 sampai 365, default 30. |
-| `limit` | no | 1 sampai 100, default 20. |
-| `include_raw` | no | Boolean, default false. |
-
-Jika `provider` bukan `google_news_light`, `marketaux`, atau `newsdata`, backend mengembalikan
-`BAD_REQUEST`.
+| Field | Rule |
+|---|---|
+| `provider` | Optional: `google_news_light`, `marketaux`, `rss_context`, `newsdata`, `yfinance`. |
+| `window_days` | 1 to 365, default 30. |
+| `limit` | 1 to 100, default 20. |
+| `include_raw` | Boolean, default false. |
 
 ## Reports API
 
-Report memakai `backend/services/report_service.py`, template
-`backend/templates/reports/analysis_report.html`, CSS
-`backend/static/reports/analysis_report.css`, dan WeasyPrint untuk PDF.
+### GET /api/reports/disclaimer
+
+Returns canonical report disclaimer.
+
+```json
+{
+  "disclaimer": "This analysis report is provided..."
+}
+```
 
 ### GET /api/analysis/jobs/{job_id}/report.html
 
-Preview report HTML dari completed job. Membutuhkan owner token yang sama dengan
-job owner.
-
-Content-Type:
-
-```http
-text/html; charset=utf-8
-```
+HTML report preview for completed job. Owner must match.
 
 ### GET /api/analysis/jobs/{job_id}/report.pdf
 
-Download PDF dari completed job.
+PDF report download for completed job. Owner must match.
 
-Content-Type:
-
-```http
-application/pdf
-```
-
-Header:
+Headers:
 
 ```http
+Content-Type: application/pdf
 Content-Disposition: attachment; filename="TradingAgent_....pdf"
 Cache-Control: no-store
 ```
 
 ### POST /api/analysis/report.html
 
-Fallback preview HTML dari payload result yang dikirim client. Frontend memakai
-ini jika job store tidak lagi memiliki result tetapi result masih ada di browser
-state.
+Fallback HTML render from bounded result payload supplied by client.
 
 ### POST /api/analysis/report.pdf
 
-Fallback PDF dari payload result yang dikirim client.
+Fallback PDF render from bounded result payload supplied by client.
 
 ### GET /api/analysis/{request_id}/report.html
 
-Deprecated alias. Hidden from OpenAPI docs. Lookup report memakai `request_id`.
+Deprecated hidden alias.
 
 ### GET /api/analysis/{request_id}/report.pdf
 
-Deprecated alias. Hidden from OpenAPI docs. Lookup report memakai `request_id`.
+Deprecated hidden alias.
 
-Tidak ada endpoint `/api/reports/{job_id}.html` atau
-`/api/reports/{job_id}.pdf` di kode saat ini.
+## Debug API
 
-## Rate Limits
+### GET /api/debug/llm-cache
 
-Default berasal dari `backend/.env.example`.
+Development only. Returns exact and semantic cache stats/config.
+
+### GET /api/debug/health
+
+Requires `DEBUG_ENDPOINTS_ENABLED=true`.
+
+Returns vendor health, LLM model info, and feature flags.
+
+### GET /api/debug/vendor/{vendor_name}
+
+Requires `DEBUG_ENDPOINTS_ENABLED=true`.
+
+Returns vendor capabilities and key status.
+
+### GET /api/debug/symbol/{ticker}
+
+Requires `DEBUG_ENDPOINTS_ENABLED=true`.
+
+Returns canonical symbol resolution and source priority.
+
+### GET /api/debug/metrics
+
+Requires `DEBUG_ENDPOINTS_ENABLED=true`.
+
+Returns observability summary.
+
+### GET /api/debug/vendor-stats
+
+Requires `DEBUG_ENDPOINTS_ENABLED=true`.
+
+Returns vendor stats.
+
+## Rate Limits and Body Limit
+
+Defaults:
 
 | Setting | Default |
 |---|---:|
-| `REQUEST_RATE_LIMIT_PER_MINUTE` | `20` |
-| `STREAM_RATE_LIMIT_PER_MINUTE` | `8` |
-| `MAX_CONCURRENT_REQUESTS_PER_KEY` | `2` |
-| `MAX_CONCURRENT_STREAMS_PER_KEY` | `1` |
-| Internal limiter idle TTL | `120` detik |
-| `REQUEST_BODY_MAX_BYTES` | `65536` |
+| `REQUEST_RATE_LIMIT_PER_MINUTE` | 20 |
+| `STATUS_RATE_LIMIT_PER_MINUTE` | 120 |
+| `STREAM_RATE_LIMIT_PER_MINUTE` | 8 |
+| `MAX_CONCURRENT_REQUESTS_PER_KEY` | 2 |
+| `MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY` | 8 |
+| `MAX_CONCURRENT_STREAMS_PER_KEY` | 1 |
+| `REQUEST_BODY_MAX_BYTES` | 16777216 |
 
-Rate limit menghitung key berdasarkan owner token, bukan IP browser. Jika API
-key aktif, service credential tetap divalidasi sebelum owner token dipakai.
+Rate limit key is owner session, not browser IP.
 
 ## CORS
 
-Default development CORS:
+Default development origins:
 
-```env
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173
+```text
+http://localhost:3000
+http://localhost:5173
+http://127.0.0.1:3000
+http://127.0.0.1:5173
 ```
 
 Allowed methods:
@@ -705,7 +770,15 @@ GET, POST, DELETE, OPTIONS
 Allowed headers:
 
 ```text
-Accept, Cache-Control, Content-Type, Last-Event-ID, x-api-key, Authorization, x-owner-token
+Accept
+Cache-Control
+Content-Type
+Last-Event-ID
+x-api-key
+Authorization
+x-owner-token
 ```
 
-`CORS_ORIGINS=*` ditolak oleh config.
+Credentials are enabled.
+
+`CORS_ORIGINS=*` is rejected.

@@ -1,649 +1,549 @@
 # Architecture
 
-Terakhir disinkronkan: 2026-06-03.
+Terakhir disinkronkan: 2026-06-15.
 
-Dokumen ini menjelaskan arsitektur aktual TradingAgent berdasarkan kode aktif.
-Gunakan ini sebelum mengubah backend route, frontend hook, pipeline agent,
-cache, Docker, atau konfigurasi env.
+Dokumen ini menjelaskan arsitektur kode aktif. Pakai saat mengubah route,
+frontend flow, pipeline, cache, Docker, env, atau report.
 
-## Diagram Sistem
+## System View
 
 ```text
 Browser
-  |
-  | local Vite: http://127.0.0.1:3000
-  | Docker nginx: http://localhost:3000
-  v
-React/Vite Frontend
-  |
-  | POST /api/session
-  | POST /api/analysis/jobs
-  | GET  /api/analysis/jobs/{job_id}/events
-  | GET  /api/analysis/jobs/{job_id}
-  | GET  /api/analysis/history
-  | GET  /api/analysis/jobs/{job_id}/report.html
-  | GET  /api/analysis/jobs/{job_id}/report.pdf
-  v
-FastAPI Backend, port 8000
-  |
-  | ProcessPoolExecutor, spawn context
-  v
-tradingagents-core
-  |
-  | ThreadPoolExecutor for data collection and initial analysts
-  v
-Balanced multi-agent pipeline
+  -> React/Vite frontend
+  -> /api through Vite proxy, nginx proxy, or direct backend URL
+  -> FastAPI backend
+  -> ProcessPoolExecutor worker
+  -> tradingagents balanced pipeline
+  -> vendor data + LLM clients
+  -> result cache + SQLite history + report service
 ```
 
-Docker path:
+Local Vite recommended:
 
 ```text
-Browser -> frontend nginx:80 inside container
-        -> nginx location /api/
-        -> http://backend:8000/api/
-        -> FastAPI
+Browser http://127.0.0.1:3000
+  -> /api/*
+  -> Vite proxy target VITE_BACKEND_PROXY_TARGET=http://localhost:8000
+  -> FastAPI
 ```
 
-Local Vite path:
+Docker Compose default:
 
 ```text
-Browser -> Vite dev server on 127.0.0.1:3000
-        -> direct fetch to http://localhost:8000/api when VITE_API_BASE_URL is set
-        -> FastAPI
+Browser http://localhost:3000
+  -> frontend container Vite dev server
+  -> /api proxy target http://backend:8000
+  -> backend container FastAPI
 ```
 
-Vite local tidak menyediakan proxy `/api`.
+Production image path:
 
-## Runtime Ports
+```text
+Browser
+  -> frontend nginx runtime listen 8080
+  -> /api/ proxy_pass http://backend:8000/api/
+```
 
-| Komponen | Host/port | Source |
-|---|---|---|
-| Backend local | `127.0.0.1:8000` | Command `uvicorn main:app --host 127.0.0.1 --port 8000 --reload`. |
-| Backend Docker host | `127.0.0.1:8000` | `docker-compose.yml` maps `127.0.0.1:8000:8000`. |
-| Backend container | `0.0.0.0:8000` | `Dockerfile.backend` CMD uses `${PORT:-8000}`. |
-| Frontend local Vite | `127.0.0.1:3000` | `frontend/vite.config.js`, `frontend/package.json`. |
-| Frontend Docker host | `127.0.0.1:3000` | `docker-compose.yml` maps `127.0.0.1:3000:80`. |
-| Frontend container | `80` | `Dockerfile.frontend` and nginx. |
-| Ollama local | `localhost:11434` | `OLLAMA_BASE_URL` default. |
-| Ollama Docker host | `127.0.0.1:11434` | Compose profile `ollama`. |
-| Ollama Docker internal | `http://ollama:11434` | Backend Docker env override. |
+## Ports
 
-## Backend Top Level
+| Component | Host | Container/internal | Source |
+|---|---:|---:|---|
+| Backend local | `127.0.0.1:8000` | none | uvicorn command |
+| Backend Compose | `127.0.0.1:8000` | `0.0.0.0:8000` | `docker-compose.yml` |
+| Frontend local Vite | `127.0.0.1:3000` | none | `frontend/vite.config.js` |
+| Frontend Compose Vite | `127.0.0.1:3000` | `0.0.0.0:3000` | compose command `npm run dev:lan` |
+| Frontend nginx runtime | depends on run command | `8080` | `Dockerfile.frontend`, `nginx.conf` |
+| Ollama Compose | `127.0.0.1:11434` | `ollama:11434` | compose profile `ollama` |
 
-`backend/main.py` membuat FastAPI app dan memasang:
+## Backend App
 
-| Bagian | Fungsi |
-|---|---|
-| Lifespan startup | Memanggil `validate_startup_config()`. Jika error, backend exit dengan `sys.exit(1)`. |
-| Lifespan shutdown | Mematikan process pool dan multiprocessing manager. |
-| `RequestBodyLimitMiddleware` | Menolak payload lebih besar dari `REQUEST_BODY_MAX_BYTES`. |
-| `GZipMiddleware` | Compress response >= 1000 byte. |
-| `SkipSseCompressionMiddleware` | Menghapus `accept-encoding` untuk SSE supaya event flush. |
-| `RequestIdMiddleware` | Menempelkan request ID dan header `x-request-id`. |
-| `CORSMiddleware` | Membatasi origin, method, dan header. |
-| Error handlers | Mengubah `ApiError`, HTTP error, validation error, dan unhandled error menjadi envelope aman. |
-| Router include | History, analysis, market, news, reports, session. |
+`backend/main.py` owns app setup.
 
-Router prefix:
+Lifespan:
+
+- Installs fresh `AnalysisRuntimeState` into `app.state.analysis_runtime`.
+- Installs rate limiter state for tests/dev.
+- Runs startup validation and logs issues.
+- Starts general news background worker when enabled.
+- Stops news worker and process pool on shutdown.
+
+Middleware order:
+
+```text
+RequestBodyLimitMiddleware
+GZipMiddleware
+SkipSseCompressionMiddleware
+RequestIdMiddleware
+CORSMiddleware
+```
+
+SSE compression skip paths:
+
+```text
+/api/analyze/stream
+/api/news/general/stream
+/api/analysis/jobs/{job_id}/events
+```
+
+Routers:
 
 ```text
 analysis_history_router -> /api
 analysis_router         -> /api
+debug_router            -> /api
 market_router           -> /api
-news router             -> /api
+news routers            -> /api
 reports_router          -> /api
 session_router          -> /api
 ```
 
-`/health` berada langsung di app, tanpa prefix `/api`.
+`/health` is direct on app. It returns status, provider, and report asset health.
 
 ## Config Boundary
 
-`backend/config.py` adalah facade. Route dan service sebaiknya import runtime
-setting dari file ini.
+Use `backend/config.py` as public facade.
 
-Modul config:
-
-| File | Isi |
+| File | Role |
 |---|---|
-| `config_env.py` | Load `.env`, parser bool/int/float/list. Skip `.env` saat test. |
-| `config_defaults.py` | APP_ENV, CORS, port, timeout, worker, rate limit, cache, vendor defaults. |
-| `config_llm.py` | LLM provider, model, API key facade, TradingAgents config builder. |
-| `config_validation.py` | Startup validation provider, model, key, production secret, writable dir. |
-| `config.py` | Reload focused modules lalu re-export setting. |
+| `config_env.py` | Loads `backend/.env` outside tests, parses bool/int/float/list. |
+| `config_defaults.py` | App defaults, CORS, timeout, workers, rate limit, cache, vendors, news. |
+| `config_llm.py` | `LLMSettings`, model/provider config, `build_tradingagents_config()`. |
+| `config_validation.py` | Startup config issues and writable path checks. |
+| `config.py` | Reload helper and re-exports. |
 
-Startup validation mengecek:
+Config can fail at import for invalid hard constraints:
 
-- `LLM_PROVIDER` tidak kosong.
-- Provider termasuk supported provider.
-- API key provider ada, kecuali `ollama`.
-- `DEEP_THINK_LLM` dan `QUICK_THINK_LLM` tidak kosong.
-- `API_KEY` ada jika `REQUIRE_API_KEY_FOR_RATE_LIMIT=true`.
-- `OWNER_SESSION_SECRET` ada saat `APP_ENV=production`.
-- `ANALYSIS_MODE` tetap `balanced`.
-- `DEFAULT_ANALYSIS_DEPTH` valid.
-- `results_dir` dan `data_cache_dir` writable.
+- `APP_ENV` not `development` or `production`.
+- `CORS_ORIGINS=*`.
+- Production without `API_KEY`.
+- Production without `OWNER_SESSION_SECRET`.
+- Production with `REQUIRE_API_KEY_FOR_RATE_LIMIT=false`.
+- Invalid storage backend enum.
 
-## Request Flow Canonical
+Startup validation logs and continues in `main.validate_config()`:
 
-Frontend utama memakai job API.
+- Missing `LLM_PROVIDER`.
+- Unsupported `LLM_PROVIDER`.
+- Missing `LLM_API_KEY`.
+- Missing quick/deep model.
+- Missing optional vendor keys.
+- Debug endpoints enabled.
+- Writable path failures.
+
+## Auth and Rate Limit
+
+Two credentials exist.
+
+Service credential:
+
+- Headers: `x-api-key` or `Authorization: Bearer`.
+- Validates against `API_KEY`.
+- Optional only in development if `REQUIRE_API_KEY_FOR_RATE_LIMIT=false`.
+
+Owner session:
+
+- `POST /api/session` issues signed owner token.
+- Response sets cookie `ta_owner_token`.
+- Cookie path is `/api`.
+- Cookie is HttpOnly and SameSite Lax.
+- Backend accepts owner token from `x-owner-token` header or cookie.
+- Frontend uses cookie only.
+
+Rate limiter:
+
+| Policy | Default per minute | Default concurrent |
+|---|---:|---:|
+| request | 20 | 2 |
+| status | 120 | 8 |
+| stream | 8 | 1 |
+
+Storage:
+
+- Default `RATE_LIMIT_STORAGE_BACKEND=sqlite`.
+- SQLite path default `.cache/rate_limits.sqlite3`.
+- `memory` allowed only outside production.
+
+## Analysis Runtime
+
+`backend/routes/jobs.py` creates runtime state:
 
 ```text
-AnalysisWorkspace
-  -> StockForm
-  -> buildAnalysisPayload()
-  -> useAnalysisJob.startAnalysis()
-  -> POST /api/analysis/jobs
-  -> GET /api/analysis/jobs/{job_id}/events
-  -> handle progress/result/error
-  -> navigate /analysis/{job_id}
-  -> save compact summary to localStorage
-  -> backend saves full result to SQLite history
+AnalysisRuntimeState
+  result_cache: AnalysisResultCache
+  in_flight: InFlightRegistry
+  job_store: AnalysisJobStore
 ```
 
-File frontend yang terlibat:
+Result cache:
 
-| File | Tugas |
-|---|---|
-| `frontend/src/domain/analysisContract.js` | Market constants, validation, payload builder. |
-| `frontend/src/components/StockForm.jsx` | Form market, ticker, date, horizon, depth, response detail, position. |
-| `frontend/src/hooks/useAnalysisJob.js` | Create job, read SSE stream, cancel job. |
-| `frontend/src/utils/api.js` | Build URL, owner token, auth headers, HTTP error parsing. |
-| `frontend/src/utils/sse.js` | Parse SSE block dari fetch stream. |
-| `frontend/src/components/AgentLog.jsx` | Tampilkan progress. |
-| `frontend/src/components/ResultCard.jsx` | Render result. |
-| `frontend/src/utils/reportApi.js` | HTML/PDF report export. |
-| `frontend/src/utils/analysisHistoryApi.js` | Backend history API. |
+- TTL/LRU in memory.
+- Adds `cache.hit` and source metadata.
+- Cache key includes ticker, date, provider, models, mode, depth, horizon,
+  debate rounds, response detail, position fields, and cache version.
 
-## Auth dan Resource Ownership
+In-flight registry:
 
-`rate_limiter.py` memisahkan service credential dan owner token.
+- Deduplicates identical running analysis requests.
+- Joined calls receive cache source `in_flight`.
 
-Flow:
+Job store:
+
+- Tracks queued/running/completed/failed/cancelled.
+- Stores bounded event replay.
+- Persists active and terminal snapshots into SQLite TTL cache when backend
+  storage is sqlite.
+- Live cancellation still needs same worker/process.
+
+## Canonical Analysis Flow
 
 ```text
 POST /api/session
-  -> validate_service_credential()
-  -> issue_owner_session()
-  -> return owner_token
+  -> cookie owner session
 
-Protected request
-  -> validate_service_credential()
-  -> owner_identifier_from_token(x-owner-token)
-  -> RateLimitLease(scope, owner_id)
+POST /api/analysis/jobs
+  -> validate request
+  -> apply stream rate policy
+  -> create job with owner_id
+  -> start background task
+  -> return job_id
+
+GET /api/analysis/jobs/{job_id}/events
+  -> apply stream rate policy
+  -> owner-check job
+  -> replay job event history
+  -> stream job/progress/heartbeat/result/error
+
+GET /api/analysis/jobs/{job_id}
+  -> owner-check job
+  -> fallback to persisted job/history when possible
+
+DELETE /api/analysis/jobs/{job_id}
+  -> owner-check job
+  -> set cancel event and cancel task best effort
 ```
 
-Owner token berisi:
-
-| Field | Detail |
-|---|---|
-| `version` | Token version, saat ini `1`. |
-| `owner_id` | UUID random per session. |
-| `issued_at` | Unix timestamp. |
-| `expires_at` | Unix timestamp, default TTL mengikuti `ANALYSIS_JOB_TTL_SECONDS`. |
-| signature | HMAC SHA-256 dengan `OWNER_SESSION_SECRET` atau random dev secret. |
-
-Di development, secret kosong memakai process-local random secret. Token akan
-invalid setelah backend restart. Di production, `OWNER_SESSION_SECRET` wajib.
-
-## Backend Route Boundary
-
-| Route file | Endpoint aktif | Catatan |
-|---|---|---|
-| `routes/analysis.py` | `/analyze`, `/analyze/stream`, `/analysis/jobs`, `/analysis/jobs/{job_id}`, `/analysis/jobs/{job_id}/events`, `/ticker/validate`, `/status` | Canonical analysis flow adalah job API. |
-| `routes/jobs.py` | helper | Job lifecycle, progress forwarding, terminal persistence. |
-| `routes/sse.py` | helper | SSE formatting dan streaming pipeline. |
-| `routes/pipeline_runner.py` | helper | Process pool bridge, preflight, cancellation. |
-| `routes/analysis_history.py` | `/analysis/history` | SQLite snapshot history. |
-| `routes/market.py` | `/market/quotes` | Dashboard quote tape. |
-| `routes/news.py` | `/news/{ticker}`, dev `/debug/news/{ticker}` | Structured news context. |
-| `routes/reports.py` | `/analysis/jobs/{job_id}/report.html`, `.pdf`, payload fallback | HTML/PDF export. |
-| `routes/session.py` | `/session` | Owner token issue. |
-
-## Job Store dan Cache
-
-`backend/analysis_cache.py` berisi tiga runtime object:
-
-| Object | Fungsi |
-|---|---|
-| `AnalysisResultCache` | Async TTL/LRU cache untuk result analysis yang selesai. |
-| `InFlightRegistry` | Menggabungkan request identik yang sedang berjalan supaya hanya satu pipeline jalan. |
-| `AnalysisJobStore` | Menyimpan job queued/running/completed/failed/cancelled, event replay, owner_id, cancel event. |
-
-Cache key result memuat:
-
-```text
-ticker
-trade_date
-provider
-quick_model
-deep_model
-analysis_mode
-analysis_depth
-time_horizon_months
-max_debate_rounds
-response_detail
-has_existing_position
-position_quantity
-average_entry_price
-```
-
-Default:
-
-| Setting | Default |
-|---|---:|
-| `ANALYSIS_RESULT_CACHE_TTL_SECONDS` | `28800` |
-| `ANALYSIS_RESULT_CACHE_MAX_ENTRIES` | `256` |
-| `ANALYSIS_JOB_TTL_SECONDS` | `28800` |
-| `ANALYSIS_JOB_MAX_ENTRIES` | `256` |
-| `ANALYSIS_JOB_MAX_ACTIVE` | `32` |
-| `ANALYSIS_JOB_EVENT_REPLAY_LIMIT` | `500` |
-| `ANALYSIS_JOB_CACHE_DB_PATH` | `.cache/analysis_jobs.sqlite3` |
-
-Terminal job dipersist ke SQLite TTL cache jika status `completed`, `failed`,
-atau `cancelled`.
-
-## SQLite History
-
-`backend/services/analysis_repository.py` menyimpan completed analysis sebagai
-snapshot permanen.
-
-Table: `analyses`
-
-Kolom penting:
-
-```text
-request_id, job_id, ticker, market, trade_date, time_horizon_months,
-analysis_depth, response_detail, decision, recommendation, current_price,
-entry_price, stop_loss, take_profit, rr_ratio, source_summary, status,
-result_json, request_json, created_at, updated_at, exported_html_at,
-exported_pdf_at
-```
-
-Default:
-
-| Setting | Default |
-|---|---:|
-| `ANALYSIS_DB_PATH` | `.cache/analysis_history.sqlite3` |
-| `ANALYSIS_HISTORY_MAX_ROWS` | `1000` |
-| `ANALYSIS_HISTORY_DEFAULT_LIMIT` | `25` |
-
-Repository memakai `CREATE TABLE IF NOT EXISTS`, index SQLite, WAL journal, dan
-evict row lama setelah melewati max row. Tidak ada migration framework.
+Legacy `/api/analyze` and `/api/analyze/stream` still share cache/pipeline
+helpers, but new frontend work must use job API.
 
 ## Process Pool
 
-`routes/pipeline_runner.py` membuat process pool secara lazy.
+`backend/routes/pipeline_runner.py` owns process pool.
 
-Setting:
+| Setting | Default |
+|---|---:|
+| `PROCESS_POOL_WORKERS` | 2 |
+| `PROCESS_POOL_MAX_TASKS_PER_CHILD` | 1 |
+| `PIPELINE_TIMEOUT_SECONDS` | 600 |
+| `PREFLIGHT_TIMEOUT_SECONDS` | min(30, pipeline timeout) |
 
-| Setting | Default | Detail |
-|---|---:|---|
-| `PROCESS_POOL_WORKERS` | `2` | Dibatasi oleh CPU count. |
-| `PROCESS_POOL_MAX_TASKS_PER_CHILD` | `1` | Worker diganti setelah 1 task. |
-| Multiprocessing context | `spawn` | Aman untuk Windows dan Docker. |
-| `PIPELINE_TIMEOUT_SECONDS` | `600` | Timeout full pipeline. |
-| `PREFLIGHT_TIMEOUT_SECONDS` | `30` | Timeout ticker preflight, dibatasi <= pipeline timeout. |
+Multiprocessing uses spawn context for Windows and Docker safety.
 
 Cancellation:
 
-- Job cancel memanggil `AnalysisJob.cancel()`.
-- Backend set cancel event process-safe.
-- Future process pool di-cancel best effort.
-- Pipeline mengecek cancel via `cancel_check`.
-- SSE disconnect juga men-trigger cancellation pada stream legacy dan job flow.
+- Job cancel sets an async job cancel event.
+- Worker receives process-safe cancel event.
+- Pipeline checks `cancel_check`.
+- Future cancel is best effort.
+- SSE disconnect returns from stream; job cancel is explicit through DELETE.
 
-## Pipeline Balanced
+## Balanced Pipeline
 
-Facade pipeline:
+Facade:
 
 ```text
 backend/tradingagents-core/tradingagents/pipeline_balanced.py
 ```
 
-Implementasi dibagi:
+Implementation split:
 
-| File | Fungsi |
+| File | Role |
 |---|---|
-| `pipeline_balanced_data.py` | Data collection, vendor routing, chart, news, data quality, fundamentals deterministic. |
-| `pipeline_balanced_prompts.py` | Prompt panjang untuk agent. |
-| `pipeline_balanced_llm.py` | LLM creation, structured output, fallback, cache key. |
-| `pipeline_balanced_progress.py` | Progress callback dan label agent. |
-| `pipeline_balanced_orchestrator.py` | Control flow pipeline. |
-| `pipeline_balanced_types.py` | Dataclass/type pipeline. |
+| `pipeline_balanced_data.py` | Data collection, vendor routing, chart, deterministic builders. |
+| `pipeline_balanced_prompts.py` | Prompt templates. |
+| `pipeline_balanced_llm.py` | LLM calls, exact cache, fallbacks, usage logging. |
+| `pipeline_balanced_progress.py` | Progress event labels. |
+| `pipeline_balanced_orchestrator.py` | Stage orchestration and response assembly. |
+| `pipeline_balanced_types.py` | Dataclasses and types. |
 
-Agent labels:
-
-| `agent_id` | Label |
-|---|---|
-| `data_collection` | Data Collection |
-| `news_fetch` | News Providers |
-| `data_quality` | Data Quality |
-| `market_analyst` | Market Analyst |
-| `news_analyst` | News + Social Analyst |
-| `fundamentals` | Fundamentals Analyst |
-| `bull_researcher` | Bull Researcher |
-| `bear_researcher` | Bear Researcher |
-| `research_manager` | Research Manager |
-| `trader` | Trader |
-| `risk_analysts` | Risk Analysts |
-| `portfolio_manager` | Portfolio Manager |
-
-## Pipeline Execution Order
+Execution:
 
 ```text
-Preflight market data
-  -> Data Collection
-  -> News Providers progress
-  -> Data Quality progress
-  -> Market Analyst, News + Social Analyst, Fundamentals Analyst
-  -> Bull Researcher
-  -> Bear Researcher
-  -> Research Manager
-  -> Trader
-  -> Risk Analysts
-  -> Portfolio Manager
-  -> normalize_trade_levels()
-  -> parse_final_result()
-  -> shape_result()
-  -> persist history
+Preflight
+  -> collect_market_data
+  -> initial analysts in parallel
+  -> bull
+  -> bear
+  -> research manager
+  -> trader
+  -> risk committee
+  -> portfolio manager
+  -> normalize_trade_levels
+  -> guardrail
+  -> build_response
+  -> route serializer
 ```
 
-Parallelism:
-
-| Tahap | Executor | Setting |
-|---|---|---|
-| Full pipeline worker | `ProcessPoolExecutor` | `PROCESS_POOL_WORKERS`. |
-| Data collection inside worker | `ThreadPoolExecutor` | `DATA_COLLECTION_WORKERS`, capped by task count. |
-| Initial analyst stage | `ThreadPoolExecutor` | `ANALYST_PARALLEL_WORKERS`, capped to 3. |
-| Debate/decision | sequential | Each stage reads previous output. |
-
-Analysis depth:
-
-| Depth | Budget | Behavior |
-|---|---:|---|
-| `fast` | `6` | Analyst reports tetap jalan. Bull/bear dan risk committee memakai conservative fallback/skip behavior. |
-| `balanced` | `9` | Default full flow. |
-| `deep` | `12` | Extra debate/risk review round sesuai depth config. |
-
-`deep_think_llm` dipakai untuk Research Manager dan Portfolio Manager.
-`quick_think_llm` dipakai untuk analyst, bull, bear, trader, dan risk committee.
-
-## Data Collection
-
-Data collection mengumpulkan:
-
-| Data | Sumber/Builder |
-|---|---|
-| Price/OHLCV | Vendor router, default yfinance lalu fallback. |
-| Technical indicators | Calculated locally from OHLCV. |
-| Fundamentals | yfinance, Finnhub, Alpha Vantage via router. |
-| Balance sheet, income statement, cash flow | Quarterly dan annual statement. |
-| Company profile | `company_profile.builder`. |
-| Company news | `NewsService`, Google News Light/MarketAux/NewsData/yfinance fallback. |
-| Global news | Vendor router. |
-| News impact | `news_intelligence.build_news_impact`. |
-| Catalyst tracker | `build_catalyst_tracker`. |
-| Analyst consensus | `build_analyst_consensus`. |
-| Financial highlights | `financial_highlights.builder`. |
-| Fundamental analysis | `fundamentals.builder`. |
-| Related news | Dedup dan rank news. |
-| Data quality | `DataQualityReport`. |
-
-Data quality mengklasifikasi:
+Progress agent ids:
 
 ```text
-price_data
+data_collection
+news_fetch
+data_quality
+market_analyst
+news_analyst
 fundamentals
-news
-warnings
-warning_details
+bull_researcher
+bear_researcher
+research_manager
+trader
+risk_analysts
+portfolio_manager
 ```
 
-Warning detail memakai code seperti `OHLCV_FALLBACK_USED`, `OHLCV_MISSING`,
-`NEWS_PARTIAL`, `NEWS_UNAVAILABLE`, `FUNDAMENTALS_PARTIAL`,
-`PRICE_DATA_PARTIAL`, dan `PRICE_MISSING`.
+Depth behavior:
 
-## Vendor Routing
+| Depth | Budget | Retry | Debate | Risk |
+|---|---:|---:|---:|---:|
+| `fast` | 6 | 1 | 1 | 1 |
+| `balanced` | 9 | 2 | 2 | 2 |
+| `deep` | 12 | 3 | 3 | 3 |
 
-Vendor order dari `.env.example`:
+`deep_think_llm` is used for Research Manager and Portfolio Manager.
+`quick_think_llm` is used for other agent calls.
 
-```env
-DATA_VENDOR_CORE_STOCK_APIS=yfinance,finnhub,alpha_vantage
-DATA_VENDOR_QUOTE_DATA=yfinance,finnhub,alpha_vantage
-DATA_VENDOR_TECHNICAL_INDICATORS=yfinance,finnhub,alpha_vantage
-DATA_VENDOR_FUNDAMENTAL_DATA=yfinance,finnhub,alpha_vantage
-DATA_VENDOR_FINANCIAL_STATEMENTS=yfinance,alpha_vantage,finnhub
-DATA_VENDOR_NEWS_DATA=google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage
-DATA_VENDOR_GLOBAL_NEWS_DATA=yfinance,finnhub,alpha_vantage
-DATA_VENDOR_SENTIMENT_DATA=finnhub,alpha_vantage
-DATA_VENDOR_SOCIAL_SENTIMENT=finnhub
-DATA_VENDOR_EVENT_DATA=finnhub
-DATA_VENDOR_ANALYST_RATING=finnhub
-DATA_VENDOR_INSIDER_DATA=finnhub,alpha_vantage,yfinance
-```
+## LLM Clients and Cache
 
-Finnhub bisa aktif sebagai fallback, tetapi enrichment default false:
-
-```env
-DATA_VENDOR_ENABLE_FINNHUB_FALLBACK=true
-DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT=false
-```
-
-Multi-source news default false untuk menghindari biaya/quota lebih tinggi:
-
-```env
-DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS=false
-```
-
-## LLM Clients dan Cache
-
-Supported providers berasal dari `tradingagents.llm_clients.model_catalog`:
+Supported providers:
 
 ```text
 google, openai, anthropic, deepseek, openrouter, ollama
 ```
 
-Config wajib:
+Primary env:
 
-```env
-LLM_PROVIDER=<provider>
-DEEP_THINK_LLM=<model>
-QUICK_THINK_LLM=<model>
+```text
+LLM_PROVIDER
+LLM_API_KEY
+QUICK_THINK_LLM
+DEEP_THINK_LLM
+LLM_BASE_URL optional
+OLLAMA_BASE_URL optional
 ```
 
-Provider key:
+Provider-specific key envs still exist for compatibility:
 
-| Provider | Required key |
+```text
+GOOGLE_API_KEY
+GEMINI_API_KEY
+OPENAI_API_KEY
+ANTHROPIC_API_KEY
+DEEPSEEK_API_KEY
+OPENROUTER_API_KEY
+```
+
+Exact cache:
+
+- Enabled by default.
+- SQLite path `.cache/llm_exact_cache.sqlite3`.
+- Key uses provider, model, agent name, schema name, prompt hash.
+
+Semantic cache:
+
+- Disabled by default.
+- Used only for configured targets if enabled.
+
+## Market and Ticker Model
+
+Frontend ticker input uses yfinance search:
+
+```text
+TickerSearchBar -> GET /api/market/search?q=...&limit=10
+```
+
+The selected canonical symbol becomes request `ticker`.
+
+Validation:
+
+- `ticker` or `symbol` accepted.
+- `search_metadata.canonical`, `symbol`, or `ticker` can override raw ticker.
+- Plain IDX ticker is not auto-suffixed.
+- `market=ID` does not append `.JK`.
+- Accepted market values: `IDX`, `ID`, `US`, `GLOBAL`, `CRYPTO`, `ETF`,
+  `FUND`, `UNKNOWN`.
+- Global suffixes such as `.HK`, `.T`, `.DE` are accepted when symbol regex
+  passes.
+
+## Data Collection
+
+Collected payload areas:
+
+- Price and OHLCV.
+- Technical indicators and technical entry.
+- Fundamentals, statements, highlights, trends, valuation, scenarios.
+- Company profile.
+- Company news and market context news.
+- News impact, catalysts, analyst consensus.
+- Insider, event, sentiment when vendor supports it.
+- Data quality, data freshness, completeness, lineage/source metadata.
+
+Vendor defaults:
+
+```text
+core stock: yfinance,finnhub,alpha_vantage
+quote: yfinance,finnhub,alpha_vantage
+technical: yfinance,finnhub,alpha_vantage
+fundamental: yfinance,finnhub,alpha_vantage
+statements: yfinance,sec_companyfacts,alpha_vantage,finnhub
+company news: google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage
+global news: finnhub,alpha_vantage,yfinance
+sentiment: finnhub,alpha_vantage
+social sentiment: finnhub
+events: finnhub
+analyst rating: finnhub
+insider: finnhub,alpha_vantage,yfinance
+```
+
+## News Architecture
+
+Company news:
+
+```text
+GET /api/news/{ticker}
+  -> normalize_ticker_symbol
+  -> NewsService.fetch_news
+  -> providers: google_news_light, marketaux, rss_context, newsdata, yfinance
+```
+
+General news:
+
+```text
+GET /api/news/general
+GET /api/news/general/categories
+GET /api/news/general/stream
+  -> GeneralNewsService
+  -> rss_context first by default
+  -> optional SSE updates from background worker
+```
+
+General news stream event:
+
+```text
+event: general_news_updated
+data: {...}
+```
+
+Frontend `useGeneralNews()` connects to stream. If stream fails, it polls every
+60 seconds.
+
+## Persistence
+
+Local defaults:
+
+| Data | Path |
 |---|---|
-| `google` | `GOOGLE_API_KEY` atau `GEMINI_API_KEY` |
-| `openai` | `OPENAI_API_KEY` |
-| `anthropic` | `ANTHROPIC_API_KEY` |
-| `deepseek` | `DEEPSEEK_API_KEY` |
-| `openrouter` | `OPENROUTER_API_KEY` |
-| `ollama` | Tidak perlu key, butuh `OLLAMA_BASE_URL`. |
+| Analysis history | `.cache/analysis_history.sqlite3` |
+| Analysis job TTL cache | `.cache/analysis_jobs.sqlite3` |
+| Rate limits | `.cache/rate_limits.sqlite3` |
+| Market data cache | `.cache/market_data.sqlite3` |
+| News cache | `.cache/news_data.sqlite3` |
+| General news cache | `.cache/general_news.sqlite3` |
+| Exact LLM cache | `.cache/llm_exact_cache.sqlite3` |
+| Semantic LLM cache | `.cache/llm_semantic_cache.sqlite3` |
 
-LLM exact cache:
+Compose backend overrides these under:
 
-| Setting | Default |
-|---|---:|
-| `LLM_EXACT_CACHE_ENABLED` | `true` |
-| `LLM_EXACT_CACHE_TTL_SECONDS` | `1800` |
-| `LLM_EXACT_CACHE_MAX_ENTRIES` | `1024` |
-| `LLM_EXACT_CACHE_DB_PATH` | `.cache/llm_exact_cache.sqlite3` |
-
-Semantic cache default disabled karena keputusan trading time-sensitive:
-
-| Setting | Default |
-|---|---:|
-| `LLM_SEMANTIC_CACHE_ENABLED` | `false` |
-| `LLM_SEMANTIC_CACHE_TTL_SECONDS` | `3600` |
-| `LLM_SEMANTIC_CACHE_MAX_ENTRIES` | `2048` |
-| `LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD` | `0.97` |
-| `LLM_SEMANTIC_CACHE_TARGETS` | `news_summary,company_profile` |
+```text
+/home/tradingagent/.tradingagents/cache
+```
 
 ## Frontend Architecture
 
-Routes di `frontend/src/App.jsx`:
+Routes in `frontend/src/App.jsx`:
 
 ```text
-/                         -> redirect /home
+/                         -> /home
 /home                     -> Dashboard
-/analysis                 -> Analysis
-/analysis/:resourceId     -> Analysis result lookup
-/analysis-live            -> redirect /analysis
-/analysis.test            -> gated mock route
-/analysis.test/:resourceId -> gated mock lookup
-/analysis-mock            -> gated redirect /analysis.test
+/AI-Research              -> Analysis
+/AI-Research/:resourceId  -> Analysis lookup
+/analysis                 -> redirect /AI-Research
+/analysis/:resourceId     -> redirect /AI-Research/:resourceId
+/analysis-live            -> redirect /AI-Research
+/news                     -> News
+/market                   -> Market shell
+/economic                 -> Economic placeholder
+/AI-Research.test         -> mock Analysis if enabled
+/analysis.test            -> legacy mock redirect
+/analysis-mock            -> legacy mock redirect
 *                         -> NotFound
 ```
 
-State model:
+State/storage:
 
 | Area | Storage |
 |---|---|
-| Owner token | `sessionStorage`, key `_ta_owner_token`. |
-| Owner token expiry | `sessionStorage`, key `_ta_owner_token_expires_at`. |
-| Local history summary | `localStorage`, key `ta_analysis_history`. |
-| Mock history summary | `localStorage`, key `ta_analysis_mock_history`. |
-| Full history result | Backend SQLite, not localStorage. |
+| Owner session token | HttpOnly cookie from backend |
+| Owner session expiry | `sessionStorage` key `_ta_owner_session_expires_at` |
+| Local history summary | `localStorage` key `ta_analysis_history` |
+| Mock history summary | `localStorage` key `ta_analysis_mock_history` |
+| Full history | Backend SQLite |
 
-Mock route:
-
-- Enabled only when `VITE_ENABLE_MOCK=true`.
-- Uses `AnalysisMock.jsx`, `StockFormMock.jsx`, `useMockAnalysisJob.js`.
-- Loads fixture from `frontend/dev/mockData.js`.
-- Report export uses mock helpers in `frontend/src/utils/mockReport.js`.
-
-## Frontend API URL
-
-`buildApiUrl(path)`:
+API helper:
 
 ```text
-API_URL = VITE_API_BASE_URL || VITE_API_URL || ''
-if API_URL empty -> /api{path}
-if API_URL ends with /api -> strip /api then append /api{path}
-else -> {API_URL}/api{path}
+buildApiUrl(path)
+  base = VITE_API_BASE_URL or VITE_API_URL or /api default
+  if base ends /api, avoid double /api
 ```
 
-Examples:
-
-| Env | `buildApiUrl('/session')` |
-|---|---|
-| `VITE_API_BASE_URL=http://localhost:8000` | `http://localhost:8000/api/session` |
-| `VITE_API_BASE_URL=/api` | `/api/session` |
-| empty | `/api/session` |
+`buildHeaders()` and `buildAuthHeaders()` call `ensureOwnerSession()`.
+They rely on cookie for auth.
 
 ## Docker Architecture
 
-`docker-compose.yml` services:
+`docker-compose.yml` default services:
 
-| Service | Image/build | Port | Detail |
-|---|---|---|---|
-| `backend` | `Dockerfile.backend` | `127.0.0.1:8000:8000` | Python 3.11 slim, uvicorn, cache volume. |
-| `frontend` | `Dockerfile.frontend` | `127.0.0.1:3000:80` | Node 22 build, nginx runtime. |
-| `ollama` | `ollama/ollama:0.24.0` | `127.0.0.1:11434:11434` | Optional profile `ollama`. |
+| Service | Build/runtime | Host port | Detail |
+|---|---|---:|---|
+| backend | `Dockerfile.backend` runtime + bind mount + reload | 8000 | Python 3.11, FastAPI |
+| frontend | `Dockerfile.frontend` target `dev` | 3000 | Vite dev server |
+| ollama | `ollama/ollama:0.24.0` profile | 11434 | Optional local LLM |
 
-Backend Docker env overrides:
+Default compose frontend is not nginx. It runs:
 
-```env
-APP_ENV=development
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173
-REQUIRE_API_KEY_FOR_RATE_LIMIT=false
-OLLAMA_BASE_URL=http://ollama:11434
-XDG_CACHE_HOME=/root/.tradingagents/cache
-YFINANCE_CACHE_DIR=/root/.tradingagents/cache/py-yfinance
-ANALYSIS_JOB_CACHE_DB_PATH=/root/.tradingagents/cache/analysis_jobs.sqlite3
-ANALYSIS_DB_PATH=/root/.tradingagents/cache/analysis_history.sqlite3
-DATA_CACHE_DB_PATH=/root/.tradingagents/cache/market_data.sqlite3
+```text
+npm run dev:lan
 ```
 
-Frontend Docker build args:
+Production frontend runtime exists in `Dockerfile.frontend`:
 
-```env
-VITE_API_BASE_URL=/api
-VITE_ENABLE_MOCK=false
-```
-
-`docker-compose.mock.yml` hanya override:
-
-```yaml
-services:
-  frontend:
-    build:
-      args:
-        VITE_ENABLE_MOCK: "true"
-```
-
-## Persistence Paths
-
-Local default dari `.env.example`:
-
-| Data | Path |
-|---|---|
-| Job cache | `.cache/analysis_jobs.sqlite3` |
-| Analysis history | `.cache/analysis_history.sqlite3` |
-| Market data cache | `.cache/market_data.sqlite3` |
-| News cache | `.cache/news_data.sqlite3` |
-| Exact LLM cache | `.cache/llm_exact_cache.sqlite3` |
-| Semantic LLM cache | `.cache/llm_semantic_cache.sqlite3` |
-| yfinance cache | `YFINANCE_CACHE_DIR`, blank berarti platform default |
-
-Docker important paths:
-
-| Data | Path |
-|---|---|
-| Shared cache volume | `/root/.tradingagents/cache` |
-| yfinance cache | `/root/.tradingagents/cache/py-yfinance` |
-| Result/log volume | `/root/.tradingagents/logs` |
-| Ollama model volume | `/root/.ollama` |
-
-`.gitignore` dan `.dockerignore` mengecualikan `.env`, `.env.*`, cache, SQLite,
-build output, node_modules, coverage, logs, dan archives.
+- Build target `runtime`.
+- Nginx listens `8080`.
+- `/api/` proxies to `http://backend:8000/api/`.
+- `/health` returns `ok`.
 
 ## Report Architecture
 
-Report path:
-
 ```text
-Result JSON
-  -> build_report_context()
-  -> render_analysis_report_html()
-  -> HTMLResponse
-  -> render_analysis_report_pdf()
-  -> WeasyPrint PDF bytes
+completed result
+  -> get_analysis_result_for_report
+  -> build_report_context
+  -> render_analysis_report_html
+  -> render_analysis_report_pdf
+  -> mark_exported best effort
 ```
 
 Files:
 
-| File | Fungsi |
-|---|---|
-| `backend/services/report_service.py` | Build context, render HTML, render PDF, filename. |
-| `backend/services/report_disclaimer.py` | Legal disclaimer text. |
-| `backend/templates/reports/analysis_report.html` | HTML template. |
-| `backend/static/reports/analysis_report.css` | Report CSS. |
-| `frontend/src/utils/reportApi.js` | Open HTML preview, download PDF, fallback payload export. |
-| `frontend/src/components/ExportReportButtons.jsx` | UI buttons. |
-
-Report export mencatat audit best effort ke SQLite:
-
 ```text
-exported_html_at
-exported_pdf_at
+backend/routes/reports.py
+backend/services/report_service.py
+backend/services/report_disclaimer.py
+backend/templates/reports/analysis_report.html
+backend/static/reports/analysis_report.css
+frontend/src/utils/reportApi.js
+frontend/src/utils/reportDisclaimer.js
+frontend/src/components/ExportReportButtons.jsx
 ```
 
-## Constraints
-
-- Python 3.13 tidak didukung oleh `tradingagents-core` karena package requires
-  `>=3.10,<3.13`.
-- Backend Docker memakai Python 3.11.
-- Local Windows bisa punya Python global berbeda. Pakai venv/conda Python 3.11
-  atau 3.12.
-- Backend API server hanya mendukung `ANALYSIS_MODE=balanced`.
-- `CORS_ORIGINS=*` ditolak.
-- Production butuh `API_KEY` dan `OWNER_SESSION_SECRET`.
-- SSE path tidak boleh dikompresi.
-- Frontend local Vite butuh backend URL absolut karena tidak ada proxy.
-- Market yang didukung hanya `US` dan `ID`.
-- Non-ID exchange suffix ditolak.
-- Unit test tidak boleh memanggil external vendor atau LLM live.
+Direct POST report fallback validates bounded payload size/depth before render.
+PDF rendering is limited by semaphore and timeout.
