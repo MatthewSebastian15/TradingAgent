@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -17,7 +18,7 @@ from .news_models import NewsEntity, NormalizedNewsArticle
 from .news_provider_base import BaseNewsProvider, ProviderFetchResult, sanitize_error
 from .news_relevance import is_relevant_news
 from .news_scoring import content_hash
-from .rss_news_config import DEFAULT_RSS_FEEDS, GOOGLE_NEWS_FALLBACK_RSS_FEEDS, RSSFeedConfig
+from .rss_news_config import DEFAULT_RSS_FEEDS, GOOGLE_NEWS_FALLBACK_RSS_FEEDS, RSSFeedConfig, google_news_rss_url
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class RSSContextProvider(BaseNewsProvider):
         articles: list[NormalizedNewsArticle] = []
         feed_limit = max(1, int(config.get("rss_max_items_per_feed", 20)))
 
-        for feed in _select_feeds(config):
+        for feed in _select_feeds(config, ticker_profile):
             status, parsed, attempt = self._fetch_feed(feed, config)
             attempts.append(attempt)
             if status != "success" or parsed is None:
@@ -116,9 +117,10 @@ class RSSContextProvider(BaseNewsProvider):
             return "unavailable", None, attempt
 
 
-def _select_feeds(config: dict[str, Any]) -> list[RSSFeedConfig]:
+def _select_feeds(config: dict[str, Any], ticker_profile: dict[str, Any] | None = None) -> list[RSSFeedConfig]:
     feeds = list(DEFAULT_RSS_FEEDS)
     if bool(config.get("rss_google_news_fallback_enabled", True)):
+        feeds.extend(_company_google_news_feeds(ticker_profile))
         feeds.extend(GOOGLE_NEWS_FALLBACK_RSS_FEEDS)
 
     enabled_ids = set(_string_list(config.get("rss_enabled_feed_ids")))
@@ -134,6 +136,69 @@ def _select_feeds(config: dict[str, Any]) -> list[RSSFeedConfig]:
             continue
         selected.append(feed)
     return selected[: max(1, int(config.get("rss_max_feeds", 10)))]
+
+
+def build_company_rss_queries(ticker_profile: dict[str, Any]) -> list[str]:
+    ticker = ticker_profile.get("ticker")
+    short_ticker = ticker_profile.get("short_ticker") or str(ticker or "").split(".", 1)[0]
+    company_name = ticker_profile.get("company_name")
+    aliases = ticker_profile.get("aliases") or []
+    sector = ticker_profile.get("sector")
+    industry = ticker_profile.get("industry")
+    exchange = ticker_profile.get("exchange")
+    region = ticker_profile.get("region") or ticker_profile.get("country")
+
+    query_terms = [
+        str(value).strip()
+        for value in [ticker, short_ticker, company_name, *aliases]
+        if str(value or "").strip()
+    ]
+    query_terms = list(dict.fromkeys(query_terms))
+
+    queries: list[str] = []
+    suffixes = ["stock", "earnings", "revenue", "shares", "financial results"]
+    for suffix in suffixes:
+        for value in query_terms:
+            queries.append(f"{value} {suffix}")
+
+    primary = str(company_name or short_ticker or ticker or "").strip()
+    for context in [sector, industry, exchange, region]:
+        text = str(context or "").strip()
+        if primary and text:
+            queries.append(f"{primary} {text} stock")
+
+    return list(dict.fromkeys(queries))[:8]
+
+
+def _company_google_news_feeds(ticker_profile: dict[str, Any] | None) -> list[RSSFeedConfig]:
+    if not ticker_profile:
+        return []
+
+    locale = _google_news_locale(ticker_profile)
+    feeds: list[RSSFeedConfig] = []
+    for index, query in enumerate(build_company_rss_queries(ticker_profile), start=1):
+        feeds.append(
+            RSSFeedConfig(
+                id=f"company-google-news-{index}",
+                name=f"Company Google News {index}",
+                url=google_news_rss_url(query, **locale),
+                category="company",
+                region=str(ticker_profile.get("region") or ticker_profile.get("country") or "global"),
+                source="GOOGLE NEWS",
+                tier=1,
+                enabled=True,
+                is_google_news_fallback=True,
+            )
+        )
+    return feeds
+
+
+def _google_news_locale(ticker_profile: dict[str, Any]) -> dict[str, str]:
+    country = str(ticker_profile.get("country") or ticker_profile.get("region") or "").lower()
+    exchange = str(ticker_profile.get("exchange") or "").upper()
+    if country == "id" or exchange == "IDX":
+        return {"hl": "id-ID", "gl": "ID", "ceid": "ID:id"}
+    return {"hl": "en-US", "gl": "US", "ceid": "US:en"}
 
 
 def _normalize_feed_entries(
@@ -153,7 +218,11 @@ def _normalize_feed_entries(
         if not title or not url:
             continue
         summary = _strip_html(str(item.get("summary") or item.get("description") or ""))
-        company_match = is_relevant_news(
+        relevance_score, matched_terms = score_rss_article(
+            {"title": title, "summary": summary},
+            ticker_profile,
+        )
+        company_match = bool(matched_terms) and is_relevant_news(
             {
                 "title": title,
                 "summary": summary,
@@ -164,7 +233,6 @@ def _normalize_feed_entries(
             ticker_profile.get("company_name"),
             ticker_profile.get("aliases"),
         )
-        relevance_score = 65 if company_match else 45
         relevance_category = "company_match" if company_match else "market_context"
         market_context_only = not company_match
         bucket = "full_news" if company_match else "macro_context"
@@ -188,7 +256,7 @@ def _normalize_feed_entries(
                 relevance_category=relevance_category,
                 relevance_reasons=["rss_company_match"] if company_match else ["rss_market_context"],
                 entity_match="company_exact" if company_match else "none",
-                matched_terms=[str(ticker_profile.get("ticker") or "")] if company_match else [],
+                matched_terms=matched_terms if company_match else [],
                 bucket=bucket,
                 content_hash=content_hash(title, url),
                 raw_payload=item if include_raw else None,
@@ -199,6 +267,71 @@ def _normalize_feed_entries(
             continue
         articles.append(article)
     return articles
+
+
+def score_rss_article(article: dict[str, Any], ticker_profile: dict[str, Any]) -> tuple[float, list[str]]:
+    text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
+    ticker = str(ticker_profile.get("ticker") or "").lower()
+    short_ticker = str(ticker_profile.get("short_ticker") or ticker.split(".", 1)[0]).lower()
+    company_name = str(ticker_profile.get("company_name") or "").lower()
+    aliases = [str(alias).lower() for alias in ticker_profile.get("aliases", [])]
+    sector = str(ticker_profile.get("sector") or "").lower()
+    industry = str(ticker_profile.get("industry") or "").lower()
+    exchange = str(ticker_profile.get("exchange") or "").lower()
+    region = str(ticker_profile.get("region") or ticker_profile.get("country") or "").lower()
+
+    score = 0.0
+    matched_terms: list[str] = []
+
+    if ticker and _term_in_text(text, ticker):
+        score += 45
+        matched_terms.append(ticker)
+
+    if short_ticker and _term_in_text(text, short_ticker):
+        score += 35
+        matched_terms.append(short_ticker)
+
+    if company_name and _term_in_text(text, company_name):
+        score += 40
+        matched_terms.append(company_name)
+
+    for alias in aliases:
+        if alias and _term_in_text(text, alias):
+            score += 25
+            matched_terms.append(alias)
+
+    material_terms = [
+        "earnings",
+        "revenue",
+        "profit",
+        "guidance",
+        "forecast",
+        "shares",
+        "stock",
+        "acquisition",
+        "merger",
+        "lawsuit",
+        "regulatory",
+    ]
+    if any(term in text for term in material_terms):
+        score += 15
+
+    if not matched_terms:
+        if any(term and _term_in_text(text, term) for term in (sector, industry, exchange, region)):
+            score = max(score, 55)
+        elif any(term in text for term in ("market", "economy", "inflation", "rates", "sector", "industry")):
+            score = max(score, 45)
+
+    return min(score, 100), list(dict.fromkeys(matched_terms))
+
+
+def _term_in_text(text: str, term: str) -> bool:
+    value = str(term or "").strip().lower()
+    if len(value) < 2:
+        return False
+    if re.fullmatch(r"[a-z0-9]+", value):
+        return bool(re.search(rf"(?<![a-z0-9]){re.escape(value)}(?![a-z0-9])", text))
+    return value in text
 
 
 def _overall_status(statuses: set[str]) -> str:

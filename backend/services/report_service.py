@@ -221,6 +221,7 @@ def _attach_market_report_sections(report: dict[str, Any], result: dict[str, Any
             else _related_news_items(result),
             "news": _news_context(result),
             "news_articles": _news_articles(result),
+            "report_news_sections": _report_news_sections(result),
             "news_provider_rows": _news_provider_rows(result),
         }
     )
@@ -1482,7 +1483,7 @@ def _peer_comparison_rows(value: Any) -> list[dict[str, str]]:
 
 
 def _news_context(result: dict[str, Any]) -> dict[str, Any]:
-    return _as_dict(result.get("news") or result.get("news_context"))
+    return _as_dict(result.get("news_context") or result.get("news"))
 
 
 def _news_articles(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1497,6 +1498,85 @@ def _news_articles(result: dict[str, Any]) -> list[dict[str, Any]]:
         item["url"] = _safe_external_http_url(article.get("url"))
         items.append(item)
     return items
+
+
+def _report_news_sections(result: dict[str, Any]) -> list[dict[str, Any]]:
+    context = _news_context(result)
+    sections: list[dict[str, Any]] = []
+
+    decision_news = _as_list(context.get("decision_company_news"))
+    market_news = _as_list(context.get("market_context_news"))
+    if decision_news or market_news:
+        if decision_news:
+            sections.append(
+                {
+                    "title": "Company News Used for Decision",
+                    "items": _report_news_items(decision_news),
+                }
+            )
+        if market_news:
+            sections.append(
+                {
+                    "title": "Market Context News",
+                    "items": _report_news_items(market_news),
+                }
+            )
+        return [section for section in sections if section["items"]]
+
+    articles = _as_list(context.get("articles"))
+    if articles:
+        items = _report_news_items(articles)
+        return [{"title": "News", "items": items}] if items else []
+
+    impact = _as_dict(result.get("news_impact"))
+    high_items = _as_list(impact.get("high_impact_news"))
+    has_full_news_list = isinstance(impact.get("full_news_list"), list)
+    full_items = _as_list(impact.get("full_news_list")) if has_full_news_list else []
+    if high_items or full_items:
+        items = _report_news_items([*high_items, *full_items])
+        return [{"title": "News", "items": items}] if items else []
+
+    related_items = _as_list(_as_dict(result.get("related_news")).get("items"))
+    items = _report_news_items(related_items)
+    return [{"title": "News", "items": items}] if items else []
+
+
+def _report_news_items(raw_items: list[Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for item in _dedupe_report_news_items(raw_items):
+        source = _news_source(item)
+        items.append(
+            {
+                "title": _display(item.get("title")),
+                "publisher": _display(item.get("publisher") or item.get("source") or item.get("provider")),
+                "source": source,
+                "published_label": _news_published_label(item),
+                "summary": _display(item.get("summary") or item.get("description") or item.get("impact_reason")),
+                "impact": _display(item.get("impact") or item.get("impact_rule") or item.get("risk_level")),
+                "sentiment": _display(item.get("sentiment") or item.get("sentiment_label")),
+                "url": _safe_external_http_url(item.get("url")),
+            }
+        )
+    return items
+
+
+def _news_source(item: dict[str, Any]) -> str:
+    return _display(item.get("source") or item.get("publisher") or item.get("provider") or "Unknown Source")
+
+
+def _news_published_label(item: dict[str, Any]) -> str:
+    age = _clean_text(item.get("published_age") or item.get("published_age_label") or item.get("age"))
+    if age:
+        return age
+    value = item.get("published_at") or item.get("publishedAt") or item.get("published_date") or item.get("pub_date")
+    if not value:
+        return "N/A"
+    text = str(value).strip()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed.strftime("%Y-%m-%d")
+    except ValueError:
+        return text[:10] if len(text) >= 10 else text
 
 
 def _news_provider_rows(result: dict[str, Any]) -> list[dict[str, str]]:
