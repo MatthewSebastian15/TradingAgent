@@ -14,7 +14,7 @@ from analysis_cache import AnalysisJobLimitError
 from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
 from errors import NotFoundError, RateLimitError, sanitize_message
 from logging_config import request_id_ctx
-from rate_limiter import limit_request, request_policy, stream_policy
+from rate_limiter import limit_request, request_policy, status_policy, stream_policy
 from routes import jobs, pipeline_runner, serializers, sse
 from routes.sse import EventSourceResponse
 from routes.validation import (
@@ -566,7 +566,7 @@ async def validate_ticker(ticker: str, trade_date: str, request: Request, market
 
 @router.get("/status", response_model=ApiStatusResponse)
 async def api_status(request: Request):
-    async with limit_request(request, request_policy()):
+    async with limit_request(request, status_policy()):
         return await _api_status_payload(_runtime_for_request(request))
 
 

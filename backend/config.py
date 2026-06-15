@@ -139,6 +139,7 @@ from config_defaults import (
     MARKETAUX_API_KEY,
     MAX_CONCURRENT_LLM_CALLS,
     MAX_CONCURRENT_REQUESTS_PER_KEY,
+    MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY,
     MAX_CONCURRENT_STREAMS_PER_KEY,
     MAX_GEMINI_CALLS,
     MAX_RISK_DISCUSS_ROUNDS,
@@ -161,6 +162,7 @@ from config_defaults import (
     RESPONSE_DETAILS,
     RISK_CONSENSUS_THRESHOLD,
     RISK_MIN_ROUNDS,
+    STATUS_RATE_LIMIT_PER_MINUTE,
     STREAM_RATE_LIMIT_PER_MINUTE,
     TOOL_MAX_RETRIES,
     TOOL_TIMEOUT_SECONDS,
@@ -201,8 +203,10 @@ class _BackendSettingsShim:
     llm_budget_by_analysis_depth = LLM_BUDGET_BY_ANALYSIS_DEPTH
     max_gemini_calls = MAX_GEMINI_CALLS
     request_rate_limit_per_minute = REQUEST_RATE_LIMIT_PER_MINUTE
+    status_rate_limit_per_minute = STATUS_RATE_LIMIT_PER_MINUTE
     stream_rate_limit_per_minute = STREAM_RATE_LIMIT_PER_MINUTE
     max_concurrent_requests_per_key = MAX_CONCURRENT_REQUESTS_PER_KEY
+    max_concurrent_status_requests_per_key = MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY
     max_concurrent_streams_per_key = MAX_CONCURRENT_STREAMS_PER_KEY
     request_body_max_bytes = REQUEST_BODY_MAX_BYTES
     require_api_key_for_rate_limit = REQUIRE_API_KEY_FOR_RATE_LIMIT
