@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timedelta
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -25,13 +25,15 @@ class AnalysisRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    ticker: str = Field(
-        ...,
-        validation_alias=AliasChoices("ticker", "symbol"),
-        serialization_alias="ticker",
-        min_length=1,
-        max_length=64,
-    )
+    ticker: Annotated[
+        str,
+        Field(
+            validation_alias=AliasChoices("ticker", "symbol"),
+            serialization_alias="ticker",
+            min_length=1,
+            max_length=64,
+        ),
+    ]
     input_ticker: str | None = None
     trade_date: str
     time_horizon_months: int = Field(default=1)
