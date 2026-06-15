@@ -10,6 +10,9 @@ import { SignalBadge } from '@/components/ui/signal-badge';
 import { safeExternalUrl } from '../../../utils/url';
 import { formatPrice } from '../../../utils/formatting';
 
+const TERMINAL_GHOST_BUTTON_CLASS =
+  'rounded-none border border-bloomberg-border bg-black font-mono text-xs uppercase tracking-wider text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange-dim hover:text-bloomberg-orange focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0';
+
 function hasValue(value) {
   return (
     value !== null &&
@@ -61,11 +64,19 @@ function currentPriceValue(result = {}, profile = {}) {
 
 function formattedPrice(value, result = {}, profile = {}) {
   if (!hasValue(value)) return 'N/A';
-  return formatPrice(value, result.ticker || profile.ticker, result.price_currency || profile.currency) || 'N/A';
+  return (
+    formatPrice(
+      value,
+      result.ticker || profile.ticker,
+      result.price_currency || profile.currency
+    ) || 'N/A'
+  );
 }
 
 function signalValue(result = {}) {
-  return result.display_signal || result.final_decision || result.decision || result.rating || 'HOLD';
+  return (
+    result.display_signal || result.final_decision || result.decision || result.rating || 'HOLD'
+  );
 }
 
 function firstText(...values) {
@@ -78,7 +89,9 @@ function firstText(...values) {
 function splitThesis(thesis) {
   const text = String(thesis || '');
   const bullMatch = text.match(/(The bull case[^.]*\.[\s\S]*?)(?=The bear case|$)/i);
-  const bearMatch = text.match(/(The bear case[^.]*\.[\s\S]*?)(?=That bear case|The action plan|$)/i);
+  const bearMatch = text.match(
+    /(The bear case[^.]*\.[\s\S]*?)(?=That bear case|The action plan|$)/i
+  );
   return {
     bull: bullMatch?.[1]?.trim() || text,
     bear: bearMatch?.[1]?.trim() || text,
@@ -182,6 +195,7 @@ function DataQualityWarnings({ dataQuality }) {
           size="icon"
           aria-label="Dismiss data quality warnings"
           onClick={() => setDismissed(true)}
+          className={TERMINAL_GHOST_BUTTON_CLASS}
         >
           <X className="h-4 w-4" />
         </Button>
@@ -213,7 +227,9 @@ export default function ProfileTab({ profile, result = {} }) {
         <Card className="rounded-md border-yellow-500/70 bg-yellow-500/10">
           <CardContent className="p-4 text-sm text-yellow-300">
             <div className="mb-2 font-semibold uppercase tracking-widest">PROFILE UNAVAILABLE</div>
-            <div>{profile?.warning || 'Company profile data is not available for this ticker.'}</div>
+            <div>
+              {profile?.warning || 'Company profile data is not available for this ticker.'}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -225,8 +241,18 @@ export default function ProfileTab({ profile, result = {} }) {
   const currentPrice = currentPriceValue(result, profile);
   const thesis = firstText(result.analysis_overview?.investment_thesis, result.investment_thesis);
   const thesisParts = {
-    bull: firstText(result.bull_thesis, result.bull_case, result.bull_report, splitThesis(thesis).bull),
-    bear: firstText(result.bear_thesis, result.bear_case, result.bear_report, splitThesis(thesis).bear),
+    bull: firstText(
+      result.bull_thesis,
+      result.bull_case,
+      result.bull_report,
+      splitThesis(thesis).bull
+    ),
+    bear: firstText(
+      result.bear_thesis,
+      result.bear_case,
+      result.bear_report,
+      splitThesis(thesis).bear
+    ),
   };
   const websiteUrl = safeExternalUrl(profile.website);
   const scenarios = scenarioRows(result.scenario_analysis);
@@ -236,17 +262,37 @@ export default function ProfileTab({ profile, result = {} }) {
     ['Stop loss', formattedPrice(result.stop_loss, result, profile)],
     ['Take profit', formattedPrice(result.take_profit, result, profile)],
     ['Risk/reward ratio', formatRiskReward(result)],
-    ['Position sizing', result.position_sizing?.position_size || result.position_size_hint || result.position_sizing_reason || 'N/A'],
+    [
+      'Position sizing',
+      result.position_sizing?.position_size ||
+        result.position_size_hint ||
+        result.position_sizing_reason ||
+        'N/A',
+    ],
     ['Suggested allocation percent', formatPercent(result.suggested_allocation_percent)],
   ];
 
   const ownershipRows = [
-    ['Shares out', displayDash(firstProfileValue(profile, ['shares_out', 'shares_outstanding', 'sharesOutstanding']))],
-    ['Insider', formatOwnershipPercent(firstProfileValue(profile, ['insider_pct', 'insider_percent', 'heldPercentInsiders']))],
+    [
+      'Shares out',
+      displayDash(
+        firstProfileValue(profile, ['shares_out', 'shares_outstanding', 'sharesOutstanding'])
+      ),
+    ],
+    [
+      'Insider',
+      formatOwnershipPercent(
+        firstProfileValue(profile, ['insider_pct', 'insider_percent', 'heldPercentInsiders'])
+      ),
+    ],
     [
       'Institution',
       formatOwnershipPercent(
-        firstProfileValue(profile, ['institution_pct', 'institution_percent', 'heldPercentInstitutions'])
+        firstProfileValue(profile, [
+          'institution_pct',
+          'institution_percent',
+          'heldPercentInstitutions',
+        ])
       ),
     ],
     ['Short ratio', displayDash(firstProfileValue(profile, ['short_ratio', 'shortRatio']))],
@@ -260,14 +306,16 @@ export default function ProfileTab({ profile, result = {} }) {
             <div className="mb-3 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
               COMPANY PROFILE
             </div>
-            <div className="font-mono text-2xl font-semibold tracking-wide text-primary">{ticker}</div>
+            <div className="font-mono text-2xl font-semibold tracking-wide text-primary">
+              {ticker}
+            </div>
             <div className="mt-1 font-sans text-lg text-foreground">{companyName}</div>
             {websiteUrl ? (
               <a
                 href={websiteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-flex text-sm text-primary hover:text-orange-300"
+                className="mt-2 inline-flex font-mono text-sm text-bloomberg-orange underline-offset-4 hover:text-orange-300 hover:underline"
               >
                 {profile.website}
               </a>
@@ -293,7 +341,13 @@ export default function ProfileTab({ profile, result = {} }) {
       <Card className="rounded-md border-border bg-card">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
           <CardTitle className="text-sm uppercase tracking-widest">Investment thesis</CardTitle>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setThesisOpen((open) => !open)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setThesisOpen((open) => !open)}
+            className={TERMINAL_GHOST_BUTTON_CLASS}
+          >
             {thesisOpen ? 'Hide' : 'Show'}
           </Button>
         </CardHeader>
@@ -303,13 +357,17 @@ export default function ProfileTab({ profile, result = {} }) {
               <div className="mb-2 text-sm font-semibold uppercase tracking-widest text-green-300">
                 Bull thesis
               </div>
-              <p className="text-sm leading-relaxed text-muted-foreground">{display(thesisParts.bull)}</p>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {display(thesisParts.bull)}
+              </p>
             </div>
             <div className="rounded-md border border-red-500/40 bg-red-500/10 p-4">
               <div className="mb-2 text-sm font-semibold uppercase tracking-widest text-red-300">
                 Bear thesis
               </div>
-              <p className="text-sm leading-relaxed text-muted-foreground">{display(thesisParts.bear)}</p>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {display(thesisParts.bear)}
+              </p>
             </div>
           </CardContent>
         )}
@@ -333,7 +391,9 @@ export default function ProfileTab({ profile, result = {} }) {
             scenarios.map((scenario) => (
               <div key={scenario.key} className="rounded-md border border-border bg-black p-3">
                 <div className="mb-2 font-mono text-xs text-primary">{scenario.title}</div>
-                <p className="text-sm leading-relaxed text-muted-foreground">{display(scenario.value)}</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {display(scenario.value)}
+                </p>
               </div>
             ))
           ) : (
@@ -353,7 +413,10 @@ export default function ProfileTab({ profile, result = {} }) {
           <MetricCard label="Sector" value={display(profile.sector)} />
           <MetricCard label="Industry" value={display(profile.industry)} />
           <MetricCard label="Market cap" value={display(profile.market_cap)} />
-          <MetricCard label="Employees" value={display(profile.employee_count ?? profile.full_time_employees)} />
+          <MetricCard
+            label="Employees"
+            value={display(profile.employee_count ?? profile.full_time_employees)}
+          />
           {ownershipRows.map(([label, value]) => (
             <MetricCard key={label} label={label} value={value} />
           ))}
