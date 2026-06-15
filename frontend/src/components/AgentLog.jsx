@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { AgentStatusPill } from '@/components/ui/agent-status-pill';
 import { AGENT_ALIASES, PIPELINE, PIPELINE_IDS, PIPELINE_STATUSES } from '../domain/analysisContract';
 
 function normalizeAgentId(id = '') {
@@ -31,14 +34,26 @@ function formatTime(s) {
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
+function titleCase(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (char) => char.toUpperCase());
+}
+
+function pillStatus({ done, active, error }) {
+  if (error) return 'error';
+  if (done) return 'done';
+  if (active) return 'running';
+  return 'pending';
+}
+
 export default function AgentLog({ status, agentProgress }) {
   const [elapsed, setElapsed] = useState(0);
   const [activeIds, setActiveIds] = useState(new Set());
   const [doneIds, setDoneIds] = useState(new Set());
-  const [log, setLog] = useState([]);
-  const logRef = useRef(null);
+  const [errorIds, setErrorIds] = useState(new Set());
+  const [agentTimes, setAgentTimes] = useState({});
   const elapsedRef = useRef(0);
-  const eventSeqRef = useRef(0);
   const lastEventSignatureRef = useRef('');
 
   useEffect(() => {
@@ -55,19 +70,18 @@ export default function AgentLog({ status, agentProgress }) {
   useEffect(() => {
     if (agentProgress === null) {
       elapsedRef.current = 0;
-      eventSeqRef.current = 0;
       lastEventSignatureRef.current = '';
       setElapsed(0);
       setActiveIds(new Set());
       setDoneIds(new Set());
-      setLog([]);
+      setErrorIds(new Set());
+      setAgentTimes({});
       return;
     }
 
     if (!agentProgress?.agent_id) return;
 
     const agentId = normalizeAgentId(agentProgress.agent_id);
-    const agentName = agentProgress.agent_name || agentId;
     const eventStatus = normalizeStatus(agentProgress.status);
     const statusMessage = agentProgress.status_message || '';
     const isPipelineAgent = PIPELINE_IDS.has(agentId);
@@ -78,8 +92,12 @@ export default function AgentLog({ status, agentProgress }) {
     setActiveIds((prev) => {
       const next = new Set(prev);
       if (isPipelineAgent && eventStatus === PIPELINE_STATUSES.STARTED) next.add(agentId);
-      if (isPipelineAgent && (eventStatus === PIPELINE_STATUSES.COMPLETED || eventStatus === PIPELINE_STATUSES.FAILED))
+      if (
+        isPipelineAgent &&
+        (eventStatus === PIPELINE_STATUSES.COMPLETED || eventStatus === PIPELINE_STATUSES.FAILED)
+      ) {
         next.delete(agentId);
+      }
       return next;
     });
 
@@ -89,155 +107,95 @@ export default function AgentLog({ status, agentProgress }) {
       return next;
     });
 
-    setLog((prev) =>
-      [
-        {
-          id: `${agentId}-${(eventSeqRef.current += 1)}`,
-          ts: formatTime(elapsedRef.current),
-          agent: agentName,
-          status: eventStatus,
-          msg: statusMessage,
-        },
-        ...prev,
-      ].slice(0, 30)
-    );
-  }, [agentProgress]);
+    setErrorIds((prev) => {
+      const next = new Set(prev);
+      if (isPipelineAgent && eventStatus === PIPELINE_STATUSES.FAILED) next.add(agentId);
+      return next;
+    });
 
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = 0;
-  }, [log]);
+    if (
+      isPipelineAgent &&
+      (eventStatus === PIPELINE_STATUSES.COMPLETED || eventStatus === PIPELINE_STATUSES.FAILED)
+    ) {
+      setAgentTimes((prev) => ({ ...prev, [agentId]: formatTime(elapsedRef.current) }));
+    }
+  }, [agentProgress]);
 
   const doneCount = Math.min(doneIds.size, PIPELINE.length);
   const totalSteps = PIPELINE.length;
   const pct = Math.round((doneCount / totalSteps) * 100);
 
   return (
-    <div className="border border-bloomberg-border bg-bloomberg-card animate-fade-up">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-bloomberg-border bg-black">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-bloomberg-orange animate-pulse-dot" />
-            <span className="font-mono text-xs font-semibold text-bloomberg-orange tracking-wider">
-              PIPELINE ACTIVE
-            </span>
-          </span>
-          <span className="font-mono text-xs text-bloomberg-muted">SSE STREAM</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-bloomberg-white">
-            {doneCount}/{totalSteps} AGENTS
-          </span>
-          <span className="font-mono text-xs text-bloomberg-orange">{formatTime(elapsed)}</span>
-        </div>
-      </div>
-
-      <div className="h-0.5 bg-bloomberg-surface">
-        <div
-          className="h-full bg-bloomberg-orange transition-all duration-500"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-
-      <div className="flex divide-x divide-bloomberg-border">
-        <div className="flex-1 p-3">
-          <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-3">
-            Agent Pipeline
+    <Card className="animate-in fade-in slide-in-from-top-2 rounded-md border-border bg-card">
+      <CardHeader className="border-b border-border p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-sm uppercase tracking-widest text-primary">
+              Pipeline active
+            </CardTitle>
+            <div className="mt-1 text-xs text-muted-foreground">SSE stream</div>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3 font-mono text-xs">
+            <span className="text-foreground">
+              {doneCount}/{totalSteps} agents
+            </span>
+            <span className="text-primary">{formatTime(elapsed)}</span>
+          </div>
+        </div>
+      </CardHeader>
+
+      <div className="h-1 bg-muted">
+        <div className="h-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+      </div>
+
+      <CardContent className="p-4">
+        <ScrollArea className="h-96 pr-4">
+          <ol className="relative space-y-3 border-l border-border pl-4">
             {PIPELINE.map((step) => {
               const done = doneIds.has(step.id);
               const active = activeIds.has(step.id);
+              const error = errorIds.has(step.id);
+              const statusValue = pillStatus({ done, active, error });
+              const elapsedTime = agentTimes[step.id] || (active ? formatTime(elapsed) : undefined);
+
               return (
-                <div
-                  key={step.id}
-                  className={`flex items-center gap-2.5 px-2 py-1.5 transition-colors duration-200 ${active ? 'bg-bloomberg-surface' : ''}`}
-                >
-                  <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                    {done ? (
-                      <span className="font-mono text-xs text-bloomberg-green">✓</span>
-                    ) : active ? (
-                      <div
-                        className="w-3 h-3 border border-t-transparent rounded-full animate-spin"
-                        style={{ borderColor: step.color, borderTopColor: 'transparent' }}
-                      />
-                    ) : (
-                      <span className="font-mono text-xs text-bloomberg-border">○</span>
-                    )}
-                  </div>
-
-                  <div
-                    className="w-0.5 h-4 flex-shrink-0 transition-opacity duration-200"
-                    style={{ background: step.color, opacity: done || active ? 1 : 0.2 }}
-                  />
-
+                <li key={step.id} className="animate-in fade-in duration-300">
                   <span
-                    className="font-mono text-xs tracking-wider flex-1 transition-colors duration-200"
-                    style={{ color: done ? '#525252' : active ? '#e5e5e5' : '#3d3d3d' }}
-                  >
-                    {step.label}
-                  </span>
-
-                  {done && <span className="font-mono text-xs text-bloomberg-green">DONE</span>}
-                  {active && (
-                    <span
-                      className="font-mono text-xs animate-pulse-dot"
-                      style={{ color: step.color }}
-                    >
-                      LIVE
-                    </span>
-                  )}
-                </div>
+                    className={`absolute -left-1.5 mt-3 h-3 w-3 rounded-full border border-background transition-colors ${
+                      active
+                        ? 'bg-primary'
+                        : done
+                          ? 'bg-green-500'
+                          : error
+                            ? 'bg-red-500'
+                            : 'bg-neutral-600'
+                    }`}
+                  />
+                  <AgentStatusPill
+                    agentName={titleCase(step.label)}
+                    status={statusValue}
+                    elapsedTime={elapsedTime}
+                    className="w-full justify-start"
+                  />
+                </li>
               );
             })}
+          </ol>
+        </ScrollArea>
+
+        <div className="mt-4 rounded-md border border-border bg-black px-3 py-2">
+          <div className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+            {status || 'Waiting for pipeline...'}
           </div>
         </div>
 
-        <div className="w-48 flex flex-col">
-          <div className="px-3 py-3 border-b border-bloomberg-border">
-            <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
-              Event Log
-            </div>
-          </div>
-          <div ref={logRef} className="flex-1 overflow-y-auto p-2" style={{ maxHeight: 340 }}>
-            {log.length === 0 ? (
-              <div className="font-mono text-xs text-bloomberg-border p-1">Awaiting events...</div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {log.map((ev) => (
-                  <div key={ev.id} className="border-l-2 border-bloomberg-border pl-2 py-0.5">
-                    <div className="font-mono text-xs text-bloomberg-muted">{ev.ts}</div>
-                    <div className="font-mono text-xs text-bloomberg-white truncate">
-                      {ev.agent}
-                    </div>
-                    <div
-                      className={`font-mono text-xs ${ev.status === PIPELINE_STATUSES.COMPLETED ? 'text-bloomberg-green' : ev.status === PIPELINE_STATUSES.FAILED ? 'text-bloomberg-red' : 'text-bloomberg-orange'}`}
-                    >
-                      {(ev.status || '').toUpperCase()}
-                    </div>
-                    {ev.msg && (
-                      <div className="font-mono text-xs text-bloomberg-muted truncate">
-                        {ev.msg}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="border-t border-bloomberg-border px-3 py-2">
-            <div className="font-mono text-xs text-bloomberg-muted leading-relaxed line-clamp-3">
-              {status || 'Waiting for pipeline...'}
-            </div>
-          </div>
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+          <span>
+            Progress: {pct}% - {doneCount} of {totalSteps} agents complete
+          </span>
         </div>
-      </div>
-
-      <div className="border-t border-bloomberg-border px-4 py-2 flex items-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-bloomberg-orange animate-pulse-dot" />
-        <span className="font-mono text-xs text-bloomberg-muted tracking-wider">
-          PROGRESS: {pct}% - {doneCount} of {totalSteps} agents complete
-        </span>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

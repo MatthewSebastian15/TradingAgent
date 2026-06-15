@@ -257,8 +257,8 @@ describe('NewsTab', () => {
   it('renders strict news split in compact sections', () => {
     render(<NewsTab result={makeStrictNewsResult()} />);
 
-    const decisionSection = screen.getByText('Company News Used for Decision').closest('section');
-    const contextSection = screen.getByText('Market Context News').closest('section');
+    const decisionSection = screen.getByText('Company News Used for Decision').closest('.rounded-md');
+    const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
 
     expect(decisionSection).toBeTruthy();
     expect(contextSection).toBeTruthy();
@@ -280,7 +280,7 @@ describe('NewsTab', () => {
   it('shows provider status when strict market context is empty', () => {
     render(<NewsTab result={makeStrictNewsResultWithEmptyMarketContext()} />);
 
-    const contextSection = screen.getByText('Market Context News').closest('section');
+    const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
 
     expect(within(contextSection).getByText('No market context news was returned.')).toBeInTheDocument();
     expect(within(contextSection).getByText('rss_context: EMPTY')).toBeInTheDocument();

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { buildApiUrl, buildAuthHeaders, readHttpError } from '../../../utils/api';
 import NoticeBox from '../NoticeBox';
-import SectionHeader from '../SectionHeader';
 import CandlestickPriceChart from './CandlestickPriceChart';
 import PriceMetricLineChart from './PriceMetricLineChart';
 import {
@@ -150,19 +152,25 @@ export default function ChartPriceTab({ result }) {
 
   if (chart.available !== true || points.length < 2) {
     return (
-      <div className="px-4 py-4 border-b border-bloomberg-border">
-        <NoticeBox title="CHART DATA UNAVAILABLE" tone="amber">
-          {chart.warning || 'Valid OHLC price chart data is not available for this analysis.'}
-        </NoticeBox>
+      <div className="border-b border-border p-4">
+        <Card className="rounded-md border-border bg-card">
+          <CardContent className="p-4">
+            <NoticeBox title="CHART DATA UNAVAILABLE" tone="amber">
+              {chart.warning || 'Valid OHLC price chart data is not available for this analysis.'}
+            </NoticeBox>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border space-y-4">
-      <section>
-        <SectionHeader label="CHART & PRICE" />
-      </section>
+    <div className="space-y-4 border-b border-border p-4">
+      <Card className="rounded-md border-border bg-card">
+        <CardHeader className="p-4">
+          <CardTitle className="text-sm uppercase tracking-widest">CHART & PRICE</CardTitle>
+        </CardHeader>
+      </Card>
 
       {chart.warning && (
         <NoticeBox title="CHART DATA WARNING" tone="amber">
@@ -170,74 +178,82 @@ export default function ChartPriceTab({ result }) {
         </NoticeBox>
       )}
 
-      <section>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
-            CHART
-            {activeSource && (
-              <span className="ml-2 text-[10px] normal-case tracking-normal text-bloomberg-muted">
-                Source: {activeSource}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div
-              className="inline-flex overflow-hidden rounded-sm border border-bloomberg-border bg-black"
-              aria-label="Chart range selector"
-            >
-              {PRICE_RANGE_OPTIONS.map((option) => {
-                const active = activeRange === option.key;
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => setActiveRange(option.key)}
-                    className={`min-w-10 px-3 py-1.5 font-mono text-[11px] tracking-wider transition-all duration-150 ${
-                      active
-                        ? 'bg-bloomberg-orange text-black shadow-[inset_0_-2px_0_rgba(0,0,0,0.35)]'
-                        : 'text-bloomberg-muted hover:bg-white/5 hover:text-bloomberg-white'
-                    }`}
-                    aria-pressed={active}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
+      <Card className="rounded-md border-border bg-card">
+        <CardContent className="p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+              CHART
+              {activeSource && (
+                <span className="ml-2 normal-case tracking-normal text-muted-foreground">
+                  Source: {activeSource}
+                </span>
+              )}
             </div>
-            <div className="inline-flex overflow-hidden rounded-sm border border-bloomberg-border bg-black">
-              <button
-                type="button"
-                onClick={() => zoomChart('in')}
-                className="h-7 w-8 font-mono text-sm text-bloomberg-muted transition-colors hover:bg-white/5 hover:text-bloomberg-white disabled:opacity-35"
-                disabled={activeRange === '1W'}
-                aria-label="Zoom in chart"
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="inline-flex overflow-hidden rounded-md border border-border bg-black"
+                aria-label="Chart range selector"
               >
-                +
-              </button>
-              <button
-                type="button"
-                onClick={() => zoomChart('out')}
-                className="h-7 w-8 border-l border-bloomberg-border font-mono text-sm text-bloomberg-muted transition-colors hover:bg-white/5 hover:text-bloomberg-white disabled:opacity-35"
-                disabled={activeRange === '1Y'}
-                aria-label="Zoom out chart"
-              >
-                −
-              </button>
+                {PRICE_RANGE_OPTIONS.map((option) => {
+                  const active = activeRange === option.key;
+                  return (
+                    <Button
+                      key={option.key}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setActiveRange(option.key)}
+                      className={`rounded-none font-mono text-xs tracking-wide ${
+                        active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+                      }`}
+                      aria-pressed={active}
+                    >
+                      {option.label}
+                    </Button>
+                  );
+                })}
+              </div>
+              <div className="inline-flex overflow-hidden rounded-md border border-border bg-black">
+                <Button
+                  type="button"
+                  onClick={() => zoomChart('in')}
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-none font-mono text-sm text-muted-foreground"
+                  disabled={activeRange === '1W'}
+                  aria-label="Zoom in chart"
+                >
+                  +
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => zoomChart('out')}
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-none border-l border-border font-mono text-sm text-muted-foreground"
+                  disabled={activeRange === '1Y'}
+                  aria-label="Zoom out chart"
+                >
+                  -
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-        <CandlestickPriceChart
-          points={points}
-          allPoints={allPointsForActiveRange}
-          ticker={ticker}
-          onZoom={zoomChart}
-          rangeKey={activeRange}
-        />
-      </section>
+          <CandlestickPriceChart
+            points={points}
+            allPoints={allPointsForActiveRange}
+            ticker={ticker}
+            onZoom={zoomChart}
+            rangeKey={activeRange}
+          />
+        </CardContent>
+      </Card>
 
-      <section>
-        <SectionHeader label="MARKET CAP & DRAWDOWN" />
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+      <Card className="rounded-md border-border bg-card">
+        <CardHeader className="p-4">
+          <CardTitle className="text-sm uppercase tracking-widest">MARKET CAP & DRAWDOWN</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-3 p-4 pt-0 xl:grid-cols-2">
           <PriceMetricLineChart
             title="Historical Market Cap"
             subtitle="YOY window anchored to trade date"
@@ -254,8 +270,8 @@ export default function ChartPriceTab({ result }) {
             currency={chartCurrency}
             emptyMessage="Drawdown data is unavailable."
           />
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }
