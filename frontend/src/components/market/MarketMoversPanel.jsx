@@ -1,91 +1,150 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import { RefreshCw, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import MarketMoversTable from './MarketMoversTable';
-import { MARKET_EXCHANGE_PRESETS, MARKET_LIMIT_OPTIONS } from '../../utils/marketDefaults';
+import { MARKET_EXCHANGE_PRESETS, MARKET_MOVERS_LIMIT } from '../../utils/marketDefaults';
+
+function formatMarketOption(option) {
+  return `${option.exchange} - ${option.country}`;
+}
+
+function findBestMarketOption(query) {
+  const value = String(query || '').trim().toLowerCase();
+  if (!value) return MARKET_EXCHANGE_PRESETS[0];
+
+  return (
+    MARKET_EXCHANGE_PRESETS.find((option) => formatMarketOption(option).toLowerCase() === value) ||
+    MARKET_EXCHANGE_PRESETS.find((option) => option.exchange.toLowerCase() === value) ||
+    MARKET_EXCHANGE_PRESETS.find((option) => option.country.toLowerCase() === value) ||
+    MARKET_EXCHANGE_PRESETS.find((option) => formatMarketOption(option).toLowerCase().includes(value))
+  );
+}
 
 export default function MarketMoversPanel({ movers }) {
-  const countries = Array.from(new Set(MARKET_EXCHANGE_PRESETS.map((item) => item.country)));
-  const exchanges = Array.from(new Set(MARKET_EXCHANGE_PRESETS.map((item) => item.exchange)));
+  const initialSearch = formatMarketOption({ country: movers.country, exchange: movers.exchange });
+  const [searchText, setSearchText] = useState(initialSearch);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [selectionError, setSelectionError] = useState('');
+
+  const matches = useMemo(() => {
+    const value = searchText.trim().toLowerCase();
+    const source = value
+      ? MARKET_EXCHANGE_PRESETS.filter((option) => {
+          const label = formatMarketOption(option).toLowerCase();
+          return label.includes(value) || option.country.toLowerCase().includes(value) || option.exchange.toLowerCase().includes(value);
+        })
+      : MARKET_EXCHANGE_PRESETS;
+
+    return source.slice(0, 8);
+  }, [searchText]);
+
+  function selectMarket(option) {
+    setSearchText(formatMarketOption(option));
+    setSelectionError('');
+    setSearchOpen(false);
+    movers.setCountry(option.country);
+    movers.setExchange(option.exchange);
+  }
+
+  function refreshMarketMovers() {
+    const option = findBestMarketOption(searchText);
+    if (!option) {
+      setSelectionError('Select a valid exchange or country from the list.');
+      return;
+    }
+
+    selectMarket(option);
+    movers.refresh({ country: option.country, exchange: option.exchange, limit: MARKET_MOVERS_LIMIT });
+  }
 
   return (
     <section className="grid gap-3 font-mono">
-      <div className="border border-bloomberg-border bg-black">
-        <div className="bg-bloomberg-orange px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-black">
-          Market Movers
-        </div>
-        <div className="grid gap-2 p-3 md:grid-cols-[1fr_1fr_8rem_8rem]">
-          <label className="grid gap-1 text-[10px] uppercase tracking-widest text-bloomberg-muted">
-            Country
-            <input
-              list="market-country-options"
-              value={movers.country}
-              onChange={(event) => movers.setCountry(event.target.value)}
-              className="border border-bloomberg-border bg-black px-3 py-2 text-xs uppercase text-bloomberg-white outline-none focus:border-bloomberg-orange"
-            />
+      <Card className="overflow-visible rounded-xl border-bloomberg-border bg-black/40 text-bloomberg-white shadow-lg shadow-black/20">
+        <CardContent className="grid gap-2 p-3 md:grid-cols-[minmax(0,1fr)_8rem] md:items-end">
+          <label className="relative grid gap-1 text-[10px] uppercase tracking-widest text-bloomberg-muted">
+            Search exchange or country
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-bloomberg-muted" />
+              <Input
+                value={searchText}
+                onChange={(event) => {
+                  setSearchText(event.target.value);
+                  setSelectionError('');
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') refreshMarketMovers();
+                  if (event.key === 'Escape') setSearchOpen(false);
+                }}
+                placeholder="NASDAQ - United States"
+                className="h-10 rounded-md border-bloomberg-border bg-black/60 pl-9 font-mono text-xs uppercase text-bloomberg-white focus-visible:ring-bloomberg-orange"
+              />
+
+              {searchOpen && (
+                <div className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-30 max-h-64 overflow-hidden rounded-md border border-bloomberg-border bg-black shadow-xl shadow-black/50">
+                  {matches.length > 0 ? (
+                    <div className="max-h-64 overflow-y-auto py-1">
+                      {matches.map((option) => (
+                        <button
+                          key={`${option.exchange}-${option.country}`}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => selectMarket(option)}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left font-mono text-[11px] uppercase tracking-wider text-bloomberg-white hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
+                        >
+                          <span>{formatMarketOption(option)}</span>
+                          <span className="text-[10px] text-bloomberg-muted">{option.countryCode}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-3 py-2 text-[11px] normal-case tracking-normal text-bloomberg-muted">
+                      No matching exchange or country.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </label>
-          <label className="grid gap-1 text-[10px] uppercase tracking-widest text-bloomberg-muted">
-            Exchange
-            <input
-              list="market-exchange-options"
-              value={movers.exchange}
-              onChange={(event) => movers.setExchange(event.target.value)}
-              className="border border-bloomberg-border bg-black px-3 py-2 text-xs uppercase text-bloomberg-white outline-none focus:border-bloomberg-orange"
-            />
-          </label>
-          <label className="grid gap-1 text-[10px] uppercase tracking-widest text-bloomberg-muted">
-            Limit
-            <select
-              value={movers.limit}
-              onChange={(event) => movers.setLimit(Number(event.target.value))}
-              className="border border-bloomberg-border bg-black px-3 py-2 text-xs text-bloomberg-white outline-none focus:border-bloomberg-orange"
-            >
-              {MARKET_LIMIT_OPTIONS.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
+
+          <Button
             type="button"
-            onClick={movers.refresh}
-            className="self-end border border-bloomberg-orange bg-bloomberg-orange px-3 py-2 text-xs font-bold text-black"
+            onClick={refreshMarketMovers}
+            className="h-10 rounded-md bg-bloomberg-orange px-3 font-mono text-xs font-bold text-black hover:bg-bloomberg-orange/90"
           >
+            <RefreshCw className="h-3.5 w-3.5" />
             REFRESH
-          </button>
-        </div>
+          </Button>
+        </CardContent>
 
-        <datalist id="market-country-options">
-          {countries.map((country) => (
-            <option key={country} value={country} />
-          ))}
-        </datalist>
-        <datalist id="market-exchange-options">
-          {exchanges.map((exchange) => (
-            <option key={exchange} value={exchange} />
-          ))}
-        </datalist>
-
-        {movers.error && (
-          <div className="flex items-center justify-between gap-3 border-t border-bloomberg-border px-3 py-2 text-[11px] text-bloomberg-red">
-            <span>{movers.error}</span>
-            <button
-              type="button"
-              onClick={movers.refresh}
-              className="border border-bloomberg-red px-2 py-1 text-bloomberg-red"
-            >
-              RETRY
-            </button>
+        {(selectionError || movers.error) && (
+          <div className="flex items-center justify-between gap-3 border-t border-bloomberg-border bg-bloomberg-red/10 px-3 py-2 text-[11px] text-bloomberg-red">
+            <span>{selectionError || movers.error}</span>
+            {!selectionError && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={refreshMarketMovers}
+                className="h-7 rounded-md border-bloomberg-red/50 bg-black/40 px-2 font-mono text-[10px] text-bloomberg-red hover:bg-bloomberg-red/10 hover:text-bloomberg-red"
+              >
+                RETRY
+              </Button>
+            )}
           </div>
         )}
-      </div>
+      </Card>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <MarketMoversTable
           title="Top Gainers"
           items={movers.data?.gainers || []}
           loading={movers.loading}
-          limit={Number(movers.limit)}
+          limit={MARKET_MOVERS_LIMIT}
           emptyText="No valid market movers found for selected country/exchange."
           tone="positive"
         />
@@ -93,7 +152,7 @@ export default function MarketMoversPanel({ movers }) {
           title="Top Losers"
           items={movers.data?.losers || []}
           loading={movers.loading}
-          limit={Number(movers.limit)}
+          limit={MARKET_MOVERS_LIMIT}
           emptyText="No valid market movers found for selected country/exchange."
           tone="negative"
         />
@@ -108,8 +167,6 @@ MarketMoversPanel.propTypes = {
     setCountry: PropTypes.func.isRequired,
     exchange: PropTypes.string.isRequired,
     setExchange: PropTypes.func.isRequired,
-    limit: PropTypes.number.isRequired,
-    setLimit: PropTypes.func.isRequired,
     data: PropTypes.shape({
       gainers: PropTypes.array,
       losers: PropTypes.array,

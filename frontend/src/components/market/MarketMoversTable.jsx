@@ -1,6 +1,16 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import MiniTrendBars from './MiniTrendBars';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import MiniTrendLine from './MiniTrendLine';
 import {
   formatMarketPercent,
   formatMarketPrice,
@@ -15,70 +25,86 @@ export default function MarketMoversTable({ title, items, loading, limit, emptyT
   const positive = tone === 'positive';
 
   return (
-    <div className="border border-bloomberg-border bg-black font-mono">
-      <div className="bg-bloomberg-orange px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-black">
-        {title}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] border-collapse">
-          <thead>
-            <tr className="border-b border-bloomberg-border text-left text-[10px] uppercase tracking-widest text-bloomberg-muted">
-              <th className="px-3 py-2">TICKER</th>
-              <th className="px-3 py-2 text-right">LAST</th>
-              <th className="px-3 py-2 text-right">CHG%</th>
-              <th className="px-3 py-2 text-right">VOLUME</th>
-              <th className="px-3 py-2">TREND</th>
-            </tr>
-          </thead>
-          <tbody>
+    <Card className="overflow-hidden rounded-xl border-bloomberg-border bg-black/40 font-mono text-bloomberg-white shadow-lg shadow-black/20">
+      <CardHeader className="border-b border-bloomberg-border bg-bloomberg-surface/50 p-3">
+        <CardTitle className="w-fit rounded-md bg-bloomberg-orange px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest text-black">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table className="min-w-[460px]">
+          <TableHeader>
+            <TableRow className="border-bloomberg-border hover:bg-transparent">
+              <TableHead className="h-8 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
+                TICKER
+              </TableHead>
+              <TableHead className="h-8 px-3 py-1.5 text-right font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
+                LAST
+              </TableHead>
+              <TableHead className="h-8 px-3 py-1.5 text-right font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
+                CHG%
+              </TableHead>
+              <TableHead className="h-8 px-3 py-1.5 text-right font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
+                VOLUME
+              </TableHead>
+              <TableHead className="h-8 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
+                TREND
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading &&
               loadingRows(limit).map((row) => (
-                <tr key={row} className="border-b border-bloomberg-border">
-                  <td colSpan="5" className="px-3 py-3 text-[11px] text-bloomberg-muted">
-                    LOADING MARKET DATA...
-                  </td>
-                </tr>
+                <TableRow key={row} className="border-bloomberg-border hover:bg-transparent">
+                  <TableCell colSpan="5" className="px-3 py-1.5">
+                    <Skeleton className="h-4 w-48 rounded-full bg-bloomberg-surface" />
+                    <span className="sr-only">LOADING MARKET DATA...</span>
+                  </TableCell>
+                </TableRow>
               ))}
 
             {!loading &&
               items.map((item) => (
-                <tr
+                <TableRow
                   key={item.symbol}
-                  className="border-b border-bloomberg-border hover:bg-bloomberg-surface"
+                  className="border-bloomberg-border hover:bg-bloomberg-orange/5"
                 >
-                  <td className="px-3 py-2 text-xs font-bold text-bloomberg-orange">
+                  <TableCell className="px-3 py-1.5 font-mono text-[11px] font-bold text-bloomberg-orange">
                     {item.symbol}
-                  </td>
-                  <td className="px-3 py-2 text-right text-xs text-bloomberg-white">
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5 text-right font-mono text-[11px] text-bloomberg-white">
                     {formatMarketPrice(item.last, item.symbol)}
-                  </td>
-                  <td
-                    className={`px-3 py-2 text-right text-xs font-bold ${
+                  </TableCell>
+                  <TableCell
+                    className={`px-3 py-1.5 text-right font-mono text-[11px] font-bold ${
                       positive ? 'text-bloomberg-green' : 'text-bloomberg-red'
                     }`}
                   >
                     {formatMarketPercent(item.change_percent)}
-                  </td>
-                  <td className="px-3 py-2 text-right text-xs text-bloomberg-muted">
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5 text-right font-mono text-[11px] text-bloomberg-muted">
                     {formatMarketVolume(item.volume)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <MiniTrendBars values={item.trend || []} positive={positive} />
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5">
+                    <MiniTrendLine values={item.trend || []} positive={positive} />
+                  </TableCell>
+                </TableRow>
               ))}
 
             {!loading && items.length === 0 && (
-              <tr>
-                <td colSpan="5" className="px-3 py-4 text-[11px] text-bloomberg-muted">
+              <TableRow className="hover:bg-transparent">
+                <TableCell
+                  colSpan="5"
+                  className="px-3 py-4 font-mono text-[11px] text-bloomberg-muted"
+                >
                   {emptyText}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
 

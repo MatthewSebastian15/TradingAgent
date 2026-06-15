@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import { Plus, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import MarketCategoryTabs from './MarketCategoryTabs';
 import MarketOverviewCard from './MarketOverviewCard';
 import MarketOverviewPicker from './MarketOverviewPicker';
 import { MARKET_MAX_SYMBOLS, labelForMarketSymbol } from '../../utils/marketDefaults';
@@ -33,6 +38,7 @@ export default function GlobalMarketOverview({
   onAddSymbol,
   onDeleteSymbol,
   onRefresh,
+  onChangeCategory,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const itemsBySymbol = useMemo(
@@ -40,65 +46,86 @@ export default function GlobalMarketOverview({
     [data]
   );
   const items = symbols.map((symbol) => itemsBySymbol.get(symbol) || fallbackItem(symbol, loading));
+  const showLimitNotice = notice || symbols.length >= MARKET_MAX_SYMBOLS || !canDelete;
+  const limitText =
+    notice ||
+    (symbols.length >= MARKET_MAX_SYMBOLS
+      ? 'Maximum 6 instruments'
+      : 'Minimum 3 instruments required');
 
   return (
-    <section className="border border-bloomberg-border bg-black font-mono">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-bloomberg-border">
-        <div className="bg-bloomberg-orange px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-black">
+    <Card className="overflow-hidden rounded-xl border-bloomberg-border bg-black/40 font-mono text-bloomberg-white shadow-lg shadow-black/20">
+      <CardHeader className="flex flex-col gap-3 border-b border-bloomberg-border bg-bloomberg-surface/50 p-3 lg:flex-row lg:items-center lg:justify-between">
+        <CardTitle className="w-fit rounded-md bg-bloomberg-orange px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest text-black">
           Global Markets Overview
+        </CardTitle>
+        <MarketCategoryTabs activeCategory={activeCategory} onChangeCategory={onChangeCategory} />
+      </CardHeader>
+
+      <div className="flex flex-col gap-2 border-b border-bloomberg-border bg-bloomberg-surface/40 px-3 py-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-h-5 text-[11px] text-bloomberg-muted">
+          {showLimitNotice && (
+            <>
+              <Badge
+                variant="outline"
+                className="mr-2 rounded-full border-bloomberg-border bg-black/60 px-2 py-0 font-mono text-[9px] text-bloomberg-amber"
+              >
+                LIMIT
+              </Badge>
+              {limitText}
+            </>
+          )}
         </div>
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <button
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={onRefresh}
-            className="border border-bloomberg-border bg-black px-3 py-1.5 text-[11px] font-bold text-bloomberg-amber hover:border-bloomberg-orange hover:text-bloomberg-orange"
+            className="h-8 rounded-md border-bloomberg-border bg-black/60 px-3 font-mono text-[11px] font-bold text-bloomberg-amber hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
           >
+            <RefreshCw className="h-3.5 w-3.5" />
             REFRESH
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="sm"
             disabled={!canAdd}
             onClick={() => setPickerOpen(true)}
-            className={`border px-3 py-1.5 text-[11px] font-bold ${
+            className={`h-8 rounded-md px-3 font-mono text-[11px] font-bold ${
               canAdd
-                ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                : 'cursor-not-allowed border-bloomberg-border bg-black text-bloomberg-subtle'
+                ? 'bg-bloomberg-orange text-black hover:bg-bloomberg-orange/90'
+                : 'cursor-not-allowed border border-bloomberg-border bg-black text-bloomberg-subtle'
             }`}
           >
+            <Plus className="h-3.5 w-3.5" />
             ADD MARKET
-          </button>
+          </Button>
         </div>
       </div>
 
-      {(notice || symbols.length >= MARKET_MAX_SYMBOLS || !canDelete) && (
-        <div className="border-b border-bloomberg-border px-3 py-1 text-[11px] text-bloomberg-muted">
-          {notice ||
-            (symbols.length >= MARKET_MAX_SYMBOLS
-              ? 'Maximum 6 instruments'
-              : 'Minimum 3 instruments required')}
-        </div>
-      )}
-
       {error && (
-        <div className="flex items-center justify-between gap-3 border-b border-bloomberg-border px-3 py-2 text-[11px] text-bloomberg-red">
+        <div className="flex items-center justify-between gap-3 border-b border-bloomberg-border bg-bloomberg-red/10 px-3 py-2 text-[11px] text-bloomberg-red">
           <span>{error}</span>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={onRefresh}
-            className="border border-bloomberg-red px-2 py-1 text-bloomberg-red"
+            className="h-7 rounded-md border-bloomberg-red/50 bg-black/40 px-2 font-mono text-[10px] text-bloomberg-red hover:bg-bloomberg-red/10 hover:text-bloomberg-red"
           >
             RETRY
-          </button>
+          </Button>
         </div>
       )}
 
       {data?.message && !error && (
-        <div className="border-b border-bloomberg-border px-3 py-2 text-[11px] text-bloomberg-red">
+        <div className="border-b border-bloomberg-border bg-bloomberg-red/10 px-3 py-2 text-[11px] text-bloomberg-red">
           {data.message}
         </div>
       )}
 
-      <div
+      <CardContent
         className={`grid grid-cols-1 gap-2 p-2 md:grid-cols-2 lg:grid-cols-3 ${gridColumnsClass(symbols.length)}`}
       >
         {items.map((item) => (
@@ -109,7 +136,7 @@ export default function GlobalMarketOverview({
             onDelete={() => onDeleteSymbol(item.symbol)}
           />
         ))}
-      </div>
+      </CardContent>
 
       {pickerOpen && (
         <MarketOverviewPicker
@@ -119,7 +146,7 @@ export default function GlobalMarketOverview({
           onClose={() => setPickerOpen(false)}
         />
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -138,6 +165,7 @@ GlobalMarketOverview.propTypes = {
   onAddSymbol: PropTypes.func.isRequired,
   onDeleteSymbol: PropTypes.func.isRequired,
   onRefresh: PropTypes.func.isRequired,
+  onChangeCategory: PropTypes.func.isRequired,
 };
 
 GlobalMarketOverview.defaultProps = {
