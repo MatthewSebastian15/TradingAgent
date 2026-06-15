@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import ProfileTab from './ProfileTab';
@@ -17,7 +17,14 @@ function profile(website = 'https://example.com/about') {
     industry: 'Software',
     market_cap: 1200000000,
     current_price: 42,
+    employee_count: 1200,
     website,
+    description: 'Example Corporation builds market software for institutional users.',
+    executives: [
+      { name: 'Executive One', title: 'CEO' },
+      { name: 'Executive Two', title: 'CFO' },
+    ],
+    shareholders: [{ name: 'Holder One', ownership: 0.12, shares: 120000, source: 'YFinance' }],
     shares_ownership: {
       shares_out: 1000,
       insider_pct: 0.25,
@@ -30,33 +37,6 @@ function profile(website = 'https://example.com/about') {
 function result(overrides = {}) {
   return {
     ticker: 'EXM',
-    display_signal: 'BUY',
-    confidence_score: 82,
-    current_price: 42,
-    entry_price: 40,
-    stop_loss: 35,
-    take_profit: 55,
-    risk_reward_display: '1:3',
-    position_size_hint: 'Staged entry',
-    suggested_allocation_percent: 6,
-    investment_thesis:
-      'The bull case says growth remains resilient. The bear case is that valuation can compress. The action plan is staged.',
-    analysis_overview: {
-      risk_summary: {
-        overall_risk: 'moderate',
-        short_reason: 'Volatility requires position discipline.',
-      },
-    },
-    scenario_analysis: {
-      bear: { summary: 'Downside scenario' },
-      base: { summary: 'Base scenario' },
-      bull: { summary: 'Upside scenario' },
-    },
-    data_quality: {
-      price_data: 'partial',
-      news: 'missing',
-      fundamentals: 'ok',
-    },
     ...overrides,
   };
 }
@@ -83,46 +63,46 @@ describe('ProfileTab', () => {
     }
   );
 
-  it('renders the shadcn profile header and trade-level metrics', () => {
+  it('renders the compact company profile table without current price', () => {
     render(<ProfileTab profile={profile()} result={result()} />);
 
-    expect(screen.getByText('EXM')).toBeInTheDocument();
+    expect(screen.getByText('COMPANY PROFILE')).toBeInTheDocument();
+    expect(screen.getByText('Company Name')).toBeInTheDocument();
     expect(screen.getByText('Example Corporation')).toBeInTheDocument();
-    expect(screen.getByText('BUY')).toBeInTheDocument();
-    expect(screen.getByText('82%')).toBeInTheDocument();
-    expect(screen.getByText('Entry price')).toBeInTheDocument();
-    expect(screen.getByText('$40')).toBeInTheDocument();
-    expect(screen.getByText('Risk/reward ratio')).toBeInTheDocument();
-    expect(screen.getByText('1:3')).toBeInTheDocument();
-    expect(screen.getByText('Suggested allocation percent')).toBeInTheDocument();
-    expect(screen.getByText('6%')).toBeInTheDocument();
+    expect(screen.getByText('Ticker')).toBeInTheDocument();
+    expect(screen.getByText('EXM')).toBeInTheDocument();
+    expect(screen.getByText('Currency')).toBeInTheDocument();
+    expect(screen.getByText('USD')).toBeInTheDocument();
+    expect(screen.getByText('Market Cap')).toBeInTheDocument();
+    expect(screen.getByText('$1,200,000,000')).toBeInTheDocument();
+    expect(screen.queryByText('Current Price')).toBeNull();
   });
 
-  it('renders thesis, risk summary, scenario analysis, and supports thesis collapse', () => {
+  it('renders shares ownership table and a non-black ownership chart legend', () => {
     render(<ProfileTab profile={profile()} result={result()} />);
 
-    expect(screen.getByText('Investment thesis')).toBeInTheDocument();
-    expect(screen.getByText('Bull thesis')).toBeInTheDocument();
-    expect(screen.getByText('Bear thesis')).toBeInTheDocument();
-    expect(screen.getByText(/Volatility requires position discipline/i)).toBeInTheDocument();
-    expect(screen.getByText('BEAR')).toBeInTheDocument();
-    expect(screen.getByText('BASE')).toBeInTheDocument();
-    expect(screen.getByText('BULL')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /hide/i }));
-
-    expect(screen.queryByText('Bull thesis')).toBeNull();
+    expect(screen.getByText('SHARES & OWNERSHIP')).toBeInTheDocument();
+    expect(screen.getByText('Shares Outstanding')).toBeInTheDocument();
+    expect(screen.getByText('1,000')).toBeInTheDocument();
+    expect(screen.getAllByText('Insider Ownership').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Institutional Ownership').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('25.00%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('50.00%').length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole('img', { name: /ownership composition pie chart/i })
+    ).toBeInTheDocument();
   });
 
-  it('renders and dismisses non-ok data quality warnings', () => {
+  it('renders business description, executives, and shareholders when available', () => {
     render(<ProfileTab profile={profile()} result={result()} />);
 
-    expect(screen.getByText('Data quality warnings')).toBeInTheDocument();
-    expect(screen.getByText(/price data: partial/i)).toBeInTheDocument();
-    expect(screen.getByText(/news: missing/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /dismiss data quality warnings/i }));
-
-    expect(screen.queryByText('Data quality warnings')).toBeNull();
+    expect(screen.getByText('BUSINESS DESCRIPTION')).toBeInTheDocument();
+    expect(screen.getByText(/builds market software/i)).toBeInTheDocument();
+    expect(screen.getByText('KEY EXECUTIVES')).toBeInTheDocument();
+    expect(screen.getByText('Executive One')).toBeInTheDocument();
+    expect(screen.getByText('CEO')).toBeInTheDocument();
+    expect(screen.getByText('SHAREHOLDERS')).toBeInTheDocument();
+    expect(screen.getByText('Holder One')).toBeInTheDocument();
+    expect(screen.getByText('YFinance')).toBeInTheDocument();
   });
 });

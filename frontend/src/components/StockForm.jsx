@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import { CalendarDays, Cpu, Play, Search, SlidersHorizontal, Square } from 'lucide-react';
+import { Play, Square } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,14 +13,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
-import {
   buildAnalysisPayload,
   DEFAULT_DEBATE_ROUNDS,
   DEPTH_OPTIONS,
@@ -31,23 +23,14 @@ import {
 import { useAnalysisJob } from '../hooks/useAnalysisJob';
 import TickerSearchBar from './TickerSearchBar';
 
-const PROVIDER_OPTIONS = [
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openrouter', label: 'OpenRouter' },
-  { value: 'ollama', label: 'Ollama' },
-];
-
 const TERMINAL_INPUT_CLASS =
   'h-9 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-xs tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const TERMINAL_SELECT_TRIGGER_CLASS =
-  'h-9 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-xs tracking-wider text-bloomberg-white focus:ring-1 focus:ring-bloomberg-orange focus:ring-offset-0';
-const TERMINAL_SHEET_BUTTON_CLASS =
-  'h-8 w-8 rounded-none border border-transparent text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange-dim hover:text-bloomberg-orange focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0';
+  'h-9 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-xs tracking-wider text-bloomberg-white focus:ring-1 focus:ring-bloomberg-orange focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const TERMINAL_PRIMARY_BUTTON_CLASS =
   'h-10 rounded-none border border-bloomberg-orange bg-bloomberg-orange px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-orange-400 focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+const TERMINAL_STOP_BUTTON_CLASS =
+  'h-10 rounded-none border border-bloomberg-red bg-bloomberg-red px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-red-400 focus-visible:ring-1 focus-visible:ring-bloomberg-red focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 
 function apiToDisplayDate(value) {
   const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -61,6 +44,22 @@ function displayToApiDate(value) {
   return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
 }
 
+function ConfigSection({ title, children }) {
+  return (
+    <section className="border border-bloomberg-border bg-black p-3">
+      <div className="mb-3 border-b border-bloomberg-border pb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-bloomberg-orange">
+        {title}
+      </div>
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
+
+ConfigSection.propTypes = {
+  children: PropTypes.node.isRequired,
+  title: PropTypes.string.isRequired,
+};
+
 function FieldLabel({ children, hint = null, htmlFor = undefined }) {
   return (
     <label
@@ -68,7 +67,7 @@ function FieldLabel({ children, hint = null, htmlFor = undefined }) {
       className="mb-1.5 flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-bloomberg-muted"
     >
       <span>{children}</span>
-      {hint && <span className="font-mono text-xs normal-case tracking-wide">{hint}</span>}
+      {hint && <span className="font-mono text-[10px] normal-case tracking-wide">{hint}</span>}
     </label>
   );
 }
@@ -79,45 +78,9 @@ FieldLabel.propTypes = {
   htmlFor: PropTypes.string,
 };
 
-function SheetIconButton({ title, icon: Icon, children }) {
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={title}
-          title={title}
-          className={TERMINAL_SHEET_BUTTON_CLASS}
-        >
-          <Icon className="h-4 w-4" />
-        </Button>
-      </SheetTrigger>
-      <SheetContent className="border-bloomberg-border bg-bloomberg-bg font-mono text-bloomberg-white">
-        <SheetHeader>
-          <SheetTitle className="font-mono text-sm uppercase tracking-widest text-bloomberg-orange">
-            {title}
-          </SheetTitle>
-          <SheetDescription className="font-mono text-xs text-bloomberg-muted">
-            Configuration applies to this analysis form.
-          </SheetDescription>
-        </SheetHeader>
-        <div className="mt-6 space-y-5">{children}</div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-SheetIconButton.propTypes = {
-  children: PropTypes.node.isRequired,
-  icon: PropTypes.elementType.isRequired,
-  title: PropTypes.string.isRequired,
-};
-
 function SelectField({ label, value, onValueChange, disabled, children }) {
   return (
-    <div>
+    <div className="min-w-0">
       <FieldLabel>{label}</FieldLabel>
       <Select value={String(value)} onValueChange={onValueChange} disabled={disabled}>
         <SelectTrigger className={TERMINAL_SELECT_TRIGGER_CLASS}>
@@ -137,6 +100,23 @@ SelectField.propTypes = {
   value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
 };
 
+function ConfigSummary({ horizon, depth }) {
+  return (
+    <div className="border border-bloomberg-border bg-black px-3 py-2 text-center font-mono text-[10px] uppercase tracking-wider text-bloomberg-muted">
+      <span className="text-bloomberg-white">{horizon?.label || '1 MONTH'}</span>
+      <span className="px-2 text-bloomberg-border">/</span>
+      <span className="text-bloomberg-white">{depth?.label || 'BALANCED'}</span>
+      <span className="px-2 text-bloomberg-border">/</span>
+      <span className="text-bloomberg-white">{depth?.runtime || 'DEFAULT 9-CALL PIPELINE'}</span>
+    </div>
+  );
+}
+
+ConfigSummary.propTypes = {
+  depth: PropTypes.object,
+  horizon: PropTypes.object,
+};
+
 export default function StockForm({
   onResult,
   onLoading,
@@ -152,7 +132,6 @@ export default function StockForm({
   const [timeHorizonMonths, setTimeHorizonMonths] = useState(1);
   const [analysisDepth, setDepth] = useState('balanced');
   const [responseDetail, setDetail] = useState('full');
-  const [provider, setProvider] = useState('gemini');
   const [hasExistingPosition, setHasExistingPosition] = useState(false);
   const [positionQuantity, setPositionQuantity] = useState('');
   const [averageEntryPrice, setAverageEntryPrice] = useState('');
@@ -249,174 +228,11 @@ export default function StockForm({
 
   const selectedDepth = DEPTH_OPTIONS.find((item) => item.value === analysisDepth);
   const selectedHorizon = HORIZON_OPTIONS.find((item) => item.value === Number(timeHorizonMonths));
-  const selectedProvider = PROVIDER_OPTIONS.find((item) => item.value === provider);
 
   return (
-    <form onSubmit={handleSubmit} className="animate-in fade-in slide-in-from-top-2 duration-300">
-      <div className="flex flex-col gap-4 bg-bloomberg-bg p-4 font-mono">
-        <div className="flex items-center justify-between gap-3">
-          <div className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-bloomberg-orange">
-            Analysis Setup
-          </div>
-          <div className="flex items-center gap-1 rounded-none border border-bloomberg-border bg-black p-1">
-            <SheetIconButton title="Ticker input" icon={Search}>
-              <div>
-                <FieldLabel hint="YFINANCE ONLY">Ticker symbol</FieldLabel>
-                <TickerSearchBar
-                  value={ticker}
-                  disabled={running}
-                  searchTickers={tickerSearch}
-                  onClear={() => {
-                    setTicker('');
-                    setError('');
-                  }}
-                  onSelect={(item) => {
-                    setTicker(item.symbol);
-                    setError('');
-                  }}
-                />
-              </div>
-            </SheetIconButton>
-
-            <SheetIconButton title="Trade date" icon={CalendarDays}>
-              <div>
-                <FieldLabel hint="DD-MM-YYYY">Trade date</FieldLabel>
-                <Input
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  disabled={running}
-                  required
-                  placeholder="DD-MM-YYYY"
-                  className={TERMINAL_INPUT_CLASS}
-                />
-              </div>
-            </SheetIconButton>
-
-            <SheetIconButton title="Debate settings" icon={SlidersHorizontal}>
-              <SelectField
-                label="Analysis horizon"
-                value={timeHorizonMonths}
-                onValueChange={(value) => setTimeHorizonMonths(Number(value))}
-                disabled={running}
-              >
-                {HORIZON_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={String(option.value)}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectField>
-
-              <SelectField
-                label="Debate rounds"
-                value={rounds}
-                onValueChange={(value) => setRounds(Number(value))}
-                disabled={running}
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n} ROUND{n > 1 ? 'S' : ''}
-                  </SelectItem>
-                ))}
-              </SelectField>
-
-              <SelectField
-                label="Analysis depth"
-                value={analysisDepth}
-                onValueChange={setDepth}
-                disabled={running}
-              >
-                {DEPTH_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectField>
-
-              <SelectField
-                label="Response"
-                value={responseDetail}
-                onValueChange={setDetail}
-                disabled={running}
-              >
-                <SelectItem value="summary">SUMMARY</SelectItem>
-                <SelectItem value="full">FULL</SelectItem>
-                <SelectItem value="debug">DEBUG</SelectItem>
-              </SelectField>
-
-              <div className="rounded-none border border-bloomberg-border bg-black p-3">
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={hasExistingPosition}
-                    onChange={(event) => setHasExistingPosition(event.target.checked)}
-                    disabled={running}
-                    className="mt-1 accent-bloomberg-orange"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-mono text-xs font-semibold uppercase tracking-wider text-bloomberg-white">
-                      Existing position
-                    </span>
-                    <span className="mt-1 block font-mono text-[11px] leading-relaxed text-bloomberg-muted">
-                      Enables HOLD, REDUCE, or SELL context for current holdings.
-                    </span>
-                  </span>
-                </label>
-                {hasExistingPosition && (
-                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <FieldLabel htmlFor="position-quantity">Position qty</FieldLabel>
-                      <Input
-                        id="position-quantity"
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={positionQuantity}
-                        onChange={(event) => setPositionQuantity(event.target.value)}
-                        disabled={running}
-                        placeholder="Optional"
-                        className={TERMINAL_INPUT_CLASS}
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel htmlFor="average-entry-price">Avg entry</FieldLabel>
-                      <Input
-                        id="average-entry-price"
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={averageEntryPrice}
-                        onChange={(event) => setAverageEntryPrice(event.target.value)}
-                        disabled={running}
-                        placeholder="Optional"
-                        className={TERMINAL_INPUT_CLASS}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </SheetIconButton>
-
-            <SheetIconButton title="Provider selection" icon={Cpu}>
-              <SelectField
-                label="Provider"
-                value={provider}
-                onValueChange={setProvider}
-                disabled={running}
-              >
-                {PROVIDER_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectField>
-              <div className="rounded-none border border-bloomberg-border bg-black p-3 font-mono text-[11px] leading-relaxed text-bloomberg-muted">
-                Provider selection is visual only. Backend provider config remains unchanged.
-              </div>
-            </SheetIconButton>
-          </div>
-        </div>
-
-        <div className="space-y-4">
+    <form onSubmit={handleSubmit} className="font-mono">
+      <div className="flex flex-col gap-3 bg-bloomberg-bg p-3">
+        <ConfigSection title="Ticker">
           <div>
             <FieldLabel hint="YFINANCE ONLY">Ticker symbol</FieldLabel>
             <TickerSearchBar
@@ -433,46 +249,165 @@ export default function StockForm({
               }}
             />
           </div>
+        </ConfigSection>
 
-          <div>
-            <FieldLabel hint="DD-MM-YYYY">Trade date</FieldLabel>
-            <Input
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
+        <ConfigSection title="Analysis Horizon">
+          <div className="grid grid-cols-3 gap-2">
+            {HORIZON_OPTIONS.map((option) => {
+              const active = Number(timeHorizonMonths) === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  disabled={running}
+                  onClick={() => setTimeHorizonMonths(option.value)}
+                  className={`h-9 border px-2 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                    active
+                      ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
+                      : 'border-bloomberg-border bg-bloomberg-bg text-bloomberg-muted hover:border-bloomberg-orange hover:text-bloomberg-orange'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </ConfigSection>
+
+        <ConfigSection title="Analysis Settings">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="min-w-0">
+              <FieldLabel hint="DD-MM-YYYY" htmlFor="trade-date">
+                Trade Date
+              </FieldLabel>
+              <Input
+                id="trade-date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                disabled={running}
+                required
+                placeholder="DD-MM-YYYY"
+                className={TERMINAL_INPUT_CLASS}
+              />
+            </div>
+
+            <SelectField
+              label="Debate Rounds"
+              value={rounds}
+              onValueChange={(value) => setRounds(Number(value))}
               disabled={running}
-              required
-              placeholder="DD-MM-YYYY"
-              className={TERMINAL_INPUT_CLASS}
+            >
+              {[1, 2, 3, 4, 5].map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n} ROUND{n > 1 ? 'S' : ''}
+                </SelectItem>
+              ))}
+            </SelectField>
+
+            <SelectField
+              label="Analysis Depth"
+              value={analysisDepth}
+              onValueChange={setDepth}
+              disabled={running}
+            >
+              {DEPTH_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectField>
+
+            <SelectField
+              label="Response Detail"
+              value={responseDetail}
+              onValueChange={setDetail}
+              disabled={running}
+            >
+              <SelectItem value="summary">SUMMARY</SelectItem>
+              <SelectItem value="full">FULL</SelectItem>
+              <SelectItem value="debug">DEBUG</SelectItem>
+            </SelectField>
+          </div>
+        </ConfigSection>
+
+        <ConfigSection title="Position Settings">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={hasExistingPosition}
+              onChange={(event) => setHasExistingPosition(event.target.checked)}
+              disabled={running}
+              className="mt-1 accent-bloomberg-orange"
             />
-          </div>
-        </div>
+            <span className="min-w-0 flex-1">
+              <span className="block font-mono text-[11px] font-semibold uppercase tracking-wider text-bloomberg-white">
+                Existing Position
+              </span>
+              <span className="mt-1 block font-mono text-[10px] leading-relaxed text-bloomberg-muted">
+                Adds current holding context without changing the backend contract.
+              </span>
+            </span>
+          </label>
 
-        {error && (
-          <div className="rounded-none border border-bloomberg-red bg-bloomberg-red-dim px-3 py-2">
-            <span className="font-mono text-xs text-bloomberg-red">ERR: {error}</span>
-          </div>
-        )}
+          {hasExistingPosition && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="min-w-0">
+                <FieldLabel htmlFor="position-quantity">Position Qty</FieldLabel>
+                <Input
+                  id="position-quantity"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={positionQuantity}
+                  onChange={(event) => setPositionQuantity(event.target.value)}
+                  disabled={running}
+                  placeholder="Optional"
+                  className={TERMINAL_INPUT_CLASS}
+                />
+              </div>
+              <div className="min-w-0">
+                <FieldLabel htmlFor="average-entry-price">Avg Entry</FieldLabel>
+                <Input
+                  id="average-entry-price"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={averageEntryPrice}
+                  onChange={(event) => setAverageEntryPrice(event.target.value)}
+                  disabled={running}
+                  placeholder="Optional"
+                  className={TERMINAL_INPUT_CLASS}
+                />
+              </div>
+            </div>
+          )}
+        </ConfigSection>
 
-        <Button
-          type="submit"
-          size="lg"
-          variant={running ? 'destructive' : 'default'}
-          className={TERMINAL_PRIMARY_BUTTON_CLASS}
-        >
-          {running ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          {running ? 'Stop analysis' : 'Execute analysis'}
-        </Button>
+        <ConfigSection title="Action">
+          {error && (
+            <div className="border border-bloomberg-red bg-bloomberg-red-dim px-3 py-2">
+              <span className="font-mono text-xs text-bloomberg-red">ERR: {error}</span>
+            </div>
+          )}
 
-        <div className="rounded-none border border-bloomberg-border bg-black px-3 py-2 text-center font-mono text-[11px] tracking-wider text-bloomberg-muted">
-          {selectedHorizon?.label || '1 MONTH'} / {selectedDepth?.label || 'BALANCED'} /{' '}
-          {selectedProvider?.label || 'Gemini'}
-        </div>
+          <Button
+            type="submit"
+            size="lg"
+            variant={running ? 'destructive' : 'default'}
+            className={running ? TERMINAL_STOP_BUTTON_CLASS : TERMINAL_PRIMARY_BUTTON_CLASS}
+          >
+            {running ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            {running ? 'Stop Analysis' : 'Execute Analysis'}
+          </Button>
+
+          <ConfigSummary horizon={selectedHorizon} depth={selectedDepth} />
+        </ConfigSection>
 
         {running && (
-          <div className="space-y-3 rounded-none border border-bloomberg-border bg-bloomberg-card p-4">
+          <div className="space-y-3 border border-bloomberg-border bg-bloomberg-card p-3">
             <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
           </div>
         )}
       </div>
