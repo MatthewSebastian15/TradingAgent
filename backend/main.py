@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -11,7 +12,18 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from tradingagents.llm_cache.exact_cache import get_exact_llm_cache
 
 from body_limit import RequestBodyLimitMiddleware
-from config import APP_ENV, APP_NAME, CORS_ORIGINS, IS_DEVELOPMENT, REQUEST_BODY_MAX_BYTES, llm, validate_startup_config
+from config import (
+    APP_ENV,
+    APP_NAME,
+    CORS_ORIGINS,
+    GENERAL_NEWS_ENABLED,
+    GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH,
+    GENERAL_NEWS_REFRESH_INTERVAL_SECONDS,
+    IS_DEVELOPMENT,
+    REQUEST_BODY_MAX_BYTES,
+    llm,
+    validate_startup_config,
+)
 from config_llm import build_tradingagents_config
 from errors import (
     ApiError,
@@ -53,7 +65,11 @@ class SkipSseCompressionMiddleware:
 
     @staticmethod
     def _is_sse_path(path: str) -> bool:
-        return path == "/api/analyze/stream" or (path.startswith("/api/analysis/jobs/") and path.endswith("/events"))
+        return (
+            path == "/api/analyze/stream"
+            or path == "/api/news/general/stream"
+            or (path.startswith("/api/analysis/jobs/") and path.endswith("/events"))
+        )
 
 
 async def validate_config() -> None:
@@ -79,14 +95,53 @@ async def shutdown_resources() -> None:
     await shutdown_executor()
 
 
+async def general_news_background_worker() -> None:
+    from tradingagents.dataflows.config import use_config
+    from tradingagents.dataflows.general_news_service import GeneralNewsService
+    from tradingagents.dataflows.general_news_stream import general_news_event_bus
+
+    while True:
+        try:
+            config = build_tradingagents_config()
+            with use_config(config):
+                service = GeneralNewsService(config.get("general_news", {}))
+                result = await asyncio.to_thread(service.fetch_general_news, category="all", force_refresh=True)
+            await general_news_event_bus.publish_if_changed(result)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("general news background refresh failed")
+
+        await asyncio.sleep(max(30, int(GENERAL_NEWS_REFRESH_INTERVAL_SECONDS)))
+
+
+async def start_general_news_worker(app: FastAPI) -> None:
+    if not (GENERAL_NEWS_ENABLED and GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH):
+        return
+    app.state.general_news_worker_task = asyncio.create_task(general_news_background_worker())
+
+
+async def stop_general_news_worker(app: FastAPI) -> None:
+    task = getattr(app.state, "general_news_worker_task", None)
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.analysis_runtime = install_analysis_runtime(create_analysis_runtime())
     app.state.rate_limiter_state = create_rate_limiter_state()
     await validate_config()
+    await start_general_news_worker(app)
     try:
         yield
     finally:
+        await stop_general_news_worker(app)
         await shutdown_resources()
 
 
