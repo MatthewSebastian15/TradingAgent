@@ -6,6 +6,7 @@ import News from './pages/News';
 import Market from './pages/Market';
 import Economic from './pages/Economic';
 import NotFound from './pages/NotFound';
+import { frontendConfig } from './config';
 import {
   AI_RESEARCH_MOCK_PATH,
   AI_RESEARCH_PATH,
@@ -18,7 +19,7 @@ import './index.css';
 
 // Mock UI route is opt-in only. Keeping it behind VITE_ENABLE_MOCK prevents
 // development/demo data from leaking into normal Docker builds.
-const ENABLE_MOCK_ROUTE = import.meta.env.VITE_ENABLE_MOCK === 'true';
+const ENABLE_MOCK_ROUTE = frontendConfig.enableMock;
 const AnalysisMock = ENABLE_MOCK_ROUTE ? lazy(() => import('./pages/AnalysisMock')) : null;
 
 function buildResourceRedirectPath(basePath, resourceId) {
