@@ -6,8 +6,6 @@ The application receives a stock ticker, market, analysis date, investment horiz
 
 > This application is a research tool, not financial advice. Always validate the data, risk assumptions, and trading decisions independently before taking action.
 
-![TradingAgent Dashboard](assets/TradingAgent%20Home.png)
-
 ---
 
 ## How the Pipeline Works
@@ -27,7 +25,7 @@ The pipeline collects data first, then continues through the analysis agents.
 
 Data collection runs in parallel. The first three analyst stages also run in parallel after data collection completes. The debate, trader, risk, and portfolio manager stages run sequentially so each stage can use the output from the previous agents.
 
-![Investment Analysis Flow](assets/Investment%20Analysis%20Flow.png)
+![Investment Analysis Flow](image/Investment%20Analysis%20Flow.png)
 
 ---
 
