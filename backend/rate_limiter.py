@@ -19,11 +19,13 @@ from fastapi import Request
 from config import (
     API_KEY,
     MAX_CONCURRENT_REQUESTS_PER_KEY,
+    MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY,
     MAX_CONCURRENT_STREAMS_PER_KEY,
     RATE_LIMIT_DB_PATH,
     RATE_LIMIT_STORAGE_BACKEND,
     REQUEST_RATE_LIMIT_PER_MINUTE,
     REQUIRE_API_KEY_FOR_RATE_LIMIT,
+    STATUS_RATE_LIMIT_PER_MINUTE,
     STREAM_RATE_LIMIT_PER_MINUTE,
 )
 from errors import AuthenticationError, RateLimitError
@@ -364,6 +366,14 @@ def request_policy() -> RateLimitPolicy:
         scope="request",
         max_per_minute=REQUEST_RATE_LIMIT_PER_MINUTE,
         max_concurrent=MAX_CONCURRENT_REQUESTS_PER_KEY,
+    )
+
+
+def status_policy() -> RateLimitPolicy:
+    return RateLimitPolicy(
+        scope="status",
+        max_per_minute=STATUS_RATE_LIMIT_PER_MINUTE,
+        max_concurrent=MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY,
     )
 
 

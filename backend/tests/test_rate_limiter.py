@@ -178,7 +178,7 @@ def test_job_create_rate_limit_runs_before_storing_second_job(client, monkeypatc
 
 def test_status_endpoint_is_rate_limited(client, monkeypatch):
     monkeypatch.setattr(
-        "routes.analysis.request_policy",
+        "routes.analysis.status_policy",
         lambda: RateLimitPolicy(scope="status-limit-test", max_per_minute=1, max_concurrent=1),
     )
 
@@ -192,10 +192,29 @@ def test_status_endpoint_is_rate_limited(client, monkeypatch):
     assert second.json()["error"]["code"] == "RATE_LIMITED"
 
 
+def test_status_endpoint_uses_separate_request_bucket(client, monkeypatch):
+    monkeypatch.setattr(
+        "routes.analysis.request_policy",
+        lambda: RateLimitPolicy(scope="status-request-separation-test", max_per_minute=1, max_concurrent=1),
+    )
+    monkeypatch.setattr(
+        "routes.analysis.status_policy",
+        lambda: RateLimitPolicy(scope="status-separation-test", max_per_minute=10, max_concurrent=2),
+    )
+
+    headers = {"x-api-key": "same-status-separation-key"}
+
+    first = client.get("/api/status", headers=headers)
+    second = client.get("/api/status", headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+
 def test_shared_proxy_key_uses_separate_owner_session_quotas(client, monkeypatch):
     monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="shared-proxy-key"))
     monkeypatch.setattr(
-        "routes.analysis.request_policy",
+        "routes.analysis.status_policy",
         lambda: RateLimitPolicy(scope="owner-session-limit-test", max_per_minute=1, max_concurrent=1),
     )
 
@@ -274,8 +293,8 @@ def test_job_event_stream_does_not_consume_request_limit(client, monkeypatch):
         assert response.status_code == 200
         response.read()
 
-    first_status = client.get("/api/status", headers=headers)
-    second_status = client.get("/api/status", headers=headers)
+    first_summary = client.get(f"/api/analysis/jobs/{job_id}", headers=headers)
+    second_summary = client.get(f"/api/analysis/jobs/{job_id}", headers=headers)
 
-    assert first_status.status_code == 200
-    assert second_status.status_code == 429
+    assert first_summary.status_code == 200
+    assert second_summary.status_code == 429
