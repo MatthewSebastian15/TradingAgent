@@ -273,11 +273,9 @@ describe('StockForm cleanup', () => {
 
     render(<StockForm {...props} selectedResult={selectedTicker()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /debate settings/i }));
     fireEvent.click(screen.getByLabelText(/existing position/i));
     fireEvent.change(screen.getByLabelText(/position qty/i), { target: { value: '10' } });
     fireEvent.change(screen.getByLabelText(/avg entry/i), { target: { value: '900' } });
-    fireEvent.click(screen.getByRole('button', { name: /^close$/i }));
     fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
 
     await waitFor(() => {
@@ -321,15 +319,16 @@ describe('StockForm cleanup', () => {
     expect(screen.queryByRole('button', { name: /global/i })).toBeNull();
   });
 
-  it('renders trade date as DD-MM-YYYY and opens the provider drawer', () => {
+  it('renders trade date as DD-MM-YYYY and the compact configuration sections', () => {
     const props = callbacks();
     render(<StockForm {...props} selectedResult={selectedTicker()} />);
 
     expect(screen.getByPlaceholderText(/dd-mm-yyyy/i).value).toBe('14-05-2026');
-
-    fireEvent.click(screen.getByRole('button', { name: /provider selection/i }));
-
-    expect(screen.getByText('Provider')).toBeTruthy();
-    expect(screen.getByText(/visual only/i)).toBeTruthy();
+    expect(screen.getByText('Ticker')).toBeTruthy();
+    expect(screen.getByText('Analysis Horizon')).toBeTruthy();
+    expect(screen.getByText('Analysis Settings')).toBeTruthy();
+    expect(screen.getByText('Position Settings')).toBeTruthy();
+    expect(screen.getByText('Action')).toBeTruthy();
+    expect(screen.getByText('DEFAULT 9-CALL PIPELINE')).toBeTruthy();
   });
 });
