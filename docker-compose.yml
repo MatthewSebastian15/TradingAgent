@@ -55,7 +55,8 @@ services:
       - 1.0.0.1
     environment:
       VITE_DEV_PORT: "3000"
-    command: npm run dev:lan
+    command: >
+      sh -c "npm install --include=dev && npm run dev:lan"
     depends_on:
       backend:
         condition: service_healthy
