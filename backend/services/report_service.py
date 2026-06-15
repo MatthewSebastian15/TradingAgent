@@ -955,12 +955,8 @@ def _shares_ownership_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     if not profile or not profile.get("available"):
         return []
 
-    ownership = _ownership_data(profile)
     definitions = [
         ("Shares Outstanding", _profile_shares_out(profile), _format_number),
-        ("Insider Ownership", _profile_insider_pct(profile), _format_ownership_percent),
-        ("Institutional Ownership", _profile_institution_pct(profile), _format_ownership_percent),
-        ("Public/Other Ownership", ownership["public"], _format_ownership_percent),
     ]
     return [_profile_row(label, formatter(value)) for label, value, formatter in definitions]
 

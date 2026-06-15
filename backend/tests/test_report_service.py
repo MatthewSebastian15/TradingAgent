@@ -546,6 +546,7 @@ def test_html_report_renders_trimmed_fundamental_sections_and_optional_peers():
         "Peer Comparison",
     ):
         assert heading in html
+    assert 'class="metric-table report-metric-table"' in html
     assert report["peer_comparison_rows"][0]["ticker"] == "NVDA"
 
 
@@ -598,6 +599,10 @@ def test_html_report_formats_canonical_company_profile_metrics():
 
     assert {"label": "Market Cap", "value": "1,205,000.0 IDR Bn"} in report["company_profile_rows"]
     assert {"label": "Shares Outstanding", "value": "123,275,050,000"} in report["shares_ownership_rows"]
+    assert all(
+        row["label"] not in {"Insider Ownership", "Institutional Ownership", "Public/Other Ownership"}
+        for row in report["shares_ownership_rows"]
+    )
     assert not any(row["label"] == "Current Price" for row in report["company_profile_rows"])
 
 
