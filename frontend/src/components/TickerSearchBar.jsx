@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
+import { Input } from '@/components/ui/input';
 import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 
 const MIN_QUERY_LENGTH = 2;
@@ -180,7 +181,7 @@ export default function TickerSearchBar({
         } ${disabled ? 'opacity-50' : ''}`}
       >
         <span className="pl-3 pr-2 font-mono text-sm text-bloomberg-muted">⌕</span>
-        <input
+        <Input
           type="text"
           role="combobox"
           aria-expanded={showDropdown}
@@ -193,7 +194,7 @@ export default function TickerSearchBar({
           }}
           placeholder="Search ticker symbol..."
           disabled={disabled}
-          className="w-full bg-black px-1 py-3 font-mono text-sm text-bloomberg-white tracking-wider placeholder:text-bloomberg-muted focus:outline-none disabled:cursor-not-allowed"
+          className="h-12 border-0 bg-black px-1 font-mono text-sm tracking-wider shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
         />
       </div>
 

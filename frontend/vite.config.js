@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'node:path';
 
 const DEFAULT_DEV_HOST = '127.0.0.1';
 const DEFAULT_DEV_PORT = 3000;
@@ -27,6 +28,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
+    },
     server: {
       host: viteHost,
       port: vitePort,

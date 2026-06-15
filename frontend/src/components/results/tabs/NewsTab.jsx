@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
 
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
 
@@ -380,9 +383,9 @@ function hasNewsPayload(result) {
 
 function SummaryMetric({ label, value }) {
   return (
-    <span className="border border-bloomberg-border px-2 py-1">
+    <Badge variant="outline" className="rounded-md border-border font-mono text-xs">
       {label}: {value}
-    </span>
+    </Badge>
   );
 }
 
@@ -393,18 +396,16 @@ SummaryMetric.propTypes = {
 
 function SortButton({ label, active, onClick }) {
   return (
-    <button
+    <Button
       type="button"
+      variant={active ? 'default' : 'outline'}
+      size="sm"
       aria-pressed={active}
       onClick={onClick}
-      className={`font-mono text-[11px] uppercase tracking-wider border px-2 py-1 ${
-        active
-          ? 'border-bloomberg-orange text-bloomberg-orange bg-black'
-          : 'border-bloomberg-border text-bloomberg-muted hover:text-bloomberg-white'
-      }`}
+      className="h-8 font-mono text-xs uppercase tracking-wide"
     >
       {label}
-    </button>
+    </Button>
   );
 }
 
@@ -417,22 +418,32 @@ SortButton.propTypes = {
 function NewsRow({ item }) {
   const title = readableText(item.title) || 'Untitled';
   const url = itemUrl(item);
+  const impact = displayLabel(item.impact || item.impact_rule || item.risk_level);
+  const sentiment = displayLabel(item.sentiment || item.sentiment_label);
 
   return (
-    <article className="border-b border-bloomberg-border bg-black py-2">
-      <div className="min-w-0 space-y-1">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1 font-mono text-xs leading-snug">
-          <span className="text-bloomberg-orange text-[11px] tracking-wider">
-            {publishedLabel(item)}
-          </span>
-          <span className="text-bloomberg-muted">|</span>
-          <h3 className="text-bloomberg-white font-semibold">
+    <Card className="rounded-md border-border bg-card">
+      <CardContent className="min-w-0 space-y-3 p-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="font-mono text-xs tracking-wide text-primary">{publishedLabel(item)}</span>
+          <Badge variant="outline" className="rounded-md border-border font-mono text-xs">
+            {publisherLabel(item)}
+          </Badge>
+          <Badge className="rounded-md border-yellow-500/60 bg-yellow-500/15 font-mono text-xs text-yellow-300">
+            {sentiment}
+          </Badge>
+          <Badge className="rounded-md border-primary/60 bg-primary/15 font-mono text-xs text-primary">
+            {impact}
+          </Badge>
+        </div>
+        <div className="min-w-0">
+          <h3 className="font-sans text-sm font-semibold leading-snug text-foreground">
             {url ? (
               <a
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-bloomberg-orange"
+                className="hover:text-primary"
               >
                 {title}
               </a>
@@ -440,17 +451,13 @@ function NewsRow({ item }) {
               title
             )}
           </h3>
-          <span className="text-bloomberg-muted">- {publisherLabel(item)}</span>
         </div>
-        <p className="font-mono text-[11px] text-bloomberg-muted leading-snug">
-          {summaryText(item)}
+        <p className="text-sm leading-relaxed text-muted-foreground">{summaryText(item)}</p>
+        <p className="font-mono text-xs leading-relaxed text-muted-foreground">
+          Impact: {impact} - Sentiment: {sentiment} - Source: {sourceLabel(item)}
         </p>
-        <p className="font-mono text-[11px] text-bloomberg-muted leading-snug">
-          Impact: {displayLabel(item.impact || item.impact_rule || item.risk_level)} - Sentiment:{' '}
-          {displayLabel(item.sentiment || item.sentiment_label)} - Source: {sourceLabel(item)}
-        </p>
-      </div>
-    </article>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -461,7 +468,7 @@ NewsRow.propTypes = {
 function ProviderStatusRows({ rows }) {
   if (!rows.length) return null;
   return (
-    <div className="mt-2 space-y-1 font-mono text-[11px] text-bloomberg-muted">
+    <div className="mt-2 space-y-1 font-mono text-xs text-bloomberg-muted">
       {rows.map((row) => (
         <div key={row.provider}>
           {row.provider}: {displayLabel(row.status)}
@@ -482,10 +489,13 @@ ProviderStatusRows.propTypes = {
 
 function StrictNewsSection({ label, items, emptyText, providerRows = [] }) {
   return (
-    <section>
-      <SectionHeader label={label} />
+    <Card className="rounded-md border-border bg-card">
+      <CardHeader className="p-4">
+        <CardTitle className="text-sm uppercase tracking-widest">{label}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 pt-0">
       {items.length > 0 ? (
-        <div className="space-y-1">
+        <div className="space-y-3">
           {items.map((item, index) => (
             <NewsRow key={newsDedupeKey(item) || `${item.title}-${index}`} item={item} />
           ))}
@@ -496,7 +506,8 @@ function StrictNewsSection({ label, items, emptyText, providerRows = [] }) {
           <ProviderStatusRows rows={providerRows} />
         </NoticeBox>
       )}
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -540,7 +551,7 @@ export default function NewsTab({ result }) {
       : [];
 
     return (
-      <div className="px-4 py-4 border-b border-bloomberg-border space-y-4">
+      <div className="space-y-4 border-b border-border p-4">
         <StrictNewsSection
           label="Company News Used for Decision"
           items={decisionItems}
@@ -586,20 +597,27 @@ export default function NewsTab({ result }) {
   const sortedNewsItems = sortNewsItems(newsItems, activeSort);
   if (!hasNewsPayload(result)) {
     return (
-      <div className="px-4 py-4 border-b border-bloomberg-border">
-        <NoticeBox title="NEWS UNAVAILABLE" tone="amber">
-          {relatedNews.warning || 'No usable related news was returned for this analysis.'}
-        </NoticeBox>
+      <div className="border-b border-border p-4">
+        <Card className="rounded-md border-border bg-card">
+          <CardContent className="p-4">
+            <NoticeBox title="NEWS UNAVAILABLE" tone="amber">
+              {relatedNews.warning || 'No usable related news was returned for this analysis.'}
+            </NoticeBox>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border space-y-4">
-      <section>
-        <SectionHeader label="NEWS" />
+    <div className="space-y-4 border-b border-border p-4">
+      <Card className="rounded-md border-border bg-card">
+        <CardHeader className="p-4">
+          <CardTitle className="text-sm uppercase tracking-widest">NEWS</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 pt-0">
         {newsItems.length > 0 ? (
-          <div className="space-y-1">
+          <div className="space-y-3">
             <div className="mb-2 flex items-center gap-2">
               {SORT_OPTIONS.map((option, index) => (
                 <span key={option} className="flex items-center gap-2">
@@ -609,7 +627,7 @@ export default function NewsTab({ result }) {
                     onClick={() => setActiveSort(option)}
                   />
                   {index < SORT_OPTIONS.length - 1 && (
-                    <span className="font-mono text-[11px] text-bloomberg-muted">|</span>
+                    <span className="font-mono text-xs text-bloomberg-muted">|</span>
                   )}
                 </span>
               ))}
@@ -619,15 +637,20 @@ export default function NewsTab({ result }) {
             ))}
           </div>
         ) : (
-          <NoticeBox title="NO NEWS" tone="amber">
-            No usable related news was returned for this analysis.
-          </NoticeBox>
+            <NoticeBox title="NO NEWS" tone="amber">
+              No usable related news was returned for this analysis.
+            </NoticeBox>
         )}
-      </section>
+        </CardContent>
+      </Card>
       {analystConsensus.available && (
-        <section>
-          <SectionHeader label="ANALYST RECOMMENDATION TREND" />
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 font-mono text-xs">
+        <Card className="rounded-md border-border bg-card">
+          <CardHeader className="p-4">
+            <CardTitle className="text-sm uppercase tracking-widest">
+              ANALYST RECOMMENDATION TREND
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-2 p-4 pt-0 font-mono text-xs sm:grid-cols-3 lg:grid-cols-6">
             <SummaryMetric label="PERIOD" value={analystConsensus.period || 'N/A'} />
             <SummaryMetric label="STRONG BUY" value={analystConsensus.strong_buy ?? 0} />
             <SummaryMetric label="BUY" value={analystConsensus.buy ?? 0} />
@@ -640,8 +663,8 @@ export default function NewsTab({ result }) {
               value={displayLabel(analystConsensus.consensus_label)}
             />
             <SummaryMetric label="TREND" value={displayLabel(analystConsensus.trend)} />
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

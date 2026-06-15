@@ -473,6 +473,7 @@ describe('AnalysisWorkspace history storage', () => {
   });
 
   it('migrates old history entries and removes legacy payload keys', () => {
+    const savedAt = new Date().toISOString();
     localStorage.setItem(
       'analysis-history-test',
       JSON.stringify([
@@ -482,7 +483,7 @@ describe('AnalysisWorkspace history storage', () => {
           market: 'US',
           trade_date: '2026-05-14',
           decision: 'Buy',
-          saved_at: '2026-05-14T10:00:00.000Z',
+          saved_at: savedAt,
           position_quantity: 10,
           average_entry_price: 150,
           raw_agent_state: { internal: true },
@@ -508,7 +509,7 @@ describe('AnalysisWorkspace history storage', () => {
         market: 'US',
         trade_date: '2026-05-14',
         decision: 'Buy',
-        saved_at: '2026-05-14T10:00:00.000Z',
+        saved_at: savedAt,
       }),
     ]);
     expect(localStorage.getItem('analysis-history-test:result:legacy-request')).toBeNull();
@@ -580,7 +581,9 @@ describe('AnalysisWorkspace history storage', () => {
 
     renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/job-1');
     expect(await screen.findByText('MSFT')).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.filter(([url]) => url.includes('/analysis/jobs/job-1'))).toHaveLength(
+      2
+    );
   });
 
   it('shows an expired message when backend lookup misses', async () => {
@@ -647,6 +650,7 @@ describe('AnalysisWorkspace history storage', () => {
   });
 
   it('clears summary history and legacy payload keys from the browser', () => {
+    const savedAt = new Date().toISOString();
     localStorage.setItem(
       'analysis-history-test',
       JSON.stringify([
@@ -661,7 +665,7 @@ describe('AnalysisWorkspace history storage', () => {
           decision: 'Buy',
           time_horizon_months: 1,
           analysis_created_at: '2026-05-14T10:00:00.000Z',
-          saved_at: '2026-05-14T10:00:00.000Z',
+          saved_at: savedAt,
         },
       ])
     );
@@ -685,25 +689,33 @@ describe('AnalysisWorkspace history storage', () => {
 
   it('loads recent analyses from the backend and caches summaries locally', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      expect(url).toContain('/analysis/history?limit=25');
-      return new Response(
-        JSON.stringify({
-          items: [
-            {
-              job_id: 'job-db',
-              request_id: 'request-db',
-              ticker: 'MSFT',
-              market: 'US',
-              trade_date: '2026-05-28',
-              decision: 'Buy',
-              time_horizon_months: 1,
-              analysis_created_at: '2026-05-28T08:00:00.000Z',
-              updated_at: '2026-05-28T08:01:00.000Z',
-            },
-          ],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
+      if (url.includes('/market/quotes')) {
+        return new Response(JSON.stringify({ quotes: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/analysis/history?limit=25')) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                job_id: 'job-db',
+                request_id: 'request-db',
+                ticker: 'MSFT',
+                market: 'US',
+                trade_date: '2026-05-28',
+                decision: 'Buy',
+                time_horizon_months: 1,
+                analysis_created_at: '2026-05-28T08:00:00.000Z',
+                updated_at: '2026-05-28T08:01:00.000Z',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      throw new Error(`Unexpected URL: ${url}`);
     });
 
     function EmptyForm() {
@@ -716,7 +728,9 @@ describe('AnalysisWorkspace history storage', () => {
     openHistoryPanel();
 
     expect(await screen.findByText('MSFT')).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url.includes('/analysis/history?'))).toHaveLength(
+      1
+    );
     expect(JSON.parse(localStorage.getItem('analysis-history-test'))).toEqual([
       historySummary({
         job_id: 'job-db',
@@ -839,15 +853,22 @@ describe('AnalysisWorkspace history storage', () => {
         },
       ])
     );
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockRejectedValueOnce(new Error('Use local fallback'))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ deleted: true, deleted_count: 1 }), {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options = {}) => {
+      if (url.includes('/market/quotes')) {
+        return new Response(JSON.stringify({ quotes: [] }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
-        })
-      );
+        });
+      }
+      if (url.includes('/analysis/history?')) throw new Error('Use local fallback');
+      if (url === '/api/analysis/history' && options.method === 'DELETE') {
+        return new Response(JSON.stringify({ deleted: true, deleted_count: 1 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
 
     function EmptyForm() {
       return null;
@@ -862,8 +883,11 @@ describe('AnalysisWorkspace history storage', () => {
     fireEvent.click(screen.getByRole('button', { name: /clear/i }));
 
     await waitFor(() => expect(localStorage.getItem('analysis-history-test')).toBeNull());
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/history');
-    expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, options]) => url === '/api/analysis/history' && options.method === 'DELETE'
+      )
+    ).toBe(true);
     expect(screen.queryByText('AAPL')).toBeNull();
   });
 
@@ -881,9 +905,19 @@ describe('AnalysisWorkspace history storage', () => {
         },
       ])
     );
-    vi.spyOn(globalThis, 'fetch')
-      .mockRejectedValueOnce(new Error('Use local fallback'))
-      .mockRejectedValueOnce(new Error('Database unavailable'));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options = {}) => {
+      if (url.includes('/market/quotes')) {
+        return new Response(JSON.stringify({ quotes: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/analysis/history?')) throw new Error('Use local fallback');
+      if (url === '/api/analysis/history' && options.method === 'DELETE') {
+        throw new Error('Database unavailable');
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
 
     function EmptyForm() {
       return null;

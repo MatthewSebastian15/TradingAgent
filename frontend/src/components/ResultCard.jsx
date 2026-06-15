@@ -16,7 +16,12 @@ import ResultTabs from './results/tabs/ResultTabs';
 import { PIPELINE_STATUSES } from '../domain/analysisContract';
 import { useResultSections } from '../hooks/useResultSections';
 import { resolveClockConfig } from '../utils/clock';
-import { formatDateTimeLabel, formatPrice, formatTickerLabel } from '../utils/formatting';
+import {
+  formatDateTimeLabel,
+  formatPrice,
+  formatTickerLabel,
+  formatTradeDateLabel,
+} from '../utils/formatting';
 
 const ACTIONABLE_DECISIONS = new Set(['BUY', 'SELL', 'Buy', 'Overweight', 'Sell', 'Underweight']);
 
@@ -964,7 +969,7 @@ function ResultCardHeader({
           </span>
         )}
         <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
-          Trade Date: {result.trade_date}
+          Trade Date: {formatTradeDateLabel(result.trade_date)}
         </span>
         {createdAtLabel && (
           <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">

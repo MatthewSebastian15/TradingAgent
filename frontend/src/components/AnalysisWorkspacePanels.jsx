@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { clearAnalysisHistory, fetchAnalysisHistory } from '../utils/analysisHistoryApi';
-import { formatDateTimeLabel } from '../utils/formatting';
+import { formatDateTimeLabel, formatTradeDateLabel } from '../utils/formatting';
 import {
   clearHistory,
   confidenceScoreStyle,
@@ -210,7 +210,7 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
                 </span>
               </div>
               <div className="mt-1 flex items-center gap-3 font-mono text-[9px] text-bloomberg-muted">
-                <span>{item.trade_date || '—'}</span>
+                <span>{formatTradeDateLabel(item.trade_date) || 'N/A'}</span>
                 <span>{formatHistoryHorizon(item.time_horizon_months) || '—'}</span>
                 <span className={confidenceScoreStyle(item.confidence_tier)}>{confidenceScore}</span>
               </div>
