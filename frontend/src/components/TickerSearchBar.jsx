@@ -389,7 +389,7 @@ export default function TickerSearchBar({
           onFocus={() => {
             if (canSearch && results.length) setOpen(true);
           }}
-          placeholder="Search ticker symbol..."
+          placeholder="Search"
           disabled={disabled}
           className="h-12 border-0 bg-black px-1 font-mono text-sm tracking-wider shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
         />
