@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import React from 'react';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import NewsTab from './NewsTab';
@@ -107,26 +107,55 @@ function makeNewsResultWithMarketContext() {
   return result;
 }
 
-function makeStrictNewsResult({ includeExcluded = true } = {}) {
+function makeStrictNewsResult({
+  includeExcluded = true,
+  companyCount = 1,
+  marketContextCount = 1,
+  companyOverrides = [],
+  marketOverrides = [],
+} = {}) {
+  const decisionCompanyNews = [
+    makeArticle('Decision Company', 1, {
+      title: 'Bank Central Asia Reports Profit Growth',
+      provider: 'marketaux',
+      market_context_only: false,
+      summary: 'Bank Central Asia reports resilient earnings growth.',
+      ...companyOverrides[0],
+    }),
+    ...Array.from({ length: Math.max(companyCount - 1, 0) }, (_, index) =>
+      makeArticle('Decision Company', index + 2, {
+        title: `Company Overflow Article ${index + 2}`,
+        provider: 'marketaux',
+        market_context_only: false,
+        summary: `Company overflow article ${index + 2}.`,
+        ...companyOverrides[index + 1],
+      })
+    ),
+  ];
+  const marketContextNews = [
+    makeArticle('Market Context', 1, {
+      title: 'Asian Markets Rise Before Fed Decision',
+      provider: 'rss_context',
+      market_context_only: true,
+      summary: 'Regional markets rose before the Fed decision.',
+      ...marketOverrides[0],
+    }),
+    ...Array.from({ length: Math.max(marketContextCount - 1, 0) }, (_, index) =>
+      makeArticle('Market Context', index + 2, {
+        title: `Market Context Overflow Article ${index + 2}`,
+        provider: 'rss_context',
+        market_context_only: true,
+        summary: `Market context overflow article ${index + 2}.`,
+        ...marketOverrides[index + 1],
+      })
+    ),
+  ];
+
   return {
     ticker: 'BBCA.JK',
     news_context: {
-      decision_company_news: [
-        makeArticle('Decision Company', 1, {
-          title: 'Bank Central Asia Reports Profit Growth',
-          provider: 'marketaux',
-          market_context_only: false,
-          summary: 'Bank Central Asia reports resilient earnings growth.',
-        }),
-      ],
-      market_context_news: [
-        makeArticle('Market Context', 1, {
-          title: 'Asian Markets Rise Before Fed Decision',
-          provider: 'rss_context',
-          market_context_only: true,
-          summary: 'Regional markets rose before the Fed decision.',
-        }),
-      ],
+      decision_company_news: decisionCompanyNews,
+      market_context_news: marketContextNews,
       debug: includeExcluded
         ? {
             strict_news_filter: {
@@ -257,14 +286,21 @@ describe('NewsTab', () => {
   it('renders strict news split in compact sections', () => {
     render(<NewsTab result={makeStrictNewsResult()} />);
 
-    const decisionSection = screen.getByText('Company News Used for Decision').closest('.rounded-md');
+    const decisionSection = screen.getByText('Company News').closest('.rounded-md');
     const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
 
     expect(decisionSection).toBeTruthy();
     expect(contextSection).toBeTruthy();
-    expect(within(decisionSection).getByText('Bank Central Asia Reports Profit Growth')).toBeInTheDocument();
-    expect(within(decisionSection).queryByText('Asian Markets Rise Before Fed Decision')).not.toBeInTheDocument();
-    expect(within(contextSection).getByText('Asian Markets Rise Before Fed Decision')).toBeInTheDocument();
+    expect(screen.queryByText('Company News Used for Decision')).not.toBeInTheDocument();
+    expect(
+      within(decisionSection).getByText('Bank Central Asia Reports Profit Growth')
+    ).toBeInTheDocument();
+    expect(
+      within(decisionSection).queryByText('Asian Markets Rise Before Fed Decision')
+    ).not.toBeInTheDocument();
+    expect(
+      within(contextSection).getByText('Asian Markets Rise Before Fed Decision')
+    ).toBeInTheDocument();
     expect(screen.getByText('Excluded News Debug')).toBeInTheDocument();
     expect(screen.getByText('Weak RSS Item Without Company Match')).toBeInTheDocument();
   });
@@ -272,9 +308,118 @@ describe('NewsTab', () => {
   it('hides strict excluded news when debug rows are absent', () => {
     render(<NewsTab result={makeStrictNewsResult({ includeExcluded: false })} />);
 
-    expect(screen.getByText('Company News Used for Decision')).toBeInTheDocument();
+    expect(screen.getByText('Company News')).toBeInTheDocument();
     expect(screen.getByText('Market Context News')).toBeInTheDocument();
     expect(screen.queryByText('Excluded News Debug')).not.toBeInTheDocument();
+  });
+
+  it('limits strict company and market context news to 5 and shows all on demand', () => {
+    render(
+      <NewsTab
+        result={makeStrictNewsResult({
+          includeExcluded: false,
+          companyCount: 7,
+          marketContextCount: 10,
+        })}
+      />
+    );
+
+    const companySection = screen.getByText('Company News').closest('.rounded-md');
+    const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
+
+    expect(within(companySection).getByText('Company Overflow Article 7')).toBeInTheDocument();
+    expect(
+      within(companySection).queryByText('Bank Central Asia Reports Profit Growth')
+    ).not.toBeInTheDocument();
+    fireEvent.click(within(companySection).getByRole('button', { name: 'Show All (7)' }));
+    expect(
+      within(companySection).getByText('Bank Central Asia Reports Profit Growth')
+    ).toBeInTheDocument();
+
+    expect(
+      within(contextSection).getByText('Market Context Overflow Article 10')
+    ).toBeInTheDocument();
+    expect(
+      within(contextSection).queryByText('Market Context Overflow Article 5')
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(within(contextSection).getByRole('button', { name: 'Show All (10)' }));
+
+    expect(
+      within(contextSection).getByText('Market Context Overflow Article 5')
+    ).toBeInTheDocument();
+  });
+
+  it('sorts strict company news preview by impact without showing all', () => {
+    render(
+      <NewsTab
+        result={makeStrictNewsResult({
+          includeExcluded: false,
+          companyCount: 6,
+          companyOverrides: [
+            { impact: 'low', impact_score: 20, title: 'Low Company News' },
+            { impact: 'high', impact_score: 90, title: 'High Company News' },
+            { impact: 'medium', impact_score: 60, title: 'Medium Company News' },
+            { impact: 'low', impact_score: 10, title: 'Hidden Low Company News' },
+            { impact: 'high', impact_score: 95, title: 'Second High Company News' },
+            { impact: 'medium', impact_score: 65, title: 'Second Medium Company News' },
+          ],
+        })}
+      />
+    );
+
+    const companySection = screen.getByText('Company News').closest('.rounded-md');
+    fireEvent.click(within(companySection).getByRole('button', { name: 'Impact' }));
+
+    expect(
+      within(companySection)
+        .getAllByRole('heading', { level: 3 })
+        .map((node) => node.textContent)
+    ).toEqual([
+      'Second High Company News',
+      'High Company News',
+      'Second Medium Company News',
+      'Medium Company News',
+      'Low Company News',
+    ]);
+    expect(within(companySection).queryByText('Hidden Low Company News')).not.toBeInTheDocument();
+  });
+
+  it('sorts strict market context news preview by sentiment without showing all', () => {
+    render(
+      <NewsTab
+        result={makeStrictNewsResult({
+          includeExcluded: false,
+          marketContextCount: 6,
+          marketOverrides: [
+            { sentiment: 'negative', title: 'Negative Market Context' },
+            { sentiment: 'neutral', title: 'Neutral Market Context' },
+            { sentiment: 'positive', title: 'Positive Market Context' },
+            { sentiment: 'negative', title: 'Hidden Negative Market Context' },
+            { sentiment: 'positive', title: 'Second Positive Market Context' },
+            { sentiment: 'neutral', title: 'Second Neutral Market Context' },
+          ],
+        })}
+      />
+    );
+
+    const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
+    fireEvent.click(within(contextSection).getByRole('button', { name: 'Sentiment' }));
+
+    expect(
+      within(contextSection)
+        .getAllByRole('heading', { level: 3 })
+        .map((node) => node.textContent)
+    ).toEqual([
+      'Positive Market Context',
+      'Second Positive Market Context',
+      'Neutral Market Context',
+      'Second Neutral Market Context',
+      'Negative Market Context',
+    ]);
+    expect(
+      within(contextSection).queryByText('Hidden Negative Market Context')
+    ).not.toBeInTheDocument();
   });
 
   it('shows provider status when strict market context is empty', () => {
@@ -282,7 +427,9 @@ describe('NewsTab', () => {
 
     const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
 
-    expect(within(contextSection).getByText('No market context news was returned.')).toBeInTheDocument();
+    expect(
+      within(contextSection).getByText('No market context news was returned.')
+    ).toBeInTheDocument();
     expect(within(contextSection).getByText('rss_context: EMPTY')).toBeInTheDocument();
     expect(within(contextSection).getByText('google_news_light: EMPTY')).toBeInTheDocument();
   });
