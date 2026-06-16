@@ -164,16 +164,6 @@ function publisherLabel(item) {
   return 'Unknown Source';
 }
 
-function sourceLabel(item) {
-  return (
-    readableText(item.source) ||
-    readableText(item.provider) ||
-    readableText(item.source_name) ||
-    readableText(item.publisher) ||
-    'Unknown Source'
-  );
-}
-
 function summaryText(item) {
   return readableText(item.summary || item.description || item.impact_reason) || '-';
 }
@@ -453,9 +443,6 @@ function NewsRow({ item }) {
           </h3>
         </div>
         <p className="text-sm leading-relaxed text-muted-foreground">{summaryText(item)}</p>
-        <p className="font-mono text-xs leading-relaxed text-muted-foreground">
-          Impact: {impact} - Sentiment: {sentiment} - Source: {sourceLabel(item)}
-        </p>
       </CardContent>
     </Card>
   );
