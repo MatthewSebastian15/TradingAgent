@@ -31,6 +31,7 @@ const MONTH_LABELS = [
 ];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SORT_OPTIONS = ['Date', 'Impact', 'Sentiment'];
+const STRICT_NEWS_PREVIEW_COUNT = 5;
 const IMPACT_SORT_RANK = {
   critical: 3,
   very_high: 3,
@@ -306,7 +307,9 @@ function compareByDate(left, right) {
 }
 
 function compareByImpact(left, right) {
-  return impactSortRank(right.item) - impactSortRank(left.item);
+  const rankDiff = impactSortRank(right.item) - impactSortRank(left.item);
+  if (rankDiff !== 0) return rankDiff;
+  return impactScore(right.item) - impactScore(left.item);
 }
 
 function compareBySentiment(left, right) {
@@ -405,6 +408,30 @@ SortButton.propTypes = {
   onClick: PropTypes.func.isRequired,
 };
 
+function SortControls({ activeSort, onSortChange }) {
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-2">
+      {SORT_OPTIONS.map((option, index) => (
+        <span key={option} className="flex items-center gap-2">
+          <SortButton
+            label={option}
+            active={activeSort === option}
+            onClick={() => onSortChange(option)}
+          />
+          {index < SORT_OPTIONS.length - 1 && (
+            <span className="font-mono text-xs text-bloomberg-muted">|</span>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+SortControls.propTypes = {
+  activeSort: PropTypes.string.isRequired,
+  onSortChange: PropTypes.func.isRequired,
+};
+
 function NewsRow({ item }) {
   const title = readableText(item.title) || 'Untitled';
   const url = itemUrl(item);
@@ -415,7 +442,9 @@ function NewsRow({ item }) {
     <Card className="rounded-md border-border bg-card">
       <CardContent className="min-w-0 space-y-3 p-4">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-mono text-xs tracking-wide text-primary">{publishedLabel(item)}</span>
+          <span className="font-mono text-xs tracking-wide text-primary">
+            {publishedLabel(item)}
+          </span>
           <Badge variant="outline" className="rounded-md border-border font-mono text-xs">
             {publisherLabel(item)}
           </Badge>
@@ -474,25 +503,51 @@ ProviderStatusRows.propTypes = {
   ).isRequired,
 };
 
-function StrictNewsSection({ label, items, emptyText, providerRows = [] }) {
+function StrictNewsSection({
+  label,
+  items,
+  emptyText,
+  providerRows = [],
+  initialLimit = null,
+  sortable = false,
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [activeSort, setActiveSort] = useState('Date');
+  const canLimit =
+    Number.isInteger(initialLimit) && initialLimit > 0 && items.length > initialLimit;
+  const sortedItems = sortable ? sortNewsItems(items, activeSort) : items;
+  const visibleItems = canLimit && !showAll ? sortedItems.slice(0, initialLimit) : sortedItems;
+
   return (
     <Card className="rounded-md border-border bg-card">
       <CardHeader className="p-4">
         <CardTitle className="text-sm uppercase tracking-widest">{label}</CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0">
-      {items.length > 0 ? (
-        <div className="space-y-3">
-          {items.map((item, index) => (
-            <NewsRow key={newsDedupeKey(item) || `${item.title}-${index}`} item={item} />
-          ))}
-        </div>
-      ) : (
-        <NoticeBox title="NO NEWS" tone="amber">
-          {emptyText}
-          <ProviderStatusRows rows={providerRows} />
-        </NoticeBox>
-      )}
+        {items.length > 0 ? (
+          <div className="space-y-3">
+            {sortable && <SortControls activeSort={activeSort} onSortChange={setActiveSort} />}
+            {visibleItems.map((item, index) => (
+              <NewsRow key={newsDedupeKey(item) || `${item.title}-${index}`} item={item} />
+            ))}
+            {canLimit && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAll((current) => !current)}
+                className="h-8 font-mono text-xs uppercase tracking-wide"
+              >
+                {showAll ? 'Show Less' : `Show All (${items.length})`}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <NoticeBox title="NO NEWS" tone="amber">
+            {emptyText}
+            <ProviderStatusRows rows={providerRows} />
+          </NoticeBox>
+        )}
       </CardContent>
     </Card>
   );
@@ -502,12 +557,14 @@ StrictNewsSection.propTypes = {
   emptyText: PropTypes.string.isRequired,
   items: PropTypes.arrayOf(PropTypes.object).isRequired,
   label: PropTypes.string.isRequired,
+  initialLimit: PropTypes.number,
   providerRows: PropTypes.arrayOf(
     PropTypes.shape({
       provider: PropTypes.string.isRequired,
       status: PropTypes.string.isRequired,
     })
   ),
+  sortable: PropTypes.bool,
 };
 
 export default function NewsTab({ result }) {
@@ -540,15 +597,19 @@ export default function NewsTab({ result }) {
     return (
       <div className="space-y-4 border-b border-border p-4">
         <StrictNewsSection
-          label="Company News Used for Decision"
+          label="Company News"
           items={decisionItems}
           emptyText="No company-specific decision news was returned."
+          initialLimit={STRICT_NEWS_PREVIEW_COUNT}
+          sortable
         />
         <StrictNewsSection
           label="Market Context News"
           items={contextItems}
           emptyText="No market context news was returned."
+          initialLimit={STRICT_NEWS_PREVIEW_COUNT}
           providerRows={contextProviderRows}
+          sortable
         />
         {excludedItems.length > 0 && (
           <StrictNewsSection
@@ -603,31 +664,18 @@ export default function NewsTab({ result }) {
           <CardTitle className="text-sm uppercase tracking-widest">NEWS</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
-        {newsItems.length > 0 ? (
-          <div className="space-y-3">
-            <div className="mb-2 flex items-center gap-2">
-              {SORT_OPTIONS.map((option, index) => (
-                <span key={option} className="flex items-center gap-2">
-                  <SortButton
-                    label={option}
-                    active={activeSort === option}
-                    onClick={() => setActiveSort(option)}
-                  />
-                  {index < SORT_OPTIONS.length - 1 && (
-                    <span className="font-mono text-xs text-bloomberg-muted">|</span>
-                  )}
-                </span>
+          {newsItems.length > 0 ? (
+            <div className="space-y-3">
+              <SortControls activeSort={activeSort} onSortChange={setActiveSort} />
+              {sortedNewsItems.map((item, index) => (
+                <NewsRow key={newsDedupeKey(item) || `${item.title}-${index}`} item={item} />
               ))}
             </div>
-            {sortedNewsItems.map((item, index) => (
-              <NewsRow key={newsDedupeKey(item) || `${item.title}-${index}`} item={item} />
-            ))}
-          </div>
-        ) : (
+          ) : (
             <NoticeBox title="NO NEWS" tone="amber">
               No usable related news was returned for this analysis.
             </NoticeBox>
-        )}
+          )}
         </CardContent>
       </Card>
       {analystConsensus.available && (
