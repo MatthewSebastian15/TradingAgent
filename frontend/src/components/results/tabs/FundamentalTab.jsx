@@ -8,66 +8,138 @@ import SectionHeader from '../SectionHeader';
 
 const UNAVAILABLE_CELL = { value: null, display: '-', status: 'unavailable' };
 const CHART_WIDTH = 1040;
-const CHART_LEFT = 218;
-const CHART_RIGHT = 36;
-const CHART_TOP = 42;
-const CHART_BOTTOM = 50;
-const CHART_ROW_HEIGHT = 54;
-const CHART_BAR_TOP_OFFSET = 12;
-const CHART_BAR_HEIGHT = 28;
+const CHART_HEIGHT = 292;
+const CHART_LEFT = 84;
+const CHART_RIGHT = 78;
+const CHART_TOP = 52;
+const CHART_BOTTOM = 58;
 const CHART_GRID_COLOR = 'rgba(255, 255, 255, 0.08)';
 const CHART_AXIS_COLOR = 'rgba(255, 255, 255, 0.18)';
-const CHART_BAR_COLOR = '#f97316';
-const CHART_NEGATIVE_COLOR = '#ef4444';
 const CHART_ZERO_COLOR = '#525252';
+const CHART_SERIES_COLORS = ['#f97316', '#38bdf8', '#22c55e', '#a78bfa', '#facc15', '#fb7185'];
+const CHART_TOOLTIP_MIN_WIDTH = 204;
+const CHART_TOOLTIP_MAX_WIDTH = 320;
+const CHART_TOOLTIP_HEIGHT = 58;
 
-const FUNDAMENTAL_GROUPS = [
+function metricLabelsForChart(chart) {
+  return [...(chart.metrics || []), ...(chart.barMetrics || []), ...(chart.lineMetrics || [])];
+}
+
+const FUNDAMENTAL_CHART_GROUPS = [
   {
     id: 'income',
     label: 'Income',
     Icon: TrendingUp,
-    metrics: [
-      'Revenue',
-      'EBITDA',
-      'Net Profit',
-      'Revenue Growth (%)',
-      'Net Profit Growth (%)',
-      'EBITDA Margin (%)',
-      'Net Profit Margin (%)',
-      'EPS',
+    charts: [
+      {
+        id: 'revenue_ebitda_net_profit',
+        title: 'Revenue vs EBITDA vs Net Profit',
+        type: 'grouped_bar',
+        metrics: ['Revenue', 'EBITDA', 'Net Profit'],
+      },
+      {
+        id: 'revenue_growth_net_profit_growth',
+        title: 'Revenue Growth vs Net Profit Growth',
+        type: 'line',
+        metrics: ['Revenue Growth (%)', 'Net Profit Growth (%)'],
+      },
+      {
+        id: 'ebitda_margin_net_profit_margin',
+        title: 'EBITDA Margin vs Net Profit Margin',
+        type: 'line',
+        metrics: ['EBITDA Margin (%)', 'Net Profit Margin (%)'],
+      },
+      {
+        id: 'eps_trend',
+        title: 'EPS Trend',
+        type: 'line',
+        metrics: ['EPS'],
+      },
     ],
   },
   {
     id: 'balance_sheet',
     label: 'Balance Sheet',
     Icon: Landmark,
-    metrics: ['BVPS', 'Net Debt', 'Cash Ratio', 'Equity Ratio'],
+    charts: [
+      {
+        id: 'net_debt_trend',
+        title: 'Net Debt Trend',
+        type: 'bar',
+        metrics: ['Net Debt'],
+        wide: true,
+      },
+      { id: 'bvps_trend', title: 'BVPS Trend', type: 'line', metrics: ['BVPS'] },
+      {
+        id: 'cash_ratio_equity_ratio',
+        title: 'Cash Ratio vs Equity Ratio',
+        type: 'line',
+        metrics: ['Cash Ratio', 'Equity Ratio'],
+      },
+    ],
   },
   {
     id: 'cash_flow',
     label: 'Cash Flow',
     Icon: Activity,
-    metrics: ['CFO / Net Income', 'Free Cash Flow', 'Capex Intensity (%)', 'FCF Coverage'],
+    charts: [
+      {
+        id: 'free_cash_flow_trend',
+        title: 'Free Cash Flow Trend',
+        type: 'bar',
+        metrics: ['Free Cash Flow'],
+        wide: true,
+      },
+      {
+        id: 'cfo_net_income_trend',
+        title: 'CFO / Net Income Trend',
+        type: 'line',
+        metrics: ['CFO / Net Income'],
+      },
+      {
+        id: 'capex_intensity_fcf_coverage',
+        title: 'Capex Intensity vs FCF Coverage',
+        type: 'line',
+        metrics: ['Capex Intensity (%)', 'FCF Coverage'],
+      },
+    ],
   },
   {
     id: 'ratios',
     label: 'Ratios',
     Icon: Percent,
-    metrics: [
-      'ROE (%)',
-      'DER',
-      'Debt / EBITDA',
-      'Dividend Yield (%)',
-      'Payout Ratio (%)',
-      'Market Cap',
-      'Enterprise Value',
-      'P/E',
-      'P/BV',
-      'P/S',
-      'EV/EBITDA',
+    charts: [
+      { id: 'roe_trend', title: 'ROE Trend', type: 'line', metrics: ['ROE (%)'] },
+      {
+        id: 'leverage_risk',
+        title: 'Leverage Risk',
+        type: 'line',
+        metrics: ['DER', 'Debt / EBITDA'],
+      },
+      {
+        id: 'dividend_quality',
+        title: 'Dividend Quality',
+        type: 'line',
+        metrics: ['Dividend Yield (%)', 'Payout Ratio (%)'],
+      },
+      {
+        id: 'valuation_overview',
+        title: 'Valuation Overview',
+        type: 'mixed',
+        barMetrics: ['Market Cap', 'Enterprise Value'],
+        lineMetrics: ['P/E', 'P/BV', 'P/S', 'EV/EBITDA'],
+      },
     ],
   },
 ];
+
+const FUNDAMENTAL_GROUPS = FUNDAMENTAL_CHART_GROUPS.map(({ id, label, Icon, charts }) => ({
+  id,
+  label,
+  Icon,
+  charts,
+  metrics: [...new Set(charts.flatMap(metricLabelsForChart))],
+}));
 
 const FUNDAMENTAL_VIEW_MODES = [
   { id: 'table', label: 'Table', Icon: Table2 },
@@ -464,180 +536,536 @@ function appendLegacyFundamentalSections(financialHighlights, result) {
   };
 }
 
-function buildChartRows(financialHighlights) {
-  const rows = Array.isArray(financialHighlights?.sections?.[0]?.rows)
-    ? financialHighlights.sections[0].rows
-    : financialHighlights?.rows || [];
+function findRowForChartMetric(financialHighlights, metricLabel) {
+  const keyAliases = new Set(METRIC_KEY_ALIASES[metricLabel] || []);
+  const labelAliases = new Set(metricLabelCandidates(metricLabel));
+  return flattenFinancialRows(financialHighlights).find(
+    (row) => keyAliases.has(row.key) || labelAliases.has(normalizeMetric(row.label))
+  );
+}
+
+function axisDomain(values, includeZero = false) {
+  const numericValues = values.filter((value) => Number.isFinite(value));
+  if (!numericValues.length) return { min: 0, max: 1, range: 1 };
+
+  let min = Math.min(...numericValues, includeZero ? 0 : Number.POSITIVE_INFINITY);
+  let max = Math.max(...numericValues, includeZero ? 0 : Number.NEGATIVE_INFINITY);
+
+  if (min === max) {
+    const padding = Math.abs(max || 1) * 0.12;
+    min -= padding;
+    max += padding;
+  }
+
+  const padding = (max - min) * 0.08;
+  return {
+    min: min - padding,
+    max: max + padding,
+    range: max - min + padding * 2 || 1,
+  };
+}
+
+function axisTicks(domain) {
+  return [domain.max, domain.min + domain.range / 2, domain.min];
+}
+
+function formatAxisNumber(value) {
+  if (!Number.isFinite(value)) return '0';
+  const absolute = Math.abs(value);
+  if (absolute >= 1000) return value.toFixed(0);
+  if (absolute >= 100) return value.toFixed(1).replace(/\.0$/, '');
+  if (absolute >= 10) return value.toFixed(1).replace(/\.0$/, '');
+  return value
+    .toFixed(2)
+    .replace(/\.00$/, '')
+    .replace(/(\.\d)0$/, '$1');
+}
+
+function seriesRenderType(chartDefinition, metricLabel) {
+  if (chartDefinition.type === 'mixed') {
+    return chartDefinition.barMetrics?.includes(metricLabel) ? 'bar' : 'line';
+  }
+  return chartDefinition.type === 'bar' || chartDefinition.type === 'grouped_bar' ? 'bar' : 'line';
+}
+
+function buildMetricChart(financialHighlights, chartDefinition) {
   const periods = Array.isArray(financialHighlights?.periods)
     ? sortPeriodsForChart(financialHighlights.periods)
     : [];
 
-  return {
-    periods,
-    rows: rows.map((row) => {
-      const points = periods.map((period) => {
-        const cell = row.values?.[period.key];
-        return {
-          periodKey: period.key,
-          periodLabel: displayPeriodLabel(period),
-          value: chartCellValue(cell),
-          display: chartCellDisplay(cell),
-        };
-      });
-      const values = points.map((point) => point.value);
-      const minValue = Math.min(0, ...values);
-      const maxValue = Math.max(0, ...values);
-      const range = maxValue - minValue || 1;
-
+  const series = metricLabelsForChart(chartDefinition).map((metricLabel, index) => {
+    const row = findRowForChartMetric(financialHighlights, metricLabel);
+    const points = periods.map((period) => {
+      const cell = row?.values?.[period.key];
       return {
-        key: row.key,
-        label: row.label,
-        points,
-        minValue,
-        maxValue,
-        range,
+        periodKey: period.key,
+        periodLabel: displayPeriodLabel(period),
+        value: chartCellValue(cell),
+        display: chartCellDisplay(cell),
       };
-    }),
+    });
+
+    return {
+      key: row?.key || normalizeMetric(metricLabel).replace(/\s+/g, '_'),
+      label: metricLabel,
+      renderType: seriesRenderType(chartDefinition, metricLabel),
+      color: CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length],
+      points,
+    };
+  });
+
+  return { periods, series };
+}
+
+function pointPath(points, yForValue, xForIndex) {
+  return points
+    .map(
+      (point, index) => `${index === 0 ? 'M' : 'L'} ${xForIndex(index)} ${yForValue(point.value)}`
+    )
+    .join(' ');
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function tooltipSize(point) {
+  const longestText = Math.max(
+    point.label?.length || 0,
+    `${point.periodLabel || ''} ${point.display || ''}`.length
+  );
+
+  return {
+    width: clamp(longestText * 7.4 + 44, CHART_TOOLTIP_MIN_WIDTH, CHART_TOOLTIP_MAX_WIDTH),
+    height: CHART_TOOLTIP_HEIGHT,
   };
 }
 
-function FundamentalGroupChart({ financialHighlights, group }) {
-  const chart = useMemo(() => buildChartRows(financialHighlights), [financialHighlights]);
+function tooltipPosition(point, size) {
+  const margin = 10;
+  const offset = 14;
+  const bounds = {
+    left: CHART_LEFT + margin,
+    right: CHART_WIDTH - CHART_RIGHT - margin,
+    top: CHART_TOP + margin,
+    bottom: CHART_HEIGHT - CHART_BOTTOM - margin,
+  };
+  const preferRight = point.x < (bounds.left + bounds.right) / 2;
+  const preferBelow = point.y < (bounds.top + bounds.bottom) / 2;
+  const xOptions = preferRight
+    ? [point.x + offset, point.x - size.width - offset]
+    : [point.x - size.width - offset, point.x + offset];
+  const yOptions = preferBelow
+    ? [point.y + offset, point.y - size.height - offset]
+    : [point.y - size.height - offset, point.y + offset];
+  const candidates = [
+    { x: xOptions[0], y: yOptions[0] },
+    { x: xOptions[0], y: yOptions[1] },
+    { x: xOptions[1], y: yOptions[0] },
+    { x: xOptions[1], y: yOptions[1] },
+    { x: point.x - size.width / 2, y: yOptions[0] },
+    { x: point.x - size.width / 2, y: yOptions[1] },
+  ];
+  const fits = (candidate) =>
+    candidate.x >= bounds.left &&
+    candidate.x + size.width <= bounds.right &&
+    candidate.y >= bounds.top &&
+    candidate.y + size.height <= bounds.bottom;
+  const overlapsPoint = (candidate) =>
+    point.x >= candidate.x - margin &&
+    point.x <= candidate.x + size.width + margin &&
+    point.y >= candidate.y - margin &&
+    point.y <= candidate.y + size.height + margin;
+  const exact = candidates.find((candidate) => fits(candidate) && !overlapsPoint(candidate));
+  if (exact) return exact;
 
-  if (!chart.periods.length || !chart.rows.length) return null;
+  const clamped = candidates.map((candidate) => ({
+    x: clamp(candidate.x, bounds.left, bounds.right - size.width),
+    y: clamp(candidate.y, bounds.top, bounds.bottom - size.height),
+  }));
+  return clamped.find((candidate) => !overlapsPoint(candidate)) || clamped[0];
+}
+
+function ChartLegend({ series }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 px-3 pb-3 font-mono text-[10px] uppercase tracking-wider text-bloomberg-muted">
+      {series.map((item) => (
+        <div key={item.label} className="flex items-center gap-2">
+          <span className="h-2 w-2" style={{ backgroundColor: item.color }} />
+          <span>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+ChartLegend.propTypes = {
+  series: PropTypes.array.isRequired,
+};
+
+function FundamentalMetricChart({ financialHighlights, chartDefinition }) {
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+  const chart = useMemo(
+    () => buildMetricChart(financialHighlights, chartDefinition),
+    [financialHighlights, chartDefinition]
+  );
+
+  if (!chart.periods.length || !chart.series.length) return null;
 
   const plotWidth = CHART_WIDTH - CHART_LEFT - CHART_RIGHT;
-  const slotWidth = plotWidth / chart.periods.length;
-  const barWidth = Math.min(42, Math.max(10, slotWidth * 0.44));
-  const chartHeight = CHART_TOP + chart.rows.length * CHART_ROW_HEIGHT + CHART_BOTTOM;
-  const { title, unit_note: unitNote } = financialHighlights || {};
+  const plotHeight = CHART_HEIGHT - CHART_TOP - CHART_BOTTOM;
+  const barSeries = chart.series.filter((series) => series.renderType === 'bar');
+  const lineSeries = chart.series.filter((series) => series.renderType === 'line');
+  const isMixed = chartDefinition.type === 'mixed' && barSeries.length && lineSeries.length;
+  const allValues = chart.series.flatMap((series) => series.points.map((point) => point.value));
+  const barValues = barSeries.flatMap((series) => series.points.map((point) => point.value));
+  const lineValues = lineSeries.flatMap((series) => series.points.map((point) => point.value));
+  const singleDomain = axisDomain(allValues, chartDefinition.type !== 'line');
+  const barDomain = isMixed ? axisDomain(barValues, true) : singleDomain;
+  const lineDomain = isMixed ? axisDomain(lineValues, false) : singleDomain;
+  const periodSlotWidth = plotWidth / chart.periods.length;
+  const barSlotCenter = (index) => CHART_LEFT + periodSlotWidth * index + periodSlotWidth / 2;
+  const lineX = barSlotCenter;
+  const yForDomain = (domain) => (value) =>
+    CHART_TOP + ((domain.max - value) / domain.range) * plotHeight;
+  const yBar = yForDomain(barDomain);
+  const yLine = yForDomain(lineDomain);
+  const zeroY = yBar(0);
+  const maxBarGroupWidth = chartDefinition.type === 'grouped_bar' || isMixed ? 124 : 64;
+  const barGroupWidth = Math.min(maxBarGroupWidth, Math.max(18, periodSlotWidth * 0.66));
+  const barWidth = Math.max(4, Math.min(34, barGroupWidth / Math.max(1, barSeries.length) - 3));
+  const tooltipSizeValue = hoveredPoint ? tooltipSize(hoveredPoint) : null;
+  const tooltip = hoveredPoint ? tooltipPosition(hoveredPoint, tooltipSizeValue) : null;
 
   return (
-    <section className="space-y-4 border-b border-bloomberg-border bg-bloomberg-bg px-4 py-4">
+    <div className="overflow-hidden rounded-md border border-bloomberg-border bg-black">
+      <div className="border-b border-bloomberg-border px-3 py-2">
+        <div className="font-mono text-xs uppercase tracking-wider text-bloomberg-orange">
+          {chartDefinition.title}
+        </div>
+        <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-bloomberg-muted">
+          {chartDefinition.type === 'mixed'
+            ? 'Bars + Lines'
+            : chartDefinition.type.replace('_', ' ')}
+        </div>
+      </div>
+      <div className="overflow-hidden">
+        <svg
+          role="img"
+          aria-label={`${chartDefinition.title} chart`}
+          width={CHART_WIDTH}
+          height={CHART_HEIGHT}
+          className="block h-auto w-full font-mono"
+          viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <rect width={CHART_WIDTH} height={CHART_HEIGHT} fill="black" />
+
+          {axisTicks(isMixed ? barDomain : singleDomain).map((tick) => {
+            const y = (isMixed ? yBar : yForDomain(singleDomain))(tick);
+            return (
+              <g key={`left-${tick}`}>
+                <line
+                  x1={CHART_LEFT}
+                  x2={CHART_WIDTH - CHART_RIGHT}
+                  y1={y}
+                  y2={y}
+                  stroke={CHART_GRID_COLOR}
+                />
+                <text
+                  x={CHART_LEFT - 12}
+                  y={y + 4}
+                  fill={CHART_ZERO_COLOR}
+                  fontFamily="monospace"
+                  fontSize="10"
+                  textAnchor="end"
+                >
+                  {formatAxisNumber(tick)}
+                </text>
+              </g>
+            );
+          })}
+
+          {isMixed &&
+            axisTicks(lineDomain).map((tick) => {
+              const y = yLine(tick);
+              return (
+                <text
+                  key={`right-${tick}`}
+                  x={CHART_WIDTH - CHART_RIGHT + 12}
+                  y={y + 4}
+                  fill={CHART_ZERO_COLOR}
+                  fontFamily="monospace"
+                  fontSize="10"
+                  textAnchor="start"
+                >
+                  {formatAxisNumber(tick)}
+                </text>
+              );
+            })}
+
+          {chart.periods.map((period, index) => {
+            const x = barSlotCenter(index);
+            return (
+              <g key={period.key}>
+                <line
+                  x1={x}
+                  x2={x}
+                  y1={CHART_TOP}
+                  y2={CHART_HEIGHT - CHART_BOTTOM}
+                  stroke={CHART_GRID_COLOR}
+                  strokeDasharray="4 6"
+                />
+                <text
+                  x={x}
+                  y={CHART_HEIGHT - 24}
+                  fill={CHART_ZERO_COLOR}
+                  fontFamily="monospace"
+                  fontSize="11"
+                  textAnchor="middle"
+                >
+                  {displayPeriodLabel(period)}
+                </text>
+              </g>
+            );
+          })}
+
+          <line
+            x1={CHART_LEFT}
+            x2={CHART_LEFT}
+            y1={CHART_TOP}
+            y2={CHART_HEIGHT - CHART_BOTTOM}
+            stroke={CHART_AXIS_COLOR}
+          />
+          <line
+            x1={CHART_LEFT}
+            x2={CHART_WIDTH - CHART_RIGHT}
+            y1={CHART_HEIGHT - CHART_BOTTOM}
+            y2={CHART_HEIGHT - CHART_BOTTOM}
+            stroke={CHART_AXIS_COLOR}
+          />
+          {isMixed && (
+            <line
+              x1={CHART_WIDTH - CHART_RIGHT}
+              x2={CHART_WIDTH - CHART_RIGHT}
+              y1={CHART_TOP}
+              y2={CHART_HEIGHT - CHART_BOTTOM}
+              stroke={CHART_AXIS_COLOR}
+            />
+          )}
+          {barDomain.min < 0 && barDomain.max > 0 && (
+            <line
+              x1={CHART_LEFT}
+              x2={CHART_WIDTH - CHART_RIGHT}
+              y1={zeroY}
+              y2={zeroY}
+              stroke={CHART_AXIS_COLOR}
+            />
+          )}
+
+          {barSeries.map((series, seriesIndex) =>
+            series.points.map((point, pointIndex) => {
+              const center = barSlotCenter(pointIndex);
+              const x =
+                center -
+                (barWidth * barSeries.length + 3 * (barSeries.length - 1)) / 2 +
+                seriesIndex * (barWidth + 3);
+              const valueY = yBar(point.value);
+              const baseY = yBar(0);
+              const y = Math.min(valueY, baseY);
+              const height = Math.max(2, Math.abs(baseY - valueY));
+              const hoverPoint = {
+                label: series.label,
+                periodLabel: point.periodLabel,
+                display: point.display,
+                color: series.color,
+                x: center,
+                y: point.value === 0 ? baseY - 1 : valueY,
+              };
+
+              return (
+                <rect
+                  key={`${series.key}-${point.periodKey}`}
+                  x={x}
+                  y={point.value === 0 ? baseY - 1 : y}
+                  width={barWidth}
+                  height={height}
+                  fill={series.color}
+                  opacity={point.value === 0 ? 0.7 : 0.9}
+                  data-metric={series.label}
+                  data-period={point.periodLabel}
+                  data-value={point.value}
+                  tabIndex={0}
+                  aria-label={`${series.label} ${point.periodLabel}: ${point.display}`}
+                  onMouseEnter={() => setHoveredPoint(hoverPoint)}
+                  onMouseMove={() => setHoveredPoint(hoverPoint)}
+                  onMouseLeave={() => setHoveredPoint(null)}
+                  onFocus={() => setHoveredPoint(hoverPoint)}
+                  onBlur={() => setHoveredPoint(null)}
+                >
+                  <title>
+                    {series.label} {point.periodLabel}: {point.display}
+                  </title>
+                </rect>
+              );
+            })
+          )}
+
+          {lineSeries.map((series) => (
+            <g key={series.key}>
+              <path
+                d={pointPath(series.points, isMixed ? yLine : yForDomain(singleDomain), lineX)}
+                fill="none"
+                stroke={series.color}
+                strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
+              />
+              {series.points.map((point, index) => {
+                const x = lineX(index);
+                const y = (isMixed ? yLine : yForDomain(singleDomain))(point.value);
+                const hoverPoint = {
+                  label: series.label,
+                  periodLabel: point.periodLabel,
+                  display: point.display,
+                  color: series.color,
+                  x,
+                  y,
+                };
+                return (
+                  <g key={`${series.key}-${point.periodKey}`}>
+                    <circle cx={x} cy={y} r="3.5" fill={series.color} />
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r="13"
+                      fill="transparent"
+                      data-metric={series.label}
+                      data-period={point.periodLabel}
+                      data-value={point.value}
+                      tabIndex={0}
+                      aria-label={`${series.label} ${point.periodLabel}: ${point.display}`}
+                      onMouseEnter={() => setHoveredPoint(hoverPoint)}
+                      onMouseMove={() => setHoveredPoint(hoverPoint)}
+                      onMouseLeave={() => setHoveredPoint(null)}
+                      onFocus={() => setHoveredPoint(hoverPoint)}
+                      onBlur={() => setHoveredPoint(null)}
+                    >
+                      <title>
+                        {series.label} {point.periodLabel}: {point.display}
+                      </title>
+                    </circle>
+                  </g>
+                );
+              })}
+            </g>
+          ))}
+
+          {hoveredPoint && tooltip && (
+            <g pointerEvents="none">
+              <line
+                x1={hoveredPoint.x}
+                x2={hoveredPoint.x}
+                y1={CHART_TOP}
+                y2={CHART_HEIGHT - CHART_BOTTOM}
+                stroke={hoveredPoint.color}
+                strokeOpacity="0.35"
+                strokeDasharray="3 5"
+              />
+              <g transform={`translate(${tooltip.x} ${tooltip.y})`}>
+                <rect
+                  width={tooltipSizeValue.width}
+                  height={tooltipSizeValue.height}
+                  rx="6"
+                  fill="#050505"
+                  stroke={hoveredPoint.color}
+                  strokeOpacity="0.9"
+                />
+                <circle cx="14" cy="17" r="4" fill={hoveredPoint.color} />
+                <text
+                  x="26"
+                  y="20"
+                  fill="#f97316"
+                  fontFamily="monospace"
+                  fontSize="11"
+                  fontWeight="700"
+                >
+                  {hoveredPoint.label}
+                </text>
+                <text x="14" y="40" fill="#d4d4d4" fontFamily="monospace" fontSize="11">
+                  {hoveredPoint.periodLabel}
+                </text>
+                <text
+                  x={tooltipSizeValue.width - 14}
+                  y="40"
+                  fill="#ffffff"
+                  fontFamily="monospace"
+                  fontSize="12"
+                  fontWeight="700"
+                  textAnchor="end"
+                >
+                  {hoveredPoint.display}
+                </text>
+              </g>
+            </g>
+          )}
+        </svg>
+      </div>
+      <ChartLegend series={chart.series} />
+    </div>
+  );
+}
+
+FundamentalMetricChart.propTypes = {
+  financialHighlights: PropTypes.object,
+  chartDefinition: PropTypes.shape({
+    title: PropTypes.string.isRequired,
+    type: PropTypes.string.isRequired,
+    metrics: PropTypes.array,
+    barMetrics: PropTypes.array,
+    lineMetrics: PropTypes.array,
+  }).isRequired,
+};
+
+function FundamentalChartsPanel({ financialHighlights, activeGroup }) {
+  if (!Array.isArray(financialHighlights?.periods) || !financialHighlights.periods.length) {
+    return null;
+  }
+
+  const { title, unit_note: unitNote } = financialHighlights || {};
+  const groupedPayload = groupFinancialHighlights(financialHighlights, activeGroup);
+
+  return (
+    <section className="space-y-5 border-b border-bloomberg-border bg-bloomberg-bg px-4 py-4">
       <div>
         <SectionHeader label={title || 'KEY FINANCIAL HIGHLIGHTS'} />
         {unitNote && <p className="font-mono text-[11px] text-bloomberg-muted">{unitNote}</p>}
       </div>
 
-      <div>
-        <div className="mb-2 font-mono text-xs uppercase tracking-wider text-bloomberg-orange">
-          {group.label}
+      <div className="space-y-3">
+        <div className="font-mono text-xs uppercase tracking-wider text-bloomberg-orange">
+          {activeGroup.label}
         </div>
-        <div className="overflow-x-auto border border-bloomberg-border bg-black">
-          <svg
-            role="img"
-            aria-label={`${group.label} fundamentals chart`}
-            className="min-w-[980px] w-full font-mono"
-            viewBox={`0 0 ${CHART_WIDTH} ${chartHeight}`}
-            style={{ height: chartHeight }}
-          >
-            <rect width={CHART_WIDTH} height={chartHeight} fill="black" />
-
-            {chart.periods.map((period, index) => {
-              const x = CHART_LEFT + slotWidth * index + slotWidth / 2;
-              return (
-                <g key={period.key}>
-                  <text
-                    x={x}
-                    y={24}
-                    fill={CHART_ZERO_COLOR}
-                    fontFamily="monospace"
-                    fontSize="11"
-                    textAnchor="middle"
-                  >
-                    {displayPeriodLabel(period)}
-                  </text>
-                  <line
-                    x1={x}
-                    x2={x}
-                    y1={CHART_TOP}
-                    y2={chartHeight - CHART_BOTTOM + 6}
-                    stroke={CHART_GRID_COLOR}
-                    strokeDasharray="4 6"
-                  />
-                </g>
-              );
-            })}
-
-            {chart.rows.map((row, rowIndex) => {
-              const rowTop = CHART_TOP + rowIndex * CHART_ROW_HEIGHT;
-              const barTop = rowTop + CHART_BAR_TOP_OFFSET;
-              const valueToY = (value) =>
-                barTop + ((row.maxValue - value) / row.range) * CHART_BAR_HEIGHT;
-              const zeroY = valueToY(0);
-
-              return (
-                <g key={row.key || row.label}>
-                  <rect
-                    x={0}
-                    y={rowTop}
-                    width={CHART_WIDTH}
-                    height={CHART_ROW_HEIGHT}
-                    fill={rowIndex % 2 === 0 ? '#050505' : 'transparent'}
-                  />
-                  <line
-                    x1={0}
-                    x2={CHART_WIDTH}
-                    y1={rowTop + CHART_ROW_HEIGHT}
-                    y2={rowTop + CHART_ROW_HEIGHT}
-                    stroke={CHART_GRID_COLOR}
-                  />
-                  <text x={14} y={rowTop + 27} fill="#e5e5e5" fontFamily="monospace" fontSize="12">
-                    {row.label}
-                  </text>
-                  <line
-                    x1={CHART_LEFT}
-                    x2={CHART_WIDTH - CHART_RIGHT}
-                    y1={zeroY}
-                    y2={zeroY}
-                    stroke={CHART_AXIS_COLOR}
-                  />
-                  {row.points.map((point, pointIndex) => {
-                    const x = CHART_LEFT + slotWidth * pointIndex + slotWidth / 2 - barWidth / 2;
-                    const valueY = valueToY(point.value);
-                    const barY = Math.min(valueY, zeroY);
-                    const barHeight = Math.max(2, Math.abs(zeroY - valueY));
-                    const fill =
-                      point.value > 0
-                        ? CHART_BAR_COLOR
-                        : point.value < 0
-                          ? CHART_NEGATIVE_COLOR
-                          : CHART_ZERO_COLOR;
-
-                    return (
-                      <rect
-                        key={`${row.key || row.label}-${point.periodKey}`}
-                        x={x}
-                        y={point.value === 0 ? zeroY - 1 : barY}
-                        width={barWidth}
-                        height={barHeight}
-                        fill={fill}
-                        opacity={point.value === 0 ? 0.7 : 0.9}
-                        data-metric={row.label}
-                        data-period={point.periodLabel}
-                        data-value={point.value}
-                      >
-                        <title>
-                          {row.label} {point.periodLabel}: {point.display}
-                        </title>
-                      </rect>
-                    );
-                  })}
-                </g>
-              );
-            })}
-          </svg>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {activeGroup.charts.map((chartDefinition) => (
+            <div key={chartDefinition.id} className={chartDefinition.wide ? 'md:col-span-2' : ''}>
+              <FundamentalMetricChart
+                financialHighlights={groupedPayload}
+                chartDefinition={chartDefinition}
+              />
+            </div>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-FundamentalGroupChart.propTypes = {
-  financialHighlights: PropTypes.object,
-  group: PropTypes.shape({
+FundamentalChartsPanel.propTypes = {
+  activeGroup: PropTypes.shape({
     label: PropTypes.string.isRequired,
+    charts: PropTypes.array.isRequired,
   }).isRequired,
+  financialHighlights: PropTypes.object,
 };
 
 export default function FundamentalTab({ financialHighlights, result = {} }) {
@@ -664,7 +1092,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
                 size="sm"
                 aria-pressed={isActive}
                 onClick={() => setSelectedFundamentalGroup(group.id)}
-                className={`h-10 whitespace-nowrap rounded-none border px-3 font-mono text-xs uppercase tracking-wider ${
+                className={`h-10 whitespace-nowrap rounded-md border px-3 font-mono text-xs uppercase tracking-wider ${
                   isActive
                     ? 'border-bloomberg-orange bg-bloomberg-surface text-bloomberg-orange'
                     : 'border-bloomberg-border bg-black text-bloomberg-muted hover:border-bloomberg-orange hover:text-bloomberg-white'
@@ -676,10 +1104,9 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
             );
           })}
         </div>
-        <div
-          className="mt-3 inline-flex overflow-hidden border border-bloomberg-border bg-bloomberg-bg"
-          aria-label="Fundamental view mode"
-        >
+      </div>
+      <div className="border-b border-bloomberg-border bg-black px-4 py-3">
+        <div className="flex gap-2" aria-label="Fundamental view mode">
           {FUNDAMENTAL_VIEW_MODES.map((mode) => {
             const isActive = mode.id === fundamentalViewMode;
             const Icon = mode.Icon;
@@ -691,10 +1118,10 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
                 size="sm"
                 aria-pressed={isActive}
                 onClick={() => setFundamentalViewMode(mode.id)}
-                className={`h-8 gap-0 rounded-none border-0 px-3 font-mono text-xs uppercase tracking-wider [&_svg]:h-3.5 [&_svg]:w-3.5 ${
+                className={`h-8 gap-0 rounded-md border px-3 font-mono text-xs uppercase tracking-wider [&_svg]:h-3.5 [&_svg]:w-3.5 ${
                   isActive
-                    ? 'bg-bloomberg-surface text-bloomberg-orange'
-                    : 'bg-black text-bloomberg-muted hover:bg-bloomberg-card hover:text-bloomberg-white'
+                    ? 'border-bloomberg-orange bg-bloomberg-surface text-bloomberg-orange'
+                    : 'border-bloomberg-border bg-black text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-card hover:text-bloomberg-white'
                 }`}
               >
                 <Icon className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
@@ -707,7 +1134,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
       {fundamentalViewMode === 'table' ? (
         <FinancialHighlightsTable financialHighlights={groupedTablePayload} />
       ) : (
-        <FundamentalGroupChart financialHighlights={groupedTablePayload} group={activeGroup} />
+        <FundamentalChartsPanel financialHighlights={tablePayload} activeGroup={activeGroup} />
       )}
     </>
   );

@@ -50,6 +50,7 @@ describe('StockForm cleanup', () => {
   afterEach(() => {
     cleanup();
     sessionStorage.clear();
+    localStorage.clear();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -140,7 +141,9 @@ describe('StockForm cleanup', () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+      expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(
+        1
+      );
     });
 
     unmount();
