@@ -1,12 +1,12 @@
 # Coding Conventions
 
-Terakhir disinkronkan: 2026-06-15.
+Last synced: 2026-06-16.
 
-Ikuti pola kode aktif. Jangan pakai preferensi umum yang bentrok dengan repo.
+Follow the active code patterns. Do not use generic preferences that conflict with the repo.
 
 ## Git
 
-Gunakan Conventional Commits:
+Use Conventional Commits:
 
 ```text
 <type>(<scope>): <short description>
@@ -18,22 +18,24 @@ Types:
 feat, fix, chore, docs, test, refactor, perf, style
 ```
 
-Stage file spesifik. Hindari `git add .` kecuali semua perubahan satu unit
-kerja.
+Stage specific files. Avoid `git add .` unless all changes are one unit of
+work.
 
 ## Documentation
 
-- Gunakan Bahasa Indonesia untuk docs `ai/`.
-- Ambil endpoint dari `backend/routes/*`, bukan ingatan.
-- Ambil env default dari `backend/config_defaults.py`, `backend/config_llm.py`,
-  `frontend/src/config.js`, dan `frontend/vite.config.js`.
-- Jika endpoint/env berubah, update `ai/api.md` dan `ai/setup.md`.
-- Jangan dokumentasikan fitur yang hanya ada di UI text tetapi belum ada route
-  atau backend logic.
-- Jangan tulis bahwa Docker Compose memakai nginx runtime. Compose sekarang
-  memakai Vite dev target.
-- Jangan tulis bahwa frontend menyimpan owner token. Sekarang token di cookie
-  HttpOnly.
+- Use English for docs under `ai/`.
+- Get endpoints from `backend/routes/*`, not memory.
+- Get env defaults from `backend/config_defaults.py`, `backend/config_llm.py`,
+  `frontend/src/config.js`, and `frontend/vite.config.js`.
+- If endpoints/env change, update `ai/api.md` and `ai/setup.md`.
+- Do not document features that exist only in UI text but do not have routes
+  or backend logic yet.
+- Do not write that Docker Compose uses the nginx runtime. Compose currently
+  uses the Vite dev target.
+- Do not write that the frontend stores the owner token. The token is now in an
+  HttpOnly cookie.
+- Do not write `backtest/` or `assets/` as active folders. Neither exists in
+  the tree right now.
 
 ## Python Backend
 
@@ -42,7 +44,9 @@ kerja.
 | Area | Rule |
 |---|---|
 | Backend Docker | Python 3.11 slim. |
+| Backend ruff target | Python 3.11. |
 | Core package | `>=3.10,<3.13`. |
+| Core ruff target | Python 3.10. |
 | New Python file | Add `from __future__ import annotations`. |
 | Type hints | Required for new function signatures. |
 | Union | Use `X | Y`. |
@@ -180,7 +184,8 @@ backend/tradingagents-core/tests/
 Markers:
 
 ```text
-unit, integration, smoke, live_api
+backend pyproject: live_api
+core pyproject: unit, integration, smoke, live_api
 ```
 
 Rules:
@@ -250,8 +255,10 @@ bloomberg-subtle
 |---|---|
 | Page | `frontend/src/pages/` |
 | Shared component | `frontend/src/components/` |
+| Market component | `frontend/src/components/market/` |
 | Result component | `frontend/src/components/results/` |
 | Result tab | `frontend/src/components/results/tabs/` |
+| API client | `frontend/src/api/` |
 | Hook | `frontend/src/hooks/` |
 | Utility | `frontend/src/utils/` |
 | Domain contract | `frontend/src/domain/` |
@@ -260,17 +267,32 @@ bloomberg-subtle
 
 ### Routes
 
-Primary analysis route is `/AI-Research`.
+Primary analysis route is `/ai-agent`.
 
 Keep legacy redirects unless doing planned route migration:
 
 ```text
+/AI-Research
+/ai-research
 /analysis
-/analysis/:resourceId
 /analysis-live
+/AI-Research.test
+/ai-research.test
 /analysis.test
 /analysis-mock
 ```
+
+Other routes:
+
+```text
+/home
+/research
+/news
+/market
+/econ
+```
+
+`/economic` redirects to `/econ`.
 
 ### API URL
 
@@ -329,6 +351,29 @@ Allowed backend markets:
 IDX, ID, US, GLOBAL, CRYPTO, ETF, FUND, UNKNOWN
 ```
 
+### Market Dashboard
+
+Use `frontend/src/api/market.js` helpers:
+
+```text
+getMarketPresets()
+validateMarketSymbol()
+getMarketOverview()
+getMarketMovers()
+```
+
+Backend endpoints:
+
+```text
+GET  /api/market/presets
+GET  /api/market/validate-symbol
+POST /api/market/overview
+GET  /api/market/movers
+```
+
+`/api/market/quotes` remains ticker tape endpoint.
+`/api/market/ohlcv` remains result chart endpoint.
+
 ### Mock Route
 
 Mock route is enabled only when `VITE_ENABLE_MOCK=true`.
@@ -336,11 +381,30 @@ Mock route is enabled only when `VITE_ENABLE_MOCK=true`.
 Files:
 
 ```text
-frontend/src/pages/AnalysisMock.jsx
+frontend/src/pages/AIAgentMock.jsx
 frontend/src/components/StockFormMock.jsx
 frontend/src/hooks/useMockAnalysisJob.js
 frontend/dev/mockData.js
 frontend/src/utils/mockReport.js
+```
+
+Primary mock route:
+
+```text
+/ai-agent.test
+/ai-agent.test/:resourceId
+```
+
+Legacy mock routes redirect:
+
+```text
+/AI-Research.test
+/AI-Research.test/:resourceId
+/ai-research.test
+/ai-research.test/:resourceId
+/analysis.test
+/analysis.test/:resourceId
+/analysis-mock
 ```
 
 Do not import mock fixture into production code path.
@@ -388,12 +452,16 @@ DELETE /api/analysis/{job_id}
 Endpoints that exist and are easy to forget:
 
 ```text
-GET /api/market/search
-GET /api/market/ohlcv
-GET /api/news/general
-GET /api/news/general/categories
-GET /api/news/general/stream
-GET /api/reports/disclaimer
+GET  /api/market/presets
+GET  /api/market/validate-symbol
+POST /api/market/overview
+GET  /api/market/movers
+GET  /api/market/search
+GET  /api/market/ohlcv
+GET  /api/news/general
+GET  /api/news/general/categories
+GET  /api/news/general/stream
+GET  /api/reports/disclaimer
 ```
 
 Endpoints that do not exist:
@@ -436,17 +504,17 @@ backend/tests/test_report_routes.py
 
 ## Environment Files
 
-Allowed templates:
+Allowed template:
 
 ```text
 backend/.env.example
-backtest/.env.backtest.example
 ```
 
 Current repo does not have:
 
 ```text
 frontend/.env.example
+backtest/.env.backtest.example
 ```
 
 Do not commit:
@@ -456,7 +524,6 @@ Do not commit:
 .env.*
 backend/.env
 frontend/.env
-backtest/.env.backtest
 *.sqlite3
 *.sqlite
 *.db

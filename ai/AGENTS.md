@@ -1,94 +1,99 @@
 # TradingAgent AI Context
 
-Terakhir disinkronkan: 2026-06-15.
+Last synced: 2026-06-16.
 
-File ini konteks utama untuk coding agent. Baca dulu sebelum edit kode, docs,
-Docker, env, test, atau kontrak API.
+This file is the main context for the coding agent. Read it before editing code, docs,
+Docker, env, tests, or API contracts.
 
-## Mode Kerja
+## Working Mode
 
-- Jawab user dalam Bahasa Indonesia jika user memakai Bahasa Indonesia.
-- Singkat. Langsung ke file, command, test, hasil.
-- Jangan pakai basa-basi.
-- Jangan tampilkan reasoning panjang.
-- Jangan ubah file di luar scope.
-- Jangan revert perubahan user.
-- Jangan commit secret, `.env`, cache, SQLite, build output, atau `node_modules`.
-- Jika mengubah kontrak backend/frontend, update docs `ai/` dan test terkait.
+- Answer users and implementation output bilingually in English and Indonesian.
+- Be brief. Go straight to files, commands, tests, and results.
+- Do not use filler or pleasantries.
+- Do not show long reasoning.
+- Do not change files outside the scope.
+- Do not revert user changes.
+- Do not commit secrets, `.env`, cache files, SQLite databases, build output, or `node_modules`.
+- If you change backend/frontend contracts, update the `ai/` docs and related tests.
 
-Format laporan default setelah implementasi:
+Default report format after implementation:
 
 ```text
 Files changed:
 - path/file
 
 Summary:
-- Perubahan inti.
+- Core changes.
 
 Tests:
 - command
-- hasil
+- result
 
 Risk:
-- risiko penting, atau "Tidak ada risiko besar yang terlihat."
+- important risk, or "No major risk is visible."
 ```
 
-## Tujuan Project
+## Project Goal
 
-TradingAgent adalah aplikasi full-stack untuk riset saham dan aset berbasis
-multi-agent LLM.
+TradingAgent is a full-stack application for stock and asset research powered by
+multi-agent LLMs.
 
-- Backend: FastAPI di `backend/`.
-- Engine agent: package editable `backend/tradingagents-core`, import sebagai
+- Backend: FastAPI in `backend/`.
+- Agent engine: editable package `backend/tradingagents-core`, imported as
   `tradingagents`.
-- Frontend: React 18 + Vite di `frontend/`.
-- Output: analisis Buy, Hold, Sell, Wait, risk, thesis, chart, news,
-  fundamentals, report HTML/PDF.
-- Disclaimer report wajib tetap ada. Ini alat riset, bukan financial advice.
+- Frontend: React 18 + Vite in `frontend/`.
+- Main UI: AI Agent terminal, market dashboard, general news, research
+  placeholder, economic placeholder.
+- Analysis output: Buy, Hold, Sell, Wait, risk, thesis, chart, news,
+  fundamentals, HTML/PDF report.
+- The report disclaimer must remain. This is a research tool, not financial advice.
 
-## Fakta Penting Saat Ini
+## Current Important Facts
 
-- Primary UI route: `/AI-Research`.
-- Legacy `/analysis` redirect ke `/AI-Research`.
+- Primary UI route: `/ai-agent`.
+- Legacy `/AI-Research`, `/ai-research`, `/analysis`, and `/analysis-live`
+  redirect to `/ai-agent`.
+- The mock route is active only when `VITE_ENABLE_MOCK=true`: `/ai-agent.test`.
 - Backend API prefix: `/api`.
-- Health endpoint tanpa prefix: `/health`.
+- Health endpoint without prefix: `/health`.
 - Frontend default API base: `/api`.
-- Vite dev punya proxy `/api`.
-- Local Vite perlu `VITE_BACKEND_PROXY_TARGET=http://localhost:8000` jika backend
-  jalan di host Windows.
-- Docker Compose default memakai frontend Vite dev stage, bukan nginx runtime.
-- Dockerfile frontend runtime nginx listen `8080`, bukan `80`.
-- `frontend/.env.example` tidak ada di repo sekarang.
-- `docker-compose.mock.yml` hanya set build arg. Dengan compose dev target,
-  mock lebih aman diaktifkan lewat env `VITE_ENABLE_MOCK=true`.
-- Auth browser sekarang pakai cookie HttpOnly `ta_owner_token` dari
-  `POST /api/session`.
-- Frontend tidak mengirim `x-owner-token`; `buildAuthHeaders()` hanya memastikan
-  session cookie ada.
-- Backend masih menerima `x-owner-token` untuk test dan legacy client.
-- `validate_startup_config()` mengembalikan issue. `main.validate_config()`
-  log issue lalu server tetap jalan untuk debug local.
-- Beberapa config error tetap raise saat import, contoh invalid `APP_ENV`,
-  wildcard CORS, production tanpa `API_KEY`, production tanpa
+- Vite dev has a `/api` proxy.
+- Local Vite needs `VITE_BACKEND_PROXY_TARGET=http://localhost:8000` if the backend
+  runs on the Windows host.
+- Docker Compose defaults to the frontend Vite dev stage, not the nginx runtime.
+- Dockerfile frontend runtime nginx listens on `8080`, not `80`.
+- `frontend/.env.example` is not in the repo right now.
+- `backtest/` and `assets/` are not in the tree right now.
+- `image/` contains README screenshots.
+- `graphify-out/` is graph cache output, not runtime app source.
+- `docker-compose.mock.yml` only sets a build arg. With the compose dev target,
+  mock mode is safer to enable through env `VITE_ENABLE_MOCK=true`.
+- Browser auth uses the HttpOnly `ta_owner_token` cookie from `POST /api/session`.
+- The frontend does not send `x-owner-token`; `buildAuthHeaders()` only ensures
+  the session cookie exists.
+- The backend still accepts `x-owner-token` for tests and legacy clients.
+- `validate_startup_config()` returns issues. `main.validate_config()` logs issues,
+  then the server keeps running for local debugging.
+- Some config errors still raise at import time, for example invalid `APP_ENV`,
+  wildcard CORS, production without `API_KEY`, or production without
   `OWNER_SESSION_SECRET`.
-- LLM key utama sekarang `LLM_API_KEY`. Provider-specific keys masih legacy atau
-  fallback SDK.
-- Market input memakai canonical yfinance symbol dari `/api/market/search`.
-- Plain IDX ticker tidak auto suffix `.JK`. Pilih `BBCA.JK` dari search untuk
-  IDX.
-- Backend menerima market: `IDX`, `ID`, `US`, `GLOBAL`, `CRYPTO`, `ETF`,
+- The primary LLM key is now `LLM_API_KEY`. Provider-specific keys are still legacy
+  or SDK fallback keys.
+- Market input uses the canonical yfinance symbol from `/api/market/search`.
+- Plain IDX tickers are not auto-suffixed with `.JK`. Select `BBCA.JK` from search
+  for IDX.
+- The backend accepts these markets: `IDX`, `ID`, `US`, `GLOBAL`, `CRYPTO`, `ETF`,
   `FUND`, `UNKNOWN`.
-- Non-ID suffix seperti `.HK`, `.T`, `.DE` diterima jika canonical yfinance.
-- `/market` page masih shell dengan navbar dan ticker tape.
-- `/economic` page masih placeholder.
+- Non-ID suffixes such as `.HK`, `.T`, `.DE` are accepted when they are canonical yfinance symbols.
+- The `/market` page is active and uses overview, presets, movers, and ticker tape.
+- `/research` page placeholder.
+- The `/econ` page is a placeholder. `/economic` redirects to `/econ`.
 
 ## Repository Map
 
 ```text
 TradingAgents/
   ai/                         agent docs
-  assets/                     README screenshots
-  backtest/                   env template only, no runner
   backend/
     main.py                   FastAPI app, middleware, lifespan, routers
     config_env.py             .env loader and env parsers
@@ -101,13 +106,15 @@ TradingAgents/
     routes/
       analysis.py             analyze, jobs, SSE, status, ticker validate
       analysis_history.py     SQLite history API
-      market.py               quotes, search, OHLCV
+      market.py               presets, validate-symbol, overview, movers, search, OHLCV, quotes
       news.py                 company news, general news, news SSE
       reports.py              disclaimer, HTML/PDF report
       session.py              owner session cookie
-      debug.py                debug endpoints gated by flag
+      debug.py                debug endpoints gated by env/development
     services/
       analysis_repository.py  permanent SQLite history
+      market_yfinance_service.py market overview and movers helpers
+      market_symbol_universe.py local ticker search universe
       report_service.py       report context, HTML, PDF
       report_disclaimer.py    canonical disclaimer
     tradingagents-core/
@@ -129,12 +136,14 @@ TradingAgents/
       App.jsx                 routes
       constants/routes.js     primary and legacy routes
       config.js               frontend env resolver
+      api/market.js           market dashboard API client
       domain/analysisContract.js request payload and validation
       utils/api.js            API URL and owner session bootstrap
       hooks/useAnalysisJob.js job API and SSE stream
       hooks/useGeneralNews.js general news fetch and SSE
       components/             UI components
-      pages/                  Home, AI Research, News, Market, Economic
+      pages/                  Dashboard, AIAgent, AIAgentMock, News, Market, Research, Economic
+  image/                      README screenshots
 ```
 
 ## Active Routes
@@ -144,17 +153,30 @@ Frontend:
 ```text
 /                         -> /home
 /home                     -> Dashboard
-/AI-Research              -> Analysis
-/AI-Research/:resourceId  -> Analysis lookup
-/analysis                 -> redirect /AI-Research
-/analysis/:resourceId     -> redirect /AI-Research/:resourceId
-/analysis-live            -> redirect /AI-Research
+/ai-agent                 -> AIAgent
+/ai-agent/:resourceId     -> AIAgent lookup
+/AI-Research              -> redirect /ai-agent
+/AI-Research/:resourceId  -> redirect /ai-agent/:resourceId
+/ai-research              -> redirect /ai-agent
+/ai-research/:resourceId  -> redirect /ai-agent/:resourceId
+/analysis                 -> redirect /ai-agent
+/analysis/:resourceId     -> redirect /ai-agent/:resourceId
+/analysis-live            -> redirect /ai-agent
+/research                 -> Research placeholder
 /news                     -> General News page
-/market                   -> Shell page
-/economic                 -> Placeholder page
-/AI-Research.test         -> mock route if VITE_ENABLE_MOCK=true
-/analysis.test            -> legacy mock redirect
-/analysis-mock            -> legacy mock redirect
+/market                   -> Market dashboard
+/econ                     -> Economic placeholder
+/economic                 -> redirect /econ
+/ai-agent.test            -> mock AIAgent if VITE_ENABLE_MOCK=true
+/ai-agent.test/:resourceId -> mock AIAgent lookup if VITE_ENABLE_MOCK=true
+/AI-Research.test         -> legacy mock redirect if VITE_ENABLE_MOCK=true
+/AI-Research.test/:resourceId -> legacy mock redirect if VITE_ENABLE_MOCK=true
+/ai-research.test         -> legacy mock redirect if VITE_ENABLE_MOCK=true
+/ai-research.test/:resourceId -> legacy mock redirect if VITE_ENABLE_MOCK=true
+/analysis.test            -> legacy mock redirect if VITE_ENABLE_MOCK=true
+/analysis.test/:resourceId -> legacy mock redirect if VITE_ENABLE_MOCK=true
+/analysis-mock            -> legacy mock redirect if VITE_ENABLE_MOCK=true
+*                         -> NotFound
 ```
 
 Backend canonical API:
@@ -168,6 +190,13 @@ DELETE /api/analysis/jobs/{job_id}
 GET    /api/status
 GET    /api/ticker/validate
 GET    /api/analysis/history
+GET    /api/analysis/history/{request_id}
+DELETE /api/analysis/history/{request_id}
+DELETE /api/analysis/history
+GET    /api/market/presets
+GET    /api/market/validate-symbol
+POST   /api/market/overview
+GET    /api/market/movers
 GET    /api/market/search
 GET    /api/market/ohlcv
 GET    /api/market/quotes
@@ -182,7 +211,7 @@ POST   /api/analysis/report.html
 POST   /api/analysis/report.pdf
 ```
 
-Legacy aktif:
+Active legacy routes:
 
 ```text
 POST   /api/analyze
@@ -199,7 +228,7 @@ Debug:
 GET /api/debug/llm-cache        development only
 GET /api/debug/news/{ticker}    development only
 GET /api/debug/health           DEBUG_ENDPOINTS_ENABLED=true
-GET /api/debug/vendor/{name}    DEBUG_ENDPOINTS_ENABLED=true
+GET /api/debug/vendor/{vendor_name} DEBUG_ENDPOINTS_ENABLED=true
 GET /api/debug/symbol/{ticker}  DEBUG_ENDPOINTS_ENABLED=true
 GET /api/debug/metrics          DEBUG_ENDPOINTS_ENABLED=true
 GET /api/debug/vendor-stats     DEBUG_ENDPOINTS_ENABLED=true
@@ -210,7 +239,9 @@ GET /api/debug/vendor-stats     DEBUG_ENDPOINTS_ENABLED=true
 Service credential:
 
 - Header: `x-api-key: <API_KEY>` or `Authorization: Bearer <API_KEY>`.
-- Optional in development when `REQUIRE_API_KEY_FOR_RATE_LIMIT=false`.
+- Optional in development when `API_KEY` blank and
+  `REQUIRE_API_KEY_FOR_RATE_LIMIT=false`.
+- Required when `API_KEY` is set.
 - Required in production.
 - Docker nginx can inject `x-api-key` from `BACKEND_API_KEY`.
 
@@ -264,6 +295,7 @@ Preflight market data
   -> Risk Analysts
   -> Portfolio Manager
   -> trade level normalization
+  -> guardrail
   -> serializer response shaping
   -> SQLite history
 ```
@@ -278,15 +310,17 @@ Parallelism:
 
 Depth:
 
-| Depth | LLM budget | Retries | Behavior |
-|---|---:|---:|---|
-| `fast` | 6 | 1 | Skips full debate/risk, uses conservative fallback. |
-| `balanced` | 9 | 2 | Default full flow. |
-| `deep` | 12 | 3 | Extra debate/risk passes when supported. |
+| Depth | LLM budget | Debate | Risk |
+|---|---:|---:|---:|
+| `fast` | 6 | 1 | 1 |
+| `balanced` | 9 | 2 | 2 |
+| `deep` | 12 | 3 | 3 |
+
+LLM client retry count uses `LLM_MAX_RETRIES`.
 
 ## Data and News
 
-Primary market data route uses yfinance symbols.
+Primary market data uses yfinance symbols.
 
 Vendor defaults live in `backend/config_defaults.py`.
 
@@ -305,6 +339,14 @@ News has two paths:
   `/api/news/{ticker}`.
 - General news page: `GeneralNewsService`, exposed at `/api/news/general` and
   `/api/news/general/stream`.
+
+Market dashboard uses:
+
+- `GET /api/market/presets`
+- `GET /api/market/validate-symbol`
+- `POST /api/market/overview`
+- `GET /api/market/movers`
+- `GET /api/market/quotes`
 
 General news background refresh starts when:
 
@@ -332,7 +374,7 @@ GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH=true
 - Do not manually manage owner token in frontend storage.
 - Ticker input must use `TickerSearchBar` and `/api/market/search` unless user
   explicitly asks for manual mode.
-- Keep primary route `/AI-Research`.
+- Keep primary route `/ai-agent`.
 - Keep legacy redirects unless doing planned migration.
 
 ## Files to Check by Change Type
@@ -346,6 +388,7 @@ backend/routes/serializers.py
 frontend/src/domain/analysisContract.js
 frontend/src/components/StockForm.jsx
 frontend/src/hooks/useAnalysisJob.js
+frontend/src/components/ResultCard.jsx
 backend/tests/test_analysis_contract_snapshot.py
 frontend/src/domain/analysisContract.test.js
 ai/api.md
@@ -396,6 +439,12 @@ Market/ticker:
 ```text
 backend/routes/market.py
 backend/routes/validation.py
+backend/services/market_yfinance_service.py
+backend/services/market_symbol_universe.py
+frontend/src/api/market.js
+frontend/src/hooks/useMarketOverviewConfig.js
+frontend/src/hooks/useMarketOverviewData.js
+frontend/src/hooks/useMarketMovers.js
 frontend/src/components/TickerSearchBar.jsx
 frontend/src/domain/analysisContract.js
 frontend/src/components/results/tabs/ChartPriceTab.jsx
@@ -427,6 +476,16 @@ frontend/vite.config.js
 frontend/nginx.conf
 backend/.env.example
 ai/setup.md
+```
+
+Frontend route changes:
+
+```text
+frontend/src/App.jsx
+frontend/src/constants/routes.js
+frontend/src/components/Navbar.jsx
+frontend/src/pages/AIAgent.jsx
+frontend/src/pages/AIAgentMock.jsx
 ```
 
 ## Commands

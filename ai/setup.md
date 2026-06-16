@@ -1,22 +1,22 @@
 # Setup Guide
 
-Terakhir disinkronkan: 2026-06-15.
+Last synced: 2026-06-16.
 
-Panduan ini mengikuti kode aktif untuk local dev, Docker, env, test, dan common
+This guide follows the active code for local dev, Docker, env, tests, and common
 problems.
 
 ## Requirements
 
 | Tool | Version |
 |---|---|
-| Python | 3.10, 3.11, atau 3.12 |
+| Python | 3.10, 3.11, or 3.12 |
 | Backend Docker Python | 3.11 |
 | Node.js | 22 recommended |
-| npm | Versi bawaan Node |
+| npm | Version bundled with Node |
 | Docker | Docker Desktop current |
 | Git | Current |
 
-Python 3.13 tidak didukung oleh `backend/tradingagents-core`.
+Python 3.13 is not supported by `backend/tradingagents-core`.
 
 ## Port Map
 
@@ -88,6 +88,17 @@ LLM_API_KEY=your_deepseek_key
 DEEPSEEK_API_KEY=your_deepseek_key
 QUICK_THINK_LLM=deepseek-chat
 DEEP_THINK_LLM=deepseek-reasoner
+```
+
+Minimum OpenRouter:
+
+```env
+APP_ENV=development
+LLM_PROVIDER=openrouter
+LLM_API_KEY=your_openrouter_key
+OPENROUTER_API_KEY=your_openrouter_key
+QUICK_THINK_LLM=your-openrouter-model
+DEEP_THINK_LLM=your-openrouter-model
 ```
 
 Minimum Ollama:
@@ -165,7 +176,7 @@ http://127.0.0.1:3000
 Primary analysis page:
 
 ```text
-http://127.0.0.1:3000/AI-Research
+http://127.0.0.1:3000/ai-agent
 ```
 
 Alternative direct API env:
@@ -186,7 +197,7 @@ Frontend scripts:
 | `preview` | `vite preview --host 127.0.0.1 --port 3000` |
 | `test` | `vitest --environment jsdom` |
 | `lint` | `eslint .` |
-| `format:check` | `prettier --check ...` |
+| `format:check` | `prettier --check "src/**/*.{js,jsx,css}" "dev/**/*.{js,jsx,css}" "*.{js,json,html}"` |
 | `quality` | lint, format check, tests |
 | `dev:lan` | `vite --host 0.0.0.0 --port 3000` |
 | `preview:lan` | `vite preview --host 0.0.0.0 --port 3000` |
@@ -202,13 +213,13 @@ VITE_ENABLE_MOCK=true
 Open:
 
 ```text
-http://127.0.0.1:3000/AI-Research.test
+http://127.0.0.1:3000/ai-agent.test
 ```
 
 Files:
 
 ```text
-frontend/src/pages/AnalysisMock.jsx
+frontend/src/pages/AIAgentMock.jsx
 frontend/src/components/StockFormMock.jsx
 frontend/src/hooks/useMockAnalysisJob.js
 frontend/dev/mockData.js
@@ -218,7 +229,12 @@ frontend/src/utils/mockReport.js
 Legacy mock routes redirect:
 
 ```text
+/AI-Research.test
+/AI-Research.test/:resourceId
+/ai-research.test
+/ai-research.test/:resourceId
 /analysis.test
+/analysis.test/:resourceId
 /analysis-mock
 ```
 
@@ -339,7 +355,7 @@ npm run dev
 Open:
 
 ```text
-http://localhost:3000/AI-Research.test
+http://localhost:3000/ai-agent.test
 ```
 
 ## Backend Tests
@@ -414,23 +430,6 @@ python scripts\seed_mock_analysis.py
 ```
 
 Snapshot goes to `ANALYSIS_DB_PATH`.
-
-## Backtest Folder
-
-`backtest/` currently has env files only. No runner code exists in this repo
-state.
-
-Template:
-
-```text
-backtest/.env.backtest.example
-```
-
-Do not commit:
-
-```text
-backtest/.env.backtest
-```
 
 ## Backend Env Reference
 
@@ -535,7 +534,7 @@ RESPONSE_DETAILS=summary,full,debug
 | `LLM_TIMEOUT_SECONDS` | 60 | LLM timeout. |
 | `LLM_MAX_RETRIES` | 1 | LLM retry attempts. |
 | `PROVIDER_SDK_MAX_RETRIES` | 0 | SDK internal retries. |
-| `MAX_CONCURRENT_LLM_CALLS` | 3 | Google concurrency limit. |
+| `MAX_CONCURRENT_LLM_CALLS` | 3 | LLM concurrency limit. |
 
 Provider-specific legacy/fallback keys:
 

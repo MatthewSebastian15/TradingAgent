@@ -1,30 +1,30 @@
 # Technical Decisions
 
-Terakhir disinkronkan: 2026-06-15.
+Last synced: 2026-06-16.
 
-Dokumen ini mencatat keputusan teknis yang membentuk kode aktif.
+This document records the technical decisions that shape the active code.
 
-## ADR-001: Process Pool untuk Pipeline
+## ADR-001: Process Pool for Pipeline
 
-Decision: Backend menjalankan pipeline agent di `ProcessPoolExecutor`.
+Decision: The backend runs the agent pipeline in `ProcessPoolExecutor`.
 
 Reason:
 
-- Pipeline memakai LangGraph, LangChain, provider SDK, yfinance, dan blocking
+- The pipeline uses LangGraph, LangChain, provider SDKs, yfinance, and blocking
   calls.
-- FastAPI event loop harus tetap responsif.
-- Spawn context aman untuk Windows dan Docker.
-- `PROCESS_POOL_MAX_TASKS_PER_CHILD=1` membersihkan state provider setelah task.
+- The FastAPI event loop must stay responsive.
+- Spawn context is safe for Windows and Docker.
+- `PROCESS_POOL_MAX_TASKS_PER_CHILD=1` clears provider state after each task.
 
 Implication:
 
-- Jangan panggil pipeline blocking langsung dari route.
-- Gunakan `backend/routes/pipeline_runner.py`.
-- Cancellation lewat cancel event, bukan kill process manual.
+- Do not call the blocking pipeline directly from routes.
+- Use `backend/routes/pipeline_runner.py`.
+- Cancellation uses a cancel event, not manual process killing.
 
-## ADR-002: Job API Menjadi Flow Canonical
+## ADR-002: Job API Is the Canonical Flow
 
-Decision: Frontend utama memakai:
+Decision: The main frontend uses:
 
 ```text
 POST /api/analysis/jobs
@@ -35,209 +35,212 @@ DELETE /api/analysis/jobs/{job_id}
 
 Reason:
 
-- Analysis bisa lama.
-- User perlu progress dan cancel.
-- Result perlu bisa dibuka ulang.
-- Job store punya event replay dan terminal result.
+- Analysis can take a long time.
+- Users need progress and cancellation.
+- Results need to be reopenable.
+- The job store has event replay and terminal results.
 
 Implication:
 
-- `/api/analyze` dan `/api/analyze/stream` legacy.
-- Fitur frontend baru pakai job API.
-- Report canonical memakai `job_id`.
+- `/api/analyze` and `/api/analyze/stream` are legacy.
+- New frontend features use the job API.
+- Canonical reports use `job_id`.
 
-## ADR-003: SSE, Bukan WebSocket
+## ADR-003: SSE, Not WebSocket
 
-Decision: Progress memakai Server-Sent Events.
+Decision: Progress uses Server-Sent Events.
 
 Reason:
 
-- Data bergerak server to browser.
-- SSE lebih sederhana.
-- `fetch()` stream bisa membawa cookie dan custom header.
+- Data moves from server to browser.
+- SSE is simpler.
+- `fetch()` streams can carry cookies and custom headers.
 
 Implication:
 
-- Native `EventSource` tidak dipakai.
-- SSE route tidak boleh dikompresi.
-- Event format harus sinkron dengan frontend hooks.
+- Native `EventSource` is not used.
+- SSE routes must not be compressed.
+- Event format must stay in sync with frontend hooks.
 
-## ADR-004: Owner Session Cookie untuk Resource Isolation
+## ADR-004: Owner Session Cookie for Resource Isolation
 
-Decision: Browser mendapatkan signed owner session dari `POST /api/session`,
-disimpan sebagai cookie HttpOnly `ta_owner_token`.
+Decision: The browser gets a signed owner session from `POST /api/session`,
+stored as the HttpOnly cookie `ta_owner_token`.
 
 Reason:
 
-- API key adalah service credential, bukan identitas browser.
-- Owner session membatasi job, history, report, rate limit, dan stream per
+- The API key is a service credential, not a browser identity.
+- Owner sessions isolate jobs, history, reports, rate limits, and streams per
   browser session.
-- Cookie HttpOnly mengurangi risiko token dibaca JavaScript.
+- The HttpOnly cookie reduces the risk of JavaScript reading the token.
 
 Implication:
 
-- Frontend harus memakai `credentials: 'include'`.
-- `buildAuthHeaders()` tidak perlu mengirim `x-owner-token`.
-- Backend tetap menerima `x-owner-token` untuk tests dan legacy client.
-- Production wajib `OWNER_SESSION_SECRET`.
+- The frontend must use `credentials: 'include'`.
+- `buildAuthHeaders()` does not need to send `x-owner-token`.
+- The backend still accepts `x-owner-token` for tests and legacy clients.
+- Production requires `OWNER_SESSION_SECRET`.
 
-## ADR-005: Service Credential Terpisah dari Owner Session
+## ADR-005: Service Credential Is Separate from Owner Session
 
-Decision: `API_KEY` dipakai sebagai service/proxy credential. Owner identity
-tetap dari owner session.
+Decision: `API_KEY` is used as the service/proxy credential. Owner identity
+still comes from the owner session.
 
 Reason:
 
-- Nginx atau reverse proxy bisa menyisipkan API key server-side.
-- Browser tidak boleh melihat API key.
-- Rate/resource ownership harus per session, bukan per shared API key.
+- Nginx or a reverse proxy can inject the API key server-side.
+- The browser must not see the API key.
+- Rate/resource ownership must be per session, not per shared API key.
 
 Implication:
 
-- Jangan taruh `API_KEY` di `VITE_*`.
-- Protected endpoint memanggil `limit_request()`.
-- Docker nginx memakai `BACKEND_API_KEY` untuk `x-api-key` jika diperlukan.
+- Do not put `API_KEY` in `VITE_*`.
+- Protected endpoints call `limit_request()`.
+- Docker nginx uses `BACKEND_API_KEY` for `x-api-key` when needed.
 
-## ADR-006: SQLite untuk Runtime Storage
+## ADR-006: SQLite for Runtime Storage
 
-Decision: Job cache, analysis history, market cache, news cache, rate limit, dan
-LLM cache memakai SQLite/local shared volume.
+Decision: Job cache, analysis history, market cache, news cache, rate limits, and
+LLM cache use SQLite/local shared volume.
 
 Reason:
 
 - Project personal/single-host.
-- Tidak butuh service DB tambahan.
-- Docker volume cukup untuk persistence.
+- No additional DB service is needed.
+- A Docker volume is enough for persistence.
 
 Implication:
 
-- Jangan tambah PostgreSQL atau migration framework tanpa kebutuhan nyata.
-- Repository layer harus handle schema changes.
-- `.sqlite3`, `.sqlite`, `.db`, dan `.cache/` tidak boleh commit.
+- Do not add PostgreSQL or a migration framework without a real need.
+- The repository layer must handle schema changes.
+- `.sqlite3`, `.sqlite`, `.db`, and `.cache/` must not be committed.
 
-## ADR-007: Vite Proxy untuk Local API
+## ADR-007: Vite Proxy for Local API
 
-Decision: Vite dev server punya proxy `/api`.
+Decision: The Vite dev server has a `/api` proxy.
 
 Reason:
 
 - Frontend default API base `/api`.
-- Same-origin browser path lebih sederhana untuk cookie owner session.
-- Compose frontend bisa proxy ke `backend:8000`.
-- Host local bisa proxy ke `localhost:8000` lewat env.
+- Same-origin browser paths are simpler for owner session cookies.
+- The Compose frontend can proxy to `backend:8000`.
+- Local host can proxy to `localhost:8000` through env.
 
 Implication:
 
-- Local host dev perlu `VITE_BACKEND_PROXY_TARGET=http://localhost:8000`.
-- `VITE_API_BASE_URL=/api` adalah default.
-- Direct backend URL masih bisa dipakai, tetapi proxy lebih stabil untuk cookie.
+- Local host dev needs `VITE_BACKEND_PROXY_TARGET=http://localhost:8000`.
+- `VITE_API_BASE_URL=/api` is the default.
+- A direct backend URL can still be used, but the proxy is more stable for cookies.
 
-## ADR-008: Primary UI Route `/AI-Research`
+## ADR-008: Primary UI Route `/ai-agent`
 
-Decision: Analysis UI route aktif adalah `/AI-Research`.
+Decision: The active analysis UI route is `/ai-agent`.
 
 Reason:
 
-- UI product naming berubah.
-- Legacy `/analysis` tetap ada untuk backlink/history lama.
+- The UI product naming is now AI Agent.
+- Route constants use `AI_AGENT_PATH`.
+- Old legacy routes must stay alive for old backlinks/history.
 
 Implication:
 
-- New links use `/AI-Research`.
-- Keep redirects from `/analysis`, `/analysis-live`, and mock aliases.
-- History/resource links should use `AI_RESEARCH_PATH`.
+- New links use `/ai-agent`.
+- Keep redirects from `/AI-Research`, `/ai-research`, `/analysis`, and
+  `/analysis-live`.
+- History/resource links should use `AI_AGENT_PATH`.
 
 ## ADR-009: Unified `LLM_API_KEY`
 
-Decision: `LLM_API_KEY` adalah key utama untuk provider aktif.
+Decision: `LLM_API_KEY` is the primary key for the active provider.
 
 Reason:
 
-- Satu jalur config lebih sederhana.
-- `config_llm.py` meneruskan key sebagai `api_key` ke client provider.
-- Provider-specific keys tetap ada untuk compatibility.
+- One config path is simpler.
+- `config_llm.py` passes the key as `api_key` to the provider client.
+- Provider-specific keys remain for compatibility.
 
 Implication:
 
-- Docs dan setup baru harus merekomendasikan `LLM_API_KEY`.
-- Provider-specific keys boleh tetap disebut legacy/fallback.
-- Startup validation memberi critical issue jika `LLM_API_KEY` kosong.
+- New docs and setup must recommend `LLM_API_KEY`.
+- Provider-specific keys may still be described as legacy/fallback.
+- Startup validation gives a critical issue when `LLM_API_KEY` is empty.
 
-## ADR-010: Balanced Pipeline Saja untuk API Server
+## ADR-010: Balanced Pipeline Only for the API Server
 
-Decision: `ANALYSIS_MODE` dikunci ke `balanced`.
+Decision: `ANALYSIS_MODE` is locked to `balanced`.
 
 Reason:
 
-- Frontend, serializer, report, dan tests memakai balanced result shape.
-- `analysis_depth` sudah menyediakan fast/balanced/deep di dalam flow yang sama.
+- Frontend, serializers, reports, and tests use the balanced result shape.
+- `analysis_depth` already provides fast/balanced/deep inside the same flow.
 
 Implication:
 
-- Jangan tambah mode pipeline API tanpa kontrak lengkap.
-- User-facing mode adalah `analysis_depth`.
+- Do not add pipeline API modes without a complete contract.
+- The user-facing mode is `analysis_depth`.
 
-## ADR-011: Fast, Balanced, Deep Mengontrol Budget
+## ADR-011: Fast, Balanced, Deep Control Budget
 
-Decision: `analysis_depth` mengatur budget LLM, retry, debate, dan risk rounds.
+Decision: `analysis_depth` controls LLM budget, debate, and risk rounds.
+Active LLM client retry uses `LLM_MAX_RETRIES`.
 
 Defaults:
 
-| Depth | Budget | Retries | Debate | Risk |
-|---|---:|---:|---:|---:|
-| `fast` | 6 | 1 | 1 | 1 |
-| `balanced` | 9 | 2 | 2 | 2 |
-| `deep` | 12 | 3 | 3 | 3 |
+| Depth | Budget | Debate | Risk |
+|---|---:|---:|---:|
+| `fast` | 6 | 1 | 1 |
+| `balanced` | 9 | 2 | 2 |
+| `deep` | 12 | 3 | 3 |
 
 Reason:
 
-- User bisa memilih latency/biaya.
-- Result shape tetap stabil.
+- Users can choose latency/cost.
+- Result shape stays stable.
 
 Implication:
 
-- Fast mode boleh memakai fallback konservatif.
-- Deep mode bisa menambah extra review.
-- `max_debate_rounds` tetap divalidasi 1 sampai 5.
+- Fast mode may use conservative fallback.
+- Deep mode can add extra review.
+- `max_debate_rounds` is still validated from 1 to 5.
 
-## ADR-012: Parallel Data dan Analysts, Sequential Decision
+## ADR-012: Parallel Data and Analysts, Sequential Decision
 
-Decision: Data collection dan initial analysts parallel. Debate/decision
-sequential.
+Decision: Data collection and initial analysts run in parallel. Debate/decision
+run sequentially.
 
 Reason:
 
-- Data sources independen.
-- Market, news, fundamentals analyst membaca data sama.
-- Bull/bear/manager/trader/risk/portfolio bergantung output tahap sebelumnya.
+- Data sources are independent.
+- Market, news, and fundamentals analysts read the same data.
+- Bull/bear/manager/trader/risk/portfolio depend on previous-stage output.
 
 Implication:
 
-- Jangan buat dependency antar initial analyst.
-- Gunakan config worker yang ada: `DATA_COLLECTION_WORKERS` dan
+- Do not create dependencies between initial analysts.
+- Use the existing worker config: `DATA_COLLECTION_WORKERS` and
   `ANALYST_PARALLEL_WORKERS`.
 
 ## ADR-013: Canonical Yfinance Symbol, No Auto Suffix
 
-Decision: Ticker dikirim sebagai canonical yfinance symbol. Backend tidak lagi
-menambahkan `.JK` otomatis.
+Decision: Tickers are sent as canonical yfinance symbols. The backend no longer
+automatically appends `.JK`.
 
 Reason:
 
-- Frontend punya yfinance search endpoint.
-- Global, crypto, ETF, fund, and IDX symbols bisa dipilih sebagai canonical.
-- Auto suffix bisa salah untuk symbol global atau search result.
+- The frontend has a yfinance search endpoint.
+- Global, crypto, ETF, fund, and IDX symbols can be selected as canonical.
+- Auto suffixing can be wrong for global symbols or search results.
 
 Implication:
 
-- User IDX harus memilih/input `BBCA.JK` jika butuh Yahoo IDX symbol.
-- `market=ID` tidak mengubah `BBCA` menjadi `BBCA.JK`.
-- Tests harus menjaga behavior ini.
+- IDX users must select/input `BBCA.JK` when they need a Yahoo IDX symbol.
+- `market=ID` does not change `BBCA` into `BBCA.JK`.
+- Tests must preserve this behavior.
 
 ## ADR-014: Broader Market Values Are Accepted
 
-Decision: Backend menerima `IDX`, `ID`, `US`, `GLOBAL`, `CRYPTO`, `ETF`,
-`FUND`, dan `UNKNOWN`.
+Decision: The backend accepts `IDX`, `ID`, `US`, `GLOBAL`, `CRYPTO`, `ETF`,
+`FUND`, and `UNKNOWN`.
 
 Reason:
 
@@ -257,7 +260,7 @@ Decision: Frontend ticker input uses `/api/market/search`.
 Reason:
 
 - Avoid manual suffix rules.
-- Give user symbol, name, exchange, type, and price.
+- Give user symbol, name, exchange, type, market, source, and price.
 - Send selected canonical symbol to backend.
 
 Implication:
@@ -315,7 +318,7 @@ Implication:
 - Background worker starts only when enabled.
 - News SSE path must stay uncompressed.
 
-## ADR-019: `extra="allow"` pada Response Schema
+## ADR-019: `extra="allow"` on Response Schema
 
 Decision: Public response schema inherits `ApiSchema` with `extra="allow"`.
 
@@ -383,16 +386,42 @@ Implication:
 - Import-time config constraints still raise for unsafe settings.
 - Tests should assert validation output, not forced process exit.
 
-## ADR-023: Backtest Folder Is Env Template Only
+## ADR-023: No Backtest Module in Current Tree
 
-Decision: `backtest/` is documented as env/config area, not runtime module.
+Decision: Current repo tree has no `backtest/` source folder or runner command.
 
 Reason:
 
-- Current folder has env files only.
-- No backtest runner exists in audited code.
+- `rg --files` and top-level tree show no backtest module.
+- Core package only exposes optional `backtesting` dependency group.
 
 Implication:
 
-- Do not document backtest command until runner exists.
-- Do not read or commit `backtest/.env.backtest`.
+- Do not document a backtest command until runner code exists.
+- Do not reference `backtest/.env.backtest.example` as active template.
+
+## ADR-024: Market Dashboard API
+
+Decision: `/market` is an active dashboard backed by dedicated market endpoints.
+
+Endpoints:
+
+```text
+GET  /api/market/presets
+GET  /api/market/validate-symbol
+POST /api/market/overview
+GET  /api/market/movers
+GET  /api/market/quotes
+```
+
+Reason:
+
+- Market page needs configurable overview symbols, movers, and ticker tape
+  without running analysis.
+- Backend centralizes yfinance symbol validation and fallback behavior.
+
+Implication:
+
+- Keep `frontend/src/api/market.js` as client boundary.
+- Keep yfinance request caps in backend route/service.
+- Do not describe `/market` as shell-only.

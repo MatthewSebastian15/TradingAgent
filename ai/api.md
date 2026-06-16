@@ -1,8 +1,8 @@
 # API Reference
 
-Terakhir disinkronkan: 2026-06-15.
+Last synced: 2026-06-16.
 
-Semua app route memakai prefix `/api`, kecuali `/health`.
+All app routes use the `/api` prefix, except `/health`.
 
 ## Base URL
 
@@ -22,6 +22,9 @@ VITE_API_BASE_URL
 VITE_API_URL
 default /api
 ```
+
+`buildApiUrl(path)` always returns a path under `/api`. If base ends with
+`/api`, it avoids double prefix.
 
 ## Authentication
 
@@ -136,9 +139,23 @@ Response:
 
 Protected. Uses status rate policy.
 
-Response includes provider, models, analysis mode, depth, pipeline timeout,
-result cache, in-flight registry, job store, tool cache, LLM cache, circuit
-state, and timeout worker state.
+Response fields:
+
+```text
+provider
+quick_model
+deep_model
+analysis_mode
+default_analysis_depth
+limits
+result_cache
+in_flight
+jobs
+tool_cache
+llm_cache
+circuits
+timeout_workers
+```
 
 ## Session
 
@@ -172,7 +189,7 @@ Example:
 {
   "ticker": "BBCA.JK",
   "market": "IDX",
-  "trade_date": "2026-06-15",
+  "trade_date": "2026-06-16",
   "time_horizon_months": 1,
   "max_debate_rounds": 3,
   "analysis_depth": "balanced",
@@ -297,13 +314,30 @@ Progress payload:
 {
   "request_id": "req_...",
   "ticker": "BBCA.JK",
-  "trade_date": "2026-06-15",
+  "trade_date": "2026-06-16",
   "agent_id": "market_analyst",
   "agent_name": "Market Analyst",
   "status": "started",
   "status_message": "Market Analyst is reading price action and technical indicators...",
-  "timestamp": "2026-06-15T09:00:00Z"
+  "timestamp": "2026-06-16T09:00:00Z"
 }
+```
+
+Agent ids:
+
+```text
+data_collection
+news_fetch
+data_quality
+market_analyst
+news_analyst
+fundamentals
+bull_researcher
+bear_researcher
+research_manager
+trader
+risk_analysts
+portfolio_manager
 ```
 
 ### DELETE /api/analysis/jobs/{job_id}
@@ -368,6 +402,7 @@ position_quantity
 average_entry_price
 agents_used
 analysis_overview
+key_reasons_paragraph
 financial_highlights
 normalized_period_rows
 derived_fundamentals
@@ -395,6 +430,17 @@ risk_data_quality
 Pipeline also returns debug/budget/source fields when available:
 
 ```text
+company_of_interest
+time_horizon
+market_report
+sentiment_report
+news_report
+fundamentals_report
+investment_debate_state
+investment_plan
+trader_investment_plan
+risk_debate_state
+portfolio_decision
 data_quality
 data_sources
 data_limitations
@@ -403,15 +449,36 @@ field_sources
 validation_summary
 warnings
 vendor_attempts
+request_budget
 vendor_budget
 data_freshness
 data_completeness
+fundamental_gap_report
+data_fetched_at
+last_close_price
+last_close_price_as_of
+last_close_price_source
+price_source
+price_timestamp
+price_is_fallback
+analysis_depth_config
+analysis_depth_debate_rounds
+analysis_depth_risk_rounds
+balanced_gemini_request_budget
+balanced_gemini_calls_used
 llm_call_budget
 llm_calls_used
 budget_exhausted
 agents_skipped
 agent_pipeline
 total_pipeline_seconds
+is_partial
+partial_reason
+completed_stages
+missing_stages
+partial_signal
+partial_confidence
+available_data
 ```
 
 ## History API
@@ -427,7 +494,15 @@ Query:
 | Field | Rule |
 |---|---|
 | `ticker` | Optional exact uppercase filter. |
-| `limit` | 1 to 100, default 25. |
+| `limit` | 1 to 100, default `ANALYSIS_HISTORY_DEFAULT_LIMIT` or 25. |
+
+Response:
+
+```json
+{
+  "items": []
+}
+```
 
 ### GET /api/analysis/history/{request_id}
 
@@ -442,6 +517,91 @@ Deletes one snapshot.
 Deletes all history rows.
 
 ## Market API
+
+### GET /api/market/presets
+
+Returns categories and exchange presets used by Market page.
+
+Response fields:
+
+```text
+categories
+exchanges
+```
+
+### GET /api/market/validate-symbol
+
+Query:
+
+| Field | Rule |
+|---|---|
+| `symbol` | Required yfinance symbol. |
+
+Response:
+
+```text
+symbol
+valid
+label
+source
+reason
+```
+
+### POST /api/market/overview
+
+Request:
+
+```json
+{
+  "symbols": ["^GSPC", "^IXIC", "^JKSE"]
+}
+```
+
+Rules:
+
+- `symbols` must be array.
+- After normalization/dedupe, min 3 and max 6 symbols.
+- Each symbol must be canonical yfinance quote syntax.
+
+Response:
+
+```text
+items[]
+  symbol
+  label
+  last
+  change
+  change_percent
+  currency
+  sparkline
+  status
+  updated_at
+  reason
+message
+```
+
+### GET /api/market/movers
+
+Query:
+
+| Field | Rule |
+|---|---|
+| `country` | Required. |
+| `exchange` | Required. |
+| `limit` | One of `5`, `10`, `15`, `20`. Default 5. |
+
+Response:
+
+```text
+country
+exchange
+limit
+updated_at
+gainers[]
+losers[]
+source
+message
+```
 
 ### GET /api/market/search
 
@@ -464,13 +624,16 @@ Response:
       "name": "Bank Central Asia Tbk PT",
       "exchange": "IDX",
       "type": "EQUITY",
-      "price": 9800.0
+      "market": "ID",
+      "source": "local_universe",
+      "price": null
     }
   ]
 }
 ```
 
-Cached in memory for 60 seconds.
+Local universe returns first. Remote yfinance search refresh runs in background
+when local result count is below limit. Cache TTL is 60 seconds.
 
 ### GET /api/market/ohlcv
 
@@ -556,7 +719,7 @@ Response:
 ```json
 {
   "ticker": "BBCA.JK",
-  "trade_date": "2026-06-15",
+  "trade_date": "2026-06-16",
   "valid": true,
   "message": "Ticker has usable market data."
 }
@@ -689,6 +852,16 @@ Fallback HTML render from bounded result payload supplied by client.
 ### POST /api/analysis/report.pdf
 
 Fallback PDF render from bounded result payload supplied by client.
+
+Bounded payload limits:
+
+```text
+max depth 12
+max list items 750
+max dict keys 300
+max string length 20000
+max total nodes 20000
+```
 
 ### GET /api/analysis/{request_id}/report.html
 

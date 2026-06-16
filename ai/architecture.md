@@ -1,9 +1,9 @@
 # Architecture
 
-Terakhir disinkronkan: 2026-06-15.
+Last synced: 2026-06-16.
 
-Dokumen ini menjelaskan arsitektur kode aktif. Pakai saat mengubah route,
-frontend flow, pipeline, cache, Docker, env, atau report.
+This document explains the active code architecture. Use it when changing routes,
+frontend flow, pipeline, cache, Docker, env, market, news, or reports.
 
 ## System View
 
@@ -67,7 +67,7 @@ Lifespan:
 - Starts general news background worker when enabled.
 - Stops news worker and process pool on shutdown.
 
-Middleware order:
+Middleware registration order in `main.py`:
 
 ```text
 RequestBodyLimitMiddleware
@@ -98,6 +98,7 @@ session_router          -> /api
 ```
 
 `/health` is direct on app. It returns status, provider, and report asset health.
+`/api/debug/llm-cache` is direct on app and development-only.
 
 ## Config Boundary
 
@@ -111,7 +112,7 @@ Use `backend/config.py` as public facade.
 | `config_validation.py` | Startup config issues and writable path checks. |
 | `config.py` | Reload helper and re-exports. |
 
-Config can fail at import for invalid hard constraints:
+Config can fail at import for hard constraints:
 
 - `APP_ENV` not `development` or `production`.
 - `CORS_ORIGINS=*`.
@@ -138,7 +139,8 @@ Service credential:
 
 - Headers: `x-api-key` or `Authorization: Bearer`.
 - Validates against `API_KEY`.
-- Optional only in development if `REQUIRE_API_KEY_FOR_RATE_LIMIT=false`.
+- Optional only in development when `API_KEY` is blank and
+  `REQUIRE_API_KEY_FOR_RATE_LIMIT=false`.
 
 Owner session:
 
@@ -148,6 +150,8 @@ Owner session:
 - Cookie is HttpOnly and SameSite Lax.
 - Backend accepts owner token from `x-owner-token` header or cookie.
 - Frontend uses cookie only.
+- Development blank `OWNER_SESSION_SECRET` uses persistent cache secret
+  `.owner_session_secret` under `XDG_CACHE_HOME` or user cache.
 
 Rate limiter:
 
@@ -302,14 +306,15 @@ portfolio_manager
 
 Depth behavior:
 
-| Depth | Budget | Retry | Debate | Risk |
-|---|---:|---:|---:|---:|
-| `fast` | 6 | 1 | 1 | 1 |
-| `balanced` | 9 | 2 | 2 | 2 |
-| `deep` | 12 | 3 | 3 | 3 |
+| Depth | Budget | Debate | Risk |
+|---|---:|---:|---:|
+| `fast` | 6 | 1 | 1 |
+| `balanced` | 9 | 2 | 2 |
+| `deep` | 12 | 3 | 3 |
 
 `deep_think_llm` is used for Research Manager and Portfolio Manager.
 `quick_think_llm` is used for other agent calls.
+LLM client retry count uses `LLM_MAX_RETRIES`.
 
 ## LLM Clients and Cache
 
@@ -317,6 +322,12 @@ Supported providers:
 
 ```text
 google, openai, anthropic, deepseek, openrouter, ollama
+```
+
+OpenAI-compatible providers share `OpenAIClient`:
+
+```text
+openai, deepseek, openrouter, ollama
 ```
 
 Primary env:
@@ -373,6 +384,42 @@ Validation:
 - Global suffixes such as `.HK`, `.T`, `.DE` are accepted when symbol regex
   passes.
 
+## Market Dashboard
+
+Frontend path:
+
+```text
+/market -> frontend/src/pages/Market.jsx
+```
+
+Frontend client:
+
+```text
+frontend/src/api/market.js
+```
+
+Backend endpoints:
+
+```text
+GET  /api/market/presets
+GET  /api/market/validate-symbol
+POST /api/market/overview
+GET  /api/market/movers
+GET  /api/market/quotes
+```
+
+UI components:
+
+```text
+frontend/src/components/market/MarketTab.jsx
+frontend/src/components/market/GlobalMarketOverview.jsx
+frontend/src/components/market/MarketMoversPanel.jsx
+frontend/src/components/market/MarketOverviewPicker.jsx
+frontend/src/components/market/MarketMoversTable.jsx
+```
+
+Data comes from yfinance through `backend/services/market_yfinance_service.py`.
+
 ## Data Collection
 
 Collected payload areas:
@@ -401,6 +448,8 @@ social sentiment: finnhub
 events: finnhub
 analyst rating: finnhub
 insider: finnhub,alpha_vantage,yfinance
+forex: finnhub,alpha_vantage
+crypto: finnhub,alpha_vantage
 ```
 
 ## News Architecture
@@ -463,17 +512,29 @@ Routes in `frontend/src/App.jsx`:
 ```text
 /                         -> /home
 /home                     -> Dashboard
-/AI-Research              -> Analysis
-/AI-Research/:resourceId  -> Analysis lookup
-/analysis                 -> redirect /AI-Research
-/analysis/:resourceId     -> redirect /AI-Research/:resourceId
-/analysis-live            -> redirect /AI-Research
+/ai-agent                 -> AIAgent
+/ai-agent/:resourceId     -> AIAgent lookup
+/AI-Research              -> redirect /ai-agent
+/AI-Research/:resourceId  -> redirect /ai-agent/:resourceId
+/ai-research              -> redirect /ai-agent
+/ai-research/:resourceId  -> redirect /ai-agent/:resourceId
+/analysis                 -> redirect /ai-agent
+/analysis/:resourceId     -> redirect /ai-agent/:resourceId
+/analysis-live            -> redirect /ai-agent
+/research                 -> Research placeholder
 /news                     -> News
-/market                   -> Market shell
-/economic                 -> Economic placeholder
-/AI-Research.test         -> mock Analysis if enabled
-/analysis.test            -> legacy mock redirect
-/analysis-mock            -> legacy mock redirect
+/market                   -> Market dashboard
+/econ                     -> Economic placeholder
+/economic                 -> redirect /econ
+/ai-agent.test            -> mock AIAgent if enabled
+/ai-agent.test/:resourceId -> mock AIAgent lookup if enabled
+/AI-Research.test         -> legacy mock redirect if enabled
+/AI-Research.test/:resourceId -> legacy mock redirect if enabled
+/ai-research.test         -> legacy mock redirect if enabled
+/ai-research.test/:resourceId -> legacy mock redirect if enabled
+/analysis.test            -> legacy mock redirect if enabled
+/analysis.test/:resourceId -> legacy mock redirect if enabled
+/analysis-mock            -> legacy mock redirect if enabled
 *                         -> NotFound
 ```
 
