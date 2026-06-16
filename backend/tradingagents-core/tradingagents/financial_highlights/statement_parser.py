@@ -134,6 +134,27 @@ FIELD_ALIASES = {
     "pbv": ("p/bv", "pbv", "p/b", "pb", "price to book", "pricebook", "priceToBook"),
     "ps": ("p/s", "ps", "price to sales", "pricetosales", "priceToSalesTrailing12Months"),
     "ev_ebitda": ("ev/ebitda", "evebitda", "enterprise value to ebitda", "enterprisevaluetoebitda"),
+    "gross_profit": ("gross profit", "grossprofit", "grossProfit"),
+    "cost_of_revenue": ("cost of revenue", "costofrevenue", "costOfRevenue"),
+    "pretax_income": ("pretax income", "pretaxincome", "income before tax", "incomebeforetax"),
+    "income_tax_expense": ("tax provision", "taxprovision", "income tax expense", "incometaxexpense"),
+    "interest_expense": ("interest expense", "interestexpense", "interest expense non operating", "interestexpensenonoperating"),
+    "current_assets": ("current assets", "currentassets", "total current assets", "totalcurrentassets"),
+    "working_capital": ("working capital", "workingcapital"),
+    "invested_capital": ("invested capital", "investedcapital"),
+    "inventory": ("inventory", "inventories"),
+    "investing_cash_flow": ("investing cash flow", "investingcashflow", "cash flow from continuing investing activities", "cashflowfromcontinuinginvestingactivities"),
+    "financing_cash_flow": ("financing cash flow", "financingcashflow", "cash flow from continuing financing activities", "cashflowfromcontinuingfinancingactivities"),
+    "depreciation_amortization": ("depreciation and amortization", "depreciationandamortization", "depreciation amortization depletion", "depreciationamortizationdepletion"),
+    "change_in_working_capital": ("change in working capital", "changeinworkingcapital", "changes in working capital", "changesinworkingcapital"),
+    "stock_based_compensation": ("stock based compensation", "stockbasedcompensation", "stock-based compensation"),
+    "share_repurchase": ("repurchase of capital stock", "repurchaseofcapitalstock", "repurchase of common stock", "repurchaseofcommonstock"),
+    "peg_ratio": ("peg ratio", "pegratio", "pegRatio"),
+    "beta": ("beta",),
+    "float_shares": ("float shares", "floatshares", "floatShares"),
+    "revenue_per_share": ("revenue per share", "revenuepershare", "revenuePerShare"),
+    "current_ratio": ("current ratio", "currentratio", "currentRatio"),
+    "quick_ratio": ("quick ratio", "quickratio", "quickRatio"),
 }
 
 NORMALIZED_ALIAS_MAP = {
@@ -194,7 +215,7 @@ def _merge_value(
     number = _number(value)
     if not period_key or not field or number is None:
         return
-    if field in {"capex", "dividend_paid"}:
+    if field in {"capex", "dividend_paid", "share_repurchase"}:
         number = abs(number)
     period_values = normalized["periods"].setdefault(period_key, {})
     if field in period_values:
@@ -714,14 +735,32 @@ def _add_profile_fallbacks(
             source_field="shares_outstanding",
         )
     if periods:
-        _merge_value(
-            normalized,
-            periods[-1].key,
-            "market_cap",
-            company_profile.get("market_cap") or company_profile.get("marketCap"),
-            source_vendor="company_profile",
-            source_field="market_cap",
-        )
+        latest_period_key = periods[-1].key
+        profile_metric_fields = {
+            "market_cap": ("market_cap", "marketCap"),
+            "enterprise_value": ("enterprise_value", "enterpriseValue"),
+            "pe": ("trailing_pe", "trailingPE", "forward_pe", "forwardPE"),
+            "pbv": ("price_to_book", "priceToBook"),
+            "ps": ("price_to_sales", "priceToSalesTrailing12Months"),
+            "ev_ebitda": ("enterprise_to_ebitda", "enterpriseToEbitda"),
+            "dividend_yield": ("dividend_yield", "dividendYield"),
+            "peg_ratio": ("peg_ratio", "pegRatio"),
+            "beta": ("beta",),
+            "float_shares": ("float_shares", "floatShares"),
+            "revenue_per_share": ("revenue_per_share", "revenuePerShare"),
+            "current_ratio": ("current_ratio", "currentRatio"),
+            "quick_ratio": ("quick_ratio", "quickRatio"),
+        }
+        for field, source_keys in profile_metric_fields.items():
+            value = next((company_profile.get(key) for key in source_keys if company_profile.get(key) is not None), None)
+            _merge_value(
+                normalized,
+                latest_period_key,
+                field,
+                value,
+                source_vendor="company_profile",
+                source_field=source_keys[0],
+            )
 
 
 def parse_vendor_financials(

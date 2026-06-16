@@ -21,6 +21,15 @@ def _normalized_fundamentals_context(state: dict) -> str:
         "fallback_metadata": state.get("fallback_metadata") or {},
         "limitations": state.get("data_limitations") or [],
         "financial_highlights": state.get("financial_highlights") or {},
+        "fundamental_context": (state.get("fundamental_analysis") or {}).get("fundamental_context")
+        if isinstance(state.get("fundamental_analysis"), dict)
+        else state.get("fundamental_context") or {},
+        "fundamental_score": (state.get("fundamental_analysis") or {}).get("fundamental_score")
+        if isinstance(state.get("fundamental_analysis"), dict)
+        else None,
+        "chart_based_reasoning": (state.get("fundamental_analysis") or {}).get("chart_based_reasoning")
+        if isinstance(state.get("fundamental_analysis"), dict)
+        else [],
     }
     return json.dumps(payload, ensure_ascii=False, default=str)[:12000]
 

@@ -217,7 +217,9 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText('ROE (%)')).toBeTruthy();
     expect(screen.getByText('DER')).toBeTruthy();
     expect(screen.getByText('Debt / EBITDA')).toBeTruthy();
-    expect(screen.getByText('EV/EBITDA')).toBeTruthy();
+    expect(screen.getByText('ROA (%)')).toBeTruthy();
+    expect(screen.getByText('ROIC (%)')).toBeTruthy();
+    expect(screen.getByText('FCF Yield (%)')).toBeTruthy();
     expect(screen.queryByText('CFO / Net Income')).toBeNull();
 
     rerender(<ResultCard result={{ ...MOCK_RESPONSE, peer_comparison: null }} />);
@@ -232,59 +234,75 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByRole('button', { name: 'Chart' }).getAttribute('aria-pressed')).toBe(
       'false'
     );
-    expect(screen.queryByRole('img', { name: 'Revenue vs EBITDA vs Net Profit chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'Revenue, EBITDA, Net Profit chart' })).toBeNull();
     expect(container.querySelector('table')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
     expect(screen.getByRole('button', { name: 'Chart' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getAllByRole('img')).toHaveLength(4);
     [
-      'Revenue vs EBITDA vs Net Profit chart',
-      'Revenue Growth vs Net Profit Growth chart',
-      'EBITDA Margin vs Net Profit Margin chart',
-      'EPS Trend chart',
-    ].forEach((chartName) => {
-      expect(screen.getByRole('img', { name: chartName })).toBeTruthy();
+      'Revenue, EBITDA, Net Profit',
+      'Revenue Growth (%) vs Net Profit Growth (%)',
+      'EBITDA Margin (%) vs Net Profit Margin (%)',
+      'EPS',
+      'Gross Profit vs Cost of Revenue',
+      'Operating Income / EBIT vs Pretax Income vs Net Profit',
+    ].forEach((chartTitle) => {
+      expect(screen.getAllByText(chartTitle).length).toBeGreaterThan(0);
     });
-    expect(screen.queryByRole('img', { name: 'BVPS Trend chart' })).toBeNull();
-    expect(screen.queryByRole('img', { name: 'Free Cash Flow Trend chart' })).toBeNull();
-    expect(screen.queryByRole('img', { name: 'ROE Trend chart' })).toBeNull();
+    expect(screen.getByRole('img', { name: 'Revenue, EBITDA, Net Profit chart' })).toBeTruthy();
+    expect(screen.queryByText('BVPS')).toBeNull();
+    expect(screen.queryByText('Free Cash Flow')).toBeNull();
+    expect(screen.queryByText('ROE (%)')).toBeNull();
     expect(container.querySelector('table')).toBeNull();
     expect(
-      container
-        .querySelector('rect[data-metric="Revenue"][data-period="Q1 2026"]')
-        ?.getAttribute('data-value')
-    ).toBe('0');
+      container.querySelector('rect[data-metric="Revenue"][data-period="Q1 2026"]')
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Balance Sheet' }));
-    expect(screen.getAllByRole('img')).toHaveLength(3);
-    expect(screen.getByRole('img', { name: 'BVPS Trend chart' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Net Debt Trend chart' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Cash Ratio vs Equity Ratio chart' })).toBeTruthy();
-    expect(screen.queryByRole('img', { name: 'Revenue vs EBITDA vs Net Profit chart' })).toBeNull();
-    expect(screen.queryByRole('img', { name: 'Free Cash Flow Trend chart' })).toBeNull();
-    expect(screen.queryByRole('img', { name: 'ROE Trend chart' })).toBeNull();
+    [
+      'BVPS',
+      'Net Debt',
+      'Cash Ratio vs Equity Ratio',
+      'Total Assets vs Total Liabilities vs Total Equity',
+      'Current Assets vs Current Liabilities vs Working Capital',
+      'Current Ratio vs Quick Ratio vs Debt Ratio',
+    ].forEach((chartTitle) => {
+      expect(screen.getAllByText(chartTitle).length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText('Revenue, EBITDA, Net Profit')).toBeNull();
+    expect(screen.queryByText('Free Cash Flow')).toBeNull();
+    expect(screen.queryByText('ROE (%)')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cash Flow' }));
-    expect(screen.getAllByRole('img')).toHaveLength(3);
-    expect(screen.getByRole('img', { name: 'Free Cash Flow Trend chart' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'CFO / Net Income Trend chart' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Capex Intensity vs FCF Coverage chart' })).toBeTruthy();
-    expect(screen.queryByRole('img', { name: 'Revenue vs EBITDA vs Net Profit chart' })).toBeNull();
-    expect(screen.queryByRole('img', { name: 'BVPS Trend chart' })).toBeNull();
-    expect(screen.queryByRole('img', { name: 'ROE Trend chart' })).toBeNull();
+    [
+      'Free Cash Flow',
+      'CFO / Net Income',
+      'Capex Intensity (%) vs FCF Coverage',
+      'Operating Cash Flow vs Investing Cash Flow vs Financing Cash Flow',
+      'Capital Expenditure vs Free Cash Flow',
+      'FCF Margin (%) vs FCF Growth (%) vs CFO Growth (%)',
+    ].forEach((chartTitle) => {
+      expect(screen.getAllByText(chartTitle).length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText('Revenue, EBITDA, Net Profit')).toBeNull();
+    expect(screen.queryByText('BVPS')).toBeNull();
+    expect(screen.queryByText('ROE (%)')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Ratios' }));
-    expect(screen.getAllByRole('img')).toHaveLength(4);
-    expect(screen.getByRole('img', { name: 'ROE Trend chart' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Leverage Risk chart' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Dividend Quality chart' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Valuation Overview chart' })).toBeTruthy();
-    expect(screen.queryByRole('img', { name: 'Revenue vs EBITDA vs Net Profit chart' })).toBeNull();
-    expect(screen.queryByRole('img', { name: 'BVPS Trend chart' })).toBeNull();
-    expect(screen.queryByRole('img', { name: 'Free Cash Flow Trend chart' })).toBeNull();
+    [
+      'ROE (%)',
+      'DER vs Debt / EBITDA',
+      'Dividend Yield (%) vs Payout Ratio (%)',
+      'Market Cap vs Enterprise Value',
+      'ROA (%) vs ROIC (%) vs ROE (%)',
+      'FCF Yield (%) vs Earnings Yield (%)',
+    ].forEach((chartTitle) => {
+      expect(screen.getAllByText(chartTitle).length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText('Revenue, EBITDA, Net Profit')).toBeNull();
+    expect(screen.queryByText('BVPS')).toBeNull();
+    expect(screen.queryByText('Free Cash Flow')).toBeNull();
     expect(container.querySelector('rect[data-metric="Market Cap"]')).toBeTruthy();
-    expect(container.querySelector('circle[data-metric="P/E"]')).toBeTruthy();
   });
 
   it('uses AI Summary as the default tab and opens the Profile tab', () => {

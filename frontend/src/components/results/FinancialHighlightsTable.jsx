@@ -64,7 +64,7 @@ function isUnavailableDisplay(value) {
 }
 
 function appendUnit(value, unit) {
-  if (isUnavailableDisplay(value)) return '-';
+  if (isUnavailableDisplay(value)) return 'N/A';
   const suffix = unitSuffix(unit);
   if (!suffix) return value;
   const trimmed = String(value).trim();
@@ -75,10 +75,10 @@ function appendUnit(value, unit) {
 }
 
 function formatCellValue(cell, unit) {
-  if (!cell || cell.status === 'unavailable') return '-';
+  if (!cell || cell.status === 'unavailable') return 'N/A';
   const value = cell.display ?? cell.value;
   if (isUnavailableDisplay(value)) {
-    return '-';
+    return 'N/A';
   }
   const text = cell.status === 'estimated' ? `${value} EST` : String(value);
   return appendUnit(text, unit);

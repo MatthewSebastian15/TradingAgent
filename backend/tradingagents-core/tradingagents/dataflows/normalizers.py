@@ -72,16 +72,25 @@ _SUFFIX_PATTERN = re.compile(
 FINANCIAL_FIELDS = {
     "revenue",
     "gross_profit",
+    "cost_of_revenue",
     "operating_profit",
     "ebitda",
     "operating_income",
+    "pretax_income",
+    "income_tax_expense",
     "net_profit",
     "interest_expense",
     "operating_cash_flow",
     "cash_from_operations",
+    "investing_cash_flow",
+    "financing_cash_flow",
     "capex",
     "capital_expenditure",
     "free_cash_flow",
+    "depreciation_amortization",
+    "change_in_working_capital",
+    "stock_based_compensation",
+    "share_repurchase",
     "cash",
     "cash_and_equivalents",
     "debt",
@@ -93,7 +102,11 @@ FINANCIAL_FIELDS = {
     "total_liabilities",
     "current_assets",
     "current_liabilities",
+    "working_capital",
+    "invested_capital",
+    "inventory",
     "shares_outstanding",
+    "float_shares",
     "eps",
     "dividend_per_share",
     "dividend_paid",
@@ -105,6 +118,11 @@ FINANCIAL_FIELDS = {
     "pbv",
     "ps",
     "ev_ebitda",
+    "peg_ratio",
+    "beta",
+    "current_ratio",
+    "quick_ratio",
+    "revenue_per_share",
 }
 
 _FIELD_ALIASES = {
@@ -123,8 +141,20 @@ _FIELD_ALIASES = {
     "cash_from_operations": "operating_cash_flow",
     "total_cash_from_operating_activities": "operating_cash_flow",
     "operating_cashflow": "operating_cash_flow",
+    "cash_flow_from_continuing_operating_activities": "operating_cash_flow",
+    "investing_cash_flow": "investing_cash_flow",
+    "cash_flow_from_continuing_investing_activities": "investing_cash_flow",
+    "financing_cash_flow": "financing_cash_flow",
+    "cash_flow_from_continuing_financing_activities": "financing_cash_flow",
     "capital_expenditure": "capex",
     "capital_expenditures": "capex",
+    "depreciation_and_amortization": "depreciation_amortization",
+    "depreciation_amortization_depletion": "depreciation_amortization",
+    "change_in_working_capital": "change_in_working_capital",
+    "changes_in_working_capital": "change_in_working_capital",
+    "stock_based_compensation": "stock_based_compensation",
+    "repurchase_of_capital_stock": "share_repurchase",
+    "repurchase_of_common_stock": "share_repurchase",
     "net_income": "net_profit",
     "net_income_common_stockholders": "net_profit",
     "net_income_continuous_operations": "net_profit",
@@ -133,6 +163,12 @@ _FIELD_ALIASES = {
     "operating_revenue": "revenue",
     "gross_profit": "gross_profit",
     "gross_profit_loss": "gross_profit",
+    "cost_of_revenue": "cost_of_revenue",
+    "cost_of_goods_sold": "cost_of_revenue",
+    "pretax_income": "pretax_income",
+    "income_before_tax": "pretax_income",
+    "tax_provision": "income_tax_expense",
+    "income_tax_expense": "income_tax_expense",
     "operating_income": "operating_income",
     "operating_profit": "operating_profit",
     "income_from_operations": "operating_income",
@@ -149,12 +185,18 @@ _FIELD_ALIASES = {
     "cash_cash_equivalents_and_federal_funds_sold": "cash",
     "current_assets": "current_assets",
     "total_current_assets": "current_assets",
+    "working_capital": "working_capital",
+    "invested_capital": "invested_capital",
+    "inventory": "inventory",
+    "inventories": "inventory",
     "total_current_liabilities": "current_liabilities",
     "total_liabilities_net_minority_interest": "total_liabilities",
     "ordinary_shares_number": "shares_outstanding",
     "share_issued": "shares_outstanding",
     "common_stock_shares_outstanding": "shares_outstanding",
     "shares_outstanding": "shares_outstanding",
+    "float_shares": "float_shares",
+    "floatshares": "float_shares",
     "diluted_eps": "eps",
     "basic_eps": "eps",
     "reported_eps": "eps",
@@ -184,6 +226,12 @@ _FIELD_ALIASES = {
     "price_to_sales": "ps",
     "ev_ebitda": "ev_ebitda",
     "enterprise_value_to_ebitda": "ev_ebitda",
+    "peg_ratio": "peg_ratio",
+    "pegratio": "peg_ratio",
+    "beta": "beta",
+    "current_ratio": "current_ratio",
+    "quick_ratio": "quick_ratio",
+    "revenue_per_share": "revenue_per_share",
 }
 
 
@@ -1074,7 +1122,7 @@ def _merge_table_metric(
     number = _number_like(value)
     if not period_key or number is None:
         return
-    if field in {"capex", "dividend_paid"}:
+    if field in {"capex", "dividend_paid", "share_repurchase"}:
         number = abs(number)
     bucket = normalized.setdefault("periods", {}).setdefault(period_key, {})
     if field in bucket:
@@ -1305,6 +1353,10 @@ def build_financial_highlights_from_normalized_rows(
             period_values.setdefault("cash_from_operations", period_values["operating_cash_flow"])
         if "capex" in period_values:
             period_values.setdefault("capital_expenditure", period_values["capex"])
+        if "cash" in period_values:
+            period_values.setdefault("cash_and_equivalents", period_values["cash"])
+        if "dividend_paid" in period_values:
+            period_values.setdefault("cash_dividends_paid", period_values["dividend_paid"])
         normalized_for_table["periods"][period_key] = period_values
 
     periods = (
@@ -1349,22 +1401,32 @@ def build_financial_highlights_from_normalized_rows(
             source_vendor="price_data",
             source_field="current_price",
         )
-        _merge_table_metric(
-            normalized_for_table,
-            latest_key,
-            "shares_outstanding",
-            profile.get("shares_outstanding"),
-            source_vendor="company_profile",
-            source_field="shares_outstanding",
-        )
-        _merge_table_metric(
-            normalized_for_table,
-            latest_key,
-            "market_cap",
-            profile.get("market_cap"),
-            source_vendor="company_profile",
-            source_field="market_cap",
-        )
+        profile_metric_fields = {
+            "shares_outstanding": ("shares_outstanding", "sharesOutstanding"),
+            "market_cap": ("market_cap", "marketCap"),
+            "enterprise_value": ("enterprise_value", "enterpriseValue"),
+            "pe": ("trailing_pe", "trailingPE", "forward_pe", "forwardPE"),
+            "pbv": ("price_to_book", "priceToBook"),
+            "ps": ("price_to_sales", "priceToSalesTrailing12Months"),
+            "ev_ebitda": ("enterprise_to_ebitda", "enterpriseToEbitda"),
+            "dividend_yield": ("dividend_yield", "dividendYield"),
+            "peg_ratio": ("peg_ratio", "pegRatio"),
+            "beta": ("beta",),
+            "float_shares": ("float_shares", "floatShares"),
+            "current_ratio": ("current_ratio", "currentRatio"),
+            "quick_ratio": ("quick_ratio", "quickRatio"),
+            "revenue_per_share": ("revenue_per_share", "revenuePerShare"),
+        }
+        for field_name, source_keys in profile_metric_fields.items():
+            value = next((profile.get(key) for key in source_keys if profile.get(key) is not None), None)
+            _merge_table_metric(
+                normalized_for_table,
+                latest_key,
+                field_name,
+                value,
+                source_vendor="company_profile",
+                source_field=source_keys[0],
+            )
     if dividends is not None:
         _merge_dividend_events(normalized_for_table, dividends)
     if periods:

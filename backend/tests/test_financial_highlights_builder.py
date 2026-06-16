@@ -80,10 +80,55 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         "net_profit_growth",
         "ebitda_margin",
         "net_profit_margin",
-        "roe",
         "eps",
+        "gross_profit",
+        "cost_of_revenue",
+        "operating_income",
+        "pretax_income",
+        "income_tax_expense",
+        "interest_expense",
+        "ebitda_growth",
+        "operating_income_growth",
+        "gross_margin",
+        "operating_margin",
+        "tax_rate",
         "bvps",
+        "net_debt",
+        "cash_ratio",
+        "equity_ratio",
+        "total_assets",
+        "total_liabilities",
+        "total_equity",
+        "cash",
+        "total_debt",
+        "current_assets",
+        "current_liabilities",
+        "working_capital",
+        "invested_capital",
+        "net_debt_to_equity",
+        "current_ratio",
+        "quick_ratio",
+        "debt_ratio",
+        "free_cash_flow",
+        "cfo_to_net_income",
+        "capex_intensity_percent",
+        "fcf_coverage",
+        "operating_cash_flow",
+        "investing_cash_flow",
+        "financing_cash_flow",
+        "capital_expenditure",
+        "depreciation_amortization",
+        "change_in_working_capital",
+        "stock_based_compensation",
+        "cash_dividends_paid",
+        "share_repurchase",
+        "fcf_margin",
+        "fcf_growth",
+        "cfo_growth",
+        "dividend_coverage_by_fcf",
+        "roe",
         "der",
+        "debt_to_ebitda",
         "dividend_yield",
         "payout_ratio",
         "market_cap",
@@ -92,29 +137,30 @@ def test_builder_returns_all_rows_and_dynamic_periods():
         "pbv",
         "ps",
         "ev_ebitda",
-        "cfo_to_net_income",
-        "free_cash_flow",
-        "capex_intensity_percent",
-        "balance_der",
-        "net_debt",
-        "debt_to_ebitda",
-        "cash_ratio",
-        "equity_ratio",
-        "dividend_yield_percent",
-        "payout_ratio_percent",
-        "fcf_coverage",
+        "roa",
+        "roic",
+        "interest_coverage",
+        "asset_turnover",
+        "equity_multiplier",
+        "earnings_yield",
+        "fcf_yield",
+        "price_fcf",
+        "ev_sales",
+        "ev_fcf",
+        "peg_ratio",
+        "beta",
+        "shares_outstanding",
+        "float_shares",
+        "revenue_per_share",
+        "cash_per_share",
     ]
     assert [section.title for section in highlights.sections] == [
-        "Market & Scale",
-        "Growth",
-        "Profitability",
-        "Per Share & Balance Sheet",
-        "Dividends",
-        "VALUATION MULTIPLES",
-        "QUALITY OF EARNINGS",
-        "BALANCE SHEET RISK",
-        "DIVIDEND QUALITY",
+        "Income",
+        "Balance Sheet",
+        "Cash Flow",
+        "Ratios",
     ]
+    assert [len(section.rows) for section in highlights.sections] == [19, 17, 17, 27]
 
     assert highlights.period_logic == "fy23_to_analysis_quarter"
     revenue_rows = [row for row in highlights.rows if row.key == "revenue"]
@@ -149,8 +195,8 @@ def test_builder_does_not_crash_when_vendor_payloads_are_missing():
     payload = to_dict(build_financial_highlights(ticker="TEST", analysis_date="2026-01-15"))
 
     assert payload is not None
-    assert len(payload["rows"]) == 30
-    assert len(payload["sections"]) == 9
+    assert len(payload["rows"]) == 80
+    assert len(payload["sections"]) == 4
     assert payload["data_quality"]["status"] == "unavailable"
     assert all(cell["display"] == "-" for row in payload["rows"] for cell in row["values"].values())
 
@@ -269,7 +315,7 @@ def test_builder_uses_idr_billion_and_point_in_time_market_cap():
 
 
 def test_statement_parser_limits_suffix_aliases_to_xbrl_concepts():
-    assert _canonical_field("Cost Of Revenue") is None
+    assert _canonical_field("Cost Of Revenue") == "cost_of_revenue"
     assert _canonical_field("us-gaap_Revenues") == "revenue"
 
 
