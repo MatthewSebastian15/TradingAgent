@@ -39,7 +39,7 @@ describe('FinancialHighlightsTable', () => {
     expect(screen.getByText('126.00 %')).toBeTruthy();
     expect(screen.getByText('0.45x')).toBeTruthy();
     expect(screen.queryByText('Source unavailable')).toBeNull();
-    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
     expect(
       Array.from(container.querySelectorAll('tbody tr td:first-child')).map(
         (cell) => cell.textContent

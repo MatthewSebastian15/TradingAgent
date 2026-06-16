@@ -147,6 +147,24 @@ def build_fundamentals_context(data: Any) -> dict[str, Any]:
         "normalized_period_rows": _compact_list(getattr(data, "normalized_period_rows", None), max_items=8),
         "derived_fundamentals": _compact_list(getattr(data, "derived_fundamentals", None), max_items=8),
         "fundamental_analysis": _compact_mapping(data.fundamental_analysis, max_items=16),
+        "fundamental_context": _compact_mapping(
+            (data.fundamental_analysis or {}).get("fundamental_context")
+            if isinstance(data.fundamental_analysis, dict)
+            else None,
+            max_items=16,
+        ),
+        "fundamental_score": (data.fundamental_analysis or {}).get("fundamental_score")
+        if isinstance(data.fundamental_analysis, dict)
+        else None,
+        "fundamental_signal": (data.fundamental_analysis or {}).get("fundamental_signal")
+        if isinstance(data.fundamental_analysis, dict)
+        else None,
+        "chart_based_reasoning": _compact_list(
+            (data.fundamental_analysis or {}).get("chart_based_reasoning")
+            if isinstance(data.fundamental_analysis, dict)
+            else None,
+            max_items=24,
+        ),
         "event_risk": _compact_text_block(data.event_risk, max_chars=1200),
         "recommendation_trends": _compact_text_block(data.recommendation_trends, max_chars=1200),
         "data_quality": _model_dump(data.data_quality),
@@ -209,6 +227,7 @@ def _compact_financial_highlights(value: dict[str, Any] | None) -> dict[str, Any
         "rows": _compact_list(value.get("rows"), max_items=24),
         "notes": value.get("notes"),
         "data_quality": value.get("data_quality"),
+        "derived_fundamentals": _compact_list(value.get("derived_fundamentals"), max_items=24),
     }
 
 

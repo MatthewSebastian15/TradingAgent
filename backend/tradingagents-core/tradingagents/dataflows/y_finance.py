@@ -650,6 +650,48 @@ def _clean_ownership_ratio(value: Any) -> float | None:
     return max(0, min(number, 1))
 
 
+
+def _first_numeric_from_record(record: Any, keys: tuple[str, ...]) -> float | None:
+    if not isinstance(record, dict):
+        return None
+    for key in keys:
+        value = record.get(key)
+        if isinstance(value, (int, float)) and math.isfinite(float(value)):
+            return float(value)
+    return None
+
+
+def _latest_numeric_from_frame(data: Any, keys: tuple[str, ...]) -> float | None:
+    if data is None:
+        return None
+    if isinstance(data, dict):
+        return _first_numeric_from_record(data, keys)
+    if isinstance(data, pd.Series):
+        return _first_numeric_from_record(data.to_dict(), keys)
+    if not isinstance(data, pd.DataFrame) or data.empty:
+        return None
+
+    for key in keys:
+        if key in data.columns:
+            series = pd.to_numeric(data[key], errors="coerce").dropna()
+            if not series.empty:
+                return float(series.iloc[-1])
+        if key in data.index:
+            series = pd.to_numeric(data.loc[key], errors="coerce").dropna()
+            if not series.empty:
+                return float(series.iloc[-1])
+    return None
+
+
+def _load_optional_ticker_table(ticker_obj: Any, attribute: str) -> Any | None:
+    if not hasattr(ticker_obj, attribute):
+        return None
+    try:
+        return yf_retry(lambda: getattr(ticker_obj, attribute))
+    except Exception as exc:
+        logger.debug("Unable to load yfinance %s table: %s", attribute, exc)
+        return None
+
 def _clean_profile_text(value: Any, max_length: int | None = None) -> str | None:
     if value is None:
         return None
@@ -695,7 +737,32 @@ def get_company_profile(
                 if name:
                     executives.append({"name": name, "title": title or "N/A"})
 
-        shares_out = info.get("sharesOutstanding")
+        shares_table = _load_optional_ticker_table(ticker_obj, "shares")
+        valuation_table = _load_optional_ticker_table(ticker_obj, "valuation")
+        shares_out = info.get("sharesOutstanding") or _latest_numeric_from_frame(
+            shares_table,
+            ("Shares Outstanding", "sharesOutstanding", "shares_outstanding"),
+        )
+        enterprise_value = info.get("enterpriseValue") or _latest_numeric_from_frame(
+            valuation_table,
+            ("Enterprise Value", "enterpriseValue", "enterprise_value"),
+        )
+        trailing_pe = info.get("trailingPE") or _latest_numeric_from_frame(
+            valuation_table,
+            ("Trailing P/E", "Trailing PE", "trailingPE", "trailing_pe"),
+        )
+        price_to_book = info.get("priceToBook") or _latest_numeric_from_frame(
+            valuation_table,
+            ("Price/Book", "Price To Book", "priceToBook", "price_to_book"),
+        )
+        price_to_sales = info.get("priceToSalesTrailing12Months") or _latest_numeric_from_frame(
+            valuation_table,
+            ("Price/Sales", "Price To Sales", "priceToSalesTrailing12Months", "price_to_sales"),
+        )
+        enterprise_to_ebitda = info.get("enterpriseToEbitda") or _latest_numeric_from_frame(
+            valuation_table,
+            ("Enterprise/EBITDA", "EV/EBITDA", "enterpriseToEbitda", "enterprise_to_ebitda"),
+        )
         insider_pct = _clean_ownership_ratio(info.get("heldPercentInsiders"))
         institution_pct = _clean_ownership_ratio(info.get("heldPercentInstitutions"))
         short_ratio = info.get("shortRatio")
@@ -723,6 +790,20 @@ def get_company_profile(
             "phone": _clean_profile_text(info.get("phone")),
             "website": _clean_profile_text(info.get("website") or info.get("ir_website")),
             "market_cap": info.get("marketCap"),
+            "enterprise_value": enterprise_value,
+            "trailing_pe": trailing_pe,
+            "forward_pe": info.get("forwardPE"),
+            "price_to_book": price_to_book,
+            "price_to_sales": price_to_sales,
+            "enterprise_to_ebitda": enterprise_to_ebitda,
+            "dividend_yield": info.get("dividendYield"),
+            "payout_ratio": info.get("payoutRatio"),
+            "peg_ratio": info.get("pegRatio"),
+            "beta": info.get("beta"),
+            "float_shares": info.get("floatShares"),
+            "current_ratio": info.get("currentRatio"),
+            "quick_ratio": info.get("quickRatio"),
+            "revenue_per_share": info.get("revenuePerShare"),
             "shares_outstanding": shares_out,
             "shares_out": shares_out,
             "insider_percent": insider_pct,
@@ -820,6 +901,8 @@ def get_cashflow(
 
         if freq.lower() == "quarterly":
             data = yf_retry(lambda: ticker_obj.quarterly_cashflow)
+        elif freq.lower() == "ttm" and hasattr(ticker_obj, "ttm_cashflow"):
+            data = yf_retry(lambda: ticker_obj.ttm_cashflow)
         else:
             data = yf_retry(lambda: ticker_obj.cashflow)
 
@@ -853,6 +936,8 @@ def get_income_statement(
 
         if freq.lower() == "quarterly":
             data = yf_retry(lambda: ticker_obj.quarterly_income_stmt)
+        elif freq.lower() == "ttm" and hasattr(ticker_obj, "ttm_income_stmt"):
+            data = yf_retry(lambda: ticker_obj.ttm_income_stmt)
         else:
             data = yf_retry(lambda: ticker_obj.income_stmt)
 

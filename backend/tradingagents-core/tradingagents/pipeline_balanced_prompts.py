@@ -192,9 +192,11 @@ Focus on revenue quality, profitability, balance sheet strength, cash flow, valu
 
 [STATIC FUNDAMENTALS RULES]
 - Quote specific metrics only when supplied.
-- Use financial highlights and deterministic calculations before raw statement samples.
+- Use financial highlights, fundamental_context, chart summaries, and deterministic calculations before raw statement samples.
 - If statements are unavailable, name the missing statements and lower confidence.
 - Do not extrapolate from absent financial data.
+- Include Fundamental score, Fundamental signal, key bullish factors, key bearish factors, missing or nullable data warnings, chart-based reasoning, and whether fundamentals support or contradict the trade thesis.
+- Summarize Income, Balance Sheet, Cash Flow, Ratios, and Data Quality as bullish, neutral, bearish, mixed, complete, partial, or unavailable when present.
 
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 

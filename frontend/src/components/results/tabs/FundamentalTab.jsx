@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import FinancialHighlightsTable from '../FinancialHighlightsTable';
 import SectionHeader from '../SectionHeader';
 
-const UNAVAILABLE_CELL = { value: null, display: '-', status: 'unavailable' };
+const UNAVAILABLE_CELL = { value: null, display: 'N/A', status: 'unavailable' };
 const CHART_WIDTH = 1040;
 const CHART_HEIGHT = 292;
 const CHART_LEFT = 84;
@@ -32,28 +32,46 @@ const FUNDAMENTAL_CHART_GROUPS = [
     Icon: TrendingUp,
     charts: [
       {
-        id: 'revenue_ebitda_net_profit',
-        title: 'Revenue vs EBITDA vs Net Profit',
+        id: 'income-revenue-ebitda-net-profit',
+        title: 'Revenue, EBITDA, Net Profit',
+        description: 'Shows top-line revenue, operating profitability proxy, and final profit.',
         type: 'grouped_bar',
         metrics: ['Revenue', 'EBITDA', 'Net Profit'],
       },
       {
-        id: 'revenue_growth_net_profit_growth',
-        title: 'Revenue Growth vs Net Profit Growth',
+        id: 'income-growth',
+        title: 'Revenue Growth (%) vs Net Profit Growth (%)',
+        description: 'Shows whether profit growth follows revenue growth.',
         type: 'line',
         metrics: ['Revenue Growth (%)', 'Net Profit Growth (%)'],
       },
       {
-        id: 'ebitda_margin_net_profit_margin',
-        title: 'EBITDA Margin vs Net Profit Margin',
+        id: 'income-margin',
+        title: 'EBITDA Margin (%) vs Net Profit Margin (%)',
+        description: 'Shows margin quality before and after non-operating items, taxes, and interest.',
         type: 'line',
         metrics: ['EBITDA Margin (%)', 'Net Profit Margin (%)'],
       },
       {
-        id: 'eps_trend',
-        title: 'EPS Trend',
+        id: 'income-eps',
+        title: 'EPS',
+        description: 'Shows earnings per share trend.',
         type: 'line',
         metrics: ['EPS'],
+      },
+      {
+        id: 'income-gross-profit-cost-revenue',
+        title: 'Gross Profit vs Cost of Revenue',
+        description: 'Shows core production or service delivery efficiency.',
+        type: 'grouped_bar',
+        metrics: ['Gross Profit', 'Cost of Revenue'],
+      },
+      {
+        id: 'income-operating-pretax-net-profit',
+        title: 'Operating Income / EBIT vs Pretax Income vs Net Profit',
+        description: 'Shows profit waterfall from operating level to final net income.',
+        type: 'grouped_bar',
+        metrics: ['Operating Income / EBIT', 'Pretax Income', 'Net Profit'],
       },
     ],
   },
@@ -63,18 +81,46 @@ const FUNDAMENTAL_CHART_GROUPS = [
     Icon: Landmark,
     charts: [
       {
-        id: 'net_debt_trend',
-        title: 'Net Debt Trend',
+        id: 'balance-bvps',
+        title: 'BVPS',
+        description: 'Shows book value per share trend.',
+        type: 'line',
+        metrics: ['BVPS'],
+      },
+      {
+        id: 'balance-net-debt',
+        title: 'Net Debt',
+        description: 'Shows debt burden after cash position.',
         type: 'bar',
         metrics: ['Net Debt'],
-        wide: true,
       },
-      { id: 'bvps_trend', title: 'BVPS Trend', type: 'line', metrics: ['BVPS'] },
       {
-        id: 'cash_ratio_equity_ratio',
+        id: 'balance-cash-equity-ratio',
         title: 'Cash Ratio vs Equity Ratio',
+        description: 'Shows liquidity strength and capital structure strength.',
         type: 'line',
         metrics: ['Cash Ratio', 'Equity Ratio'],
+      },
+      {
+        id: 'balance-assets-liabilities-equity',
+        title: 'Total Assets vs Total Liabilities vs Total Equity',
+        description: 'Shows balance sheet structure and capital base.',
+        type: 'grouped_bar',
+        metrics: ['Total Assets', 'Total Liabilities', 'Total Equity'],
+      },
+      {
+        id: 'balance-current-working-capital',
+        title: 'Current Assets vs Current Liabilities vs Working Capital',
+        description: 'Shows short-term liquidity and working capital condition.',
+        type: 'grouped_bar',
+        metrics: ['Current Assets', 'Current Liabilities', 'Working Capital'],
+      },
+      {
+        id: 'balance-liquidity-debt-ratios',
+        title: 'Current Ratio vs Quick Ratio vs Debt Ratio',
+        description: 'Shows liquidity ratios and debt pressure.',
+        type: 'line',
+        metrics: ['Current Ratio', 'Quick Ratio', 'Debt Ratio'],
       },
     ],
   },
@@ -84,23 +130,46 @@ const FUNDAMENTAL_CHART_GROUPS = [
     Icon: Activity,
     charts: [
       {
-        id: 'free_cash_flow_trend',
-        title: 'Free Cash Flow Trend',
+        id: 'cashflow-free-cash-flow',
+        title: 'Free Cash Flow',
+        description: 'Shows cash available after capital expenditure.',
         type: 'bar',
         metrics: ['Free Cash Flow'],
-        wide: true,
       },
       {
-        id: 'cfo_net_income_trend',
-        title: 'CFO / Net Income Trend',
+        id: 'cashflow-cfo-net-income',
+        title: 'CFO / Net Income',
+        description: 'Shows earnings quality by comparing operating cash flow to reported profit.',
         type: 'line',
         metrics: ['CFO / Net Income'],
       },
       {
-        id: 'capex_intensity_fcf_coverage',
-        title: 'Capex Intensity vs FCF Coverage',
+        id: 'cashflow-capex-fcf-coverage',
+        title: 'Capex Intensity (%) vs FCF Coverage',
+        description: 'Shows how heavy capital expenditure is and whether free cash flow covers key obligations.',
         type: 'line',
         metrics: ['Capex Intensity (%)', 'FCF Coverage'],
+      },
+      {
+        id: 'cashflow-operating-investing-financing',
+        title: 'Operating Cash Flow vs Investing Cash Flow vs Financing Cash Flow',
+        description: 'Shows where cash comes from and where cash goes.',
+        type: 'grouped_bar',
+        metrics: ['Operating Cash Flow', 'Investing Cash Flow', 'Financing Cash Flow'],
+      },
+      {
+        id: 'cashflow-capex-fcf',
+        title: 'Capital Expenditure vs Free Cash Flow',
+        description: 'Shows whether capital expenditure is consuming too much cash generation.',
+        type: 'grouped_bar',
+        metrics: ['Capital Expenditure', 'Free Cash Flow'],
+      },
+      {
+        id: 'cashflow-fcf-cfo-growth',
+        title: 'FCF Margin (%) vs FCF Growth (%) vs CFO Growth (%)',
+        description: 'Shows cash flow quality, growth, and conversion trend.',
+        type: 'line',
+        metrics: ['FCF Margin (%)', 'FCF Growth (%)', 'CFO Growth (%)'],
       },
     ],
   },
@@ -109,25 +178,47 @@ const FUNDAMENTAL_CHART_GROUPS = [
     label: 'Ratios',
     Icon: Percent,
     charts: [
-      { id: 'roe_trend', title: 'ROE Trend', type: 'line', metrics: ['ROE (%)'] },
       {
-        id: 'leverage_risk',
-        title: 'Leverage Risk',
+        id: 'ratios-roe',
+        title: 'ROE (%)',
+        description: 'Shows return generated from shareholder equity.',
+        type: 'line',
+        metrics: ['ROE (%)'],
+      },
+      {
+        id: 'ratios-leverage-risk',
+        title: 'DER vs Debt / EBITDA',
+        description: 'Shows leverage risk from balance sheet and operating cash earnings perspective.',
         type: 'line',
         metrics: ['DER', 'Debt / EBITDA'],
       },
       {
-        id: 'dividend_quality',
-        title: 'Dividend Quality',
+        id: 'ratios-dividend-quality',
+        title: 'Dividend Yield (%) vs Payout Ratio (%)',
+        description: 'Shows dividend attractiveness and dividend sustainability.',
         type: 'line',
         metrics: ['Dividend Yield (%)', 'Payout Ratio (%)'],
       },
       {
-        id: 'valuation_overview',
-        title: 'Valuation Overview',
-        type: 'mixed',
-        barMetrics: ['Market Cap', 'Enterprise Value'],
-        lineMetrics: ['P/E', 'P/BV', 'P/S', 'EV/EBITDA'],
+        id: 'ratios-market-cap-enterprise-value',
+        title: 'Market Cap vs Enterprise Value',
+        description: 'Shows equity value compared with debt-adjusted enterprise value.',
+        type: 'grouped_bar',
+        metrics: ['Market Cap', 'Enterprise Value'],
+      },
+      {
+        id: 'ratios-return-quality',
+        title: 'ROA (%) vs ROIC (%) vs ROE (%)',
+        description: 'Shows return quality across assets, invested capital, and shareholder equity.',
+        type: 'line',
+        metrics: ['ROA (%)', 'ROIC (%)', 'ROE (%)'],
+      },
+      {
+        id: 'ratios-yield-quality',
+        title: 'FCF Yield (%) vs Earnings Yield (%)',
+        description: 'Shows valuation quality from both accounting earnings and free cash flow.',
+        type: 'line',
+        metrics: ['FCF Yield (%)', 'Earnings Yield (%)'],
       },
     ],
   },
@@ -155,14 +246,34 @@ const METRIC_KEY_ALIASES = {
   'EBITDA Margin (%)': ['ebitda_margin'],
   'Net Profit Margin (%)': ['net_profit_margin'],
   EPS: ['eps'],
+  'Gross Profit': ['gross_profit'],
+  'Cost of Revenue': ['cost_of_revenue'],
+  'Operating Income / EBIT': ['operating_income', 'operating_profit'],
+  'Pretax Income': ['pretax_income'],
   BVPS: ['bvps'],
   'Net Debt': ['net_debt'],
   'Cash Ratio': ['cash_ratio'],
   'Equity Ratio': ['equity_ratio'],
+  'Total Assets': ['total_assets', 'assets'],
+  'Total Liabilities': ['total_liabilities'],
+  'Total Equity': ['total_equity', 'equity'],
+  'Current Assets': ['current_assets'],
+  'Current Liabilities': ['current_liabilities'],
+  'Working Capital': ['working_capital'],
+  'Current Ratio': ['current_ratio'],
+  'Quick Ratio': ['quick_ratio'],
+  'Debt Ratio': ['debt_ratio'],
   'CFO / Net Income': ['cfo_to_net_income'],
   'Free Cash Flow': ['free_cash_flow'],
   'Capex Intensity (%)': ['capex_intensity_percent'],
   'FCF Coverage': ['fcf_coverage'],
+  'Operating Cash Flow': ['operating_cash_flow'],
+  'Investing Cash Flow': ['investing_cash_flow'],
+  'Financing Cash Flow': ['financing_cash_flow'],
+  'Capital Expenditure': ['capital_expenditure', 'capex'],
+  'FCF Margin (%)': ['fcf_margin'],
+  'FCF Growth (%)': ['fcf_growth'],
+  'CFO Growth (%)': ['cfo_growth'],
   'ROE (%)': ['roe'],
   DER: ['der', 'balance_der'],
   'Debt / EBITDA': ['debt_to_ebitda'],
@@ -174,6 +285,10 @@ const METRIC_KEY_ALIASES = {
   'P/BV': ['pbv'],
   'P/S': ['ps'],
   'EV/EBITDA': ['ev_ebitda'],
+  'ROA (%)': ['roa'],
+  'ROIC (%)': ['roic'],
+  'FCF Yield (%)': ['fcf_yield'],
+  'Earnings Yield (%)': ['earnings_yield'],
 };
 
 const METRIC_LABEL_ALIASES = {
@@ -191,14 +306,34 @@ const METRIC_FORMAT_TYPES = {
   'EBITDA Margin (%)': 'percent',
   'Net Profit Margin (%)': 'percent',
   EPS: 'per_share',
+  'Gross Profit': 'currency_scaled',
+  'Cost of Revenue': 'currency_scaled',
+  'Operating Income / EBIT': 'currency_scaled',
+  'Pretax Income': 'currency_scaled',
   BVPS: 'per_share',
   'Net Debt': 'currency_scaled',
   'Cash Ratio': 'ratio',
-  'Equity Ratio': 'ratio',
+  'Equity Ratio': 'percent',
+  'Total Assets': 'currency_scaled',
+  'Total Liabilities': 'currency_scaled',
+  'Total Equity': 'currency_scaled',
+  'Current Assets': 'currency_scaled',
+  'Current Liabilities': 'currency_scaled',
+  'Working Capital': 'currency_scaled',
+  'Current Ratio': 'ratio',
+  'Quick Ratio': 'ratio',
+  'Debt Ratio': 'ratio',
   'CFO / Net Income': 'ratio',
   'Free Cash Flow': 'currency_scaled',
   'Capex Intensity (%)': 'percent',
   'FCF Coverage': 'ratio',
+  'Operating Cash Flow': 'currency_scaled',
+  'Investing Cash Flow': 'currency_scaled',
+  'Financing Cash Flow': 'currency_scaled',
+  'Capital Expenditure': 'currency_scaled',
+  'FCF Margin (%)': 'percent',
+  'FCF Growth (%)': 'percent',
+  'CFO Growth (%)': 'percent',
   'ROE (%)': 'percent',
   DER: 'ratio',
   'Debt / EBITDA': 'ratio',
@@ -210,6 +345,10 @@ const METRIC_FORMAT_TYPES = {
   'P/BV': 'ratio',
   'P/S': 'ratio',
   'EV/EBITDA': 'ratio',
+  'ROA (%)': 'percent',
+  'ROIC (%)': 'percent',
+  'FCF Yield (%)': 'percent',
+  'Earnings Yield (%)': 'percent',
 };
 
 const LEGACY_FUNDAMENTAL_SECTIONS = [
@@ -357,17 +496,16 @@ function parseDisplayNumber(value) {
 }
 
 function chartCellValue(cell) {
-  if (!cell || cell.status === 'unavailable') return 0;
-  const displayNumber = parseDisplayNumber(cell.display);
-  if (displayNumber !== null) return displayNumber;
+  if (!cell || cell.status === 'unavailable') return null;
   const number = Number(cell.value);
-  return Number.isFinite(number) ? number : 0;
+  if (Number.isFinite(number)) return number;
+  return parseDisplayNumber(cell.display);
 }
 
 function chartCellDisplay(cell) {
-  if (!cell || cell.status === 'unavailable') return '0';
+  if (!cell || cell.status === 'unavailable') return 'N/A';
   const display = cell.display ?? cell.value;
-  return isUnavailableValue(display) ? '0' : String(display);
+  return isUnavailableValue(display) ? 'N/A' : String(display);
 }
 
 function rowValueScore(row, periods) {
@@ -618,10 +756,18 @@ function buildMetricChart(financialHighlights, chartDefinition) {
 }
 
 function pointPath(points, yForValue, xForIndex) {
+  let hasOpenSegment = false;
   return points
-    .map(
-      (point, index) => `${index === 0 ? 'M' : 'L'} ${xForIndex(index)} ${yForValue(point.value)}`
-    )
+    .map((point, index) => {
+      if (!Number.isFinite(point.value)) {
+        hasOpenSegment = false;
+        return '';
+      }
+      const command = hasOpenSegment ? 'L' : 'M';
+      hasOpenSegment = true;
+      return `${command} ${xForIndex(index)} ${yForValue(point.value)}`;
+    })
+    .filter(Boolean)
     .join(' ');
 }
 
@@ -710,7 +856,29 @@ function FundamentalMetricChart({ financialHighlights, chartDefinition }) {
     [financialHighlights, chartDefinition]
   );
 
-  if (!chart.periods.length || !chart.series.length) return null;
+  const hasChartData = chart.series.some((series) =>
+    series.points.some((point) => Number.isFinite(point.value))
+  );
+
+  if (!chart.periods.length || !chart.series.length || !hasChartData) {
+    return (
+      <div className="overflow-hidden rounded-md border border-bloomberg-border bg-black">
+        <div className="border-b border-bloomberg-border px-3 py-2">
+          <div className="font-mono text-xs uppercase tracking-wider text-bloomberg-orange">
+            {chartDefinition.title}
+          </div>
+          {chartDefinition.description && (
+            <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-bloomberg-muted">
+              {chartDefinition.description}
+            </div>
+          )}
+        </div>
+        <div className="flex min-h-[292px] items-center justify-center px-4 py-8 font-mono text-xs uppercase tracking-wider text-bloomberg-muted">
+          No fundamental data available
+        </div>
+      </div>
+    );
+  }
 
   const plotWidth = CHART_WIDTH - CHART_LEFT - CHART_RIGHT;
   const plotHeight = CHART_HEIGHT - CHART_TOP - CHART_BOTTOM;
@@ -744,9 +912,10 @@ function FundamentalMetricChart({ financialHighlights, chartDefinition }) {
           {chartDefinition.title}
         </div>
         <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-bloomberg-muted">
-          {chartDefinition.type === 'mixed'
-            ? 'Bars + Lines'
-            : chartDefinition.type.replace('_', ' ')}
+          {chartDefinition.description ||
+            (chartDefinition.type === 'mixed'
+              ? 'Bars + Lines'
+              : chartDefinition.type.replace('_', ' '))}
         </div>
       </div>
       <div className="overflow-hidden">
@@ -865,6 +1034,7 @@ function FundamentalMetricChart({ financialHighlights, chartDefinition }) {
 
           {barSeries.map((series, seriesIndex) =>
             series.points.map((point, pointIndex) => {
+              if (!Number.isFinite(point.value)) return null;
               const center = barSlotCenter(pointIndex);
               const x =
                 center -
@@ -921,6 +1091,7 @@ function FundamentalMetricChart({ financialHighlights, chartDefinition }) {
                 vectorEffect="non-scaling-stroke"
               />
               {series.points.map((point, index) => {
+                if (!Number.isFinite(point.value)) return null;
                 const x = lineX(index);
                 const y = (isMixed ? yLine : yForDomain(singleDomain))(point.value);
                 const hoverPoint = {
@@ -1019,6 +1190,7 @@ FundamentalMetricChart.propTypes = {
   financialHighlights: PropTypes.object,
   chartDefinition: PropTypes.shape({
     title: PropTypes.string.isRequired,
+    description: PropTypes.string,
     type: PropTypes.string.isRequired,
     metrics: PropTypes.array,
     barMetrics: PropTypes.array,
@@ -1027,10 +1199,6 @@ FundamentalMetricChart.propTypes = {
 };
 
 function FundamentalChartsPanel({ financialHighlights, activeGroup }) {
-  if (!Array.isArray(financialHighlights?.periods) || !financialHighlights.periods.length) {
-    return null;
-  }
-
   const { title, unit_note: unitNote } = financialHighlights || {};
   const groupedPayload = groupFinancialHighlights(financialHighlights, activeGroup);
 
@@ -1045,14 +1213,13 @@ function FundamentalChartsPanel({ financialHighlights, activeGroup }) {
         <div className="font-mono text-xs uppercase tracking-wider text-bloomberg-orange">
           {activeGroup.label}
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {activeGroup.charts.map((chartDefinition) => (
-            <div key={chartDefinition.id} className={chartDefinition.wide ? 'md:col-span-2' : ''}>
-              <FundamentalMetricChart
-                financialHighlights={groupedPayload}
-                chartDefinition={chartDefinition}
-              />
-            </div>
+            <FundamentalMetricChart
+              key={chartDefinition.id}
+              financialHighlights={groupedPayload}
+              chartDefinition={chartDefinition}
+            />
           ))}
         </div>
       </div>
