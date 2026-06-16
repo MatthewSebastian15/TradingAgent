@@ -116,6 +116,69 @@ describe('StockForm cleanup', () => {
     expect(props.onResult).not.toHaveBeenCalledWith({ error: 'Analysis cancelled.' });
   });
 
+  it('does not create duplicate jobs on rapid submit', async () => {
+    const props = callbacks();
+    const fetchMock = vi.fn((url, options = {}) => {
+      if (options.method === 'POST') {
+        return new Promise((_resolve, reject) => {
+          options.signal?.addEventListener('abort', () => {
+            const error = new Error('Aborted');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { unmount } = render(<StockForm {...props} selectedResult={selectedTicker()} />);
+
+    const button = screen.getByRole('button', { name: /execute analysis/i });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+    });
+
+    unmount();
+  });
+
+  it('shows a clearer message when owner session already has a running analysis', async () => {
+    const props = callbacks();
+    const fetchMock = vi.fn((url, options = {}) => {
+      if (options.method === 'POST') {
+        return Promise.resolve({
+          ok: false,
+          status: 429,
+          text: async () =>
+            JSON.stringify({
+              error: {
+                code: 'RATE_LIMITED',
+                message: 'Too many analyses are already running for this owner session.',
+              },
+            }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<StockForm {...props} selectedResult={selectedTicker()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
+
+    await waitFor(() => {
+      expect(props.onResult).toHaveBeenCalledWith({
+        error:
+          'Analysis already running in this browser session. Stop the current run, wait until it finishes, or retry shortly if the previous run was interrupted.',
+      });
+    });
+  });
+
   it('surfaces an error when the SSE stream ends before a result or error event', async () => {
     const props = callbacks();
     const encoder = new TextEncoder();
@@ -329,6 +392,7 @@ describe('StockForm cleanup', () => {
     expect(screen.getByText('Analysis Settings')).toBeTruthy();
     expect(screen.getByText('Position Settings')).toBeTruthy();
     expect(screen.getByText('Action')).toBeTruthy();
-    expect(screen.getByText('DEFAULT 9-CALL PIPELINE')).toBeTruthy();
+    expect(screen.queryByText('DEFAULT 9-CALL PIPELINE')).toBeNull();
+    expect(screen.getByRole('button', { name: /execute analysis/i })).toBeTruthy();
   });
 });

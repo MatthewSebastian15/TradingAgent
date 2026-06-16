@@ -75,6 +75,8 @@ class RateLimiterBackend(Protocol):
 
     async def release(self, identifier: str, policy: RateLimitPolicy) -> None: ...
 
+    async def touch(self, identifier: str, policy: RateLimitPolicy) -> None: ...
+
 
 class MemoryRateLimiterBackend:
     def __init__(self, state: RateLimiterState | None = None) -> None:
@@ -106,6 +108,13 @@ class MemoryRateLimiterBackend:
                 state.active = max(0, state.active - 1)
                 state.last_seen = time.monotonic()
 
+    async def touch(self, identifier: str, policy: RateLimitPolicy) -> None:
+        key = (policy.scope, identifier)
+        async with self.state.lock:
+            state = self.state.states.get(key)
+            if state is not None and state.active > 0:
+                state.last_seen = time.monotonic()
+
 
 class SQLiteRateLimiterBackend:
     """SQLite-backed limiter for shared-volume deployments.
@@ -126,6 +135,9 @@ class SQLiteRateLimiterBackend:
 
     async def release(self, identifier: str, policy: RateLimitPolicy) -> None:
         await asyncio.to_thread(self._release_sync, identifier, policy)
+
+    async def touch(self, identifier: str, policy: RateLimitPolicy) -> None:
+        await asyncio.to_thread(self._touch_sync, identifier, policy)
 
     def _acquire_sync(self, identifier: str, policy: RateLimitPolicy) -> None:
         now = time.time()
@@ -183,6 +195,18 @@ class SQLiteRateLimiterBackend:
                 (active, now, policy.scope, identifier),
             )
 
+    def _touch_sync(self, identifier: str, policy: RateLimitPolicy) -> None:
+        now = time.time()
+        with self._write_lock, self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE rate_limit_buckets
+                SET last_seen = ?
+                WHERE scope = ? AND identifier = ? AND active > 0
+                """,
+                (now, policy.scope, identifier),
+            )
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=30)
         conn.execute("PRAGMA busy_timeout = 30000")
@@ -207,8 +231,12 @@ class SQLiteRateLimiterBackend:
 
     def _evict_stale_entries(self, conn: sqlite3.Connection, now: float) -> None:
         conn.execute(
-            "DELETE FROM rate_limit_buckets WHERE active <= 0 AND last_seen < ?",
-            (now - self.ttl_seconds,),
+            """
+            DELETE FROM rate_limit_buckets
+            WHERE (active <= 0 AND last_seen < ?)
+               OR (scope = 'stream' AND active > 0 AND last_seen < ?)
+            """,
+            (now - self.ttl_seconds, now - self.ttl_seconds),
         )
 
 
@@ -268,7 +296,8 @@ def _evict_stale_entries(now: float, limiter_state: RateLimiterState) -> None:
     stale = [
         key
         for key, state in limiter_state.states.items()
-        if state.active == 0 and (now - state.last_seen) > limiter_state.ttl_seconds
+        if (now - state.last_seen) > limiter_state.ttl_seconds
+        and (state.active == 0 or (key[0] == "stream" and state.active > 0))
     ]
     for key in stale:
         del limiter_state.states[key]
@@ -359,6 +388,11 @@ class RateLimitLease:
         if not self._acquired:
             return
         await self._backend.release(self.identifier, self.policy)
+        self._acquired = False
+
+    async def touch(self) -> None:
+        if self._acquired:
+            await self._backend.touch(self.identifier, self.policy)
 
 
 def request_policy() -> RateLimitPolicy:

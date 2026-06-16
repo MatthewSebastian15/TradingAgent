@@ -15,8 +15,16 @@ function errorMessageFromPayload(payload, fallback = 'Analysis failed.') {
   return typeof errorPayload === 'string' ? errorPayload : errorPayload.message || fallback;
 }
 
+function normalizeJobCreateError(message) {
+  if (/too many analyses are already running for this owner session/i.test(message)) {
+    return 'Analysis already running in this browser session. Stop the current run, wait until it finishes, or retry shortly if the previous run was interrupted.';
+  }
+  return message;
+}
+
 export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress }) {
   const [running, setRunning] = useState(false);
+  const runningRef = useRef(false);
   const abortRef = useRef(null);
   const jobIdRef = useRef(null);
   const mountedRef = useRef(true);
@@ -123,7 +131,7 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
         signal: controller.signal,
       });
 
-      if (!createRes.ok) throw new Error(await readHttpError(createRes));
+      if (!createRes.ok) throw new Error(normalizeJobCreateError(await readHttpError(createRes)));
       ensureMounted();
       const job = await createRes.json();
       ensureMounted();
@@ -184,6 +192,8 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
 
   const startAnalysis = useCallback(
     async (payload) => {
+      if (runningRef.current) return;
+      runningRef.current = true;
       setRunning(true);
       callbacksRef.current.onLoading(true);
       callbacksRef.current.onStatus('Creating analysis job...');
@@ -200,6 +210,7 @@ export function useAnalysisJob({ onResult, onLoading, onStatus, onAgentProgress 
           callbacksRef.current.onResult({ error: ex.message || 'Analysis failed.' });
         }
       } finally {
+        runningRef.current = false;
         if (mountedRef.current) {
           setRunning(false);
           callbacksRef.current.onLoading(false);
