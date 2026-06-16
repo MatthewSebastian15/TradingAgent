@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from datetime import date
 from types import SimpleNamespace
 
 from analysis_cache import AnalysisJobStore
-from rate_limiter import RateLimitPolicy
+from errors import RateLimitError
+from rate_limiter import RateLimitPolicy, SQLiteRateLimiterBackend
 
 
 def test_rate_limit_returns_429(client, monkeypatch):
@@ -238,6 +240,42 @@ def test_owner_scoped_endpoint_rejects_missing_owner_token(client):
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+def test_sqlite_stream_limiter_rejects_live_active_lease(tmp_path):
+    backend = SQLiteRateLimiterBackend(str(tmp_path / "rate_limits.sqlite3"), ttl_seconds=60)
+    policy = RateLimitPolicy(scope="stream", max_per_minute=100, max_concurrent=1)
+
+    asyncio.run(backend.acquire("owner-a", policy))
+
+    try:
+        asyncio.run(backend.acquire("owner-a", policy))
+    except RateLimitError:
+        pass
+    else:
+        raise AssertionError("Expected live stream lease to be rate limited.")
+
+
+def test_sqlite_stream_limiter_evicts_stale_active_lease(tmp_path):
+    db_path = tmp_path / "rate_limits.sqlite3"
+    backend = SQLiteRateLimiterBackend(str(db_path), ttl_seconds=60)
+    policy = RateLimitPolicy(scope="stream", max_per_minute=100, max_concurrent=1)
+
+    asyncio.run(backend.acquire("owner-a", policy))
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE rate_limit_buckets SET last_seen = 0 WHERE scope = ? AND identifier = ?",
+            (policy.scope, "owner-a"),
+        )
+
+    asyncio.run(backend.acquire("owner-a", policy))
+
+    with sqlite3.connect(db_path) as conn:
+        active = conn.execute(
+            "SELECT active FROM rate_limit_buckets WHERE scope = ? AND identifier = ?",
+            (policy.scope, "owner-a"),
+        ).fetchone()[0]
+    assert active == 1
 
 
 def test_market_quotes_endpoint_is_rate_limited(client, monkeypatch):

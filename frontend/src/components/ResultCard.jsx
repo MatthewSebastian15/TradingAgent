@@ -13,7 +13,6 @@ import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
 import ReportActions from './results/ReportActions';
 import ResultTabs from './results/tabs/ResultTabs';
-import { PIPELINE_STATUSES } from '../domain/analysisContract';
 import { useResultSections } from '../hooks/useResultSections';
 import { resolveClockConfig } from '../utils/clock';
 import {
@@ -723,141 +722,6 @@ ExpandableTextSection.propTypes = {
   expandLabel: PropTypes.string.isRequired,
 };
 
-const AGENT_ROLE_FALLBACKS = {
-  'Data Collection': 'Collects prices, fundamentals, news, and source metadata.',
-  'Market Analyst': 'Reviews trend, momentum, volume, volatility, and technical levels.',
-  'News Analyst': 'Summarizes news, sentiment, catalysts, and headline risk.',
-  'News + Social Analyst': 'Summarizes news, sentiment, catalysts, and headline risk.',
-  'Fundamentals Analyst': 'Reviews financial statements, ratios, earnings quality, and valuation.',
-  'Bull Researcher': 'Builds the upside case and positive catalyst view.',
-  'Bear Researcher': 'Tests downside risk, counterarguments, and invalidation points.',
-  'Research Manager': 'Compares bull and bear arguments and selects the strongest thesis.',
-  Trader: 'Turns the thesis into entry, stop, target, and sizing guidance.',
-  'Risk Analysts': 'Checks drawdown, volatility, leverage, liquidity, and risk fit.',
-  'Risk Manager': 'Checks portfolio risk and exposure limits.',
-  'Portfolio Manager': 'Sets the final decision, allocation, and position context.',
-};
-
-function normalizePipelineStatus(status) {
-  const normalized = String(status || PIPELINE_STATUSES.COMPLETED).toLowerCase();
-  if ([PIPELINE_STATUSES.ERROR, PIPELINE_STATUSES.FAILED, 'fail'].includes(normalized)) {
-    return PIPELINE_STATUSES.FAILED;
-  }
-  if ([PIPELINE_STATUSES.RUNNING, PIPELINE_STATUSES.STARTED, 'in_progress'].includes(normalized)) {
-    return PIPELINE_STATUSES.RUNNING;
-  }
-  if ([PIPELINE_STATUSES.SKIPPED, 'skip', 'cancelled'].includes(normalized)) {
-    return PIPELINE_STATUSES.SKIPPED;
-  }
-  return PIPELINE_STATUSES.COMPLETED;
-}
-
-function pipelineStatusClasses(status) {
-  if (status === PIPELINE_STATUSES.FAILED) return 'border-bloomberg-red text-bloomberg-red bg-bloomberg-red-dim';
-  if (status === PIPELINE_STATUSES.SKIPPED)
-    return 'border-bloomberg-amber text-bloomberg-amber bg-bloomberg-amber-dim';
-  return 'border-bloomberg-green text-bloomberg-green bg-bloomberg-green-dim';
-}
-
-function formatDuration(value) {
-  if (!hasDisplayValue(value)) return 'N/A';
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? `${numeric.toFixed(1)}s` : String(value);
-}
-
-function normalizePipelineRows(pipeline = [], agents = []) {
-  if (Array.isArray(pipeline) && pipeline.length > 0) {
-    return pipeline.map((agent, index) => {
-      const name = normalizeInlineText(
-        agent.name || agent.agent_name || agent.agent || `Agent ${index + 1}`
-      );
-      const status = normalizePipelineStatus(agent.status);
-      const warning = normalizeInlineText(agent.warning || agent.error || agent.reason);
-      const output = normalizeInlineText(
-        agent.output_summary ||
-          agent.key_finding ||
-          agent.finding ||
-          agent.summary ||
-          agent.status_message ||
-          warning ||
-          (status === PIPELINE_STATUSES.SKIPPED
-            ? 'Skipped by the selected pipeline mode.'
-            : status === PIPELINE_STATUSES.FAILED
-              ? 'Agent failed before producing a summary.'
-              : 'Completed. No compact backend summary was provided.')
-      );
-
-      return {
-        key: `${name}-${index}`,
-        name,
-        role:
-          normalizeInlineText(agent.role || agent.function || agent.description) ||
-          AGENT_ROLE_FALLBACKS[name] ||
-          'Runs the assigned analysis step in the pipeline.',
-        status,
-        output,
-        duration: formatDuration(
-          coalesceDisplayValue(
-            agent.duration_seconds,
-            agent.elapsed_seconds,
-            agent.execution_seconds
-          )
-        ),
-      };
-    });
-  }
-
-  return agents.map((agent, index) => {
-    const name = normalizeInlineText(agent) || `Agent ${index + 1}`;
-    return {
-      key: `${name}-${index}`,
-      name,
-      role: AGENT_ROLE_FALLBACKS[name] || 'Runs the assigned analysis step in the pipeline.',
-      status: PIPELINE_STATUSES.COMPLETED,
-      output: 'Completed. No compact backend summary was provided.',
-      duration: 'N/A',
-    };
-  });
-}
-
-function AgentPipeline({ pipeline = [], agents = [], totalSeconds }) {
-  const rows = normalizePipelineRows(pipeline, agents);
-  if (!rows.length) return null;
-
-  const completedCount = rows.filter((agent) => agent.status === PIPELINE_STATUSES.COMPLETED).length;
-
-  return (
-    <div className="px-4 py-3 border-b border-bloomberg-border">
-      <div className="border border-bloomberg-border bg-black bg-opacity-20 px-3 py-2">
-        <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] tracking-wider">
-          <span className="text-bloomberg-muted">Agent Pipeline</span>
-          <span className="text-bloomberg-muted">
-            Execution: {formatDuration(totalSeconds)} · {completedCount}/{rows.length} completed
-          </span>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {rows.map((agent) => (
-            <span
-              key={agent.key}
-              className={`inline-flex items-center gap-1.5 border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${pipelineStatusClasses(agent.status)}`}
-              title={`${agent.name} · ${agent.duration}`}
-            >
-              <span className="max-w-[160px] truncate">{agent.name}</span>
-              <span className="text-bloomberg-muted normal-case">{agent.duration}</span>
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-AgentPipeline.propTypes = {
-  pipeline: PropTypes.array,
-  agents: PropTypes.array,
-  totalSeconds: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-};
-
 function buildResultViewModel(result) {
   const displayTicker = result.normalized_ticker || result.ticker;
   const displayResult = { ...result, ticker: displayTicker };
@@ -1206,12 +1070,6 @@ function AnalysisTab({ result, vm, summaryExpanded, thesisExpanded, showRaw, onT
         collapsedWords={150}
         expandedMaxClass="max-h-[500px]"
         expandLabel="Read Full Thesis"
-      />
-
-      <AgentPipeline
-        pipeline={result.agent_pipeline}
-        agents={vm.agents}
-        totalSeconds={result.total_pipeline_seconds}
       />
 
       {vm.canShowRaw && <RawJsonDebug result={result} showRaw={showRaw} onToggle={onToggleRaw} />}

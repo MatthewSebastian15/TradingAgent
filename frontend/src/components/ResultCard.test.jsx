@@ -137,7 +137,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(countWords(paragraph.textContent)).toBeLessThanOrEqual(150);
   });
 
-  it('renders compact Agent Pipeline without expanded detail rows', () => {
+  it('does not render Agent Pipeline in AI Summary', () => {
     render(
       <ResultCard
         result={{
@@ -156,10 +156,9 @@ describe('ResultCard risk-engine contract', () => {
       />
     );
 
-    expect(screen.getByText('Agent Pipeline')).toBeTruthy();
-    expect(screen.getByText('Custom Risk Agent')).toBeTruthy();
-    expect(screen.getByText(/Execution: 4\.3s · 1\/1 completed/)).toBeTruthy();
-    expect(screen.getAllByText('4.3s').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Agent Pipeline')).toBeNull();
+    expect(screen.queryByText('Custom Risk Agent')).toBeNull();
+    expect(screen.queryByText(/Execution: 4\.3s/)).toBeNull();
     expect(screen.queryByText('Risk is acceptable with moderate allocation.')).toBeNull();
   });
 

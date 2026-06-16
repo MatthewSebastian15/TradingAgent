@@ -34,9 +34,9 @@ const SETTINGS_INPUT_CLASS =
 const SETTINGS_SELECT_TRIGGER_CLASS =
   'h-[54px] w-full rounded-none border-bloomberg-border bg-black font-mono text-sm tracking-wider text-bloomberg-white focus:ring-1 focus:ring-bloomberg-orange focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const TERMINAL_PRIMARY_BUTTON_CLASS =
-  'h-10 rounded-none border border-bloomberg-orange bg-bloomberg-orange px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-orange-400 focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+  'h-10 w-full max-w-[228px] rounded-none border border-bloomberg-orange bg-bloomberg-orange px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-orange-400 focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const TERMINAL_STOP_BUTTON_CLASS =
-  'h-10 rounded-none border border-bloomberg-red bg-bloomberg-red px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-red-400 focus-visible:ring-1 focus-visible:ring-bloomberg-red focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+  'h-10 w-full max-w-[228px] rounded-none border border-bloomberg-red bg-bloomberg-red px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-red-400 focus-visible:ring-1 focus-visible:ring-bloomberg-red focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 
 function apiToDisplayDate(value) {
   const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -104,23 +104,6 @@ SelectField.propTypes = {
   label: PropTypes.string.isRequired,
   onValueChange: PropTypes.func.isRequired,
   value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
-};
-
-function ConfigSummary({ horizon, depth }) {
-  return (
-    <div className="border border-bloomberg-border bg-black px-3 py-2 text-center font-mono text-[10px] uppercase tracking-wider text-bloomberg-muted">
-      <span className="text-bloomberg-white">{horizon?.label || '1 MONTH'}</span>
-      <span className="px-2 text-bloomberg-border">/</span>
-      <span className="text-bloomberg-white">{depth?.label || 'BALANCED'}</span>
-      <span className="px-2 text-bloomberg-border">/</span>
-      <span className="text-bloomberg-white">{depth?.runtime || 'DEFAULT 9-CALL PIPELINE'}</span>
-    </div>
-  );
-}
-
-ConfigSummary.propTypes = {
-  depth: PropTypes.object,
-  horizon: PropTypes.object,
 };
 
 export default function StockForm({
@@ -231,9 +214,6 @@ export default function StockForm({
       })
     );
   }
-
-  const selectedDepth = DEPTH_OPTIONS.find((item) => item.value === analysisDepth);
-  const selectedHorizon = HORIZON_OPTIONS.find((item) => item.value === Number(timeHorizonMonths));
 
   return (
     <form onSubmit={handleSubmit} className="font-mono">
@@ -396,17 +376,17 @@ export default function StockForm({
             </div>
           )}
 
-          <Button
-            type="submit"
-            size="lg"
-            variant={running ? 'destructive' : 'default'}
-            className={running ? TERMINAL_STOP_BUTTON_CLASS : TERMINAL_PRIMARY_BUTTON_CLASS}
-          >
-            {running ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            {running ? 'Stop Analysis' : 'Execute Analysis'}
-          </Button>
-
-          <ConfigSummary horizon={selectedHorizon} depth={selectedDepth} />
+          <div className="flex justify-center">
+            <Button
+              type="submit"
+              size="lg"
+              variant={running ? 'destructive' : 'default'}
+              className={running ? TERMINAL_STOP_BUTTON_CLASS : TERMINAL_PRIMARY_BUTTON_CLASS}
+            >
+              {running ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              {running ? 'Stop Analysis' : 'Execute Analysis'}
+            </Button>
+          </div>
         </ConfigSection>
 
         {running && (
