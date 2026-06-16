@@ -172,21 +172,82 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getAllByText('Revenue').length).toBeGreaterThan(0);
   });
 
-  it('renders the trimmed Fundamental sections and hides removed valuation detail blocks', () => {
+  it('renders grouped Fundamental filters and only shows the active group metrics', () => {
     const { rerender } = render(<ResultCard result={MOCK_RESPONSE} />);
 
     fireEvent.click(screen.getByText('Fundamental'));
+    expect(screen.getByRole('button', { name: 'Income' }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
+    expect(screen.getByRole('button', { name: 'Balance Sheet' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Cash Flow' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ratios' })).toBeTruthy();
     expect(screen.queryByText('FINANCIAL TREND ANALYSIS')).toBeNull();
-    expect(screen.getByText('VALUATION MULTIPLES')).toBeTruthy();
+    expect(screen.getAllByText('Income').length).toBeGreaterThan(1);
+    expect(screen.getByText('Revenue')).toBeTruthy();
+    expect(screen.getByText('EBITDA')).toBeTruthy();
+    expect(screen.getByText('Net Profit Margin (%)')).toBeTruthy();
+    expect(screen.queryByText('Market & Scale')).toBeNull();
+    expect(screen.queryByText('VALUATION MULTIPLES')).toBeNull();
     expect(screen.queryByText('FAIR VALUE RANGE')).toBeNull();
     expect(screen.queryByText('BULL / BASE / BEAR SCENARIO')).toBeNull();
-    expect(screen.getByText('QUALITY OF EARNINGS')).toBeTruthy();
-    expect(screen.getByText('BALANCE SHEET RISK')).toBeTruthy();
-    expect(screen.getByText('DIVIDEND QUALITY')).toBeTruthy();
-    expect(screen.getByText('PEER COMPARISON')).toBeTruthy();
+    expect(screen.queryByText('QUALITY OF EARNINGS')).toBeNull();
+    expect(screen.queryByText('BALANCE SHEET RISK')).toBeNull();
+    expect(screen.queryByText('DIVIDEND QUALITY')).toBeNull();
+    expect(screen.queryByText('DER')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Balance Sheet' }));
+    expect(screen.getByRole('button', { name: 'Balance Sheet' }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
+    expect(screen.getByText('BVPS')).toBeTruthy();
+    expect(screen.getByText('Net Debt')).toBeTruthy();
+    expect(screen.getByText('Cash Ratio')).toBeTruthy();
+    expect(screen.getByText('Equity Ratio')).toBeTruthy();
+    expect(screen.queryByText('Revenue')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cash Flow' }));
+    expect(screen.getByText('CFO / Net Income')).toBeTruthy();
+    expect(screen.getByText('Free Cash Flow')).toBeTruthy();
+    expect(screen.getByText('Capex Intensity (%)')).toBeTruthy();
+    expect(screen.getByText('FCF Coverage')).toBeTruthy();
+    expect(screen.queryByText('BVPS')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ratios' }));
+    expect(screen.getByText('ROE (%)')).toBeTruthy();
+    expect(screen.getByText('DER')).toBeTruthy();
+    expect(screen.getByText('Debt / EBITDA')).toBeTruthy();
+    expect(screen.getByText('EV/EBITDA')).toBeTruthy();
+    expect(screen.queryByText('CFO / Net Income')).toBeNull();
 
     rerender(<ResultCard result={{ ...MOCK_RESPONSE, peer_comparison: null }} />);
     expect(screen.queryByText('PEER COMPARISON')).toBeNull();
+  });
+
+  it('defaults Fundamental to table and renders group charts only after Chart is selected', () => {
+    const { container } = render(<ResultCard result={MOCK_RESPONSE} />);
+
+    fireEvent.click(screen.getByText('Fundamental'));
+    expect(screen.getByRole('button', { name: 'Table' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Chart' }).getAttribute('aria-pressed')).toBe(
+      'false'
+    );
+    expect(screen.queryByRole('img', { name: 'Income fundamentals chart' })).toBeNull();
+    expect(container.querySelector('table')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
+    expect(screen.getByRole('button', { name: 'Chart' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('img', { name: 'Income fundamentals chart' })).toBeTruthy();
+    expect(container.querySelector('table')).toBeNull();
+    expect(
+      container
+        .querySelector('rect[data-metric="Revenue"][data-period="Q1 2026"]')
+        ?.getAttribute('data-value')
+    ).toBe('0');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Balance Sheet' }));
+    expect(screen.getByRole('img', { name: 'Balance Sheet fundamentals chart' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Income fundamentals chart' })).toBeNull();
   });
 
   it('uses AI Summary as the default tab and opens the Profile tab', () => {
@@ -232,7 +293,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(
       screen.getAllByText(/NVDA earnings outlook remains constructive/i).length
     ).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Impact: HIGH/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('HIGH').length).toBeGreaterThan(0);
     expect(screen.queryByText('OPEN ORIGINAL SOURCE')).toBeNull();
   });
 

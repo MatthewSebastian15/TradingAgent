@@ -188,7 +188,7 @@ describe('NewsTab', () => {
     expect(screen.queryByText('FULL NEWS LIST')).not.toBeInTheDocument();
     expect(screen.getByText('High Impact Article 1')).toBeInTheDocument();
     expect(screen.getByText('High Impact Article 7')).toBeInTheDocument();
-    expect(screen.getAllByText(/Impact: HIGH/i).length).toBeGreaterThanOrEqual(7);
+    expect(screen.getAllByText('HIGH').length).toBeGreaterThanOrEqual(7);
   });
 
   it('sorts the unified news list by highest impact first', () => {
