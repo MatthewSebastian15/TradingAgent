@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from time import monotonic
 from typing import Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Query, Request
 
 from errors import BadRequestError
 from rate_limiter import limit_request, request_policy
@@ -21,6 +21,7 @@ from schemas import (
     MarketQuotesResponse,
     SymbolValidationResponse,
 )
+from services.market_symbol_universe import MARKET_SEARCH_UNIVERSE
 from services.market_yfinance_service import (
     dedupe_symbols,
     get_market_movers,
@@ -303,7 +304,9 @@ def _fetch_ohlcv_range(symbol: str, range_key: str, trade_date: str | None) -> d
 
     for interval in intervals:
         try:
-            rows = _normalize_ohlcv_rows(_download_ohlcv(symbol, start_dt, end_dt, interval), start_dt, end_dt, interval)
+            rows = _normalize_ohlcv_rows(
+                _download_ohlcv(symbol, start_dt, end_dt, interval), start_dt, end_dt, interval
+            )
             if not rows:
                 continue
             if len(rows) < 2 and interval != intervals[-1]:
@@ -403,6 +406,83 @@ async def _fetch_quotes(symbols: list[str]) -> list[dict]:
     return await asyncio.gather(*tasks)
 
 
+def _compact_search_text(value: Any) -> str:
+    return re.sub(r"[^A-Z0-9]", "", str(value or "").strip().upper())
+
+
+def _local_search_score(item: dict[str, Any], query: str, compact_query: str) -> int | None:
+    symbol = str(item.get("symbol") or "").strip().upper()
+    compact_symbol = _compact_search_text(symbol)
+    haystack = " ".join(
+        str(item.get(key) or "").strip().upper() for key in ("symbol", "name", "exchange", "type", "market")
+    )
+    compact_haystack = _compact_search_text(haystack)
+    tokens = [_compact_search_text(part) for part in re.split(r"[^A-Z0-9^._=-]+", haystack)]
+
+    if symbol == query or compact_symbol == compact_query:
+        return 0
+    if symbol.startswith(query):
+        return 1
+    if compact_symbol.startswith(compact_query):
+        return 2
+    if any(token.startswith(compact_query) for token in tokens if token):
+        return 3
+    if haystack.startswith(query):
+        return 4
+    if query in haystack:
+        return 8
+    if compact_query in compact_haystack:
+        return 9
+    return None
+
+
+def _search_local_tickers(query: str, limit: int) -> list[dict[str, Any]]:
+    normalized_query = str(query or "").strip().upper()
+    compact_query = _compact_search_text(normalized_query)
+    if not compact_query:
+        return []
+
+    scored: list[tuple[int, int, dict[str, Any]]] = []
+    for index, item in enumerate(MARKET_SEARCH_UNIVERSE):
+        score = _local_search_score(item, normalized_query, compact_query)
+        if score is None:
+            continue
+        scored.append((score, index, item))
+
+    results = [
+        {**item, "symbol": str(item["symbol"]).upper(), "source": "local_universe", "price": None}
+        for score, index, item in sorted(scored, key=lambda value: (value[0], value[1]))[:limit]
+    ]
+    if results or len(compact_query) < 2 or not _QUOTE_SYMBOL_RE.fullmatch(normalized_query):
+        return results
+
+    return [
+        {
+            "symbol": normalized_query,
+            "name": normalized_query,
+            "exchange": "",
+            "type": "SYMBOL",
+            "market": "ID" if normalized_query.endswith(".JK") else "US",
+            "source": "manual_symbol",
+            "price": None,
+        }
+    ]
+
+
+def _merge_search_results(*groups: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in [item for group in groups for item in group]:
+        symbol = str(item.get("symbol") or "").strip().upper()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        merged.append({**item, "symbol": symbol})
+        if len(merged) >= limit:
+            break
+    return merged
+
+
 def _search_instance(yf: Any, query: str, limit: int) -> Any:
     try:
         return yf.Search(
@@ -454,27 +534,24 @@ def _fetch_last_price(yf: Any, symbol: str) -> float | None:
         return None
 
 
-def _clean_search_result(raw: dict[str, Any], yf: Any) -> dict[str, Any] | None:
+def _clean_search_result(raw: dict[str, Any]) -> dict[str, Any] | None:
     symbol = str(raw.get("symbol") or "").strip().upper()
     if not symbol:
         return None
 
-    name = (
-        raw.get("shortname")
-        or raw.get("longname")
-        or raw.get("name")
-        or raw.get("displayName")
-        or symbol
-    )
+    name = raw.get("shortname") or raw.get("longname") or raw.get("name") or raw.get("displayName") or symbol
     exchange = raw.get("exchDisp") or raw.get("exchange") or raw.get("fullExchangeName") or ""
     quote_type = raw.get("quoteType") or raw.get("typeDisp") or raw.get("type") or ""
+    raw_price = raw.get("regularMarketPrice") or raw.get("price")
+    price = _as_float(raw_price)
 
     return {
         "symbol": symbol,
         "name": str(name).strip(),
         "exchange": str(exchange).strip().upper(),
         "type": str(quote_type).strip().upper(),
-        "price": _fetch_last_price(yf, symbol),
+        "price": round(price, 2) if price is not None else None,
+        "source": "yfinance_search",
     }
 
 
@@ -488,7 +565,7 @@ def _search_tickers(query: str, limit: int) -> list[dict[str, Any]]:
         seen: set[str] = set()
 
         for raw in raw_quotes:
-            item = _clean_search_result(raw, yf)
+            item = _clean_search_result(raw)
             if not item or item["symbol"] in seen:
                 continue
             seen.add(item["symbol"])
@@ -502,8 +579,15 @@ def _search_tickers(query: str, limit: int) -> list[dict[str, Any]]:
         return []
 
 
+def _refresh_search_cache(query: str, limit: int, local_results: list[dict[str, Any]]) -> None:
+    remote_results = _search_tickers(query, limit)
+    results = _merge_search_results(local_results, remote_results, limit=limit)
+    _SEARCH_CACHE[(query.lower(), limit)] = (monotonic(), _clone_search_results(results))
+
+
 @router.get("/market/search", tags=["market"])
 async def search_market_tickers(
+    background_tasks: BackgroundTasks,
     request: Request,
     q: str = Query(..., min_length=2, description="Ticker or company search query."),
     limit: int = Query(default=10, ge=1, le=20, description="Maximum number of search results."),
@@ -516,14 +600,20 @@ async def search_market_tickers(
 
         cache_key = (query.lower(), limit)
         now = monotonic()
+        local_results = _search_local_tickers(query, limit)
+        if len(local_results) >= limit:
+            return {"results": local_results[:limit]}
+
         cached = _SEARCH_CACHE.get(cache_key)
         if cached is not None:
             cached_at, cached_results = cached
             if now - cached_at <= _SEARCH_CACHE_TTL_SECONDS:
-                return {"results": _clone_search_results(cached_results)}
+                return {
+                    "results": _merge_search_results(local_results, _clone_search_results(cached_results), limit=limit)
+                }
 
-        results = await asyncio.to_thread(_search_tickers, query, limit)
-        _SEARCH_CACHE[cache_key] = (monotonic(), _clone_search_results(results))
+        background_tasks.add_task(_refresh_search_cache, query, limit, _clone_search_results(local_results))
+        results = local_results[:limit]
 
     return {"results": results}
 

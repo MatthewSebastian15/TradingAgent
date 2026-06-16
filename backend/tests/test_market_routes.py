@@ -96,7 +96,7 @@ def test_fetch_quote_returns_error_payload_on_vendor_failure(monkeypatch):
     assert quote == {"sym": "AAPL", "chg": "N/A", "pos": True, "price": None, "error": True}
 
 
-def test_market_search_returns_yfinance_results_and_uses_cache(client, monkeypatch):
+def test_market_search_returns_local_results_and_warms_yfinance_cache(client, monkeypatch):
     market_routes._SEARCH_CACHE.clear()
     calls: list[tuple[str, int]] = []
 
@@ -126,7 +126,9 @@ def test_market_search_returns_yfinance_results_and_uses_cache(client, monkeypat
                 "name": "Bank Central Asia Tbk PT",
                 "exchange": "IDX",
                 "type": "EQUITY",
-                "price": 9800.0,
+                "market": "ID",
+                "source": "local_universe",
+                "price": None,
             }
         ]
     }
@@ -144,14 +146,43 @@ def test_market_search_caches_empty_yfinance_results(client, monkeypatch):
 
     monkeypatch.setattr("routes.market._search_tickers", fake_search)
 
-    first_response = client.get("/api/market/search?q=zzzzzz&limit=5")
-    second_response = client.get("/api/market/search?q=zzzzzz&limit=5")
+    first_response = client.get("/api/market/search?q=zzzzzz%21&limit=5")
+    second_response = client.get("/api/market/search?q=zzzzzz%21&limit=5")
 
     assert first_response.status_code == 200
     assert second_response.status_code == 200
     assert first_response.json() == {"results": []}
     assert second_response.json() == {"results": []}
-    assert calls == [("zzzzzz", 5)]
+    assert calls == [("zzzzzz!", 5)]
+
+
+def test_market_search_returns_manual_symbol_without_waiting_for_vendor(client, monkeypatch):
+    market_routes._SEARCH_CACHE.clear()
+    calls: list[tuple[str, int]] = []
+
+    def fake_search(query: str, limit: int):
+        calls.append((query, limit))
+        return []
+
+    monkeypatch.setattr("routes.market._search_tickers", fake_search)
+
+    response = client.get("/api/market/search?q=META2&limit=5")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "results": [
+            {
+                "symbol": "META2",
+                "name": "META2",
+                "exchange": "",
+                "type": "SYMBOL",
+                "market": "US",
+                "source": "manual_symbol",
+                "price": None,
+            }
+        ]
+    }
+    assert calls == [("META2", 5)]
 
 
 def test_market_ohlcv_ytd_uses_january_first_and_daily(client, monkeypatch):

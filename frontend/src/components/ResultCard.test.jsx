@@ -224,7 +224,7 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByText('PEER COMPARISON')).toBeNull();
   });
 
-  it('defaults Fundamental to table and renders group charts only after Chart is selected', () => {
+  it('defaults Fundamental to table and renders only active section charts after Chart is selected', () => {
     const { container } = render(<ResultCard result={MOCK_RESPONSE} />);
 
     fireEvent.click(screen.getByText('Fundamental'));
@@ -232,12 +232,23 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByRole('button', { name: 'Chart' }).getAttribute('aria-pressed')).toBe(
       'false'
     );
-    expect(screen.queryByRole('img', { name: 'Income fundamentals chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'Revenue vs EBITDA vs Net Profit chart' })).toBeNull();
     expect(container.querySelector('table')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
     expect(screen.getByRole('button', { name: 'Chart' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('img', { name: 'Income fundamentals chart' })).toBeTruthy();
+    expect(screen.getAllByRole('img')).toHaveLength(4);
+    [
+      'Revenue vs EBITDA vs Net Profit chart',
+      'Revenue Growth vs Net Profit Growth chart',
+      'EBITDA Margin vs Net Profit Margin chart',
+      'EPS Trend chart',
+    ].forEach((chartName) => {
+      expect(screen.getByRole('img', { name: chartName })).toBeTruthy();
+    });
+    expect(screen.queryByRole('img', { name: 'BVPS Trend chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'Free Cash Flow Trend chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'ROE Trend chart' })).toBeNull();
     expect(container.querySelector('table')).toBeNull();
     expect(
       container
@@ -246,8 +257,34 @@ describe('ResultCard risk-engine contract', () => {
     ).toBe('0');
 
     fireEvent.click(screen.getByRole('button', { name: 'Balance Sheet' }));
-    expect(screen.getByRole('img', { name: 'Balance Sheet fundamentals chart' })).toBeTruthy();
-    expect(screen.queryByRole('img', { name: 'Income fundamentals chart' })).toBeNull();
+    expect(screen.getAllByRole('img')).toHaveLength(3);
+    expect(screen.getByRole('img', { name: 'BVPS Trend chart' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Net Debt Trend chart' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Cash Ratio vs Equity Ratio chart' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Revenue vs EBITDA vs Net Profit chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'Free Cash Flow Trend chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'ROE Trend chart' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cash Flow' }));
+    expect(screen.getAllByRole('img')).toHaveLength(3);
+    expect(screen.getByRole('img', { name: 'Free Cash Flow Trend chart' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'CFO / Net Income Trend chart' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Capex Intensity vs FCF Coverage chart' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Revenue vs EBITDA vs Net Profit chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'BVPS Trend chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'ROE Trend chart' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ratios' }));
+    expect(screen.getAllByRole('img')).toHaveLength(4);
+    expect(screen.getByRole('img', { name: 'ROE Trend chart' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Leverage Risk chart' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Dividend Quality chart' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Valuation Overview chart' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Revenue vs EBITDA vs Net Profit chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'BVPS Trend chart' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'Free Cash Flow Trend chart' })).toBeNull();
+    expect(container.querySelector('rect[data-metric="Market Cap"]')).toBeTruthy();
+    expect(container.querySelector('circle[data-metric="P/E"]')).toBeTruthy();
   });
 
   it('uses AI Summary as the default tab and opens the Profile tab', () => {
