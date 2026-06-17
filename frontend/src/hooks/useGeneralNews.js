@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchGeneralNews } from '../services/generalNewsApi';
 
 const POLL_MS = 120000;
-const REQUEST_DEBOUNCE_MS = 300;
-const CACHE_TTL_MS = 45000;
+const CACHE_TTL_MS = 120000;
+const STORAGE_CACHE_TTL_MS = 10 * 60 * 1000;
+const STORAGE_PREFIX = 'tradingagents:general-news:v2:';
 const MANUAL_REFRESH_COOLDOWN_MS = 10000;
 const ERROR_BACKOFF_MS = 60000;
 const RATE_LIMIT_BACKOFF_MS = 90000;
@@ -25,17 +26,72 @@ function getErrorStatus(error) {
   return Number(error?.status || error?.response?.status || 0);
 }
 
-function cacheFresh(entry) {
-  return entry && nowMs() - entry.fetchedAt < CACHE_TTL_MS;
+function cacheFresh(entry, ttlMs = CACHE_TTL_MS) {
+  return entry && nowMs() - Number(entry.fetchedAt || 0) < ttlMs;
 }
 
 function backoffMsForError(error) {
   return getErrorStatus(error) === 429 ? RATE_LIMIT_BACKOFF_MS : ERROR_BACKOFF_MS;
 }
 
+function storageKey(key) {
+  return `${STORAGE_PREFIX}${key}`;
+}
+
+function readStoredCache(key) {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(storageKey(key)) || 'null');
+    if (!parsed || !parsed.data || !cacheFresh(parsed, STORAGE_CACHE_TTL_MS)) return null;
+    responseCache.set(key, parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredCache(key, entry) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.sessionStorage.setItem(storageKey(key), JSON.stringify(entry));
+  } catch {
+    // Cache storage can fail. Memory cache still avoids duplicate requests.
+  }
+}
+
+function readAnyFreshCache(key) {
+  const memoryEntry = responseCache.get(key);
+  if (cacheFresh(memoryEntry)) return memoryEntry;
+
+  return readStoredCache(key);
+}
+
+function clearStoredCaches() {
+  if (typeof window === 'undefined') return;
+
+  try {
+    for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.sessionStorage.key(index);
+      if (key?.startsWith(STORAGE_PREFIX)) {
+        window.sessionStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Ignore test/browser storage cleanup failures.
+  }
+}
+
+function cachedDataForParams({ category, windowDays, limit }) {
+  const key = buildCacheKey({ category, windowDays, limit });
+  const cached = readAnyFreshCache(key);
+  return cached?.data || null;
+}
+
 async function loadGeneralNews({ category, windowDays, limit, force = false }) {
   const key = buildCacheKey({ category, windowDays, limit });
-  const cached = responseCache.get(key);
+  const cached = readAnyFreshCache(key);
 
   if (!force && cacheFresh(cached)) {
     return cached.data;
@@ -51,9 +107,11 @@ async function loadGeneralNews({ category, windowDays, limit, force = false }) {
     throw new Error('General news refresh is cooling down after a recent failed request.');
   }
 
-  const request = fetchGeneralNews({ category, windowDays, limit })
+  const request = fetchGeneralNews({ category, windowDays, limit, forceRefresh: force })
     .then((data) => {
-      responseCache.set(key, { data, fetchedAt: nowMs() });
+      const entry = { data, fetchedAt: nowMs() };
+      responseCache.set(key, entry);
+      writeStoredCache(key, entry);
       backoffUntilByKey.delete(key);
       return data;
     })
@@ -74,11 +132,17 @@ export function clearGeneralNewsClientStateForTests() {
   responseCache.clear();
   inflightRequests.clear();
   backoffUntilByKey.clear();
+  clearStoredCaches();
 }
 
 export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 }) {
-  const [data, setData] = useState(null);
-  const [status, setStatus] = useState('idle');
+  const initialDataRef = useRef();
+  if (initialDataRef.current === undefined) {
+    initialDataRef.current = cachedDataForParams({ category, windowDays, limit });
+  }
+
+  const [data, setData] = useState(initialDataRef.current);
+  const [status, setStatus] = useState(initialDataRef.current ? 'success' : 'idle');
   const [error, setError] = useState(null);
   const mountedRef = useRef(false);
   const requestIdRef = useRef(0);
@@ -131,13 +195,7 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
   }, []);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      load();
-    }, REQUEST_DEBOUNCE_MS);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
+    load();
   }, [load]);
 
   useEffect(() => {

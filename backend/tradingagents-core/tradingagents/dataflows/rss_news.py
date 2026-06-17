@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -57,20 +58,33 @@ class RSSContextProvider(BaseNewsProvider):
         articles: list[NormalizedNewsArticle] = []
         feed_limit = max(1, int(config.get("rss_max_items_per_feed", 20)))
 
-        for feed in _select_feeds(config, ticker_profile):
-            status, parsed, attempt = self._fetch_feed(feed, config)
-            attempts.append(attempt)
-            if status != "success" or parsed is None:
-                continue
-            articles.extend(
-                _normalize_feed_entries(
-                    parsed,
-                    feed,
-                    ticker_profile,
-                    limit=feed_limit,
-                    include_raw=include_raw,
+        feeds = _select_feeds(config, ticker_profile)
+        if not feeds:
+            return ProviderFetchResult(provider=self.provider_name, status="disabled")
+
+        max_workers = min(max(1, int(config.get("rss_fetch_workers", 6))), len(feeds))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(self._fetch_feed, feed, config): feed for feed in feeds}
+            for future in as_completed(futures):
+                feed = futures[future]
+                try:
+                    status, parsed, attempt = future.result()
+                except Exception as exc:  # noqa: BLE001
+                    status = "unavailable"
+                    parsed = None
+                    attempt = {"strategy": feed.id, "feed": feed.name, "url": feed.url, "status": status, "error": sanitize_error(exc)}
+                attempts.append(attempt)
+                if status != "success" or parsed is None:
+                    continue
+                articles.extend(
+                    _normalize_feed_entries(
+                        parsed,
+                        feed,
+                        ticker_profile,
+                        limit=feed_limit,
+                        include_raw=include_raw,
+                    )
                 )
-            )
 
         if articles:
             return ProviderFetchResult(

@@ -5,12 +5,17 @@ export async function fetchGeneralNews({
   windowDays = 7,
   limit = 50,
   signal,
+  forceRefresh = false,
 } = {}) {
   const params = new URLSearchParams({
     category,
     window_days: String(windowDays),
     limit: String(limit),
   });
+
+  if (forceRefresh) {
+    params.set('force_refresh', 'true');
+  }
 
   const response = await fetch(buildApiUrl(`/news/general?${params.toString()}`), {
     method: 'GET',

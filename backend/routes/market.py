@@ -60,13 +60,50 @@ _OHLCV_RANGE_OPTIONS = {"YTD", *_OHLCV_RANGE_DAYS.keys()}
 _MOVER_LIMITS = {5, 10, 15, 20}
 
 
+_IDX_AUTO_SUFFIX_SYMBOLS = {
+    "AALI",
+    "ACES",
+    "ADRO",
+    "AKRA",
+    "AMMN",
+    "ANTM",
+    "ARTO",
+    "ASII",
+    "BBCA",
+    "BBNI",
+    "BBRI",
+    "BBTN",
+    "BMRI",
+    "BRIS",
+    "BRPT",
+    "CPIN",
+    "ESSA",
+    "EXCL",
+    "GOTO",
+    "ICBP",
+    "INCO",
+    "INDF",
+    "INKP",
+    "INTP",
+    "ISAT",
+    "ITMG",
+    "KLBF",
+    "MDKA",
+    "MEDC",
+    "PGAS",
+    "PTBA",
+    "SMGR",
+    "TLKM",
+    "UNTR",
+    "UNVR",
+}
+
+
 def _normalize_quote_symbol(symbol: str) -> str:
     """Normalize symbols used by the global ticker tape without blocking Yahoo index/future syntax."""
     normalized = symbol.strip().upper() if isinstance(symbol, str) else symbol
-    if isinstance(normalized, str):
-        from tradingagents.dataflows.y_finance import normalize_ticker as normalize_yfinance_ticker
-
-        normalized = normalize_yfinance_ticker(normalized)
+    if isinstance(normalized, str) and "." not in normalized and normalized in _IDX_AUTO_SUFFIX_SYMBOLS:
+        normalized = f"{normalized}.JK"
     if not isinstance(normalized, str) or not _QUOTE_SYMBOL_RE.fullmatch(normalized):
         raise BadRequestError(
             "Invalid ticker symbol.",
