@@ -249,7 +249,15 @@ const METRIC_KEY_ALIASES = {
   'Gross Profit': ['gross_profit'],
   'Cost of Revenue': ['cost_of_revenue'],
   'Operating Income / EBIT': ['operating_income', 'operating_profit'],
+  'Operating Expense': ['operating_expense'],
   'Pretax Income': ['pretax_income'],
+  'Income Tax Expense': ['income_tax_expense'],
+  'Interest Expense': ['interest_expense'],
+  'EBITDA Growth (%)': ['ebitda_growth'],
+  'Operating Income Growth (%)': ['operating_income_growth'],
+  'Gross Margin (%)': ['gross_margin'],
+  'Operating Margin (%)': ['operating_margin'],
+  'Tax Rate (%)': ['tax_rate'],
   BVPS: ['bvps'],
   'Net Debt': ['net_debt'],
   'Cash Ratio': ['cash_ratio'],
@@ -257,9 +265,13 @@ const METRIC_KEY_ALIASES = {
   'Total Assets': ['total_assets', 'assets'],
   'Total Liabilities': ['total_liabilities'],
   'Total Equity': ['total_equity', 'equity'],
+  'Cash & Cash Equivalents': ['cash'],
+  'Total Debt': ['total_debt'],
   'Current Assets': ['current_assets'],
   'Current Liabilities': ['current_liabilities'],
   'Working Capital': ['working_capital'],
+  'Invested Capital': ['invested_capital'],
+  'Net Debt / Equity': ['net_debt_to_equity'],
   'Current Ratio': ['current_ratio'],
   'Quick Ratio': ['quick_ratio'],
   'Debt Ratio': ['debt_ratio'],
@@ -271,12 +283,20 @@ const METRIC_KEY_ALIASES = {
   'Investing Cash Flow': ['investing_cash_flow'],
   'Financing Cash Flow': ['financing_cash_flow'],
   'Capital Expenditure': ['capital_expenditure', 'capex'],
+  'Cash Dividends Paid': ['cash_dividends_paid'],
+  'Share Repurchase': ['share_repurchase'],
+  'Depreciation & Amortization': ['depreciation_amortization'],
+  'Change in Working Capital': ['change_in_working_capital'],
+  'Stock Based Compensation': ['stock_based_compensation'],
   'FCF Margin (%)': ['fcf_margin'],
   'FCF Growth (%)': ['fcf_growth'],
   'CFO Growth (%)': ['cfo_growth'],
+  'Dividend Coverage by FCF': ['dividend_coverage_by_fcf'],
   'ROE (%)': ['roe'],
   DER: ['der', 'balance_der'],
   'Debt / EBITDA': ['debt_to_ebitda'],
+  'Interest Coverage': ['interest_coverage'],
+  'Equity Multiplier': ['equity_multiplier'],
   'Dividend Yield (%)': ['dividend_yield', 'dividend_yield_percent'],
   'Payout Ratio (%)': ['payout_ratio', 'payout_ratio_percent'],
   'Market Cap': ['market_cap'],
@@ -285,10 +305,20 @@ const METRIC_KEY_ALIASES = {
   'P/BV': ['pbv'],
   'P/S': ['ps'],
   'EV/EBITDA': ['ev_ebitda'],
+  'Price / FCF': ['price_fcf'],
+  'EV / Sales': ['ev_sales'],
+  'EV / FCF': ['ev_fcf'],
+  'PEG Ratio': ['peg_ratio'],
+  Beta: ['beta'],
+  'Shares Outstanding': ['shares_outstanding'],
+  'Float Shares': ['float_shares'],
+  'Revenue Per Share': ['revenue_per_share'],
+  'Cash Per Share': ['cash_per_share'],
   'ROA (%)': ['roa'],
   'ROIC (%)': ['roic'],
   'FCF Yield (%)': ['fcf_yield'],
   'Earnings Yield (%)': ['earnings_yield'],
+  'Asset Turnover': ['asset_turnover'],
 };
 
 const METRIC_LABEL_ALIASES = {
@@ -309,7 +339,15 @@ const METRIC_FORMAT_TYPES = {
   'Gross Profit': 'currency_scaled',
   'Cost of Revenue': 'currency_scaled',
   'Operating Income / EBIT': 'currency_scaled',
+  'Operating Expense': 'currency_scaled',
   'Pretax Income': 'currency_scaled',
+  'Income Tax Expense': 'currency_scaled',
+  'Interest Expense': 'currency_scaled',
+  'EBITDA Growth (%)': 'percent',
+  'Operating Income Growth (%)': 'percent',
+  'Gross Margin (%)': 'percent',
+  'Operating Margin (%)': 'percent',
+  'Tax Rate (%)': 'percent',
   BVPS: 'per_share',
   'Net Debt': 'currency_scaled',
   'Cash Ratio': 'ratio',
@@ -317,9 +355,13 @@ const METRIC_FORMAT_TYPES = {
   'Total Assets': 'currency_scaled',
   'Total Liabilities': 'currency_scaled',
   'Total Equity': 'currency_scaled',
+  'Cash & Cash Equivalents': 'currency_scaled',
+  'Total Debt': 'currency_scaled',
   'Current Assets': 'currency_scaled',
   'Current Liabilities': 'currency_scaled',
   'Working Capital': 'currency_scaled',
+  'Invested Capital': 'currency_scaled',
+  'Net Debt / Equity': 'ratio',
   'Current Ratio': 'ratio',
   'Quick Ratio': 'ratio',
   'Debt Ratio': 'ratio',
@@ -331,12 +373,20 @@ const METRIC_FORMAT_TYPES = {
   'Investing Cash Flow': 'currency_scaled',
   'Financing Cash Flow': 'currency_scaled',
   'Capital Expenditure': 'currency_scaled',
+  'Cash Dividends Paid': 'currency_scaled',
+  'Share Repurchase': 'currency_scaled',
+  'Depreciation & Amortization': 'currency_scaled',
+  'Change in Working Capital': 'currency_scaled',
+  'Stock Based Compensation': 'currency_scaled',
   'FCF Margin (%)': 'percent',
   'FCF Growth (%)': 'percent',
   'CFO Growth (%)': 'percent',
+  'Dividend Coverage by FCF': 'ratio',
   'ROE (%)': 'percent',
   DER: 'ratio',
   'Debt / EBITDA': 'ratio',
+  'Interest Coverage': 'ratio',
+  'Equity Multiplier': 'ratio',
   'Dividend Yield (%)': 'percent',
   'Payout Ratio (%)': 'percent',
   'Market Cap': 'currency_scaled',
@@ -345,10 +395,221 @@ const METRIC_FORMAT_TYPES = {
   'P/BV': 'ratio',
   'P/S': 'ratio',
   'EV/EBITDA': 'ratio',
+  'Price / FCF': 'ratio',
+  'EV / Sales': 'ratio',
+  'EV / FCF': 'ratio',
+  'PEG Ratio': 'ratio',
+  Beta: 'ratio',
+  'Shares Outstanding': 'number',
+  'Float Shares': 'number',
+  'Revenue Per Share': 'per_share',
+  'Cash Per Share': 'per_share',
   'ROA (%)': 'percent',
   'ROIC (%)': 'percent',
   'FCF Yield (%)': 'percent',
   'Earnings Yield (%)': 'percent',
+  'Asset Turnover': 'ratio',
+};
+
+
+const metricGroupRow = (key, label, format = METRIC_FORMAT_TYPES[label]) => ({ key, label, format });
+
+const FUNDAMENTAL_TABLE_GROUPS = {
+  income: [
+    {
+      title: 'Revenue & Gross Profit',
+      metrics: [
+        metricGroupRow('revenue', 'Revenue', 'currency_scaled'),
+        metricGroupRow('revenue_growth', 'Revenue Growth (%)', 'percent'),
+        metricGroupRow('gross_profit', 'Gross Profit', 'currency_scaled'),
+        metricGroupRow('cost_of_revenue', 'Cost of Revenue', 'currency_scaled'),
+        metricGroupRow('gross_margin', 'Gross Margin (%)', 'percent'),
+      ],
+    },
+    {
+      title: 'Operating Performance',
+      metrics: [
+        metricGroupRow('ebitda', 'EBITDA', 'currency_scaled'),
+        metricGroupRow('ebitda_growth', 'EBITDA Growth (%)', 'percent'),
+        metricGroupRow('ebitda_margin', 'EBITDA Margin (%)', 'percent'),
+        metricGroupRow('operating_income', 'Operating Income / EBIT', 'currency_scaled'),
+        metricGroupRow('operating_income_growth', 'Operating Income Growth (%)', 'percent'),
+        metricGroupRow('operating_margin', 'Operating Margin (%)', 'percent'),
+        metricGroupRow('operating_expense', 'Operating Expense', 'currency_scaled'),
+      ],
+    },
+    {
+      title: 'Profitability',
+      metrics: [
+        metricGroupRow('net_profit', 'Net Profit', 'currency_scaled'),
+        metricGroupRow('net_profit_growth', 'Net Profit Growth (%)', 'percent'),
+        metricGroupRow('net_profit_margin', 'Net Profit Margin (%)', 'percent'),
+        metricGroupRow('pretax_income', 'Pretax Income', 'currency_scaled'),
+        metricGroupRow('income_tax_expense', 'Income Tax Expense', 'currency_scaled'),
+        metricGroupRow('tax_rate', 'Tax Rate (%)', 'percent'),
+      ],
+    },
+    {
+      title: 'Per Share & Financing Cost',
+      metrics: [
+        metricGroupRow('eps', 'EPS', 'per_share'),
+        metricGroupRow('interest_expense', 'Interest Expense', 'currency_scaled'),
+      ],
+    },
+  ],
+  balance_sheet: [
+    {
+      title: 'Asset Structure',
+      metrics: [
+        metricGroupRow('total_assets', 'Total Assets', 'currency_scaled'),
+        metricGroupRow('current_assets', 'Current Assets', 'currency_scaled'),
+        metricGroupRow('cash', 'Cash & Cash Equivalents', 'currency_scaled'),
+      ],
+    },
+    {
+      title: 'Liability & Debt',
+      metrics: [
+        metricGroupRow('total_liabilities', 'Total Liabilities', 'currency_scaled'),
+        metricGroupRow('current_liabilities', 'Current Liabilities', 'currency_scaled'),
+        metricGroupRow('total_debt', 'Total Debt', 'currency_scaled'),
+        metricGroupRow('net_debt', 'Net Debt', 'currency_scaled'),
+        metricGroupRow('net_debt_to_equity', 'Net Debt / Equity', 'ratio'),
+        metricGroupRow('debt_ratio', 'Debt Ratio', 'ratio'),
+      ],
+    },
+    {
+      title: 'Equity & Book Value',
+      metrics: [
+        metricGroupRow('total_equity', 'Total Equity', 'currency_scaled'),
+        metricGroupRow('bvps', 'BVPS', 'per_share'),
+        metricGroupRow('equity_ratio', 'Equity Ratio', 'percent'),
+      ],
+    },
+    {
+      title: 'Liquidity',
+      metrics: [
+        metricGroupRow('cash_ratio', 'Cash Ratio', 'ratio'),
+        metricGroupRow('current_ratio', 'Current Ratio', 'ratio'),
+        metricGroupRow('quick_ratio', 'Quick Ratio', 'ratio'),
+        metricGroupRow('working_capital', 'Working Capital', 'currency_scaled'),
+      ],
+    },
+    {
+      title: 'Capital Efficiency',
+      metrics: [metricGroupRow('invested_capital', 'Invested Capital', 'currency_scaled')],
+    },
+  ],
+  cash_flow: [
+    {
+      title: 'Core Cash Flow',
+      metrics: [
+        metricGroupRow('operating_cash_flow', 'Operating Cash Flow', 'currency_scaled'),
+        metricGroupRow('cfo_to_net_income', 'CFO / Net Income', 'ratio'),
+        metricGroupRow('cfo_growth', 'CFO Growth (%)', 'percent'),
+      ],
+    },
+    {
+      title: 'Free Cash Flow',
+      metrics: [
+        metricGroupRow('free_cash_flow', 'Free Cash Flow', 'currency_scaled'),
+        metricGroupRow('fcf_growth', 'FCF Growth (%)', 'percent'),
+        metricGroupRow('fcf_margin', 'FCF Margin (%)', 'percent'),
+        metricGroupRow('fcf_coverage', 'FCF Coverage', 'ratio'),
+        metricGroupRow('dividend_coverage_by_fcf', 'Dividend Coverage by FCF', 'ratio'),
+      ],
+    },
+    {
+      title: 'Investment Activity',
+      metrics: [
+        metricGroupRow('investing_cash_flow', 'Investing Cash Flow', 'currency_scaled'),
+        metricGroupRow('capital_expenditure', 'Capital Expenditure', 'currency_scaled'),
+        metricGroupRow('capex_intensity_percent', 'Capex Intensity (%)', 'percent'),
+      ],
+    },
+    {
+      title: 'Financing Activity',
+      metrics: [
+        metricGroupRow('financing_cash_flow', 'Financing Cash Flow', 'currency_scaled'),
+        metricGroupRow('cash_dividends_paid', 'Cash Dividends Paid', 'currency_scaled'),
+        metricGroupRow('share_repurchase', 'Share Repurchase', 'currency_scaled'),
+      ],
+    },
+    {
+      title: 'Non-Cash & Working Capital Adjustment',
+      metrics: [
+        metricGroupRow('depreciation_amortization', 'Depreciation & Amortization', 'currency_scaled'),
+        metricGroupRow('change_in_working_capital', 'Change in Working Capital', 'currency_scaled'),
+        metricGroupRow('stock_based_compensation', 'Stock Based Compensation', 'currency_scaled'),
+      ],
+    },
+  ],
+  ratios: [
+    {
+      title: 'Profitability Ratios',
+      metrics: [
+        metricGroupRow('roe', 'ROE (%)', 'percent'),
+        metricGroupRow('roa', 'ROA (%)', 'percent'),
+        metricGroupRow('roic', 'ROIC (%)', 'percent'),
+        metricGroupRow('earnings_yield', 'Earnings Yield (%)', 'percent'),
+        metricGroupRow('fcf_yield', 'FCF Yield (%)', 'percent'),
+      ],
+    },
+    {
+      title: 'Leverage & Solvency',
+      metrics: [
+        metricGroupRow('der', 'DER', 'ratio'),
+        metricGroupRow('debt_to_ebitda', 'Debt / EBITDA', 'ratio'),
+        metricGroupRow('interest_coverage', 'Interest Coverage', 'ratio'),
+        metricGroupRow('equity_multiplier', 'Equity Multiplier', 'ratio'),
+      ],
+    },
+    {
+      title: 'Valuation Ratios',
+      metrics: [
+        metricGroupRow('pe', 'P/E', 'ratio'),
+        metricGroupRow('pbv', 'P/BV', 'ratio'),
+        metricGroupRow('ps', 'P/S', 'ratio'),
+        metricGroupRow('ev_ebitda', 'EV/EBITDA', 'ratio'),
+        metricGroupRow('price_fcf', 'Price / FCF', 'ratio'),
+        metricGroupRow('ev_sales', 'EV / Sales', 'ratio'),
+        metricGroupRow('ev_fcf', 'EV / FCF', 'ratio'),
+        metricGroupRow('peg_ratio', 'PEG Ratio', 'ratio'),
+      ],
+    },
+    {
+      title: 'Dividend Ratios',
+      metrics: [
+        metricGroupRow('dividend_yield', 'Dividend Yield (%)', 'percent'),
+        metricGroupRow('payout_ratio', 'Payout Ratio (%)', 'percent'),
+      ],
+    },
+    {
+      title: 'Market Value',
+      metrics: [
+        metricGroupRow('market_cap', 'Market Cap', 'currency_scaled'),
+        metricGroupRow('enterprise_value', 'Enterprise Value', 'currency_scaled'),
+        metricGroupRow('beta', 'Beta', 'ratio'),
+      ],
+    },
+    {
+      title: 'Share Data',
+      metrics: [
+        metricGroupRow('shares_outstanding', 'Shares Outstanding', 'number'),
+        metricGroupRow('float_shares', 'Float Shares', 'number'),
+      ],
+    },
+    {
+      title: 'Per Share Metrics',
+      metrics: [
+        metricGroupRow('revenue_per_share', 'Revenue Per Share', 'per_share'),
+        metricGroupRow('cash_per_share', 'Cash Per Share', 'per_share'),
+      ],
+    },
+    {
+      title: 'Efficiency Ratios',
+      metrics: [metricGroupRow('asset_turnover', 'Asset Turnover', 'ratio')],
+    },
+  ],
 };
 
 const LEGACY_FUNDAMENTAL_SECTIONS = [
@@ -406,6 +667,7 @@ function unitForFormat(formatType, financialHighlights) {
   if (formatType === 'percent') return '%';
   if (formatType === 'ratio') return 'x';
   if (formatType === 'per_share') return `${financialHighlights?.currency || ''}/share`;
+  if (formatType === 'number') return '';
   return '';
 }
 
@@ -611,6 +873,74 @@ function groupFinancialHighlights(financialHighlights, group) {
         key: group.id,
         title: group.label,
         rows,
+      },
+    ],
+  };
+}
+
+
+function metricPlaceholderRowFromDefinition(financialHighlights, metricDefinition, periods) {
+  return {
+    key: metricDefinition.key,
+    label: metricDefinition.label,
+    unit: unitForFormat(metricDefinition.format, financialHighlights),
+    format_type: metricDefinition.format,
+    values: Object.fromEntries(periods.map((period) => [period.key, { ...UNAVAILABLE_CELL }])),
+  };
+}
+
+function groupTableMetricRow(financialHighlights, metricDefinition, periods, usedSourceRows) {
+  const sourceRow = findMetricRow(financialHighlights, metricDefinition.label, usedSourceRows);
+  const snapshotRow = pointInTimeRow(financialHighlights, metricDefinition.label, periods);
+  if (sourceRow && rowValueScore(sourceRow, periods) === 0 && snapshotRow) return snapshotRow;
+
+  if (sourceRow) {
+    usedSourceRows.add(sourceRow);
+    return {
+      ...sourceRow,
+      key: metricDefinition.key,
+      label: metricDefinition.label,
+      unit: sourceRow.unit || unitForFormat(metricDefinition.format, financialHighlights),
+      format_type: sourceRow.format_type || metricDefinition.format,
+      values: Object.fromEntries(
+        periods.map((period) => [
+          period.key,
+          sourceRow.values?.[period.key] || { ...UNAVAILABLE_CELL },
+        ])
+      ),
+    };
+  }
+
+  return snapshotRow || metricPlaceholderRowFromDefinition(financialHighlights, metricDefinition, periods);
+}
+
+function groupFundamentalTableHighlights(financialHighlights, group) {
+  const periods = Array.isArray(financialHighlights?.periods) ? financialHighlights.periods : [];
+  const groupDefinitions = FUNDAMENTAL_TABLE_GROUPS[group?.id] || [];
+  if (!periods.length || !group || !groupDefinitions.length) return financialHighlights;
+
+  const usedSourceRows = new Set();
+  const tableGroups = groupDefinitions.map((groupDefinition) => {
+    const rows = groupDefinition.metrics.map((metricDefinition) =>
+      groupTableMetricRow(financialHighlights, metricDefinition, periods, usedSourceRows)
+    );
+
+    return {
+      key: normalizeMetric(groupDefinition.title).replace(/\s+/g, '_'),
+      title: groupDefinition.title,
+      rows,
+    };
+  });
+
+  return {
+    ...financialHighlights,
+    rows: tableGroups.flatMap((tableGroup) => tableGroup.rows),
+    point_in_time: [],
+    sections: [
+      {
+        key: group.id,
+        title: group.label,
+        groups: tableGroups,
       },
     ],
   };
@@ -1242,7 +1572,7 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
     FUNDAMENTAL_GROUPS.find((group) => group.id === selectedFundamentalGroup) ||
     FUNDAMENTAL_GROUPS[0];
   const tablePayload = appendLegacyFundamentalSections(financialHighlights, result);
-  const groupedTablePayload = groupFinancialHighlights(tablePayload, activeGroup);
+  const groupedTablePayload = groupFundamentalTableHighlights(tablePayload, activeGroup);
 
   return (
     <>

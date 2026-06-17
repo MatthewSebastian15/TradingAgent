@@ -78,6 +78,41 @@ describe('FinancialHighlightsTable', () => {
     ]);
   });
 
+
+  it('renders grouped metric tables with latest value, growth, and status columns', () => {
+    const rowKeys = new Set(['revenue', 'revenue_growth']);
+    const groupedPayload = {
+      ...MOCK_FINANCIAL_HIGHLIGHTS,
+      point_in_time: [],
+      sections: [
+        {
+          key: 'income',
+          title: 'Income',
+          groups: [
+            {
+              key: 'revenue_gross_profit',
+              title: 'Revenue & Gross Profit',
+              rows: MOCK_FINANCIAL_HIGHLIGHTS.rows.filter((row) => rowKeys.has(row.key)),
+            },
+          ],
+        },
+      ],
+    };
+
+    const { container } = render(<FinancialHighlightsTable financialHighlights={groupedPayload} />);
+
+    expect(screen.getByText('Income')).toBeTruthy();
+    expect(screen.getByText('Revenue & Gross Profit')).toBeTruthy();
+    expect(
+      Array.from(container.querySelectorAll('thead')[0].querySelectorAll('th')).map(
+        (cell) => cell.textContent
+      )
+    ).toEqual(['Metric', 'Value', 'YoY / Growth', 'Status']);
+    expect(screen.getByText('208,700.0 Mn')).toBeTruthy();
+    expect(screen.getByText('+59.92 %')).toBeTruthy();
+    expect(screen.getAllByText('REPORTED').length).toBeGreaterThan(0);
+  });
+
   it('returns null when payload is missing', () => {
     const { container } = render(<FinancialHighlightsTable financialHighlights={null} />);
 
