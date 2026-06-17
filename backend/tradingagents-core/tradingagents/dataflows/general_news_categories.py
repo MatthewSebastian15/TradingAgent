@@ -10,7 +10,6 @@ GENERAL_NEWS_CATEGORIES = [
     {"key": "forex", "label": "FOREX"},
     {"key": "commodities", "label": "COMMODITIES"},
     {"key": "regulatory", "label": "REGULATORY"},
-    {"key": "indonesia", "label": "INDONESIA"},
 ]
 
 SOURCE_CATEGORY_MAP = {
@@ -101,23 +100,10 @@ CATEGORY_KEYWORDS = {
         "probe",
         "compliance",
     ],
-    "indonesia": [
-        "indonesia",
-        "rupiah",
-        "jakarta",
-        "ihsg",
-        "idx",
-        "bei",
-        "bank indonesia",
-        "bi rate",
-        "ojk",
-        "bursa efek",
-    ],
 }
 
 CATEGORY_PRIORITY = [
     "regulatory",
-    "indonesia",
     "crypto",
     "commodities",
     "forex",

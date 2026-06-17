@@ -17,6 +17,7 @@ describe('NewsFilterBar', () => {
     expect(screen.getByRole('button', { name: 'ALL' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'CRYPTO' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'MACRO' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'INDONESIA' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'CRYPTO' }));
 

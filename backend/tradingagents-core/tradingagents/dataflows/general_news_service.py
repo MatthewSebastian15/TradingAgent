@@ -52,7 +52,6 @@ GENERAL_QUERY_BY_CATEGORY = {
     "forex": ["forex market", "currency markets", "dollar", "exchange rate"],
     "commodities": ["oil prices", "gold prices", "commodities", "energy market"],
     "regulatory": ["SEC enforcement", "financial regulation", "market regulator", "compliance"],
-    "indonesia": ["Indonesia economy", "rupiah", "IHSG", "Bank Indonesia"],
 }
 HIGH_IMPACT_KEYWORDS = [
     "central bank decision",
@@ -711,7 +710,10 @@ def _published_age(value: datetime | None) -> str:
         return f"{max(1, seconds // 60)}m"
     if seconds < 86400:
         return f"{seconds // 3600}h"
-    return f"{seconds // 86400}d"
+    days = seconds // 86400
+    if days < 7:
+        return f"{days} {'Day' if days == 1 else 'Days'}"
+    return f"{days // 7} W"
 
 
 def _source_name(value: Any) -> str:

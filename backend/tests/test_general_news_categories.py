@@ -22,14 +22,14 @@ def test_crypto_category_mapping():
     assert map_general_news_category(article) == "crypto"
 
 
-def test_indonesia_category_mapping_from_keywords():
+def test_rupiah_news_maps_to_forex_without_indonesia_category():
     article = FakeArticle(
         title="Rupiah steadies before Bank Indonesia decision",
         summary="Jakarta markets watch BI rate guidance",
         source="Unknown",
     )
 
-    assert map_general_news_category(article) == "indonesia"
+    assert map_general_news_category(article) == "forex"
 
 
 def test_default_category_mapping_is_market():

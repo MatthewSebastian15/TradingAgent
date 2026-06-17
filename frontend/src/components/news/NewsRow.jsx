@@ -10,7 +10,9 @@ const CATEGORY_LABELS = {
   forex: 'FOREX',
   commodities: 'COMMODITIES',
   regulatory: 'REGULATORY',
-  indonesia: 'INDONESIA',
+};
+const CATEGORY_ALIASES = {
+  indonesia: 'market',
 };
 const CATEGORY_BADGE_CLASSES = {
   market: 'border-orange-400/50 bg-orange-400/10 text-orange-300',
@@ -19,10 +21,13 @@ const CATEGORY_BADGE_CLASSES = {
   forex: 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300',
   commodities: 'border-amber-400/50 bg-amber-400/10 text-amber-300',
   regulatory: 'border-red-400/50 bg-red-400/10 text-red-300',
-  indonesia: 'border-fuchsia-400/50 bg-fuchsia-400/10 text-fuchsia-300',
   unknown: 'border-bloomberg-border bg-bloomberg-surface text-neutral-300',
 };
 const MAX_DESCRIPTION_WORDS = 35;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+const WEEK_DAYS = 7;
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -33,7 +38,8 @@ function isProviderName(value) {
 }
 
 function normalizeCategory(value) {
-  const category = normalizeText(value).toLowerCase();
+  const rawCategory = normalizeText(value).toLowerCase();
+  const category = CATEGORY_ALIASES[rawCategory] || rawCategory;
   return CATEGORY_LABELS[category] ? category : 'unknown';
 }
 
@@ -62,14 +68,32 @@ function getDataSource(article) {
   return normalizeText(source) || 'Unknown Source';
 }
 
-function getDisplayDate(article) {
+function parsePublishedDate(article) {
   const value = article.published_at || article.publishedAt || article.date;
-  if (!value) return '-';
+  if (!value) return null;
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
-  return date.toISOString().slice(0, 10);
+function getDisplayDate(article) {
+  const date = parsePublishedDate(article);
+  if (!date) return normalizeText(article.published_age) || '-';
+
+  const elapsedMs = Math.max(MINUTE_MS, Date.now() - date.getTime());
+  if (elapsedMs < HOUR_MS) {
+    return `${Math.floor(elapsedMs / MINUTE_MS)}m`;
+  }
+  if (elapsedMs < DAY_MS) {
+    return `${Math.floor(elapsedMs / HOUR_MS)}h`;
+  }
+
+  const days = Math.floor(elapsedMs / DAY_MS);
+  if (days < WEEK_DAYS) {
+    return `${days} ${days === 1 ? 'Day' : 'Days'}`;
+  }
+
+  return `${Math.floor(days / WEEK_DAYS)} W`;
 }
 
 function limitDescriptionWords(value, fallback) {
@@ -135,6 +159,7 @@ NewsRow.propTypes = {
     description: PropTypes.string,
     provider: PropTypes.string,
     publishedAt: PropTypes.string,
+    published_age: PropTypes.string,
     published_at: PropTypes.string,
     publisher: PropTypes.string,
     source: PropTypes.string,

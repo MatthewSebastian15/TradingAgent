@@ -281,7 +281,7 @@ GENERAL_NEWS_DEFAULT_LIMIT = env_int("GENERAL_NEWS_DEFAULT_LIMIT", 50, min_value
 GENERAL_NEWS_DEFAULT_CATEGORY = env("GENERAL_NEWS_DEFAULT_CATEGORY", "all")
 GENERAL_NEWS_ALLOWED_CATEGORIES: list[str] = env_list(
     "GENERAL_NEWS_ALLOWED_CATEGORIES",
-    ["all", "market", "macro", "crypto", "forex", "commodities", "regulatory", "indonesia"],
+    ["all", "market", "macro", "crypto", "forex", "commodities", "regulatory"],
 )
 
 GENERAL_NEWS_RSS_PRIMARY = env_bool("GENERAL_NEWS_RSS_PRIMARY", True)

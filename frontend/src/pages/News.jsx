@@ -6,10 +6,15 @@ import NewsList from '../components/news/NewsList';
 import TickerTape from '../components/TickerTape';
 import { useGeneralNews } from '../hooks/useGeneralNews';
 
+const CATEGORY_ALIASES = {
+  indonesia: 'market',
+};
+
 function normalizeCategory(value) {
-  return String(value || '')
+  const category = String(value || '')
     .trim()
     .toLowerCase();
+  return CATEGORY_ALIASES[category] || category;
 }
 
 export default function News() {
