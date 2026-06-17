@@ -158,3 +158,51 @@ def test_profile_builder_fetches_yfinance_ownership_after_profile_core_is_filled
     assert profile["insider_pct"] == 0.60814
     assert profile["institution_pct"] == 0.20815
     assert round(profile["public_pct"], 5) == 0.18371
+
+
+def test_profile_builder_keeps_yfinance_ratio_fields_for_fundamental_table():
+    profile = build_company_profile(
+        ticker="TEST",
+        vendor_payloads={
+            "yfinance": {
+                "available": True,
+                "longName": "Ratio Corp",
+                "enterpriseValue": 1200,
+                "trailingPE": 10,
+                "priceToBook": 2,
+                "priceToSalesTrailing12Months": 1.5,
+                "enterpriseToEbitda": 8,
+                "enterpriseToRevenue": 1.2,
+                "priceToFreeCashFlow": 12,
+                "enterpriseToFreeCashFlow": 14,
+                "earningsYield": 0.1,
+                "freeCashFlowYield": 0.07,
+                "dividendYield": 0.03,
+                "payoutRatio": 0.4,
+                "returnOnEquity": 0.25,
+                "returnOnAssets": 0.08,
+                "beta": 1.1,
+                "floatShares": 900,
+                "totalCashPerShare": 5,
+            }
+        },
+        vendor_order=["yfinance"],
+    )
+
+    assert profile["enterprise_value"] == 1200
+    assert profile["trailing_pe"] == 10
+    assert profile["price_to_book"] == 2
+    assert profile["price_to_sales"] == 1.5
+    assert profile["enterprise_to_ebitda"] == 8
+    assert profile["enterprise_to_revenue"] == 1.2
+    assert profile["price_to_free_cash_flow"] == 12
+    assert profile["enterprise_to_fcf"] == 14
+    assert profile["earnings_yield"] == 0.1
+    assert profile["fcf_yield"] == 0.07
+    assert profile["dividend_yield"] == 0.03
+    assert profile["payout_ratio"] == 0.4
+    assert profile["return_on_equity"] == 0.25
+    assert profile["return_on_assets"] == 0.08
+    assert profile["beta"] == 1.1
+    assert profile["float_shares"] == 900
+    assert profile["total_cash_per_share"] == 5

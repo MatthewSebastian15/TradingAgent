@@ -76,6 +76,7 @@ FINANCIAL_FIELDS = {
     "operating_profit",
     "ebitda",
     "operating_income",
+    "operating_expense",
     "pretax_income",
     "income_tax_expense",
     "net_profit",
@@ -123,6 +124,15 @@ FINANCIAL_FIELDS = {
     "current_ratio",
     "quick_ratio",
     "revenue_per_share",
+    "cash_per_share",
+    "payout_ratio",
+    "roe",
+    "roa",
+    "ev_sales",
+    "price_fcf",
+    "ev_fcf",
+    "earnings_yield",
+    "fcf_yield",
 }
 
 _FIELD_ALIASES = {
@@ -171,6 +181,11 @@ _FIELD_ALIASES = {
     "income_tax_expense": "income_tax_expense",
     "operating_income": "operating_income",
     "operating_profit": "operating_profit",
+    "operating_expense": "operating_expense",
+    "operating_expenses": "operating_expense",
+    "total_operating_expenses": "operating_expense",
+    "total_operating_expense": "operating_expense",
+    "operating_costs": "operating_expense",
     "income_from_operations": "operating_income",
     "ebit": "operating_income",
     "ebitda": "ebitda",
@@ -217,21 +232,49 @@ _FIELD_ALIASES = {
     "enterprise_value": "enterprise_value",
     "p_e": "pe",
     "pe_ratio": "pe",
+    "trailingpe": "pe",
+    "forwardpe": "pe",
     "p_bv": "pbv",
     "p_b": "pbv",
     "pb_ratio": "pbv",
     "price_to_book": "pbv",
+    "pricetobook": "pbv",
     "p_s": "ps",
     "ps_ratio": "ps",
     "price_to_sales": "ps",
+    "pricetosalestrailing12months": "ps",
     "ev_ebitda": "ev_ebitda",
     "enterprise_value_to_ebitda": "ev_ebitda",
+    "enterprisetoebitda": "ev_ebitda",
     "peg_ratio": "peg_ratio",
     "pegratio": "peg_ratio",
     "beta": "beta",
     "current_ratio": "current_ratio",
     "quick_ratio": "quick_ratio",
     "revenue_per_share": "revenue_per_share",
+    "total_cash_per_share": "cash_per_share",
+    "cash_per_share": "cash_per_share",
+    "payout_ratio": "payout_ratio",
+    "payoutratio": "payout_ratio",
+    "return_on_equity": "roe",
+    "returnonequity": "roe",
+    "roe": "roe",
+    "return_on_assets": "roa",
+    "returnonassets": "roa",
+    "roa": "roa",
+    "enterprise_to_revenue": "ev_sales",
+    "enterprisetorevenue": "ev_sales",
+    "ev_sales": "ev_sales",
+    "price_to_free_cash_flow": "price_fcf",
+    "pricetofreecashflow": "price_fcf",
+    "price_fcf": "price_fcf",
+    "enterprise_to_free_cash_flow": "ev_fcf",
+    "enterprisetofreecashflow": "ev_fcf",
+    "ev_fcf": "ev_fcf",
+    "earnings_yield": "earnings_yield",
+    "earningsyield": "earnings_yield",
+    "fcf_yield": "fcf_yield",
+    "fcfyield": "fcf_yield",
 }
 
 
@@ -655,6 +698,9 @@ _FINANCIAL_ROW_FIELD_ALIASES = {
     "capex": "capex",
     "operating_income": "operating_profit",
     "operating_profit": "operating_profit",
+    "operating_expense": "operating_expense",
+    "operating_expenses": "operating_expense",
+    "total_operating_expenses": "operating_expense",
 }
 
 _FINNHUB_FIELD_ALIASES = {
@@ -667,6 +713,12 @@ _FINNHUB_FIELD_ALIASES = {
     "operating_income": "operating_profit",
     "operatingincome": "operating_profit",
     "ebit": "operating_profit",
+    "operating_expense": "operating_expense",
+    "operatingexpense": "operating_expense",
+    "operating_expenses": "operating_expense",
+    "operatingexpenses": "operating_expense",
+    "total_operating_expenses": "operating_expense",
+    "totaloperatingexpenses": "operating_expense",
     "ebitda": "ebitda",
     "net_income": "net_profit",
     "netincome": "net_profit",
@@ -1349,6 +1401,8 @@ def build_financial_highlights_from_normalized_rows(
             period_values.setdefault("total_debt", period_values["debt"])
         if "assets" in period_values:
             period_values.setdefault("total_assets", period_values["assets"])
+        if "operating_profit" in period_values:
+            period_values.setdefault("operating_income", period_values["operating_profit"])
         if "operating_cash_flow" in period_values:
             period_values.setdefault("cash_from_operations", period_values["operating_cash_flow"])
         if "capex" in period_values:
@@ -1416,6 +1470,15 @@ def build_financial_highlights_from_normalized_rows(
             "current_ratio": ("current_ratio", "currentRatio"),
             "quick_ratio": ("quick_ratio", "quickRatio"),
             "revenue_per_share": ("revenue_per_share", "revenuePerShare"),
+            "cash_per_share": ("total_cash_per_share", "totalCashPerShare"),
+            "payout_ratio": ("payout_ratio", "payoutRatio"),
+            "roe": ("return_on_equity", "returnOnEquity"),
+            "roa": ("return_on_assets", "returnOnAssets"),
+            "ev_sales": ("enterprise_to_revenue", "enterpriseToRevenue"),
+            "price_fcf": ("price_to_free_cash_flow", "priceToFreeCashflow", "priceToFreeCashFlow"),
+            "ev_fcf": ("enterprise_to_fcf", "enterpriseToFcf", "enterpriseToFreeCashFlow"),
+            "earnings_yield": ("earnings_yield", "earningsYield"),
+            "fcf_yield": ("fcf_yield", "free_cash_flow_yield", "freeCashFlowYield"),
         }
         for field_name, source_keys in profile_metric_fields.items():
             value = next((profile.get(key) for key in source_keys if profile.get(key) is not None), None)

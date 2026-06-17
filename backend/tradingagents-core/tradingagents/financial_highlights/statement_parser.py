@@ -87,6 +87,15 @@ FIELD_ALIASES = {
     ),
     "total_assets": ("total assets", "totalassets", "totalAssets"),
     "operating_income": ("operating income", "operatingincome", "operatingIncome"),
+    "operating_expense": (
+        "operating expense",
+        "operating expenses",
+        "operatingexpense",
+        "operatingexpenses",
+        "total operating expenses",
+        "totaloperatingexpenses",
+        "operatingExpense",
+    ),
     "operating_cash_flow": (
         "operating cash flow",
         "operatingcashflow",
@@ -133,7 +142,7 @@ FIELD_ALIASES = {
     "pe": ("p/e", "pe", "pe ratio", "peratio", "trailingPE"),
     "pbv": ("p/bv", "pbv", "p/b", "pb", "price to book", "pricebook", "priceToBook"),
     "ps": ("p/s", "ps", "price to sales", "pricetosales", "priceToSalesTrailing12Months"),
-    "ev_ebitda": ("ev/ebitda", "evebitda", "enterprise value to ebitda", "enterprisevaluetoebitda"),
+    "ev_ebitda": ("ev/ebitda", "evebitda", "enterprise value to ebitda", "enterprisevaluetoebitda", "enterpriseToEbitda"),
     "gross_profit": ("gross profit", "grossprofit", "grossProfit"),
     "cost_of_revenue": ("cost of revenue", "costofrevenue", "costOfRevenue"),
     "pretax_income": ("pretax income", "pretaxincome", "income before tax", "incomebeforetax"),
@@ -155,6 +164,15 @@ FIELD_ALIASES = {
     "revenue_per_share": ("revenue per share", "revenuepershare", "revenuePerShare"),
     "current_ratio": ("current ratio", "currentratio", "currentRatio"),
     "quick_ratio": ("quick ratio", "quickratio", "quickRatio"),
+    "cash_per_share": ("cash per share", "cashpershare", "totalCashPerShare"),
+    "payout_ratio": ("payout ratio", "payoutratio", "payoutRatio"),
+    "roe": ("return on equity", "returnonequity", "returnOnEquity", "roe"),
+    "roa": ("return on assets", "returnonassets", "returnOnAssets", "roa"),
+    "ev_sales": ("ev/sales", "evsales", "enterprise to revenue", "enterprisetorevenue", "enterpriseToRevenue"),
+    "price_fcf": ("price/fcf", "pricefcf", "price to free cash flow", "pricetofreecashflow", "priceToFreeCashflow", "priceToFreeCashFlow"),
+    "ev_fcf": ("ev/fcf", "evfcf", "enterprise to free cash flow", "enterprisetofreecashflow", "enterpriseToFcf", "enterpriseToFreeCashFlow"),
+    "earnings_yield": ("earnings yield", "earningsyield"),
+    "fcf_yield": ("fcf yield", "fcfyield", "free cash flow yield", "freecashflowyield"),
 }
 
 NORMALIZED_ALIAS_MAP = {
@@ -748,8 +766,17 @@ def _add_profile_fallbacks(
             "beta": ("beta",),
             "float_shares": ("float_shares", "floatShares"),
             "revenue_per_share": ("revenue_per_share", "revenuePerShare"),
+            "cash_per_share": ("total_cash_per_share", "totalCashPerShare"),
             "current_ratio": ("current_ratio", "currentRatio"),
             "quick_ratio": ("quick_ratio", "quickRatio"),
+            "payout_ratio": ("payout_ratio", "payoutRatio"),
+            "roe": ("return_on_equity", "returnOnEquity"),
+            "roa": ("return_on_assets", "returnOnAssets"),
+            "ev_sales": ("enterprise_to_revenue", "enterpriseToRevenue"),
+            "price_fcf": ("price_to_free_cash_flow", "priceToFreeCashflow", "priceToFreeCashFlow"),
+            "ev_fcf": ("enterprise_to_fcf", "enterpriseToFcf", "enterpriseToFreeCashFlow"),
+            "earnings_yield": ("earnings_yield", "earningsYield"),
+            "fcf_yield": ("fcf_yield", "free_cash_flow_yield", "freeCashFlowYield"),
         }
         for field, source_keys in profile_metric_fields.items():
             value = next((company_profile.get(key) for key in source_keys if company_profile.get(key) is not None), None)
