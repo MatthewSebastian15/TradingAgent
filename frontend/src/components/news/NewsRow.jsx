@@ -3,6 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 
 const PROVIDER_NAMES = new Set(['marketaux', 'newsdata', 'google_news_light', 'rss_context']);
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -35,6 +37,17 @@ function getSource(article) {
   );
 }
 
+function formatRelativeNewsAge(date) {
+  const diffMs = Math.max(0, Date.now() - date.getTime());
+  const diffHours = Math.floor(diffMs / HOUR_MS);
+
+  if (diffHours < 1) return '<1h';
+  if (diffHours < 24) return `${diffHours}h`;
+
+  const diffDays = Math.floor(diffMs / DAY_MS);
+  return `${diffDays} ${diffDays === 1 ? 'day' : 'days'}`;
+}
+
 function getDisplayDate(article) {
   const value = article.published_at || article.publishedAt || article.date;
   if (!value) return '-';
@@ -42,18 +55,7 @@ function getDisplayDate(article) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
 
-  const now = new Date();
-  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.floor((startToday - startDate) / 86400000);
-
-  if (diffDays <= 0) return 'Today';
-  if (diffDays <= 7) return `${diffDays} ${diffDays === 1 ? 'Day' : 'Days'}`;
-
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-  });
+  return formatRelativeNewsAge(date);
 }
 
 export default function NewsRow({ article }) {
@@ -70,33 +72,35 @@ export default function NewsRow({ article }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="font-bold text-bloomberg-white transition-colors hover:text-bloomberg-orange"
+      className="terminal-news-headline font-bold text-bloomberg-white transition-colors hover:text-bloomberg-orange"
     >
       {title}
     </a>
   ) : (
-    <span className="font-bold text-bloomberg-white">{title}</span>
+    <span className="terminal-news-headline font-bold text-bloomberg-white">{title}</span>
   );
 
   return (
-    <Card className="rounded-lg border-bloomberg-border bg-black/55 px-3 py-2.5 shadow-sm shadow-black/20 transition-all hover:border-bloomberg-orange/40 hover:bg-bloomberg-orange/5">
+    <Card className="terminal-news-row rounded-lg border-bloomberg-border bg-black/55 shadow-sm shadow-black/20 transition-all hover:border-bloomberg-orange/40 hover:bg-bloomberg-orange/5">
       <div className="flex items-center gap-2 text-xs text-neutral-300">
         <Badge
           variant="outline"
-          className="rounded-full border-bloomberg-border bg-bloomberg-surface px-2 py-0 font-mono text-[10px] font-semibold text-neutral-300"
+          className="terminal-news-source rounded-full border-bloomberg-border bg-bloomberg-surface px-2 py-0 font-mono text-[10px] font-semibold text-neutral-300"
         >
           {source}
         </Badge>
         <span className="mx-2 text-bloomberg-muted">-</span>
-        <span className="text-[10px] text-bloomberg-muted">{age}</span>
+        <span className="terminal-news-time text-[10px] text-bloomberg-muted">{age}</span>
       </div>
 
-      <div className="mt-0.5 truncate text-xs text-neutral-300">
+      <div className="terminal-news-headline mt-0.5 truncate text-xs text-neutral-300">
         {titleNode}
-        <span className="text-bloomberg-muted"> - {publisher}</span>
+        <span className="terminal-news-label text-bloomberg-muted"> - {publisher}</span>
       </div>
 
-      <div className="mt-0.5 truncate text-[11px] text-bloomberg-muted">{description}</div>
+      <div className="terminal-news-summary mt-0.5 truncate text-[11px] text-bloomberg-muted">
+        {description}
+      </div>
     </Card>
   );
 }

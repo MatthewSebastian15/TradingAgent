@@ -22,4 +22,16 @@ describe('NewsFilterBar', () => {
 
     expect(onChange).toHaveBeenCalledWith('crypto');
   });
+
+  it('renders refresh action inside the filter toolbar', async () => {
+    const onChange = vi.fn();
+    const onRefresh = vi.fn();
+    render(
+      <NewsFilterBar selectedCategory="all" onChange={onChange} onRefresh={onRefresh} />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'REFRESH' }));
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
 });

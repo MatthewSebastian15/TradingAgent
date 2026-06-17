@@ -15,21 +15,8 @@ const VENDOR_PUBLISHERS = new Set([
   'rsscontext',
 ]);
 
-const MONTH_LABELS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 const SORT_OPTIONS = ['Date', 'Impact', 'Sentiment'];
 const STRICT_NEWS_PREVIEW_COUNT = 5;
 const IMPACT_SORT_RANK = {
@@ -65,13 +52,16 @@ function normalizedValue(value) {
 function parseNewsDate(value) {
   if (!value) return null;
   const text = String(value).trim();
-  let match = text.match(/^(\d{8})T\d{6}/);
+  let match = text.match(/^(\d{8})T(\d{2})(\d{2})(\d{2})/);
   if (match) {
     const date = match[1];
     return new Date(
       Number(date.slice(0, 4)),
       Number(date.slice(4, 6)) - 1,
-      Number(date.slice(6, 8))
+      Number(date.slice(6, 8)),
+      Number(match[2]),
+      Number(match[3]),
+      Number(match[4])
     );
   }
 
@@ -84,18 +74,21 @@ function parseNewsDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function startOfDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function formatRelativeNewsAge(date) {
+  if (!date) return '-';
+
+  const diffMs = Math.max(0, Date.now() - date.getTime());
+  const diffHours = Math.floor(diffMs / HOUR_MS);
+
+  if (diffHours < 1) return '<1h';
+  if (diffHours < 24) return `${diffHours}h`;
+
+  const diffDays = Math.floor(diffMs / DAY_MS);
+  return `${diffDays} ${diffDays === 1 ? 'day' : 'days'}`;
 }
 
 function formatNewsDateFromDate(date) {
-  if (!date) return '-';
-  const publishedDay = startOfDay(date);
-  const today = startOfDay(new Date());
-  const diffDays = Math.floor((today.getTime() - publishedDay.getTime()) / DAY_MS);
-  if (diffDays === 0) return 'Today';
-  if (diffDays > 0 && diffDays <= 7) return `${diffDays} ${diffDays === 1 ? 'Day' : 'Days'}`;
-  return `${publishedDay.getDate()} ${MONTH_LABELS[publishedDay.getMonth()]}`;
+  return formatRelativeNewsAge(date);
 }
 
 function formatAge(value) {
@@ -103,17 +96,32 @@ function formatAge(value) {
     .trim()
     .toLowerCase();
   if (!text || text === 'n/a') return '-';
-  if (text === 'today' || /(hour|minute|second)s?\b/.test(text)) return 'Today';
+  if (text === 'today') return '<1h';
 
-  const match = text.match(/(\d+)\s*(day|days|d)\b/);
+  let match = text.match(/(\d+)\s*(second|seconds|sec|secs|s)\b/);
+  if (match) return '<1h';
+
+  match = text.match(/(\d+)\s*(minute|minutes|min|mins|m)\b/);
+  if (match) return '<1h';
+
+  match = text.match(/(\d+)\s*(hour|hours|hr|hrs|h)\b/);
+  if (match) {
+    const hours = Number(match[1]);
+    if (!Number.isFinite(hours)) return '-';
+    if (hours < 1) return '<1h';
+    if (hours < 24) return `${hours}h`;
+
+    const days = Math.floor(hours / 24);
+    return `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+
+  match = text.match(/(\d+)\s*(day|days|d)\b/);
   if (!match) return '-';
 
   const days = Number(match[1]);
   if (!Number.isFinite(days)) return '-';
-  if (days <= 0) return 'Today';
-  if (days <= 7) return `${days} ${days === 1 ? 'Day' : 'Days'}`;
-
-  return formatNewsDateFromDate(new Date(Date.now() - days * DAY_MS));
+  if (days <= 0) return '<1h';
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
 function formatDate(value) {
@@ -376,7 +384,10 @@ function hasNewsPayload(result) {
 
 function SummaryMetric({ label, value }) {
   return (
-    <Badge variant="outline" className="rounded-md border-border font-mono text-xs">
+    <Badge
+      variant="outline"
+      className="terminal-news-insight rounded-md border-border font-mono text-xs"
+    >
       {label}: {value}
     </Badge>
   );
@@ -395,7 +406,7 @@ function SortButton({ label, active, onClick }) {
       size="sm"
       aria-pressed={active}
       onClick={onClick}
-      className="h-8 font-mono text-xs uppercase tracking-wide"
+      className="terminal-news-filter-tab h-8 font-mono text-xs uppercase tracking-wide"
     >
       {label}
     </Button>
@@ -410,7 +421,7 @@ SortButton.propTypes = {
 
 function SortControls({ activeSort, onSortChange }) {
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-2">
+    <div className="terminal-news-sort-controls mb-2 flex flex-wrap items-center gap-2">
       {SORT_OPTIONS.map((option, index) => (
         <span key={option} className="flex items-center gap-2">
           <SortButton
@@ -419,7 +430,7 @@ function SortControls({ activeSort, onSortChange }) {
             onClick={() => onSortChange(option)}
           />
           {index < SORT_OPTIONS.length - 1 && (
-            <span className="font-mono text-xs text-bloomberg-muted">|</span>
+            <span className="terminal-news-label font-mono text-xs text-bloomberg-muted">|</span>
           )}
         </span>
       ))}
@@ -439,30 +450,33 @@ function NewsRow({ item }) {
   const sentiment = displayLabel(item.sentiment || item.sentiment_label);
 
   return (
-    <Card className="rounded-md border-border bg-card">
-      <CardContent className="min-w-0 space-y-3 p-4">
+    <Card className="terminal-news-row rounded-md border-border bg-card">
+      <CardContent className="terminal-news-row-content min-w-0 space-y-2 p-4">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-mono text-xs tracking-wide text-primary">
+          <span className="terminal-news-time font-mono text-xs tracking-wide text-primary">
             {publishedLabel(item)}
           </span>
-          <Badge variant="outline" className="rounded-md border-border font-mono text-xs">
+          <Badge
+            variant="outline"
+            className="terminal-news-source rounded-md border-border font-mono text-xs"
+          >
             {publisherLabel(item)}
           </Badge>
-          <Badge className="rounded-md border-yellow-500/60 bg-yellow-500/15 font-mono text-xs text-yellow-300">
+          <Badge className="terminal-news-label rounded-md border-yellow-500/60 bg-yellow-500/15 font-mono text-xs text-yellow-300">
             {sentiment}
           </Badge>
-          <Badge className="rounded-md border-primary/60 bg-primary/15 font-mono text-xs text-primary">
+          <Badge className="terminal-news-label rounded-md border-primary/60 bg-primary/15 font-mono text-xs text-primary">
             {impact}
           </Badge>
         </div>
         <div className="min-w-0">
-          <h3 className="font-sans text-sm font-semibold leading-snug text-foreground">
+          <h3 className="terminal-news-headline text-sm font-semibold leading-snug text-foreground">
             {url ? (
               <a
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-primary"
+                className="terminal-news-headline hover:text-primary"
               >
                 {title}
               </a>
@@ -471,7 +485,9 @@ function NewsRow({ item }) {
             )}
           </h3>
         </div>
-        <p className="text-sm leading-relaxed text-muted-foreground">{summaryText(item)}</p>
+        <p className="terminal-news-summary text-sm leading-relaxed text-muted-foreground">
+          {summaryText(item)}
+        </p>
       </CardContent>
     </Card>
   );
@@ -484,7 +500,7 @@ NewsRow.propTypes = {
 function ProviderStatusRows({ rows }) {
   if (!rows.length) return null;
   return (
-    <div className="mt-2 space-y-1 font-mono text-xs text-bloomberg-muted">
+    <div className="terminal-news-insight mt-2 space-y-1 font-mono text-xs text-bloomberg-muted">
       {rows.map((row) => (
         <div key={row.provider}>
           {row.provider}: {displayLabel(row.status)}
@@ -519,9 +535,11 @@ function StrictNewsSection({
   const visibleItems = canLimit && !showAll ? sortedItems.slice(0, initialLimit) : sortedItems;
 
   return (
-    <Card className="rounded-md border-border bg-card">
+    <Card className="terminal-news-panel rounded-md border-border bg-card">
       <CardHeader className="p-4">
-        <CardTitle className="text-sm uppercase tracking-widest">{label}</CardTitle>
+        <CardTitle className="terminal-news-panel-title text-sm uppercase tracking-widest">
+          {label}
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0">
         {items.length > 0 ? (
@@ -536,7 +554,7 @@ function StrictNewsSection({
                 variant="outline"
                 size="sm"
                 onClick={() => setShowAll((current) => !current)}
-                className="h-8 font-mono text-xs uppercase tracking-wide"
+                className="terminal-news-filter-tab h-8 font-mono text-xs uppercase tracking-wide"
               >
                 {showAll ? 'Show Less' : `Show All (${items.length})`}
               </Button>
@@ -595,7 +613,7 @@ export default function NewsTab({ result }) {
       : [];
 
     return (
-      <div className="space-y-4 border-b border-border p-4">
+      <div className="terminal-news space-y-4 border-b border-border p-4">
         <StrictNewsSection
           label="Company News"
           items={decisionItems}
@@ -621,7 +639,7 @@ export default function NewsTab({ result }) {
         {analystConsensus.available && (
           <section>
             <SectionHeader label="ANALYST RECOMMENDATION TREND" />
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 font-mono text-xs">
+            <div className="terminal-news-insight grid grid-cols-2 gap-2 font-mono text-xs sm:grid-cols-3 lg:grid-cols-6">
               <SummaryMetric label="PERIOD" value={analystConsensus.period || 'N/A'} />
               <SummaryMetric label="STRONG BUY" value={analystConsensus.strong_buy ?? 0} />
               <SummaryMetric label="BUY" value={analystConsensus.buy ?? 0} />
@@ -645,8 +663,8 @@ export default function NewsTab({ result }) {
   const sortedNewsItems = sortNewsItems(newsItems, activeSort);
   if (!hasNewsPayload(result)) {
     return (
-      <div className="border-b border-border p-4">
-        <Card className="rounded-md border-border bg-card">
+      <div className="terminal-news border-b border-border p-4">
+        <Card className="terminal-news-panel rounded-md border-border bg-card">
           <CardContent className="p-4">
             <NoticeBox title="NEWS UNAVAILABLE" tone="amber">
               {relatedNews.warning || 'No usable related news was returned for this analysis.'}
@@ -658,10 +676,12 @@ export default function NewsTab({ result }) {
   }
 
   return (
-    <div className="space-y-4 border-b border-border p-4">
-      <Card className="rounded-md border-border bg-card">
+    <div className="terminal-news space-y-4 border-b border-border p-4">
+      <Card className="terminal-news-panel rounded-md border-border bg-card">
         <CardHeader className="p-4">
-          <CardTitle className="text-sm uppercase tracking-widest">NEWS</CardTitle>
+          <CardTitle className="terminal-news-panel-title text-sm uppercase tracking-widest">
+            NEWS
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
           {newsItems.length > 0 ? (
@@ -679,13 +699,13 @@ export default function NewsTab({ result }) {
         </CardContent>
       </Card>
       {analystConsensus.available && (
-        <Card className="rounded-md border-border bg-card">
+        <Card className="terminal-news-panel rounded-md border-border bg-card">
           <CardHeader className="p-4">
-            <CardTitle className="text-sm uppercase tracking-widest">
+            <CardTitle className="terminal-news-panel-title text-sm uppercase tracking-widest">
               ANALYST RECOMMENDATION TREND
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2 p-4 pt-0 font-mono text-xs sm:grid-cols-3 lg:grid-cols-6">
+          <CardContent className="terminal-news-insight grid grid-cols-2 gap-2 p-4 pt-0 font-mono text-xs sm:grid-cols-3 lg:grid-cols-6">
             <SummaryMetric label="PERIOD" value={analystConsensus.period || 'N/A'} />
             <SummaryMetric label="STRONG BUY" value={analystConsensus.strong_buy ?? 0} />
             <SummaryMetric label="BUY" value={analystConsensus.buy ?? 0} />

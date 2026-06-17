@@ -27,7 +27,7 @@ export default function DisclaimerFooter({ disclaimer }) {
       <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase">
         Disclaimer
       </div>
-      <p className="mt-2 whitespace-pre-line font-mono text-[11px] leading-relaxed text-bloomberg-muted">
+      <p className="ai-summary-disclaimer mt-2 whitespace-pre-line font-mono text-[11px] leading-relaxed text-bloomberg-muted">
         {visibleDisclaimer}
       </p>
     </section>
