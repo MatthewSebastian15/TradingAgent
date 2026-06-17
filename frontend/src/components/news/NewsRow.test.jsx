@@ -17,7 +17,7 @@ describe('NewsRow', () => {
     vi.useRealTimers();
   });
 
-  it('renders compact 3-line article with UI date format', () => {
+  it('renders compact 3-line article with relative hour format', () => {
     render(
       <NewsRow
         article={{
@@ -31,7 +31,7 @@ describe('NewsRow', () => {
     );
 
     expect(screen.getByText('Bloomberg')).toBeInTheDocument();
-    expect(screen.getByText('Today')).toBeInTheDocument();
+    expect(screen.getByText('11h')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Bitcoin slips as traders await macro data' })).toHaveAttribute(
       'href',
       'https://example.com/news'
@@ -59,7 +59,7 @@ describe('NewsRow', () => {
 
     expect(screen.queryByRole('link', { name: 'Market update' })).not.toBeInTheDocument();
     expect(screen.getByText('Market update')).toBeInTheDocument();
-    expect(screen.getByText('1 Day')).toBeInTheDocument();
+    expect(screen.getByText('1 day')).toBeInTheDocument();
     expect(screen.getByText((_, element) => element?.textContent === ' - example.com')).toBeInTheDocument();
     expect(screen.queryByText((_, element) => element?.textContent === ' - rss_context')).not.toBeInTheDocument();
   });

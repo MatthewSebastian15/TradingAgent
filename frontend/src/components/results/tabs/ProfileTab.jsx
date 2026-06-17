@@ -408,7 +408,7 @@ export default function ProfileTab({ profile, result = {} }) {
 
       {description && (
         <TerminalSection label="BUSINESS DESCRIPTION">
-          <p className="max-w-none text-justify font-mono text-sm leading-relaxed text-bloomberg-muted">
+          <p className="company-description company-overview business-summary profile-description stock-description max-w-none text-justify">
             {description}
           </p>
         </TerminalSection>

@@ -83,7 +83,7 @@ function Clock() {
   }, []);
 
   return (
-    <div className="flex items-center gap-3 font-mono text-xs tracking-wider text-bloomberg-orange">
+    <div className="flex items-center gap-2 font-mono text-[10px] leading-none tracking-wider text-bloomberg-orange">
       <span>{formatDate(now)}</span>
       <span>
         {CLOCK_FORMATTER.format(now)} {CLOCK_CONFIG.label}
@@ -94,9 +94,9 @@ function Clock() {
 
 function LiveStatus() {
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex items-center gap-1">
       <span className="h-1.5 w-1.5 rounded-full bg-bloomberg-green animate-pulse-dot" />
-      <span className="text-bloomberg-green font-mono text-xs">LIVE</span>
+      <span className="font-mono text-[10px] leading-none text-bloomberg-green">LIVE</span>
     </span>
   );
 }
@@ -114,7 +114,7 @@ function NavButton({ item, active, onClick }) {
       type="button"
       aria-disabled={item.disabled || undefined}
       onClick={item.disabled ? undefined : onClick}
-      className={`relative inline-flex h-10 items-center gap-2 border-r border-bloomberg-border px-4 font-mono text-xs font-medium tracking-wider transition-colors duration-150 first:border-l sm:px-5 ${
+      className={`relative inline-flex h-7 items-center gap-1.5 border-r border-bloomberg-border px-3 font-mono text-[11px] font-medium leading-none tracking-wider transition-colors duration-150 first:border-l sm:px-4 ${
         item.disabled
           ? 'cursor-not-allowed text-bloomberg-border opacity-55'
           : active
@@ -122,7 +122,7 @@ function NavButton({ item, active, onClick }) {
             : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
       }`}
     >
-      <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.7} />
+      <Icon className="h-3.5 w-3.5 flex-shrink-0" strokeWidth={1.7} />
       {item.label}
       {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-bloomberg-orange" />}
     </button>
@@ -160,7 +160,7 @@ export default function Navbar() {
   return (
     <TooltipProvider delayDuration={150}>
       <nav className="sticky top-0 z-50 border-b border-bloomberg-border bg-black">
-        <div className="flex h-10 items-center justify-between border-b border-bloomberg-border">
+        <div className="flex h-7 items-center justify-between border-b border-bloomberg-border">
           <div className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto">
             {NAV_ITEMS.map((item) => (
               <NavButton
@@ -172,7 +172,7 @@ export default function Navbar() {
             ))}
           </div>
 
-          <div className="ml-auto flex min-w-max items-center gap-4 px-4">
+          <div className="ml-auto flex min-w-max items-center gap-3 px-3">
             <LiveStatus />
             <Clock />
           </div>

@@ -692,7 +692,7 @@ function ExpandableTextSection({
       <div
         className={`relative ${expanded ? `${expandedMaxClass} overflow-y-auto pr-2` : 'overflow-hidden'}`}
       >
-        <p className="font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">
+        <p className="ai-summary-paragraph font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">
           {parseBold(visibleText)}
         </p>
         {!expanded && needsToggle && (
@@ -998,7 +998,9 @@ function RecommendationRiskSection({ text }) {
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border">
       <SectionHeader label="KEY REASONS & RISK SUMMARY" />
-      <p className="font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">{text}</p>
+      <p className="ai-summary-paragraph font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">
+        {text}
+      </p>
     </div>
   );
 }

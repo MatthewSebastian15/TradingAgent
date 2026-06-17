@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const NEWS_CATEGORIES = [
@@ -12,25 +13,40 @@ const NEWS_CATEGORIES = [
   { key: 'indonesia', label: 'INDONESIA' },
 ];
 
-export default function NewsFilterBar({ selectedCategory, onChange }) {
+export default function NewsFilterBar({ selectedCategory, onChange, onRefresh }) {
   return (
-    <div className="flex flex-wrap gap-2 border-b border-bloomberg-border pb-3">
-      {NEWS_CATEGORIES.map((item) => (
+    <div className="terminal-news-toolbar flex items-center justify-between gap-3 border-b border-bloomberg-border pb-3">
+      <div className="terminal-news-filter flex flex-wrap gap-2">
+        {NEWS_CATEGORIES.map((item) => (
+          <Button
+            key={item.key}
+            type="button"
+            variant={selectedCategory === item.key ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onChange(item.key)}
+            className={
+              selectedCategory === item.key
+                ? 'terminal-news-filter-tab h-8 rounded-full bg-bloomberg-orange px-3 font-mono text-xs font-bold text-black shadow-sm shadow-bloomberg-orange/20 hover:bg-bloomberg-orange/90'
+                : 'terminal-news-filter-tab h-8 rounded-full border-bloomberg-border bg-black/60 px-3 font-mono text-xs text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange'
+            }
+          >
+            {item.label}
+          </Button>
+        ))}
+      </div>
+
+      {onRefresh && (
         <Button
-          key={item.key}
           type="button"
-          variant={selectedCategory === item.key ? 'default' : 'outline'}
+          variant="outline"
           size="sm"
-          onClick={() => onChange(item.key)}
-          className={
-            selectedCategory === item.key
-              ? 'h-8 rounded-full bg-bloomberg-orange px-3 font-mono text-xs font-bold text-black shadow-sm shadow-bloomberg-orange/20 hover:bg-bloomberg-orange/90'
-              : 'h-8 rounded-full border-bloomberg-border bg-black/60 px-3 font-mono text-xs text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange'
-          }
+          onClick={onRefresh}
+          className="terminal-news-filter-tab terminal-news-refresh-button h-8 shrink-0 rounded-full border-bloomberg-border bg-black/60 px-3 font-mono text-xs text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
         >
-          {item.label}
+          <RefreshCw className="h-3.5 w-3.5" />
+          REFRESH
         </Button>
-      ))}
+      )}
     </div>
   );
 }
@@ -38,4 +54,5 @@ export default function NewsFilterBar({ selectedCategory, onChange }) {
 NewsFilterBar.propTypes = {
   selectedCategory: PropTypes.string.isRequired,
   onChange: PropTypes.func.isRequired,
+  onRefresh: PropTypes.func,
 };
