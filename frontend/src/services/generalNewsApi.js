@@ -20,7 +20,9 @@ export async function fetchGeneralNews({
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch general news: ${await readHttpError(response)}`);
+    const error = new Error(`Failed to fetch general news: ${await readHttpError(response)}`);
+    error.status = response.status;
+    throw error;
   }
 
   return response.json();

@@ -197,10 +197,12 @@ class GeneralNewsService:
         if not bool(self.config.get("rss_primary", True)):
             return ProviderFetchResult(provider="rss_context", status="disabled")
 
+        rss_max_feeds = max(1, int(self.config.get("rss_max_feeds", 20)))
+        rss_max_items_per_feed = max(1, int(self.config.get("rss_max_items_per_feed", 30)))
         rss_config = {
             "rss_enabled": bool(self.config.get("rss_enabled", True)),
-            "rss_max_feeds": int(self.config.get("rss_max_feeds", 20)),
-            "rss_max_items_per_feed": int(self.config.get("rss_max_items_per_feed", 30)),
+            "rss_max_feeds": rss_max_feeds,
+            "rss_max_items_per_feed": rss_max_items_per_feed,
             "rss_include_trial_feeds": bool(self.config.get("rss_include_trial_feeds", False)),
             "rss_google_news_fallback_enabled": bool(self.config.get("rss_google_news_fallback_enabled", True)),
             "rss_enabled_feed_ids": str(self.config.get("rss_enabled_feed_ids") or ""),
@@ -214,7 +216,8 @@ class GeneralNewsService:
             config=rss_config,
         )
         try:
-            return provider.fetch_news(_general_profile(), window_days=window_days, limit=limit)
+            rss_limit = max(max(1, int(limit)), rss_max_feeds * rss_max_items_per_feed)
+            return provider.fetch_news(_general_profile(), window_days=window_days, limit=rss_limit)
         except Exception as exc:
             logger.info("general news rss_context failed: %s", exc)
             return ProviderFetchResult(provider="rss_context", status="unavailable", last_error=sanitize_error(exc))
@@ -247,8 +250,6 @@ class GeneralNewsService:
             status = _public_status(str(attempt.get("status") or "error"), articles)
             if payload is not None:
                 articles.extend(_normalize_google_payload(payload, query=query))
-            if len(articles) >= limit:
-                break
         return ProviderFetchResult(provider="google_news_light", status="success" if articles else status, articles=articles[:limit], attempts=attempts)
 
     def _fetch_marketaux(self, *, category: str, window_days: int, limit: int) -> ProviderFetchResult:
@@ -279,8 +280,6 @@ class GeneralNewsService:
             status = _public_status(str(attempt.get("status") or "error"), articles)
             if payload is not None:
                 articles.extend(_normalize_marketaux_payload(payload, query=query))
-            if len(articles) >= limit:
-                break
         return ProviderFetchResult(provider="marketaux", status="success" if articles else status, articles=articles[:limit], attempts=attempts)
 
     def _fetch_newsdata(self, *, category: str, limit: int) -> ProviderFetchResult:
@@ -308,8 +307,6 @@ class GeneralNewsService:
             status = _public_status(str(attempt.get("status") or "error"), articles)
             if payload is not None:
                 articles.extend(_normalize_newsdata_payload(payload, query=query))
-            if len(articles) >= limit:
-                break
         return ProviderFetchResult(provider="newsdata", status="success" if articles else status, articles=articles[:limit], attempts=attempts)
 
     def _normalize_articles(
@@ -329,7 +326,7 @@ class GeneralNewsService:
             published_at = _coerce_datetime(article.published_at)
             if published_at is not None and published_at < start:
                 continue
-            summary = _sanitize_summary(article.summary) or article.title
+            summary = _fit_summary_word_range(article.summary, fallback=article.title)
             article.summary = summary
             article.published_at = published_at
             article.relevance_score = _general_relevance_score(article)
@@ -537,6 +534,7 @@ def _article_payload(article: NormalizedNewsArticle) -> dict[str, Any]:
         "id": _stable_article_id(article),
         "title": article.title,
         "summary": article.summary or article.title,
+        "description": _fit_summary_word_range(article.summary, fallback=article.title),
         "url": article.url,
         "source": article.source,
         "source_domain": article.source_domain or _domain(article.url),
@@ -633,6 +631,20 @@ def _sanitize_summary(value: Any) -> str:
     text = html.unescape(str(value or ""))
     text = _TAG_RE.sub(" ", text)
     return " ".join(text.split())
+
+
+def _fit_summary_word_range(value: Any, *, fallback: Any = None, max_words: int = 35) -> str:
+    text = _sanitize_summary(value)
+    fallback_text = _sanitize_summary(fallback)
+    if not text:
+        text = fallback_text
+    elif fallback_text and len(text.split()) < 25 and fallback_text.lower() not in text.lower():
+        text = f"{text} {fallback_text}"
+
+    words = text.split()
+    if len(words) <= max_words:
+        return " ".join(words)
+    return " ".join(words[:max_words])
 
 
 def _parse_date(value: Any) -> datetime | None:
