@@ -5,6 +5,7 @@ import hashlib
 import html
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
@@ -127,22 +128,15 @@ class GeneralNewsService:
         articles: list[NormalizedNewsArticle] = []
         provider_order = self._provider_order(provider_filter)
         max_per_provider = max(1, int(self.config.get("max_articles_per_provider", 30)))
+        results_by_provider = self._fetch_providers(
+            provider_order,
+            category=category,
+            window_days=window_days,
+            max_per_provider=max_per_provider,
+        )
 
         for provider_name in provider_order:
-            if provider_name not in GENERAL_NEWS_PROVIDER_SET:
-                provider_status[provider_name] = "disabled"
-                continue
-            if provider_name == "rss_context":
-                result = self._fetch_rss_context(window_days=window_days, limit=max_per_provider)
-            elif provider_name == "google_news_light":
-                result = self._fetch_google_news_light(category=category, window_days=window_days, limit=max_per_provider)
-            elif provider_name == "marketaux":
-                result = self._fetch_marketaux(category=category, window_days=window_days, limit=max_per_provider)
-            elif provider_name == "newsdata":
-                result = self._fetch_newsdata(category=category, limit=max_per_provider)
-            else:
-                result = ProviderFetchResult(provider=provider_name, status="disabled")
-
+            result = results_by_provider.get(provider_name) or ProviderFetchResult(provider=provider_name, status="disabled")
             provider_status[provider_name] = _public_status(result.status, result.articles)
             articles.extend(result.articles)
 
@@ -192,6 +186,63 @@ class GeneralNewsService:
             return [provider_filter] if provider_filter in enabled or provider_filter in GENERAL_NEWS_PROVIDER_SET else [provider_filter]
         return [provider for provider in priority if provider in enabled]
 
+    def _fetch_provider(
+        self,
+        provider_name: str,
+        *,
+        category: str,
+        window_days: int,
+        max_per_provider: int,
+    ) -> ProviderFetchResult:
+        if provider_name not in GENERAL_NEWS_PROVIDER_SET:
+            return ProviderFetchResult(provider=provider_name, status="disabled")
+        if provider_name == "rss_context":
+            return self._fetch_rss_context(window_days=window_days, limit=max_per_provider)
+        if provider_name == "google_news_light":
+            return self._fetch_google_news_light(category=category, window_days=window_days, limit=max_per_provider)
+        if provider_name == "marketaux":
+            return self._fetch_marketaux(category=category, window_days=window_days, limit=max_per_provider)
+        if provider_name == "newsdata":
+            return self._fetch_newsdata(category=category, limit=max_per_provider)
+        return ProviderFetchResult(provider=provider_name, status="disabled")
+
+    def _fetch_providers(
+        self,
+        provider_order: list[str],
+        *,
+        category: str,
+        window_days: int,
+        max_per_provider: int,
+    ) -> dict[str, ProviderFetchResult]:
+        if not provider_order:
+            return {}
+
+        max_workers = min(max(1, int(self.config.get("provider_fetch_workers", 4))), len(provider_order))
+        results: dict[str, ProviderFetchResult] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    self._fetch_provider,
+                    provider_name,
+                    category=category,
+                    window_days=window_days,
+                    max_per_provider=max_per_provider,
+                ): provider_name
+                for provider_name in provider_order
+            }
+            for future in as_completed(futures):
+                provider_name = futures[future]
+                try:
+                    results[provider_name] = future.result()
+                except Exception as exc:  # noqa: BLE001
+                    logger.info("general news provider failed provider=%s error=%s", provider_name, exc)
+                    results[provider_name] = ProviderFetchResult(
+                        provider=provider_name,
+                        status="unavailable",
+                        last_error=sanitize_error(exc),
+                    )
+        return results
+
     def _fetch_rss_context(self, *, window_days: int, limit: int) -> ProviderFetchResult:
         if not bool(self.config.get("rss_primary", True)):
             return ProviderFetchResult(provider="rss_context", status="disabled")
@@ -207,6 +258,7 @@ class GeneralNewsService:
             "rss_enabled_feed_ids": str(self.config.get("rss_enabled_feed_ids") or ""),
             "rss_disabled_feed_ids": str(self.config.get("rss_disabled_feed_ids") or "theblock-trial"),
             "rss_user_agent": str(self.config.get("rss_user_agent") or "TradingAgent/0.1 RSS Reader"),
+            "rss_fetch_workers": max(1, int(self.config.get("rss_fetch_workers", 6))),
         }
         provider = RSSContextProvider(
             "",

@@ -45,17 +45,13 @@ describe('useGeneralNews', () => {
     vi.useRealTimers();
   });
 
-  it('debounces the initial request and does not open an SSE stream', async () => {
+  it('loads immediately and does not open an SSE stream', async () => {
     fetchGeneralNews.mockResolvedValue({ articles: [{ id: '1' }] });
     vi.stubGlobal('fetch', vi.fn());
 
     render(<Harness />);
 
-    expect(fetchGeneralNews).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
-    });
+    await act(async () => {});
 
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
     expect(fetchGeneralNews).toHaveBeenCalledWith(
@@ -75,9 +71,7 @@ describe('useGeneralNews', () => {
       </>
     );
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
-    });
+    await act(async () => {});
 
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('first')).toHaveTextContent('2');
@@ -89,14 +83,12 @@ describe('useGeneralNews', () => {
 
     render(<Harness />);
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
-    });
+    await act(async () => {});
 
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(119699);
+      await vi.advanceTimersByTimeAsync(119999);
     });
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
 
@@ -111,9 +103,7 @@ describe('useGeneralNews', () => {
 
     render(<Harness />);
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
-    });
+    await act(async () => {});
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'reload' }));

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any
@@ -16,9 +17,10 @@ from services.market_symbol_universe import (
     normalize_country,
 )
 
-OVERVIEW_TTL_SECONDS = 60
-MOVERS_TTL_SECONDS = 120
+OVERVIEW_TTL_SECONDS = 120
+MOVERS_TTL_SECONDS = 180
 VALIDATION_TTL_SECONDS = 3600
+YFINANCE_WORKERS = 8
 
 
 def normalize_market_symbol(symbol: str) -> str:
@@ -100,12 +102,23 @@ def _history_for_symbol(symbol: str, *, period: str, interval: str) -> Any:
     return yf.Ticker(symbol).history(period=period, interval=interval)
 
 
-def _build_overview_item(symbol: str) -> dict[str, Any]:
+def _download_history(symbols: list[str], *, period: str, interval: str) -> dict[str, Any]:
     from tradingagents.yfinance_runtime import yf
 
-    ticker = yf.Ticker(symbol)
+    data = yf.download(
+        tickers=symbols,
+        period=period,
+        interval=interval,
+        group_by="ticker",
+        auto_adjust=False,
+        threads=True,
+        progress=False,
+    )
+    return _normalize_download_frame(data, symbols)
+
+
+def _overview_item_from_history(symbol: str, history: Any) -> dict[str, Any]:
     try:
-        history = ticker.history(period="1mo", interval="1d")
         close_values = _series_values(history, "Close")
         if len(close_values) < 2:
             return {
@@ -132,7 +145,6 @@ def _build_overview_item(symbol: str) -> dict[str, Any]:
             "last": last_close,
             "change": change,
             "change_percent": (change / previous_close) * 100,
-            "currency": _ticker_currency(ticker),
             "sparkline": close_values,
             "status": "ok",
             "updated_at": _now_iso(),
@@ -146,6 +158,51 @@ def _build_overview_item(symbol: str) -> dict[str, Any]:
         }
 
 
+def _build_overview_item(symbol: str) -> dict[str, Any]:
+    try:
+        return _overview_item_from_history(symbol, _history_for_symbol(symbol, period="1mo", interval="1d"))
+    except Exception as exc:
+        return {
+            "symbol": symbol,
+            "label": MARKET_LABELS.get(symbol, symbol),
+            "status": "error",
+            "reason": str(exc) or "No yfinance data found",
+        }
+
+
+def _build_overview_items(symbols: list[str]) -> list[dict[str, Any]]:
+    if not symbols:
+        return []
+
+    try:
+        frames = _download_history(symbols, period="1mo", interval="1d")
+    except Exception:
+        frames = {}
+
+    items: list[dict[str, Any]] = []
+    missing_symbols: list[str] = []
+    for symbol in symbols:
+        history = frames.get(symbol)
+        if history is None or getattr(history, "empty", True):
+            missing_symbols.append(symbol)
+            continue
+        items.append(_overview_item_from_history(symbol, history))
+
+    if not missing_symbols:
+        return items
+
+    fallback_items: dict[str, dict[str, Any]] = {}
+    max_workers = min(YFINANCE_WORKERS, len(missing_symbols))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_build_overview_item, symbol): symbol for symbol in missing_symbols}
+        for future in as_completed(futures):
+            fallback_items[futures[future]] = future.result()
+
+    by_symbol = {item["symbol"]: item for item in items}
+    by_symbol.update(fallback_items)
+    return [by_symbol.get(symbol) or _build_overview_item(symbol) for symbol in symbols]
+
+
 def get_overview_data(symbols: list[str]) -> dict[str, Any]:
     normalized_symbols = dedupe_symbols(symbols)
     symbols_hash = sha256("|".join(normalized_symbols).encode("utf-8")).hexdigest()[:16]
@@ -154,7 +211,7 @@ def get_overview_data(symbols: list[str]) -> dict[str, Any]:
     if cached is not None:
         return cached
 
-    items = [_build_overview_item(symbol) for symbol in normalized_symbols]
+    items = _build_overview_items(normalized_symbols)
     ok_items = [item for item in items if item.get("status") == "ok"]
     payload: dict[str, Any] = {"items": items}
     if not ok_items:
@@ -278,15 +335,20 @@ def get_market_movers(country: str, exchange: str, limit: int) -> dict[str, Any]
     except Exception:
         frames = {}
 
+    missing_symbols = [symbol for symbol in symbols if frames.get(symbol) is None]
+    if missing_symbols:
+        max_workers = min(YFINANCE_WORKERS, len(missing_symbols))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_download_symbol, symbol): symbol for symbol in missing_symbols}
+            for future in as_completed(futures):
+                try:
+                    frames[futures[future]] = future.result()
+                except Exception:
+                    frames[futures[future]] = None
+
     items: list[dict[str, Any]] = []
     for symbol in symbols:
-        history = frames.get(symbol)
-        if history is None:
-            try:
-                history = _download_symbol(symbol)
-            except Exception:
-                history = None
-        item = _mover_from_history(symbol, history, require_volume=require_volume)
+        item = _mover_from_history(symbol, frames.get(symbol), require_volume=require_volume)
         if item is not None:
             items.append(item)
 

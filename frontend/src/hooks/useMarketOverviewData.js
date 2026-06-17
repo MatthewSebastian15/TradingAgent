@@ -1,25 +1,77 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getMarketOverview } from '../api/market';
 
 const OVERVIEW_REFRESH_MS = 60 * 1000;
+const OVERVIEW_CACHE_TTL_MS = 120 * 1000;
+const overviewCache = new Map();
+const overviewInflight = new Map();
+
+function nowMs() {
+  return Date.now();
+}
+
+function overviewKey(symbols) {
+  return symbols.map((symbol) => String(symbol || '').trim().toUpperCase()).join('|');
+}
+
+function isFresh(entry) {
+  return entry && nowMs() - entry.fetchedAt < OVERVIEW_CACHE_TTL_MS;
+}
+
+function hasItems(payload) {
+  return Array.isArray(payload?.items) && payload.items.length > 0;
+}
+
+async function loadOverviewPayload(symbols, { signal, force = false } = {}) {
+  const key = overviewKey(symbols);
+  const cached = overviewCache.get(key);
+  if (!force && isFresh(cached)) return cached.data;
+  if (!force && overviewInflight.has(key)) return overviewInflight.get(key);
+
+  const request = getMarketOverview(symbols, { signal })
+    .then((payload) => {
+      overviewCache.set(key, { data: payload, fetchedAt: nowMs() });
+      return payload;
+    })
+    .finally(() => {
+      overviewInflight.delete(key);
+    });
+
+  overviewInflight.set(key, request);
+  return request;
+}
+
+export function clearMarketOverviewClientCacheForTests() {
+  overviewCache.clear();
+  overviewInflight.clear();
+}
 
 export function useMarketOverviewData(symbols) {
-  const [data, setData] = useState({ items: [] });
-  const [loading, setLoading] = useState(true);
+  const cacheKey = overviewKey(symbols);
+  const cached = overviewCache.get(cacheKey);
+  const initialData = isFresh(cached) ? cached.data : { items: [] };
+  const [data, setData] = useState(initialData);
+  const [loading, setLoading] = useState(!hasItems(initialData));
   const [error, setError] = useState('');
+  const dataRef = useRef(initialData);
 
   const loadOverview = useCallback(
-    async ({ signal } = {}) => {
-      if (!symbols.length) return;
-      setLoading(true);
+    async ({ signal, force = false } = {}) => {
+      if (!symbols.length) return null;
+      setLoading(!hasItems(dataRef.current));
       setError('');
 
       try {
-        const payload = await getMarketOverview(symbols, { signal });
+        const payload = await loadOverviewPayload(symbols, { signal, force });
+        if (signal?.aborted) return null;
+        dataRef.current = payload;
         setData(payload);
+        setError('');
+        return payload;
       } catch (loadError) {
-        if (loadError.name === 'AbortError') return;
+        if (loadError.name === 'AbortError') return null;
         setError('Failed to load market data from yfinance.');
+        return null;
       } finally {
         if (!signal?.aborted) setLoading(false);
       }
@@ -44,6 +96,6 @@ export function useMarketOverviewData(symbols) {
     data,
     loading,
     error,
-    refresh: () => loadOverview(),
+    refresh: () => loadOverview({ force: true }),
   };
 }
