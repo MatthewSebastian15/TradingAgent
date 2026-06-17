@@ -84,6 +84,105 @@ function formatCellValue(cell, unit) {
   return appendUnit(text, unit);
 }
 
+function cellHasValue(cell) {
+  if (!cell || cell.status === 'unavailable') return false;
+  return !isUnavailableDisplay(cell.display ?? cell.value);
+}
+
+function numericCellValue(cell) {
+  if (!cell || cell.status === 'unavailable') return null;
+  const rawNumber = Number(cell.value);
+  if (Number.isFinite(rawNumber)) return rawNumber;
+  const match = String(cell.display || '')
+    .replace(/,/g, '')
+    .match(/-?\d+(\.\d+)?/);
+  if (!match) return null;
+  const displayNumber = Number(match[0]);
+  return Number.isFinite(displayNumber) ? displayNumber : null;
+}
+
+function latestAvailableCell(row, displayPeriods) {
+  for (const period of displayPeriods) {
+    const cell = row.values?.[period.key];
+    if (cellHasValue(cell)) return { period, cell };
+  }
+  return { period: displayPeriods[0], cell: row.values?.[displayPeriods[0]?.key] };
+}
+
+function formatGrowthValue(value) {
+  if (!Number.isFinite(value)) return '-';
+  const prefix = value > 0 ? '+' : '';
+  return `${prefix}${value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')} %`;
+}
+
+function rowGrowthDisplay(row, latestPeriod, displayPeriods) {
+  const latestIndex = displayPeriods.findIndex((period) => period.key === latestPeriod?.key);
+  if (latestIndex < 0) return '-';
+
+  const latestValue = numericCellValue(row.values?.[latestPeriod.key]);
+  const previousPeriod = displayPeriods.slice(latestIndex + 1).find((period) =>
+    Number.isFinite(numericCellValue(row.values?.[period.key]))
+  );
+  const previousValue = numericCellValue(row.values?.[previousPeriod?.key]);
+
+  if (!Number.isFinite(latestValue) || !Number.isFinite(previousValue) || previousValue === 0) {
+    return '-';
+  }
+
+  return formatGrowthValue(((latestValue - previousValue) / Math.abs(previousValue)) * 100);
+}
+
+function statusDisplay(cell) {
+  if (!cell || cell.status === 'unavailable') return '-';
+  const status = String(cell.status || '').trim();
+  return status ? status.toUpperCase() : '-';
+}
+
+function FinancialMetricGroupTable({ periods, rows }) {
+  const displayPeriods = sortPeriodsForDisplay(periods);
+
+  return (
+    <div className="overflow-x-auto border border-bloomberg-border">
+      <table className="min-w-[520px] w-full border-collapse font-mono text-xs">
+        <thead>
+          <tr className="border-b border-bloomberg-border text-bloomberg-muted">
+            <th className="min-w-[190px] px-3 py-2 text-left whitespace-nowrap">Metric</th>
+            <th className="min-w-[110px] px-3 py-2 text-right whitespace-nowrap">Value</th>
+            <th className="min-w-[110px] px-3 py-2 text-right whitespace-nowrap">YoY / Growth</th>
+            <th className="min-w-[88px] px-3 py-2 text-left whitespace-nowrap">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const latest = latestAvailableCell(row, displayPeriods);
+            return (
+              <tr key={row.key} className="border-b border-bloomberg-border border-opacity-50">
+                <td className="min-w-[190px] px-3 py-2 text-bloomberg-white whitespace-nowrap">
+                  {row.label}
+                </td>
+                <td className="min-w-[110px] px-3 py-2 text-right text-bloomberg-white whitespace-nowrap">
+                  {formatCellValue(latest.cell, row.unit)}
+                </td>
+                <td className="min-w-[110px] px-3 py-2 text-right text-bloomberg-white whitespace-nowrap">
+                  {rowGrowthDisplay(row, latest.period, displayPeriods)}
+                </td>
+                <td className="min-w-[88px] px-3 py-2 text-bloomberg-muted whitespace-nowrap">
+                  {statusDisplay(latest.cell)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+FinancialMetricGroupTable.propTypes = {
+  periods: PropTypes.array.isRequired,
+  rows: PropTypes.array.isRequired,
+};
+
 function FinancialTable({ periods, rows }) {
   const displayPeriods = sortPeriodsForDisplay(periods);
   return (
@@ -133,8 +232,14 @@ export default function FinancialHighlightsTable({ financialHighlights }) {
   const sections = financialHighlights?.sections;
   const fallbackRows = financialHighlights?.rows;
   const hasSections = Array.isArray(sections) && sections.some((section) => section.rows?.length);
+  const hasGroupedSections = Array.isArray(sections) &&
+    sections.some((section) => section.groups?.some((group) => group.rows?.length));
 
-  if (!Array.isArray(periods) || !periods.length || (!hasSections && !fallbackRows?.length)) {
+  if (
+    !Array.isArray(periods) ||
+    !periods.length ||
+    (!hasGroupedSections && !hasSections && !fallbackRows?.length)
+  ) {
     return null;
   }
 
@@ -173,7 +278,25 @@ export default function FinancialHighlightsTable({ financialHighlights }) {
         </div>
       )}
 
-      {hasSections ? (
+      {hasGroupedSections ? (
+        sections.map((section) => (
+          <div key={section.key} className="space-y-3">
+            <div className="font-mono text-xs text-bloomberg-orange uppercase tracking-wider">
+              {section.title}
+            </div>
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              {section.groups.map((group) => (
+                <div key={group.key} className="space-y-2">
+                  <div className="font-mono text-[11px] text-bloomberg-muted uppercase tracking-wider">
+                    {group.title}
+                  </div>
+                  <FinancialMetricGroupTable periods={periods} rows={group.rows} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      ) : hasSections ? (
         sections.map((section) => (
           <div key={section.key}>
             <div className="font-mono text-xs text-bloomberg-orange uppercase tracking-wider mb-2">
