@@ -237,3 +237,12 @@ def test_general_rss_fetch_uses_all_configured_feed_capacity(tmp_path, monkeypat
     ).fetch_general_news(force_refresh=True)
 
     assert captured["limit"] == 40
+
+def test_published_age_uses_minutes_hours_days_and_weeks():
+    now = datetime.now(timezone.utc)
+
+    assert general_news_service._published_age(now - timedelta(minutes=1)) == "1m"
+    assert general_news_service._published_age(now - timedelta(hours=23)) == "23h"
+    assert general_news_service._published_age(now - timedelta(days=1)) == "1 Day"
+    assert general_news_service._published_age(now - timedelta(days=6)) == "6 Days"
+    assert general_news_service._published_age(now - timedelta(days=14)) == "2 W"

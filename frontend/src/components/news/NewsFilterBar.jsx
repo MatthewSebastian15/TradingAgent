@@ -10,7 +10,6 @@ const NEWS_CATEGORIES = [
   { key: 'forex', label: 'FOREX' },
   { key: 'commodities', label: 'COMMODITIES' },
   { key: 'regulatory', label: 'REGULATORY' },
-  { key: 'indonesia', label: 'INDONESIA' },
 ];
 
 export default function NewsFilterBar({ selectedCategory, onChange, onRefresh }) {
@@ -23,7 +22,9 @@ export default function NewsFilterBar({ selectedCategory, onChange, onRefresh })
             type="button"
             variant={selectedCategory === item.key ? 'default' : 'outline'}
             size="sm"
-            onClick={() => onChange(item.key)}
+            onClick={() => {
+              if (selectedCategory !== item.key) onChange(item.key);
+            }}
             className={
               selectedCategory === item.key
                 ? 'terminal-news-filter-tab h-8 rounded-full bg-bloomberg-orange px-3 font-mono text-xs font-bold text-black shadow-sm shadow-bloomberg-orange/20 hover:bg-bloomberg-orange/90'
