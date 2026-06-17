@@ -202,3 +202,38 @@ def test_yfinance_is_not_called_for_general_news():
     source = inspect.getsource(general_news_service).lower()
 
     assert "yfinance" not in source
+
+
+def test_article_description_is_capped_at_35_words(tmp_path, monkeypatch):
+    long_summary = " ".join(f"word{index}" for index in range(1, 50))
+    _patch_rss(monkeypatch, [_article("Stocks gain after earnings", summary=long_summary)])
+
+    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(force_refresh=True)
+
+    assert len(result["articles"][0]["description"].split()) == 35
+    assert len(result["articles"][0]["summary"].split()) == 35
+
+
+def test_general_rss_fetch_uses_all_configured_feed_capacity(tmp_path, monkeypatch):
+    captured = {}
+
+    class FakeRSSProvider:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def fetch_news(self, *_args, **kwargs):
+            captured.update(kwargs)
+            return ProviderFetchResult(provider="rss_context", status="success", articles=[])
+
+    monkeypatch.setattr(general_news_service, "RSSContextProvider", FakeRSSProvider)
+
+    GeneralNewsService(
+        _config(
+            tmp_path,
+            rss_max_feeds=8,
+            rss_max_items_per_feed=5,
+            cache_enabled=False,
+        )
+    ).fetch_general_news(force_refresh=True)
+
+    assert captured["limit"] == 40

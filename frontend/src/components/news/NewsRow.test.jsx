@@ -17,34 +17,37 @@ describe('NewsRow', () => {
     vi.useRealTimers();
   });
 
-  it('renders compact 3-line article with relative hour format', () => {
+  it('renders the source, category, date, headline, and 35-word capped description', () => {
     render(
       <NewsRow
         article={{
           title: 'Bitcoin slips as traders await macro data',
-          summary: 'Bloomberg Bitcoin slips as traders await macro data.',
+          summary:
+            'Bitcoin slipped as traders waited for macro data, policy signals, liquidity updates, ETF flows, bond market moves, dollar strength, derivatives positioning, and broader risk appetite across global markets before adding exposure again today while desks reviewed overnight liquidity conditions and volatility risk.',
           url: 'https://example.com/news',
           source: 'Bloomberg',
+          category: 'crypto',
           published_at: '2026-06-15T01:00:00Z',
         }}
       />
     );
 
     expect(screen.getByText('Bloomberg')).toBeInTheDocument();
-    expect(screen.getByText('11h')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Bitcoin slips as traders await macro data' })).toHaveAttribute(
-      'href',
-      'https://example.com/news'
-    );
-    expect(screen.getByText((_, element) => element?.textContent === ' - Bloomberg')).toBeInTheDocument();
-    expect(screen.getByText('Bloomberg Bitcoin slips as traders await macro data.')).toBeInTheDocument();
+    expect(screen.getByText('CRYPTO')).toBeInTheDocument();
+    expect(screen.getByText('2026-06-15')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Bitcoin slips as traders await macro data' })
+    ).toHaveAttribute('href', 'https://example.com/news');
+    expect(
+      screen.getByText(/Bitcoin slipped as traders waited/).textContent.split(/\s+/)
+    ).toHaveLength(35);
     expect(screen.queryByText(/2026-06-15T01:00:00Z/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Impact/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Sentiment/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/OPEN ORIGINAL SOURCE/i)).not.toBeInTheDocument();
   });
 
-  it('renders plain title when url is missing and hides provider names as publisher', () => {
+  it('renders plain title when url is missing and avoids provider names as data source', () => {
     render(
       <NewsRow
         article={{
@@ -52,6 +55,7 @@ describe('NewsRow', () => {
           summary: 'Market update summary.',
           source: 'rss_context',
           source_domain: 'example.com',
+          category: 'market',
           published_at: '2026-06-14T01:00:00Z',
         }}
       />
@@ -59,8 +63,9 @@ describe('NewsRow', () => {
 
     expect(screen.queryByRole('link', { name: 'Market update' })).not.toBeInTheDocument();
     expect(screen.getByText('Market update')).toBeInTheDocument();
-    expect(screen.getByText('1 day')).toBeInTheDocument();
-    expect(screen.getByText((_, element) => element?.textContent === ' - example.com')).toBeInTheDocument();
-    expect(screen.queryByText((_, element) => element?.textContent === ' - rss_context')).not.toBeInTheDocument();
+    expect(screen.getByText('2026-06-14')).toBeInTheDocument();
+    expect(screen.getByText('MARKET')).toBeInTheDocument();
+    expect(screen.getByText('example.com')).toBeInTheDocument();
+    expect(screen.queryByText('rss_context')).not.toBeInTheDocument();
   });
 });

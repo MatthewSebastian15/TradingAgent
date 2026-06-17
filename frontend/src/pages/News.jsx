@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import Navbar from '../components/Navbar';
 import NewsFilterBar from '../components/news/NewsFilterBar';
@@ -6,13 +6,25 @@ import NewsList from '../components/news/NewsList';
 import TickerTape from '../components/TickerTape';
 import { useGeneralNews } from '../hooks/useGeneralNews';
 
+function normalizeCategory(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase();
+}
+
 export default function News() {
   const [category, setCategory] = useState('all');
   const { data, status, error, reload } = useGeneralNews({
-    category,
+    category: 'all',
     windowDays: 7,
-    limit: 50,
+    limit: 100,
   });
+
+  const articles = useMemo(() => data?.articles || [], [data]);
+  const displayedArticles = useMemo(() => {
+    if (category === 'all') return articles;
+    return articles.filter((article) => normalizeCategory(article?.category) === category);
+  }, [articles, category]);
 
   return (
     <div className="min-h-screen bg-bloomberg-bg text-bloomberg-white">
@@ -35,7 +47,7 @@ export default function News() {
               </div>
             )}
 
-            <NewsList articles={data?.articles || []} />
+            <NewsList articles={displayedArticles} />
           </CardContent>
         </Card>
       </main>
