@@ -131,7 +131,7 @@ const FUNDAMENTAL_CHART_GROUPS = [
     charts: [
       {
         id: 'cashflow-free-cash-flow',
-        title: 'Free Cash Flow',
+        title: 'B. Free Cash Flow',
         description: 'Shows cash available after capital expenditure.',
         type: 'bar',
         metrics: ['Free Cash Flow'],
@@ -417,7 +417,7 @@ const metricGroupRow = (key, label, format = METRIC_FORMAT_TYPES[label]) => ({ k
 const FUNDAMENTAL_TABLE_GROUPS = {
   income: [
     {
-      title: 'Revenue & Gross Profit',
+      title: 'A. Revenue & Gross Profit',
       metrics: [
         metricGroupRow('revenue', 'Revenue', 'currency_scaled'),
         metricGroupRow('revenue_growth', 'Revenue Growth (%)', 'percent'),
@@ -427,7 +427,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Operating Performance',
+      title: 'B. Operating Performance',
       metrics: [
         metricGroupRow('ebitda', 'EBITDA', 'currency_scaled'),
         metricGroupRow('ebitda_growth', 'EBITDA Growth (%)', 'percent'),
@@ -439,7 +439,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Profitability',
+      title: 'C. Profitability',
       metrics: [
         metricGroupRow('net_profit', 'Net Profit', 'currency_scaled'),
         metricGroupRow('net_profit_growth', 'Net Profit Growth (%)', 'percent'),
@@ -450,7 +450,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Per Share & Financing Cost',
+      title: 'D. Per Share & Financing Cost',
       metrics: [
         metricGroupRow('eps', 'EPS', 'per_share'),
         metricGroupRow('interest_expense', 'Interest Expense', 'currency_scaled'),
@@ -459,7 +459,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
   ],
   balance_sheet: [
     {
-      title: 'Asset Structure',
+      title: 'A. Asset Structure',
       metrics: [
         metricGroupRow('total_assets', 'Total Assets', 'currency_scaled'),
         metricGroupRow('current_assets', 'Current Assets', 'currency_scaled'),
@@ -467,7 +467,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Liability & Debt',
+      title: 'B. Liability & Debt',
       metrics: [
         metricGroupRow('total_liabilities', 'Total Liabilities', 'currency_scaled'),
         metricGroupRow('current_liabilities', 'Current Liabilities', 'currency_scaled'),
@@ -478,7 +478,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Equity & Book Value',
+      title: 'C. Equity & Book Value',
       metrics: [
         metricGroupRow('total_equity', 'Total Equity', 'currency_scaled'),
         metricGroupRow('bvps', 'BVPS', 'per_share'),
@@ -486,7 +486,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Liquidity',
+      title: 'D. Liquidity',
       metrics: [
         metricGroupRow('cash_ratio', 'Cash Ratio', 'ratio'),
         metricGroupRow('current_ratio', 'Current Ratio', 'ratio'),
@@ -495,13 +495,13 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Capital Efficiency',
+      title: 'E. Capital Efficiency',
       metrics: [metricGroupRow('invested_capital', 'Invested Capital', 'currency_scaled')],
     },
   ],
   cash_flow: [
     {
-      title: 'Core Cash Flow',
+      title: 'A. Core Cash Flow',
       metrics: [
         metricGroupRow('operating_cash_flow', 'Operating Cash Flow', 'currency_scaled'),
         metricGroupRow('cfo_to_net_income', 'CFO / Net Income', 'ratio'),
@@ -509,7 +509,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Free Cash Flow',
+      title: 'B. Free Cash Flow',
       metrics: [
         metricGroupRow('free_cash_flow', 'Free Cash Flow', 'currency_scaled'),
         metricGroupRow('fcf_growth', 'FCF Growth (%)', 'percent'),
@@ -519,7 +519,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Investment Activity',
+      title: 'C. Investment Activity',
       metrics: [
         metricGroupRow('investing_cash_flow', 'Investing Cash Flow', 'currency_scaled'),
         metricGroupRow('capital_expenditure', 'Capital Expenditure', 'currency_scaled'),
@@ -527,7 +527,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Financing Activity',
+      title: 'D. Financing Activity',
       metrics: [
         metricGroupRow('financing_cash_flow', 'Financing Cash Flow', 'currency_scaled'),
         metricGroupRow('cash_dividends_paid', 'Cash Dividends Paid', 'currency_scaled'),
@@ -535,7 +535,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Non-Cash & Working Capital Adjustment',
+      title: 'E. Non-Cash & Working Capital Adjustment',
       metrics: [
         metricGroupRow('depreciation_amortization', 'Depreciation & Amortization', 'currency_scaled'),
         metricGroupRow('change_in_working_capital', 'Change in Working Capital', 'currency_scaled'),
@@ -545,7 +545,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
   ],
   ratios: [
     {
-      title: 'Profitability Ratios',
+      title: 'A. Profitability Ratios',
       metrics: [
         metricGroupRow('roe', 'ROE (%)', 'percent'),
         metricGroupRow('roa', 'ROA (%)', 'percent'),
@@ -555,7 +555,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Leverage & Solvency',
+      title: 'B. Leverage & Solvency',
       metrics: [
         metricGroupRow('der', 'DER', 'ratio'),
         metricGroupRow('debt_to_ebitda', 'Debt / EBITDA', 'ratio'),
@@ -564,7 +564,7 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Valuation Ratios',
+      title: 'C. Valuation Ratios',
       metrics: [
         metricGroupRow('pe', 'P/E', 'ratio'),
         metricGroupRow('pbv', 'P/BV', 'ratio'),
@@ -577,14 +577,14 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Dividend Ratios',
+      title: 'D. Dividend Ratios',
       metrics: [
         metricGroupRow('dividend_yield', 'Dividend Yield (%)', 'percent'),
         metricGroupRow('payout_ratio', 'Payout Ratio (%)', 'percent'),
       ],
     },
     {
-      title: 'Market Value',
+      title: 'E. Market Value',
       metrics: [
         metricGroupRow('market_cap', 'Market Cap', 'currency_scaled'),
         metricGroupRow('enterprise_value', 'Enterprise Value', 'currency_scaled'),
@@ -592,21 +592,21 @@ const FUNDAMENTAL_TABLE_GROUPS = {
       ],
     },
     {
-      title: 'Share Data',
+      title: 'F. Share Data',
       metrics: [
         metricGroupRow('shares_outstanding', 'Shares Outstanding', 'number'),
         metricGroupRow('float_shares', 'Float Shares', 'number'),
       ],
     },
     {
-      title: 'Per Share Metrics',
+      title: 'G. Per Share Metrics',
       metrics: [
         metricGroupRow('revenue_per_share', 'Revenue Per Share', 'per_share'),
         metricGroupRow('cash_per_share', 'Cash Per Share', 'per_share'),
       ],
     },
     {
-      title: 'Efficiency Ratios',
+      title: 'H. Efficiency Ratios',
       metrics: [metricGroupRow('asset_turnover', 'Asset Turnover', 'ratio')],
     },
   ],

@@ -28,6 +28,16 @@ function displayPeriodLabel(period) {
   return raw || '-';
 }
 
+const FUNDAMENTAL_DISPLAY_START_YEAR = 2023;
+
+function periodYear(period) {
+  const label = displayPeriodLabel(period);
+  const labelYear = label.match(/(?:FY|Q[1-4])\s(\d{4})$/i);
+  if (labelYear) return Number(labelYear[1]);
+  const year = expandYear(period?.year || period?.fiscal_year);
+  return year || null;
+}
+
 function periodSortValue(period) {
   if (period?.sort_key) return String(period.sort_key);
   const label = displayPeriodLabel(period);
@@ -42,9 +52,13 @@ function periodSortValue(period) {
 }
 
 function sortPeriodsForDisplay(periods) {
-  return [...periods].sort((left, right) =>
+  const sortedPeriods = [...periods].sort((left, right) =>
     periodSortValue(right).localeCompare(periodSortValue(left))
   );
+  const filteredPeriods = sortedPeriods.filter(
+    (period) => (periodYear(period) || 0) >= FUNDAMENTAL_DISPLAY_START_YEAR
+  );
+  return filteredPeriods.length ? filteredPeriods : sortedPeriods;
 }
 
 function unitSuffix(unit) {
@@ -84,107 +98,11 @@ function formatCellValue(cell, unit) {
   return appendUnit(text, unit);
 }
 
-function cellHasValue(cell) {
-  if (!cell || cell.status === 'unavailable') return false;
-  return !isUnavailableDisplay(cell.display ?? cell.value);
-}
-
-function numericCellValue(cell) {
-  if (!cell || cell.status === 'unavailable') return null;
-  const rawNumber = Number(cell.value);
-  if (Number.isFinite(rawNumber)) return rawNumber;
-  const match = String(cell.display || '')
-    .replace(/,/g, '')
-    .match(/-?\d+(\.\d+)?/);
-  if (!match) return null;
-  const displayNumber = Number(match[0]);
-  return Number.isFinite(displayNumber) ? displayNumber : null;
-}
-
-function latestAvailableCell(row, displayPeriods) {
-  for (const period of displayPeriods) {
-    const cell = row.values?.[period.key];
-    if (cellHasValue(cell)) return { period, cell };
-  }
-  return { period: displayPeriods[0], cell: row.values?.[displayPeriods[0]?.key] };
-}
-
-function formatGrowthValue(value) {
-  if (!Number.isFinite(value)) return '-';
-  const prefix = value > 0 ? '+' : '';
-  return `${prefix}${value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')} %`;
-}
-
-function rowGrowthDisplay(row, latestPeriod, displayPeriods) {
-  const latestIndex = displayPeriods.findIndex((period) => period.key === latestPeriod?.key);
-  if (latestIndex < 0) return '-';
-
-  const latestValue = numericCellValue(row.values?.[latestPeriod.key]);
-  const previousPeriod = displayPeriods.slice(latestIndex + 1).find((period) =>
-    Number.isFinite(numericCellValue(row.values?.[period.key]))
-  );
-  const previousValue = numericCellValue(row.values?.[previousPeriod?.key]);
-
-  if (!Number.isFinite(latestValue) || !Number.isFinite(previousValue) || previousValue === 0) {
-    return '-';
-  }
-
-  return formatGrowthValue(((latestValue - previousValue) / Math.abs(previousValue)) * 100);
-}
-
-function statusDisplay(cell) {
-  if (!cell || cell.status === 'unavailable') return '-';
-  const status = String(cell.status || '').trim();
-  return status ? status.toUpperCase() : '-';
-}
-
-function FinancialMetricGroupTable({ periods, rows }) {
+function FinancialTable({ periods, rows, groups }) {
   const displayPeriods = sortPeriodsForDisplay(periods);
+  const rowGroups =
+    Array.isArray(groups) && groups.length ? groups : [{ key: 'metrics', title: null, rows }];
 
-  return (
-    <div className="overflow-x-auto border border-bloomberg-border">
-      <table className="min-w-[520px] w-full border-collapse font-mono text-xs">
-        <thead>
-          <tr className="border-b border-bloomberg-border text-bloomberg-muted">
-            <th className="min-w-[190px] px-3 py-2 text-left whitespace-nowrap">Metric</th>
-            <th className="min-w-[110px] px-3 py-2 text-right whitespace-nowrap">Value</th>
-            <th className="min-w-[110px] px-3 py-2 text-right whitespace-nowrap">YoY / Growth</th>
-            <th className="min-w-[88px] px-3 py-2 text-left whitespace-nowrap">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const latest = latestAvailableCell(row, displayPeriods);
-            return (
-              <tr key={row.key} className="border-b border-bloomberg-border border-opacity-50">
-                <td className="min-w-[190px] px-3 py-2 text-bloomberg-white whitespace-nowrap">
-                  {row.label}
-                </td>
-                <td className="min-w-[110px] px-3 py-2 text-right text-bloomberg-white whitespace-nowrap">
-                  {formatCellValue(latest.cell, row.unit)}
-                </td>
-                <td className="min-w-[110px] px-3 py-2 text-right text-bloomberg-white whitespace-nowrap">
-                  {rowGrowthDisplay(row, latest.period, displayPeriods)}
-                </td>
-                <td className="min-w-[88px] px-3 py-2 text-bloomberg-muted whitespace-nowrap">
-                  {statusDisplay(latest.cell)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-FinancialMetricGroupTable.propTypes = {
-  periods: PropTypes.array.isRequired,
-  rows: PropTypes.array.isRequired,
-};
-
-function FinancialTable({ periods, rows }) {
-  const displayPeriods = sortPeriodsForDisplay(periods);
   return (
     <div className="overflow-x-auto border border-bloomberg-border">
       <table className="min-w-[980px] w-full text-xs font-mono border-collapse">
@@ -201,20 +119,34 @@ function FinancialTable({ periods, rows }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.key} className="border-b border-bloomberg-border border-opacity-50">
-              <td className="sticky left-0 z-10 bg-black px-3 py-2 text-bloomberg-white whitespace-nowrap min-w-[190px]">
-                <div>{row.label}</div>
-              </td>
-              {displayPeriods.map((period) => (
-                <td
-                  key={period.key}
-                  className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap min-w-[86px]"
-                >
-                  <div>{formatCellValue(row.values?.[period.key], row.unit)}</div>
-                </td>
+          {rowGroups.map((group) => (
+            <React.Fragment key={group.key || group.title}>
+              {group.title && (
+                <tr className="border-b border-bloomberg-border bg-bloomberg-surface">
+                  <td
+                    colSpan={displayPeriods.length + 1}
+                    className="px-3 py-2 text-bloomberg-orange uppercase tracking-wider"
+                  >
+                    {group.title}
+                  </td>
+                </tr>
+              )}
+              {(group.rows || []).map((row) => (
+                <tr key={row.key} className="border-b border-bloomberg-border border-opacity-50">
+                  <td className="sticky left-0 z-10 bg-black px-3 py-2 text-bloomberg-white whitespace-nowrap min-w-[190px]">
+                    <div>{row.label}</div>
+                  </td>
+                  {displayPeriods.map((period) => (
+                    <td
+                      key={period.key}
+                      className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap min-w-[86px]"
+                    >
+                      <div>{formatCellValue(row.values?.[period.key], row.unit)}</div>
+                    </td>
+                  ))}
+                </tr>
               ))}
-            </tr>
+            </React.Fragment>
           ))}
         </tbody>
       </table>
@@ -223,16 +155,24 @@ function FinancialTable({ periods, rows }) {
 }
 
 FinancialTable.propTypes = {
+  groups: PropTypes.array,
   periods: PropTypes.array.isRequired,
   rows: PropTypes.array.isRequired,
 };
+
+function sectionRows(section) {
+  if (Array.isArray(section?.rows) && section.rows.length) return section.rows;
+  if (!Array.isArray(section?.groups)) return [];
+  return section.groups.flatMap((group) => group.rows || []);
+}
 
 export default function FinancialHighlightsTable({ financialHighlights }) {
   const periods = financialHighlights?.periods;
   const sections = financialHighlights?.sections;
   const fallbackRows = financialHighlights?.rows;
   const hasSections = Array.isArray(sections) && sections.some((section) => section.rows?.length);
-  const hasGroupedSections = Array.isArray(sections) &&
+  const hasGroupedSections =
+    Array.isArray(sections) &&
     sections.some((section) => section.groups?.some((group) => group.rows?.length));
 
   if (
@@ -280,20 +220,11 @@ export default function FinancialHighlightsTable({ financialHighlights }) {
 
       {hasGroupedSections ? (
         sections.map((section) => (
-          <div key={section.key} className="space-y-3">
-            <div className="font-mono text-xs text-bloomberg-orange uppercase tracking-wider">
+          <div key={section.key}>
+            <div className="font-mono text-xs text-bloomberg-orange uppercase tracking-wider mb-2">
               {section.title}
             </div>
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-              {section.groups.map((group) => (
-                <div key={group.key} className="space-y-2">
-                  <div className="font-mono text-[11px] text-bloomberg-muted uppercase tracking-wider">
-                    {group.title}
-                  </div>
-                  <FinancialMetricGroupTable periods={periods} rows={group.rows} />
-                </div>
-              ))}
-            </div>
+            <FinancialTable periods={periods} rows={sectionRows(section)} groups={section.groups} />
           </div>
         ))
       ) : hasSections ? (

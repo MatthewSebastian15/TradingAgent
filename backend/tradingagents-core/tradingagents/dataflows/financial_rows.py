@@ -18,6 +18,7 @@ class FinancialRow:
     revenue: float | None = None
     gross_profit: float | None = None
     operating_profit: float | None = None
+    operating_expense: float | None = None
     ebitda: float | None = None
     net_profit: float | None = None
     eps: float | None = None
@@ -54,6 +55,7 @@ FINANCIAL_ROW_FIELDS = {
     "revenue",
     "gross_profit",
     "operating_profit",
+    "operating_expense",
     "ebitda",
     "net_profit",
     "eps",
