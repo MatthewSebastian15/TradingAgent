@@ -60,7 +60,12 @@ function LoadingScreen() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
