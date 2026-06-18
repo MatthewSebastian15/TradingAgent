@@ -211,7 +211,11 @@ def detect_sector(
                 "confidence": "medium" if source == "finnhub" else "high",
             }
     if symbol_key in _STATIC_SECTOR_MAP:
-        return {"sector": _STATIC_SECTOR_MAP[symbol_key], "source": "static_map", "confidence": "medium"}
+        return {
+            "sector": _STATIC_SECTOR_MAP[symbol_key],
+            "source": "static_map",
+            "confidence": "medium",
+        }
     if symbol_key.endswith("-USD") or symbol_key.endswith("-USDT"):
         return {"sector": "crypto", "source": "static_map", "confidence": "medium"}
     return {"sector": "unknown", "source": "unknown", "confidence": "low"}
@@ -260,7 +264,8 @@ def _sector_from_payload(symbol: str, payload: dict | None) -> str:
     if not isinstance(payload, dict):
         return "unknown"
     quote_type = " ".join(
-        str(payload.get(key) or "") for key in ("quoteType", "quote_type", "type", "assetType", "asset_type")
+        str(payload.get(key) or "")
+        for key in ("quoteType", "quote_type", "type", "assetType", "asset_type")
     ).lower()
     if "crypto" in quote_type or symbol.endswith("-USD") or symbol.endswith("-USDT"):
         return "crypto"
@@ -284,9 +289,14 @@ def _sector_from_payload(symbol: str, payload: dict | None) -> str:
     ).lower()
     if any(word in text for word in ("bank", "banks", "banking")):
         return "bank"
-    if any(word in text for word in ("oil", "gas", "coal", "mining", "metals", "materials", "commodity")):
+    if any(
+        word in text
+        for word in ("oil", "gas", "coal", "mining", "metals", "materials", "commodity")
+    ):
         return "commodity"
-    if any(word in text for word in ("technology", "software", "semiconductor", "internet", "tech")):
+    if any(
+        word in text for word in ("technology", "software", "semiconductor", "internet", "tech")
+    ):
         return "technology"
     if "consumer" in text:
         return "consumer"

@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, fields
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, fields
 from typing import Any
 
 try:
@@ -101,14 +101,19 @@ def sse_error(exc: Exception) -> dict:
     elif isinstance(exc, asyncio.CancelledError):
         payload = {
             "request_id": request_id_ctx.get(),
-            SseEvent.ERROR.value: {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."},
+            SseEvent.ERROR.value: {
+                "code": "ANALYSIS_CANCELLED",
+                "message": "Analysis was cancelled by the client.",
+            },
         }
     else:
         payload = {
             "request_id": request_id_ctx.get(),
             SseEvent.ERROR.value: {
                 "code": "PIPELINE_FAILED",
-                "message": sanitize_message("Analysis failed. Check backend logs with the request_id."),
+                "message": sanitize_message(
+                    "Analysis failed. Check backend logs with the request_id."
+                ),
             },
         }
     return sse_event(SseEvent.ERROR.value, payload)
@@ -120,10 +125,14 @@ class StreamPipelineContext:
     request_id: str
     queue: asyncio.Queue
     cancel_event: asyncio.Event | None = None
-    preflight_market_data_func: Callable[[AnalysisRequest], Awaitable[None]] = pipeline_runner.preflight_market_data
+    preflight_market_data_func: Callable[[AnalysisRequest], Awaitable[None]] = (
+        pipeline_runner.preflight_market_data
+    )
     get_cancel_manager_func: Callable[[], Awaitable[Any]] = pipeline_runner.get_cancel_manager
     get_executor_func: Callable[[], Awaitable[Any]] = pipeline_runner.get_executor
-    pipeline_worker_func: Callable[..., dict[str, Any]] = pipeline_runner.run_pipeline_with_progress_worker
+    pipeline_worker_func: Callable[..., dict[str, Any]] = (
+        pipeline_runner.run_pipeline_with_progress_worker
+    )
     result_cache: AnalysisResultCache | None = None
     cache_key_func: Callable[[AnalysisRequest], Any] | None = None
     shape_result_func: Callable[[dict[str, Any], str], dict[str, Any]] | None = None
@@ -144,7 +153,9 @@ class StreamContext:
     run_stream_pipeline_func: Callable[..., Awaitable[dict[str, Any]]] | None = None
     get_or_start_analysis_func: Callable[..., Awaitable[dict[str, Any]]] | None = None
     use_cache: bool = False
-    persist_result_func: Callable[[dict[str, Any], AnalysisRequest, str | None, str | None], Awaitable[None]] | None = None
+    persist_result_func: (
+        Callable[[dict[str, Any], AnalysisRequest, str | None, str | None], Awaitable[None]] | None
+    ) = None
     use_deduplication: bool = True
 
 
@@ -175,7 +186,12 @@ def _coerce_stream_pipeline_context(
 def _require_stream_pipeline_dependencies(ctx: StreamPipelineContext) -> None:
     missing = [
         name
-        for name in ("result_cache", "cache_key_func", "shape_result_func", "with_data_fetched_at_func")
+        for name in (
+            "result_cache",
+            "cache_key_func",
+            "shape_result_func",
+            "with_data_fetched_at_func",
+        )
         if getattr(ctx, name) is None
     ]
     if missing:
@@ -203,7 +219,9 @@ async def _run_stream_preflight(ctx: StreamPipelineContext) -> None:
     await ctx.preflight_market_data_func(ctx.req)
 
 
-def _stream_worker_args(ctx: StreamPipelineContext, progress_queue: Any, worker_cancel_event: Any) -> tuple[Any, ...]:
+def _stream_worker_args(
+    ctx: StreamPipelineContext, progress_queue: Any, worker_cancel_event: Any
+) -> tuple[Any, ...]:
     req = ctx.req
     return (
         req.ticker,
@@ -235,7 +253,12 @@ def _start_stream_worker(
     )
 
 
-async def _pump_worker_progress(loop: asyncio.AbstractEventLoop, future: asyncio.Future, progress_queue: Any, queue: asyncio.Queue) -> None:
+async def _pump_worker_progress(
+    loop: asyncio.AbstractEventLoop,
+    future: asyncio.Future,
+    progress_queue: Any,
+    queue: asyncio.Queue,
+) -> None:
     empty_after_done = 0
     while True:
         try:
@@ -280,7 +303,10 @@ async def _wait_for_stream_worker(
         try:
             await asyncio.wait_for(pump_task, timeout=2)
         except TimeoutError:
-            logger.debug("Timed out while draining worker progress queue", extra={"request_id": ctx.request_id})
+            logger.debug(
+                "Timed out while draining worker progress queue",
+                extra={"request_id": ctx.request_id},
+            )
         return fields
     except TimeoutError:
         pipeline_runner.set_cancel_event(worker_cancel_event)
@@ -296,7 +322,9 @@ async def _wait_for_stream_worker(
                 task.cancel()
 
 
-def _shape_stream_pipeline_result(ctx: StreamPipelineContext, fields: dict[str, Any]) -> dict[str, Any]:
+def _shape_stream_pipeline_result(
+    ctx: StreamPipelineContext, fields: dict[str, Any]
+) -> dict[str, Any]:
     assert ctx.with_data_fetched_at_func is not None
     assert ctx.shape_result_func is not None
     fields = ctx.with_data_fetched_at_func(fields)
@@ -322,7 +350,9 @@ async def run_stream_pipeline(
     future = _start_stream_worker(ctx, executor, progress_queue, worker_cancel_event)
     loop = asyncio.get_running_loop()
     pump_task = asyncio.create_task(_pump_worker_progress(loop, future, progress_queue, ctx.queue))
-    cancel_task = asyncio.create_task(_watch_stream_cancel(ctx.cancel_event, worker_cancel_event, future))
+    cancel_task = asyncio.create_task(
+        _watch_stream_cancel(ctx.cancel_event, worker_cancel_event, future)
+    )
     fields = await _wait_for_stream_worker(ctx, future, pump_task, cancel_task, worker_cancel_event)
     shaped = _shape_stream_pipeline_result(ctx, fields)
     if ctx.write_result_cache:
@@ -384,11 +414,14 @@ async def _yield_cached_result(ctx: StreamContext, cached: dict[str, Any]):
     yield sse_event(SseEvent.RESULT.value, payload)
 
 
-async def _run_stream_result_job(ctx: StreamContext, queue: asyncio.Queue, cancel_event: asyncio.Event) -> None:
+async def _run_stream_result_job(
+    ctx: StreamContext, queue: asyncio.Queue, cancel_event: asyncio.Event
+) -> None:
     assert ctx.run_stream_pipeline_func is not None
     assert ctx.get_or_start_analysis_func is not None
     assert ctx.response_payload_func is not None
     try:
+
         async def factory() -> dict[str, Any]:
             return await ctx.run_stream_pipeline_func(ctx.req, ctx.request_id, queue, cancel_event)
 
@@ -457,7 +490,11 @@ async def _yield_live_stream(ctx: StreamContext):
                 task.cancel()
                 logger.info(
                     "SSE client disconnected",
-                    extra={"event": "sse_client_disconnected", "request_id": ctx.request_id, "ticker": ctx.req.ticker},
+                    extra={
+                        "event": "sse_client_disconnected",
+                        "request_id": ctx.request_id,
+                        "ticker": ctx.req.ticker,
+                    },
                 )
                 return
             try:

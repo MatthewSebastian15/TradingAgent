@@ -59,11 +59,15 @@ def test_debug_news_endpoint_is_not_registered_in_production():
     assert response.status_code == 404
 
 
-def test_debug_news_endpoint_is_registered_in_development_with_raw_response_disabled_by_default(monkeypatch):
+def test_debug_news_endpoint_is_registered_in_development_with_raw_response_disabled_by_default(
+    monkeypatch,
+):
     calls = []
     monkeypatch.setattr(
         "routes.news._fetch_news",
-        lambda ticker, **kwargs: calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker),
+        lambda ticker, **kwargs: (
+            calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker)
+        ),
     )
 
     response = _news_client(is_development=True).get("/api/debug/news/BBCA.JK?provider=marketaux")
@@ -85,10 +89,14 @@ def test_debug_news_endpoint_accepts_google_news_light(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "routes.news._fetch_news",
-        lambda ticker, **kwargs: calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker),
+        lambda ticker, **kwargs: (
+            calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker)
+        ),
     )
 
-    response = _news_client(is_development=True).get("/api/debug/news/BBCA.JK?provider=google_news_light")
+    response = _news_client(is_development=True).get(
+        "/api/debug/news/BBCA.JK?provider=google_news_light"
+    )
 
     assert response.status_code == 200
     assert calls[0]["provider"] == "google_news_light"
@@ -98,11 +106,17 @@ def test_debug_news_endpoint_accepts_rss_context_and_yfinance(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "routes.news._fetch_news",
-        lambda ticker, **kwargs: calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker),
+        lambda ticker, **kwargs: (
+            calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker)
+        ),
     )
 
-    rss_response = _news_client(is_development=True).get("/api/debug/news/BBCA.JK?provider=rss_context")
-    yfinance_response = _news_client(is_development=True).get("/api/debug/news/BBCA.JK?provider=yfinance")
+    rss_response = _news_client(is_development=True).get(
+        "/api/debug/news/BBCA.JK?provider=rss_context"
+    )
+    yfinance_response = _news_client(is_development=True).get(
+        "/api/debug/news/BBCA.JK?provider=yfinance"
+    )
 
     assert rss_response.status_code == 200
     assert yfinance_response.status_code == 200
@@ -113,7 +127,9 @@ def test_debug_news_endpoint_runs_full_pipeline_without_provider(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "routes.news._fetch_news",
-        lambda ticker, **kwargs: calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker),
+        lambda ticker, **kwargs: (
+            calls.append({"ticker": ticker, **kwargs}) or _news_response(ticker)
+        ),
     )
 
     response = _news_client(is_development=True).get("/api/debug/news/BBCA.JK")

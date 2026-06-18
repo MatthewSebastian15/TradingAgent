@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 
 from errors import ApiError
-from services.report_service import build_report_context, render_analysis_report_html, validate_report_scope
+from services.report_service import (
+    build_report_context,
+    render_analysis_report_html,
+    validate_report_scope,
+)
 
 
 def _count_words(text: str) -> int:
@@ -125,22 +129,45 @@ def _base_result(**overrides):
                 }
             ],
             "fallback_used": [
-                {"field": "market_cap", "method": "price_times_shares_outstanding", "confidence": "high"}
+                {
+                    "field": "market_cap",
+                    "method": "price_times_shares_outstanding",
+                    "confidence": "high",
+                }
             ],
             "stale_data_warning": [],
             "calculation_notes": ["Risk/reward ratio = expected upside / expected downside"],
         },
         "validation_warnings": ["TAKE_PROFIT_RECOMPUTED"],
         "key_reasons_paragraph": (
-            "The recommendation is supported by improving earnings visibility, resilient margin structure, disciplined balance sheet quality, and a more balanced risk reward setup. "
-            "Price momentum remains constructive, but the model still requires confirmation from fresh market data and reliable vendor inputs before increasing conviction. "
-            "News flow and catalyst quality should be monitored because valuation sensitivity can reduce upside if earnings delivery weakens. "
-            "Position sizing should remain controlled until volatility, liquidity, thesis confirmation, entry discipline, and source reliability improve together."
+            (
+                "The recommendation is supported by improving earnings visibility, resilient "
+                + "margin structure, disciplined balance sheet quality, and a more balanced risk "
+                + "reward setup. "
+            )
+            + (
+                "Price momentum remains constructive, but the model still requires confirmation "
+                + "from fresh market data and reliable vendor inputs before increasing conviction. "
+            )
+            + (
+                "News flow and catalyst quality should be monitored because valuation "
+                + "sensitivity can reduce upside if earnings delivery weakens. "
+            )
+            + (
+                "Position sizing should remain controlled until volatility, liquidity, thesis "
+                + "confirmation, entry discipline, and source reliability improve together."
+            )
         ),
         "key_reasons": [
             "Improving earnings visibility supports the final recommendation.",
-            "Risk reward is more balanced when current price data and technical confirmation are available.",
-            "Position sizing should remain controlled because volatility and data quality still affect conviction.",
+            (
+                "Risk reward is more balanced when current price data and technical confirmation "
+                + "are available."
+            ),
+            (
+                "Position sizing should remain controlled because volatility and data quality "
+                + "still affect conviction."
+            ),
         ],
         "key_catalysts": ["News flow and catalyst quality should be monitored for confirmation."],
         "executive_summary": "Summary text.",
@@ -171,8 +198,12 @@ def _base_result(**overrides):
             "window": "1M",
             "window_label": "1 Month Analysis / 60D Price Window",
             "lookback_days": 60,
-            "points": [{"date": "2026-05-26", "close": 920.15, "adjusted_close": 920.15, "volume": 1000}],
-            "data": [{"date": "2026-05-26", "close": 920.15, "adjusted_close": 920.15, "volume": 1000}],
+            "points": [
+                {"date": "2026-05-26", "close": 920.15, "adjusted_close": 920.15, "volume": 1000}
+            ],
+            "data": [
+                {"date": "2026-05-26", "close": 920.15, "adjusted_close": 920.15, "volume": 1000}
+            ],
             "stats": {
                 "start_price": 900.0,
                 "end_price": 920.15,
@@ -287,7 +318,10 @@ def _base_result(**overrides):
         },
         "financial_highlights": {
             "title": "Key Financial Highlights",
-            "unit_note": "Currency: USD (US Dollar) | Amount figures: in millions (USD Mn) | Percent metrics: shown with %",
+            ("unit_note"): (
+                "Currency: USD (US Dollar) | Amount figures: in millions (USD Mn) | Percent "
+                + "metrics: shown with %"
+            ),
             "periods": [
                 {"key": "FY25", "label": "FY25", "type": "annual", "year": 2025, "quarter": None},
                 {"key": "FY26Q1", "label": "FY26Q1", "type": "quarter", "year": 2026, "quarter": 1},
@@ -335,7 +369,9 @@ def _base_result(**overrides):
     return result
 
 
-def _make_news_item(prefix: str, index: int, *, high: bool = False, scope: str = "company") -> dict[str, object]:
+def _make_news_item(
+    prefix: str, index: int, *, high: bool = False, scope: str = "company"
+) -> dict[str, object]:
     return {
         "title": f"{prefix} News {index}",
         "source": "Reuters" if high else "MarketAux",
@@ -360,7 +396,9 @@ def _make_news_item(prefix: str, index: int, *, high: bool = False, scope: str =
 
 
 def make_result_with_news(high_count: int = 0, full_count: int = 0) -> dict[str, object]:
-    high_items = [_make_news_item("High Impact", index + 1, high=True) for index in range(high_count)]
+    high_items = [
+        _make_news_item("High Impact", index + 1, high=True) for index in range(high_count)
+    ]
     full_items = [_make_news_item("Full", index + 1, high=False) for index in range(full_count)]
     return _base_result(
         news_impact={
@@ -389,7 +427,9 @@ def make_result_with_news(high_count: int = 0, full_count: int = 0) -> dict[str,
 
 
 def test_report_context_uses_final_decision_and_trade_plan_for_valid_buy():
-    report = build_report_context(_base_result(llm_decision="Hold", final_decision="Buy", decision="Buy"))
+    report = build_report_context(
+        _base_result(llm_decision="Hold", final_decision="Buy", decision="Buy")
+    )
 
     assert report["decision"] == "Buy"
     assert report["final_decision"] == "Buy"
@@ -409,9 +449,12 @@ def test_report_context_uses_final_decision_and_trade_plan_for_valid_buy():
         "Position Size Hint",
         "R/R Ratio",
     ]
-    assert any(row["label"] == "R/R Ratio" and row["value"] == "1:3" for row in report["trade_plan_rows"])
+    assert any(
+        row["label"] == "R/R Ratio" and row["value"] == "1:3" for row in report["trade_plan_rows"]
+    )
     assert not any(
-        row["label"] in {"Price Target", "Risk Per Share", "Reward Per Share"} for row in report["trade_plan_rows"]
+        row["label"] in {"Price Target", "Risk Per Share", "Reward Per Share"}
+        for row in report["trade_plan_rows"]
     )
 
 
@@ -453,7 +496,9 @@ def test_html_report_renders_key_reasons_as_paragraph():
 
 def test_html_report_renders_investment_thesis_as_justified_paragraphs():
     html = render_analysis_report_html(
-        build_report_context(_base_result(investment_thesis="First thesis paragraph.\nSecond thesis paragraph."))
+        build_report_context(
+            _base_result(investment_thesis="First thesis paragraph.\nSecond thesis paragraph.")
+        )
     )
 
     assert "investment-thesis" in html
@@ -463,7 +508,9 @@ def test_html_report_renders_investment_thesis_as_justified_paragraphs():
 
 def test_html_report_renders_executive_summary_as_justified_paragraphs():
     html = render_analysis_report_html(
-        build_report_context(_base_result(executive_summary="First summary paragraph.\n\nSecond summary paragraph."))
+        build_report_context(
+            _base_result(executive_summary="First summary paragraph.\n\nSecond summary paragraph.")
+        )
     )
 
     assert '<p class="justified-text summary-paragraph">First summary paragraph.</p>' in html
@@ -486,7 +533,9 @@ def test_html_report_renders_dynamic_financial_highlights():
 
 
 def test_html_report_succeeds_without_financial_highlights():
-    html = render_analysis_report_html(build_report_context(_base_result(financial_highlights=None)))
+    html = render_analysis_report_html(
+        build_report_context(_base_result(financial_highlights=None))
+    )
 
     assert "TradingAgent Analysis Report" in html
     assert "Key Financial Highlights" not in html
@@ -509,7 +558,9 @@ def test_html_report_renders_trimmed_fundamental_sections_and_optional_peers():
             },
             fair_value_range={
                 "primary_method": "P/E",
-                "metric_details": {"base": {"value": 100, "display": "USD 100.00", "status": "calculated"}},
+                "metric_details": {
+                    "base": {"value": 100, "display": "USD 100.00", "status": "calculated"}
+                },
                 "data_quality": quality,
             },
             scenario_analysis={
@@ -520,11 +571,19 @@ def test_html_report_renders_trimmed_fundamental_sections_and_optional_peers():
                     "assumption": "Lower growth",
                 }
             },
-            quality_of_earnings={"metric_details": {"cfo_to_net_income": metric}, "data_quality": quality},
+            quality_of_earnings={
+                "metric_details": {"cfo_to_net_income": metric},
+                "data_quality": quality,
+            },
             balance_sheet_risk={"metric_details": {"der": metric}, "data_quality": quality},
-            dividend_quality={"metric_details": {"dividend_yield_percent": metric}, "data_quality": quality},
+            dividend_quality={
+                "metric_details": {"dividend_yield_percent": metric},
+                "data_quality": quality,
+            },
             peer_comparison={
-                "metrics": [{"ticker": "NVDA", "company_name": "NVIDIA Corporation", "pe": "10.00x"}],
+                "metrics": [
+                    {"ticker": "NVDA", "company_name": "NVIDIA Corporation", "pe": "10.00x"}
+                ],
                 "data_quality": quality,
             },
         )
@@ -595,12 +654,17 @@ def test_html_report_formats_canonical_company_profile_metrics():
         "current_price": 9_800,
     }
 
-    report = build_report_context(_base_result(ticker="BBCA.JK", market="ID", company_profile=company_profile))
+    report = build_report_context(
+        _base_result(ticker="BBCA.JK", market="ID", company_profile=company_profile)
+    )
 
     assert {"label": "Market Cap", "value": "1,205,000.0 IDR Bn"} in report["company_profile_rows"]
-    assert {"label": "Shares Outstanding", "value": "123,275,050,000"} in report["shares_ownership_rows"]
+    assert {"label": "Shares Outstanding", "value": "123,275,050,000"} in report[
+        "shares_ownership_rows"
+    ]
     assert all(
-        row["label"] not in {"Insider Ownership", "Institutional Ownership", "Public/Other Ownership"}
+        row["label"]
+        not in {"Insider Ownership", "Institutional Ownership", "Public/Other Ownership"}
         for row in report["shares_ownership_rows"]
     )
     assert not any(row["label"] == "Current Price" for row in report["company_profile_rows"])
@@ -690,7 +754,9 @@ def test_report_excludes_high_impact_from_full_news_items():
 
 def test_report_does_not_fallback_to_related_when_full_news_list_is_empty():
     result = make_result_with_news(high_count=1, full_count=0)
-    result["related_news"] = {"items": [{"title": "Legacy duplicate", "url": "https://example.com/legacy"}]}
+    result["related_news"] = {
+        "items": [{"title": "Legacy duplicate", "url": "https://example.com/legacy"}]
+    }
     result["news_impact"]["full_news_list"] = []
 
     report = build_report_context(result)
@@ -723,7 +789,10 @@ def test_html_report_renders_phase_4_risk_data_quality_sections():
     assert "Data Quality Notes" not in html
     assert "Data quality: partial" not in html
     assert "Data quality: complete" not in html
-    assert "Label: expensive. EV/EBITDA is compared with the documented base policy multiple." not in html
+    assert (
+        "Label: expensive. EV/EBITDA is compared with the documented base policy multiple."
+        not in html
+    )
 
 
 def test_html_report_hides_unavailable_price_chart_summary():
@@ -902,7 +971,9 @@ def test_report_context_forces_legacy_ratio_to_one_to_three_for_valid_trade_plan
     report = build_report_context(_base_result(risk_reward_display=None, risk_reward_ratio=5.0))
 
     assert report["show_trade_plan"] is True
-    assert any(row["label"] == "R/R Ratio" and row["value"] == "1:3" for row in report["trade_plan_rows"])
+    assert any(
+        row["label"] == "R/R Ratio" and row["value"] == "1:3" for row in report["trade_plan_rows"]
+    )
     assert not any(row["value"] in {"1:" + "4", "1:" + "5"} for row in report["trade_plan_rows"])
 
 

@@ -79,4 +79,6 @@ def test_sec_returns_clear_message_when_ticker_missing(monkeypatch):
     sec_companyfacts._company_facts.cache_clear()
     monkeypatch.setattr(sec_companyfacts.requests, "get", lambda *a, **k: _response({}))
 
-    assert "No SEC CIK mapping found" in sec_companyfacts.get_balance_sheet("UNKNOWN", "annual", "2026-06-13")
+    assert "No SEC CIK mapping found" in sec_companyfacts.get_balance_sheet(
+        "UNKNOWN", "annual", "2026-06-13"
+    )

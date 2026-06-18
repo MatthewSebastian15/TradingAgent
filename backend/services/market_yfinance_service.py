@@ -160,7 +160,9 @@ def _overview_item_from_history(symbol: str, history: Any) -> dict[str, Any]:
 
 def _build_overview_item(symbol: str) -> dict[str, Any]:
     try:
-        return _overview_item_from_history(symbol, _history_for_symbol(symbol, period="1mo", interval="1d"))
+        return _overview_item_from_history(
+            symbol, _history_for_symbol(symbol, period="1mo", interval="1d")
+        )
     except Exception as exc:
         return {
             "symbol": symbol,
@@ -194,7 +196,9 @@ def _build_overview_items(symbols: list[str]) -> list[dict[str, Any]]:
     fallback_items: dict[str, dict[str, Any]] = {}
     max_workers = min(YFINANCE_WORKERS, len(missing_symbols))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_build_overview_item, symbol): symbol for symbol in missing_symbols}
+        futures = {
+            executor.submit(_build_overview_item, symbol): symbol for symbol in missing_symbols
+        }
         for future in as_completed(futures):
             fallback_items[futures[future]] = future.result()
 
@@ -259,7 +263,9 @@ def _normalize_download_frame(data: Any, symbols: list[str]) -> dict[str, Any]:
     return {symbols[0]: data} if len(symbols) == 1 else {}
 
 
-def _mover_from_history(symbol: str, history: Any, *, require_volume: bool) -> dict[str, Any] | None:
+def _mover_from_history(
+    symbol: str, history: Any, *, require_volume: bool
+) -> dict[str, Any] | None:
     if history is None or getattr(history, "empty", True):
         return None
     close_values = _series_values(history, "Close")
@@ -321,7 +327,9 @@ def get_market_movers(country: str, exchange: str, limit: int) -> dict[str, Any]
     normalized_country = normalize_country(country)
     normalized_exchange = str(exchange or "").strip()
     normalized_limit = int(limit)
-    cache_key = f"market:movers:{normalized_country}:{normalized_exchange.upper()}:{normalized_limit}"
+    cache_key = (
+        f"market:movers:{normalized_country}:{normalized_exchange.upper()}:{normalized_limit}"
+    )
     cached = market_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -339,7 +347,9 @@ def get_market_movers(country: str, exchange: str, limit: int) -> dict[str, Any]
     if missing_symbols:
         max_workers = min(YFINANCE_WORKERS, len(missing_symbols))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(_download_symbol, symbol): symbol for symbol in missing_symbols}
+            futures = {
+                executor.submit(_download_symbol, symbol): symbol for symbol in missing_symbols
+            }
             for future in as_completed(futures):
                 try:
                     frames[futures[future]] = future.result()
@@ -352,7 +362,9 @@ def get_market_movers(country: str, exchange: str, limit: int) -> dict[str, Any]
         if item is not None:
             items.append(item)
 
-    gainers = sorted(items, key=lambda item: item["change_percent"], reverse=True)[:normalized_limit]
+    gainers = sorted(items, key=lambda item: item["change_percent"], reverse=True)[
+        :normalized_limit
+    ]
     losers = sorted(items, key=lambda item: item["change_percent"])[:normalized_limit]
     payload = {
         "country": normalized_country,

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from tradingagents.dataflows.financial_rows import FinancialRow, detect_sector
-from tradingagents.dataflows.fundamental_calculator import calculate_market_aware_metrics, safe_divide
+from tradingagents.dataflows.fundamental_calculator import (
+    calculate_market_aware_metrics,
+    safe_divide,
+)
 from tradingagents.dataflows.normalizers import merge_financial_rows_yfinance_first
 
 
@@ -57,7 +60,9 @@ def test_etf_fund_and_crypto_do_not_crash_without_financials():
 
 def test_bank_excludes_interest_coverage_and_der():
     sector = detect_sector("BBCA.JK", {"sector": "Financial Services", "industry": "Banks"})
-    metrics = calculate_market_aware_metrics([_row(symbol="BBCA.JK", currency="IDR")], market="IDX", sector_classification=sector)
+    metrics = calculate_market_aware_metrics(
+        [_row(symbol="BBCA.JK", currency="IDR")], market="IDX", sector_classification=sector
+    )
     assert sector["sector"] == "bank"
     assert metrics.interest_coverage is None
     assert "interest_coverage" in metrics.unavailable_fields
@@ -75,7 +80,9 @@ def test_finnhub_fallback_does_not_overwrite_yfinance_growth_inputs():
         _row(period="FY2023", revenue=100, net_profit=10, as_of_date="2023-12-31"),
         _row(revenue=120, net_profit=12),
     ]
-    finnhub_rows = [_row(revenue=999, net_profit=999, total_debt=50, source="finnhub", fallback=True)]
+    finnhub_rows = [
+        _row(revenue=999, net_profit=999, total_debt=50, source="finnhub", fallback=True)
+    ]
     merged = merge_financial_rows_yfinance_first(yfinance_rows, finnhub_rows)
     metrics = calculate_market_aware_metrics(merged["rows"], market="US")
 

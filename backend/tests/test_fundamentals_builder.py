@@ -48,7 +48,9 @@ def _vendor_payloads(*, include_ebitda: bool = True) -> dict:
     }
 
 
-def _bundle(*, sector: str = "Technology", include_ebitda: bool = True, peer_payload: dict | None = None) -> dict:
+def _bundle(
+    *, sector: str = "Technology", include_ebitda: bool = True, peer_payload: dict | None = None
+) -> dict:
     vendor_payloads = _vendor_payloads(include_ebitda=include_ebitda)
     highlights = to_dict(
         build_financial_highlights(
@@ -80,15 +82,15 @@ def test_safe_helpers_preserve_zero_and_reject_zero_denominator():
 def test_statement_parser_normalizes_cashflow_outflows_and_new_aliases():
     statements = (
         "# Financial statement frequency: annual\n"
-        ",2025-12-31\n"
-        "Cash And Cash Equivalents,80\n"
-        "Current Liabilities,100\n"
-        "Total Liabilities,400\n"
-        "Total Assets,1000\n"
-        "Operating Income,220\n"
-        "Operating Cash Flow,160\n"
-        "Capital Expenditure,-40\n"
-        "Cash Dividends Paid,-30"
+        + ",2025-12-31\n"
+        + "Cash And Cash Equivalents,80\n"
+        + "Current Liabilities,100\n"
+        + "Total Liabilities,400\n"
+        + "Total Assets,1000\n"
+        + "Operating Income,220\n"
+        + "Operating Cash Flow,160\n"
+        + "Capital Expenditure,-40\n"
+        + "Cash Dividends Paid,-30"
     )
 
     normalized = parse_vendor_financials(
@@ -208,7 +210,9 @@ def test_valuation_marks_profile_market_cap_fallback_as_estimated():
         ticker="TEST",
         analysis_date="2026-01-15",
         financial_highlights=None,
-        vendor_payloads={"yfinance": {"income_statement": {"FY25": {"revenue": 1000, "net_profit": 100}}}},
+        vendor_payloads={
+            "yfinance": {"income_statement": {"FY25": {"revenue": 1000, "net_profit": 100}}}
+        },
         company_profile={"market_cap": 2000},
         current_price=10,
     )
@@ -258,4 +262,6 @@ def test_financial_trends_keep_period_alignment_and_metric_detail_formula():
 
     assert [period["key"] for period in trends["periods"]] == ["FY23", "FY24", "FY25"]
     assert len(trends["metric_details"]["revenue"]) == 3
-    assert trends["metric_details"]["revenue"][-1]["formula"] == "Reported financial statement value"
+    assert (
+        trends["metric_details"]["revenue"][-1]["formula"] == "Reported financial statement value"
+    )

@@ -6,15 +6,32 @@ from difflib import SequenceMatcher
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-TRACKING_QUERY_KEYS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "cmpid", "mod", "ref", "fbclid", "gclid"}
+TRACKING_QUERY_KEYS = {
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "cmpid",
+    "mod",
+    "ref",
+    "fbclid",
+    "gclid",
+}
 
 
 def normalize_url(url: str | None) -> str:
     if not url:
         return ""
     parts = urlsplit(str(url).strip())
-    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k.lower() not in TRACKING_QUERY_KEYS]
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), urlencode(query), ""))
+    query = [
+        (k, v)
+        for k, v in parse_qsl(parts.query, keep_blank_values=True)
+        if k.lower() not in TRACKING_QUERY_KEYS
+    ]
+    return urlunsplit(
+        (parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), urlencode(query), "")
+    )
 
 
 def normalize_title(title: str | None) -> str:
@@ -63,7 +80,9 @@ def deduplicate_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         normalized_url = normalize_url(str(item.get("url") or ""))
         publisher = str(item.get("publisher") or item.get("source") or "").lower().strip()
         published_date = str(item.get("published_at") or item.get("datetime") or "")[:10]
-        publisher_key = f"{publisher}:{published_date}:{normalized_title}" if normalized_title else ""
+        publisher_key = (
+            f"{publisher}:{published_date}:{normalized_title}" if normalized_title else ""
+        )
 
         if not normalized_title:
             continue
@@ -100,7 +119,9 @@ def rank_news(items: list[dict[str, Any]], ticker: str | None = None) -> list[di
         summary = str(item.get("summary") or "")
         related = str(item.get("related_ticker") or item.get("related") or "").upper()
         relevance = float(item.get("relevance_score") or 0)
-        if ticker_text and (ticker_text in related or ticker_text in title.upper() or ticker_text in summary.upper()):
+        if ticker_text and (
+            ticker_text in related or ticker_text in title.upper() or ticker_text in summary.upper()
+        ):
             relevance += 1.0
         event_bonus = 0.4 if str(item.get("event_type") or "general") != "general" else 0.0
         published = _parse_dt(item.get("published_at") or item.get("datetime"))
@@ -110,7 +131,9 @@ def rank_news(items: list[dict[str, Any]], ticker: str | None = None) -> list[di
 
 
 def aggregate_news(
-    vendor_items: dict[str, list[dict[str, Any]]], ticker: str | None = None, limit: int | None = None
+    vendor_items: dict[str, list[dict[str, Any]]],
+    ticker: str | None = None,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     # Backward-compatible limit only. Aggregated news should not be capped after collection.
     _ = limit

@@ -4,7 +4,14 @@ from typing import Any
 
 from tradingagents.financial_highlights.calculator import safe_divide
 
-from .common import POLICY_MULTIPLES, data_quality, effective_ebitda, metric, metric_values, select_primary_method
+from .common import (
+    POLICY_MULTIPLES,
+    data_quality,
+    effective_ebitda,
+    metric,
+    metric_values,
+    select_primary_method,
+)
 
 
 def _fair_value(snapshot: dict[str, Any], method: str | None, multiple: float) -> float | None:
@@ -19,7 +26,9 @@ def _fair_value(snapshot: dict[str, Any], method: str | None, multiple: float) -
         ebitda, _status, _source = effective_ebitda(snapshot)
         equity_value = (
             ebitda * multiple - snapshot["total_debt"] + snapshot["cash"]
-            if ebitda is not None and snapshot.get("total_debt") is not None and snapshot.get("cash") is not None
+            if ebitda is not None
+            and snapshot.get("total_debt") is not None
+            and snapshot.get("cash") is not None
             else None
         )
         return safe_divide(equity_value, snapshot.get("shares_outstanding"))
@@ -50,7 +59,9 @@ def build_fair_value_range(snapshot: dict[str, Any]) -> dict[str, Any]:
                 value,
                 currency=currency,
                 format_type="price",
-                formula=f"{method or 'N/A'} fair value using {policy.get(case, 'N/A')}x policy multiple",
+                formula=(
+                    f"{method or 'N/A'} fair value using {policy.get(case, 'N/A')}x policy multiple"
+                ),
                 status="estimated" if estimated_method else "calculated",
             )
             for case, value in fair_values.items()
@@ -76,7 +87,9 @@ def build_fair_value_range(snapshot: dict[str, Any]) -> dict[str, Any]:
         "method": "multiple-based valuation" if method else "N/A",
         "primary_method": method,
         "assumptions": [
-            f"Base case uses the documented {method} policy multiple." if method else "No valuation method has enough data.",
+            f"Base case uses the documented {method} policy multiple."
+            if method
+            else "No valuation method has enough data.",
             "Bear case uses the lower documented policy multiple.",
             "Bull case uses the higher documented policy multiple.",
         ],

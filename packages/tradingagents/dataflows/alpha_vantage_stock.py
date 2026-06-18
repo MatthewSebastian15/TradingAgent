@@ -58,7 +58,9 @@ def get_stock(symbol: str, start_date: str, end_date: str) -> str:
         return str(filtered)
 
     data = data[available_columns]
-    header = f"# Alpha Vantage daily stock data for {symbol.upper()} from {start_date} to {end_date}\n"
+    header = (
+        f"# Alpha Vantage daily stock data for {symbol.upper()} from {start_date} to {end_date}\n"
+    )
     header += f"# Total records: {len(data)}\n"
     header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
     return header + data.to_csv(index=False)

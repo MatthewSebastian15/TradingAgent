@@ -20,7 +20,10 @@ _SECRET_PATTERNS = [
 
 
 def sanitize_params(params: dict[str, Any]) -> dict[str, Any]:
-    return {key: REDACTED if key.lower() in HIDDEN_PARAM_KEYS else value for key, value in params.items()}
+    return {
+        key: REDACTED if key.lower() in HIDDEN_PARAM_KEYS else value
+        for key, value in params.items()
+    }
 
 
 def sanitize_error(value: Any) -> str:
@@ -58,7 +61,9 @@ class BaseNewsProvider:
         for retry in range(self.max_retries + 1):
             started = time.monotonic()
             try:
-                response = requests.get(self.base_url, params=params, timeout=(5, self.timeout_seconds))
+                response = requests.get(
+                    self.base_url, params=params, timeout=(5, self.timeout_seconds)
+                )
                 attempt["status_code"] = response.status_code
                 attempt["duration_ms"] = round((time.monotonic() - started) * 1000)
                 if response.status_code in {401, 403}:

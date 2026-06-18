@@ -34,8 +34,12 @@ def test_exact_cache_key_changes_when_identity_changes():
     }
 
     assert build_exact_cache_key(**base) != build_exact_cache_key(**{**base, "provider": "openai"})
-    assert build_exact_cache_key(**base) != build_exact_cache_key(**{**base, "model": "gemini-2.5-pro"})
-    assert build_exact_cache_key(**base) != build_exact_cache_key(**{**base, "schema_name": "RiskCommitteeReport"})
+    assert build_exact_cache_key(**base) != build_exact_cache_key(
+        **{**base, "model": "gemini-2.5-pro"}
+    )
+    assert build_exact_cache_key(**base) != build_exact_cache_key(
+        **{**base, "schema_name": "RiskCommitteeReport"}
+    )
 
 
 def test_exact_cache_roundtrip(tmp_path):
@@ -93,7 +97,9 @@ def test_exact_cache_hit_does_not_consume_budget(tmp_path):
     )
     llm = CountingLLM()
     budget = LLMBudget(limit=1)
-    fallback = AnalystReport(title="Fallback", summary="Fallback", key_points=[], risks=[], confidence=0.1)
+    fallback = AnalystReport(
+        title="Fallback", summary="Fallback", key_points=[], risks=[], confidence=0.1
+    )
 
     first = _invoke_once(llm, AnalystReport, "same prompt", fallback, "Market Analyst", budget)
     second = _invoke_once(llm, AnalystReport, "same prompt", fallback, "Market Analyst", budget)
@@ -102,4 +108,3 @@ def test_exact_cache_hit_does_not_consume_budget(tmp_path):
     assert second.title == "Market Report"
     assert llm.calls == 1
     assert budget.snapshot()["used"] == 1
-

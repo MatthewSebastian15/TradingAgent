@@ -41,7 +41,9 @@ def test_run_cache_hit_does_not_count_vendor_call(monkeypatch):
         return "Revenue and earnings are stable."
 
     monkeypatch.setattr(interface, "get_budget", lambda _budget_id: budget)
-    monkeypatch.setitem(interface.VENDOR_METHODS, "get_fundamentals", {"yfinance": fake_fundamentals})
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS, "get_fundamentals", {"yfinance": fake_fundamentals}
+    )
     interface._TOOL_CACHE._data.clear()
 
     with use_config(

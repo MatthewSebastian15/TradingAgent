@@ -45,4 +45,3 @@ def build_exact_cache_key(
         schema_version=schema_version,
         prompt_hash=sha256_text(prompt or ""),
     )
-

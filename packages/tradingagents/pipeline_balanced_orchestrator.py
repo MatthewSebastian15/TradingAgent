@@ -23,7 +23,7 @@ from tradingagents.agents.schemas import (
 )
 from tradingagents.dataflows.config import set_config
 from tradingagents.graph.run_cache import RunCache
-from tradingagents.llm.LLM_router import apply_guardrail, llm_metadata
+from tradingagents.llm.llm_router import apply_guardrail, llm_metadata
 from tradingagents.pipeline_balanced_data import (
     _normalize_time_horizon_months,
     _run_with_config,
@@ -40,7 +40,11 @@ from tradingagents.pipeline_balanced_llm import (
     _research_plan_to_markdown,
     _risk_to_markdown,
 )
-from tradingagents.pipeline_balanced_progress import _emit_data_quality, _emit_progress, _run_tracked
+from tradingagents.pipeline_balanced_progress import (
+    _emit_data_quality,
+    _emit_progress,
+    _run_tracked,
+)
 from tradingagents.pipeline_balanced_prompts import (
     bear_prompt,
     bull_prompt,
@@ -155,16 +159,55 @@ def _fallback_portfolio_executive_summary(ticker: str, time_horizon_text: str) -
     constructing the local safety decision.
     """
     return (
-        f"The final rating for {ticker} is Hold because the pipeline could not produce a fully validated portfolio decision, and protecting capital is safer than forcing a trade from incomplete evidence. "
-        "The most important reason is process reliability: a recommendation is only useful when price, fundamentals, risk controls, and final model output all pass validation together.\n\n"
-        "Recent price action should therefore be treated as context, not as permission to enter. The system may have collected market and news inputs, but a failed final decision layer can hide stale prices, missing provider responses, or unsupported trade levels. "
-        "Any movement that appears attractive must be separated from a verified fundamental driver.\n\n"
-        "Fundamental interpretation also needs caution. Revenue trend, profitability, cash flow, and balance sheet quality may have partial signals, yet the fallback path means those signals were not converted into a clean dashboard-ready decision. "
-        "Financial health should be reviewed again after provider calls and structured output complete normally.\n\n"
-        "The overall risk level is High because data quality and model completeness are both uncertain. The top risks are acting on partial vendor data and relying on a shortened or malformed final thesis. "
-        "Either risk can make allocation, stop-loss, take-profit, and risk/reward fields misleading.\n\n"
-        f"The immediate action is to avoid new exposure for the selected {time_horizon_text} horizon, keep allocation at zero for new trades, and rerun the analysis after the backend returns a clean structured result. "
-        "Existing holders should maintain or reduce risk only through their own verified plan, not this fallback message."
+        f"The final rating for {ticker} is Hold because the pipeline could not produce a fully "
+        "validated portfolio decision, and protecting capital is safer than forcing a trade from "
+        "incomplete evidence. "
+        + (
+            "The most important reason is process reliability: a recommendation is only useful "
+            + "when price, fundamentals, risk controls, and final model output all pass validation "
+            + "together.\n"
+            + "\n"
+        )
+        + (
+            "Recent price action should therefore be treated as context, not as permission to "
+            + "enter. The system may have collected market and news inputs, but a failed final "
+            + "decision layer can hide stale prices, missing provider responses, or unsupported "
+            + "trade levels. "
+        )
+        + (
+            "Any movement that appears attractive must be separated from a verified fundamental "
+            + "driver.\n"
+            + "\n"
+        )
+        + (
+            "Fundamental interpretation also needs caution. Revenue trend, profitability, cash "
+            + "flow, and balance sheet quality may have partial signals, yet the fallback path "
+            + "means those signals were not converted into a clean dashboard-ready decision. "
+        )
+        + (
+            "Financial health should be reviewed again after provider calls and structured "
+            + "output complete normally.\n"
+            + "\n"
+        )
+        + (
+            "The overall risk level is High because data quality and model completeness are both "
+            + "uncertain. The top risks are acting on partial vendor data and relying on a "
+            + "shortened or malformed final thesis. "
+        )
+        + (
+            "Either risk can make allocation, stop-loss, take-profit, and risk/reward fields "
+            + "misleading.\n"
+            + "\n"
+        )
+        + (
+            f"The immediate action is to avoid new exposure for the selected {time_horizon_text} "
+            "horizon, keep allocation at zero for new trades, and rerun the analysis after the "
+            "backend returns a clean structured result. "
+        )
+        + (
+            "Existing holders should maintain or reduce risk only through their own verified "
+            + "plan, not this fallback message."
+        )
     )
 
 
@@ -176,22 +219,87 @@ def _fallback_portfolio_investment_thesis(ticker: str, time_horizon_text: str) -
     invalid, or unparseable content.
     """
     return (
-        f"{ticker} should stay on Hold until the analysis can be verified because the fallback path is a process signal, not a market conviction signal. "
-        "The company may have a valid business, liquid trading, and useful public disclosures, but the final portfolio layer did not produce a clean structured answer. "
-        "A dashboard recommendation must connect business context, price behavior, fundamentals, technical levels, risk controls, and data quality. When that chain breaks, the responsible conclusion is patience.\n\n"
-        "Recent price movement should be read conservatively. The market report may show momentum, reversal, support, or resistance, yet the final decision cannot assume that movement is fundamentally supported when vendor calls or schema validation failed. "
-        "A speculative move can look impressive on a chart while still offering poor entry quality. The application should therefore avoid converting partial price evidence into entry, stop-loss, or take-profit numbers that appear more precise than the source data allows.\n\n"
-        "The fundamental view also remains provisional. Revenue growth, net profit, margins, cash flow quality, debt, liquidity, and shareholder context should be reviewed from official or higher-priority vendors before conviction is raised. "
-        "If those numbers are available, they should support the thesis with period labels and source metadata. If they are missing or inconsistent, the result should reduce confidence rather than invent certainty. "
-        "In this fallback case, financial health is not rejected, but it is not strong enough to override validation risk.\n\n"
-        "Technical interpretation has the same limitation. Support, resistance, trend direction, volume confirmation, and moving-average behavior can help only when the current price anchor is reliable. "
-        "Without a clean price source, any trade level can become cosmetic. A valid Buy would require an entry with a stop below it and a take-profit that preserves exactly 1:3 risk/reward. "
-        "A valid Sell would need the opposite structure. If that cannot be validated, Hold or Avoid new entry is the only defensible action.\n\n"
-        "The risk assessment is High because the main threat is not simply market volatility; it is decision quality. The top macro risk is broad market weakness, the sector risk is a shift in liquidity or sentiment against comparable stocks, and the company-specific risk is acting before official fundamentals and quote data reconcile. "
-        "These risks are made worse when model output is too short, malformed, or repaired by fallback rules.\n\n"
-        f"The final positioning for the selected {time_horizon_text} horizon is to open no new exposure, keep suggested allocation at zero, and wait for a clean rerun. "
-        "The thesis could be upgraded if provider calls complete, official fundamentals reconcile, price data is fresh, and the model returns a validated thesis with actionable risk controls. "
-        "It should be downgraded if data remains missing, price breaks support, or risk/reward cannot be validated."
+        f"{ticker} should stay on Hold until the analysis can be verified because the fallback "
+        "path is a process signal, not a market conviction signal. "
+        + (
+            "The company may have a valid business, liquid trading, and useful public "
+            + "disclosures, but the final portfolio layer did not produce a clean structured "
+            + "answer. "
+        )
+        + (
+            "A dashboard recommendation must connect business context, price behavior, "
+            + "fundamentals, technical levels, risk controls, and data quality. When that chain "
+            + "breaks, the responsible conclusion is patience.\n"
+            + "\n"
+        )
+        + (
+            "Recent price movement should be read conservatively. The market report may show "
+            + "momentum, reversal, support, or resistance, yet the final decision cannot assume "
+            + "that movement is fundamentally supported when vendor calls or schema validation "
+            + "failed. "
+        )
+        + (
+            "A speculative move can look impressive on a chart while still offering poor entry "
+            + "quality. The application should therefore avoid converting partial price evidence "
+            + "into entry, stop-loss, or take-profit numbers that appear more precise than the "
+            + "source data allows.\n"
+            + "\n"
+        )
+        + (
+            "The fundamental view also remains provisional. Revenue growth, net profit, margins, "
+            + "cash flow quality, debt, liquidity, and shareholder context should be reviewed from "
+            + "official or higher-priority vendors before conviction is raised. "
+        )
+        + (
+            "If those numbers are available, they should support the thesis with period labels "
+            + "and source metadata. If they are missing or inconsistent, the result should reduce "
+            + "confidence rather than invent certainty. "
+        )
+        + (
+            "In this fallback case, financial health is not rejected, but it is not strong "
+            + "enough to override validation risk.\n"
+            + "\n"
+        )
+        + (
+            "Technical interpretation has the same limitation. Support, resistance, trend "
+            + "direction, volume confirmation, and moving-average behavior can help only when the "
+            + "current price anchor is reliable. "
+        )
+        + (
+            "Without a clean price source, any trade level can become cosmetic. A valid Buy "
+            + "would require an entry with a stop below it and a take-profit that preserves "
+            + "exactly 1:3 risk/reward. "
+        )
+        + (
+            "A valid Sell would need the opposite structure. If that cannot be validated, Hold "
+            + "or Avoid new entry is the only defensible action.\n"
+            + "\n"
+        )
+        + (
+            "The risk assessment is High because the main threat is not simply market "
+            + "volatility; it is decision quality. The top macro risk is broad market weakness, "
+            + "the sector risk is a shift in liquidity or sentiment against comparable stocks, and "
+            + "the company-specific risk is acting before official fundamentals and quote data "
+            + "reconcile. "
+        )
+        + (
+            "These risks are made worse when model output is too short, malformed, or repaired "
+            + "by fallback rules.\n"
+            + "\n"
+        )
+        + (
+            f"The final positioning for the selected {time_horizon_text} horizon is to open no "
+            "new exposure, keep suggested allocation at zero, and wait for a clean rerun. "
+        )
+        + (
+            "The thesis could be upgraded if provider calls complete, official fundamentals "
+            + "reconcile, price data is fresh, and the model returns a validated thesis with "
+            + "actionable risk controls. "
+        )
+        + (
+            "It should be downgraded if data remains missing, price breaks support, or "
+            + "risk/reward cannot be validated."
+        )
     )
 
 
@@ -218,19 +326,31 @@ def _build_portfolio_manager_fallback(
         risk_reward_ratio=None,
         max_drawdown_estimate="Not estimated because final output used fallback.",
         volatility_level=VolatilityLevel.HIGH,
-        position_sizing_reason="Fallback output and/or incomplete data quality require zero new allocation.",
-        rebalancing_action="Maintain position" if has_existing_position else "No position to rebalance",
+        position_sizing_reason=(
+            "Fallback output and/or incomplete data quality require zero new allocation."
+        ),
+        rebalancing_action="Maintain position"
+        if has_existing_position
+        else "No position to rebalance",
         key_catalysts=[],
         key_reasons=[
-            "The final Portfolio Manager response could not be validated, so the backend used a conservative safety fallback.",
-            "Provider or model output should be rerun before any new entry, stop-loss, take-profit, or allocation is trusted.",
+            (
+                "The final Portfolio Manager response could not be validated, so the backend "
+                + "used a conservative safety fallback."
+            ),
+            (
+                "Provider or model output should be rerun before any new entry, stop-loss, "
+                + "take-profit, or allocation is trusted."
+            ),
         ],
         invalidation_conditions=["Clean data and clean model output are not available."],
         price_target=None,
         time_horizon=time_horizon_text,
         current_price=data.last_close_price,
         current_price_as_of=data.last_close_price_as_of or trade_date,
-        current_price_source=data.last_close_price_source if data.last_close_price is not None else None,
+        current_price_source=data.last_close_price_source
+        if data.last_close_price is not None
+        else None,
         llm_decision="Hold",
         final_decision="Hold",
         decision="Hold",
@@ -245,7 +365,10 @@ def _build_portfolio_manager_fallback(
             "volatility_data": "missing",
         },
         validation_warnings=[
-            "Portfolio Manager output used schema-safe fallback because the model response was invalid, short, or unavailable."
+            (
+                "Portfolio Manager output used schema-safe fallback because the model response "
+                + "was invalid, short, or unavailable."
+            )
         ],
     )
 
@@ -299,10 +422,13 @@ def _build_initial_analyst_reports(
             lambda: _invoke_once(
                 quick_llm,
                 AnalystReport,
-                market_analyst_prompt(ticker, trade_date, data, data_quality_json, time_horizon_text),
+                market_analyst_prompt(
+                    ticker, trade_date, data, data_quality_json, time_horizon_text
+                ),
                 _fallback_report(
                     "Market Analyst Report",
-                    f"Market data for {ticker} was collected, but the model did not return a complete market view.",
+                    f"Market data for {ticker} was collected, but the model did not return a "
+                    "complete market view.",
                 ),
                 "Market Analyst",
                 llm_budget,
@@ -322,7 +448,8 @@ def _build_initial_analyst_reports(
                 news_social_prompt(ticker, trade_date, data, data_quality_json, time_horizon_text),
                 _fallback_report(
                     "News and Social Sentiment Report",
-                    f"News and sentiment data for {ticker} was collected, but the model did not return a complete sentiment view.",
+                    f"News and sentiment data for {ticker} was collected, but the model did not "
+                    "return a complete sentiment view.",
                 ),
                 "News + Social Analyst",
                 llm_budget,
@@ -342,7 +469,8 @@ def _build_initial_analyst_reports(
                 fundamentals_prompt(ticker, trade_date, data, data_quality_json, time_horizon_text),
                 _fallback_report(
                     "Fundamentals Analyst Report",
-                    f"Fundamental data for {ticker} was collected, but the model did not return a complete fundamental view.",
+                    f"Fundamental data for {ticker} was collected, but the model did not return "
+                    "a complete fundamental view.",
                 ),
                 "Fundamentals Analyst",
                 llm_budget,
@@ -353,10 +481,14 @@ def _build_initial_analyst_reports(
 
     try:
         analyst_workers = min(max(1, int(config.get("analyst_parallel_workers", 3))), 3)
-        with ThreadPoolExecutor(max_workers=analyst_workers, thread_name_prefix="balanced-analyst") as pool:
+        with ThreadPoolExecutor(
+            max_workers=analyst_workers, thread_name_prefix="balanced-analyst"
+        ) as pool:
             market_future = pool.submit(_run_with_config, config, build_market_report_parallel)
             news_future = pool.submit(_run_with_config, config, build_news_social_report_parallel)
-            fundamentals_future = pool.submit(_run_with_config, config, build_fundamentals_report_parallel)
+            fundamentals_future = pool.submit(
+                _run_with_config, config, build_fundamentals_report_parallel
+            )
             return market_future.result(), news_future.result(), fundamentals_future.result()
     finally:
         if analyst_forwarder is not None:
@@ -440,12 +572,16 @@ def prepare_context(
     depth_debate_rounds = max(
         1, int(depth_config.get("debate_rounds") or config.get("analysis_depth_debate_rounds") or 1)
     )
-    depth_risk_rounds = max(1, int(depth_config.get("risk_rounds") or config.get("analysis_depth_risk_rounds") or 1))
+    depth_risk_rounds = max(
+        1, int(depth_config.get("risk_rounds") or config.get("analysis_depth_risk_rounds") or 1)
+    )
     extra_debate_rounds = max(0, depth_debate_rounds - 2) if analysis_depth == "deep" else 0
     extra_risk_rounds = max(0, depth_risk_rounds - 2) if analysis_depth == "deep" else 0
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
     time_horizon_text = _time_horizon_label(time_horizon_months)
-    llm_budget = LLMBudget(int(config.get("max_total_llm_calls") or config.get("max_gemini_calls", 9)))
+    llm_budget = LLMBudget(
+        int(config.get("max_total_llm_calls") or config.get("max_gemini_calls", 9))
+    )
     pipeline_started_at = time.perf_counter()
     pipeline_timings: dict[str, dict[str, Any]] = {}
     return PipelineContext(
@@ -481,7 +617,10 @@ def collect_market_data(context: PipelineContext) -> MarketDataStageResult:
     cancel_check = context.cancel_check
     pipeline_timings = context.pipeline_timings
     _emit_progress(
-        progress_callback, "news_fetch", "started", "Fetching normalized company news from configured providers..."
+        progress_callback,
+        "news_fetch",
+        "started",
+        "Fetching normalized company news from configured providers...",
     )
     data = _run_tracked(
         progress_callback,
@@ -495,11 +634,14 @@ def collect_market_data(context: PipelineContext) -> MarketDataStageResult:
         progress_callback,
         "news_fetch",
         "completed",
-        f"Normalized company news ready: {(data.news_context or {}).get('articles_found', 0)} article(s).",
+        "Normalized company news ready: "
+        f"{(data.news_context or {}).get('articles_found', 0)} article(s).",
     )
     data_fetched_at = datetime.now(timezone.utc).isoformat()
     data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
-    last_close_text = f"{data.last_close_price:.2f}" if data.last_close_price is not None else "Unavailable"
+    last_close_text = (
+        f"{data.last_close_price:.2f}" if data.last_close_price is not None else "Unavailable"
+    )
     _emit_data_quality(progress_callback, data.data_quality)
 
     return MarketDataStageResult(
@@ -551,8 +693,12 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
     debate_history: list[str] = []
 
     if analysis_depth == "fast":
-        _emit_progress(progress_callback, "bull_researcher", "completed", "Bull debate skipped in fast mode.")
-        _emit_progress(progress_callback, "bear_researcher", "completed", "Bear debate skipped in fast mode.")
+        _emit_progress(
+            progress_callback, "bull_researcher", "completed", "Bull debate skipped in fast mode."
+        )
+        _emit_progress(
+            progress_callback, "bear_researcher", "completed", "Bear debate skipped in fast mode."
+        )
         _record_skipped_timing(
             pipeline_timings,
             "bull_researcher",
@@ -567,23 +713,41 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
         )
         bull = DebateArgument(
             stance="bull",
-            thesis=f"Fast mode uses the analyst reports directly for {ticker} instead of a separate bull debate.",
-            evidence=["Market report completed.", "News/social report completed.", "Fundamentals report completed."],
+            thesis=(
+                f"Fast mode uses the analyst reports directly for {ticker} instead of a separate "
+                "bull debate."
+            ),
+            evidence=[
+                "Market report completed.",
+                "News/social report completed.",
+                "Fundamentals report completed.",
+            ],
             counterargument="Fast mode has less debate depth than balanced/deep mode.",
             risk_flags=["Debate skipped to reduce LLM calls."],
             confidence=max(
                 0.25,
                 min(
                     0.75,
-                    (market_report.confidence + news_social_report.confidence + fundamentals_report.confidence) / 3,
+                    (
+                        market_report.confidence
+                        + news_social_report.confidence
+                        + fundamentals_report.confidence
+                    )
+                    / 3,
                 ),
             ),
             consensus_signal=False,
         )
         bear = DebateArgument(
             stance="bear",
-            thesis=f"Fast mode keeps downside assumptions conservative for {ticker} because no separate bear debate was run.",
-            evidence=["Risk is inferred from analyst report risk sections.", "Data quality warnings are preserved."],
+            thesis=(
+                f"Fast mode keeps downside assumptions conservative for {ticker} because no "
+                "separate bear debate was run."
+            ),
+            evidence=[
+                "Risk is inferred from analyst report risk sections.",
+                "Data quality warnings are preserved.",
+            ],
             counterargument="Balanced/deep mode should be used before high-conviction trades.",
             risk_flags=_limit_unique_text_items(
                 market_report.risks + news_social_report.risks + fundamentals_report.risks,
@@ -617,12 +781,18 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
                 ),
                 DebateArgument(
                     stance="bull",
-                    thesis=f"The bullish case for {ticker} is not strong enough to rate confidently because model output failed.",
+                    thesis=(
+                        f"The bullish case for {ticker} is not strong enough to rate confidently "
+                        "because model output failed."
+                    ),
                     evidence=[
                         "Market, news, and fundamental reports were collected.",
                         "A complete bullish argument was not generated.",
                     ],
-                    counterargument="The absence of a reliable bullish argument weakens any aggressive buy decision.",
+                    counterargument=(
+                        "The absence of a reliable bullish argument weakens any aggressive buy "
+                        + "decision."
+                    ),
                     risk_flags=["Model output fallback used."],
                     confidence=0.35,
                     consensus_signal=False,
@@ -653,12 +823,18 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
                 ),
                 DebateArgument(
                     stance="bear",
-                    thesis=f"The bearish case for {ticker} is incomplete because model output failed, so risk should be treated cautiously.",
+                    thesis=(
+                        f"The bearish case for {ticker} is incomplete because model output "
+                        "failed, so risk should be treated cautiously."
+                    ),
                     evidence=[
                         "Market, news, and fundamental reports were collected.",
                         "A complete bearish argument was not generated.",
                     ],
-                    counterargument="Without a reliable bear case, the final decision should avoid overconfidence.",
+                    counterargument=(
+                        "Without a reliable bear case, the final decision should avoid "
+                        + "overconfidence."
+                    ),
                     risk_flags=["Model output fallback used."],
                     confidence=0.35,
                     consensus_signal=False,
@@ -696,7 +872,10 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
                     + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
                     DebateArgument(
                         stance="bull",
-                        thesis=f"Deep mode could not generate an additional bullish refinement for {ticker}.",
+                        thesis=(
+                            "Deep mode could not generate an additional bullish refinement "
+                            f"for {ticker}."
+                        ),
                         evidence=[
                             "Prior analyst reports remain available.",
                             "The prior debate remains available for review.",
@@ -734,7 +913,10 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
                     + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
                     DebateArgument(
                         stance="bear",
-                        thesis=f"Deep mode could not generate an additional bearish refinement for {ticker}.",
+                        thesis=(
+                            "Deep mode could not generate an additional bearish refinement "
+                            f"for {ticker}."
+                        ),
                         evidence=[
                             "Prior analyst reports remain available.",
                             "The prior debate remains available for review.",
@@ -774,8 +956,14 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
             ResearchPlanLite(
                 recommendation=PortfolioRating.HOLD,
                 confidence=0.35,
-                rationale="The evidence is incomplete or the research manager call failed, so the safest recommendation is Hold until the analysis is verified.",
-                strategic_actions="Avoid new exposure until data quality, model output, and key risk/reward assumptions are reviewed.",
+                rationale=(
+                    "The evidence is incomplete or the research manager call failed, so the "
+                    + "safest recommendation is Hold until the analysis is verified."
+                ),
+                strategic_actions=(
+                    "Avoid new exposure until data quality, model output, and key risk/reward "
+                    + "assumptions are reviewed."
+                ),
             ),
             "Research Manager",
             llm_budget,
@@ -792,11 +980,16 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
         lambda: _invoke_once(
             quick_llm,
             TraderProposal,
-            trader_prompt(ticker, trade_date, time_horizon_text, market_md, investment_plan, data_quality_json),
+            trader_prompt(
+                ticker, trade_date, time_horizon_text, market_md, investment_plan, data_quality_json
+            ),
             TraderProposal(
                 confidence=0.35,
                 action=TraderAction.HOLD,
-                reasoning="The balanced pipeline could not generate a reliable trader proposal, so no new trade should be opened.",
+                reasoning=(
+                    "The balanced pipeline could not generate a reliable trader proposal, so no "
+                    + "new trade should be opened."
+                ),
                 entry_price=None,
                 stop_loss=None,
                 suggested_allocation_percent=0.0,
@@ -830,8 +1023,13 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
         risk_report = RiskCommitteeReport(
             overall_risk_level="Medium" if data.data_quality.price_data == "ok" else "High",
             aggressive_view="Fast mode skips a separate aggressive risk debate to save LLM calls.",
-            neutral_view="Use the trader proposal with conservative sizing and verify manually before increasing exposure.",
-            conservative_view="Prefer Hold or small allocation until balanced/deep analysis confirms the setup.",
+            neutral_view=(
+                "Use the trader proposal with conservative sizing and verify manually before "
+                + "increasing exposure."
+            ),
+            conservative_view=(
+                "Prefer Hold or small allocation until balanced/deep analysis confirms the setup."
+            ),
             key_risks=list(
                 dict.fromkeys(
                     (data.data_quality.warnings or [])
@@ -840,7 +1038,10 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
                     + fundamentals_report.risks
                 )
             )[:8],
-            mitigation_plan="Keep sizing small, require a clear stop-loss, and rerun balanced/deep mode before a high-conviction trade.",
+            mitigation_plan=(
+                "Keep sizing small, require a clear stop-loss, and rerun balanced/deep mode "
+                + "before a high-conviction trade."
+            ),
             confidence=0.45,
         )
     else:
@@ -865,14 +1066,22 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
                 ),
                 RiskCommitteeReport(
                     overall_risk_level="High",
-                    aggressive_view="The opportunity cannot be assessed aggressively because the risk model call failed.",
+                    aggressive_view=(
+                        "The opportunity cannot be assessed aggressively because the risk model "
+                        + "call failed."
+                    ),
                     neutral_view="Hold is preferred until the analysis is verified.",
-                    conservative_view="Avoid new exposure until reliable downside controls are available.",
+                    conservative_view=(
+                        "Avoid new exposure until reliable downside controls are available."
+                    ),
                     key_risks=[
                         "Risk committee model output fallback used.",
                         "Data and model output should be reviewed before trading.",
                     ],
-                    mitigation_plan="Use no new allocation or a very small test position only after manual review.",
+                    mitigation_plan=(
+                        "Use no new allocation or a very small test position only after manual "
+                        + "review."
+                    ),
                     confidence=0.35,
                 ),
                 "Risk Committee",
@@ -904,11 +1113,20 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
                     ),
                     RiskCommitteeReport(
                         overall_risk_level="High",
-                        aggressive_view="Deep mode could not generate an extra aggressive risk review.",
-                        neutral_view="Use the previous risk committee output until this deep review is verified.",
-                        conservative_view="Avoid increasing exposure when the deep risk review falls back.",
+                        aggressive_view=(
+                            "Deep mode could not generate an extra aggressive risk review."
+                        ),
+                        neutral_view=(
+                            "Use the previous risk committee output until this deep review is "
+                            + "verified."
+                        ),
+                        conservative_view=(
+                            "Avoid increasing exposure when the deep risk review falls back."
+                        ),
                         key_risks=["Deep risk review fallback used."],
-                        mitigation_plan="Keep the previous risk controls and manually verify sizing.",
+                        mitigation_plan=(
+                            "Keep the previous risk controls and manually verify sizing."
+                        ),
                         confidence=0.35,
                     ),
                     f"Risk Committee R{round_number}",
@@ -991,7 +1209,9 @@ def aggregate_decision(
         current_price=data.last_close_price,
         ticker=ticker,
         current_price_as_of=data.last_close_price_as_of,
-        current_price_source=data.last_close_price_source if data.last_close_price is not None else None,
+        current_price_source=data.last_close_price_source
+        if data.last_close_price is not None
+        else None,
         has_existing_position=bool(has_existing_position),
         position_quantity=position_quantity,
         average_entry_price=average_entry_price,
@@ -1000,11 +1220,15 @@ def aggregate_decision(
     )
     safety_context = getattr(data, "safety_prompt_context", None)
     if safety_context is not None:
-        guarded_action, guardrail_warnings = apply_guardrail(safety_context, _decision_action(portfolio_decision))
+        guarded_action, guardrail_warnings = apply_guardrail(
+            safety_context, _decision_action(portfolio_decision)
+        )
         if guardrail_warnings:
             _append_guardrail_warnings(data, portfolio_decision, guardrail_warnings)
         if guarded_action == "WAIT" and _decision_action(portfolio_decision) in {"BUY", "SELL"}:
-            _downgrade_decision_to_wait(portfolio_decision, guardrail_warnings, has_existing_position)
+            _downgrade_decision_to_wait(
+                portfolio_decision, guardrail_warnings, has_existing_position
+            )
 
     return portfolio_decision
 
@@ -1032,7 +1256,9 @@ def _append_guardrail_warnings(data: Any, decision: PortfolioDecision, warnings:
     data.data_quality.warnings = list(dict.fromkeys([*existing_quality_warnings, *warnings]))[:20]
     existing_data_warnings = list(getattr(data, "warnings", []) or [])
     data.warnings = list(dict.fromkeys([*existing_data_warnings, *warnings]))[:20]
-    decision.validation_warnings = list(dict.fromkeys([*(decision.validation_warnings or []), *warnings]))[:20]
+    decision.validation_warnings = list(
+        dict.fromkeys([*(decision.validation_warnings or []), *warnings])
+    )[:20]
 
 
 def _downgrade_decision_to_wait(
@@ -1040,7 +1266,10 @@ def _downgrade_decision_to_wait(
     warnings: list[str],
     has_existing_position: bool,
 ) -> None:
-    reason = next((warning for warning in warnings if "Action downgraded" in warning), warnings[0] if warnings else None)
+    reason = next(
+        (warning for warning in warnings if "Action downgraded" in warning),
+        warnings[0] if warnings else None,
+    )
     decision.rating = PortfolioRating.HOLD
     decision.decision = "Hold"
     decision.final_decision = "Hold"
@@ -1055,7 +1284,9 @@ def _downgrade_decision_to_wait(
     decision.risk_reward_display = None
     decision.risk_per_share = None
     decision.reward_per_share = None
-    decision.rebalancing_action = "Maintain position" if has_existing_position else "No position to rebalance"
+    decision.rebalancing_action = (
+        "Maintain position" if has_existing_position else "No position to rebalance"
+    )
     decision.new_entry_action = "Wait for valid entry setup"
     decision.position_size_hint = (
         "Maintain current position size; no additional exposure suggested."
@@ -1147,7 +1378,10 @@ def build_response(
             "available_data": {
                 "price": data.last_close_price is not None,
                 "technical": bool(data.technical_entry),
-                "news": bool((data.news_context or {}).get("top_articles") or (data.news_context or {}).get("articles")),
+                "news": bool(
+                    (data.news_context or {}).get("top_articles")
+                    or (data.news_context or {}).get("articles")
+                ),
                 "fundamental": bool(data.normalized_period_rows or data.financial_highlights),
                 "ai_signal": False,
             },
@@ -1219,9 +1453,13 @@ def build_response(
         "data_fetched_at": data_fetched_at,
         "last_close_price": data.last_close_price,
         "last_close_price_as_of": data.last_close_price_as_of,
-        "last_close_price_source": data.last_close_price_source if data.last_close_price is not None else None,
+        "last_close_price_source": data.last_close_price_source
+        if data.last_close_price is not None
+        else None,
         "price_source": data.last_close_price_source if data.last_close_price is not None else None,
-        "price_timestamp": data.last_close_price_as_of if data.last_close_price is not None else None,
+        "price_timestamp": data.last_close_price_as_of
+        if data.last_close_price is not None
+        else None,
         "price_is_fallback": bool(data.last_close_price_is_fallback),
         "analysis_depth": analysis_depth,
         "analysis_depth_config": depth_config,
@@ -1250,7 +1488,13 @@ def run_balanced_pipeline(
     average_entry_price: float | None = None,
 ) -> dict[str, Any]:
     """Run the balanced pipeline through explicit maintainable stages."""
-    run_cache = RunCache(str(config.get("job_id") or config.get("request_id") or f"{ticker}:{trade_date}:{time.perf_counter_ns()}"))
+    run_cache = RunCache(
+        str(
+            config.get("job_id")
+            or config.get("request_id")
+            or f"{ticker}:{trade_date}:{time.perf_counter_ns()}"
+        )
+    )
     run_config = dict(config)
     run_config["_run_cache"] = run_cache
     try:

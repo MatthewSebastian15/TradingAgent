@@ -6,7 +6,10 @@ from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_language_instruction,
 )
-from tradingagents.agents.utils.event_data_tools import get_earnings_calendar, get_recommendation_trends
+from tradingagents.agents.utils.event_data_tools import (
+    get_earnings_calendar,
+    get_recommendation_trends,
+)
 from tradingagents.agents.utils.fundamental_data_tools import get_company_profile
 
 
@@ -27,7 +30,9 @@ def _normalized_fundamentals_context(state: dict) -> str:
         "fundamental_score": (state.get("fundamental_analysis") or {}).get("fundamental_score")
         if isinstance(state.get("fundamental_analysis"), dict)
         else None,
-        "chart_based_reasoning": (state.get("fundamental_analysis") or {}).get("chart_based_reasoning")
+        "chart_based_reasoning": (state.get("fundamental_analysis") or {}).get(
+            "chart_based_reasoning"
+        )
         if isinstance(state.get("fundamental_analysis"), dict)
         else [],
     }
@@ -46,10 +51,30 @@ def create_fundamentals_analyst(llm):
         ]
 
         system_message = (
-            "You are a researcher tasked with analyzing normalized fundamental information about a company. Use normalized FinancialRow data, FundamentalMetrics, DataGapReport, fundamental_field_quality, source metadata, fallback metadata, unavailable field reasons, estimated field limitations, and sector classification as the source of truth."
-            + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."
-            + " Use the available tools only for company context, event risk, and external recommendation comparison. Do not treat raw tool financial statements as primary data."
-            + " YFinance is the primary source. Finnhub is fallback only. Fallback fields are not primary. Estimated fields are not actual reported data. Unavailable fields must be named as data limitations. ETF, FUND, and crypto instruments must not be forced to have operating financial statement metrics. Banks must not be forced to have EBITDA or interest coverage. No third provider is used in this Sprint 3 fundamental pipeline."
+            (
+                "You are a researcher tasked with analyzing normalized fundamental information "
+                + "about a company. Use normalized FinancialRow data, FundamentalMetrics, "
+                + "DataGapReport, fundamental_field_quality, source metadata, fallback metadata, "
+                + "unavailable field reasons, estimated field limitations, and sector "
+                + "classification as the source of truth."
+            )
+            + (
+                " Make sure to append a Markdown table at the end of the report to organize key "
+                + "points in the report, organized and easy to read."
+            )
+            + (
+                " Use the available tools only for company context, event risk, and external "
+                + "recommendation comparison. Do not treat raw tool financial statements as "
+                + "primary data."
+            )
+            + (
+                " YFinance is the primary source. Finnhub is fallback only. Fallback fields are "
+                + "not primary. Estimated fields are not actual reported data. Unavailable fields "
+                + "must be named as data limitations. ETF, FUND, and crypto instruments must not "
+                + "be forced to have operating financial statement metrics. Banks must not be "
+                + "forced to have EBITDA or interest coverage. No third provider is used in this "
+                + "Sprint 3 fundamental pipeline."
+            )
             + get_language_instruction()
         )
 
@@ -58,14 +83,23 @@ def create_fundamentals_analyst(llm):
                 (
                     "system",
                     "You are a helpful AI assistant, collaborating with other assistants."
-                    " Use the provided tools to progress towards answering the question."
-                    " If you are unable to fully answer, that's OK; another assistant with different tools"
-                    " will help where you left off. Execute what you can to make progress."
-                    " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
-                    " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    " You have access to the following tools: {tool_names}.\n{system_message}"
-                    "For your reference, the current date is {current_date}. {instrument_context}"
-                    "\nNormalized fundamentals context:\n{normalized_context}",
+                    + " Use the provided tools to progress towards answering the question."
+                    + (
+                        " If you are unable to fully answer, that's OK; another assistant with "
+                        + "different tools"
+                    )
+                    + " will help where you left off. Execute what you can to make progress."
+                    + (
+                        " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: "
+                        + "**BUY/HOLD/SELL** or deliverable,"
+                    )
+                    + (
+                        " prefix your response with FINAL TRANSACTION PROPOSAL: "
+                        + "**BUY/HOLD/SELL** so the team knows to stop."
+                    )
+                    + " You have access to the following tools: {tool_names}.\n{system_message}"
+                    + "For your reference, the current date is {current_date}. {instrument_context}"
+                    + "\nNormalized fundamentals context:\n{normalized_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]

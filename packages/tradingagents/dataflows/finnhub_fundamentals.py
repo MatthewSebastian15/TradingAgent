@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .finnhub_common import FinnhubUnavailableError, build_metadata, handle_finnhub_error, make_api_request
+from .finnhub_common import (
+    FinnhubUnavailableError,
+    build_metadata,
+    handle_finnhub_error,
+    make_api_request,
+)
 
 
 def _dump(payload: dict[str, Any]) -> str:
@@ -30,7 +35,9 @@ def _sourced(value: Any, period: str = "ttm") -> dict[str, Any] | None:
 def get_company_profile(ticker: str, curr_date: str | None = None) -> str:
     del curr_date
     try:
-        payload = make_api_request("/stock/profile2", {"symbol": ticker}, feature_key="enable_fundamentals")
+        payload = make_api_request(
+            "/stock/profile2", {"symbol": ticker}, feature_key="enable_fundamentals"
+        )
         if not isinstance(payload, dict) or not payload:
             raise FinnhubUnavailableError("Company profile response is empty.")
         company = {
@@ -61,7 +68,9 @@ def get_company_profile(ticker: str, curr_date: str | None = None) -> str:
             }
         )
     except Exception as exc:
-        return handle_finnhub_error(f"company profile for {ticker}", exc, fallback_next="alpha_vantage")
+        return handle_finnhub_error(
+            f"company profile for {ticker}", exc, fallback_next="alpha_vantage"
+        )
 
 
 def get_basic_financials(ticker: str) -> str:
@@ -87,7 +96,10 @@ def get_basic_financials(ticker: str) -> str:
             "gross_margin_ttm": (_first_metric(metric, "grossMarginTTM"), "ttm"),
             "operating_margin_ttm": (_first_metric(metric, "operatingMarginTTM"), "ttm"),
             "net_margin_ttm": (_first_metric(metric, "netProfitMarginTTM"), "ttm"),
-            "debt_to_equity": (_first_metric(metric, "totalDebt/totalEquityQuarterly"), "quarterly"),
+            "debt_to_equity": (
+                _first_metric(metric, "totalDebt/totalEquityQuarterly"),
+                "quarterly",
+            ),
             "current_ratio": (_first_metric(metric, "currentRatioQuarterly"), "quarterly"),
             "quick_ratio": (_first_metric(metric, "quickRatioQuarterly"), "quarterly"),
             "revenue_growth_ttm_yoy": (_first_metric(metric, "revenueGrowthTTMYoy"), "ttm"),
@@ -97,7 +109,9 @@ def get_basic_financials(ticker: str) -> str:
             "52_week_low": (_first_metric(metric, "52WeekLow"), "latest"),
         }
         normalized = {
-            key: _sourced(value, period) for key, (value, period) in mappings.items() if _sourced(value, period)
+            key: _sourced(value, period)
+            for key, (value, period) in mappings.items()
+            if _sourced(value, period)
         }
         if not normalized:
             raise FinnhubUnavailableError("No selected basic financial metrics were available.")
@@ -115,7 +129,9 @@ def get_basic_financials(ticker: str) -> str:
             }
         )
     except Exception as exc:
-        return handle_finnhub_error(f"basic financials for {ticker}", exc, fallback_next="alpha_vantage")
+        return handle_finnhub_error(
+            f"basic financials for {ticker}", exc, fallback_next="alpha_vantage"
+        )
 
 
 def get_fundamentals(ticker: str, curr_date: str | None = None) -> str:
@@ -138,7 +154,10 @@ def get_fundamentals(ticker: str, curr_date: str | None = None) -> str:
             continue
 
     if not profile_payload and not metrics_payload:
-        return f"No fundamentals data found for symbol '{ticker}' from Finnhub. {profile_text} {metrics_text}"
+        return (
+            f"No fundamentals data found for symbol '{ticker}' from Finnhub. "
+            f"{profile_text} {metrics_text}"
+        )
 
     payload = {
         "symbol": ticker,
@@ -159,18 +178,27 @@ def get_fundamentals(ticker: str, curr_date: str | None = None) -> str:
     return _dump(payload)
 
 
-def get_financials_reported(ticker: str, freq: str = "quarterly", curr_date: str | None = None) -> str:
+def get_financials_reported(
+    ticker: str, freq: str = "quarterly", curr_date: str | None = None
+) -> str:
     try:
         payload = make_api_request(
             "/stock/financials-reported",
-            {"symbol": ticker, "freq": "annual" if str(freq).lower().startswith("a") else "quarterly"},
+            {
+                "symbol": ticker,
+                "freq": "annual" if str(freq).lower().startswith("a") else "quarterly",
+            },
             feature_key="enable_fundamentals",
         )
         if not isinstance(payload, dict) or not payload.get("data"):
             raise FinnhubUnavailableError("Financials reported response is empty.")
         data = payload.get("data") if isinstance(payload.get("data"), list) else []
         if curr_date:
-            data = [item for item in data if str(item.get("endDate") or item.get("startDate") or "") <= curr_date]
+            data = [
+                item
+                for item in data
+                if str(item.get("endDate") or item.get("startDate") or "") <= curr_date
+            ]
         if not data:
             raise FinnhubUnavailableError("No financial reports remain after date filtering.")
         return _dump(
@@ -178,7 +206,9 @@ def get_financials_reported(ticker: str, freq: str = "quarterly", curr_date: str
                 "symbol": ticker,
                 "source": "finnhub",
                 "reports": data[:8],
-                "metadata": build_metadata("/stock/financials-reported", is_fallback=True, confidence="medium"),
+                "metadata": build_metadata(
+                    "/stock/financials-reported", is_fallback=True, confidence="medium"
+                ),
             }
         )
     except Exception as exc:
@@ -200,7 +230,8 @@ def _filter_statement(text: str, statement_hint: str, ticker: str) -> str:
             relevant = {
                 key: value
                 for key, value in report_data.items()
-                if statement_hint.lower() in str(key).lower() or statement_hint.lower() in json.dumps(value).lower()
+                if statement_hint.lower() in str(key).lower()
+                or statement_hint.lower() in json.dumps(value).lower()
             }
             if relevant:
                 item = dict(report)
@@ -234,7 +265,9 @@ def get_financials(ticker: str, freq: str = "annual") -> str:
                 "source": "finnhub",
                 "freq": normalized_freq,
                 "financials": metric[:8],
-                "metadata": build_metadata("/stock/financials", is_fallback=True, confidence="medium"),
+                "metadata": build_metadata(
+                    "/stock/financials", is_fallback=True, confidence="medium"
+                ),
             }
         )
     except Exception as exc:

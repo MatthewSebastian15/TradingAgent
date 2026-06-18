@@ -5,11 +5,14 @@ from typing import Any
 from tradingagents.utils.normalization import number as _number
 
 
-
 def _metric_value(payload: dict[str, Any] | None, key: str) -> float | None:
     if not isinstance(payload, dict):
         return None
-    detail = payload.get("metric_details", {}).get(key) if isinstance(payload.get("metric_details"), dict) else None
+    detail = (
+        payload.get("metric_details", {}).get(key)
+        if isinstance(payload.get("metric_details"), dict)
+        else None
+    )
     if isinstance(detail, dict):
         value = _number(detail.get("value"))
         if value is not None:
@@ -42,8 +45,12 @@ def _round(value: float | None, digits: int = 2) -> float | None:
 
 def build_risk_adjusted_return(result: dict[str, Any]) -> dict[str, Any]:
     current_price = _first_number(result.get("current_price"), result.get("last_close_price"))
-    scenario = result.get("scenario_analysis") if isinstance(result.get("scenario_analysis"), dict) else {}
-    fair_value = result.get("fair_value_range") if isinstance(result.get("fair_value_range"), dict) else {}
+    scenario = (
+        result.get("scenario_analysis") if isinstance(result.get("scenario_analysis"), dict) else {}
+    )
+    fair_value = (
+        result.get("fair_value_range") if isinstance(result.get("fair_value_range"), dict) else {}
+    )
     target = _first_number(
         result.get("take_profit"),
         _scenario_value(scenario, "base"),
@@ -55,7 +62,11 @@ def build_risk_adjusted_return(result: dict[str, Any]) -> dict[str, Any]:
         _metric_value(fair_value, "bear"),
     )
 
-    upside = ((target - current_price) / current_price * 100) if current_price and target is not None else None
+    upside = (
+        ((target - current_price) / current_price * 100)
+        if current_price and target is not None
+        else None
+    )
     downside = (
         ((downside_anchor - current_price) / current_price * 100)
         if current_price and downside_anchor is not None

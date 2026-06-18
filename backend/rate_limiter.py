@@ -160,15 +160,24 @@ class SQLiteRateLimiterBackend:
 
             timestamps.append(now)
             conn.execute(
-                """
-                INSERT INTO rate_limit_buckets (scope, identifier, timestamps_json, active, last_seen)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(scope, identifier) DO UPDATE SET
-                    timestamps_json = excluded.timestamps_json,
-                    active = excluded.active,
-                    last_seen = excluded.last_seen
-                """,
-                (policy.scope, identifier, json.dumps(timestamps, separators=(",", ":")), active + 1, now),
+                (
+                    "\n"
+                    + "                INSERT INTO rate_limit_buckets (scope, identifier, "
+                    + "timestamps_json, active, last_seen)\n"
+                    + "                VALUES (?, ?, ?, ?, ?)\n"
+                    + "                ON CONFLICT(scope, identifier) DO UPDATE SET\n"
+                    + "                    timestamps_json = excluded.timestamps_json,\n"
+                    + "                    active = excluded.active,\n"
+                    + "                    last_seen = excluded.last_seen\n"
+                    + "                "
+                ),
+                (
+                    policy.scope,
+                    identifier,
+                    json.dumps(timestamps, separators=(",", ":")),
+                    active + 1,
+                    now,
+                ),
             )
 
     def _release_sync(self, identifier: str, policy: RateLimitPolicy) -> None:
@@ -227,7 +236,12 @@ class SQLiteRateLimiterBackend:
                 )
                 """
             )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_rate_limit_last_seen ON rate_limit_buckets (last_seen)")
+            conn.execute(
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_rate_limit_last_seen ON rate_limit_buckets "
+                    + "(last_seen)"
+                )
+            )
 
     def _evict_stale_entries(self, conn: sqlite3.Connection, now: float) -> None:
         conn.execute(
@@ -339,7 +353,9 @@ def validate_service_credential(request: Request) -> str:
     configured_api_key = llm.api_key
     if configured_api_key:
         if not api_key:
-            raise AuthenticationError("Missing API key. Send x-api-key or Authorization: Bearer <key>.")
+            raise AuthenticationError(
+                "Missing API key. Send x-api-key or Authorization: Bearer <key>."
+            )
         if not hmac.compare_digest(api_key, configured_api_key):
             raise AuthenticationError("Invalid API key.")
         return f"service:{_hash(api_key)}"

@@ -56,20 +56,35 @@ PROVIDER_KEY_REQUIREMENTS: dict[str, tuple[tuple[str, ...], str]] = {
         "GOOGLE_API_KEY or GEMINI_API_KEY is required when LLM_PROVIDER=google.",
     ),
     "openai": (("OPENAI_API_KEY",), "OPENAI_API_KEY is required when LLM_PROVIDER=openai."),
-    "anthropic": (("ANTHROPIC_API_KEY",), "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic."),
+    "anthropic": (
+        ("ANTHROPIC_API_KEY",),
+        "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic.",
+    ),
     "deepseek": (("DEEPSEEK_API_KEY",), "DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek."),
-    "openrouter": (("OPENROUTER_API_KEY",), "OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter."),
+    "openrouter": (
+        ("OPENROUTER_API_KEY",),
+        "OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter.",
+    ),
 }
-
 
 
 def _warn_finnhub_runtime_mismatch() -> None:
     api_key = bool(str(os.getenv("FINNHUB_API_KEY") or "").strip())
-    enabled = str(os.getenv("FINNHUB_ENABLED") or "false").strip().lower() in {"1", "true", "yes", "on"}
+    enabled = str(os.getenv("FINNHUB_ENABLED") or "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     if api_key and not enabled:
-        logger.warning("FINNHUB_API_KEY is set but FINNHUB_ENABLED=false; Finnhub calls will be skipped")
+        logger.warning(
+            "FINNHUB_API_KEY is set but FINNHUB_ENABLED=false; Finnhub calls will be skipped"
+        )
     if enabled and not api_key:
-        logger.warning("FINNHUB_ENABLED=true but FINNHUB_API_KEY is empty; Finnhub calls will be skipped")
+        logger.warning(
+            "FINNHUB_ENABLED=true but FINNHUB_API_KEY is empty; Finnhub calls will be skipped"
+        )
+
 
 def validate_startup_config() -> list[str]:
     errors: list[str] = []
@@ -79,7 +94,9 @@ def validate_startup_config() -> list[str]:
     if not provider:
         errors.append("CRITICAL: LLM_PROVIDER is not set. LLM routing will fail.")
     elif provider not in SUPPORTED_PROVIDERS:
-        errors.append(f"CRITICAL: LLM_PROVIDER must be one of: {', '.join(sorted(SUPPORTED_PROVIDERS))}.")
+        errors.append(
+            f"CRITICAL: LLM_PROVIDER must be one of: {', '.join(sorted(SUPPORTED_PROVIDERS))}."
+        )
 
     if not llm.llm_api_key:
         errors.append("CRITICAL: LLM_API_KEY is not set. LLM calls will fail.")
@@ -105,7 +122,9 @@ def validate_startup_config() -> list[str]:
     if IS_PRODUCTION and RATE_LIMIT_STORAGE_BACKEND == "memory":
         errors.append("RATE_LIMIT_STORAGE_BACKEND=memory is not allowed in production.")
     if ANALYSIS_JOB_ROUTING_MODE == "single_instance" and IS_PRODUCTION:
-        logger.warning("ANALYSIS_JOB_ROUTING_MODE=single_instance requires exactly one backend instance.")
+        logger.warning(
+            "ANALYSIS_JOB_ROUTING_MODE=single_instance requires exactly one backend instance."
+        )
 
     _validate_writable_parent(ANALYSIS_DB_PATH, "ANALYSIS_DB_PATH", errors)
     _validate_writable_parent(ANALYSIS_JOB_CACHE_DB_PATH, "ANALYSIS_JOB_CACHE_DB_PATH", errors)
@@ -114,7 +133,9 @@ def validate_startup_config() -> list[str]:
         _validate_writable_parent(RATE_LIMIT_DB_PATH, "RATE_LIMIT_DB_PATH", errors)
 
     if ANALYSIS_MODE != "balanced":
-        errors.append("ANALYSIS_MODE must be balanced. The API server only supports the balanced pipeline.")
+        errors.append(
+            "ANALYSIS_MODE must be balanced. The API server only supports the balanced pipeline."
+        )
     if DEFAULT_ANALYSIS_DEPTH not in ANALYSIS_DEPTHS:
         errors.append("DEFAULT_ANALYSIS_DEPTH must be one of: fast, balanced, deep.")
 

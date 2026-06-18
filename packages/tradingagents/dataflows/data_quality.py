@@ -23,7 +23,10 @@ class DataQualityWarning(BaseModel):
 class DataQualityReport(BaseModel):
     """Compact API-facing data quality summary for a yfinance collection run."""
 
-    price_data: str = Field(default="missing", description="ok, partial, missing, stale, invalid_ticker, or market_closed")
+    price_data: str = Field(
+        default="missing",
+        description="ok, partial, missing, stale, invalid_ticker, or market_closed",
+    )
     fundamentals: str = Field(default="missing", description="ok, partial, or missing")
     news: str = Field(default="missing", description="ok, partial, unavailable, or missing")
     warnings: list[str] = Field(default_factory=list)
@@ -121,7 +124,6 @@ def _quality(
     }
 
 
-
 def validate_quote(result: dict) -> dict:
     if not isinstance(result, dict) or not result:
         return _quality(available=False, is_empty=True, missing_fields=["current_price", "source"])
@@ -142,7 +144,9 @@ def validate_quote(result: dict) -> dict:
         confidence = "medium"
     if missing:
         confidence = "unavailable"
-    return _quality(available=not missing, confidence=confidence, missing_fields=missing, warnings=warnings)
+    return _quality(
+        available=not missing, confidence=confidence, missing_fields=missing, warnings=warnings
+    )
 
 
 def _parse_yyyy_mm_dd(value: Any) -> datetime | None:
@@ -178,7 +182,9 @@ def _ohlcv_freshness_quality(
             warnings=warnings,
         )
 
-    parsed_dates = sorted(item for item in (_parse_yyyy_mm_dd(date) for date in dates) if item is not None)
+    parsed_dates = sorted(
+        item for item in (_parse_yyyy_mm_dd(date) for date in dates) if item is not None
+    )
     eligible_dates = [item for item in parsed_dates if item <= expected_dt]
     if not eligible_dates:
         return _quality(
@@ -266,7 +272,9 @@ def validate_ohlcv(
     available = not missing and freshness.get("available") is not False
     return _quality(
         available=available,
-        confidence="high" if len(rows) >= 30 and freshness.get("confidence") == "high" else "medium",
+        confidence="high"
+        if len(rows) >= 30 and freshness.get("confidence") == "high"
+        else "medium",
         is_empty=not rows,
         is_stale=bool(freshness.get("is_stale")),
         missing_fields=list(dict.fromkeys(missing + list(freshness.get("missing_fields") or []))),
@@ -287,7 +295,9 @@ def validate_fundamentals(result) -> dict:
         warnings = []
         if "source" not in lowered:
             warnings.append("field-level source metadata not detected in fundamentals text.")
-        return _quality(available=True, confidence="medium" if warnings else "high", warnings=warnings)
+        return _quality(
+            available=True, confidence="medium" if warnings else "high", warnings=warnings
+        )
     if not isinstance(result, dict) or not result:
         return _quality(available=False, is_empty=True, missing_fields=["fundamentals"])
     metrics = result.get("metrics") if isinstance(result.get("metrics"), dict) else {}
@@ -585,7 +595,8 @@ def build_field_quality(
         completeness_score=completeness_score,
         source_reliability_score=source_reliability_score,
         cross_vendor_match_score=cross_vendor_match_score,
-        coverage_verified=not missing and status not in {"unknown", "source_unavailable", "unavailable"},
+        coverage_verified=not missing
+        and status not in {"unknown", "source_unavailable", "unavailable"},
         blocking=str(field_name) in _BLOCKING_FIELDS,
         warnings=list(dict.fromkeys(field_warnings)),
         as_of_date=as_of_date,

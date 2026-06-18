@@ -141,22 +141,22 @@ class ResearchPlan(BaseModel):
     recommendation: PortfolioRating = Field(
         description=(
             "The investment recommendation. Exactly one of Buy / Overweight / "
-            "Hold / Underweight / Sell. Reserve Hold for situations where the "
-            "evidence on both sides is genuinely balanced; otherwise commit to "
-            "the side with the stronger arguments."
+            + "Hold / Underweight / Sell. Reserve Hold for situations where the "
+            + "evidence on both sides is genuinely balanced; otherwise commit to "
+            + "the side with the stronger arguments."
         ),
     )
     rationale: str = Field(
         description=(
             "Conversational summary of the key points from both sides of the "
-            "debate, ending with which arguments led to the recommendation. "
-            "Speak naturally, as if to a teammate."
+            + "debate, ending with which arguments led to the recommendation. "
+            + "Speak naturally, as if to a teammate."
         ),
     )
     strategic_actions: str = Field(
         description=(
             "Concrete steps for the trader to implement the recommendation, "
-            "including position sizing guidance consistent with the rating."
+            + "including position sizing guidance consistent with the rating."
         ),
     )
 
@@ -190,7 +190,8 @@ class TraderProposal(BaseModel):
     )
     reasoning: str = Field(
         description=(
-            "The case for this action, anchored in the analysts' reports and the research plan. Two to four sentences."
+            "The case for this action, anchored in the analysts' reports and the research "
+            + "plan. Two to four sentences."
         ),
     )
     suggested_allocation_percent: float | None = Field(
@@ -213,7 +214,9 @@ class TraderProposal(BaseModel):
     )
     risk_reward_ratio: float | None = Field(
         default=None,
-        description="Fixed reward/risk ratio for valid Buy/Sell setups. Must be 3.0, displayed as 1:3.",
+        description=(
+            "Fixed reward/risk ratio for valid Buy/Sell setups. Must be 3.0, displayed as 1:3."
+        ),
     )
     max_drawdown_estimate: str | None = Field(
         default=None,
@@ -235,7 +238,10 @@ class TraderProposal(BaseModel):
         default=None,
         description=(
             "Concrete portfolio action. Exactly one of Open new position, Add position, "
-            "Maintain position, Trim position, Exit position, Avoid new entry, or No position to rebalance."
+            + (
+                "Maintain position, Trim position, Exit position, Avoid new entry, or No "
+                + "position to rebalance."
+            )
         ),
     )
 
@@ -290,7 +296,13 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
     if proposal.key_catalysts:
         parts.extend(["", "**Key Catalysts**:", *[f"- {item}" for item in proposal.key_catalysts]])
     if proposal.invalidation_conditions:
-        parts.extend(["", "**Invalidation Conditions**:", *[f"- {item}" for item in proposal.invalidation_conditions]])
+        parts.extend(
+            [
+                "",
+                "**Invalidation Conditions**:",
+                *[f"- {item}" for item in proposal.invalidation_conditions],
+            ]
+        )
     parts.extend(
         [
             "",
@@ -359,29 +371,37 @@ class PortfolioDecision(BaseModel):
     confidence_score: float = Field(
         ge=0.0,
         le=1.0,
-        description="Final confidence score for the recommendation after validation and debate synthesis.",
+        description=(
+            "Final confidence score for the recommendation after validation and debate synthesis."
+        ),
     )
     confidence_breakdown: ConfidenceBreakdown | None = Field(
         default=None,
         description=(
             "Structured 0-100 score breakdown for price momentum, fundamental quality, "
-            "news sentiment, risk level, data quality, and weighted overall confidence."
+            + "news sentiment, risk level, data quality, and weighted overall confidence."
         ),
     )
     rating: PortfolioRating = Field(
         description=(
             "The final position rating. Exactly one of Buy / Overweight / Hold / "
-            "Underweight / Sell, picked based on the analysts' debate."
+            + "Underweight / Sell, picked based on the analysts' debate."
         ),
     )
     executive_summary: str = Field(
         description=(
-            "Write 250-300 words in exactly 5 continuous paragraphs without headers, numbering, or bullets. "
-            "Part 1 states the recommendation and the single most important reason. "
-            "Part 2 explains recent price action and separates fundamental movement from speculation. "
-            "Part 3 summarizes revenue trend, profitability, and financial health. "
-            "Part 4 states overall risk level and the top two risk factors. "
-            "Part 5 gives the immediate action the user should take."
+            (
+                "Write 250-300 words in exactly 5 continuous paragraphs without headers, "
+                + "numbering, or bullets. "
+            )
+            + "Part 1 states the recommendation and the single most important reason. "
+            + (
+                "Part 2 explains recent price action and separates fundamental movement from "
+                + "speculation. "
+            )
+            + "Part 3 summarizes revenue trend, profitability, and financial health. "
+            + "Part 4 states overall risk level and the top two risk factors. "
+            + "Part 5 gives the immediate action the user should take."
         ),
     )
 
@@ -392,9 +412,18 @@ class PortfolioDecision(BaseModel):
 
     investment_thesis: str = Field(
         description=(
-            "Write 400-450 words in exactly 6 continuous paragraphs without headers, numbering, or bullets. "
-            "Cover business overview, recent price movement, fundamental view, technical view, risk assessment, "
-            "and final positioning. Include specific numbers where available and clearly state upgrade or downgrade conditions."
+            (
+                "Write 400-450 words in exactly 6 continuous paragraphs without headers, "
+                + "numbering, or bullets. "
+            )
+            + (
+                "Cover business overview, recent price movement, fundamental view, technical "
+                + "view, risk assessment, "
+            )
+            + (
+                "and final positioning. Include specific numbers where available and clearly "
+                + "state upgrade or downgrade conditions."
+            )
         ),
     )
 
@@ -431,7 +460,10 @@ class PortfolioDecision(BaseModel):
     )
     volatility_level: VolatilityLevel | str | None = Field(
         default=None,
-        description="Expected volatility level for the recommendation. Backend normalizes this to Low, Medium, High, or Very High.",
+        description=(
+            "Expected volatility level for the recommendation. Backend normalizes this to Low, "
+            + "Medium, High, or Very High."
+        ),
     )
     position_sizing_reason: str | None = Field(
         default=None,
@@ -441,7 +473,10 @@ class PortfolioDecision(BaseModel):
         default=None,
         description=(
             "Final portfolio action. Exactly one of Open new position, Add position, "
-            "Maintain position, Trim position, Exit position, Avoid new entry, or No position to rebalance. Backend normalizes this again."
+            + (
+                "Maintain position, Trim position, Exit position, Avoid new entry, or No "
+                + "position to rebalance. Backend normalizes this again."
+            )
         ),
     )
 
@@ -463,9 +498,15 @@ class PortfolioDecision(BaseModel):
         default_factory=list,
         max_length=8,
         description=(
-            "Primary reasons supporting the final recommendation. Items must be written so they can be "
-            "combined into one coherent 75-125 word paragraph for the dashboard. Avoid fragments, labels, "
-            "or duplicate ideas."
+            (
+                "Primary reasons supporting the final recommendation. Items must be written so "
+                + "they can be "
+            )
+            + (
+                "combined into one coherent 75-125 word paragraph for the dashboard. Avoid "
+                + "fragments, labels, "
+            )
+            + "or duplicate ideas."
         ),
     )
     key_reasons_paragraph: str | None = Field(
@@ -502,11 +543,16 @@ class PortfolioDecision(BaseModel):
     trade_plan_valid: bool = Field(default=False)
     has_existing_position: bool = Field(
         default=False,
-        description="Resolved final flag that indicates whether the user already owns this long position.",
+        description=(
+            "Resolved final flag that indicates whether the user already owns this long position."
+        ),
     )
     position_quantity: float | None = Field(
         default=None,
-        description="User's current position quantity when provided. Backend uses explicit quantity to resolve position context.",
+        description=(
+            "User's current position quantity when provided. Backend uses explicit quantity to "
+            + "resolve position context."
+        ),
     )
     average_entry_price: float | None = Field(
         default=None,
@@ -518,12 +564,17 @@ class PortfolioDecision(BaseModel):
     )
     new_entry_action: str | None = Field(
         default=None,
-        description="Instruction for opening new exposure. For existing positions, this must not imply a separate new trade.",
+        description=(
+            "Instruction for opening new exposure. For existing positions, this must not imply a "
+            + "separate new trade."
+        ),
     )
 
     risk_reward_display: str | None = Field(
         default=None,
-        description='Display string for fixed Risk:Reward. Must be "1:3" for valid Buy/Sell trade plans.',
+        description=(
+            'Display string for fixed Risk:Reward. Must be "1:3" for valid Buy/Sell trade plans.'
+        ),
     )
     risk_per_share: float | None = Field(default=None)
     reward_per_share: float | None = Field(default=None)
@@ -531,7 +582,9 @@ class PortfolioDecision(BaseModel):
     volatility_score: float | None = Field(default=None)
     position_size_hint: str | None = Field(
         default=None,
-        description="Contextual sizing guidance for new entry, add, maintain, trim, or exit actions.",
+        description=(
+            "Contextual sizing guidance for new entry, add, maintain, trim, or exit actions."
+        ),
     )
 
     max_drawdown_min_pct: float | None = Field(default=None)
@@ -568,7 +621,9 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
     actionable_fields = [
         (
             "Suggested Allocation",
-            f"{decision.suggested_allocation_percent}%" if decision.suggested_allocation_percent is not None else None,
+            f"{decision.suggested_allocation_percent}%"
+            if decision.suggested_allocation_percent is not None
+            else None,
         ),
         ("Entry Price", decision.entry_price),
         ("Stop Loss", decision.stop_loss),
@@ -599,7 +654,13 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
     if decision.key_reasons:
         parts.extend(["", "**Key Reasons**:", *[f"- {item}" for item in decision.key_reasons]])
     if decision.invalidation_conditions:
-        parts.extend(["", "**Invalidation Conditions**:", *[f"- {item}" for item in decision.invalidation_conditions]])
+        parts.extend(
+            [
+                "",
+                "**Invalidation Conditions**:",
+                *[f"- {item}" for item in decision.invalidation_conditions],
+            ]
+        )
     if decision.price_target is not None:
         parts.extend(["", f"**Price Target**: {decision.price_target}"])
     if decision.time_horizon:

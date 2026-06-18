@@ -100,16 +100,23 @@ _IDX_AUTO_SUFFIX_SYMBOLS = {
 
 
 def _normalize_quote_symbol(symbol: str) -> str:
-    """Normalize symbols used by the global ticker tape without blocking Yahoo index/future syntax."""
+    "Normalize symbols used by the global ticker tape without blocking Yahoo index/future syntax."
     normalized = symbol.strip().upper() if isinstance(symbol, str) else symbol
-    if isinstance(normalized, str) and "." not in normalized and normalized in _IDX_AUTO_SUFFIX_SYMBOLS:
+    if (
+        isinstance(normalized, str)
+        and "." not in normalized
+        and normalized in _IDX_AUTO_SUFFIX_SYMBOLS
+    ):
         normalized = f"{normalized}.JK"
     if not isinstance(normalized, str) or not _QUOTE_SYMBOL_RE.fullmatch(normalized):
         raise BadRequestError(
             "Invalid ticker symbol.",
             details={
                 "fields": {
-                    "ticker": "Ticker must be a canonical yfinance quote symbol, for example ES=F, ^VIX, DX-Y.NYB, BTC-USD, or AAPL."
+                    ("ticker"): (
+                        "Ticker must be a canonical yfinance quote symbol, for example ES=F, "
+                        + "^VIX, DX-Y.NYB, BTC-USD, or AAPL."
+                    )
                 }
             },
         )
@@ -215,9 +222,13 @@ async def get_market_mover_data(
     exchange: str = Query(..., min_length=1),
     limit: int = Query(default=5),
 ) -> dict[str, Any]:
-    normalized_country, normalized_exchange, normalized_limit = _validate_movers_query(country, exchange, limit)
+    normalized_country, normalized_exchange, normalized_limit = _validate_movers_query(
+        country, exchange, limit
+    )
     async with limit_request(request, request_policy()):
-        return await asyncio.to_thread(get_market_movers, normalized_country, normalized_exchange, normalized_limit)
+        return await asyncio.to_thread(
+            get_market_movers, normalized_country, normalized_exchange, normalized_limit
+        )
 
 
 def _as_float(value: Any) -> float | None:
@@ -274,7 +285,9 @@ def _download_ohlcv(symbol: str, start_dt: datetime, end_dt: datetime, interval:
     return data
 
 
-def _normalize_ohlcv_rows(data: Any, start_dt: datetime, end_dt: datetime, interval: str) -> list[dict[str, Any]]:
+def _normalize_ohlcv_rows(
+    data: Any, start_dt: datetime, end_dt: datetime, interval: str
+) -> list[dict[str, Any]]:
     import pandas as pd  # noqa: PLC0415
 
     if data is None or getattr(data, "empty", True):
@@ -327,7 +340,9 @@ def _normalize_ohlcv_rows(data: Any, start_dt: datetime, end_dt: datetime, inter
                 "low": min(low_price, open_price, close_price, high_price),
                 "close": close_price,
                 "adjusted_close": adjusted_close if adjusted_close is not None else close_price,
-                "volume": int(volume_value) if volume_value is not None and volume_value >= 0 else None,
+                "volume": int(volume_value)
+                if volume_value is not None and volume_value >= 0
+                else None,
             }
         )
     return points
@@ -366,7 +381,9 @@ def _fetch_ohlcv_range(symbol: str, range_key: str, trade_date: str | None) -> d
                     "missing_fields": [],
                     "point_count": len(rows),
                 },
-                "warning": None if len(rows) >= 2 else "Only one OHLCV candle was available for this range.",
+                "warning": None
+                if len(rows) >= 2
+                else "Only one OHLCV candle was available for this range.",
             }
         except Exception as exc:  # noqa: BLE001
             last_error = exc
@@ -451,7 +468,8 @@ def _local_search_score(item: dict[str, Any], query: str, compact_query: str) ->
     symbol = str(item.get("symbol") or "").strip().upper()
     compact_symbol = _compact_search_text(symbol)
     haystack = " ".join(
-        str(item.get(key) or "").strip().upper() for key in ("symbol", "name", "exchange", "type", "market")
+        str(item.get(key) or "").strip().upper()
+        for key in ("symbol", "name", "exchange", "type", "market")
     )
     compact_haystack = _compact_search_text(haystack)
     tokens = [_compact_search_text(part) for part in re.split(r"[^A-Z0-9^._=-]+", haystack)]
@@ -576,7 +594,13 @@ def _clean_search_result(raw: dict[str, Any]) -> dict[str, Any] | None:
     if not symbol:
         return None
 
-    name = raw.get("shortname") or raw.get("longname") or raw.get("name") or raw.get("displayName") or symbol
+    name = (
+        raw.get("shortname")
+        or raw.get("longname")
+        or raw.get("name")
+        or raw.get("displayName")
+        or symbol
+    )
     exchange = raw.get("exchDisp") or raw.get("exchange") or raw.get("fullExchangeName") or ""
     quote_type = raw.get("quoteType") or raw.get("typeDisp") or raw.get("type") or ""
     raw_price = raw.get("regularMarketPrice") or raw.get("price")
@@ -646,10 +670,14 @@ async def search_market_tickers(
             cached_at, cached_results = cached
             if now - cached_at <= _SEARCH_CACHE_TTL_SECONDS:
                 return {
-                    "results": _merge_search_results(local_results, _clone_search_results(cached_results), limit=limit)
+                    "results": _merge_search_results(
+                        local_results, _clone_search_results(cached_results), limit=limit
+                    )
                 }
 
-        background_tasks.add_task(_refresh_search_cache, query, limit, _clone_search_results(local_results))
+        background_tasks.add_task(
+            _refresh_search_cache, query, limit, _clone_search_results(local_results)
+        )
         results = local_results[:limit]
 
     return {"results": results}
@@ -659,7 +687,9 @@ async def search_market_tickers(
 async def get_market_ohlcv(
     request: Request,
     ticker: str = Query(..., min_length=1, description="Ticker symbol."),
-    range_key: str = Query(default="1Y", alias="range", description="One of YTD, 1Y, 6M, 3M, 1M, 1W."),
+    range_key: str = Query(
+        default="1Y", alias="range", description="One of YTD, 1Y, 6M, 3M, 1M, 1W."
+    ),
     trade_date: str | None = Query(default=None, description="Optional YYYY-MM-DD upper bound."),
 ) -> dict[str, Any]:
     async with limit_request(request, request_policy()):
@@ -677,7 +707,9 @@ async def get_market_ohlcv(
         if cached_payload and now - cached_at <= _OHLCV_CACHE_TTL_SECONDS:
             return _clone_ohlcv_payload(cached_payload)
 
-        payload = await asyncio.to_thread(_fetch_ohlcv_range, symbol, normalized_range, parsed_trade_date)
+        payload = await asyncio.to_thread(
+            _fetch_ohlcv_range, symbol, normalized_range, parsed_trade_date
+        )
         _OHLCV_CACHE[cache_key] = (now, _clone_ohlcv_payload(payload))
 
     return payload

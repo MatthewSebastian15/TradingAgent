@@ -24,7 +24,9 @@ def _action_from_dict(value: CorporateAction | dict[str, Any]) -> CorporateActio
     return CorporateAction(
         ticker=str(value.get("ticker") or ""),
         action_type=str(value.get("action_type") or value.get("type") or "").lower(),
-        effective_date=str(value.get("effective_date") or value.get("ex_date") or value.get("date") or ""),
+        effective_date=str(
+            value.get("effective_date") or value.get("ex_date") or value.get("date") or ""
+        ),
         announcement_date=value.get("announcement_date"),
         ratio=_float(value.get("ratio")),
         cash_amount=_float(value.get("cash_amount") or value.get("amount")),
@@ -81,7 +83,9 @@ def _applies_to_row(row_date: str, action: CorporateAction) -> bool:
     return row_date <= effective
 
 
-def annotate_adjusted_close(row: dict[str, Any], actions: list[CorporateAction | dict[str, Any]]) -> dict[str, Any]:
+def annotate_adjusted_close(
+    row: dict[str, Any], actions: list[CorporateAction | dict[str, Any]]
+) -> dict[str, Any]:
     result = dict(row)
     close = result.get("close") or result.get("Close") or result.get("raw_close")
     try:
@@ -118,9 +122,13 @@ def annotate_adjusted_close(row: dict[str, Any], actions: list[CorporateAction |
     return result
 
 
-def apply_corporate_action_adjustments(price_rows: list[dict[str, Any]], actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def apply_corporate_action_adjustments(
+    price_rows: list[dict[str, Any]], actions: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     """Return rows annotated with raw/adjusted close and action notes."""
-    normalized_actions = [_action_from_dict(action) for action in actions or [] if isinstance(action, dict)]
+    normalized_actions = [
+        _action_from_dict(action) for action in actions or [] if isinstance(action, dict)
+    ]
     if not price_rows:
         return []
     if not normalized_actions:

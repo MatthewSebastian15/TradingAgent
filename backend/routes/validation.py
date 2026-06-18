@@ -8,7 +8,12 @@ from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-from config import ANALYSIS_DEPTHS, DEFAULT_ANALYSIS_DEPTH, DEFAULT_MAX_DEBATE_ROUNDS, RESPONSE_DETAILS
+from config import (
+    ANALYSIS_DEPTHS,
+    DEFAULT_ANALYSIS_DEPTH,
+    DEFAULT_MAX_DEBATE_ROUNDS,
+    RESPONSE_DETAILS,
+)
 from errors import BadRequestError
 
 # Accept canonical Yahoo/yfinance symbols selected by the frontend search bar:
@@ -92,7 +97,10 @@ def normalize_ticker_symbol(ticker: str) -> str:
             "Invalid ticker symbol.",
             details={
                 "fields": {
-                    "ticker": "Ticker must be a canonical yfinance symbol, for example BBCA.JK, AAPL, BTC-USD, 0700.HK, 9984.T, or SPY."
+                    ("ticker"): (
+                        "Ticker must be a canonical yfinance symbol, for example BBCA.JK, AAPL, "
+                        + "BTC-USD, 0700.HK, 9984.T, or SPY."
+                    )
                 }
             },
         )
@@ -107,12 +115,18 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     raw_ticker = canonical_from_search or req.ticker
     input_ticker = req.input_ticker or (req.ticker if isinstance(req.ticker, str) else None)
     market = normalize_market(req.market)
-    ticker = normalize_ticker_for_market(raw_ticker, market) if isinstance(raw_ticker, str) else raw_ticker
+    ticker = (
+        normalize_ticker_for_market(raw_ticker, market)
+        if isinstance(raw_ticker, str)
+        else raw_ticker
+    )
     trade_date = req.trade_date.strip() if isinstance(req.trade_date, str) else req.trade_date
     analysis_depth = str(req.analysis_depth or DEFAULT_ANALYSIS_DEPTH).strip().lower()
     response_detail = str(req.response_detail or "full").strip().lower()
     time_horizon_months = req.time_horizon_months
-    has_existing_position = bool(req.has_existing_position) if req.has_existing_position is not None else False
+    has_existing_position = (
+        bool(req.has_existing_position) if req.has_existing_position is not None else False
+    )
     position_quantity = req.position_quantity
     average_entry_price = req.average_entry_price
 
@@ -123,7 +137,8 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
 
     if not isinstance(ticker, str) or not _SYMBOL_RE.fullmatch(ticker):
         errors["ticker"] = (
-            "Ticker must be a canonical yfinance symbol, for example BBCA.JK, AAPL, BTC-USD, 0700.HK, 9984.T, or SPY."
+            "Ticker must be a canonical yfinance symbol, for example BBCA.JK, AAPL, BTC-USD, "
+            + "0700.HK, 9984.T, or SPY."
         )
 
     if not isinstance(trade_date, str):
@@ -154,10 +169,14 @@ def normalize_and_validate_analysis_request(req: AnalysisRequest) -> AnalysisReq
     if response_detail not in RESPONSE_DETAILS:
         errors["response_detail"] = "response_detail must be one of: summary, full, debug."
 
-    if position_quantity is not None and (isinstance(position_quantity, bool) or position_quantity < 0):
+    if position_quantity is not None and (
+        isinstance(position_quantity, bool) or position_quantity < 0
+    ):
         errors["position_quantity"] = "position_quantity must be a non-negative number or null."
 
-    if average_entry_price is not None and (isinstance(average_entry_price, bool) or average_entry_price < 0):
+    if average_entry_price is not None and (
+        isinstance(average_entry_price, bool) or average_entry_price < 0
+    ):
         errors["average_entry_price"] = "average_entry_price must be a non-negative number or null."
 
     if errors:

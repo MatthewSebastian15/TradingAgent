@@ -15,7 +15,9 @@ def _last_number(values: list[Any] | None) -> float | None:
 def _display_metric(detail: dict[str, Any] | None) -> str:
     payload = detail or {}
     display = payload.get("display", "N/A")
-    return f"{display} EST" if payload.get("status") == "estimated" and display != "N/A" else display
+    return (
+        f"{display} EST" if payload.get("status") == "estimated" and display != "N/A" else display
+    )
 
 
 def build_scenario_analysis(
@@ -59,14 +61,18 @@ def build_scenario_analysis(
         metric_details[case] = case_details
         scenarios[case] = {
             "fair_value": fair_value_range.get(case),
-            "fair_value_display": _display_metric(fair_value_range.get("metric_details", {}).get(case)),
+            "fair_value_display": _display_metric(
+                fair_value_range.get("metric_details", {}).get(case)
+            ),
             "upside_downside_percent": fair_value_range.get(f"{case}_upside_percent"),
             "upside_downside_display": _display_metric(
                 fair_value_range.get("metric_details", {}).get(f"{case}_upside_percent")
             ),
             "revenue_growth_assumption_percent": growth_assumption,
             "margin_assumption_percent": margin_assumption,
-            "valuation_multiple": f"{policy.get(case)}x {method}" if method and case in policy else "N/A",
+            "valuation_multiple": f"{policy.get(case)}x {method}"
+            if method and case in policy
+            else "N/A",
             "assumption": assumption,
             "metric_details": case_details,
         }

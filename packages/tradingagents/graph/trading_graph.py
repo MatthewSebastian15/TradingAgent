@@ -8,7 +8,10 @@ from typing import Any
 from langgraph.prebuilt import ToolNode
 
 from tradingagents.agents.utils.core_stock_tools import get_stock_data
-from tradingagents.agents.utils.event_data_tools import get_earnings_calendar, get_recommendation_trends
+from tradingagents.agents.utils.event_data_tools import (
+    get_earnings_calendar,
+    get_recommendation_trends,
+)
 from tradingagents.agents.utils.fundamental_data_tools import (
     get_balance_sheet,
     get_cashflow,
@@ -221,8 +224,12 @@ class TradingAgentsGraph:
                 return None, None, None
 
             actual_days = min(holding_days, len(stock) - 1, len(spy) - 1)
-            raw = float((stock["Close"].iloc[actual_days] - stock["Close"].iloc[0]) / stock["Close"].iloc[0])
-            spy_ret = float((spy["Close"].iloc[actual_days] - spy["Close"].iloc[0]) / spy["Close"].iloc[0])
+            raw = float(
+                (stock["Close"].iloc[actual_days] - stock["Close"].iloc[0]) / stock["Close"].iloc[0]
+            )
+            spy_ret = float(
+                (spy["Close"].iloc[actual_days] - spy["Close"].iloc[0]) / spy["Close"].iloc[0]
+            )
             alpha = raw - spy_ret
             return raw, alpha, actual_days
         except Exception as e:
@@ -308,7 +315,9 @@ class TradingAgentsGraph:
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM.
         past_context = self.memory_log.get_past_context(company_name)
-        init_agent_state = self.propagator.create_initial_state(company_name, trade_date, past_context=past_context)
+        init_agent_state = self.propagator.create_initial_state(
+            company_name, trade_date, past_context=past_context
+        )
         args = self.propagator.get_graph_args()
 
         # Inject thread_id so same ticker+date resumes, different date starts fresh.

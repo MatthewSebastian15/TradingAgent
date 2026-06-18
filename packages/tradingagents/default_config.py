@@ -47,9 +47,13 @@ DEFAULT_CONFIG = {
     "llm_semantic_cache_enabled": _env_bool("LLM_SEMANTIC_CACHE_ENABLED", False),
     "llm_semantic_cache_ttl_seconds": int(_env("LLM_SEMANTIC_CACHE_TTL_SECONDS") or "3600"),
     "llm_semantic_cache_max_entries": int(_env("LLM_SEMANTIC_CACHE_MAX_ENTRIES") or "2048"),
-    "llm_semantic_cache_db_path": _env("LLM_SEMANTIC_CACHE_DB_PATH") or ".cache/llm_semantic_cache.sqlite3",
-    "llm_semantic_cache_similarity_threshold": float(_env("LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD") or "0.97"),
-    "llm_semantic_cache_targets": _env("LLM_SEMANTIC_CACHE_TARGETS") or "news_summary,company_profile",
+    "llm_semantic_cache_db_path": _env("LLM_SEMANTIC_CACHE_DB_PATH")
+    or ".cache/llm_semantic_cache.sqlite3",
+    "llm_semantic_cache_similarity_threshold": float(
+        _env("LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD") or "0.97"
+    ),
+    "llm_semantic_cache_targets": _env("LLM_SEMANTIC_CACHE_TARGETS")
+    or "news_summary,company_profile",
     # Pipeline
     "parallel_analysts": True,
     "analysis_mode": "balanced",
@@ -88,7 +92,8 @@ DEFAULT_CONFIG = {
         "enable_insider": (_env("FINNHUB_ENABLE_INSIDER") or "true").lower() == "true",
         "enable_forex": (_env("FINNHUB_ENABLE_FOREX") or "false").lower() == "true",
         "enable_crypto": (_env("FINNHUB_ENABLE_CRYPTO") or "false").lower() == "true",
-        "enable_symbol_resolver": (_env("FINNHUB_ENABLE_SYMBOL_RESOLVER") or "true").lower() == "true",
+        "enable_symbol_resolver": (_env("FINNHUB_ENABLE_SYMBOL_RESOLVER") or "true").lower()
+        == "true",
         "quote_cache_ttl_seconds": int(_env("FINNHUB_QUOTE_CACHE_TTL_SECONDS") or "120"),
         "ohlcv_cache_ttl_seconds": int(_env("FINNHUB_OHLCV_CACHE_TTL_SECONDS") or "21600"),
         "profile_cache_ttl_seconds": int(_env("FINNHUB_PROFILE_CACHE_TTL_SECONDS") or "604800"),
@@ -119,8 +124,10 @@ DEFAULT_CONFIG = {
         "newsdata_api_key": _env("NEWSDATA_API_KEY"),
         "strict_ai_analysis_mode": _env_bool("NEWS_STRICT_AI_ANALYSIS_MODE", True),
         "force_all_providers": _env_bool("NEWS_FORCE_ALL_PROVIDERS", True),
-        "provider_priority": _env("NEWS_PROVIDER_PRIORITY") or "google_news_light,marketaux,rss_context,newsdata,yfinance",
-        "enabled_providers": _env("NEWS_ENABLED_PROVIDERS") or "google_news_light,marketaux,rss_context,newsdata,yfinance",
+        "provider_priority": _env("NEWS_PROVIDER_PRIORITY")
+        or "google_news_light,marketaux,rss_context,newsdata,yfinance",
+        "enabled_providers": _env("NEWS_ENABLED_PROVIDERS")
+        or "google_news_light,marketaux,rss_context,newsdata,yfinance",
         "default_window_days": int(_env("NEWS_DEFAULT_WINDOW_DAYS") or "30"),
         "max_articles_per_provider": int(_env("NEWS_MAX_ARTICLES_PER_PROVIDER") or "20"),
         "max_articles_for_prompt": int(_env("NEWS_MAX_ARTICLES_FOR_PROMPT") or "8"),
@@ -128,7 +135,9 @@ DEFAULT_CONFIG = {
         "min_relevance_score": float(_env("NEWS_MIN_RELEVANCE_SCORE") or "55"),
         "prompt_min_relevance_score": float(_env("NEWS_PROMPT_MIN_RELEVANCE_SCORE") or "70"),
         "decision_min_relevance_score": float(_env("NEWS_DECISION_MIN_RELEVANCE_SCORE") or "70"),
-        "rss_decision_min_relevance_score": float(_env("NEWS_RSS_DECISION_MIN_RELEVANCE_SCORE") or "80"),
+        "rss_decision_min_relevance_score": float(
+            _env("NEWS_RSS_DECISION_MIN_RELEVANCE_SCORE") or "80"
+        ),
         "rss_enabled": True,
         "rss_max_feeds": 50,
         "rss_max_items_per_feed": 20,
@@ -151,8 +160,10 @@ DEFAULT_CONFIG = {
     },
     "general_news": {
         "enabled": _env_bool("GENERAL_NEWS_ENABLED", True),
-        "provider_priority": _env("GENERAL_NEWS_PROVIDER_PRIORITY") or "rss_context,google_news_light,marketaux,newsdata",
-        "enabled_providers": _env("GENERAL_NEWS_ENABLED_PROVIDERS") or "rss_context,google_news_light,marketaux,newsdata",
+        "provider_priority": _env("GENERAL_NEWS_PROVIDER_PRIORITY")
+        or "rss_context,google_news_light,marketaux,newsdata",
+        "enabled_providers": _env("GENERAL_NEWS_ENABLED_PROVIDERS")
+        or "rss_context,google_news_light,marketaux,newsdata",
         "enable_background_refresh": _env_bool("GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH", True),
         "refresh_interval_seconds": int(_env("GENERAL_NEWS_REFRESH_INTERVAL_SECONDS") or "120"),
         "cache_ttl_seconds": int(_env("GENERAL_NEWS_CACHE_TTL_SECONDS") or "120"),
@@ -163,7 +174,9 @@ DEFAULT_CONFIG = {
         "max_articles_for_ui": int(_env("GENERAL_NEWS_MAX_ARTICLES_FOR_UI") or "100"),
         "default_limit": int(_env("GENERAL_NEWS_DEFAULT_LIMIT") or "50"),
         "default_category": _env("GENERAL_NEWS_DEFAULT_CATEGORY") or "all",
-        "allowed_categories": "all,markets,world,finance,tech,macro,central_bank,regulatory,forex,crypto",
+        ("allowed_categories"): (
+            "all,markets,world,finance,tech,macro,central_bank,regulatory,forex,crypto"
+        ),
         "rss_primary": True,
         "rss_max_feeds": 50,
         "rss_max_items_per_feed": 30,
@@ -176,11 +189,16 @@ DEFAULT_CONFIG = {
     "data_vendors": {
         "core_stock_apis": _env("DATA_VENDOR_CORE_STOCK_APIS") or "yfinance,finnhub,alpha_vantage",
         "quote_data": _env("DATA_VENDOR_QUOTE_DATA") or "yfinance,finnhub,alpha_vantage",
-        "technical_indicators": _env("DATA_VENDOR_TECHNICAL_INDICATORS") or "yfinance,finnhub,alpha_vantage",
-        "fundamental_data": _env("DATA_VENDOR_FUNDAMENTAL_DATA") or "yfinance,finnhub,alpha_vantage",
-        "financial_statements": _env("DATA_VENDOR_FINANCIAL_STATEMENTS") or "yfinance,sec_companyfacts,alpha_vantage,finnhub",
-        "news_data": _env("DATA_VENDOR_NEWS_DATA") or "google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage",
-        "global_news_data": _env("DATA_VENDOR_GLOBAL_NEWS_DATA") or "finnhub,alpha_vantage,yfinance",
+        "technical_indicators": _env("DATA_VENDOR_TECHNICAL_INDICATORS")
+        or "yfinance,finnhub,alpha_vantage",
+        "fundamental_data": _env("DATA_VENDOR_FUNDAMENTAL_DATA")
+        or "yfinance,finnhub,alpha_vantage",
+        "financial_statements": _env("DATA_VENDOR_FINANCIAL_STATEMENTS")
+        or "yfinance,sec_companyfacts,alpha_vantage,finnhub",
+        "news_data": _env("DATA_VENDOR_NEWS_DATA")
+        or "google_news_light,marketaux,newsdata,yfinance,finnhub,alpha_vantage",
+        "global_news_data": _env("DATA_VENDOR_GLOBAL_NEWS_DATA")
+        or "finnhub,alpha_vantage,yfinance",
         "sentiment_data": _env("DATA_VENDOR_SENTIMENT_DATA") or "finnhub,alpha_vantage",
         "social_sentiment": _env("DATA_VENDOR_SOCIAL_SENTIMENT") or "finnhub",
         "event_data": _env("DATA_VENDOR_EVENT_DATA") or "finnhub",
@@ -190,14 +208,29 @@ DEFAULT_CONFIG = {
         "crypto_data": _env("DATA_VENDOR_CRYPTO_DATA") or "finnhub,alpha_vantage",
     },
     "data_vendor_max_calls_per_analysis": int(_env("DATA_VENDOR_MAX_CALLS_PER_ANALYSIS") or "60"),
-    "data_vendor_enable_multi_source_news": (_env("DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS") or "true").lower() == "true",
-    "data_vendor_enable_multi_source_price": (_env("DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE") or "false").lower()
+    "data_vendor_enable_multi_source_news": (
+        _env("DATA_VENDOR_ENABLE_MULTI_SOURCE_NEWS") or "true"
+    ).lower()
     == "true",
-    "data_vendor_enable_finnhub_fallback": (_env("DATA_VENDOR_ENABLE_FINNHUB_FALLBACK") or "true").lower() == "true",
-    "data_vendor_enable_finnhub_enrichment": (_env("DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT") or "true").lower()
+    "data_vendor_enable_multi_source_price": (
+        _env("DATA_VENDOR_ENABLE_MULTI_SOURCE_PRICE") or "false"
+    ).lower()
     == "true",
-    "data_vendor_require_source_metadata": (_env("DATA_VENDOR_REQUIRE_SOURCE_METADATA") or "true").lower() == "true",
-    "data_vendor_return_partial_on_failure": (_env("DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE") or "true").lower()
+    "data_vendor_enable_finnhub_fallback": (
+        _env("DATA_VENDOR_ENABLE_FINNHUB_FALLBACK") or "true"
+    ).lower()
+    == "true",
+    "data_vendor_enable_finnhub_enrichment": (
+        _env("DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT") or "true"
+    ).lower()
+    == "true",
+    "data_vendor_require_source_metadata": (
+        _env("DATA_VENDOR_REQUIRE_SOURCE_METADATA") or "true"
+    ).lower()
+    == "true",
+    "data_vendor_return_partial_on_failure": (
+        _env("DATA_VENDOR_RETURN_PARTIAL_ON_FAILURE") or "true"
+    ).lower()
     == "true",
     "max_news_per_vendor": int(_env("MAX_NEWS_PER_VENDOR") or "10"),
     "max_total_news_items": int(_env("MAX_TOTAL_NEWS_ITEMS") or "25"),

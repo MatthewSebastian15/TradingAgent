@@ -77,7 +77,9 @@ def get_balance_sheet(ticker: str, freq: str = "quarterly", curr_date: str = Non
 
 def get_cashflow(ticker: str, freq: str = "quarterly", curr_date: str = None):
     """Retrieve cash flow statement data for a given ticker symbol using Alpha Vantage."""
-    result = _filter_reports_by_date(_load_json_payload(_make_api_request("CASH_FLOW", {"symbol": ticker})), curr_date)
+    result = _filter_reports_by_date(
+        _load_json_payload(_make_api_request("CASH_FLOW", {"symbol": ticker})), curr_date
+    )
     if not result.get("annualReports") and not result.get("quarterlyReports"):
         return f"No cash flow data found for symbol '{ticker}'"
     return _dump_payload(result)

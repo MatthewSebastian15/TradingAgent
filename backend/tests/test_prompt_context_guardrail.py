@@ -4,7 +4,7 @@ from dataclasses import asdict
 
 from tradingagents.dataflows.news_context_builder import build_news_context
 from tradingagents.graph.prompt_context_builder import PromptContext, build_prompt_context
-from tradingagents.llm.LLM_router import apply_guardrail
+from tradingagents.llm.llm_router import apply_guardrail
 
 
 def _state(**overrides):
@@ -18,12 +18,16 @@ def _state(**overrides):
             "blocking_fields_missing": [],
             "warnings": ["Cashflow contains fallback fields"],
         },
-        "field_quality": {"cashflow": {"status": "partial", "source": "yfinance", "warnings": ["fallback"]}},
+        "field_quality": {
+            "cashflow": {"status": "partial", "source": "yfinance", "warnings": ["fallback"]}
+        },
         "limitations": ["Financial data contains fallback fields"],
         "sector": "technology",
         "normalized_financials": [{"period": "FY2025", "revenue": 100}],
         "news_context": {
-            "top_articles": [{"title": "Apple earnings rise", "provider": "marketaux", "relevance_score": 90}],
+            "top_articles": [
+                {"title": "Apple earnings rise", "provider": "marketaux", "relevance_score": 90}
+            ],
             "limitations": ["News coverage is partial"],
         },
         "vendor_budget": {"llm_calls": {"used": 1, "max": 3}, "data_calls": {"used": 2, "max": 10}},
@@ -41,7 +45,10 @@ def test_build_prompt_context_returns_compact_dataclass():
     assert context.market == "US"
     assert context.field_sources["quote"] == "yfinance"
     assert context.data_quality["field_quality"]["cashflow"]["status"] == "partial"
-    assert context.limitations == ["Financial data contains fallback fields", "News coverage is partial"]
+    assert context.limitations == [
+        "Financial data contains fallback fields",
+        "News coverage is partial",
+    ]
     assert context.normalized_financials == [{"period": "FY2025", "revenue": 100}]
     assert context.top_news[0]["title"] == "Apple earnings rise"
     assert context.budget_remaining == {"llm_calls_left": 2, "data_calls_left": 8}
@@ -49,7 +56,9 @@ def test_build_prompt_context_returns_compact_dataclass():
 
 
 def test_apply_guardrail_blocks_buy_and_sell_when_quote_missing():
-    context = build_prompt_context(_state(data_quality={"quote_missing": True, "source_confidence_score": 100}))
+    context = build_prompt_context(
+        _state(data_quality={"quote_missing": True, "source_confidence_score": 100})
+    )
 
     assert apply_guardrail(context, "BUY")[0] == "WAIT"
     assert apply_guardrail(context, "SELL")[0] == "WAIT"

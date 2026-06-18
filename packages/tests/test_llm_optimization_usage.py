@@ -51,7 +51,9 @@ def test_invoke_once_logs_usage_on_success(tmp_path, caplog):
             "llm_exact_cache_db_path": str(tmp_path / "llm.sqlite3"),
         }
     )
-    fallback = AnalystReport(title="Fallback", summary="Fallback", key_points=[], risks=[], confidence=0.1)
+    fallback = AnalystReport(
+        title="Fallback", summary="Fallback", key_points=[], risks=[], confidence=0.1
+    )
 
     with caplog.at_level(logging.INFO, logger="tradingagents.llm_optimization.usage"):
         result = _invoke_once(DummyLLM(), AnalystReport, "Prompt", fallback, "Market Analyst")
@@ -60,4 +62,3 @@ def test_invoke_once_logs_usage_on_success(tmp_path, caplog):
     assert "LLM usage | agent=Market Analyst" in caplog.text
     assert "parse_success=True" in caplog.text
     assert "fallback=False" in caplog.text
-

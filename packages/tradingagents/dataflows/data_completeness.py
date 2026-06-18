@@ -69,7 +69,9 @@ def _available(value: Any) -> bool:
         lowered = value.strip().lower()
         if lowered in _MISSING_STRINGS:
             return False
-        return not (lowered.startswith("no ") or " unavailable" in lowered or "not found" in lowered)
+        return not (
+            lowered.startswith("no ") or " unavailable" in lowered or "not found" in lowered
+        )
     if isinstance(value, (list, tuple, set)):
         return len(value) > 0
     if isinstance(value, dict):
@@ -110,15 +112,24 @@ def _build_group(payload: dict[str, Any], fields: list[str]) -> dict[str, Any]:
 
 def calculate_completeness(data: dict[str, Any] | None) -> dict[str, Any]:
     payload = data or {}
-    groups = {group_name: _build_group(payload, fields) for group_name, fields in COMPLETENESS_GROUPS.items()}
+    groups = {
+        group_name: _build_group(payload, fields)
+        for group_name, fields in COMPLETENESS_GROUPS.items()
+    }
     overall_total = sum(item["total_count"] for item in groups.values())
     overall_available = sum(item["available_count"] for item in groups.values())
     overall_pct = round((overall_available / overall_total) * 100, 2) if overall_total else 0.0
     overall = {
-        "status": "complete" if overall_available == overall_total else "partial" if overall_available else "source_unavailable",
+        "status": "complete"
+        if overall_available == overall_total
+        else "partial"
+        if overall_available
+        else "source_unavailable",
         "available_count": overall_available,
         "total_count": overall_total,
-        "available_fields": [field for group in groups.values() for field in group["available_fields"]],
+        "available_fields": [
+            field for group in groups.values() for field in group["available_fields"]
+        ],
         "missing_fields": [field for group in groups.values() for field in group["missing_fields"]],
         "completeness_pct": overall_pct,
         "completeness_percent": overall_pct,

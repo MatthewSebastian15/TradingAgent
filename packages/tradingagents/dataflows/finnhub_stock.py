@@ -30,7 +30,9 @@ def _as_float(value: Any) -> float | None:
     return number if number == number else None
 
 
-def normalize_quote(symbol: str, payload: dict[str, Any], *, endpoint: str = "/quote") -> dict[str, Any]:
+def normalize_quote(
+    symbol: str, payload: dict[str, Any], *, endpoint: str = "/quote"
+) -> dict[str, Any]:
     current = _as_float(payload.get("c"))
     previous_close = _as_float(payload.get("pc"))
     missing = []
@@ -58,7 +60,9 @@ def normalize_quote(symbol: str, payload: dict[str, Any], *, endpoint: str = "/q
         "percent_change": _as_float(payload.get("dp")),
         "timestamp": payload.get("t"),
         "currency": None,
-        "metadata": build_metadata(endpoint, is_fallback=True, confidence=confidence, missing_fields=missing),
+        "metadata": build_metadata(
+            endpoint, is_fallback=True, confidence=confidence, missing_fields=missing
+        ),
     }
 
 
@@ -67,7 +71,9 @@ def get_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
     last_error: Exception | None = None
     for candidate in _try_symbols(symbol):
         try:
-            payload = make_api_request("/quote", {"symbol": candidate}, feature_key="enable_stock_data")
+            payload = make_api_request(
+                "/quote", {"symbol": candidate}, feature_key="enable_stock_data"
+            )
             if not isinstance(payload, dict):
                 raise FinnhubUnavailableError("Quote response is not an object.")
             quote = normalize_quote(candidate, payload)
@@ -78,10 +84,14 @@ def get_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
         except Exception as exc:  # try alternate symbol formats before returning unavailable
             last_error = exc
             continue
-    raise FinnhubUnavailableError(str(last_error or "No valid Finnhub quote candidate returned data."))
+    raise FinnhubUnavailableError(
+        str(last_error or "No valid Finnhub quote candidate returned data.")
+    )
 
 
-def _normalize_candles(symbol: str, payload: dict[str, Any], *, start_date: str, end_date: str) -> list[dict[str, Any]]:
+def _normalize_candles(
+    symbol: str, payload: dict[str, Any], *, start_date: str, end_date: str
+) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         raise FinnhubUnavailableError("Candle response is not an object.")
     if payload.get("s") != "ok":
@@ -114,7 +124,9 @@ def _normalize_candles(symbol: str, payload: dict[str, Any], *, start_date: str,
             }
         )
     if not rows:
-        raise FinnhubUnavailableError(f"No valid candle rows for {symbol} between {start_date} and {end_date}.")
+        raise FinnhubUnavailableError(
+            f"No valid candle rows for {symbol} between {start_date} and {end_date}."
+        )
     return rows
 
 
@@ -135,7 +147,9 @@ def _rows_to_csv(rows: list[dict[str, Any]]) -> pd.DataFrame:
     )
 
 
-def get_stock_ohlcv(symbol: str, start_date: str, end_date: str, timeframe: str = "1d") -> dict[str, Any]:
+def get_stock_ohlcv(
+    symbol: str, start_date: str, end_date: str, timeframe: str = "1d"
+) -> dict[str, Any]:
     """Return normalized object OHLCV while keeping get_stock CSV compatibility intact."""
     datetime.strptime(start_date, "%Y-%m-%d")
     datetime.strptime(end_date, "%Y-%m-%d")
@@ -237,7 +251,9 @@ def _load_stock_dataframe(symbol: str, curr_date: str, look_back_days: int) -> p
     raw = get_stock(symbol, start_dt.strftime("%Y-%m-%d"), curr_dt.strftime("%Y-%m-%d"))
     if raw.lower().startswith("finnhub unavailable"):
         raise FinnhubUnavailableError(raw)
-    lines = [line for line in raw.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    lines = [
+        line for line in raw.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    ]
     df = pd.read_csv(StringIO("\n".join(lines)))
     df["Date"] = pd.to_datetime(df["Date"])
     return df.sort_values("Date")
@@ -279,7 +295,9 @@ def _indicator_series(df: pd.DataFrame, indicator: str) -> pd.Series:
         return middle - (2 * std)
     if indicator == "atr":
         prev_close = close.shift(1)
-        tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+        tr = pd.concat(
+            [(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1
+        ).max(axis=1)
         return tr.rolling(14).mean()
     if indicator == "vwma":
         return (close * volume).rolling(20).sum() / volume.rolling(20).sum().replace(0, pd.NA)
@@ -306,12 +324,17 @@ def get_indicator(symbol: str, indicator: str, curr_date: str, look_back_days: i
         rendered = "N/A" if pd.isna(value) else f"{float(value):.4f}"
         lines.append(f"{row['Date'].strftime('%Y-%m-%d')}: {rendered}")
     if not lines:
-        return f"Finnhub unavailable: indicator {indicator} for {symbol} - no rows in requested window."
+        return (
+            f"Finnhub unavailable: indicator {indicator} for {symbol} - "
+            "no rows in requested window."
+        )
     return f"## Finnhub {indicator} values for {symbol} up to {curr_date}\n\n" + "\n".join(lines)
 
 
 def get_stock_symbols(exchange: str = "US") -> dict[str, Any]:
-    return make_api_request("/stock/symbol", {"exchange": exchange}, feature_key="enable_symbol_resolver")
+    return make_api_request(
+        "/stock/symbol", {"exchange": exchange}, feature_key="enable_symbol_resolver"
+    )
 
 
 def search_symbol(query: str) -> dict[str, Any]:
@@ -319,4 +342,6 @@ def search_symbol(query: str) -> dict[str, Any]:
 
 
 def get_market_status(exchange: str = "US") -> dict[str, Any]:
-    return make_api_request("/stock/market-status", {"exchange": exchange}, feature_key="enable_stock_data")
+    return make_api_request(
+        "/stock/market-status", {"exchange": exchange}, feature_key="enable_stock_data"
+    )

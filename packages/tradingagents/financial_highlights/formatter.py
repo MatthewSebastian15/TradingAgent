@@ -24,13 +24,14 @@ def currency_metadata(currency: str | None) -> dict[str, str | float]:
         "unit_note": (
             f"Currency: {code} ({currency_label}) | "
             f"Amount figures: in {scale}s ({scale_label}) | "
-            f"Per-share values: {code}/share | "
-            "Percent metrics: shown with % | DER: ratio (x)"
+            f"Per-share values: {code}/share | " + "Percent metrics: shown with % | DER: ratio (x)"
         ),
     }
 
 
-def convert_amount(value: float | None, *, source_unit: str | None, scale_divisor: float) -> float | None:
+def convert_amount(
+    value: float | None, *, source_unit: str | None, scale_divisor: float
+) -> float | None:
     if value is None:
         return None
     normalized_unit = str(source_unit or "raw").strip().lower()

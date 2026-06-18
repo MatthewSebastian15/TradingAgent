@@ -103,7 +103,10 @@ def _blocking_quality_reason(data_quality: dict[str, Any] | None) -> str | None:
             continue
         status = str(quality.get("status") or "").lower()
         confidence = str(quality.get("confidence") or "").lower()
-        if status in {"source_unavailable", "unavailable", "empty", "failed"} or confidence == "unavailable":
+        if (
+            status in {"source_unavailable", "unavailable", "empty", "failed"}
+            or confidence == "unavailable"
+        ):
             return f"Blocking data quality field unavailable: {field_name}"
     return None
 
@@ -148,7 +151,9 @@ def _is_indonesia_ticker(ticker: str | None) -> bool:
     return bool(ticker and ticker.upper().endswith(".JK"))
 
 
-def _round_price(price: float | None, ticker: str | None, warnings: list[str]) -> float | int | None:
+def _round_price(
+    price: float | None, ticker: str | None, warnings: list[str]
+) -> float | int | None:
     if price is None:
         return None
     if not math.isfinite(float(price)) or price <= 0:
@@ -162,7 +167,11 @@ def _round_price(price: float | None, ticker: str | None, warnings: list[str]) -
 
 
 def _parse_price_rows(price_data: str | None) -> list[dict[str, float]]:
-    lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    lines = [
+        line
+        for line in (price_data or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
     if not lines:
         return []
     rows: list[dict[str, float]] = []
@@ -227,7 +236,9 @@ def calculate_atr(price_data: str | None, window_size: int = 14) -> float | None
     return atr if math.isfinite(atr) and atr > 0 else None
 
 
-def calculate_risk_distance(current_price: float, volatility_level: str, price_data: str | None) -> float:
+def calculate_risk_distance(
+    current_price: float, volatility_level: str, price_data: str | None
+) -> float:
     """Calculate deterministic risk distance for the fixed 1:3 trade contract."""
     fallback_pct = {
         "Low": 0.03,
@@ -421,7 +432,9 @@ def build_position_size_hint(
                 "Low": "Add to existing position gradually; normal add size may be acceptable.",
                 "Medium": "Add gradually using standard risk limits.",
                 "High": "Add only small size due to high volatility.",
-                "Very High": "Avoid aggressive add; use very small add only if conviction remains strong.",
+                ("Very High"): (
+                    "Avoid aggressive add; use very small add only if conviction remains strong."
+                ),
             }.get(volatility_level, "Add gradually using standard risk limits.")
 
         if rebalancing_action == "Maintain position":
@@ -445,7 +458,9 @@ def build_position_size_hint(
             "Low": "New entry may use normal starter size if the trade plan is valid.",
             "Medium": "Use standard starter size and avoid oversized entry.",
             "High": "Use smaller starter size due to high volatility.",
-            "Very High": "Use very small starter size only, or avoid entry if risk is not acceptable.",
+            ("Very High"): (
+                "Use very small starter size only, or avoid entry if risk is not acceptable."
+            ),
         }.get(volatility_level, "Use standard starter size and avoid oversized entry.")
 
     if normalized_decision == "Buy":
@@ -471,7 +486,9 @@ def _parse_drawdown_range(value: str | None) -> tuple[float | None, float | None
     return (min(low, high), max(low, high))
 
 
-def _ensure_drawdown(decision: PortfolioDecision, volatility_level: str, warnings: list[str]) -> None:
+def _ensure_drawdown(
+    decision: PortfolioDecision, volatility_level: str, warnings: list[str]
+) -> None:
     low = getattr(decision, "max_drawdown_min_pct", None)
     high = getattr(decision, "max_drawdown_max_pct", None)
     if low is None or high is None:
@@ -486,7 +503,9 @@ def _ensure_drawdown(decision: PortfolioDecision, volatility_level: str, warning
     decision.max_drawdown_estimate = f"{_format_number(float(low))}-{_format_number(float(high))}%"
 
 
-def _clear_trade_levels(decision: PortfolioDecision, warnings: list[str], *, add_hold_warning: bool = False) -> None:
+def _clear_trade_levels(
+    decision: PortfolioDecision, warnings: list[str], *, add_hold_warning: bool = False
+) -> None:
     decision.price_target = None
     decision.entry_price = None
     decision.stop_loss = None
@@ -536,7 +555,11 @@ def _normalize_long(
     risk_distance = calculate_risk_distance(float(entry), volatility_level, price_data)
     stop = _round_price(float(entry) - risk_distance, ticker, warnings)
     if stop is None or float(stop) >= float(entry):
-        tick = get_idx_tick_size(float(entry)) if _is_indonesia_ticker(ticker) else max(float(entry) * 0.01, 0.01)
+        tick = (
+            get_idx_tick_size(float(entry))
+            if _is_indonesia_ticker(ticker)
+            else max(float(entry) * 0.01, 0.01)
+        )
         stop = _round_price(float(entry) - tick, ticker, warnings)
     if stop is None or float(stop) >= float(entry):
         return False
@@ -597,7 +620,11 @@ def _normalize_short(
     risk_distance = calculate_risk_distance(float(entry), volatility_level, price_data)
     stop = _round_price(float(entry) + risk_distance, ticker, warnings)
     if stop is None or float(stop) <= float(entry):
-        tick = get_idx_tick_size(float(entry)) if _is_indonesia_ticker(ticker) else max(float(entry) * 0.01, 0.01)
+        tick = (
+            get_idx_tick_size(float(entry))
+            if _is_indonesia_ticker(ticker)
+            else max(float(entry) * 0.01, 0.01)
+        )
         stop = _round_price(float(entry) + tick, ticker, warnings)
     if stop is None or float(stop) <= float(entry):
         return False
@@ -694,7 +721,9 @@ def normalize_trade_levels(
     llm_decision = str(_enum_value(raw_llm_decision) or DEFAULT_DECISION)
     original_rebalancing = _enum_value(getattr(decision, "rebalancing_action", None))
     raw_volatility = _enum_value(getattr(decision, "volatility_level", None))
-    resolved_has_existing_position = resolve_existing_position(has_existing_position, position_quantity)
+    resolved_has_existing_position = resolve_existing_position(
+        has_existing_position, position_quantity
+    )
     _append_position_resolution_warnings(
         warnings,
         has_existing_position=has_existing_position,
@@ -818,9 +847,13 @@ def normalize_trade_levels(
         return decision
 
     if final_decision in LONG_DECISIONS:
-        valid = _normalize_long(decision, float(current_price), ticker, warnings, price_data, normalized_volatility)
+        valid = _normalize_long(
+            decision, float(current_price), ticker, warnings, price_data, normalized_volatility
+        )
     elif final_decision in SHORT_DECISIONS:
-        valid = _normalize_short(decision, float(current_price), ticker, warnings, price_data, normalized_volatility)
+        valid = _normalize_short(
+            decision, float(current_price), ticker, warnings, price_data, normalized_volatility
+        )
     else:
         valid = False
 

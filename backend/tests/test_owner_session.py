@@ -6,13 +6,20 @@ import pytest
 
 from config import OWNER_SESSION_TTL_SECONDS
 from errors import AuthenticationError
-from owner_session import issue_owner_session, owner_identifier, owner_identifier_from_token, read_owner_session
+from owner_session import (
+    issue_owner_session,
+    owner_identifier,
+    owner_identifier_from_token,
+    read_owner_session,
+)
 
 
 def test_owner_session_token_is_signed_and_expires():
     session = issue_owner_session(owner_id="a" * 32, now=100)
 
-    assert owner_identifier_from_token(session["owner_token"], now=101) == owner_identifier("a" * 32)
+    assert owner_identifier_from_token(session["owner_token"], now=101) == owner_identifier(
+        "a" * 32
+    )
     assert read_owner_session(session["owner_token"], now=101) == {
         "owner_id": "a" * 32,
         "expires_at": 100 + OWNER_SESSION_TTL_SECONDS,
@@ -28,7 +35,9 @@ def test_owner_session_token_rejects_tampered_signature():
         owner_identifier_from_token(f"{session['owner_token']}x")
 
 
-def test_session_endpoint_validates_service_credential_reuses_cookie_and_issues_distinct_owners(client, monkeypatch):
+def test_session_endpoint_validates_service_credential_reuses_cookie_and_issues_distinct_owners(
+    client, monkeypatch
+):
     monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="shared-proxy-key"))
     client.headers.pop("x-owner-token", None)
 

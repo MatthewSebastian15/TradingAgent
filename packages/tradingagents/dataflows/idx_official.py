@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from .idx_financials_parser import build_idx_financial_statement_from_report, find_idx_financial_reports
+from .idx_financials_parser import (
+    build_idx_financial_statement_from_report,
+    find_idx_financial_reports,
+)
 
 
 def _ticker_key(ticker: str | None) -> str:
@@ -21,7 +24,9 @@ def _is_idx_ticker(ticker: str | None) -> bool:
     return _ticker_key(ticker).endswith(".JK")
 
 
-def _unavailable(ticker: str, endpoint: str, reason: str = "IDX official live adapter is not implemented yet") -> dict[str, Any]:
+def _unavailable(
+    ticker: str, endpoint: str, reason: str = "IDX official live adapter is not implemented yet"
+) -> dict[str, Any]:
     return {
         "available": False,
         "ticker": ticker,
@@ -69,7 +74,12 @@ def _target_year(period: str | int | None) -> int | None:
 def get_idx_financial_statements(ticker: str, period: str = "annual") -> dict[str, Any]:
     ticker_key = _ticker_key(ticker)
     if not _is_idx_ticker(ticker_key):
-        return {**_unavailable(ticker_key, "financial_statements", "IDX official is only used for .JK tickers"), "period": period}
+        return {
+            **_unavailable(
+                ticker_key, "financial_statements", "IDX official is only used for .JK tickers"
+            ),
+            "period": period,
+        }
 
     reports = find_idx_financial_reports(ticker_key, year=_target_year(period), period=period)
     if not reports:
@@ -77,7 +87,10 @@ def get_idx_financial_statements(ticker: str, period: str = "annual") -> dict[st
             **_unavailable(
                 ticker_key,
                 "financial_statements",
-                "No IDX official financial report metadata found; configure IDX_REPORT_INDEX_PATH or IDX_REPORT_INDEX_URL",
+                (
+                    "No IDX official financial report metadata found; configure "
+                    + "IDX_REPORT_INDEX_PATH or IDX_REPORT_INDEX_URL"
+                ),
             ),
             "period": period,
             "report_candidates": [],
@@ -106,7 +119,9 @@ def get_idx_financial_statements(ticker: str, period: str = "annual") -> dict[st
             }
         errors.append(str(result.get("reason") or "IDX report could not be parsed"))
 
-    reason = " | ".join(errors) if errors else "IDX official reports were found but none were usable"
+    reason = (
+        " | ".join(errors) if errors else "IDX official reports were found but none were usable"
+    )
     return {
         **_unavailable(ticker_key, "financial_statements", reason),
         "period": period,
@@ -114,7 +129,9 @@ def get_idx_financial_statements(ticker: str, period: str = "annual") -> dict[st
     }
 
 
-def get_idx_corporate_actions(ticker: str, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
+def get_idx_corporate_actions(
+    ticker: str, start_date: str | None = None, end_date: str | None = None
+) -> dict[str, Any]:
     return {
         **_unavailable(_ticker_key(ticker), "corporate_actions"),
         "start_date": start_date,

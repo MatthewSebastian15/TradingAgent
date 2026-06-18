@@ -8,13 +8,67 @@ from tradingagents.trade_levels import normalize_trade_levels
 
 def _valid_executive_summary() -> str:
     return (
-        'The final rating is Hold because the available evidence is balanced and the setup does not justify forcing a new position before confirmation improves. The strongest support comes from stable price behavior, controlled downside assumptions, and a risk plan that keeps capital protected while the next catalyst develops. The biggest risk is incomplete data or weak confirmation, because either problem could turn a neutral setup into a poor trade. The recommended action is to keep allocation modest, avoid adding size, wait for a cleaner entry, and only use a stop loss after price data confirms the setup. The expected horizon is short to medium term, and the thesis should be confirmed by stronger trend evidence or invalidated by a break below support. It also names the rating, support, risk, action plan, sizing posture, stop context, time horizon, and invalidation logic so the object behaves like a real portfolio manager response. The wording is deliberately reusable so schema validation remains stable across parse, memory, and trade level tests without changing assertions. The summary also includes enough realistic context to satisfy production length checks, because short placeholders are dangerous when the schema is deliberately strict. It explains that allocation should remain conservative, that price confirmation matters more than narrative confidence, and that the user should avoid pretending a watchlist idea is already a validated trade. This extra detail keeps test fixtures aligned with the same narrative contract used by real analysis responses. It also confirms that action wording, risk posture, position context, and validation behavior can be tested together without inventing a live recommendation.'
+        "The final rating is Hold because the available evidence is balanced and the setup does "
+        + "not justify forcing a new position before confirmation improves. The strongest support "
+        + "comes from stable price behavior, controlled downside assumptions, and a risk plan that "
+        + "keeps capital protected while the next catalyst develops. The biggest risk is "
+        + "incomplete data or weak confirmation, because either problem could turn a neutral setup "
+        + "into a poor trade. The recommended action is to keep allocation modest, avoid adding "
+        + "size, wait for a cleaner entry, and only use a stop loss after price data confirms the "
+        + "setup. The expected horizon is short to medium term, and the thesis should be confirmed "
+        + "by stronger trend evidence or invalidated by a break below support. It also names the "
+        + "rating, support, risk, action plan, sizing posture, stop context, time horizon, and "
+        + "invalidation logic so the object behaves like a real portfolio manager response. The "
+        + "wording is deliberately reusable so schema validation remains stable across parse, "
+        + "memory, and trade level tests without changing assertions. The summary also includes "
+        + "enough realistic context to satisfy production length checks, because short "
+        + "placeholders are dangerous when the schema is deliberately strict. It explains that "
+        + "allocation should remain conservative, that price confirmation matters more than "
+        + "narrative confidence, and that the user should avoid pretending a watchlist idea is "
+        + "already a validated trade. This extra detail keeps test fixtures aligned with the same "
+        + "narrative contract used by real analysis responses. It also confirms that action "
+        + "wording, risk posture, position context, and validation behavior can be tested together "
+        + "without inventing a live recommendation."
     )
 
 
 def _valid_investment_thesis() -> str:
     return (
-        'The investment thesis is intentionally cautious because the available evidence supports patience more than immediate action. The company remains relevant in its market, but the current setup needs stronger confirmation before it deserves a larger allocation. The most useful signals are stable price behavior, controlled risk assumptions, and a trade plan that avoids oversized exposure while waiting for the next catalyst. Those signals are helpful, but they are not strong enough to justify a high conviction Buy without cleaner momentum, better data quality, and a more attractive entry point. The bear case is that weak confirmation, stale inputs, or sudden volatility could quickly damage the risk reward profile. That bear case matters because a trade can be directionally reasonable and still be poor if the entry is late or the stop loss is not respected. The balanced conclusion is to wait, keep allocation limited, and require stronger evidence before increasing exposure. The action plan is to avoid chasing price, use a smaller position only if the setup improves, define the stop loss before entry, and take profit only when the validated risk reward target is reached. If the next catalyst confirms stronger demand and price stability, the thesis can be upgraded; if support breaks, the idea should be rejected. This helper also keeps tests readable by using one reusable narrative instead of scattering short invalid placeholders across unrelated assertions. The exact company is not important here; what matters is that schema validation, parsing, serialization, and trade level normalization all receive text that matches the production contract. The mock company is assumed to have an understandable business model, reasonable liquidity, and enough public information for a normal research workflow, but conviction remains limited because the evidence is deliberately neutral. Price action is described as stable rather than decisive, which means support and resistance levels should guide action more than broad company quality. Fundamentals are treated as acceptable but not powerful enough to overwhelm timing risk, so revenue, margin, balance sheet, and cash flow details should be monitored before any upgrade. Technical confirmation is also required because a good business can still be a poor short term trade when volatility rises or entry quality deteriorates. The preferred outcome is a patient watchlist stance that becomes actionable only after price, data quality, and risk reward all improve together. The downside case would gain force if support fails, if financial updates disappoint, or if market liquidity weakens. The upside case would gain force if catalysts arrive with stronger volume, cleaner earnings quality, and a valid entry setup. Until then, the correct conclusion is disciplined patience, not heroic improvisation dressed up as portfolio management.'
+        "The investment thesis is intentionally cautious because the available evidence supports "
+        + "patience more than immediate action. The company remains relevant in its market, but "
+        + "the current setup needs stronger confirmation before it deserves a larger allocation. "
+        + "The most useful signals are stable price behavior, controlled risk assumptions, and a "
+        + "trade plan that avoids oversized exposure while waiting for the next catalyst. Those "
+        + "signals are helpful, but they are not strong enough to justify a high conviction Buy "
+        + "without cleaner momentum, better data quality, and a more attractive entry point. The "
+        + "bear case is that weak confirmation, stale inputs, or sudden volatility could quickly "
+        + "damage the risk reward profile. That bear case matters because a trade can be "
+        + "directionally reasonable and still be poor if the entry is late or the stop loss is not "
+        + "respected. The balanced conclusion is to wait, keep allocation limited, and require "
+        + "stronger evidence before increasing exposure. The action plan is to avoid chasing "
+        + "price, use a smaller position only if the setup improves, define the stop loss before "
+        + "entry, and take profit only when the validated risk reward target is reached. If the "
+        + "next catalyst confirms stronger demand and price stability, the thesis can be upgraded; "
+        + "if support breaks, the idea should be rejected. This helper also keeps tests readable "
+        + "by using one reusable narrative instead of scattering short invalid placeholders across "
+        + "unrelated assertions. The exact company is not important here; what matters is that "
+        + "schema validation, parsing, serialization, and trade level normalization all receive "
+        + "text that matches the production contract. The mock company is assumed to have an "
+        + "understandable business model, reasonable liquidity, and enough public information for "
+        + "a normal research workflow, but conviction remains limited because the evidence is "
+        + "deliberately neutral. Price action is described as stable rather than decisive, which "
+        + "means support and resistance levels should guide action more than broad company "
+        + "quality. Fundamentals are treated as acceptable but not powerful enough to overwhelm "
+        + "timing risk, so revenue, margin, balance sheet, and cash flow details should be "
+        + "monitored before any upgrade. Technical confirmation is also required because a good "
+        + "business can still be a poor short term trade when volatility rises or entry quality "
+        + "deteriorates. The preferred outcome is a patient watchlist stance that becomes "
+        + "actionable only after price, data quality, and risk reward all improve together. The "
+        + "downside case would gain force if support fails, if financial updates disappoint, or if "
+        + "market liquidity weakens. The upside case would gain force if catalysts arrive with "
+        + "stronger volume, cleaner earnings quality, and a valid entry setup. Until then, the "
+        + "correct conclusion is disciplined patience, not heroic improvisation dressed up as "
+        + "portfolio management."
     )
 
 
@@ -47,7 +101,9 @@ def make_decision(**overrides) -> PortfolioDecision:
 def test_buy_always_forces_risk_reward_to_one_to_three(raw_rr):
     decision = make_decision(risk_reward_ratio=raw_rr, stop_loss=95.0, price_target=130.0)
 
-    normalized = normalize_trade_levels(decision, 100.0, ticker="NVDA", current_price_as_of="2026-05-18")
+    normalized = normalize_trade_levels(
+        decision, 100.0, ticker="NVDA", current_price_as_of="2026-05-18"
+    )
 
     assert normalized.final_decision == "Buy"
     assert normalized.trade_plan_valid is True
@@ -247,7 +303,10 @@ def test_no_existing_position_sell_avoids_new_entry_not_exit():
     assert normalized.rebalancing_action == "No position to rebalance"
     assert normalized.position_action is None
     assert normalized.new_entry_action == "Avoid entry; wait for risk to normalize"
-    assert normalized.position_size_hint == "0% allocation; stay on watchlist only until risk normalizes."
+    assert (
+        normalized.position_size_hint
+        == "0% allocation; stay on watchlist only until risk normalizes."
+    )
     assert "INVALID_REBALANCING_FIXED" in normalized.validation_warnings
 
 
@@ -276,7 +335,10 @@ def test_existing_position_buy_valid_adds_position():
     assert normalized.rebalancing_action == "Add position"
     assert normalized.position_action == "Add position"
     assert normalized.new_entry_action == "No separate new entry; add only to existing position"
-    assert normalized.position_size_hint == "Add to existing position gradually; normal add size may be acceptable."
+    assert (
+        normalized.position_size_hint
+        == "Add to existing position gradually; normal add size may be acceptable."
+    )
 
 
 def test_existing_position_buy_low_confidence_maintains_position():
@@ -303,7 +365,10 @@ def test_existing_position_buy_low_confidence_maintains_position():
     assert normalized.rebalancing_action == "Maintain position"
     assert normalized.position_action == "Maintain position"
     assert normalized.new_entry_action == "No new entry; maintain existing position"
-    assert normalized.position_size_hint == "Maintain current position size; no additional exposure suggested."
+    assert (
+        normalized.position_size_hint
+        == "Maintain current position size; no additional exposure suggested."
+    )
 
 
 def test_existing_position_hold_maintains_position():
@@ -326,7 +391,10 @@ def test_existing_position_hold_maintains_position():
     assert normalized.rebalancing_action == "Maintain position"
     assert normalized.position_action == "Maintain position"
     assert normalized.new_entry_action == "No new entry; maintain existing position"
-    assert normalized.position_size_hint == "Maintain current position size; no additional exposure suggested."
+    assert (
+        normalized.position_size_hint
+        == "Maintain current position size; no additional exposure suggested."
+    )
 
 
 def test_existing_position_sell_high_confidence_exits_position():
@@ -380,7 +448,10 @@ def test_existing_position_sell_low_confidence_trims_position():
     assert normalized.rebalancing_action == "Trim position"
     assert normalized.position_action == "Trim position"
     assert normalized.new_entry_action == "Do not add; reduce existing exposure"
-    assert normalized.position_size_hint == "Reduce exposure aggressively or prepare full exit if risk worsens."
+    assert (
+        normalized.position_size_hint
+        == "Reduce exposure aggressively or prepare full exit if risk worsens."
+    )
 
 
 def test_position_quantity_overrides_false_existing_position_flag():
@@ -492,7 +563,10 @@ def test_missing_price_existing_position_maintains_position_fields():
     assert normalized.rebalancing_action == "Maintain position"
     assert normalized.position_action == "Maintain position"
     assert normalized.new_entry_action == "No new entry until price data is valid"
-    assert normalized.position_size_hint == "Maintain current position size until valid price data is available."
+    assert (
+        normalized.position_size_hint
+        == "Maintain current position size until valid price data is available."
+    )
 
 
 def test_indonesia_ticker_uses_tick_size_rounding():

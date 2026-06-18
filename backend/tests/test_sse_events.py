@@ -37,7 +37,12 @@ def _stream_result() -> dict:
         "position_size_hint": "Use standard starter size and avoid oversized entry.",
         "key_catalysts": ["volume"],
         "invalidation_conditions": ["support break"],
-        "data_quality": {"price_data": "ok", "fundamentals": "partial", "news": "missing", "warnings": []},
+        "data_quality": {
+            "price_data": "ok",
+            "fundamentals": "partial",
+            "news": "missing",
+            "warnings": [],
+        },
     }
 
 
@@ -110,7 +115,12 @@ def test_sse_sends_progress_and_final_result(client, monkeypatch, analysis_repos
     assert result_payload["ticker"] == "AAPL"
     assert result_payload["decision"] == "Buy"
     assert result_payload["data_quality"]["price_data"] == "ok"
-    assert analysis_repository.get_analysis(result_payload["request_id"], owner_id=_TEST_OWNER_IDENTIFIER)["ticker"] == "AAPL"
+    assert (
+        analysis_repository.get_analysis(
+            result_payload["request_id"], owner_id=_TEST_OWNER_IDENTIFIER
+        )["ticker"]
+        == "AAPL"
+    )
 
 
 def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch, analysis_repository):
@@ -145,7 +155,9 @@ def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch, a
     job_id = create_response.json()["job_id"]
 
     def read_events():
-        with client.stream("GET", f"/api/analysis/jobs/{job_id}/events", headers=headers) as response:
+        with client.stream(
+            "GET", f"/api/analysis/jobs/{job_id}/events", headers=headers
+        ) as response:
             assert response.status_code == 200
             return _collect_sse_events(response.read().decode("utf-8"))
 
@@ -156,7 +168,12 @@ def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch, a
     assert [name for name, _ in second] == ["job", "progress", "result"]
     assert first[1][1]["agent_id"] == "market_analyst"
     assert second[2][1]["decision"] == "Buy"
-    assert analysis_repository.get_analysis_by_job_id(job_id, owner_id=_TEST_OWNER_IDENTIFIER)["ticker"] == "AAPL"
+    assert (
+        analysis_repository.get_analysis_by_job_id(job_id, owner_id=_TEST_OWNER_IDENTIFIER)[
+            "ticker"
+        ]
+        == "AAPL"
+    )
 
 
 def test_job_event_stream_is_not_gzipped(client, monkeypatch):
@@ -269,7 +286,9 @@ def test_running_job_event_stream_replays_history_to_multiple_subscribers():
             payload={"ticker": "AAPL", "trade_date": "2026-05-14"},
             status="running",
         )
-        await job.publish("progress", {"request_id": "request-1", "agent_id": "market", "status": "completed"})
+        await job.publish(
+            "progress", {"request_id": "request-1", "agent_id": "market", "status": "completed"}
+        )
         job.result = {"request_id": "request-1", "ticker": "AAPL", "decision": "Hold"}
         job.status = "completed"
         await job.publish("result", job.result)
@@ -311,7 +330,9 @@ def test_running_job_event_stream_yields_result_after_wait_notification():
 
         collector = asyncio.create_task(collect(job))
         await asyncio.sleep(0.01)
-        await job.publish("progress", {"request_id": "request-1", "agent_id": "market", "status": "completed"})
+        await job.publish(
+            "progress", {"request_id": "request-1", "agent_id": "market", "status": "completed"}
+        )
         await asyncio.sleep(0.01)
         await job.complete({"request_id": "request-1", "ticker": "AAPL", "decision": "Hold"})
         return await asyncio.wait_for(collector, timeout=1)

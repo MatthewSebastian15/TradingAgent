@@ -3,14 +3,30 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from tradingagents.utils.normalization import as_dict as _as_dict, as_list as _as_list, number as _number
+from tradingagents.utils.normalization import as_dict as _as_dict
+from tradingagents.utils.normalization import as_list as _as_list
+from tradingagents.utils.normalization import number as _number
 
-KNOWN_VENDORS = ("idx_official", "yfinance", "alpha_vantage", "finnhub", "google_news_light", "marketaux", "newsdata")
+KNOWN_VENDORS = (
+    "idx_official",
+    "yfinance",
+    "alpha_vantage",
+    "finnhub",
+    "google_news_light",
+    "marketaux",
+    "newsdata",
+)
 SUCCESS_STATUSES = {"success", "cache_hit", "ok", "complete"}
 PARTIAL_STATUSES = {"partial", "fallback"}
 RATE_LIMIT_STATUSES = {"rate_limited"}
 UNAVAILABLE_STATUSES = {"unavailable", "failed", "error", "request_failed"}
-SKIPPED_STATUSES = {"disabled", "skipped", "skipped_sufficient_primary", "unsupported", "budget_exceeded"}
+SKIPPED_STATUSES = {
+    "disabled",
+    "skipped",
+    "skipped_sufficient_primary",
+    "unsupported",
+    "budget_exceeded",
+}
 
 IMPORTANT_FIELDS = {
     "current_price": "high",
@@ -33,7 +49,6 @@ IMPORTANT_FIELDS = {
     "unit_note": "medium",
     "sections": "medium",
 }
-
 
 
 def _impact(field: str) -> str:
@@ -116,7 +131,9 @@ def _missing_from_quality(result: dict[str, Any]) -> list[dict[str, Any]]:
     for required, impact in (("ebitda", "medium"), ("payout_ratio", "low")):
         row = row_by_key.get(required)
         values = _as_dict(row.get("values")) if row else {}
-        if not row or all(_as_dict(cell).get("status") == "unavailable" for cell in values.values()):
+        if not row or all(
+            _as_dict(cell).get("status") == "unavailable" for cell in values.values()
+        ):
             items.append(_missing_item("financial_highlights", required, impact=impact))
     if rows and not _as_list(highlights.get("sections")):
         items.append(_missing_item("financial_highlights", "sections", impact="medium"))
@@ -131,7 +148,11 @@ def _missing_from_quality(result: dict[str, Any]) -> list[dict[str, Any]]:
         items.append(_missing_item("price_chart", "OHLCV", impact="high"))
 
     news = _as_dict(result.get("news_impact"))
-    if news and not _as_list(news.get("full_news_list")) and not _as_list(news.get("high_impact_news")):
+    if (
+        news
+        and not _as_list(news.get("full_news_list"))
+        and not _as_list(news.get("high_impact_news"))
+    ):
         items.append(_missing_item("news_impact", "news", impact="medium"))
 
     return _dedupe_items(items, ("module", "field"))
@@ -153,13 +174,18 @@ def _fallback_from_quality(result: dict[str, Any]) -> list[dict[str, Any]]:
                 items.append(
                     {
                         "field": str(row.get("key") or row.get("label") or "financial_metric"),
-                        "method": str(payload.get("formula") or payload.get("source_field") or "estimated"),
+                        "method": str(
+                            payload.get("formula") or payload.get("source_field") or "estimated"
+                        ),
                         "confidence": "medium",
                     }
                 )
     for item in _as_list(highlights.get("point_in_time")):
         payload = _as_dict(item)
-        if payload.get("status") in {"estimated", "calculated"} and payload.get("key") == "market_cap":
+        if (
+            payload.get("status") in {"estimated", "calculated"}
+            and payload.get("key") == "market_cap"
+        ):
             items.append(
                 {
                     "field": "market_cap",
@@ -174,7 +200,9 @@ def _fallback_from_quality(result: dict[str, Any]) -> list[dict[str, Any]]:
         for attempt in _as_list(attempts):
             vendor, status, _detail = _parse_attempt(str(attempt))
             if status == "fallback":
-                items.append({"field": str(route), "method": f"{vendor}_fallback", "confidence": "medium"})
+                items.append(
+                    {"field": str(route), "method": f"{vendor}_fallback", "confidence": "medium"}
+                )
 
     return _dedupe_items(items, ("field", "method"))
 
@@ -201,26 +229,32 @@ def _stale_warnings(result: dict[str, Any]) -> list[dict[str, Any]]:
         freshness = quality.get("freshness_status") or quality.get("freshness")
         freshness_payload = _as_dict(freshness)
         status = str(
-            freshness_payload.get("status")
-            or freshness
-            or quality.get("status")
-            or "unknown"
+            freshness_payload.get("status") or freshness or quality.get("status") or "unknown"
         ).lower()
-        is_stale = bool(freshness_payload.get("is_stale")) or status in {"stale", "unknown", "outdated"}
+        is_stale = bool(freshness_payload.get("is_stale")) or status in {
+            "stale",
+            "unknown",
+            "outdated",
+        }
         if not is_stale:
             continue
         warnings.append(
             {
                 "module": "field_quality",
                 "field": str(field_name),
-                "warning": "; ".join(str(item) for item in (quality.get("warnings") or freshness_payload.get("warnings") or []))
+                "warning": "; ".join(
+                    str(item)
+                    for item in (quality.get("warnings") or freshness_payload.get("warnings") or [])
+                )
                 or "Field freshness cannot be verified.",
                 "severity": "medium" if status == "stale" else "low",
             }
         )
 
     trade_date = _parse_date(result.get("trade_date"))
-    price_date = _parse_date(result.get("current_price_as_of") or result.get("last_close_price_as_of"))
+    price_date = _parse_date(
+        result.get("current_price_as_of") or result.get("last_close_price_as_of")
+    )
     if not price_date:
         warnings.append(
             {
@@ -264,7 +298,9 @@ def _stale_warnings(result: dict[str, Any]) -> list[dict[str, Any]]:
 
     news = _as_dict(result.get("news_impact"))
     dated_news = [
-        _parse_date(item.get("published_at")) for item in _as_list(news.get("full_news_list")) if isinstance(item, dict)
+        _parse_date(item.get("published_at"))
+        for item in _as_list(news.get("full_news_list"))
+        if isinstance(item, dict)
     ]
     dated_news = [item for item in dated_news if item is not None]
     if news and not dated_news and _number(news.get("news_count")):
@@ -333,7 +369,9 @@ def _used_for_from_attempts(result: dict[str, Any]) -> dict[str, set[str]]:
     return used_for
 
 
-def _vendor_status(result: dict[str, Any], missing_fields: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _vendor_status(
+    result: dict[str, Any], missing_fields: list[dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
     statuses: dict[str, list[str]] = {vendor: [] for vendor in KNOWN_VENDORS}
     details: dict[str, list[str]] = {vendor: [] for vendor in KNOWN_VENDORS}
     for attempts in _as_dict(result.get("vendor_attempts")).values():
@@ -362,7 +400,9 @@ def _vendor_status(result: dict[str, Any], missing_fields: list[dict[str, Any]])
     }
     response: dict[str, dict[str, Any]] = {}
     for vendor in KNOWN_VENDORS:
-        vendor_missing = [item["field"] for item in missing_fields if item.get("module") in module_missing[vendor]]
+        vendor_missing = [
+            item["field"] for item in missing_fields if item.get("module") in module_missing[vendor]
+        ]
         response[vendor] = {
             "status": _normalize_vendor_status(statuses[vendor]),
             "used_for": sorted(used_for[vendor]),
@@ -394,13 +434,17 @@ def _score_breakdown(
 ) -> dict[str, int]:
     root_quality = _as_dict(result.get("data_quality"))
     price_data = _component_score_from_status(root_quality.get("price_data"), {"ok", "complete"})
-    financial_data = _component_score_from_status(root_quality.get("fundamentals"), {"ok", "complete"})
+    financial_data = _component_score_from_status(
+        root_quality.get("fundamentals"), {"ok", "complete"}
+    )
     valuation_quality = _as_dict(_as_dict(result.get("fair_value_range")).get("data_quality"))
     valuation_data = _component_score_from_status(valuation_quality.get("status"), {"complete"})
     news_data = _component_score_from_status(root_quality.get("news"), {"ok", "complete"})
 
     successful_vendors = sum(
-        1 for item in vendor_status.values() if item.get("status") in {"success", "partial", "fallback"}
+        1
+        for item in vendor_status.values()
+        if item.get("status") in {"success", "partial", "fallback"}
     )
     vendor_success = round(successful_vendors / len(KNOWN_VENDORS) * 100) if KNOWN_VENDORS else 0
 
@@ -408,7 +452,9 @@ def _score_breakdown(
     high_missing = sum(1 for item in missing_fields if item.get("impact") == "high")
     medium_missing = sum(1 for item in missing_fields if item.get("impact") == "medium")
     low_missing = sum(1 for item in missing_fields if item.get("impact") == "low")
-    financial_data = max(0, financial_data - (high_missing * 12) - (medium_missing * 5) - (low_missing * 2))
+    financial_data = max(
+        0, financial_data - (high_missing * 12) - (medium_missing * 5) - (low_missing * 2)
+    )
     valuation_data = max(0, valuation_data - (len(fallback_used) * 4))
     return {
         "price_data": int(max(0, min(100, price_data))),
@@ -430,7 +476,9 @@ def _confidence_label(score: int) -> str:
     return "very_low"
 
 
-def _summary(score: int, missing_fields: list[dict[str, Any]], fallback_used: list[dict[str, Any]]) -> str:
+def _summary(
+    score: int, missing_fields: list[dict[str, Any]], fallback_used: list[dict[str, Any]]
+) -> str:
     if score >= 80:
         return "Most critical financial, price, and news data were available."
     if score >= 60:

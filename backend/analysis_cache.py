@@ -181,14 +181,18 @@ class AnalysisJob:
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     state_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     task: asyncio.Task | None = None
-    persist_callback: Callable[[AnalysisJob], Awaitable[None]] | None = field(default=None, repr=False)
+    persist_callback: Callable[[AnalysisJob], Awaitable[None]] | None = field(
+        default=None, repr=False
+    )
     _next_event_sequence: int = 0
 
     def __post_init__(self) -> None:
         self.max_event_history = max(1, int(self.max_event_history))
         self.events = deque(self.events, maxlen=self.max_event_history)
         if self.events:
-            self._next_event_sequence = max(int(event.get("sequence", -1)) for event in self.events) + 1
+            self._next_event_sequence = (
+                max(int(event.get("sequence", -1)) for event in self.events) + 1
+            )
         if self.status in TERMINAL_ANALYSIS_STATUSES:
             self.done_event.set()
         if self.status == "cancelled":
@@ -217,7 +221,9 @@ class AnalysisJob:
             created_at=float(snapshot.get("created_at") or time.time()),
             updated_at=float(snapshot.get("updated_at") or time.time()),
             events=deque(snapshot.get("events") or []),
-            max_event_history=int(snapshot.get("max_event_history") or DEFAULT_JOB_EVENT_REPLAY_LIMIT),
+            max_event_history=int(
+                snapshot.get("max_event_history") or DEFAULT_JOB_EVENT_REPLAY_LIMIT
+            ),
             result=snapshot.get("result"),
             error=snapshot.get("error"),
             persist_callback=persist_callback,
@@ -355,7 +361,12 @@ class AnalysisJobStore:
         self._lock = asyncio.Lock()
 
     async def create(
-        self, *, owner_id: str, request_id: str, cache_key: AnalysisCacheKey, payload: dict[str, Any]
+        self,
+        *,
+        owner_id: str,
+        request_id: str,
+        cache_key: AnalysisCacheKey,
+        payload: dict[str, Any],
     ) -> AnalysisJob:
         await self.cleanup()
         async with self._lock:
@@ -388,7 +399,9 @@ class AnalysisJobStore:
             return None
         return job
 
-    async def get_by_request_id(self, request_id: str, *, owner_id: str | None = None) -> AnalysisJob | None:
+    async def get_by_request_id(
+        self, request_id: str, *, owner_id: str | None = None
+    ) -> AnalysisJob | None:
         async with self._lock:
             job_id = self._job_ids_by_request_id.get(request_id)
             job = self._jobs.get(job_id) if job_id is not None else None
@@ -407,7 +420,10 @@ class AnalysisJobStore:
         changed = await job.cancel(
             {
                 "request_id": job.request_id,
-                "error": {"code": "ANALYSIS_CANCELLED", "message": "Analysis was cancelled by the client."},
+                "error": {
+                    "code": "ANALYSIS_CANCELLED",
+                    "message": "Analysis was cancelled by the client.",
+                },
             }
         )
         if changed and job.task and not job.task.done():
@@ -474,14 +490,20 @@ class AnalysisJobStore:
             return
 
         snapshot = job.to_snapshot()
-        await asyncio.to_thread(self.persistent_cache.set, self._persistent_key("job_id", job.id), snapshot)
-        await asyncio.to_thread(self.persistent_cache.set, self._persistent_key("request_id", job.request_id), snapshot)
+        await asyncio.to_thread(
+            self.persistent_cache.set, self._persistent_key("job_id", job.id), snapshot
+        )
+        await asyncio.to_thread(
+            self.persistent_cache.set, self._persistent_key("request_id", job.request_id), snapshot
+        )
 
     async def _load_persisted_job(self, key_type: str, value: str) -> AnalysisJob | None:
         if self.persistent_cache is None:
             return None
 
-        snapshot = await asyncio.to_thread(self.persistent_cache.get, self._persistent_key(key_type, value))
+        snapshot = await asyncio.to_thread(
+            self.persistent_cache.get, self._persistent_key(key_type, value)
+        )
         if not isinstance(snapshot, dict):
             return None
 

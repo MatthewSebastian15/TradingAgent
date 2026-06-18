@@ -31,7 +31,9 @@ def _round(value: float | None, digits: int = 2) -> float | None:
 
 
 def _rows_from_csv(value: str) -> list[dict[str, Any]]:
-    lines = [line for line in value.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    lines = [
+        line for line in value.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    ]
     if not lines:
         return []
     rows: list[dict[str, Any]] = []
@@ -40,11 +42,17 @@ def _rows_from_csv(value: str) -> list[dict[str, Any]]:
             continue
         rows.append(
             {
-                "date": row.get("Date") or row.get("date") or row.get("") or next(iter(row.values()), ""),
+                "date": row.get("Date")
+                or row.get("date")
+                or row.get("")
+                or next(iter(row.values()), ""),
                 "open": row.get("Open") or row.get("open"),
                 "high": row.get("High") or row.get("high"),
                 "low": row.get("Low") or row.get("low"),
-                "close": row.get("Close") or row.get("close") or row.get("Adj Close") or row.get("adjusted_close"),
+                "close": row.get("Close")
+                or row.get("close")
+                or row.get("Adj Close")
+                or row.get("adjusted_close"),
                 "adjusted_close": row.get("Adj Close") or row.get("adjusted_close"),
                 "volume": row.get("Volume") or row.get("volume"),
             }
@@ -80,7 +88,9 @@ def _normalize_rows(ohlcv_data: Any) -> list[dict[str, Any]]:
                 "high": max(high, open_price, close, low),
                 "low": min(low, open_price, close, high),
                 "close": close,
-                "adjusted_close": _safe_float(item.get("adjusted_close") or item.get("Adj Close") or close),
+                "adjusted_close": _safe_float(
+                    item.get("adjusted_close") or item.get("Adj Close") or close
+                ),
                 "volume": _safe_int(item.get("volume") or item.get("Volume")),
             }
         )
@@ -222,13 +232,25 @@ def calculate_entry_quality(
     stop_loss = _first_number(levels.get("stop_loss"), levels.get("stop"))
     take_profit = _first_number(levels.get("take_profit"), levels.get("target"))
     risk_reward_ratio = _first_number(levels.get("risk_reward_ratio"), levels.get("risk_reward"))
-    if current_price is None or entry_price is None or stop_loss is None or (take_profit is None and risk_reward_ratio is None):
-        return _entry_quality_unavailable("Entry quality requires current price, entry, stop loss, and take profit or risk/reward ratio.")
+    if (
+        current_price is None
+        or entry_price is None
+        or stop_loss is None
+        or (take_profit is None and risk_reward_ratio is None)
+    ):
+        return _entry_quality_unavailable(
+            (
+                "Entry quality requires current price, entry, stop loss, and take profit or "
+                + "risk/reward ratio."
+            )
+        )
 
     direction = _entry_direction(levels)
     components = {
         "trend": _trend_alignment_component(direction, current_price, technical),
-        "risk_reward": _risk_reward_component(entry_price, stop_loss, take_profit, risk_reward_ratio),
+        "risk_reward": _risk_reward_component(
+            entry_price, stop_loss, take_profit, risk_reward_ratio
+        ),
         "volume": _volume_component(price_payload, technical),
         "support_resistance": _support_resistance_component(direction, current_price, technical),
         "volatility": _volatility_component(current_price, technical),
@@ -286,18 +308,24 @@ def _entry_direction(levels: dict[str, Any]) -> str:
     return "sell" if any(word in text for word in ("sell", "short", "reduce")) else "buy"
 
 
-def _trend_alignment_component(direction: str, current_price: float, technical: dict[str, Any]) -> float | None:
+def _trend_alignment_component(
+    direction: str, current_price: float, technical: dict[str, Any]
+) -> float | None:
     trend = str(technical.get("trend") or "").lower()
     sma20 = _safe_float(technical.get("sma_20"))
     sma50 = _safe_float(technical.get("sma_50"))
     macd_signal = str(technical.get("macd_signal") or "").lower()
     if direction == "buy":
-        if trend == "uptrend" or (sma20 is not None and sma50 is not None and current_price > sma20 > sma50):
+        if trend == "uptrend" or (
+            sma20 is not None and sma50 is not None and current_price > sma20 > sma50
+        ):
             return 1.0
         if trend == "downtrend" or macd_signal == "bearish":
             return 0.2
     else:
-        if trend == "downtrend" or (sma20 is not None and sma50 is not None and current_price < sma20 < sma50):
+        if trend == "downtrend" or (
+            sma20 is not None and sma50 is not None and current_price < sma20 < sma50
+        ):
             return 1.0
         if trend == "uptrend" or macd_signal == "bullish":
             return 0.2
@@ -333,7 +361,9 @@ def _risk_reward_component(
 
 
 def _volume_component(price_data: dict[str, Any], technical: dict[str, Any]) -> float | None:
-    volume_trend = str(technical.get("volume_trend") or price_data.get("volume_trend") or "").lower()
+    volume_trend = str(
+        technical.get("volume_trend") or price_data.get("volume_trend") or ""
+    ).lower()
     if volume_trend in {"above_average", "strong", "high"}:
         return 1.0
     if volume_trend in {"average", "normal", "neutral"}:
@@ -352,7 +382,9 @@ def _volume_component(price_data: dict[str, Any], technical: dict[str, Any]) -> 
     return None
 
 
-def _support_resistance_component(direction: str, current_price: float, technical: dict[str, Any]) -> float | None:
+def _support_resistance_component(
+    direction: str, current_price: float, technical: dict[str, Any]
+) -> float | None:
     support = _safe_float(technical.get("support"))
     resistance = _safe_float(technical.get("resistance"))
     if current_price <= 0:
@@ -413,23 +445,37 @@ def _entry_drivers(components: dict[str, float | None]) -> list[str]:
     drivers: list[str] = []
     trend = components.get("trend")
     if trend is not None:
-        drivers.append("trend aligned with entry direction" if trend >= 0.75 else "trend alignment weak")
+        drivers.append(
+            "trend aligned with entry direction" if trend >= 0.75 else "trend alignment weak"
+        )
     rr = components.get("risk_reward")
     if rr is not None:
         drivers.append("risk/reward ratio acceptable" if rr >= 0.65 else "risk/reward ratio weak")
     volume = components.get("volume")
     if volume is not None:
-        drivers.append("volume confirmation strong" if volume >= 0.75 else "volume confirmation weak")
+        drivers.append(
+            "volume confirmation strong" if volume >= 0.75 else "volume confirmation weak"
+        )
     proximity = components.get("support_resistance")
     if proximity is not None:
-        drivers.append("support/resistance proximity favorable" if proximity >= 0.65 else "support/resistance proximity unfavorable")
+        drivers.append(
+            "support/resistance proximity favorable"
+            if proximity >= 0.65
+            else "support/resistance proximity unfavorable"
+        )
     volatility = components.get("volatility")
     if volatility is not None:
-        drivers.append("volatility condition manageable" if volatility >= 0.65 else "volatility condition elevated")
+        drivers.append(
+            "volatility condition manageable"
+            if volatility >= 0.65
+            else "volatility condition elevated"
+        )
     return drivers or ["entry quality uses limited technical data"]
 
 
-def build_technical_entry(ohlcv_data: Any, current_price: float | None = None, config: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_technical_entry(
+    ohlcv_data: Any, current_price: float | None = None, config: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Build a deterministic technical entry quality payload from normalized OHLCV rows."""
     _ = config
     rows = _normalize_rows(ohlcv_data)
@@ -483,8 +529,16 @@ def build_technical_entry(ohlcv_data: Any, current_price: float | None = None, c
 
     distance_to_support = latest_close - support if support is not None else None
     distance_to_resistance = resistance - latest_close if resistance is not None else None
-    resistance_gap_pct = (distance_to_resistance / latest_close * 100) if latest_close and distance_to_resistance is not None else None
-    support_gap_pct = (distance_to_support / latest_close * 100) if latest_close and distance_to_support is not None else None
+    resistance_gap_pct = (
+        (distance_to_resistance / latest_close * 100)
+        if latest_close and distance_to_resistance is not None
+        else None
+    )
+    support_gap_pct = (
+        (distance_to_support / latest_close * 100)
+        if latest_close and distance_to_support is not None
+        else None
+    )
     atr_pct = (atr / latest_close * 100) if latest_close and atr is not None else None
     if resistance_gap_pct is not None and resistance_gap_pct <= 3:
         reasons.append("Resistance is close to the latest price.")

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import tradingagents.dataflows.normalizers as normalizers
-from tradingagents.dataflows.financial_rows import FinancialRow, build_period_label, normalize_currency, normalize_unit
+from tradingagents.dataflows.financial_rows import (
+    FinancialRow,
+    build_period_label,
+    normalize_currency,
+    normalize_unit,
+)
 from tradingagents.dataflows.normalizers import (
     merge_financial_rows_yfinance_first,
     normalize_finnhub_financials,
@@ -10,7 +15,9 @@ from tradingagents.dataflows.normalizers import (
 
 
 def test_financial_row_contract_and_helpers():
-    row = FinancialRow(symbol="AAPL", period="FY2024", period_type="annual", currency="USD", unit="raw")
+    row = FinancialRow(
+        symbol="AAPL", period="FY2024", period_type="annual", currency="USD", unit="raw"
+    )
     assert row.net_profit is None
     assert normalize_currency(None, "IDX") == "IDR"
     assert normalize_currency(None, "US") == "USD"
@@ -21,10 +28,19 @@ def test_financial_row_contract_and_helpers():
 def test_yfinance_normalizer_maps_rows_and_preserves_period_types():
     rows = normalize_yfinance_financials(
         financials={
-            "annual": [{"period_label": "FY2024", "period_type": "annual", "revenue": 100, "net_income": 10}],
+            "annual": [
+                {
+                    "period_label": "FY2024",
+                    "period_type": "annual",
+                    "revenue": 100,
+                    "net_income": 10,
+                }
+            ],
             "quarterly": [{"period_label": "Q1FY2025", "period_type": "quarterly", "revenue": 30}],
         },
-        balance_sheet={"annual": [{"period_label": "FY2024", "total_assets": 200, "total_liabilities": 80}]},
+        balance_sheet={
+            "annual": [{"period_label": "FY2024", "total_assets": 200, "total_liabilities": 80}]
+        },
         cashflow={"annual": [{"period_label": "FY2024", "operating_cash_flow": 20, "capex": 5}]},
         info={"symbol": "AAPL", "currency": "USD", "sharesOutstanding": 1000},
     )

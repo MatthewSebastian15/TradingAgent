@@ -35,7 +35,9 @@ def _price_csv(*dates: str) -> str:
     )
 
 
-def _mock_market_data(monkeypatch: pytest.MonkeyPatch, sample: str | Exception) -> list[tuple[str, str, str, str]]:
+def _mock_market_data(
+    monkeypatch: pytest.MonkeyPatch, sample: str | Exception
+) -> list[tuple[str, str, str, str]]:
     calls: list[tuple[str, str, str, str]] = []
 
     class ImmediateExecutor:
@@ -51,7 +53,11 @@ def _mock_market_data(monkeypatch: pytest.MonkeyPatch, sample: str | Exception) 
         return ImmediateExecutor()
 
     def fake_preflight_worker(
-        ticker: str, trade_date: str, max_debate_rounds: int, analysis_depth: str, response_detail: str
+        ticker: str,
+        trade_date: str,
+        max_debate_rounds: int,
+        analysis_depth: str,
+        response_detail: str,
     ) -> str:
         assert analysis_depth == "fast"
         trade_dt = datetime.strptime(trade_date, "%Y-%m-%d")

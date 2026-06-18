@@ -77,7 +77,13 @@ FIELD_ALIASES = {
         "cashAndCashEquivalentsAtCarryingValue",
         "cash",
     ),
-    "current_liabilities": ("current liabilities", "currentliabilities", "total current liabilities", "totalcurrentliabilities", "totalCurrentLiabilities"),
+    "current_liabilities": (
+        "current liabilities",
+        "currentliabilities",
+        "total current liabilities",
+        "totalcurrentliabilities",
+        "totalCurrentLiabilities",
+    ),
     "total_liabilities": (
         "total liabilities net minority interest",
         "totalliabilitiesnetminorityinterest",
@@ -132,7 +138,16 @@ FIELD_ALIASES = {
         "shares outstanding",
         "sharesoutstanding",
     ),
-    "eps": ("diluted eps", "dilutedeps", "basic eps", "basiceps", "reported eps", "reportedeps", "reportedEPS", "eps"),
+    "eps": (
+        "diluted eps",
+        "dilutedeps",
+        "basic eps",
+        "basiceps",
+        "reported eps",
+        "reportedeps",
+        "reportedEPS",
+        "eps",
+    ),
     "dividend_per_share": ("dividend per share", "dividendpershare", "DividendPerShare"),
     "reference_price": ("reference price", "referenceprice", "close", "last close", "lastclose"),
     "dividend_yield": ("dividend yield", "dividendyield", "DividendYield"),
@@ -142,22 +157,72 @@ FIELD_ALIASES = {
     "pe": ("p/e", "pe", "pe ratio", "peratio", "trailingPE"),
     "pbv": ("p/bv", "pbv", "p/b", "pb", "price to book", "pricebook", "priceToBook"),
     "ps": ("p/s", "ps", "price to sales", "pricetosales", "priceToSalesTrailing12Months"),
-    "ev_ebitda": ("ev/ebitda", "evebitda", "enterprise value to ebitda", "enterprisevaluetoebitda", "enterpriseToEbitda"),
+    "ev_ebitda": (
+        "ev/ebitda",
+        "evebitda",
+        "enterprise value to ebitda",
+        "enterprisevaluetoebitda",
+        "enterpriseToEbitda",
+    ),
     "gross_profit": ("gross profit", "grossprofit", "grossProfit"),
     "cost_of_revenue": ("cost of revenue", "costofrevenue", "costOfRevenue"),
     "pretax_income": ("pretax income", "pretaxincome", "income before tax", "incomebeforetax"),
-    "income_tax_expense": ("tax provision", "taxprovision", "income tax expense", "incometaxexpense"),
-    "interest_expense": ("interest expense", "interestexpense", "interest expense non operating", "interestexpensenonoperating"),
-    "current_assets": ("current assets", "currentassets", "total current assets", "totalcurrentassets"),
+    "income_tax_expense": (
+        "tax provision",
+        "taxprovision",
+        "income tax expense",
+        "incometaxexpense",
+    ),
+    "interest_expense": (
+        "interest expense",
+        "interestexpense",
+        "interest expense non operating",
+        "interestexpensenonoperating",
+    ),
+    "current_assets": (
+        "current assets",
+        "currentassets",
+        "total current assets",
+        "totalcurrentassets",
+    ),
     "working_capital": ("working capital", "workingcapital"),
     "invested_capital": ("invested capital", "investedcapital"),
     "inventory": ("inventory", "inventories"),
-    "investing_cash_flow": ("investing cash flow", "investingcashflow", "cash flow from continuing investing activities", "cashflowfromcontinuinginvestingactivities"),
-    "financing_cash_flow": ("financing cash flow", "financingcashflow", "cash flow from continuing financing activities", "cashflowfromcontinuingfinancingactivities"),
-    "depreciation_amortization": ("depreciation and amortization", "depreciationandamortization", "depreciation amortization depletion", "depreciationamortizationdepletion"),
-    "change_in_working_capital": ("change in working capital", "changeinworkingcapital", "changes in working capital", "changesinworkingcapital"),
-    "stock_based_compensation": ("stock based compensation", "stockbasedcompensation", "stock-based compensation"),
-    "share_repurchase": ("repurchase of capital stock", "repurchaseofcapitalstock", "repurchase of common stock", "repurchaseofcommonstock"),
+    "investing_cash_flow": (
+        "investing cash flow",
+        "investingcashflow",
+        "cash flow from continuing investing activities",
+        "cashflowfromcontinuinginvestingactivities",
+    ),
+    "financing_cash_flow": (
+        "financing cash flow",
+        "financingcashflow",
+        "cash flow from continuing financing activities",
+        "cashflowfromcontinuingfinancingactivities",
+    ),
+    "depreciation_amortization": (
+        "depreciation and amortization",
+        "depreciationandamortization",
+        "depreciation amortization depletion",
+        "depreciationamortizationdepletion",
+    ),
+    "change_in_working_capital": (
+        "change in working capital",
+        "changeinworkingcapital",
+        "changes in working capital",
+        "changesinworkingcapital",
+    ),
+    "stock_based_compensation": (
+        "stock based compensation",
+        "stockbasedcompensation",
+        "stock-based compensation",
+    ),
+    "share_repurchase": (
+        "repurchase of capital stock",
+        "repurchaseofcapitalstock",
+        "repurchase of common stock",
+        "repurchaseofcommonstock",
+    ),
     "peg_ratio": ("peg ratio", "pegratio", "pegRatio"),
     "beta": ("beta",),
     "float_shares": ("float shares", "floatshares", "floatShares"),
@@ -168,21 +233,42 @@ FIELD_ALIASES = {
     "payout_ratio": ("payout ratio", "payoutratio", "payoutRatio"),
     "roe": ("return on equity", "returnonequity", "returnOnEquity", "roe"),
     "roa": ("return on assets", "returnonassets", "returnOnAssets", "roa"),
-    "ev_sales": ("ev/sales", "evsales", "enterprise to revenue", "enterprisetorevenue", "enterpriseToRevenue"),
-    "price_fcf": ("price/fcf", "pricefcf", "price to free cash flow", "pricetofreecashflow", "priceToFreeCashflow", "priceToFreeCashFlow"),
-    "ev_fcf": ("ev/fcf", "evfcf", "enterprise to free cash flow", "enterprisetofreecashflow", "enterpriseToFcf", "enterpriseToFreeCashFlow"),
+    "ev_sales": (
+        "ev/sales",
+        "evsales",
+        "enterprise to revenue",
+        "enterprisetorevenue",
+        "enterpriseToRevenue",
+    ),
+    "price_fcf": (
+        "price/fcf",
+        "pricefcf",
+        "price to free cash flow",
+        "pricetofreecashflow",
+        "priceToFreeCashflow",
+        "priceToFreeCashFlow",
+    ),
+    "ev_fcf": (
+        "ev/fcf",
+        "evfcf",
+        "enterprise to free cash flow",
+        "enterprisetofreecashflow",
+        "enterpriseToFcf",
+        "enterpriseToFreeCashFlow",
+    ),
     "earnings_yield": ("earnings yield", "earningsyield"),
     "fcf_yield": ("fcf yield", "fcfyield", "free cash flow yield", "freecashflowyield"),
 }
 
 NORMALIZED_ALIAS_MAP = {
-    re.sub(r"[^a-z0-9]", "", alias.lower()): field for field, aliases in FIELD_ALIASES.items() for alias in aliases
+    re.sub(r"[^a-z0-9]", "", alias.lower()): field
+    for field, aliases in FIELD_ALIASES.items()
+    for alias in aliases
 }
 
 
 def _blank(value: Any) -> bool:
     return value is None or value == "" or value == "None" or value == "null"
-
 
 
 def _canonical_field(label: Any) -> str | None:
@@ -202,7 +288,9 @@ def _fy_key(year: int) -> str:
 
 
 def _period_key(value: Any, frequency: str | None = None) -> str | None:
-    if isinstance(value, str) and re.fullmatch(r"FY\d{2}(?:Q[1-4])?", value.strip(), flags=re.IGNORECASE):
+    if isinstance(value, str) and re.fullmatch(
+        r"FY\d{2}(?:Q[1-4])?", value.strip(), flags=re.IGNORECASE
+    ):
         return value.strip().upper()
     try:
         parsed = datetime.fromisoformat(str(value)[:10])
@@ -239,7 +327,9 @@ def _merge_value(
     if field in period_values:
         if accumulate and isinstance(period_values[field].get("value"), (int, float)):
             period_values[field]["value"] = float(period_values[field]["value"]) + number
-            period_values[field]["source_field"] = f"{period_values[field].get('source_field')}; {source_field}"
+            period_values[field]["source_field"] = (
+                f"{period_values[field].get('source_field')}; {source_field}"
+            )
         return
     period_values[field] = {
         "value": number,
@@ -320,7 +410,9 @@ def _parse_tabular_statement(
         payload = payload.to_csv()
     if not isinstance(payload, str) or "," not in payload:
         return False
-    rows = [line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    rows = [
+        line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    ]
     if len(rows) < 2:
         return False
     try:
@@ -427,8 +519,6 @@ def _parse_finnhub_statement(
     return found
 
 
-
-
 def _dict_date_rows(mapping: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     rows: list[Mapping[str, Any]] = []
     for raw_date, raw_value in mapping.items():
@@ -446,7 +536,9 @@ def _dict_date_rows(mapping: Mapping[str, Any]) -> list[Mapping[str, Any]]:
 
 
 def _csv_event_rows(payload: str) -> list[Mapping[str, Any]]:
-    lines = [line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    lines = [
+        line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    ]
     if len(lines) < 2 or "," not in payload:
         return []
     try:
@@ -492,7 +584,15 @@ def _event_period_keys(row: Mapping[str, Any]) -> list[str]:
     date_value = next(
         (
             row.get(key)
-            for key in ("ex_date", "date", "Date", "payment_date", "record_date", "announcement_date", "")
+            for key in (
+                "ex_date",
+                "date",
+                "Date",
+                "payment_date",
+                "record_date",
+                "announcement_date",
+                "",
+            )
             if row.get(key)
         ),
         None,
@@ -507,7 +607,15 @@ def _event_period_keys(row: Mapping[str, Any]) -> list[str]:
 
 
 def _event_amount(row: Mapping[str, Any]) -> float | None:
-    for key in ("dividend_per_share", "Dividend Per Share", "Dividends", "cash_amount", "amount", "dividend", "cash_dividend"):
+    for key in (
+        "dividend_per_share",
+        "Dividend Per Share",
+        "Dividends",
+        "cash_amount",
+        "amount",
+        "dividend",
+        "cash_dividend",
+    ):
         amount = _number(row.get(key))
         if amount is not None:
             return abs(amount)
@@ -559,6 +667,7 @@ def _parse_dividend_events(payload: Any, normalized: dict[str, Any], vendor: str
                 )
                 found = True
     return found
+
 
 def _parse_statement(
     payload: Any,
@@ -635,7 +744,11 @@ def _price_rows(price_data: Any) -> list[tuple[Any, Any]]:
         rows = [item for item in price_data if isinstance(item, Mapping)]
     elif isinstance(price_data, Mapping):
         nested = next(
-            (price_data.get(key) for key in ("data", "rows", "prices", "points") if isinstance(price_data.get(key), list)),
+            (
+                price_data.get(key)
+                for key in ("data", "rows", "prices", "points")
+                if isinstance(price_data.get(key), list)
+            ),
             None,
         )
         if isinstance(nested, list):
@@ -645,7 +758,11 @@ def _price_rows(price_data: Any) -> list[tuple[Any, Any]]:
         else:
             rows = [price_data]
     elif isinstance(price_data, str) and "," in price_data:
-        lines = [line for line in price_data.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+        lines = [
+            line
+            for line in price_data.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
         if len(lines) < 2:
             return []
         try:
@@ -660,9 +777,15 @@ def _price_rows(price_data: Any) -> list[tuple[Any, Any]]:
         if not isinstance(row, Mapping):
             continue
         field_map = {re.sub(r"[^a-z0-9]", "", str(field).lower()): field for field in row}
-        date_field = next((field_map[key] for key in ("date", "datetime", "timestamp") if key in field_map), None)
+        date_field = next(
+            (field_map[key] for key in ("date", "datetime", "timestamp") if key in field_map), None
+        )
         close_field = next(
-            (field_map[key] for key in ("close", "adjclose", "lastclose", "price") if key in field_map),
+            (
+                field_map[key]
+                for key in ("close", "adjclose", "lastclose", "price")
+                if key in field_map
+            ),
             None,
         )
         if date_field and close_field:
@@ -700,12 +823,16 @@ def reference_prices_by_period(
     if not rows or not periods:
         return {}
     try:
-        analysis_cutoff = datetime.fromisoformat(str(analysis_date)[:10]).date() if analysis_date else None
+        analysis_cutoff = (
+            datetime.fromisoformat(str(analysis_date)[:10]).date() if analysis_date else None
+        )
     except (TypeError, ValueError):
         analysis_cutoff = None
     prices: dict[str, float] = {}
     for period in periods:
-        cutoff_value = period.sort_key or (f"{period.year}-12-31" if period.type == "annual" else None)
+        cutoff_value = period.sort_key or (
+            f"{period.year}-12-31" if period.type == "annual" else None
+        )
         try:
             period_cutoff = datetime.fromisoformat(str(cutoff_value)[:10]).date()
         except (TypeError, ValueError):
@@ -724,7 +851,9 @@ def _add_reference_prices(
     price_data: Any,
     analysis_date: Any,
 ) -> None:
-    for period_key, reference_price in reference_prices_by_period(periods, price_data, analysis_date).items():
+    for period_key, reference_price in reference_prices_by_period(
+        periods, price_data, analysis_date
+    ).items():
         _merge_value(
             normalized,
             period_key,
@@ -742,7 +871,9 @@ def _add_profile_fallbacks(
 ) -> None:
     if not isinstance(company_profile, Mapping):
         return
-    shares_outstanding = company_profile.get("shares_outstanding") or company_profile.get("sharesOutstanding")
+    shares_outstanding = company_profile.get("shares_outstanding") or company_profile.get(
+        "sharesOutstanding"
+    )
     for period in periods:
         _merge_value(
             normalized,
@@ -779,7 +910,14 @@ def _add_profile_fallbacks(
             "fcf_yield": ("fcf_yield", "free_cash_flow_yield", "freeCashFlowYield"),
         }
         for field, source_keys in profile_metric_fields.items():
-            value = next((company_profile.get(key) for key in source_keys if company_profile.get(key) is not None), None)
+            value = next(
+                (
+                    company_profile.get(key)
+                    for key in source_keys
+                    if company_profile.get(key) is not None
+                ),
+                None,
+            )
             _merge_value(
                 normalized,
                 latest_period_key,
@@ -815,10 +953,14 @@ def parse_vendor_financials(
             continue
         for field in ("income_statement", "balance_sheet", "cashflow", "dividends"):
             _collect_statement_payloads(grouped, bundle.get(field), hinted_vendor=vendor)
-        normalized["currency"] = normalized["currency"] or _currency_from_payload(bundle.get("fundamentals"))
+        normalized["currency"] = normalized["currency"] or _currency_from_payload(
+            bundle.get("fundamentals")
+        )
 
     normalized["currency"] = normalized["currency"] or _currency_from_payload(fundamentals)
-    normalized["currency"] = "IDR" if str(ticker).upper().endswith(".JK") else (normalized["currency"] or "USD")
+    normalized["currency"] = (
+        "IDR" if str(ticker).upper().endswith(".JK") else (normalized["currency"] or "USD")
+    )
 
     for vendor in VENDOR_PRIORITY:
         for payload, frequency in grouped.get(vendor, []):

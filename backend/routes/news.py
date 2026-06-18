@@ -15,7 +15,13 @@ from schemas import NewsResponse
 
 router = APIRouter(tags=["news"])
 debug_router = APIRouter(tags=["news"])
-_SUPPORTED_DEBUG_PROVIDERS = {"google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"}
+_SUPPORTED_DEBUG_PROVIDERS = {
+    "google_news_light",
+    "marketaux",
+    "rss_context",
+    "newsdata",
+    "yfinance",
+}
 _SUPPORTED_GENERAL_PROVIDERS = {"google_news_light", "marketaux", "rss_context", "newsdata"}
 
 
@@ -72,7 +78,10 @@ async def get_general_news(
     if normalized_provider is not None and normalized_provider not in _SUPPORTED_GENERAL_PROVIDERS:
         raise BadRequestError(
             "Unsupported general news provider.",
-            details={"provider": provider, "supported_providers": sorted(_SUPPORTED_GENERAL_PROVIDERS)},
+            details={
+                "provider": provider,
+                "supported_providers": sorted(_SUPPORTED_GENERAL_PROVIDERS),
+            },
         )
     async with limit_request(request, request_policy()):
         return await asyncio.to_thread(
@@ -135,7 +144,9 @@ async def get_news(
 ):
     normalized_ticker = normalize_ticker_symbol(ticker)
     async with limit_request(request, request_policy()):
-        return await asyncio.to_thread(_fetch_news, normalized_ticker, window_days=window_days, limit=limit)
+        return await asyncio.to_thread(
+            _fetch_news, normalized_ticker, window_days=window_days, limit=limit
+        )
 
 
 @debug_router.get("/debug/news/{ticker}")
@@ -151,7 +162,10 @@ async def debug_news(
     if normalized_provider is not None and normalized_provider not in _SUPPORTED_DEBUG_PROVIDERS:
         raise BadRequestError(
             "Unsupported news provider.",
-            details={"provider": provider, "supported_providers": sorted(_SUPPORTED_DEBUG_PROVIDERS)},
+            details={
+                "provider": provider,
+                "supported_providers": sorted(_SUPPORTED_DEBUG_PROVIDERS),
+            },
         )
     normalized_ticker = normalize_ticker_symbol(ticker)
     async with limit_request(request, request_policy()):

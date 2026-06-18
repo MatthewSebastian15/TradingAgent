@@ -72,7 +72,8 @@ def sample_collected_data():
         month_day = day if day <= 31 else day - 31 if day <= 61 else day - 61
         close = 100 + index
         price_rows.append(
-            f"2026-{month:02d}-{month_day:02d},{close - 1},{close + 2},{close - 2},{close},{1000 + index * 10}"
+            f"2026-{month:02d}-{month_day:02d},{close - 1},{close + 2},"
+            f"{close - 2},{close},{1000 + index * 10}"
         )
 
     data = CollectedData(
@@ -85,7 +86,12 @@ def sample_collected_data():
         balance_sheet='{"total_assets": 5000000, "total_liabilities": 2000000}',
         cashflow='{"operating_cash_flow": 120000, "free_cash_flow": 90000}',
         income_statement='{"revenue": 800000, "net_income": 180000}',
-        company_news="### BBCA earnings beat\nPublished: 2026-05-08\nRevenue and profit improved.\nLink: https://example.com/a",
+        company_news=(
+            "### BBCA earnings beat\n"
+            + "Published: 2026-05-08\n"
+            + "Revenue and profit improved.\n"
+            + "Link: https://example.com/a"
+        ),
         global_news="### Indonesia rate outlook stable\nMacro context remains supportive.",
         insider_transactions="No major insider transactions returned.",
         data_quality=DataQualityReport(price_data="ok", fundamentals="ok", news="ok", warnings=[]),
@@ -146,7 +152,9 @@ def sample_collected_data():
             "scale": "millions",
             "analysis_date": "2026-05-10",
             "periods": [{"key": "2026Q1", "label": "Q1 2026"}],
-            "rows": [{"key": "revenue", "label": "Revenue", "values": {"2026Q1": {"display": "800,000"}}}],
+            "rows": [
+                {"key": "revenue", "label": "Revenue", "values": {"2026Q1": {"display": "800,000"}}}
+            ],
             "data_quality": {"available": True},
         },
         fundamental_analysis={

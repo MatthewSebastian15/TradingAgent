@@ -48,7 +48,10 @@ def _client() -> TestClient:
 
 
 def test_get_general_news_returns_200(monkeypatch):
-    monkeypatch.setattr("routes.news._fetch_general_news", lambda **kwargs: _general_news_response(kwargs["category"]))
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
 
     response = _client().get("/api/news/general")
 
@@ -64,7 +67,10 @@ def test_get_general_news_categories_returns_category_list():
 
 
 def test_get_general_news_crypto_returns_crypto_only(monkeypatch):
-    monkeypatch.setattr("routes.news._fetch_general_news", lambda **kwargs: _general_news_response(kwargs["category"]))
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
 
     response = _client().get("/api/news/general?category=crypto")
 
@@ -73,7 +79,10 @@ def test_get_general_news_crypto_returns_crypto_only(monkeypatch):
 
 
 def test_invalid_category_does_not_crash(monkeypatch):
-    monkeypatch.setattr("routes.news._fetch_general_news", lambda **kwargs: _general_news_response(kwargs["category"]))
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
 
     response = _client().get("/api/news/general?category=invalid")
 
@@ -81,7 +90,10 @@ def test_invalid_category_does_not_crash(monkeypatch):
 
 
 def test_provider_status_exists(monkeypatch):
-    monkeypatch.setattr("routes.news._fetch_general_news", lambda **kwargs: _general_news_response(kwargs["category"]))
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
 
     response = _client().get("/api/news/general")
 
@@ -89,7 +101,10 @@ def test_provider_status_exists(monkeypatch):
 
 
 def test_provider_status_can_include_rss_context(monkeypatch):
-    monkeypatch.setattr("routes.news._fetch_general_news", lambda **kwargs: _general_news_response(kwargs["category"]))
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
 
     response = _client().get("/api/news/general")
 
@@ -97,7 +112,10 @@ def test_provider_status_can_include_rss_context(monkeypatch):
 
 
 def test_response_does_not_include_prompt_articles(monkeypatch):
-    monkeypatch.setattr("routes.news._fetch_general_news", lambda **kwargs: _general_news_response(kwargs["category"]))
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
 
     response = _client().get("/api/news/general")
 
@@ -105,7 +123,10 @@ def test_response_does_not_include_prompt_articles(monkeypatch):
 
 
 def test_response_does_not_include_decision_company_news(monkeypatch):
-    monkeypatch.setattr("routes.news._fetch_general_news", lambda **kwargs: _general_news_response(kwargs["category"]))
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
 
     response = _client().get("/api/news/general")
 

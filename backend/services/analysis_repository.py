@@ -44,8 +44,6 @@ def _history_signal(result: dict[str, Any] | None, fallback: Any) -> str | None:
     return str(fallback).strip() if fallback else None
 
 
-
-
 def _require_owner_id(owner_id: str | None) -> str:
     owner = str(owner_id or "").strip()
     if not owner:
@@ -95,7 +93,9 @@ class AnalysisRepository:
         owner = _require_owner_id(owner_id)
         now = utc_now_iso()
         created_at = str(result.get("analysis_created_at") or result.get("created_at") or now)
-        decision = result.get("final_decision") or result.get("decision") or result.get("recommendation")
+        decision = (
+            result.get("final_decision") or result.get("decision") or result.get("recommendation")
+        )
         values = {
             "request_id": request_id,
             "owner_id": owner,
@@ -113,7 +113,9 @@ class AnalysisRepository:
             "stop_loss": result.get("stop_loss"),
             "take_profit": result.get("take_profit"),
             "rr_ratio": result.get("risk_reward_display") or result.get("rr_ratio"),
-            "source_summary": result.get("current_price_source") or result.get("source") or result.get("data_source"),
+            "source_summary": result.get("current_price_source")
+            or result.get("source")
+            or result.get("data_source"),
             "status": "completed",
             "result_json": self._dumps(result),
             "request_json": self._dumps(request_payload or {}),
@@ -243,7 +245,11 @@ class AnalysisRepository:
             result = self._loads_dict(item.pop("result_json", None)) or {}
             item["display_signal"] = _history_signal(result, item.get("decision"))
             item["confidence_score"] = _confidence_score_percent(result.get("confidence_score"))
-            item["confidence_tier"] = result.get("confidence_tier") if isinstance(result.get("confidence_tier"), str) else None
+            item["confidence_tier"] = (
+                result.get("confidence_tier")
+                if isinstance(result.get("confidence_tier"), str)
+                else None
+            )
             items.append(item)
         return items
 
@@ -263,10 +269,14 @@ class AnalysisRepository:
             if owner_id is None:
                 cursor = conn.execute("DELETE FROM analyses")
             else:
-                cursor = conn.execute("DELETE FROM analyses WHERE owner_id = ?", (_require_owner_id(owner_id),))
+                cursor = conn.execute(
+                    "DELETE FROM analyses WHERE owner_id = ?", (_require_owner_id(owner_id),)
+                )
             return max(0, cursor.rowcount)
 
-    def mark_exported(self, request_id: str, export_type: str, *, owner_id: str | None = None) -> bool:
+    def mark_exported(
+        self, request_id: str, export_type: str, *, owner_id: str | None = None
+    ) -> bool:
         if export_type not in {"html", "pdf"}:
             return False
         column = "exported_html_at" if export_type == "html" else "exported_pdf_at"
@@ -279,7 +289,8 @@ class AnalysisRepository:
                 )
             else:
                 cursor = conn.execute(
-                    f"UPDATE analyses SET {column} = ?, updated_at = ? WHERE request_id = ? AND owner_id = ?",
+                    f"UPDATE analyses SET {column} = ?, updated_at = ? "
+                    "WHERE request_id = ? AND owner_id = ?",
                     (now, now, request_id, _require_owner_id(owner_id)),
                 )
             return cursor.rowcount > 0
@@ -297,7 +308,8 @@ class AnalysisRepository:
             version = int(conn.execute("PRAGMA user_version").fetchone()[0])
             if version > SCHEMA_VERSION:
                 raise RuntimeError(
-                    f"SQLite analysis history schema version {version} is newer than supported version {SCHEMA_VERSION}."
+                    f"SQLite analysis history schema version {version} is newer than supported "
+                    f"version {SCHEMA_VERSION}."
                 )
             conn.execute(
                 """
@@ -331,16 +343,39 @@ class AnalysisRepository:
             )
             self._migrate_owner_id_not_null(conn)
 
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_owner_created_at ON analyses (owner_id, created_at DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_owner_request_id ON analyses (owner_id, request_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_owner_job_id ON analyses (owner_id, job_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_job_id ON analyses (job_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_created_at ON analyses (created_at DESC)")
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_analyses_ticker_created_at ON analyses (ticker, created_at DESC)"
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_analyses_owner_created_at ON analyses "
+                    + "(owner_id, created_at DESC)"
+                )
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_analyses_market_created_at ON analyses (market, created_at DESC)"
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_analyses_owner_request_id ON analyses "
+                    + "(owner_id, request_id)"
+                )
+            )
+            conn.execute(
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_analyses_owner_job_id ON analyses (owner_id, "
+                    + "job_id)"
+                )
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_analyses_job_id ON analyses (job_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_analyses_created_at ON analyses (created_at DESC)"
+            )
+            conn.execute(
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_analyses_ticker_created_at ON analyses "
+                    + "(ticker, created_at DESC)"
+                )
+            )
+            conn.execute(
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_analyses_market_created_at ON analyses "
+                    + "(market, created_at DESC)"
+                )
             )
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
@@ -355,7 +390,9 @@ class AnalysisRepository:
             raise ValueError(f"Unsupported lookup column: {column}")
 
         owner_filter = "AND owner_id = ?" if owner_id is not None else ""
-        params: tuple[Any, ...] = (value, _require_owner_id(owner_id)) if owner_id is not None else (value,)
+        params: tuple[Any, ...] = (
+            (value, _require_owner_id(owner_id)) if owner_id is not None else (value,)
+        )
         with self._connect() as conn:
             return conn.execute(
                 f"""
@@ -376,10 +413,18 @@ class AnalysisRepository:
         rows = conn.execute("PRAGMA table_info(analyses)").fetchall()
         columns = {row["name"] for row in rows}
         if "owner_id" not in columns:
-            conn.execute("ALTER TABLE analyses ADD COLUMN owner_id TEXT NOT NULL DEFAULT '__legacy_unowned__'")
+            conn.execute(
+                (
+                    "ALTER TABLE analyses ADD COLUMN owner_id TEXT NOT NULL DEFAULT "
+                    + "'__legacy_unowned__'"
+                )
+            )
             return
         owner_column = next(row for row in rows if row["name"] == "owner_id")
-        conn.execute("UPDATE analyses SET owner_id = ? WHERE owner_id IS NULL OR TRIM(owner_id) = ''", (LEGACY_OWNER_ID,))
+        conn.execute(
+            "UPDATE analyses SET owner_id = ? WHERE owner_id IS NULL OR TRIM(owner_id) = ''",
+            (LEGACY_OWNER_ID,),
+        )
         if int(owner_column["notnull"]):
             return
 
@@ -415,35 +460,43 @@ class AnalysisRepository:
             """
         )
         conn.execute(
-            """
-            INSERT INTO analyses (
-                request_id, owner_id, job_id, ticker, market, trade_date,
-                time_horizon_months, analysis_depth, response_detail,
-                decision, recommendation, current_price, entry_price,
-                stop_loss, take_profit, rr_ratio, source_summary,
-                status, result_json, request_json, created_at, updated_at,
-                exported_html_at, exported_pdf_at
-            )
-            SELECT
-                request_id, COALESCE(NULLIF(TRIM(owner_id), ''), ?), job_id, ticker, market, trade_date,
-                time_horizon_months, analysis_depth, response_detail,
-                decision, recommendation, current_price, entry_price,
-                stop_loss, take_profit, rr_ratio, source_summary,
-                status, result_json, request_json, created_at, updated_at,
-                exported_html_at, exported_pdf_at
-            FROM analyses_legacy_owner_nullable
-            """,
+            (
+                "\n"
+                + "            INSERT INTO analyses (\n"
+                + "                request_id, owner_id, job_id, ticker, market, trade_date,\n"
+                + "                time_horizon_months, analysis_depth, response_detail,\n"
+                + "                decision, recommendation, current_price, entry_price,\n"
+                + "                stop_loss, take_profit, rr_ratio, source_summary,\n"
+                + "                status, result_json, request_json, created_at, updated_at,\n"
+                + "                exported_html_at, exported_pdf_at\n"
+                + "            )\n"
+                + "            SELECT\n"
+                + "                request_id, COALESCE(NULLIF(TRIM(owner_id), ''), ?), job_id, "
+                + "ticker, market, trade_date,\n"
+                + "                time_horizon_months, analysis_depth, response_detail,\n"
+                + "                decision, recommendation, current_price, entry_price,\n"
+                + "                stop_loss, take_profit, rr_ratio, source_summary,\n"
+                + "                status, result_json, request_json, created_at, updated_at,\n"
+                + "                exported_html_at, exported_pdf_at\n"
+                + "            FROM analyses_legacy_owner_nullable\n"
+                + "            "
+            ),
             (LEGACY_OWNER_ID,),
         )
         conn.execute("DROP TABLE analyses_legacy_owner_nullable")
 
     def _evict_old_rows(self, conn: sqlite3.Connection) -> None:
         rows = conn.execute(
-            "SELECT request_id FROM analyses ORDER BY created_at DESC, request_id DESC LIMIT -1 OFFSET ?",
+            (
+                "SELECT request_id FROM analyses ORDER BY created_at DESC, request_id DESC LIMIT "
+                + "-1 OFFSET ?"
+            ),
             (self.max_rows,),
         ).fetchall()
         if rows:
-            conn.executemany("DELETE FROM analyses WHERE request_id = ?", [(row["request_id"],) for row in rows])
+            conn.executemany(
+                "DELETE FROM analyses WHERE request_id = ?", [(row["request_id"],) for row in rows]
+            )
 
     @classmethod
     def _result_from_row(cls, row: sqlite3.Row | None) -> dict[str, Any] | None:

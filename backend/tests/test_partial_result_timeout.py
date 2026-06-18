@@ -33,7 +33,11 @@ def test_build_partial_result_contract():
 
     assert result["is_partial"] is True
     assert result["partial_reason"] == "pipeline_timeout"
-    assert result["completed_stages"] == ["symbol_resolution", "market_data_fetch", "technical_analysis"]
+    assert result["completed_stages"] == [
+        "symbol_resolution",
+        "market_data_fetch",
+        "technical_analysis",
+    ]
     assert "final_synthesis" in result["missing_stages"]
     assert result["partial_signal"] == "WAIT"
     assert result["partial_confidence"] == 0

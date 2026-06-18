@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from .vendor_capabilities import VENDOR_CAPABILITIES, supports_vendor
 
-NEWS_PRIORITY = ["yfinance", "google_news_light", "newsdata", "marketaux", "finnhub", "alpha_vantage"]
+NEWS_PRIORITY = [
+    "yfinance",
+    "google_news_light",
+    "newsdata",
+    "marketaux",
+    "finnhub",
+    "alpha_vantage",
+]
 NEWS_SENTIMENT_PRIORITY = ["finnhub", "alpha_vantage"]
 
 SOURCE_PRIORITY: dict[str, dict[str, list[str]]] = {
@@ -205,7 +212,9 @@ def get_source_priority(market: str | None, field_name: str) -> list[str]:
     return list(vendors or ["yfinance"])
 
 
-def get_field_vendor_order(field_name: str, ticker: str | None = None, market: str | None = None) -> list[str]:
+def get_field_vendor_order(
+    field_name: str, ticker: str | None = None, market: str | None = None
+) -> list[str]:
     """Return yfinance-first vendor order for a field and ticker market."""
     market_key = normalize_market(market) if market is not None else market_from_symbol(ticker)
     field_key = _canonical_field(field_name)

@@ -36,7 +36,8 @@ def test_get_stock_earnings_success(monkeypatch):
 
 def test_get_recommendation_trends_success(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_events.make_api_request", lambda *a, **k: [{"buy": 10, "hold": 5}]
+        "tradingagents.dataflows.finnhub_events.make_api_request",
+        lambda *a, **k: [{"buy": 10, "hold": 5}],
     )
     payload = json.loads(get_recommendation_trends("AAPL"))
     assert "external comparison" in payload["usage_note"]

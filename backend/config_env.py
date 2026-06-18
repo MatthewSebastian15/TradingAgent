@@ -27,7 +27,9 @@ def env_bool_raw(value: str | None, default: bool = False, *, name: str = "value
 
 def should_load_dotenv() -> bool:
     """Load local .env for app runtime, but keep tests hermetic."""
-    if env_bool_raw(os.getenv("TRADINGAGENTS_SKIP_DOTENV"), False, name="TRADINGAGENTS_SKIP_DOTENV"):
+    if env_bool_raw(
+        os.getenv("TRADINGAGENTS_SKIP_DOTENV"), False, name="TRADINGAGENTS_SKIP_DOTENV"
+    ):
         return False
     return not os.getenv("PYTEST_CURRENT_TEST")
 

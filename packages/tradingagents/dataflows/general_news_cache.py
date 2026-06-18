@@ -58,7 +58,9 @@ class GeneralNewsCache:
                 conn.execute("DELETE FROM general_news_cache WHERE key = ?", (key_text,))
                 return None
 
-            conn.execute("UPDATE general_news_cache SET last_accessed_at = ? WHERE key = ?", (now, key_text))
+            conn.execute(
+                "UPDATE general_news_cache SET last_accessed_at = ? WHERE key = ?", (now, key_text)
+            )
             return GeneralNewsCacheEntry(
                 payload=copy.deepcopy(payload),
                 created_at=float(created_at),
@@ -73,10 +75,13 @@ class GeneralNewsCache:
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute(
-                """
-                INSERT OR REPLACE INTO general_news_cache (key, created_at, expires_at, last_accessed_at, payload_json)
-                VALUES (?, ?, ?, ?, ?)
-                """,
+                (
+                    "\n"
+                    + "                INSERT OR REPLACE INTO general_news_cache (key, created_at, "
+                    + "expires_at, last_accessed_at, payload_json)\n"
+                    + "                VALUES (?, ?, ?, ?, ?)\n"
+                    + "                "
+                ),
                 (key_text, now, expires_at, now, payload_json),
             )
             self._evict(conn, now)
@@ -97,7 +102,9 @@ class GeneralNewsCache:
                 payload = json.loads(row[2])
             except (TypeError, ValueError):
                 return None
-            return GeneralNewsCacheEntry(payload=payload, created_at=float(row[0]), expires_at=float(row[1]))
+            return GeneralNewsCacheEntry(
+                payload=payload, created_at=float(row[0]), expires_at=float(row[1])
+            )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=30)
@@ -119,10 +126,16 @@ class GeneralNewsCache:
                 """
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_general_news_cache_created_at ON general_news_cache (created_at)"
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_general_news_cache_created_at ON "
+                    + "general_news_cache (created_at)"
+                )
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_general_news_cache_last_accessed_at ON general_news_cache (last_accessed_at)"
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_general_news_cache_last_accessed_at ON "
+                    + "general_news_cache (last_accessed_at)"
+                )
             )
 
     def _evict(self, conn: sqlite3.Connection, now: float) -> None:

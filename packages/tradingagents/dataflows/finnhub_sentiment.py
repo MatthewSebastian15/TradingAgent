@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .finnhub_common import FinnhubUnavailableError, build_metadata, handle_finnhub_error, make_api_request
+from .finnhub_common import (
+    FinnhubUnavailableError,
+    build_metadata,
+    handle_finnhub_error,
+    make_api_request,
+)
 
 
 def _dump(payload: dict[str, Any]) -> str:
@@ -19,7 +24,9 @@ def _as_float(value: Any) -> float | None:
 
 def get_news_sentiment(ticker: str) -> str:
     try:
-        payload = make_api_request("/news-sentiment", {"symbol": ticker}, feature_key="enable_sentiment")
+        payload = make_api_request(
+            "/news-sentiment", {"symbol": ticker}, feature_key="enable_sentiment"
+        )
         if not isinstance(payload, dict) or not payload:
             raise FinnhubUnavailableError("News sentiment response is empty.")
 
@@ -45,16 +52,24 @@ def get_news_sentiment(ticker: str) -> str:
                 "source": "finnhub",
                 "available": True,
                 "news_sentiment": normalized,
-                "metadata": build_metadata("/news-sentiment", is_enrichment=True, confidence="medium"),
+                "metadata": build_metadata(
+                    "/news-sentiment", is_enrichment=True, confidence="medium"
+                ),
             }
         )
     except Exception as exc:
-        return handle_finnhub_error(f"news sentiment for {ticker}", exc, fallback_next="alpha_vantage")
+        return handle_finnhub_error(
+            f"news sentiment for {ticker}", exc, fallback_next="alpha_vantage"
+        )
 
 
 def _summarize_social(reddit: list[Any], twitter: list[Any]) -> dict[str, Any]:
-    reddit_mentions = sum(int(item.get("mention", 0) or 0) for item in reddit if isinstance(item, dict))
-    twitter_mentions = sum(int(item.get("mention", 0) or 0) for item in twitter if isinstance(item, dict))
+    reddit_mentions = sum(
+        int(item.get("mention", 0) or 0) for item in reddit if isinstance(item, dict)
+    )
+    twitter_mentions = sum(
+        int(item.get("mention", 0) or 0) for item in twitter if isinstance(item, dict)
+    )
     positives = 0.0
     negatives = 0.0
     for item in [*reddit, *twitter]:
@@ -99,7 +114,9 @@ def get_social_sentiment(ticker: str, start_date: str, end_date: str) -> str:
                 "reddit": reddit,
                 "twitter": twitter,
                 "summary": _summarize_social(reddit, twitter),
-                "metadata": build_metadata("/stock/social-sentiment", is_enrichment=True, confidence="medium"),
+                "metadata": build_metadata(
+                    "/stock/social-sentiment", is_enrichment=True, confidence="medium"
+                ),
             }
         )
     except Exception as exc:
@@ -109,7 +126,10 @@ def get_social_sentiment(ticker: str, start_date: str, end_date: str) -> str:
                 "source": "finnhub",
                 "available": False,
                 "reason": str(exc),
-                "fallback": "Use news sentiment as a separate proxy signal only; do not label it as direct social media sentiment.",
+                ("fallback"): (
+                    "Use news sentiment as a separate proxy signal only; do not label it as "
+                    + "direct social media sentiment."
+                ),
                 "metadata": build_metadata(
                     "/stock/social-sentiment",
                     is_enrichment=True,

@@ -10,8 +10,6 @@ from dateutil.relativedelta import relativedelta
 
 from tradingagents.utils_resilience import TTLCache, call_with_retry, call_with_timeout
 
-logger = logging.getLogger(__name__)
-
 from .alpha_vantage import (
     get_balance_sheet as get_alpha_vantage_balance_sheet,
 )
@@ -157,7 +155,7 @@ from .y_finance import (
 # Import from vendor-specific modules
 from .y_finance import (
     get_stock_stats_indicators_window,
-    get_YFin_data_online,
+    get_yfin_data_online,
 )
 from .yfinance_news import get_global_news_yfinance, get_news_yfinance
 
@@ -167,24 +165,56 @@ except Exception:  # pragma: no cover - backend wrapper may not be available in 
     SQLiteTTLCache = None  # type: ignore[assignment]
 
 
+logger = logging.getLogger(__name__)
+
+
 def _parse_last_quote_from_csv(raw: str, symbol: str, source: str) -> dict[str, Any]:
     """Build a quote object from CSV OHLCV fallback data."""
-    lines = [line for line in str(raw or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    lines = [
+        line
+        for line in str(raw or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
     if not lines:
-        return {"symbol": symbol, "source": source, "available": False, "reason": "empty quote source"}
+        return {
+            "symbol": symbol,
+            "source": source,
+            "available": False,
+            "reason": "empty quote source",
+        }
     try:
         df = pd.read_csv(StringIO("\n".join(lines)))
     except Exception as exc:
-        return {"symbol": symbol, "source": source, "available": False, "reason": f"quote CSV parse failed: {exc}"}
+        return {
+            "symbol": symbol,
+            "source": source,
+            "available": False,
+            "reason": f"quote CSV parse failed: {exc}",
+        }
     if df.empty:
-        return {"symbol": symbol, "source": source, "available": False, "reason": "empty quote dataframe"}
+        return {
+            "symbol": symbol,
+            "source": source,
+            "available": False,
+            "reason": "empty quote dataframe",
+        }
     if "Date" not in df.columns and df.columns[0] not in {"Open", "High", "Low", "Close"}:
         df = df.rename(columns={df.columns[0]: "Date"})
     if "Close" not in df.columns:
-        return {"symbol": symbol, "source": source, "available": False, "reason": "quote close column missing"}
+        return {
+            "symbol": symbol,
+            "source": source,
+            "available": False,
+            "reason": "quote close column missing",
+        }
     df = df.dropna(subset=["Close"])
     if df.empty:
-        return {"symbol": symbol, "source": source, "available": False, "reason": "quote close value missing"}
+        return {
+            "symbol": symbol,
+            "source": source,
+            "available": False,
+            "reason": "quote close value missing",
+        }
     last = df.iloc[-1]
     previous = df.iloc[-2] if len(df) >= 2 else None
 
@@ -224,7 +254,7 @@ def _parse_last_quote_from_csv(raw: str, symbol: str, source: str) -> dict[str, 
 def get_yfinance_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
     end_dt = datetime.strptime(curr_date, "%Y-%m-%d") if curr_date else datetime.now()
     start_dt = end_dt - relativedelta(years=1)
-    raw = get_YFin_data_online(
+    raw = get_yfin_data_online(
         symbol,
         start_dt.strftime("%Y-%m-%d"),
         end_dt.strftime("%Y-%m-%d"),
@@ -249,7 +279,10 @@ def get_alpha_vantage_quote(symbol: str, curr_date: str | None = None) -> dict[s
 TOOLS_CATEGORIES = {
     "core_stock_apis": {"description": "OHLCV stock price data", "tools": ["get_stock_data"]},
     "quote_data": {"description": "Current quote data", "tools": ["get_quote"]},
-    "technical_indicators": {"description": "Technical analysis indicators", "tools": ["get_indicators"]},
+    "technical_indicators": {
+        "description": "Technical analysis indicators",
+        "tools": ["get_indicators"],
+    },
     "fundamental_data": {
         "description": "Company fundamentals and profile data",
         "tools": ["get_fundamentals", "get_company_profile"],
@@ -316,7 +349,7 @@ VENDOR_LIST = [
 VENDOR_METHODS = {
     # core_stock_apis
     "get_stock_data": {
-        "yfinance": get_YFin_data_online,
+        "yfinance": get_yfin_data_online,
         "finnhub": get_finnhub_stock,
         "alpha_vantage": get_alpha_vantage_stock,
     },
@@ -344,21 +377,27 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_company_profile,
     },
     "get_balance_sheet": {
-        "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
+        "idx_official": lambda ticker, period="annual", curr_date=None: (
+            get_idx_financial_statements(ticker, period)
+        ),
         "sec_companyfacts": get_sec_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "finnhub": get_finnhub_balance_sheet,
     },
     "get_cashflow": {
-        "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
+        "idx_official": lambda ticker, period="annual", curr_date=None: (
+            get_idx_financial_statements(ticker, period)
+        ),
         "sec_companyfacts": get_sec_cashflow,
         "yfinance": get_yfinance_cashflow,
         "alpha_vantage": get_alpha_vantage_cashflow,
         "finnhub": get_finnhub_cashflow,
     },
     "get_income_statement": {
-        "idx_official": lambda ticker, period="annual", curr_date=None: get_idx_financial_statements(ticker, period),
+        "idx_official": lambda ticker, period="annual", curr_date=None: (
+            get_idx_financial_statements(ticker, period)
+        ),
         "sec_companyfacts": get_sec_income_statement,
         "yfinance": get_yfinance_income_statement,
         "alpha_vantage": get_alpha_vantage_income_statement,
@@ -438,7 +477,6 @@ def _is_price_cache_disabled(method: str) -> bool:
     return method in PRICE_CACHE_DISABLED_METHODS
 
 
-
 def _normalize_args_for_vendor(method: str, vendor: str, args: tuple) -> tuple:
     if method not in TICKER_FIRST_ARG_METHODS or not args:
         return args
@@ -477,7 +515,9 @@ def _cache_key(method: str, vendor: str, args: tuple, kwargs: dict) -> tuple:
     return (method, vendor, args, tuple(sorted(kwargs.items())))
 
 
-def _run_cache_key(run_cache: Any, method: str, vendor: str, args: tuple, kwargs: dict) -> str | None:
+def _run_cache_key(
+    run_cache: Any, method: str, vendor: str, args: tuple, kwargs: dict
+) -> str | None:
     if run_cache is None or not args or not hasattr(run_cache, "build_key"):
         return None
     symbol = str(args[0] or "")
@@ -498,13 +538,20 @@ def _run_cache_key(run_cache: Any, method: str, vendor: str, args: tuple, kwargs
     }.get(method)
     if data_type is None:
         return None
-    extras = [method, vendor, *(str(item) for item in args[1:]), *(f"{key}={value}" for key, value in sorted(kwargs.items()))]
+    extras = [
+        method,
+        vendor,
+        *(str(item) for item in args[1:]),
+        *(f"{key}={value}" for key, value in sorted(kwargs.items())),
+    ]
     return str(run_cache.build_key(data_type, symbol, *extras))
 
 
 def _vendor_sequence(method: str, preferred: str | None = None) -> list[str]:
     """Return configured vendors followed by any supported fallback vendors."""
-    vendor_config = preferred if preferred is not None else get_vendor(get_category_for_method(method), method)
+    vendor_config = (
+        preferred if preferred is not None else get_vendor(get_category_for_method(method), method)
+    )
     primary_vendors = [v.strip() for v in str(vendor_config or "").split(",") if v.strip()]
     all_available_vendors = list(VENDOR_METHODS[method].keys())
 
@@ -572,7 +619,11 @@ def _quality_for_result(
                 max_fallback_days=_max_price_fallback_days(config),
             )
         except Exception as exc:
-            return {"available": False, "confidence": "unavailable", "warnings": [sanitize_error(exc)]}
+            return {
+                "available": False,
+                "confidence": "unavailable",
+                "warnings": [sanitize_error(exc)],
+            }
 
     validators = {
         "get_quote": validate_quote,
@@ -597,7 +648,10 @@ def _delete_cache_key(cache: Any, key: tuple) -> None:
             cache.delete(key)
             return
         except Exception:
-            logger.debug("Unable to delete vendor cache key through delete(); falling back if possible.", exc_info=True)
+            logger.debug(
+                "Unable to delete vendor cache key through delete(); falling back if possible.",
+                exc_info=True,
+            )
     data = getattr(cache, "_data", None)
     lock = getattr(cache, "_lock", None)
     if isinstance(data, dict):
@@ -608,13 +662,17 @@ def _delete_cache_key(cache: Any, key: tuple) -> None:
             data.pop(key, None)
 
 
-def _purge_cached_vendor_result(method: str, vendor: str, args: tuple, kwargs: dict, config: dict[str, Any]) -> None:
+def _purge_cached_vendor_result(
+    method: str, vendor: str, args: tuple, kwargs: dict, config: dict[str, Any]
+) -> None:
     try:
         vendor_args = _normalize_args_for_vendor(method, vendor, args)
         cache_key = _cache_key(method, vendor, vendor_args, kwargs)
         _delete_cache_key(_active_cache(config), cache_key)
     except Exception:
-        logger.debug("Unable to purge stale vendor cache entry for %s/%s", vendor, method, exc_info=True)
+        logger.debug(
+            "Unable to purge stale vendor cache entry for %s/%s", vendor, method, exc_info=True
+        )
 
 
 def _record_attempt(
@@ -648,9 +706,13 @@ def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, st
     if vendor != "finnhub":
         return True, None
     fallback_methods = {"get_stock_data", "get_quote", "get_indicators"}
-    if method in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_fallback", True)):
+    if method in fallback_methods and not bool(
+        config.get("data_vendor_enable_finnhub_fallback", True)
+    ):
         return False, "Finnhub fallback disabled by DATA_VENDOR_ENABLE_FINNHUB_FALLBACK"
-    if method not in fallback_methods and not bool(config.get("data_vendor_enable_finnhub_enrichment", True)):
+    if method not in fallback_methods and not bool(
+        config.get("data_vendor_enable_finnhub_enrichment", True)
+    ):
         return False, "Finnhub enrichment disabled by DATA_VENDOR_ENABLE_FINNHUB_ENRICHMENT"
     feature_key = feature_for_method(method)
     if not is_finnhub_feature_enabled(feature_key):
@@ -709,7 +771,9 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         max_delay=10.0,
         circuit_failure_threshold=int(config.get("circuit_breaker_failure_threshold", 5)),
         circuit_recovery_seconds=int(config.get("circuit_breaker_recovery_seconds", 60)),
-        should_retry=lambda exc: not isinstance(exc, (AlphaVantagePermanentError, FinnhubUnavailableError)),
+        should_retry=lambda exc: (
+            not isinstance(exc, (AlphaVantagePermanentError, FinnhubUnavailableError))
+        ),
     )
     quality = _quality_for_result(method, result, vendor_args, config)
     if (
@@ -723,7 +787,9 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         if quality is None or quality.get("available") is not False:
             cache.set(cache_key, result)
         else:
-            detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or ["quality unavailable"])
+            detail = "; ".join(
+                quality.get("warnings") or quality.get("missing_fields") or ["quality unavailable"]
+            )
             logger.info("Not caching unusable %s/%s result: %s", vendor, method, detail)
     return result
 
@@ -801,7 +867,9 @@ def extract_vendor_numeric_value(result: Any, field_name: str) -> float | None:
         for key in keys:
             value = result.get(key)
             if isinstance(value, dict):
-                value = value.get("normalized_value") or value.get("value") or value.get("raw_value")
+                value = (
+                    value.get("normalized_value") or value.get("value") or value.get("raw_value")
+                )
             try:
                 number = float(str(value).replace(",", ""))
             except (TypeError, ValueError):
@@ -820,9 +888,12 @@ def collect_vendor_values(vendor_results: dict[str, Any], field_name: str) -> di
     return values
 
 
-def collect_vendor_numeric_values(vendor_results: dict[str, Any], field_name: str) -> dict[str, float]:
+def collect_vendor_numeric_values(
+    vendor_results: dict[str, Any], field_name: str
+) -> dict[str, float]:
     """Backward-compatible alias for older tests/imports."""
     return collect_vendor_values(vendor_results, field_name)
+
 
 def _attach_attempt_metadata(result: Any, attempts: list[VendorAttempt]) -> Any:
     if isinstance(result, dict):
@@ -852,7 +923,9 @@ def route_to_vendor(
     first_unusable_result = None
     local_attempts: list[VendorAttempt] = []
 
-    def record(vendor: str, status: str, detail: str | None = None, duration_ms: int | None = None) -> None:
+    def record(
+        vendor: str, status: str, detail: str | None = None, duration_ms: int | None = None
+    ) -> None:
         normalized = {
             "disabled": "skipped",
             "unsupported": "skipped",
@@ -884,7 +957,11 @@ def route_to_vendor(
             if quality is not None and quality.get("available") is False:
                 if first_unusable_result is None:
                     first_unusable_result = result
-                detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or ["quality unavailable"])
+                detail = "; ".join(
+                    quality.get("warnings")
+                    or quality.get("missing_fields")
+                    or ["quality unavailable"]
+                )
                 errors.append(f"{vendor}: invalid quality: {detail}")
                 _purge_cached_vendor_result(method, vendor, args, kwargs, config)
                 record(vendor, "unavailable", detail, duration_ms=duration_ms)
@@ -892,35 +969,93 @@ def route_to_vendor(
             if _is_unusable_result(result):
                 if first_unusable_result is None:
                     first_unusable_result = result
-                detail = str(result.get("reason") if isinstance(result, dict) else "empty or unusable response")
+                detail = str(
+                    result.get("reason")
+                    if isinstance(result, dict)
+                    else "empty or unusable response"
+                )
                 errors.append(f"{vendor}: {detail or 'empty or unusable response'}")
-                record(vendor, "unavailable", detail or "empty or unusable response", duration_ms=duration_ms)
+                record(
+                    vendor,
+                    "unavailable",
+                    detail or "empty or unusable response",
+                    duration_ms=duration_ms,
+                )
                 continue
-            status = "partial" if quality and quality.get("confidence") in {"low", "medium"} else "success"
+            status = (
+                "partial"
+                if quality and quality.get("confidence") in {"low", "medium"}
+                else "success"
+            )
             record(vendor, status, duration_ms=duration_ms)
             return _attach_attempt_metadata(result, local_attempts) if attach_metadata else result
         except AlphaVantagePermanentError as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
-            record(vendor, "unavailable", sanitize_error(exc), duration_ms=int((time.perf_counter() - start) * 1000))
+            record(
+                vendor,
+                "unavailable",
+                sanitize_error(exc),
+                duration_ms=int((time.perf_counter() - start) * 1000),
+            )
             continue
         except (AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
             errors.append(f"{vendor}: rate limited: {sanitize_error(exc)}")
-            record(vendor, "rate_limited", sanitize_error(exc), duration_ms=int((time.perf_counter() - start) * 1000))
+            record(
+                vendor,
+                "rate_limited",
+                sanitize_error(exc),
+                duration_ms=int((time.perf_counter() - start) * 1000),
+            )
             continue
         except Exception as exc:
             errors.append(f"{vendor}: {sanitize_error(exc)}")
             status = "budget_exceeded" if "budget" in str(exc).lower() else "failure"
-            record(vendor, status, sanitize_error(exc), duration_ms=int((time.perf_counter() - start) * 1000))
+            record(
+                vendor,
+                status,
+                sanitize_error(exc),
+                duration_ms=int((time.perf_counter() - start) * 1000),
+            )
             continue
 
     if first_unusable_result is not None:
-        return _attach_attempt_metadata(first_unusable_result, local_attempts) if attach_metadata else first_unusable_result
-    if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends", "get_corporate_actions"}:
-        return {"available": False, "source": "unavailable", "corporate_actions": [], "reason": f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"} if method == "get_corporate_actions" else f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"
+        return (
+            _attach_attempt_metadata(first_unusable_result, local_attempts)
+            if attach_metadata
+            else first_unusable_result
+        )
+    if method in {
+        "get_news_sentiment",
+        "get_social_sentiment",
+        "get_earnings_calendar",
+        "get_recommendation_trends",
+        "get_corporate_actions",
+    }:
+        return (
+            {
+                "available": False,
+                "source": "unavailable",
+                "corporate_actions": [],
+                "reason": (
+                    f"Optional data unavailable: {method} - "
+                    f"{' | '.join(errors) or 'no configured vendor'}"
+                ),
+            }
+            if method == "get_corporate_actions"
+            else (
+                f"Optional data unavailable: {method} - "
+                f"{' | '.join(errors) or 'no configured vendor'}"
+            )
+        )
     if method == "get_quote":
-        return {"available": False, "source": "unavailable", "reason": " | ".join(errors) or "no configured vendor"}
+        return {
+            "available": False,
+            "source": "unavailable",
+            "reason": " | ".join(errors) or "no configured vendor",
+        }
 
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")
+
 
 def get_quote(ticker: str, curr_date: str | None = None) -> dict[str, Any]:
     return route_to_vendor(
@@ -969,12 +1104,16 @@ def route_to_all_vendors(
             result = _call_vendor(method, vendor, args, kwargs, config)
             duration_ms = int((time.perf_counter() - start) * 1000)
             quality = _quality_for_result(method, result, args, config)
-            if (quality is not None and quality.get("available") is False) or _is_unusable_result(result):
+            if (quality is not None and quality.get("available") is False) or _is_unusable_result(
+                result
+            ):
                 if first_unusable is None:
                     first_unusable = (vendor, result)
                 detail = "empty or unusable response"
                 if quality is not None:
-                    detail = "; ".join(quality.get("warnings") or quality.get("missing_fields") or [detail])
+                    detail = "; ".join(
+                        quality.get("warnings") or quality.get("missing_fields") or [detail]
+                    )
                 errors.append(f"{vendor}: {detail}")
                 _purge_cached_vendor_result(method, vendor, args, kwargs, config)
                 _record_attempt(config, method, vendor, "empty", detail, duration_ms=duration_ms)
@@ -997,6 +1136,17 @@ def route_to_all_vendors(
     if first_unusable is not None:
         vendor, result = first_unusable
         return {vendor: result}
-    if method in {"get_news_sentiment", "get_social_sentiment", "get_earnings_calendar", "get_recommendation_trends", "get_corporate_actions"}:
-        return {"optional": f"Optional data unavailable: {method} - {' | '.join(errors) or 'no configured vendor'}"}
+    if method in {
+        "get_news_sentiment",
+        "get_social_sentiment",
+        "get_earnings_calendar",
+        "get_recommendation_trends",
+        "get_corporate_actions",
+    }:
+        return {
+            "optional": (
+                f"Optional data unavailable: {method} - "
+                f"{' | '.join(errors) or 'no configured vendor'}"
+            )
+        }
     raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")

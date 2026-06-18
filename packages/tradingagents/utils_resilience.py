@@ -53,13 +53,15 @@ class CircuitBreaker:
             if elapsed >= self.recovery_seconds:
                 if self._state.half_open_probe_in_flight:
                     raise CircuitOpenError(
-                        f"Circuit breaker is half-open for {self.name}; recovery probe already in progress."
+                        f"Circuit breaker is half-open for {self.name}; recovery probe already "
+                        "in progress."
                     )
                 logger.warning("Circuit half-open for %s after %.1fs", self.name, elapsed)
                 self._state.half_open_probe_in_flight = True
                 return
             raise CircuitOpenError(
-                f"Circuit breaker is open for {self.name}. Retry after {self.recovery_seconds - elapsed:.0f}s."
+                f"Circuit breaker is open for {self.name}. Retry after "
+                f"{self.recovery_seconds - elapsed:.0f}s."
             )
 
     def record_success(self) -> None:
@@ -74,14 +76,21 @@ class CircuitBreaker:
                 self._state.failures = self.failure_threshold
                 self._state.opened_at = time.monotonic()
                 self._state.half_open_probe_in_flight = False
-                logger.error("Circuit reopened for %s after failed half-open probe. Last error: %s", self.name, exc)
+                logger.error(
+                    "Circuit reopened for %s after failed half-open probe. Last error: %s",
+                    self.name,
+                    exc,
+                )
                 return
             self._state.failures += 1
             if self._state.failures >= self.failure_threshold:
                 self._state.opened_at = time.monotonic()
                 self._state.half_open_probe_in_flight = False
                 logger.error(
-                    "Circuit opened for %s after %d failures. Last error: %s", self.name, self._state.failures, exc
+                    "Circuit opened for %s after %d failures. Last error: %s",
+                    self.name,
+                    self._state.failures,
+                    exc,
                 )
 
 
@@ -104,8 +113,12 @@ _TIMEOUT_MAX_ACTIVE_CALLS = _env_int(
     "TRADINGAGENTS_TIMEOUT_MAX_ACTIVE_CALLS",
     max(16, min(32, (os.cpu_count() or 1) + 4)),
 )
-_TIMEOUT_MAX_ABANDONED_CALLS = _env_int("TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS", _TIMEOUT_MAX_ACTIVE_CALLS)
-_TIMEOUT_CAPACITY_WAIT_SECONDS = _env_int("TRADINGAGENTS_TIMEOUT_CAPACITY_WAIT_SECONDS", 5, min_value=0)
+_TIMEOUT_MAX_ABANDONED_CALLS = _env_int(
+    "TRADINGAGENTS_TIMEOUT_MAX_ABANDONED_CALLS", _TIMEOUT_MAX_ACTIVE_CALLS
+)
+_TIMEOUT_CAPACITY_WAIT_SECONDS = _env_int(
+    "TRADINGAGENTS_TIMEOUT_CAPACITY_WAIT_SECONDS", 5, min_value=0
+)
 _TIMEOUT_ACTIVE_CAPACITY = threading.BoundedSemaphore(_TIMEOUT_MAX_ACTIVE_CALLS)
 _TIMEOUT_ABANDONED_CAPACITY = threading.BoundedSemaphore(max(1, _TIMEOUT_MAX_ABANDONED_CALLS))
 _TIMEOUT_STATS_LOCK = threading.Lock()
@@ -113,7 +126,9 @@ _TIMEOUT_ACTIVE_CALLS = 0
 _TIMEOUT_ABANDONED_CALLS = 0
 
 
-def get_circuit(name: str, failure_threshold: int = 5, recovery_seconds: int = 60) -> CircuitBreaker:
+def get_circuit(
+    name: str, failure_threshold: int = 5, recovery_seconds: int = 60
+) -> CircuitBreaker:
     with _CIRCUITS_LOCK:
         if name not in _CIRCUITS:
             _CIRCUITS[name] = CircuitBreaker(name, failure_threshold, recovery_seconds)
@@ -212,11 +227,17 @@ def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_na
     process instead of accumulating in the API process.
     """
     if not _TIMEOUT_ACTIVE_CAPACITY.acquire(blocking=True, timeout=_TIMEOUT_CAPACITY_WAIT_SECONDS):
-        raise TimeoutError(f"{service_name} timed out before starting because active timed-call capacity is saturated.")
-    if not _TIMEOUT_ABANDONED_CAPACITY.acquire(blocking=True, timeout=_TIMEOUT_CAPACITY_WAIT_SECONDS):
+        raise TimeoutError(
+            f"{service_name} timed out before starting because active timed-call capacity is "
+            "saturated."
+        )
+    if not _TIMEOUT_ABANDONED_CAPACITY.acquire(
+        blocking=True, timeout=_TIMEOUT_CAPACITY_WAIT_SECONDS
+    ):
         _TIMEOUT_ACTIVE_CAPACITY.release()
         raise TimeoutError(
-            f"{service_name} timed out before starting because abandoned timed-call capacity is saturated."
+            f"{service_name} timed out before starting because abandoned timed-call capacity is "
+            "saturated."
         )
 
     _record_timeout_active_started()
@@ -280,7 +301,10 @@ def call_with_timeout(func: Callable[[], T], *, timeout_seconds: int, service_na
                 _record_timeout_abandoned_started()
         release_active_once()
         logger.warning(
-            "%s timed out after %ss; the underlying blocking call is abandoned in a daemon thread and will be reaped when the worker process exits.",
+            (
+                "%s timed out after %ss; the underlying blocking call is abandoned in a daemon "
+                + "thread and will be reaped when the worker process exits."
+            ),
             service_name,
             timeout_seconds,
         )

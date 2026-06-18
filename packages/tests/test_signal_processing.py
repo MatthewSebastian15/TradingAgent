@@ -37,8 +37,8 @@ class TestParseRating:
         # The exact shape produced by render_pm_decision must always parse.
         text = (
             "**Rating**: Buy\n\n"
-            "**Executive Summary**: Enter at $189-192, 6% portfolio cap.\n\n"
-            "**Investment Thesis**: AI capex cycle intact; institutional flows constructive."
+            + "**Executive Summary**: Enter at $189-192, 6% portfolio cap.\n\n"
+            + "**Investment Thesis**: AI capex cycle intact; institutional flows constructive."
         )
         assert parse_rating(text) == "Buy"
 

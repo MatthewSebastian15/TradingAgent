@@ -1,11 +1,19 @@
-from routes.event_contract import PipelineAgent, PipelineStatus, SseEvent, UI_AGENT_IDS, UI_EVENT_TYPES, UI_PIPELINE_STATUSES
+from routes.event_contract import (
+    UI_AGENT_IDS,
+    UI_EVENT_TYPES,
+    UI_PIPELINE_STATUSES,
+    PipelineAgent,
+    SseEvent,
+)
 from routes.serializers import AGENT_SEQUENCE
 
 
 def test_backend_event_contract_exports_ui_known_values():
     assert set(UI_EVENT_TYPES) == {event.value for event in SseEvent}
     assert {"progress", "result", "error", "heartbeat"}.issubset(UI_EVENT_TYPES)
-    assert {"started", "running", "completed", "failed", "error", "skipped"}.issubset(UI_PIPELINE_STATUSES)
+    assert {"started", "running", "completed", "failed", "error", "skipped"}.issubset(
+        UI_PIPELINE_STATUSES
+    )
 
 
 def test_backend_agent_sequence_uses_contract_ids():

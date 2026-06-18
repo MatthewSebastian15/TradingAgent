@@ -15,7 +15,9 @@ router = APIRouter(tags=["analysis-history"])
 
 
 def _history_not_found(request_id: str) -> NotFoundError:
-    return NotFoundError("Analysis history result was not found.", details={"request_id": request_id})
+    return NotFoundError(
+        "Analysis history result was not found.", details={"request_id": request_id}
+    )
 
 
 @router.get("/analysis/history")

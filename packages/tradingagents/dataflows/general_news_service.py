@@ -35,7 +35,15 @@ PROVIDER_PRIORITY_SCORE = {
     "marketaux": 200,
     "newsdata": 100,
 }
-FAILURE_STATUSES = {"missing_api_key", "timeout", "unavailable", "auth_or_forbidden", "parse_error", "error", "disabled"}
+FAILURE_STATUSES = {
+    "missing_api_key",
+    "timeout",
+    "unavailable",
+    "auth_or_forbidden",
+    "parse_error",
+    "error",
+    "disabled",
+}
 GENERAL_QUERY_BY_CATEGORY = {
     "all": [
         "global markets",
@@ -80,7 +88,18 @@ MEDIUM_IMPACT_KEYWORDS = [
     "volatility",
 ]
 POSITIVE_KEYWORDS = ["rise", "gain", "rally", "beat", "growth", "inflows", "approval", "recovery"]
-NEGATIVE_KEYWORDS = ["fall", "drop", "slump", "miss", "loss", "outflows", "lawsuit", "probe", "enforcement", "recession"]
+NEGATIVE_KEYWORDS = [
+    "fall",
+    "drop",
+    "slump",
+    "miss",
+    "loss",
+    "outflows",
+    "lawsuit",
+    "probe",
+    "enforcement",
+    "recession",
+]
 _TAG_RE = re.compile(r"<[^>]+>")
 
 
@@ -106,7 +125,9 @@ class GeneralNewsService:
                 "articles_found": 0,
             }
 
-        category = _normalized_category(category or str(self.config.get("default_category") or "all"))
+        category = _normalized_category(
+            category or str(self.config.get("default_category") or "all")
+        )
         window_days = max(1, int(window_days or self.config.get("default_window_days", 7)))
         configured_limit = max(1, int(self.config.get("default_limit", 50)))
         max_ui = max(1, int(self.config.get("max_articles_for_ui", 100)))
@@ -118,7 +139,9 @@ class GeneralNewsService:
         if self._cache is not None and not force_refresh:
             cached = self._cache.get(cache_key)
             if cached is not None:
-                return _with_cache_metadata(cached.payload, hit=True, stale=False, age_seconds=cached.age_seconds)
+                return _with_cache_metadata(
+                    cached.payload, hit=True, stale=False, age_seconds=cached.age_seconds
+                )
             stale_entry = self._cache.get(cache_key, allow_stale=True)
             if stale_entry is not None and bool(self.config.get("enable_background_refresh", True)):
                 return _with_cache_metadata(
@@ -140,11 +163,15 @@ class GeneralNewsService:
         )
 
         for provider_name in provider_order:
-            result = results_by_provider.get(provider_name) or ProviderFetchResult(provider=provider_name, status="disabled")
+            result = results_by_provider.get(provider_name) or ProviderFetchResult(
+                provider=provider_name, status="disabled"
+            )
             provider_status[provider_name] = _public_status(result.status, result.articles)
             articles.extend(result.articles)
 
-        normalized = self._normalize_articles(articles, category=category, window_days=window_days, limit=limit)
+        normalized = self._normalize_articles(
+            articles, category=category, window_days=window_days, limit=limit
+        )
         result = {
             "enabled": True,
             "mode": "general_news",
@@ -170,7 +197,9 @@ class GeneralNewsService:
                 return _with_cache_metadata(
                     {
                         **copy.deepcopy(stale_entry.payload),
-                        "warning": "Serving stale cached general news because all providers failed.",
+                        ("warning"): (
+                            "Serving stale cached general news because all providers failed."
+                        ),
                         "provider_status": provider_status,
                     },
                     hit=True,
@@ -184,10 +213,18 @@ class GeneralNewsService:
         return result
 
     def _provider_order(self, provider_filter: str | None) -> list[str]:
-        enabled = _string_list(self.config.get("enabled_providers") or ",".join(GENERAL_NEWS_PROVIDER_ORDER))
-        priority = _string_list(self.config.get("provider_priority") or ",".join(GENERAL_NEWS_PROVIDER_ORDER))
+        enabled = _string_list(
+            self.config.get("enabled_providers") or ",".join(GENERAL_NEWS_PROVIDER_ORDER)
+        )
+        priority = _string_list(
+            self.config.get("provider_priority") or ",".join(GENERAL_NEWS_PROVIDER_ORDER)
+        )
         if provider_filter:
-            return [provider_filter] if provider_filter in enabled or provider_filter in GENERAL_NEWS_PROVIDER_SET else [provider_filter]
+            return (
+                [provider_filter]
+                if provider_filter in enabled or provider_filter in GENERAL_NEWS_PROVIDER_SET
+                else [provider_filter]
+            )
         return [provider for provider in priority if provider in enabled]
 
     def _fetch_provider(
@@ -203,9 +240,13 @@ class GeneralNewsService:
         if provider_name == "rss_context":
             return self._fetch_rss_context(window_days=window_days, limit=max_per_provider)
         if provider_name == "google_news_light":
-            return self._fetch_google_news_light(category=category, window_days=window_days, limit=max_per_provider)
+            return self._fetch_google_news_light(
+                category=category, window_days=window_days, limit=max_per_provider
+            )
         if provider_name == "marketaux":
-            return self._fetch_marketaux(category=category, window_days=window_days, limit=max_per_provider)
+            return self._fetch_marketaux(
+                category=category, window_days=window_days, limit=max_per_provider
+            )
         if provider_name == "newsdata":
             return self._fetch_newsdata(category=category, limit=max_per_provider)
         return ProviderFetchResult(provider=provider_name, status="disabled")
@@ -221,7 +262,9 @@ class GeneralNewsService:
         if not provider_order:
             return {}
 
-        max_workers = min(max(1, int(self.config.get("provider_fetch_workers", 4))), len(provider_order))
+        max_workers = min(
+            max(1, int(self.config.get("provider_fetch_workers", 4))), len(provider_order)
+        )
         results: dict[str, ProviderFetchResult] = {}
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -239,7 +282,9 @@ class GeneralNewsService:
                 try:
                     results[provider_name] = future.result()
                 except Exception as exc:  # noqa: BLE001
-                    logger.info("general news provider failed provider=%s error=%s", provider_name, exc)
+                    logger.info(
+                        "general news provider failed provider=%s error=%s", provider_name, exc
+                    )
                     results[provider_name] = ProviderFetchResult(
                         provider=provider_name,
                         status="unavailable",
@@ -258,10 +303,14 @@ class GeneralNewsService:
             "rss_max_feeds": rss_max_feeds,
             "rss_max_items_per_feed": rss_max_items_per_feed,
             "rss_include_trial_feeds": bool(self.config.get("rss_include_trial_feeds", True)),
-            "rss_google_news_fallback_enabled": bool(self.config.get("rss_google_news_fallback_enabled", True)),
+            "rss_google_news_fallback_enabled": bool(
+                self.config.get("rss_google_news_fallback_enabled", True)
+            ),
             "rss_enabled_feed_ids": str(self.config.get("rss_enabled_feed_ids") or ""),
             "rss_disabled_feed_ids": self.config.get("rss_disabled_feed_ids") or "",
-            "rss_user_agent": str(self.config.get("rss_user_agent") or "TradingAgent/0.1 RSS Reader"),
+            "rss_user_agent": str(
+                self.config.get("rss_user_agent") or "TradingAgent/0.1 RSS Reader"
+            ),
             "rss_fetch_workers": max(1, int(self.config.get("rss_fetch_workers", 8))),
         }
         provider = RSSContextProvider(
@@ -275,9 +324,13 @@ class GeneralNewsService:
             return provider.fetch_news(_general_profile(), window_days=window_days, limit=rss_limit)
         except Exception as exc:
             logger.info("general news rss_context failed: %s", exc)
-            return ProviderFetchResult(provider="rss_context", status="unavailable", last_error=sanitize_error(exc))
+            return ProviderFetchResult(
+                provider="rss_context", status="unavailable", last_error=sanitize_error(exc)
+            )
 
-    def _fetch_google_news_light(self, *, category: str, window_days: int, limit: int) -> ProviderFetchResult:
+    def _fetch_google_news_light(
+        self, *, category: str, window_days: int, limit: int
+    ) -> ProviderFetchResult:
         provider = GoogleNewsLightProvider(
             str(self.config.get("google_news_light_api_key") or ""),
             timeout_seconds=int(self.config.get("vendor_timeout_seconds", 10)),
@@ -300,14 +353,23 @@ class GeneralNewsService:
                 "sort_by": "most_recent",
                 "filter": "1",
             }
-            payload, attempt = provider._request_json(params, strategy=f"general:{query}", include_raw=False)
+            payload, attempt = provider._request_json(
+                params, strategy=f"general:{query}", include_raw=False
+            )
             attempts.append(attempt)
             status = _public_status(str(attempt.get("status") or "error"), articles)
             if payload is not None:
                 articles.extend(_normalize_google_payload(payload, query=query))
-        return ProviderFetchResult(provider="google_news_light", status="success" if articles else status, articles=articles[:limit], attempts=attempts)
+        return ProviderFetchResult(
+            provider="google_news_light",
+            status="success" if articles else status,
+            articles=articles[:limit],
+            attempts=attempts,
+        )
 
-    def _fetch_marketaux(self, *, category: str, window_days: int, limit: int) -> ProviderFetchResult:
+    def _fetch_marketaux(
+        self, *, category: str, window_days: int, limit: int
+    ) -> ProviderFetchResult:
         provider = MarketAuxProvider(
             str(self.config.get("marketaux_api_key") or ""),
             timeout_seconds=int(self.config.get("vendor_timeout_seconds", 10)),
@@ -330,12 +392,19 @@ class GeneralNewsService:
                 "published_before": end.strftime("%Y-%m-%dT%H:%M:%S"),
                 "limit": max(1, min(limit, 100)),
             }
-            payload, attempt = provider._request_json(params, strategy=f"general:{query}", include_raw=False)
+            payload, attempt = provider._request_json(
+                params, strategy=f"general:{query}", include_raw=False
+            )
             attempts.append(attempt)
             status = _public_status(str(attempt.get("status") or "error"), articles)
             if payload is not None:
                 articles.extend(_normalize_marketaux_payload(payload, query=query))
-        return ProviderFetchResult(provider="marketaux", status="success" if articles else status, articles=articles[:limit], attempts=attempts)
+        return ProviderFetchResult(
+            provider="marketaux",
+            status="success" if articles else status,
+            articles=articles[:limit],
+            attempts=attempts,
+        )
 
     def _fetch_newsdata(self, *, category: str, limit: int) -> ProviderFetchResult:
         provider = NewsDataProvider(
@@ -357,12 +426,19 @@ class GeneralNewsService:
                 "removeduplicate": "1",
                 "size": max(1, min(limit, 50)),
             }
-            payload, attempt = provider._request_json(params, strategy=f"general:{query}", include_raw=False)
+            payload, attempt = provider._request_json(
+                params, strategy=f"general:{query}", include_raw=False
+            )
             attempts.append(attempt)
             status = _public_status(str(attempt.get("status") or "error"), articles)
             if payload is not None:
                 articles.extend(_normalize_newsdata_payload(payload, query=query))
-        return ProviderFetchResult(provider="newsdata", status="success" if articles else status, articles=articles[:limit], attempts=attempts)
+        return ProviderFetchResult(
+            provider="newsdata",
+            status="success" if articles else status,
+            articles=articles[:limit],
+            attempts=attempts,
+        )
 
     def _normalize_articles(
         self,
@@ -404,7 +480,9 @@ class GeneralNewsService:
         )
         return [_article_payload(article) for article in deduped[:limit]]
 
-    def _cache_key(self, category: str, window_days: int, limit: int, provider_filter: str | None) -> tuple[Any, ...]:
+    def _cache_key(
+        self, category: str, window_days: int, limit: int, provider_filter: str | None
+    ) -> tuple[Any, ...]:
         return (
             "general_news:v1",
             category,
@@ -469,7 +547,11 @@ def _normalized_category(category: str) -> str:
 
 
 def _queries_for_category(category: str) -> list[str]:
-    return list(GENERAL_QUERY_BY_CATEGORY.get(_normalized_category(category), GENERAL_QUERY_BY_CATEGORY["all"]))
+    return list(
+        GENERAL_QUERY_BY_CATEGORY.get(
+            _normalized_category(category), GENERAL_QUERY_BY_CATEGORY["all"]
+        )
+    )
 
 
 def _normalize_google_payload(payload: Any, *, query: str) -> list[NormalizedNewsArticle]:
@@ -636,7 +718,9 @@ def _general_relevance_score(article: NormalizedNewsArticle) -> float:
     return float(score)
 
 
-def _with_cache_metadata(payload: dict[str, Any], *, hit: bool, stale: bool, age_seconds: int) -> dict[str, Any]:
+def _with_cache_metadata(
+    payload: dict[str, Any], *, hit: bool, stale: bool, age_seconds: int
+) -> dict[str, Any]:
     result = copy.deepcopy(payload)
     cache = dict(result.get("cache") or {})
     cache.update(

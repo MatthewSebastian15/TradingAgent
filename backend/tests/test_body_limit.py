@@ -7,7 +7,9 @@ from collections import deque
 from body_limit import RequestBodyLimitMiddleware
 
 
-async def _call_body_limit(headers: list[tuple[bytes, bytes]], bodies: list[bytes], *, max_bytes: int = 5) -> tuple[int, dict]:
+async def _call_body_limit(
+    headers: list[tuple[bytes, bytes]], bodies: list[bytes], *, max_bytes: int = 5
+) -> tuple[int, dict]:
     async def app(scope, receive, send):
         while True:
             message = await receive()
@@ -35,7 +37,9 @@ async def _call_body_limit(headers: list[tuple[bytes, bytes]], bodies: list[byte
     await middleware({"type": "http", "headers": headers}, receive, send)
 
     status = next(message["status"] for message in sent if message["type"] == "http.response.start")
-    body = b"".join(message.get("body", b"") for message in sent if message["type"] == "http.response.body")
+    body = b"".join(
+        message.get("body", b"") for message in sent if message["type"] == "http.response.body"
+    )
     return status, json.loads(body or b"{}")
 
 

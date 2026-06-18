@@ -33,15 +33,22 @@ _SIDE_CONFIG = {
 }
 
 
-def _fallback_argument(side: ResearcherSide, label: str, confidence: float = 0.35) -> DebateArgument:
+def _fallback_argument(
+    side: ResearcherSide, label: str, confidence: float = 0.35
+) -> DebateArgument:
     return DebateArgument(
         stance=side,
         thesis=f"{label} could not produce a fully validated argument, so confidence is low.",
         evidence=[
             "Structured output validation failed or the model returned incomplete reasoning.",
-            "The final decision should rely more heavily on validated analyst reports and later manager synthesis.",
+            (
+                "The final decision should rely more heavily on validated analyst reports and "
+                + "later manager synthesis."
+            ),
         ],
-        counterargument="The opposing case may be stronger until this side provides complete evidence.",
+        counterargument=(
+            "The opposing case may be stronger until this side provides complete evidence."
+        ),
         risk_flags=["Incomplete agent output", "Low confidence fallback used"],
         confidence=confidence,
         consensus_signal=False,
@@ -92,7 +99,9 @@ def create_researcher(side: ResearcherSide, llm):
             config["opponent_history_key"]: debate_state.get(config["opponent_history_key"], ""),
             "current_response": argument,
             config["own_confidence_key"]: typed.confidence,
-            config["opponent_confidence_key"]: debate_state.get(config["opponent_confidence_key"], 0.0),
+            config["opponent_confidence_key"]: debate_state.get(
+                config["opponent_confidence_key"], 0.0
+            ),
             "last_consensus_signal": typed.consensus_signal,
             "consensus_reached": bool(typed.consensus_signal),
             "count": count,

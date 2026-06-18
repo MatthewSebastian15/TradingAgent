@@ -91,7 +91,10 @@ async def _pdf_response_from_result_async(result: dict[str, Any]) -> Response:
             )
         except TimeoutError as exc:
             raise ReportGenerationError(
-                "PDF export timed out while rendering the report. Use HTML export or retry with a smaller report.",
+                (
+                    "PDF export timed out while rendering the report. Use HTML export or retry "
+                    + "with a smaller report."
+                ),
                 internal_message="report_pdf_render_timeout",
             ) from exc
 
@@ -113,7 +116,11 @@ async def _mark_exported_best_effort(result: dict[str, Any], export_type: str) -
     except Exception:
         logger.error(
             "Failed to record analysis report export",
-            extra={"event": "analysis_report_audit_failed", "request_id": request_id, "export_type": export_type},
+            extra={
+                "event": "analysis_report_audit_failed",
+                "request_id": request_id,
+                "export_type": export_type,
+            },
             exc_info=True,
         )
 
@@ -133,7 +140,9 @@ def _pdf_response_from_result(result: dict[str, Any]) -> Response:
         content=pdf,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quoted_filename}",
+            (
+                "Content-Disposition"
+            ): f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quoted_filename}",
             "Cache-Control": "no-store",
         },
     )
@@ -145,7 +154,9 @@ async def get_analysis_report_html(job_id: str, request: Request) -> HTMLRespons
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report(
-            job_id, owner_id=lease.identifier, job_store=jobs.get_analysis_runtime(request).job_store
+            job_id,
+            owner_id=lease.identifier,
+            job_store=jobs.get_analysis_runtime(request).job_store,
         )
         response = _html_response_from_result(result)
         await _mark_exported_best_effort(result, "html")
@@ -158,20 +169,29 @@ async def get_analysis_report_pdf(job_id: str, request: Request) -> Response:
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report(
-            job_id, owner_id=lease.identifier, job_store=jobs.get_analysis_runtime(request).job_store
+            job_id,
+            owner_id=lease.identifier,
+            job_store=jobs.get_analysis_runtime(request).job_store,
         )
         response = await _pdf_response_from_result_async(result)
         await _mark_exported_best_effort(result, "pdf")
         return response
 
 
-@router.get("/analysis/{request_id}/report.html", response_class=HTMLResponse, deprecated=True, include_in_schema=False)
+@router.get(
+    "/analysis/{request_id}/report.html",
+    response_class=HTMLResponse,
+    deprecated=True,
+    include_in_schema=False,
+)
 async def get_analysis_report_html_alias(request_id: str, request: Request) -> HTMLResponse:
     """Preview a report through the owner-checked request_id migration alias."""
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report_by_request_id(
-            request_id, owner_id=lease.identifier, job_store=jobs.get_analysis_runtime(request).job_store
+            request_id,
+            owner_id=lease.identifier,
+            job_store=jobs.get_analysis_runtime(request).job_store,
         )
         response = _html_response_from_result(result)
         await _mark_exported_best_effort(result, "html")
@@ -184,7 +204,9 @@ async def get_analysis_report_pdf_alias(request_id: str, request: Request) -> Re
 
     async with limit_request(request, request_policy()) as lease:
         result = await get_analysis_result_for_report_by_request_id(
-            request_id, owner_id=lease.identifier, job_store=jobs.get_analysis_runtime(request).job_store
+            request_id,
+            owner_id=lease.identifier,
+            job_store=jobs.get_analysis_runtime(request).job_store,
         )
         response = await _pdf_response_from_result_async(result)
         await _mark_exported_best_effort(result, "pdf")
@@ -192,14 +214,16 @@ async def get_analysis_report_pdf_alias(request_id: str, request: Request) -> Re
 
 
 @router.post("/analysis/report.html", response_class=HTMLResponse)
-async def post_analysis_report_html(result: AnalysisReportExportPayload, request: Request) -> HTMLResponse:
+async def post_analysis_report_html(
+    result: AnalysisReportExportPayload, request: Request
+) -> HTMLResponse:
     """Preview a report from an analysis payload supplied by the client.
 
     This fallback is used when the result is visible in browser storage but the
     backend job store no longer has the completed request_id.
     """
 
-    async with limit_request(request, request_policy()) as lease:
+    async with limit_request(request, request_policy()):
         result_payload = result.to_result_dict()
         response = _html_response_from_result(result_payload)
         await _mark_exported_best_effort(result_payload, "html")
@@ -207,10 +231,12 @@ async def post_analysis_report_html(result: AnalysisReportExportPayload, request
 
 
 @router.post("/analysis/report.pdf")
-async def post_analysis_report_pdf(result: AnalysisReportExportPayload, request: Request) -> Response:
+async def post_analysis_report_pdf(
+    result: AnalysisReportExportPayload, request: Request
+) -> Response:
     """Download a PDF report from an analysis payload supplied by the client."""
 
-    async with limit_request(request, request_policy()) as lease:
+    async with limit_request(request, request_policy()):
         result_payload = result.to_result_dict()
         response = await _pdf_response_from_result_async(result_payload)
         await _mark_exported_best_effort(result_payload, "pdf")

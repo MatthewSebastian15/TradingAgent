@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import sys
 import types
 
@@ -17,7 +18,9 @@ stockstats_stub = types.ModuleType("stockstats")
 stockstats_stub.wrap = lambda data: data
 sys.modules.setdefault("stockstats", stockstats_stub)
 
-from tradingagents.pipeline_balanced_data import _build_related_news
+_build_related_news = importlib.import_module(
+    "tradingagents.pipeline_balanced_data"
+)._build_related_news
 
 
 def _context_articles(count: int) -> list[dict[str, object]]:

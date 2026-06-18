@@ -15,7 +15,9 @@ MOCK_JOB_ID = "mock-seed-nvda-job"
 
 
 def _mock_high_impact_news(index: int) -> dict[str, object]:
-    confidence_label = "VERY_HIGH" if index == 1 else "HIGH" if index <= 4 else "LOW" if index == 7 else "MEDIUM"
+    confidence_label = (
+        "VERY_HIGH" if index == 1 else "HIGH" if index <= 4 else "LOW" if index == 7 else "MEDIUM"
+    )
     source = "IDX Official Disclosure" if index == 1 else "Local Blog" if index == 7 else "Reuters"
     return {
         "title": f"High Impact NVDA News {index}",
@@ -29,11 +31,20 @@ def _mock_high_impact_news(index: int) -> dict[str, object]:
         "recency_score": 85,
         "materiality_score": 90,
         "materiality_category": "index" if index % 2 == 0 else "corporate_action",
-        "source_confidence_score": 95 if index == 1 else 85 if index <= 4 else 45 if index == 7 else 70,
+        "source_confidence_score": 95
+        if index == 1
+        else 85
+        if index <= 4
+        else 45
+        if index == 7
+        else 70,
         "source_confidence_label": confidence_label,
         "news_scope": "company",
         "scope_label": "COMPANY",
-        "impact_reason": f"High impact because this article directly matches NVDA and passes materiality filter {index}.",
+        "impact_reason": (
+            "High impact because this article directly matches NVDA and passes materiality filter "
+            f"{index}."
+        ),
         "summary": f"Mock high impact summary {index}.",
         "url": f"https://example.com/nvda-high-{index}",
         "normalized_url": f"example.com/nvda-high-{index}",
@@ -46,7 +57,10 @@ def _mock_high_impact_news(index: int) -> dict[str, object]:
 def _mock_full_news(index: int, scope: str = "company") -> dict[str, object]:
     scope_label = scope.replace("_", " ").upper()
     return {
-        "title": f"{'Market Context News' if scope == 'market_context' else 'Full News NVDA Article'} {index}",
+        "title": (
+            f"{'Market Context News' if scope == 'market_context' else 'Full News NVDA Article'} "
+            f"{index}"
+        ),
         "source": "NewsData" if index % 3 == 0 else "MarketAux",
         "publisher": "NewsData" if index % 3 == 0 else "MarketAux",
         "published_at": f"2026-05-{index:02d}",
@@ -62,7 +76,10 @@ def _mock_full_news(index: int, scope: str = "company") -> dict[str, object]:
         "news_scope": scope,
         "scope_label": scope_label,
         "impact_reason": (
-            "Included as market context and not classified as high impact because it does not directly match the ticker."
+            (
+                "Included as market context and not classified as high impact because it does "
+                + "not directly match the ticker."
+            )
             if scope == "market_context"
             else "Included as related full news but below high-impact threshold."
         ),
@@ -73,6 +90,8 @@ def _mock_full_news(index: int, scope: str = "company") -> dict[str, object]:
         "dedupe_key": f"full-nvda-{index}",
         "is_high_impact": False,
     }
+
+
 MOCK_RESULT = {
     "request_id": "mock-seed-nvda-buy",
     "job_id": MOCK_JOB_ID,
@@ -107,7 +126,9 @@ MOCK_RESULT = {
     "new_entry_action": "Allowed with validated entry",
     "position_size_hint": "Use standard starter size and avoid oversized entry.",
     "executive_summary": "Seeded mock snapshot for SQLite history and backend report debugging.",
-    "investment_thesis": "This is static development data. It does not contain a live market recommendation.",
+    ("investment_thesis"): (
+        "This is static development data. It does not contain a live market recommendation."
+    ),
     "key_catalysts": ["Mock catalyst for report layout testing."],
     "invalidation_conditions": ["Mock invalidation condition for report layout testing."],
     "related_news": {

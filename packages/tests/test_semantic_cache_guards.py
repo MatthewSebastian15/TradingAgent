@@ -46,4 +46,3 @@ def test_semantic_cache_disabled_by_default(tmp_path):
 def test_cosine_similarity_requires_matching_vectors():
     assert cosine_similarity([1.0, 0.0], [1.0, 0.0]) == 1.0
     assert cosine_similarity([1.0], [1.0, 0.0]) == 0.0
-

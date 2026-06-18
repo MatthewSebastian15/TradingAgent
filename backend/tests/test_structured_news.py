@@ -6,10 +6,18 @@ from tradingagents.dataflows.google_news_light import GoogleNewsLightProvider
 from tradingagents.dataflows.marketaux_news import MarketAuxProvider
 from tradingagents.dataflows.news_models import NewsEntity, NormalizedNewsArticle
 from tradingagents.dataflows.news_provider_base import ProviderFetchResult, sanitize_params
-from tradingagents.dataflows.news_service import NewsService, _filter_articles_by_window, format_news_for_prompt
+from tradingagents.dataflows.news_service import (
+    NewsService,
+    _filter_articles_by_window,
+    format_news_for_prompt,
+)
 from tradingagents.dataflows.news_ticker_aliases import resolve_news_ticker
 from tradingagents.dataflows.newsdata_news import NewsDataProvider
-from tradingagents.dataflows.rss_news import _select_feeds, build_company_rss_queries, score_rss_article
+from tradingagents.dataflows.rss_news import (
+    _select_feeds,
+    build_company_rss_queries,
+    score_rss_article,
+)
 
 
 class FakeResponse:
@@ -146,7 +154,9 @@ def test_newsdata_uses_separate_fallback_queries(monkeypatch):
         )
 
     monkeypatch.setattr("tradingagents.dataflows.news_provider_base.requests.get", fake_get)
-    result = NewsDataProvider("newsdata-secret", max_retries=0).fetch_news(resolve_news_ticker("BBCA.JK"))
+    result = NewsDataProvider("newsdata-secret", max_retries=0).fetch_news(
+        resolve_news_ticker("BBCA.JK")
+    )
 
     assert result.status == "success"
     assert len(result.articles) == 1
@@ -217,7 +227,9 @@ def test_news_service_skips_secondary_when_primary_is_sufficient(monkeypatch):
         api_key = "configured"
 
         def fetch_news(self, *_args, **_kwargs):
-            return ProviderFetchResult(provider="marketaux", status="success", articles=primary_articles)
+            return ProviderFetchResult(
+                provider="marketaux", status="success", articles=primary_articles
+            )
 
     class SecondaryProvider:
         api_key = "configured"
@@ -226,10 +238,12 @@ def test_news_service_skips_secondary_when_primary_is_sufficient(monkeypatch):
             raise AssertionError("Secondary provider should be skipped.")
 
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: PrimaryProvider()
+        "tradingagents.dataflows.news_service.MarketAuxProvider",
+        lambda *_args, **_kwargs: PrimaryProvider(),
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.NewsDataProvider", lambda *_args, **_kwargs: SecondaryProvider()
+        "tradingagents.dataflows.news_service.NewsDataProvider",
+        lambda *_args, **_kwargs: SecondaryProvider(),
     )
 
     result = NewsService(
@@ -272,7 +286,9 @@ def test_news_service_skips_marketaux_when_google_news_is_sufficient(monkeypatch
         api_key = "configured"
 
         def fetch_news(self, *_args, **_kwargs):
-            return ProviderFetchResult(provider="google_news_light", status="success", articles=primary_articles)
+            return ProviderFetchResult(
+                provider="google_news_light", status="success", articles=primary_articles
+            )
 
     class MarketAuxProviderStub:
         api_key = "configured"
@@ -281,10 +297,12 @@ def test_news_service_skips_marketaux_when_google_news_is_sufficient(monkeypatch
             raise AssertionError("MarketAux should be skipped.")
 
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.GoogleNewsLightProvider", lambda *_args, **_kwargs: GoogleProvider()
+        "tradingagents.dataflows.news_service.GoogleNewsLightProvider",
+        lambda *_args, **_kwargs: GoogleProvider(),
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: MarketAuxProviderStub()
+        "tradingagents.dataflows.news_service.MarketAuxProvider",
+        lambda *_args, **_kwargs: MarketAuxProviderStub(),
     )
 
     result = NewsService(
@@ -336,7 +354,9 @@ def test_news_service_uses_marketaux_when_google_news_is_below_threshold(monkeyp
             self.provider = provider
 
         def fetch_news(self, *_args, **_kwargs):
-            articles = google_articles if self.provider == "google_news_light" else marketaux_articles
+            articles = (
+                google_articles if self.provider == "google_news_light" else marketaux_articles
+            )
             return ProviderFetchResult(provider=self.provider, status="success", articles=articles)
 
     monkeypatch.setattr(
@@ -344,7 +364,8 @@ def test_news_service_uses_marketaux_when_google_news_is_below_threshold(monkeyp
         lambda *_args, **_kwargs: Provider("google_news_light"),
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: Provider("marketaux")
+        "tradingagents.dataflows.news_service.MarketAuxProvider",
+        lambda *_args, **_kwargs: Provider("marketaux"),
     )
 
     result = NewsService(
@@ -382,11 +403,14 @@ def test_news_service_accepts_list_provider_config_with_cache(monkeypatch):
         api_key = "configured"
 
         def fetch_news(self, *_args, **_kwargs):
-            return ProviderFetchResult(provider="google_news_light", status="success", articles=articles)
+            return ProviderFetchResult(
+                provider="google_news_light", status="success", articles=articles
+            )
 
     monkeypatch.setattr("tradingagents.dataflows.news_service.SQLiteTTLCache", None)
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.GoogleNewsLightProvider", lambda *_args, **_kwargs: GoogleProvider()
+        "tradingagents.dataflows.news_service.GoogleNewsLightProvider",
+        lambda *_args, **_kwargs: GoogleProvider(),
     )
 
     result = NewsService(
@@ -442,10 +466,12 @@ def test_news_service_deduplicates_and_filters_low_relevance(monkeypatch):
             return ProviderFetchResult(provider=self.provider, status="success", articles=selected)
 
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.MarketAuxProvider", lambda *_args, **_kwargs: Provider("marketaux")
+        "tradingagents.dataflows.news_service.MarketAuxProvider",
+        lambda *_args, **_kwargs: Provider("marketaux"),
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.NewsDataProvider", lambda *_args, **_kwargs: Provider("newsdata")
+        "tradingagents.dataflows.news_service.NewsDataProvider",
+        lambda *_args, **_kwargs: Provider("newsdata"),
     )
 
     result = NewsService(

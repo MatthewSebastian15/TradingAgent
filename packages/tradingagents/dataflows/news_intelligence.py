@@ -11,9 +11,25 @@ from tradingagents.dataflows.news_noise_filter import route_news_bucket
 from tradingagents.dataflows.news_relevance import score_news_relevance
 
 MATERIAL_KEYWORDS = {
-    "earnings": ["earnings", "profit", "revenue", "margin", "guidance", "eps", "laba", "pendapatan"],
+    "earnings": [
+        "earnings",
+        "profit",
+        "revenue",
+        "margin",
+        "guidance",
+        "eps",
+        "laba",
+        "pendapatan",
+    ],
     "dividend": ["dividend", "payout", "distribution", "dividen"],
-    "corporate_action": ["merger", "acquisition", "buyback", "rights issue", "spin off", "tender offer"],
+    "corporate_action": [
+        "merger",
+        "acquisition",
+        "buyback",
+        "rights issue",
+        "spin off",
+        "tender offer",
+    ],
     "index": ["index inclusion", "index exclusion", "removes", "removed from", "free float"],
     "regulatory": ["investigation", "sanction", "regulation", "lawsuit", "probe", "fine"],
     "management": ["ceo", "cfo", "resignation", "appointment", "appoints", "chairman", "director"],
@@ -70,7 +86,9 @@ def _safe_int(value: Any) -> int:
 
 def _parse_datetime(value: Any) -> datetime | None:
     if isinstance(value, datetime):
-        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return (
+            value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        )
     if isinstance(value, (int, float)):
         try:
             return datetime.fromtimestamp(value, tz=timezone.utc)
@@ -82,7 +100,11 @@ def _parse_datetime(value: Any) -> datetime | None:
     for candidate in (text, text[:10]):
         try:
             parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
-            return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+            return (
+                parsed.astimezone(timezone.utc)
+                if parsed.tzinfo
+                else parsed.replace(tzinfo=timezone.utc)
+            )
         except ValueError:
             pass
         try:
@@ -191,7 +213,9 @@ def _recency_score(published_at: Any, trade_date: str) -> int:
 
 
 def _materiality_score(item: dict[str, Any]) -> tuple[int, str]:
-    text = f"{item.get('title') or ''} {item.get('summary') or ''} {item.get('event_type') or ''}".lower()
+    text = (
+        f"{item.get('title') or ''} {item.get('summary') or ''} {item.get('event_type') or ''}"
+    ).lower()
     for category, keywords in MATERIAL_KEYWORDS.items():
         if any(keyword in text for keyword in keywords):
             return 90, category
@@ -207,7 +231,9 @@ def _article_key(item: dict[str, Any]) -> str:
     return normalize_title(str(item.get("title") or ""))
 
 
-def _collect_articles(related_news: dict[str, Any] | None, news_context: dict[str, Any] | None) -> list[dict[str, Any]]:
+def _collect_articles(
+    related_news: dict[str, Any] | None, news_context: dict[str, Any] | None
+) -> list[dict[str, Any]]:
     articles: list[dict[str, Any]] = []
     context_articles = []
     if isinstance(news_context, dict):
@@ -277,12 +303,16 @@ def build_news_impact(
     scored: list[dict[str, Any]] = []
     sentiment_values: list[float] = []
     for item in ranked:
-        relevance_payload = score_news_relevance(item, ticker, str(item.get("company_name") or ""), str(item.get("sector") or ""))
+        relevance_payload = score_news_relevance(
+            item, ticker, str(item.get("company_name") or ""), str(item.get("sector") or "")
+        )
         relevance = _safe_float(item.get("relevance_score"))
         calculated_relevance = _safe_float(relevance_payload.get("relevance_score")) or 0
         if relevance is None or relevance <= 0:
             text = f"{item.get('title') or ''} {item.get('summary') or ''}".upper()
-            relevance = max(calculated_relevance, 70 if ticker.upper().removesuffix(".JK") in text else 45)
+            relevance = max(
+                calculated_relevance, 70 if ticker.upper().removesuffix(".JK") in text else 45
+            )
         else:
             relevance = max(relevance, calculated_relevance)
         relevance = max(0, min(100, relevance))
@@ -343,13 +373,23 @@ def build_news_impact(
             and relevance_category in {"company_specific", "subsidiary_related", "sector_related"}
             and entity_match in {"company_exact", "subsidiary"}
         )
-        enriched["impact"] = "high" if strict_high else "medium" if base_impact == "high" else base_impact
+        enriched["impact"] = (
+            "high" if strict_high else "medium" if base_impact == "high" else base_impact
+        )
         enriched["is_high_impact"] = enriched["impact"] == "high"
         if bucket != "discard":
             scored.append(enriched)
-    scored = sorted(scored, key=lambda item: (item["impact_score"], item["published_at"] or ""), reverse=True)
+    scored = sorted(
+        scored, key=lambda item: (item["impact_score"], item["published_at"] or ""), reverse=True
+    )
     average_sentiment = sum(sentiment_values) / len(sentiment_values) if sentiment_values else 0
-    overall_sentiment = "positive" if average_sentiment > 0.1 else "negative" if average_sentiment < -0.1 else "neutral"
+    overall_sentiment = (
+        "positive"
+        if average_sentiment > 0.1
+        else "negative"
+        if average_sentiment < -0.1
+        else "neutral"
+    )
     sources_used = list(dict.fromkeys(str(item.get("source") or "unknown") for item in scored))
     high_impact_news = [item for item in scored if item["is_high_impact"]]
     full_news_all = [item for item in scored if not item["is_high_impact"]]
@@ -410,7 +450,9 @@ def _label_for_catalyst(item: dict[str, Any], sentiment: str) -> str:
     return f"{direction} {catalyst_type} catalyst"
 
 
-def build_catalyst_tracker(news_impact: dict[str, Any] | None, event_risk: Any = None) -> dict[str, Any]:
+def build_catalyst_tracker(
+    news_impact: dict[str, Any] | None, event_risk: Any = None
+) -> dict[str, Any]:
     if isinstance(news_impact, dict):
         news_items = []
         for key in ("high_impact_news", "full_news_list"):
@@ -427,7 +469,9 @@ def build_catalyst_tracker(news_impact: dict[str, Any] | None, event_risk: Any =
         sentiment = str(item.get("sentiment") or "neutral")
         catalyst = {
             "type": _catalyst_type(item),
-            "label": _label_for_catalyst(item, sentiment) if sentiment in {"positive", "negative"} else "Material news catalyst",
+            "label": _label_for_catalyst(item, sentiment)
+            if sentiment in {"positive", "negative"}
+            else "Material news catalyst",
             "impact": item.get("impact") or "medium",
             "source": item.get("source") or "unknown",
             "date": item.get("published_at"),
@@ -453,7 +497,11 @@ def build_catalyst_tracker(news_impact: dict[str, Any] | None, event_risk: Any =
                     "risk_level": event.get("risk_level"),
                 }
             )
-        rows = payload.get("earnings_calendar") if isinstance(payload.get("earnings_calendar"), list) else []
+        rows = (
+            payload.get("earnings_calendar")
+            if isinstance(payload.get("earnings_calendar"), list)
+            else []
+        )
         for row in rows[:3]:
             if isinstance(row, dict) and row.get("date") and row.get("date") != next_earnings:
                 upcoming_events.append(
@@ -488,8 +536,7 @@ def build_catalyst_tracker(news_impact: dict[str, Any] | None, event_risk: Any =
 
 def _recommendation_score(row: dict[str, Any]) -> float:
     total = sum(
-        _safe_int(row.get(key))
-        for key in ("strong_buy", "buy", "hold", "sell", "strong_sell")
+        _safe_int(row.get(key)) for key in ("strong_buy", "buy", "hold", "sell", "strong_sell")
     )
     if total <= 0:
         return 0.0
@@ -555,7 +602,9 @@ def build_analyst_consensus(recommendation_trends: Any) -> dict[str, Any]:
             "data_quality": {"status": "unavailable", "source": "Finnhub"},
         }
 
-    normalized_rows = sorted(normalized_rows, key=lambda row: str(row.get("period") or ""), reverse=True)
+    normalized_rows = sorted(
+        normalized_rows, key=lambda row: str(row.get("period") or ""), reverse=True
+    )
     latest = normalized_rows[0]
     buy_total = latest["strong_buy"] + latest["buy"]
     sell_total = latest["sell"] + latest["strong_sell"]
@@ -568,7 +617,13 @@ def build_analyst_consensus(recommendation_trends: Any) -> dict[str, Any]:
 
     if len(normalized_rows) >= 2:
         score_delta = _recommendation_score(latest) - _recommendation_score(normalized_rows[1])
-        trend = "improving" if score_delta > 0.15 else "deteriorating" if score_delta < -0.15 else "stable"
+        trend = (
+            "improving"
+            if score_delta > 0.15
+            else "deteriorating"
+            if score_delta < -0.15
+            else "stable"
+        )
     else:
         trend = "stable"
 

@@ -187,8 +187,15 @@ class SemanticCache:
                 )
                 """
             )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_semantic_guard ON llm_semantic_cache (namespace, guard_json)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_semantic_expires ON llm_semantic_cache (expires_at)")
+            conn.execute(
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_semantic_guard ON llm_semantic_cache "
+                    + "(namespace, guard_json)"
+                )
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_semantic_expires ON llm_semantic_cache (expires_at)"
+            )
 
     def _evict(self, conn: sqlite3.Connection) -> None:
         now = time.time()

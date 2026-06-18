@@ -106,9 +106,17 @@ class ExactLLMCache:
                     )
                     """
                 )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_llm_exact_expires ON llm_exact_cache (expires_at)")
                 conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_llm_exact_last_accessed ON llm_exact_cache (last_accessed_at)"
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_llm_exact_expires ON llm_exact_cache "
+                        + "(expires_at)"
+                    )
+                )
+                conn.execute(
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_llm_exact_last_accessed ON "
+                        + "llm_exact_cache (last_accessed_at)"
+                    )
                 )
                 conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
@@ -116,7 +124,10 @@ class ExactLLMCache:
         now = time.time()
         conn.execute("DELETE FROM llm_exact_cache WHERE expires_at <= ?", (now,))
         rows = conn.execute(
-            "SELECT cache_key FROM llm_exact_cache ORDER BY last_accessed_at DESC LIMIT -1 OFFSET ?",
+            (
+                "SELECT cache_key FROM llm_exact_cache ORDER BY last_accessed_at DESC LIMIT -1 "
+                + "OFFSET ?"
+            ),
             (self.max_entries,),
         ).fetchall()
         if rows:
@@ -149,4 +160,3 @@ def get_exact_llm_cache(config: dict[str, Any]) -> ExactLLMCache | None:
         ):
             _CACHE_INSTANCE = ExactLLMCache(db_path, ttl_seconds, max_entries)
         return _CACHE_INSTANCE
-

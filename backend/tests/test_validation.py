@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
@@ -119,7 +118,9 @@ def test_indonesia_market_does_not_append_jk_for_plain_symbol():
 
 def test_idx_market_accepts_canonical_yfinance_symbol():
     req = normalize_and_validate_analysis_request(
-        AnalysisRequest(ticker="bbca.jk", market="IDX", trade_date="2026-05-14", max_debate_rounds=1)
+        AnalysisRequest(
+            ticker="bbca.jk", market="IDX", trade_date="2026-05-14", max_debate_rounds=1
+        )
     )
 
     assert req.ticker == "BBCA.JK"
@@ -157,7 +158,9 @@ def test_search_metadata_canonical_symbol_wins():
 
 def test_symbol_alias_payload_is_accepted():
     req = normalize_and_validate_analysis_request(
-        AnalysisRequest(symbol="BTC-USD", market="CRYPTO", trade_date="2026-05-14", max_debate_rounds=1)
+        AnalysisRequest(
+            symbol="BTC-USD", market="CRYPTO", trade_date="2026-05-14", max_debate_rounds=1
+        )
     )
 
     assert req.ticker == "BTC-USD"
@@ -167,7 +170,9 @@ def test_symbol_alias_payload_is_accepted():
 def test_global_suffix_tickers_are_valid():
     for ticker in ["0700.HK", "9984.T"]:
         req = normalize_and_validate_analysis_request(
-            AnalysisRequest(ticker=ticker, market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
+            AnalysisRequest(
+                ticker=ticker, market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1
+            )
         )
         assert req.ticker == ticker
         assert req.market == "GLOBAL"
@@ -176,7 +181,9 @@ def test_global_suffix_tickers_are_valid():
 def test_etf_and_fund_markets_are_valid():
     for ticker, market in [("SPY", "ETF"), ("VFIAX", "FUND")]:
         req = normalize_and_validate_analysis_request(
-            AnalysisRequest(ticker=ticker, market=market, trade_date="2026-05-14", max_debate_rounds=1)
+            AnalysisRequest(
+                ticker=ticker, market=market, trade_date="2026-05-14", max_debate_rounds=1
+            )
         )
         assert req.ticker == ticker
         assert req.market == market
@@ -382,7 +389,9 @@ def test_production_requires_owner_session_secret(monkeypatch):
     monkeypatch.delenv("OWNER_SESSION_SECRET", raising=False)
 
     try:
-        with pytest.raises(ValueError, match="OWNER_SESSION_SECRET must be configured in production"):
+        with pytest.raises(
+            ValueError, match="OWNER_SESSION_SECRET must be configured in production"
+        ):
             config.reload_config_for_tests()
     finally:
         _restore_test_config(monkeypatch)
@@ -427,7 +436,9 @@ def test_production_rejects_disabled_api_key_requirement(monkeypatch):
     import config
 
     try:
-        with pytest.raises(ValueError, match="REQUIRE_API_KEY_FOR_RATE_LIMIT=false is not allowed in production"):
+        with pytest.raises(
+            ValueError, match="REQUIRE_API_KEY_FOR_RATE_LIMIT=false is not allowed in production"
+        ):
             config.reload_config_for_tests()
     finally:
         _restore_test_config(monkeypatch)
@@ -435,7 +446,9 @@ def test_production_rejects_disabled_api_key_requirement(monkeypatch):
 
 def test_global_market_is_accepted():
     req = normalize_and_validate_analysis_request(
-        AnalysisRequest(ticker="0700.HK", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
+        AnalysisRequest(
+            ticker="0700.HK", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1
+        )
     )
 
     assert req.ticker == "0700.HK"
@@ -444,7 +457,9 @@ def test_global_market_is_accepted():
 
 def test_non_id_exchange_suffix_is_accepted():
     req = normalize_and_validate_analysis_request(
-        AnalysisRequest(ticker="SAP.DE", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
+        AnalysisRequest(
+            ticker="SAP.DE", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1
+        )
     )
 
     assert req.ticker == "SAP.DE"
@@ -452,14 +467,21 @@ def test_non_id_exchange_suffix_is_accepted():
 
 def test_hk_suffix_ticker_is_accepted():
     req = normalize_and_validate_analysis_request(
-        AnalysisRequest(ticker="0700.HK", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1)
+        AnalysisRequest(
+            ticker="0700.HK", market="GLOBAL", trade_date="2026-05-14", max_debate_rounds=1
+        )
     )
 
     assert req.ticker == "0700.HK"
 
 
 def test_invalid_symbols_are_rejected():
-    invalid_values = ["<script>", "AAPL; DROP TABLE", "../../BBCA.JK", "SYMBOL-WITH-UNREASONABLY-LONG-NAME"]
+    invalid_values = [
+        "<script>",
+        "AAPL; DROP TABLE",
+        "../../BBCA.JK",
+        "SYMBOL-WITH-UNREASONABLY-LONG-NAME",
+    ]
     for ticker in invalid_values:
         with pytest.raises(BadRequestError) as exc_info:
             normalize_and_validate_analysis_request(

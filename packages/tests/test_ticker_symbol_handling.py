@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,13 +19,11 @@ def test_yfinance_ticker_cache_evicts_oldest_symbol(monkeypatch):
 
     created = []
 
-    class FakeYF:
-        @staticmethod
-        def Ticker(symbol):
-            created.append(symbol)
-            return {"symbol": symbol}
+    def fake_ticker(symbol):
+        created.append(symbol)
+        return {"symbol": symbol}
 
-    monkeypatch.setattr(y_finance, "yf", FakeYF)
+    monkeypatch.setattr(y_finance, "yf", SimpleNamespace(Ticker=fake_ticker))
     monkeypatch.setattr(y_finance, "_TICKER_CACHE_MAX_ENTRIES", 2)
     y_finance._ticker_cache.clear()
 

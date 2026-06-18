@@ -4,8 +4,8 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore, AnalysisResultCache, InFlightRegistry
-from routes.jobs import AnalysisRuntimeState
 from owner_session import issue_owner_session, owner_identifier
+from routes.jobs import AnalysisRuntimeState
 
 _TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
@@ -79,13 +79,28 @@ def _result(**overrides):
             "title": "Key Financial Highlights",
             "unit_note": "Currency: USD (US Dollar) | Amount figures: in millions (USD Mn)",
             "periods": [{"key": "FY26Q1", "label": "FY26Q1"}],
-            "rows": [{"key": "revenue", "label": "Revenue", "values": {"FY26Q1": {"display": "N/A"}}}],
-            "point_in_time": [{"key": "market_cap", "label": "Market Cap", "display": "2,300,000.0", "unit": "USD Mn"}],
+            "rows": [
+                {"key": "revenue", "label": "Revenue", "values": {"FY26Q1": {"display": "N/A"}}}
+            ],
+            "point_in_time": [
+                {
+                    "key": "market_cap",
+                    "label": "Market Cap",
+                    "display": "2,300,000.0",
+                    "unit": "USD Mn",
+                }
+            ],
             "sections": [
                 {
                     "key": "market_scale",
                     "title": "Market & Scale",
-                    "rows": [{"key": "revenue", "label": "Revenue", "values": {"FY26Q1": {"display": "N/A"}}}],
+                    "rows": [
+                        {
+                            "key": "revenue",
+                            "label": "Revenue",
+                            "values": {"FY26Q1": {"display": "N/A"}},
+                        }
+                    ],
                 }
             ],
         },
@@ -110,13 +125,15 @@ def _store_with_result(result: dict) -> tuple[AnalysisJobStore, str]:
             owner_id=_TEST_OWNER_IDENTIFIER,
             request_id=result["request_id"],
             cache_key=_cache_key(result.get("ticker", "NVDA")),
-            payload={"ticker": result.get("ticker", "NVDA"), "trade_date": result.get("trade_date", "2026-05-26")},
+            payload={
+                "ticker": result.get("ticker", "NVDA"),
+                "trade_date": result.get("trade_date", "2026-05-26"),
+            },
         )
         await job.complete(result)
         return store, job.id
 
     return asyncio.run(main())
-
 
 
 def test_disclaimer_endpoint_returns_canonical_backend_disclaimer(client):
@@ -125,6 +142,7 @@ def test_disclaimer_endpoint_returns_canonical_backend_disclaimer(client):
     assert response.status_code == 200
     assert response.json()["disclaimer"].startswith("This analysis report is provided")
     assert "automated AI-assisted analysis system" in response.json()["disclaimer"]
+
 
 def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypatch):
     store, job_id = _store_with_result(_result())
@@ -148,7 +166,9 @@ def test_html_report_endpoint_returns_existing_analysis_result(client, monkeypat
 
 
 def test_pdf_report_endpoint_returns_attachment_without_rerunning_pipeline(client, monkeypatch):
-    store, job_id = _store_with_result(_result(ticker="BBCA.JK", market="ID", request_id="rid-report-pdf"))
+    store, job_id = _store_with_result(
+        _result(ticker="BBCA.JK", market="ID", request_id="rid-report-pdf")
+    )
     rendered_report = {}
     _install_report_store(monkeypatch, store)
     monkeypatch.setattr(
@@ -178,7 +198,9 @@ def test_post_html_report_renders_from_payload(client):
 
 
 def test_post_pdf_report_renders_from_payload(client, monkeypatch):
-    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+    monkeypatch.setattr(
+        "routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock"
+    )
 
     response = client.post("/api/analysis/report.pdf", json=_result())
 
@@ -189,7 +211,9 @@ def test_post_pdf_report_renders_from_payload(client, monkeypatch):
 
 
 def test_post_pdf_report_succeeds_without_profile_or_financial_highlights(client, monkeypatch):
-    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+    monkeypatch.setattr(
+        "routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock"
+    )
 
     response = client.post(
         "/api/analysis/report.pdf",
@@ -200,10 +224,16 @@ def test_post_pdf_report_succeeds_without_profile_or_financial_highlights(client
     assert response.content.startswith(b"%PDF")
 
 
-def test_html_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, analysis_repository):
+def test_html_report_falls_back_to_sqlite_and_marks_export(
+    client, monkeypatch, analysis_repository
+):
     result = _result(request_id="rid-history-html")
-    analysis_repository.save_analysis(result=result, job_id="job-history-html", owner_id=_TEST_OWNER_IDENTIFIER)
-    _install_report_store(monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10))
+    analysis_repository.save_analysis(
+        result=result, job_id="job-history-html", owner_id=_TEST_OWNER_IDENTIFIER
+    )
+    _install_report_store(
+        monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    )
 
     response = client.get("/api/analysis/jobs/job-history-html/report.html")
 
@@ -214,9 +244,15 @@ def test_html_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, 
 
 def test_pdf_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, analysis_repository):
     result = _result(request_id="rid-history-pdf")
-    analysis_repository.save_analysis(result=result, job_id="job-history-pdf", owner_id=_TEST_OWNER_IDENTIFIER)
-    _install_report_store(monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10))
-    monkeypatch.setattr("routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock")
+    analysis_repository.save_analysis(
+        result=result, job_id="job-history-pdf", owner_id=_TEST_OWNER_IDENTIFIER
+    )
+    _install_report_store(
+        monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    )
+    monkeypatch.setattr(
+        "routes.reports.render_analysis_report_pdf", lambda report: b"%PDF-1.4\nmock"
+    )
 
     response = client.get("/api/analysis/jobs/job-history-pdf/report.pdf")
 
@@ -228,7 +264,9 @@ def test_pdf_report_falls_back_to_sqlite_and_marks_export(client, monkeypatch, a
 def test_request_id_report_alias_falls_back_to_sqlite(client, monkeypatch, analysis_repository):
     result = _result(request_id="rid-history-alias")
     analysis_repository.save_analysis(result=result, owner_id=_TEST_OWNER_IDENTIFIER)
-    _install_report_store(monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10))
+    _install_report_store(
+        monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    )
 
     response = client.get("/api/analysis/rid-history-alias/report.html")
 
@@ -236,13 +274,19 @@ def test_request_id_report_alias_falls_back_to_sqlite(client, monkeypatch, analy
     assert "TradingAgent Analysis Report" in response.text
 
 
-def test_request_id_report_alias_sqlite_is_global_across_valid_owner_sessions(client, monkeypatch, analysis_repository):
+def test_request_id_report_alias_sqlite_is_global_across_valid_owner_sessions(
+    client, monkeypatch, analysis_repository
+):
     result = _result(request_id="rid-history-alias-owner")
     analysis_repository.save_analysis(result=result, owner_id=_TEST_OWNER_IDENTIFIER)
-    _install_report_store(monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10))
+    _install_report_store(
+        monkeypatch, AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    )
     other_headers = {"x-owner-token": issue_owner_session()["owner_token"]}
 
-    response = client.get("/api/analysis/rid-history-alias-owner/report.html", headers=other_headers)
+    response = client.get(
+        "/api/analysis/rid-history-alias-owner/report.html", headers=other_headers
+    )
 
     assert response.status_code == 200
     assert "rid-history-alias-owner" in response.text
@@ -271,7 +315,9 @@ def test_report_endpoints_are_bound_to_owner(client, monkeypatch):
 
 
 def test_report_endpoint_rejects_global_legacy_result(client, monkeypatch):
-    store, job_id = _store_with_result(_result(request_id="rid-global", market="GLOBAL", ticker="700.HK"))
+    store, job_id = _store_with_result(
+        _result(request_id="rid-global", market="GLOBAL", ticker="700.HK")
+    )
     _install_report_store(monkeypatch, store)
 
     response = client.get(f"/api/analysis/jobs/{job_id}/report.html")
@@ -326,7 +372,11 @@ def test_html_report_supports_indonesian_utf8_content(client, monkeypatch):
 def test_pdf_report_returns_clear_error_when_weasyprint_unavailable(monkeypatch):
     import builtins
 
-    from services.report_service import ReportGenerationError, build_report_context, render_analysis_report_pdf
+    from services.report_service import (
+        ReportGenerationError,
+        build_report_context,
+        render_analysis_report_pdf,
+    )
 
     report = build_report_context(_result())
     real_import = builtins.__import__

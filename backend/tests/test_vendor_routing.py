@@ -63,7 +63,12 @@ _DATA_VENDOR_ENV_BY_CATEGORY = {
 
 
 def _quote(source: str, price: float = 10) -> dict:
-    return {"source": source, "current_price": price, "previous_close": price - 1, "timestamp": "2026-05-28"}
+    return {
+        "source": source,
+        "current_price": price,
+        "previous_close": price - 1,
+        "timestamp": "2026-05-28",
+    }
 
 
 def test_vendor_attempts_records_success_and_failure(monkeypatch):
@@ -72,7 +77,9 @@ def test_vendor_attempts_records_success_and_failure(monkeypatch):
     recorder = VendorAttemptRecorder()
     monkeypatch.setattr(vendor_router, "get_attempt_recorder", lambda _id: recorder)
     monkeypatch.setattr(interface, "get_attempt_recorder", lambda _id: recorder)
-    monkeypatch.setitem(interface.VENDOR_METHODS, "get_quote", {"yfinance": lambda *a, **k: _quote("yfinance")})
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS, "get_quote", {"yfinance": lambda *a, **k: _quote("yfinance")}
+    )
     with use_config({**BASE_CONFIG, "_vendor_attempt_recorder_id": "x"}):
         route_to_vendor("get_quote", "AAPL", "2026-05-28")
     assert recorder.get_summary()["quote"] == ["yfinance:success"]
@@ -86,7 +93,9 @@ def test_yfinance_empty_finnhub_fallback_called(monkeypatch):
         interface.VENDOR_METHODS,
         "get_quote",
         {
-            "yfinance": lambda *a, **k: calls.append("yfinance") or {"available": False, "source": "yfinance"},
+            "yfinance": lambda *a, **k: (
+                calls.append("yfinance") or {"available": False, "source": "yfinance"}
+            ),
             "finnhub": lambda *a, **k: calls.append("finnhub") or _quote("finnhub"),
         },
     )
@@ -99,7 +108,9 @@ def test_all_vendors_failed_returns_clear_error(monkeypatch):
     from tradingagents.dataflows import interface
 
     monkeypatch.setitem(
-        interface.VENDOR_METHODS, "get_quote", {"yfinance": lambda *a, **k: {"available": False, "source": "yfinance"}}
+        interface.VENDOR_METHODS,
+        "get_quote",
+        {"yfinance": lambda *a, **k: {"available": False, "source": "yfinance"}},
     )
     with use_config(BASE_CONFIG):
         result = route_to_vendor("get_quote", "AAPL", "2026-05-28")
@@ -133,7 +144,10 @@ def test_build_config_preserves_environment_vendor_order_for_every_category(monk
 
     import config
 
-    expected = {category: f"primary_{category},fallback_{category}" for category in _DATA_VENDOR_ENV_BY_CATEGORY}
+    expected = {
+        category: f"primary_{category},fallback_{category}"
+        for category in _DATA_VENDOR_ENV_BY_CATEGORY
+    }
 
     try:
         with monkeypatch.context() as env:

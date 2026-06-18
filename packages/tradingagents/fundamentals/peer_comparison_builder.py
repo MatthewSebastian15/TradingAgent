@@ -4,7 +4,11 @@ from typing import Any
 
 
 def build_peer_comparison(payload: dict[str, Any] | None = None) -> dict[str, Any] | None:
-    if not isinstance(payload, dict) or not isinstance(payload.get("metrics"), list) or not payload["metrics"]:
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("metrics"), list)
+        or not payload["metrics"]
+    ):
         return None
     quality = dict(payload.get("data_quality") or {})
     quality.setdefault("status", "complete")

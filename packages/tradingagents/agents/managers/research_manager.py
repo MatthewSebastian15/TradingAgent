@@ -19,7 +19,8 @@ def create_research_manager(llm):
 
         investment_debate_state = state["investment_debate_state"]
 
-        prompt = f"""As the Research Manager and debate facilitator, your role is to critically evaluate this round of debate and deliver a clear, actionable investment plan for the trader.
+        prompt = f"""As the Research Manager and debate facilitator, your role is to critically \
+evaluate this round of debate and deliver a clear, actionable investment plan for the trader.
 
 {instrument_context}
 
@@ -32,7 +33,8 @@ def create_research_manager(llm):
 - **Underweight**: Cautious view; recommend trimming exposure
 - **Sell**: Strong conviction in the bear thesis; recommend exiting or avoiding the position
 
-Commit to a clear stance whenever the debate's strongest arguments warrant one; reserve Hold for situations where the evidence on both sides is genuinely balanced.
+Commit to a clear stance whenever the debate's strongest arguments warrant one; reserve Hold for \
+situations where the evidence on both sides is genuinely balanced.
 
 ---
 
@@ -44,7 +46,8 @@ Commit to a clear stance whenever the debate's strongest arguments warrant one; 
 **Debate History:**
 {history}
 
-Return a confidence score from 0.0 to 1.0. Lower confidence if the reports are incomplete, contradictory, or based on weak evidence."""
+Return a confidence score from 0.0 to 1.0. Lower confidence if the reports are incomplete, \
+contradictory, or based on weak evidence."""
 
         investment_plan = invoke_structured_or_freetext(
             structured_llm,

@@ -25,7 +25,11 @@ class GeneralNewsEventBus:
         if not isinstance(articles, list):
             return
 
-        article_ids = {str(item.get("id") or item.get("url") or "") for item in articles if isinstance(item, dict)}
+        article_ids = {
+            str(item.get("id") or item.get("url") or "")
+            for item in articles
+            if isinstance(item, dict)
+        }
         article_ids.discard("")
         if not article_ids:
             return

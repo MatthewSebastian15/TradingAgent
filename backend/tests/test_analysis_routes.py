@@ -62,7 +62,12 @@ def test_analyze_accepts_valid_request_and_returns_result(client, monkeypatch):
 
     response = client.post(
         "/api/analyze",
-        json={"ticker": "BBCA.JK", "trade_date": "2026-05-14", "time_horizon_months": 2, "max_debate_rounds": 3},
+        json={
+            "ticker": "BBCA.JK",
+            "trade_date": "2026-05-14",
+            "time_horizon_months": 2,
+            "max_debate_rounds": 3,
+        },
         headers={"x-api-key": "route-test-key"},
     )
 
@@ -89,7 +94,9 @@ def test_analyze_persists_completed_result(client, monkeypatch, analysis_reposit
     )
 
     assert response.status_code == 200
-    stored = analysis_repository.get_analysis(response.json()["request_id"], owner_id=_TEST_OWNER_IDENTIFIER)
+    stored = analysis_repository.get_analysis(
+        response.json()["request_id"], owner_id=_TEST_OWNER_IDENTIFIER
+    )
     assert stored is not None
     assert stored["request_id"] == response.json()["request_id"]
     assert stored["ticker"] == "AAPL"
@@ -124,7 +131,12 @@ def test_analyze_fast_mode_warns_when_debate_rounds_are_ignored(client, monkeypa
 
     response = client.post(
         "/api/analyze",
-        json={"ticker": "BBCA.JK", "trade_date": "2026-05-14", "analysis_depth": "fast", "max_debate_rounds": 5},
+        json={
+            "ticker": "BBCA.JK",
+            "trade_date": "2026-05-14",
+            "analysis_depth": "fast",
+            "max_debate_rounds": 5,
+        },
         headers={"x-api-key": "fast-warning-test-key"},
     )
 
@@ -274,7 +286,9 @@ def test_route_cache_and_deduplication_can_be_disabled_explicitly():
             return {"decision": "Hold"}
 
         first = await _get_or_start_analysis(req, factory, use_cache=False, use_deduplication=False)
-        second = await _get_or_start_analysis(req, factory, use_cache=False, use_deduplication=False)
+        second = await _get_or_start_analysis(
+            req, factory, use_cache=False, use_deduplication=False
+        )
         return first, second
 
     first, second = asyncio.run(main())
@@ -420,13 +434,20 @@ def test_analysis_result_endpoint_looks_up_by_request_id(client, monkeypatch):
             payload={"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1},
         )
         await job.complete(
-            {"request_id": "request-lookup", "ticker": "MSFT", "trade_date": "2026-05-14", "decision": "Buy"}
+            {
+                "request_id": "request-lookup",
+                "ticker": "MSFT",
+                "trade_date": "2026-05-14",
+                "decision": "Buy",
+            }
         )
 
     asyncio.run(create_completed_job())
 
     response = client.get("/api/analysis/request-lookup", headers={"x-owner-token": owner_token})
-    wrong_owner_response = client.get("/api/analysis/request-lookup", headers={"x-owner-token": other_token})
+    wrong_owner_response = client.get(
+        "/api/analysis/request-lookup", headers={"x-owner-token": other_token}
+    )
 
     assert response.status_code == 200
     assert response.json()["request_id"] == "request-lookup"
@@ -465,10 +486,17 @@ def test_analysis_result_endpoint_returns_404_for_expired_result(client, monkeyp
     assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
-def test_analysis_result_endpoint_falls_back_to_history_repository(client, monkeypatch, analysis_repository):
+def test_analysis_result_endpoint_falls_back_to_history_repository(
+    client, monkeypatch, analysis_repository
+):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     monkeypatch.setattr("routes.analysis._JOB_STORE", store)
-    result = {"request_id": "history-request", "ticker": "MSFT", "market": "US", "trade_date": "2026-05-14"}
+    result = {
+        "request_id": "history-request",
+        "ticker": "MSFT",
+        "market": "US",
+        "trade_date": "2026-05-14",
+    }
     analysis_repository.save_analysis(result=result, owner_id=_TEST_OWNER_IDENTIFIER)
 
     response = client.get("/api/analysis/history-request")
@@ -479,10 +507,17 @@ def test_analysis_result_endpoint_falls_back_to_history_repository(client, monke
     assert response.json()["trade_date"] == "2026-05-14"
 
 
-def test_analysis_job_endpoint_falls_back_to_history_repository(client, monkeypatch, analysis_repository):
+def test_analysis_job_endpoint_falls_back_to_history_repository(
+    client, monkeypatch, analysis_repository
+):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     monkeypatch.setattr("routes.analysis._JOB_STORE", store)
-    result = {"request_id": "history-job-request", "ticker": "MSFT", "market": "US", "trade_date": "2026-05-14"}
+    result = {
+        "request_id": "history-job-request",
+        "ticker": "MSFT",
+        "market": "US",
+        "trade_date": "2026-05-14",
+    }
     analysis_repository.save_analysis(
         result=result,
         request_payload={"ticker": "MSFT", "trade_date": "2026-05-14"},

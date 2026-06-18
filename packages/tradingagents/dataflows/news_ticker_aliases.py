@@ -40,7 +40,12 @@ IDX_COMPANY_ALIASES: dict[str, dict[str, Any]] = {
     },
     "ADRO.JK": {
         "company_name": "Alamtri Resources Indonesia",
-        "aliases": ["ADRO", "Adaro", "Alamtri Resources Indonesia", "PT Alamtri Resources Indonesia Tbk"],
+        "aliases": [
+            "ADRO",
+            "Adaro",
+            "Alamtri Resources Indonesia",
+            "PT Alamtri Resources Indonesia Tbk",
+        ],
         "sector": "Energy",
     },
     "ANTM.JK": {
