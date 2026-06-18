@@ -64,8 +64,19 @@ export function getDataStatusTone(status, confidenceScore) {
   }
   if (normalized === 'calculated') return Number.isFinite(score) && score < 60 ? 'warning' : 'info';
   if (['conflict', 'stale', 'partial'].includes(normalized)) return 'warning';
-  if (['source_unavailable', 'unavailable', 'missing', 'failed'].includes(normalized)) return 'error';
-  if (['not_applicable', 'no_history', 'no_dividend_history', 'not_applicable_negative_earnings', 'empty', 'skipped'].includes(normalized)) return 'neutral';
+  if (['source_unavailable', 'unavailable', 'missing', 'failed'].includes(normalized))
+    return 'error';
+  if (
+    [
+      'not_applicable',
+      'no_history',
+      'no_dividend_history',
+      'not_applicable_negative_earnings',
+      'empty',
+      'skipped',
+    ].includes(normalized)
+  )
+    return 'neutral';
   return 'neutral';
 }
 
@@ -73,7 +84,8 @@ export function getDataStatusClasses(status, confidenceScore) {
   const tone = getDataStatusTone(status, confidenceScore);
   if (tone === 'ok') return 'border-bloomberg-green bg-bloomberg-green-dim text-bloomberg-green';
   if (tone === 'error') return 'border-bloomberg-red bg-bloomberg-red-dim text-bloomberg-red';
-  if (tone === 'warning') return 'border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber';
+  if (tone === 'warning')
+    return 'border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber';
   if (tone === 'info') return 'border-bloomberg-border bg-bloomberg-surface text-bloomberg-orange';
   return 'border-bloomberg-border bg-bloomberg-surface text-bloomberg-muted';
 }
@@ -99,7 +111,12 @@ export function normalizeQualityPayload(payload) {
     label: getDataStatusLabel(status),
     source: payload.source || payload.primary || payload.method || payload.vendor || null,
     reason: payload.reason || payload.warning || payload.summary || null,
-    confidenceScore: payload.confidence_score ?? payload.confidenceScore ?? payload.score ?? payload.confidence ?? null,
+    confidenceScore:
+      payload.confidence_score ??
+      payload.confidenceScore ??
+      payload.score ??
+      payload.confidence ??
+      null,
     warnings: [...new Set(warnings)],
     freshnessStatus: freshnessPayload,
   };
@@ -116,7 +133,6 @@ export function normalizeSources(value) {
   }
   return [];
 }
-
 
 export function getDisplayValue(value, quality) {
   const isGenericUnavailable = typeof value === 'string' && value.trim().toUpperCase() === 'N/A';

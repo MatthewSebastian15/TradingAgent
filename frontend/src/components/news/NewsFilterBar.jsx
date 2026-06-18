@@ -1,5 +1,6 @@
-import PropTypes from 'prop-types';
 import { RefreshCw } from 'lucide-react';
+import PropTypes from 'prop-types';
+
 import { Button } from '@/components/ui/button';
 
 const NEWS_CATEGORIES = [

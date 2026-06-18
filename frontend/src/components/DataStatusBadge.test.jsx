@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
-import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
+import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import DataQualityBadge from './DataQualityBadge';
@@ -66,5 +66,4 @@ describe('DataStatusBadge', () => {
     expect(screen.getByText(/IDX Official/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Data is stale/i).length).toBeGreaterThan(0);
   });
-
 });

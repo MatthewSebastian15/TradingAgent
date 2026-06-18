@@ -1,5 +1,7 @@
 import React from 'react';
+
 import { Card, CardContent } from '@/components/ui/card';
+
 import GlobalMarketOverview from './GlobalMarketOverview';
 import MarketMoversPanel from './MarketMoversPanel';
 import { useMarketMovers } from '../../hooks/useMarketMovers';

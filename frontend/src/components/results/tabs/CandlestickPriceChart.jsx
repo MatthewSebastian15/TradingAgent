@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { formatPrice } from '../../../utils/formatting';
+import React, { useMemo, useState } from 'react';
+
 import {
   AXIS_COLOR,
   buildXAxisTicks,
@@ -14,6 +14,7 @@ import {
   normalizePricePoints,
   TEXT_COLOR,
 } from './priceChartUtils';
+import { formatPrice } from '../../../utils/formatting';
 
 const WIDTH = 1000;
 const HEIGHT = 420;
@@ -63,7 +64,10 @@ function TradingDataPanel({ point, previousPoint, ticker }) {
       <div className="mb-3 text-bloomberg-muted">{point.date}</div>
       <div className="space-y-2">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex items-center justify-between gap-2 border-b border-white/5 pb-1">
+          <div
+            key={label}
+            className="flex items-center justify-between gap-2 border-b border-white/5 pb-1"
+          >
             <span className="text-bloomberg-muted">{label}</span>
             <span className="text-right text-white">{value}</span>
           </div>
@@ -73,7 +77,9 @@ function TradingDataPanel({ point, previousPoint, ticker }) {
         <span className="text-bloomberg-muted">Change</span>
         <span className={`text-right ${changeClass}`}>{displayPrice(change, ticker)}</span>
         <span className="text-bloomberg-muted">Change %</span>
-        <span className={`text-right ${changeClass}`}>{formatChangePercent(point, previousPoint)}</span>
+        <span className={`text-right ${changeClass}`}>
+          {formatChangePercent(point, previousPoint)}
+        </span>
       </div>
     </aside>
   );
@@ -137,7 +143,13 @@ CandlestickTooltip.propTypes = {
   }).isRequired,
 };
 
-export default function CandlestickPriceChart({ points, allPoints = null, ticker = '', onZoom, rangeKey = '1Y' }) {
+export default function CandlestickPriceChart({
+  points,
+  allPoints = null,
+  ticker = '',
+  onZoom,
+  rangeKey = '1Y',
+}) {
   const [hover, setHover] = useState(null);
   const chart = useMemo(() => {
     const normalizedPoints = normalizePricePoints(points);
@@ -191,7 +203,8 @@ export default function CandlestickPriceChart({ points, allPoints = null, ticker
     const ratio = (chart.maxPrice - price) / (chart.maxPrice - chart.minPrice || 1);
     return PADDING.top + ratio * pricePlotHeight;
   };
-  const volumeToY = (volume) => VOLUME_TOP + ((chart.maxVolume - volume) / chart.maxVolume) * volumePlotHeight;
+  const volumeToY = (volume) =>
+    VOLUME_TOP + ((chart.maxVolume - volume) / chart.maxVolume) * volumePlotHeight;
   const indexToX = (index) => PADDING.left + step * index + step / 2;
   const lastPoint = chart.points[chart.points.length - 1];
   const lastCloseY = priceToY(lastPoint.close);
@@ -254,195 +267,195 @@ export default function CandlestickPriceChart({ points, allPoints = null, ticker
           onMouseLeave={() => setHover(null)}
           onWheel={handleWheel}
         >
-        <rect x="0" y="0" width={WIDTH} height={HEIGHT} fill="black" />
+          <rect x="0" y="0" width={WIDTH} height={HEIGHT} fill="black" />
 
-        {chart.yTicks.map((tick) => {
-          const y = priceToY(tick);
-          return (
-            <g key={tick}>
-              <line
-                x1={PADDING.left}
-                x2={WIDTH - PADDING.right}
-                y1={y}
-                y2={y}
-                stroke={GRID_COLOR}
-                strokeDasharray="5 6"
-              />
-              <text
-                x={PADDING.left - 12}
-                y={y + 4}
-                fill={TEXT_COLOR}
-                fontFamily="monospace"
-                fontSize="11"
-                textAnchor="end"
-              >
-                {displayPrice(tick, ticker)}
-              </text>
-            </g>
-          );
-        })}
+          {chart.yTicks.map((tick) => {
+            const y = priceToY(tick);
+            return (
+              <g key={tick}>
+                <line
+                  x1={PADDING.left}
+                  x2={WIDTH - PADDING.right}
+                  y1={y}
+                  y2={y}
+                  stroke={GRID_COLOR}
+                  strokeDasharray="5 6"
+                />
+                <text
+                  x={PADDING.left - 12}
+                  y={y + 4}
+                  fill={TEXT_COLOR}
+                  fontFamily="monospace"
+                  fontSize="11"
+                  textAnchor="end"
+                >
+                  {displayPrice(tick, ticker)}
+                </text>
+              </g>
+            );
+          })}
 
-        <line
-          x1={PADDING.left}
-          x2={PADDING.left}
-          y1={PADDING.top}
-          y2={VOLUME_TOP + VOLUME_HEIGHT}
-          stroke={AXIS_COLOR}
-        />
-        <text
-          x={PADDING.left - 12}
-          y={PADDING.top - 8}
-          fill={TEXT_COLOR}
-          fontFamily="monospace"
-          fontSize="10"
-          textAnchor="end"
-        >
-          PRICE
-        </text>
-        <text
-          x={PADDING.left + 8}
-          y={VOLUME_TOP - 18}
-          fill={TEXT_COLOR}
-          fontFamily="monospace"
-          fontSize="10"
-          textAnchor="start"
-        >
-          VOLUME
-        </text>
-        <line
-          x1={PADDING.left}
-          x2={WIDTH - PADDING.right}
-          y1={VOLUME_TOP - 12}
-          y2={VOLUME_TOP - 12}
-          stroke={AXIS_COLOR}
-        />
-
-        {chart.points.map((point, index) => {
-          const previousPoint = previousByDate.get(point.date) || null;
-          const x = indexToX(index);
-          const openY = priceToY(point.open);
-          const closeY = priceToY(point.close);
-          const rawBodyHeight = Math.abs(closeY - openY);
-          const bodyHeight = Math.max(rawBodyHeight, 2);
-          const bodyY = Math.min(openY, closeY) - (bodyHeight - rawBodyHeight) / 2;
-          const color = movementColor(point, previousPoint);
-          const volume = point.volume || 0;
-          const volumeY = volumeToY(volume);
-          const volumeHeight = VOLUME_TOP + VOLUME_HEIGHT - volumeY;
-
-          return (
-            <g key={`${point.date}-${index}`}>
-              <line
-                x1={x}
-                x2={x}
-                y1={priceToY(point.high)}
-                y2={priceToY(point.low)}
-                stroke={color}
-              />
-              <rect
-                x={x - candleWidth / 2}
-                y={bodyY}
-                width={candleWidth}
-                height={bodyHeight}
-                fill={color}
-                stroke={color}
-              >
-                <title>{`${point.date}: O ${point.open}, H ${point.high}, L ${point.low}, C ${point.close}, Prev ${previousPoint?.close ?? 'N/A'}, Adj ${point.adjusted_close ?? 'N/A'}, V ${point.volume ?? 'N/A'}`}</title>
-              </rect>
-              <rect
-                data-testid="volume-bar"
-                x={x - barWidth / 2}
-                y={volumeY}
-                width={barWidth}
-                height={Math.max(volumeHeight, 1)}
-                fill={color}
-                opacity="0.72"
-              >
-                <title>{`${point.date}: Volume ${formatCompactNumber(point.volume)}`}</title>
-              </rect>
-            </g>
-          );
-        })}
-
-        <line
-          x1={PADDING.left}
-          x2={WIDTH - PADDING.right}
-          y1={lastCloseY}
-          y2={lastCloseY}
-          stroke={LAST_PRICE_COLOR}
-          strokeDasharray="3 5"
-        />
-        <text
-          x={PADDING.left - 12}
-          y={lastCloseY - 6}
-          fill={LAST_PRICE_COLOR}
-          fontFamily="monospace"
-          fontSize="11"
-          textAnchor="end"
-        >
-          {displayPrice(lastPoint.close, ticker)}
-        </text>
-
-        {chart.volumeTicks.map((tick) => {
-          const y = volumeToY(tick);
-          return (
-            <g key={`volume-${tick}`}>
-              <line
-                x1={PADDING.left}
-                x2={WIDTH - PADDING.right}
-                y1={y}
-                y2={y}
-                stroke={GRID_COLOR}
-                strokeDasharray="4 6"
-              />
-              <text
-                x={PADDING.left - 12}
-                y={y + 4}
-                fill={TEXT_COLOR}
-                fontFamily="monospace"
-                fontSize="10"
-                textAnchor="end"
-              >
-                {formatCompactNumber(tick)}
-              </text>
-            </g>
-          );
-        })}
-
-        {hoverPoint && (
-          <g>
-            <line
-              x1={indexToX(hoverIndex)}
-              x2={indexToX(hoverIndex)}
-              y1={PADDING.top}
-              y2={VOLUME_TOP + VOLUME_HEIGHT}
-              stroke={CROSSHAIR_COLOR}
-              strokeDasharray="4 4"
-            />
-            <line
-              x1={PADDING.left}
-              x2={WIDTH - PADDING.right}
-              y1={priceToY(hoverPoint.close)}
-              y2={priceToY(hoverPoint.close)}
-              stroke={CROSSHAIR_COLOR}
-              strokeDasharray="4 4"
-            />
-          </g>
-        )}
-
-        {chart.xTicks.map(({ index, label }) => (
+          <line
+            x1={PADDING.left}
+            x2={PADDING.left}
+            y1={PADDING.top}
+            y2={VOLUME_TOP + VOLUME_HEIGHT}
+            stroke={AXIS_COLOR}
+          />
           <text
-            key={`${index}-${label}`}
-            x={indexToX(index)}
-            y={HEIGHT - 8}
+            x={PADDING.left - 12}
+            y={PADDING.top - 8}
             fill={TEXT_COLOR}
             fontFamily="monospace"
             fontSize="10"
-            textAnchor="middle"
+            textAnchor="end"
           >
-            {label}
+            PRICE
           </text>
-        ))}
+          <text
+            x={PADDING.left + 8}
+            y={VOLUME_TOP - 18}
+            fill={TEXT_COLOR}
+            fontFamily="monospace"
+            fontSize="10"
+            textAnchor="start"
+          >
+            VOLUME
+          </text>
+          <line
+            x1={PADDING.left}
+            x2={WIDTH - PADDING.right}
+            y1={VOLUME_TOP - 12}
+            y2={VOLUME_TOP - 12}
+            stroke={AXIS_COLOR}
+          />
+
+          {chart.points.map((point, index) => {
+            const previousPoint = previousByDate.get(point.date) || null;
+            const x = indexToX(index);
+            const openY = priceToY(point.open);
+            const closeY = priceToY(point.close);
+            const rawBodyHeight = Math.abs(closeY - openY);
+            const bodyHeight = Math.max(rawBodyHeight, 2);
+            const bodyY = Math.min(openY, closeY) - (bodyHeight - rawBodyHeight) / 2;
+            const color = movementColor(point, previousPoint);
+            const volume = point.volume || 0;
+            const volumeY = volumeToY(volume);
+            const volumeHeight = VOLUME_TOP + VOLUME_HEIGHT - volumeY;
+
+            return (
+              <g key={`${point.date}-${index}`}>
+                <line
+                  x1={x}
+                  x2={x}
+                  y1={priceToY(point.high)}
+                  y2={priceToY(point.low)}
+                  stroke={color}
+                />
+                <rect
+                  x={x - candleWidth / 2}
+                  y={bodyY}
+                  width={candleWidth}
+                  height={bodyHeight}
+                  fill={color}
+                  stroke={color}
+                >
+                  <title>{`${point.date}: O ${point.open}, H ${point.high}, L ${point.low}, C ${point.close}, Prev ${previousPoint?.close ?? 'N/A'}, Adj ${point.adjusted_close ?? 'N/A'}, V ${point.volume ?? 'N/A'}`}</title>
+                </rect>
+                <rect
+                  data-testid="volume-bar"
+                  x={x - barWidth / 2}
+                  y={volumeY}
+                  width={barWidth}
+                  height={Math.max(volumeHeight, 1)}
+                  fill={color}
+                  opacity="0.72"
+                >
+                  <title>{`${point.date}: Volume ${formatCompactNumber(point.volume)}`}</title>
+                </rect>
+              </g>
+            );
+          })}
+
+          <line
+            x1={PADDING.left}
+            x2={WIDTH - PADDING.right}
+            y1={lastCloseY}
+            y2={lastCloseY}
+            stroke={LAST_PRICE_COLOR}
+            strokeDasharray="3 5"
+          />
+          <text
+            x={PADDING.left - 12}
+            y={lastCloseY - 6}
+            fill={LAST_PRICE_COLOR}
+            fontFamily="monospace"
+            fontSize="11"
+            textAnchor="end"
+          >
+            {displayPrice(lastPoint.close, ticker)}
+          </text>
+
+          {chart.volumeTicks.map((tick) => {
+            const y = volumeToY(tick);
+            return (
+              <g key={`volume-${tick}`}>
+                <line
+                  x1={PADDING.left}
+                  x2={WIDTH - PADDING.right}
+                  y1={y}
+                  y2={y}
+                  stroke={GRID_COLOR}
+                  strokeDasharray="4 6"
+                />
+                <text
+                  x={PADDING.left - 12}
+                  y={y + 4}
+                  fill={TEXT_COLOR}
+                  fontFamily="monospace"
+                  fontSize="10"
+                  textAnchor="end"
+                >
+                  {formatCompactNumber(tick)}
+                </text>
+              </g>
+            );
+          })}
+
+          {hoverPoint && (
+            <g>
+              <line
+                x1={indexToX(hoverIndex)}
+                x2={indexToX(hoverIndex)}
+                y1={PADDING.top}
+                y2={VOLUME_TOP + VOLUME_HEIGHT}
+                stroke={CROSSHAIR_COLOR}
+                strokeDasharray="4 4"
+              />
+              <line
+                x1={PADDING.left}
+                x2={WIDTH - PADDING.right}
+                y1={priceToY(hoverPoint.close)}
+                y2={priceToY(hoverPoint.close)}
+                stroke={CROSSHAIR_COLOR}
+                strokeDasharray="4 4"
+              />
+            </g>
+          )}
+
+          {chart.xTicks.map(({ index, label }) => (
+            <text
+              key={`${index}-${label}`}
+              x={indexToX(index)}
+              y={HEIGHT - 8}
+              fill={TEXT_COLOR}
+              fontFamily="monospace"
+              fontSize="10"
+              textAnchor="middle"
+            >
+              {label}
+            </text>
+          ))}
         </svg>
       </div>
       <TradingDataPanel point={lastPoint} previousPoint={lastPreviousPoint} ticker={ticker} />

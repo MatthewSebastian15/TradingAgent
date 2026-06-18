@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types';
 import React, { useState } from 'react';
 
 import { downloadAnalysisPdf, openAnalysisHtmlReport } from '../utils/reportApi';
@@ -62,3 +63,10 @@ export default function ExportReportButtons({
     </div>
   );
 }
+
+ExportReportButtons.propTypes = {
+  disabled: PropTypes.bool,
+  mockReport: PropTypes.bool,
+  resourceId: PropTypes.string,
+  result: PropTypes.object,
+};

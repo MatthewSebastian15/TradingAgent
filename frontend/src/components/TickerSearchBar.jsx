@@ -1,9 +1,10 @@
+import { Search } from 'lucide-react';
+import PropTypes from 'prop-types';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import PropTypes from 'prop-types';
-import { Search } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
+
 import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 import { mergeTickerResults, searchLocalTickers } from '../utils/tickerSearch';
 

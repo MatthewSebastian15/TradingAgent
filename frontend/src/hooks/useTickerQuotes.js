@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 
 export const GLOBAL_TICKER_TAPE = [
@@ -88,11 +89,14 @@ export function useTickerQuotes() {
 
       try {
         const symbols = DEFAULT_TICKERS.join(',');
-        const res = await fetch(buildApiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols)}`), {
-          headers: await buildAuthHeaders(),
-          credentials: 'include',
-          signal: controller.signal,
-        });
+        const res = await fetch(
+          buildApiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols)}`),
+          {
+            headers: await buildAuthHeaders(),
+            credentials: 'include',
+            signal: controller.signal,
+          }
+        );
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 

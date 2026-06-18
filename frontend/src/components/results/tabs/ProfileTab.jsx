@@ -1,8 +1,8 @@
 import PropTypes from 'prop-types';
 
-import SectionHeader from '../SectionHeader';
-import { safeExternalUrl } from '../../../utils/url';
 import { formatPrice } from '../../../utils/formatting';
+import { safeExternalUrl } from '../../../utils/url';
+import SectionHeader from '../SectionHeader';
 
 const OWNERSHIP_SEGMENTS = [
   { key: 'insider', label: 'Insider Ownership', color: '#f97316' },

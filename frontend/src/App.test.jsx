@@ -1,6 +1,7 @@
-import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
+import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { AI_AGENT_MOCK_PATH, AI_AGENT_PATH } from './constants/routes';
 
 async function renderApp(path, enableMock) {

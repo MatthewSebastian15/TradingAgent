@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 

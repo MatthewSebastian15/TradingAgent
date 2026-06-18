@@ -62,7 +62,7 @@ export function historyResourceId(entry) {
 function isSameHistoryEntry(left, right) {
   return Boolean(
     (left?.job_id && right?.job_id && left.job_id === right.job_id) ||
-      (left?.request_id && right?.request_id && left.request_id === right.request_id)
+    (left?.request_id && right?.request_id && left.request_id === right.request_id)
   );
 }
 

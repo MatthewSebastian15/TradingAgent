@@ -136,13 +136,15 @@ export function clearGeneralNewsClientStateForTests() {
 }
 
 export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 }) {
-  const initialDataRef = useRef();
-  if (initialDataRef.current === undefined) {
-    initialDataRef.current = cachedDataForParams({ category, windowDays, limit });
-  }
-
-  const [data, setData] = useState(initialDataRef.current);
-  const [status, setStatus] = useState(initialDataRef.current ? 'success' : 'idle');
+  const [{ data: initialData, status: initialStatus }] = useState(() => {
+    const cachedData = cachedDataForParams({ category, windowDays, limit });
+    return {
+      data: cachedData,
+      status: cachedData ? 'success' : 'idle',
+    };
+  });
+  const [data, setData] = useState(initialData);
+  const [status, setStatus] = useState(initialStatus);
   const [error, setError] = useState(null);
   const mountedRef = useRef(false);
   const requestIdRef = useRef(0);

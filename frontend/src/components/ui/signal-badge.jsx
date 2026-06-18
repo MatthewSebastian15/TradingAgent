@@ -1,26 +1,14 @@
 import PropTypes from 'prop-types';
-import { cva } from 'class-variance-authority';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-const signalBadgeVariants = cva('gap-2 border font-mono text-xs uppercase tracking-wider', {
-  variants: {
-    signal: {
-      BUY: 'border-green-500/60 bg-green-500/15 text-green-400',
-      WAIT: 'border-yellow-500/60 bg-yellow-500/15 text-yellow-300',
-      HOLD: 'border-neutral-500/60 bg-neutral-500/15 text-neutral-300',
-      REDUCE: 'border-orange-500/60 bg-orange-500/15 text-orange-400',
-      SELL: 'border-red-500/60 bg-red-500/15 text-red-400',
-    },
-  },
-  defaultVariants: {
-    signal: 'HOLD',
-  },
-});
+import { signalBadgeVariants } from './signalBadgeVariants';
 
 function normalizeSignal(signal) {
-  const normalized = String(signal || 'HOLD').trim().toUpperCase();
+  const normalized = String(signal || 'HOLD')
+    .trim()
+    .toUpperCase();
   return ['BUY', 'WAIT', 'HOLD', 'REDUCE', 'SELL'].includes(normalized) ? normalized : 'HOLD';
 }
 
@@ -51,5 +39,3 @@ SignalBadge.propTypes = {
   confidence: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   signal: PropTypes.string,
 };
-
-export { signalBadgeVariants };

@@ -1,6 +1,7 @@
 import React from 'react';
-import { EMPTY_CHANGE, fallbackTickerQuotes, useTickerQuotes } from '../hooks/useTickerQuotes';
+
 import WarningToastStack from './WarningToastStack';
+import { EMPTY_CHANGE, fallbackTickerQuotes, useTickerQuotes } from '../hooks/useTickerQuotes';
 
 function formatTickerPrice(ticker) {
   const value = Number(ticker.price);

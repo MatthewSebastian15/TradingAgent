@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { getMarketMovers } from '../api/market';
 import { MARKET_MOVERS_LIMIT } from '../utils/marketDefaults';
 
@@ -19,7 +20,11 @@ function nowMs() {
 
 function moversKey(filters) {
   return [filters.country, filters.exchange, filters.limit]
-    .map((value) => String(value || '').trim().toUpperCase())
+    .map((value) =>
+      String(value || '')
+        .trim()
+        .toUpperCase()
+    )
     .join('|');
 }
 

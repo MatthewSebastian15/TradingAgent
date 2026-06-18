@@ -1,11 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 
-import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchGeneralNews } from '../services/generalNewsApi';
 import { clearGeneralNewsClientStateForTests, useGeneralNews } from './useGeneralNews';
+import { fetchGeneralNews } from '../services/generalNewsApi';
 
 vi.mock('../services/generalNewsApi', () => ({
   fetchGeneralNews: vi.fn(),

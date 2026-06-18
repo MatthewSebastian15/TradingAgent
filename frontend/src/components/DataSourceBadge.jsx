@@ -11,7 +11,10 @@ export default function DataSourceBadge({ sources, label = 'Sources' }) {
         {label}
       </span>
       {normalized.map((source) => (
-        <span key={source} className="border border-bloomberg-border bg-bloomberg-surface px-2 py-0.5">
+        <span
+          key={source}
+          className="border border-bloomberg-border bg-bloomberg-surface px-2 py-0.5"
+        >
           {formatSourceLabel(source)}
         </span>
       ))}

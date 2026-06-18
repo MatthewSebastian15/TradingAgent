@@ -1,5 +1,5 @@
-import PropTypes from 'prop-types';
 import { AlertTriangle, CheckCircle2, Clock3, Loader2 } from 'lucide-react';
+import PropTypes from 'prop-types';
 
 import { cn } from '@/lib/utils';
 
@@ -24,7 +24,9 @@ const STATE_META = {
 };
 
 function normalizeStatus(status) {
-  const normalized = String(status || 'pending').trim().toLowerCase();
+  const normalized = String(status || 'pending')
+    .trim()
+    .toLowerCase();
   if (['running', 'started', 'start', 'in_progress', 'live'].includes(normalized)) return 'running';
   if (['done', 'completed', 'complete', 'success', 'finished'].includes(normalized)) return 'done';
   if (['error', 'failed', 'fail'].includes(normalized)) return 'error';

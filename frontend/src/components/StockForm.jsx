@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import PropTypes from 'prop-types';
 import { Play, Square } from 'lucide-react';
+import PropTypes from 'prop-types';
+import React, { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -12,6 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+
+import TickerSearchBar from './TickerSearchBar';
 import {
   buildAnalysisPayload,
   DEFAULT_DEBATE_ROUNDS,
@@ -21,7 +23,6 @@ import {
   validateAnalysisInput,
 } from '../domain/analysisContract';
 import { useAnalysisJob } from '../hooks/useAnalysisJob';
-import TickerSearchBar from './TickerSearchBar';
 
 const TERMINAL_INPUT_CLASS =
   'h-9 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-xs tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { getMarketOverview } from '../api/market';
 
 const OVERVIEW_REFRESH_MS = 60 * 1000;
@@ -11,7 +12,13 @@ function nowMs() {
 }
 
 function overviewKey(symbols) {
-  return symbols.map((symbol) => String(symbol || '').trim().toUpperCase()).join('|');
+  return symbols
+    .map((symbol) =>
+      String(symbol || '')
+        .trim()
+        .toUpperCase()
+    )
+    .join('|');
 }
 
 function isFresh(entry) {

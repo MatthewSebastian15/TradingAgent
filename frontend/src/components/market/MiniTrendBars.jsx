@@ -1,5 +1,5 @@
-import React from 'react';
 import PropTypes from 'prop-types';
+import React from 'react';
 
 function barHeights(values) {
   const cleanValues = values.map(Number).filter(Number.isFinite);
