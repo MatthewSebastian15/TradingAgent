@@ -52,7 +52,7 @@ Backend FastAPI
   └─ SQLite cache/history stores
         │
         ▼
-tradingagents-core
+packages/tradingagents
   ├─ Data vendor router
   ├─ yfinance / Finnhub / Alpha Vantage / SEC / RSS / news providers
   ├─ Multi-agent analysis pipeline
@@ -94,7 +94,7 @@ Default ports:
 - Jinja2
 - WeasyPrint
 - SQLite
-- Local `tradingagents-core` package
+- Local `tradingagents` package from `packages/`
 
 ### Data and AI
 
@@ -118,8 +118,11 @@ TradingAgent-main/
 │  ├─ templates/reports/
 │  ├─ static/reports/
 │  ├─ tests/
-│  ├─ scripts/
-│  └─ tradingagents-core/
+│  └─ scripts/
+├─ packages/
+│  ├─ pyproject.toml
+│  ├─ tradingagents/
+│  └─ tests/
 ├─ frontend/
 │  ├─ src/
 │  │  ├─ components/
