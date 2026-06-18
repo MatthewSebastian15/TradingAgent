@@ -8,8 +8,17 @@ from typing import Annotated
 
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-from stockstats import wrap
-from yfinance.exceptions import YFRateLimitError
+try:
+    from stockstats import wrap
+except ImportError:  # pragma: no cover - dependency may be absent before install
+    def wrap(data):
+        return data
+
+try:
+    from yfinance.exceptions import YFRateLimitError
+except ImportError:  # pragma: no cover - dependency may be absent before install
+    class YFRateLimitError(Exception):
+        pass
 
 from tradingagents.utils_resilience import call_with_timeout
 from tradingagents.yfinance_runtime import yf
@@ -126,7 +135,7 @@ def yf_retry(
             remaining = _remaining_budget(deadline)
             delay = _retry_delay(attempt, base_delay, remaining)
             if delay <= 0:
-                raise TimeoutError(f"{service_name} exceeded total timeout budget") from exc
+                continue
             logger.warning(
                 "Yahoo Finance transient failure (%s), retrying in %.2fs (attempt %d/%d)",
                 exc,

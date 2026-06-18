@@ -1493,7 +1493,11 @@ def build_financial_highlights_from_normalized_rows(
     if dividends is not None:
         _merge_dividend_events(normalized_for_table, dividends)
     if periods:
-        metric_rows, sections, data_quality = build_metric_rows(periods=periods, normalized=normalized_for_table)
+        metric_rows, sections, data_quality = build_metric_rows(
+            periods=periods,
+            normalized=normalized_for_table,
+            include_operating_expense=True,
+        )
         metadata = currency_metadata(currency)
         highlights.update(
             {

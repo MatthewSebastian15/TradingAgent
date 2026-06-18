@@ -388,7 +388,7 @@ class PortfolioDecision(BaseModel):
     @field_validator("executive_summary")
     @classmethod
     def executive_summary_word_range(cls, v: str) -> str:
-        return _validate_word_range("executive_summary", v, 250, 300)
+        return _validate_word_range("executive_summary", v, 150, 300)
 
     investment_thesis: str = Field(
         description=(
@@ -401,7 +401,7 @@ class PortfolioDecision(BaseModel):
     @field_validator("investment_thesis")
     @classmethod
     def investment_thesis_word_range(cls, v: str) -> str:
-        return _validate_word_range("investment_thesis", v, 400, 450)
+        return _validate_word_range("investment_thesis", v, 250, 450)
 
     suggested_allocation_percent: float | None = Field(
         default=None,

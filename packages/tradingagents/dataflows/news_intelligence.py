@@ -411,8 +411,13 @@ def _label_for_catalyst(item: dict[str, Any], sentiment: str) -> str:
 
 
 def build_catalyst_tracker(news_impact: dict[str, Any] | None, event_risk: Any = None) -> dict[str, Any]:
-    news_items = (news_impact or {}).get("full_news_list") if isinstance(news_impact, dict) else []
-    if not isinstance(news_items, list):
+    if isinstance(news_impact, dict):
+        news_items = []
+        for key in ("high_impact_news", "full_news_list"):
+            values = news_impact.get(key)
+            if isinstance(values, list):
+                news_items.extend(values)
+    else:
         news_items = []
     positive: list[dict[str, Any]] = []
     negative: list[dict[str, Any]] = []
