@@ -1,13 +1,13 @@
 # TradingAgent AI Context
 
-Last synced: 2026-06-16.
+Last synced: 2026-06-18.
 
 This file is the main context for the coding agent. Read it before editing code, docs,
 Docker, env, tests, or API contracts.
 
 ## Working Mode
 
-- Answer users and implementation output bilingually in English and Indonesian.
+- Answer users and implementation output in English.
 - Be brief. Go straight to files, commands, tests, and results.
 - Do not use filler or pleasantries.
 - Do not show long reasoning.
@@ -39,8 +39,7 @@ TradingAgent is a full-stack application for stock and asset research powered by
 multi-agent LLMs.
 
 - Backend: FastAPI in `backend/`.
-- Agent engine: editable package `backend/tradingagents-core`, imported as
-  `tradingagents`.
+- Agent engine: editable package `packages`, imported as `tradingagents`.
 - Frontend: React 18 + Vite in `frontend/`.
 - Main UI: AI Agent terminal, market dashboard, general news, research
   placeholder, economic placeholder.
@@ -117,18 +116,20 @@ TradingAgents/
       market_symbol_universe.py local ticker search universe
       report_service.py       report context, HTML, PDF
       report_disclaimer.py    canonical disclaimer
-    tradingagents-core/
-      tradingagents/
-        pipeline_balanced.py              facade
-        pipeline_balanced_data.py         deterministic data collection
-        pipeline_balanced_orchestrator.py control flow
-        pipeline_balanced_llm.py          LLM call, cache, fallback
-        pipeline_balanced_progress.py     progress labels
-        dataflows/                        vendor/data/news layer
-        fundamentals/                     deterministic fundamentals
-        financial_highlights/             financial table builders
-        llm_clients/                      provider clients
-        llm_cache/                        exact and semantic cache
+  packages/
+    pyproject.toml
+    tradingagents/
+      pipeline_balanced.py              facade
+      pipeline_balanced_data.py         deterministic data collection
+      pipeline_balanced_orchestrator.py control flow
+      pipeline_balanced_llm.py          LLM call, cache, fallback
+      pipeline_balanced_progress.py     progress labels
+      dataflows/                        vendor/data/news layer
+      fundamentals/                     deterministic fundamentals
+      financial_highlights/             financial table builders
+      llm_clients/                      provider clients
+      llm_cache/                        exact and semantic cache
+    tests/
   frontend/
     vite.config.js            Vite dev server and /api proxy
     nginx.conf                production nginx template
@@ -277,7 +278,7 @@ use them for new frontend work.
 Canonical entry:
 
 ```text
-backend/tradingagents-core/tradingagents/pipeline_balanced.py
+packages/tradingagents/pipeline_balanced.py
 ```
 
 Flow:
@@ -426,8 +427,8 @@ News:
 ```text
 backend/routes/news.py
 backend/config_defaults.py
-backend/tradingagents-core/tradingagents/dataflows/news_service.py
-backend/tradingagents-core/tradingagents/dataflows/general_news_service.py
+packages/tradingagents/dataflows/news_service.py
+packages/tradingagents/dataflows/general_news_service.py
 frontend/src/pages/News.jsx
 frontend/src/hooks/useGeneralNews.js
 frontend/src/services/generalNewsApi.js
@@ -527,8 +528,8 @@ python -m ruff format --check .
 Core tests:
 
 ```powershell
-cd d:\CODING\TradingAgents\backend\tradingagents-core
-pytest tests/ -m "not integration and not live_api" -v
+cd d:\CODING\TradingAgents
+python -m pytest packages/tests -m "not integration and not live_api" -v
 ```
 
 Frontend tests:

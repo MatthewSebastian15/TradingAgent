@@ -1,6 +1,6 @@
 # Setup Guide
 
-Last synced: 2026-06-16.
+Last synced: 2026-06-18.
 
 This guide follows the active code for local dev, Docker, env, tests, and common
 problems.
@@ -16,7 +16,7 @@ problems.
 | Docker | Docker Desktop current |
 | Git | Current |
 
-Python 3.13 is not supported by `backend/tradingagents-core`.
+Python 3.13 is not supported by the core package in `packages/`.
 
 ## Port Map
 
@@ -50,7 +50,7 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-`requirements-dev.txt` installs editable `./tradingagents-core`.
+`requirements-dev.txt` installs editable `../packages`.
 
 Create backend env:
 
@@ -360,6 +360,17 @@ http://localhost:3000/ai-agent.test
 
 ## Backend Tests
 
+Repo Python checks:
+
+```powershell
+cd d:\CODING\TradingAgents
+python -m pip install -e packages
+python -c "import tradingagents; print(tradingagents.__file__)"
+python -m ruff check backend packages
+python -m ruff format --check backend packages
+python -m pytest backend/tests packages/tests
+```
+
 Backend unit:
 
 ```powershell
@@ -389,8 +400,8 @@ PowerShell quality script:
 Core package:
 
 ```powershell
-cd d:\CODING\TradingAgents\backend\tradingagents-core
-pytest tests/ -m "not integration and not live_api" -v
+cd d:\CODING\TradingAgents
+python -m pytest packages/tests -m "not integration and not live_api" -v
 ```
 
 ## Frontend Tests
@@ -778,7 +789,8 @@ pip install -r requirements-dev.txt
 or:
 
 ```powershell
-pip install -e .\tradingagents-core
+cd d:\CODING\TradingAgents
+pip install -e packages
 ```
 
 ### WeasyPrint PDF fails local Windows

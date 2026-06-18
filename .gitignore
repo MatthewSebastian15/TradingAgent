@@ -14,6 +14,7 @@
 **/.ruff_cache/
 **/.pyre/
 **/.pytype/
+.venv/
 .coverage
 .coverage.*
 coverage.xml
@@ -43,6 +44,7 @@ frontend/coverage/
 
 # Logs and local artifacts
 *.log
+*.err
 logs/
 *.zip
 *.tar.gz

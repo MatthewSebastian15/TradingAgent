@@ -1,6 +1,6 @@
 # Architecture
 
-Last synced: 2026-06-16.
+Last synced: 2026-06-18.
 
 This document explains the active code architecture. Use it when changing routes,
 frontend flow, pipeline, cache, Docker, env, market, news, or reports.
@@ -255,7 +255,7 @@ Cancellation:
 Facade:
 
 ```text
-backend/tradingagents-core/tradingagents/pipeline_balanced.py
+packages/tradingagents/pipeline_balanced.py
 ```
 
 Implementation split:

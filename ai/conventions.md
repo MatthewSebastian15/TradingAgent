@@ -1,6 +1,6 @@
 # Coding Conventions
 
-Last synced: 2026-06-16.
+Last synced: 2026-06-18.
 
 Follow the active code patterns. Do not use generic preferences that conflict with the repo.
 
@@ -51,7 +51,7 @@ work.
 | Type hints | Required for new function signatures. |
 | Union | Use `X | Y`. |
 | Formatting | Ruff format, double quotes. |
-| Line length | Ruff config, 120 chars. |
+| Line length | Ruff config, 100 chars. |
 
 ### Imports
 
@@ -178,7 +178,7 @@ Backend tests:
 
 ```text
 backend/tests/
-backend/tradingagents-core/tests/
+packages/tests/
 ```
 
 Markers:
@@ -209,8 +209,8 @@ python -m ruff format --check .
 Core:
 
 ```powershell
-cd backend/tradingagents-core
-pytest tests/ -m "not integration and not live_api" -v
+cd d:\CODING\TradingAgents
+python -m pytest packages/tests -m "not integration and not live_api" -v
 ```
 
 ## Frontend
@@ -218,12 +218,17 @@ pytest tests/ -m "not integration and not live_api" -v
 ### Component Style
 
 - Use functional components.
-- Components with props must define `PropTypes`.
+- Components with props must define `PropTypes`; PropTypes are the current
+  JS/JSX type-checking mechanism.
 - Hooks start with `use`.
 - Use Tailwind utilities.
 - Use tokens from `frontend/tailwind.config.js`.
 - Avoid inline style unless existing pattern requires small dynamic value.
 - Do not add `console.log()` in production path.
+- ESLint enforces `react/prop-types`, `import/order`, single quotes, and
+  semicolons.
+- `import/order` groups imports as builtin, external, internal alias, then
+  relative.
 
 Color tokens:
 
