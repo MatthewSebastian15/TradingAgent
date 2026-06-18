@@ -206,3 +206,49 @@ def test_profile_builder_keeps_yfinance_ratio_fields_for_fundamental_table():
     assert profile["beta"] == 1.1
     assert profile["float_shares"] == 900
     assert profile["total_cash_per_share"] == 5
+
+
+def test_profile_builder_enriches_finnhub_profile_with_alpha_vantage_sector_and_employees():
+    calls = []
+
+    def fetch(vendor):
+        calls.append(vendor)
+        if vendor == "yfinance":
+            return {"available": False, "ticker": "NVDA"}
+        if vendor == "finnhub":
+            return {
+                "source": "finnhub",
+                "company": {
+                    "name": "NVIDIA Corp",
+                    "country": "US",
+                    "currency": "USD",
+                    "industry": "Semiconductors",
+                    "market_cap": 4_952_530.08,
+                    "share_outstanding": 24_200,
+                    "website": "https://www.nvidia.com/",
+                },
+            }
+        return {
+            "Symbol": "NVDA",
+            "Name": "NVIDIA Corporation",
+            "Sector": "Technology",
+            "Description": "GPU and accelerated computing company.",
+            "FullTimeEmployees": "36000",
+            "FiscalYearEnd": "January",
+        }
+
+    profile = build_company_profile(
+        ticker="NVDA",
+        fetch_vendor=fetch,
+        vendor_order=["yfinance", "finnhub", "alpha_vantage"],
+    )
+
+    assert calls == ["yfinance", "finnhub", "alpha_vantage"]
+    assert profile["company_name"] == "NVIDIA Corp"
+    assert profile["sector"] == "Technology"
+    assert profile["industry"] == "Semiconductors"
+    assert profile["employee_count"] == 36000
+    assert profile["business_summary"] == "GPU and accelerated computing company."
+    assert profile["data_quality"]["field_sources"]["company_name"] == "finnhub"
+    assert profile["data_quality"]["field_sources"]["sector"] == "alpha_vantage"
+    assert profile["data_quality"]["field_sources"]["employee_count"] == "alpha_vantage"
