@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from config_env import BASE_DIR, env, env_bool, env_float, env_int, env_list
+from config_env import env, env_bool, env_float, env_int, env_list
 
 # App
 APP_NAME = "TradingAgents API"
@@ -236,17 +236,18 @@ NEWS_RSS_DECISION_MIN_RELEVANCE_SCORE = env_float(
     min_value=0,
     max_value=100,
 )
-NEWS_RSS_ENABLED = env_bool("NEWS_RSS_ENABLED", True)
-NEWS_RSS_MAX_FEEDS = env_int("NEWS_RSS_MAX_FEEDS", 50, min_value=1)
-NEWS_RSS_MAX_ITEMS_PER_FEED = env_int("NEWS_RSS_MAX_ITEMS_PER_FEED", 20, min_value=1)
-NEWS_RSS_INCLUDE_TRIAL_FEEDS = env_bool("NEWS_RSS_INCLUDE_TRIAL_FEEDS", True)
-NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED = env_bool("NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED", True)
-NEWS_RSS_ENABLED_FEED_IDS = env("NEWS_RSS_ENABLED_FEED_IDS", "")
-NEWS_RSS_DISABLED_FEED_IDS: list[str] = env_list("NEWS_RSS_DISABLED_FEED_IDS", [])
-NEWS_RSS_USER_AGENT = env("NEWS_RSS_USER_AGENT", "TradingAgent/0.1 RSS Reader")
+# Hardcoded RSS settings keep the news pipeline active without requiring .env values.
+NEWS_RSS_ENABLED = True
+NEWS_RSS_MAX_FEEDS = 50
+NEWS_RSS_MAX_ITEMS_PER_FEED = 20
+NEWS_RSS_INCLUDE_TRIAL_FEEDS = True
+NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED = True
+NEWS_RSS_ENABLED_FEED_IDS = ""
+NEWS_RSS_DISABLED_FEED_IDS: list[str] = []
+NEWS_RSS_USER_AGENT = "TradingAgent/0.1 RSS Reader"
 NEWS_CACHE_ENABLED = env_bool("NEWS_CACHE_ENABLED", True)
 NEWS_CACHE_TTL_MINUTES = env_int("NEWS_CACHE_TTL_MINUTES", 60, min_value=1)
-NEWS_CACHE_DB_PATH = env("NEWS_CACHE_DB_PATH", str(BASE_DIR / ".cache" / "news_data.sqlite3"))
+NEWS_CACHE_DB_PATH = ".cache/news_data.sqlite3"
 NEWS_CACHE_MAX_ENTRIES = env_int("NEWS_CACHE_MAX_ENTRIES", 512, min_value=1)
 NEWS_DEBUG_RAW_RESPONSE = env_bool("NEWS_DEBUG_RAW_RESPONSE", False)
 NEWS_LOG_PROVIDER_REQUESTS = env_bool("NEWS_LOG_PROVIDER_REQUESTS", True)
@@ -279,20 +280,28 @@ GENERAL_NEWS_MAX_ARTICLES_FOR_UI = env_int("GENERAL_NEWS_MAX_ARTICLES_FOR_UI", 1
 GENERAL_NEWS_DEFAULT_LIMIT = env_int("GENERAL_NEWS_DEFAULT_LIMIT", 50, min_value=1)
 
 GENERAL_NEWS_DEFAULT_CATEGORY = env("GENERAL_NEWS_DEFAULT_CATEGORY", "all")
-GENERAL_NEWS_ALLOWED_CATEGORIES: list[str] = env_list(
-    "GENERAL_NEWS_ALLOWED_CATEGORIES",
-    ["all", "markets", "world", "finance", "tech", "macro", "central_bank", "regulatory", "forex", "crypto"],
-)
+GENERAL_NEWS_ALLOWED_CATEGORIES: list[str] = [
+    "all",
+    "markets",
+    "world",
+    "finance",
+    "tech",
+    "macro",
+    "central_bank",
+    "regulatory",
+    "forex",
+    "crypto",
+]
 
-GENERAL_NEWS_RSS_PRIMARY = env_bool("GENERAL_NEWS_RSS_PRIMARY", True)
-GENERAL_NEWS_RSS_MAX_FEEDS = env_int("GENERAL_NEWS_RSS_MAX_FEEDS", 50, min_value=1)
-GENERAL_NEWS_RSS_MAX_ITEMS_PER_FEED = env_int("GENERAL_NEWS_RSS_MAX_ITEMS_PER_FEED", 30, min_value=1)
+GENERAL_NEWS_RSS_PRIMARY = True
+GENERAL_NEWS_RSS_MAX_FEEDS = 50
+GENERAL_NEWS_RSS_MAX_ITEMS_PER_FEED = 30
 
 GENERAL_NEWS_VENDOR_TIMEOUT_SECONDS = env_int("GENERAL_NEWS_VENDOR_TIMEOUT_SECONDS", 10, min_value=1)
 GENERAL_NEWS_VENDOR_MAX_RETRIES = env_int("GENERAL_NEWS_VENDOR_MAX_RETRIES", 1, min_value=0)
 
 GENERAL_NEWS_CACHE_ENABLED = env_bool("GENERAL_NEWS_CACHE_ENABLED", True)
-GENERAL_NEWS_CACHE_DB_PATH = env("GENERAL_NEWS_CACHE_DB_PATH", ".cache/general_news.sqlite3")
+GENERAL_NEWS_CACHE_DB_PATH = ".cache/general_news.sqlite3"
 GENERAL_NEWS_CACHE_MAX_ENTRIES = env_int("GENERAL_NEWS_CACHE_MAX_ENTRIES", 1000, min_value=1)
 
 # Circuit breaker
