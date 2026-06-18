@@ -29,11 +29,12 @@ services:
       DATA_CACHE_DB_PATH: /home/tradingagent/.tradingagents/cache/market_data.sqlite3
     command: >
       uvicorn main:app --host 0.0.0.0 --port 8000
-      --reload --reload-dir /app/backend
+      --reload --reload-dir /app/backend --reload-dir /app/packages
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app/backend
+      - ./packages:/app/packages
       - tradingagent-cache:/home/tradingagent/.tradingagents/cache
       - tradingagent-results:/home/tradingagent/.tradingagents/logs
     restart: unless-stopped

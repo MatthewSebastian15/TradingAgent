@@ -33,7 +33,7 @@ dist/
 sdist/
 *.egg
 *.egg-info/
-backend/tradingagents-core/tradingagents.egg-info/
+packages/*.egg-info/
 
 # Frontend dependencies and build output
 frontend/node_modules/

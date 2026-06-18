@@ -14,12 +14,12 @@ RUN apt-get update \
 RUN pip install pip==25.3 setuptools==82.0.1 wheel==0.45.1
 
 COPY backend/requirements.txt /build/backend/requirements.txt
-COPY backend/tradingagents-core /build/backend/tradingagents-core
+COPY packages /build/packages
 
 WORKDIR /build/backend
 
 RUN pip wheel --wheel-dir=/wheels -r requirements.txt \
-    && pip wheel --wheel-dir=/wheels ./tradingagents-core
+    && pip wheel --wheel-dir=/wheels ../packages
 
 
 FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0 AS runtime
@@ -27,7 +27,7 @@ FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e3
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PYTHONPATH=/app/backend:/app/backend/tradingagents-core \
+    PYTHONPATH=/app/backend:/app/packages \
     XDG_CACHE_HOME=/home/tradingagent/.tradingagents/cache \
     YFINANCE_CACHE_DIR=/home/tradingagent/.tradingagents/cache/py-yfinance \
     DEBIAN_FRONTEND=noninteractive
@@ -52,6 +52,7 @@ RUN apt-get update \
 
 COPY --from=builder /wheels /wheels
 COPY --chown=tradingagent:tradingagent backend /app/backend
+COPY --chown=tradingagent:tradingagent packages /app/packages
 
 WORKDIR /app/backend
 
