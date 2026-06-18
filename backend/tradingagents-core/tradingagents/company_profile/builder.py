@@ -64,6 +64,7 @@ ENRICHMENT_FIELDS = (
     "market_cap",
     "shares_outstanding",
     "fiscal_year_end",
+    "employee_count",
 )
 
 OPTIONAL_PROFILE_FIELDS = (
@@ -109,8 +110,8 @@ FIELD_ALIASES = {
     "exchange": ("exchange", "Exchange", "fullExchangeName", "exchangeName"),
     "currency": ("currency", "Currency", "financialCurrency"),
     "country": ("country", "Country"),
-    "sector": ("sector", "Sector"),
-    "industry": ("industry", "Industry", "finnhubIndustry"),
+    "sector": ("sector", "Sector", "sectorDisp", "sectorKey"),
+    "industry": ("industry", "Industry", "finnhubIndustry", "industryDisp", "industryKey"),
     "business_summary": ("business_summary", "description", "Description", "longBusinessSummary"),
     "website": ("website", "OfficialSite", "weburl"),
     "market_cap": ("market_cap", "marketCap", "MarketCapitalization", "marketCapitalization"),
@@ -164,7 +165,14 @@ FIELD_ALIASES = {
     "current_price_source": ("current_price_source", "price_source"),
     "current_price_as_of": ("current_price_as_of", "price_timestamp"),
     "fiscal_year_end": ("fiscal_year_end", "FiscalYearEnd"),
-    "employee_count": ("employee_count", "full_time_employees", "fullTimeEmployees"),
+    "employee_count": (
+        "employee_count",
+        "full_time_employees",
+        "fullTimeEmployees",
+        "FullTimeEmployees",
+        "employees",
+        "Employees",
+    ),
     "officers": ("officers", "executives", "companyOfficers"),
 }
 

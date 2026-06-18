@@ -18,6 +18,11 @@ def test_yfinance_first_for_main_market_fields_across_markets():
             assert order[0] == "yfinance"
 
 
+def test_us_profile_priority_keeps_alpha_vantage_enrichment_after_finnhub():
+    assert get_field_vendor_order("profile", "NVDA") == ["yfinance", "finnhub", "alpha_vantage"]
+    assert get_field_vendor_order("profile", market="GLOBAL") == ["yfinance", "finnhub", "alpha_vantage"]
+
+
 def test_news_priority_only_uses_allowed_news_vendors():
     assert NEWS_PRIORITY == ["yfinance", "google_news_light", "newsdata", "marketaux", "finnhub", "alpha_vantage"]
     for market in ["IDX", "ID", "US", "GLOBAL", "CRYPTO", "ETF", "FUND"]:

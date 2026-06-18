@@ -703,6 +703,28 @@ def _clean_profile_text(value: Any, max_length: int | None = None) -> str | None
     return text
 
 
+def _first_profile_text(info: dict[str, Any], *keys: str, max_length: int | None = None) -> str | None:
+    for key in keys:
+        value = _clean_profile_text(info.get(key), max_length=max_length)
+        if value:
+            return value
+    return None
+
+
+def _safe_current_price_payload(ticker: str, curr_date: str | None = None) -> dict[str, Any]:
+    try:
+        payload = fetch_current_price(ticker, curr_date)
+    except Exception as exc:
+        logger.warning("Unable to attach current price to company profile for %s: %s", ticker, exc)
+        payload = {}
+
+    return {
+        "price": payload.get("price"),
+        "price_source": payload.get("price_source") or "unavailable",
+        "price_timestamp": payload.get("price_timestamp"),
+    }
+
+
 def get_company_profile(
     ticker: Annotated[str, "ticker symbol of the company"],
     curr_date: Annotated[str, "current date, not used for yfinance"] = None,
@@ -770,7 +792,7 @@ def get_company_profile(
         if insider_pct is not None and institution_pct is not None:
             public_pct = max(0, 1 - (insider_pct + institution_pct))
 
-        current_price_payload = fetch_current_price(ticker, curr_date)
+        current_price_payload = _safe_current_price_payload(ticker, curr_date)
         current_price = (
             current_price_payload.get("price")
             or info.get("currentPrice")
@@ -780,12 +802,12 @@ def get_company_profile(
         profile = {
             "available": True,
             "ticker": ticker,
-            "name": _clean_profile_text(info.get("longName") or info.get("shortName")),
-            "exchange": _clean_profile_text(info.get("exchange") or info.get("fullExchangeName")),
-            "currency": _clean_profile_text(info.get("currency") or info.get("financialCurrency")),
-            "country": _clean_profile_text(info.get("country")),
-            "sector": _clean_profile_text(info.get("sector")),
-            "industry": _clean_profile_text(info.get("industry")),
+            "name": _first_profile_text(info, "longName", "shortName"),
+            "exchange": _first_profile_text(info, "exchange", "fullExchangeName", "exchangeName"),
+            "currency": _first_profile_text(info, "currency", "financialCurrency"),
+            "country": _first_profile_text(info, "country"),
+            "sector": _first_profile_text(info, "sector", "sectorDisp", "sectorKey"),
+            "industry": _first_profile_text(info, "industry", "industryDisp", "industryKey"),
             "address": ", ".join(address_parts) if address_parts else None,
             "phone": _clean_profile_text(info.get("phone")),
             "website": _clean_profile_text(info.get("website") or info.get("ir_website")),
@@ -817,8 +839,10 @@ def get_company_profile(
             "current_price_source": current_price_payload.get("price_source"),
             "current_price_as_of": current_price_payload.get("price_timestamp"),
             "fiscal_year_end": info.get("lastFiscalYearEnd"),
+            "employee_count": info.get("fullTimeEmployees"),
             "full_time_employees": info.get("fullTimeEmployees"),
-            "description": _clean_profile_text(info.get("longBusinessSummary"), max_length=2000),
+            "business_summary": _first_profile_text(info, "longBusinessSummary", max_length=2000),
+            "description": _first_profile_text(info, "longBusinessSummary", max_length=2000),
             "executives": executives,
             "shares_ownership": {
                 "shares_out": shares_out,
