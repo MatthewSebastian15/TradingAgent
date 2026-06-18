@@ -8,18 +8,12 @@ function Invoke-Checked {
 }
 
 $BackendRoot = Split-Path -Parent $PSScriptRoot
-Push-Location $BackendRoot
+$RepoRoot = Split-Path -Parent $BackendRoot
+Push-Location $RepoRoot
 try {
-    Invoke-Checked python -m ruff format --check .
-    Invoke-Checked python -m ruff check .
-    Invoke-Checked python -m pytest tests -q
-    Push-Location (Join-Path $BackendRoot "tradingagents-core")
-    try {
-        Invoke-Checked python -m pytest tests -q
-    }
-    finally {
-        Pop-Location
-    }
+    Invoke-Checked python -m ruff format --check backend packages
+    Invoke-Checked python -m ruff check backend packages
+    Invoke-Checked python -m pytest backend/tests packages/tests -q
 }
 finally {
     Pop-Location

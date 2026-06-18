@@ -1,9 +1,9 @@
 [tool.pytest.ini_options]
 pythonpath = [
     ".",
-    "tradingagents-core",
+    "../packages",
 ]
-testpaths = ["tests"]
+testpaths = ["tests", "../packages/tests"]
 addopts = "-ra"
 markers = [
     "live_api: manual tests that call live vendor APIs",
