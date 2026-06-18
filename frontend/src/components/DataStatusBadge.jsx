@@ -1,6 +1,11 @@
 import PropTypes from 'prop-types';
 
-import { getDataStatusClasses, getDataStatusLabel, normalizeQualityPayload, readableSource } from '../utils/dataStatus';
+import {
+  getDataStatusClasses,
+  getDataStatusLabel,
+  normalizeQualityPayload,
+  readableSource,
+} from '../utils/dataStatus';
 
 function displayConfidence(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -10,7 +15,14 @@ function displayConfidence(value) {
   return `${normalized}`;
 }
 
-export default function DataStatusBadge({ quality, status, source, reason, confidenceScore, compact = false }) {
+export default function DataStatusBadge({
+  quality,
+  status,
+  source,
+  reason,
+  confidenceScore,
+  compact = false,
+}) {
   const normalized = normalizeQualityPayload(quality) || {
     status: status || 'unknown',
     source: source || null,
@@ -26,8 +38,12 @@ export default function DataStatusBadge({ quality, status, source, reason, confi
   const warnings = Array.isArray(normalized.warnings) ? normalized.warnings : [];
 
   return (
-    <div className={`font-mono text-[11px] ${compact ? 'inline-flex flex-wrap gap-1.5' : 'flex flex-wrap gap-2'}`}>
-      <span className={`inline-flex w-fit items-center rounded-sm border px-2 py-0.5 uppercase tracking-wider ${getDataStatusClasses(finalStatus, finalScore)}`}>
+    <div
+      className={`font-mono text-[11px] ${compact ? 'inline-flex flex-wrap gap-1.5' : 'flex flex-wrap gap-2'}`}
+    >
+      <span
+        className={`inline-flex w-fit items-center rounded-sm border px-2 py-0.5 uppercase tracking-wider ${getDataStatusClasses(finalStatus, finalScore)}`}
+      >
         {getDataStatusLabel(finalStatus)}
       </span>
       {finalSource && (
@@ -40,7 +56,9 @@ export default function DataStatusBadge({ quality, status, source, reason, confi
           Confidence: {confidence}
         </span>
       )}
-      {finalReason && !compact && <span className="text-bloomberg-muted">Reason: {finalReason}</span>}
+      {finalReason && !compact && (
+        <span className="text-bloomberg-muted">Reason: {finalReason}</span>
+      )}
       {warnings.length > 0 && !compact && (
         <span className="text-bloomberg-amber">Warning: {warnings.join(' | ')}</span>
       )}

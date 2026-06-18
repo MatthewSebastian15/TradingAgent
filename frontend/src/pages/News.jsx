@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
+
 import { Card, CardContent } from '@/components/ui/card';
+
 import Navbar from '../components/Navbar';
 import NewsFilterBar from '../components/news/NewsFilterBar';
 import NewsList from '../components/news/NewsList';

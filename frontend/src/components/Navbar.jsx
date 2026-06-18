@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import PropTypes from 'prop-types';
 import { Landmark, Microscope, Newspaper, Home, Sparkles, TrendingUp } from 'lucide-react';
+import PropTypes from 'prop-types';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { createClockFormatter, resolveClockConfig } from '../utils/clock';
+
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 import {
   AI_AGENT_MOCK_PATH,
   AI_AGENT_PATH,
@@ -15,7 +17,7 @@ import {
   LEGACY_ANALYSIS_MOCK_PATH,
   LEGACY_ANALYSIS_PATH,
 } from '../constants/routes';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { createClockFormatter, resolveClockConfig } from '../utils/clock';
 
 const CLOCK_CONFIG = resolveClockConfig();
 const CLOCK_FORMATTER = createClockFormatter(CLOCK_CONFIG);

@@ -1,6 +1,7 @@
 import React from 'react';
-import Navbar from '../components/Navbar';
+
 import MarketTab from '../components/market/MarketTab';
+import Navbar from '../components/Navbar';
 import TickerTape from '../components/TickerTape';
 
 export default function Market() {

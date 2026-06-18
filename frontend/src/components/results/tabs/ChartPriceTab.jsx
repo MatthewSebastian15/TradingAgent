@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
 import { buildApiUrl, buildAuthHeaders, readHttpError } from '../../../utils/api';
 import NoticeBox from '../NoticeBox';
 import CandlestickPriceChart from './CandlestickPriceChart';
-import PriceMetricLineChart from './PriceMetricLineChart';
 import {
   buildHistoricalMarketCapPoints,
   buildMaxDrawdownPoints,
@@ -17,6 +17,7 @@ import {
   resolveYoyPriceWindow,
   toNumber,
 } from './priceChartUtils';
+import PriceMetricLineChart from './PriceMetricLineChart';
 
 function firstNumber(...values) {
   for (const value of values) {

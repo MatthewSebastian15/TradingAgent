@@ -1,9 +1,9 @@
-import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
+import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { MOCK_FINANCIAL_HIGHLIGHTS } from '../../../dev/mockData';
 import FinancialHighlightsTable from './FinancialHighlightsTable';
+import { MOCK_FINANCIAL_HIGHLIGHTS } from '../../../dev/mockData';
 
 describe('FinancialHighlightsTable', () => {
   afterEach(() => cleanup());
@@ -77,7 +77,6 @@ describe('FinancialHighlightsTable', () => {
       'FCF Coverage',
     ]);
   });
-
 
   it('renders grouped metric tables with latest value, growth, and status columns', () => {
     const rowKeys = new Set(['revenue', 'revenue_growth']);

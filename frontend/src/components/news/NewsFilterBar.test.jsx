@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
-import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import NewsFilterBar from './NewsFilterBar';
@@ -38,9 +38,7 @@ describe('NewsFilterBar', () => {
   it('renders refresh action inside the filter toolbar', async () => {
     const onChange = vi.fn();
     const onRefresh = vi.fn();
-    render(
-      <NewsFilterBar selectedCategory="all" onChange={onChange} onRefresh={onRefresh} />
-    );
+    render(<NewsFilterBar selectedCategory="all" onChange={onChange} onRefresh={onRefresh} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'REFRESH' }));
 
@@ -55,5 +53,4 @@ describe('NewsFilterBar', () => {
 
     expect(onChange).not.toHaveBeenCalled();
   });
-
 });

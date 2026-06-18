@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+import React, { useEffect, useState } from 'react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { clearAnalysisHistory, fetchAnalysisHistory } from '../utils/analysisHistoryApi';
-import { formatDateTimeLabel, formatTradeDateLabel } from '../utils/formatting';
+
 import {
   clearHistory,
   confidenceScoreStyle,
@@ -17,6 +17,8 @@ import {
   readHistory,
   writeHistory,
 } from '../hooks/useAnalysisHistoryStore';
+import { clearAnalysisHistory, fetchAnalysisHistory } from '../utils/analysisHistoryApi';
+import { formatDateTimeLabel, formatTradeDateLabel } from '../utils/formatting';
 
 export function ConfigIcon() {
   return (

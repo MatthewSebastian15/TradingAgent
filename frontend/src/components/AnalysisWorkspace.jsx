@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAnalysisJob } from '../hooks/useAnalysisJob';
+
 import AgentLog from './AgentLog';
 import {
   ClockIcon,
@@ -12,14 +12,15 @@ import {
   StatusBar,
 } from './AnalysisWorkspacePanels';
 import Navbar from './Navbar';
-import TickerTape from './TickerTape';
 import ResultCard from './ResultCard';
-import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
+import TickerTape from './TickerTape';
 import {
   historyResourceId,
   saveToHistory,
   withAnalysisCreatedAt,
 } from '../hooks/useAnalysisHistoryStore';
+import { useAnalysisJob } from '../hooks/useAnalysisJob';
+import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 
 const RESULT_EXPIRED_MESSAGE = 'Result expired. Please submit a new analysis.';
 

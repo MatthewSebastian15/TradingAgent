@@ -1,7 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Clock3, Loader2 } from 'lucide-react';
+import PropTypes from 'prop-types';
+import React, { useEffect, useRef, useState } from 'react';
 
-import { AGENT_ALIASES, PIPELINE, PIPELINE_IDS, PIPELINE_STATUSES } from '../domain/analysisContract';
+import {
+  AGENT_ALIASES,
+  PIPELINE,
+  PIPELINE_IDS,
+  PIPELINE_STATUSES,
+} from '../domain/analysisContract';
 
 function normalizeAgentId(id = '') {
   const normalized = String(id)
@@ -167,7 +173,10 @@ export default function AgentLog({ status, agentProgress }) {
       </div>
 
       <div className="h-px bg-bloomberg-border">
-        <div className="h-full bg-bloomberg-orange transition-all duration-500" style={{ width: `${pct}%` }} />
+        <div
+          className="h-full bg-bloomberg-orange transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
       </div>
 
       <div className="p-4">
@@ -217,3 +226,12 @@ export default function AgentLog({ status, agentProgress }) {
     </section>
   );
 }
+
+AgentLog.propTypes = {
+  agentProgress: PropTypes.shape({
+    agent_id: PropTypes.string,
+    status: PropTypes.string,
+    status_message: PropTypes.string,
+  }),
+  status: PropTypes.string,
+};

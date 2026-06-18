@@ -1,10 +1,12 @@
-import React, { useMemo, useState } from 'react';
-import PropTypes from 'prop-types';
 import { X } from 'lucide-react';
+import PropTypes from 'prop-types';
+import React, { useMemo, useState } from 'react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+
 import { validateMarketSymbol } from '../../api/market';
 import {
   MARKET_CATEGORIES,

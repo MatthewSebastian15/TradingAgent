@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
+import React, { useMemo } from 'react';
 
 function buildPoints(values) {
   const cleanValues = values.map(Number).filter(Number.isFinite);

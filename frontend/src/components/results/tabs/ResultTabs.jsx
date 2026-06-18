@@ -1,5 +1,5 @@
-import PropTypes from 'prop-types';
 import { BarChart3, Building2, CandlestickChart, Newspaper, Sparkles } from 'lucide-react';
+import PropTypes from 'prop-types';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -36,7 +36,11 @@ function statusMeta(status, label) {
 
 export default function ResultTabs({ activeTab, onTabChange, disabledTabs = [], tabStatus = {} }) {
   return (
-    <Tabs value={activeTab} onValueChange={onTabChange} className="border-b border-border bg-black p-2">
+    <Tabs
+      value={activeTab}
+      onValueChange={onTabChange}
+      className="border-b border-border bg-black p-2"
+    >
       <TabsList className="h-auto flex-wrap justify-start gap-2 bg-transparent p-0">
         {TABS.map((tab) => {
           const isDisabled = disabledTabs.includes(tab.id);

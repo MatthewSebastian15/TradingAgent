@@ -1,8 +1,10 @@
+import PropTypes from 'prop-types';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AI_AGENT_PATH } from '../constants/routes';
+
 import Navbar from '../components/Navbar';
 import TickerTape from '../components/TickerTape';
+import { AI_AGENT_PATH } from '../constants/routes';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 
 const AGENTS = [
@@ -10,79 +12,100 @@ const AGENTS = [
     short: 'MKT',
     label: 'MARKET ANALYST',
     desc: 'Price action, volume, technical indicators',
-    color: '#06b6d4',
+    textClass: 'text-bloomberg-cyan',
+    dividerClass: 'bg-bloomberg-cyan/40',
+    chipClass: 'border-bloomberg-cyan/25 text-bloomberg-cyan',
+    delayClass: '[transition-delay:0ms]',
   },
   {
     short: 'NEWS',
     label: 'NEWS RESEARCHER',
     desc: 'Headlines, sentiment, macro events',
-    color: '#3b82f6',
+    textClass: 'text-bloomberg-blue',
+    dividerClass: 'bg-bloomberg-blue/40',
+    chipClass: 'border-bloomberg-blue/25 text-bloomberg-blue',
+    delayClass: '[transition-delay:60ms]',
   },
   {
     short: 'FUND',
     label: 'FUNDAMENTALS ANALYST',
     desc: 'Financials, ratios, balance sheet',
-    color: '#8b5cf6',
+    textClass: 'text-[#8b5cf6]',
+    dividerClass: 'bg-[#8b5cf6]/40',
+    chipClass: 'border-[#8b5cf6]/25 text-[#8b5cf6]',
+    delayClass: '[transition-delay:120ms]',
   },
   {
     short: 'BULL',
     label: 'BULL RESEARCHER',
     desc: 'Long-side investment thesis',
-    color: '#22c55e',
+    textClass: 'text-bloomberg-green',
+    dividerClass: 'bg-bloomberg-green/40',
+    chipClass: 'border-bloomberg-green/25 text-bloomberg-green',
+    delayClass: '[transition-delay:180ms]',
   },
   {
     short: 'BEAR',
     label: 'BEAR RESEARCHER',
     desc: 'Short-side counterargument',
-    color: '#ef4444',
+    textClass: 'text-bloomberg-red',
+    dividerClass: 'bg-bloomberg-red/40',
+    chipClass: 'border-bloomberg-red/25 text-bloomberg-red',
+    delayClass: '[transition-delay:240ms]',
   },
   {
     short: 'RSRCH',
     label: 'RESEARCH MANAGER',
     desc: 'Debate evaluation and synthesis',
-    color: '#eab308',
+    textClass: 'text-bloomberg-amber',
+    dividerClass: 'bg-bloomberg-amber/40',
+    chipClass: 'border-bloomberg-amber/25 text-bloomberg-amber',
+    delayClass: '[transition-delay:300ms]',
   },
   {
     short: 'TRD',
     label: 'TRADER',
     desc: 'Transaction proposal generation',
-    color: '#06b6d4',
+    textClass: 'text-bloomberg-cyan',
+    dividerClass: 'bg-bloomberg-cyan/40',
+    chipClass: 'border-bloomberg-cyan/25 text-bloomberg-cyan',
+    delayClass: '[transition-delay:360ms]',
   },
   {
     short: 'RISK',
     label: 'RISK ANALYSTS (3×)',
     desc: 'Aggressive / conservative / neutral debate',
-    color: '#f97316',
+    textClass: 'text-bloomberg-orange',
+    dividerClass: 'bg-bloomberg-orange/40',
+    chipClass: 'border-bloomberg-orange/25 text-bloomberg-orange',
+    delayClass: '[transition-delay:420ms]',
   },
   {
     short: 'PORT',
     label: 'PORTFOLIO MANAGER',
     desc: 'Final BUY / HOLD / SELL decision',
-    color: '#a855f7',
+    textClass: 'text-[#a855f7]',
+    dividerClass: 'bg-[#a855f7]/40',
+    chipClass: 'border-[#a855f7]/25 text-[#a855f7]',
+    delayClass: '[transition-delay:480ms]',
   },
 ];
 
 function AgentRow({ agent, index, visible }) {
   return (
     <div
-      className={`flex items-center gap-3 p-3 border-b border-bloomberg-border hover:bg-bloomberg-surface transition-all duration-300 group cursor-default sm:gap-4 sm:p-4 ${
+      className={`flex items-center gap-3 p-3 border-b border-bloomberg-border hover:bg-bloomberg-surface transition-all duration-300 group cursor-default sm:gap-4 sm:p-4 ${agent.delayClass} ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
       }`}
-      style={{ transitionDelay: `${index * 60}ms` }}
     >
       <div
-        className="w-10 font-mono text-xs font-bold tracking-wider flex-shrink-0 sm:w-12"
-        style={{ color: agent.color }}
+        className={`w-10 font-mono text-xs font-bold tracking-wider flex-shrink-0 sm:w-12 ${agent.textClass}`}
       >
         {agent.short}
       </div>
 
       <div
-        className="w-0.5 h-8 flex-shrink-0 transition-opacity duration-300 group-hover:opacity-100"
-        style={{
-          background: agent.color,
-          opacity: 0.4,
-        }}
+        className={`w-0.5 h-8 flex-shrink-0 transition-opacity duration-300 group-hover:opacity-100 ${agent.dividerClass}`}
       />
 
       <div className="flex-1 min-w-0">
@@ -101,6 +124,20 @@ function AgentRow({ agent, index, visible }) {
     </div>
   );
 }
+
+AgentRow.propTypes = {
+  agent: PropTypes.shape({
+    chipClass: PropTypes.string.isRequired,
+    delayClass: PropTypes.string.isRequired,
+    desc: PropTypes.string.isRequired,
+    dividerClass: PropTypes.string.isRequired,
+    label: PropTypes.string.isRequired,
+    short: PropTypes.string.isRequired,
+    textClass: PropTypes.string.isRequired,
+  }).isRequired,
+  index: PropTypes.number.isRequired,
+  visible: PropTypes.bool.isRequired,
+};
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -333,11 +370,7 @@ export default function Dashboard() {
                   {AGENTS.map((agent, index) => (
                     <React.Fragment key={agent.short}>
                       <div
-                        className="font-mono text-xs px-2 py-1 border border-bloomberg-border text-bloomberg-muted whitespace-nowrap flex-shrink-0"
-                        style={{
-                          borderColor: `${agent.color}40`,
-                          color: agent.color,
-                        }}
+                        className={`font-mono text-xs px-2 py-1 border whitespace-nowrap flex-shrink-0 ${agent.chipClass}`}
                       >
                         {agent.short}
                       </div>

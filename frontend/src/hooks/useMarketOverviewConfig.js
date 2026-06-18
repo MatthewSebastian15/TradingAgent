@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+
 import {
   MARKET_CATEGORIES,
   MARKET_DEFAULT_CATEGORY,

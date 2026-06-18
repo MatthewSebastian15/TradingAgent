@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import PropTypes from 'prop-types';
 import { RefreshCw, Search } from 'lucide-react';
+import PropTypes from 'prop-types';
+import React, { useMemo, useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+
 import MarketMoversTable from './MarketMoversTable';
 import { MARKET_EXCHANGE_PRESETS, MARKET_MOVERS_LIMIT } from '../../utils/marketDefaults';
 
@@ -12,14 +14,18 @@ function formatMarketOption(option) {
 }
 
 function findBestMarketOption(query) {
-  const value = String(query || '').trim().toLowerCase();
+  const value = String(query || '')
+    .trim()
+    .toLowerCase();
   if (!value) return MARKET_EXCHANGE_PRESETS[0];
 
   return (
     MARKET_EXCHANGE_PRESETS.find((option) => formatMarketOption(option).toLowerCase() === value) ||
     MARKET_EXCHANGE_PRESETS.find((option) => option.exchange.toLowerCase() === value) ||
     MARKET_EXCHANGE_PRESETS.find((option) => option.country.toLowerCase() === value) ||
-    MARKET_EXCHANGE_PRESETS.find((option) => formatMarketOption(option).toLowerCase().includes(value))
+    MARKET_EXCHANGE_PRESETS.find((option) =>
+      formatMarketOption(option).toLowerCase().includes(value)
+    )
   );
 }
 
@@ -34,7 +40,11 @@ export default function MarketMoversPanel({ movers }) {
     const source = value
       ? MARKET_EXCHANGE_PRESETS.filter((option) => {
           const label = formatMarketOption(option).toLowerCase();
-          return label.includes(value) || option.country.toLowerCase().includes(value) || option.exchange.toLowerCase().includes(value);
+          return (
+            label.includes(value) ||
+            option.country.toLowerCase().includes(value) ||
+            option.exchange.toLowerCase().includes(value)
+          );
         })
       : MARKET_EXCHANGE_PRESETS;
 
@@ -57,7 +67,11 @@ export default function MarketMoversPanel({ movers }) {
     }
 
     selectMarket(option);
-    movers.refresh({ country: option.country, exchange: option.exchange, limit: MARKET_MOVERS_LIMIT });
+    movers.refresh({
+      country: option.country,
+      exchange: option.exchange,
+      limit: MARKET_MOVERS_LIMIT,
+    });
   }
 
   return (
@@ -97,7 +111,9 @@ export default function MarketMoversPanel({ movers }) {
                           className="flex w-full items-center justify-between px-3 py-2 text-left font-mono text-[11px] uppercase tracking-wider text-bloomberg-white hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
                         >
                           <span>{formatMarketOption(option)}</span>
-                          <span className="text-[10px] text-bloomberg-muted">{option.countryCode}</span>
+                          <span className="text-[10px] text-bloomberg-muted">
+                            {option.countryCode}
+                          </span>
                         </button>
                       ))}
                     </div>

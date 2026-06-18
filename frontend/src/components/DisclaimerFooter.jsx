@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+import React, { useEffect, useState } from 'react';
 
 import { fetchReportDisclaimer } from '../utils/reportDisclaimer';
 
 export default function DisclaimerFooter({ disclaimer }) {
   const [backendDisclaimer, setBackendDisclaimer] = useState('');
-  const visibleDisclaimer = typeof disclaimer === 'string' && disclaimer.trim() ? disclaimer : backendDisclaimer;
+  const visibleDisclaimer =
+    typeof disclaimer === 'string' && disclaimer.trim() ? disclaimer : backendDisclaimer;
 
   useEffect(() => {
     if (typeof disclaimer === 'string' && disclaimer.trim()) return undefined;

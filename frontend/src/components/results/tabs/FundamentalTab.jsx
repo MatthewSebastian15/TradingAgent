@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
-import PropTypes from 'prop-types';
 import { Activity, BarChart3, Landmark, Percent, Table2, TrendingUp } from 'lucide-react';
+import PropTypes from 'prop-types';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+
 import FinancialHighlightsTable from '../FinancialHighlightsTable';
 import SectionHeader from '../SectionHeader';
 
@@ -48,7 +49,8 @@ const FUNDAMENTAL_CHART_GROUPS = [
       {
         id: 'income-margin',
         title: 'EBITDA Margin (%) vs Net Profit Margin (%)',
-        description: 'Shows margin quality before and after non-operating items, taxes, and interest.',
+        description:
+          'Shows margin quality before and after non-operating items, taxes, and interest.',
         type: 'line',
         metrics: ['EBITDA Margin (%)', 'Net Profit Margin (%)'],
       },
@@ -146,7 +148,8 @@ const FUNDAMENTAL_CHART_GROUPS = [
       {
         id: 'cashflow-capex-fcf-coverage',
         title: 'Capex Intensity (%) vs FCF Coverage',
-        description: 'Shows how heavy capital expenditure is and whether free cash flow covers key obligations.',
+        description:
+          'Shows how heavy capital expenditure is and whether free cash flow covers key obligations.',
         type: 'line',
         metrics: ['Capex Intensity (%)', 'FCF Coverage'],
       },
@@ -188,7 +191,8 @@ const FUNDAMENTAL_CHART_GROUPS = [
       {
         id: 'ratios-leverage-risk',
         title: 'DER vs Debt / EBITDA',
-        description: 'Shows leverage risk from balance sheet and operating cash earnings perspective.',
+        description:
+          'Shows leverage risk from balance sheet and operating cash earnings perspective.',
         type: 'line',
         metrics: ['DER', 'Debt / EBITDA'],
       },
@@ -209,7 +213,8 @@ const FUNDAMENTAL_CHART_GROUPS = [
       {
         id: 'ratios-return-quality',
         title: 'ROA (%) vs ROIC (%) vs ROE (%)',
-        description: 'Shows return quality across assets, invested capital, and shareholder equity.',
+        description:
+          'Shows return quality across assets, invested capital, and shareholder equity.',
         type: 'line',
         metrics: ['ROA (%)', 'ROIC (%)', 'ROE (%)'],
       },
@@ -411,8 +416,11 @@ const METRIC_FORMAT_TYPES = {
   'Asset Turnover': 'ratio',
 };
 
-
-const metricGroupRow = (key, label, format = METRIC_FORMAT_TYPES[label]) => ({ key, label, format });
+const metricGroupRow = (key, label, format = METRIC_FORMAT_TYPES[label]) => ({
+  key,
+  label,
+  format,
+});
 
 const FUNDAMENTAL_TABLE_GROUPS = {
   income: [
@@ -537,7 +545,11 @@ const FUNDAMENTAL_TABLE_GROUPS = {
     {
       title: 'E. Non-Cash & Working Capital Adjustment',
       metrics: [
-        metricGroupRow('depreciation_amortization', 'Depreciation & Amortization', 'currency_scaled'),
+        metricGroupRow(
+          'depreciation_amortization',
+          'Depreciation & Amortization',
+          'currency_scaled'
+        ),
         metricGroupRow('change_in_working_capital', 'Change in Working Capital', 'currency_scaled'),
         metricGroupRow('stock_based_compensation', 'Stock Based Compensation', 'currency_scaled'),
       ],
@@ -878,7 +890,6 @@ function groupFinancialHighlights(financialHighlights, group) {
   };
 }
 
-
 function metricPlaceholderRowFromDefinition(financialHighlights, metricDefinition, periods) {
   return {
     key: metricDefinition.key,
@@ -911,7 +922,10 @@ function groupTableMetricRow(financialHighlights, metricDefinition, periods, use
     };
   }
 
-  return snapshotRow || metricPlaceholderRowFromDefinition(financialHighlights, metricDefinition, periods);
+  return (
+    snapshotRow ||
+    metricPlaceholderRowFromDefinition(financialHighlights, metricDefinition, periods)
+  );
 }
 
 function groupFundamentalTableHighlights(financialHighlights, group) {

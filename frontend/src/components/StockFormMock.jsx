@@ -1,8 +1,9 @@
+import PropTypes from 'prop-types';
 import React from 'react';
 
 import StockForm from './StockForm';
-import { useMockAnalysisJob } from '../hooks/useMockAnalysisJob';
 import { searchMockTickers } from '../../dev/mockData';
+import { useMockAnalysisJob } from '../hooks/useMockAnalysisJob';
 
 export default function StockFormMock(props) {
   return (
@@ -13,3 +14,11 @@ export default function StockFormMock(props) {
     />
   );
 }
+
+StockFormMock.propTypes = {
+  onAgentProgress: PropTypes.func.isRequired,
+  onLoading: PropTypes.func.isRequired,
+  onResult: PropTypes.func.isRequired,
+  onStatus: PropTypes.func.isRequired,
+  selectedResult: PropTypes.object,
+};

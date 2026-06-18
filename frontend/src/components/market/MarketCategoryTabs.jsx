@@ -1,6 +1,8 @@
-import React from 'react';
 import PropTypes from 'prop-types';
+import React from 'react';
+
 import { Button } from '@/components/ui/button';
+
 import { MARKET_CATEGORIES, MARKET_CATEGORY_LABELS } from '../../utils/marketDefaults';
 
 export default function MarketCategoryTabs({ activeCategory, onChangeCategory }) {

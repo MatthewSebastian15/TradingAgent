@@ -1,5 +1,5 @@
-import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import React from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -581,9 +581,9 @@ describe('AnalysisWorkspace history storage', () => {
 
     renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/job-1');
     expect(await screen.findByText('MSFT')).toBeTruthy();
-    expect(fetchMock.mock.calls.filter(([url]) => url.includes('/analysis/jobs/job-1'))).toHaveLength(
-      2
-    );
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url.includes('/analysis/jobs/job-1'))
+    ).toHaveLength(2);
   });
 
   it('shows an expired message when backend lookup misses', async () => {
@@ -853,22 +853,24 @@ describe('AnalysisWorkspace history storage', () => {
         },
       ])
     );
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options = {}) => {
-      if (url.includes('/market/quotes')) {
-        return new Response(JSON.stringify({ quotes: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      if (url.includes('/analysis/history?')) throw new Error('Use local fallback');
-      if (url === '/api/analysis/history' && options.method === 'DELETE') {
-        return new Response(JSON.stringify({ deleted: true, deleted_count: 1 }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      throw new Error(`Unexpected URL: ${url}`);
-    });
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (url, options = {}) => {
+        if (url.includes('/market/quotes')) {
+          return new Response(JSON.stringify({ quotes: [] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        if (url.includes('/analysis/history?')) throw new Error('Use local fallback');
+        if (url === '/api/analysis/history' && options.method === 'DELETE') {
+          return new Response(JSON.stringify({ deleted: true, deleted_count: 1 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      });
 
     function EmptyForm() {
       return null;

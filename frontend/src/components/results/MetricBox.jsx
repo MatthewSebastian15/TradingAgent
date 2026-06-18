@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 
-import DataStatusBadge from '../DataStatusBadge';
 import { getDisplayValue, normalizeQualityPayload } from '../../utils/dataStatus';
+import DataStatusBadge from '../DataStatusBadge';
 
 function hasDisplayValue(value) {
   return (

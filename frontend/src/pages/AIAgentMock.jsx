@@ -1,4 +1,5 @@
 import React from 'react';
+
 import AnalysisWorkspace from '../components/AnalysisWorkspace';
 import StockFormMock from '../components/StockFormMock';
 import { AI_AGENT_MOCK_PATH } from '../constants/routes';

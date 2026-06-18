@@ -1,12 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import AIAgent from './pages/AIAgent';
-import News from './pages/News';
-import Market from './pages/Market';
-import Economic from './pages/Economic';
-import Research from './pages/Research';
-import NotFound from './pages/NotFound';
+
 import { frontendConfig } from './config';
 import {
   AI_AGENT_MOCK_PATH,
@@ -20,6 +14,13 @@ import {
   LEGACY_ANALYSIS_MOCK_PATH,
   LEGACY_ANALYSIS_PATH,
 } from './constants/routes';
+import AIAgent from './pages/AIAgent';
+import Dashboard from './pages/Dashboard';
+import Economic from './pages/Economic';
+import Market from './pages/Market';
+import News from './pages/News';
+import NotFound from './pages/NotFound';
+import Research from './pages/Research';
 import './index.css';
 
 // Mock UI route is opt-in only. Keeping it behind VITE_ENABLE_MOCK prevents

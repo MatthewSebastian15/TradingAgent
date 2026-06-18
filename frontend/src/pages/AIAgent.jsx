@@ -1,4 +1,5 @@
 import React from 'react';
+
 import AnalysisWorkspace from '../components/AnalysisWorkspace';
 import StockForm from '../components/StockForm';
 import { AI_AGENT_PATH } from '../constants/routes';

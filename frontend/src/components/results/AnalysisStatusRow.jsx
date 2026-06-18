@@ -1,9 +1,16 @@
-import React from 'react';
 import PropTypes from 'prop-types';
+import React from 'react';
+
 import MetricBox from './MetricBox';
 import SectionHeader from './SectionHeader';
 
-export default function AnalysisStatusRow({ label, metrics, reason = null, reasonRenderer = null, columnsClass }) {
+export default function AnalysisStatusRow({
+  label,
+  metrics,
+  reason = null,
+  reasonRenderer = null,
+  columnsClass,
+}) {
   if (!metrics.length) return null;
 
   return (

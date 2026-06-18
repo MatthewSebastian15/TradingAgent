@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
-import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
+import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import NewsRow from './NewsRow';
@@ -86,7 +86,6 @@ describe('NewsRow', () => {
     expect(screen.getByText('2 W')).toBeInTheDocument();
   });
 });
-
 
 describe('NewsRow final category labels', () => {
   afterEach(() => cleanup());

@@ -1,17 +1,19 @@
-import React from 'react';
-import PropTypes from 'prop-types';
 import { X } from 'lucide-react';
+import PropTypes from 'prop-types';
+import React from 'react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+
 import MiniSparkline from './MiniSparkline';
+import { labelForMarketSymbol } from '../../utils/marketDefaults';
 import {
   formatMarketChange,
   formatMarketPercent,
   formatMarketPrice,
   marketChangeState,
 } from '../../utils/marketFormatters';
-import { labelForMarketSymbol } from '../../utils/marketDefaults';
 
 function valueColorClass(state) {
   if (state === 'positive') return 'text-bloomberg-green';

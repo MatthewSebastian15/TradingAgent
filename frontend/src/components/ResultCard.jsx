@@ -1,18 +1,14 @@
-import React, { useState } from 'react';
 import PropTypes from 'prop-types';
+import React, { useState } from 'react';
+
 import ConfidenceBreakdown from './ConfidenceBreakdown';
 import DisclaimerFooter from './DisclaimerFooter';
 import RerunPanel from './RerunPanel';
 import AnalysisStatusRow from './results/AnalysisStatusRow';
 import MetricBox from './results/MetricBox';
 import NoticeBox from './results/NoticeBox';
-import SectionHeader from './results/SectionHeader';
-import ChartPriceTab from './results/tabs/ChartPriceTab';
-import FundamentalTab from './results/tabs/FundamentalTab';
-import NewsTab from './results/tabs/NewsTab';
-import ProfileTab from './results/tabs/ProfileTab';
 import ReportActions from './results/ReportActions';
-import ResultTabs from './results/tabs/ResultTabs';
+import SectionHeader from './results/SectionHeader';
 import { useResultSections } from '../hooks/useResultSections';
 import { resolveClockConfig } from '../utils/clock';
 import {
@@ -21,6 +17,11 @@ import {
   formatTickerLabel,
   formatTradeDateLabel,
 } from '../utils/formatting';
+import ChartPriceTab from './results/tabs/ChartPriceTab';
+import FundamentalTab from './results/tabs/FundamentalTab';
+import NewsTab from './results/tabs/NewsTab';
+import ProfileTab from './results/tabs/ProfileTab';
+import ResultTabs from './results/tabs/ResultTabs';
 
 const ACTIONABLE_DECISIONS = new Set(['BUY', 'SELL', 'Buy', 'Overweight', 'Sell', 'Underweight']);
 
@@ -757,7 +758,10 @@ function buildResultViewModel(result) {
     priceTimestampLabel: formatDevicePriceTimestamp(currentPriceAsOf),
     currentPriceSource: formatDataSourcePriceLabel(result),
     timeHorizon: formatAnalysisHorizon(result.time_horizon_months, result.time_horizon),
-    confidenceDisplay: formatConfidenceDisplay(result.confidence_score ?? null, result.confidence_label),
+    confidenceDisplay: formatConfidenceDisplay(
+      result.confidence_score ?? null,
+      result.confidence_label
+    ),
     allocation: result.suggested_allocation_percent ?? null,
     riskReward: formatRiskReward(result),
     catalysts,
@@ -854,6 +858,18 @@ function ResultCardHeader({
   );
 }
 
+ResultCardHeader.propTypes = {
+  createdAtLabel: PropTypes.string,
+  displayResult: PropTypes.object,
+  enableReportExport: PropTypes.bool.isRequired,
+  mockReport: PropTypes.bool.isRequired,
+  onRerunSubmit: PropTypes.func,
+  onToggleRerun: PropTypes.func.isRequired,
+  rerunRunning: PropTypes.bool.isRequired,
+  result: PropTypes.object.isRequired,
+  timeHorizon: PropTypes.string,
+};
+
 function DecisionHero({ result, vm }) {
   return (
     <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
@@ -919,6 +935,11 @@ function DecisionHero({ result, vm }) {
   );
 }
 
+DecisionHero.propTypes = {
+  result: PropTypes.object.isRequired,
+  vm: PropTypes.object.isRequired,
+};
+
 function ValidationNotices({ result, vm }) {
   if (!result.decision_adjusted && !(vm.isActionable && !vm.tradePlanValid)) return null;
   return (
@@ -939,6 +960,11 @@ function ValidationNotices({ result, vm }) {
   );
 }
 
+ValidationNotices.propTypes = {
+  result: PropTypes.object.isRequired,
+  vm: PropTypes.object.isRequired,
+};
+
 function PipelineLimitNotice({ agentsSkipped }) {
   return (
     <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
@@ -954,6 +980,10 @@ function PipelineLimitNotice({ agentsSkipped }) {
     </div>
   );
 }
+
+PipelineLimitNotice.propTypes = {
+  agentsSkipped: PropTypes.arrayOf(PropTypes.string).isRequired,
+};
 
 function CatalystInvalidationGrid({ catalysts, invalidations }) {
   if (!catalysts.length && !invalidations.length) return null;
@@ -980,10 +1010,10 @@ function CatalystInvalidationGrid({ catalysts, invalidations }) {
           <ul className="flex flex-col gap-1.5">
             {invalidations.map((inv, i) => (
               <li key={i} className="flex items-start gap-2">
-                <span className="font-mono text-xs text-bloomberg-red flex-shrink-0 mt-0.5">
-                  ✕
+                <span className="font-mono text-xs text-bloomberg-red flex-shrink-0 mt-0.5">✕</span>
+                <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                  {inv}
                 </span>
-                <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">{inv}</span>
               </li>
             ))}
           </ul>
@@ -992,6 +1022,11 @@ function CatalystInvalidationGrid({ catalysts, invalidations }) {
     </div>
   );
 }
+
+CatalystInvalidationGrid.propTypes = {
+  catalysts: PropTypes.arrayOf(PropTypes.string).isRequired,
+  invalidations: PropTypes.arrayOf(PropTypes.string).isRequired,
+};
 
 function RecommendationRiskSection({ text }) {
   if (!text) return null;
@@ -1004,6 +1039,10 @@ function RecommendationRiskSection({ text }) {
     </div>
   );
 }
+
+RecommendationRiskSection.propTypes = {
+  text: PropTypes.string,
+};
 
 function RawJsonDebug({ result, showRaw, onToggle }) {
   return (
@@ -1023,7 +1062,22 @@ function RawJsonDebug({ result, showRaw, onToggle }) {
   );
 }
 
-function AnalysisTab({ result, vm, summaryExpanded, thesisExpanded, showRaw, onToggleSummary, onToggleThesis, onToggleRaw }) {
+RawJsonDebug.propTypes = {
+  onToggle: PropTypes.func.isRequired,
+  result: PropTypes.object.isRequired,
+  showRaw: PropTypes.bool.isRequired,
+};
+
+function AnalysisTab({
+  result,
+  vm,
+  summaryExpanded,
+  thesisExpanded,
+  showRaw,
+  onToggleSummary,
+  onToggleThesis,
+  onToggleRaw,
+}) {
   return (
     <>
       <DecisionHero result={result} vm={vm} />
@@ -1046,7 +1100,9 @@ function AnalysisTab({ result, vm, summaryExpanded, thesisExpanded, showRaw, onT
         />
       )}
 
-      {vm.shouldShowHoldMetrics && <HoldMetrics result={vm.displayResult} currentPrice={vm.currentPrice} />}
+      {vm.shouldShowHoldMetrics && (
+        <HoldMetrics result={vm.displayResult} currentPrice={vm.currentPrice} />
+      )}
 
       {vm.budgetExhausted && <PipelineLimitNotice agentsSkipped={vm.agentsSkipped} />}
 
@@ -1078,6 +1134,17 @@ function AnalysisTab({ result, vm, summaryExpanded, thesisExpanded, showRaw, onT
     </>
   );
 }
+
+AnalysisTab.propTypes = {
+  onToggleRaw: PropTypes.func.isRequired,
+  onToggleSummary: PropTypes.func.isRequired,
+  onToggleThesis: PropTypes.func.isRequired,
+  result: PropTypes.object.isRequired,
+  showRaw: PropTypes.bool.isRequired,
+  summaryExpanded: PropTypes.bool.isRequired,
+  thesisExpanded: PropTypes.bool.isRequired,
+  vm: PropTypes.object.isRequired,
+};
 
 export default function ResultCard({
   result,

@@ -1,8 +1,7 @@
 import { resolveClockConfig } from './clock';
 import { formatPrice } from './formatting';
-import { safeExternalUrl } from './url';
-
 import { fetchReportDisclaimer } from './reportDisclaimer';
+import { safeExternalUrl } from './url';
 
 const ACTIONABLE_DECISIONS = new Set(['BUY', 'Buy', 'Overweight', 'SELL', 'Sell', 'Underweight']);
 const LEGACY_REPORT_FIELD_PATTERN = /\b(price target|risk per share|reward per share)\b/i;
@@ -268,9 +267,7 @@ function formatOwnershipPercent(value) {
 function buildSharesOwnershipRows(profile) {
   if (!profile?.available) return [];
 
-  const definitions = [
-    ['Shares Outstanding', profileSharesOut(profile), profileNumber],
-  ];
+  const definitions = [['Shares Outstanding', profileSharesOut(profile), profileNumber]];
 
   return definitions.map(([label, value, formatter]) => profileRow(label, formatter(value)));
 }
