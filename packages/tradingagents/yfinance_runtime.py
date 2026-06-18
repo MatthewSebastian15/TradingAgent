@@ -11,7 +11,17 @@ import logging
 import os
 from pathlib import Path
 
-import yfinance as yf
+try:
+    import yfinance as yf
+except ImportError:  # pragma: no cover - dependency may be absent before install
+    class _MissingYFinance:
+        def set_tz_cache_location(self, *_args, **_kwargs):
+            return None
+
+        def __getattr__(self, name):
+            raise ImportError("yfinance is required for Yahoo Finance runtime calls.")
+
+    yf = _MissingYFinance()
 
 logger = logging.getLogger(__name__)
 

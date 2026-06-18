@@ -641,7 +641,7 @@ def _build_related_news(
 ) -> dict[str, Any]:
     months = _normalize_time_horizon_months(time_horizon_months)
     lookback_days = _horizon_days(months)
-    max_items = None if limit is None else max(1, int(limit or 1))
+    max_items = (8 if source_label is None else None) if limit is None else max(1, int(limit or 1))
 
     base_payload: dict[str, Any] = {
         "available": False,
@@ -685,7 +685,9 @@ def _build_related_news(
 
 def _safe_company_profile(ticker: str, trade_date: str) -> dict[str, Any]:
     try:
-        vendor_order = get_field_vendor_order("profile", ticker)
+        vendor_order = list(get_field_vendor_order("profile", ticker))
+        if "alpha_vantage" not in vendor_order:
+            vendor_order.append("alpha_vantage")
         return build_company_profile(
             ticker=ticker,
             fetch_vendor=lambda vendor: route_to_vendor(
@@ -991,11 +993,18 @@ def _build_price_chart(
         else None
     )
 
-    # start_date must always be anchored to trade_date - 1 year, never to the
-    # fallback effective_cutoff, so the YOY window is always exactly
-    # [trade_date - 1 year, trade_date] regardless of market holiday/weekend fallback.
-    yoy_anchor = requested_cutoff if requested_cutoff is not None else effective_cutoff
-    effective_start_cutoff = yoy_anchor - relativedelta(years=1)
+    requested_anchor_candidates = (
+        [item for item in parsed_points if item["_row_date"] <= requested_start_cutoff]
+        if requested_start_cutoff is not None
+        else []
+    )
+    # Keep the requested YOY label when a real historical anchor exists.
+    # Otherwise, anchor the displayed window to the effective last trade date.
+    effective_start_cutoff = (
+        requested_start_cutoff
+        if requested_anchor_candidates and requested_start_cutoff is not None
+        else effective_cutoff - relativedelta(years=1)
+    )
     effective_start_date = effective_start_cutoff.strftime("%Y-%m-%d")
     fallback_to_last_trade = bool(
         requested_cutoff is not None and effective_cutoff.date() != requested_cutoff.date()

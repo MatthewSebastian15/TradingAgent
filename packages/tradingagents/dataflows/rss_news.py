@@ -132,9 +132,11 @@ class RSSContextProvider(BaseNewsProvider):
 
 
 def _select_feeds(config: dict[str, Any], ticker_profile: dict[str, Any] | None = None) -> list[RSSFeedConfig]:
-    feeds = list(DEFAULT_RSS_FEEDS)
+    feeds: list[RSSFeedConfig] = []
     if bool(config.get("rss_google_news_fallback_enabled", True)):
         feeds.extend(_company_google_news_feeds(ticker_profile))
+    feeds.extend(DEFAULT_RSS_FEEDS)
+    if bool(config.get("rss_google_news_fallback_enabled", True)):
         feeds.extend(GOOGLE_NEWS_FALLBACK_RSS_FEEDS)
 
     enabled_ids = set(_string_list(config.get("rss_enabled_feed_ids")))

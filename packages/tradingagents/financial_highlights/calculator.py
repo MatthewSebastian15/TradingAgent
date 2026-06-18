@@ -22,7 +22,6 @@ METRIC_SECTIONS = [
             ("gross_profit", "Gross Profit", "currency_scaled"),
             ("cost_of_revenue", "Cost of Revenue", "currency_scaled"),
             ("operating_income", "Operating Income / EBIT", "currency_scaled"),
-            ("operating_expense", "Operating Expense", "currency_scaled"),
             ("pretax_income", "Pretax Income", "currency_scaled"),
             ("income_tax_expense", "Income Tax Expense", "currency_scaled"),
             ("interest_expense", "Interest Expense", "currency_scaled"),
@@ -502,6 +501,7 @@ def build_metric_rows(
     *,
     periods: list[FinancialPeriod],
     normalized: dict[str, Any],
+    include_operating_expense: bool = False,
 ) -> tuple[list[FinancialHighlightRow], list[FinancialHighlightSection], dict[str, Any]]:
     metadata = currency_metadata(normalized.get("currency"))
     currency_unit = str(metadata["scale_label"])
@@ -520,8 +520,18 @@ def build_metric_rows(
     rows: list[FinancialHighlightRow] = []
     sections: list[FinancialHighlightSection] = []
     for section_definition in METRIC_SECTIONS:
+        section_row_definitions = list(section_definition["rows"])
+        if include_operating_expense and section_definition["key"] == "income":
+            insert_at = next(
+                (index + 1 for index, row in enumerate(section_row_definitions) if row[0] == "operating_income"),
+                len(section_row_definitions),
+            )
+            section_row_definitions.insert(
+                insert_at,
+                ("operating_expense", "Operating Expense", "currency_scaled"),
+            )
         section_rows = []
-        for key, label, format_type in section_definition["rows"]:
+        for key, label, format_type in section_row_definitions:
             row = FinancialHighlightRow(
                 key=key,
                 label=label,
