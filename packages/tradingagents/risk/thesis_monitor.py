@@ -5,9 +5,10 @@ from typing import Any
 from tradingagents.utils.normalization import number as _number
 
 
-
 def _latest_metric(result: dict[str, Any], key: str) -> float | None:
-    trends = result.get("financial_trends") if isinstance(result.get("financial_trends"), dict) else {}
+    trends = (
+        result.get("financial_trends") if isinstance(result.get("financial_trends"), dict) else {}
+    )
     metrics = trends.get("metrics") if isinstance(trends.get("metrics"), dict) else {}
     values = metrics.get(key)
     if not isinstance(values, list):
@@ -29,7 +30,9 @@ def _status_from_data(value: Any, *, invalid_when: bool, watch_when: bool = Fals
     return "valid"
 
 
-def build_thesis_monitor(result: dict[str, Any], data_quality_score: int | None = None) -> dict[str, Any]:
+def build_thesis_monitor(
+    result: dict[str, Any], data_quality_score: int | None = None
+) -> dict[str, Any]:
     current_price = _number(result.get("current_price") or result.get("last_close_price"))
     stop_loss = _number(result.get("stop_loss"))
     revenue_growth = _latest_metric(result, "revenue_growth_percent")
@@ -92,7 +95,9 @@ def build_thesis_monitor(result: dict[str, Any], data_quality_score: int | None 
             "condition": "Price breaks stop loss",
             "status": _status_from_data(
                 current_price if stop_loss is not None else None,
-                invalid_when=current_price is not None and stop_loss is not None and current_price <= stop_loss,
+                invalid_when=current_price is not None
+                and stop_loss is not None
+                and current_price <= stop_loss,
             ),
             "reason": "Current price or stop loss is unavailable."
             if current_price is None or stop_loss is None
@@ -103,8 +108,12 @@ def build_thesis_monitor(result: dict[str, Any], data_quality_score: int | None 
             "condition": "Stock trades above bull fair value without earnings upgrade",
             "status": _status_from_data(
                 current_price if bull_value is not None else None,
-                invalid_when=current_price is not None and bull_value is not None and current_price > bull_value,
-                watch_when=current_price is not None and bull_value is not None and current_price > bull_value * 0.95,
+                invalid_when=current_price is not None
+                and bull_value is not None
+                and current_price > bull_value,
+                watch_when=current_price is not None
+                and bull_value is not None
+                and current_price > bull_value * 0.95,
             ),
             "reason": "Current price or bull fair value is unavailable."
             if current_price is None or bull_value is None

@@ -23,7 +23,9 @@ VALID_DIVIDEND_STATUSES = {
 
 
 def _fixtures() -> list[dict[str, Any]]:
-    return [json.loads(path.read_text(encoding="utf-8")) for path in sorted(FIXTURE_DIR.glob("*.json"))]
+    return [
+        json.loads(path.read_text(encoding="utf-8")) for path in sorted(FIXTURE_DIR.glob("*.json"))
+    ]
 
 
 def test_idx_payloads_meet_minimum_acceptance_without_live_api():
@@ -32,7 +34,9 @@ def test_idx_payloads_meet_minimum_acceptance_without_live_api():
         payload: dict[str, Any] = fixture["mock_payload"]
         quality = payload["data_quality_summary"]
         for area, minimum in TARGETS.items():
-            assert quality[area] >= minimum, f"{fixture['ticker']} {area} quality dropped below {minimum}"
+            assert quality[area] >= minimum, (
+                f"{fixture['ticker']} {area} quality dropped below {minimum}"
+            )
 
         dividend_status = payload.get("fundamental", {}).get("dividend_status")
         assert dividend_status in VALID_DIVIDEND_STATUSES

@@ -35,7 +35,9 @@ METRIC_SECTIONS = [
     {
         "key": "balance_sheet",
         "title": "Balance Sheet",
-        "description": "Assets, liabilities, equity, liquidity, leverage, and capital structure metrics.",
+        ("description"): (
+            "Assets, liabilities, equity, liquidity, leverage, and capital structure metrics."
+        ),
         "rows": [
             ("bvps", "BVPS", "per_share"),
             ("net_debt", "Net Debt", "currency_scaled"),
@@ -59,7 +61,9 @@ METRIC_SECTIONS = [
     {
         "key": "cash_flow",
         "title": "Cash Flow",
-        "description": "Operating, investing, financing, free cash flow, capex, and cash conversion metrics.",
+        ("description"): (
+            "Operating, investing, financing, free cash flow, capex, and cash conversion metrics."
+        ),
         "rows": [
             ("free_cash_flow", "Free Cash Flow", "currency_scaled"),
             ("cfo_to_net_income", "CFO / Net Income", "ratio"),
@@ -172,7 +176,9 @@ def _reported_cell(
         return _unavailable_cell()
     raw_value = float(record["value"])
     if format_type == "currency_scaled":
-        value = convert_amount(raw_value, source_unit=record.get("source_unit"), scale_divisor=scale_divisor)
+        value = convert_amount(
+            raw_value, source_unit=record.get("source_unit"), scale_divisor=scale_divisor
+        )
     elif percent_ratio and abs(raw_value) <= 1:
         value = raw_value * 100
     else:
@@ -253,7 +259,6 @@ def _build_period_cells(
     ebitda = _number(normalized, key, "ebitda")
     previous_ebitda = _number(normalized, previous_key, "ebitda")
     gross_profit = _number(normalized, key, "gross_profit")
-    cost_of_revenue = _number(normalized, key, "cost_of_revenue")
     operating_income = _number(normalized, key, "operating_income")
     operating_expense = _number(normalized, key, "operating_expense")
     if operating_expense is None and gross_profit is not None and operating_income is not None:
@@ -277,34 +282,40 @@ def _build_period_cells(
     invested_capital_reported = _number(normalized, key, "invested_capital")
     operating_cash_flow = _number(normalized, key, "operating_cash_flow")
     previous_operating_cash_flow = _number(normalized, previous_key, "operating_cash_flow")
-    investing_cash_flow = _number(normalized, key, "investing_cash_flow")
-    financing_cash_flow = _number(normalized, key, "financing_cash_flow")
     capex = _amount(_number(normalized, key, "capex"))
-    depreciation_amortization = _number(normalized, key, "depreciation_amortization")
-    change_in_working_capital = _number(normalized, key, "change_in_working_capital")
-    stock_based_compensation = _number(normalized, key, "stock_based_compensation")
     dividend_paid = _amount(_number(normalized, key, "dividend_paid"))
-    share_repurchase = _amount(_number(normalized, key, "share_repurchase"))
     shares_outstanding = _number(normalized, key, "shares_outstanding")
-    float_shares = _number(normalized, key, "float_shares")
     dividend_per_share = _number(normalized, key, "dividend_per_share")
     reference_price = _number(normalized, key, "reference_price")
     reported_eps = _number(normalized, key, "eps")
-    eps_value = reported_eps if reported_eps is not None else safe_divide(net_profit, shares_outstanding)
+    eps_value = (
+        reported_eps if reported_eps is not None else safe_divide(net_profit, shares_outstanding)
+    )
     average_equity = (
-        (total_equity + previous_equity) / 2 if total_equity is not None and previous_equity is not None else None
+        (total_equity + previous_equity) / 2
+        if total_equity is not None and previous_equity is not None
+        else None
     )
     eps_cell = _reported_cell(_record(normalized, key, "eps"), format_type="per_share")
     if eps_cell.status == "unavailable":
-        eps_cell = _calculated_cell(eps_value, "Net Profit / Shares Outstanding", format_type="per_share")
+        eps_cell = _calculated_cell(
+            eps_value, "Net Profit / Shares Outstanding", format_type="per_share"
+        )
 
     market_cap_from_price = (
-        reference_price * shares_outstanding if reference_price is not None and shares_outstanding is not None else None
+        reference_price * shares_outstanding
+        if reference_price is not None and shares_outstanding is not None
+        else None
     )
     market_cap_record = _record(normalized, key, "market_cap")
     market_cap_value = _number(normalized, key, "market_cap") or market_cap_from_price
     enterprise_value_value = _number(normalized, key, "enterprise_value")
-    if enterprise_value_value is None and market_cap_value is not None and total_debt is not None and cash is not None:
+    if (
+        enterprise_value_value is None
+        and market_cap_value is not None
+        and total_debt is not None
+        and cash is not None
+    ):
         enterprise_value_value = market_cap_value + total_debt - cash
 
     free_cash_flow_value = _number(normalized, key, "free_cash_flow")
@@ -312,7 +323,9 @@ def _build_period_cells(
         free_cash_flow_value = operating_cash_flow - capex
     previous_free_cash_flow = _number(normalized, previous_key, "free_cash_flow")
     if previous_free_cash_flow is None:
-        previous_operating_cash_flow_for_fcf = _number(normalized, previous_key, "operating_cash_flow")
+        previous_operating_cash_flow_for_fcf = _number(
+            normalized, previous_key, "operating_cash_flow"
+        )
         previous_capex = _amount(_number(normalized, previous_key, "capex"))
         if previous_operating_cash_flow_for_fcf is not None and previous_capex is not None:
             previous_free_cash_flow = previous_operating_cash_flow_for_fcf - previous_capex
@@ -341,16 +354,30 @@ def _build_period_cells(
         percent_ratio=True,
     )
 
-    net_debt_value = total_debt - cash if total_debt is not None and cash is not None else _number(normalized, key, "net_debt")
+    net_debt_value = (
+        total_debt - cash
+        if total_debt is not None and cash is not None
+        else _number(normalized, key, "net_debt")
+    )
     working_capital_value = (
         current_assets - current_liabilities
         if current_assets is not None and current_liabilities is not None
         else _number(normalized, key, "working_capital")
     )
     invested_capital_value = invested_capital_reported
-    if invested_capital_value is None and total_debt is not None and total_equity is not None and cash is not None:
+    if (
+        invested_capital_value is None
+        and total_debt is not None
+        and total_equity is not None
+        and cash is not None
+    ):
         invested_capital_value = total_debt + total_equity - cash
-    nopat = operating_income * (1 - safe_divide(income_tax_expense, pretax_income)) if operating_income is not None and safe_divide(income_tax_expense, pretax_income) is not None else None
+    nopat = (
+        operating_income * (1 - safe_divide(income_tax_expense, pretax_income))
+        if operating_income is not None
+        and safe_divide(income_tax_expense, pretax_income) is not None
+        else None
+    )
     der = safe_divide(total_debt, total_equity)
     fcf_coverage = safe_divide(free_cash_flow_value, dividend_paid)
     current_ratio_value = _number(normalized, key, "current_ratio")
@@ -364,77 +391,343 @@ def _build_period_cells(
         revenue_per_share_value = safe_divide(revenue, shares_outstanding)
 
     cells = {
-        "revenue": _reported_cell(_record(normalized, key, "revenue"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "ebitda": _reported_cell(_record(normalized, key, "ebitda"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "net_profit": _reported_cell(_record(normalized, key, "net_profit"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "revenue_growth": _calculated_cell(safe_growth_percent(revenue, previous_revenue), "(Revenue current - Revenue previous) / Revenue previous * 100", format_type="percent"),
-        "net_profit_growth": _calculated_cell(safe_growth_percent(net_profit, previous_net_profit), "(Net Profit current - Net Profit previous) / Net Profit previous * 100", format_type="percent"),
-        "ebitda_margin": _calculated_cell(safe_percent(ebitda, revenue), "EBITDA / Revenue * 100", format_type="percent"),
-        "net_profit_margin": _calculated_cell(safe_percent(net_profit, revenue), "Net Profit / Revenue * 100", format_type="percent"),
+        "revenue": _reported_cell(
+            _record(normalized, key, "revenue"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "ebitda": _reported_cell(
+            _record(normalized, key, "ebitda"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "net_profit": _reported_cell(
+            _record(normalized, key, "net_profit"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "revenue_growth": _calculated_cell(
+            safe_growth_percent(revenue, previous_revenue),
+            "(Revenue current - Revenue previous) / Revenue previous * 100",
+            format_type="percent",
+        ),
+        "net_profit_growth": _calculated_cell(
+            safe_growth_percent(net_profit, previous_net_profit),
+            "(Net Profit current - Net Profit previous) / Net Profit previous * 100",
+            format_type="percent",
+        ),
+        "ebitda_margin": _calculated_cell(
+            safe_percent(ebitda, revenue), "EBITDA / Revenue * 100", format_type="percent"
+        ),
+        "net_profit_margin": _calculated_cell(
+            safe_percent(net_profit, revenue), "Net Profit / Revenue * 100", format_type="percent"
+        ),
         "eps": eps_cell,
-        "gross_profit": _reported_cell(_record(normalized, key, "gross_profit"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "cost_of_revenue": _reported_cell(_record(normalized, key, "cost_of_revenue"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "operating_income": _reported_cell(_record(normalized, key, "operating_income"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "operating_expense": _reported_or_calculated_cell(_record(normalized, key, "operating_expense"), operating_expense, "Gross Profit - Operating Income", format_type="currency_scaled", scale_divisor=scale_divisor),
-        "pretax_income": _reported_cell(_record(normalized, key, "pretax_income"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "income_tax_expense": _reported_cell(_record(normalized, key, "income_tax_expense"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "interest_expense": _reported_cell(_record(normalized, key, "interest_expense"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "ebitda_growth": _calculated_cell(safe_growth_percent(ebitda, previous_ebitda), "(EBITDA current - EBITDA previous) / EBITDA previous * 100", format_type="percent"),
-        "operating_income_growth": _calculated_cell(safe_growth_percent(operating_income, previous_operating_income), "(Operating Income current - Operating Income previous) / Operating Income previous * 100", format_type="percent"),
-        "gross_margin": _calculated_cell(safe_percent(gross_profit, revenue), "Gross Profit / Revenue * 100", format_type="percent"),
-        "operating_margin": _calculated_cell(safe_percent(operating_income, revenue), "Operating Income / Revenue * 100", format_type="percent"),
-        "tax_rate": _calculated_cell(safe_percent(income_tax_expense, pretax_income), "Income Tax Expense / Pretax Income * 100", format_type="percent"),
-        "bvps": _reported_or_calculated_cell(_record(normalized, key, "bvps"), safe_divide(total_equity, shares_outstanding), "Total Equity / Shares Outstanding", format_type="per_share"),
-        "net_debt": _reported_or_calculated_cell(_record(normalized, key, "net_debt"), net_debt_value, "Total Debt - Cash", format_type="currency_scaled", scale_divisor=scale_divisor),
-        "cash_ratio": _calculated_cell(safe_divide(cash, current_liabilities if current_liabilities is not None else total_liabilities), "Cash / Current Liabilities; fallback to Total Liabilities", format_type="ratio"),
-        "equity_ratio": _calculated_cell(safe_percent(total_equity, total_assets), "Total Equity / Total Assets * 100", format_type="percent"),
-        "total_assets": _reported_cell(_record(normalized, key, "total_assets"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "total_liabilities": _reported_cell(_record(normalized, key, "total_liabilities"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "total_equity": _reported_cell(_record(normalized, key, "total_equity"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "cash": _reported_cell(_record(normalized, key, "cash"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "total_debt": _reported_cell(_record(normalized, key, "total_debt"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "current_assets": _reported_cell(_record(normalized, key, "current_assets"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "current_liabilities": _reported_cell(_record(normalized, key, "current_liabilities"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "working_capital": _reported_or_calculated_cell(_record(normalized, key, "working_capital"), working_capital_value, "Current Assets - Current Liabilities", format_type="currency_scaled", scale_divisor=scale_divisor),
-        "invested_capital": _reported_or_calculated_cell(_record(normalized, key, "invested_capital"), invested_capital_value, "Total Debt + Total Equity - Cash", format_type="currency_scaled", scale_divisor=scale_divisor),
-        "net_debt_to_equity": _calculated_cell(safe_divide(net_debt_value, total_equity), "Net Debt / Total Equity", format_type="ratio"),
-        "current_ratio": _reported_or_calculated_cell(_record(normalized, key, "current_ratio"), current_ratio_value, "Current Assets / Current Liabilities", format_type="ratio"),
-        "quick_ratio": _reported_or_calculated_cell(_record(normalized, key, "quick_ratio"), quick_ratio_value, "(Current Assets - Inventory) / Current Liabilities", format_type="ratio"),
-        "debt_ratio": _calculated_cell(safe_divide(total_debt, total_assets), "Total Debt / Total Assets", format_type="ratio"),
-        "free_cash_flow": _reported_or_calculated_cell(_record(normalized, key, "free_cash_flow"), free_cash_flow_value, "Operating Cash Flow - abs(Capex)", format_type="currency_scaled", scale_divisor=scale_divisor),
-        "cfo_to_net_income": _calculated_cell(safe_divide(operating_cash_flow, net_profit), "Operating Cash Flow / Net Income", format_type="ratio"),
-        "capex_intensity_percent": _calculated_cell(safe_percent(capex, revenue), "Capex / Revenue * 100", format_type="percent"),
-        "fcf_coverage": _calculated_cell(fcf_coverage, "Free Cash Flow / Dividend Paid", format_type="ratio"),
-        "operating_cash_flow": _reported_cell(_record(normalized, key, "operating_cash_flow"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "investing_cash_flow": _reported_cell(_record(normalized, key, "investing_cash_flow"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "financing_cash_flow": _reported_cell(_record(normalized, key, "financing_cash_flow"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "capital_expenditure": _reported_or_calculated_cell(_record(normalized, key, "capex"), capex, "Capital Expenditure", format_type="currency_scaled", scale_divisor=scale_divisor),
-        "depreciation_amortization": _reported_cell(_record(normalized, key, "depreciation_amortization"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "change_in_working_capital": _reported_cell(_record(normalized, key, "change_in_working_capital"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "stock_based_compensation": _reported_cell(_record(normalized, key, "stock_based_compensation"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "cash_dividends_paid": _reported_cell(_record(normalized, key, "dividend_paid"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "share_repurchase": _reported_cell(_record(normalized, key, "share_repurchase"), format_type="currency_scaled", scale_divisor=scale_divisor),
-        "fcf_margin": _calculated_cell(safe_percent(free_cash_flow_value, revenue), "Free Cash Flow / Revenue * 100", format_type="percent"),
-        "fcf_growth": _calculated_cell(safe_growth_percent(free_cash_flow_value, previous_free_cash_flow), "(FCF current - FCF previous) / FCF previous * 100", format_type="percent"),
-        "cfo_growth": _calculated_cell(safe_growth_percent(operating_cash_flow, previous_operating_cash_flow), "(Operating Cash Flow current - Operating Cash Flow previous) / Operating Cash Flow previous * 100", format_type="percent"),
-        "dividend_coverage_by_fcf": _calculated_cell(safe_divide(free_cash_flow_value, dividend_paid), "Free Cash Flow / Cash Dividends Paid", format_type="ratio"),
+        "gross_profit": _reported_cell(
+            _record(normalized, key, "gross_profit"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "cost_of_revenue": _reported_cell(
+            _record(normalized, key, "cost_of_revenue"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "operating_income": _reported_cell(
+            _record(normalized, key, "operating_income"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "operating_expense": _reported_or_calculated_cell(
+            _record(normalized, key, "operating_expense"),
+            operating_expense,
+            "Gross Profit - Operating Income",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "pretax_income": _reported_cell(
+            _record(normalized, key, "pretax_income"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "income_tax_expense": _reported_cell(
+            _record(normalized, key, "income_tax_expense"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "interest_expense": _reported_cell(
+            _record(normalized, key, "interest_expense"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "ebitda_growth": _calculated_cell(
+            safe_growth_percent(ebitda, previous_ebitda),
+            "(EBITDA current - EBITDA previous) / EBITDA previous * 100",
+            format_type="percent",
+        ),
+        "operating_income_growth": _calculated_cell(
+            safe_growth_percent(operating_income, previous_operating_income),
+            (
+                "(Operating Income current - Operating Income previous) / Operating Income "
+                + "previous * 100"
+            ),
+            format_type="percent",
+        ),
+        "gross_margin": _calculated_cell(
+            safe_percent(gross_profit, revenue),
+            "Gross Profit / Revenue * 100",
+            format_type="percent",
+        ),
+        "operating_margin": _calculated_cell(
+            safe_percent(operating_income, revenue),
+            "Operating Income / Revenue * 100",
+            format_type="percent",
+        ),
+        "tax_rate": _calculated_cell(
+            safe_percent(income_tax_expense, pretax_income),
+            "Income Tax Expense / Pretax Income * 100",
+            format_type="percent",
+        ),
+        "bvps": _reported_or_calculated_cell(
+            _record(normalized, key, "bvps"),
+            safe_divide(total_equity, shares_outstanding),
+            "Total Equity / Shares Outstanding",
+            format_type="per_share",
+        ),
+        "net_debt": _reported_or_calculated_cell(
+            _record(normalized, key, "net_debt"),
+            net_debt_value,
+            "Total Debt - Cash",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "cash_ratio": _calculated_cell(
+            safe_divide(
+                cash, current_liabilities if current_liabilities is not None else total_liabilities
+            ),
+            "Cash / Current Liabilities; fallback to Total Liabilities",
+            format_type="ratio",
+        ),
+        "equity_ratio": _calculated_cell(
+            safe_percent(total_equity, total_assets),
+            "Total Equity / Total Assets * 100",
+            format_type="percent",
+        ),
+        "total_assets": _reported_cell(
+            _record(normalized, key, "total_assets"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "total_liabilities": _reported_cell(
+            _record(normalized, key, "total_liabilities"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "total_equity": _reported_cell(
+            _record(normalized, key, "total_equity"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "cash": _reported_cell(
+            _record(normalized, key, "cash"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "total_debt": _reported_cell(
+            _record(normalized, key, "total_debt"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "current_assets": _reported_cell(
+            _record(normalized, key, "current_assets"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "current_liabilities": _reported_cell(
+            _record(normalized, key, "current_liabilities"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "working_capital": _reported_or_calculated_cell(
+            _record(normalized, key, "working_capital"),
+            working_capital_value,
+            "Current Assets - Current Liabilities",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "invested_capital": _reported_or_calculated_cell(
+            _record(normalized, key, "invested_capital"),
+            invested_capital_value,
+            "Total Debt + Total Equity - Cash",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "net_debt_to_equity": _calculated_cell(
+            safe_divide(net_debt_value, total_equity),
+            "Net Debt / Total Equity",
+            format_type="ratio",
+        ),
+        "current_ratio": _reported_or_calculated_cell(
+            _record(normalized, key, "current_ratio"),
+            current_ratio_value,
+            "Current Assets / Current Liabilities",
+            format_type="ratio",
+        ),
+        "quick_ratio": _reported_or_calculated_cell(
+            _record(normalized, key, "quick_ratio"),
+            quick_ratio_value,
+            "(Current Assets - Inventory) / Current Liabilities",
+            format_type="ratio",
+        ),
+        "debt_ratio": _calculated_cell(
+            safe_divide(total_debt, total_assets), "Total Debt / Total Assets", format_type="ratio"
+        ),
+        "free_cash_flow": _reported_or_calculated_cell(
+            _record(normalized, key, "free_cash_flow"),
+            free_cash_flow_value,
+            "Operating Cash Flow - abs(Capex)",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "cfo_to_net_income": _calculated_cell(
+            safe_divide(operating_cash_flow, net_profit),
+            "Operating Cash Flow / Net Income",
+            format_type="ratio",
+        ),
+        "capex_intensity_percent": _calculated_cell(
+            safe_percent(capex, revenue), "Capex / Revenue * 100", format_type="percent"
+        ),
+        "fcf_coverage": _calculated_cell(
+            fcf_coverage, "Free Cash Flow / Dividend Paid", format_type="ratio"
+        ),
+        "operating_cash_flow": _reported_cell(
+            _record(normalized, key, "operating_cash_flow"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "investing_cash_flow": _reported_cell(
+            _record(normalized, key, "investing_cash_flow"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "financing_cash_flow": _reported_cell(
+            _record(normalized, key, "financing_cash_flow"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "capital_expenditure": _reported_or_calculated_cell(
+            _record(normalized, key, "capex"),
+            capex,
+            "Capital Expenditure",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "depreciation_amortization": _reported_cell(
+            _record(normalized, key, "depreciation_amortization"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "change_in_working_capital": _reported_cell(
+            _record(normalized, key, "change_in_working_capital"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "stock_based_compensation": _reported_cell(
+            _record(normalized, key, "stock_based_compensation"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "cash_dividends_paid": _reported_cell(
+            _record(normalized, key, "dividend_paid"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "share_repurchase": _reported_cell(
+            _record(normalized, key, "share_repurchase"),
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "fcf_margin": _calculated_cell(
+            safe_percent(free_cash_flow_value, revenue),
+            "Free Cash Flow / Revenue * 100",
+            format_type="percent",
+        ),
+        "fcf_growth": _calculated_cell(
+            safe_growth_percent(free_cash_flow_value, previous_free_cash_flow),
+            "(FCF current - FCF previous) / FCF previous * 100",
+            format_type="percent",
+        ),
+        "cfo_growth": _calculated_cell(
+            safe_growth_percent(operating_cash_flow, previous_operating_cash_flow),
+            (
+                "(Operating Cash Flow current - Operating Cash Flow previous) / Operating Cash "
+                + "Flow previous * 100"
+            ),
+            format_type="percent",
+        ),
+        "dividend_coverage_by_fcf": _calculated_cell(
+            safe_divide(free_cash_flow_value, dividend_paid),
+            "Free Cash Flow / Cash Dividends Paid",
+            format_type="ratio",
+        ),
         "roe": _reported_or_calculated_cell(
             _record(normalized, key, "roe"),
-            safe_percent(net_profit, average_equity if average_equity is not None else total_equity),
-            "Net Profit / Average Equity * 100; fallback to Total Equity when average is unavailable",
+            safe_percent(
+                net_profit, average_equity if average_equity is not None else total_equity
+            ),
+            (
+                "Net Profit / Average Equity * 100; fallback to Total Equity when average is "
+                + "unavailable"
+            ),
             format_type="percent",
             percent_ratio=True,
         ),
         "der": _calculated_cell(der, "Total Debt / Total Equity", format_type="ratio"),
-        "debt_to_ebitda": _calculated_cell(safe_divide(total_debt, effective_ebitda), "Total Debt / EBITDA; fallback to Operating Income when EBITDA is unavailable", format_type="ratio"),
+        "debt_to_ebitda": _calculated_cell(
+            safe_divide(total_debt, effective_ebitda),
+            "Total Debt / EBITDA; fallback to Operating Income when EBITDA is unavailable",
+            format_type="ratio",
+        ),
         "dividend_yield": dividend_yield_cell,
         "payout_ratio": payout_ratio_cell,
-        "market_cap": _reported_or_calculated_cell(market_cap_record, market_cap_from_price, "Reference Price * Shares Outstanding", format_type="currency_scaled", scale_divisor=scale_divisor),
-        "enterprise_value": _reported_or_calculated_cell(_record(normalized, key, "enterprise_value"), enterprise_value_value, "Market Cap + Total Debt - Cash", format_type="currency_scaled", scale_divisor=scale_divisor),
-        "pe": _reported_or_calculated_cell(_record(normalized, key, "pe"), safe_divide(market_cap_value, net_profit), "Market Cap / Net Profit", format_type="ratio"),
-        "pbv": _reported_or_calculated_cell(_record(normalized, key, "pbv"), safe_divide(market_cap_value, total_equity), "Market Cap / Total Equity", format_type="ratio"),
-        "ps": _reported_or_calculated_cell(_record(normalized, key, "ps"), safe_divide(market_cap_value, revenue), "Market Cap / Revenue", format_type="ratio"),
-        "ev_ebitda": _reported_or_calculated_cell(_record(normalized, key, "ev_ebitda"), safe_divide(enterprise_value_value, effective_ebitda), "Enterprise Value / EBITDA; fallback to Operating Income when EBITDA is unavailable", format_type="ratio"),
+        "market_cap": _reported_or_calculated_cell(
+            market_cap_record,
+            market_cap_from_price,
+            "Reference Price * Shares Outstanding",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "enterprise_value": _reported_or_calculated_cell(
+            _record(normalized, key, "enterprise_value"),
+            enterprise_value_value,
+            "Market Cap + Total Debt - Cash",
+            format_type="currency_scaled",
+            scale_divisor=scale_divisor,
+        ),
+        "pe": _reported_or_calculated_cell(
+            _record(normalized, key, "pe"),
+            safe_divide(market_cap_value, net_profit),
+            "Market Cap / Net Profit",
+            format_type="ratio",
+        ),
+        "pbv": _reported_or_calculated_cell(
+            _record(normalized, key, "pbv"),
+            safe_divide(market_cap_value, total_equity),
+            "Market Cap / Total Equity",
+            format_type="ratio",
+        ),
+        "ps": _reported_or_calculated_cell(
+            _record(normalized, key, "ps"),
+            safe_divide(market_cap_value, revenue),
+            "Market Cap / Revenue",
+            format_type="ratio",
+        ),
+        "ev_ebitda": _reported_or_calculated_cell(
+            _record(normalized, key, "ev_ebitda"),
+            safe_divide(enterprise_value_value, effective_ebitda),
+            "Enterprise Value / EBITDA; fallback to Operating Income when EBITDA is unavailable",
+            format_type="ratio",
+        ),
         "roa": _reported_or_calculated_cell(
             _record(normalized, key, "roa"),
             safe_percent(net_profit, total_assets),
@@ -442,14 +735,32 @@ def _build_period_cells(
             format_type="percent",
             percent_ratio=True,
         ),
-        "roic": _calculated_cell(safe_percent(nopat, invested_capital_value), "NOPAT / Invested Capital * 100", format_type="percent"),
-        "interest_coverage": _calculated_cell(safe_divide(operating_income, interest_expense), "EBIT / Interest Expense", format_type="ratio"),
-        "asset_turnover": _calculated_cell(safe_divide(revenue, total_assets), "Revenue / Total Assets", format_type="ratio"),
-        "equity_multiplier": _calculated_cell(safe_divide(total_assets, total_equity), "Total Assets / Total Equity", format_type="ratio"),
+        "roic": _calculated_cell(
+            safe_percent(nopat, invested_capital_value),
+            "NOPAT / Invested Capital * 100",
+            format_type="percent",
+        ),
+        "interest_coverage": _calculated_cell(
+            safe_divide(operating_income, interest_expense),
+            "EBIT / Interest Expense",
+            format_type="ratio",
+        ),
+        "asset_turnover": _calculated_cell(
+            safe_divide(revenue, total_assets), "Revenue / Total Assets", format_type="ratio"
+        ),
+        "equity_multiplier": _calculated_cell(
+            safe_divide(total_assets, total_equity),
+            "Total Assets / Total Equity",
+            format_type="ratio",
+        ),
         "earnings_yield": _reported_or_calculated_cell(
             _record(normalized, key, "earnings_yield"),
             safe_percent(eps_value, reference_price)
-            or (safe_divide(100, _number(normalized, key, "pe")) if _number(normalized, key, "pe") else None),
+            or (
+                safe_divide(100, _number(normalized, key, "pe"))
+                if _number(normalized, key, "pe")
+                else None
+            ),
             "EPS / Price * 100; fallback to 1 / P/E * 100",
             format_type="percent",
             percent_ratio=True,
@@ -481,9 +792,18 @@ def _build_period_cells(
         ),
         "peg_ratio": _reported_cell(_record(normalized, key, "peg_ratio"), format_type="ratio"),
         "beta": _reported_cell(_record(normalized, key, "beta"), format_type="ratio"),
-        "shares_outstanding": _reported_cell(_record(normalized, key, "shares_outstanding"), format_type="number"),
-        "float_shares": _reported_cell(_record(normalized, key, "float_shares"), format_type="number"),
-        "revenue_per_share": _reported_or_calculated_cell(_record(normalized, key, "revenue_per_share"), revenue_per_share_value, "Revenue / Shares Outstanding", format_type="per_share"),
+        "shares_outstanding": _reported_cell(
+            _record(normalized, key, "shares_outstanding"), format_type="number"
+        ),
+        "float_shares": _reported_cell(
+            _record(normalized, key, "float_shares"), format_type="number"
+        ),
+        "revenue_per_share": _reported_or_calculated_cell(
+            _record(normalized, key, "revenue_per_share"),
+            revenue_per_share_value,
+            "Revenue / Shares Outstanding",
+            format_type="per_share",
+        ),
         "cash_per_share": _reported_or_calculated_cell(
             _record(normalized, key, "cash_per_share"),
             safe_divide(cash, shares_outstanding),
@@ -514,7 +834,9 @@ def build_metric_rows(
         "number": "",
     }
     cells_by_period = {
-        period.key: _build_period_cells(period, normalized, scale_divisor=float(metadata["scale_divisor"]))
+        period.key: _build_period_cells(
+            period, normalized, scale_divisor=float(metadata["scale_divisor"])
+        )
         for period in periods
     }
     rows: list[FinancialHighlightRow] = []
@@ -523,7 +845,11 @@ def build_metric_rows(
         section_row_definitions = list(section_definition["rows"])
         if include_operating_expense and section_definition["key"] == "income":
             insert_at = next(
-                (index + 1 for index, row in enumerate(section_row_definitions) if row[0] == "operating_income"),
+                (
+                    index + 1
+                    for index, row in enumerate(section_row_definitions)
+                    if row[0] == "operating_income"
+                ),
                 len(section_row_definitions),
             )
             section_row_definitions.insert(
@@ -550,13 +876,25 @@ def build_metric_rows(
                 rows=section_rows,
             )
         )
-    missing_metrics = [row.key for row in rows if all(cell.status == "unavailable" for cell in row.values.values())]
-    missing_periods = [
-        period.key for period in periods if all(row.values[period.key].status == "unavailable" for row in rows)
+    missing_metrics = [
+        row.key for row in rows if all(cell.status == "unavailable" for cell in row.values.values())
     ]
-    available_count = sum(cell.status != "unavailable" for row in rows for cell in row.values.values())
+    missing_periods = [
+        period.key
+        for period in periods
+        if all(row.values[period.key].status == "unavailable" for row in rows)
+    ]
+    available_count = sum(
+        cell.status != "unavailable" for row in rows for cell in row.values.values()
+    )
     total_count = len(rows) * len(periods)
-    status = "unavailable" if available_count == 0 else "complete" if available_count == total_count else "partial"
+    status = (
+        "unavailable"
+        if available_count == 0
+        else "complete"
+        if available_count == total_count
+        else "partial"
+    )
     return (
         rows,
         sections,

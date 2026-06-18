@@ -5,15 +5,26 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-
-_SECRET_KEY_RE = re.compile(r"(api[_-]?key|token|secret|password|authorization|bearer)", re.IGNORECASE)
+_SECRET_KEY_RE = re.compile(
+    r"(api[_-]?key|token|secret|password|authorization|bearer)", re.IGNORECASE
+)
 _RAW_KEY_RE = re.compile(r"(raw|body|response_text|response_body|payload)", re.IGNORECASE)
 _SECRET_VALUE_PATTERNS = [
     re.compile(r"(api[_-]?key=)([^&\s]+)", re.IGNORECASE),
     re.compile(r"(apikey=)([^&\s]+)", re.IGNORECASE),
     re.compile(r"(token=)([^&\s]+)", re.IGNORECASE),
 ]
-_SAFE_STATUSES = {"success", "ok", "partial", "fallback", "empty", "failed", "skipped", "cache_hit", "rate_limited"}
+_SAFE_STATUSES = {
+    "success",
+    "ok",
+    "partial",
+    "fallback",
+    "empty",
+    "failed",
+    "skipped",
+    "cache_hit",
+    "rate_limited",
+}
 _FUNDAMENTAL_FIELDS = {
     "fundamentals",
     "financial_statements",
@@ -25,7 +36,14 @@ _FUNDAMENTAL_FIELDS = {
     "profile",
     "company_profile",
 }
-_NEWS_FIELDS = {"news", "company_news", "global_news", "news_sentiment", "social_sentiment", "event_risk"}
+_NEWS_FIELDS = {
+    "news",
+    "company_news",
+    "global_news",
+    "news_sentiment",
+    "social_sentiment",
+    "event_risk",
+}
 _MARKET_FIELDS = {"quote", "price", "ohlcv", "technical", "last_price", "historical_price"}
 
 
@@ -81,8 +99,12 @@ def build_data_lineage(analysis_result: dict) -> DataLineage:
     estimated fields, and warnings from analysis result.
     """
     result = analysis_result if isinstance(analysis_result, dict) else {}
-    symbol = _safe_text(result.get("normalized_ticker") or result.get("ticker") or result.get("symbol"))
-    generated_at = _safe_text(result.get("analysis_created_at") or result.get("data_fetched_at")) or _now_iso()
+    symbol = _safe_text(
+        result.get("normalized_ticker") or result.get("ticker") or result.get("symbol")
+    )
+    generated_at = (
+        _safe_text(result.get("analysis_created_at") or result.get("data_fetched_at")) or _now_iso()
+    )
     source_items = _build_vendor_items(result)
 
     return DataLineage(
@@ -150,8 +172,12 @@ def _safe_value(value: Any) -> Any:
 
 
 def _build_symbol_discovery(result: dict[str, Any], symbol: str) -> SymbolDiscoveryLineage:
-    search_metadata = result.get("search_metadata") if isinstance(result.get("search_metadata"), dict) else {}
-    analysis_params = result.get("analysis_params") if isinstance(result.get("analysis_params"), dict) else {}
+    search_metadata = (
+        result.get("search_metadata") if isinstance(result.get("search_metadata"), dict) else {}
+    )
+    analysis_params = (
+        result.get("analysis_params") if isinstance(result.get("analysis_params"), dict) else {}
+    )
     input_symbol = _safe_text(
         result.get("input_ticker")
         or analysis_params.get("ticker")
@@ -159,31 +185,55 @@ def _build_symbol_discovery(result: dict[str, Any], symbol: str) -> SymbolDiscov
         or search_metadata.get("query")
         or symbol
     )
-    market = _safe_text(result.get("market") or analysis_params.get("market") or result.get("exchange") or "UNKNOWN")
-    source = _safe_text(search_metadata.get("source") or search_metadata.get("provider") or result.get("current_price_source"))
+    market = _safe_text(
+        result.get("market") or analysis_params.get("market") or result.get("exchange") or "UNKNOWN"
+    )
+    source = _safe_text(
+        search_metadata.get("source")
+        or search_metadata.get("provider")
+        or result.get("current_price_source")
+    )
     return SymbolDiscoveryLineage(
         input_symbol=input_symbol,
         canonical_symbol=symbol,
         market=market or "UNKNOWN",
         exchange=_safe_text(result.get("exchange") or search_metadata.get("exchange")) or None,
-        verified=bool(search_metadata.get("verified", search_metadata.get("search_verified", bool(symbol)))),
+        verified=bool(
+            search_metadata.get("verified", search_metadata.get("search_verified", bool(symbol)))
+        ),
         source=source or None,
     )
 
 
 def _build_vendor_items(result: dict[str, Any]) -> list[VendorLineageItem]:
     items: list[VendorLineageItem] = []
-    data_sources = result.get("data_sources") if isinstance(result.get("data_sources"), dict) else {}
-    field_sources = result.get("field_sources") if isinstance(result.get("field_sources"), dict) else {}
-    data_freshness = result.get("data_freshness") if isinstance(result.get("data_freshness"), dict) else {}
-    vendor_attempts = result.get("vendor_attempts") if isinstance(result.get("vendor_attempts"), dict) else {}
+    data_sources = (
+        result.get("data_sources") if isinstance(result.get("data_sources"), dict) else {}
+    )
+    field_sources = (
+        result.get("field_sources") if isinstance(result.get("field_sources"), dict) else {}
+    )
+    data_freshness = (
+        result.get("data_freshness") if isinstance(result.get("data_freshness"), dict) else {}
+    )
+    vendor_attempts = (
+        result.get("vendor_attempts") if isinstance(result.get("vendor_attempts"), dict) else {}
+    )
 
     for field_name, source_value in data_sources.items():
         field_key = str(field_name)
         selected_source = _selected_source(source_value)
-        quality = field_sources.get(field_key) if isinstance(field_sources.get(field_key), dict) else {}
-        freshness = data_freshness.get(field_key) if isinstance(data_freshness.get(field_key), dict) else {}
-        attempts = vendor_attempts.get(field_key) if isinstance(vendor_attempts.get(field_key), list) else []
+        quality = (
+            field_sources.get(field_key) if isinstance(field_sources.get(field_key), dict) else {}
+        )
+        freshness = (
+            data_freshness.get(field_key) if isinstance(data_freshness.get(field_key), dict) else {}
+        )
+        attempts = (
+            vendor_attempts.get(field_key)
+            if isinstance(vendor_attempts.get(field_key), list)
+            else []
+        )
         status = _status_from_attempts(attempts) or _status_from_source(selected_source)
         fallback_from, fallback_reason = _fallback_from_attempts(attempts)
         items.append(
@@ -193,7 +243,12 @@ def _build_vendor_items(result: dict[str, Any]) -> list[VendorLineageItem]:
                 status=status,
                 confidence=_safe_text(quality.get("confidence")) or None,
                 freshness=_safe_text(freshness.get("status") or quality.get("freshness")) or None,
-                as_of_date=_safe_text(freshness.get("as_of_date") or freshness.get("as_of") or quality.get("as_of_date")) or None,
+                as_of_date=_safe_text(
+                    freshness.get("as_of_date")
+                    or freshness.get("as_of")
+                    or quality.get("as_of_date")
+                )
+                or None,
                 fallback_from=fallback_from,
                 fallback_reason=fallback_reason,
             )
@@ -220,7 +275,10 @@ def _build_vendor_items(result: dict[str, Any]) -> list[VendorLineageItem]:
 
 def _selected_source(value: Any) -> str:
     if isinstance(value, dict):
-        return _safe_text(value.get("selected_source") or value.get("source") or value.get("vendor")) or "unavailable"
+        return (
+            _safe_text(value.get("selected_source") or value.get("source") or value.get("vendor"))
+            or "unavailable"
+        )
     return _safe_text(value) or "unavailable"
 
 
@@ -238,7 +296,16 @@ def _status_from_source(source: str) -> str:
 def _status_from_attempts(attempts: list[Any]) -> str | None:
     statuses = [_attempt_status(attempt) for attempt in attempts]
     statuses = [status for status in statuses if status]
-    for status in ("success", "cache_hit", "fallback", "partial", "empty", "failed", "rate_limited", "skipped"):
+    for status in (
+        "success",
+        "cache_hit",
+        "fallback",
+        "partial",
+        "empty",
+        "failed",
+        "rate_limited",
+        "skipped",
+    ):
         if status in statuses:
             return status
     return statuses[-1] if statuses else None
@@ -307,19 +374,31 @@ def _dedupe_items(items: list[VendorLineageItem]) -> list[VendorLineageItem]:
 
 
 def _build_llm_usage(result: dict[str, Any]) -> LLMUsageLineage:
-    vendor_budget = result.get("vendor_budget") if isinstance(result.get("vendor_budget"), dict) else {}
-    llm_calls = vendor_budget.get("llm_calls") if isinstance(vendor_budget.get("llm_calls"), dict) else {}
+    vendor_budget = (
+        result.get("vendor_budget") if isinstance(result.get("vendor_budget"), dict) else {}
+    )
+    llm_calls = (
+        vendor_budget.get("llm_calls") if isinstance(vendor_budget.get("llm_calls"), dict) else {}
+    )
     models = llm_calls.get("models") if isinstance(llm_calls.get("models"), dict) else {}
     agents = llm_calls.get("agents") if isinstance(llm_calls.get("agents"), dict) else {}
     quick_calls = _safe_int(result.get("llm_quick_calls"))
     deep_calls = _safe_int(result.get("llm_deep_calls"))
 
     if quick_calls is None or deep_calls is None:
-        quick_calls, deep_calls = _calls_from_agents(agents, _safe_int(result.get("llm_calls_used")) or _safe_int(llm_calls.get("used")) or 0)
+        quick_calls, deep_calls = _calls_from_agents(
+            agents, _safe_int(result.get("llm_calls_used")) or _safe_int(llm_calls.get("used")) or 0
+        )
 
     return LLMUsageLineage(
-        quick_model=_safe_text(result.get("quick_model") or models.get("quick_think") or llm_calls.get("quick_model")) or None,
-        deep_model=_safe_text(result.get("deep_model") or models.get("deep_think") or llm_calls.get("deep_model")) or None,
+        quick_model=_safe_text(
+            result.get("quick_model") or models.get("quick_think") or llm_calls.get("quick_model")
+        )
+        or None,
+        deep_model=_safe_text(
+            result.get("deep_model") or models.get("deep_think") or llm_calls.get("deep_model")
+        )
+        or None,
         quick_calls=quick_calls or 0,
         deep_calls=deep_calls or 0,
         budget_exceeded=bool(result.get("budget_exhausted") or llm_calls.get("budget_exceeded")),
@@ -336,7 +415,13 @@ def _safe_int(value: Any) -> int | None:
 
 
 def _calls_from_agents(agents: dict[str, Any], total_used: int) -> tuple[int, int]:
-    deep_names = {"Bull Researcher", "Bear Researcher", "Research Manager", "Risk Committee", "Portfolio Manager"}
+    deep_names = {
+        "Bull Researcher",
+        "Bear Researcher",
+        "Research Manager",
+        "Risk Committee",
+        "Portfolio Manager",
+    }
     quick = 0
     deep = 0
     for agent_name, payload in agents.items():
@@ -356,7 +441,11 @@ def _estimated_fields(result: dict[str, Any]) -> list[str]:
     if isinstance(gap_report, dict):
         fields.extend(str(item) for item in gap_report.get("estimated_fields") or [] if item)
 
-    highlights = result.get("financial_highlights") if isinstance(result.get("financial_highlights"), dict) else {}
+    highlights = (
+        result.get("financial_highlights")
+        if isinstance(result.get("financial_highlights"), dict)
+        else {}
+    )
     for row in highlights.get("rows") or []:
         if not isinstance(row, dict):
             continue

@@ -5,7 +5,9 @@ from tradingagents.dataflows.news_provider_base import ProviderFetchResult
 from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
 
 
-def _article(provider: str = "marketaux", title: str = "Bank Central Asia reports profit growth") -> NormalizedNewsArticle:
+def _article(
+    provider: str = "marketaux", title: str = "Bank Central Asia reports profit growth"
+) -> NormalizedNewsArticle:
     return NormalizedNewsArticle(
         provider=provider,
         ticker="BBCA.JK",
@@ -49,7 +51,9 @@ def test_strict_news_pipeline_calls_all_providers(monkeypatch):
             called.append(self.provider_name)
             return ProviderFetchResult(provider=self.provider_name, status="empty", articles=[])
 
-    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
+    monkeypatch.setattr(
+        NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
+    )
     monkeypatch.setattr(
         "tradingagents.dataflows.news_service._fetch_yfinance_fallback",
         lambda *_args, **_kwargs: yfinance_called.append("yfinance") or [],
@@ -71,11 +75,22 @@ def test_strict_news_pipeline_does_not_skip_secondary_when_primary_has_articles(
 
         def fetch_news(self, *_args, **_kwargs):
             called.append(self.provider_name)
-            articles = [_article("google_news_light")] if self.provider_name == "google_news_light" else []
-            return ProviderFetchResult(provider=self.provider_name, status="success" if articles else "empty", articles=articles)
+            articles = (
+                [_article("google_news_light")] if self.provider_name == "google_news_light" else []
+            )
+            return ProviderFetchResult(
+                provider=self.provider_name,
+                status="success" if articles else "empty",
+                articles=articles,
+            )
 
-    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
-    monkeypatch.setattr("tradingagents.dataflows.news_service._fetch_yfinance_fallback", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
+    )
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service._fetch_yfinance_fallback",
+        lambda *_args, **_kwargs: [],
+    )
 
     result = NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
 
@@ -97,8 +112,13 @@ def test_strict_news_pipeline_provider_failure_continues(monkeypatch):
                 raise RuntimeError("vendor failed")
             return ProviderFetchResult(provider=self.provider_name, status="empty", articles=[])
 
-    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
-    monkeypatch.setattr("tradingagents.dataflows.news_service._fetch_yfinance_fallback", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
+    )
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service._fetch_yfinance_fallback",
+        lambda *_args, **_kwargs: [],
+    )
 
     result = NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
 
@@ -123,8 +143,12 @@ def test_yfinance_is_called_last_and_only_once(monkeypatch):
         call_order.append("yfinance")
         return []
 
-    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
-    monkeypatch.setattr("tradingagents.dataflows.news_service._fetch_yfinance_fallback", fake_yfinance)
+    monkeypatch.setattr(
+        NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
+    )
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service._fetch_yfinance_fallback", fake_yfinance
+    )
 
     NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
 
@@ -170,14 +194,29 @@ def test_strict_api_response_contract_and_debug(monkeypatch):
 
         def fetch_news(self, *_args, **_kwargs):
             articles = [_article("marketaux")] if self.provider_name == "marketaux" else []
-            return ProviderFetchResult(provider=self.provider_name, status="success" if articles else "empty", articles=articles)
+            return ProviderFetchResult(
+                provider=self.provider_name,
+                status="success" if articles else "empty",
+                articles=articles,
+            )
 
-    monkeypatch.setattr(NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name))
-    monkeypatch.setattr("tradingagents.dataflows.news_service._fetch_yfinance_fallback", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
+    )
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news_service._fetch_yfinance_fallback",
+        lambda *_args, **_kwargs: [],
+    )
 
     result = NewsService(_service_config()).fetch_news("BBCA.JK", debug=True, bypass_cache=True)
 
-    assert result["providers_used"] == ["google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"]
+    assert result["providers_used"] == [
+        "google_news_light",
+        "marketaux",
+        "rss_context",
+        "newsdata",
+        "yfinance",
+    ]
     assert result["articles_used_in_prompt"] == 1
     assert len(result["decision_company_news"]) == 1
     assert result["market_context_news"] == []

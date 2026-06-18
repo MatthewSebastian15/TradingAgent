@@ -6,7 +6,12 @@ import time
 
 import pytest
 
-from analysis_cache import AnalysisCacheKey, AnalysisJobLimitError, AnalysisJobStore, AnalysisResultCache
+from analysis_cache import (
+    AnalysisCacheKey,
+    AnalysisJobLimitError,
+    AnalysisJobStore,
+    AnalysisResultCache,
+)
 from persistent_cache import SQLiteTTLCache
 
 
@@ -33,7 +38,9 @@ def _cache_key(ticker: str) -> AnalysisCacheKey:
 def test_result_cache_preserves_original_data_fetched_at_on_hit():
     async def main():
         cache = AnalysisResultCache(ttl_seconds=60, max_entries=2)
-        await cache.set(_cache_key("BBCA.JK"), {"decision": "Buy", "data_fetched_at": "2026-05-20T10:11:12"})
+        await cache.set(
+            _cache_key("BBCA.JK"), {"decision": "Buy", "data_fetched_at": "2026-05-20T10:11:12"}
+        )
 
         cached = await cache.get(_cache_key("BBCA.JK"))
 
@@ -64,7 +71,10 @@ def test_job_store_rejects_jobs_over_active_cap():
     async def main():
         store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=1)
         await store.create(
-            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+            owner_id="owner-1",
+            request_id="request-1",
+            cache_key=_cache_key("BBCA.JK"),
+            payload={"ticker": "BBCA.JK"},
         )
 
         with pytest.raises(AnalysisJobLimitError) as exc_info:
@@ -85,7 +95,10 @@ def test_job_store_indexes_request_id_without_scanning_registry():
     async def main():
         store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
         job = await store.create(
-            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+            owner_id="owner-1",
+            request_id="request-1",
+            cache_key=_cache_key("BBCA.JK"),
+            payload={"ticker": "BBCA.JK"},
         )
 
         assert store._job_ids_by_request_id == {"request-1": job.id}
@@ -101,7 +114,10 @@ def test_job_store_cleanup_removes_request_id_index():
     async def main():
         store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
         job = await store.create(
-            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+            owner_id="owner-1",
+            request_id="request-1",
+            cache_key=_cache_key("BBCA.JK"),
+            payload={"ticker": "BBCA.JK"},
         )
         await job.complete({"request_id": "request-1", "decision": "Buy"})
         job.updated_at = time.time() - 61
@@ -119,12 +135,18 @@ def test_job_store_eviction_removes_only_evicted_request_id_index():
     async def main():
         store = AnalysisJobStore(ttl_seconds=60, max_entries=1, max_active_jobs=10)
         evicted = await store.create(
-            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+            owner_id="owner-1",
+            request_id="request-1",
+            cache_key=_cache_key("BBCA.JK"),
+            payload={"ticker": "BBCA.JK"},
         )
         await evicted.complete({"request_id": "request-1", "decision": "Buy"})
 
         kept = await store.create(
-            owner_id="owner-1", request_id="request-2", cache_key=_cache_key("BBRI.JK"), payload={"ticker": "BBRI.JK"}
+            owner_id="owner-1",
+            request_id="request-2",
+            cache_key=_cache_key("BBRI.JK"),
+            payload={"ticker": "BBRI.JK"},
         )
 
         assert evicted.id not in store._jobs
@@ -138,9 +160,14 @@ def test_job_store_eviction_removes_only_evicted_request_id_index():
 
 def test_job_event_history_is_bounded():
     async def main():
-        store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10, max_event_history=2)
+        store = AnalysisJobStore(
+            ttl_seconds=60, max_entries=10, max_active_jobs=10, max_event_history=2
+        )
         job = await store.create(
-            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+            owner_id="owner-1",
+            request_id="request-1",
+            cache_key=_cache_key("BBCA.JK"),
+            payload={"ticker": "BBCA.JK"},
         )
 
         for index in range(5):
@@ -158,11 +185,17 @@ def test_job_terminal_transition_does_not_overwrite_cancelled_state():
     async def main():
         store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
         job = await store.create(
-            owner_id="owner-1", request_id="request-1", cache_key=_cache_key("BBCA.JK"), payload={"ticker": "BBCA.JK"}
+            owner_id="owner-1",
+            request_id="request-1",
+            cache_key=_cache_key("BBCA.JK"),
+            payload={"ticker": "BBCA.JK"},
         )
 
         cancelled = await job.cancel(
-            {"request_id": "request-1", "error": {"code": "ANALYSIS_CANCELLED", "message": "cancelled"}}
+            {
+                "request_id": "request-1",
+                "error": {"code": "ANALYSIS_CANCELLED", "message": "cancelled"},
+            }
         )
         completed = await job.complete({"decision": "Buy"})
 
@@ -177,7 +210,9 @@ def test_job_terminal_transition_does_not_overwrite_cancelled_state():
 
 def test_job_store_loads_persisted_completed_jobs_by_request_id(tmp_path):
     async def main():
-        persistent_cache = SQLiteTTLCache(str(tmp_path / "analysis_jobs.sqlite3"), ttl_seconds=60, max_entries=20)
+        persistent_cache = SQLiteTTLCache(
+            str(tmp_path / "analysis_jobs.sqlite3"), ttl_seconds=60, max_entries=20
+        )
         first_store = AnalysisJobStore(
             ttl_seconds=60,
             max_entries=10,

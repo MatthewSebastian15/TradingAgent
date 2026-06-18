@@ -2,12 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from tradingagents.financial_highlights.calculator import calculate_payout_ratio, safe_divide, safe_percent
+from tradingagents.financial_highlights.calculator import (
+    calculate_payout_ratio,
+    safe_divide,
+    safe_percent,
+)
 
 from .common import data_quality, metric, metric_values
 
 
-def build_dividend_quality(snapshot: dict[str, Any], quality_of_earnings: dict[str, Any]) -> dict[str, Any]:
+def build_dividend_quality(
+    snapshot: dict[str, Any], quality_of_earnings: dict[str, Any]
+) -> dict[str, Any]:
     currency = snapshot["currency"]
     dividend_per_share = snapshot.get("dividend_per_share")
     dividend_paid = snapshot.get("dividend_paid")
@@ -17,7 +23,9 @@ def build_dividend_quality(snapshot: dict[str, Any], quality_of_earnings: dict[s
     fallbacks = []
     if payout_ratio is None and dividend_paid is not None:
         payout_ratio = safe_percent(dividend_paid, snapshot.get("net_profit"))
-        fallbacks.append("Payout ratio uses dividend paid / net income because per-share dividend is unavailable")
+        fallbacks.append(
+            "Payout ratio uses dividend paid / net income because per-share dividend is unavailable"
+        )
     details = {
         "dividend_yield_percent": metric(
             safe_percent(dividend_per_share, snapshot.get("current_price")),

@@ -27,7 +27,9 @@ class PeriodMetadata:
         return asdict(self)
 
 
-_DATE_PATTERN = re.compile(r"(19\d{2}|20\d{2}|21\d{2}|22\d{2})[-/](1[0-2]|0?[1-9])[-/](3[01]|[12]\d|0?[1-9])")
+_DATE_PATTERN = re.compile(
+    r"(19\d{2}|20\d{2}|21\d{2}|22\d{2})[-/](1[0-2]|0?[1-9])[-/](3[01]|[12]\d|0?[1-9])"
+)
 _YEAR_PATTERN = re.compile(r"(?:FY)?((?:19|20|21|22)\d{2}|\d{2})(?!\d)")
 _QUARTER_PATTERNS = (
     re.compile(r"(?:FY)?((?:19|20|21|22)\d{2}|\d{2})\s*Q([1-4])", re.IGNORECASE),
@@ -197,7 +199,9 @@ def build_ttm_period_metadata(
     ).to_dict()
 
 
-def merge_period_metadata(existing: dict[str, Any] | None, incoming: dict[str, Any] | None) -> dict[str, Any]:
+def merge_period_metadata(
+    existing: dict[str, Any] | None, incoming: dict[str, Any] | None
+) -> dict[str, Any]:
     merged = dict(existing or {})
     for key, value in (incoming or {}).items():
         if value is not None and value != "":
@@ -259,7 +263,9 @@ def infer_period_metadata(
 
     if end_date:
         parsed = date.fromisoformat(end_date)
-        if normalized_hint == "quarterly" or (normalized_hint != "annual" and _is_quarter_end(end_date)):
+        if normalized_hint == "quarterly" or (
+            normalized_hint != "annual" and _is_quarter_end(end_date)
+        ):
             return build_quarter_period_metadata(
                 parsed.year,
                 infer_quarter_from_date(end_date) or 4,
@@ -356,12 +362,19 @@ def attach_period_metadata_to_rows(
             period["unit"] = _clean_unit(period.get("unit") or unit)
             item["period"] = period
         else:
-            label = item.get("period_label") or item.get("date") or item.get("fiscalDateEnding") or item.get("period")
+            label = (
+                item.get("period_label")
+                or item.get("date")
+                or item.get("fiscalDateEnding")
+                or item.get("period")
+            )
             item["period"] = infer_period_metadata(
                 str(label or ""),
                 period_type_hint=item.get("period_type") or default_period_type,
                 period_end=item.get("period_end") or item.get("fiscalDateEnding"),
-                reported_date=item.get("reported_date") or item.get("reportedDate") or item.get("acceptedDate"),
+                reported_date=item.get("reported_date")
+                or item.get("reportedDate")
+                or item.get("acceptedDate"),
                 as_of_date=item.get("as_of_date") or item.get("asOfDate"),
                 currency=currency,
                 unit=unit,

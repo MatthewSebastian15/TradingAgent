@@ -45,7 +45,9 @@ MARKET_PRESETS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
-MARKET_LABELS: dict[str, str] = {item["symbol"]: item["label"] for values in MARKET_PRESETS.values() for item in values}
+MARKET_LABELS: dict[str, str] = {
+    item["symbol"]: item["label"] for values in MARKET_PRESETS.values() for item in values
+}
 
 MARKET_SYMBOL_UNIVERSE: dict[str, list[str]] = {
     "US:NASDAQ": ["AAPL", "MSFT", "NVDA", "TSLA", "META", "GOOGL", "AMZN", "NFLX"],
@@ -58,28 +60,142 @@ MARKET_SYMBOL_UNIVERSE: dict[str, list[str]] = {
 
 MARKET_SEARCH_UNIVERSE: list[dict[str, str]] = [
     {"symbol": "AAPL", "name": "Apple Inc", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "MSFT", "name": "Microsoft Corporation", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "NVDA", "name": "NVIDIA Corporation", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "META", "name": "Meta Platforms Inc", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "GOOGL", "name": "Alphabet Inc Class A", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "AMZN", "name": "Amazon.com Inc", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
+    {
+        "symbol": "MSFT",
+        "name": "Microsoft Corporation",
+        "exchange": "NASDAQ",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "NVDA",
+        "name": "NVIDIA Corporation",
+        "exchange": "NASDAQ",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "META",
+        "name": "Meta Platforms Inc",
+        "exchange": "NASDAQ",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "GOOGL",
+        "name": "Alphabet Inc Class A",
+        "exchange": "NASDAQ",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "AMZN",
+        "name": "Amazon.com Inc",
+        "exchange": "NASDAQ",
+        "type": "EQUITY",
+        "market": "US",
+    },
     {"symbol": "TSLA", "name": "Tesla Inc", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "AVGO", "name": "Broadcom Inc", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "NFLX", "name": "Netflix Inc", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "AMD", "name": "Advanced Micro Devices Inc", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "INTC", "name": "Intel Corporation", "exchange": "NASDAQ", "type": "EQUITY", "market": "US"},
-    {"symbol": "JPM", "name": "JPMorgan Chase & Co", "exchange": "NYSE", "type": "EQUITY", "market": "US"},
-    {"symbol": "BAC", "name": "Bank of America Corporation", "exchange": "NYSE", "type": "EQUITY", "market": "US"},
+    {
+        "symbol": "AVGO",
+        "name": "Broadcom Inc",
+        "exchange": "NASDAQ",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "NFLX",
+        "name": "Netflix Inc",
+        "exchange": "NASDAQ",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "AMD",
+        "name": "Advanced Micro Devices Inc",
+        "exchange": "NASDAQ",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "INTC",
+        "name": "Intel Corporation",
+        "exchange": "NASDAQ",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "JPM",
+        "name": "JPMorgan Chase & Co",
+        "exchange": "NYSE",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "BAC",
+        "name": "Bank of America Corporation",
+        "exchange": "NYSE",
+        "type": "EQUITY",
+        "market": "US",
+    },
     {"symbol": "V", "name": "Visa Inc", "exchange": "NYSE", "type": "EQUITY", "market": "US"},
-    {"symbol": "MA", "name": "Mastercard Incorporated", "exchange": "NYSE", "type": "EQUITY", "market": "US"},
-    {"symbol": "UNH", "name": "UnitedHealth Group Incorporated", "exchange": "NYSE", "type": "EQUITY", "market": "US"},
-    {"symbol": "LLY", "name": "Eli Lilly and Company", "exchange": "NYSE", "type": "EQUITY", "market": "US"},
-    {"symbol": "JNJ", "name": "Johnson & Johnson", "exchange": "NYSE", "type": "EQUITY", "market": "US"},
-    {"symbol": "XOM", "name": "Exxon Mobil Corporation", "exchange": "NYSE", "type": "EQUITY", "market": "US"},
+    {
+        "symbol": "MA",
+        "name": "Mastercard Incorporated",
+        "exchange": "NYSE",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "UNH",
+        "name": "UnitedHealth Group Incorporated",
+        "exchange": "NYSE",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "LLY",
+        "name": "Eli Lilly and Company",
+        "exchange": "NYSE",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "JNJ",
+        "name": "Johnson & Johnson",
+        "exchange": "NYSE",
+        "type": "EQUITY",
+        "market": "US",
+    },
+    {
+        "symbol": "XOM",
+        "name": "Exxon Mobil Corporation",
+        "exchange": "NYSE",
+        "type": "EQUITY",
+        "market": "US",
+    },
     {"symbol": "WMT", "name": "Walmart Inc", "exchange": "NYSE", "type": "EQUITY", "market": "US"},
-    {"symbol": "SPY", "name": "SPDR S&P 500 ETF Trust", "exchange": "NYSEARCA", "type": "ETF", "market": "US"},
-    {"symbol": "QQQ", "name": "Invesco QQQ Trust", "exchange": "NASDAQ", "type": "ETF", "market": "US"},
-    {"symbol": "BBCA.JK", "name": "Bank Central Asia Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
+    {
+        "symbol": "SPY",
+        "name": "SPDR S&P 500 ETF Trust",
+        "exchange": "NYSEARCA",
+        "type": "ETF",
+        "market": "US",
+    },
+    {
+        "symbol": "QQQ",
+        "name": "Invesco QQQ Trust",
+        "exchange": "NASDAQ",
+        "type": "ETF",
+        "market": "US",
+    },
+    {
+        "symbol": "BBCA.JK",
+        "name": "Bank Central Asia Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
     {
         "symbol": "BBRI.JK",
         "name": "Bank Rakyat Indonesia Persero Tbk PT",
@@ -87,7 +203,13 @@ MARKET_SEARCH_UNIVERSE: list[dict[str, str]] = [
         "type": "EQUITY",
         "market": "ID",
     },
-    {"symbol": "BMRI.JK", "name": "Bank Mandiri Persero Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
+    {
+        "symbol": "BMRI.JK",
+        "name": "Bank Mandiri Persero Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
     {
         "symbol": "BBNI.JK",
         "name": "Bank Negara Indonesia Persero Tbk PT",
@@ -102,12 +224,48 @@ MARKET_SEARCH_UNIVERSE: list[dict[str, str]] = [
         "type": "EQUITY",
         "market": "ID",
     },
-    {"symbol": "ASII.JK", "name": "Astra International Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
-    {"symbol": "UNTR.JK", "name": "United Tractors Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
-    {"symbol": "UNVR.JK", "name": "Unilever Indonesia Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
-    {"symbol": "GOTO.JK", "name": "GoTo Gojek Tokopedia Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
-    {"symbol": "ANTM.JK", "name": "Aneka Tambang Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
-    {"symbol": "INCO.JK", "name": "Vale Indonesia Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
+    {
+        "symbol": "ASII.JK",
+        "name": "Astra International Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
+    {
+        "symbol": "UNTR.JK",
+        "name": "United Tractors Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
+    {
+        "symbol": "UNVR.JK",
+        "name": "Unilever Indonesia Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
+    {
+        "symbol": "GOTO.JK",
+        "name": "GoTo Gojek Tokopedia Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
+    {
+        "symbol": "ANTM.JK",
+        "name": "Aneka Tambang Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
+    {
+        "symbol": "INCO.JK",
+        "name": "Vale Indonesia Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
     {
         "symbol": "ADRO.JK",
         "name": "Alamtri Resources Indonesia Tbk PT",
@@ -115,9 +273,27 @@ MARKET_SEARCH_UNIVERSE: list[dict[str, str]] = [
         "type": "EQUITY",
         "market": "ID",
     },
-    {"symbol": "TPIA.JK", "name": "Chandra Asri Pacific Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
-    {"symbol": "PTRO.JK", "name": "Petrosea Tbk PT", "exchange": "IDX", "type": "EQUITY", "market": "ID"},
-    {"symbol": "700.HK", "name": "Tencent Holdings Limited", "exchange": "HKEX", "type": "EQUITY", "market": "HK"},
+    {
+        "symbol": "TPIA.JK",
+        "name": "Chandra Asri Pacific Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
+    {
+        "symbol": "PTRO.JK",
+        "name": "Petrosea Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+    },
+    {
+        "symbol": "700.HK",
+        "name": "Tencent Holdings Limited",
+        "exchange": "HKEX",
+        "type": "EQUITY",
+        "market": "HK",
+    },
     {
         "symbol": "9988.HK",
         "name": "Alibaba Group Holding Limited",
@@ -125,19 +301,97 @@ MARKET_SEARCH_UNIVERSE: list[dict[str, str]] = [
         "type": "EQUITY",
         "market": "HK",
     },
-    {"symbol": "7203.T", "name": "Toyota Motor Corporation", "exchange": "TSE", "type": "EQUITY", "market": "JP"},
-    {"symbol": "^GSPC", "name": "S&P 500 Index", "exchange": "SNP", "type": "INDEX", "market": "US"},
-    {"symbol": "^IXIC", "name": "NASDAQ Composite", "exchange": "NASDAQ", "type": "INDEX", "market": "US"},
-    {"symbol": "^DJI", "name": "Dow Jones Industrial Average", "exchange": "DJI", "type": "INDEX", "market": "US"},
-    {"symbol": "^VIX", "name": "CBOE Volatility Index", "exchange": "CBOE", "type": "INDEX", "market": "US"},
-    {"symbol": "^JKSE", "name": "Jakarta Composite Index", "exchange": "IDX", "type": "INDEX", "market": "ID"},
-    {"symbol": "BTC-USD", "name": "Bitcoin USD", "exchange": "CCC", "type": "CRYPTO", "market": "CRYPTO"},
-    {"symbol": "ETH-USD", "name": "Ethereum USD", "exchange": "CCC", "type": "CRYPTO", "market": "CRYPTO"},
-    {"symbol": "SOL-USD", "name": "Solana USD", "exchange": "CCC", "type": "CRYPTO", "market": "CRYPTO"},
-    {"symbol": "ES=F", "name": "E-mini S&P 500 Futures", "exchange": "CME", "type": "FUTURE", "market": "US"},
-    {"symbol": "NQ=F", "name": "E-mini NASDAQ 100 Futures", "exchange": "CME", "type": "FUTURE", "market": "US"},
-    {"symbol": "CL=F", "name": "Crude Oil Futures", "exchange": "NYMEX", "type": "FUTURE", "market": "US"},
-    {"symbol": "GC=F", "name": "Gold Futures", "exchange": "COMEX", "type": "FUTURE", "market": "US"},
+    {
+        "symbol": "7203.T",
+        "name": "Toyota Motor Corporation",
+        "exchange": "TSE",
+        "type": "EQUITY",
+        "market": "JP",
+    },
+    {
+        "symbol": "^GSPC",
+        "name": "S&P 500 Index",
+        "exchange": "SNP",
+        "type": "INDEX",
+        "market": "US",
+    },
+    {
+        "symbol": "^IXIC",
+        "name": "NASDAQ Composite",
+        "exchange": "NASDAQ",
+        "type": "INDEX",
+        "market": "US",
+    },
+    {
+        "symbol": "^DJI",
+        "name": "Dow Jones Industrial Average",
+        "exchange": "DJI",
+        "type": "INDEX",
+        "market": "US",
+    },
+    {
+        "symbol": "^VIX",
+        "name": "CBOE Volatility Index",
+        "exchange": "CBOE",
+        "type": "INDEX",
+        "market": "US",
+    },
+    {
+        "symbol": "^JKSE",
+        "name": "Jakarta Composite Index",
+        "exchange": "IDX",
+        "type": "INDEX",
+        "market": "ID",
+    },
+    {
+        "symbol": "BTC-USD",
+        "name": "Bitcoin USD",
+        "exchange": "CCC",
+        "type": "CRYPTO",
+        "market": "CRYPTO",
+    },
+    {
+        "symbol": "ETH-USD",
+        "name": "Ethereum USD",
+        "exchange": "CCC",
+        "type": "CRYPTO",
+        "market": "CRYPTO",
+    },
+    {
+        "symbol": "SOL-USD",
+        "name": "Solana USD",
+        "exchange": "CCC",
+        "type": "CRYPTO",
+        "market": "CRYPTO",
+    },
+    {
+        "symbol": "ES=F",
+        "name": "E-mini S&P 500 Futures",
+        "exchange": "CME",
+        "type": "FUTURE",
+        "market": "US",
+    },
+    {
+        "symbol": "NQ=F",
+        "name": "E-mini NASDAQ 100 Futures",
+        "exchange": "CME",
+        "type": "FUTURE",
+        "market": "US",
+    },
+    {
+        "symbol": "CL=F",
+        "name": "Crude Oil Futures",
+        "exchange": "NYMEX",
+        "type": "FUTURE",
+        "market": "US",
+    },
+    {
+        "symbol": "GC=F",
+        "name": "Gold Futures",
+        "exchange": "COMEX",
+        "type": "FUTURE",
+        "market": "US",
+    },
 ]
 
 MARKET_EXCHANGE_PRESETS: list[dict[str, str]] = [
@@ -194,13 +448,20 @@ def universe_key(country: str, exchange: str) -> str:
 
 
 def get_symbol_universe(country: str, exchange: str) -> list[str]:
-    return list(MARKET_SYMBOL_UNIVERSE.get(universe_key(country, exchange), MARKET_SYMBOL_UNIVERSE["US:NASDAQ"]))
+    return list(
+        MARKET_SYMBOL_UNIVERSE.get(
+            universe_key(country, exchange), MARKET_SYMBOL_UNIVERSE["US:NASDAQ"]
+        )
+    )
 
 
 def get_exchange_preset(country: str, exchange: str) -> dict[str, str] | None:
     normalized_country = normalize_country(country)
     normalized_exchange = normalize_exchange(exchange).upper()
     for preset in MARKET_EXCHANGE_PRESETS:
-        if preset["country_code"] == normalized_country and preset["exchange"].upper() == normalized_exchange:
+        if (
+            preset["country_code"] == normalized_country
+            and preset["exchange"].upper() == normalized_exchange
+        ):
             return dict(preset)
     return None

@@ -35,10 +35,14 @@ def calculate_position_sizing(
     risk_pct = _safe_float(risk_per_trade_pct, default=2.0) or 2.0
 
     if market_key == "UNKNOWN":
-        return _unavailable(market_key, risk_pct, "Position sizing is unavailable for unknown market.")
+        return _unavailable(
+            market_key, risk_pct, "Position sizing is unavailable for unknown market."
+        )
 
     if market_key not in {"IDX", "US", "GLOBAL", "ETF", "FUND", "CRYPTO"}:
-        return _unavailable(market_key, risk_pct, "Position sizing is unavailable for unsupported market.")
+        return _unavailable(
+            market_key, risk_pct, "Position sizing is unavailable for unsupported market."
+        )
 
     entry = _safe_float(entry_price)
     stop = _safe_float(stop_loss)
@@ -48,13 +52,17 @@ def calculate_position_sizing(
     if stop is None or stop <= 0:
         return _unavailable(market_key, risk_pct, "Stop loss is required for position sizing.")
     if portfolio is None or portfolio <= 0:
-        return _unavailable(market_key, risk_pct, "Portfolio value is required for position sizing.")
+        return _unavailable(
+            market_key, risk_pct, "Portfolio value is required for position sizing."
+        )
     if risk_pct <= 0:
         return _unavailable(market_key, risk_pct, "Risk percent must be greater than zero.")
 
     risk_per_unit = abs(entry - stop)
     if risk_per_unit <= 0:
-        return _unavailable(market_key, risk_pct, "Risk per unit is zero because entry price equals stop loss.")
+        return _unavailable(
+            market_key, risk_pct, "Risk per unit is zero because entry price equals stop loss."
+        )
 
     risk_amount = portfolio * risk_pct / 100
     raw_quantity = risk_amount / risk_per_unit

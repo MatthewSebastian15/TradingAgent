@@ -146,7 +146,11 @@ FIELD_ALIASES = {
     "price_to_sales": ("price_to_sales", "priceToSalesTrailing12Months"),
     "enterprise_to_ebitda": ("enterprise_to_ebitda", "enterpriseToEbitda"),
     "enterprise_to_revenue": ("enterprise_to_revenue", "enterpriseToRevenue"),
-    "price_to_free_cash_flow": ("price_to_free_cash_flow", "priceToFreeCashflow", "priceToFreeCashFlow"),
+    "price_to_free_cash_flow": (
+        "price_to_free_cash_flow",
+        "priceToFreeCashflow",
+        "priceToFreeCashFlow",
+    ),
     "enterprise_to_fcf": ("enterprise_to_fcf", "enterpriseToFcf", "enterpriseToFreeCashFlow"),
     "earnings_yield": ("earnings_yield", "earningsYield"),
     "fcf_yield": ("fcf_yield", "free_cash_flow_yield", "freeCashFlowYield"),
@@ -191,7 +195,6 @@ def _load_mapping(value: Any) -> Mapping[str, Any]:
             return {}
         return parsed if isinstance(parsed, Mapping) else {}
     return {}
-
 
 
 def _text(value: Any) -> str | None:
@@ -307,7 +310,9 @@ def _normalize_vendor_payload(payload: Any, vendor: str) -> dict[str, Any]:
 
 
 def _needs_enrichment(profile: Mapping[str, Any]) -> bool:
-    return any(_blank(profile.get(field)) for field in ENRICHMENT_FIELDS + OWNERSHIP_ENRICHMENT_FIELDS)
+    return any(
+        _blank(profile.get(field)) for field in ENRICHMENT_FIELDS + OWNERSHIP_ENRICHMENT_FIELDS
+    )
 
 
 def _attach_ownership_aliases(profile: dict[str, Any]) -> None:
@@ -350,7 +355,9 @@ def build_company_profile(
         if sources_used and not _needs_enrichment(profile):
             break
         try:
-            raw_payload = vendor_payloads.get(vendor) if vendor_payloads is not None else fetch_vendor(vendor)
+            raw_payload = (
+                vendor_payloads.get(vendor) if vendor_payloads is not None else fetch_vendor(vendor)
+            )
         except Exception as exc:
             warnings.append(f"{vendor}: {exc}")
             continue
@@ -369,7 +376,9 @@ def build_company_profile(
         for field in PROFILE_FIELDS
         if field not in OPTIONAL_PROFILE_FIELDS and _blank(profile.get(field))
     ]
-    meaningful_fields = [field for field in PROFILE_FIELDS if field != "ticker" and not _blank(profile.get(field))]
+    meaningful_fields = [
+        field for field in PROFILE_FIELDS if field != "ticker" and not _blank(profile.get(field))
+    ]
     available = bool(meaningful_fields)
     status = "unavailable" if not available else "complete" if not missing_fields else "partial"
     profile["available"] = available

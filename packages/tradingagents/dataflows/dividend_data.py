@@ -16,7 +16,6 @@ DIVIDEND_STATUSES = {
 }
 
 
-
 def _cash_dividend_amount(row: dict[str, Any]) -> float | None:
     for key in ("amount", "cash_amount", "dividend", "dividend_per_share", "cash_dividend"):
         amount = _number(row.get(key))
@@ -33,7 +32,9 @@ def _event_total(row: dict[str, Any]) -> float | None:
     return None
 
 
-def _base_payload(ticker: str, source: str, status: str, reason: str | None, warnings: list[str] | None = None) -> dict[str, Any]:
+def _base_payload(
+    ticker: str, source: str, status: str, reason: str | None, warnings: list[str] | None = None
+) -> dict[str, Any]:
     return {
         "ticker": ticker,
         "dividend_status": status,
@@ -84,7 +85,10 @@ def build_dividend_status(
             "No cash dividend found for selected period",
         )
 
-    latest = sorted(cash_dividends, key=lambda row: str(row.get("ex_date") or row.get("date") or row.get("payment_date") or ""))[-1]
+    latest = sorted(
+        cash_dividends,
+        key=lambda row: str(row.get("ex_date") or row.get("date") or row.get("payment_date") or ""),
+    )[-1]
     amount = _number(latest.get("_cash_amount")) or 0.0
     price = _number(latest_price)
     profit = _number(net_profit)

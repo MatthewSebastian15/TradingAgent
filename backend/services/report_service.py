@@ -29,7 +29,9 @@ SUPPORTED_REPORT_MARKETS = {"US", "ID"}
 ACTIONABLE_DECISIONS = {"Buy", "Sell", "Overweight", "Underweight"}
 NON_ID_EXCHANGE_SUFFIX_RE = re.compile(r"\.(?!JK$)[A-Z0-9]{1,5}$")
 SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_.-]+")
-LEGACY_REPORT_FIELD_RE = re.compile(r"\b(price target|risk per share|reward per share)\b", re.IGNORECASE)
+LEGACY_REPORT_FIELD_RE = re.compile(
+    r"\b(price target|risk per share|reward per share)\b", re.IGNORECASE
+)
 REPORT_PDF_MAX_HTML_CHARS = 1_000_000
 
 _REPORT_ENV = Environment(
@@ -75,7 +77,9 @@ class ReportGenerationError(ApiError):
         )
 
 
-async def get_analysis_result_for_report(job_id: str, *, owner_id: str, job_store: Any | None = None) -> dict[str, Any]:
+async def get_analysis_result_for_report(
+    job_id: str, *, owner_id: str, job_store: Any | None = None
+) -> dict[str, Any]:
     """Return a completed analysis payload by canonical job_id."""
 
     store = job_store or jobs.get_analysis_runtime().job_store
@@ -159,7 +163,9 @@ def _build_base_report_context(result: dict[str, Any], inputs: dict[str, Any]) -
     market = inputs["market"]
     data_quality = inputs["data_quality"]
     executive_summary_paragraphs = _text_paragraphs(result.get("executive_summary"))
-    executive_summary = "\n\n".join(executive_summary_paragraphs) if executive_summary_paragraphs else "N/A"
+    executive_summary = (
+        "\n\n".join(executive_summary_paragraphs) if executive_summary_paragraphs else "N/A"
+    )
     return {
         "request_id": _clean_text(result.get("request_id")),
         "ticker": ticker,
@@ -171,7 +177,9 @@ def _build_base_report_context(result: dict[str, Any], inputs: dict[str, Any]) -
         "disclaimer": REPORT_DISCLAIMER,
         "current_price": inputs["current_price"],
         "current_price_display": _format_price(inputs["current_price"], ticker, market),
-        "current_price_as_of": _display(result.get("current_price_as_of") or result.get("last_close_price_as_of")),
+        "current_price_as_of": _display(
+            result.get("current_price_as_of") or result.get("last_close_price_as_of")
+        ),
         "current_price_source": _display(result.get("current_price_source")),
         "llm_decision": _display(inputs["llm_decision"]),
         "final_decision": inputs["final_decision"],
@@ -188,7 +196,9 @@ def _build_base_report_context(result: dict[str, Any], inputs: dict[str, Any]) -
         "data_quality": data_quality,
         "risk_data_quality": _as_dict(result.get("risk_data_quality")),
         "data_quality_rows": _data_quality_rows(data_quality),
-        "data_quality_warnings": _as_text_list(data_quality.get("warnings")) if data_quality else [],
+        "data_quality_warnings": _as_text_list(data_quality.get("warnings"))
+        if data_quality
+        else [],
         "analyst_sections": _analyst_sections(result),
         "show_trade_plan": inputs["is_actionable_trade_plan"],
     }
@@ -263,7 +273,9 @@ def _attach_risk_report_sections(report: dict[str, Any]) -> None:
         ],
         percent_keys={"volatility_percent", "max_drawdown_percent", "price_range_percent"},
     )
-    report["market_risk_notes"] = _as_text_list(_as_dict(risk_data_quality.get("market_risk")).get("notes"))
+    report["market_risk_notes"] = _as_text_list(
+        _as_dict(risk_data_quality.get("market_risk")).get("notes")
+    )
     report["risk_adjusted_return_rows"] = _simple_payload_rows(
         _as_dict(risk_data_quality.get("risk_adjusted_return")),
         [
@@ -279,7 +291,9 @@ def _attach_risk_report_sections(report: dict[str, Any]) -> None:
     )
     report["thesis_monitor_rows"] = _thesis_monitor_rows(risk_data_quality)
     report["catalyst_risk_rows"] = _catalyst_risk_rows(risk_data_quality)
-    report["source_quality_rows"] = _source_quality_rows(risk_data_quality, report["validation_rows"])
+    report["source_quality_rows"] = _source_quality_rows(
+        risk_data_quality, report["validation_rows"]
+    )
     report["vendor_status_rows"] = _vendor_status_rows(risk_data_quality)
     report["missing_fields_rows"] = _list_payload_rows(risk_data_quality, "missing_fields")
     report["fallback_used_rows"] = _list_payload_rows(risk_data_quality, "fallback_used")
@@ -398,7 +412,10 @@ def render_analysis_report_pdf(report: dict[str, Any]) -> bytes:
     html = render_analysis_report_html(report)
     if len(html) > REPORT_PDF_MAX_HTML_CHARS:
         raise ReportGenerationError(
-            "PDF export is too large to render safely. Use HTML export or retry with a smaller report.",
+            (
+                "PDF export is too large to render safely. Use HTML export or retry with a "
+                + "smaller report."
+            ),
             internal_message="report_pdf_html_too_large",
         )
     try:
@@ -407,7 +424,7 @@ def render_analysis_report_pdf(report: dict[str, Any]) -> bytes:
         logger.exception("WeasyPrint is unavailable for analysis report PDF export")
         raise ReportGenerationError(
             "PDF export is unavailable because WeasyPrint or its system dependencies are missing. "
-            "Use HTML export or install the required OS libraries.",
+            + "Use HTML export or install the required OS libraries.",
             internal_message=sanitize_message(str(exc)),
         ) from exc
 
@@ -422,8 +439,12 @@ def render_analysis_report_pdf(report: dict[str, Any]) -> bytes:
 
 
 def analysis_report_filename(report: dict[str, Any], extension: str) -> str:
-    ticker = SAFE_FILENAME_RE.sub("_", str(report.get("ticker") or "UNKNOWN")).strip("_") or "UNKNOWN"
-    trade_date = SAFE_FILENAME_RE.sub("_", str(report.get("trade_date") or "report")).strip("_") or "report"
+    ticker = (
+        SAFE_FILENAME_RE.sub("_", str(report.get("ticker") or "UNKNOWN")).strip("_") or "UNKNOWN"
+    )
+    trade_date = (
+        SAFE_FILENAME_RE.sub("_", str(report.get("trade_date") or "report")).strip("_") or "report"
+    )
     ext = extension.lstrip(".") or "pdf"
     return f"{ticker}_{trade_date}.{ext}"
 
@@ -474,7 +495,11 @@ def _as_text_list(value: Any) -> list[str]:
                 part
                 for part in (
                     severity if severity else None,
-                    "blocking" if blocking is True else "non-blocking" if blocking is False else None,
+                    "blocking"
+                    if blocking is True
+                    else "non-blocking"
+                    if blocking is False
+                    else None,
                 )
                 if part
             )
@@ -511,12 +536,18 @@ def _reason_items(value: Any) -> list[str]:
 
 def _key_reasons_paragraph(result: dict[str, Any]) -> str:
     overview = _as_dict(result.get("analysis_overview"))
-    direct = _normalize_inline_text(overview.get("key_reasons_paragraph") or result.get("key_reasons_paragraph"))
+    direct = _normalize_inline_text(
+        overview.get("key_reasons_paragraph") or result.get("key_reasons_paragraph")
+    )
     if direct:
         return _truncate_words(direct, 125)
 
     items: list[str] = []
-    for source in (overview.get("key_reasons"), result.get("key_reasons"), result.get("key_catalysts")):
+    for source in (
+        overview.get("key_reasons"),
+        result.get("key_reasons"),
+        result.get("key_catalysts"),
+    ):
         items.extend(_reason_items(source))
 
     mini_risk_summary = _normalize_inline_text(result.get("mini_risk_summary"))
@@ -657,7 +688,11 @@ def _financial_cell_display(cell: Any, unit: Any = "") -> str:
             return "-"
         value = cell.get("display") if cell.get("display") is not None else cell.get("value")
         displayed = _append_financial_unit(value, unit)
-        return f"{displayed} EST" if cell.get("status") == "estimated" and displayed != "-" else displayed
+        return (
+            f"{displayed} EST"
+            if cell.get("status") == "estimated" and displayed != "-"
+            else displayed
+        )
     return _append_financial_unit(cell, unit)
 
 
@@ -699,7 +734,10 @@ def _decision_rows(result: dict[str, Any], report: dict[str, Any]) -> list[dict[
 
 def _trade_plan_rows(result: dict[str, Any], ticker: str, market: str) -> list[dict[str, str]]:
     return [
-        {"label": "Current Price", "value": _format_price(result.get("current_price"), ticker, market)},
+        {
+            "label": "Current Price",
+            "value": _format_price(result.get("current_price"), ticker, market),
+        },
         {"label": "Entry", "value": _format_price(result.get("entry_price"), ticker, market)},
         {"label": "Stop Loss", "value": _format_price(result.get("stop_loss"), ticker, market)},
         {"label": "Take Profit", "value": _format_price(result.get("take_profit"), ticker, market)},
@@ -760,7 +798,11 @@ def _data_quality_rows(data_quality: dict[str, Any]) -> list[dict[str, str]]:
         "fundamentals",
         "news",
     ]
-    return [_row(key.replace("_", " ").title(), data_quality.get(key)) for key in keys if key in data_quality]
+    return [
+        _row(key.replace("_", " ").title(), data_quality.get(key))
+        for key in keys
+        if key in data_quality
+    ]
 
 
 def _value_with_percent(value: Any, is_percent: bool) -> Any:
@@ -781,7 +823,10 @@ def _simple_payload_rows(
     if not payload:
         return []
     percent_fields = percent_keys or set()
-    return [_row(label, _value_with_percent(payload.get(key), key in percent_fields)) for key, label in definitions]
+    return [
+        _row(label, _value_with_percent(payload.get(key), key in percent_fields))
+        for key, label in definitions
+    ]
 
 
 def _risk_summary_rows(risk_data_quality: dict[str, Any]) -> list[dict[str, str]]:
@@ -899,7 +944,11 @@ def _number_or_none(value: Any) -> float | None:
 
 
 def _ownership_source_objects(profile: dict[str, Any]) -> list[dict[str, Any]]:
-    sources = [profile, _as_dict(profile.get("shares_ownership")), _as_dict(profile.get("ownership"))]
+    sources = [
+        profile,
+        _as_dict(profile.get("shares_ownership")),
+        _as_dict(profile.get("ownership")),
+    ]
     return [source for source in sources if source]
 
 
@@ -929,7 +978,9 @@ def _profile_insider_pct(profile: dict[str, Any]) -> Any:
 
 
 def _profile_institution_pct(profile: dict[str, Any]) -> Any:
-    return _first_profile_value(profile, ("institution_pct", "institution_percent", "heldPercentInstitutions"))
+    return _first_profile_value(
+        profile, ("institution_pct", "institution_percent", "heldPercentInstitutions")
+    )
 
 
 def _profile_public_pct(profile: dict[str, Any]) -> Any:
@@ -1021,7 +1072,9 @@ def _ownership_segments(result: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
     ownership = _ownership_data(profile)
-    raw_segments = [{**segment, "value": ownership.get(segment["key"])} for segment in OWNERSHIP_SEGMENTS]
+    raw_segments = [
+        {**segment, "value": ownership.get(segment["key"])} for segment in OWNERSHIP_SEGMENTS
+    ]
     if any(segment["value"] is None for segment in raw_segments):
         return []
 
@@ -1059,7 +1112,10 @@ def _company_profile_rows(result: dict[str, Any]) -> list[dict[str, str]]:
         _profile_row("Sector", profile.get("sector")),
         _profile_row("Industry", profile.get("industry")),
         _profile_row("Market Cap", _format_market_cap(profile.get("market_cap"), currency)),
-        _profile_row("Employees", _format_number(profile.get("employee_count") or profile.get("full_time_employees"))),
+        _profile_row(
+            "Employees",
+            _format_number(profile.get("employee_count") or profile.get("full_time_employees")),
+        ),
         _profile_row("Website", profile.get("website")),
     ]
 
@@ -1098,16 +1154,27 @@ def _price_chart_rows(result: dict[str, Any], ticker: str, market: str) -> list[
         {"label": "End Price", "value": _format_price(stats.get("end_price"), ticker, market)},
         {
             "label": "Period Return",
-            "value": _format_percent(summary.get("period_return_percent") or stats.get("change_percent")),
+            "value": _format_percent(
+                summary.get("period_return_percent") or stats.get("change_percent")
+            ),
         },
         {
             "label": "Period High",
             "value": _format_price(summary.get("period_high") or stats.get("high"), ticker, market),
         },
-        {"label": "Period Low", "value": _format_price(summary.get("period_low") or stats.get("low"), ticker, market)},
+        {
+            "label": "Period Low",
+            "value": _format_price(summary.get("period_low") or stats.get("low"), ticker, market),
+        },
         {"label": "Max Drawdown", "value": _format_percent(summary.get("max_drawdown_percent"))},
-        {"label": "Average Close", "value": _format_price(stats.get("average_close"), ticker, market)},
-        {"label": "Average Volume", "value": _display(summary.get("average_volume") or stats.get("average_volume"))},
+        {
+            "label": "Average Close",
+            "value": _format_price(stats.get("average_close"), ticker, market),
+        },
+        {
+            "label": "Average Volume",
+            "value": _display(summary.get("average_volume") or stats.get("average_volume")),
+        },
         {"label": "Latest Volume", "value": _display(summary.get("latest_volume"))},
         {"label": "Volume Trend", "value": _display(summary.get("volume_trend"))},
         {"label": "Point Count", "value": _display(stats.get("point_count"))},
@@ -1131,7 +1198,10 @@ def _technical_entry_rows(result: dict[str, Any], ticker: str, market: str) -> l
         {"label": "SMA 50", "value": _format_price(technical.get("sma_50"), ticker, market)},
         {"label": "SMA 200", "value": _format_price(technical.get("sma_200"), ticker, market)},
         {"label": "Support", "value": _format_price(technical.get("support"), ticker, market)},
-        {"label": "Resistance", "value": _format_price(technical.get("resistance"), ticker, market)},
+        {
+            "label": "Resistance",
+            "value": _format_price(technical.get("resistance"), ticker, market),
+        },
         _row("Volume Trend", technical.get("volume_trend")),
     ]
 
@@ -1145,8 +1215,14 @@ def _news_impact_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     return [
         _row("Overall Sentiment", impact.get("overall_sentiment")),
         _row("Sentiment Score", impact.get("sentiment_score")),
-        _row("High Impact Count", impact.get("high_impact_count") or len(impact.get("high_impact_news") or [])),
-        _row("Full News Count", impact.get("full_news_count") or len(impact.get("full_news_list") or [])),
+        _row(
+            "High Impact Count",
+            impact.get("high_impact_count") or len(impact.get("high_impact_news") or []),
+        ),
+        _row(
+            "Full News Count",
+            impact.get("full_news_count") or len(impact.get("full_news_list") or []),
+        ),
         _row("News Count", impact.get("news_count")),
         _row("Deduplicated Count", impact.get("deduplicated_count")),
         _row("Duplicate Removed", impact.get("duplicate_excluded_count")),
@@ -1178,7 +1254,9 @@ def _high_impact_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
                 "materiality_category": _display(item.get("materiality_category")),
                 "source_confidence_label": _display(item.get("source_confidence_label")),
                 "news_scope": _display(item.get("scope_label") or item.get("news_scope")),
-                "impact_reason": _display(item.get("impact_reason") or item.get("relevance_reason")),
+                "impact_reason": _display(
+                    item.get("impact_reason") or item.get("relevance_reason")
+                ),
                 "summary": _display(item.get("summary")),
                 "url": _safe_external_http_url(item.get("url")),
                 "dedupe_key": _display(item.get("dedupe_key")),
@@ -1285,7 +1363,9 @@ def _full_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
     related_news = _as_dict(result.get("related_news"))
 
     has_full_news_list = isinstance(impact.get("full_news_list"), list) if impact else False
-    raw_items = impact.get("full_news_list") if has_full_news_list else related_news.get("items", [])
+    raw_items = (
+        impact.get("full_news_list") if has_full_news_list else related_news.get("items", [])
+    )
     high_items = impact.get("high_impact_news", []) if impact else []
 
     if not isinstance(raw_items, list):
@@ -1293,7 +1373,11 @@ def _full_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(high_items, list):
         high_items = []
 
-    high_keys = {_news_dedupe_key(item) for item in high_items if isinstance(item, dict) and _news_dedupe_key(item)}
+    high_keys = {
+        _news_dedupe_key(item)
+        for item in high_items
+        if isinstance(item, dict) and _news_dedupe_key(item)
+    }
 
     items: list[dict[str, Any]] = []
     for item in _dedupe_report_news_items(raw_items):
@@ -1314,7 +1398,9 @@ def _full_news_items(result: dict[str, Any]) -> list[dict[str, Any]]:
                 "impact_score": _display(item.get("impact_score")),
                 "relevance_score": _display(item.get("relevance_score")),
                 "summary": _display(item.get("summary")),
-                "impact_reason": _display(item.get("impact_reason") or item.get("relevance_reason")),
+                "impact_reason": _display(
+                    item.get("impact_reason") or item.get("relevance_reason")
+                ),
                 "url": _safe_external_http_url(item.get("url")),
                 "dedupe_key": _display(item.get("dedupe_key")),
             }
@@ -1343,7 +1429,9 @@ def _normalize_financial_highlight_row(row: dict[str, Any]) -> dict[str, Any]:
         "label": _clean_text(row.get("label")) or _clean_text(row.get("key")) or "Metric",
         "unit": unit or "-",
         "values": values,
-        "display_values": {str(key): _financial_cell_display(cell, unit) for key, cell in values.items()},
+        "display_values": {
+            str(key): _financial_cell_display(cell, unit) for key, cell in values.items()
+        },
     }
 
 
@@ -1355,7 +1443,11 @@ def _normalize_financial_highlight_snapshot(item: dict[str, Any]) -> dict[str, A
 def _financial_highlights(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
-    periods = [period for period in value.get("periods", []) if isinstance(period, dict) and period.get("key")]
+    periods = [
+        period
+        for period in value.get("periods", [])
+        if isinstance(period, dict) and period.get("key")
+    ]
     rows = [
         _normalize_financial_highlight_row(row)
         for row in value.get("rows", [])
@@ -1408,13 +1500,21 @@ def _metric_detail_display(value: Any, fallback: Any = None, unit: Any = "") -> 
         displayed = _append_financial_unit(displayed, unit)
     if displayed == "N/A":
         displayed = "-"
-    return f"{displayed} EST" if detail.get("status") == "estimated" and displayed != "-" else displayed
+    return (
+        f"{displayed} EST"
+        if detail.get("status") == "estimated" and displayed != "-"
+        else displayed
+    )
 
 
 def _financial_trend_rows(value: Any) -> list[dict[str, Any]]:
     payload = _as_dict(value)
     details = _as_dict(payload.get("metric_details"))
-    periods = [period for period in payload.get("periods", []) if isinstance(period, dict) and period.get("key")]
+    periods = [
+        period
+        for period in payload.get("periods", [])
+        if isinstance(period, dict) and period.get("key")
+    ]
     definitions = [
         ("revenue", "Revenue", payload.get("scale_label") or ""),
         ("revenue_growth_percent", "Revenue Growth", "%"),
@@ -1450,8 +1550,12 @@ def _scenario_rows(value: Any) -> list[dict[str, str]]:
             rows.append(
                 {
                     "scenario": case.title(),
-                    "fair_value": _display(item.get("fair_value_display") or item.get("fair_value")),
-                    "upside": _display(item.get("upside_downside_display") or item.get("upside_downside_percent")),
+                    "fair_value": _display(
+                        item.get("fair_value_display") or item.get("fair_value")
+                    ),
+                    "upside": _display(
+                        item.get("upside_downside_display") or item.get("upside_downside_percent")
+                    ),
                     "growth": _format_percent(item.get("revenue_growth_assumption_percent")),
                     "margin": _format_percent(item.get("margin_assumption_percent")),
                     "multiple": _display(item.get("valuation_multiple")),
@@ -1548,11 +1652,17 @@ def _report_news_items(raw_items: list[Any]) -> list[dict[str, Any]]:
         items.append(
             {
                 "title": _display(item.get("title")),
-                "publisher": _display(item.get("publisher") or item.get("source") or item.get("provider")),
+                "publisher": _display(
+                    item.get("publisher") or item.get("source") or item.get("provider")
+                ),
                 "source": source,
                 "published_label": _news_published_label(item),
-                "summary": _display(item.get("summary") or item.get("description") or item.get("impact_reason")),
-                "impact": _display(item.get("impact") or item.get("impact_rule") or item.get("risk_level")),
+                "summary": _display(
+                    item.get("summary") or item.get("description") or item.get("impact_reason")
+                ),
+                "impact": _display(
+                    item.get("impact") or item.get("impact_rule") or item.get("risk_level")
+                ),
                 "sentiment": _display(item.get("sentiment") or item.get("sentiment_label")),
                 "url": _safe_external_http_url(item.get("url")),
             }
@@ -1561,14 +1671,23 @@ def _report_news_items(raw_items: list[Any]) -> list[dict[str, Any]]:
 
 
 def _news_source(item: dict[str, Any]) -> str:
-    return _display(item.get("source") or item.get("publisher") or item.get("provider") or "Unknown Source")
+    return _display(
+        item.get("source") or item.get("publisher") or item.get("provider") or "Unknown Source"
+    )
 
 
 def _news_published_label(item: dict[str, Any]) -> str:
-    age = _clean_text(item.get("published_age") or item.get("published_age_label") or item.get("age"))
+    age = _clean_text(
+        item.get("published_age") or item.get("published_age_label") or item.get("age")
+    )
     if age:
         return age
-    value = item.get("published_at") or item.get("publishedAt") or item.get("published_date") or item.get("pub_date")
+    value = (
+        item.get("published_at")
+        or item.get("publishedAt")
+        or item.get("published_date")
+        or item.get("pub_date")
+    )
     if not value:
         return "N/A"
     text = str(value).strip()
@@ -1583,7 +1702,9 @@ def _news_provider_rows(result: dict[str, Any]) -> list[dict[str, str]]:
     statuses = _news_context(result).get("provider_status")
     if not isinstance(statuses, dict):
         return []
-    return [{"label": str(provider), "value": _display(status)} for provider, status in statuses.items()]
+    return [
+        {"label": str(provider), "value": _display(status)} for provider, status in statuses.items()
+    ]
 
 
 def _text_paragraphs(value: Any) -> list[str]:
@@ -1591,17 +1712,23 @@ def _text_paragraphs(value: Any) -> list[str]:
         return [
             re.sub(r"\n+", " ", paragraph).strip()
             for item in value
-            if (paragraph := (_strip_legacy_report_fields(item) or "").replace("\r\n", "\n").strip())
+            if (
+                paragraph := (_strip_legacy_report_fields(item) or "").replace("\r\n", "\n").strip()
+            )
         ]
 
     normalized = (_strip_legacy_report_fields(value) or "").replace("\r\n", "\n").strip()
     if not normalized:
         return []
     paragraphs = [
-        re.sub(r"\n+", " ", paragraph).strip() for paragraph in re.split(r"\n\s*\n", normalized) if paragraph.strip()
+        re.sub(r"\n+", " ", paragraph).strip()
+        for paragraph in re.split(r"\n\s*\n", normalized)
+        if paragraph.strip()
     ]
     if len(paragraphs) <= 1 and "\n" in normalized:
-        paragraphs = [paragraph.strip() for paragraph in re.split(r"\n+", normalized) if paragraph.strip()]
+        paragraphs = [
+            paragraph.strip() for paragraph in re.split(r"\n+", normalized) if paragraph.strip()
+        ]
     return paragraphs
 
 

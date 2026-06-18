@@ -17,7 +17,11 @@ def deduplicate_news_articles(items: list[NormalizedNewsArticle]) -> list[Normal
     for article in ranked:
         normalized_url = normalize_url(article.url)
         normalized_title = normalize_title(article.title)
-        source_title = f"{str(article.source or '').strip().lower()}:{normalized_title}" if normalized_title else ""
+        source_title = (
+            f"{str(article.source or '').strip().lower()}:{normalized_title}"
+            if normalized_title
+            else ""
+        )
         article.content_hash = article.content_hash or content_hash(article.title, normalized_url)
 
         if article.content_hash in seen_hashes:
@@ -28,7 +32,9 @@ def deduplicate_news_articles(items: list[NormalizedNewsArticle]) -> list[Normal
             continue
         if source_title and source_title in seen_source_titles:
             continue
-        if normalized_title and any(similar_title(normalized_title, title) for title in seen_similar_titles):
+        if normalized_title and any(
+            similar_title(normalized_title, title) for title in seen_similar_titles
+        ):
             continue
 
         seen_hashes.add(article.content_hash)
@@ -46,7 +52,7 @@ def deduplicate_news_articles(items: list[NormalizedNewsArticle]) -> list[Normal
 def _dedupe_preference(article: NormalizedNewsArticle) -> tuple[float, int, int, int, int, float]:
     tier = int(article.feed_tier or 3)
     tier_score = max(0, 5 - tier)
-    has_summary = 1 if str(article.summary or '').strip() else 0
+    has_summary = 1 if str(article.summary or "").strip() else 0
     direct_rss = 0 if _is_google_news_fallback(article) else 1
     company_match = 1 if not article.market_context_only else 0
     published = article.published_at.timestamp() if article.published_at else 0.0
@@ -61,6 +67,6 @@ def _dedupe_preference(article: NormalizedNewsArticle) -> tuple[float, int, int,
 
 
 def _is_google_news_fallback(article: NormalizedNewsArticle) -> bool:
-    feed_id = str(article.feed_id or article.query_strategy or '').lower()
-    source = str(article.source or '').lower()
-    return 'google-news' in feed_id or source == 'google news'
+    feed_id = str(article.feed_id or article.query_strategy or "").lower()
+    source = str(article.source or "").lower()
+    return "google-news" in feed_id or source == "google news"

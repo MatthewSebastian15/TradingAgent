@@ -14,7 +14,6 @@ from dotenv import dotenv_values
 from fastapi.testclient import TestClient
 from tradingagents.llm_clients.model_catalog import MODEL_CATALOG
 
-
 _LIVE_TEST_ENV_KEYS = {"FINNHUB_API_KEY", "FINNHUB_BASE_URL", "FINNHUB_ENABLED"}
 
 

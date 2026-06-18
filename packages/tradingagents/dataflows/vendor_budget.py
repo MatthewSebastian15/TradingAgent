@@ -30,7 +30,9 @@ class VendorBudget:
 
     def __init__(self, max_total_calls: int, per_vendor_limits: dict[str, int] | None = None):
         self.max_total_calls = max(0, int(max_total_calls or 0))
-        self.per_vendor_limits = {str(k): max(0, int(v)) for k, v in (per_vendor_limits or {}).items()}
+        self.per_vendor_limits = {
+            str(k): max(0, int(v)) for k, v in (per_vendor_limits or {}).items()
+        }
         self.total_calls = 0
         self.vendor_calls: dict[str, int] = {vendor: 0 for vendor in self.per_vendor_limits}
         self.cache_hits: dict[str, int] = {vendor: 0 for vendor in self.per_vendor_limits}
@@ -44,7 +46,11 @@ class VendorBudget:
             if self.max_total_calls and self.total_calls >= self.max_total_calls:
                 return False
             vendor_limit = self.per_vendor_limits.get(vendor)
-            return not (vendor_limit is not None and vendor_limit and self.vendor_calls.get(vendor, 0) >= vendor_limit)
+            return not (
+                vendor_limit is not None
+                and vendor_limit
+                and self.vendor_calls.get(vendor, 0) >= vendor_limit
+            )
 
     def record_call(self, vendor: str, method: str) -> None:
         vendor = str(vendor)
@@ -97,7 +103,9 @@ class VendorBudget:
                 "used_finnhub_calls": used_finnhub,
                 "vendor_calls": dict(self.vendor_calls),
                 "cache_hits": dict(self.cache_hits),
-                "method_calls": {method: dict(counts) for method, counts in self.method_calls.items()},
+                "method_calls": {
+                    method: dict(counts) for method, counts in self.method_calls.items()
+                },
                 "blocked_calls": list(self.blocked_calls),
                 "budget_exceeded": bool(
                     (self.max_total_calls and self.total_calls >= self.max_total_calls)

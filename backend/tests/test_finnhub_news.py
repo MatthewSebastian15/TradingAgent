@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.finnhub_news import classify_event_type, deduplicate_news, get_news, normalize_news_item
+from tradingagents.dataflows.finnhub_news import (
+    classify_event_type,
+    deduplicate_news,
+    get_news,
+    normalize_news_item,
+)
 from tradingagents.dataflows.news_aggregator import normalize_url, rank_news
 
 
 def test_normalize_news_item_converts_timestamp():
-    item = normalize_news_item({"headline": "Earnings beat", "datetime": 1779840000, "source": "Wire"}, ticker="AAPL")
+    item = normalize_news_item(
+        {"headline": "Earnings beat", "datetime": 1779840000, "source": "Wire"}, ticker="AAPL"
+    )
     assert item["published_at"].startswith("2026")
     assert item["event_type"] == "earnings"
 
@@ -15,7 +22,10 @@ def test_news_event_classifier_dividend():
 
 
 def test_news_deduplicate_by_url():
-    rows = [{"title": "A", "url": "https://x.test/a?utm_source=1"}, {"title": "B", "url": "https://x.test/a"}]
+    rows = [
+        {"title": "A", "url": "https://x.test/a?utm_source=1"},
+        {"title": "B", "url": "https://x.test/a"},
+    ]
     assert len(deduplicate_news(rows)) == 1
 
 
@@ -25,7 +35,10 @@ def test_news_deduplicate_by_title():
 
 
 def test_news_rank_by_recency():
-    rows = [{"title": "old", "published_at": "2026-01-01"}, {"title": "new", "published_at": "2026-05-01"}]
+    rows = [
+        {"title": "old", "published_at": "2026-01-01"},
+        {"title": "new", "published_at": "2026-05-01"},
+    ]
     assert rank_news(rows)[0]["title"] == "new"
 
 

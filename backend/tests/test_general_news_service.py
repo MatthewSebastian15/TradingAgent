@@ -64,12 +64,12 @@ def test_service_returns_enabled_false_when_config_disabled(tmp_path):
 def test_service_accepts_category_all(tmp_path, monkeypatch):
     _patch_rss(monkeypatch, [_article("Stocks gain after earnings")])
 
-    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(category="all", force_refresh=True)
+    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(
+        category="all", force_refresh=True
+    )
 
     assert result["category"] == "all"
     assert result["articles_found"] == 1
-
-
 
 
 def test_all_returns_mixed_categories_sorted_newest_first(tmp_path, monkeypatch):
@@ -77,15 +77,27 @@ def test_all_returns_mixed_categories_sorted_newest_first(tmp_path, monkeypatch)
     _patch_rss(
         monkeypatch,
         [
-            _article("Bank credit growth improves", source="CNBC", published_at=now - timedelta(hours=2)),
+            _article(
+                "Bank credit growth improves", source="CNBC", published_at=now - timedelta(hours=2)
+            ),
             _article("Bitcoin rises after ETF inflows", source="CoinDesk", published_at=now),
-            _article("Fed keeps rate decision in focus", source="Federal Reserve", published_at=now - timedelta(hours=1)),
+            _article(
+                "Fed keeps rate decision in focus",
+                source="Federal Reserve",
+                published_at=now - timedelta(hours=1),
+            ),
         ],
     )
 
-    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(category="all", force_refresh=True)
+    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(
+        category="all", force_refresh=True
+    )
 
-    assert [article["category"] for article in result["articles"]] == ["crypto", "central_bank", "finance"]
+    assert [article["category"] for article in result["articles"]] == [
+        "crypto",
+        "central_bank",
+        "finance",
+    ]
     assert [article["title"] for article in result["articles"]] == [
         "Bitcoin rises after ETF inflows",
         "Fed keeps rate decision in focus",
@@ -93,10 +105,13 @@ def test_all_returns_mixed_categories_sorted_newest_first(tmp_path, monkeypatch)
     ]
     assert all("relevance_score" in article for article in result["articles"])
 
+
 def test_invalid_category_falls_back_to_all(tmp_path, monkeypatch):
     _patch_rss(monkeypatch, [_article("Stocks gain after earnings")])
 
-    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(category="bad", force_refresh=True)
+    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(
+        category="bad", force_refresh=True
+    )
 
     assert result["category"] == "all"
 
@@ -151,7 +166,9 @@ def test_category_filter_returns_only_selected_category(tmp_path, monkeypatch):
         ],
     )
 
-    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(category="crypto", force_refresh=True)
+    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(
+        category="crypto", force_refresh=True
+    )
 
     assert result["articles"]
     assert {article["category"] for article in result["articles"]} == {"crypto"}
@@ -169,7 +186,10 @@ def test_articles_sorted_by_published_at_desc(tmp_path, monkeypatch):
 
     result = GeneralNewsService(_config(tmp_path)).fetch_general_news(force_refresh=True)
 
-    assert [article["title"] for article in result["articles"]] == ["Newer market news", "Older market news"]
+    assert [article["title"] for article in result["articles"]] == [
+        "Newer market news",
+        "Older market news",
+    ]
 
 
 def test_limit_is_applied(tmp_path, monkeypatch):
@@ -260,6 +280,7 @@ def test_general_rss_fetch_uses_all_configured_feed_capacity(tmp_path, monkeypat
     ).fetch_general_news(force_refresh=True)
 
     assert captured["limit"] == 40
+
 
 def test_published_age_uses_minutes_hours_days_and_weeks():
     now = datetime.now(timezone.utc)

@@ -4,7 +4,14 @@ from typing import Any
 
 from tradingagents.financial_highlights.calculator import safe_divide
 
-from .common import POLICY_MULTIPLES, data_quality, effective_ebitda, metric, metric_values, select_primary_method
+from .common import (
+    POLICY_MULTIPLES,
+    data_quality,
+    effective_ebitda,
+    metric,
+    metric_values,
+    select_primary_method,
+)
 
 
 def build_valuation_multiples(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -56,17 +63,27 @@ def build_valuation_multiples(snapshot: dict[str, Any]) -> dict[str, Any]:
             currency=currency,
             format_type="ratio",
             formula="Enterprise Value / EBITDA",
-            status="estimated" if ebitda_status == "estimated" and enterprise_value is not None else "calculated",
+            status="estimated"
+            if ebitda_status == "estimated" and enterprise_value is not None
+            else "calculated",
         ),
     }
     values = metric_values(details)
     primary_method = select_primary_method(snapshot)
-    method_field = {"P/BV": "pbv", "EV/EBITDA": "ev_ebitda", "P/E": "pe", "P/S": "ps"}.get(primary_method)
+    method_field = {"P/BV": "pbv", "EV/EBITDA": "ev_ebitda", "P/E": "pe", "P/S": "ps"}.get(
+        primary_method
+    )
     selected_value = values.get(method_field) if method_field else None
     base_target = POLICY_MULTIPLES.get(primary_method or "", {}).get("base")
     label = "N/A"
     if selected_value is not None and base_target:
-        label = "cheap" if selected_value <= base_target * 0.85 else "expensive" if selected_value >= base_target * 1.15 else "fair"
+        label = (
+            "cheap"
+            if selected_value <= base_target * 0.85
+            else "expensive"
+            if selected_value >= base_target * 1.15
+            else "fair"
+        )
     return {
         "currency": currency,
         **values,

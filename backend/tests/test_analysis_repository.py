@@ -33,7 +33,12 @@ def test_repository_save_get_list_and_job_lookup(tmp_path):
     repository = AnalysisRepository(str(tmp_path / "analysis.sqlite3"), max_rows=10)
     result = _result()
 
-    assert repository.save_analysis(result=result, request_payload={"ticker": "AAPL"}, job_id="job-1", owner_id=_TEST_OWNER) is True
+    assert (
+        repository.save_analysis(
+            result=result, request_payload={"ticker": "AAPL"}, job_id="job-1", owner_id=_TEST_OWNER
+        )
+        is True
+    )
     assert repository.get_analysis("req-1", owner_id=_TEST_OWNER) == result
     assert repository.get_analysis_by_job_id("job-1", owner_id=_TEST_OWNER) == result
 
@@ -56,7 +61,9 @@ def test_repository_filters_deletes_and_clears(tmp_path):
     repository.save_analysis(result=_result("req-aapl", "AAPL"), owner_id=_TEST_OWNER)
     repository.save_analysis(result=_result("req-msft", "MSFT"), owner_id=_TEST_OWNER)
 
-    assert [item["request_id"] for item in repository.list_analyses(ticker="aapl", owner_id=_TEST_OWNER)] == ["req-aapl"]
+    assert [
+        item["request_id"] for item in repository.list_analyses(ticker="aapl", owner_id=_TEST_OWNER)
+    ] == ["req-aapl"]
     assert repository.delete_analysis("req-aapl", owner_id=_TEST_OWNER) is True
     assert repository.delete_analysis("req-aapl", owner_id=_TEST_OWNER) is False
     assert repository.delete_all_analyses(owner_id=_TEST_OWNER) == 1
@@ -65,11 +72,23 @@ def test_repository_filters_deletes_and_clears(tmp_path):
 
 def test_repository_evicts_old_rows(tmp_path):
     repository = AnalysisRepository(str(tmp_path / "analysis.sqlite3"), max_rows=2)
-    repository.save_analysis(result=_result("req-1", analysis_created_at="2026-05-26T08:00:00+00:00"), owner_id=_TEST_OWNER)
-    repository.save_analysis(result=_result("req-2", analysis_created_at="2026-05-27T08:00:00+00:00"), owner_id=_TEST_OWNER)
-    repository.save_analysis(result=_result("req-3", analysis_created_at="2026-05-28T08:00:00+00:00"), owner_id=_TEST_OWNER)
+    repository.save_analysis(
+        result=_result("req-1", analysis_created_at="2026-05-26T08:00:00+00:00"),
+        owner_id=_TEST_OWNER,
+    )
+    repository.save_analysis(
+        result=_result("req-2", analysis_created_at="2026-05-27T08:00:00+00:00"),
+        owner_id=_TEST_OWNER,
+    )
+    repository.save_analysis(
+        result=_result("req-3", analysis_created_at="2026-05-28T08:00:00+00:00"),
+        owner_id=_TEST_OWNER,
+    )
 
-    assert [item["request_id"] for item in repository.list_analyses(owner_id=_TEST_OWNER)] == ["req-3", "req-2"]
+    assert [item["request_id"] for item in repository.list_analyses(owner_id=_TEST_OWNER)] == [
+        "req-3",
+        "req-2",
+    ]
     assert repository.get_analysis("req-1", owner_id=_TEST_OWNER) is None
 
 
@@ -78,7 +97,13 @@ def test_repository_rejects_invalid_result(tmp_path):
 
     assert repository.save_analysis(result={"ticker": "AAPL"}, owner_id=_TEST_OWNER) is False
     assert repository.save_analysis(result={"request_id": "req-1"}, owner_id=_TEST_OWNER) is False
-    assert repository.save_analysis(result={"request_id": "req-2", "ticker": "AAPL", "error": "failed"}, owner_id=_TEST_OWNER) is False
+    assert (
+        repository.save_analysis(
+            result={"request_id": "req-2", "ticker": "AAPL", "error": "failed"},
+            owner_id=_TEST_OWNER,
+        )
+        is False
+    )
     assert repository.list_analyses(owner_id=_TEST_OWNER) == []
 
 
@@ -108,7 +133,9 @@ def test_repository_schema_owner_id_is_not_nullable(tmp_path):
     repository = AnalysisRepository(str(tmp_path / "analysis.sqlite3"), max_rows=10)
 
     with repository._connect() as conn:
-        owner_column = next(row for row in conn.execute("PRAGMA table_info(analyses)") if row["name"] == "owner_id")
+        owner_column = next(
+            row for row in conn.execute("PRAGMA table_info(analyses)") if row["name"] == "owner_id"
+        )
         indexes = {row["name"] for row in conn.execute("PRAGMA index_list(analyses)")}
 
     assert int(owner_column["notnull"]) == 1

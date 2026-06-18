@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.source_priority import NEWS_PRIORITY, SOURCE_PRIORITY, get_field_vendor_order
+from tradingagents.dataflows.source_priority import (
+    NEWS_PRIORITY,
+    SOURCE_PRIORITY,
+    get_field_vendor_order,
+)
 from tradingagents.dataflows.vendor_capabilities import SPRINT_1_VENDORS
 
 
@@ -20,11 +24,22 @@ def test_yfinance_first_for_main_market_fields_across_markets():
 
 def test_us_profile_priority_keeps_alpha_vantage_enrichment_after_finnhub():
     assert get_field_vendor_order("profile", "NVDA") == ["yfinance", "finnhub", "alpha_vantage"]
-    assert get_field_vendor_order("profile", market="GLOBAL") == ["yfinance", "finnhub", "alpha_vantage"]
+    assert get_field_vendor_order("profile", market="GLOBAL") == [
+        "yfinance",
+        "finnhub",
+        "alpha_vantage",
+    ]
 
 
 def test_news_priority_only_uses_allowed_news_vendors():
-    assert NEWS_PRIORITY == ["yfinance", "google_news_light", "newsdata", "marketaux", "finnhub", "alpha_vantage"]
+    assert NEWS_PRIORITY == [
+        "yfinance",
+        "google_news_light",
+        "newsdata",
+        "marketaux",
+        "finnhub",
+        "alpha_vantage",
+    ]
     for market in ["IDX", "ID", "US", "GLOBAL", "CRYPTO", "ETF", "FUND"]:
         order = get_field_vendor_order("company_news", market=market)
         assert order[0] == "yfinance"
@@ -33,7 +48,10 @@ def test_news_priority_only_uses_allowed_news_vendors():
 
 def test_unknown_market_priority_is_safe():
     assert get_field_vendor_order("quote", market="UNKNOWN") == ["yfinance"]
-    assert get_field_vendor_order("company_news", market="UNKNOWN") == ["yfinance", "google_news_light"]
+    assert get_field_vendor_order("company_news", market="UNKNOWN") == [
+        "yfinance",
+        "google_news_light",
+    ]
 
 
 def test_global_and_crypto_do_not_try_unsupported_fallbacks():

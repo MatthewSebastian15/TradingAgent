@@ -60,13 +60,16 @@ def _format_news_payload(raw, label: str, start_date: str, end_date: str, limit:
 
     if not parts:
         return f"No news found for {label} between {start_date} and {end_date}"
-    return f"## Alpha Vantage News for {label}, from {start_date} to {end_date}:\n\n" + "\n".join(parts)
+    return f"## Alpha Vantage News for {label}, from {start_date} to {end_date}:\n\n" + "\n".join(
+        parts
+    )
 
 
 def get_news(ticker, start_date, end_date) -> dict[str, str] | str:
     """Returns live and historical market news & sentiment data from premier news outlets worldwide.
 
-    Covers stocks, cryptocurrencies, forex, and topics like fiscal policy, mergers & acquisitions, IPOs.
+    Covers stocks, cryptocurrencies, forex, and topics like fiscal policy, mergers & acquisitions, \
+IPOs.
 
     Args:
         ticker: Stock symbol for news articles.

@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
-from dataclasses import dataclass, fields
 import multiprocessing
 from collections.abc import Callable
+from dataclasses import dataclass, fields
 from datetime import datetime
 from multiprocessing.managers import SyncManager
 from typing import Any
@@ -100,7 +100,9 @@ def _coerce_pipeline_position_args(
     wrappers can always find it at args[-1]. This adapter keeps both
     positional styles safe during the transition.
     """
-    legacy_cancel_first = has_existing_position is not None and not isinstance(has_existing_position, bool)
+    legacy_cancel_first = has_existing_position is not None and not isinstance(
+        has_existing_position, bool
+    )
     legacy_position_payload = isinstance(position_quantity, bool)
     if legacy_cancel_first or (has_existing_position is None and legacy_position_payload):
         legacy_cancel_event = has_existing_position
@@ -127,11 +129,13 @@ def run_pipeline(
     cancel_event: Any | None = None,
 ) -> dict:
     """Run the full TradingAgents pipeline in a subprocess."""
-    has_existing_position, position_quantity, average_entry_price, cancel_event = _coerce_pipeline_position_args(
-        has_existing_position,
-        position_quantity,
-        average_entry_price,
-        cancel_event,
+    has_existing_position, position_quantity, average_entry_price, cancel_event = (
+        _coerce_pipeline_position_args(
+            has_existing_position,
+            position_quantity,
+            average_entry_price,
+            cancel_event,
+        )
     )
 
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
@@ -425,12 +429,18 @@ def _pipeline_worker_args(ctx: PipelineRunContext, cancel_event: Any | None) -> 
     )
 
 
-def _start_pipeline_future(ctx: PipelineRunContext, executor: Any, cancel_event: Any | None) -> asyncio.Future:
+def _start_pipeline_future(
+    ctx: PipelineRunContext, executor: Any, cancel_event: Any | None
+) -> asyncio.Future:
     loop = asyncio.get_running_loop()
-    return loop.run_in_executor(executor, ctx.run_pipeline_func, *_pipeline_worker_args(ctx, cancel_event))
+    return loop.run_in_executor(
+        executor, ctx.run_pipeline_func, *_pipeline_worker_args(ctx, cancel_event)
+    )
 
 
-def _start_disconnect_watch(ctx: PipelineRunContext, cancel_event: Any | None, future: asyncio.Future) -> asyncio.Task | None:
+def _start_disconnect_watch(
+    ctx: PipelineRunContext, cancel_event: Any | None, future: asyncio.Future
+) -> asyncio.Task | None:
     if ctx.request is None:
         return None
     return asyncio.create_task(
@@ -497,7 +507,7 @@ async def run_pipeline_async(
     disconnect_task = _start_disconnect_watch(ctx, cancel_event, future)
     try:
         return await asyncio.wait_for(future, timeout=PIPELINE_TIMEOUT_SECONDS)
-    except TimeoutError as exc:
+    except TimeoutError:
         ctx.set_cancel_event_func(cancel_event)
         future.cancel()
         _log_pipeline_timeout(ctx)

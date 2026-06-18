@@ -3,23 +3,49 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from tradingagents.financial_highlights.builder import build_financial_highlights
 from tradingagents.financial_highlights.models import to_dict
 from tradingagents.financial_highlights.period_resolver import resolve_financial_highlight_periods
-from tradingagents.financial_highlights.statement_parser import _canonical_field, parse_vendor_financials
+from tradingagents.financial_highlights.statement_parser import (
+    _canonical_field,
+    parse_vendor_financials,
+)
 
 
 def _vendor_payloads():
     return {
         "yfinance": {
             "income_statement": {
-                "FY22": {"revenue": 100_000_000_000, "ebitda": 20_000_000_000, "net_profit": 10_000_000_000},
-                "FY23": {"revenue": 120_000_000_000, "ebitda": 24_000_000_000, "net_profit": 12_000_000_000},
-                "FY24": {"revenue": 132_000_000_000, "ebitda": 27_000_000_000, "net_profit": 13_000_000_000},
-                "FY25": {"revenue": 150_000_000_000, "ebitda": 30_000_000_000, "net_profit": 15_000_000_000},
-                "FY25Q1": {"revenue": 35_000_000_000, "ebitda": 7_000_000_000, "net_profit": 3_500_000_000},
-                "FY26Q1": {"revenue": 40_000_000_000, "ebitda": 8_000_000_000, "net_profit": 4_000_000_000},
+                "FY22": {
+                    "revenue": 100_000_000_000,
+                    "ebitda": 20_000_000_000,
+                    "net_profit": 10_000_000_000,
+                },
+                "FY23": {
+                    "revenue": 120_000_000_000,
+                    "ebitda": 24_000_000_000,
+                    "net_profit": 12_000_000_000,
+                },
+                "FY24": {
+                    "revenue": 132_000_000_000,
+                    "ebitda": 27_000_000_000,
+                    "net_profit": 13_000_000_000,
+                },
+                "FY25": {
+                    "revenue": 150_000_000_000,
+                    "ebitda": 30_000_000_000,
+                    "net_profit": 15_000_000_000,
+                },
+                "FY25Q1": {
+                    "revenue": 35_000_000_000,
+                    "ebitda": 7_000_000_000,
+                    "net_profit": 3_500_000_000,
+                },
+                "FY26Q1": {
+                    "revenue": 40_000_000_000,
+                    "ebitda": 8_000_000_000,
+                    "net_profit": 4_000_000_000,
+                },
             },
             "balance_sheet": {
                 "FY22": {
@@ -205,8 +231,8 @@ def test_builder_parses_annual_and_quarterly_yfinance_statement_bundle():
     statements = "\n\n".join(
         [
             "# Financial statement frequency: annual\n"
-            ",2023-12-31,2024-12-31,2025-12-31\n"
-            "Total Revenue,120000000000,132000000000,150000000000",
+            + ",2023-12-31,2024-12-31,2025-12-31\n"
+            + "Total Revenue,120000000000,132000000000,150000000000",
             "# Financial statement frequency: quarterly\n,2026-03-31\nTotal Revenue,40000000000",
         ]
     )
@@ -345,7 +371,9 @@ def test_builder_uses_last_close_on_or_before_analysis_date_for_dividend_yield()
         ticker="TEST",
         analysis_date="2026-01-15",
         dividends={"FY25": {"dividend_per_share": 1}},
-        price_data=("Date,Open,High,Low,Close,Volume\n2025-12-31,9,11,8,10,100\n2026-01-14,18,22,17,20,200"),
+        price_data=(
+            "Date,Open,High,Low,Close,Volume\n2025-12-31,9,11,8,10,100\n2026-01-14,18,22,17,20,200"
+        ),
     )
 
     assert _rows(highlights)["dividend_yield"].values["FY25"].value == 10
@@ -374,25 +402,25 @@ def test_statement_parser_reads_expanded_yfinance_aliases_and_profile_shares():
         periods=resolve_financial_highlight_periods("2026-01-15"),
         income_statement=(
             "# Financial statement frequency: annual\n"
-            ",2025-12-31\n"
-            "Operating Revenue,1000\n"
-            "Net Income Continuous Operations,100\n"
-            "Reported EPS,2"
+            + ",2025-12-31\n"
+            + "Operating Revenue,1000\n"
+            + "Net Income Continuous Operations,100\n"
+            + "Reported EPS,2"
         ),
         balance_sheet=(
             "# Financial statement frequency: annual\n"
-            ",2025-12-31\n"
-            "Total Equity Gross Minority Interest,500\n"
-            "Long Term Debt And Capital Lease Obligation,200\n"
-            "Cash Financial,80\n"
-            "Total Current Liabilities,100\n"
-            "Common Stock Shares Outstanding,50"
+            + ",2025-12-31\n"
+            + "Total Equity Gross Minority Interest,500\n"
+            + "Long Term Debt And Capital Lease Obligation,200\n"
+            + "Cash Financial,80\n"
+            + "Total Current Liabilities,100\n"
+            + "Common Stock Shares Outstanding,50"
         ),
         cashflow=(
             "# Financial statement frequency: annual\n"
-            ",2025-12-31\n"
-            "Total Cash From Operating Activities,160\n"
-            "Cash Dividends Paid Direct,-30"
+            + ",2025-12-31\n"
+            + "Total Cash From Operating Activities,160\n"
+            + "Cash Dividends Paid Direct,-30"
         ),
     )
     period = normalized["periods"]["FY25"]
@@ -417,13 +445,7 @@ def test_builder_maps_dividend_series_and_reference_prices_per_period():
             "2023-08-01": 2.0,
             "2026-03-01": 1.5,
         },
-        price_data=(
-            "Date,Close\n"
-            "2023-12-29,30\n"
-            "2025-12-31,50\n"
-            "2026-03-28,55\n"
-            "2026-04-01,99"
-        ),
+        price_data=("Date,Close\n2023-12-29,30\n2025-12-31,50\n2026-03-28,55\n2026-04-01,99"),
     )
     rows = _rows(highlights)
 

@@ -4,7 +4,12 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from .config import get_config
-from .finnhub_common import FinnhubUnavailableError, handle_finnhub_error, make_api_request, unix_to_iso_datetime
+from .finnhub_common import (
+    FinnhubUnavailableError,
+    handle_finnhub_error,
+    make_api_request,
+    unix_to_iso_datetime,
+)
 from .news_aggregator import deduplicate_news as aggregate_deduplicate_news
 from .news_aggregator import rank_news
 
@@ -96,21 +101,29 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
         )
         if not isinstance(payload, list):
             raise FinnhubUnavailableError("Company news response is not a list.")
-        items = [normalize_news_item(item, ticker=ticker) for item in payload if isinstance(item, dict)]
+        items = [
+            normalize_news_item(item, ticker=ticker) for item in payload if isinstance(item, dict)
+        ]
         items = rank_news(deduplicate_news(items), ticker=ticker)[: _limit(10)]
         return _format_items(items, ticker, start_date, end_date)
     except Exception as exc:
-        return handle_finnhub_error(f"company news for {ticker}", exc, fallback_next="alpha_vantage")
+        return handle_finnhub_error(
+            f"company news for {ticker}", exc, fallback_next="alpha_vantage"
+        )
 
 
-def get_global_news(curr_date: str, look_back_days: int = 7, limit: int = 10, category: str = "general") -> str:
+def get_global_news(
+    curr_date: str, look_back_days: int = 7, limit: int = 10, category: str = "general"
+) -> str:
     try:
         curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
         start_date = (curr_dt - timedelta(days=int(look_back_days))).strftime("%Y-%m-%d")
         payload = make_api_request("/news", {"category": category}, feature_key="enable_news")
         if not isinstance(payload, list):
             raise FinnhubUnavailableError("Global news response is not a list.")
-        items = [normalize_news_item(item, ticker=None) for item in payload if isinstance(item, dict)]
+        items = [
+            normalize_news_item(item, ticker=None) for item in payload if isinstance(item, dict)
+        ]
         items = rank_news(deduplicate_news(items), ticker=None)[: max(1, int(limit))]
         return _format_items(items, "global markets", start_date, curr_date)
     except Exception as exc:

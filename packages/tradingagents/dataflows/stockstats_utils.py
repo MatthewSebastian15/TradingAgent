@@ -8,21 +8,25 @@ from typing import Annotated
 
 import pandas as pd
 from dateutil.relativedelta import relativedelta
+
 try:
     from stockstats import wrap
 except ImportError:  # pragma: no cover - dependency may be absent before install
+
     def wrap(data):
         return data
+
 
 try:
     from yfinance.exceptions import YFRateLimitError
 except ImportError:  # pragma: no cover - dependency may be absent before install
+
     class YFRateLimitError(Exception):
         pass
 
+
 from tradingagents.utils_resilience import call_with_timeout
 from tradingagents.yfinance_runtime import yf
-
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +47,9 @@ try:  # requests is a direct dependency, but keep import defensive for packaging
         ]
     )
 except ImportError:  # pragma: no cover - dependency absence only
-    logger.warning("requests exception classes are unavailable for Yahoo Finance retry mapping", exc_info=True)
+    logger.warning(
+        "requests exception classes are unavailable for Yahoo Finance retry mapping", exc_info=True
+    )
 
 try:  # yfinance may surface curl_cffi request exceptions on newer versions.
     from curl_cffi.requests import exceptions as curl_exceptions
@@ -58,7 +64,9 @@ try:  # yfinance may surface curl_cffi request exceptions on newer versions.
         if isinstance(error_cls, type) and issubclass(error_cls, BaseException)
     )
 except ImportError:  # pragma: no cover - optional dependency absence only
-    logger.warning("curl_cffi exception classes are unavailable for Yahoo Finance retry mapping", exc_info=True)
+    logger.warning(
+        "curl_cffi exception classes are unavailable for Yahoo Finance retry mapping", exc_info=True
+    )
 
 _RETRYABLE_YF_EXCEPTIONS = tuple(dict.fromkeys(_retryable_yf_errors))
 
@@ -76,13 +84,19 @@ def _env_float(name: str, default: float, *, min_value: float = 0.0) -> float:
 
 _YFINANCE_CALL_TIMEOUT_SECONDS = _env_float("YFINANCE_CALL_TIMEOUT_SECONDS", 20.0, min_value=1.0)
 _YFINANCE_TOTAL_TIMEOUT_SECONDS = _env_float("YFINANCE_TOTAL_TIMEOUT_SECONDS", 45.0, min_value=1.0)
-_YFINANCE_RETRY_MAX_DELAY_SECONDS = _env_float("YFINANCE_RETRY_MAX_DELAY_SECONDS", 8.0, min_value=0.0)
+_YFINANCE_RETRY_MAX_DELAY_SECONDS = _env_float(
+    "YFINANCE_RETRY_MAX_DELAY_SECONDS", 8.0, min_value=0.0
+)
 
 
 def yf_deadline(total_timeout_seconds: float | None = None) -> float:
     """Return a shared deadline for one Yahoo Finance provider attempt chain."""
 
-    budget = _YFINANCE_TOTAL_TIMEOUT_SECONDS if total_timeout_seconds is None else max(1.0, total_timeout_seconds)
+    budget = (
+        _YFINANCE_TOTAL_TIMEOUT_SECONDS
+        if total_timeout_seconds is None
+        else max(1.0, total_timeout_seconds)
+    )
     return time.monotonic() + budget
 
 
@@ -114,7 +128,9 @@ def yf_retry(
     those transient failures; other exceptions still propagate immediately.
     """
 
-    call_timeout = _YFINANCE_CALL_TIMEOUT_SECONDS if timeout_seconds is None else max(1.0, timeout_seconds)
+    call_timeout = (
+        _YFINANCE_CALL_TIMEOUT_SECONDS if timeout_seconds is None else max(1.0, timeout_seconds)
+    )
     deadline = yf_deadline() if deadline is None else deadline
 
     for attempt in range(max_retries + 1):
@@ -147,7 +163,7 @@ def yf_retry(
 
 
 def _clean_dataframe(data: pd.DataFrame) -> pd.DataFrame:
-    """Normalize a stock DataFrame for stockstats: parse dates, drop invalid rows, fill price gaps."""
+    "Normalize a stock DataFrame for stockstats: parse dates, drop invalid rows, fill price gaps."
     data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
     data = data.dropna(subset=["Date"])
 
@@ -231,7 +247,9 @@ class StockstatsUtils:
     @staticmethod
     def get_stock_stats(
         symbol: Annotated[str, "ticker symbol for the company"],
-        indicator: Annotated[str, "quantitative indicators based off of the stock data for the company"],
+        indicator: Annotated[
+            str, "quantitative indicators based off of the stock data for the company"
+        ],
         curr_date: Annotated[str, "curr date for retrieving stock price data, YYYY-mm-dd"],
     ):
         data = load_ohlcv(symbol, curr_date)

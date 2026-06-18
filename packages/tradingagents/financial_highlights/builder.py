@@ -54,7 +54,9 @@ def build_financial_highlights(
             unit=str(metadata["scale_label"]),
             as_of=parse_analysis_date(analysis_date).isoformat(),
             status="reported" if market_cap is not None else "unavailable",
-            source_vendor=(profile.get("data_quality") or {}).get("field_sources", {}).get("market_cap"),
+            source_vendor=(profile.get("data_quality") or {})
+            .get("field_sources", {})
+            .get("market_cap"),
             source_field="market_cap",
         )
     ]
@@ -73,10 +75,17 @@ def build_financial_highlights(
         rows=rows,
         notes=[
             "Periods start from FY23 and extend dynamically based on the analysis date quarter.",
-            "Older historical periods remain visible even when vendor data is unavailable; missing values are shown as -.",
-            f"Amount figures are displayed in {metadata['scale']}s unless the row unit states otherwise.",
+            (
+                "Older historical periods remain visible even when vendor data is unavailable; "
+                + "missing values are shown as -."
+            ),
+            f"Amount figures are displayed in {metadata['scale']}s unless the row unit states "
+            "otherwise.",
             "Percentage values are displayed with the % symbol.",
-            "Market Cap is shown as a point-in-time snapshot unless historical period-end market cap is available.",
+            (
+                "Market Cap is shown as a point-in-time snapshot unless historical period-end "
+                + "market cap is available."
+            ),
             "Unavailable values are shown as -.",
         ],
         data_quality=data_quality,

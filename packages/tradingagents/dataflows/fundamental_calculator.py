@@ -6,7 +6,12 @@ from dataclasses import asdict, dataclass
 from dataclasses import field as dataclass_field
 from typing import Any
 
-from .financial_rows import FINANCIAL_ROW_FIELDS, GENERAL_METRICS, FinancialRow, metrics_profile_for_sector
+from .financial_rows import (
+    FINANCIAL_ROW_FIELDS,
+    GENERAL_METRICS,
+    FinancialRow,
+    metrics_profile_for_sector,
+)
 
 
 @dataclass
@@ -99,13 +104,17 @@ def calculate_margin(numerator: float | int | None, revenue: float | int | None)
     return safe_div(numerator, revenue)
 
 
-def calculate_fcf(operating_cash_flow: float | int | None, capex: float | int | None) -> float | None:
+def calculate_fcf(
+    operating_cash_flow: float | int | None, capex: float | int | None
+) -> float | None:
     if operating_cash_flow is None or capex is None:
         return None
     return float(operating_cash_flow) - float(capex)
 
 
-def calculate_cfo_to_net_income(operating_cash_flow: float | int | None, net_profit: float | int | None) -> float | None:
+def calculate_cfo_to_net_income(
+    operating_cash_flow: float | int | None, net_profit: float | int | None
+) -> float | None:
     return safe_div(operating_cash_flow, net_profit)
 
 
@@ -138,10 +147,16 @@ def _latest_row(rows: list[FinancialRow]) -> FinancialRow | None:
 
 
 def _previous_comparable(rows: list[FinancialRow], current: FinancialRow) -> FinancialRow | None:
-    comparable = [row for row in rows if row is not current and row.period_type == current.period_type]
+    comparable = [
+        row for row in rows if row is not current and row.period_type == current.period_type
+    ]
     if not comparable:
         return None
-    comparable = [row for row in comparable if str(row.as_of_date or row.period) < str(current.as_of_date or current.period)]
+    comparable = [
+        row
+        for row in comparable
+        if str(row.as_of_date or row.period) < str(current.as_of_date or current.period)
+    ]
     return sorted(comparable, key=_row_sort_key)[-1] if comparable else None
 
 
@@ -154,7 +169,9 @@ def _append_unavailable(metrics: FundamentalMetrics, field_name: str) -> None:
         metrics.unavailable_fields.append(field_name)
 
 
-def _set_metric_or_unavailable(metrics: FundamentalMetrics, field_name: str, value: float | None) -> None:
+def _set_metric_or_unavailable(
+    metrics: FundamentalMetrics, field_name: str, value: float | None
+) -> None:
     setattr(metrics, field_name, value)
     if value is None:
         _append_unavailable(metrics, field_name)
@@ -193,27 +210,41 @@ def calculate_fundamental_metrics(
 
     if market_rule in {"ETF", "FUND", "CRYPTO"}:
         metrics.unavailable_fields.extend(OPERATING_FINANCIAL_METRICS)
-        metrics.warnings.append(f"{market_rule} does not use operating financial statement metrics.")
+        metrics.warnings.append(
+            f"{market_rule} does not use operating financial statement metrics."
+        )
         return metrics
     if current is None:
         metrics.unavailable_fields.extend(OPERATING_FINANCIAL_METRICS)
         metrics.warnings.append("No normalized financial rows available.")
         return metrics
 
-    _set_metric_or_unavailable(metrics, "roe", _percent(safe_divide(current.net_profit, current.equity)))
-    _set_metric_or_unavailable(metrics, "roa", _percent(safe_divide(current.net_profit, current.total_assets)))
-    _set_metric_or_unavailable(metrics, "npm", _percent(safe_divide(current.net_profit, current.revenue)))
-    _set_metric_or_unavailable(metrics, "gross_margin", _percent(safe_divide(current.gross_profit, current.revenue)))
+    _set_metric_or_unavailable(
+        metrics, "roe", _percent(safe_divide(current.net_profit, current.equity))
+    )
+    _set_metric_or_unavailable(
+        metrics, "roa", _percent(safe_divide(current.net_profit, current.total_assets))
+    )
+    _set_metric_or_unavailable(
+        metrics, "npm", _percent(safe_divide(current.net_profit, current.revenue))
+    )
+    _set_metric_or_unavailable(
+        metrics, "gross_margin", _percent(safe_divide(current.gross_profit, current.revenue))
+    )
 
     der = safe_divide(current.total_debt, current.equity)
     if der is None and current.total_liabilities is not None and current.equity not in (None, 0):
         der = safe_divide(current.total_liabilities, current.equity)
         if der is not None:
             metrics.estimated_fields.append("der")
-            metrics.warnings.append("DER uses total_liabilities / equity because total_debt is unavailable.")
+            metrics.warnings.append(
+                "DER uses total_liabilities / equity because total_debt is unavailable."
+            )
     _set_metric_or_unavailable(metrics, "der", der)
 
-    _set_metric_or_unavailable(metrics, "current_ratio", safe_divide(current.current_assets, current.current_liabilities))
+    _set_metric_or_unavailable(
+        metrics, "current_ratio", safe_divide(current.current_assets, current.current_liabilities)
+    )
 
     if sector == "bank":
         metrics.der = None
@@ -229,14 +260,20 @@ def calculate_fundamental_metrics(
         )
 
     free_cash_flow = current.free_cash_flow
-    if free_cash_flow is None and current.operating_cash_flow is not None and current.capex is not None:
+    if (
+        free_cash_flow is None
+        and current.operating_cash_flow is not None
+        and current.capex is not None
+    ):
         free_cash_flow = calculate_fcf(current.operating_cash_flow, current.capex)
         metrics.estimated_fields.append("free_cash_flow")
     _set_metric_or_unavailable(metrics, "free_cash_flow", free_cash_flow)
 
     previous = _previous_comparable(row_list, current)
     if previous is not None:
-        _set_metric_or_unavailable(metrics, "revenue_growth_yoy", calculate_growth(current.revenue, previous.revenue))
+        _set_metric_or_unavailable(
+            metrics, "revenue_growth_yoy", calculate_growth(current.revenue, previous.revenue)
+        )
         _set_metric_or_unavailable(
             metrics,
             "net_profit_growth_yoy",
@@ -330,7 +367,9 @@ def build_fundamental_field_quality(
                 }
                 continue
             quality[metric_name] = {
-                "source": "estimated" if estimated else "local_calculation_from_normalized_financials",
+                "source": "estimated"
+                if estimated
+                else "local_calculation_from_normalized_financials",
                 "confidence": "low" if estimated else metrics.source_confidence,
                 "estimated": estimated,
                 "fallback": False,
@@ -341,7 +380,9 @@ def build_fundamental_field_quality(
     return quality
 
 
-def _calculated(value: float | None, formula: str, warnings: list[str] | None = None) -> dict[str, Any]:
+def _calculated(
+    value: float | None, formula: str, warnings: list[str] | None = None
+) -> dict[str, Any]:
     return {
         "value": value,
         "status": "calculated" if value is not None else "source_unavailable",
@@ -360,14 +401,22 @@ def calculate_derived_fundamentals(period_rows: list[dict[str, Any]]) -> list[di
     more backwards-compatible schema change.
     """
     rows = [dict(row) for row in (period_rows or [])]
-    rows.sort(key=lambda row: str((row.get("period") or {}).get("period_end") if isinstance(row.get("period"), dict) else row.get("period_end") or row.get("period") or ""))
+    rows.sort(
+        key=lambda row: str(
+            (row.get("period") or {}).get("period_end")
+            if isinstance(row.get("period"), dict)
+            else row.get("period_end") or row.get("period") or ""
+        )
+    )
 
     for index, row in enumerate(rows):
         prev = rows[index - 1] if index > 0 else None
         revenue = get_normalized_value(row, "revenue")
         ebitda = get_normalized_value(row, "ebitda")
         net_profit = get_normalized_value(row, "net_profit")
-        operating_cash_flow = _first_normalized_value(row, "operating_cash_flow", "cash_from_operations")
+        operating_cash_flow = _first_normalized_value(
+            row, "operating_cash_flow", "cash_from_operations"
+        )
         capex = _first_normalized_value(row, "capex", "capital_expenditure")
         total_debt = _first_normalized_value(row, "total_debt", "debt")
         cash = _first_normalized_value(row, "cash", "cash_and_equivalents")
@@ -398,7 +447,9 @@ def calculate_derived_fundamentals(period_rows: list[dict[str, Any]]) -> list[di
 
         if prev:
             revenue_growth = calculate_growth(revenue, get_normalized_value(prev, "revenue"))
-            net_profit_growth = calculate_growth(net_profit, get_normalized_value(prev, "net_profit"))
+            net_profit_growth = calculate_growth(
+                net_profit, get_normalized_value(prev, "net_profit")
+            )
             row["revenue_growth_percent"] = revenue_growth
             row["net_profit_growth_percent"] = net_profit_growth
             derived_metrics["revenue_growth_percent"] = _calculated(
@@ -414,8 +465,12 @@ def calculate_derived_fundamentals(period_rows: list[dict[str, Any]]) -> list[di
         else:
             row.setdefault("revenue_growth_percent", None)
             row.setdefault("net_profit_growth_percent", None)
-            derived_metrics["revenue_growth_percent"] = _calculated(None, "requires previous revenue", ["previous period unavailable"])
-            derived_metrics["net_profit_growth_percent"] = _calculated(None, "requires previous net profit", ["previous period unavailable"])
+            derived_metrics["revenue_growth_percent"] = _calculated(
+                None, "requires previous revenue", ["previous period unavailable"]
+            )
+            derived_metrics["net_profit_growth_percent"] = _calculated(
+                None, "requires previous net profit", ["previous period unavailable"]
+            )
 
         row["derived_metrics"] = derived_metrics
 

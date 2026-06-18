@@ -27,7 +27,9 @@ def test_field_quality_marks_primary_fallback_estimated_and_unavailable_fields()
         source_confidence="high",
         as_of_date="2024-12-31",
     )
-    estimated_row, gap_report = estimate_financial_row_fields(row, fallback_fields=["enterprise_value"])
+    estimated_row, gap_report = estimate_financial_row_fields(
+        row, fallback_fields=["enterprise_value"]
+    )
     metrics = calculate_market_aware_metrics([estimated_row], market="US")
     quality = build_fundamental_field_quality(
         estimated_row,
@@ -48,7 +50,12 @@ def test_field_quality_marks_primary_fallback_estimated_and_unavailable_fields()
 
 def test_serializer_exposes_quality_sector_gap_and_metadata_without_breaking_legacy_fields():
     field_quality = {
-        "revenue": {"source": "yfinance", "confidence": "high", "estimated": False, "fallback": False},
+        "revenue": {
+            "source": "yfinance",
+            "confidence": "high",
+            "estimated": False,
+            "fallback": False,
+        },
         "enterprise_value": {
             "source": "finnhub",
             "confidence": "medium",

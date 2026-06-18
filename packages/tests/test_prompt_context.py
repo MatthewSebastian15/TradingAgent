@@ -24,4 +24,3 @@ def test_build_prompt_context_has_expected_sections(sample_collected_data):
     assert context["market"]["last_close"] == 169.0
     assert context["news_social"]["top_related_news"]
     assert context["fundamentals"]["financial_highlights"]["available"] is True
-

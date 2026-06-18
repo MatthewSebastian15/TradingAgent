@@ -34,7 +34,9 @@ class MarketAuxProvider(BaseNewsProvider):
             "filter_entities": "true",
             "must_have_entities": "true",
             "language": "id,en",
-            "published_after": (end - timedelta(days=max(1, int(window_days)))).strftime("%Y-%m-%dT%H:%M:%S"),
+            "published_after": (end - timedelta(days=max(1, int(window_days)))).strftime(
+                "%Y-%m-%dT%H:%M:%S"
+            ),
             "published_before": end.strftime("%Y-%m-%dT%H:%M:%S"),
             "limit": max(1, int(limit)),
         }
@@ -51,7 +53,9 @@ class MarketAuxProvider(BaseNewsProvider):
         status = "unavailable"
 
         for strategy, params, market_context_only in query_attempts:
-            payload, attempt = self._request_json(params, strategy=strategy, include_raw=include_raw)
+            payload, attempt = self._request_json(
+                params, strategy=strategy, include_raw=include_raw
+            )
             attempts.append(attempt)
             status = str(attempt.get("status") or "unknown_error")
             if payload is not None:
@@ -96,8 +100,14 @@ class MarketAuxProvider(BaseNewsProvider):
                 or not str(item.get("url") or "").strip()
             ):
                 continue
-            entities = [_normalize_entity(entity) for entity in item.get("entities", []) if isinstance(entity, dict)]
-            scores = [entity.sentiment_score for entity in entities if entity.sentiment_score is not None]
+            entities = [
+                _normalize_entity(entity)
+                for entity in item.get("entities", [])
+                if isinstance(entity, dict)
+            ]
+            scores = [
+                entity.sentiment_score for entity in entities if entity.sentiment_score is not None
+            ]
             sentiment_score = sum(scores) / len(scores) if scores else None
             try:
                 article = NormalizedNewsArticle(
@@ -144,7 +154,9 @@ def _normalize_entity(entity: dict[str, Any]) -> NewsEntity:
 def _as_of_datetime(value: str | None) -> datetime:
     if value:
         try:
-            return datetime.strptime(value[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+            return datetime.strptime(value[:10], "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            ) + timedelta(days=1)
         except ValueError:
             pass
     return datetime.now(timezone.utc)
@@ -158,14 +170,22 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
         max_retries=int(config.get("vendor_max_retries", 2)),
     )
     profile = resolve_news_ticker(ticker)
-    window_days = max(1, (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days)
+    window_days = max(
+        1,
+        (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days,
+    )
     result = provider.fetch_news(
-        profile, as_of_date=end_date, window_days=window_days, limit=int(config.get("max_articles_per_provider", 10))
+        profile,
+        as_of_date=end_date,
+        window_days=window_days,
+        limit=int(config.get("max_articles_per_provider", 10)),
     )
     return _format_provider_result(result, ticker, start_date, end_date)
 
 
-def _format_provider_result(result: ProviderFetchResult, ticker: str, start_date: str, end_date: str) -> str:
+def _format_provider_result(
+    result: ProviderFetchResult, ticker: str, start_date: str, end_date: str
+) -> str:
     if not result.articles:
         return f"No news found for {ticker} from MarketAux between {start_date} and {end_date}"
     lines = [f"## MarketAux News for {ticker}, from {start_date} to {end_date}:", ""]

@@ -31,15 +31,51 @@ def _article(
 def _high_impact_articles(ticker: str = "GOTO.JK") -> list[dict[str, Any]]:
     base = ticker.removesuffix(".JK")
     rows = [
-        ("earnings", f"{base} reports laba bersih and revenue improvement", "Kinerja keuangan membaik."),
-        ("dividend", f"{base} announces dividend cum date schedule", "Pembagian dividen baru diumumkan."),
-        ("corporate_action", f"{base} approves rights issue and private placement plan", "Aksi korporasi material."),
-        ("index", f"FTSE removes {base} from Indonesia index", "Removed due to free float and liquidity criteria."),
-        ("regulatory", f"OJK reviews {base} disclosure after market suspension", "Regulatory review is material."),
-        ("management", f"{base} appoints new chief financial officer", "Pergantian manajemen diumumkan."),
-        ("shareholder", f"{base} discloses pemegang saham pengendali update", "Kepemilikan saham berubah."),
-        ("debt_rating", f"Rating agency upgrades {base} bond outlook", "Peringkat obligasi berubah."),
-        ("major_contract", f"{base} signs major project partnership contract", "Kontrak proyek bernilai besar."),
+        (
+            "earnings",
+            f"{base} reports laba bersih and revenue improvement",
+            "Kinerja keuangan membaik.",
+        ),
+        (
+            "dividend",
+            f"{base} announces dividend cum date schedule",
+            "Pembagian dividen baru diumumkan.",
+        ),
+        (
+            "corporate_action",
+            f"{base} approves rights issue and private placement plan",
+            "Aksi korporasi material.",
+        ),
+        (
+            "index",
+            f"FTSE removes {base} from Indonesia index",
+            "Removed due to free float and liquidity criteria.",
+        ),
+        (
+            "regulatory",
+            f"OJK reviews {base} disclosure after market suspension",
+            "Regulatory review is material.",
+        ),
+        (
+            "management",
+            f"{base} appoints new chief financial officer",
+            "Pergantian manajemen diumumkan.",
+        ),
+        (
+            "shareholder",
+            f"{base} discloses pemegang saham pengendali update",
+            "Kepemilikan saham berubah.",
+        ),
+        (
+            "debt_rating",
+            f"Rating agency upgrades {base} bond outlook",
+            "Peringkat obligasi berubah.",
+        ),
+        (
+            "major_contract",
+            f"{base} signs major project partnership contract",
+            "Kontrak proyek bernilai besar.",
+        ),
     ]
     return [
         _article(i, title=title, summary=summary, event_type=event_type, ticker=ticker)

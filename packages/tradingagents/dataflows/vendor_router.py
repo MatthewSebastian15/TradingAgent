@@ -74,7 +74,10 @@ class VendorAttemptRecorder:
 
     def get_detailed_summary(self) -> dict[str, list[dict[str, Any]]]:
         with self._lock:
-            return {key: [attempt.to_dict() for attempt in attempts] for key, attempts in self._attempts.items()}
+            return {
+                key: [attempt.to_dict() for attempt in attempts]
+                for key, attempts in self._attempts.items()
+            }
 
 
 _RECORDERS: dict[str, VendorAttemptRecorder] = {}

@@ -30,7 +30,9 @@ class NormalizedChatOpenAI(ChatOpenAI):
     def invoke(self, input, config=None, **kwargs):
         cfg = get_config()
         provider = getattr(self, "provider", "openai")
-        service_name = f"llm:{provider}:{getattr(self, 'model_name', getattr(self, 'model', 'unknown'))}"
+        service_name = (
+            f"llm:{provider}:{getattr(self, 'model_name', getattr(self, 'model', 'unknown'))}"
+        )
 
         def do_call():
             return normalize_content(ChatOpenAI.invoke(self, input, config, **kwargs))
@@ -103,7 +105,9 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
             if isinstance(response, dict)
             else response.model_dump(exclude={"choices": {"__all__": {"message": {"parsed"}}}})
         )
-        for generation, choice in zip(chat_result.generations, response_dict.get("choices", []), strict=False):
+        for generation, choice in zip(
+            chat_result.generations, response_dict.get("choices", []), strict=False
+        ):
             reasoning = choice.get("message", {}).get("reasoning_content")
             if reasoning is not None:
                 generation.message.additional_kwargs["reasoning_content"] = reasoning
@@ -113,8 +117,8 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
         if self.model_name in DEEPSEEK_STRUCTURED_OUTPUT_UNSUPPORTED_MODELS:
             raise NotImplementedError(
                 f"{self.model_name} does not support tool_choice; structured "
-                "output is unavailable. Agent factories fall back to "
-                "free-text generation automatically."
+                + "output is unavailable. Agent factories fall back to "
+                + "free-text generation automatically."
             )
         return super().with_structured_output(schema, method=method, **kwargs)
 
@@ -169,7 +173,9 @@ class OpenAIClient(BaseLLMClient):
             default_base, api_key_envs = _PROVIDER_CONFIG[self.provider]
             llm_kwargs["base_url"] = self.base_url or default_base
             if api_key_envs:
-                api_key = next((os.environ.get(name) for name in api_key_envs if os.environ.get(name)), None)
+                api_key = next(
+                    (os.environ.get(name) for name in api_key_envs if os.environ.get(name)), None
+                )
                 if api_key:
                     llm_kwargs["api_key"] = api_key
             else:

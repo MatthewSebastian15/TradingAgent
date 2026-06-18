@@ -40,10 +40,14 @@ class GoogleNewsLightProvider(BaseNewsProvider):
             "sort_by": "most_recent",
             "filter": "1",
         }
-        payload, attempt = self._request_json(params, strategy="company_query", include_raw=include_raw)
+        payload, attempt = self._request_json(
+            params, strategy="company_query", include_raw=include_raw
+        )
         status = str(attempt.get("status") or "unknown_error")
         articles = (
-            self._normalize_response(payload, ticker_profile, as_of_datetime=end, include_raw=include_raw)
+            self._normalize_response(
+                payload, ticker_profile, as_of_datetime=end, include_raw=include_raw
+            )
             if payload is not None
             else []
         )
@@ -103,7 +107,9 @@ class GoogleNewsLightProvider(BaseNewsProvider):
 def _build_query(ticker_profile: dict[str, Any]) -> str:
     aliases = [str(item).strip() for item in ticker_profile.get("aliases", []) if str(item).strip()]
     company_name = str(ticker_profile.get("company_name") or "").strip()
-    short_ticker = str(ticker_profile.get("short_ticker") or ticker_profile.get("ticker") or "").strip()
+    short_ticker = str(
+        ticker_profile.get("short_ticker") or ticker_profile.get("ticker") or ""
+    ).strip()
     if ticker_profile.get("country") == "id":
         terms = list(dict.fromkeys([company_name, short_ticker, *aliases]))[:4]
         quoted = " OR ".join(f'"{term}"' for term in terms if len(term) >= 3)
@@ -127,7 +133,9 @@ def _time_period(window_days: int) -> str:
 def _as_of_datetime(value: str | None) -> datetime:
     if value:
         try:
-            return datetime.strptime(value[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+            return datetime.strptime(value[:10], "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            ) + timedelta(days=1)
         except ValueError:
             pass
     return datetime.now(timezone.utc)
@@ -142,7 +150,10 @@ def _parse_relative_date(value: Any, now: datetime) -> datetime | None:
     except ValueError:
         pass
     text = raw.lower()
-    match = re.match(r"^(\d+)\s+(minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)\s+ago$", text)
+    match = re.match(
+        r"^(\d+)\s+(minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)\s+ago$",
+        text,
+    )
     if match:
         amount = int(match.group(1))
         unit = match.group(2)
@@ -189,16 +200,26 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
         max_retries=int(config.get("vendor_max_retries", 2)),
     )
     profile = resolve_news_ticker(ticker)
-    window_days = max(1, (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days)
+    window_days = max(
+        1,
+        (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days,
+    )
     result = provider.fetch_news(
-        profile, as_of_date=end_date, window_days=window_days, limit=int(config.get("max_articles_per_provider", 10))
+        profile,
+        as_of_date=end_date,
+        window_days=window_days,
+        limit=int(config.get("max_articles_per_provider", 10)),
     )
     return _format_provider_result(result, ticker, start_date, end_date)
 
 
-def _format_provider_result(result: ProviderFetchResult, ticker: str, start_date: str, end_date: str) -> str:
+def _format_provider_result(
+    result: ProviderFetchResult, ticker: str, start_date: str, end_date: str
+) -> str:
     if not result.articles:
-        return f"No news found for {ticker} from Google News Light between {start_date} and {end_date}"
+        return (
+            f"No news found for {ticker} from Google News Light between {start_date} and {end_date}"
+        )
     lines = [f"## Google News Light News for {ticker}, from {start_date} to {end_date}:", ""]
     for article in result.articles:
         lines.append(f"### {article.title} (source: {article.source or 'Unknown'})")

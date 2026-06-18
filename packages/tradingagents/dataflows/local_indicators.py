@@ -40,7 +40,9 @@ def calculate_local_indicators(price_df: pd.DataFrame) -> dict[str, Any]:
         "available": True,
         "source": "local_ohlcv",
         "close_50_sma": _to_float(close.rolling(50).mean().iloc[-1]) if len(close) >= 50 else None,
-        "close_200_sma": _to_float(close.rolling(200).mean().iloc[-1]) if len(close) >= 200 else None,
+        "close_200_sma": _to_float(close.rolling(200).mean().iloc[-1])
+        if len(close) >= 200
+        else None,
     }
 
     delta = close.diff()
@@ -86,7 +88,9 @@ def calculate_local_indicators(price_df: pd.DataFrame) -> dict[str, Any]:
         money_flow = typical_price * volume
         positive_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
         negative_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
-        money_ratio = positive_flow.rolling(14).sum() / negative_flow.rolling(14).sum().replace(0, pd.NA)
+        money_ratio = positive_flow.rolling(14).sum() / negative_flow.rolling(14).sum().replace(
+            0, pd.NA
+        )
         mfi = 100 - (100 / (1 + money_ratio))
         result["mfi"] = _to_float(mfi.iloc[-1])
     else:

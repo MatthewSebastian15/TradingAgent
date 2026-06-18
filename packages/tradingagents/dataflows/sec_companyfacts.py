@@ -10,7 +10,7 @@ import requests
 from .config import get_config
 
 TICKER_URL = "https://www.sec.gov/files/company_tickers.json"
-FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+FACTS_URL_PREFIX = "https://data.sec.gov/api/xbrl/companyfacts/CIK"
 
 FIELD_CONCEPTS = {
     "income_statement": {
@@ -27,21 +27,37 @@ FIELD_CONCEPTS = {
     "balance_sheet": {
         "assets": ("Assets",),
         "total_liabilities": ("Liabilities",),
-        "equity": ("StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"),
-        "cash": ("CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"),
-        "debt": ("DebtCurrent", "LongTermDebtCurrent", "LongTermDebtNoncurrent", "LongTermDebtAndFinanceLeaseObligations"),
+        "equity": (
+            "StockholdersEquity",
+            "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+        ),
+        "cash": (
+            "CashAndCashEquivalentsAtCarryingValue",
+            "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+        ),
+        "debt": (
+            "DebtCurrent",
+            "LongTermDebtCurrent",
+            "LongTermDebtNoncurrent",
+            "LongTermDebtAndFinanceLeaseObligations",
+        ),
         "current_liabilities": ("LiabilitiesCurrent",),
     },
     "cashflow": {
         "operating_cash_flow": ("NetCashProvidedByUsedInOperatingActivities",),
-        "capex": ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"),
+        "capex": (
+            "PaymentsToAcquirePropertyPlantAndEquipment",
+            "PaymentsToAcquireProductiveAssets",
+        ),
         "dividend_paid": ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock"),
     },
 }
 
 
 def _headers() -> dict[str, str]:
-    user_agent = os.getenv("SEC_USER_AGENT", "").strip() or "TradingAgents/1.0 tradingagents@example.com"
+    user_agent = (
+        os.getenv("SEC_USER_AGENT", "").strip() or "TradingAgents/1.0 tradingagents@example.com"
+    )
     return {
         "User-Agent": user_agent,
         "Accept-Encoding": "gzip, deflate",
@@ -80,7 +96,7 @@ def _ticker_map() -> dict[str, str]:
 
 @lru_cache(maxsize=512)
 def _company_facts(cik: str) -> dict[str, Any]:
-    return _request_json(FACTS_URL.format(cik=str(cik).zfill(10)))
+    return _request_json(f"{FACTS_URL_PREFIX}{str(cik).zfill(10)}.json")
 
 
 def _base_ticker(ticker: str) -> str:
@@ -91,7 +107,9 @@ def _is_blank(value: Any) -> bool:
     return value in (None, "", [], {})
 
 
-def _units_for(concept_payload: dict[str, Any], field_name: str) -> tuple[str, list[dict[str, Any]]] | None:
+def _units_for(
+    concept_payload: dict[str, Any], field_name: str
+) -> tuple[str, list[dict[str, Any]]] | None:
     units = concept_payload.get("units") if isinstance(concept_payload.get("units"), dict) else {}
     candidates = ("USD", "shares", "USD/shares", "pure")
     if field_name == "eps":
@@ -143,7 +161,9 @@ def _field_value(value: Any, field_name: str) -> float | int | None:
     return int(number) if number.is_integer() else number
 
 
-def _select_latest(entries: list[dict[str, Any]], freq: str, curr_date: str | None) -> dict[str, dict[str, Any]]:
+def _select_latest(
+    entries: list[dict[str, Any]], freq: str, curr_date: str | None
+) -> dict[str, dict[str, Any]]:
     selected: dict[str, dict[str, Any]] = {}
     for entry in entries:
         if not _entry_allowed(entry, freq, curr_date):
@@ -167,7 +187,9 @@ def _period_end(values: dict[str, Any]) -> str:
     return max(dates) if dates else ""
 
 
-def _limit_periods(periods: dict[str, dict[str, Any]], max_periods: int = 8) -> dict[str, dict[str, Any]]:
+def _limit_periods(
+    periods: dict[str, dict[str, Any]], max_periods: int = 8
+) -> dict[str, dict[str, Any]]:
     ordered = sorted(periods.items(), key=lambda item: (_period_end(item[1]), item[0]))
     return dict(ordered[-max_periods:])
 
@@ -178,7 +200,7 @@ def _statement_payload(ticker: str, statement: str, freq: str, curr_date: str | 
     if not cik:
         return f"No SEC CIK mapping found for symbol '{ticker}'"
 
-    facts = ((_company_facts(cik).get("facts") or {}).get("us-gaap") or {})
+    facts = (_company_facts(cik).get("facts") or {}).get("us-gaap") or {}
     periods: dict[str, dict[str, Any]] = {}
     normalized_freq = "annual" if str(freq or "").lower().startswith("a") else "quarterly"
 

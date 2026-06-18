@@ -24,7 +24,12 @@ from tradingagents.pipeline_balanced_data import (
     _resolve_current_price_anchor,
 )
 from tradingagents.technical.entry_quality import build_technical_entry
-from tradingagents.utils_resilience import CircuitBreaker, CircuitOpenError, call_with_timeout, get_timeout_stats
+from tradingagents.utils_resilience import (
+    CircuitBreaker,
+    CircuitOpenError,
+    call_with_timeout,
+    get_timeout_stats,
+)
 
 
 def test_llm_budget_records_exhaustion_and_skipped_agents():
@@ -75,7 +80,11 @@ Date,Open,High,Low,Close,Volume
     assert chart["effective_trade_date"] == "2026-05-30"
     assert chart["price_as_of_date"] == "2026-05-30"
     assert chart["fallback_to_last_trade"] is True
-    assert [point["date"] for point in chart["points"]] == ["2026-03-01", "2026-05-18", "2026-05-19"]
+    assert [point["date"] for point in chart["points"]] == [
+        "2026-03-01",
+        "2026-05-18",
+        "2026-05-19",
+    ]
     assert chart["data"] == chart["points"]
     assert chart["points"][0]["adjusted_close"] == 8.5
     assert chart["stats"] == {
@@ -213,7 +222,9 @@ def test_build_technical_entry_calculates_indicators_and_support_resistance():
 
 
 def test_build_technical_entry_handles_insufficient_data():
-    technical = build_technical_entry([{"date": "2026-05-01", "close": 10, "open": 10, "high": 11, "low": 9}])
+    technical = build_technical_entry(
+        [{"date": "2026-05-01", "close": 10, "open": 10, "high": 11, "low": 9}]
+    )
 
     assert technical["available"] is False
     assert technical["entry_quality"] == "N/A"
@@ -311,7 +322,8 @@ This item must be skipped.
             "related_ticker": "BBCA.JK",
             "normalized_url": "https://example.com/bbca-earnings",
             "relevance_reason": (
-                "This article is tagged as earnings news and may affect the analysis context for BBCA.JK."
+                "This article is tagged as earnings news and may affect the analysis context "
+                + "for BBCA.JK."
             ),
         }
     ]
@@ -555,7 +567,9 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
         },
     )
     monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance")
-    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", lambda *args, **kwargs: price_csv)
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS["get_stock_data"], "yfinance", lambda *args, **kwargs: price_csv
+    )
     monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
 
     def fake_retry(func, **kwargs):
@@ -564,7 +578,9 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
 
     monkeypatch.setattr(interface, "call_with_retry", fake_retry)
 
-    assert interface.route_to_vendor("get_stock_data", "AAPL", "2026-05-01", "2026-05-02") == price_csv
+    assert (
+        interface.route_to_vendor("get_stock_data", "AAPL", "2026-05-01", "2026-05-02") == price_csv
+    )
     assert attempts == [1]
 
 
@@ -583,9 +599,13 @@ def test_router_falls_back_when_primary_returns_missing_text(monkeypatch):
             "circuit_breaker_recovery_seconds": 60,
         },
     )
-    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage")
+    monkeypatch.setattr(
+        interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage"
+    )
     monkeypatch.setitem(
-        interface.VENDOR_METHODS["get_news"], "yfinance", lambda *args, **kwargs: "No news found for TEST"
+        interface.VENDOR_METHODS["get_news"],
+        "yfinance",
+        lambda *args, **kwargs: "No news found for TEST",
     )
     monkeypatch.setitem(
         interface.VENDOR_METHODS["get_news"],
@@ -615,9 +635,17 @@ def test_route_to_all_vendors_returns_every_usable_payload(monkeypatch):
             "circuit_breaker_recovery_seconds": 60,
         },
     )
-    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage")
-    monkeypatch.setitem(interface.VENDOR_METHODS["get_news"], "yfinance", lambda *args, **kwargs: "## Yahoo News")
-    monkeypatch.setitem(interface.VENDOR_METHODS["get_news"], "alpha_vantage", lambda *args, **kwargs: "## Alpha News")
+    monkeypatch.setattr(
+        interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage"
+    )
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS["get_news"], "yfinance", lambda *args, **kwargs: "## Yahoo News"
+    )
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS["get_news"],
+        "alpha_vantage",
+        lambda *args, **kwargs: "## Alpha News",
+    )
     monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
     monkeypatch.setattr(interface, "call_with_retry", lambda func, **kwargs: func())
 
@@ -635,7 +663,9 @@ def test_alpha_vantage_stock_normalizes_csv_for_pipeline(monkeypatch):
             "2026-05-14,10,11,9,10.5,1000",
         ]
     )
-    monkeypatch.setattr(alpha_vantage_stock, "_make_api_request", lambda function_name, params: raw_csv)
+    monkeypatch.setattr(
+        alpha_vantage_stock, "_make_api_request", lambda function_name, params: raw_csv
+    )
 
     result = alpha_vantage_stock.get_stock("TEST", "2026-05-14", "2026-05-15")
 
@@ -652,7 +682,7 @@ def test_alpha_vantage_news_formats_feed_and_empty_response(monkeypatch):
         "_make_api_request",
         lambda function_name, params: (
             '{"feed":[{"title":"Astra expands","source":"Example","summary":"Expansion summary",'
-            '"url":"https://example.com/news","time_published":"20260514T120000"}]}'
+            + '"url":"https://example.com/news","time_published":"20260514T120000"}]}'
         ),
     )
 
@@ -662,7 +692,9 @@ def test_alpha_vantage_news_formats_feed_and_empty_response(monkeypatch):
     assert "source: Example" in result
     assert "https://example.com/news" in result
 
-    monkeypatch.setattr(alpha_vantage_news, "_make_api_request", lambda function_name, params: '{"feed":[]}')
+    monkeypatch.setattr(
+        alpha_vantage_news, "_make_api_request", lambda function_name, params: '{"feed":[]}'
+    )
 
     empty = alpha_vantage_news.get_news("ASII.JK", "2026-05-01", "2026-05-15")
 
@@ -796,7 +828,9 @@ def test_router_falls_back_and_does_not_cache_price_ohlcv(monkeypatch):
             "price_max_fallback_days": 7,
         },
     )
-    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage")
+    monkeypatch.setattr(
+        interface, "get_vendor", lambda category, method=None: "yfinance,alpha_vantage"
+    )
 
     def yf_payload(*args, **kwargs):
         calls["yfinance"] += 1

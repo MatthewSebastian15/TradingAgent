@@ -12,7 +12,13 @@ from dateutil.relativedelta import relativedelta
 
 from tradingagents.yfinance_runtime import yf
 
-from .stockstats_utils import StockstatsUtils, filter_financials_by_date, load_ohlcv, yf_deadline, yf_retry
+from .stockstats_utils import (
+    StockstatsUtils,
+    filter_financials_by_date,
+    load_ohlcv,
+    yf_deadline,
+    yf_retry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +131,6 @@ def _get_ticker(symbol: str):
         return ticker_obj
 
 
-
-
 def _currency_for_symbol(symbol: str) -> str:
     normalized = str(symbol or "").upper()
     if normalized.endswith(".JK"):
@@ -227,7 +231,9 @@ def _download_price_history(symbol: str, start_dt: datetime, end_dt: datetime) -
     return _normalize_price_dataframe(data)
 
 
-def _with_start_anchor_row(data: pd.DataFrame, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
+def _with_start_anchor_row(
+    data: pd.DataFrame, start_dt: datetime, end_dt: datetime
+) -> pd.DataFrame:
     """Keep rows through end_dt and prepend last close <= start_dt when needed."""
     if data is None or data.empty:
         return pd.DataFrame()
@@ -249,7 +255,9 @@ def _with_start_anchor_row(data: pd.DataFrame, start_dt: datetime, end_dt: datet
     return window_rows.sort_index()
 
 
-def _last_close_at_or_before(data: pd.DataFrame, cutoff_dt: datetime) -> tuple[float | None, str | None]:
+def _last_close_at_or_before(
+    data: pd.DataFrame, cutoff_dt: datetime
+) -> tuple[float | None, str | None]:
     """Return the last valid close and date at or before cutoff_dt."""
     if data is None or data.empty or "Close" not in data.columns:
         return None, None
@@ -401,7 +409,7 @@ def calculate_volatility(symbol: str, trade_date: str | None = None) -> dict[str
         return metadata
 
 
-def get_YFin_data_online(
+def get_yfin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
@@ -455,23 +463,65 @@ def get_stock_stats_indicators_window(
     # Concise one-line descriptions reduce token usage on every LLM call
     # while still giving the agent enough context to interpret each indicator.
     best_ind_params = {
-        "close_50_sma": "50 SMA: medium-term trend; dynamic support/resistance. Lags price — combine with faster indicators.",
-        "close_200_sma": "200 SMA: long-term benchmark; golden/death cross confirmation. Reacts slowly — use for strategic trend only.",
-        "close_10_ema": "10 EMA: responsive short-term average for momentum shifts. Prone to noise — filter with longer averages.",
-        "macd": "MACD: momentum via EMA difference; watch crossovers and divergence. Confirm in low-volatility markets.",
-        "macds": "MACD Signal: EMA of MACD; crossovers trigger trades. Use as part of a broader strategy.",
-        "macdh": "MACD Histogram: gap between MACD and signal; visualise momentum strength. Can be volatile.",
-        "rsi": "RSI: overbought (>70) / oversold (<30) momentum. In strong trends RSI may stay extreme — cross-check with trend.",
-        "boll": "Bollinger Middle: 20 SMA basis; dynamic benchmark. Combine with upper/lower bands for breakout signals.",
-        "boll_ub": "Bollinger Upper: ~2 std above middle; potential overbought / breakout zone. Confirm with other tools.",
-        "boll_lb": "Bollinger Lower: ~2 std below middle; potential oversold zone. Use extra analysis to avoid false reversals.",
-        "atr": "ATR: average true range; set stop-loss and size positions by current volatility. Reactive — part of risk strategy.",
-        "vwma": "VWMA: volume-weighted moving average; confirm trends with price+volume. Watch for spikes skewing results.",
-        "mfi": "MFI: volume-weighted momentum; overbought (>80) / oversold (<20). Use with RSI/MACD; divergence signals reversals.",
+        ("close_50_sma"): (
+            "50 SMA: medium-term trend; dynamic support/resistance. Lags price \u2014 combine with "
+            + "faster indicators."
+        ),
+        ("close_200_sma"): (
+            "200 SMA: long-term benchmark; golden/death cross confirmation. Reacts slowly "
+            "\u2014 use " + "for strategic trend only."
+        ),
+        ("close_10_ema"): (
+            "10 EMA: responsive short-term average for momentum shifts. Prone to noise "
+            "\u2014 filter " + "with longer averages."
+        ),
+        ("macd"): (
+            "MACD: momentum via EMA difference; watch crossovers and divergence. Confirm in "
+            + "low-volatility markets."
+        ),
+        ("macds"): (
+            "MACD Signal: EMA of MACD; crossovers trigger trades. Use as part of a broader "
+            + "strategy."
+        ),
+        ("macdh"): (
+            "MACD Histogram: gap between MACD and signal; visualise momentum strength. Can be "
+            + "volatile."
+        ),
+        ("rsi"): (
+            "RSI: overbought (>70) / oversold (<30) momentum. In strong trends RSI may stay "
+            + "extreme \u2014 cross-check with trend."
+        ),
+        ("boll"): (
+            "Bollinger Middle: 20 SMA basis; dynamic benchmark. Combine with upper/lower bands "
+            + "for breakout signals."
+        ),
+        ("boll_ub"): (
+            "Bollinger Upper: ~2 std above middle; potential overbought / breakout zone. Confirm "
+            + "with other tools."
+        ),
+        ("boll_lb"): (
+            "Bollinger Lower: ~2 std below middle; potential oversold zone. Use extra analysis "
+            + "to avoid false reversals."
+        ),
+        ("atr"): (
+            "ATR: average true range; set stop-loss and size positions by current volatility. "
+            + "Reactive \u2014 part of risk strategy."
+        ),
+        ("vwma"): (
+            "VWMA: volume-weighted moving average; confirm trends with price+volume. Watch for "
+            + "spikes skewing results."
+        ),
+        ("mfi"): (
+            "MFI: volume-weighted momentum; overbought (>80) / oversold (<20). Use with "
+            + "RSI/MACD; divergence signals reversals."
+        ),
     }
 
     if indicator not in best_ind_params:
-        raise ValueError(f"Indicator {indicator} is not supported. Please choose from: {list(best_ind_params.keys())}")
+        raise ValueError(
+            f"Indicator {indicator} is not supported. Please choose from: "
+            f"{list(best_ind_params.keys())}"
+        )
 
     curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
     before = curr_date_dt - relativedelta(years=1)
@@ -507,7 +557,9 @@ def get_stock_stats_indicators_window(
         ind_string = ""
         curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
         while curr_date_dt >= before:
-            indicator_value = get_stockstats_indicator(symbol, indicator, curr_date_dt.strftime("%Y-%m-%d"))
+            indicator_value = get_stockstats_indicator(
+                symbol, indicator, curr_date_dt.strftime("%Y-%m-%d")
+            )
             ind_string += f"{curr_date_dt.strftime('%Y-%m-%d')}: {indicator_value}\n"
             curr_date_dt = curr_date_dt - relativedelta(days=1)
 
@@ -571,7 +623,9 @@ def get_stockstats_indicator(
             curr_date,
         )
     except Exception as e:
-        logger.warning("Error getting stockstats indicator data for %s on %s: %s", indicator, curr_date, e)
+        logger.warning(
+            "Error getting stockstats indicator data for %s on %s: %s", indicator, curr_date, e
+        )
         return ""
 
     return str(indicator_value)
@@ -635,7 +689,6 @@ def get_fundamentals(
         return f"Error retrieving fundamentals for {ticker}: {str(e)}"
 
 
-
 def _clean_ownership_ratio(value: Any) -> float | None:
     if value is None or value == "":
         return None
@@ -648,7 +701,6 @@ def _clean_ownership_ratio(value: Any) -> float | None:
     if number > 1:
         number = number / 100
     return max(0, min(number, 1))
-
 
 
 def _first_numeric_from_record(record: Any, keys: tuple[str, ...]) -> float | None:
@@ -692,6 +744,7 @@ def _load_optional_ticker_table(ticker_obj: Any, attribute: str) -> Any | None:
         logger.debug("Unable to load yfinance %s table: %s", attribute, exc)
         return None
 
+
 def _clean_profile_text(value: Any, max_length: int | None = None) -> str | None:
     if value is None:
         return None
@@ -703,7 +756,9 @@ def _clean_profile_text(value: Any, max_length: int | None = None) -> str | None
     return text
 
 
-def _first_profile_text(info: dict[str, Any], *keys: str, max_length: int | None = None) -> str | None:
+def _first_profile_text(
+    info: dict[str, Any], *keys: str, max_length: int | None = None
+) -> str | None:
     for key in keys:
         value = _clean_profile_text(info.get(key), max_length=max_length)
         if value:
@@ -1006,7 +1061,11 @@ def get_insider_transactions(ticker: Annotated[str, "ticker symbol of the compan
         return f"Error retrieving insider transactions for {ticker}: {str(e)}"
 
 
-def get_corporate_actions(ticker: Annotated[str, "ticker symbol of the company"], start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
+def get_corporate_actions(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, Any]:
     """Return yfinance split/dividend events in the corporate-action schema."""
     try:
         ticker_obj = yf.Ticker(ticker)
@@ -1014,7 +1073,8 @@ def get_corporate_actions(ticker: Annotated[str, "ticker symbol of the company"]
         rows: list[dict[str, Any]] = []
         if actions is not None and not getattr(actions, "empty", True):
             for index, row in actions.iterrows():
-                date_text = str(getattr(index, "date", lambda: index)())[:10]
+                index_date = getattr(index, "date", None)
+                date_text = str(index_date() if callable(index_date) else index)[:10]
                 if start_date and date_text < str(start_date)[:10]:
                     continue
                 if end_date and date_text > str(end_date)[:10]:

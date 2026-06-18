@@ -65,6 +65,7 @@ _request_warnings = serializers.request_warnings
 _response_payload = serializers.response_payload
 _log_request_accepted = serializers.log_request_accepted
 
+
 # Public aliases kept in this route module for tests and route-level callers.
 def normalize_ticker(ticker: str, market: str | None) -> str:
     """Normalize a user ticker before analysis work starts."""
@@ -195,7 +196,9 @@ async def shutdown_executor() -> None:
     await pipeline_runner.shutdown_executor()
 
 
-async def _run_pipeline_async(req: AnalysisRequest, request_id: str, request: Request | None = None) -> dict:
+async def _run_pipeline_async(
+    req: AnalysisRequest, request_id: str, request: Request | None = None
+) -> dict:
     return await pipeline_runner.run_pipeline_async(
         req,
         request_id,
@@ -230,7 +233,9 @@ def _callable_accepts_named_argument(func: Callable[..., Any], name: str) -> boo
     return any(param.kind == Parameter.VAR_KEYWORD for param in params.values())
 
 
-async def _call_run_pipeline_async(req: AnalysisRequest, request_id: str, request: Request | None) -> dict[str, Any]:
+async def _call_run_pipeline_async(
+    req: AnalysisRequest, request_id: str, request: Request | None
+) -> dict[str, Any]:
     if _callable_accepts_request_argument(_run_pipeline_async):
         return await _run_pipeline_async(req, request_id, request=request)
     return await _run_pipeline_async(req, request_id)
@@ -340,7 +345,9 @@ async def _stream_progress_and_result(
     async def run_stream_pipeline_with_runtime(req, request_id, queue, cancel_event):
         return await _call_run_stream_pipeline(req, request_id, queue, cancel_event, runtime)
 
-    async def get_or_start_analysis_with_runtime(req, factory, *, use_cache, use_deduplication=True):
+    async def get_or_start_analysis_with_runtime(
+        req, factory, *, use_cache, use_deduplication=True
+    ):
         return await _get_or_start_analysis(
             req,
             factory,
@@ -416,7 +423,9 @@ async def analyze_stream(req: AnalysisRequest, request: Request):
     rate_limit_lease = limit_request(request, stream_policy())
     await rate_limit_lease.__aenter__()
     _log_request_accepted("stream", request_id, req)
-    return EventSourceResponse(_stream_progress_and_result(request, req, request_id, rate_limit_lease))
+    return EventSourceResponse(
+        _stream_progress_and_result(request, req, request_id, rate_limit_lease)
+    )
 
 
 @router.post("/analyze", response_model=AnalysisResponse, response_model_exclude_none=True)
@@ -467,7 +476,11 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
         ) from exc
 
 
-@router.get("/analysis/jobs/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
+@router.get(
+    "/analysis/jobs/{job_id}",
+    response_model=AnalysisJobSummaryResponse,
+    response_model_exclude_none=True,
+)
 async def get_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job_store = _job_store_for_request(request)
@@ -510,7 +523,9 @@ async def analysis_job_events(job_id: str, request: Request):
     rate_limit_lease = limit_request(request, stream_policy())
     await rate_limit_lease.__aenter__()
     try:
-        job = await _job_store_for_request(request).get(job_id, owner_id=rate_limit_lease.identifier)
+        job = await _job_store_for_request(request).get(
+            job_id, owner_id=rate_limit_lease.identifier
+        )
         if job is None:
             raise _job_not_found(job_id)
     except BaseException:
@@ -519,7 +534,11 @@ async def analysis_job_events(job_id: str, request: Request):
     return EventSourceResponse(_stream_job_events_with_lease(request, job, rate_limit_lease))
 
 
-@router.delete("/analysis/jobs/{job_id}", response_model=AnalysisJobSummaryResponse, response_model_exclude_none=True)
+@router.delete(
+    "/analysis/jobs/{job_id}",
+    response_model=AnalysisJobSummaryResponse,
+    response_model_exclude_none=True,
+)
 async def cancel_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
         job = await _job_store_for_request(request).cancel(job_id, owner_id=lease.identifier)
@@ -541,7 +560,9 @@ async def cancel_analysis_job_alias(job_id: str, request: Request):
 
 
 @router.get("/ticker/validate", response_model=TickerValidationResponse)
-async def validate_ticker(ticker: str, trade_date: str, request: Request, market: str | None = None):
+async def validate_ticker(
+    ticker: str, trade_date: str, request: Request, market: str | None = None
+):
     from tradingagents.dataflows.y_finance import normalize_ticker as normalize_yfinance_ticker
 
     req = normalize_and_validate_analysis_request(
@@ -591,7 +612,9 @@ async def _api_status_payload(runtime: jobs.AnalysisRuntimeState | None = None):
                 "enabled": bool(llm_cache_config.get("llm_semantic_cache_enabled", False)),
                 "ttl_seconds": int(llm_cache_config.get("llm_semantic_cache_ttl_seconds") or 3600),
                 "max_entries": int(llm_cache_config.get("llm_semantic_cache_max_entries") or 2048),
-                "threshold": float(llm_cache_config.get("llm_semantic_cache_similarity_threshold") or 0.97),
+                "threshold": float(
+                    llm_cache_config.get("llm_semantic_cache_similarity_threshold") or 0.97
+                ),
                 "targets": str(llm_cache_config.get("llm_semantic_cache_targets") or ""),
             },
         }

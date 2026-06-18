@@ -9,7 +9,9 @@ from tradingagents.dataflows.period_metadata import (
 
 
 def test_annual_period_metadata_schema():
-    period = build_annual_period_metadata(2024, reported_date="2025-03-31", currency="idr", unit="million")
+    period = build_annual_period_metadata(
+        2024, reported_date="2025-03-31", currency="idr", unit="million"
+    )
     assert period["period_label"] == "FY2024"
     assert period["period_type"] == "annual"
     assert period["period_end"] == "2024-12-31"

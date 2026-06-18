@@ -17,11 +17,13 @@ def get_indicators(
     Uses the configured technical_indicators vendor.
     Args:
         symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
-        indicator (str): A single technical indicator name, e.g. 'rsi', 'macd'. Call this tool once per indicator.
+        indicator (str): A single technical indicator name, e.g. 'rsi', 'macd'. Call this tool \
+once per indicator.
         curr_date (str): The current trading date you are trading on, YYYY-mm-dd
         look_back_days (int): Year-on-Year window days, kept for compatibility.
     Returns:
-        str: A formatted dataframe containing the technical indicators for the specified ticker symbol and indicator.
+        str: A formatted dataframe containing the technical indicators for the specified ticker \
+symbol and indicator.
     """
     # LLMs sometimes pass multiple indicators as a comma-separated string;
     # split and process each individually.
@@ -29,7 +31,9 @@ def get_indicators(
     results = []
     for ind in indicators:
         try:
-            results.append(route_to_vendor("get_indicators", symbol, ind, curr_date, look_back_days))
+            results.append(
+                route_to_vendor("get_indicators", symbol, ind, curr_date, look_back_days)
+            )
         except ValueError as e:
             results.append(str(e))
     return "\n\n".join(results)

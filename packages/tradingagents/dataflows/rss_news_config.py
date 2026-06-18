@@ -236,7 +236,10 @@ GOOGLE_NEWS_FALLBACK_RSS_FEEDS: tuple[RSSFeedConfig, ...] = (
         id="bloomberg-markets-google-news",
         name="Bloomberg Markets via Google News",
         url=google_news_rss_url(
-            "site:bloomberg.com (markets OR economy OR stocks OR bonds OR currencies OR commodities)"
+            (
+                "site:bloomberg.com (markets OR economy OR stocks OR bonds OR currencies OR "
+                + "commodities)"
+            )
         ),
         category="markets",
         region="global",

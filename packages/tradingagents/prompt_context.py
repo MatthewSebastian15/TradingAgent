@@ -16,7 +16,11 @@ def safe_json_dumps(value: Any, *, max_chars: int | None = None) -> str:
 
 
 def parse_ohlcv_csv(price_data: str) -> list[dict[str, Any]]:
-    lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    lines = [
+        line
+        for line in (price_data or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
     if not lines:
         return []
 
@@ -80,7 +84,9 @@ def build_market_context(data: Any, *, recent_candle_limit: int = 10) -> dict[st
     }
 
 
-def build_news_context(data: Any, *, max_company_items: int = 5, max_macro_items: int = 3) -> dict[str, Any]:
+def build_news_context(
+    data: Any, *, max_company_items: int = 5, max_macro_items: int = 3
+) -> dict[str, Any]:
     related_items = []
     if isinstance(data.related_news, dict):
         related_items = data.related_news.get("items") or []
@@ -97,7 +103,9 @@ def build_news_context(data: Any, *, max_company_items: int = 5, max_macro_items
                 "source": item.get("source"),
                 "event_type": item.get("event_type"),
                 "summary": _compact_text_block(item.get("summary", ""), max_chars=450),
-                "relevance_reason": _compact_text_block(item.get("relevance_reason", ""), max_chars=280),
+                "relevance_reason": _compact_text_block(
+                    item.get("relevance_reason", ""), max_chars=280
+                ),
                 "url": item.get("url"),
             }
         )
@@ -112,12 +120,16 @@ def build_news_context(data: Any, *, max_company_items: int = 5, max_macro_items
         "articles_found": news_context.get("articles_found"),
         "articles_used_in_prompt": news_context.get("articles_used_in_prompt"),
         "average_sentiment": news_context.get("average_sentiment"),
-        "related_news_summary": (data.related_news or {}).get("summary") if isinstance(data.related_news, dict) else None,
+        "related_news_summary": (data.related_news or {}).get("summary")
+        if isinstance(data.related_news, dict)
+        else None,
         "top_related_news": normalized_items,
         "news_impact": _compact_mapping(data.news_impact, max_items=12),
         "catalyst_tracker": _compact_mapping(data.catalyst_tracker, max_items=12),
         "analyst_consensus": _compact_mapping(data.analyst_consensus, max_items=12),
-        "top_articles": news_context.get("top_articles") or news_context.get("prompt_articles") or [],
+        "top_articles": news_context.get("top_articles")
+        or news_context.get("prompt_articles")
+        or [],
         "limitations": news_context.get("limitations") or [],
         "data_quality": _model_dump(data.data_quality),
     }
@@ -140,12 +152,18 @@ def build_fundamentals_context(data: Any) -> dict[str, Any]:
             "market_cap": profile.get("market_cap"),
             "shares_outstanding": profile.get("shares_outstanding"),
             "current_price": profile.get("current_price"),
-            "business_summary": _compact_text_block(profile.get("business_summary", ""), max_chars=900),
+            "business_summary": _compact_text_block(
+                profile.get("business_summary", ""), max_chars=900
+            ),
             "data_quality": profile.get("data_quality"),
         },
         "financial_highlights": _compact_financial_highlights(data.financial_highlights),
-        "normalized_period_rows": _compact_list(getattr(data, "normalized_period_rows", None), max_items=8),
-        "derived_fundamentals": _compact_list(getattr(data, "derived_fundamentals", None), max_items=8),
+        "normalized_period_rows": _compact_list(
+            getattr(data, "normalized_period_rows", None), max_items=8
+        ),
+        "derived_fundamentals": _compact_list(
+            getattr(data, "derived_fundamentals", None), max_items=8
+        ),
         "fundamental_analysis": _compact_mapping(data.fundamental_analysis, max_items=16),
         "fundamental_context": _compact_mapping(
             (data.fundamental_analysis or {}).get("fundamental_context")

@@ -14,6 +14,7 @@ from pathlib import Path
 try:
     import yfinance as yf
 except ImportError:  # pragma: no cover - dependency may be absent before install
+
     class _MissingYFinance:
         def set_tz_cache_location(self, *_args, **_kwargs):
             return None
@@ -62,7 +63,10 @@ def configure_yfinance_cache() -> Path | None:
         return cache_dir
     except Exception:
         logger.warning(
-            "Could not configure yfinance timezone cache at %s; yfinance will use its default behavior.",
+            (
+                "Could not configure yfinance timezone cache at %s; yfinance will use its "
+                + "default behavior."
+            ),
             cache_dir,
             exc_info=True,
         )

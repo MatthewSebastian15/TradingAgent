@@ -54,7 +54,9 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
         def do_call():
             concurrency_limit = int(cfg.get("max_concurrent_llm_calls", 3))
             with limit_concurrency("llm:google", concurrency_limit):
-                return normalize_content(ChatGoogleGenerativeAI.invoke(self, input, config, **kwargs))
+                return normalize_content(
+                    ChatGoogleGenerativeAI.invoke(self, input, config, **kwargs)
+                )
 
         try:
             return call_with_retry(
@@ -74,7 +76,7 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
                 delay = min(raw_delay, max_wait)
                 logger.warning(
                     "Gemini rate limit. retryDelay %.0fs was returned and capped at %.0fs; "
-                    "sync pipeline will fail fast instead of blocking a worker thread.",
+                    + "sync pipeline will fail fast instead of blocking a worker thread.",
                     raw_delay,
                     delay,
                 )

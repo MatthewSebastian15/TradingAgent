@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 from tradingagents.data_quality import build_source_confidence
-from tradingagents.risk import build_market_risk, build_risk_adjusted_return, build_risk_data_quality
+from tradingagents.risk import (
+    build_market_risk,
+    build_risk_adjusted_return,
+    build_risk_data_quality,
+)
 from tradingagents.risk.thesis_monitor import build_thesis_monitor
 
 
@@ -58,7 +62,9 @@ def test_thesis_monitor_marks_stop_loss_break_as_invalidated():
         {
             "current_price": 80,
             "stop_loss": 90,
-            "financial_trends": {"metrics": {"revenue_growth_percent": [10], "net_profit_margin_percent": [20]}},
+            "financial_trends": {
+                "metrics": {"revenue_growth_percent": [10], "net_profit_margin_percent": [20]}
+            },
             "balance_sheet_risk": {"der": 0.5},
             "quality_of_earnings": {"cfo_to_net_income": 1.1},
             "fair_value_range": {"bull": 120},
@@ -68,7 +74,10 @@ def test_thesis_monitor_marks_stop_loss_break_as_invalidated():
     )
 
     assert monitor["overall_thesis_status"] == "invalidated"
-    assert any(item["category"] == "Price" and item["status"] == "invalidated" for item in monitor["checklist"])
+    assert any(
+        item["category"] == "Price" and item["status"] == "invalidated"
+        for item in monitor["checklist"]
+    )
 
 
 def test_source_confidence_score_drops_when_missing_fields_increase():
@@ -92,7 +101,10 @@ def test_source_confidence_score_drops_when_missing_fields_increase():
             ],
         },
         "fair_value_range": {"data_quality": {"status": "complete", "missing_fields": []}},
-        "vendor_attempts": {"quote": ["yfinance:success"], "news": ["marketaux:success", "newsdata:success"]},
+        "vendor_attempts": {
+            "quote": ["yfinance:success"],
+            "news": ["marketaux:success", "newsdata:success"],
+        },
     }
     degraded = {
         **base,
@@ -132,12 +144,19 @@ def test_risk_data_quality_combined_contract_contains_final_sections():
             "price_chart": {"available": True, "data": _price_rows()},
             "price_performance": {},
             "technical_entry": {"entry_quality": "neutral", "atr": 5},
-            "balance_sheet_risk": {"risk_level": "low", "metric_details": {"der": {"display": "0.5x"}}},
+            "balance_sheet_risk": {
+                "risk_level": "low",
+                "metric_details": {"der": {"display": "0.5x"}},
+            },
             "quality_of_earnings": {"rating": "healthy"},
             "fair_value_range": {"base": 110, "bull": 130, "bear": 80},
             "scenario_analysis": {"base": {"fair_value": 110}, "bear": {"fair_value": 80}},
             "catalyst_tracker": {"negative_catalysts": [], "upcoming_events": []},
-            "financial_highlights": {"unit_note": "Currency: USD", "periods": [{"key": "FY25"}], "rows": []},
+            "financial_highlights": {
+                "unit_note": "Currency: USD",
+                "periods": [{"key": "FY25"}],
+                "rows": [],
+            },
         },
         {"vendor_attempts": {"quote": ["yfinance:success"]}},
     )

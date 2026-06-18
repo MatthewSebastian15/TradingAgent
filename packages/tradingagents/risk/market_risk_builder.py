@@ -7,7 +7,6 @@ from typing import Any
 from tradingagents.utils.normalization import number as _number
 
 
-
 def _round(value: float | None, digits: int = 2) -> float | None:
     return round(value, digits) if value is not None else None
 
@@ -17,7 +16,9 @@ def _ohlcv_rows(price_chart: dict[str, Any] | None) -> list[dict[str, Any]]:
     rows = chart.get("data") or chart.get("points") or []
     if not isinstance(rows, list):
         return []
-    normalized = [row for row in rows if isinstance(row, dict) and _number(row.get("close")) is not None]
+    normalized = [
+        row for row in rows if isinstance(row, dict) and _number(row.get("close")) is not None
+    ]
     return sorted(normalized, key=lambda row: str(row.get("date") or ""))
 
 
@@ -68,7 +69,10 @@ def _atr(rows: list[dict[str, Any]], period: int = 14) -> float | None:
 
 
 def _risk_bucket(
-    volatility: float | None, max_drawdown: float | None, atr: float | None, latest_close: float | None
+    volatility: float | None,
+    max_drawdown: float | None,
+    atr: float | None,
+    latest_close: float | None,
 ) -> str:
     atr_percent = (atr / latest_close * 100) if atr is not None and latest_close else None
     if (
@@ -114,7 +118,11 @@ def build_market_risk(
     lows = [value for value in lows if value is not None and value > 0]
     period_high = _number(summary.get("period_high")) or (max(highs) if highs else None)
     period_low = _number(summary.get("period_low")) or (min(lows) if lows else None)
-    price_range = ((period_high - period_low) / period_low * 100) if period_high is not None and period_low else None
+    price_range = (
+        ((period_high - period_low) / period_low * 100)
+        if period_high is not None and period_low
+        else None
+    )
     latest_close = closes[-1] if closes else None
     bucket = _risk_bucket(volatility, drawdown, atr, latest_close)
 

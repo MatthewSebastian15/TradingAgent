@@ -45,7 +45,10 @@ def test_market_quotes_caps_symbols_to_twenty(client, monkeypatch):
 
     async def fake_fetch_quotes(symbols):
         seen_symbols.extend(symbols)
-        return [{"sym": symbol, "chg": "N/A", "pos": True, "price": None, "error": False} for symbol in symbols]
+        return [
+            {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "error": False}
+            for symbol in symbols
+        ]
 
     monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
     symbols = ",".join(f"AAA{i}" for i in range(25))
@@ -61,7 +64,9 @@ def test_market_quotes_caps_symbols_to_twenty(client, monkeypatch):
 def test_fetch_quote_handles_missing_last_price(monkeypatch):
     fake_yf = SimpleNamespace(
         Ticker=lambda _symbol: SimpleNamespace(
-            fast_info=SimpleNamespace(previous_close=100, regularMarketPreviousClose=100, last_price=None)
+            fast_info=SimpleNamespace(
+                previous_close=100, regularMarketPreviousClose=100, last_price=None
+            )
         )
     )
     monkeypatch.setitem(sys.modules, "tradingagents.yfinance_runtime", SimpleNamespace(yf=fake_yf))
@@ -85,11 +90,14 @@ def test_fetch_quote_handles_previous_close_zero(monkeypatch):
 
 
 def test_fetch_quote_returns_error_payload_on_vendor_failure(monkeypatch):
-    class BrokenYF:
-        def Ticker(self, _symbol):
-            raise TimeoutError("vendor timeout")
+    def raise_timeout(_symbol):
+        raise TimeoutError("vendor timeout")
 
-    monkeypatch.setitem(sys.modules, "tradingagents.yfinance_runtime", SimpleNamespace(yf=BrokenYF()))
+    monkeypatch.setitem(
+        sys.modules,
+        "tradingagents.yfinance_runtime",
+        SimpleNamespace(yf=SimpleNamespace(Ticker=raise_timeout)),
+    )
 
     quote = market_routes._fetch_quote("AAPL")
 

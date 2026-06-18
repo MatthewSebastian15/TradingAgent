@@ -52,10 +52,10 @@ from config_defaults import (
     GENERAL_NEWS_DEFAULT_CATEGORY,
     GENERAL_NEWS_DEFAULT_LIMIT,
     GENERAL_NEWS_DEFAULT_WINDOW_DAYS,
-    GENERAL_NEWS_ENABLED,
-    GENERAL_NEWS_ENABLED_PROVIDERS,
     GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH,
     GENERAL_NEWS_ENABLE_SSE,
+    GENERAL_NEWS_ENABLED,
+    GENERAL_NEWS_ENABLED_PROVIDERS,
     GENERAL_NEWS_FRONTEND_POLL_SECONDS,
     GENERAL_NEWS_MAX_ARTICLES_FOR_UI,
     GENERAL_NEWS_MAX_ARTICLES_PER_PROVIDER,
@@ -91,8 +91,8 @@ from config_defaults import (
     NEWS_CACHE_MAX_ENTRIES,
     NEWS_CACHE_TTL_MINUTES,
     NEWS_DEBUG_RAW_RESPONSE,
-    NEWS_DEFAULT_WINDOW_DAYS,
     NEWS_DECISION_MIN_RELEVANCE_SCORE,
+    NEWS_DEFAULT_WINDOW_DAYS,
     NEWS_ENABLE_YFINANCE_FALLBACK,
     NEWS_ENABLED_PROVIDERS,
     NEWS_FETCH_SECONDARY_ALWAYS,
@@ -144,7 +144,9 @@ class LLMSettings:
     quick_think_llm: str = field(default_factory=lambda: env("QUICK_THINK_LLM"))
     llm_api_key: str = field(default_factory=lambda: env("LLM_API_KEY", ""))
     base_url: str = field(default_factory=lambda: env("LLM_BASE_URL", "").rstrip("/"))
-    ollama_base_url: str = field(default_factory=lambda: env("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"))
+    ollama_base_url: str = field(
+        default_factory=lambda: env("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+    )
 
     def __post_init__(self) -> None:
         if self.provider == "google":
@@ -174,7 +176,9 @@ class LLMSettings:
         analysis_depth: str = DEFAULT_ANALYSIS_DEPTH,
         response_detail: str = "full",
     ) -> dict[str, Any]:
-        depth_config = ANALYSIS_DEPTH_CONFIG.get(analysis_depth, ANALYSIS_DEPTH_CONFIG[DEFAULT_ANALYSIS_DEPTH])
+        depth_config = ANALYSIS_DEPTH_CONFIG.get(
+            analysis_depth, ANALYSIS_DEPTH_CONFIG[DEFAULT_ANALYSIS_DEPTH]
+        )
         retries = LLM_MAX_RETRIES
         budget = ANALYSIS_DEPTH_LLM_BUDGETS.get(analysis_depth, MAX_GEMINI_CALLS)
         return {
@@ -348,8 +352,12 @@ def build_tradingagents_config(
     depth_config = config.get("analysis_depth_config", {})
     depth_debate_rounds = int(depth_config.get("debate_rounds") or 1)
     depth_risk_rounds = int(depth_config.get("risk_rounds") or 1)
-    requested_rounds = int(max_debate_rounds) if max_debate_rounds is not None else DEFAULT_MAX_DEBATE_ROUNDS
-    effective_rounds = max(requested_rounds, depth_debate_rounds) if depth == "deep" else requested_rounds
+    requested_rounds = (
+        int(max_debate_rounds) if max_debate_rounds is not None else DEFAULT_MAX_DEBATE_ROUNDS
+    )
+    effective_rounds = (
+        max(requested_rounds, depth_debate_rounds) if depth == "deep" else requested_rounds
+    )
     config["max_debate_rounds"] = effective_rounds
     config["max_risk_discuss_rounds"] = (
         max(effective_rounds, depth_risk_rounds) if depth == "deep" else effective_rounds

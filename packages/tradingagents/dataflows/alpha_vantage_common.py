@@ -131,13 +131,21 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
         if "Note" in response_json:
             note_message = str(response_json["Note"])
             if "call frequency" in note_message.lower() or "rate limit" in note_message.lower():
-                raise AlphaVantageRateLimitError(f"Alpha Vantage rate limit exceeded: {note_message}")
+                raise AlphaVantageRateLimitError(
+                    f"Alpha Vantage rate limit exceeded: {note_message}"
+                )
             raise ValueError(f"Alpha Vantage note: {note_message}")
         if "Information" in response_json:
             info_message = str(response_json["Information"])
             lowered_info = info_message.lower()
-            if "rate limit" in lowered_info or "api key" in lowered_info or "premium" in lowered_info:
-                raise AlphaVantageRateLimitError(f"Alpha Vantage rate limit exceeded: {info_message}")
+            if (
+                "rate limit" in lowered_info
+                or "api key" in lowered_info
+                or "premium" in lowered_info
+            ):
+                raise AlphaVantageRateLimitError(
+                    f"Alpha Vantage rate limit exceeded: {info_message}"
+                )
             raise ValueError(f"Alpha Vantage information: {info_message}")
     except json.JSONDecodeError:
         # Response is not JSON (likely CSV data), which is normal

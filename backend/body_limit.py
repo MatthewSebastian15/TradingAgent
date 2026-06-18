@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from errors import ApiError, error_payload
 
 
-class InvalidContentLength(ApiError):
+class InvalidContentLengthError(ApiError):
     def __init__(self, raw_value: str) -> None:
         super().__init__(
             400,
@@ -17,7 +17,7 @@ class InvalidContentLength(ApiError):
         )
 
 
-class RequestBodyTooLarge(ApiError):
+class RequestBodyTooLargeError(ApiError):
     def __init__(self, max_bytes: int) -> None:
         super().__init__(
             413,
@@ -45,7 +45,9 @@ class RequestBodyLimitMiddleware:
             try:
                 content_length_value = int(content_length)
             except ValueError:
-                await self._send_invalid_content_length(send, content_length.decode("latin1", errors="replace"))
+                await self._send_invalid_content_length(
+                    send, content_length.decode("latin1", errors="replace")
+                )
                 return
             if content_length_value < 0:
                 await self._send_invalid_content_length(send, str(content_length_value))
@@ -62,22 +64,22 @@ class RequestBodyLimitMiddleware:
             if message.get("type") == "http.request":
                 received += len(message.get("body") or b"")
                 if received > self.max_bytes:
-                    raise RequestBodyTooLarge(self.max_bytes)
+                    raise RequestBodyTooLargeError(self.max_bytes)
             return message
 
         try:
             await self.app(scope, limited_receive, send)
-        except RequestBodyTooLarge:
+        except RequestBodyTooLargeError:
             await self._send_error(send)
 
     async def _send_invalid_content_length(self, send, raw_value: str) -> None:
-        error = InvalidContentLength(raw_value)
+        error = InvalidContentLengthError(raw_value)
         response = JSONResponse(status_code=error.status_code, content=error_payload(error))
         await response({"type": "http"}, None, send)
 
     async def _send_error(self, send) -> None:
         response = JSONResponse(
             status_code=413,
-            content=error_payload(RequestBodyTooLarge(self.max_bytes)),
+            content=error_payload(RequestBodyTooLargeError(self.max_bytes)),
         )
         await response({"type": "http"}, None, send)

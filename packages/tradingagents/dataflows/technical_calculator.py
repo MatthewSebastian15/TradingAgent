@@ -44,7 +44,9 @@ def extract_closes(price_history: list[dict[str, Any]] | str | Any) -> list[floa
     values: list[float] = []
     for row in price_history or []:
         try:
-            value = float(row.get("close") or row.get("Close") or row.get("adj close") or row.get("Adj Close"))
+            value = float(
+                row.get("close") or row.get("Close") or row.get("adj close") or row.get("Adj Close")
+            )
         except (AttributeError, TypeError, ValueError):
             continue
         if value == value:
@@ -87,26 +89,35 @@ def calculate_rsi(closes: list[float], window: int = 14) -> dict[str, Any]:
     return build_indicator_value(100 - (100 / (1 + rs)), "rsi_14", len(closes), window + 1)
 
 
-def build_indicator_value(value: float | None, name: str, available_points: int, required_points: int) -> dict[str, Any]:
+def build_indicator_value(
+    value: float | None, name: str, available_points: int, required_points: int
+) -> dict[str, Any]:
     if value is None:
-        return IndicatorValue({
-            "value": None,
-            "status": "source_unavailable",
+        return IndicatorValue(
+            {
+                "value": None,
+                "status": "source_unavailable",
+                "source": SOURCE,
+                "reason": "insufficient_history",
+                "required_points": required_points,
+                "available_points": available_points,
+                "warnings": [
+                    f"{name} unavailable: insufficient_history "
+                    f"({available_points}/{required_points} closes)"
+                ],
+            }
+        )
+    return IndicatorValue(
+        {
+            "value": value,
+            "status": "calculated",
             "source": SOURCE,
-            "reason": "insufficient_history",
+            "reason": None,
             "required_points": required_points,
             "available_points": available_points,
-            "warnings": [f"{name} unavailable: insufficient_history ({available_points}/{required_points} closes)"],
-        })
-    return IndicatorValue({
-        "value": value,
-        "status": "calculated",
-        "source": SOURCE,
-        "reason": None,
-        "required_points": required_points,
-        "available_points": available_points,
-        "warnings": [],
-    })
+            "warnings": [],
+        }
+    )
 
 
 def calculate_technical_fallback(price_history: list[dict[str, Any]] | str | Any) -> dict[str, Any]:

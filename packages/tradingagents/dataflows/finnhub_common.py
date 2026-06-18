@@ -110,7 +110,11 @@ def unix_to_iso_datetime(ts: int | float | str | None) -> str | None:
     if ts in (None, ""):
         return None
     try:
-        return datetime.fromtimestamp(int(float(ts)), tz=timezone.utc).isoformat().replace("+00:00", "Z")
+        return (
+            datetime.fromtimestamp(int(float(ts)), tz=timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
     except (TypeError, ValueError, OSError):
         return None
 
@@ -120,7 +124,9 @@ def utc_now_iso() -> str:
 
 
 def cache_key(method: str, *parts: Any, **params: Any) -> str:
-    raw = json.dumps({"method": method, "parts": parts, "params": params}, sort_keys=True, default=str)
+    raw = json.dumps(
+        {"method": method, "parts": parts, "params": params}, sort_keys=True, default=str
+    )
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
     safe_parts = ":".join(str(part).replace(":", "_") for part in parts if part not in (None, ""))
     return f"finnhub:{method}:{safe_parts}:{digest}" if safe_parts else f"finnhub:{method}:{digest}"
@@ -160,7 +166,10 @@ def make_api_request(
 
             if response.status_code in (401, 403):
                 raise FinnhubConfigError(
-                    "Finnhub auth/plan error: invalid API key or endpoint not allowed by current plan."
+                    (
+                        "Finnhub auth/plan error: invalid API key or endpoint not allowed by "
+                        + "current plan."
+                    )
                 )
             if response.status_code == 429:
                 raise FinnhubRateLimitError("Finnhub rate limit exceeded.")
@@ -178,7 +187,9 @@ def make_api_request(
                 time.sleep(backoff * (attempt + 1))
                 continue
 
-    raise FinnhubUnavailableError(f"Finnhub request failed: {_safe_error_message(last_error or FinnhubError())}")
+    raise FinnhubUnavailableError(
+        f"Finnhub request failed: {_safe_error_message(last_error or FinnhubError())}"
+    )
 
 
 def build_quality(

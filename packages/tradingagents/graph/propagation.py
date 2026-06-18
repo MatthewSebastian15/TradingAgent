@@ -14,7 +14,9 @@ class Propagator:
     def __init__(self, max_recur_limit=100):
         self.max_recur_limit = max_recur_limit
 
-    def create_initial_state(self, company_name: str, trade_date: str, past_context: str = "") -> dict[str, Any]:
+    def create_initial_state(
+        self, company_name: str, trade_date: str, past_context: str = ""
+    ) -> dict[str, Any]:
         return {
             "messages": [("human", company_name)],
             "company_of_interest": company_name,

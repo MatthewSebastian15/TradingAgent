@@ -138,11 +138,18 @@ def supports_vendor(vendor: str, market: str, field: str) -> bool:
         return False
 
     market_key = _normalize_market(market)
-    if vendor_key == "alpha_vantage" and str(field or "") == "ownership" and market_key in {"IDX", "ID"}:
+    if (
+        vendor_key == "alpha_vantage"
+        and str(field or "") == "ownership"
+        and market_key in {"IDX", "ID"}
+    ):
         return True
     markets = capability.get("markets")
     fields = _fields_for(vendor_key)
-    return market_key in set(markets if isinstance(markets, list) else []) and str(field or "") in fields
+    return (
+        market_key in set(markets if isinstance(markets, list) else [])
+        and str(field or "") in fields
+    )
 
 
 def get_vendor_strength(vendor: str, market: str, field: str) -> str | None:

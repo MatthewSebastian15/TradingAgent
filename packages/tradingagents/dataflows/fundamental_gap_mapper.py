@@ -38,8 +38,14 @@ GAP_RULES: dict[str, dict[str, str]] = {
     "fcf_coverage": {"impact": "medium", "fallback": "cashflow + dividends"},
     "cfo_to_net_income": {"impact": "medium", "fallback": "cashflow + income_statement"},
     "free_cash_flow": {"impact": "medium", "fallback": "operating_cash_flow - capex"},
-    "revenue_growth_percent": {"impact": "high", "fallback": "annual revenue FY current and previous"},
-    "net_profit_growth_percent": {"impact": "high", "fallback": "annual net profit FY current and previous"},
+    "revenue_growth_percent": {
+        "impact": "high",
+        "fallback": "annual revenue FY current and previous",
+    },
+    "net_profit_growth_percent": {
+        "impact": "high",
+        "fallback": "annual net profit FY current and previous",
+    },
     "ebitda_margin": {"impact": "medium", "fallback": "ebitda / revenue"},
     "net_profit_margin": {"impact": "medium", "fallback": "net_profit / revenue"},
     "sma_50": {"impact": "medium", "fallback": "historical_price"},
@@ -69,12 +75,22 @@ def _missing_financial_fields(row: FinancialRow) -> list[str]:
     return [field for field in sorted(FINANCIAL_ROW_FIELDS) if getattr(row, field) is None]
 
 
-def _estimate_field(row: FinancialRow, field_name: str, gross_margin: float | None = None) -> float | None:
+def _estimate_field(
+    row: FinancialRow, field_name: str, gross_margin: float | None = None
+) -> float | None:
     if field_name == "net_profit" and row.eps is not None and row.shares_outstanding is not None:
         return row.eps * row.shares_outstanding
-    if field_name == "equity" and row.total_assets is not None and row.total_liabilities is not None:
+    if (
+        field_name == "equity"
+        and row.total_assets is not None
+        and row.total_liabilities is not None
+    ):
         return row.total_assets - row.total_liabilities
-    if field_name == "free_cash_flow" and row.operating_cash_flow is not None and row.capex is not None:
+    if (
+        field_name == "free_cash_flow"
+        and row.operating_cash_flow is not None
+        and row.capex is not None
+    ):
         return row.operating_cash_flow - row.capex
     if field_name == "revenue" and row.gross_profit is not None and gross_margin not in (None, 0):
         return row.gross_profit / gross_margin
@@ -104,13 +120,21 @@ def estimate_financial_row_fields(
         estimated_fields.append(field_name)
         estimation_methods[field_name] = FALLBACK_CALCULATION_MAP[field_name]["method"]
 
-    if estimated.total_debt is None and estimated.total_liabilities is not None and estimated.equity not in (None, 0):
+    if (
+        estimated.total_debt is None
+        and estimated.total_liabilities is not None
+        and estimated.equity not in (None, 0)
+    ):
         estimated_fields.append("der")
         estimation_methods["der"] = FALLBACK_CALCULATION_MAP["der"]["method"]
 
     if estimated_fields:
-        estimated.estimated_fields = list(dict.fromkeys([*estimated.estimated_fields, *estimated_fields]))
-        warnings.append("Estimated fields use low or medium-low confidence and are not reported data.")
+        estimated.estimated_fields = list(
+            dict.fromkeys([*estimated.estimated_fields, *estimated_fields])
+        )
+        warnings.append(
+            "Estimated fields use low or medium-low confidence and are not reported data."
+        )
 
     unresolvable = _missing_financial_fields(estimated)
     return estimated, DataGapReport(
@@ -177,16 +201,24 @@ def _first_present(*values: Any) -> Any:
 
 
 def _latest_derived(payload: dict[str, Any], field: str) -> Any:
-    derived = payload.get("derived_fundamentals") or _lookup(payload, "financial_highlights.derived_fundamentals")
+    derived = payload.get("derived_fundamentals") or _lookup(
+        payload, "financial_highlights.derived_fundamentals"
+    )
     if isinstance(derived, list) and derived:
         for row in reversed(derived):
             if not isinstance(row, dict):
                 continue
-            metrics = row.get("derived_metrics") if isinstance(row.get("derived_metrics"), dict) else row
+            metrics = (
+                row.get("derived_metrics") if isinstance(row.get("derived_metrics"), dict) else row
+            )
             if field in metrics:
                 return metrics.get(field)
     if isinstance(derived, dict):
-        metrics = derived.get("derived_metrics") if isinstance(derived.get("derived_metrics"), dict) else derived
+        metrics = (
+            derived.get("derived_metrics")
+            if isinstance(derived.get("derived_metrics"), dict)
+            else derived
+        )
         return metrics.get(field)
     return None
 
@@ -250,7 +282,12 @@ def _available(value: Any, *, field: str | None = None) -> bool:
             return True
         if status in _AVAILABLE_STATUSES:
             if "value" in value:
-                return _available(value.get("value"), field=field) or status in {"calculated", "not_applicable", "no_dividend_history", "not_applicable_negative_earnings"}
+                return _available(value.get("value"), field=field) or status in {
+                    "calculated",
+                    "not_applicable",
+                    "no_dividend_history",
+                    "not_applicable_negative_earnings",
+                }
             return True
         if status in _MISSING_STATUSES or value.get("available") is False:
             return False
@@ -307,11 +344,13 @@ def map_fundamental_gaps(fundamental_payload: dict[str, Any] | None) -> dict[str
         )
 
     critical_missing_count = sum(1 for gap in gaps if gap.get("impact") == "high")
-    recommended_actions = [
-        f"{gap['field']}: use {gap['recommended_fallback']}" for gap in gaps
-    ]
+    recommended_actions = [f"{gap['field']}: use {gap['recommended_fallback']}" for gap in gaps]
     return {
-        "status": "complete" if not gaps else "partial" if available_fields else "source_unavailable",
+        "status": "complete"
+        if not gaps
+        else "partial"
+        if available_fields
+        else "source_unavailable",
         "missing_count": len(gaps),
         "available_count": len(available_fields),
         "critical_missing_count": critical_missing_count,

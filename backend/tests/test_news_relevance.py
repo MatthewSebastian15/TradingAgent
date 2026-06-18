@@ -14,13 +14,19 @@ def test_build_news_relevance_terms_for_bbca():
 
 
 def test_ticker_match_is_relevant():
-    article = {"title": "BBCA posts higher quarterly profit", "summary": "Shares rose after earnings."}
+    article = {
+        "title": "BBCA posts higher quarterly profit",
+        "summary": "Shares rose after earnings.",
+    }
 
     assert is_relevant_news(article, "BBCA.JK", "PT Bank Central Asia Tbk") is True
 
 
 def test_company_alias_match_is_relevant():
-    article = {"title": "BCA expands digital banking services", "summary": "New service targets retail customers."}
+    article = {
+        "title": "BCA expands digital banking services",
+        "summary": "New service targets retail customers.",
+    }
 
     assert is_relevant_news(article, "BBCA.JK", "PT Bank Central Asia Tbk", ["BCA"]) is True
 
@@ -35,18 +41,27 @@ def test_entity_match_is_relevant():
 
 
 def test_unrelated_fedex_article_is_rejected_for_bbca():
-    article = {"title": "FedEx cuts delivery outlook", "summary": "Logistics demand weakens in the US."}
+    article = {
+        "title": "FedEx cuts delivery outlook",
+        "summary": "Logistics demand weakens in the US.",
+    }
 
     assert is_relevant_news(article, "BBCA.JK", "PT Bank Central Asia Tbk", ["BCA"]) is False
 
 
 def test_macro_inflation_article_without_company_is_rejected_for_bbca():
-    article = {"title": "US inflation data pressures Asian markets", "summary": "The Fed may keep rates high."}
+    article = {
+        "title": "US inflation data pressures Asian markets",
+        "summary": "The Fed may keep rates high.",
+    }
 
     assert is_relevant_news(article, "BBCA.JK", "PT Bank Central Asia Tbk", ["BCA"]) is False
 
 
 def test_gold_article_without_company_is_rejected_for_bbca():
-    article = {"title": "Gold prices rise as dollar weakens", "summary": "Commodity investors rotate assets."}
+    article = {
+        "title": "Gold prices rise as dollar weakens",
+        "summary": "Commodity investors rotate assets.",
+    }
 
     assert is_relevant_news(article, "BBCA.JK", "PT Bank Central Asia Tbk", ["BCA"]) is False

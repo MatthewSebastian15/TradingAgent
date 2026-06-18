@@ -3,19 +3,24 @@ from __future__ import annotations
 from typing import Any
 
 from tradingagents.data_quality import build_source_confidence
-from tradingagents.utils.normalization import as_dict as _as_dict, as_list as _as_list, number as _number
+from tradingagents.utils.normalization import as_dict as _as_dict
+from tradingagents.utils.normalization import as_list as _as_list
+from tradingagents.utils.normalization import number as _number
 
 from .market_risk_builder import build_market_risk
 from .risk_adjusted_return import build_risk_adjusted_return
 from .thesis_monitor import build_thesis_monitor
 
 
-
 def _metric_display(payload: dict[str, Any], key: str) -> str:
     detail = _as_dict(_as_dict(payload.get("metric_details")).get(key))
     display = detail.get("display")
     if display:
-        return f"{display} EST" if detail.get("status") == "estimated" and display != "N/A" else str(display)
+        return (
+            f"{display} EST"
+            if detail.get("status") == "estimated" and display != "N/A"
+            else str(display)
+        )
     value = payload.get(key)
     return "N/A" if value is None or value == "" else str(value)
 
@@ -64,7 +69,8 @@ def build_catalyst_risk(result: dict[str, Any]) -> list[dict[str, Any]]:
                 "impact": item.get("impact") or "medium",
                 "date": item.get("date"),
                 "source": item.get("source") or "N/A",
-                "reason": item.get("related_news_title") or "Negative catalyst detected in news flow.",
+                "reason": item.get("related_news_title")
+                or "Negative catalyst detected in news flow.",
             }
         )
     for item in _as_list(tracker.get("upcoming_events")):
@@ -137,7 +143,9 @@ def build_risk_summary(
     market_bucket = str(market_risk.get("risk_bucket") or "").lower()
     if market_bucket == "high":
         score += 20
-        _add_risk(flags, main_risks, "High volatility", "Avoid aggressive sizing during volatility spikes")
+        _add_risk(
+            flags, main_risks, "High volatility", "Avoid aggressive sizing during volatility spikes"
+        )
     elif market_bucket == "medium":
         score += 10
         _add_risk(flags, main_risks, "Moderate volatility", "Use disciplined entry levels")
@@ -146,7 +154,9 @@ def build_risk_summary(
     entry_quality = str(technical.get("entry_quality") or "").lower()
     if entry_quality == "risky":
         score += 15
-        _add_risk(flags, main_risks, "Risky technical entry", "Avoid aggressive entry near resistance")
+        _add_risk(
+            flags, main_risks, "Risky technical entry", "Avoid aggressive entry near resistance"
+        )
     elif entry_quality == "neutral":
         score += 6
         _add_risk(flags, main_risks, "Mixed technical entry", "Wait for clearer entry confirmation")
@@ -161,13 +171,17 @@ def build_risk_summary(
     if catalyst_risk:
         highest = any(str(item.get("impact") or "").lower() == "high" for item in catalyst_risk)
         score += 15 if highest else 8
-        _add_risk(flags, main_risks, "Negative catalyst risk", "Monitor material news and upcoming events")
+        _add_risk(
+            flags, main_risks, "Negative catalyst risk", "Monitor material news and upcoming events"
+        )
 
     data_quality = _as_dict(source_confidence.get("data_quality"))
     data_score = _number(data_quality.get("score"))
     if data_score is None or data_score < 60:
         score += 15
-        _add_risk(flags, main_risks, "Data confidence risk", "Check missing fields and vendor status")
+        _add_risk(
+            flags, main_risks, "Data confidence risk", "Check missing fields and vendor status"
+        )
     elif data_score < 80:
         score += 8
         _add_risk(flags, main_risks, "Partial data quality", "Review fallback and stale data notes")
@@ -175,22 +189,34 @@ def build_risk_summary(
     score = int(max(0, min(100, score)))
     overall = "low" if score <= 30 else "moderate" if score <= 65 else "high"
     explanation = (
-        "The stock has low aggregate risk based on available balance sheet, market, news, and data quality signals."
+        (
+            "The stock has low aggregate risk based on available balance sheet, market, news, "
+            + "and data quality signals."
+        )
         if overall == "low"
-        else "The stock has manageable risk, but selected market, financial, news, or data quality items should be monitored."
+        else (
+            "The stock has manageable risk, but selected market, financial, news, or data "
+            + "quality items should be monitored."
+        )
         if overall == "moderate"
-        else "The stock has elevated aggregate risk across one or more financial, market, news, or data quality signals."
+        else (
+            "The stock has elevated aggregate risk across one or more financial, market, news, "
+            + "or data quality signals."
+        )
     )
     return {
         "overall_risk": overall,
         "risk_score": score,
         "main_risks": main_risks[:6] or ["No major risk flag detected from available data."],
-        "risk_flags": flags[:8] or ["Continue monitoring price, fundamentals, news, and data quality."],
+        "risk_flags": flags[:8]
+        or ["Continue monitoring price, fundamentals, news, and data quality."],
         "risk_explanation": explanation,
     }
 
 
-def build_risk_data_quality(result: dict[str, Any], metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_risk_data_quality(
+    result: dict[str, Any], metadata: dict[str, Any] | None = None
+) -> dict[str, Any]:
     merged = {**_as_dict(metadata), **_as_dict(result)}
     market_risk = build_market_risk(
         _as_dict(merged.get("price_chart")),
@@ -212,7 +238,9 @@ def build_risk_data_quality(result: dict[str, Any], metadata: dict[str, Any] | N
     )
     return {
         "risk_summary": risk_summary,
-        "balance_sheet_risk_summary": build_balance_sheet_risk_summary(_as_dict(merged.get("balance_sheet_risk"))),
+        "balance_sheet_risk_summary": build_balance_sheet_risk_summary(
+            _as_dict(merged.get("balance_sheet_risk"))
+        ),
         "market_risk": market_risk,
         "risk_adjusted_return": risk_adjusted_return,
         "thesis_monitor": thesis_monitor,

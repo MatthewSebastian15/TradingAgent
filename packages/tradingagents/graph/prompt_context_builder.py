@@ -40,7 +40,10 @@ def build_prompt_context(analysis_state: dict) -> PromptContext:
         limit=12,
     )
     return PromptContext(
-        symbol=str(_get(state, "symbol", _get(state, "ticker", _get(state, "company_of_interest", ""))) or ""),
+        symbol=str(
+            _get(state, "symbol", _get(state, "ticker", _get(state, "company_of_interest", "")))
+            or ""
+        ),
         market=str(_get(state, "market", "") or _infer_market(state)),
         field_sources=_compact_field_sources(_get(state, "field_sources", {})),
         data_quality=data_quality,
@@ -49,8 +52,12 @@ def build_prompt_context(analysis_state: dict) -> PromptContext:
         normalized_financials=_compact_financials(
             _get(state, "normalized_financials", _get(state, "normalized_period_rows", []))
         ),
-        top_news=_compact_news(news_context.get("top_articles", news_context.get("prompt_articles", []))),
-        budget_remaining=_budget_remaining(_get(state, "vendor_budget", _get(state, "request_budget", {}))),
+        top_news=_compact_news(
+            news_context.get("top_articles", news_context.get("prompt_articles", []))
+        ),
+        budget_remaining=_budget_remaining(
+            _get(state, "vendor_budget", _get(state, "request_budget", {}))
+        ),
         warnings=warnings,
     )
 
@@ -122,9 +129,13 @@ def _compact_data_quality(state: dict[str, Any]) -> dict[str, Any]:
     quality.setdefault("quote_missing", _status_missing(raw.get("price_data") or raw.get("quote")))
     quality.setdefault(
         "historical_missing",
-        _status_missing(raw.get("historical") or raw.get("historical_price") or raw.get("price_data")),
+        _status_missing(
+            raw.get("historical") or raw.get("historical_price") or raw.get("price_data")
+        ),
     )
-    quality.setdefault("financials_missing", _status_missing(raw.get("fundamentals") or raw.get("financials")))
+    quality.setdefault(
+        "financials_missing", _status_missing(raw.get("fundamentals") or raw.get("financials"))
+    )
     quality.setdefault("news_missing", _status_missing(raw.get("news")))
     quality.setdefault("blocking_fields_missing", _blocking_fields(field_quality))
     if field_quality:
@@ -137,7 +148,12 @@ def _compact_data_quality(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _status_missing(value: Any) -> bool:
-    return str(value or "").strip().lower() in {"missing", "unavailable", "source_unavailable", "invalid_ticker"}
+    return str(value or "").strip().lower() in {
+        "missing",
+        "unavailable",
+        "source_unavailable",
+        "invalid_ticker",
+    }
 
 
 def _blocking_fields(field_quality: dict[str, Any]) -> list[str]:
@@ -147,14 +163,19 @@ def _blocking_fields(field_quality: dict[str, Any]) -> list[str]:
             continue
         status = str(value.get("status") or "").lower()
         confidence = str(value.get("confidence") or "").lower()
-        if status in {"source_unavailable", "unavailable", "missing", "failed"} or confidence == "unavailable":
+        if (
+            status in {"source_unavailable", "unavailable", "missing", "failed"}
+            or confidence == "unavailable"
+        ):
             fields.append(str(key))
     return fields
 
 
 def _compact_quality_entry(value: dict[str, Any]) -> dict[str, Any]:
     keep = ("status", "confidence", "source", "as_of_date", "warnings", "blocking", "reason")
-    compact = {key: value.get(key) for key in keep if key in value and value.get(key) not in (None, "", [])}
+    compact = {
+        key: value.get(key) for key in keep if key in value and value.get(key) not in (None, "", [])
+    }
     if isinstance(compact.get("warnings"), list):
         compact["warnings"] = [str(item)[:200] for item in compact["warnings"][:3]]
     return compact
@@ -185,7 +206,15 @@ def _compact_news(value: Any) -> list[dict]:
         articles.append(
             {
                 key: item.get(key)
-                for key in ("title", "source", "provider", "published_at", "summary", "url", "relevance_score")
+                for key in (
+                    "title",
+                    "source",
+                    "provider",
+                    "published_at",
+                    "summary",
+                    "url",
+                    "relevance_score",
+                )
                 if item.get(key) not in (None, "", [])
             }
         )

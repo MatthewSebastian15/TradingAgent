@@ -15,50 +15,107 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 
 def _valid_executive_summary(opening: str | None = None) -> str:
     first_sentence = opening or (
-        "The final rating is Hold because the available evidence is balanced and the setup does not justify forcing a new position before confirmation improves."
+        "The final rating is Hold because the available evidence is balanced and the setup "
+        + "does not justify forcing a new position before confirmation improves."
     )
     return (
         f"{first_sentence} "
-        "The strongest support comes from stable price behavior, controlled downside assumptions, and a risk plan that keeps capital protected while the next catalyst develops. "
-        "The biggest risk is incomplete data or weak confirmation, because either problem could turn a neutral setup into a poor trade. "
-        "The recommended action is to keep allocation modest, avoid adding size, wait for a cleaner entry, and only use a stop-loss after price data confirms the setup. "
-        "The expected horizon is short to medium term, and the thesis should be confirmed by stronger trend evidence or invalidated by a break below support. "
-        "It also names the rating, support, risk, action plan, sizing posture, stop context, time horizon, and invalidation logic so the object behaves like a real portfolio manager response. "
-        "The wording is deliberately reusable so schema validation remains stable across parse, memory, and trade-level tests without changing assertions."
+        + (
+            "The strongest support comes from stable price behavior, controlled downside "
+            + "assumptions, and a risk plan that keeps capital protected while the next catalyst "
+            + "develops. "
+        )
+        + (
+            "The biggest risk is incomplete data or weak confirmation, because either problem "
+            + "could turn a neutral setup into a poor trade. "
+        )
+        + (
+            "The recommended action is to keep allocation modest, avoid adding size, wait for a "
+            + "cleaner entry, and only use a stop-loss after price data confirms the setup. "
+        )
+        + (
+            "The expected horizon is short to medium term, and the thesis should be confirmed by "
+            + "stronger trend evidence or invalidated by a break below support. "
+        )
+        + (
+            "It also names the rating, support, risk, action plan, sizing posture, stop context, "
+            + "time horizon, and invalidation logic so the object behaves like a real portfolio "
+            + "manager response. "
+        )
+        + (
+            "The wording is deliberately reusable so schema validation remains stable across "
+            + "parse, memory, and trade-level tests without changing assertions."
+        )
     )
 
 
 def _valid_investment_thesis(opening: str | None = None) -> str:
-    first_sentence = (
-        opening
-        or "The investment thesis is intentionally cautious because the available evidence supports patience more than immediate action."
+    first_sentence = opening or (
+        "The investment thesis is intentionally cautious because the available evidence "
+        + "supports patience more than immediate action."
     )
     return (
         f"{first_sentence} "
-        "The company remains relevant in its market, but the current setup needs stronger confirmation before it deserves a larger allocation. "
-        "The most useful signals are stable price behavior, controlled risk assumptions, and a trade plan that avoids oversized exposure while waiting for the next catalyst. "
-        "Those signals are helpful, but they are not strong enough to justify a high-conviction Buy without cleaner momentum, better data quality, and a more attractive entry point. "
-        "The bear case is that weak confirmation, stale inputs, or sudden volatility could quickly damage the risk/reward profile. "
-        "That bear case matters because a trade can be directionally reasonable and still be poor if the entry is late or the stop-loss is not respected. "
-        "The balanced conclusion is to wait, keep allocation limited, and require stronger evidence before increasing exposure. "
-        "The action plan is to avoid chasing price, use a smaller position only if the setup improves, define the stop-loss before entry, and take profit only when the validated risk/reward target is reached. "
-        "If the next catalyst confirms stronger demand and price stability, the thesis can be upgraded; if support breaks, the idea should be rejected. "
-        "This helper also keeps tests readable by using one reusable narrative instead of scattering short invalid placeholders across unrelated assertions. "
-        "The exact company is not important here; what matters is that schema validation, parsing, serialization, and trade-level normalization all receive text that matches the production contract. "
-        "The longer body also proves rendered reports can carry realistic paragraphs without collapsing around short placeholder text."
+        + (
+            "The company remains relevant in its market, but the current setup needs stronger "
+            + "confirmation before it deserves a larger allocation. "
+        )
+        + (
+            "The most useful signals are stable price behavior, controlled risk assumptions, and "
+            + "a trade plan that avoids oversized exposure while waiting for the next catalyst. "
+        )
+        + (
+            "Those signals are helpful, but they are not strong enough to justify a "
+            + "high-conviction Buy without cleaner momentum, better data quality, and a more "
+            + "attractive entry point. "
+        )
+        + (
+            "The bear case is that weak confirmation, stale inputs, or sudden volatility could "
+            + "quickly damage the risk/reward profile. "
+        )
+        + (
+            "That bear case matters because a trade can be directionally reasonable and still be "
+            + "poor if the entry is late or the stop-loss is not respected. "
+        )
+        + (
+            "The balanced conclusion is to wait, keep allocation limited, and require stronger "
+            + "evidence before increasing exposure. "
+        )
+        + (
+            "The action plan is to avoid chasing price, use a smaller position only if the setup "
+            + "improves, define the stop-loss before entry, and take profit only when the "
+            + "validated risk/reward target is reached. "
+        )
+        + (
+            "If the next catalyst confirms stronger demand and price stability, the thesis can "
+            + "be upgraded; if support breaks, the idea should be rejected. "
+        )
+        + (
+            "This helper also keeps tests readable by using one reusable narrative instead of "
+            + "scattering short invalid placeholders across unrelated assertions. "
+        )
+        + (
+            "The exact company is not important here; what matters is that schema validation, "
+            + "parsing, serialization, and trade-level normalization all receive text that matches "
+            + "the production contract. "
+        )
+        + (
+            "The longer body also proves rendered reports can carry realistic paragraphs without "
+            + "collapsing around short placeholder text."
+        )
     )
 
 
 DECISION_BUY = "Rating: Buy\nEnter at $189-192, 6% portfolio cap."
 DECISION_OVERWEIGHT = (
     "Rating: Overweight\n"
-    "Executive Summary: Moderate position, await confirmation.\n"
-    "Investment Thesis: Strong fundamentals but near-term headwinds."
+    + "Executive Summary: Moderate position, await confirmation.\n"
+    + "Investment Thesis: Strong fundamentals but near-term headwinds."
 )
 DECISION_SELL = "Rating: Sell\nExit position immediately."
 DECISION_NO_RATING = (
     "Executive Summary: Complex situation with multiple competing factors.\n"
-    "Investment Thesis: No clear directional signal at this time."
+    + "Investment Thesis: No clear directional signal at this time."
 )
 
 
@@ -79,7 +136,9 @@ def _db_path(tmp_path, filename="trading_memory.md"):
     return path
 
 
-def _seed_completed(tmp_path, ticker, date, decision_text, reflection_text, filename="trading_memory.md"):
+def _seed_completed(
+    tmp_path, ticker, date, decision_text, reflection_text, filename="trading_memory.md"
+):
     """Write a completed entry using the public SQLite-backed API."""
     log = make_log(tmp_path, filename)
     _resolve_entry(log, ticker, date, decision_text, reflection_text)
@@ -133,7 +192,9 @@ def _structured_pm_llm(captured: dict, decision: PortfolioDecision | None = None
             investment_thesis=_valid_investment_thesis(),
         )
     structured = MagicMock()
-    structured.invoke.side_effect = lambda prompt: captured.__setitem__("prompt", prompt) or decision
+    structured.invoke.side_effect = lambda prompt: (
+        captured.__setitem__("prompt", prompt) or decision
+    )
     llm = MagicMock()
     llm.with_structured_output.return_value = structured
     return llm
@@ -230,8 +291,8 @@ class TestTradingMemoryLogCore:
         """'Rating: X' label wins even when an opposing rating word appears earlier in prose."""
         decision = (
             "The sell thesis is weak. The hold case is marginal.\n\n"
-            "Rating: Buy\n\n"
-            "Executive Summary: Strong fundamentals support the position."
+            + "Rating: Buy\n\n"
+            + "Executive Summary: Strong fundamentals support the position."
         )
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", decision)
@@ -304,7 +365,13 @@ class TestTradingMemoryLogCore:
 
     def test_get_past_context_same_ticker(self, tmp_path):
         log = make_log(tmp_path)
-        _seed_completed(tmp_path, "NVDA", "2026-01-05", "Buy NVDA — AI capex thesis intact.", "Directionally correct.")
+        _seed_completed(
+            tmp_path,
+            "NVDA",
+            "2026-01-05",
+            "Buy NVDA — AI capex thesis intact.",
+            "Directionally correct.",
+        )
         ctx = log.get_past_context("NVDA")
         assert "Past analyses of NVDA" in ctx
         assert "Buy NVDA" in ctx
@@ -419,7 +486,9 @@ class TestTradingMemoryLogCore:
 
     def test_rating_label_wins_over_prose_with_markdown(self, tmp_path):
         """Rating: **Sell** must win even when prose contains a conflicting rating word."""
-        decision = "The buy thesis is weakened by guidance.\nRating: **Sell**\nExit before earnings."
+        decision = (
+            "The buy thesis is weakened by guidance.\nRating: **Sell**\nExit before earnings."
+        )
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", decision)
         assert log.load_entries()[0]["rating"] == "Sell"
@@ -516,7 +585,9 @@ class TestDeferredReflection:
         mock_llm = MagicMock()
         mock_llm.invoke.return_value.content = "Directionally correct. Thesis confirmed."
         reflector = Reflector(mock_llm)
-        result = reflector.reflect_on_final_decision(final_decision=DECISION_BUY, raw_return=0.042, alpha_return=0.021)
+        result = reflector.reflect_on_final_decision(
+            final_decision=DECISION_BUY, raw_return=0.042, alpha_return=0.021
+        )
         assert result == "Directionally correct. Thesis confirmed."
         mock_llm.invoke.assert_called_once()
 
@@ -525,7 +596,9 @@ class TestDeferredReflection:
         mock_llm = MagicMock()
         mock_llm.invoke.return_value.content = "Incorrect call."
         reflector = Reflector(mock_llm)
-        reflector.reflect_on_final_decision(final_decision=DECISION_SELL, raw_return=-0.08, alpha_return=-0.05)
+        reflector.reflect_on_final_decision(
+            final_decision=DECISION_SELL, raw_return=-0.08, alpha_return=-0.05
+        )
         messages = mock_llm.invoke.call_args[0][0]
         human_content = next(content for role, content in messages if role == "human")
         assert "-8.0%" in human_content
@@ -568,7 +641,9 @@ class TestDeferredReflection:
             m = MagicMock()
             m.history.return_value = pd.DataFrame({"Close": []})
             mock_ticker_cls.return_value = m
-            raw, alpha, days = TradingAgentsGraph._fetch_returns(mock_graph, "XXXXXFAKE", "2026-01-10")
+            raw, alpha, days = TradingAgentsGraph._fetch_returns(
+                mock_graph, "XXXXXFAKE", "2026-01-10"
+            )
         assert raw is None and alpha is None and days is None
 
     def test_fetch_returns_spy_shorter_than_stock(self):
@@ -646,7 +721,9 @@ class TestPortfolioManagerInjection:
         captured = {}
         llm = _structured_pm_llm(captured)
         pm_node = create_portfolio_manager(llm)
-        state = _make_pm_state(past_context="[2026-01-05 | NVDA | Buy | +5.0% | +2.0% | 5d]\nGreat call.")
+        state = _make_pm_state(
+            past_context="[2026-01-05 | NVDA | Buy | +5.0% | +2.0% | 5d]\nGreat call."
+        )
         pm_node(state)
         assert "Lessons from prior decisions and outcomes" in captured["prompt"]
         assert "Great call." in captured["prompt"]
@@ -668,7 +745,9 @@ class TestPortfolioManagerInjection:
         decision = PortfolioDecision(
             confidence_score=0.72,
             rating=PortfolioRating.OVERWEIGHT,
-            executive_summary=_valid_executive_summary("Build position gradually over the next two weeks."),
+            executive_summary=_valid_executive_summary(
+                "Build position gradually over the next two weeks."
+            ),
             investment_thesis=_valid_investment_thesis(
                 "AI capex cycle remains intact; institutional flows constructive."
             ),
@@ -700,7 +779,7 @@ class TestPortfolioManagerInjection:
     # get_past_context ordering and limits
 
     def test_same_ticker_prioritised(self, tmp_path):
-        """Same-ticker entries in same-ticker section; cross-ticker entries in cross-ticker section."""
+        "Same-ticker entries in same-ticker section; cross-ticker entries in cross-ticker section."
         log = make_log(tmp_path)
         _resolve_entry(log, "NVDA", "2026-01-05", DECISION_BUY, "Momentum confirmed.")
         _resolve_entry(log, "AAPL", "2026-01-06", DECISION_SELL, "Overvalued.")

@@ -38,7 +38,17 @@ MARKET_MOVING_KEYWORDS = {
     "lawsuit",
 }
 
-MACRO_KEYWORDS = {"rupiah", "bank indonesia", "fed", "interest rate", "inflation", "commodity", "coal", "cpo", "nickel"}
+MACRO_KEYWORDS = {
+    "rupiah",
+    "bank indonesia",
+    "fed",
+    "interest rate",
+    "inflation",
+    "commodity",
+    "coal",
+    "cpo",
+    "nickel",
+}
 _ENTITY_FIELDS = ("entities", "symbols", "tickers", "keywords")
 _TEXT_FIELDS = ("title", "description", "summary", "content", "publisher", "url")
 _STOPWORDS = {"pt", "tbk", "inc", "corp", "corporation", "ltd", "plc", "llc", "co", "company"}
@@ -64,12 +74,18 @@ def _clean_term(value: Any) -> str | None:
 def _company_aliases(company_name: str | None) -> list[str]:
     if not company_name:
         return []
-    clean = re.sub(r"\b(PT|TBK|Tbk|Inc|Corp|Corporation|Ltd|PLC|LLC|Co)\b\.?", "", company_name).strip()
+    clean = re.sub(
+        r"\b(PT|TBK|Tbk|Inc|Corp|Corporation|Ltd|PLC|LLC|Co)\b\.?", "", company_name
+    ).strip()
     clean = " ".join(clean.split())
     aliases = [company_name]
     if clean and clean.lower() != company_name.lower():
         aliases.append(clean)
-    words = [word for word in re.split(r"[^A-Za-z0-9]+", clean) if word and word.lower() not in _STOPWORDS]
+    words = [
+        word
+        for word in re.split(r"[^A-Za-z0-9]+", clean)
+        if word and word.lower() not in _STOPWORDS
+    ]
     acronym = "".join(word[0] for word in words if word)
     if len(acronym) >= 2:
         aliases.append(acronym.upper())
@@ -102,7 +118,9 @@ def _article_text(article: dict[str, Any]) -> str:
         if isinstance(value, list):
             for item in value:
                 if isinstance(item, dict):
-                    chunks.extend(str(item.get(key) or "") for key in ("symbol", "ticker", "name", "title"))
+                    chunks.extend(
+                        str(item.get(key) or "") for key in ("symbol", "ticker", "name", "title")
+                    )
                 else:
                     chunks.append(str(item))
         elif isinstance(value, dict):
@@ -117,7 +135,9 @@ def _contains_term(text: str, term: str) -> bool:
     if len(value) < 2:
         return False
     if re.fullmatch(r"[A-Za-z0-9]+", value):
-        return bool(re.search(rf"(?<![a-z0-9]){re.escape(value.lower())}(?![a-z0-9])", text.lower()))
+        return bool(
+            re.search(rf"(?<![a-z0-9]){re.escape(value.lower())}(?![a-z0-9])", text.lower())
+        )
     return value.lower() in text.lower()
 
 
@@ -133,7 +153,9 @@ def is_relevant_news(
     return any(_contains_term(text, term) for term in terms)
 
 
-def score_news_relevance(article: dict[str, Any], ticker: str, company_name: str = "", sector: str = "") -> dict[str, Any]:
+def score_news_relevance(
+    article: dict[str, Any], ticker: str, company_name: str = "", sector: str = ""
+) -> dict[str, Any]:
     title = str(article.get("title") or "")
     body = str(article.get("summary") or article.get("description") or article.get("content") or "")
     text = f"{title} {body}".lower()
@@ -148,7 +170,12 @@ def score_news_relevance(article: dict[str, Any], ticker: str, company_name: str
         score += 45
         reasons.append("subsidiary_entity_match")
     elif entity["entity_match"] == "negative":
-        return {"relevance_score": 0, "category": "irrelevant", "reasons": ["negative_entity_term"], **entity}
+        return {
+            "relevance_score": 0,
+            "category": "irrelevant",
+            "reasons": ["negative_entity_term"],
+            **entity,
+        }
 
     short_ticker = _base_symbol(ticker).lower()
     if short_ticker and _contains_term(text, short_ticker):
@@ -180,8 +207,17 @@ def score_news_relevance(article: dict[str, Any], ticker: str, company_name: str
     else:
         category = "irrelevant"
 
-    return {"relevance_score": min(score, 100), "category": category, "reasons": list(dict.fromkeys(reasons)), **entity}
+    return {
+        "relevance_score": min(score, 100),
+        "category": category,
+        "reasons": list(dict.fromkeys(reasons)),
+        **entity,
+    }
 
 
 def is_high_impact_news(article_score: dict[str, Any]) -> bool:
-    return article_score.get("category") in {"company_specific", "subsidiary_related", "sector_related", "macro_related"} and float(article_score.get("relevance_score") or 0) >= 60
+    return (
+        article_score.get("category")
+        in {"company_specific", "subsidiary_related", "sector_related", "macro_related"}
+        and float(article_score.get("relevance_score") or 0) >= 60
+    )

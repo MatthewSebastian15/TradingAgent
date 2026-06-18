@@ -27,8 +27,20 @@ from .vendor_router import get_attempt_recorder
 from .yfinance_news import _extract_article_data
 
 logger = logging.getLogger(__name__)
-STRUCTURED_NEWS_PROVIDERS = {"google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"}
-DEFAULT_NEWS_PROVIDER_ORDER = ["google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"]
+STRUCTURED_NEWS_PROVIDERS = {
+    "google_news_light",
+    "marketaux",
+    "rss_context",
+    "newsdata",
+    "yfinance",
+}
+DEFAULT_NEWS_PROVIDER_ORDER = [
+    "google_news_light",
+    "marketaux",
+    "rss_context",
+    "newsdata",
+    "yfinance",
+]
 _MEMORY_CACHE = TTLCache(maxsize=512, ttl_seconds=6 * 60 * 60)
 _PERSISTENT_CACHE = None
 _PERSISTENT_CACHE_CONFIG = None
@@ -91,8 +103,12 @@ class NewsService:
                 result["cache"] = {"hit": True}
                 return result
 
-        enabled_providers = _string_list(self.config.get("enabled_providers", DEFAULT_NEWS_PROVIDER_ORDER))
-        provider_priority = _string_list(self.config.get("provider_priority", DEFAULT_NEWS_PROVIDER_ORDER))
+        enabled_providers = _string_list(
+            self.config.get("enabled_providers", DEFAULT_NEWS_PROVIDER_ORDER)
+        )
+        provider_priority = _string_list(
+            self.config.get("provider_priority", DEFAULT_NEWS_PROVIDER_ORDER)
+        )
         if provider_filter:
             provider_priority = [provider_filter]
             if provider_filter not in enabled_providers:
@@ -124,13 +140,17 @@ class NewsService:
                 if not self._consume_budget("yfinance"):
                     provider_status[provider_name] = "budget_exceeded"
                     provider_health[provider_name] = _provider_health(True, "budget_exceeded")
-                    debug_attempts[provider_name] = [{"strategy": "yfinance_get_news", "status": "budget_exceeded"}]
+                    debug_attempts[provider_name] = [
+                        {"strategy": "yfinance_get_news", "status": "budget_exceeded"}
+                    ]
                     self._record_attempt("yfinance", "budget_exceeded")
                     continue
                 yfinance_articles = _fetch_yfinance_fallback(profile, limit=max_per_provider)
                 articles.extend(yfinance_articles)
                 provider_status[provider_name] = "success" if yfinance_articles else "unavailable"
-                provider_health[provider_name] = _provider_health(True, provider_status[provider_name])
+                provider_health[provider_name] = _provider_health(
+                    True, provider_status[provider_name]
+                )
                 debug_attempts[provider_name] = [
                     {
                         "strategy": "yfinance_get_news",
@@ -145,15 +165,20 @@ class NewsService:
                 and not strict_mode
                 and index > 0
                 and not self.config.get("fetch_secondary_always", False)
-                and len([item for item in articles if item.relevance_score >= min_relevance]) >= required_primary_count
+                and len([item for item in articles if item.relevance_score >= min_relevance])
+                >= required_primary_count
             ):
                 provider_status[provider_name] = "skipped_sufficient_primary"
-                provider_health[provider_name] = _provider_health(True, "skipped_sufficient_primary")
+                provider_health[provider_name] = _provider_health(
+                    True, "skipped_sufficient_primary"
+                )
                 continue
             provider = self._provider(provider_name)
             if provider.api_key and not self._consume_budget(provider_name):
                 provider_status[provider_name] = "budget_exceeded"
-                provider_health[provider_name] = _provider_health(bool(provider.api_key), "budget_exceeded")
+                provider_health[provider_name] = _provider_health(
+                    bool(provider.api_key), "budget_exceeded"
+                )
                 self._record_attempt(provider_name, "budget_exceeded")
                 continue
             try:
@@ -165,14 +190,25 @@ class NewsService:
                     include_raw=include_raw,
                 )
             except Exception as exc:
-                logger.info("news provider failed provider=%s ticker=%s error=%s", provider_name, profile["ticker"], exc)
+                logger.info(
+                    "news provider failed provider=%s ticker=%s error=%s",
+                    provider_name,
+                    profile["ticker"],
+                    exc,
+                )
                 provider_status[provider_name] = "unavailable"
-                provider_health[provider_name] = _provider_health(bool(provider.api_key), "unavailable")
-                debug_attempts[provider_name] = [{"strategy": provider_name, "status": "unavailable", "error": str(exc)[:300]}]
+                provider_health[provider_name] = _provider_health(
+                    bool(provider.api_key), "unavailable"
+                )
+                debug_attempts[provider_name] = [
+                    {"strategy": provider_name, "status": "unavailable", "error": str(exc)[:300]}
+                ]
                 self._record_attempt(provider_name, "unavailable")
                 continue
             provider_status[provider_name] = fetch_result.status
-            provider_health[provider_name] = _provider_health(bool(provider.api_key), fetch_result.status)
+            provider_health[provider_name] = _provider_health(
+                bool(provider.api_key), fetch_result.status
+            )
             debug_attempts[provider_name] = fetch_result.attempts
             articles.extend(fetch_result.articles)
             self._record_attempt(provider_name, fetch_result.status)
@@ -190,7 +226,8 @@ class NewsService:
             and "yfinance" not in provider_priority
             and not provider_filter
             and self.config.get("enable_yfinance_fallback", True)
-            and len([item for item in articles if item.relevance_score >= min_relevance]) < required_primary_count
+            and len([item for item in articles if item.relevance_score >= min_relevance])
+            < required_primary_count
         ):
             if self._consume_budget("yfinance"):
                 yfinance_articles = _fetch_yfinance_fallback(profile, limit=max_per_provider)
@@ -209,7 +246,9 @@ class NewsService:
             ]
             self._record_attempt("yfinance", provider_status["yfinance"])
 
-        articles = _filter_articles_by_window(articles, as_of_date=as_of_date, window_days=window_days)
+        articles = _filter_articles_by_window(
+            articles, as_of_date=as_of_date, window_days=window_days
+        )
         deduped = deduplicate_news_articles(articles)
         dedup_removed_count = max(0, len(articles) - len(deduped))
         prompt_limit = max(1, int(self.config.get("max_articles_for_prompt", 5)))
@@ -255,14 +294,23 @@ class NewsService:
                 and (article.bucket or "full_news") in {"full_news", "macro_context"}
             ][:prompt_limit]
             decision_company_news = prompt_articles
-            market_context_news = [article for article in ui_articles if article.market_context_only]
+            market_context_news = [
+                article for article in ui_articles if article.market_context_only
+            ]
             excluded_news = []
         serialized_articles = [article_to_dict(article) for article in ui_articles]
         serialized_prompt_articles = [article_to_dict(article) for article in prompt_articles]
         serialized_decision_news = [article_to_dict(article) for article in decision_company_news]
         serialized_context_news = [article_to_dict(article) for article in market_context_news]
         providers_used = list(provider_status.keys())
-        latest_article_date = max((str(item.get("published_at")) for item in serialized_articles if item.get("published_at")), default=None)
+        latest_article_date = max(
+            (
+                str(item.get("published_at"))
+                for item in serialized_articles
+                if item.get("published_at")
+            ),
+            default=None,
+        )
         result = {
             "enabled": bool(enabled_providers or self.config.get("enable_yfinance_fallback", True)),
             "ticker": profile["ticker"],
@@ -332,7 +380,9 @@ class NewsService:
             "max_retries": int(self.config.get("vendor_max_retries", 2)),
         }
         if provider_name == "google_news_light":
-            return GoogleNewsLightProvider(str(self.config.get("google_news_light_api_key") or ""), **kwargs)
+            return GoogleNewsLightProvider(
+                str(self.config.get("google_news_light_api_key") or ""), **kwargs
+            )
         if provider_name == "marketaux":
             return MarketAuxProvider(str(self.config.get("marketaux_api_key") or ""), **kwargs)
         if provider_name == "rss_context":
@@ -420,7 +470,11 @@ def _fetch_yfinance_fallback(profile: dict[str, Any], *, limit: int) -> list[Nor
                 url=extracted["link"],
                 source=extracted.get("publisher"),
                 published_at=extracted.get("pub_date"),
-                entities=[NewsEntity(symbol=profile["ticker"], name=profile["company_name"], match_score=50)],
+                entities=[
+                    NewsEntity(
+                        symbol=profile["ticker"], name=profile["company_name"], match_score=50
+                    )
+                ],
             )
         except ValueError:
             continue
@@ -429,7 +483,9 @@ def _fetch_yfinance_fallback(profile: dict[str, Any], *, limit: int) -> list[Nor
 
 
 def _average_sentiment(articles: list[NormalizedNewsArticle]) -> str | None:
-    scores = [article.sentiment_score for article in articles if article.sentiment_score is not None]
+    scores = [
+        article.sentiment_score for article in articles if article.sentiment_score is not None
+    ]
     if not scores:
         return None
     average = sum(scores) / len(scores)
@@ -453,7 +509,9 @@ def _filter_articles_by_window(
     if not as_of_date:
         return articles
     try:
-        end = datetime.strptime(as_of_date[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        end = datetime.strptime(as_of_date[:10], "%Y-%m-%d").replace(
+            tzinfo=timezone.utc
+        ) + timedelta(days=1)
     except ValueError:
         return articles
     start = end - timedelta(days=max(1, int(window_days)))
@@ -499,6 +557,8 @@ def _active_cache(config: dict[str, Any]):
     cache_config = (db_path, ttl_seconds, max_entries)
     with _CACHE_LOCK:
         if _PERSISTENT_CACHE is None or cache_config != _PERSISTENT_CACHE_CONFIG:
-            _PERSISTENT_CACHE = SQLiteTTLCache(db_path=db_path, ttl_seconds=ttl_seconds, max_entries=max_entries)
+            _PERSISTENT_CACHE = SQLiteTTLCache(
+                db_path=db_path, ttl_seconds=ttl_seconds, max_entries=max_entries
+            )
             _PERSISTENT_CACHE_CONFIG = cache_config
     return _PERSISTENT_CACHE

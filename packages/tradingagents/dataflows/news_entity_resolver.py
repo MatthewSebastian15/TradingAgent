@@ -33,17 +33,30 @@ def _contains(text: str, term: str) -> bool:
     term = str(term or "").strip().lower()
     if not term:
         return False
-    return bool(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text, flags=re.IGNORECASE))
+    return bool(
+        re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text, flags=re.IGNORECASE)
+    )
 
 
-def resolve_news_entities(article: dict[str, Any], ticker: str, company_name: str | None = None) -> dict[str, Any]:
+def resolve_news_entities(
+    article: dict[str, Any], ticker: str, company_name: str | None = None
+) -> dict[str, Any]:
     canonical = str(ticker or "").upper()
-    aliases = ENTITY_ALIASES.get(canonical, {"company": [], "subsidiaries": [], "negative_terms": []})
-    text = f"{article.get('title') or ''} {article.get('summary') or article.get('description') or ''}".lower()
+    aliases = ENTITY_ALIASES.get(
+        canonical, {"company": [], "subsidiaries": [], "negative_terms": []}
+    )
+    text = (
+        f"{article.get('title') or ''} {article.get('summary') or article.get('description') or ''}"
+    ).lower()
 
     for negative in aliases.get("negative_terms", []):
         if _contains(text, negative):
-            return {"entity_match": "negative", "matched_terms": [negative], "ticker": canonical, "confidence": 0}
+            return {
+                "entity_match": "negative",
+                "matched_terms": [negative],
+                "ticker": canonical,
+                "confidence": 0,
+            }
 
     matched_company = [term for term in aliases.get("company", []) if _contains(text, term)]
     short_ticker = canonical.removesuffix(".JK")

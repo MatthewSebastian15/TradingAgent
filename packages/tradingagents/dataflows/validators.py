@@ -52,7 +52,10 @@ def validate_numeric_consistency(
 
 
 def validate_price_consistency(values: dict[str, Any], tolerance_pct: float = 3.0) -> list[str]:
-    return [f"Price mismatch: {warning}" for warning in validate_numeric_consistency("last_price", values, tolerance_pct)]
+    return [
+        f"Price mismatch: {warning}"
+        for warning in validate_numeric_consistency("last_price", values, tolerance_pct)
+    ]
 
 
 def validate_volume_consistency(values: dict[str, Any], tolerance_pct: float = 20.0) -> list[str]:

@@ -8,7 +8,10 @@ from tradingagents.dataflows.source_priority import get_source_priority
 from tradingagents.dataflows.vendor_budget import DEFAULT_VENDOR_BUDGET
 from tradingagents.dataflows.vendor_capabilities import VENDOR_CAPABILITIES, vendor_requires_api_key
 from tradingagents.dataflows.vendor_symbol import resolve_symbol
-from tradingagents.observability.health_aggregator import get_observability_summary, get_vendor_stats
+from tradingagents.observability.health_aggregator import (
+    get_observability_summary,
+    get_vendor_stats,
+)
 
 import config as app_config
 from routes.validation import normalize_ticker_symbol
@@ -55,8 +58,14 @@ def _llm_debug_payload() -> dict[str, Any]:
         "provider": app_config.llm.provider,
         "api_key_present": bool(app_config.llm.llm_api_key),
         "models": {
-            "quick_think": {"model": app_config.llm.quick_think_llm, "status": "ok" if app_config.llm.quick_think_llm else "degraded"},
-            "deep_think": {"model": app_config.llm.deep_think_llm, "status": "ok" if app_config.llm.deep_think_llm else "degraded"},
+            "quick_think": {
+                "model": app_config.llm.quick_think_llm,
+                "status": "ok" if app_config.llm.quick_think_llm else "degraded",
+            },
+            "deep_think": {
+                "model": app_config.llm.deep_think_llm,
+                "status": "ok" if app_config.llm.deep_think_llm else "degraded",
+            },
         },
         "budget_by_depth": {
             depth: cfg["max_total_llm_calls"]
@@ -70,11 +79,20 @@ async def debug_health() -> dict[str, Any]:
     _guard_debug_enabled()
     vendors = {
         vendor: _vendor_health(vendor)
-        for vendor in ("yfinance", "finnhub", "marketaux", "newsdata", "alpha_vantage", "google_news_light")
+        for vendor in (
+            "yfinance",
+            "finnhub",
+            "marketaux",
+            "newsdata",
+            "alpha_vantage",
+            "google_news_light",
+        )
     }
     llm_payload = _llm_debug_payload()
     status = "ok"
-    if not llm_payload["api_key_present"] or any(item["status"] != "ok" for item in vendors.values()):
+    if not llm_payload["api_key_present"] or any(
+        item["status"] != "ok" for item in vendors.values()
+    ):
         status = "degraded"
     return {
         "status": status,
@@ -105,7 +123,9 @@ async def debug_vendor(vendor_name: str) -> dict[str, Any]:
 async def debug_symbol(ticker: str) -> dict[str, Any]:
     _guard_debug_enabled()
     canonical = normalize_ticker_symbol(ticker)
-    resolution = resolve_symbol(canonical, search_metadata={"canonical": canonical, "symbol": canonical})
+    resolution = resolve_symbol(
+        canonical, search_metadata={"canonical": canonical, "symbol": canonical}
+    )
     return {
         "ticker": canonical,
         "resolution": {

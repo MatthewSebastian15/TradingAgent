@@ -54,7 +54,9 @@ def split_ai_analysis_news(
         else:
             excluded.append({"article": article, "reason": verdict["reason"]})
 
-    decision = sorted(decision, key=_rank_decision_article, reverse=True)[: max(1, int(prompt_limit))]
+    decision = sorted(decision, key=_rank_decision_article, reverse=True)[
+        : max(1, int(prompt_limit))
+    ]
     market_context = sorted(market_context, key=_rank_context_article, reverse=True)
 
     return {

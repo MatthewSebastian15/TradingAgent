@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from tradingagents.dataflows.config import use_config
-from tradingagents.dataflows.vendor_budget import DEFAULT_VENDOR_BUDGET, VendorBudget, create_budget_from_config
+from tradingagents.dataflows.vendor_budget import (
+    DEFAULT_VENDOR_BUDGET,
+    VendorBudget,
+    create_budget_from_config,
+)
 from tradingagents.pipeline_balanced_types import LLMBudget
 
 
@@ -34,7 +38,9 @@ def test_cache_hit_does_not_count_as_vendor_call(monkeypatch):
         return "Revenue and earnings are stable."
 
     monkeypatch.setattr(interface, "get_budget", lambda _budget_id: budget)
-    monkeypatch.setitem(interface.VENDOR_METHODS, "get_fundamentals", {"yfinance": fake_fundamentals})
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS, "get_fundamentals", {"yfinance": fake_fundamentals}
+    )
     interface._TOOL_CACHE._data.clear()
 
     with use_config(
@@ -88,9 +94,16 @@ def test_llm_budget_depth_limits_from_env(monkeypatch):
         env.setenv("LLM_API_KEY", "test-llm-key")
         reloaded = config.reload_config_for_tests()
 
-        assert reloaded.build_tradingagents_config(analysis_depth="fast")["max_total_llm_calls"] == 2
-        assert reloaded.build_tradingagents_config(analysis_depth="balanced")["max_total_llm_calls"] == 3
-        assert reloaded.build_tradingagents_config(analysis_depth="deep")["max_total_llm_calls"] == 4
+        assert (
+            reloaded.build_tradingagents_config(analysis_depth="fast")["max_total_llm_calls"] == 2
+        )
+        assert (
+            reloaded.build_tradingagents_config(analysis_depth="balanced")["max_total_llm_calls"]
+            == 3
+        )
+        assert (
+            reloaded.build_tradingagents_config(analysis_depth="deep")["max_total_llm_calls"] == 4
+        )
     config.reload_config_for_tests()
 
 

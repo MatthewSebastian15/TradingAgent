@@ -4,8 +4,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from tradingagents.dataflows.vendor_capabilities import SPRINT_1_VENDORS, supports_vendor
 from tradingagents.dataflows.source_priority import market_from_symbol, normalize_market
+from tradingagents.dataflows.vendor_capabilities import SPRINT_1_VENDORS, supports_vendor
 
 
 @dataclass(frozen=True)
@@ -60,12 +60,22 @@ def _aliases(
     values: list[str] = [canonical, base_ticker]
     if company_name:
         values.append(company_name)
-        simplified = re.sub(r"\b(PT|TBK|Tbk|Inc|Corp|Corporation|Ltd|PLC|LLC)\b\.?", "", company_name).strip()
+        simplified = re.sub(
+            r"\b(PT|TBK|Tbk|Inc|Corp|Corporation|Ltd|PLC|LLC)\b\.?", "", company_name
+        ).strip()
         simplified = " ".join(simplified.split())
         if simplified and simplified.lower() != company_name.lower():
             values.append(simplified)
     if isinstance(search_metadata, dict):
-        for key in ("short_name", "shortname", "long_name", "longname", "name", "displayName", "exchange_local_name"):
+        for key in (
+            "short_name",
+            "shortname",
+            "long_name",
+            "longname",
+            "name",
+            "displayName",
+            "exchange_local_name",
+        ):
             alias = _clean_alias(search_metadata.get(key))
             if alias:
                 values.append(alias)
@@ -101,7 +111,9 @@ def resolve_symbol(
     metadata_canonical = _metadata_value(search_metadata, "canonical", "symbol", "ticker")
     canonical = (metadata_canonical or normalized_input).upper()
     quote_type = _metadata_value(search_metadata, "quote_type", "quoteType", "type")
-    company_name = _metadata_value(search_metadata, "company_name", "longname", "long_name", "shortname", "short_name", "name")
+    company_name = _metadata_value(
+        search_metadata, "company_name", "longname", "long_name", "shortname", "short_name", "name"
+    )
     exchange = _metadata_value(search_metadata, "exchange", "exchDisp", "fullExchangeName")
     market_key = normalize_market(market) if market else market_from_symbol(canonical)
     base_ticker = _base_ticker(canonical, market_key, quote_type)

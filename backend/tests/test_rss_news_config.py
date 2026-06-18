@@ -4,7 +4,11 @@ from types import SimpleNamespace
 
 from tradingagents.dataflows import rss_news
 from tradingagents.dataflows.rss_news import RSSContextProvider, _select_feeds
-from tradingagents.dataflows.rss_news_config import DEFAULT_RSS_FEEDS, GOOGLE_NEWS_FALLBACK_RSS_FEEDS, RSSFeedConfig
+from tradingagents.dataflows.rss_news_config import (
+    DEFAULT_RSS_FEEDS,
+    GOOGLE_NEWS_FALLBACK_RSS_FEEDS,
+    RSSFeedConfig,
+)
 
 ALLOWED_RSS_CATEGORIES = {
     "markets",
@@ -109,7 +113,12 @@ def test_company_google_news_fallback_feeds_remain_active():
             "rss_disabled_feed_ids": "",
             "rss_max_feeds": 50,
         },
-        {"ticker": "AAPL", "short_ticker": "AAPL", "company_name": "Apple", "aliases": ["Apple Inc"]},
+        {
+            "ticker": "AAPL",
+            "short_ticker": "AAPL",
+            "company_name": "Apple",
+            "aliases": ["Apple Inc"],
+        },
     )
 
     company_ids = {feed.id for feed in selected if feed.id.startswith("company-google-news-")}

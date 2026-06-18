@@ -81,7 +81,9 @@ def parse_datetime(value: object) -> datetime | None:
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return (
+            value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        )
     if isinstance(value, str):
         text = value.strip()
         if not text:
@@ -92,7 +94,11 @@ def parse_datetime(value: object) -> datetime | None:
         for candidate in candidates:
             try:
                 parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
-                return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+                return (
+                    parsed.astimezone(timezone.utc)
+                    if parsed.tzinfo
+                    else parsed.replace(tzinfo=timezone.utc)
+                )
             except ValueError:
                 pass
             try:
@@ -112,7 +118,9 @@ def _freshness_score(ttl: int | None, age_seconds: int | None, is_stale: bool) -
     return max(0, int(25 * (ttl / age_seconds))) if age_seconds else 25
 
 
-def get_freshness_status(field_name: str, as_of: Any, now: datetime | None = None) -> dict[str, Any]:
+def get_freshness_status(
+    field_name: str, as_of: Any, now: datetime | None = None
+) -> dict[str, Any]:
     ttl = FIELD_TTL_SECONDS.get(_canonical_field(field_name))
     parsed_as_of = parse_datetime(as_of)
     current = now or datetime.now(timezone.utc)

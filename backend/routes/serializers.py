@@ -158,15 +158,43 @@ SUMMARY_FIELDS = {
 
 AGENT_SEQUENCE = [
     (PipelineAgent.DATA_COLLECTION.value, "Data Collection", "Fetching market data..."),
-    (PipelineAgent.MARKET_ANALYST.value, "Market Analyst", "Reading price data and technical indicators..."),
-    (PipelineAgent.NEWS_ANALYST.value, "News + Social Analyst", "Scanning headlines, macro events, and sentiment signals..."),
-    (PipelineAgent.FUNDAMENTALS.value, "Fundamentals Analyst", "Reviewing financial statements and ratios..."),
-    (PipelineAgent.BULL_RESEARCHER.value, "Bull Researcher", "Building or skipping the bullish investment case..."),
-    (PipelineAgent.BEAR_RESEARCHER.value, "Bear Researcher", "Building or skipping the bearish counterarguments..."),
-    (PipelineAgent.RESEARCH_MANAGER.value, "Research Manager", "Evaluating the debate and forming an investment plan..."),
+    (
+        PipelineAgent.MARKET_ANALYST.value,
+        "Market Analyst",
+        "Reading price data and technical indicators...",
+    ),
+    (
+        PipelineAgent.NEWS_ANALYST.value,
+        "News + Social Analyst",
+        "Scanning headlines, macro events, and sentiment signals...",
+    ),
+    (
+        PipelineAgent.FUNDAMENTALS.value,
+        "Fundamentals Analyst",
+        "Reviewing financial statements and ratios...",
+    ),
+    (
+        PipelineAgent.BULL_RESEARCHER.value,
+        "Bull Researcher",
+        "Building or skipping the bullish investment case...",
+    ),
+    (
+        PipelineAgent.BEAR_RESEARCHER.value,
+        "Bear Researcher",
+        "Building or skipping the bearish counterarguments...",
+    ),
+    (
+        PipelineAgent.RESEARCH_MANAGER.value,
+        "Research Manager",
+        "Evaluating the debate and forming an investment plan...",
+    ),
     (PipelineAgent.TRADER.value, "Trader", "Translating the plan into a transaction proposal..."),
     (PipelineAgent.RISK_ANALYSTS.value, "Risk Analysts", "Running or skipping risk debate..."),
-    (PipelineAgent.PORTFOLIO_MANAGER.value, "Portfolio Manager", "Synthesizing all inputs into the final decision..."),
+    (
+        PipelineAgent.PORTFOLIO_MANAGER.value,
+        "Portfolio Manager",
+        "Synthesizing all inputs into the final decision...",
+    ),
 ]
 
 PARTIAL_STAGE_SEQUENCE = [
@@ -205,7 +233,9 @@ def _parse_datetime(value: Any) -> datetime | None:
 def get_market_status(timestamp: datetime) -> str:
     """Return IDX market status for a timestamp using WIB trading hours."""
     wib = ZoneInfo("Asia/Jakarta")
-    dt = timestamp.astimezone(wib) if timestamp.tzinfo is not None else timestamp.replace(tzinfo=wib)
+    dt = (
+        timestamp.astimezone(wib) if timestamp.tzinfo is not None else timestamp.replace(tzinfo=wib)
+    )
 
     if dt.weekday() >= 5:
         return "closed"
@@ -221,7 +251,9 @@ def _market_status_from_value(value: Any) -> str | None:
     return get_market_status(parsed)
 
 
-def _get_current_price_fields(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
+def _get_current_price_fields(
+    final_state: dict[str, Any], pd_obj: object | None = None
+) -> dict[str, Any]:
     current_price = final_state.get("last_price", final_state.get("last_close_price"))
     if current_price is None and pd_obj is not None:
         current_price = getattr(pd_obj, "current_price", None)
@@ -233,7 +265,9 @@ def _get_current_price_fields(final_state: dict[str, Any], pd_obj: object | None
     if current_price_as_of is None and current_price is not None:
         current_price_as_of = final_state.get("trade_date")
 
-    current_price_source = final_state.get("price_source") or final_state.get("last_close_price_source")
+    current_price_source = final_state.get("price_source") or final_state.get(
+        "last_close_price_source"
+    )
     if current_price_source is None and current_price is not None:
         current_price_source = "yfinance:last_close"
     if pd_obj is not None:
@@ -241,7 +275,9 @@ def _get_current_price_fields(final_state: dict[str, Any], pd_obj: object | None
 
     price_is_fallback = bool(final_state.get("price_is_fallback", False))
     price_currency = final_state.get("price_currency")
-    market_status = final_state.get("market_status") or _market_status_from_value(current_price_as_of)
+    market_status = final_state.get("market_status") or _market_status_from_value(
+        current_price_as_of
+    )
 
     return {
         "current_price": current_price,
@@ -255,6 +291,7 @@ def _get_current_price_fields(final_state: dict[str, Any], pd_obj: object | None
         "market_status": market_status,
     }
 
+
 def _coerce_data_quality(value: Any) -> dict[str, Any]:
     if hasattr(value, "model_dump"):
         try:
@@ -266,16 +303,14 @@ def _coerce_data_quality(value: Any) -> dict[str, Any]:
 
 def _quality_from_state(final_state: dict[str, Any]) -> dict[str, Any]:
     data_quality = _coerce_data_quality(final_state.get("data_quality"))
-    field_quality = final_state.get("fundamental_field_quality") or data_quality.get("fundamental_field_quality")
+    field_quality = final_state.get("fundamental_field_quality") or data_quality.get(
+        "fundamental_field_quality"
+    )
     if isinstance(field_quality, dict):
         return field_quality
     field_quality = data_quality.get("field_quality") or final_state.get("field_quality")
     if isinstance(field_quality, dict):
-        return {
-            str(key): value
-            for key, value in field_quality.items()
-            if isinstance(value, dict)
-        }
+        return {str(key): value for key, value in field_quality.items() if isinstance(value, dict)}
     return {}
 
 
@@ -283,7 +318,11 @@ def _sector_classification_from_state(final_state: dict[str, Any]) -> dict[str, 
     existing = final_state.get("sector_classification")
     if isinstance(existing, dict) and existing.get("sector"):
         return existing
-    profile = final_state.get("company_profile") if isinstance(final_state.get("company_profile"), dict) else {}
+    profile = (
+        final_state.get("company_profile")
+        if isinstance(final_state.get("company_profile"), dict)
+        else {}
+    )
     sector = profile.get("sector") or profile.get("industry")
     if sector:
         return {"sector": str(sector).strip().lower(), "source": "yfinance", "confidence": "medium"}
@@ -316,24 +355,32 @@ def _gap_report_from_state(final_state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _source_metadata_from_state(final_state: dict[str, Any], field_quality: dict[str, Any]) -> dict[str, Any]:
+def _source_metadata_from_state(
+    final_state: dict[str, Any], field_quality: dict[str, Any]
+) -> dict[str, Any]:
     existing = final_state.get("source_metadata")
     if isinstance(existing, dict):
         return existing
-    data_sources = final_state.get("data_sources") if isinstance(final_state.get("data_sources"), dict) else {}
+    data_sources = (
+        final_state.get("data_sources") if isinstance(final_state.get("data_sources"), dict) else {}
+    )
     sources = [
         value.get("source")
         for value in field_quality.values()
         if isinstance(value, dict) and value.get("source")
     ]
     return {
-        "source": data_sources.get("fundamentals") or data_sources.get("financials") or data_sources.get("fundamental_data"),
+        "source": data_sources.get("fundamentals")
+        or data_sources.get("financials")
+        or data_sources.get("fundamental_data"),
         "source_priority": ["yfinance", "finnhub"],
         "sources_used": list(dict.fromkeys(str(source) for source in sources if source)),
     }
 
 
-def _fallback_metadata_from_state(final_state: dict[str, Any], field_quality: dict[str, Any]) -> dict[str, Any]:
+def _fallback_metadata_from_state(
+    final_state: dict[str, Any], field_quality: dict[str, Any]
+) -> dict[str, Any]:
     existing = final_state.get("fallback_metadata")
     if isinstance(existing, dict):
         return existing
@@ -355,10 +402,16 @@ VALIDATION_WARNING_META: dict[str, dict[str, Any]] = {
         "message": "Trade levels are hidden because recommendation is Hold.",
         "blocking": False,
     },
-    "NEWS_PARTIAL": {"severity": "warning", "message": "Partial news coverage is available.", "blocking": False},
+    "NEWS_PARTIAL": {
+        "severity": "warning",
+        "message": "Partial news coverage is available.",
+        "blocking": False,
+    },
     "NEWS_UNAVAILABLE": {
         "severity": "warning",
-        "message": "No usable news was returned; analysis continues without blocking trade validation.",
+        ("message"): (
+            "No usable news was returned; analysis continues without blocking trade validation."
+        ),
         "blocking": False,
     },
     "DATA_SOURCE_WARNING": {
@@ -371,8 +424,16 @@ VALIDATION_WARNING_META: dict[str, dict[str, Any]] = {
         "message": "Exact OHLCV date was not found; latest available trading day is used.",
         "blocking": False,
     },
-    "CURRENT_PRICE_MISSING": {"severity": "error", "message": "Current price missing.", "blocking": True},
-    "PRICE_MISSING": {"severity": "error", "message": "Required price data is missing.", "blocking": True},
+    "CURRENT_PRICE_MISSING": {
+        "severity": "error",
+        "message": "Current price missing.",
+        "blocking": True,
+    },
+    "PRICE_MISSING": {
+        "severity": "error",
+        "message": "Required price data is missing.",
+        "blocking": True,
+    },
     "OHLCV_MISSING": {
         "severity": "error",
         "message": "No OHLCV row is available on or before the trade date.",
@@ -432,13 +493,19 @@ def _validation_warning_details(warnings: Any) -> list[dict[str, Any]]:
                 {
                     "code": code,
                     "severity": str(
-                        warning.get("severity") or VALIDATION_WARNING_META.get(code, {}).get("severity") or "warning"
+                        warning.get("severity")
+                        or VALIDATION_WARNING_META.get(code, {}).get("severity")
+                        or "warning"
                     ),
                     "message": str(
-                        warning.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code
+                        warning.get("message")
+                        or VALIDATION_WARNING_META.get(code, {}).get("message")
+                        or code
                     ),
                     "blocking": bool(
-                        warning.get("blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False))
+                        warning.get(
+                            "blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False)
+                        )
                     ),
                 }
             )
@@ -455,19 +522,31 @@ def _clean_data_source_message(message: str) -> str:
     lowered = str(message or "").lower()
 
     if "request budget exceeded" in lowered:
-        return "Some optional market data was skipped because the request budget was reached. Analysis continues."
+        return (
+            "Some optional market data was skipped because the request budget was reached. "
+            + "Analysis continues."
+        )
 
     if "invalid ticker format" in lowered and "alpha vantage" in lowered:
-        return "Alpha Vantage does not support this ticker format for the requested optional data. Analysis continues."
+        return (
+            "Alpha Vantage does not support this ticker format for the requested optional data. "
+            + "Analysis continues."
+        )
 
     if "finnhub" in lowered and ("auth" in lowered or "plan" in lowered or "api key" in lowered):
-        return "Finnhub optional data is unavailable for the current API key or plan. Analysis continues."
+        return (
+            "Finnhub optional data is unavailable for the current API key or plan. Analysis "
+            + "continues."
+        )
 
     if "finnhub enrichment disabled" in lowered:
         return "Some optional Finnhub enrichment was skipped. Analysis continues."
 
     if "no usable news" in lowered or "news_unavailable" in lowered or "no news found" in lowered:
-        return "No usable news was returned for this ticker. Analysis continues without blocking trade validation."
+        return (
+            "No usable news was returned for this ticker. Analysis continues without blocking "
+            + "trade validation."
+        )
 
     if "optional data unavailable" in lowered:
         return "Some optional vendor enrichment was skipped. Analysis continues."
@@ -495,7 +574,12 @@ def _data_quality_warning_detail_from_message(message: str) -> dict[str, Any]:
         return _warning_detail("NEWS_UNAVAILABLE", message)
     if "price" in lowered and ("missing" in lowered or "unavailable" in lowered):
         return _warning_detail("PRICE_MISSING", message)
-    return {"code": "DATA_SOURCE_WARNING", "severity": "warning", "message": message, "blocking": False}
+    return {
+        "code": "DATA_SOURCE_WARNING",
+        "severity": "warning",
+        "message": message,
+        "blocking": False,
+    }
 
 
 def _complete_data_quality_warning_details(merged: dict[str, Any]) -> None:
@@ -506,17 +590,26 @@ def _complete_data_quality_warning_details(merged: dict[str, Any]) -> None:
             if isinstance(item, dict):
                 code = str(item.get("code") or "DATA_SOURCE_WARNING")
                 message = _clean_data_source_message(
-                    str(item.get("message") or VALIDATION_WARNING_META.get(code, {}).get("message") or code)
+                    str(
+                        item.get("message")
+                        or VALIDATION_WARNING_META.get(code, {}).get("message")
+                        or code
+                    )
                 )
                 details.append(
                     {
                         "code": code,
                         "severity": str(
-                            item.get("severity") or VALIDATION_WARNING_META.get(code, {}).get("severity") or "warning"
+                            item.get("severity")
+                            or VALIDATION_WARNING_META.get(code, {}).get("severity")
+                            or "warning"
                         ),
                         "message": message,
                         "blocking": bool(
-                            item.get("blocking", VALIDATION_WARNING_META.get(code, {}).get("blocking", False))
+                            item.get(
+                                "blocking",
+                                VALIDATION_WARNING_META.get(code, {}).get("blocking", False),
+                            )
                         ),
                     }
                 )
@@ -571,7 +664,6 @@ def _complete_risk_engine_data_quality(
     return merged
 
 
-
 def _confidence_score_percent(value: Any) -> float | None:
     try:
         score = float(value)
@@ -608,7 +700,9 @@ def _normalize_raw_signal(raw_ai_signal: str | None) -> str:
     return signal or "HOLD"
 
 
-def resolve_display_signal(raw_ai_signal: str, has_existing_position: bool, rebalancing_action: str | None = None) -> str:
+def resolve_display_signal(
+    raw_ai_signal: str, has_existing_position: bool, rebalancing_action: str | None = None
+) -> str:
     """Convert the raw AI recommendation into the user-position-aware signal."""
     signal = _normalize_raw_signal(raw_ai_signal)
     action = str(rebalancing_action or "").strip()
@@ -626,7 +720,11 @@ def resolve_display_signal(raw_ai_signal: str, has_existing_position: bool, reba
 
 
 def _signal_context(raw_signal: str, display_signal: str, has_existing_position: bool) -> str:
-    position_text = "User has an existing position" if has_existing_position else "User has no existing position"
+    position_text = (
+        "User has an existing position"
+        if has_existing_position
+        else "User has no existing position"
+    )
     return f"{position_text}. AI signal {raw_signal} translated to {display_signal}."
 
 
@@ -680,7 +778,11 @@ def _as_reason_items(value: Any) -> list[str]:
 
 
 def _build_key_reasons_paragraph(payload: dict[str, Any]) -> str:
-    overview = payload.get("analysis_overview") if isinstance(payload.get("analysis_overview"), dict) else {}
+    overview = (
+        payload.get("analysis_overview")
+        if isinstance(payload.get("analysis_overview"), dict)
+        else {}
+    )
 
     direct = _normalize_inline_text(
         overview.get("key_reasons_paragraph") or payload.get("key_reasons_paragraph")
@@ -746,7 +848,9 @@ def _attach_phase1_fields(payload: dict[str, Any], final_state: dict[str, Any]) 
             enriched[field] = _sanitize_text_list(enriched[field])
 
     has_position = bool(enriched.get("has_existing_position", False))
-    raw_signal = _normalize_raw_signal(enriched.get("final_decision") or enriched.get("decision") or enriched.get("llm_decision"))
+    raw_signal = _normalize_raw_signal(
+        enriched.get("final_decision") or enriched.get("decision") or enriched.get("llm_decision")
+    )
     display_signal = resolve_display_signal(
         raw_signal,
         has_position,
@@ -760,27 +864,34 @@ def _attach_phase1_fields(payload: dict[str, Any], final_state: dict[str, Any]) 
     enriched["confidence_label"] = confidence["label"]
     enriched["confidence_tier"] = confidence["tier"]
 
-    volatility_metadata = final_state.get("volatility_metadata") if isinstance(final_state, dict) else None
+    volatility_metadata = (
+        final_state.get("volatility_metadata") if isinstance(final_state, dict) else None
+    )
     volatility_metadata = volatility_metadata if isinstance(volatility_metadata, dict) else {}
     volatility_score = enriched.get("volatility_score")
     enriched["volatility_scale"] = volatility_metadata.get("volatility_scale") or "0–100"
     enriched["volatility_method"] = volatility_metadata.get("volatility_method") or (
         "Annualized standard deviation of daily returns, normalized to 0–100"
     )
-    enriched["volatility_lookback_days"] = volatility_metadata.get("volatility_lookback_days") or 365
-    enriched["volatility_classification"] = (
-        volatility_metadata.get("volatility_classification") or _volatility_classification(volatility_score)
+    enriched["volatility_lookback_days"] = (
+        volatility_metadata.get("volatility_lookback_days") or 365
     )
+    enriched["volatility_classification"] = volatility_metadata.get(
+        "volatility_classification"
+    ) or _volatility_classification(volatility_score)
 
     risk_reason = (
         enriched.get("decision_adjusted_reason")
         or enriched.get("position_sizing_reason")
         or f"Volatility level is {enriched.get('volatility_level') or 'N/A'}."
     )
-    risk_label = enriched.get("volatility_classification") or enriched.get("volatility_level") or "N/A"
+    risk_label = (
+        enriched.get("volatility_classification") or enriched.get("volatility_level") or "N/A"
+    )
     enriched["mini_risk_summary"] = sanitize_text(f"{risk_label}: {risk_reason}")
 
     return enriched
+
 
 def _confidence_label(value: Any) -> str:
     score = _confidence_score_percent(value)
@@ -807,7 +918,8 @@ def _analysis_overview(payload: dict[str, Any]) -> dict[str, Any]:
         "executive_summary": payload.get("executive_summary"),
         "investment_thesis": payload.get("investment_thesis"),
         "key_reasons": list(key_reasons) if isinstance(key_reasons, list) else [],
-        "key_reasons_paragraph": payload.get("key_reasons_paragraph") or _build_key_reasons_paragraph(payload),
+        "key_reasons_paragraph": payload.get("key_reasons_paragraph")
+        or _build_key_reasons_paragraph(payload),
         "action_plan": {
             "current_price": payload.get("current_price"),
             "entry": payload.get("entry_price"),
@@ -864,13 +976,19 @@ def _status_to_score(status: Any) -> int:
 
 
 def _price_momentum_score(payload: dict[str, Any]) -> int:
-    technical_entry = payload.get("technical_entry") if isinstance(payload.get("technical_entry"), dict) else {}
+    technical_entry = (
+        payload.get("technical_entry") if isinstance(payload.get("technical_entry"), dict) else {}
+    )
     for key in ("entry_quality_score", "score", "technical_score"):
         score = _clamp_int_score(technical_entry.get(key))
         if score is not None:
             return score
 
-    performance = payload.get("price_performance") if isinstance(payload.get("price_performance"), dict) else {}
+    performance = (
+        payload.get("price_performance")
+        if isinstance(payload.get("price_performance"), dict)
+        else {}
+    )
     for key in ("period_return_percent", "one_month_return_percent", "return_percent"):
         value = performance.get(key)
         try:
@@ -885,8 +1003,14 @@ def _fundamental_quality_score(payload: dict[str, Any]) -> int:
     data_quality = _coerce_data_quality(payload.get("data_quality"))
     if data_quality.get(PipelineAgent.FUNDAMENTALS.value):
         return _status_to_score(data_quality.get(PipelineAgent.FUNDAMENTALS.value))
-    data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
-    fundamentals = data_sources.get(PipelineAgent.FUNDAMENTALS.value) if isinstance(data_sources.get(PipelineAgent.FUNDAMENTALS.value), dict) else {}
+    data_sources = (
+        payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
+    )
+    fundamentals = (
+        data_sources.get(PipelineAgent.FUNDAMENTALS.value)
+        if isinstance(data_sources.get(PipelineAgent.FUNDAMENTALS.value), dict)
+        else {}
+    )
     return _status_to_score(fundamentals.get("completeness"))
 
 
@@ -924,8 +1048,16 @@ def _risk_level_component_score(payload: dict[str, Any]) -> int:
 
 
 def _data_quality_score(payload: dict[str, Any]) -> int:
-    risk_payload = payload.get("risk_data_quality") if isinstance(payload.get("risk_data_quality"), dict) else {}
-    risk_quality = risk_payload.get("data_quality") if isinstance(risk_payload.get("data_quality"), dict) else {}
+    risk_payload = (
+        payload.get("risk_data_quality")
+        if isinstance(payload.get("risk_data_quality"), dict)
+        else {}
+    )
+    risk_quality = (
+        risk_payload.get("data_quality")
+        if isinstance(risk_payload.get("data_quality"), dict)
+        else {}
+    )
     score = _clamp_int_score(risk_quality.get("score"))
     if score is not None:
         return score
@@ -964,13 +1096,17 @@ def _normalize_confidence_breakdown(value: Any) -> dict[str, Any]:
     return normalized
 
 
-def _build_confidence_breakdown(payload: dict[str, Any], final_state: dict[str, Any]) -> dict[str, int]:
-    supplied = _normalize_confidence_breakdown(payload.get("confidence_breakdown")) or _normalize_confidence_breakdown(
-        final_state.get("confidence_breakdown")
-    )
+def _build_confidence_breakdown(
+    payload: dict[str, Any], final_state: dict[str, Any]
+) -> dict[str, int]:
+    supplied = _normalize_confidence_breakdown(
+        payload.get("confidence_breakdown")
+    ) or _normalize_confidence_breakdown(final_state.get("confidence_breakdown"))
     components = {
         "price_momentum": supplied.get("price_momentum", _price_momentum_score(payload)),
-        "fundamental_quality": supplied.get("fundamental_quality", _fundamental_quality_score(payload)),
+        "fundamental_quality": supplied.get(
+            "fundamental_quality", _fundamental_quality_score(payload)
+        ),
         "news_sentiment": supplied.get("news_sentiment", _news_sentiment_score(payload)),
         "risk_level_score": supplied.get("risk_level_score", _risk_level_component_score(payload)),
         "data_quality": supplied.get("data_quality", _data_quality_score(payload)),
@@ -1059,24 +1195,33 @@ def _period_end_from_label(label: Any) -> str | None:
 
 def _build_response_warnings(payload: dict[str, Any], final_state: dict[str, Any]) -> list[str]:
     warnings: list[str] = []
-    for source in (payload.get("warnings"), final_state.get("warnings") if isinstance(final_state, dict) else None):
+    for source in (
+        payload.get("warnings"),
+        final_state.get("warnings") if isinstance(final_state, dict) else None,
+    ):
         if isinstance(source, list):
             warnings.extend(str(item) for item in source if item)
         elif source:
             warnings.append(str(source))
 
-    data_quality = _coerce_data_quality(payload.get("data_quality") or final_state.get("data_quality"))
+    data_quality = _coerce_data_quality(
+        payload.get("data_quality") or final_state.get("data_quality")
+    )
     for item in data_quality.get("warnings") or []:
         warnings.append(str(item))
 
     for item in final_state.get("data_limitations", []) if isinstance(final_state, dict) else []:
         warnings.append(str(item))
 
-    gap_report = final_state.get("fundamental_gap_report") if isinstance(final_state, dict) else None
+    gap_report = (
+        final_state.get("fundamental_gap_report") if isinstance(final_state, dict) else None
+    )
     if isinstance(gap_report, dict):
         missing = gap_report.get("missing_fields") or gap_report.get("missing") or []
         if missing:
-            warnings.append(f"{len(missing)} fundamental field(s) have explicit missing-data metadata.")
+            warnings.append(
+                f"{len(missing)} fundamental field(s) have explicit missing-data metadata."
+            )
 
     return list(dict.fromkeys(warnings))[:30]
 
@@ -1087,9 +1232,17 @@ def _normalize_data_sources_for_response(data_sources: Any) -> dict[str, Any]:
     normalized = dict(data_sources)
     for key, value in list(normalized.items()):
         if isinstance(value, str):
-            normalized[key] = {"primary": value, "sources": [value], "status": "available" if value else "source_unavailable"}
+            normalized[key] = {
+                "primary": value,
+                "sources": [value],
+                "status": "available" if value else "source_unavailable",
+            }
         elif isinstance(value, list):
-            normalized[key] = {"sources": value, "primary": value[0] if value else None, "status": "available" if value else "source_unavailable"}
+            normalized[key] = {
+                "sources": value,
+                "primary": value[0] if value else None,
+                "status": "available" if value else "source_unavailable",
+            }
     return normalized
 
 
@@ -1098,27 +1251,58 @@ def _build_data_freshness(payload: dict[str, Any], final_state: dict[str, Any]) 
     if isinstance(existing, dict) and existing:
         return existing
 
-    data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
+    data_sources = (
+        payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
+    )
     price_source = data_sources.get("price") if isinstance(data_sources.get("price"), dict) else {}
-    fundamentals = data_sources.get(PipelineAgent.FUNDAMENTALS.value) if isinstance(data_sources.get(PipelineAgent.FUNDAMENTALS.value), dict) else {}
+    fundamentals = (
+        data_sources.get(PipelineAgent.FUNDAMENTALS.value)
+        if isinstance(data_sources.get(PipelineAgent.FUNDAMENTALS.value), dict)
+        else {}
+    )
     news_source = data_sources.get("news") if isinstance(data_sources.get("news"), dict) else {}
     macro_source = data_sources.get("macro") if isinstance(data_sources.get("macro"), dict) else {}
 
-    price_timestamp = payload.get("price_timestamp") or price_source.get("timestamp") or payload.get("current_price_as_of")
+    price_timestamp = (
+        payload.get("price_timestamp")
+        or price_source.get("timestamp")
+        or payload.get("current_price_as_of")
+    )
     financial_period = fundamentals.get("last_period")
-    period_end_date = fundamentals.get("as_of_date") or fundamentals.get("period_end_date") or _period_end_from_label(financial_period)
-    news_payload = payload.get("news_context") if isinstance(payload.get("news_context"), dict) else payload.get("news") if isinstance(payload.get("news"), dict) else {}
+    period_end_date = (
+        fundamentals.get("as_of_date")
+        or fundamentals.get("period_end_date")
+        or _period_end_from_label(financial_period)
+    )
+    news_payload = (
+        payload.get("news_context")
+        if isinstance(payload.get("news_context"), dict)
+        else payload.get("news")
+        if isinstance(payload.get("news"), dict)
+        else {}
+    )
     news_impact = payload.get("news_impact") if isinstance(payload.get("news_impact"), dict) else {}
     news_articles = news_payload.get("articles") if isinstance(news_payload, dict) else []
     impact_articles = news_impact.get("full_news_list") if isinstance(news_impact, dict) else []
     latest_article_date = (
         news_source.get("latest_article_date")
         or (news_payload or {}).get("latest_article_date")
-        or max((str(item.get("published_at")) for item in [*(news_articles or []), *(impact_articles or [])] if isinstance(item, dict) and item.get("published_at")), default=None)
+        or max(
+            (
+                str(item.get("published_at"))
+                for item in [*(news_articles or []), *(impact_articles or [])]
+                if isinstance(item, dict) and item.get("published_at")
+            ),
+            default=None,
+        )
     )
 
     market_status = str(payload.get("market_status") or "").lower()
-    price_type = "intraday" if market_status == "open" and not payload.get("price_is_fallback") else "previous_close"
+    price_type = (
+        "intraday"
+        if market_status == "open" and not payload.get("price_is_fallback")
+        else "previous_close"
+    )
     if not payload.get("price_is_fallback") and market_status != "open":
         price_type = price_source.get("method") or "daily"
 
@@ -1135,10 +1319,15 @@ def _build_data_freshness(payload: dict[str, Any], final_state: dict[str, Any]) 
             **_field_freshness_payload("financial_statement", period_end_date),
         },
         "news": {
-            "lookback_days": news_source.get("lookback_days") or (news_payload or {}).get("window_days"),
-            "articles_count": news_source.get("articles_found") or (news_payload or {}).get("articles_found") or len(news_articles or []),
+            "lookback_days": news_source.get("lookback_days")
+            or (news_payload or {}).get("window_days"),
+            "articles_count": news_source.get("articles_found")
+            or (news_payload or {}).get("articles_found")
+            or len(news_articles or []),
             "latest_article_date": latest_article_date,
-            "duplicate_removed_count": (news_payload or {}).get("duplicate_removed_count") or (news_payload or {}).get("dedup_removed_count") or news_impact.get("duplicate_excluded_count"),
+            "duplicate_removed_count": (news_payload or {}).get("duplicate_removed_count")
+            or (news_payload or {}).get("dedup_removed_count")
+            or news_impact.get("duplicate_excluded_count"),
             **_field_freshness_payload("company_news", latest_article_date),
         },
         "macro": {
@@ -1157,25 +1346,51 @@ def _build_tab_status(payload: dict[str, Any]) -> dict[str, str]:
         "news": "ok",
         "risk_data_quality": "ok",
     }
-    data_sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
-    fundamentals = data_sources.get(PipelineAgent.FUNDAMENTALS.value) if isinstance(data_sources.get(PipelineAgent.FUNDAMENTALS.value), dict) else {}
+    data_sources = (
+        payload.get("data_sources") if isinstance(payload.get("data_sources"), dict) else {}
+    )
+    fundamentals = (
+        data_sources.get(PipelineAgent.FUNDAMENTALS.value)
+        if isinstance(data_sources.get(PipelineAgent.FUNDAMENTALS.value), dict)
+        else {}
+    )
     data_quality = _coerce_data_quality(payload.get("data_quality"))
-    completeness = payload.get("data_completeness") if isinstance(payload.get("data_completeness"), dict) else {}
-    gap_report = payload.get("fundamental_gap_report") if isinstance(payload.get("fundamental_gap_report"), dict) else {}
-    fundamental_completeness = completeness.get("fundamental_data") or completeness.get(PipelineAgent.FUNDAMENTALS.value) or {}
+    completeness = (
+        payload.get("data_completeness")
+        if isinstance(payload.get("data_completeness"), dict)
+        else {}
+    )
+    gap_report = (
+        payload.get("fundamental_gap_report")
+        if isinstance(payload.get("fundamental_gap_report"), dict)
+        else {}
+    )
+    fundamental_completeness = (
+        completeness.get("fundamental_data")
+        or completeness.get(PipelineAgent.FUNDAMENTALS.value)
+        or {}
+    )
     pct = None
     if isinstance(fundamental_completeness, dict):
         pct = fundamental_completeness.get("percent") or fundamental_completeness.get("score")
     if (
-        str(fundamentals.get("completeness") or data_quality.get(PipelineAgent.FUNDAMENTALS.value) or "").lower() == "partial"
+        str(
+            fundamentals.get("completeness")
+            or data_quality.get(PipelineAgent.FUNDAMENTALS.value)
+            or ""
+        ).lower()
+        == "partial"
         or bool(gap_report.get("missing_fields") or gap_report.get("missing"))
         or (isinstance(pct, (int, float)) and pct < 80)
     ):
         statuses["fundamental"] = "partial"
 
-    freshness = payload.get("data_freshness") if isinstance(payload.get("data_freshness"), dict) else {}
+    freshness = (
+        payload.get("data_freshness") if isinstance(payload.get("data_freshness"), dict) else {}
+    )
     if any(
-        str(item.get("freshness_status") if isinstance(item, dict) else "").lower() in {"stale", "outdated"}
+        str(item.get("freshness_status") if isinstance(item, dict) else "").lower()
+        in {"stale", "outdated"}
         for item in freshness.values()
     ):
         statuses["risk_data_quality"] = "warning"
@@ -1207,7 +1422,9 @@ def _with_analysis_overview_and_risk_data_quality(
     return enriched
 
 
-def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = None) -> dict[str, Any]:
+def _empty_trade_contract(
+    final_state: dict[str, Any], pd_obj: object | None = None
+) -> dict[str, Any]:
     current_price_fields = _get_current_price_fields(final_state, pd_obj)
     has_pos = bool(getattr(pd_obj, "has_existing_position", False)) if pd_obj is not None else False
     position_action = getattr(pd_obj, "position_action", None) if pd_obj is not None else None
@@ -1215,7 +1432,9 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
         position_action = None
     new_entry_action = getattr(pd_obj, "new_entry_action", None) if pd_obj is not None else None
     if not new_entry_action:
-        new_entry_action = "No new entry; maintain existing position" if has_pos else "Wait for valid entry setup"
+        new_entry_action = (
+            "No new entry; maintain existing position" if has_pos else "Wait for valid entry setup"
+        )
     position_size_hint = getattr(pd_obj, "position_size_hint", None) if pd_obj is not None else None
     if not position_size_hint:
         position_size_hint = (
@@ -1230,8 +1449,12 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
         "decision_adjusted_reason": None,
         "trade_plan_valid": False,
         "has_existing_position": has_pos,
-        "position_quantity": getattr(pd_obj, "position_quantity", None) if pd_obj is not None else None,
-        "average_entry_price": getattr(pd_obj, "average_entry_price", None) if pd_obj is not None else None,
+        "position_quantity": getattr(pd_obj, "position_quantity", None)
+        if pd_obj is not None
+        else None,
+        "average_entry_price": getattr(pd_obj, "average_entry_price", None)
+        if pd_obj is not None
+        else None,
         "position_action": position_action,
         "new_entry_action": new_entry_action,
         **current_price_fields,
@@ -1247,7 +1470,9 @@ def _empty_trade_contract(final_state: dict[str, Any], pd_obj: object | None = N
     }
 
 
-def _coerce_portfolio_decision(full_decision: str, pd_obj: object | None) -> tuple[str, object | None, list[str]]:
+def _coerce_portfolio_decision(
+    full_decision: str, pd_obj: object | None
+) -> tuple[str, object | None, list[str]]:
     if pd_obj is None:
         return full_decision, None, []
     try:
@@ -1257,19 +1482,29 @@ def _coerce_portfolio_decision(full_decision: str, pd_obj: object | None) -> tup
             pd_obj = PortfolioDecision.model_validate(pd_obj)
         return full_decision, pd_obj, []
     except (ImportError, AttributeError, TypeError, ValueError, ValidationError):
-        logger.warning("Portfolio decision payload could not be parsed; using fallback response", exc_info=True)
-        return full_decision or "", None, ["Portfolio decision payload could not be parsed; fallback response was used."]
+        logger.warning(
+            "Portfolio decision payload could not be parsed; using fallback response", exc_info=True
+        )
+        return (
+            full_decision or "",
+            None,
+            ["Portfolio decision payload could not be parsed; fallback response was used."],
+        )
 
 
-def _build_common_result_fields(final_state: dict[str, Any], pd_obj: object | None) -> dict[str, Any]:
+def _build_common_result_fields(
+    final_state: dict[str, Any], pd_obj: object | None
+) -> dict[str, Any]:
     data_quality = final_state.get("data_quality")
     current_price_fields = _get_current_price_fields(final_state, pd_obj)
     return {
         "analysis_depth": final_state.get("analysis_depth", DEFAULT_ANALYSIS_DEPTH),
         "time_horizon_months": final_state.get("time_horizon_months"),
         "data_fetched_at": final_state.get("data_fetched_at") or _utc_now_iso(),
-        "llm_call_budget": final_state.get("llm_call_budget") or final_state.get("balanced_gemini_request_budget"),
-        "llm_calls_used": final_state.get("llm_calls_used") or final_state.get("balanced_gemini_calls_used"),
+        "llm_call_budget": final_state.get("llm_call_budget")
+        or final_state.get("balanced_gemini_request_budget"),
+        "llm_calls_used": final_state.get("llm_calls_used")
+        or final_state.get("balanced_gemini_calls_used"),
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
         "is_partial": bool(final_state.get("is_partial", False)),
@@ -1310,9 +1545,14 @@ def _build_common_fundamental_fields(final_state: dict[str, Any]) -> dict[str, A
         "derived_fundamentals": final_state.get("derived_fundamentals") or [],
         "fundamental_field_quality": field_quality,
         "sector_classification": sector_classification,
-        "metrics_profile": final_state.get("metrics_profile") or metrics_profile.get("metrics_profile"),
-        "included_metrics": final_state.get("included_metrics") or metrics_profile.get("included_metrics") or [],
-        "excluded_metrics": final_state.get("excluded_metrics") or metrics_profile.get("excluded_metrics") or [],
+        "metrics_profile": final_state.get("metrics_profile")
+        or metrics_profile.get("metrics_profile"),
+        "included_metrics": final_state.get("included_metrics")
+        or metrics_profile.get("included_metrics")
+        or [],
+        "excluded_metrics": final_state.get("excluded_metrics")
+        or metrics_profile.get("excluded_metrics")
+        or [],
         "gap_report": gap_report,
         "source_metadata": _source_metadata_from_state(final_state, field_quality),
         "fallback_metadata": _fallback_metadata_from_state(final_state, field_quality),
@@ -1404,7 +1644,9 @@ def _portfolio_trade_fields(pd_obj: object, final_decision: Any) -> dict[str, An
         "average_entry_price": getattr(pd_obj, "average_entry_price", None),
         "position_action": position_action,
         "new_entry_action": _new_entry_action(pd_obj, has_existing_position),
-        "risk_reward_ratio": FIXED_RR if has_valid_actionable_trade else getattr(pd_obj, "risk_reward_ratio", None),
+        "risk_reward_ratio": FIXED_RR
+        if has_valid_actionable_trade
+        else getattr(pd_obj, "risk_reward_ratio", None),
         "risk_reward_display": RISK_REWARD_DISPLAY
         if has_valid_actionable_trade
         else getattr(pd_obj, "risk_reward_display", None),
@@ -1417,7 +1659,11 @@ def _new_entry_action(pd_obj: object, has_existing_position: bool) -> str:
     value = getattr(pd_obj, "new_entry_action", None)
     if value:
         return value
-    return "No new entry; maintain existing position" if has_existing_position else "Wait for valid entry setup"
+    return (
+        "No new entry; maintain existing position"
+        if has_existing_position
+        else "Wait for valid entry setup"
+    )
 
 
 def _rebalancing_action(pd_obj: object, has_existing_position: bool) -> str:
@@ -1462,7 +1708,11 @@ def _portfolio_payload(
 ) -> dict[str, Any]:
     rating = getattr(pd_obj, "rating", None)
     fallback_rating = _enum_value(rating)
-    final_decision = getattr(pd_obj, "final_decision", None) or getattr(pd_obj, "decision", None) or fallback_rating
+    final_decision = (
+        getattr(pd_obj, "final_decision", None)
+        or getattr(pd_obj, "decision", None)
+        or fallback_rating
+    )
     current_price_fields = _get_current_price_fields(final_state, pd_obj)
     return {
         "decision": final_decision,
@@ -1475,12 +1725,16 @@ def _portfolio_payload(
         **_portfolio_summary_fields(full_decision, pd_obj, final_state),
         "data_quality": _portfolio_data_quality(pd_obj, common, current_price_fields),
         "validation_warnings": getattr(pd_obj, "validation_warnings", []) or [],
-        "validation_warning_details": _validation_warning_details(getattr(pd_obj, "validation_warnings", []) or []),
+        "validation_warning_details": _validation_warning_details(
+            getattr(pd_obj, "validation_warnings", []) or []
+        ),
         **{key: value for key, value in common.items() if key != "data_quality"},
     }
 
 
-def _portfolio_summary_fields(full_decision: str, pd_obj: object, final_state: dict[str, Any]) -> dict[str, Any]:
+def _portfolio_summary_fields(
+    full_decision: str, pd_obj: object, final_state: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "full_decision": full_decision,
         "executive_summary": getattr(pd_obj, "executive_summary", None),
@@ -1488,7 +1742,8 @@ def _portfolio_summary_fields(full_decision: str, pd_obj: object, final_state: d
         "price_target": getattr(pd_obj, "price_target", None),
         "time_horizon": final_state.get("time_horizon") or getattr(pd_obj, "time_horizon", None),
         "confidence_score": getattr(pd_obj, "confidence_score", None),
-        "confidence_breakdown": _model_to_dict(getattr(pd_obj, "confidence_breakdown", None)) or None,
+        "confidence_breakdown": _model_to_dict(getattr(pd_obj, "confidence_breakdown", None))
+        or None,
         "suggested_allocation_percent": getattr(pd_obj, "suggested_allocation_percent", None),
         "entry_price": getattr(pd_obj, "entry_price", None),
         "stop_loss": getattr(pd_obj, "stop_loss", None),
@@ -1527,7 +1782,9 @@ def parse_final_result(
             final_state["warnings"] = coercion_warnings
     common = _build_common_result_fields(final_state, pd_obj)
     payload = (
-        _missing_portfolio_payload(full_decision=full_decision, final_state=final_state, common=common)
+        _missing_portfolio_payload(
+            full_decision=full_decision, final_state=final_state, common=common
+        )
         if pd_obj is None
         else _portfolio_payload(
             full_decision=full_decision,
@@ -1584,7 +1841,11 @@ def build_partial_result(
         "data_limitations": limitations,
         "warnings": warnings,
     }
-    payload = _missing_portfolio_payload(full_decision="", final_state=final_state, common=_build_common_result_fields(final_state, None))
+    payload = _missing_portfolio_payload(
+        full_decision="",
+        final_state=final_state,
+        common=_build_common_result_fields(final_state, None),
+    )
     payload.update(
         {
             "is_partial": True,
@@ -1621,7 +1882,9 @@ def cache_key(req: AnalysisRequest) -> AnalysisCacheKey:
         time_horizon_months=req.time_horizon_months,
         max_debate_rounds=req.max_debate_rounds,
         response_detail=req.response_detail,
-        has_existing_position=bool(req.has_existing_position) if req.has_existing_position is not None else False,
+        has_existing_position=bool(req.has_existing_position)
+        if req.has_existing_position is not None
+        else False,
         position_quantity=req.position_quantity,
         average_entry_price=req.average_entry_price,
     )
@@ -1630,7 +1893,11 @@ def cache_key(req: AnalysisRequest) -> AnalysisCacheKey:
 def shape_result(result_fields: dict[str, Any], response_detail: str) -> dict[str, Any]:
     """Trim response payload for summary mode; keep debug metadata only in debug."""
     if response_detail == "summary":
-        return {key: value for key, value in result_fields.items() if key in SUMMARY_FIELDS or key == "cache"}
+        return {
+            key: value
+            for key, value in result_fields.items()
+            if key in SUMMARY_FIELDS or key == "cache"
+        }
     if response_detail == "debug":
         return result_fields
     return {key: value for key, value in result_fields.items() if key not in {"raw_agent_state"}}
@@ -1645,7 +1912,10 @@ def with_data_fetched_at(result_fields: dict[str, Any]) -> dict[str, Any]:
 def request_warnings(req: AnalysisRequest) -> list[str]:
     if req.analysis_depth == "fast" and req.max_debate_rounds > 1:
         return [
-            "analysis_depth=fast skips the bull/bear and risk debate stages, so max_debate_rounds greater than 1 is ignored.",
+            (
+                "analysis_depth=fast skips the bull/bear and risk debate stages, so "
+                + "max_debate_rounds greater than 1 is ignored."
+            ),
         ]
     return []
 
@@ -1675,12 +1945,20 @@ def _entry_quality_payload(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         from tradingagents.technical.entry_quality import calculate_entry_quality
 
-        technical_entry = payload.get("technical_entry") if isinstance(payload.get("technical_entry"), dict) else {}
+        technical_entry = (
+            payload.get("technical_entry")
+            if isinstance(payload.get("technical_entry"), dict)
+            else {}
+        )
         return calculate_entry_quality(
             {
                 "current_price": payload.get("current_price"),
                 "last_price": payload.get("last_price"),
-                **(payload.get("price_performance") if isinstance(payload.get("price_performance"), dict) else {}),
+                **(
+                    payload.get("price_performance")
+                    if isinstance(payload.get("price_performance"), dict)
+                    else {}
+                ),
             },
             {
                 "entry_price": payload.get("entry_price"),
@@ -1696,7 +1974,9 @@ def _entry_quality_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _portfolio_value_from_payload(payload: dict[str, Any]) -> float | None:
-    analysis_params = payload.get("analysis_params") if isinstance(payload.get("analysis_params"), dict) else {}
+    analysis_params = (
+        payload.get("analysis_params") if isinstance(payload.get("analysis_params"), dict) else {}
+    )
     for value in (
         payload.get("portfolio_value"),
         payload.get("portfolio_value_used"),
@@ -1765,7 +2045,11 @@ def _record_observability_metrics(payload: dict[str, Any]) -> bool:
         from tradingagents.observability.metrics_collector import get_metrics_collector
 
         collector = get_metrics_collector()
-        vendor_attempts = payload.get("vendor_attempts") if isinstance(payload.get("vendor_attempts"), dict) else {}
+        vendor_attempts = (
+            payload.get("vendor_attempts")
+            if isinstance(payload.get("vendor_attempts"), dict)
+            else {}
+        )
         for data_type, attempts in vendor_attempts.items():
             if not isinstance(attempts, list):
                 continue
@@ -1788,13 +2072,30 @@ def _record_observability_metrics(payload: dict[str, Any]) -> bool:
                     collector.record_fallback(previous_failed_vendor, vendor, str(data_type))
                     previous_failed_vendor = None
 
-        vendor_budget = payload.get("vendor_budget") if isinstance(payload.get("vendor_budget"), dict) else {}
-        llm_calls = vendor_budget.get("llm_calls") if isinstance(vendor_budget.get("llm_calls"), dict) else {}
+        vendor_budget = (
+            payload.get("vendor_budget") if isinstance(payload.get("vendor_budget"), dict) else {}
+        )
+        llm_calls = (
+            vendor_budget.get("llm_calls")
+            if isinstance(vendor_budget.get("llm_calls"), dict)
+            else {}
+        )
         for agent_name, usage in (llm_calls.get("agents") or {}).items():
             if not isinstance(usage, dict):
                 continue
             used = int(usage.get("used") or 0)
-            model_type = "deep" if str(agent_name) in {"Bull Researcher", "Bear Researcher", "Research Manager", "Risk Committee", "Portfolio Manager"} else "quick"
+            model_type = (
+                "deep"
+                if str(agent_name)
+                in {
+                    "Bull Researcher",
+                    "Bear Researcher",
+                    "Research Manager",
+                    "Risk Committee",
+                    "Portfolio Manager",
+                }
+                else "quick"
+            )
             for _ in range(max(0, min(used, 20))):
                 collector.record_llm_call(model_type, True, None)
         if payload.get("budget_exhausted"):
@@ -1815,7 +2116,9 @@ def _attach_sprint5_fields(payload: dict[str, Any], req: AnalysisRequest) -> dic
     enriched["position_sizing"] = _position_sizing_payload(enriched, req)
     enriched["data_lineage"] = _data_lineage_payload(enriched)
     enriched["observability"] = {
-        **(enriched.get("observability") if isinstance(enriched.get("observability"), dict) else {}),
+        **(
+            enriched.get("observability") if isinstance(enriched.get("observability"), dict) else {}
+        ),
         "metrics_recorded": _record_observability_metrics(enriched),
     }
     return enriched
@@ -1824,8 +2127,20 @@ def _attach_sprint5_fields(payload: dict[str, Any], req: AnalysisRequest) -> dic
 def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict) -> dict:
     input_ticker = req.input_ticker or req.ticker
     normalized_ticker = req.ticker
-    exchange = "IDX" if str(normalized_ticker).upper().endswith(".JK") or req.market == "ID" else "US" if req.market == "US" else None
-    currency = "IDR" if exchange == "IDX" else "USD" if exchange == "US" else result_fields.get("price_currency")
+    exchange = (
+        "IDX"
+        if str(normalized_ticker).upper().endswith(".JK") or req.market == "ID"
+        else "US"
+        if req.market == "US"
+        else None
+    )
+    currency = (
+        "IDR"
+        if exchange == "IDX"
+        else "USD"
+        if exchange == "US"
+        else result_fields.get("price_currency")
+    )
 
     analysis_params = {
         "ticker": input_ticker,
@@ -1837,7 +2152,9 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
         "max_debate_rounds": req.max_debate_rounds,
         "analysis_depth": req.analysis_depth,
         "response_detail": req.response_detail,
-        "has_existing_position": bool(req.has_existing_position) if req.has_existing_position is not None else False,
+        "has_existing_position": bool(req.has_existing_position)
+        if req.has_existing_position is not None
+        else False,
         "position_quantity": req.position_quantity,
         "average_entry_price": req.average_entry_price,
     }
@@ -1854,7 +2171,9 @@ def response_payload(request_id: str, req: AnalysisRequest, result_fields: dict)
         "analysis_created_at": _utc_now_iso(),
         "analysis_depth": req.analysis_depth,
         "response_detail": req.response_detail,
-        "has_existing_position": bool(req.has_existing_position) if req.has_existing_position is not None else False,
+        "has_existing_position": bool(req.has_existing_position)
+        if req.has_existing_position is not None
+        else False,
         "position_quantity": req.position_quantity,
         "average_entry_price": req.average_entry_price,
         "analysis_params": analysis_params,

@@ -9,8 +9,8 @@ from pydantic import BaseModel
 from tradingagents.agents.utils.structured import bind_structured
 from tradingagents.dataflows.config import get_config
 from tradingagents.dataflows.errors import ErrorCode
-from tradingagents.llm.LLM_router import create_llms as _router_create_llms
-from tradingagents.llm.LLM_router import provider_kwargs as _router_provider_kwargs
+from tradingagents.llm.llm_router import create_llms as _router_create_llms
+from tradingagents.llm.llm_router import provider_kwargs as _router_provider_kwargs
 from tradingagents.llm_cache.exact_cache import get_exact_llm_cache
 from tradingagents.llm_cache.keys import build_exact_cache_key
 from tradingagents.llm_optimization.usage import (
@@ -122,7 +122,9 @@ def _invoke_once(
             if structured is not None:
                 return structured.invoke(prompt)
             return llm.invoke(
-                prompt + "\n\nReturn only valid JSON matching this schema: " + json.dumps(schema.model_json_schema())
+                prompt
+                + "\n\nReturn only valid JSON matching this schema: "
+                + json.dumps(schema.model_json_schema())
             )
 
         result = invoke_model()
@@ -140,7 +142,9 @@ def _invoke_once(
             usage_record.latency_ms = timer.elapsed_ms()
             log_usage(usage_record)
             return parsed
-        logger.warning("%s returned unparseable structured output. Using local fallback.", agent_name)
+        logger.warning(
+            "%s returned unparseable structured output. Using local fallback.", agent_name
+        )
         usage_record.fallback_used = True
         usage_record.error = "unparseable_structured_output"
         if budget is not None:

@@ -374,7 +374,9 @@ def normalize_financial_value(
     return payload
 
 
-def normalize_financial_field(value: Any, unit: str = "raw", currency: str = "IDR") -> dict[str, Any]:
+def normalize_financial_field(
+    value: Any, unit: str = "raw", currency: str = "IDR"
+) -> dict[str, Any]:
     return normalize_financial_value(value, unit=unit, currency=currency)
 
 
@@ -407,7 +409,9 @@ def normalize_financial_rows(
         for field in FINANCIAL_FIELDS:
             value = item.get(field)
             if field in item and not isinstance(value, dict):
-                item[field] = normalize_financial_field(value, unit=item["unit"], currency=item["currency"])
+                item[field] = normalize_financial_field(
+                    value, unit=item["unit"], currency=item["currency"]
+                )
         normalized_rows.append(item)
     return normalized_rows
 
@@ -446,22 +450,35 @@ def _looks_like_period_key(value: Any) -> bool:
     )
 
 
-def _row_from_period_mapping(period_label: str, values: Any, period_type_hint: str) -> dict[str, Any] | None:
+def _row_from_period_mapping(
+    period_label: str, values: Any, period_type_hint: str
+) -> dict[str, Any] | None:
     if not isinstance(values, dict):
         return None
     row = {"period_label": period_label, "period_type": period_type_hint}
     for raw_key, raw_value in values.items():
         if isinstance(raw_value, dict):
-            value = raw_value.get("normalized_value", raw_value.get("value", raw_value.get("raw_value")))
+            value = raw_value.get(
+                "normalized_value", raw_value.get("value", raw_value.get("raw_value"))
+            )
             row[_canonical_field(raw_key)] = value
             if raw_value.get("source_unit") or raw_value.get("unit") or raw_value.get("raw_unit"):
                 row.setdefault(
-                    "unit", raw_value.get("source_unit") or raw_value.get("unit") or raw_value.get("raw_unit")
+                    "unit",
+                    raw_value.get("source_unit")
+                    or raw_value.get("unit")
+                    or raw_value.get("raw_unit"),
                 )
-            if raw_value.get("currency") or raw_value.get("raw_currency") or raw_value.get("normalized_currency"):
+            if (
+                raw_value.get("currency")
+                or raw_value.get("raw_currency")
+                or raw_value.get("normalized_currency")
+            ):
                 row.setdefault(
                     "currency",
-                    raw_value.get("currency") or raw_value.get("raw_currency") or raw_value.get("normalized_currency"),
+                    raw_value.get("currency")
+                    or raw_value.get("raw_currency")
+                    or raw_value.get("normalized_currency"),
                 )
         else:
             row[_canonical_field(raw_key)] = raw_value
@@ -501,14 +518,17 @@ def _extract_statement_rows(payload: Any, default_period_type: str) -> list[dict
             if row:
                 rows.append(row)
 
-    if mapping and all(_looks_like_period_key(key) and isinstance(value, dict) for key, value in mapping.items()):
+    if mapping and all(
+        _looks_like_period_key(key) and isinstance(value, dict) for key, value in mapping.items()
+    ):
         for label, values in mapping.items():
             row = _row_from_period_mapping(str(label), values, default_period_type)
             if row:
                 rows.append(row)
 
     if not rows and any(
-        _canonical_field(key) in FINANCIAL_FIELDS or key in {"period", "period_label", "fiscalDateEnding"}
+        _canonical_field(key) in FINANCIAL_FIELDS
+        or key in {"period", "period_label", "fiscalDateEnding"}
         for key in mapping
     ):
         item = dict(mapping)
@@ -558,14 +578,19 @@ def _rows_from_vendor_parser(
             field = _canonical_field(raw_field)
             value = payload.get("value") if isinstance(payload, dict) else payload
             unit = payload.get("source_unit") if isinstance(payload, dict) else default_unit
-            row[field] = normalize_financial_field(value, unit=unit or default_unit, currency=currency)
+            row[field] = normalize_financial_field(
+                value, unit=unit or default_unit, currency=currency
+            )
         rows.append(row)
     return rows
 
 
 def _period_sort_key(row: dict[str, Any]) -> tuple[str, str]:
     period = row.get("period") if isinstance(row.get("period"), dict) else {}
-    return (str(period.get("period_end") or ""), str(period.get("period_label") or row.get("period_label") or ""))
+    return (
+        str(period.get("period_end") or ""),
+        str(period.get("period_label") or row.get("period_label") or ""),
+    )
 
 
 def build_normalized_period_rows(
@@ -795,7 +820,9 @@ def _financial_row_source_confidence(source: str, warnings: list[str] | None = N
 
 def _financial_row_value(row: dict[str, Any], field: str) -> float | None:
     candidates = [field]
-    candidates.extend(alias for alias, target in _FINANCIAL_ROW_FIELD_ALIASES.items() if target == field)
+    candidates.extend(
+        alias for alias, target in _FINANCIAL_ROW_FIELD_ALIASES.items() if target == field
+    )
     for candidate in candidates:
         value = unwrap_normalized_value(row.get(candidate))
         if value is not None:
@@ -829,7 +856,11 @@ def _financial_row_from_normalized_dict(
     field_values = {field: _financial_row_value(row, field) for field in FINANCIAL_ROW_FIELDS}
     financial_row = FinancialRow(
         symbol=str(symbol or row.get("symbol") or "").upper(),
-        period=str(period.get("period_label") or row.get("period_label") or build_period_label(as_of_date, "annual")),
+        period=str(
+            period.get("period_label")
+            or row.get("period_label")
+            or build_period_label(as_of_date, "annual")
+        ),
         period_type=str(period.get("period_type") or row.get("period_type") or "annual"),
         currency=currency,
         unit=unit,
@@ -854,7 +885,9 @@ def _info_value(info: dict[str, Any], *keys: str) -> Any:
     return None
 
 
-def _row_from_yfinance_info(info: dict[str, Any], *, symbol: str, market: str, currency: str) -> FinancialRow | None:
+def _row_from_yfinance_info(
+    info: dict[str, Any], *, symbol: str, market: str, currency: str
+) -> FinancialRow | None:
     if not isinstance(info, dict) or not info:
         return None
     values = {
@@ -870,13 +903,16 @@ def _row_from_yfinance_info(info: dict[str, Any], *, symbol: str, market: str, c
     }
     row = FinancialRow(
         symbol=symbol,
-        period=build_period_label(str(info.get("mostRecentQuarter") or info.get("lastFiscalYearEnd") or ""), "annual"),
+        period=build_period_label(
+            str(info.get("mostRecentQuarter") or info.get("lastFiscalYearEnd") or ""), "annual"
+        ),
         period_type="annual",
         currency=normalize_row_currency(currency, market),
         unit="raw",
         source="yfinance",
         source_confidence="medium",
-        as_of_date=str(info.get("mostRecentQuarter") or info.get("lastFiscalYearEnd") or "") or None,
+        as_of_date=str(info.get("mostRecentQuarter") or info.get("lastFiscalYearEnd") or "")
+        or None,
         retrieved_at=_utc_iso(),
         **values,
     )
@@ -912,7 +948,9 @@ def normalize_yfinance_financials(
         )
         for row in rows
     ]
-    shares_outstanding = _number_like(_info_value(info, "sharesOutstanding", "impliedSharesOutstanding"))
+    shares_outstanding = _number_like(
+        _info_value(info, "sharesOutstanding", "impliedSharesOutstanding")
+    )
     for row in normalized:
         if not row.shares_outstanding and shares_outstanding is not None:
             row.shares_outstanding = shares_outstanding
@@ -925,7 +963,9 @@ def normalize_yfinance_financials(
 
 def _flatten_finnhub_values(value: Any, output: dict[str, Any]) -> None:
     if isinstance(value, dict):
-        concept = value.get("concept") or value.get("label") or value.get("name") or value.get("field")
+        concept = (
+            value.get("concept") or value.get("label") or value.get("name") or value.get("field")
+        )
         if concept and any(key in value for key in ("value", "amount", "v")):
             output[str(concept)] = value.get("value", value.get("amount", value.get("v")))
             return
@@ -941,7 +981,9 @@ def _flatten_finnhub_values(value: Any, output: dict[str, Any]) -> None:
 
 
 def _finnhub_period_type(report: dict[str, Any], default_type: str) -> str:
-    text = " ".join(str(report.get(key) or "") for key in ("freq", "period", "fp", "form", "quarter")).upper()
+    text = " ".join(
+        str(report.get(key) or "") for key in ("freq", "period", "fp", "form", "quarter")
+    ).upper()
     if "Q" in text or report.get("quarter") not in (None, ""):
         return "quarterly"
     if "FY" in text or report.get("year") not in (None, ""):
@@ -979,7 +1021,9 @@ def normalize_finnhub_financials(
         return []
     profile = profile if isinstance(profile, dict) else {}
     company = profile.get("company") if isinstance(profile.get("company"), dict) else profile
-    symbol = str(payload.get("symbol") or company.get("ticker") or company.get("symbol") or "").upper()
+    symbol = str(
+        payload.get("symbol") or company.get("ticker") or company.get("symbol") or ""
+    ).upper()
     market = _market_for_financial_row(symbol, company)
     currency = normalize_row_currency(
         payload.get("currency") or company.get("currency") or company.get("currency_symbol"),
@@ -1003,7 +1047,9 @@ def normalize_finnhub_financials(
             if field in values:
                 values[field] = _number_like(raw_value)
         if values.get("shares_outstanding") is None:
-            values["shares_outstanding"] = _number_like(company.get("shareOutstanding") or company.get("shares_outstanding"))
+            values["shares_outstanding"] = _number_like(
+                company.get("shareOutstanding") or company.get("shares_outstanding")
+            )
         row = FinancialRow(
             symbol=symbol,
             period=build_period_label(str(end_date or ""), period_type),
@@ -1116,7 +1162,9 @@ def merge_financial_rows_yfinance_first(
         row = _copy_financial_row(fallback)
         row.fallback = True
         row.fallback_source = "finnhub"
-        row.warnings.append("Entire period supplied by Finnhub fallback because YFinance period was unavailable.")
+        row.warnings.append(
+            "Entire period supplied by Finnhub fallback because YFinance period was unavailable."
+        )
         for field in FINANCIAL_ROW_FIELDS:
             if getattr(row, field) is not None:
                 filled_by_fallback.append(field)
@@ -1133,11 +1181,19 @@ def merge_financial_rows_yfinance_first(
         merged_rows.append(row)
 
     missing_fields = sorted(
-        field for field in FINANCIAL_ROW_FIELDS if not any(getattr(row, field) is not None for row in merged_rows)
+        field
+        for field in FINANCIAL_ROW_FIELDS
+        if not any(getattr(row, field) is not None for row in merged_rows)
     )
     fallback_used = bool(filled_by_fallback)
     metadata = {
-        "source": "mixed" if fallback_used else "yfinance" if primary_rows else "finnhub" if fallback_rows else "unavailable",
+        "source": "mixed"
+        if fallback_used
+        else "yfinance"
+        if primary_rows
+        else "finnhub"
+        if fallback_rows
+        else "unavailable",
         "source_priority": ["yfinance", "finnhub"],
         "fallback_used": fallback_used,
         "fallback_source": "finnhub" if fallback_used else None,
@@ -1146,8 +1202,6 @@ def merge_financial_rows_yfinance_first(
         "warnings": list(dict.fromkeys(warnings)),
     }
     return {"rows": merged_rows, "metadata": metadata, "field_quality": field_quality}
-
-
 
 
 def _number_like(value: Any) -> float | None:
@@ -1214,7 +1268,9 @@ def _csv_dividend_rows(payload: str) -> list[dict[str, Any]]:
     import csv
     from io import StringIO
 
-    lines = [line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    lines = [
+        line for line in payload.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    ]
     if len(lines) < 2 or "," not in payload:
         return []
     try:
@@ -1242,7 +1298,14 @@ def _dividend_rows(payload: Any) -> list[dict[str, Any]]:
         else:
             return _csv_dividend_rows(payload)
     if isinstance(payload, dict):
-        for key in ("dividends", "Dividends", "corporate_actions", "corporateActions", "data", "rows"):
+        for key in (
+            "dividends",
+            "Dividends",
+            "corporate_actions",
+            "corporateActions",
+            "data",
+            "rows",
+        ):
             value = payload.get(key)
             if isinstance(value, list):
                 return [dict(item) for item in value if isinstance(item, dict)]
@@ -1260,7 +1323,15 @@ def _event_period_keys(row: dict[str, Any]) -> list[str]:
     date_value = next(
         (
             row.get(key)
-            for key in ("ex_date", "date", "Date", "payment_date", "record_date", "announcement_date", "")
+            for key in (
+                "ex_date",
+                "date",
+                "Date",
+                "payment_date",
+                "record_date",
+                "announcement_date",
+                "",
+            )
             if row.get(key)
         ),
         None,
@@ -1275,7 +1346,15 @@ def _event_period_keys(row: dict[str, Any]) -> list[str]:
 
 
 def _dividend_amount(row: dict[str, Any]) -> float | None:
-    for key in ("dividend_per_share", "Dividend Per Share", "Dividends", "cash_amount", "amount", "dividend", "cash_dividend"):
+    for key in (
+        "dividend_per_share",
+        "Dividend Per Share",
+        "Dividends",
+        "cash_amount",
+        "amount",
+        "dividend",
+        "cash_dividend",
+    ):
         amount = _number_like(row.get(key))
         if amount is not None:
             return abs(amount)
@@ -1320,6 +1399,7 @@ def _merge_dividend_events(normalized: dict[str, Any], dividends: Any) -> None:
 def _latest_period_key(periods: list[Any]) -> str | None:
     return periods[-1].key if periods else None
 
+
 def build_financial_highlights_from_normalized_rows(
     normalized_rows: list[dict[str, Any]],
     *,
@@ -1335,7 +1415,9 @@ def build_financial_highlights_from_normalized_rows(
     resolved_periods: list[Any] | None = None
     if analysis_date:
         try:
-            from tradingagents.financial_highlights.period_resolver import resolve_financial_highlight_periods
+            from tradingagents.financial_highlights.period_resolver import (
+                resolve_financial_highlight_periods,
+            )
 
             resolved_periods = resolve_financial_highlight_periods(analysis_date)
             allowed_keys = {period.key for period in resolved_periods}
@@ -1346,7 +1428,9 @@ def build_financial_highlights_from_normalized_rows(
     for row in rows:
         period = row.get("period") if isinstance(row.get("period"), dict) else {}
         financial_period = _financial_period_from_metadata(period)
-        if financial_period is not None and (allowed_keys is None or financial_period.key in allowed_keys):
+        if financial_period is not None and (
+            allowed_keys is None or financial_period.key in allowed_keys
+        ):
             display_rows.append(row)
     latest = display_rows[-1] if display_rows else rows[-1] if rows else {}
     latest_period = latest.get("period") if isinstance(latest.get("period"), dict) else {}
@@ -1421,9 +1505,13 @@ def build_financial_highlights_from_normalized_rows(
     profile = company_profile or {}
     if periods and price_data is not None:
         try:
-            from tradingagents.financial_highlights.statement_parser import reference_prices_by_period
+            from tradingagents.financial_highlights.statement_parser import (
+                reference_prices_by_period,
+            )
 
-            for period_key, reference_price in reference_prices_by_period(periods, price_data, analysis_date).items():
+            for period_key, reference_price in reference_prices_by_period(
+                periods, price_data, analysis_date
+            ).items():
                 _merge_table_metric(
                     normalized_for_table,
                     period_key,
@@ -1481,7 +1569,9 @@ def build_financial_highlights_from_normalized_rows(
             "fcf_yield": ("fcf_yield", "free_cash_flow_yield", "freeCashFlowYield"),
         }
         for field_name, source_keys in profile_metric_fields.items():
-            value = next((profile.get(key) for key in source_keys if profile.get(key) is not None), None)
+            value = next(
+                (profile.get(key) for key in source_keys if profile.get(key) is not None), None
+            )
             _merge_table_metric(
                 normalized_for_table,
                 latest_key,

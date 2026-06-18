@@ -15,4 +15,3 @@ def sha256_text(value: str) -> str:
 
 def sha256_json(value: Any) -> str:
     return sha256_text(stable_json_dumps(value))
-

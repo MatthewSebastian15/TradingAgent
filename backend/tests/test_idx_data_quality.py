@@ -8,7 +8,9 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures" / "idx_golden"
 
 
 def _fixtures() -> list[dict[str, Any]]:
-    return [json.loads(path.read_text(encoding="utf-8")) for path in sorted(FIXTURE_DIR.glob("*.json"))]
+    return [
+        json.loads(path.read_text(encoding="utf-8")) for path in sorted(FIXTURE_DIR.glob("*.json"))
+    ]
 
 
 def _value(payload: dict[str, Any], key: str) -> Any:

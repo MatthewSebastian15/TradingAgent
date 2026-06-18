@@ -18,36 +18,174 @@ from .valuation_multiples_builder import build_valuation_multiples
 
 FUNDAMENTAL_CHART_REGISTRY: dict[str, list[dict[str, Any]]] = {
     "income": [
-        {"id": "income-revenue-ebitda-net-profit", "title": "Revenue, EBITDA, Net Profit", "type": "grouped_bar", "metrics": ["revenue", "ebitda", "net_profit"], "unit": "currency"},
-        {"id": "income-growth", "title": "Revenue Growth (%) vs Net Profit Growth (%)", "type": "line", "metrics": ["revenue_growth", "net_profit_growth"], "unit": "percent"},
-        {"id": "income-margin", "title": "EBITDA Margin (%) vs Net Profit Margin (%)", "type": "line", "metrics": ["ebitda_margin", "net_profit_margin"], "unit": "percent"},
+        {
+            "id": "income-revenue-ebitda-net-profit",
+            "title": "Revenue, EBITDA, Net Profit",
+            "type": "grouped_bar",
+            "metrics": ["revenue", "ebitda", "net_profit"],
+            "unit": "currency",
+        },
+        {
+            "id": "income-growth",
+            "title": "Revenue Growth (%) vs Net Profit Growth (%)",
+            "type": "line",
+            "metrics": ["revenue_growth", "net_profit_growth"],
+            "unit": "percent",
+        },
+        {
+            "id": "income-margin",
+            "title": "EBITDA Margin (%) vs Net Profit Margin (%)",
+            "type": "line",
+            "metrics": ["ebitda_margin", "net_profit_margin"],
+            "unit": "percent",
+        },
         {"id": "income-eps", "title": "EPS", "type": "line", "metrics": ["eps"], "unit": "number"},
-        {"id": "income-gross-profit-cost-revenue", "title": "Gross Profit vs Cost of Revenue", "type": "grouped_bar", "metrics": ["gross_profit", "cost_of_revenue"], "unit": "currency"},
-        {"id": "income-operating-pretax-net-profit", "title": "Operating Income / EBIT vs Pretax Income vs Net Profit", "type": "grouped_bar", "metrics": ["operating_income", "pretax_income", "net_profit"], "unit": "currency"},
+        {
+            "id": "income-gross-profit-cost-revenue",
+            "title": "Gross Profit vs Cost of Revenue",
+            "type": "grouped_bar",
+            "metrics": ["gross_profit", "cost_of_revenue"],
+            "unit": "currency",
+        },
+        {
+            "id": "income-operating-pretax-net-profit",
+            "title": "Operating Income / EBIT vs Pretax Income vs Net Profit",
+            "type": "grouped_bar",
+            "metrics": ["operating_income", "pretax_income", "net_profit"],
+            "unit": "currency",
+        },
     ],
     "balance_sheet": [
-        {"id": "balance-bvps", "title": "BVPS", "type": "line", "metrics": ["bvps"], "unit": "number"},
-        {"id": "balance-net-debt", "title": "Net Debt", "type": "bar", "metrics": ["net_debt"], "unit": "currency"},
-        {"id": "balance-cash-equity-ratio", "title": "Cash Ratio vs Equity Ratio", "type": "line", "metrics": ["cash_ratio", "equity_ratio"], "unit": "ratio_percent_mixed"},
-        {"id": "balance-assets-liabilities-equity", "title": "Total Assets vs Total Liabilities vs Total Equity", "type": "grouped_bar", "metrics": ["total_assets", "total_liabilities", "total_equity"], "unit": "currency"},
-        {"id": "balance-current-working-capital", "title": "Current Assets vs Current Liabilities vs Working Capital", "type": "grouped_bar", "metrics": ["current_assets", "current_liabilities", "working_capital"], "unit": "currency"},
-        {"id": "balance-liquidity-debt-ratios", "title": "Current Ratio vs Quick Ratio vs Debt Ratio", "type": "line", "metrics": ["current_ratio", "quick_ratio", "debt_ratio"], "unit": "ratio"},
+        {
+            "id": "balance-bvps",
+            "title": "BVPS",
+            "type": "line",
+            "metrics": ["bvps"],
+            "unit": "number",
+        },
+        {
+            "id": "balance-net-debt",
+            "title": "Net Debt",
+            "type": "bar",
+            "metrics": ["net_debt"],
+            "unit": "currency",
+        },
+        {
+            "id": "balance-cash-equity-ratio",
+            "title": "Cash Ratio vs Equity Ratio",
+            "type": "line",
+            "metrics": ["cash_ratio", "equity_ratio"],
+            "unit": "ratio_percent_mixed",
+        },
+        {
+            "id": "balance-assets-liabilities-equity",
+            "title": "Total Assets vs Total Liabilities vs Total Equity",
+            "type": "grouped_bar",
+            "metrics": ["total_assets", "total_liabilities", "total_equity"],
+            "unit": "currency",
+        },
+        {
+            "id": "balance-current-working-capital",
+            "title": "Current Assets vs Current Liabilities vs Working Capital",
+            "type": "grouped_bar",
+            "metrics": ["current_assets", "current_liabilities", "working_capital"],
+            "unit": "currency",
+        },
+        {
+            "id": "balance-liquidity-debt-ratios",
+            "title": "Current Ratio vs Quick Ratio vs Debt Ratio",
+            "type": "line",
+            "metrics": ["current_ratio", "quick_ratio", "debt_ratio"],
+            "unit": "ratio",
+        },
     ],
     "cash_flow": [
-        {"id": "cashflow-free-cash-flow", "title": "Free Cash Flow", "type": "bar", "metrics": ["free_cash_flow"], "unit": "currency"},
-        {"id": "cashflow-cfo-net-income", "title": "CFO / Net Income", "type": "line", "metrics": ["cfo_to_net_income"], "unit": "ratio"},
-        {"id": "cashflow-capex-fcf-coverage", "title": "Capex Intensity (%) vs FCF Coverage", "type": "line", "metrics": ["capex_intensity_percent", "fcf_coverage"], "unit": "percent_ratio_mixed"},
-        {"id": "cashflow-operating-investing-financing", "title": "Operating Cash Flow vs Investing Cash Flow vs Financing Cash Flow", "type": "grouped_bar", "metrics": ["operating_cash_flow", "investing_cash_flow", "financing_cash_flow"], "unit": "currency"},
-        {"id": "cashflow-capex-fcf", "title": "Capital Expenditure vs Free Cash Flow", "type": "grouped_bar", "metrics": ["capital_expenditure", "free_cash_flow"], "unit": "currency"},
-        {"id": "cashflow-fcf-cfo-growth", "title": "FCF Margin (%) vs FCF Growth (%) vs CFO Growth (%)", "type": "line", "metrics": ["fcf_margin", "fcf_growth", "cfo_growth"], "unit": "percent"},
+        {
+            "id": "cashflow-free-cash-flow",
+            "title": "Free Cash Flow",
+            "type": "bar",
+            "metrics": ["free_cash_flow"],
+            "unit": "currency",
+        },
+        {
+            "id": "cashflow-cfo-net-income",
+            "title": "CFO / Net Income",
+            "type": "line",
+            "metrics": ["cfo_to_net_income"],
+            "unit": "ratio",
+        },
+        {
+            "id": "cashflow-capex-fcf-coverage",
+            "title": "Capex Intensity (%) vs FCF Coverage",
+            "type": "line",
+            "metrics": ["capex_intensity_percent", "fcf_coverage"],
+            "unit": "percent_ratio_mixed",
+        },
+        {
+            "id": "cashflow-operating-investing-financing",
+            "title": "Operating Cash Flow vs Investing Cash Flow vs Financing Cash Flow",
+            "type": "grouped_bar",
+            "metrics": ["operating_cash_flow", "investing_cash_flow", "financing_cash_flow"],
+            "unit": "currency",
+        },
+        {
+            "id": "cashflow-capex-fcf",
+            "title": "Capital Expenditure vs Free Cash Flow",
+            "type": "grouped_bar",
+            "metrics": ["capital_expenditure", "free_cash_flow"],
+            "unit": "currency",
+        },
+        {
+            "id": "cashflow-fcf-cfo-growth",
+            "title": "FCF Margin (%) vs FCF Growth (%) vs CFO Growth (%)",
+            "type": "line",
+            "metrics": ["fcf_margin", "fcf_growth", "cfo_growth"],
+            "unit": "percent",
+        },
     ],
     "ratios": [
-        {"id": "ratios-roe", "title": "ROE (%)", "type": "line", "metrics": ["roe"], "unit": "percent"},
-        {"id": "ratios-leverage-risk", "title": "DER vs Debt / EBITDA", "type": "line", "metrics": ["der", "debt_to_ebitda"], "unit": "ratio"},
-        {"id": "ratios-dividend-quality", "title": "Dividend Yield (%) vs Payout Ratio (%)", "type": "line", "metrics": ["dividend_yield", "payout_ratio"], "unit": "percent"},
-        {"id": "ratios-market-cap-enterprise-value", "title": "Market Cap vs Enterprise Value", "type": "grouped_bar", "metrics": ["market_cap", "enterprise_value"], "unit": "currency"},
-        {"id": "ratios-return-quality", "title": "ROA (%) vs ROIC (%) vs ROE (%)", "type": "line", "metrics": ["roa", "roic", "roe"], "unit": "percent"},
-        {"id": "ratios-yield-quality", "title": "FCF Yield (%) vs Earnings Yield (%)", "type": "line", "metrics": ["fcf_yield", "earnings_yield"], "unit": "percent"},
+        {
+            "id": "ratios-roe",
+            "title": "ROE (%)",
+            "type": "line",
+            "metrics": ["roe"],
+            "unit": "percent",
+        },
+        {
+            "id": "ratios-leverage-risk",
+            "title": "DER vs Debt / EBITDA",
+            "type": "line",
+            "metrics": ["der", "debt_to_ebitda"],
+            "unit": "ratio",
+        },
+        {
+            "id": "ratios-dividend-quality",
+            "title": "Dividend Yield (%) vs Payout Ratio (%)",
+            "type": "line",
+            "metrics": ["dividend_yield", "payout_ratio"],
+            "unit": "percent",
+        },
+        {
+            "id": "ratios-market-cap-enterprise-value",
+            "title": "Market Cap vs Enterprise Value",
+            "type": "grouped_bar",
+            "metrics": ["market_cap", "enterprise_value"],
+            "unit": "currency",
+        },
+        {
+            "id": "ratios-return-quality",
+            "title": "ROA (%) vs ROIC (%) vs ROE (%)",
+            "type": "line",
+            "metrics": ["roa", "roic", "roe"],
+            "unit": "percent",
+        },
+        {
+            "id": "ratios-yield-quality",
+            "title": "FCF Yield (%) vs Earnings Yield (%)",
+            "type": "line",
+            "metrics": ["fcf_yield", "earnings_yield"],
+            "unit": "percent",
+        },
     ],
 }
 
@@ -77,7 +215,11 @@ def _row_map(financial_highlights: dict[str, Any] | None) -> dict[str, dict[str,
 
 
 def _periods(financial_highlights: dict[str, Any] | None) -> list[dict[str, Any]]:
-    return [period for period in (financial_highlights or {}).get("periods") or [] if isinstance(period, dict)]
+    return [
+        period
+        for period in (financial_highlights or {}).get("periods") or []
+        if isinstance(period, dict)
+    ]
 
 
 def _cell(row: dict[str, Any] | None, period_key: str | None) -> dict[str, Any] | None:
@@ -128,11 +270,15 @@ def _direction(points: list[dict[str, Any]]) -> str:
     return "stable"
 
 
-def _metric_availability(rows: dict[str, dict[str, Any]], periods: list[dict[str, Any]]) -> dict[str, str]:
+def _metric_availability(
+    rows: dict[str, dict[str, Any]], periods: list[dict[str, Any]]
+) -> dict[str, str]:
     availability = {}
     for key, row in rows.items():
         cells = [_cell(row, period.get("key")) for period in periods]
-        available = [cell for cell in cells if isinstance(cell, dict) and cell.get("status") != "unavailable"]
+        available = [
+            cell for cell in cells if isinstance(cell, dict) and cell.get("status") != "unavailable"
+        ]
         if not available:
             availability[key] = "unavailable"
         elif len(available) == len(cells):
@@ -161,22 +307,39 @@ def _chart_data_quality(series_by_metric: dict[str, list[dict[str, Any]]]) -> st
 
 def _signal_for_chart(chart_id: str, series_by_metric: dict[str, list[dict[str, Any]]]) -> str:
     direction = {key: _direction(points) for key, points in series_by_metric.items()}
-    latest = {key: (_latest_point(points) or {}).get("value") for key, points in series_by_metric.items()}
+    latest = {
+        key: (_latest_point(points) or {}).get("value") for key, points in series_by_metric.items()
+    }
     if not any(_is_number(value) for value in latest.values()):
         return "unavailable"
 
     if chart_id == "income-growth":
-        if direction.get("revenue_growth") == "rising" and direction.get("net_profit_growth") == "rising":
+        if (
+            direction.get("revenue_growth") == "rising"
+            and direction.get("net_profit_growth") == "rising"
+        ):
             return "bullish"
-        if direction.get("revenue_growth") == "rising" and direction.get("net_profit_growth") == "falling":
+        if (
+            direction.get("revenue_growth") == "rising"
+            and direction.get("net_profit_growth") == "falling"
+        ):
             return "mixed"
     if chart_id == "income-margin":
-        if direction.get("ebitda_margin") == "rising" and direction.get("net_profit_margin") == "rising":
+        if (
+            direction.get("ebitda_margin") == "rising"
+            and direction.get("net_profit_margin") == "rising"
+        ):
             return "bullish"
         if "falling" in {direction.get("ebitda_margin"), direction.get("net_profit_margin")}:
             return "bearish"
     if chart_id == "income-eps":
-        return "bullish" if direction.get("eps") == "rising" else "bearish" if direction.get("eps") == "falling" else "neutral"
+        return (
+            "bullish"
+            if direction.get("eps") == "rising"
+            else "bearish"
+            if direction.get("eps") == "falling"
+            else "neutral"
+        )
     if chart_id == "income-gross-profit-cost-revenue":
         gross = direction.get("gross_profit")
         cost = direction.get("cost_of_revenue")
@@ -185,12 +348,24 @@ def _signal_for_chart(chart_id: str, series_by_metric: dict[str, list[dict[str, 
         if gross == "falling" and cost == "rising":
             return "bearish"
     if chart_id == "income-operating-pretax-net-profit":
-        if direction.get("operating_income") == "falling" and direction.get("net_profit") != "rising":
+        if (
+            direction.get("operating_income") == "falling"
+            and direction.get("net_profit") != "rising"
+        ):
             return "bearish"
-        if direction.get("operating_income") == "rising" and direction.get("net_profit") == "rising":
+        if (
+            direction.get("operating_income") == "rising"
+            and direction.get("net_profit") == "rising"
+        ):
             return "bullish"
     if chart_id == "balance-net-debt":
-        return "bearish" if direction.get("net_debt") == "rising" else "bullish" if direction.get("net_debt") == "falling" else "neutral"
+        return (
+            "bearish"
+            if direction.get("net_debt") == "rising"
+            else "bullish"
+            if direction.get("net_debt") == "falling"
+            else "neutral"
+        )
     if chart_id == "balance-current-working-capital":
         value = latest.get("working_capital")
         if _is_number(value) and value < 0 and direction.get("working_capital") == "falling":
@@ -201,7 +376,11 @@ def _signal_for_chart(chart_id: str, series_by_metric: dict[str, list[dict[str, 
         current_ratio = latest.get("current_ratio")
         quick_ratio = latest.get("quick_ratio")
         debt_ratio_dir = direction.get("debt_ratio")
-        if _is_number(quick_ratio) and quick_ratio < 1 and direction.get("quick_ratio") == "falling":
+        if (
+            _is_number(quick_ratio)
+            and quick_ratio < 1
+            and direction.get("quick_ratio") == "falling"
+        ):
             return "bearish"
         if _is_number(current_ratio) and current_ratio >= 1 and debt_ratio_dir != "rising":
             return "bullish"
@@ -213,9 +392,18 @@ def _signal_for_chart(chart_id: str, series_by_metric: dict[str, list[dict[str, 
             return "bearish"
     if chart_id == "cashflow-cfo-net-income":
         value = latest.get("cfo_to_net_income")
-        return "bullish" if _is_number(value) and value > 1 else "neutral" if _is_number(value) else "unavailable"
+        return (
+            "bullish"
+            if _is_number(value) and value > 1
+            else "neutral"
+            if _is_number(value)
+            else "unavailable"
+        )
     if chart_id == "cashflow-capex-fcf-coverage":
-        if direction.get("capex_intensity_percent") == "rising" and direction.get("fcf_coverage") == "falling":
+        if (
+            direction.get("capex_intensity_percent") == "rising"
+            and direction.get("fcf_coverage") == "falling"
+        ):
             return "bearish"
     if chart_id == "cashflow-fcf-cfo-growth":
         if direction.get("fcf_margin") == "rising" and direction.get("fcf_growth") == "rising":
@@ -223,7 +411,11 @@ def _signal_for_chart(chart_id: str, series_by_metric: dict[str, list[dict[str, 
         if direction.get("fcf_margin") == "falling" or direction.get("cfo_growth") == "falling":
             return "bearish"
     if chart_id == "ratios-return-quality":
-        if direction.get("roe") == "rising" and direction.get("roa") == "rising" and direction.get("roic") == "rising":
+        if (
+            direction.get("roe") == "rising"
+            and direction.get("roa") == "rising"
+            and direction.get("roic") == "rising"
+        ):
             return "bullish"
         if direction.get("roe") == "rising" and direction.get("roa") == "falling":
             return "mixed"
@@ -236,7 +428,10 @@ def _signal_for_chart(chart_id: str, series_by_metric: dict[str, list[dict[str, 
         if direction.get("fcf_yield") == "rising" or direction.get("earnings_yield") == "rising":
             return "bullish"
     if chart_id == "ratios-dividend-quality":
-        if direction.get("payout_ratio") == "rising" and direction.get("dividend_yield") != "rising":
+        if (
+            direction.get("payout_ratio") == "rising"
+            and direction.get("dividend_yield") != "rising"
+        ):
             return "bearish"
 
     rising = sum(1 for value in direction.values() if value == "rising")
@@ -256,7 +451,9 @@ def _chart_summary_text(title: str, signal: str, data_quality: str) -> str:
     return f"{title} produces a {signal} signal with {data_quality} data quality."
 
 
-def build_fundamental_chart_sections(financial_highlights: dict[str, Any] | None) -> list[dict[str, Any]]:
+def build_fundamental_chart_sections(
+    financial_highlights: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
     rows = _row_map(financial_highlights)
     periods = _periods(financial_highlights)
     sections = []
@@ -265,7 +462,9 @@ def build_fundamental_chart_sections(financial_highlights: dict[str, Any] | None
         for chart in charts:
             data = {metric: _series(rows.get(metric), periods) for metric in chart["metrics"]}
             section_charts.append({**chart, "data": data})
-        sections.append({"section": section_key, "layout": {"columns": 2, "rows": 3}, "charts": section_charts})
+        sections.append(
+            {"section": section_key, "layout": {"columns": 2, "rows": 3}, "charts": section_charts}
+        )
     return sections
 
 
@@ -300,7 +499,9 @@ def build_fundamental_context(
 
         signals = []
         for chart in charts:
-            series_by_metric = {metric: _series(rows.get(metric), periods) for metric in chart["metrics"]}
+            series_by_metric = {
+                metric: _series(rows.get(metric), periods) for metric in chart["metrics"]
+            }
             quality = _chart_data_quality(series_by_metric)
             signal = _signal_for_chart(chart["id"], series_by_metric)
             signals.append(signal)
@@ -320,13 +521,25 @@ def build_fundamental_context(
             section_signals[section_key] = "unavailable"
         else:
             average = sum(scored) / len(scored)
-            section_signals[section_key] = "bullish" if average >= 0.7 else "bearish" if average <= 0.3 else "mixed" if any(signal == "mixed" for signal in signals) else "neutral"
+            section_signals[section_key] = (
+                "bullish"
+                if average >= 0.7
+                else "bearish"
+                if average <= 0.3
+                else "mixed"
+                if any(signal == "mixed" for signal in signals)
+                else "neutral"
+            )
 
     warnings = []
-    missing_nullable = sorted(key for key in NULLABLE_METRIC_KEYS if metric_availability.get(key) == "unavailable")
+    missing_nullable = sorted(
+        key for key in NULLABLE_METRIC_KEYS if metric_availability.get(key) == "unavailable"
+    )
     if missing_nullable:
         warnings.append(f"Nullable metrics unavailable: {', '.join(missing_nullable)}")
-    data_quality_status = (financial_highlights or {}).get("data_quality", {}).get("status") or "unavailable"
+    data_quality_status = (financial_highlights or {}).get("data_quality", {}).get(
+        "status"
+    ) or "unavailable"
     if data_quality_status != "complete":
         warnings.append(f"Fundamental data quality is {data_quality_status}.")
 
@@ -338,7 +551,15 @@ def build_fundamental_context(
             weighted_score += SIGNAL_SCORES[signal] * weight
             used_weight += weight
     fundamental_score = round((weighted_score / used_weight) * 100) if used_weight else 0
-    fundamental_signal = "bullish" if fundamental_score >= 70 else "bearish" if fundamental_score <= 35 else "neutral" if fundamental_score >= 50 else "mixed"
+    fundamental_signal = (
+        "bullish"
+        if fundamental_score >= 70
+        else "bearish"
+        if fundamental_score <= 35
+        else "neutral"
+        if fundamental_score >= 50
+        else "mixed"
+    )
 
     return {
         "ticker": ticker,
@@ -351,7 +572,11 @@ def build_fundamental_context(
         "section_signals": section_signals,
         "data_quality": data_quality_status,
         "warnings": warnings,
-        "decision_hints": [item["summary"] for item in chart_summary if item["signal"] in {"bullish", "bearish", "mixed"}],
+        "decision_hints": [
+            item["summary"]
+            for item in chart_summary
+            if item["signal"] in {"bullish", "bearish", "mixed"}
+        ],
         "fundamental_score": fundamental_score,
         "fundamental_signal": fundamental_signal,
         "weights": SECTION_WEIGHTS,

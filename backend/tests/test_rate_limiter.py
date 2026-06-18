@@ -31,7 +31,12 @@ def test_rate_limit_returns_429(client, monkeypatch):
             "rebalancing_action": None,
             "key_catalysts": [],
             "invalidation_conditions": [],
-            "data_quality": {"price_data": "ok", "fundamentals": "missing", "news": "missing", "warnings": []},
+            "data_quality": {
+                "price_data": "ok",
+                "fundamentals": "missing",
+                "news": "missing",
+                "warnings": [],
+            },
         }
 
     monkeypatch.setattr("routes.analysis._run_pipeline_async", fake_run_pipeline_async)
@@ -77,7 +82,12 @@ def test_legacy_sse_rate_limit_returns_http_429(client, monkeypatch):
     async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
         return {
             "decision": "Hold",
-            "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []},
+            "data_quality": {
+                "price_data": "ok",
+                "fundamentals": "ok",
+                "news": "ok",
+                "warnings": [],
+            },
         }
 
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
@@ -118,7 +128,12 @@ def test_configured_api_key_must_match(client, monkeypatch):
             "rebalancing_action": None,
             "key_catalysts": [],
             "invalidation_conditions": [],
-            "data_quality": {"price_data": "ok", "fundamentals": "missing", "news": "missing", "warnings": []},
+            "data_quality": {
+                "price_data": "ok",
+                "fundamentals": "missing",
+                "news": "missing",
+                "warnings": [],
+            },
         }
 
     monkeypatch.setattr("routes.analysis._run_pipeline_async", fake_run_pipeline_async)
@@ -155,7 +170,12 @@ def test_job_create_rate_limit_runs_before_storing_second_job(client, monkeypatc
     async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
         return {
             "decision": "Hold",
-            "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []},
+            "data_quality": {
+                "price_data": "ok",
+                "fundamentals": "ok",
+                "news": "ok",
+                "warnings": [],
+            },
         }
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
@@ -197,11 +217,15 @@ def test_status_endpoint_is_rate_limited(client, monkeypatch):
 def test_status_endpoint_uses_separate_request_bucket(client, monkeypatch):
     monkeypatch.setattr(
         "routes.analysis.request_policy",
-        lambda: RateLimitPolicy(scope="status-request-separation-test", max_per_minute=1, max_concurrent=1),
+        lambda: RateLimitPolicy(
+            scope="status-request-separation-test", max_per_minute=1, max_concurrent=1
+        ),
     )
     monkeypatch.setattr(
         "routes.analysis.status_policy",
-        lambda: RateLimitPolicy(scope="status-separation-test", max_per_minute=10, max_concurrent=2),
+        lambda: RateLimitPolicy(
+            scope="status-separation-test", max_per_minute=10, max_concurrent=2
+        ),
     )
 
     headers = {"x-api-key": "same-status-separation-key"}
@@ -217,7 +241,9 @@ def test_shared_proxy_key_uses_separate_owner_session_quotas(client, monkeypatch
     monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="shared-proxy-key"))
     monkeypatch.setattr(
         "routes.analysis.status_policy",
-        lambda: RateLimitPolicy(scope="owner-session-limit-test", max_per_minute=1, max_concurrent=1),
+        lambda: RateLimitPolicy(
+            scope="owner-session-limit-test", max_per_minute=1, max_concurrent=1
+        ),
     )
 
     proxy_headers = {"x-api-key": "shared-proxy-key"}
@@ -280,12 +306,17 @@ def test_sqlite_stream_limiter_evicts_stale_active_lease(tmp_path):
 
 def test_market_quotes_endpoint_is_rate_limited(client, monkeypatch):
     async def fake_fetch_quotes(symbols):
-        return [{"sym": symbol, "chg": "0.00%", "pos": True, "price": 1.0, "error": False} for symbol in symbols]
+        return [
+            {"sym": symbol, "chg": "0.00%", "pos": True, "price": 1.0, "error": False}
+            for symbol in symbols
+        ]
 
     monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
     monkeypatch.setattr(
         "routes.market.request_policy",
-        lambda: RateLimitPolicy(scope="market-quotes-limit-test", max_per_minute=1, max_concurrent=1),
+        lambda: RateLimitPolicy(
+            scope="market-quotes-limit-test", max_per_minute=1, max_concurrent=1
+        ),
     )
 
     headers = {"x-api-key": "same-market-key"}
@@ -303,7 +334,12 @@ def test_job_event_stream_does_not_consume_request_limit(client, monkeypatch):
     async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
         return {
             "decision": "Hold",
-            "data_quality": {"price_data": "ok", "fundamentals": "ok", "news": "ok", "warnings": []},
+            "data_quality": {
+                "price_data": "ok",
+                "fundamentals": "ok",
+                "news": "ok",
+                "warnings": [],
+            },
         }
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
@@ -311,11 +347,15 @@ def test_job_event_stream_does_not_consume_request_limit(client, monkeypatch):
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
     monkeypatch.setattr(
         "routes.analysis.request_policy",
-        lambda: RateLimitPolicy(scope="job-events-request-test", max_per_minute=1, max_concurrent=1),
+        lambda: RateLimitPolicy(
+            scope="job-events-request-test", max_per_minute=1, max_concurrent=1
+        ),
     )
     monkeypatch.setattr(
         "routes.analysis.stream_policy",
-        lambda: RateLimitPolicy(scope="job-events-stream-test", max_per_minute=10, max_concurrent=1),
+        lambda: RateLimitPolicy(
+            scope="job-events-stream-test", max_per_minute=10, max_concurrent=1
+        ),
     )
 
     headers = {"x-api-key": "same-job-events-key"}

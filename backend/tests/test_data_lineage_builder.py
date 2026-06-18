@@ -62,7 +62,10 @@ def _sample_analysis_result() -> dict:
         "fundamental_gap_report": {"estimated_fields": ["market_cap"]},
         "financial_highlights": {
             "rows": [
-                {"key": "revenue", "values": {"FY25": {"status": "estimated", "formula": "fallback"}}},
+                {
+                    "key": "revenue",
+                    "values": {"FY25": {"status": "estimated", "formula": "fallback"}},
+                },
             ]
         },
         "warnings": ["Fallback vendor used."],

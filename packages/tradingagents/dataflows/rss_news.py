@@ -19,7 +19,12 @@ from .news_models import NewsEntity, NormalizedNewsArticle
 from .news_provider_base import BaseNewsProvider, ProviderFetchResult, sanitize_error
 from .news_relevance import is_relevant_news
 from .news_scoring import content_hash
-from .rss_news_config import DEFAULT_RSS_FEEDS, GOOGLE_NEWS_FALLBACK_RSS_FEEDS, RSSFeedConfig, google_news_rss_url
+from .rss_news_config import (
+    DEFAULT_RSS_FEEDS,
+    GOOGLE_NEWS_FALLBACK_RSS_FEEDS,
+    RSSFeedConfig,
+    google_news_rss_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +57,9 @@ class RSSContextProvider(BaseNewsProvider):
         if not bool(config.get("rss_enabled", True)):
             return ProviderFetchResult(provider=self.provider_name, status="disabled")
         if feedparser is None:
-            return ProviderFetchResult(provider=self.provider_name, status="unavailable", last_error="feedparser_missing")
+            return ProviderFetchResult(
+                provider=self.provider_name, status="unavailable", last_error="feedparser_missing"
+            )
 
         attempts: list[dict[str, Any]] = []
         articles: list[NormalizedNewsArticle] = []
@@ -72,7 +79,13 @@ class RSSContextProvider(BaseNewsProvider):
                 except Exception as exc:  # noqa: BLE001
                     status = "unavailable"
                     parsed = None
-                    attempt = {"strategy": feed.id, "feed": feed.name, "url": feed.url, "status": status, "error": sanitize_error(exc)}
+                    attempt = {
+                        "strategy": feed.id,
+                        "feed": feed.name,
+                        "url": feed.url,
+                        "status": status,
+                        "error": sanitize_error(exc),
+                    }
                 attempts.append(attempt)
                 if status != "success" or parsed is None:
                     continue
@@ -96,7 +109,9 @@ class RSSContextProvider(BaseNewsProvider):
 
         statuses = {str(attempt.get("status") or "") for attempt in attempts}
         status = _overall_status(statuses)
-        return ProviderFetchResult(provider=self.provider_name, status=status, articles=[], attempts=attempts)
+        return ProviderFetchResult(
+            provider=self.provider_name, status=status, articles=[], attempts=attempts
+        )
 
     def _fetch_feed(
         self,
@@ -131,7 +146,9 @@ class RSSContextProvider(BaseNewsProvider):
             return "unavailable", None, attempt
 
 
-def _select_feeds(config: dict[str, Any], ticker_profile: dict[str, Any] | None = None) -> list[RSSFeedConfig]:
+def _select_feeds(
+    config: dict[str, Any], ticker_profile: dict[str, Any] | None = None
+) -> list[RSSFeedConfig]:
     feeds: list[RSSFeedConfig] = []
     if bool(config.get("rss_google_news_fallback_enabled", True)):
         feeds.extend(_company_google_news_feeds(ticker_profile))
@@ -199,7 +216,9 @@ def _company_google_news_feeds(ticker_profile: dict[str, Any] | None) -> list[RS
                 name=f"Company Google News {index}",
                 url=google_news_rss_url(query, **locale),
                 category="markets",
-                region=str(ticker_profile.get("region") or ticker_profile.get("country") or "global"),
+                region=str(
+                    ticker_profile.get("region") or ticker_profile.get("country") or "global"
+                ),
                 source="GOOGLE NEWS",
                 tier=1,
                 enabled=True,
@@ -273,13 +292,17 @@ def _normalize_feed_entries(
                 feed_tier=feed.tier,
                 published_at=_parse_rss_date(item.get("published") or item.get("updated")),
                 entities=[
-                    NewsEntity(symbol=ticker_profile.get("ticker"), name=ticker_profile.get("company_name"))
+                    NewsEntity(
+                        symbol=ticker_profile.get("ticker"), name=ticker_profile.get("company_name")
+                    )
                 ]
                 if company_match
                 else [],
                 relevance_score=relevance_score,
                 relevance_category=relevance_category,
-                relevance_reasons=["rss_company_match"] if company_match else ["rss_market_context"],
+                relevance_reasons=["rss_company_match"]
+                if company_match
+                else ["rss_market_context"],
                 entity_match="company_exact" if company_match else "none",
                 matched_terms=matched_terms if company_match else [],
                 bucket=bucket,
@@ -294,7 +317,9 @@ def _normalize_feed_entries(
     return articles
 
 
-def score_rss_article(article: dict[str, Any], ticker_profile: dict[str, Any]) -> tuple[float, list[str]]:
+def score_rss_article(
+    article: dict[str, Any], ticker_profile: dict[str, Any]
+) -> tuple[float, list[str]]:
     text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
     ticker = str(ticker_profile.get("ticker") or "").lower()
     short_ticker = str(ticker_profile.get("short_ticker") or ticker.split(".", 1)[0]).lower()
@@ -344,7 +369,10 @@ def score_rss_article(article: dict[str, Any], ticker_profile: dict[str, Any]) -
     if not matched_terms:
         if any(term and _term_in_text(text, term) for term in (sector, industry, exchange, region)):
             score = max(score, 55)
-        elif any(term in text for term in ("market", "economy", "inflation", "rates", "sector", "industry")):
+        elif any(
+            term in text
+            for term in ("market", "economy", "inflation", "rates", "sector", "industry")
+        ):
             score = max(score, 45)
 
     return min(score, 100), list(dict.fromkeys(matched_terms))

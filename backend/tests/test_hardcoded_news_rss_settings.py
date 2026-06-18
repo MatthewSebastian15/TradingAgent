@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 
-
 _ENV_OVERRIDES = {
     "NEWS_RSS_ENABLED": "false",
     "NEWS_RSS_MAX_FEEDS": "1",
@@ -79,5 +78,8 @@ def test_core_news_rss_settings_are_hardcoded(monkeypatch):
     assert general_news["rss_primary"] is True
     assert general_news["rss_max_feeds"] == 50
     assert general_news["rss_max_items_per_feed"] == 30
-    assert general_news["allowed_categories"] == "all,markets,world,finance,tech,macro,central_bank,regulatory,forex,crypto"
+    assert (
+        general_news["allowed_categories"]
+        == "all,markets,world,finance,tech,macro,central_bank,regulatory,forex,crypto"
+    )
     assert general_news["cache_db_path"] == ".cache/general_news.sqlite3"

@@ -15,7 +15,9 @@ def build_balance_sheet_risk(snapshot: dict[str, Any]) -> dict[str, Any]:
     fallbacks = []
     if denominator is None and snapshot.get("total_liabilities") is not None:
         denominator = snapshot.get("total_liabilities")
-        fallbacks.append("Cash ratio uses total liabilities because current liabilities are unavailable")
+        fallbacks.append(
+            "Cash ratio uses total liabilities because current liabilities are unavailable"
+        )
     ebitda, ebitda_status, _source = effective_ebitda(snapshot)
     if ebitda_status == "estimated":
         fallbacks.append("EBITDA estimated from operating income")
@@ -37,7 +39,9 @@ def build_balance_sheet_risk(snapshot: dict[str, Any]) -> dict[str, Any]:
             currency=currency,
             format_type="ratio",
             formula="Total Debt / EBITDA",
-            status="estimated" if ebitda_status == "estimated" and debt is not None else "calculated",
+            status="estimated"
+            if ebitda_status == "estimated" and debt is not None
+            else "calculated",
         ),
         "cash_ratio": metric(
             safe_divide(cash, denominator),
@@ -56,7 +60,12 @@ def build_balance_sheet_risk(snapshot: dict[str, Any]) -> dict[str, Any]:
     warnings = []
     if is_financial_sector(snapshot):
         risk_level = "N/A"
-        warnings.append("Generic DER risk level is not applied to financial-sector companies. Use sector-specific review.")
+        warnings.append(
+            (
+                "Generic DER risk level is not applied to financial-sector companies. Use "
+                + "sector-specific review."
+            )
+        )
     elif values["der"] is None and values["debt_to_ebitda"] is None:
         risk_level = "N/A"
     elif (values["der"] or 0) > 2 or (values["debt_to_ebitda"] or 0) > 4:
@@ -69,6 +78,7 @@ def build_balance_sheet_risk(snapshot: dict[str, Any]) -> dict[str, Any]:
         **values,
         "metric_details": details,
         "risk_level": risk_level,
-        "risk_flags": warnings or ["Leverage metrics are calculated from the latest available statements."],
+        "risk_flags": warnings
+        or ["Leverage metrics are calculated from the latest available statements."],
         "data_quality": data_quality(details, fallback_used=fallbacks, warnings=warnings),
     }

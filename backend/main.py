@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -16,8 +16,8 @@ from config import (
     APP_ENV,
     APP_NAME,
     CORS_ORIGINS,
-    GENERAL_NEWS_ENABLED,
     GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH,
+    GENERAL_NEWS_ENABLED,
     GENERAL_NEWS_REFRESH_INTERVAL_SECONDS,
     IS_DEVELOPMENT,
     REQUEST_BODY_MAX_BYTES,
@@ -59,7 +59,9 @@ class SkipSseCompressionMiddleware:
         if scope.get("type") == "http" and self._is_sse_path(scope.get("path", "")):
             scope = dict(scope)
             scope["headers"] = [
-                (name, value) for name, value in scope.get("headers", []) if name.lower() != b"accept-encoding"
+                (name, value)
+                for name, value in scope.get("headers", [])
+                if name.lower() != b"accept-encoding"
             ]
         await self.app(scope, receive, send)
 
@@ -80,7 +82,9 @@ async def validate_config() -> None:
         for msg in issues:
             log = logger.critical if str(msg).startswith("CRITICAL:") else logger.warning
             log("STARTUP CONFIG ISSUE: %s", msg)
-        logger.warning("%d startup config issue(s) found. Server continues for debugging.", len(issues))
+        logger.warning(
+            "%d startup config issue(s) found. Server continues for debugging.", len(issues)
+        )
 
     logger.info(
         "Startup validation passed. Provider: %s | deep: %s | quick: %s",
@@ -105,7 +109,9 @@ async def general_news_background_worker() -> None:
             config = build_tradingagents_config()
             with use_config(config):
                 service = GeneralNewsService(config.get("general_news", {}))
-                result = await asyncio.to_thread(service.fetch_general_news, category="all", force_refresh=True)
+                result = await asyncio.to_thread(
+                    service.fetch_general_news, category="all", force_refresh=True
+                )
             await general_news_event_bus.publish_if_changed(result)
         except asyncio.CancelledError:
             raise
@@ -126,10 +132,8 @@ async def stop_general_news_worker(app: FastAPI) -> None:
     if task is None:
         return
     task.cancel()
-    try:
+    with suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
 
 
 @asynccontextmanager

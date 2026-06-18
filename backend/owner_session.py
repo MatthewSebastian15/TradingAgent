@@ -10,6 +10,7 @@ import os
 import secrets
 import time
 import uuid
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +42,9 @@ def _persistent_dev_signing_secret() -> bytes:
     if _DEV_SIGNING_SECRET is not None:
         return _DEV_SIGNING_SECRET
 
-    cache_home = Path(os.getenv("XDG_CACHE_HOME") or Path.home() / ".tradingagents" / "cache").expanduser()
+    cache_home = Path(
+        os.getenv("XDG_CACHE_HOME") or Path.home() / ".tradingagents" / "cache"
+    ).expanduser()
     secret_path = cache_home / _DEV_SIGNING_SECRET_FILE
     try:
         secret_path.parent.mkdir(parents=True, exist_ok=True)
@@ -49,10 +52,8 @@ def _persistent_dev_signing_secret() -> bytes:
         if not secret:
             secret = secrets.token_hex(32)
             secret_path.write_text(secret, encoding="utf-8")
-            try:
+            with suppress(OSError):
                 secret_path.chmod(0o600)
-            except OSError:
-                pass
         _DEV_SIGNING_SECRET = secret.encode("utf-8")
     except OSError:
         _DEV_SIGNING_SECRET = secrets.token_bytes(32)
@@ -78,7 +79,9 @@ def issue_owner_session(*, owner_id: str | None = None, now: int | None = None) 
         "issued_at": issued_at,
         "expires_at": expires_at,
     }
-    encoded_payload = _base64url_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+    encoded_payload = _base64url_encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    )
     return {
         "owner_token": f"{encoded_payload}.{_signature(encoded_payload)}",
         "expires_at": expires_at,

@@ -5,7 +5,6 @@ from typing import Any
 from tradingagents.graph.prompt_context_builder import PromptContext
 from tradingagents.llm_clients import create_llm_client
 
-
 ACTIONABLE_ACTIONS = {"BUY", "SELL", "Buy", "Sell"}
 
 

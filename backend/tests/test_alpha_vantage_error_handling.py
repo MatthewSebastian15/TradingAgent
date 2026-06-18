@@ -19,7 +19,9 @@ def test_alpha_vantage_http_error_redacts_api_key(monkeypatch):
         request = SimpleNamespace(url=url)
 
         def raise_for_status(self):
-            raise alpha_vantage_common.requests.HTTPError(f"500 Server Error for url: {self.url}", response=self)
+            raise alpha_vantage_common.requests.HTTPError(
+                f"500 Server Error for url: {self.url}", response=self
+            )
 
     response = Response()
 

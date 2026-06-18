@@ -114,7 +114,9 @@ class TradingMemoryLog:
             cols = {row[1] for row in conn.execute("PRAGMA table_info(decisions)").fetchall()}
             if "created_at" not in cols:
                 conn.execute("ALTER TABLE decisions ADD COLUMN created_at TEXT")
-                conn.execute("UPDATE decisions SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
+                conn.execute(
+                    "UPDATE decisions SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"
+                )
             conn.commit()
 
     # ------------------------------------------------------------------
@@ -161,7 +163,9 @@ class TradingMemoryLog:
         if self._db_path is None:
             return []
         with self._conn() as conn:
-            rows = conn.execute("SELECT * FROM decisions WHERE pending = 1 ORDER BY id ASC").fetchall()
+            rows = conn.execute(
+                "SELECT * FROM decisions WHERE pending = 1 ORDER BY id ASC"
+            ).fetchall()
         return [self._row_to_entry(r) for r in rows]
 
     def get_past_context(self, ticker: str, n_same: int = 5, n_cross: int = 3) -> str:
@@ -289,7 +293,9 @@ class TradingMemoryLog:
                 )
 
             if self._max_entries and self._max_entries > 0:
-                resolved_count = conn.execute("SELECT COUNT(*) FROM decisions WHERE pending = 0").fetchone()[0]
+                resolved_count = conn.execute(
+                    "SELECT COUNT(*) FROM decisions WHERE pending = 0"
+                ).fetchone()[0]
 
                 if resolved_count > self._max_entries:
                     to_drop = resolved_count - self._max_entries
@@ -321,7 +327,9 @@ class TradingMemoryLog:
         entry["date"] = entry.get("trade_date")
         entry["raw"] = self._format_return(entry.get("raw_return"))
         entry["alpha"] = self._format_return(entry.get("alpha_return"))
-        entry["holding"] = f"{entry['holding_days']}d" if entry.get("holding_days") is not None else None
+        entry["holding"] = (
+            f"{entry['holding_days']}d" if entry.get("holding_days") is not None else None
+        )
         return entry
 
     def _format_full(self, e: dict) -> str:

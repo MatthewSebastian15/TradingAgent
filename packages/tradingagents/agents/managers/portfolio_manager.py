@@ -26,7 +26,8 @@ def _trim_history(history: str, max_chars: int = MAX_HISTORY_CHARS) -> str:
 
     return (
         "[Earlier debate history omitted to stay within model context limits. "
-        "The most recent arguments from each analyst are preserved below.]\n\n" + tail
+        + "The most recent arguments from each analyst are preserved below.]\n\n"
+        + tail
     )
 
 
@@ -44,9 +45,15 @@ def create_portfolio_manager(llm):
         trader_plan = state["trader_investment_plan"]
 
         past_context = state.get("past_context", "")
-        lessons_line = f"- Lessons from prior decisions and outcomes:\n{past_context}\n" if past_context else ""
+        lessons_line = (
+            f"- Lessons from prior decisions and outcomes:\n{past_context}\n"
+            if past_context
+            else ""
+        )
 
-        prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision.
+        prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver \
+the \
+final trading decision.
 
 {instrument_context}
 
@@ -69,15 +76,36 @@ def create_portfolio_manager(llm):
 
 **Output requirements:**
 
-Executive Summary: Write 250-300 words in exactly 5 parts, written as continuous paragraphs without headers, section numbers, or bullet points. Part 1 states the signal and single most important reason. Part 2 describes recent price movement and separates fundamental-driven movement from speculative movement. Part 3 briefly states revenue trend, profitability, and financial health. Part 4 states overall risk level and the top 2 risk factors. Part 5 clearly states what the user should do right now.
+Executive Summary: Write 250-300 words in exactly 5 parts, written as continuous paragraphs \
+without \
+headers, section numbers, or bullet points. Part 1 states the signal and single most important \
+reason. Part 2 describes recent price movement and separates fundamental-driven movement from \
+speculative movement. Part 3 briefly states revenue trend, profitability, and financial health. \
+Part 4 states overall risk level and the top 2 risk factors. Part 5 clearly states what the user \
+should do right now.
 
-Investment Thesis: Write 400-450 words in exactly 6 parts, written as continuous paragraphs without headers, section numbers, or bullet points. Part 1 explains business overview, segments, and market position. Part 2 explains recent price movement and whether it is fundamentally supported or speculative. Part 3 covers revenue growth, profit margins, cashflow quality, and balance sheet strength with numbers where available. Part 4 identifies support, resistance, moving average conditions, and trend direction. Part 5 explains one macro risk, one sector risk, and one company-specific risk. Part 6 states the recommended action and the conditions that would upgrade or downgrade the recommendation.
+Investment Thesis: Write 400-450 words in exactly 6 parts, written as continuous paragraphs \
+without \
+headers, section numbers, or bullet points. Part 1 explains business overview, segments, and \
+market \
+position. Part 2 explains recent price movement and whether it is fundamentally supported or \
+speculative. Part 3 covers revenue growth, profit margins, cashflow quality, and balance sheet \
+strength with numbers where available. Part 4 identifies support, resistance, moving average \
+conditions, and trend direction. Part 5 explains one macro risk, one sector risk, and one \
+company-specific risk. Part 6 states the recommended action and the conditions that would upgrade \
+or downgrade the recommendation.
 
-Return a confidence_score from 0.0 to 1.0. Lower it when reports are incomplete, risk controls are weak, or debate evidence is mixed.
+Return a confidence_score from 0.0 to 1.0. Lower it when reports are incomplete, risk controls are \
+weak, or debate evidence is mixed.
 
-Also return confidence_breakdown as structured 0-100 integer scores for price_momentum, fundamental_quality, news_sentiment, risk_level_score, data_quality, and overall. Use risk_level_score so lower portfolio risk produces a higher score. The overall value must be a weighted average that is consistent with confidence_score after converting confidence_score to percent.
+Also return confidence_breakdown as structured 0-100 integer scores for price_momentum, \
+fundamental_quality, news_sentiment, risk_level_score, data_quality, and overall. Use \
+risk_level_score so lower portfolio risk produces a higher score. The overall value must be a \
+weighted average that is consistent with confidence_score after converting confidence_score to \
+percent.
 
-Be decisive. Ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
+Be decisive. Ground every conclusion in specific evidence from the \
+analysts.{get_language_instruction()}"""
 
         # Attempt structured output and capture the typed object.
         portfolio_decision_obj: PortfolioDecision | None = None
@@ -102,7 +130,7 @@ Be decisive. Ground every conclusion in specific evidence from the analysts.{get
             except Exception as exc:
                 logger.error(
                     "Portfolio Manager: free-text fallback also failed (%s). "
-                    "Returning placeholder so graph can continue.",
+                    + "Returning placeholder so graph can continue.",
                     exc,
                 )
                 final_trade_decision = (

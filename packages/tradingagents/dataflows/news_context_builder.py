@@ -42,7 +42,9 @@ def build_news_context(
         if article
         and (
             not article.get("market_context_only")
-            and is_relevant_news(article, symbol, str(company_name) if company_name else None, aliases)
+            and is_relevant_news(
+                article, symbol, str(company_name) if company_name else None, aliases
+            )
         )
     ]
     ranked = sorted(relevant, key=lambda article: _rank_score(article, symbol), reverse=True)
@@ -83,7 +85,9 @@ def _normalize_article(item: Any) -> dict[str, Any]:
         "title": item.get("title"),
         "source": source,
         "provider": provider,
-        "published_at": item.get("published_at") or item.get("pub_date") or item.get("published_date"),
+        "published_at": item.get("published_at")
+        or item.get("pub_date")
+        or item.get("published_date"),
         "summary": item.get("summary") or item.get("description"),
         "url": item.get("url") or item.get("link"),
         "relevance_score": item.get("relevance_score"),
@@ -96,7 +100,16 @@ def _normalize_article(item: Any) -> dict[str, Any]:
 def _compact_article(article: dict[str, Any]) -> dict[str, Any]:
     return {
         key: article.get(key)
-        for key in ("title", "source", "provider", "published_at", "summary", "url", "relevance_score", "sentiment_label")
+        for key in (
+            "title",
+            "source",
+            "provider",
+            "published_at",
+            "summary",
+            "url",
+            "relevance_score",
+            "sentiment_label",
+        )
         if article.get(key) not in (None, "", [])
     }
 
@@ -139,7 +152,9 @@ def _parse_date(value: Any) -> datetime | None:
 
 
 def _vendor_summary(result: dict[str, Any], articles: list[Any]) -> dict[str, dict[str, Any]]:
-    statuses = result.get("provider_status") if isinstance(result.get("provider_status"), dict) else {}
+    statuses = (
+        result.get("provider_status") if isinstance(result.get("provider_status"), dict) else {}
+    )
     summary: dict[str, dict[str, Any]] = {}
     for source in NEWS_CONTEXT_SOURCES:
         count = 0
@@ -149,7 +164,10 @@ def _vendor_summary(result: dict[str, Any], articles: list[Any]) -> dict[str, di
             provider = str(item.get("provider") or item.get("source") or "").lower()
             if provider == source:
                 count += 1
-        summary[source] = {"articles": count, "status": statuses.get(source, "empty" if count == 0 else "success")}
+        summary[source] = {
+            "articles": count,
+            "status": statuses.get(source, "empty" if count == 0 else "success"),
+        }
     return summary
 
 

@@ -37,7 +37,11 @@ from tradingagents.pipeline_balanced_llm import (
     _risk_to_markdown,
 )
 from tradingagents.pipeline_balanced_progress import AGENT_LABELS as _AGENT_LABELS
-from tradingagents.pipeline_balanced_progress import _emit_data_quality, _emit_progress, _run_tracked
+from tradingagents.pipeline_balanced_progress import (
+    _emit_data_quality,
+    _emit_progress,
+    _run_tracked,
+)
 from tradingagents.pipeline_balanced_types import (
     AnalysisCancelledError,
     AnalystReport,

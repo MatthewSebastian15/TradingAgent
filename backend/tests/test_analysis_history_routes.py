@@ -18,8 +18,12 @@ def _result(request_id: str, ticker: str = "AAPL"):
 
 
 def test_history_list_detail_filter_and_limit(client, analysis_repository):
-    analysis_repository.save_analysis(result=_result("req-aapl", "AAPL"), job_id="job-aapl", owner_id=_TEST_OWNER_IDENTIFIER)
-    analysis_repository.save_analysis(result=_result("req-msft", "MSFT"), job_id="job-msft", owner_id=_TEST_OWNER_IDENTIFIER)
+    analysis_repository.save_analysis(
+        result=_result("req-aapl", "AAPL"), job_id="job-aapl", owner_id=_TEST_OWNER_IDENTIFIER
+    )
+    analysis_repository.save_analysis(
+        result=_result("req-msft", "MSFT"), job_id="job-msft", owner_id=_TEST_OWNER_IDENTIFIER
+    )
 
     response = client.get("/api/analysis/history", params={"ticker": "aapl", "limit": 1})
 
@@ -70,7 +74,9 @@ def test_history_is_global_across_valid_owner_sessions(client, analysis_reposito
 
 
 def test_history_delete_is_global_across_valid_owner_sessions(client, analysis_repository):
-    analysis_repository.save_analysis(result=_result("req-delete-owner"), owner_id=_TEST_OWNER_IDENTIFIER)
+    analysis_repository.save_analysis(
+        result=_result("req-delete-owner"), owner_id=_TEST_OWNER_IDENTIFIER
+    )
     other_headers = {"x-owner-token": issue_owner_session()["owner_token"]}
 
     response = client.delete("/api/analysis/history/req-delete-owner", headers=other_headers)

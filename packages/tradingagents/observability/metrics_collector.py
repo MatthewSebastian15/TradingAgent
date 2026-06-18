@@ -4,8 +4,15 @@ import threading
 from collections import defaultdict
 from typing import Any
 
-
-_BLOCKED_KEY_PARTS = ("api_key", "apikey", "secret", "token", "authorization", "raw_response", "response_body")
+_BLOCKED_KEY_PARTS = (
+    "api_key",
+    "apikey",
+    "secret",
+    "token",
+    "authorization",
+    "raw_response",
+    "response_body",
+)
 
 
 class MetricsCollector:
@@ -30,7 +37,12 @@ class MetricsCollector:
             if latency_ms is not None:
                 stats["latency_total_ms"] += max(0, int(latency_ms))
                 stats["latency_count"] += 1
-            if data_type_key in {"fundamental", "fundamentals", "financials", "financial_statements"}:
+            if data_type_key in {
+                "fundamental",
+                "fundamentals",
+                "financials",
+                "financial_statements",
+            }:
                 self._fundamental_coverage["calls"] += 1
                 if status_key in {"success", "partial", "cache_hit"}:
                     self._fundamental_coverage["hit_count"] += 1
@@ -92,7 +104,9 @@ class MetricsCollector:
                 "llm_stats": _llm_summary(self._llm_stats),
                 "analysis_stats": {
                     "partial_result_count": sum(self._partial_results.values()),
-                    "avg_warning_count": _ratio(sum(self._warnings.values()), max(1, self._analysis_count)),
+                    "avg_warning_count": _ratio(
+                        sum(self._warnings.values()), max(1, self._analysis_count)
+                    ),
                     "warning_count": sum(self._warnings.values()),
                     "warnings_by_type": dict(self._warnings),
                     "partial_results_by_reason": dict(self._partial_results),
@@ -119,7 +133,9 @@ class MetricsCollector:
                     "latency_count": 0,
                 }
             )
-            self._cache_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"hit_count": 0, "miss_count": 0})
+            self._cache_stats: dict[str, dict[str, int]] = defaultdict(
+                lambda: {"hit_count": 0, "miss_count": 0}
+            )
             self._llm_stats: dict[str, dict[str, int]] = defaultdict(
                 lambda: {"calls": 0, "success": 0, "latency_total_ms": 0, "latency_count": 0}
             )
@@ -174,8 +190,12 @@ def _vendor_summary(stats: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any
         latency_count = int(payload["latency_count"])
         summary[vendor] = {
             "calls": calls,
-            "success_rate": _ratio(statuses.get("success", 0) + statuses.get("cache_hit", 0), calls),
-            "avg_latency_ms": round(payload["latency_total_ms"] / latency_count) if latency_count else 0,
+            "success_rate": _ratio(
+                statuses.get("success", 0) + statuses.get("cache_hit", 0), calls
+            ),
+            "avg_latency_ms": round(payload["latency_total_ms"] / latency_count)
+            if latency_count
+            else 0,
             "empty_rate": _ratio(statuses.get("empty", 0), calls),
             "success_count": statuses.get("success", 0) + statuses.get("cache_hit", 0),
             "empty_count": statuses.get("empty", 0),
@@ -214,6 +234,8 @@ def _llm_summary(stats: dict[str, dict[str, int]]) -> dict[str, dict[str, Any]]:
         summary[model_type] = {
             "calls": calls,
             "success_rate": _ratio(payload["success"], calls),
-            "avg_latency_ms": round(payload["latency_total_ms"] / latency_count) if latency_count else 0,
+            "avg_latency_ms": round(payload["latency_total_ms"] / latency_count)
+            if latency_count
+            else 0,
         }
     return summary

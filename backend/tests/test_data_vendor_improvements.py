@@ -69,7 +69,9 @@ def test_news_relevance_and_impact_rules_for_goto():
 def test_gap_mapper_and_completeness_report():
     gaps = map_fundamental_gaps({"sma_50": 100, "sma_200": 90})
     assert any(item["field"] == "dividend_yield" for item in gaps["gaps"])
-    report = calculate_completeness({"quote": 1, "historical_price": "rows", "company_news": "news"})
+    report = calculate_completeness(
+        {"quote": 1, "historical_price": "rows", "company_news": "news"}
+    )
     assert report["price_data"]["available_fields"] >= 2
 
 

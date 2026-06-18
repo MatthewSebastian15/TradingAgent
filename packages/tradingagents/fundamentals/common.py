@@ -21,7 +21,13 @@ POLICY_MULTIPLES = {
     "P/S": {"bear": 1.0, "base": 2.0, "bull": 3.0},
 }
 
-FINANCIAL_SECTOR_KEYWORDS = ("bank", "financial", "insurance", "asset management", "capital markets")
+FINANCIAL_SECTOR_KEYWORDS = (
+    "bank",
+    "financial",
+    "insurance",
+    "asset management",
+    "capital markets",
+)
 
 
 def is_financial_sector(snapshot: dict[str, Any]) -> bool:
@@ -94,7 +100,9 @@ def build_snapshot(
     if snapshot.get("current_price") is None and snapshot.get("reference_price") is not None:
         snapshot["current_price"] = snapshot["reference_price"]
 
-    if snapshot["shares_outstanding"] is None and isinstance(profile.get("shares_outstanding"), (int, float)):
+    if snapshot["shares_outstanding"] is None and isinstance(
+        profile.get("shares_outstanding"), (int, float)
+    ):
         snapshot["shares_outstanding"] = float(profile["shares_outstanding"])
         snapshot["records"]["shares_outstanding"] = {
             "value": snapshot["shares_outstanding"],
@@ -103,11 +111,32 @@ def build_snapshot(
         }
 
     market_cap = snapshot.get("market_cap")
-    market_cap_record = snapshot.get("records", {}).get("market_cap") if isinstance(snapshot.get("records"), dict) else None
-    market_cap_is_profile = isinstance(market_cap_record, dict) and market_cap_record.get("source_vendor") == "company_profile"
-    market_cap_status = "estimated" if market_cap_is_profile else "reported" if market_cap is not None else "unavailable"
-    market_cap_formula = "Company profile market cap fallback" if market_cap_is_profile else "Reported period market cap"
-    if market_cap is None and snapshot.get("current_price") is not None and snapshot["shares_outstanding"] is not None:
+    market_cap_record = (
+        snapshot.get("records", {}).get("market_cap")
+        if isinstance(snapshot.get("records"), dict)
+        else None
+    )
+    market_cap_is_profile = (
+        isinstance(market_cap_record, dict)
+        and market_cap_record.get("source_vendor") == "company_profile"
+    )
+    market_cap_status = (
+        "estimated"
+        if market_cap_is_profile
+        else "reported"
+        if market_cap is not None
+        else "unavailable"
+    )
+    market_cap_formula = (
+        "Company profile market cap fallback"
+        if market_cap_is_profile
+        else "Reported period market cap"
+    )
+    if (
+        market_cap is None
+        and snapshot.get("current_price") is not None
+        and snapshot["shares_outstanding"] is not None
+    ):
         market_cap = snapshot["current_price"] * snapshot["shares_outstanding"]
         market_cap_status = "calculated"
         market_cap_formula = "Current Price * Shares Outstanding"
@@ -119,8 +148,10 @@ def build_snapshot(
     snapshot["market_cap"] = market_cap
     snapshot["market_cap_status"] = market_cap_status
     snapshot["market_cap_formula"] = market_cap_formula
-    snapshot["eps"] = snapshot["eps"] if snapshot["eps"] is not None else safe_divide(
-        snapshot["net_profit"], snapshot["shares_outstanding"]
+    snapshot["eps"] = (
+        snapshot["eps"]
+        if snapshot["eps"] is not None
+        else safe_divide(snapshot["net_profit"], snapshot["shares_outstanding"])
     )
     snapshot["bvps"] = safe_divide(snapshot["total_equity"], snapshot["shares_outstanding"])
     return snapshot
@@ -161,7 +192,9 @@ def _display(value: float | None, format_type: str, currency: str) -> str:
         return format_ratio(value)
     if format_type == "currency":
         metadata = currency_metadata(currency)
-        scaled = convert_amount(value, source_unit="raw", scale_divisor=float(metadata["scale_divisor"]))
+        scaled = convert_amount(
+            value, source_unit="raw", scale_divisor=float(metadata["scale_divisor"])
+        )
         return f"{format_currency_scaled(scaled)} {metadata['scale_label']}"
     if format_type == "price":
         return f"{currency} {format_number(value)}"

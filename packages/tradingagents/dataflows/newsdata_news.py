@@ -48,12 +48,16 @@ class NewsDataProvider(BaseNewsProvider):
         status = "unavailable"
 
         for strategy, params in query_attempts:
-            payload, attempt = self._request_json(params, strategy=strategy, include_raw=include_raw)
+            payload, attempt = self._request_json(
+                params, strategy=strategy, include_raw=include_raw
+            )
             attempts.append(attempt)
             status = str(attempt.get("status") or "unknown_error")
             if payload is not None:
                 articles.extend(
-                    self._normalize_response(payload, ticker_profile, strategy=strategy, include_raw=include_raw)
+                    self._normalize_response(
+                        payload, ticker_profile, strategy=strategy, include_raw=include_raw
+                    )
                 )
                 if articles:
                     status = "success"
@@ -87,8 +91,12 @@ class NewsDataProvider(BaseNewsProvider):
                 or not str(item.get("link") or "").strip()
             ):
                 continue
-            sentiment_score = _float_or_none(item.get("sentiment_stats") or item.get("sentiment_score"))
-            sentiment_label = str(item.get("sentiment") or "").strip().lower() or map_sentiment_label(sentiment_score)
+            sentiment_score = _float_or_none(
+                item.get("sentiment_stats") or item.get("sentiment_score")
+            )
+            sentiment_label = str(
+                item.get("sentiment") or ""
+            ).strip().lower() or map_sentiment_label(sentiment_score)
             entities = [
                 NewsEntity(symbol=symbol, name=ticker_profile["company_name"])
                 for symbol in item.get("symbol", [])
@@ -150,14 +158,22 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
         max_retries=int(config.get("vendor_max_retries", 2)),
     )
     profile = resolve_news_ticker(ticker)
-    window_days = max(1, (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days)
+    window_days = max(
+        1,
+        (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days,
+    )
     result = provider.fetch_news(
-        profile, as_of_date=end_date, window_days=window_days, limit=int(config.get("max_articles_per_provider", 10))
+        profile,
+        as_of_date=end_date,
+        window_days=window_days,
+        limit=int(config.get("max_articles_per_provider", 10)),
     )
     return _format_provider_result(result, ticker, start_date, end_date)
 
 
-def _format_provider_result(result: ProviderFetchResult, ticker: str, start_date: str, end_date: str) -> str:
+def _format_provider_result(
+    result: ProviderFetchResult, ticker: str, start_date: str, end_date: str
+) -> str:
     if not result.articles:
         return f"No news found for {ticker} from NewsData between {start_date} and {end_date}"
     lines = [f"## NewsData.io News for {ticker}, from {start_date} to {end_date}:", ""]

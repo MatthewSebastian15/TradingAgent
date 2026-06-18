@@ -42,16 +42,16 @@ def build_investment_debate_prompt(side: DebateSide, bundle: ReportBundle) -> st
         role = "Bull Analyst"
         objective = (
             "Build the strongest evidence-based case for buying or increasing exposure. "
-            "Focus on growth, competitive edge, financial strength, positive catalysts, "
-            "and why bear concerns are manageable."
+            + "Focus on growth, competitive edge, financial strength, positive catalysts, "
+            + "and why bear concerns are manageable."
         )
         opponent_label = "Last bear argument"
     else:
         role = "Bear Analyst"
         objective = (
             "Build the strongest evidence-based case against buying or for reducing exposure. "
-            "Focus on valuation risk, weak fundamentals, macro pressure, execution risk, "
-            "competitive threats, and why bull optimism may be overstated."
+            + "Focus on valuation risk, weak fundamentals, macro pressure, execution risk, "
+            + "competitive threats, and why bull optimism may be overstated."
         )
         opponent_label = "Last bull argument"
 
@@ -68,13 +68,21 @@ Debate rules:
 - Provide 2 to 4 evidence-backed arguments.
 - Include what would make your view wrong.
 - Set confidence from 0.0 to 1.0 based on evidence quality.
-- Set consensus_signal to true only if your side and the opponent are now close enough that another round is unlikely to change the final recommendation.
-- If DATA QUALITY shows any field as "partial" or "missing", explicitly acknowledge this limitation in your risk_flags and adjust your confidence downward.
+- Set consensus_signal to true only if your side and the opponent are now close enough that \
+another \
+round is unlikely to change the final recommendation.
+- If DATA QUALITY shows any field as "partial" or "missing", explicitly acknowledge this \
+limitation \
+in your risk_flags and adjust your confidence downward.
 
 {bundle.instrument_context}
 
 DATA QUALITY:
-{bundle.data_quality_summary if bundle.data_quality_summary else "No data quality report available."}
+{
+        bundle.data_quality_summary
+        if bundle.data_quality_summary
+        else ("No data quality report available.")
+    }
 
 Reports:
 Market report:
@@ -109,17 +117,26 @@ def build_risk_debate_prompt(
         "aggressive": (
             "Aggressive Risk Analyst",
             "Defend the upside case and explain why taking calculated risk is justified.",
-            "Identify opportunity cost, upside asymmetry, and catalysts. Still acknowledge real downside controls.",
+            (
+                "Identify opportunity cost, upside asymmetry, and catalysts. Still acknowledge "
+                + "real downside controls."
+            ),
         ),
         "conservative": (
             "Conservative Risk Analyst",
             "Protect capital and challenge risk-taking that lacks enough margin of safety.",
-            "Identify drawdown risk, valuation risk, liquidity risk, macro risk, and weak stop-loss logic.",
+            (
+                "Identify drawdown risk, valuation risk, liquidity risk, macro risk, and weak "
+                + "stop-loss logic."
+            ),
         ),
         "neutral": (
             "Neutral Risk Analyst",
             "Balance upside and downside into a practical risk-adjusted recommendation.",
-            "Identify where aggressive and conservative arguments are each too extreme or incomplete.",
+            (
+                "Identify where aggressive and conservative arguments are each too extreme or "
+                + "incomplete."
+            ),
         ),
     }
 

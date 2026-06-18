@@ -29,7 +29,11 @@ from tradingagents.dataflows.dividend_data import build_dividend_status
 from tradingagents.dataflows.freshness_policy import get_freshness_status, parse_datetime
 from tradingagents.dataflows.fundamental_calculator import calculate_derived_fundamentals
 from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
-from tradingagents.dataflows.interface import collect_vendor_values, route_to_all_vendors, route_to_vendor
+from tradingagents.dataflows.interface import (
+    collect_vendor_values,
+    route_to_all_vendors,
+    route_to_vendor,
+)
 from tradingagents.dataflows.news_aggregator import deduplicate_news, normalize_url, rank_news
 from tradingagents.dataflows.news_context_builder import build_news_context
 from tradingagents.dataflows.news_intelligence import (
@@ -57,7 +61,9 @@ from tradingagents.dataflows.vendor_budget import create_budget_from_config, rel
 from tradingagents.dataflows.vendor_router import create_attempt_recorder, release_attempt_recorder
 from tradingagents.dataflows.y_finance import normalize_ticker
 from tradingagents.fundamentals.builder import build_fundamental_analysis
-from tradingagents.graph.prompt_context_builder import build_prompt_context as build_safety_prompt_context
+from tradingagents.graph.prompt_context_builder import (
+    build_prompt_context as build_safety_prompt_context,
+)
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 from tradingagents.prompt_context import build_prompt_context as build_legacy_prompt_context
 from tradingagents.technical.entry_quality import build_technical_entry
@@ -73,18 +79,24 @@ DEFAULT_PRICE_MAX_FALLBACK_DAYS = 7
 
 def _price_max_fallback_days() -> int:
     try:
-        return max(0, int(get_config().get("price_max_fallback_days", DEFAULT_PRICE_MAX_FALLBACK_DAYS)))
+        return max(
+            0, int(get_config().get("price_max_fallback_days", DEFAULT_PRICE_MAX_FALLBACK_DAYS))
+        )
     except (TypeError, ValueError):
         return DEFAULT_PRICE_MAX_FALLBACK_DAYS
 
 
-def _quality_warning(code: str, severity: str, message: str, blocking: bool = False) -> dict[str, Any]:
+def _quality_warning(
+    code: str, severity: str, message: str, blocking: bool = False
+) -> dict[str, Any]:
     return {"code": code, "severity": severity, "message": message, "blocking": blocking}
 
 
 def _warning_detail_from_message(message: str) -> dict[str, Any]:
     lowered = message.lower()
-    if "ohlcv_stale" in lowered or ("latest ohlcv row" in lowered and "maximum allowed fallback" in lowered):
+    if "ohlcv_stale" in lowered or (
+        "latest ohlcv row" in lowered and "maximum allowed fallback" in lowered
+    ):
         return _quality_warning("OHLCV_STALE", "error", message, True)
     if "exact ohlcv date not found" in lowered or "ohlcv_fallback_used" in lowered:
         return _quality_warning("OHLCV_FALLBACK_USED", "warning", message, False)
@@ -170,7 +182,15 @@ def run_cross_vendor_validation(field_name: str, vendor_values: dict[str, float]
         warnings = validate_price_consistency(normalized_values)
     elif field_name == "volume":
         warnings = validate_volume_consistency(normalized_values)
-    elif field_name in {"revenue", "ebitda", "net_profit", "market_cap", "total_assets", "assets", "equity"}:
+    elif field_name in {
+        "revenue",
+        "ebitda",
+        "net_profit",
+        "market_cap",
+        "total_assets",
+        "assets",
+        "equity",
+    }:
         warnings = validate_fundamental_consistency(field_name, normalized_values)
     else:
         warnings = []
@@ -323,7 +343,13 @@ def _resolve_current_price_anchor(
             "is_fallback": False,
         }
 
-    return {"price": None, "as_of": None, "actual_price_as_of": None, "source": None, "is_fallback": False}
+    return {
+        "price": None,
+        "as_of": None,
+        "actual_price_as_of": None,
+        "source": None,
+        "is_fallback": False,
+    }
 
 
 def _deduplicate_news_sections(parts: list[str]) -> list[str]:
@@ -338,7 +364,9 @@ def _deduplicate_news_sections(parts: list[str]) -> list[str]:
         skip_article = False
         article_has_content = False
         for line in part.splitlines():
-            heading = re.match(r"^###\s+(.+?)(?:\s+\(source:.*\))?$", line.strip(), flags=re.IGNORECASE)
+            heading = re.match(
+                r"^###\s+(.+?)(?:\s+\(source:.*\))?$", line.strip(), flags=re.IGNORECASE
+            )
             if heading:
                 title_key = " ".join(heading.group(1).lower().split())
                 skip_article = title_key in seen_titles
@@ -356,7 +384,9 @@ def _deduplicate_news_sections(parts: list[str]) -> list[str]:
     return deduped_parts
 
 
-def _safe_multi_source_data_field(label: str, func: Callable[[], dict[str, Any]], limit: int = 12_000) -> DataField:
+def _safe_multi_source_data_field(
+    label: str, func: Callable[[], dict[str, Any]], limit: int = 12_000
+) -> DataField:
     """Collect and format every usable vendor payload for high-value fields."""
     try:
         raw_results = func()
@@ -404,7 +434,9 @@ def _safe_news_data_field(
     if bool(config.get("data_vendor_enable_multi_source_news", False)):
         return _safe_multi_source_data_field(
             label,
-            lambda: route_to_all_vendors(method, *args, vendor_order=vendor_order, field_name=field_name),
+            lambda: route_to_all_vendors(
+                method, *args, vendor_order=vendor_order, field_name=field_name
+            ),
             limit=limit,
         )
     return _safe_data_field(
@@ -432,12 +464,16 @@ def _safe_structured_company_news(
             news_config["enable_yfinance_fallback"] = True
         else:
             provider_priority = [
-                vendor for vendor in vendor_order if vendor in {"google_news_light", "marketaux", "newsdata"}
+                vendor
+                for vendor in vendor_order
+                if vendor in {"google_news_light", "marketaux", "newsdata"}
             ]
             if provider_priority:
                 news_config["provider_priority"] = provider_priority
             news_config["enable_yfinance_fallback"] = "yfinance" in vendor_order
-        context = NewsService(config=news_config).fetch_news(ticker, as_of_date=trade_date, window_days=window_days)
+        context = NewsService(config=news_config).fetch_news(
+            ticker, as_of_date=trade_date, window_days=window_days
+        )
         holder.update(context)
         compact_context = build_news_context(
             ticker,
@@ -515,11 +551,19 @@ def _news_relevance_reason(item: dict[str, Any], ticker: str) -> str:
     event_type = str(item.get("event_type") or "general")
     source = str(item.get("source") or "vendor")
     if event_type != "general":
-        return f"This article is tagged as {event_type} news and may affect the analysis context for {ticker}."
-    return f"This article was returned by {source} as related market news for the selected analysis window."
+        return (
+            f"This article is tagged as {event_type} news and may affect the analysis context "
+            f"for {ticker}."
+        )
+    return (
+        f"This article was returned by {source} as related market news for the selected "
+        "analysis window."
+    )
 
 
-def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -> list[dict[str, Any]]:
+def _parse_markdown_news_items(
+    text: str, *, default_source: str, ticker: str
+) -> list[dict[str, Any]]:
     """Parse vendor-formatted Markdown news into structured article dictionaries."""
     items: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
@@ -551,7 +595,9 @@ def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -
             continue
 
         if line.startswith("## "):
-            current_source = _detect_current_news_source(line, fallback=current_source or default_source)
+            current_source = _detect_current_news_source(
+                line, fallback=current_source or default_source
+            )
             continue
 
         heading = re.match(r"^###\s+(.+?)(?:\s+\(source:\s*(.*?)\))?$", line, flags=re.IGNORECASE)
@@ -594,10 +640,16 @@ def _parse_markdown_news_items(text: str, *, default_source: str, ticker: str) -
     return items
 
 
-def _related_news_items_from_context(news_context: dict[str, Any] | None, ticker: str) -> list[dict[str, Any]]:
+def _related_news_items_from_context(
+    news_context: dict[str, Any] | None, ticker: str
+) -> list[dict[str, Any]]:
     if not isinstance(news_context, dict):
         return []
-    articles = news_context.get("decision_company_news") or news_context.get("prompt_articles") or news_context.get("articles")
+    articles = (
+        news_context.get("decision_company_news")
+        or news_context.get("prompt_articles")
+        or news_context.get("articles")
+    )
     if not isinstance(articles, list):
         return []
 
@@ -654,8 +706,12 @@ def _build_related_news(
     }
 
     structured_items = _related_news_items_from_context(news_context, ticker)
-    company_items = _parse_markdown_news_items(company_news, default_source="company_news", ticker=ticker)
-    global_items = _parse_markdown_news_items(global_news, default_source="global_news", ticker=ticker)
+    company_items = _parse_markdown_news_items(
+        company_news, default_source="company_news", ticker=ticker
+    )
+    global_items = _parse_markdown_news_items(
+        global_news, default_source="global_news", ticker=ticker
+    )
     merged = structured_items + company_items + global_items
 
     if not merged:
@@ -672,13 +728,18 @@ def _build_related_news(
     if not ranked:
         return {**base_payload, "warning": "Related news is unavailable after deduplication."}
 
-    source = source_label or "+".join(dict.fromkeys(str(item.get("source") or "unknown") for item in ranked))
+    source = source_label or "+".join(
+        dict.fromkeys(str(item.get("source") or "unknown") for item in ranked)
+    )
 
     return {
         **base_payload,
         "available": True,
         "source": source,
-        "summary": f"Top {len(ranked)} related news items collected from configured vendors for this analysis window.",
+        "summary": (
+            f"Top {len(ranked)} related news items collected from configured vendors for this "
+            "analysis window."
+        ),
         "items": ranked,
     }
 
@@ -753,7 +814,11 @@ def _extract_last_close_price_and_date(
     max_fallback_days: int | None = None,
 ) -> tuple[float | None, str | None]:
     """Parse the last fresh Close value and row date at or before trade_date from OHLCV CSV."""
-    lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    lines = [
+        line
+        for line in (price_data or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
     if not lines:
         return None, None
 
@@ -785,7 +850,11 @@ def _extract_last_close_price_and_date(
     if last_date is None:
         return None, None
     if cutoff is not None:
-        allowed_gap = _price_max_fallback_days() if max_fallback_days is None else max(0, int(max_fallback_days))
+        allowed_gap = (
+            _price_max_fallback_days()
+            if max_fallback_days is None
+            else max(0, int(max_fallback_days))
+        )
         if (cutoff - last_date).days > allowed_gap:
             return None, None
     return last_close, last_date.strftime("%Y-%m-%d")
@@ -875,7 +944,8 @@ def _build_price_chart(
     time_horizon_months: int,
     source: str | None = None,
 ) -> dict[str, Any]:
-    """Build frontend-ready YOY OHLCV chart data anchored to trade_date with bounded last-trade fallback."""
+    """Build frontend-ready YOY OHLCV chart data anchored to trade_date with bounded \
+last-trade fallback."""
     lookback_days = _price_lookback_days(time_horizon_months)
     window_label = "YOY Price Window"
     window = "YOY"
@@ -892,7 +962,9 @@ def _build_price_chart(
     requested_start_date = (
         requested_start_cutoff.strftime("%Y-%m-%d") if requested_start_cutoff is not None else None
     )
-    requested_end_date = requested_cutoff.strftime("%Y-%m-%d") if requested_cutoff is not None else trade_date
+    requested_end_date = (
+        requested_cutoff.strftime("%Y-%m-%d") if requested_cutoff is not None else trade_date
+    )
 
     base_payload: dict[str, Any] = {
         "available": False,
@@ -918,7 +990,11 @@ def _build_price_chart(
         "data_quality": {"status": "unavailable", "missing_fields": ["ohlcv"]},
     }
 
-    lines = [line for line in (price_data or "").splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    lines = [
+        line
+        for line in (price_data or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
     if not lines:
         return {**base_payload, "warning": "Price chart data is unavailable."}
 
@@ -930,7 +1006,9 @@ def _build_price_chart(
             if not row:
                 continue
 
-            date_raw = (row.get("Date") or row.get("") or next(iter(row.values()), "") or "").strip()
+            date_raw = (
+                row.get("Date") or row.get("") or next(iter(row.values()), "") or ""
+            ).strip()
             if not date_raw:
                 continue
 
@@ -943,7 +1021,9 @@ def _build_price_chart(
             high_price = _safe_float(row.get("High"))
             low_price = _safe_float(row.get("Low"))
             close_price = _safe_float(row.get("Close") or row.get("Adj Close"))
-            adjusted_close = _safe_float(row.get("Adj Close") or row.get("Adjusted Close") or close_price)
+            adjusted_close = _safe_float(
+                row.get("Adj Close") or row.get("Adjusted Close") or close_price
+            )
             if any(value is None for value in [open_price, high_price, low_price, close_price]):
                 continue
 
@@ -966,11 +1046,16 @@ def _build_price_chart(
     parsed_points = sorted(parsed_points, key=lambda item: item["_row_date"])
 
     if not parsed_points:
-        return {**base_payload, "warning": "No usable price rows were available for the selected window."}
+        return {
+            **base_payload,
+            "warning": "No usable price rows were available for the selected window.",
+        }
 
     last_available_trade_date = parsed_points[-1]["date"]
     eligible_points = [
-        item for item in parsed_points if requested_cutoff is None or item["_row_date"] <= requested_cutoff
+        item
+        for item in parsed_points
+        if requested_cutoff is None or item["_row_date"] <= requested_cutoff
     ]
 
     if not eligible_points:
@@ -983,7 +1068,9 @@ def _build_price_chart(
     effective_cutoff = eligible_points[-1]["_row_date"]
     actual_end_date = effective_cutoff.strftime("%Y-%m-%d")
     display_end_date = requested_end_date or actual_end_date
-    fallback_gap_days = (requested_cutoff - effective_cutoff).days if requested_cutoff is not None else 0
+    fallback_gap_days = (
+        (requested_cutoff - effective_cutoff).days if requested_cutoff is not None else 0
+    )
     is_stale = requested_cutoff is not None and fallback_gap_days > max_fallback_days
     stale_warning = (
         "OHLCV_STALE - Latest OHLCV row "
@@ -1010,7 +1097,9 @@ def _build_price_chart(
         requested_cutoff is not None and effective_cutoff.date() != requested_cutoff.date()
     )
 
-    start_anchor_candidates = [item for item in parsed_points if item["_row_date"] <= effective_start_cutoff]
+    start_anchor_candidates = [
+        item for item in parsed_points if item["_row_date"] <= effective_start_cutoff
+    ]
     start_anchor = start_anchor_candidates[-1] if start_anchor_candidates else None
     selected_points = [
         item
@@ -1118,10 +1207,13 @@ def _build_price_chart(
             "fallback_gap_days": fallback_gap_days,
             "warnings": warnings,
         },
-        "warning": warnings[0] if warnings else (
+        "warning": warnings[0]
+        if warnings
+        else (
             None if available else "Valid OHLC price chart data is not available for this analysis."
         ),
     }
+
 
 def _date_window(trade_date: str, time_horizon_months: int = 1) -> tuple[str, str, str]:
     current = datetime.strptime(trade_date, "%Y-%m-%d")
@@ -1323,7 +1415,9 @@ def _run_collection_tasks(
     results: dict[str, DataField] = {}
     max_workers = min(max(1, int(config.get("data_collection_workers", 12))), len(tasks))
     with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="balanced-data") as pool:
-        futures = {pool.submit(_run_with_config, config, func): name for name, func in tasks.items()}
+        futures = {
+            pool.submit(_run_with_config, config, func): name for name, func in tasks.items()
+        }
         for future in as_completed(futures):
             _check_cancel(cancel_check)
             name = futures[future]
@@ -1353,7 +1447,9 @@ def _classify_price_data(
 ) -> str:
     _ = price_lookback_days
     price_dates = extract_price_dates(price.value)
-    allowed_gap = _price_max_fallback_days() if max_fallback_days is None else max(0, int(max_fallback_days))
+    allowed_gap = (
+        _price_max_fallback_days() if max_fallback_days is None else max(0, int(max_fallback_days))
+    )
     if price.status == "missing":
         return "invalid_ticker" if fundamentals.status == "missing" else "missing"
     if trade_date not in price_dates:
@@ -1385,7 +1481,8 @@ def _classify_price_data(
         return "missing"
     if len(price_dates) < 10:
         warnings.append(
-            f"Only {len(price_dates)} price rows found in the Year-on-Year configured vendor window."
+            f"Only {len(price_dates)} price rows found in the Year-on-Year configured vendor "
+            "window."
         )
         return "partial"
     return "ok"
@@ -1409,7 +1506,9 @@ def _classify_fundamentals(
         return "missing"
     if any(status == "missing" for status in statuses):
         missing_parts = [name for name, item in fields if item.status == "missing"]
-        warnings.append(f"Partial fundamentals from configured vendors; missing: {', '.join(missing_parts)}.")
+        warnings.append(
+            f"Partial fundamentals from configured vendors; missing: {', '.join(missing_parts)}."
+        )
         return "partial"
     return "ok"
 
@@ -1417,12 +1516,18 @@ def _classify_fundamentals(
 def _classify_news(company_news: DataField, global_news: DataField, warnings: list[str]) -> str:
     if company_news.status == "missing" and global_news.status == "missing":
         warnings.append(
-            "NEWS_UNAVAILABLE - No usable company-specific or global news was returned; analysis continues without blocking trade validation."
+            (
+                "NEWS_UNAVAILABLE - No usable company-specific or global news was returned; "
+                + "analysis continues without blocking trade validation."
+            )
         )
         return "unavailable"
     if company_news.status == "missing" or global_news.status == "missing":
         warnings.append(
-            "NEWS_PARTIAL - Partial news coverage from configured vendors; company-specific or global news is missing."
+            (
+                "NEWS_PARTIAL - Partial news coverage from configured vendors; company-specific "
+                + "or global news is missing."
+            )
         )
         return "partial"
     return "ok"
@@ -1449,7 +1554,9 @@ def _build_data_quality(
         warnings,
         max_fallback_days=_price_max_fallback_days(),
     )
-    fundamentals_status = _classify_fundamentals(fundamentals, balance_sheet, cashflow, income_statement, warnings)
+    fundamentals_status = _classify_fundamentals(
+        fundamentals, balance_sheet, cashflow, income_statement, warnings
+    )
     news_status = _classify_news(company_news, global_news, warnings)
     deduped_warnings = list(dict.fromkeys(warnings))[:20]
     warning_details = [_warning_detail_from_message(message) for message in deduped_warnings]
@@ -1526,7 +1633,9 @@ def _build_data_source_metadata(
 ) -> tuple[dict[str, str], list[str], dict[str, Any]]:
     data_sources = {
         "quote": "routed:yfinance->finnhub->alpha_vantage",
-        "price": last_close_price_source or _price_source_label(price.value, last_close_price) or "unavailable",
+        "price": last_close_price_source
+        or _price_source_label(price.value, last_close_price)
+        or "unavailable",
         "ohlcv": _source_label(price.value),
         "technical": "configured_ohlcv:local_calculation",
         "fundamental_profile_metrics": _source_label(fundamentals.value),
@@ -1536,7 +1645,10 @@ def _build_data_source_metadata(
         "company_news": _source_label(company_news.value),
         "global_news": _source_label(global_news.value),
         "news": "+".join(
-            dict.fromkeys(_detect_sources_from_text(company_news.value) + _detect_sources_from_text(global_news.value))
+            dict.fromkeys(
+                _detect_sources_from_text(company_news.value)
+                + _detect_sources_from_text(global_news.value)
+            )
         )
         or "unavailable",
         "news_sentiment": _source_label(news_sentiment.value),
@@ -1551,8 +1663,14 @@ def _build_data_source_metadata(
     limitations = [
         "Finnhub is skipped unless FINNHUB_ENABLED=true and FINNHUB_API_KEY is configured.",
         "Finnhub coverage for Indonesian .JK tickers must be validated per endpoint.",
-        "Fallback vendors are used only when earlier vendors return empty, stale, invalid, or unavailable data.",
-        "Direct social sentiment can be unavailable for many tickers and must not be invented from news headlines.",
+        (
+            "Fallback vendors are used only when earlier vendors return empty, stale, invalid, "
+            + "or unavailable data."
+        ),
+        (
+            "Direct social sentiment can be unavailable for many tickers and must not be "
+            + "invented from news headlines."
+        ),
         "Forex and crypto Finnhub integration are deferred for a later phase.",
     ]
     runtime_metadata = {
@@ -1637,7 +1755,9 @@ def latest_corporate_action_as_of(actions: list[dict[str, Any]] | None) -> str |
     )
 
 
-def _latest_news_date(news_context: dict[str, Any] | None, fallback: str | None = None) -> str | None:
+def _latest_news_date(
+    news_context: dict[str, Any] | None, fallback: str | None = None
+) -> str | None:
     articles = news_context.get("articles") if isinstance(news_context, dict) else []
     return latest_news_published_at(articles) or fallback
 
@@ -1665,7 +1785,9 @@ def _build_runtime_freshness_metadata(
         period = financial_highlights.get("period")
         if isinstance(period, dict):
             financial_period_end = period.get("period_end")
-            financial_as_of_date = period.get("as_of_date") or period.get("reported_date") or financial_period_end
+            financial_as_of_date = (
+                period.get("as_of_date") or period.get("reported_date") or financial_period_end
+            )
         if financial_period_end is None:
             periods = financial_highlights.get("periods")
             trends = financial_highlights.get("financial_trends")
@@ -1674,7 +1796,9 @@ def _build_runtime_freshness_metadata(
             if isinstance(periods, list) and periods:
                 latest_period = periods[-1] if isinstance(periods[-1], dict) else {}
                 financial_period_end = (
-                    latest_period.get("period_end") or latest_period.get("date") or latest_period.get("key")
+                    latest_period.get("period_end")
+                    or latest_period.get("date")
+                    or latest_period.get("key")
                 )
                 financial_as_of_date = financial_as_of_date or financial_period_end
     return {
@@ -1685,7 +1809,9 @@ def _build_runtime_freshness_metadata(
         "financials": {
             "period_end_date": financial_period_end,
             "as_of_date": financial_as_of_date,
-            **_freshness_payload("financial_statement", financial_as_of_date or financial_period_end),
+            **_freshness_payload(
+                "financial_statement", financial_as_of_date or financial_period_end
+            ),
         },
         "news": {
             "latest_article_date": latest_news_date,
@@ -1705,11 +1831,18 @@ def _safe_corporate_actions(ticker: str, start_date: str, end_date: str) -> dict
             field_name="corporate_actions",
         )
         return (
-            result if isinstance(result, dict) else {"available": False, "corporate_actions": [], "reason": str(result)}
+            result
+            if isinstance(result, dict)
+            else {"available": False, "corporate_actions": [], "reason": str(result)}
         )
     except Exception as exc:
         logger.warning("Corporate actions unavailable for %s: %s", ticker, exc)
-        return {"available": False, "corporate_actions": [], "reason": str(exc), "source": "unavailable"}
+        return {
+            "available": False,
+            "corporate_actions": [],
+            "reason": str(exc),
+            "source": "unavailable",
+        }
 
 
 def _numeric_value(value: Any) -> float | None:
@@ -1722,16 +1855,24 @@ def _numeric_value(value: Any) -> float | None:
     return number if number == number else None
 
 
-def _latest_derived_metric(derived_fundamentals: list[dict[str, Any]] | None, field: str) -> dict[str, Any] | None:
+def _latest_derived_metric(
+    derived_fundamentals: list[dict[str, Any]] | None, field: str
+) -> dict[str, Any] | None:
     for row in reversed(derived_fundamentals or []):
         if not isinstance(row, dict):
             continue
-        metrics = row.get("derived_metrics") if isinstance(row.get("derived_metrics"), dict) else row
+        metrics = (
+            row.get("derived_metrics") if isinstance(row.get("derived_metrics"), dict) else row
+        )
         value = metrics.get(field) if isinstance(metrics, dict) else None
         if isinstance(value, dict):
             return value
         if value is not None:
-            return {"value": value, "status": "calculated", "source": "local_calculation_from_normalized_financials"}
+            return {
+                "value": value,
+                "status": "calculated",
+                "source": "local_calculation_from_normalized_financials",
+            }
     return None
 
 
@@ -1761,7 +1902,9 @@ def _normalize_technical_entry_for_display(technical_entry: dict[str, Any]) -> d
     return entry
 
 
-def _apply_technical_fallback(technical_entry: dict[str, Any], price_history: Any) -> dict[str, Any]:
+def _apply_technical_fallback(
+    technical_entry: dict[str, Any], price_history: Any
+) -> dict[str, Any]:
     entry = dict(technical_entry or {})
     fallback = calculate_technical_fallback(price_history)
     indicator_quality = dict(entry.get("indicator_quality") or {})
@@ -1789,14 +1932,18 @@ def _apply_technical_fallback(technical_entry: dict[str, Any], price_history: An
     return entry
 
 
-def _corporate_action_summary(corporate_actions_result: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _corporate_action_summary(
+    corporate_actions_result: dict[str, Any], rows: list[dict[str, Any]]
+) -> dict[str, Any]:
     summary = {
         "source": corporate_actions_result.get("source") or "idx_official/yfinance",
         "split": None,
         "rights_issue": None,
     }
     for row in rows or []:
-        text = " ".join(str(row.get(key) or "") for key in ("type", "action", "event", "description")).lower()
+        text = " ".join(
+            str(row.get(key) or "") for key in ("type", "action", "event", "description")
+        ).lower()
         if "split" in text:
             summary["split"] = row
         if "right" in text or "hmtd" in text:
@@ -1845,20 +1992,26 @@ def _field_quality_common(ctx: FieldQualityContext) -> dict[str, Any]:
     profile = ctx.company_profile or {}
     validation_summary = ctx.validation_summary or {}
     last_price_validation = (
-        validation_summary.get("last_price") if isinstance(validation_summary.get("last_price"), dict) else {}
+        validation_summary.get("last_price")
+        if isinstance(validation_summary.get("last_price"), dict)
+        else {}
     )
     return {
         "profile": profile,
         "performance": ctx.price_performance or {},
         "latest_news_as_of": _latest_news_date(ctx.news_context),
         "price_as_of": ctx.last_close_price_as_of,
-        "profile_as_of": profile.get("source_published_date") or profile.get("reported_date") or profile.get("fetched_at"),
+        "profile_as_of": profile.get("source_published_date")
+        or profile.get("reported_date")
+        or profile.get("fetched_at"),
         "last_price_warnings": list(last_price_validation.get("warnings") or []),
         "last_price_vendor_values": dict(last_price_validation.get("vendor_values") or {}),
     }
 
 
-def _price_quality_fields(ctx: FieldQualityContext, common: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _price_quality_fields(
+    ctx: FieldQualityContext, common: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
     data_sources = ctx.data_sources
     price_as_of = common["price_as_of"]
     return {
@@ -1916,7 +2069,9 @@ def _price_quality_fields(ctx: FieldQualityContext, common: dict[str, Any]) -> d
     }
 
 
-def _profile_quality_fields(ctx: FieldQualityContext, common: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _profile_quality_fields(
+    ctx: FieldQualityContext, common: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
     profile = common["profile"]
     profile_as_of = common["profile_as_of"]
     quality: dict[str, dict[str, Any]] = {
@@ -1932,8 +2087,12 @@ def _profile_quality_fields(ctx: FieldQualityContext, common: dict[str, Any]) ->
             profile if profile.get("available") else None,
             "company_profile",
             as_of_date=profile_as_of,
-            status=profile.get("data_quality", {}).get("status") if isinstance(profile.get("data_quality"), dict) else None,
-            warnings=(profile.get("data_quality", {}) or {}).get("warnings") if isinstance(profile.get("data_quality"), dict) else [],
+            status=profile.get("data_quality", {}).get("status")
+            if isinstance(profile.get("data_quality"), dict)
+            else None,
+            warnings=(profile.get("data_quality", {}) or {}).get("warnings")
+            if isinstance(profile.get("data_quality"), dict)
+            else [],
             vendor_attempts=_attempts_for_field(ctx.vendor_attempts, "profile"),
         ),
     }
@@ -2004,7 +2163,9 @@ def _financial_quality_fields(ctx: FieldQualityContext) -> dict[str, dict[str, A
     return quality
 
 
-def _news_quality_fields(ctx: FieldQualityContext, common: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _news_quality_fields(
+    ctx: FieldQualityContext, common: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
     data_sources = ctx.data_sources
     latest_news_as_of = common["latest_news_as_of"]
     quality: dict[str, dict[str, Any]] = {}
@@ -2057,6 +2218,7 @@ def _build_field_quality_metadata(
         **_signal_quality_fields(ctx),
     }
 
+
 def _run_market_collection_tasks(
     *,
     ticker: str,
@@ -2083,13 +2245,17 @@ def _run_market_collection_tasks(
     all_results = _run_collection_tasks(tasks, config, cancel_check)
     results = {key: value for key, value in all_results.items() if key not in annual_task_names}
     annual_statement_results = {
-        key: all_results.get(key, DataField.unavailable(key, RuntimeError("annual statement task did not complete")))
+        key: all_results.get(
+            key, DataField.unavailable(key, RuntimeError("annual statement task did not complete"))
+        )
         for key in annual_task_names
     }
     return results, annual_statement_results
 
 
-def _collection_field_bundle(results: dict[str, DataField], annual_results: dict[str, DataField]) -> dict[str, Any]:
+def _collection_field_bundle(
+    results: dict[str, DataField], annual_results: dict[str, DataField]
+) -> dict[str, Any]:
     price = results["price_data"]
     bundle = {
         "price": price,
@@ -2176,11 +2342,19 @@ def _resolve_price_runtime(
         if isinstance(corporate_actions_result.get("corporate_actions"), list)
         else []
     )
-    _attach_corporate_action_adjustments(price_chart, corporate_actions_result, corporate_actions_rows)
-    price_performance = dict(price_chart.get("summary") or {}) if isinstance(price_chart, dict) else {}
+    _attach_corporate_action_adjustments(
+        price_chart, corporate_actions_result, corporate_actions_rows
+    )
+    price_performance = (
+        dict(price_chart.get("summary") or {}) if isinstance(price_chart, dict) else {}
+    )
     if isinstance(price_chart, dict):
-        price_performance["adjusted_price_history"] = price_chart.get("adjusted_price_history") or []
-        price_performance["corporate_action_adjustment"] = price_chart.get("corporate_action_adjustment") or {
+        price_performance["adjusted_price_history"] = (
+            price_chart.get("adjusted_price_history") or []
+        )
+        price_performance["corporate_action_adjustment"] = price_chart.get(
+            "corporate_action_adjustment"
+        ) or {
             "status": "source_unavailable",
             "source": "unavailable",
             "action_count": 0,
@@ -2214,7 +2388,9 @@ def _attach_corporate_action_adjustments(
 ) -> None:
     if not isinstance(price_chart, dict) or not price_chart.get("available"):
         return
-    adjusted_rows = apply_corporate_action_adjustments(price_chart.get("points") or [], corporate_actions_rows)
+    adjusted_rows = apply_corporate_action_adjustments(
+        price_chart.get("points") or [], corporate_actions_rows
+    )
     price_chart["adjusted_price_history"] = adjusted_rows
     price_chart["corporate_action_adjustment"] = {
         "status": "available" if corporate_actions_rows else "source_unavailable",
@@ -2254,7 +2430,9 @@ def _build_collected_market_data(ctx: dict[str, Any]) -> CollectedData:
         data_quality=ctx["data_quality"],
         last_close_price=ctx["last_close_price"],
         last_close_price_as_of=ctx["last_close_price_as_of"],
-        last_close_price_source=ctx["last_close_price_source"] if ctx["last_close_price"] is not None else None,
+        last_close_price_source=ctx["last_close_price_source"]
+        if ctx["last_close_price"] is not None
+        else None,
         last_close_price_is_fallback=ctx["last_close_price_is_fallback"],
         company_profile=ctx["company_profile"],
         price_chart=ctx["price_chart"],
@@ -2288,7 +2466,9 @@ def _build_collected_market_data(ctx: dict[str, Any]) -> CollectedData:
             "data_quality": collected.data_quality.model_dump(),
             "field_quality": collected.data_quality.field_quality,
             "limitations": collected.data_limitations or [],
-            "sector": (collected.company_profile or {}).get("sector") if isinstance(collected.company_profile, dict) else None,
+            "sector": (collected.company_profile or {}).get("sector")
+            if isinstance(collected.company_profile, dict)
+            else None,
             "normalized_financials": collected.normalized_period_rows or [],
             "news_context": collected.news_context or {},
             "vendor_budget": collected.request_budget or {},
@@ -2387,13 +2567,18 @@ def collect_market_data(
 
     financial_currency = _currency_for_ticker(ticker)
     normalized_period_rows = build_normalized_period_rows(
-        income_statement={"annual": annual_income_statement.value, "quarterly": income_statement.value},
+        income_statement={
+            "annual": annual_income_statement.value,
+            "quarterly": income_statement.value,
+        },
         balance_sheet={"annual": annual_balance_sheet.value, "quarterly": balance_sheet.value},
         cashflow={"annual": annual_cashflow.value, "quarterly": cashflow.value},
         default_currency=financial_currency,
     )
     derived_fundamentals = calculate_derived_fundamentals(normalized_period_rows)
-    latest_derived = derived_fundamentals[-1].get("derived_metrics", {}) if derived_fundamentals else {}
+    latest_derived = (
+        derived_fundamentals[-1].get("derived_metrics", {}) if derived_fundamentals else {}
+    )
     financial_as_of = latest_financial_as_of(normalized_period_rows)
     technical_as_of = (
         latest_price_as_of(price_chart.get("points") if isinstance(price_chart, dict) else None)
@@ -2403,7 +2588,9 @@ def collect_market_data(
     latest_revenue = _latest_statement_value(normalized_period_rows, "revenue")
     latest_ebitda = _latest_statement_value(normalized_period_rows, "ebitda")
     latest_net_profit = _latest_statement_value(normalized_period_rows, "net_profit")
-    latest_free_cash_flow = _numeric_value((latest_derived.get("free_cash_flow") or {}).get("value"))
+    latest_free_cash_flow = _numeric_value(
+        (latest_derived.get("free_cash_flow") or {}).get("value")
+    )
     if latest_free_cash_flow is None:
         latest_free_cash_flow = _latest_statement_value(normalized_period_rows, "free_cash_flow")
     dividend_events = [
@@ -2411,7 +2598,9 @@ def collect_market_data(
         for row in corporate_actions_rows
         if isinstance(row, dict)
         and "dividend"
-        in " ".join(str(row.get(key) or "") for key in ("type", "action", "event", "description")).lower()
+        in " ".join(
+            str(row.get(key) or "") for key in ("type", "action", "event", "description")
+        ).lower()
     ]
     dividend_quality = build_dividend_status(
         ticker=ticker,
@@ -2421,7 +2610,9 @@ def collect_market_data(
         free_cash_flow=latest_free_cash_flow,
         source=corporate_actions_result.get("source") or "idx_corporate_action",
     )
-    corporate_action_summary = _corporate_action_summary(corporate_actions_result, corporate_actions_rows)
+    corporate_action_summary = _corporate_action_summary(
+        corporate_actions_result, corporate_actions_rows
+    )
 
     validation_summary = {"last_price": _collect_quote_validation(ticker, trade_date)}
     validation_warnings = list(validation_summary["last_price"].get("warnings") or [])
@@ -2447,8 +2638,12 @@ def collect_market_data(
         request_budget=request_budget,
     )
     if validation_warnings:
-        data_quality.warnings = list(dict.fromkeys([*(data_quality.warnings or []), *validation_warnings]))[:20]
-        data_quality.warning_details = [_warning_detail_from_message(message) for message in data_quality.warnings]
+        data_quality.warnings = list(
+            dict.fromkeys([*(data_quality.warnings or []), *validation_warnings])
+        )[:20]
+        data_quality.warning_details = [
+            _warning_detail_from_message(message) for message in data_quality.warnings
+        ]
     field_sources = _build_field_sources(ticker, data_sources)
     data_quality.field_quality = _build_field_quality_metadata(
         FieldQualityContext(
@@ -2535,12 +2730,14 @@ def collect_market_data(
         indicator_value = (
             indicator_numeric_value(indicator_quality)
             if indicator_quality
-            else technical_entry.get(field_name) or (technical_entry.get("rsi") if field_name == "rsi_14" else None)
+            else technical_entry.get(field_name)
+            or (technical_entry.get("rsi") if field_name == "rsi_14" else None)
         )
         data_quality.field_quality[field_name] = build_field_quality(
             field_name,
             indicator_value,
-            source=(indicator_quality or {}).get("source") or "local_calculation_from_historical_price",
+            source=(indicator_quality or {}).get("source")
+            or "local_calculation_from_historical_price",
             status=(indicator_quality or {}).get("status") or "available",
             warnings=(indicator_quality or {}).get("warnings") or [],
             as_of_date=technical_as_of,
@@ -2589,7 +2786,10 @@ def collect_market_data(
             analysis_date=trade_date,
             financial_highlights=financial_highlights,
             fundamentals=fundamentals.value,
-            income_statement={"quarterly": income_statement.value, "annual": annual_income_statement.value},
+            income_statement={
+                "quarterly": income_statement.value,
+                "annual": annual_income_statement.value,
+            },
             balance_sheet={"quarterly": balance_sheet.value, "annual": annual_balance_sheet.value},
             cashflow={"quarterly": cashflow.value, "annual": annual_cashflow.value},
             dividends=dividend_events,
@@ -2602,7 +2802,9 @@ def collect_market_data(
     if fundamental_analysis is None:
         fundamental_analysis = {}
     existing_dividend_quality = (
-        fundamental_analysis.get("dividend_quality") if isinstance(fundamental_analysis, dict) else None
+        fundamental_analysis.get("dividend_quality")
+        if isinstance(fundamental_analysis, dict)
+        else None
     )
     if isinstance(existing_dividend_quality, dict):
         fundamental_analysis["dividend_quality"] = {**existing_dividend_quality, **dividend_quality}
@@ -2611,7 +2813,9 @@ def collect_market_data(
 
     latest_balance_sheet = normalized_period_rows[-1] if normalized_period_rows else {}
     latest_cashflow = {
-        "operating_cash_flow": _latest_statement_value(normalized_period_rows, "operating_cash_flow"),
+        "operating_cash_flow": _latest_statement_value(
+            normalized_period_rows, "operating_cash_flow"
+        ),
         "free_cash_flow": latest_free_cash_flow,
     }
     latest_revenue = _latest_statement_value(normalized_period_rows, "revenue")
@@ -2639,9 +2843,12 @@ def collect_market_data(
         "dividend": dividend_quality,
         "split": corporate_action_summary.get("split"),
         "rights_issue": corporate_action_summary.get("rights_issue"),
-        "sma_20": (technical_entry.get("indicator_quality") or {}).get("sma_20") or technical_entry.get("sma_20"),
-        "sma_50": (technical_entry.get("indicator_quality") or {}).get("sma_50") or technical_entry.get("sma_50"),
-        "sma_200": (technical_entry.get("indicator_quality") or {}).get("sma_200") or technical_entry.get("sma_200"),
+        "sma_20": (technical_entry.get("indicator_quality") or {}).get("sma_20")
+        or technical_entry.get("sma_20"),
+        "sma_50": (technical_entry.get("indicator_quality") or {}).get("sma_50")
+        or technical_entry.get("sma_50"),
+        "sma_200": (technical_entry.get("indicator_quality") or {}).get("sma_200")
+        or technical_entry.get("sma_200"),
         "volatility": (technical_entry.get("indicator_quality") or {}).get("volatility"),
         "pe_ratio": (fundamental_analysis.get("valuation_multiples") or {}).get("pe"),
         "pb_ratio": (fundamental_analysis.get("valuation_multiples") or {}).get("pbv"),

@@ -84,7 +84,9 @@ def _collected_data(trade_date: str = "2026-05-18") -> pipeline.CollectedData:
         ),
     ],
 )
-def test_analysis_depth_controls_llm_agent_calls(depth, expected_budget, expected_agents, monkeypatch):
+def test_analysis_depth_controls_llm_agent_calls(
+    depth, expected_budget, expected_agents, monkeypatch
+):
     called_agents: list[str] = []
     lock = threading.Lock()
 
@@ -105,7 +107,9 @@ def test_analysis_depth_controls_llm_agent_calls(depth, expected_budget, expecte
     monkeypatch.setattr(pipeline, "collect_market_data", fake_collect_market_data)
     monkeypatch.setattr(pipeline, "_invoke_once", fake_invoke_once)
 
-    config = build_tradingagents_config(max_debate_rounds=1, analysis_depth=depth, response_detail="summary")
+    config = build_tradingagents_config(
+        max_debate_rounds=1, analysis_depth=depth, response_detail="summary"
+    )
 
     result = pipeline.run_balanced_pipeline("BBCA.JK", "2026-05-18", config)
 

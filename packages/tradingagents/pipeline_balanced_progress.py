@@ -30,7 +30,9 @@ AGENT_LABELS = {
 }
 
 
-def _emit_progress(callback: ProgressCallback | None, agent_id: str, status: str, message: str) -> None:
+def _emit_progress(
+    callback: ProgressCallback | None, agent_id: str, status: str, message: str
+) -> None:
     if callback is None:
         return
     try:
@@ -40,7 +42,9 @@ def _emit_progress(callback: ProgressCallback | None, agent_id: str, status: str
                 "agent_name": AGENT_LABELS.get(agent_id, agent_id.replace("_", " ").title()),
                 "status": status,
                 "status_message": message,
-                "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat(timespec="seconds")
+                .replace("+00:00", "Z"),
             }
         )
     except Exception as exc:
@@ -50,7 +54,10 @@ def _emit_progress(callback: ProgressCallback | None, agent_id: str, status: str
 def _emit_data_quality(callback: ProgressCallback | None, report: DataQualityReport) -> None:
     if callback is None:
         return
-    message = f"Data quality: price={report.price_data}, fundamentals={report.fundamentals}, news={report.news}."
+    message = (
+        f"Data quality: price={report.price_data}, fundamentals={report.fundamentals}, "
+        f"news={report.news}."
+    )
     if report.warnings:
         message = f"{message} Warning: {report.warnings[0]}"
     try:
@@ -61,7 +68,9 @@ def _emit_data_quality(callback: ProgressCallback | None, report: DataQualityRep
                 "status": "completed",
                 "status_message": message,
                 "data_quality": report.model_dump(),
-                "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat(timespec="seconds")
+                .replace("+00:00", "Z"),
             }
         )
     except Exception as exc:
@@ -89,7 +98,9 @@ def _run_tracked(
                 "duration_seconds": round(time.perf_counter() - start, 1),
                 "warning": "Agent was cancelled before completion.",
             }
-        _emit_progress(callback, agent_id, "failed", f"{AGENT_LABELS.get(agent_id, agent_id)} cancelled.")
+        _emit_progress(
+            callback, agent_id, "failed", f"{AGENT_LABELS.get(agent_id, agent_id)} cancelled."
+        )
         raise
     except Exception:
         if timings is not None:
@@ -99,7 +110,9 @@ def _run_tracked(
                 "duration_seconds": round(time.perf_counter() - start, 1),
                 "warning": f"{AGENT_LABELS.get(agent_id, agent_id)} failed.",
             }
-        _emit_progress(callback, agent_id, "failed", f"{AGENT_LABELS.get(agent_id, agent_id)} failed.")
+        _emit_progress(
+            callback, agent_id, "failed", f"{AGENT_LABELS.get(agent_id, agent_id)} failed."
+        )
         raise
     _check_cancel(cancel_check)
     if timings is not None:
@@ -109,5 +122,7 @@ def _run_tracked(
             "duration_seconds": round(time.perf_counter() - start, 1),
             "warning": None,
         }
-    _emit_progress(callback, agent_id, "completed", f"{AGENT_LABELS.get(agent_id, agent_id)} completed.")
+    _emit_progress(
+        callback, agent_id, "completed", f"{AGENT_LABELS.get(agent_id, agent_id)} completed."
+    )
     return result

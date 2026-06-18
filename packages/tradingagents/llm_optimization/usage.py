@@ -32,7 +32,9 @@ def estimate_tokens_from_text(text: str) -> int:
 
 
 def get_llm_identity(llm: Any) -> tuple[str, str]:
-    provider = getattr(llm, "provider", None) or getattr(llm, "_llm_type", None) or llm.__class__.__name__
+    provider = (
+        getattr(llm, "provider", None) or getattr(llm, "_llm_type", None) or llm.__class__.__name__
+    )
     model = (
         getattr(llm, "model_name", None)
         or getattr(llm, "model", None)
@@ -75,9 +77,13 @@ def normalize_usage_numbers(metadata: dict[str, Any]) -> tuple[int | None, int |
             or usage.get("output_token_count")
         )
 
-        prompt_details = usage.get("prompt_tokens_details") or usage.get("input_token_details") or {}
+        prompt_details = (
+            usage.get("prompt_tokens_details") or usage.get("input_token_details") or {}
+        )
         if isinstance(prompt_details, dict):
-            cached_input_tokens = prompt_details.get("cached_tokens") or prompt_details.get("cache_read")
+            cached_input_tokens = prompt_details.get("cached_tokens") or prompt_details.get(
+                "cache_read"
+            )
 
         cached_input_tokens = (
             cached_input_tokens
@@ -101,8 +107,8 @@ def _safe_int(value: Any) -> int | None:
 def log_usage(record: LLMUsageRecord) -> None:
     logger.info(
         "LLM usage | agent=%s provider=%s model=%s schema=%s prompt_chars=%s est_input_tokens=%s "
-        "output_tokens=%s cached_input_tokens=%s latency_ms=%.1f cache_layer=%s cache_hit=%s "
-        "fallback=%s parse_success=%s error=%s",
+        + "output_tokens=%s cached_input_tokens=%s latency_ms=%.1f cache_layer=%s cache_hit=%s "
+        + "fallback=%s parse_success=%s error=%s",
         record.agent_name,
         record.provider,
         record.model,
@@ -126,4 +132,3 @@ class Timer:
 
     def elapsed_ms(self) -> float:
         return (time.perf_counter() - self.started) * 1000
-

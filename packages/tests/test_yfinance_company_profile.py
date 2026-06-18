@@ -5,7 +5,10 @@ from tradingagents.dataflows import y_finance
 
 
 def test_get_company_profile_returns_clean_frontend_payload(monkeypatch):
-    officers = [{"name": f" Executive {index} ", "title": " Director ", "totalPay": 1_000_000} for index in range(12)]
+    officers = [
+        {"name": f" Executive {index} ", "title": " Director ", "totalPay": 1_000_000}
+        for index in range(12)
+    ]
     info = {
         "longName": " Example  Company ",
         "sectorDisp": " Technology ",
@@ -101,7 +104,9 @@ def test_get_company_profile_keeps_profile_when_price_anchor_fails(monkeypatch):
 
 def test_get_company_profile_returns_unavailable_payload_on_error(monkeypatch):
     monkeypatch.setattr(y_finance, "_get_ticker", lambda _ticker: SimpleNamespace(info={}))
-    monkeypatch.setattr(y_finance, "yf_retry", lambda _func: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(
+        y_finance, "yf_retry", lambda _func: (_ for _ in ()).throw(RuntimeError("offline"))
+    )
 
     profile = y_finance.get_company_profile("AAPL")
 
