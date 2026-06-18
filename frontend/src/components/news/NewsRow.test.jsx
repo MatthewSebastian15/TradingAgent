@@ -65,7 +65,7 @@ describe('NewsRow', () => {
     expect(screen.queryByRole('link', { name: 'Market update' })).not.toBeInTheDocument();
     expect(screen.getByText('Market update')).toBeInTheDocument();
     expect(screen.getByText('1 Day')).toBeInTheDocument();
-    expect(screen.getByText('MARKET')).toBeInTheDocument();
+    expect(screen.getByText('MARKETS')).toBeInTheDocument();
     expect(screen.getByText('example.com')).toBeInTheDocument();
     expect(screen.queryByText('rss_context')).not.toBeInTheDocument();
   });
@@ -84,5 +84,42 @@ describe('NewsRow', () => {
     );
 
     expect(screen.getByText('2 W')).toBeInTheDocument();
+  });
+});
+
+
+describe('NewsRow final category labels', () => {
+  afterEach(() => cleanup());
+
+  it('renders central_bank as CENTRAL BANK', () => {
+    render(
+      <NewsRow
+        article={{
+          title: 'Fed rate decision update',
+          summary: 'Central bank policy update.',
+          source: 'Federal Reserve',
+          category: 'central_bank',
+          published_at: '2026-06-15T01:00:00Z',
+        }}
+      />
+    );
+
+    expect(screen.getByText('CENTRAL BANK')).toBeInTheDocument();
+  });
+
+  it('keeps legacy market category styled as markets', () => {
+    render(
+      <NewsRow
+        article={{
+          title: 'Legacy market payload',
+          summary: 'Legacy category payload.',
+          source: 'CNBC',
+          category: 'market',
+          published_at: '2026-06-15T01:00:00Z',
+        }}
+      />
+    );
+
+    expect(screen.getByText('MARKETS')).toBeInTheDocument();
   });
 });

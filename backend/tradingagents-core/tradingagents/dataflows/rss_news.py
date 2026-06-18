@@ -62,7 +62,7 @@ class RSSContextProvider(BaseNewsProvider):
         if not feeds:
             return ProviderFetchResult(provider=self.provider_name, status="disabled")
 
-        max_workers = min(max(1, int(config.get("rss_fetch_workers", 6))), len(feeds))
+        max_workers = min(max(1, int(config.get("rss_fetch_workers", 8))), len(feeds))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(self._fetch_feed, feed, config): feed for feed in feeds}
             for future in as_completed(futures):
@@ -138,8 +138,8 @@ def _select_feeds(config: dict[str, Any], ticker_profile: dict[str, Any] | None 
         feeds.extend(GOOGLE_NEWS_FALLBACK_RSS_FEEDS)
 
     enabled_ids = set(_string_list(config.get("rss_enabled_feed_ids")))
-    disabled_ids = set(_string_list(config.get("rss_disabled_feed_ids") or "theblock-trial"))
-    include_trial = bool(config.get("rss_include_trial_feeds", False))
+    disabled_ids = set(_string_list(config.get("rss_disabled_feed_ids")))
+    include_trial = bool(config.get("rss_include_trial_feeds", True))
     selected = []
     for feed in feeds:
         if enabled_ids and feed.id not in enabled_ids:
@@ -149,7 +149,7 @@ def _select_feeds(config: dict[str, Any], ticker_profile: dict[str, Any] | None 
         if not feed.enabled and not include_trial:
             continue
         selected.append(feed)
-    return selected[: max(1, int(config.get("rss_max_feeds", 10)))]
+    return selected[: max(1, int(config.get("rss_max_feeds", 50)))]
 
 
 def build_company_rss_queries(ticker_profile: dict[str, Any]) -> list[str]:
@@ -196,7 +196,7 @@ def _company_google_news_feeds(ticker_profile: dict[str, Any] | None) -> list[RS
                 id=f"company-google-news-{index}",
                 name=f"Company Google News {index}",
                 url=google_news_rss_url(query, **locale),
-                category="company",
+                category="markets",
                 region=str(ticker_profile.get("region") or ticker_profile.get("country") or "global"),
                 source="GOOGLE NEWS",
                 tier=1,
@@ -236,16 +236,21 @@ def _normalize_feed_entries(
             {"title": title, "summary": summary},
             ticker_profile,
         )
-        company_match = bool(matched_terms) and is_relevant_news(
-            {
-                "title": title,
-                "summary": summary,
-                "url": url,
-                "entities": item.get("tags") or item.get("symbols") or [],
-            },
-            str(ticker_profile.get("ticker") or ""),
-            ticker_profile.get("company_name"),
-            ticker_profile.get("aliases"),
+        is_general_profile = str(ticker_profile.get("ticker") or "").upper() == "GENERAL"
+        company_match = (
+            not is_general_profile
+            and bool(matched_terms)
+            and is_relevant_news(
+                {
+                    "title": title,
+                    "summary": summary,
+                    "url": url,
+                    "entities": item.get("tags") or item.get("symbols") or [],
+                },
+                str(ticker_profile.get("ticker") or ""),
+                ticker_profile.get("company_name"),
+                ticker_profile.get("aliases"),
+            )
         )
         relevance_category = "company_match" if company_match else "market_context"
         market_context_only = not company_match
@@ -260,6 +265,10 @@ def _normalize_feed_entries(
                 summary=summary or None,
                 url=url,
                 source=_entry_source(item, feed),
+                source_domain=_domain_from_url(url),
+                category=feed.category,
+                feed_id=feed.id,
+                feed_tier=feed.tier,
                 published_at=_parse_rss_date(item.get("published") or item.get("updated")),
                 entities=[
                     NewsEntity(symbol=ticker_profile.get("ticker"), name=ticker_profile.get("company_name"))
@@ -390,6 +399,11 @@ def _strip_html(value: str) -> str:
         if not in_tag:
             chunks.append(char)
     return " ".join("".join(chunks).split())
+
+
+def _domain_from_url(url: str) -> str | None:
+    match = re.match(r"^https?://([^/]+)", str(url or "").strip(), flags=re.IGNORECASE)
+    return match.group(1).lower() if match else None
 
 
 def _entry_source(item: dict[str, Any], feed: RSSFeedConfig) -> str:

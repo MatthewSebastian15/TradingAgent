@@ -14,6 +14,7 @@ from .general_news_cache import GeneralNewsCache, GeneralNewsCacheEntry
 from .general_news_categories import (
     is_allowed_category,
     map_general_news_category,
+    normalize_general_news_category,
 )
 from .google_news_light import GoogleNewsLightProvider
 from .marketaux_news import MarketAuxProvider
@@ -39,20 +40,23 @@ GENERAL_QUERY_BY_CATEGORY = {
     "all": [
         "global markets",
         "stock market",
-        "economy",
+        "world economy",
         "central bank",
         "inflation",
         "crypto market",
-        "oil prices",
         "forex market",
-        "Indonesia economy",
+        "financial regulation",
+        "technology stocks",
     ],
-    "market": ["global markets", "stock market", "earnings", "bond yields"],
-    "macro": ["economy", "central bank", "inflation", "gdp"],
-    "crypto": ["crypto market", "bitcoin", "ethereum", "digital assets"],
-    "forex": ["forex market", "currency markets", "dollar", "exchange rate"],
-    "commodities": ["oil prices", "gold prices", "commodities", "energy market"],
+    "markets": ["global markets", "stock market", "earnings", "bond yields"],
+    "world": ["world news", "geopolitics", "global trade", "international markets"],
+    "finance": ["finance", "banking", "credit markets", "asset managers"],
+    "tech": ["technology", "AI", "semiconductors", "cloud software"],
+    "macro": ["economy", "inflation", "gdp", "jobs report"],
+    "central_bank": ["central bank", "Federal Reserve", "Bank of England", "interest rates"],
     "regulatory": ["SEC enforcement", "financial regulation", "market regulator", "compliance"],
+    "forex": ["forex market", "currency markets", "dollar", "exchange rate"],
+    "crypto": ["crypto market", "bitcoin", "ethereum", "digital assets"],
 }
 HIGH_IMPACT_KEYWORDS = [
     "central bank decision",
@@ -253,12 +257,12 @@ class GeneralNewsService:
             "rss_enabled": bool(self.config.get("rss_enabled", True)),
             "rss_max_feeds": rss_max_feeds,
             "rss_max_items_per_feed": rss_max_items_per_feed,
-            "rss_include_trial_feeds": bool(self.config.get("rss_include_trial_feeds", False)),
+            "rss_include_trial_feeds": bool(self.config.get("rss_include_trial_feeds", True)),
             "rss_google_news_fallback_enabled": bool(self.config.get("rss_google_news_fallback_enabled", True)),
             "rss_enabled_feed_ids": str(self.config.get("rss_enabled_feed_ids") or ""),
-            "rss_disabled_feed_ids": str(self.config.get("rss_disabled_feed_ids") or "theblock-trial"),
+            "rss_disabled_feed_ids": self.config.get("rss_disabled_feed_ids") or "",
             "rss_user_agent": str(self.config.get("rss_user_agent") or "TradingAgent/0.1 RSS Reader"),
-            "rss_fetch_workers": max(1, int(self.config.get("rss_fetch_workers", 6))),
+            "rss_fetch_workers": max(1, int(self.config.get("rss_fetch_workers", 8))),
         }
         provider = RSSContextProvider(
             "",
@@ -393,6 +397,8 @@ class GeneralNewsService:
             key=lambda item: (
                 item.published_at is not None,
                 item.published_at.timestamp() if item.published_at else 0,
+                PROVIDER_PRIORITY_SCORE.get(item.provider, 0),
+                float(item.relevance_score or 0),
             ),
             reverse=True,
         )
@@ -450,14 +456,16 @@ def _general_profile() -> dict[str, Any]:
         "ticker": "GENERAL",
         "short_ticker": "GENERAL",
         "company_name": "Global Markets",
-        "aliases": ["markets", "economy", "macro", "crypto", "forex", "commodities"],
+        "aliases": [],
         "country": None,
     }
 
 
 def _normalized_category(category: str) -> str:
-    normalized = str(category or "all").strip().lower()
-    return normalized if is_allowed_category(normalized) else "all"
+    raw = str(category or "all").strip().lower().replace(" ", "_")
+    if raw == "all":
+        return "all"
+    return normalize_general_news_category(raw) if is_allowed_category(raw) else "all"
 
 
 def _queries_for_category(category: str) -> list[str]:
@@ -579,7 +587,7 @@ def _make_article(
 
 
 def _article_payload(article: NormalizedNewsArticle) -> dict[str, Any]:
-    category = article.bucket or map_general_news_category(article)
+    category = map_general_news_category(article)
     published_at = _coerce_datetime(article.published_at)
     return {
         "id": _stable_article_id(article),
@@ -591,10 +599,13 @@ def _article_payload(article: NormalizedNewsArticle) -> dict[str, Any]:
         "source_domain": article.source_domain or _domain(article.url),
         "provider": article.provider,
         "category": category,
+        "feed_id": article.feed_id,
+        "feed_tier": article.feed_tier,
         "published_at": _date_text(published_at),
         "published_age": _published_age(published_at),
         "impact": infer_impact(article),
         "sentiment": infer_sentiment(article),
+        "relevance_score": article.relevance_score,
     }
 
 

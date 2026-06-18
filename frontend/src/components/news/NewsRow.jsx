@@ -4,23 +4,35 @@ import { Card } from '@/components/ui/card';
 
 const PROVIDER_NAMES = new Set(['marketaux', 'newsdata', 'google_news_light', 'rss_context']);
 const CATEGORY_LABELS = {
-  market: 'MARKET',
+  markets: 'MARKETS',
+  world: 'WORLD',
+  finance: 'FINANCE',
+  tech: 'TECH',
   macro: 'MACRO',
-  crypto: 'CRYPTO',
-  forex: 'FOREX',
-  commodities: 'COMMODITIES',
+  central_bank: 'CENTRAL BANK',
   regulatory: 'REGULATORY',
+  forex: 'FOREX',
+  crypto: 'CRYPTO',
 };
 const CATEGORY_ALIASES = {
-  indonesia: 'market',
+  market: 'markets',
+  business: 'finance',
+  commodities: 'markets',
+  energy: 'markets',
+  'central-bank': 'central_bank',
+  centralbank: 'central_bank',
+  indonesia: 'markets',
 };
 const CATEGORY_BADGE_CLASSES = {
-  market: 'border-orange-400/50 bg-orange-400/10 text-orange-300',
+  markets: 'border-orange-400/50 bg-orange-400/10 text-orange-300',
+  world: 'border-violet-400/50 bg-violet-400/10 text-violet-300',
+  finance: 'border-lime-400/50 bg-lime-400/10 text-lime-300',
+  tech: 'border-fuchsia-400/50 bg-fuchsia-400/10 text-fuchsia-300',
   macro: 'border-blue-400/50 bg-blue-400/10 text-blue-300',
-  crypto: 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300',
-  forex: 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300',
-  commodities: 'border-amber-400/50 bg-amber-400/10 text-amber-300',
+  central_bank: 'border-sky-400/50 bg-sky-400/10 text-sky-300',
   regulatory: 'border-red-400/50 bg-red-400/10 text-red-300',
+  forex: 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300',
+  crypto: 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300',
   unknown: 'border-bloomberg-border bg-bloomberg-surface text-neutral-300',
 };
 const MAX_DESCRIPTION_WORDS = 35;
@@ -38,7 +50,7 @@ function isProviderName(value) {
 }
 
 function normalizeCategory(value) {
-  const rawCategory = normalizeText(value).toLowerCase();
+  const rawCategory = normalizeText(value).toLowerCase().replace(/\s+/g, '_');
   const category = CATEGORY_ALIASES[rawCategory] || rawCategory;
   return CATEGORY_LABELS[category] ? category : 'unknown';
 }

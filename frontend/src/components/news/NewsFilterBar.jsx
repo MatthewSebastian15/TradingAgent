@@ -4,12 +4,15 @@ import { Button } from '@/components/ui/button';
 
 const NEWS_CATEGORIES = [
   { key: 'all', label: 'ALL' },
-  { key: 'market', label: 'MARKET' },
+  { key: 'markets', label: 'MARKETS' },
+  { key: 'world', label: 'WORLD' },
+  { key: 'finance', label: 'FINANCE' },
+  { key: 'tech', label: 'TECH' },
   { key: 'macro', label: 'MACRO' },
-  { key: 'crypto', label: 'CRYPTO' },
-  { key: 'forex', label: 'FOREX' },
-  { key: 'commodities', label: 'COMMODITIES' },
+  { key: 'central_bank', label: 'CENTRAL BANK' },
   { key: 'regulatory', label: 'REGULATORY' },
+  { key: 'forex', label: 'FOREX' },
+  { key: 'crypto', label: 'CRYPTO' },
 ];
 
 export default function NewsFilterBar({ selectedCategory, onChange, onRefresh }) {
