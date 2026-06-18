@@ -2,7 +2,7 @@ export function formatPrice(price, ticker = '', currency = '') {
   if (price === null || price === undefined || price === '') return null;
   if (typeof price === 'number' && !Number.isFinite(price)) return null;
 
-  const value = typeof price === 'number' ? price.toLocaleString() : String(price);
+  const value = typeof price === 'number' ? price.toLocaleString('en-US') : String(price);
   const normalizedTicker = String(ticker || '').toUpperCase();
   const normalizedCurrency = String(currency || '').toUpperCase();
 
