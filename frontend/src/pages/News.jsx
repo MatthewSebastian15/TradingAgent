@@ -7,13 +7,20 @@ import TickerTape from '../components/TickerTape';
 import { useGeneralNews } from '../hooks/useGeneralNews';
 
 const CATEGORY_ALIASES = {
-  indonesia: 'market',
+  market: 'markets',
+  business: 'finance',
+  commodities: 'markets',
+  energy: 'markets',
+  'central-bank': 'central_bank',
+  centralbank: 'central_bank',
+  indonesia: 'markets',
 };
 
 function normalizeCategory(value) {
   const category = String(value || '')
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/\s+/g, '_');
   return CATEGORY_ALIASES[category] || category;
 }
 

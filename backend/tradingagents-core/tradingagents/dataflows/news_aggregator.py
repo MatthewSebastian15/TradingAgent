@@ -6,7 +6,7 @@ from difflib import SequenceMatcher
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-TRACKING_QUERY_KEYS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid"}
+TRACKING_QUERY_KEYS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "cmpid", "mod", "ref", "fbclid", "gclid"}
 
 
 def normalize_url(url: str | None) -> str:

@@ -28,6 +28,9 @@ class NormalizedNewsArticle(BaseModel):
     image_url: str | None = None
     source: str | None = None
     source_domain: str | None = None
+    category: str | None = None
+    feed_id: str | None = None
+    feed_tier: int | None = None
     author: str | None = None
     language: str | None = None
     country: str | None = None

@@ -164,6 +164,7 @@ from config_defaults import (
     NEWS_RSS_DECISION_MIN_RELEVANCE_SCORE,
     NEWS_RSS_DISABLED_FEED_IDS,
     NEWS_RSS_ENABLED,
+    NEWS_RSS_ENABLED_FEED_IDS,
     NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED,
     NEWS_RSS_INCLUDE_TRIAL_FEEDS,
     NEWS_RSS_MAX_FEEDS,
@@ -313,6 +314,7 @@ class _BackendSettingsShim:
     news_decision_min_relevance_score = NEWS_DECISION_MIN_RELEVANCE_SCORE
     news_rss_decision_min_relevance_score = NEWS_RSS_DECISION_MIN_RELEVANCE_SCORE
     news_rss_enabled = NEWS_RSS_ENABLED
+    news_rss_enabled_feed_ids = NEWS_RSS_ENABLED_FEED_IDS
     news_rss_max_feeds = NEWS_RSS_MAX_FEEDS
     news_rss_max_items_per_feed = NEWS_RSS_MAX_ITEMS_PER_FEED
     news_rss_include_trial_feeds = NEWS_RSS_INCLUDE_TRIAL_FEEDS

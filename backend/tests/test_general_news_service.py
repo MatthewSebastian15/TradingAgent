@@ -70,6 +70,29 @@ def test_service_accepts_category_all(tmp_path, monkeypatch):
     assert result["articles_found"] == 1
 
 
+
+
+def test_all_returns_mixed_categories_sorted_newest_first(tmp_path, monkeypatch):
+    now = datetime.now(timezone.utc)
+    _patch_rss(
+        monkeypatch,
+        [
+            _article("Bank credit growth improves", source="CNBC", published_at=now - timedelta(hours=2)),
+            _article("Bitcoin rises after ETF inflows", source="CoinDesk", published_at=now),
+            _article("Fed keeps rate decision in focus", source="Federal Reserve", published_at=now - timedelta(hours=1)),
+        ],
+    )
+
+    result = GeneralNewsService(_config(tmp_path)).fetch_general_news(category="all", force_refresh=True)
+
+    assert [article["category"] for article in result["articles"]] == ["crypto", "central_bank", "finance"]
+    assert [article["title"] for article in result["articles"]] == [
+        "Bitcoin rises after ETF inflows",
+        "Fed keeps rate decision in focus",
+        "Bank credit growth improves",
+    ]
+    assert all("relevance_score" in article for article in result["articles"])
+
 def test_invalid_category_falls_back_to_all(tmp_path, monkeypatch):
     _patch_rss(monkeypatch, [_article("Stocks gain after earnings")])
 
@@ -246,3 +269,31 @@ def test_published_age_uses_minutes_hours_days_and_weeks():
     assert general_news_service._published_age(now - timedelta(days=1)) == "1 Day"
     assert general_news_service._published_age(now - timedelta(days=6)) == "6 Days"
     assert general_news_service._published_age(now - timedelta(days=14)) == "2 W"
+
+
+def test_rss_context_config_keeps_disabled_feed_ids_empty(tmp_path, monkeypatch):
+    captured = {}
+
+    class FakeRSSProvider:
+        def __init__(self, *_args, **kwargs):
+            captured.update(kwargs.get("config") or {})
+
+        def fetch_news(self, *_args, **kwargs):
+            captured.update(kwargs)
+            return ProviderFetchResult(provider="rss_context", status="success", articles=[])
+
+    monkeypatch.setattr(general_news_service, "RSSContextProvider", FakeRSSProvider)
+
+    GeneralNewsService(
+        _config(
+            tmp_path,
+            rss_disabled_feed_ids="",
+            rss_max_feeds=50,
+            rss_max_items_per_feed=30,
+            cache_enabled=False,
+        )
+    ).fetch_general_news(force_refresh=True)
+
+    assert captured["rss_disabled_feed_ids"] == ""
+    assert captured["rss_fetch_workers"] == 8
+    assert captured["limit"] == 1500

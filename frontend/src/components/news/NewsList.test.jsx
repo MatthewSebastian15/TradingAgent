@@ -19,7 +19,7 @@ describe('NewsList', () => {
             id: '1',
             title: 'Older market story',
             source: 'CNBC',
-            category: 'market',
+            category: 'markets',
             published_at: '2026-06-15T00:00:00Z',
           },
           {
