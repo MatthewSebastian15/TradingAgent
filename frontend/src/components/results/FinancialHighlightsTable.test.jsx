@@ -107,10 +107,10 @@ describe('FinancialHighlightsTable', () => {
       Array.from(container.querySelectorAll('thead')[0].querySelectorAll('th')).map(
         (cell) => cell.textContent
       )
-    ).toEqual(['Metric', 'Value', 'YoY / Growth', 'Status']);
+    ).toEqual(['Metric', 'Q1 2026', 'FY 2025', 'FY 2024', 'FY 2023']);
     expect(screen.getByText('208,700.0 Mn')).toBeTruthy();
-    expect(screen.getByText('+59.92 %')).toBeTruthy();
-    expect(screen.getAllByText('REPORTED').length).toBeGreaterThan(0);
+    expect(screen.getByText('59.90 %')).toBeTruthy();
+    expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
   });
 
   it('returns null when payload is missing', () => {
