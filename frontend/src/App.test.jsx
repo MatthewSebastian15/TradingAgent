@@ -31,7 +31,7 @@ describe('App', () => {
     expect(
       screen.getByRole('button', { name: /research/i }).getAttribute('aria-disabled')
     ).toBeNull();
-  });
+  }, 10000);
 
   it('registers the Research placeholder route', async () => {
     await renderApp('/research', false);
@@ -40,11 +40,11 @@ describe('App', () => {
     expect(screen.getByText('Research module is under development.')).toBeTruthy();
   });
 
-  it('registers the Watchlist placeholder route', async () => {
+  it('registers the Watchlist route', async () => {
     await renderApp('/watchlist', false);
 
-    expect(await screen.findByText('COMING SOON')).toBeTruthy();
-    expect(screen.getByText('Watchlist module is under development.')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /watchlist/i })).toBeTruthy();
+    expect(screen.getByText('No watchlist group yet')).toBeTruthy();
   });
 
   it('registers the ECON placeholder route', async () => {

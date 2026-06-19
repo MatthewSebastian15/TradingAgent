@@ -12,8 +12,8 @@ def test_market_quotes_returns_valid_symbols(client, monkeypatch):
     async def fake_fetch_quotes(symbols):
         assert symbols == ["BBCA.JK", "NVDA"]
         return [
-            {"sym": "BBCA.JK", "chg": "+1.25%", "pos": True, "price": 9800, "error": False},
-            {"sym": "NVDA", "chg": "-0.50%", "pos": False, "price": 920, "error": False},
+            {"sym": "BBCA.JK", "chg": "+1.25%", "pos": True, "price": 9800, "volume": 1200000, "error": False},
+            {"sym": "NVDA", "chg": "-0.50%", "pos": False, "price": 920, "volume": 246900000, "error": False},
         ]
 
     monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
@@ -22,8 +22,8 @@ def test_market_quotes_returns_valid_symbols(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["quotes"] == [
-        {"sym": "BBCA.JK", "chg": "+1.25%", "pos": True, "price": 9800.0, "error": False},
-        {"sym": "NVDA", "chg": "-0.50%", "pos": False, "price": 920.0, "error": False},
+        {"sym": "BBCA.JK", "chg": "+1.25%", "pos": True, "price": 9800.0, "volume": 1200000.0, "error": False},
+        {"sym": "NVDA", "chg": "-0.50%", "pos": False, "price": 920.0, "volume": 246900000.0, "error": False},
     ]
 
 
@@ -46,7 +46,7 @@ def test_market_quotes_caps_symbols_to_twenty(client, monkeypatch):
     async def fake_fetch_quotes(symbols):
         seen_symbols.extend(symbols)
         return [
-            {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "error": False}
+            {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "volume": None, "error": False}
             for symbol in symbols
         ]
 
@@ -73,7 +73,7 @@ def test_fetch_quote_handles_missing_last_price(monkeypatch):
 
     quote = market_routes._fetch_quote("AAPL")
 
-    assert quote == {"sym": "AAPL", "chg": "N/A", "pos": True, "price": None, "error": False}
+    assert quote == {"sym": "AAPL", "chg": "N/A", "pos": True, "price": None, "volume": None, "error": False}
 
 
 def test_fetch_quote_handles_previous_close_zero(monkeypatch):
@@ -86,7 +86,7 @@ def test_fetch_quote_handles_previous_close_zero(monkeypatch):
 
     quote = market_routes._fetch_quote("AAPL")
 
-    assert quote == {"sym": "AAPL", "chg": "N/A", "pos": True, "price": 10, "error": False}
+    assert quote == {"sym": "AAPL", "chg": "N/A", "pos": True, "price": 10, "volume": None, "error": False}
 
 
 def test_fetch_quote_returns_error_payload_on_vendor_failure(monkeypatch):
@@ -101,7 +101,7 @@ def test_fetch_quote_returns_error_payload_on_vendor_failure(monkeypatch):
 
     quote = market_routes._fetch_quote("AAPL")
 
-    assert quote == {"sym": "AAPL", "chg": "N/A", "pos": True, "price": None, "error": True}
+    assert quote == {"sym": "AAPL", "chg": "N/A", "pos": True, "price": None, "volume": None, "error": True}
 
 
 def test_market_search_returns_local_results_and_warms_yfinance_cache(client, monkeypatch):

@@ -26,6 +26,46 @@ export async function validateMarketSymbol(symbol, { signal } = {}) {
   return parseMarketResponse(response);
 }
 
+export async function searchMarketTickers(query, { limit = 10, signal } = {}) {
+  const params = new URLSearchParams({
+    q: String(query || ''),
+    limit: String(limit),
+  });
+  const response = await fetch(buildApiUrl(`/market/search?${params.toString()}`), {
+    headers: await buildAuthHeaders(),
+    credentials: 'include',
+    signal,
+  });
+  return parseMarketResponse(response);
+}
+
+export async function getMarketQuotes(symbols, { signal } = {}) {
+  const symbolList = Array.isArray(symbols) ? symbols.join(',') : String(symbols || '');
+  const response = await fetch(
+    buildApiUrl(`/market/quotes?symbols=${encodeURIComponent(symbolList)}`),
+    {
+      headers: await buildAuthHeaders(),
+      credentials: 'include',
+      signal,
+    }
+  );
+  return parseMarketResponse(response);
+}
+
+export async function getMarketSparklines(symbols, { range = '1M', signal } = {}) {
+  const symbolList = Array.isArray(symbols) ? symbols.join(',') : String(symbols || '');
+  const params = new URLSearchParams({
+    symbols: symbolList,
+    range,
+  });
+  const response = await fetch(buildApiUrl(`/market/sparklines?${params.toString()}`), {
+    headers: await buildAuthHeaders(),
+    credentials: 'include',
+    signal,
+  });
+  return parseMarketResponse(response);
+}
+
 export async function getMarketOverview(symbols, { signal } = {}) {
   const response = await fetch(buildApiUrl('/market/overview'), {
     method: 'POST',

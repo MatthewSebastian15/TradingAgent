@@ -16,6 +16,7 @@ import {
   LEGACY_ANALYSIS_MOCK_ALIAS_PATH,
   LEGACY_ANALYSIS_MOCK_PATH,
   LEGACY_ANALYSIS_PATH,
+  WATCHLIST_PATH,
 } from '../constants/routes';
 import { createClockFormatter, resolveClockConfig } from '../utils/clock';
 
@@ -61,7 +62,7 @@ const NAV_ITEMS = [
     matchPrefixes: ['/research'],
     Icon: Microscope,
   },
-  { label: 'Watchlist', path: '/watchlist', matchPrefixes: ['/watchlist'], Icon: Star },
+  { label: 'Watchlist', path: WATCHLIST_PATH, matchPrefixes: [WATCHLIST_PATH], Icon: Star },
   { label: 'News', path: '/news', matchPrefixes: ['/news'], Icon: Newspaper },
   { label: 'Market', path: '/market', matchPrefixes: ['/market'], Icon: TrendingUp },
   { label: 'ECON', path: '/econ', matchPrefixes: ['/econ', '/economic'], Icon: Landmark },

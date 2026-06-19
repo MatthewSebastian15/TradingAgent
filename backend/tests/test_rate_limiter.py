@@ -313,10 +313,8 @@ def test_market_quotes_endpoint_is_rate_limited(client, monkeypatch):
 
     monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
     monkeypatch.setattr(
-        "routes.market.request_policy",
-        lambda: RateLimitPolicy(
-            scope="market-quotes-limit-test", max_per_minute=1, max_concurrent=1
-        ),
+        "routes.market._MARKET_DATA_POLICY",
+        RateLimitPolicy(scope="market-quotes-limit-test", max_per_minute=1, max_concurrent=1),
     )
 
     headers = {"x-api-key": "same-market-key"}
@@ -328,6 +326,74 @@ def test_market_quotes_endpoint_is_rate_limited(client, monkeypatch):
     assert [item["sym"] for item in first.json()["quotes"]] == ["BBCA.JK", "AAPL"]
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "RATE_LIMITED"
+
+
+def test_market_quotes_use_separate_bucket_from_analysis_requests(client, monkeypatch):
+    async def fake_run_pipeline_async(req, request_id):
+        return {
+            "decision": "Hold",
+            "full_decision": "Mocked decision",
+            "executive_summary": None,
+            "investment_thesis": None,
+            "price_target": None,
+            "time_horizon": None,
+            "confidence_score": None,
+            "suggested_allocation_percent": None,
+            "entry_price": None,
+            "stop_loss": None,
+            "take_profit": None,
+            "risk_reward_ratio": None,
+            "max_drawdown_estimate": None,
+            "volatility_level": None,
+            "position_sizing_reason": None,
+            "rebalancing_action": None,
+            "key_catalysts": [],
+            "invalidation_conditions": [],
+            "data_quality": {
+                "price_data": "ok",
+                "fundamentals": "missing",
+                "news": "missing",
+                "warnings": [],
+            },
+        }
+
+    async def fake_fetch_quotes(symbols):
+        return [
+            {
+                "sym": symbol,
+                "chg": "+1.00%",
+                "pos": True,
+                "price": 10.0,
+                "volume": 1000,
+                "error": False,
+            }
+            for symbol in symbols
+        ]
+
+    monkeypatch.setattr("routes.analysis._run_pipeline_async", fake_run_pipeline_async)
+    monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
+    monkeypatch.setattr(
+        "routes.analysis.request_policy",
+        lambda: RateLimitPolicy(
+            scope="analysis-market-separation-test", max_per_minute=1, max_concurrent=1
+        ),
+    )
+    monkeypatch.setattr(
+        "routes.market._MARKET_DATA_POLICY",
+        RateLimitPolicy(scope="market-separation-test", max_per_minute=10, max_concurrent=2),
+    )
+
+    payload = {"ticker": "BBCA.JK", "trade_date": "2026-05-14", "max_debate_rounds": 1}
+    headers = {"x-api-key": "same-analysis-market-key"}
+
+    analysis = client.post("/api/analyze", json=payload, headers=headers)
+    blocked_analysis = client.post("/api/analyze", json=payload, headers=headers)
+    market = client.get("/api/market/quotes?symbols=NVDA", headers=headers)
+
+    assert analysis.status_code == 200
+    assert blocked_analysis.status_code == 429
+    assert market.status_code == 200
+    assert market.json()["quotes"][0]["sym"] == "NVDA"
 
 
 def test_job_event_stream_does_not_consume_request_limit(client, monkeypatch):

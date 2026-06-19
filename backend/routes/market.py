@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Query, Request
 
 from errors import BadRequestError
-from rate_limiter import limit_request, request_policy
+from rate_limiter import RateLimitPolicy, limit_request
 from schemas import (
     MarketMoversResponse,
     MarketOverviewRequest,
@@ -35,6 +35,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_MARKET_DATA_POLICY = RateLimitPolicy(scope="market", max_per_minute=180, max_concurrent=16)
+
+
+def _market_data_limit(request: Request):
+    """Rate-limit market data separately from long-running analysis jobs."""
+    return limit_request(request, _MARKET_DATA_POLICY)
+
+
 # Default tickers shown on the dashboard ticker tape.
 _DEFAULT_TICKERS: list[str] = [
     "ES=F",
@@ -52,9 +60,11 @@ _QUOTE_SYMBOL_RE = re.compile(r"^[A-Z0-9^]{1,15}(?:[.=:-][A-Z0-9]{1,12}){0,3}$")
 _QUOTE_CACHE_TTL_SECONDS = 90.0
 _SEARCH_CACHE_TTL_SECONDS = 60.0
 _OHLCV_CACHE_TTL_SECONDS = 60.0
+_SPARKLINE_CACHE_TTL_SECONDS = 300.0
 _QUOTE_CACHE: dict[tuple[str, ...], tuple[float, list[dict]]] = {}
 _SEARCH_CACHE: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
 _OHLCV_CACHE: dict[tuple[str, str, str], tuple[float, dict[str, Any]]] = {}
+_SPARKLINE_CACHE: dict[tuple[tuple[str, ...], str], tuple[float, dict[str, list[float]]]] = {}
 _OHLCV_RANGE_DAYS = {"1W": 7, "1M": 31, "3M": 92, "6M": 183, "1Y": 365}
 _OHLCV_RANGE_OPTIONS = {"YTD", *_OHLCV_RANGE_DAYS.keys()}
 _MOVER_LIMITS = {5, 10, 15, 20}
@@ -191,7 +201,7 @@ def _clone_ohlcv_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/market/presets", tags=["market"], response_model=MarketPresetsResponse)
 async def get_market_preset_data(request: Request) -> dict[str, Any]:
-    async with limit_request(request, request_policy()):
+    async with _market_data_limit(request):
         return get_market_presets()
 
 
@@ -200,7 +210,7 @@ async def validate_market_symbol(
     request: Request,
     symbol: str = Query(..., min_length=1, description="Yahoo Finance symbol."),
 ) -> dict[str, Any]:
-    async with limit_request(request, request_policy()):
+    async with _market_data_limit(request):
         normalized_symbol = _normalize_quote_symbol(symbol)
         return await asyncio.to_thread(validate_symbol, normalized_symbol)
 
@@ -211,7 +221,7 @@ async def get_market_overview(
     request: Request,
 ) -> dict[str, Any]:
     normalized_symbols = _normalize_market_request_symbols(payload.symbols)
-    async with limit_request(request, request_policy()):
+    async with _market_data_limit(request):
         return await asyncio.to_thread(get_overview_data, normalized_symbols)
 
 
@@ -225,7 +235,7 @@ async def get_market_mover_data(
     normalized_country, normalized_exchange, normalized_limit = _validate_movers_query(
         country, exchange, limit
     )
-    async with limit_request(request, request_policy()):
+    async with _market_data_limit(request):
         return await asyncio.to_thread(
             get_market_movers, normalized_country, normalized_exchange, normalized_limit
         )
@@ -536,6 +546,7 @@ def _fetch_quote(symbol: str) -> dict:
         # fast_info attributes vary by symbol/exchange; fall back gracefully.
         previous_close = _fast_info_value(info, "previous_close", "regularMarketPreviousClose")
         last_price = _fast_info_value(info, "last_price", "regularMarketPrice")
+        volume = _as_float(_fast_info_value(info, "last_volume", "regularMarketVolume", "volume"))
 
         if previous_close and last_price and previous_close != 0:
             raw_chg = (last_price - previous_close) / previous_close * 100
@@ -551,12 +562,13 @@ def _fetch_quote(symbol: str) -> dict:
             "chg": chg_str,
             "pos": pos,
             "price": round(last_price, 2) if last_price else None,
+            "volume": volume,
             "error": False,
         }
 
     except Exception as exc:  # noqa: BLE001
         logger.warning("Failed to fetch quote for %s: %s", symbol, exc)
-        return {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "error": True}
+        return {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "volume": None, "error": True}
 
 
 async def _fetch_quotes(symbols: list[str]) -> list[dict]:
@@ -566,6 +578,34 @@ async def _fetch_quotes(symbols: list[str]) -> list[dict]:
     tasks = [asyncio.to_thread(_fetch_quote, symbol) for symbol in symbols]
     return await asyncio.gather(*tasks)
 
+
+
+def _clone_sparklines(payload: dict[str, list[float]]) -> dict[str, list[float]]:
+    return {symbol: list(values) for symbol, values in payload.items()}
+
+
+def _sparkline_values_from_payload(payload: dict[str, Any]) -> list[float]:
+    values: list[float] = []
+    for point in payload.get("points") or payload.get("data") or []:
+        value = _as_float(point.get("close") if isinstance(point, dict) else None)
+        if value is not None:
+            values.append(value)
+    return values[-20:]
+
+
+def _fetch_sparkline(symbol: str, range_key: str) -> list[float]:
+    trade_date = datetime.utcnow().strftime("%Y-%m-%d")
+    payload = _fetch_ohlcv_range(symbol, range_key, trade_date)
+    return _sparkline_values_from_payload(payload)
+
+
+async def _fetch_sparklines(symbols: list[str], range_key: str) -> dict[str, list[float]]:
+    if not symbols:
+        return {}
+
+    tasks = [asyncio.to_thread(_fetch_sparkline, symbol, range_key) for symbol in symbols]
+    values = await asyncio.gather(*tasks)
+    return {symbol: list(series) for symbol, series in zip(symbols, values, strict=False)}
 
 def _compact_search_text(value: Any) -> str:
     return re.sub(r"[^A-Z0-9]", "", str(value or "").strip().upper())
@@ -761,7 +801,7 @@ async def search_market_tickers(
     limit: int = Query(default=10, ge=1, le=20, description="Maximum number of search results."),
 ) -> dict[str, list[dict[str, Any]]]:
     """Search yfinance tickers and return canonical symbols for the frontend autocomplete."""
-    async with limit_request(request, request_policy()):
+    async with _market_data_limit(request):
         query = q.strip()
         if len(query) < 2:
             return {"results": []}
@@ -799,7 +839,7 @@ async def get_market_ohlcv(
     ),
     trade_date: str | None = Query(default=None, description="Optional YYYY-MM-DD upper bound."),
 ) -> dict[str, Any]:
-    async with limit_request(request, request_policy()):
+    async with _market_data_limit(request):
         symbol = _normalize_quote_symbol(ticker)
         normalized_range = str(range_key or "").strip().upper()
         if normalized_range not in _OHLCV_RANGE_OPTIONS:
@@ -813,6 +853,40 @@ async def get_market_ohlcv(
         )
 
     return payload
+
+
+@router.get("/market/sparklines", tags=["market"])
+async def get_market_sparklines(
+    request: Request,
+    symbols: str = Query(..., min_length=1, description="Comma-separated list of ticker symbols."),
+    range_key: str = Query(default="1M", alias="range", description="One of YTD, 1Y, 6M, 3M, 1M, 1W."),
+) -> dict[str, dict[str, list[float]]]:
+    async with _market_data_limit(request):
+        raw_symbols = [symbol.strip() for symbol in symbols.split(",") if symbol.strip()]
+        if len(raw_symbols) > 20:
+            raise BadRequestError(
+                "Too many ticker symbols.",
+                details={"fields": {"symbols": "symbols.length must be <= 20."}},
+            )
+
+        normalized_range = str(range_key or "").strip().upper()
+        if normalized_range not in _OHLCV_RANGE_OPTIONS:
+            raise BadRequestError(
+                "Invalid chart range.",
+                details={"fields": {"range": "Range must be one of YTD, 1Y, 6M, 3M, 1M, 1W."}},
+            )
+
+        capped = [_normalize_quote_symbol(symbol) for symbol in raw_symbols]
+        cache_key = (tuple(capped), normalized_range)
+        cached_at, cached_sparklines = _SPARKLINE_CACHE.get(cache_key, (0.0, {}))
+        now = monotonic()
+        if cached_sparklines and now - cached_at <= _SPARKLINE_CACHE_TTL_SECONDS:
+            return {"sparklines": _clone_sparklines(cached_sparklines)}
+
+        sparklines = await _fetch_sparklines(capped, normalized_range)
+        _SPARKLINE_CACHE[cache_key] = (now, _clone_sparklines(sparklines))
+
+    return {"sparklines": sparklines}
 
 
 @router.get("/market/quotes", tags=["market"], response_model=MarketQuotesResponse)
@@ -829,7 +903,7 @@ async def get_market_quotes(
     symbol, no historical download).  Results are returned even when some
     symbols fail — failed tickers include ``\"error\": true`` and ``\"chg\": \"N/A\"``.
     """
-    async with limit_request(request, request_policy()):
+    async with _market_data_limit(request):
         raw_symbols = [s.strip() for s in symbols.split(",") if s.strip()]
 
         # Cap at 20 to avoid overloading yfinance on a single request.
