@@ -2,14 +2,13 @@ import { Plus, RefreshCw } from 'lucide-react';
 import PropTypes from 'prop-types';
 import React, { useMemo, useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import MarketCategoryTabs from './MarketCategoryTabs';
 import MarketOverviewCard from './MarketOverviewCard';
 import MarketOverviewPicker from './MarketOverviewPicker';
-import { MARKET_MAX_SYMBOLS, labelForMarketSymbol } from '../../utils/marketDefaults';
+import { labelForMarketSymbol } from '../../utils/marketDefaults';
 
 function gridColumnsClass(count) {
   if (count >= 6) return 'xl:grid-cols-6';
@@ -34,7 +33,6 @@ export default function GlobalMarketOverview({
   data,
   loading,
   error,
-  notice,
   canAdd,
   canDelete,
   onAddSymbol,
@@ -48,63 +46,49 @@ export default function GlobalMarketOverview({
     [data]
   );
   const items = symbols.map((symbol) => itemsBySymbol.get(symbol) || fallbackItem(symbol, loading));
-  const showLimitNotice = notice || symbols.length >= MARKET_MAX_SYMBOLS || !canDelete;
-  const limitText =
-    notice ||
-    (symbols.length >= MARKET_MAX_SYMBOLS
-      ? 'Maximum 6 instruments'
-      : 'Minimum 3 instruments required');
 
   return (
-    <Card className="overflow-hidden rounded-xl border-bloomberg-border bg-black/40 font-mono text-bloomberg-white shadow-lg shadow-black/20">
-      <CardHeader className="flex flex-col gap-3 border-b border-bloomberg-border bg-bloomberg-surface/50 p-3 lg:flex-row lg:items-center lg:justify-between">
-        <CardTitle className="w-fit rounded-md bg-bloomberg-orange px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest text-black">
-          Global Markets Overview
-        </CardTitle>
-        <MarketCategoryTabs activeCategory={activeCategory} onChangeCategory={onChangeCategory} />
-      </CardHeader>
+    <Card className="overflow-hidden rounded-lg border-bloomberg-border bg-black/45 font-mono text-bloomberg-white shadow-md shadow-black/20">
+      <CardHeader className="border-b border-bloomberg-border bg-bloomberg-surface/50 px-3 py-2">
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+          <CardTitle className="w-fit rounded bg-bloomberg-orange px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-black">
+            Global Markets Overview
+          </CardTitle>
 
-      <div className="flex flex-col gap-2 border-b border-bloomberg-border bg-bloomberg-surface/40 px-3 py-2 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-h-5 text-[11px] text-bloomberg-muted">
-          {showLimitNotice && (
-            <>
-              <Badge
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-end">
+            <MarketCategoryTabs
+              activeCategory={activeCategory}
+              onChangeCategory={onChangeCategory}
+            />
+            <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+              <Button
+                type="button"
                 variant="outline"
-                className="mr-2 rounded-full border-bloomberg-border bg-black/60 px-2 py-0 font-mono text-[9px] text-bloomberg-amber"
+                size="sm"
+                onClick={onRefresh}
+                className="h-7 gap-1.5 rounded-md border-bloomberg-border bg-black/60 px-2.5 font-mono text-[10px] font-bold text-bloomberg-amber hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange [&_svg]:size-3.5"
               >
-                LIMIT
-              </Badge>
-              {limitText}
-            </>
-          )}
+                <RefreshCw />
+                REFRESH
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!canAdd}
+                onClick={() => setPickerOpen(true)}
+                className={`h-7 gap-1.5 rounded-md px-2.5 font-mono text-[10px] font-bold [&_svg]:size-3.5 ${
+                  canAdd
+                    ? 'bg-bloomberg-orange text-black hover:bg-bloomberg-orange/90'
+                    : 'cursor-not-allowed border border-bloomberg-border bg-black text-bloomberg-subtle'
+                }`}
+              >
+                <Plus />
+                ADD MARKET
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            className="h-8 rounded-md border-bloomberg-border bg-black/60 px-3 font-mono text-[11px] font-bold text-bloomberg-amber hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            REFRESH
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={!canAdd}
-            onClick={() => setPickerOpen(true)}
-            className={`h-8 rounded-md px-3 font-mono text-[11px] font-bold ${
-              canAdd
-                ? 'bg-bloomberg-orange text-black hover:bg-bloomberg-orange/90'
-                : 'cursor-not-allowed border border-bloomberg-border bg-black text-bloomberg-subtle'
-            }`}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            ADD MARKET
-          </Button>
-        </div>
-      </div>
+      </CardHeader>
 
       {error && (
         <div className="flex items-center justify-between gap-3 border-b border-bloomberg-border bg-bloomberg-red/10 px-3 py-2 text-[11px] text-bloomberg-red">
@@ -161,7 +145,6 @@ GlobalMarketOverview.propTypes = {
   }),
   loading: PropTypes.bool.isRequired,
   error: PropTypes.string,
-  notice: PropTypes.string,
   canAdd: PropTypes.bool.isRequired,
   canDelete: PropTypes.bool.isRequired,
   onAddSymbol: PropTypes.func.isRequired,
@@ -173,5 +156,4 @@ GlobalMarketOverview.propTypes = {
 GlobalMarketOverview.defaultProps = {
   data: { items: [] },
   error: '',
-  notice: '',
 };

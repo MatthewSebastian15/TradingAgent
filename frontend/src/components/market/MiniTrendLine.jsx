@@ -26,7 +26,7 @@ export default function MiniTrendLine({ values, positive }) {
     <svg
       viewBox="0 0 100 32"
       preserveAspectRatio="none"
-      className={`h-8 w-24 ${colorClass}`}
+      className={`h-6 w-20 ${colorClass}`}
       aria-label="trend line"
       role="img"
     >
@@ -34,7 +34,7 @@ export default function MiniTrendLine({ values, positive }) {
         points={points}
         fill="none"
         stroke="currentColor"
-        strokeWidth="3"
+        strokeWidth="3.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

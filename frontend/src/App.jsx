@@ -22,6 +22,7 @@ import Market from './pages/Market';
 import News from './pages/News';
 import NotFound from './pages/NotFound';
 import Research from './pages/Research';
+import Watchlist from './pages/Watchlist';
 import { MARKET_DEFAULT_SYMBOLS } from './utils/marketDefaults';
 import './index.css';
 
@@ -103,6 +104,7 @@ function App() {
             element={<Navigate to={AI_AGENT_PATH} replace />}
           />
           <Route path="/research" element={<Research />} />
+          <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/news" element={<News />} />
           <Route path="/market" element={<Market />} />
           <Route path="/econ" element={<Economic />} />

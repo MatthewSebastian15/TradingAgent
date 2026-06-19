@@ -40,6 +40,13 @@ describe('App', () => {
     expect(screen.getByText('Research module is under development.')).toBeTruthy();
   });
 
+  it('registers the Watchlist placeholder route', async () => {
+    await renderApp('/watchlist', false);
+
+    expect(await screen.findByText('COMING SOON')).toBeTruthy();
+    expect(screen.getByText('Watchlist module is under development.')).toBeTruthy();
+  });
+
   it('registers the ECON placeholder route', async () => {
     await renderApp('/econ', false);
 

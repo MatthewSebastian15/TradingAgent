@@ -30,7 +30,7 @@ export default function MiniSparkline({ values, positive }) {
   return (
     <svg
       viewBox="0 0 120 32"
-      className={`h-8 w-full ${colorClass}`}
+      className={`h-7 w-full ${colorClass}`}
       role="img"
       aria-label="sparkline"
     >
