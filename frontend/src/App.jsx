@@ -13,6 +13,7 @@ import {
   LEGACY_ANALYSIS_MOCK_ALIAS_PATH,
   LEGACY_ANALYSIS_MOCK_PATH,
   LEGACY_ANALYSIS_PATH,
+  WATCHLIST_PATH,
 } from './constants/routes';
 import { prefetchMarketOverviewData } from './hooks/useMarketOverviewData';
 import AIAgent from './pages/AIAgent';
@@ -104,7 +105,7 @@ function App() {
             element={<Navigate to={AI_AGENT_PATH} replace />}
           />
           <Route path="/research" element={<Research />} />
-          <Route path="/watchlist" element={<Watchlist />} />
+          <Route path={WATCHLIST_PATH} element={<Watchlist />} />
           <Route path="/news" element={<News />} />
           <Route path="/market" element={<Market />} />
           <Route path="/econ" element={<Economic />} />

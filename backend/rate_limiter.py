@@ -300,8 +300,14 @@ def _raise_if_limited(timestamps, active: int, policy: RateLimitPolicy) -> None:
         )
 
     if active >= policy.max_concurrent:
+        if policy.scope == "request":
+            message = "Too many analyses are already running for this owner session."
+        elif policy.scope == "market":
+            message = "Too many market data requests are already running for this owner session."
+        else:
+            message = "Too many requests are already running for this owner session."
         raise RateLimitError(
-            "Too many analyses are already running for this owner session.",
+            message,
             details={"scope": policy.scope, "max_concurrent": policy.max_concurrent},
         )
 
