@@ -25,19 +25,19 @@ import {
 import { useAnalysisJob } from '../hooks/useAnalysisJob';
 
 const TERMINAL_INPUT_CLASS =
-  'h-9 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-xs tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+  'h-8 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-[11px] tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const SETTINGS_LABEL_CLASS =
-  'text-[10px] text-bloomberg-muted font-mono tracking-[0.2em] uppercase leading-tight min-h-[28px] flex items-end';
+  'text-[9px] text-bloomberg-muted font-mono tracking-[0.16em] uppercase leading-tight min-h-[18px] flex items-end';
 const SETTINGS_STACKED_LABEL_CLASS =
-  'text-[10px] text-bloomberg-muted font-mono tracking-[0.2em] uppercase leading-tight min-h-[28px] flex flex-col justify-end';
+  'text-[9px] text-bloomberg-muted font-mono tracking-[0.16em] uppercase leading-tight min-h-[18px] flex flex-col justify-end';
 const SETTINGS_INPUT_CLASS =
-  'h-[54px] w-full rounded-none border-bloomberg-border bg-black font-mono text-sm tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+  'h-10 w-full rounded-none border-bloomberg-border bg-black font-mono text-xs tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const SETTINGS_SELECT_TRIGGER_CLASS =
-  'h-[54px] w-full rounded-none border-bloomberg-border bg-black font-mono text-sm tracking-wider text-bloomberg-white focus:ring-1 focus:ring-bloomberg-orange focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+  'h-10 w-full rounded-none border-bloomberg-border bg-black font-mono text-xs tracking-wider text-bloomberg-white focus:ring-1 focus:ring-bloomberg-orange focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const TERMINAL_PRIMARY_BUTTON_CLASS =
-  'h-10 w-full max-w-[228px] rounded-none border border-bloomberg-orange bg-bloomberg-orange px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-orange-400 focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+  'h-9 w-full max-w-[208px] rounded-none border border-bloomberg-orange bg-bloomberg-orange px-3 font-mono text-[11px] font-bold uppercase tracking-widest text-black hover:bg-orange-400 focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const TERMINAL_STOP_BUTTON_CLASS =
-  'h-10 w-full max-w-[228px] rounded-none border border-bloomberg-red bg-bloomberg-red px-4 font-mono text-xs font-bold uppercase tracking-widest text-black hover:bg-red-400 focus-visible:ring-1 focus-visible:ring-bloomberg-red focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
+  'h-9 w-full max-w-[208px] rounded-none border border-bloomberg-red bg-bloomberg-red px-3 font-mono text-[11px] font-bold uppercase tracking-widest text-black hover:bg-red-400 focus-visible:ring-1 focus-visible:ring-bloomberg-red focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 
 function apiToDisplayDate(value) {
   const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -53,11 +53,11 @@ function displayToApiDate(value) {
 
 function ConfigSection({ title, children }) {
   return (
-    <section className="border border-bloomberg-border bg-black p-3">
-      <div className="mb-3 border-b border-bloomberg-border pb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-bloomberg-orange">
+    <section className="border border-bloomberg-border bg-black p-2">
+      <div className="mb-2 border-b border-bloomberg-border pb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-bloomberg-orange">
         {title}
       </div>
-      <div className="space-y-3">{children}</div>
+      <div className="space-y-2">{children}</div>
     </section>
   );
 }
@@ -71,7 +71,7 @@ function FieldLabel({ children, hint = null, htmlFor = undefined }) {
   return (
     <label
       htmlFor={htmlFor}
-      className="mb-1.5 flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-bloomberg-muted"
+      className="mb-1 flex items-center justify-between gap-2 font-mono text-[9px] uppercase tracking-[0.16em] text-bloomberg-muted"
     >
       <span>{children}</span>
       {hint && <span className="font-mono text-[10px] normal-case tracking-wide">{hint}</span>}
@@ -87,7 +87,7 @@ FieldLabel.propTypes = {
 
 function SelectField({ label, value, onValueChange, disabled, children }) {
   return (
-    <div className="min-w-0 space-y-2">
+    <div className="min-w-0 space-y-1.5">
       <label className={SETTINGS_LABEL_CLASS}>{label}</label>
       <Select value={String(value)} onValueChange={onValueChange} disabled={disabled}>
         <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS}>
@@ -218,7 +218,7 @@ export default function StockForm({
 
   return (
     <form onSubmit={handleSubmit} className="font-mono">
-      <div className="flex flex-col gap-3 bg-bloomberg-bg p-3">
+      <div className="flex flex-col gap-2 bg-bloomberg-bg p-2">
         <ConfigSection title="Ticker">
           <div className="relative overflow-visible">
             <TickerSearchBar
@@ -238,7 +238,7 @@ export default function StockForm({
         </ConfigSection>
 
         <ConfigSection title="Analysis Horizon">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {HORIZON_OPTIONS.map((option) => {
               const active = Number(timeHorizonMonths) === option.value;
               return (
@@ -247,7 +247,7 @@ export default function StockForm({
                   type="button"
                   disabled={running}
                   onClick={() => setTimeHorizonMonths(option.value)}
-                  className={`h-9 border px-2 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                  className={`h-8 border px-2 font-mono text-[9px] font-semibold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
                     active
                       ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
                       : 'border-bloomberg-border bg-bloomberg-bg text-bloomberg-muted hover:border-bloomberg-orange hover:text-bloomberg-orange'
@@ -261,8 +261,8 @@ export default function StockForm({
         </ConfigSection>
 
         <ConfigSection title="Analysis Settings">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="min-w-0 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0 space-y-1.5">
               <label htmlFor="trade-date" className={SETTINGS_STACKED_LABEL_CLASS}>
                 <span>TRADE DATE</span>
                 <span>DD-MM-YYYY</span>
@@ -318,7 +318,7 @@ export default function StockForm({
         </ConfigSection>
 
         <ConfigSection title="Position Settings">
-          <label className="flex cursor-pointer items-start gap-3">
+          <label className="flex cursor-pointer items-start gap-2">
             <input
               type="checkbox"
               checked={hasExistingPosition}
@@ -327,17 +327,17 @@ export default function StockForm({
               className="mt-1 accent-bloomberg-orange"
             />
             <span className="min-w-0 flex-1">
-              <span className="block font-mono text-[11px] font-semibold uppercase tracking-wider text-bloomberg-white">
+              <span className="block font-mono text-[10px] font-semibold uppercase tracking-wider text-bloomberg-white">
                 Existing Position
               </span>
-              <span className="mt-1 block font-mono text-[10px] leading-relaxed text-bloomberg-muted">
+              <span className="mt-0.5 block font-mono text-[9px] leading-snug text-bloomberg-muted">
                 Adds current holding context without changing the backend contract.
               </span>
             </span>
           </label>
 
           {hasExistingPosition && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="min-w-0">
                 <FieldLabel htmlFor="position-quantity">Position Qty</FieldLabel>
                 <Input
@@ -372,8 +372,8 @@ export default function StockForm({
 
         <ConfigSection title="Action">
           {error && (
-            <div className="border border-bloomberg-red bg-bloomberg-red-dim px-3 py-2">
-              <span className="font-mono text-xs text-bloomberg-red">ERR: {error}</span>
+            <div className="border border-bloomberg-red bg-bloomberg-red-dim px-2 py-1.5">
+              <span className="font-mono text-[11px] text-bloomberg-red">ERR: {error}</span>
             </div>
           )}
 
@@ -391,10 +391,10 @@ export default function StockForm({
         </ConfigSection>
 
         {running && (
-          <div className="space-y-3 border border-bloomberg-border bg-bloomberg-card p-3">
+          <div className="space-y-2 border border-bloomberg-border bg-bloomberg-card p-2">
             <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
           </div>
         )}
       </div>

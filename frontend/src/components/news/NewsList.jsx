@@ -20,14 +20,14 @@ export default function NewsList({ articles }) {
 
   if (!sortedArticles.length) {
     return (
-      <Card className="terminal-news-state mt-4 rounded-lg border-bloomberg-border bg-black/50 px-4 py-3 text-xs text-bloomberg-muted">
+      <Card className="terminal-news-state mt-2 rounded-md border-bloomberg-border bg-black/50 px-3 py-2 text-xs text-bloomberg-muted">
         No news found for this category.
       </Card>
     );
   }
 
   return (
-    <div className="terminal-news-list mt-4 grid gap-2">
+    <div className="terminal-news-list mt-2 overflow-hidden rounded-md border border-bloomberg-border/80 bg-black/40">
       {sortedArticles.map((article, index) => (
         <NewsRow
           key={article?.id || article?.url || article?.title || `general-news-${index}`}

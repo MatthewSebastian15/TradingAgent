@@ -39,9 +39,9 @@ export default function ResultTabs({ activeTab, onTabChange, disabledTabs = [], 
     <Tabs
       value={activeTab}
       onValueChange={onTabChange}
-      className="border-b border-border bg-black p-2"
+      className="border-b border-border bg-black p-1.5"
     >
-      <TabsList className="h-auto flex-wrap justify-start gap-2 bg-transparent p-0">
+      <TabsList className="h-auto flex-wrap justify-start gap-1.5 bg-transparent p-0">
         {TABS.map((tab) => {
           const isDisabled = disabledTabs.includes(tab.id);
           const meta =
@@ -56,9 +56,9 @@ export default function ResultTabs({ activeTab, onTabChange, disabledTabs = [], 
               onClick={() => {
                 if (!isDisabled) onTabChange(tab.id);
               }}
-              className="relative gap-2 rounded-md border border-border px-3 py-2 font-mono text-xs tracking-wide text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-card data-[state=active]:text-primary"
+              className="relative gap-1.5 rounded-md border border-border px-3 py-1.5 font-mono text-xs tracking-wide text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-card data-[state=active]:text-primary"
             >
-              <Icon className="h-4 w-4" aria-hidden="true" />
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
               {tab.label}
               {meta && (
                 <span

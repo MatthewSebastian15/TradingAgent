@@ -32,9 +32,12 @@ describe('NewsRow', () => {
       />
     );
 
-    expect(screen.getByText('Bloomberg')).toBeInTheDocument();
+    expect(screen.getByText('BLOOMBERG')).toBeInTheDocument();
     expect(screen.getByText('CRYPTO')).toBeInTheDocument();
     expect(screen.getByText('11h')).toBeInTheDocument();
+    expect(screen.getByText('CRYPTO').closest('.terminal-news-meta')).toHaveTextContent(
+      /CRYPTO\s*-\s*BLOOMBERG\s*-\s*11h/
+    );
     expect(
       screen.getByRole('link', { name: 'Bitcoin slips as traders await macro data' })
     ).toHaveAttribute('href', 'https://example.com/news');
@@ -66,8 +69,8 @@ describe('NewsRow', () => {
     expect(screen.getByText('Market update')).toBeInTheDocument();
     expect(screen.getByText('1 Day')).toBeInTheDocument();
     expect(screen.getByText('MARKETS')).toBeInTheDocument();
-    expect(screen.getByText('example.com')).toBeInTheDocument();
-    expect(screen.queryByText('rss_context')).not.toBeInTheDocument();
+    expect(screen.getByText('EXAMPLE.COM')).toBeInTheDocument();
+    expect(screen.queryByText('RSS_CONTEXT')).not.toBeInTheDocument();
   });
 
   it('renders weeks after seven days', () => {

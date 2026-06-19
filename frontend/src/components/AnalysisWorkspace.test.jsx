@@ -341,7 +341,7 @@ describe('AnalysisWorkspace history storage', () => {
     const main = screen.getByTestId('analysis-main');
     expect(main.className).toContain('ml-10');
     await waitFor(() => {
-      expect(main.className).toContain('md:ml-[20.5rem]');
+      expect(main.className).toContain('md:ml-[22.5rem]');
     });
   });
 

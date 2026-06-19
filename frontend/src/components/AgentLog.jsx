@@ -155,15 +155,15 @@ export default function AgentLog({ status, agentProgress }) {
 
   return (
     <section className="animate-in fade-in slide-in-from-top-2 rounded-md border border-bloomberg-border bg-bloomberg-card">
-      <div className="border-b border-bloomberg-border p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-b border-bloomberg-border p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="font-mono text-sm font-semibold uppercase tracking-widest text-bloomberg-orange">
+            <h3 className="font-mono text-xs font-semibold uppercase tracking-widest text-bloomberg-orange">
               Pipeline active
             </h3>
-            <div className="mt-1 font-mono text-xs text-bloomberg-muted">SSE stream</div>
+            <div className="mt-0.5 font-mono text-[11px] text-bloomberg-muted">SSE stream</div>
           </div>
-          <div className="flex items-center gap-3 font-mono text-xs">
+          <div className="flex items-center gap-2 font-mono text-[11px]">
             <span className="text-bloomberg-white">
               {doneCount}/{totalSteps} agents
             </span>
@@ -179,9 +179,9 @@ export default function AgentLog({ status, agentProgress }) {
         />
       </div>
 
-      <div className="p-4">
-        <div className="h-96 overflow-y-auto pr-2">
-          <ol className="relative space-y-3 border-l border-bloomberg-border pl-4">
+      <div className="p-3">
+        <div className="h-72 overflow-y-auto pr-2">
+          <ol className="relative space-y-2 border-l border-bloomberg-border pl-3">
             {PIPELINE.map((step) => {
               const done = doneIds.has(step.id);
               const active = activeIds.has(step.id);
@@ -194,12 +194,12 @@ export default function AgentLog({ status, agentProgress }) {
               return (
                 <li key={step.id} className="animate-in fade-in duration-300">
                   <span
-                    className={`absolute -left-1.5 mt-3 h-3 w-3 rounded-full border border-bloomberg-card transition-colors ${meta.dot}`}
+                    className={`absolute -left-1 mt-2.5 h-2.5 w-2.5 rounded-full border border-bloomberg-card transition-colors ${meta.dot}`}
                   />
                   <div
-                    className={`grid min-h-[32px] grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 border px-3 py-2 font-mono text-xs transition-colors ${meta.row}`}
+                    className={`grid min-h-[30px] grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 border px-2.5 py-1.5 font-mono text-[11px] transition-colors ${meta.row}`}
                   >
-                    <Icon className={`h-3.5 w-3.5 ${meta.icon || ''}`} aria-hidden="true" />
+                    <Icon className={`h-3 w-3 ${meta.icon || ''}`} aria-hidden="true" />
                     <span className="truncate text-bloomberg-white">{titleCase(step.label)}</span>
                     <span className="uppercase tracking-wider">{statusValue}</span>
                     {elapsedTime && <span className="text-bloomberg-muted">{elapsedTime}</span>}
@@ -210,13 +210,13 @@ export default function AgentLog({ status, agentProgress }) {
           </ol>
         </div>
 
-        <div className="mt-4 border border-bloomberg-border bg-black px-3 py-2">
-          <div className="line-clamp-3 font-mono text-xs leading-relaxed text-bloomberg-muted">
+        <div className="mt-3 border border-bloomberg-border bg-black px-2.5 py-1.5">
+          <div className="line-clamp-2 font-mono text-[11px] leading-snug text-bloomberg-muted">
             {status || 'Waiting for pipeline...'}
           </div>
         </div>
 
-        <div className="mt-3 flex items-center gap-2 font-mono text-xs text-bloomberg-muted">
+        <div className="mt-2 flex items-center gap-2 font-mono text-[11px] text-bloomberg-muted">
           <span className="h-2 w-2 rounded-full bg-bloomberg-orange animate-pulse" />
           <span>
             Progress: {pct}% - {doneCount} of {totalSteps} agents complete

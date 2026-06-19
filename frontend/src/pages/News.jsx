@@ -41,22 +41,27 @@ export default function News() {
   }, [articles, category]);
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg text-bloomberg-white">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] text-bloomberg-white">
       <Navbar />
       <TickerTape />
-      <main className="terminal-news px-4 py-4 font-mono">
-        <Card className="terminal-news-panel overflow-hidden rounded-xl border-bloomberg-border bg-card text-bloomberg-white shadow-xl shadow-black/30">
-          <CardContent className="p-4">
+      <main className="terminal-news px-3 py-3 font-mono">
+        <Card className="terminal-news-panel overflow-hidden rounded-lg border-bloomberg-border bg-black/30 text-bloomberg-white shadow-lg shadow-black/20">
+          <CardContent className="p-3">
             <NewsFilterBar selectedCategory={category} onChange={setCategory} onRefresh={reload} />
 
+            <div className="mt-2 flex items-center justify-between border-b border-bloomberg-border/70 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-bloomberg-muted">
+              <span>{displayedArticles.length} stories</span>
+              <span>Newest first</span>
+            </div>
+
             {status === 'loading' && (
-              <div className="terminal-news-state mt-4 rounded-lg border border-bloomberg-border bg-black/50 px-4 py-3 text-xs text-bloomberg-muted">
+              <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-border bg-black/50 px-3 py-2 text-xs text-bloomberg-muted">
                 Loading news...
               </div>
             )}
 
             {error && (
-              <div className="terminal-news-state mt-4 rounded-lg border border-bloomberg-red/40 bg-bloomberg-red/10 px-4 py-3 text-xs text-bloomberg-red">
+              <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-red/40 bg-bloomberg-red/10 px-3 py-2 text-xs text-bloomberg-red">
                 Failed to load general news.
               </div>
             )}

@@ -1,8 +1,5 @@
 import PropTypes from 'prop-types';
 
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-
 const PROVIDER_NAMES = new Set(['marketaux', 'newsdata', 'google_news_light', 'rss_context']);
 const CATEGORY_LABELS = {
   markets: 'MARKETS',
@@ -23,18 +20,6 @@ const CATEGORY_ALIASES = {
   'central-bank': 'central_bank',
   centralbank: 'central_bank',
   indonesia: 'markets',
-};
-const CATEGORY_BADGE_CLASSES = {
-  markets: 'border-orange-400/50 bg-orange-400/10 text-orange-300',
-  world: 'border-violet-400/50 bg-violet-400/10 text-violet-300',
-  finance: 'border-lime-400/50 bg-lime-400/10 text-lime-300',
-  tech: 'border-fuchsia-400/50 bg-fuchsia-400/10 text-fuchsia-300',
-  macro: 'border-blue-400/50 bg-blue-400/10 text-blue-300',
-  central_bank: 'border-sky-400/50 bg-sky-400/10 text-sky-300',
-  regulatory: 'border-red-400/50 bg-red-400/10 text-red-300',
-  forex: 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300',
-  crypto: 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300',
-  unknown: 'border-bloomberg-border bg-bloomberg-surface text-neutral-300',
 };
 const MAX_DESCRIPTION_WORDS = 35;
 const MINUTE_MS = 60 * 1000;
@@ -58,12 +43,6 @@ function normalizeCategory(value) {
 
 function getCategoryLabel(article) {
   return CATEGORY_LABELS[normalizeCategory(article.category)] || 'UNKNOWN';
-}
-
-function getCategoryBadgeClass(article) {
-  return (
-    CATEGORY_BADGE_CLASSES[normalizeCategory(article.category)] || CATEGORY_BADGE_CLASSES.unknown
-  );
 }
 
 function getDataSource(article) {
@@ -138,30 +117,31 @@ export default function NewsRow({ article }) {
   );
 
   return (
-    <Card className="terminal-news-row rounded-lg border-bloomberg-border bg-black/55 px-3 py-2 shadow-sm shadow-black/20 transition-all hover:border-bloomberg-orange/40 hover:bg-bloomberg-orange/5">
-      <div className="terminal-news-meta flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-neutral-300">
-        <span className="terminal-news-source">{source}</span>
-        <span className="text-bloomberg-muted">-</span>
-        <Badge
-          variant="outline"
-          className={`terminal-news-category rounded-full px-2 py-0 font-mono text-[10px] font-semibold ${getCategoryBadgeClass(
-            article
-          )}`}
-        >
-          {category}
-        </Badge>
-        <span className="text-bloomberg-muted">-</span>
-        <span className="terminal-news-date text-bloomberg-muted">{date}</span>
-      </div>
+    <article className="terminal-news-row border-b border-bloomberg-border/70 bg-black/25 px-3 py-2 transition-colors last:border-b-0 hover:bg-bloomberg-orange/5">
+      <div className="min-w-0 space-y-0.5">
+        <div className="terminal-news-meta flex min-w-0 items-center gap-1.5 truncate font-mono text-[9px] font-semibold uppercase leading-4 tracking-wide text-bloomberg-muted">
+          <span className="terminal-news-category shrink-0 text-bloomberg-orange">{category}</span>
+          <span aria-hidden="true" className="text-neutral-600">
+            -
+          </span>
+          <span className="terminal-news-source truncate text-bloomberg-green">
+            {source.toUpperCase()}
+          </span>
+          <span aria-hidden="true" className="shrink-0 text-neutral-600">
+            -
+          </span>
+          <span className="terminal-news-date shrink-0 text-neutral-400">{date}</span>
+        </div>
 
-      <div className="terminal-news-headline mt-1 text-sm leading-snug text-neutral-200">
-        {titleNode}
-      </div>
+        <div className="terminal-news-headline truncate text-[13px] font-bold leading-5 text-neutral-100">
+          {titleNode}
+        </div>
 
-      <div className="terminal-news-summary mt-1 text-xs leading-relaxed text-bloomberg-muted">
-        {description}
+        <div className="terminal-news-summary truncate text-[11px] leading-4 text-bloomberg-muted">
+          {description}
+        </div>
       </div>
-    </Card>
+    </article>
   );
 }
 
