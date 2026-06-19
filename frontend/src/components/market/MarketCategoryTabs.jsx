@@ -7,7 +7,7 @@ import { MARKET_CATEGORIES, MARKET_CATEGORY_LABELS } from '../../utils/marketDef
 
 export default function MarketCategoryTabs({ activeCategory, onChangeCategory }) {
   return (
-    <div className="flex flex-wrap justify-end gap-1">
+    <div className="flex flex-wrap gap-1 lg:justify-end">
       {MARKET_CATEGORIES.map((category) => {
         const active = category === activeCategory;
         return (
@@ -17,7 +17,7 @@ export default function MarketCategoryTabs({ activeCategory, onChangeCategory })
             variant={active ? 'default' : 'outline'}
             size="sm"
             onClick={() => onChangeCategory(category)}
-            className={`h-8 rounded-full px-3 font-mono text-[11px] font-bold tracking-wider ${
+            className={`h-7 rounded-full px-2.5 font-mono text-[10px] font-bold tracking-wider ${
               active
                 ? 'bg-bloomberg-orange text-black shadow-sm shadow-bloomberg-orange/20 hover:bg-bloomberg-orange/90'
                 : 'border-bloomberg-border bg-black/60 text-bloomberg-amber hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange'

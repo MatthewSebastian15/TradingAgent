@@ -25,32 +25,36 @@ function loadingRows(limit) {
 
 export default function MarketMoversTable({ title, items, loading, limit, emptyText, tone }) {
   const positive = tone === 'positive';
+  const toneClass = positive ? 'text-bloomberg-green' : 'text-bloomberg-red';
 
   return (
-    <Card className="overflow-hidden rounded-xl border-bloomberg-border bg-black/40 font-mono text-bloomberg-white shadow-lg shadow-black/20">
-      <CardHeader className="border-b border-bloomberg-border bg-bloomberg-surface/50 p-3">
-        <CardTitle className="w-fit rounded-md bg-bloomberg-orange px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest text-black">
+    <Card className="overflow-hidden rounded-lg border-bloomberg-border bg-black/35 font-mono text-bloomberg-white shadow-lg shadow-black/20">
+      <CardHeader className="flex flex-row items-center justify-between border-b border-bloomberg-border bg-bloomberg-surface/40 p-2">
+        <CardTitle className="rounded-md bg-bloomberg-orange px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-black">
           {title}
         </CardTitle>
+        <span className={`font-mono text-[10px] font-bold uppercase tracking-widest ${toneClass}`}>
+          {loading ? 'Loading' : `${items.length} shown`}
+        </span>
       </CardHeader>
-      <CardContent className="p-0">
-        <Table className="min-w-[460px]">
+      <CardContent className="overflow-x-auto p-0">
+        <Table className="min-w-[390px]">
           <TableHeader>
             <TableRow className="border-bloomberg-border hover:bg-transparent">
-              <TableHead className="h-8 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
-                TICKER
+              <TableHead className="h-7 px-2 py-1 font-mono text-[9px] uppercase tracking-widest text-bloomberg-muted">
+                Ticker
               </TableHead>
-              <TableHead className="h-8 px-3 py-1.5 text-right font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
-                LAST
+              <TableHead className="h-7 px-2 py-1 text-right font-mono text-[9px] uppercase tracking-widest text-bloomberg-muted">
+                Last
               </TableHead>
-              <TableHead className="h-8 px-3 py-1.5 text-right font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
-                CHG%
+              <TableHead className="h-7 px-2 py-1 text-right font-mono text-[9px] uppercase tracking-widest text-bloomberg-muted">
+                Chg%
               </TableHead>
-              <TableHead className="h-8 px-3 py-1.5 text-right font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
-                VOLUME
+              <TableHead className="hidden h-7 px-2 py-1 text-right font-mono text-[9px] uppercase tracking-widest text-bloomberg-muted sm:table-cell">
+                Volume
               </TableHead>
-              <TableHead className="h-8 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-bloomberg-muted">
-                TREND
+              <TableHead className="h-7 px-2 py-1 font-mono text-[9px] uppercase tracking-widest text-bloomberg-muted">
+                Trend
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -58,8 +62,8 @@ export default function MarketMoversTable({ title, items, loading, limit, emptyT
             {loading &&
               loadingRows(limit).map((row) => (
                 <TableRow key={row} className="border-bloomberg-border hover:bg-transparent">
-                  <TableCell colSpan="5" className="px-3 py-1.5">
-                    <Skeleton className="h-4 w-48 rounded-full bg-bloomberg-surface" />
+                  <TableCell colSpan="5" className="px-2 py-1">
+                    <Skeleton className="h-3.5 w-40 rounded-full bg-bloomberg-surface" />
                     <span className="sr-only">LOADING MARKET DATA...</span>
                   </TableCell>
                 </TableRow>
@@ -71,23 +75,21 @@ export default function MarketMoversTable({ title, items, loading, limit, emptyT
                   key={item.symbol}
                   className="border-bloomberg-border hover:bg-bloomberg-orange/5"
                 >
-                  <TableCell className="px-3 py-1.5 font-mono text-[11px] font-bold text-bloomberg-orange">
+                  <TableCell className="px-2 py-1 font-mono text-[11px] font-bold text-bloomberg-orange">
                     {item.symbol}
                   </TableCell>
-                  <TableCell className="px-3 py-1.5 text-right font-mono text-[11px] text-bloomberg-white">
+                  <TableCell className="px-2 py-1 text-right font-mono text-[11px] text-bloomberg-white">
                     {formatMarketPrice(item.last, item.symbol)}
                   </TableCell>
                   <TableCell
-                    className={`px-3 py-1.5 text-right font-mono text-[11px] font-bold ${
-                      positive ? 'text-bloomberg-green' : 'text-bloomberg-red'
-                    }`}
+                    className={`px-2 py-1 text-right font-mono text-[11px] font-bold ${toneClass}`}
                   >
                     {formatMarketPercent(item.change_percent)}
                   </TableCell>
-                  <TableCell className="px-3 py-1.5 text-right font-mono text-[11px] text-bloomberg-muted">
+                  <TableCell className="hidden px-2 py-1 text-right font-mono text-[11px] text-bloomberg-muted sm:table-cell">
                     {formatMarketVolume(item.volume)}
                   </TableCell>
-                  <TableCell className="px-3 py-1.5">
+                  <TableCell className="px-2 py-1">
                     <MiniTrendLine values={item.trend || []} positive={positive} />
                   </TableCell>
                 </TableRow>
@@ -97,7 +99,7 @@ export default function MarketMoversTable({ title, items, loading, limit, emptyT
               <TableRow className="hover:bg-transparent">
                 <TableCell
                   colSpan="5"
-                  className="px-3 py-4 font-mono text-[11px] text-bloomberg-muted"
+                  className="px-2 py-3 font-mono text-[11px] text-bloomberg-muted"
                 >
                   {emptyText}
                 </TableCell>
