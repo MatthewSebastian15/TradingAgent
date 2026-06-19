@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tradingagents.dataflows.general_news_categories import (
+from tradingagents.dataflows.news.general_news_categories import (
     allowed_category_keys,
     map_general_news_category,
     normalize_general_news_category,

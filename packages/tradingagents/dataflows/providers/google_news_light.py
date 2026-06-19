@@ -5,12 +5,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from tradingagents.dataflows.news.news_dedup_normalized import deduplicate_news_articles
+from tradingagents.dataflows.news.news_models import NormalizedNewsArticle
+from tradingagents.dataflows.news.news_provider_base import BaseNewsProvider, ProviderFetchResult
+from tradingagents.dataflows.news.news_scoring import score_news_article
+from tradingagents.dataflows.news.news_ticker_aliases import resolve_news_ticker
+
 from .config import get_config
-from .news_deduplication import deduplicate_news_articles
-from .news_models import NormalizedNewsArticle
-from .news_provider_base import BaseNewsProvider, ProviderFetchResult
-from .news_scoring import score_news_article
-from .news_ticker_aliases import resolve_news_ticker
 
 
 class GoogleNewsLightProvider(BaseNewsProvider):

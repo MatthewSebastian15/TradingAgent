@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.financial_rows import FinancialRow, detect_sector
-from tradingagents.dataflows.fundamental_calculator import (
+from tradingagents.dataflows.fundamentals.financial_rows import FinancialRow, detect_sector
+from tradingagents.dataflows.fundamentals.fundamental_calculator import (
     calculate_market_aware_metrics,
     safe_divide,
 )
-from tradingagents.dataflows.normalizers import merge_financial_rows_yfinance_first
+from tradingagents.dataflows.fundamentals.normalizers import merge_financial_rows_yfinance_first
 
 
 def _row(**overrides):

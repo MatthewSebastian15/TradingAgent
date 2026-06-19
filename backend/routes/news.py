@@ -33,8 +33,8 @@ def _fetch_general_news(
     provider: str | None = None,
     force_refresh: bool = False,
 ) -> dict[str, Any]:
-    from tradingagents.dataflows.config import use_config
-    from tradingagents.dataflows.general_news_service import GeneralNewsService
+    from tradingagents.dataflows.news.general_news_service import GeneralNewsService
+    from tradingagents.dataflows.providers.config import use_config
 
     config = build_tradingagents_config()
     with use_config(config):
@@ -48,13 +48,13 @@ def _fetch_general_news(
 
 
 def _general_news_categories() -> dict[str, Any]:
-    from tradingagents.dataflows.general_news_categories import GENERAL_NEWS_CATEGORIES
+    from tradingagents.dataflows.news.general_news_categories import GENERAL_NEWS_CATEGORIES
 
     return {"categories": GENERAL_NEWS_CATEGORIES}
 
 
 async def _stream_general_news_events(request: Request, rate_limit_lease):
-    from tradingagents.dataflows.general_news_stream import general_news_event_bus
+    from tradingagents.dataflows.news.general_news_stream import general_news_event_bus
 
     try:
         async for event in general_news_event_bus.subscribe():
@@ -119,8 +119,8 @@ def _fetch_news(
     debug: bool = False,
     include_raw: bool = False,
 ) -> dict[str, Any]:
-    from tradingagents.dataflows.config import use_config
-    from tradingagents.dataflows.news_service import NewsService
+    from tradingagents.dataflows.news.news_service import NewsService
+    from tradingagents.dataflows.providers.config import use_config
 
     config = build_tradingagents_config()
     with use_config(config):

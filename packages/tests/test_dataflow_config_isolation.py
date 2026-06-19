@@ -5,7 +5,7 @@ import threading
 
 
 def test_parallel_async_configs_do_not_overwrite_each_other():
-    from tradingagents.dataflows.config import get_config, set_config
+    from tradingagents.dataflows.providers.config import get_config, set_config
 
     async def worker(timeout: int, release: asyncio.Event) -> int:
         set_config({"timeout": timeout, "llm_provider": f"provider-{timeout}"})
@@ -24,7 +24,7 @@ def test_parallel_async_configs_do_not_overwrite_each_other():
 
 
 def test_set_config_does_not_leak_into_unscoped_threads():
-    from tradingagents.dataflows.config import get_config, initialize_config, set_config
+    from tradingagents.dataflows.providers.config import get_config, initialize_config, set_config
     from tradingagents.default_config import DEFAULT_CONFIG
 
     initialize_config()

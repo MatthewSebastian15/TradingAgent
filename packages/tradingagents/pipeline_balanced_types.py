@@ -9,8 +9,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from tradingagents.agents.schemas import PortfolioRating
-from tradingagents.dataflows.data_quality import DataQualityReport
-from tradingagents.dataflows.errors import ErrorCode
+from tradingagents.dataflows.providers.errors import ErrorCode
+from tradingagents.dataflows.quality.data_quality import DataQualityReport
 
 logger = logging.getLogger(__name__)
 

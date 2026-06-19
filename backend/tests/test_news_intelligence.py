@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tradingagents.dataflows.news_intelligence import build_news_impact
+from tradingagents.dataflows.news.news_intelligence import build_news_impact
 
 
 def _article(

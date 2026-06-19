@@ -5,7 +5,7 @@ from routes.event_contract import (
     PipelineAgent,
     SseEvent,
 )
-from routes.serializers import AGENT_SEQUENCE
+from routes.serializers_analysis import AGENT_SEQUENCE
 
 
 def test_backend_event_contract_exports_ui_known_values():

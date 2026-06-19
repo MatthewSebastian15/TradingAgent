@@ -552,7 +552,7 @@ def build_field_quality(
     stale_penalty = 0
 
     try:
-        from tradingagents.dataflows.freshness_policy import get_freshness_status
+        from tradingagents.dataflows.quality.freshness_policy import get_freshness_status
 
         freshness_detail = get_freshness_status(field_name, as_of_date)
         freshness_score = int(freshness_detail.get("freshness_score") or 0)

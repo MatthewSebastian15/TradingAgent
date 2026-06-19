@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.news_decision_filter import split_ai_analysis_news
-from tradingagents.dataflows.news_models import NormalizedNewsArticle
+from tradingagents.dataflows.news.news_decision_filter import split_ai_analysis_news
+from tradingagents.dataflows.news.news_models import NormalizedNewsArticle
 
 
 def test_rss_market_context_does_not_enter_decision_news():

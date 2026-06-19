@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 
-from tradingagents.dataflows.lineage_builder import (
+from tradingagents.dataflows.quality.lineage_builder import (
     DataLineage,
     LLMUsageLineage,
     SymbolDiscoveryLineage,

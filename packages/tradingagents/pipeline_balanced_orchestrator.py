@@ -21,15 +21,15 @@ from tradingagents.agents.schemas import (
     render_debate_argument,
     render_trader_proposal,
 )
-from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.providers.config import set_config
 from tradingagents.graph.run_cache import RunCache
 from tradingagents.llm.llm_router import apply_guardrail, llm_metadata
-from tradingagents.pipeline_balanced_data import (
+from tradingagents.pipeline.orchestrator import (
     _normalize_time_horizon_months,
     _run_with_config,
     _time_horizon_label,
 )
-from tradingagents.pipeline_balanced_data import (
+from tradingagents.pipeline.orchestrator import (
     collect_market_data as _collect_raw_market_data,
 )
 from tradingagents.pipeline_balanced_llm import (

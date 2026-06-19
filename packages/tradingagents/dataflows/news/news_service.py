@@ -6,25 +6,25 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 
+from tradingagents.dataflows.market.stockstats_utils import yf_retry
+from tradingagents.dataflows.providers.config import get_config
+from tradingagents.dataflows.providers.errors import ErrorCode
+from tradingagents.dataflows.providers.google_news_light import GoogleNewsLightProvider
+from tradingagents.dataflows.providers.marketaux_news import MarketAuxProvider
+from tradingagents.dataflows.providers.newsdata_news import NewsDataProvider
+from tradingagents.dataflows.providers.rss_news import RSSContextProvider
+from tradingagents.dataflows.providers.vendor_budget import get_budget
+from tradingagents.dataflows.providers.vendor_router import get_attempt_recorder
+from tradingagents.dataflows.providers.yfinance_news import _extract_article_data
 from tradingagents.utils_resilience import TTLCache
 from tradingagents.yfinance_runtime import yf
 
-from .config import get_config
-from .errors import ErrorCode
-from .google_news_light import GoogleNewsLightProvider
-from .marketaux_news import MarketAuxProvider
 from .news_decision_filter import split_ai_analysis_news
-from .news_deduplication import deduplicate_news_articles
+from .news_dedup_normalized import deduplicate_news_articles
 from .news_models import NewsEntity, NormalizedNewsArticle, article_to_dict
 from .news_relevance import is_relevant_news
 from .news_scoring import score_news_article
 from .news_ticker_aliases import resolve_news_ticker
-from .newsdata_news import NewsDataProvider
-from .rss_news import RSSContextProvider
-from .stockstats_utils import yf_retry
-from .vendor_budget import get_budget
-from .vendor_router import get_attempt_recorder
-from .yfinance_news import _extract_article_data
 
 logger = logging.getLogger(__name__)
 STRUCTURED_NEWS_PROVIDERS = {

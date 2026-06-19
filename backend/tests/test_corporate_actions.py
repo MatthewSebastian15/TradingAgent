@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from tradingagents.dataflows import y_finance
-from tradingagents.dataflows.corporate_actions import apply_corporate_action_adjustments
+from tradingagents.dataflows.market.corporate_actions import apply_corporate_action_adjustments
+from tradingagents.dataflows.providers import y_finance
 
 
 def test_split_adjusts_historical_close():

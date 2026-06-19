@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from tradingagents.dataflows import sec_companyfacts
+from tradingagents.dataflows.fundamentals import sec_companyfacts
 
 
 def _response(payload):

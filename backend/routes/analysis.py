@@ -563,7 +563,9 @@ async def cancel_analysis_job_alias(job_id: str, request: Request):
 async def validate_ticker(
     ticker: str, trade_date: str, request: Request, market: str | None = None
 ):
-    from tradingagents.dataflows.y_finance import normalize_ticker as normalize_yfinance_ticker
+    from tradingagents.dataflows.providers.y_finance import (
+        normalize_ticker as normalize_yfinance_ticker,
+    )
 
     req = normalize_and_validate_analysis_request(
         AnalysisRequest(
@@ -593,7 +595,7 @@ async def api_status(request: Request):
 
 async def _api_status_payload(runtime: jobs.AnalysisRuntimeState | None = None):
     try:
-        from tradingagents.dataflows.interface import get_tool_cache_stats
+        from tradingagents.dataflows.providers.interface import get_tool_cache_stats
 
         tool_cache = get_tool_cache_stats()
     except Exception as exc:  # pragma: no cover - useful when optional vendor deps are absent

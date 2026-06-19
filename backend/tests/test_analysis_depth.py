@@ -5,7 +5,7 @@ from collections import Counter
 
 import pytest
 import tradingagents.pipeline_balanced as pipeline
-from tradingagents.dataflows.data_quality import DataQualityReport
+from tradingagents.dataflows.quality.data_quality import DataQualityReport
 
 from config import build_tradingagents_config
 

@@ -1,6 +1,6 @@
 import logging
 
-from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.providers.config import set_config
 from tradingagents.llm_optimization.usage import (
     estimate_tokens_from_text,
     normalize_usage_numbers,

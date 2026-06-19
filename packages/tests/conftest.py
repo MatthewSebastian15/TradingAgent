@@ -25,7 +25,7 @@ os.environ["TRADINGAGENTS_SKIP_DOTENV"] = "true"
 for _env_var in _API_KEY_ENV_VARS:
     os.environ[_env_var] = _API_KEY_PLACEHOLDER
 
-from tradingagents.dataflows.data_quality import DataQualityReport  # noqa: E402
+from tradingagents.dataflows.quality.data_quality import DataQualityReport  # noqa: E402
 from tradingagents.llm_clients.model_catalog import MODEL_CATALOG  # noqa: E402
 from tradingagents.pipeline_balanced_types import CollectedData  # noqa: E402
 from tradingagents.prompt_context import build_prompt_context  # noqa: E402

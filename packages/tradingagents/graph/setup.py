@@ -21,7 +21,7 @@ from tradingagents.agents import (
     create_trader,
 )
 from tradingagents.agents.utils.agent_states import AgentState
-from tradingagents.dataflows.config import get_config
+from tradingagents.dataflows.providers.config import get_config
 
 from .conditional_logic import ConditionalLogic
 

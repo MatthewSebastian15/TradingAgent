@@ -3,25 +3,25 @@ import time
 
 import pytest
 
-from tradingagents.dataflows.config import get_config, set_config
-from tradingagents.dataflows.news_intelligence import (
+from tradingagents.dataflows.market.stockstats_utils import yf_retry
+from tradingagents.dataflows.news.news_intelligence import (
     build_analyst_consensus,
     build_catalyst_tracker,
     build_news_impact,
 )
-from tradingagents.dataflows.stockstats_utils import yf_retry
+from tradingagents.dataflows.providers.config import get_config, set_config
+from tradingagents.pipeline.orchestrator import (
+    _build_price_chart,
+    _build_related_news,
+    _parse_markdown_news_items,
+    _resolve_current_price_anchor,
+)
 from tradingagents.pipeline_balanced import (
     AnalystReport,
     LLMBudget,
     _date_window,
     _extract_last_close_price,
     _invoke_once,
-)
-from tradingagents.pipeline_balanced_data import (
-    _build_price_chart,
-    _build_related_news,
-    _parse_markdown_news_items,
-    _resolve_current_price_anchor,
 )
 from tradingagents.technical.entry_quality import build_technical_entry
 from tradingagents.utils_resilience import (
@@ -518,7 +518,7 @@ def test_yf_retry_retries_timeout_errors():
 
 
 def test_alpha_vantage_requests_use_native_timeout(monkeypatch):
-    from tradingagents.dataflows import alpha_vantage_common
+    from tradingagents.dataflows.providers import alpha_vantage_common
 
     set_config({"tool_timeout_seconds": 7})
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-test-key")
@@ -544,7 +544,7 @@ def test_alpha_vantage_requests_use_native_timeout(monkeypatch):
 
 
 def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
-    from tradingagents.dataflows import interface
+    from tradingagents.dataflows.providers import interface
 
     attempts = []
     price_csv = "\n".join(
@@ -585,7 +585,7 @@ def test_yfinance_router_uses_single_app_retry_layer(monkeypatch):
 
 
 def test_router_falls_back_when_primary_returns_missing_text(monkeypatch):
-    from tradingagents.dataflows import interface
+    from tradingagents.dataflows.providers import interface
 
     monkeypatch.setattr(
         interface,
@@ -621,7 +621,7 @@ def test_router_falls_back_when_primary_returns_missing_text(monkeypatch):
 
 
 def test_route_to_all_vendors_returns_every_usable_payload(monkeypatch):
-    from tradingagents.dataflows import interface
+    from tradingagents.dataflows.providers import interface
 
     monkeypatch.setattr(
         interface,
@@ -655,7 +655,7 @@ def test_route_to_all_vendors_returns_every_usable_payload(monkeypatch):
 
 
 def test_alpha_vantage_stock_normalizes_csv_for_pipeline(monkeypatch):
-    from tradingagents.dataflows import alpha_vantage_stock
+    from tradingagents.dataflows.providers import alpha_vantage_stock
 
     raw_csv = "\n".join(
         [
@@ -675,7 +675,7 @@ def test_alpha_vantage_stock_normalizes_csv_for_pipeline(monkeypatch):
 
 
 def test_alpha_vantage_news_formats_feed_and_empty_response(monkeypatch):
-    from tradingagents.dataflows import alpha_vantage_news
+    from tradingagents.dataflows.providers import alpha_vantage_news
 
     monkeypatch.setattr(
         alpha_vantage_news,
@@ -730,7 +730,7 @@ def test_invoke_once_returns_fallback_when_llm_timeout_is_raised():
 
 
 def test_price_chart_rejects_stale_ohlcv_before_trade_date(monkeypatch):
-    import tradingagents.pipeline_balanced_data as pipeline_data
+    import tradingagents.pipeline.orchestrator as pipeline_data
 
     monkeypatch.setattr(pipeline_data, "get_config", lambda: {"price_max_fallback_days": 7})
 
@@ -752,7 +752,7 @@ Date,Open,High,Low,Close,Volume
 
 
 def test_price_chart_allows_bounded_last_trade_fallback(monkeypatch):
-    import tradingagents.pipeline_balanced_data as pipeline_data
+    import tradingagents.pipeline.orchestrator as pipeline_data
 
     monkeypatch.setattr(pipeline_data, "get_config", lambda: {"price_max_fallback_days": 7})
 
@@ -799,7 +799,7 @@ def test_current_price_anchor_uses_ohlcv_before_profile():
 
 
 def test_router_falls_back_and_does_not_cache_price_ohlcv(monkeypatch):
-    from tradingagents.dataflows import interface
+    from tradingagents.dataflows.providers import interface
 
     stale_csv = "\n".join(
         [

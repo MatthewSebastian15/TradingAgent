@@ -8,7 +8,7 @@ from statistics import pstdev
 from typing import Any
 
 from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
-from tradingagents.dataflows.errors import ErrorCode
+from tradingagents.dataflows.providers.errors import ErrorCode
 
 FIXED_RR = 3.0
 RISK_REWARD_DISPLAY = "1:3"

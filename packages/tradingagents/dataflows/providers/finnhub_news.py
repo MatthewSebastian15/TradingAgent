@@ -3,6 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
+from tradingagents.dataflows.news.news_aggregator import (
+    deduplicate_news as aggregate_deduplicate_news,
+)
+from tradingagents.dataflows.news.news_aggregator import rank_news
+
 from .config import get_config
 from .finnhub_common import (
     FinnhubUnavailableError,
@@ -10,8 +15,6 @@ from .finnhub_common import (
     make_api_request,
     unix_to_iso_datetime,
 )
-from .news_aggregator import deduplicate_news as aggregate_deduplicate_news
-from .news_aggregator import rank_news
 
 EVENT_KEYWORDS = {
     "earnings": ["earnings", "revenue", "profit", "net income"],

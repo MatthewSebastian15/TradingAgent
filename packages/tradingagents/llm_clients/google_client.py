@@ -5,7 +5,7 @@ from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from tradingagents.dataflows.config import get_config
+from tradingagents.dataflows.providers.config import get_config
 from tradingagents.utils_resilience import call_with_retry, limit_concurrency
 
 from .base_client import BaseLLMClient, normalize_content

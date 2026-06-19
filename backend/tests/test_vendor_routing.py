@@ -17,15 +17,15 @@ sys.modules.setdefault("yfinance.exceptions", yf_exceptions)
 sys.modules.setdefault("stockstats", SimpleNamespace(wrap=lambda df: df))
 
 import pytest
-from tradingagents.dataflows.config import use_config
-from tradingagents.dataflows.interface import route_to_vendor
-from tradingagents.dataflows.vendor_budget import VendorBudget
-from tradingagents.dataflows.vendor_router import VendorAttemptRecorder
+from tradingagents.dataflows.providers.config import use_config
+from tradingagents.dataflows.providers.interface import route_to_vendor
+from tradingagents.dataflows.providers.vendor_budget import VendorBudget
+from tradingagents.dataflows.providers.vendor_router import VendorAttemptRecorder
 
 
 @pytest.fixture(autouse=True)
 def clear_interface_cache():
-    from tradingagents.dataflows import interface
+    from tradingagents.dataflows.providers import interface
 
     interface._TOOL_CACHE._data.clear()
     yield
@@ -72,7 +72,7 @@ def _quote(source: str, price: float = 10) -> dict:
 
 
 def test_vendor_attempts_records_success_and_failure(monkeypatch):
-    from tradingagents.dataflows import interface, vendor_router
+    from tradingagents.dataflows.providers import interface, vendor_router
 
     recorder = VendorAttemptRecorder()
     monkeypatch.setattr(vendor_router, "get_attempt_recorder", lambda _id: recorder)
@@ -86,7 +86,7 @@ def test_vendor_attempts_records_success_and_failure(monkeypatch):
 
 
 def test_yfinance_empty_finnhub_fallback_called(monkeypatch):
-    from tradingagents.dataflows import interface
+    from tradingagents.dataflows.providers import interface
 
     calls = []
     monkeypatch.setitem(
@@ -105,7 +105,7 @@ def test_yfinance_empty_finnhub_fallback_called(monkeypatch):
 
 
 def test_all_vendors_failed_returns_clear_error(monkeypatch):
-    from tradingagents.dataflows import interface
+    from tradingagents.dataflows.providers import interface
 
     monkeypatch.setitem(
         interface.VENDOR_METHODS,
@@ -125,7 +125,7 @@ def test_request_budget_stops_extra_calls():
 
 
 def test_company_profile_routes_to_yfinance(monkeypatch):
-    from tradingagents.dataflows import interface
+    from tradingagents.dataflows.providers import interface
 
     monkeypatch.setitem(
         interface.VENDOR_METHODS,
@@ -183,7 +183,7 @@ def test_news_relevance_thresholds_use_separate_environment_keys(monkeypatch):
 
 
 def test_vendor_order_skips_vendor_without_method(monkeypatch):
-    from tradingagents.dataflows import interface, vendor_router
+    from tradingagents.dataflows.providers import interface, vendor_router
 
     recorder = VendorAttemptRecorder()
     monkeypatch.setattr(vendor_router, "get_attempt_recorder", lambda _id: recorder)
@@ -210,7 +210,7 @@ def test_vendor_order_skips_vendor_without_method(monkeypatch):
 
 
 def test_alpha_vantage_without_key_is_skipped_before_call(monkeypatch):
-    from tradingagents.dataflows import interface, vendor_router
+    from tradingagents.dataflows.providers import interface, vendor_router
 
     recorder = VendorAttemptRecorder()
     monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)

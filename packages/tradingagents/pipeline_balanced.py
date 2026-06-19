@@ -1,7 +1,7 @@
 """Facade for the balanced TradingAgents pipeline.
 
 The implementation is split by concern:
-- pipeline_balanced_data.py: deterministic market-data collection and parsing
+- pipeline/orchestrator.py: deterministic market-data collection orchestration
 - pipeline_balanced_prompts.py: long prompt templates
 - pipeline_balanced_llm.py: LLM invocation, local fallbacks, and render helpers
 - pipeline_balanced_progress.py: SSE/progress event helpers
@@ -11,7 +11,7 @@ The implementation is split by concern:
 from __future__ import annotations
 
 from tradingagents import pipeline_balanced_orchestrator as _orchestrator
-from tradingagents.pipeline_balanced_data import (
+from tradingagents.pipeline.orchestrator import (
     _call_yfinance_with_resilience,
     _check_cancel,
     _date_window,

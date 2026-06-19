@@ -6,7 +6,7 @@ import threading
 import time
 
 from routes import pipeline_runner
-from routes.serializers import build_partial_result
+from routes.serializers_analysis import build_partial_result
 from routes.validation import AnalysisRequest
 
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.normalizers import (
+from tradingagents.dataflows.fundamentals.normalizers import (
     build_financial_highlights_from_normalized_rows,
     normalize_financial_field,
 )
-from tradingagents.dataflows.period_metadata import (
+from tradingagents.dataflows.fundamentals.period_metadata import (
     build_annual_period_metadata,
     build_quarter_period_metadata,
 )

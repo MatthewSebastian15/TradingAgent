@@ -6,8 +6,8 @@ import pytest
 
 
 def test_alpha_vantage_http_error_redacts_api_key(monkeypatch):
-    from tradingagents.dataflows import alpha_vantage_common
-    from tradingagents.dataflows.config import set_config
+    from tradingagents.dataflows.providers import alpha_vantage_common
+    from tradingagents.dataflows.providers.config import set_config
 
     set_config({"tool_timeout_seconds": 7})
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-secret-key")

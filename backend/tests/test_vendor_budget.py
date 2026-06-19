@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.config import use_config
-from tradingagents.dataflows.vendor_budget import (
+from tradingagents.dataflows.providers.config import use_config
+from tradingagents.dataflows.providers.vendor_budget import (
     DEFAULT_VENDOR_BUDGET,
     VendorBudget,
     create_budget_from_config,
@@ -28,7 +28,7 @@ def test_vendor_budget_default_allows_full_analysis_batch():
 
 
 def test_cache_hit_does_not_count_as_vendor_call(monkeypatch):
-    from tradingagents.dataflows import interface
+    from tradingagents.dataflows.providers import interface
 
     budget = VendorBudget(max_total_calls=10, per_vendor_limits={"yfinance": 10})
     calls = {"count": 0}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.data_completeness import calculate_completeness
+from tradingagents.dataflows.quality.data_completeness import calculate_completeness
 
 
 def test_completeness_groups_empty_do_not_crash():

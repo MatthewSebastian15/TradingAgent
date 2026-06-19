@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from tradingagents.dataflows.config import use_config
-from tradingagents.dataflows.finnhub_common import (
+from tradingagents.dataflows.providers.config import use_config
+from tradingagents.dataflows.providers.finnhub_common import (
     FinnhubConfigError,
     FinnhubRateLimitError,
     build_metadata,
@@ -56,7 +56,7 @@ def test_missing_api_key_returns_config_error():
 
 def test_make_api_request_success(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_common.requests.get",
+        "tradingagents.dataflows.providers.finnhub_common.requests.get",
         lambda *a, **k: FakeResponse(200, {"c": 10}),
     )
     with use_config(BASE_CONFIG):
@@ -65,7 +65,8 @@ def test_make_api_request_success(monkeypatch):
 
 def test_make_api_request_401_no_retry(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_common.requests.get", lambda *a, **k: FakeResponse(401, {})
+        "tradingagents.dataflows.providers.finnhub_common.requests.get",
+        lambda *a, **k: FakeResponse(401, {}),
     )
     with use_config(BASE_CONFIG), pytest.raises(FinnhubConfigError):
         make_api_request("/quote", {"symbol": "AAPL"})
@@ -73,7 +74,8 @@ def test_make_api_request_401_no_retry(monkeypatch):
 
 def test_make_api_request_429_rate_limit(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_common.requests.get", lambda *a, **k: FakeResponse(429, {})
+        "tradingagents.dataflows.providers.finnhub_common.requests.get",
+        lambda *a, **k: FakeResponse(429, {}),
     )
     with use_config(BASE_CONFIG), pytest.raises(FinnhubRateLimitError):
         make_api_request("/quote", {"symbol": "AAPL"})

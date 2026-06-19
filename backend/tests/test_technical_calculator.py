@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.technical_calculator import calculate_sma, calculate_technical_fallback
+from tradingagents.dataflows.market.technical_calculator import (
+    calculate_sma,
+    calculate_technical_fallback,
+)
 
 
 def test_sma_200_requires_history():

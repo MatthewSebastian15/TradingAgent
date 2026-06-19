@@ -8,7 +8,8 @@ from typing import Any
 
 import requests
 
-from .errors import ErrorCode
+from tradingagents.dataflows.providers.errors import ErrorCode
+
 from .news_models import NormalizedNewsArticle
 
 logger = logging.getLogger(__name__)

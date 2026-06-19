@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 
 import pytest
-from tradingagents.dataflows.config import use_config
-from tradingagents.dataflows.finnhub_stock import get_quote
+from tradingagents.dataflows.providers.config import use_config
+from tradingagents.dataflows.providers.finnhub_stock import get_quote
 
 
 @pytest.mark.live_api

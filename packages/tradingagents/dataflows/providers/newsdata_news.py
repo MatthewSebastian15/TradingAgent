@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from tradingagents.dataflows.news.news_dedup_normalized import deduplicate_news_articles
+from tradingagents.dataflows.news.news_models import NewsEntity, NormalizedNewsArticle
+from tradingagents.dataflows.news.news_provider_base import BaseNewsProvider, ProviderFetchResult
+from tradingagents.dataflows.news.news_scoring import map_sentiment_label, score_news_article
+from tradingagents.dataflows.news.news_ticker_aliases import resolve_news_ticker
+
 from .config import get_config
 from .errors import ErrorCode
-from .news_deduplication import deduplicate_news_articles
-from .news_models import NewsEntity, NormalizedNewsArticle
-from .news_provider_base import BaseNewsProvider, ProviderFetchResult
-from .news_scoring import map_sentiment_label, score_news_article
-from .news_ticker_aliases import resolve_news_ticker
 
 
 class NewsDataProvider(BaseNewsProvider):

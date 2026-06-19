@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.data_completeness import calculate_completeness
-from tradingagents.dataflows.fundamental_calculator import calculate_derived_fundamentals
-from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
-from tradingagents.dataflows.news_impact import classify_news_impact
-from tradingagents.dataflows.news_relevance import score_news_relevance
-from tradingagents.dataflows.normalizers import normalize_financial_value
-from tradingagents.dataflows.source_priority import get_field_vendor_order
-from tradingagents.dataflows.technical_calculator import calculate_technical_fallback
-from tradingagents.dataflows.validators import validate_price_consistency
+from tradingagents.dataflows.fundamentals.fundamental_calculator import (
+    calculate_derived_fundamentals,
+)
+from tradingagents.dataflows.fundamentals.fundamental_gap_mapper import map_fundamental_gaps
+from tradingagents.dataflows.fundamentals.normalizers import normalize_financial_value
+from tradingagents.dataflows.market.technical_calculator import calculate_technical_fallback
+from tradingagents.dataflows.news.news_impact import classify_news_impact
+from tradingagents.dataflows.news.news_relevance import score_news_relevance
+from tradingagents.dataflows.providers.source_priority import get_field_vendor_order
+from tradingagents.dataflows.quality.data_completeness import calculate_completeness
+from tradingagents.dataflows.quality.validators import validate_price_consistency
 
 
 def test_idx_insider_uses_yfinance_first():
@@ -93,7 +95,7 @@ def test_idx_financial_statement_priority():
 
 
 def test_yfinance_statement_headers_are_detected_as_sources():
-    from tradingagents.pipeline_balanced_data import _source_label
+    from tradingagents.pipeline.orchestrator import _source_label
 
     assert _source_label("# Balance Sheet data for NVDA (quarterly)") == "yfinance"
     assert _source_label("# Income Statement data for NVDA (quarterly)") == "yfinance"
