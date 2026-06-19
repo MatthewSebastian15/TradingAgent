@@ -253,3 +253,44 @@ def test_market_ohlcv_uses_daily_when_detail_intervals_empty(client, monkeypatch
     assert payload["interval"] == "1d"
     assert payload["fallback_to_daily"] is True
     assert payload["points"][-1]["close"] == 22
+
+
+def test_market_ohlcv_slices_shared_daily_cache_for_shorter_range(client, monkeypatch):
+    market_routes._OHLCV_CACHE.clear()
+    calls: list[tuple[str, str, str, str]] = []
+
+    def fake_download(symbol, start_dt, end_dt, interval):
+        calls.append((symbol, start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d"), interval))
+        return pd.DataFrame(
+            {
+                "Open": [8, 10, 11],
+                "High": [9, 12, 13],
+                "Low": [7, 9, 10],
+                "Close": [8.5, 11, 12],
+                "Adj Close": [8.5, 11, 12],
+                "Volume": [900, 1000, 1200],
+            },
+            index=pd.to_datetime(["2025-06-10", "2026-04-01", "2026-06-08"]),
+        )
+
+    monkeypatch.setattr(market_routes, "_download_ohlcv", fake_download)
+
+    one_year_response = client.get("/api/market/ohlcv?ticker=NVDA&range=1Y&trade_date=2026-06-09")
+    three_month_response = client.get(
+        "/api/market/ohlcv?ticker=NVDA&range=3M&trade_date=2026-06-09"
+    )
+
+    assert one_year_response.status_code == 200
+    assert three_month_response.status_code == 200
+    assert calls == [("NVDA", "2025-06-09", "2026-06-09", "1d")]
+    assert [point["date"] for point in one_year_response.json()["points"]] == [
+        "2025-06-10",
+        "2026-04-01",
+        "2026-06-08",
+    ]
+    assert [point["date"] for point in three_month_response.json()["points"]] == [
+        "2026-04-01",
+        "2026-06-08",
+    ]
+    assert three_month_response.json()["range"] == "3M"
+    assert three_month_response.json()["start_date"] == "2026-03-09"
