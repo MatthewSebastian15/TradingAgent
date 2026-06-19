@@ -13,7 +13,6 @@ import {
 } from './AnalysisWorkspacePanels';
 import Navbar from './Navbar';
 import ResultCard from './ResultCard';
-import TickerTape from './TickerTape';
 import {
   historyResourceId,
   saveToHistory,
@@ -246,7 +245,6 @@ export default function AnalysisWorkspace({
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px]">
       <Navbar />
-      <TickerTape />
 
       <div className="fixed bottom-0 left-0 top-[60px] z-[45] w-10 border-bloomberg-border border-r bg-black">
         <PanelButton

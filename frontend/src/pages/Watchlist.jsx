@@ -5,7 +5,7 @@ import WatchlistPage from '../components/watchlist/WatchlistPage';
 
 export default function Watchlist() {
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-8 text-bloomberg-white">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] text-bloomberg-white">
       <Navbar />
       <WatchlistPage />
     </div>

@@ -14,6 +14,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
+import TickerTape from './TickerTape';
 import {
   AI_AGENT_MOCK_PATH,
   AI_AGENT_PATH,
@@ -346,6 +347,7 @@ export default function Navbar() {
             <Clock />
           </div>
         </div>
+        <TickerTape />
       </nav>
     </TooltipProvider>
   );

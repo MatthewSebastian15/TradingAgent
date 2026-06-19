@@ -43,7 +43,7 @@ export default function TickerTape() {
   return (
     <>
       <WarningToastStack warnings={warnings} />
-      <div className="fixed left-0 right-0 top-8 z-[49] h-7 border-b border-bloomberg-border bg-black overflow-hidden">
+      <div className="h-7 overflow-hidden border-b border-bloomberg-border bg-black">
         <div className="ticker-tape" aria-label="Global market ticker tape">
           {items.map((ticker) => {
             const isLoading = ticker.chg === EMPTY_CHANGE;
