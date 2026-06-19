@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-from tradingagents import pipeline_balanced_data
-from tradingagents.dataflows import y_finance
+from tradingagents.dataflows.providers import y_finance
+from tradingagents.pipeline import collectors as pipeline_data
 
 
 def test_get_company_profile_returns_clean_frontend_payload(monkeypatch):
@@ -102,6 +102,60 @@ def test_get_company_profile_keeps_profile_when_price_anchor_fails(monkeypatch):
     assert profile["current_price_source"] == "unavailable"
 
 
+def test_get_company_profile_ignores_optional_table_errors(monkeypatch):
+    info = {
+        "longName": "Apple Inc.",
+        "sector": "Technology",
+        "industry": "Consumer Electronics",
+        "country": "United States",
+        "currency": "USD",
+        "marketCap": 4_376_979_046_400,
+        "fullTimeEmployees": 166_000,
+        "sharesOutstanding": 14_687_356_000,
+        "heldPercentInsiders": 0.01632,
+        "heldPercentInstitutions": 0.65825,
+        "shortRatio": 3.12,
+    }
+
+    class TickerWithBrokenOptionalTables:
+        def __init__(self, payload):
+            self.info = payload
+
+        @property
+        def shares(self):
+            raise NotImplementedError("Have not implemented fetching 'shares' from Yahoo API")
+
+        @property
+        def valuation(self):
+            raise NotImplementedError("valuation unavailable")
+
+    monkeypatch.setattr(
+        y_finance,
+        "_get_ticker",
+        lambda _ticker: TickerWithBrokenOptionalTables(info),
+    )
+    monkeypatch.setattr(y_finance, "yf_retry", lambda func: func())
+    monkeypatch.setattr(
+        y_finance,
+        "fetch_current_price",
+        lambda *_args, **_kwargs: {
+            "price": None,
+            "price_source": "test",
+            "price_timestamp": "2026-06-18",
+        },
+    )
+
+    profile = y_finance.get_company_profile("AAPL")
+
+    assert profile["available"] is True
+    assert profile["employee_count"] == 166_000
+    assert profile["shares_outstanding"] == 14_687_356_000
+    assert profile["insider_pct"] == 0.01632
+    assert profile["institution_pct"] == 0.65825
+    assert round(profile["public_pct"], 5) == 0.32543
+    assert profile["short_ratio"] == 3.12
+
+
 def test_get_company_profile_returns_unavailable_payload_on_error(monkeypatch):
     monkeypatch.setattr(y_finance, "_get_ticker", lambda _ticker: SimpleNamespace(info={}))
     monkeypatch.setattr(
@@ -117,12 +171,12 @@ def test_get_company_profile_returns_unavailable_payload_on_error(monkeypatch):
 
 def test_safe_company_profile_keeps_pipeline_running_on_vendor_error(monkeypatch):
     monkeypatch.setattr(
-        pipeline_balanced_data,
+        pipeline_data,
         "route_to_vendor",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("provider down")),
     )
 
-    profile = pipeline_balanced_data._safe_company_profile("BBCA.JK", "2026-05-31")
+    profile = pipeline_data._safe_company_profile("BBCA.JK", "2026-05-31")
 
     assert profile["available"] is False
     assert profile["ticker"] == "BBCA.JK"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.data_quality import DataQualityReport, build_field_quality
+from tradingagents.dataflows.quality.data_quality import DataQualityReport, build_field_quality
 
 
 def test_build_field_quality_available_and_missing():

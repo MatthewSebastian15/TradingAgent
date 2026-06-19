@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.data_quality import build_field_quality
-from tradingagents.pipeline_balanced_data import run_cross_vendor_validation
+from tradingagents.dataflows.quality.data_quality import build_field_quality
+from tradingagents.pipeline.orchestrator import run_cross_vendor_validation
 
 
 def test_pipeline_validation_marks_price_conflict():

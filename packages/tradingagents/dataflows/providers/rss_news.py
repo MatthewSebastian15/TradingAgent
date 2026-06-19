@@ -14,11 +14,16 @@ try:
 except Exception:  # pragma: no cover - dependency may be absent before install
     feedparser = None  # type: ignore[assignment]
 
+from tradingagents.dataflows.news.news_models import NewsEntity, NormalizedNewsArticle
+from tradingagents.dataflows.news.news_provider_base import (
+    BaseNewsProvider,
+    ProviderFetchResult,
+    sanitize_error,
+)
+from tradingagents.dataflows.news.news_relevance import is_relevant_news
+from tradingagents.dataflows.news.news_scoring import content_hash
+
 from .config import get_config
-from .news_models import NewsEntity, NormalizedNewsArticle
-from .news_provider_base import BaseNewsProvider, ProviderFetchResult, sanitize_error
-from .news_relevance import is_relevant_news
-from .news_scoring import content_hash
 from .rss_news_config import (
     DEFAULT_RSS_FEEDS,
     GOOGLE_NEWS_FALLBACK_RSS_FEEDS,

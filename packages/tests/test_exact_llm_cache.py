@@ -1,4 +1,4 @@
-from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.providers.config import set_config
 from tradingagents.llm_cache.exact_cache import ExactLLMCache
 from tradingagents.llm_cache.keys import build_exact_cache_key
 from tradingagents.pipeline_balanced_llm import _invoke_once

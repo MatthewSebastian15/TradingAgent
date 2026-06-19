@@ -22,7 +22,7 @@ from config import (
 )
 from errors import ApiError, BadRequestError, PipelineExecutionError, sanitize_message
 from routes.event_contract import SseEvent
-from routes.serializers import build_partial_result, parse_final_result
+from routes.serializers_analysis import build_partial_result, parse_final_result
 from routes.validation import AnalysisRequest
 
 logger = logging.getLogger(__name__)
@@ -291,8 +291,8 @@ def preflight_market_data_worker(
     response_detail: str,
 ) -> str:
     """Fetch a small price sample inside an isolated worker process."""
-    from tradingagents.dataflows.config import use_config
-    from tradingagents.dataflows.interface import route_to_vendor
+    from tradingagents.dataflows.providers.config import use_config
+    from tradingagents.dataflows.providers.interface import route_to_vendor
 
     config = build_tradingagents_config(
         max_debate_rounds=max_debate_rounds,
@@ -539,7 +539,7 @@ async def preflight_market_data(
     preflight_worker_func: Callable[..., str] = preflight_market_data_worker,
 ) -> None:
     """Fail fast for obviously invalid tickers before any Gemini call."""
-    from tradingagents.dataflows.data_quality import looks_missing
+    from tradingagents.dataflows.quality.data_quality import looks_missing
 
     loop = asyncio.get_running_loop()
     executor = await get_executor_func()

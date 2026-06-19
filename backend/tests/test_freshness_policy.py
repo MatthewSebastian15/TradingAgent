@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from tradingagents.dataflows.freshness_policy import get_freshness_status, ttl_for_field
+from tradingagents.dataflows.quality.freshness_policy import get_freshness_status, ttl_for_field
 
 
 def test_missing_as_of_date_returns_unknown_stale():

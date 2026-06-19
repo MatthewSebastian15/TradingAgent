@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.fundamental_gap_mapper import map_fundamental_gaps
+from tradingagents.dataflows.fundamentals.fundamental_gap_mapper import map_fundamental_gaps
 
 
 def test_gap_mapper_excludes_calculated_sma():

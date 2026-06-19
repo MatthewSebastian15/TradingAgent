@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.source_priority import (
+from tradingagents.dataflows.providers.source_priority import (
     NEWS_PRIORITY,
     SOURCE_PRIORITY,
     get_field_vendor_order,
 )
-from tradingagents.dataflows.vendor_capabilities import SPRINT_1_VENDORS
+from tradingagents.dataflows.providers.vendor_capabilities import SPRINT_1_VENDORS
 
 
 def test_source_priority_only_uses_sprint_1_vendors():

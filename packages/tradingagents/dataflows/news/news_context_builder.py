@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from tradingagents.dataflows.news_relevance import is_relevant_news
+from tradingagents.dataflows.news.news_relevance import is_relevant_news
 
 NEWS_CONTEXT_SOURCES = (
     "google_news_light",

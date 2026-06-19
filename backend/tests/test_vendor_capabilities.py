@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tradingagents.company_profile.builder import build_company_profile
-from tradingagents.dataflows.vendor_capabilities import (
+from tradingagents.dataflows.providers.vendor_capabilities import (
     SPRINT_1_VENDORS,
     VENDOR_CAPABILITIES,
     get_supported_vendors,
@@ -9,7 +9,7 @@ from tradingagents.dataflows.vendor_capabilities import (
     supports_vendor,
     vendor_requires_api_key,
 )
-from tradingagents.dataflows.vendor_symbol import resolve_symbol
+from tradingagents.dataflows.providers.vendor_symbol import resolve_symbol
 
 
 def test_vendor_capability_matrix_only_contains_sprint_1_vendors():

@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from tradingagents.dataflows.google_news_light import GoogleNewsLightProvider
-from tradingagents.dataflows.marketaux_news import MarketAuxProvider
-from tradingagents.dataflows.news_models import NewsEntity, NormalizedNewsArticle
-from tradingagents.dataflows.news_provider_base import ProviderFetchResult, sanitize_params
-from tradingagents.dataflows.news_service import (
+from tradingagents.dataflows.news.news_models import NewsEntity, NormalizedNewsArticle
+from tradingagents.dataflows.news.news_provider_base import ProviderFetchResult, sanitize_params
+from tradingagents.dataflows.news.news_service import (
     NewsService,
     _filter_articles_by_window,
     format_news_for_prompt,
 )
-from tradingagents.dataflows.news_ticker_aliases import resolve_news_ticker
-from tradingagents.dataflows.newsdata_news import NewsDataProvider
-from tradingagents.dataflows.rss_news import (
+from tradingagents.dataflows.news.news_ticker_aliases import resolve_news_ticker
+from tradingagents.dataflows.providers.google_news_light import GoogleNewsLightProvider
+from tradingagents.dataflows.providers.marketaux_news import MarketAuxProvider
+from tradingagents.dataflows.providers.newsdata_news import NewsDataProvider
+from tradingagents.dataflows.providers.rss_news import (
     _select_feeds,
     build_company_rss_queries,
     score_rss_article,
@@ -62,7 +62,7 @@ def test_marketaux_normalizes_entity_news_and_redacts_token(monkeypatch):
             },
         )
 
-    monkeypatch.setattr("tradingagents.dataflows.news_provider_base.requests.get", fake_get)
+    monkeypatch.setattr("tradingagents.dataflows.news.news_provider_base.requests.get", fake_get)
     result = MarketAuxProvider("secret-token", max_retries=0).fetch_news(
         resolve_news_ticker("BBCA.JK"),
         as_of_date="2026-06-01",
@@ -100,7 +100,7 @@ def test_google_news_light_normalizes_results_and_redacts_key(monkeypatch):
             },
         )
 
-    monkeypatch.setattr("tradingagents.dataflows.news_provider_base.requests.get", fake_get)
+    monkeypatch.setattr("tradingagents.dataflows.news.news_provider_base.requests.get", fake_get)
     result = GoogleNewsLightProvider("google-news-secret", max_retries=0).fetch_news(
         resolve_news_ticker("BBCA.JK"),
         as_of_date="2026-06-01",
@@ -153,7 +153,7 @@ def test_newsdata_uses_separate_fallback_queries(monkeypatch):
             },
         )
 
-    monkeypatch.setattr("tradingagents.dataflows.news_provider_base.requests.get", fake_get)
+    monkeypatch.setattr("tradingagents.dataflows.news.news_provider_base.requests.get", fake_get)
     result = NewsDataProvider("newsdata-secret", max_retries=0).fetch_news(
         resolve_news_ticker("BBCA.JK")
     )
@@ -238,11 +238,11 @@ def test_news_service_skips_secondary_when_primary_is_sufficient(monkeypatch):
             raise AssertionError("Secondary provider should be skipped.")
 
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.MarketAuxProvider",
+        "tradingagents.dataflows.news.news_service.MarketAuxProvider",
         lambda *_args, **_kwargs: PrimaryProvider(),
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.NewsDataProvider",
+        "tradingagents.dataflows.news.news_service.NewsDataProvider",
         lambda *_args, **_kwargs: SecondaryProvider(),
     )
 
@@ -297,11 +297,11 @@ def test_news_service_skips_marketaux_when_google_news_is_sufficient(monkeypatch
             raise AssertionError("MarketAux should be skipped.")
 
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.GoogleNewsLightProvider",
+        "tradingagents.dataflows.news.news_service.GoogleNewsLightProvider",
         lambda *_args, **_kwargs: GoogleProvider(),
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.MarketAuxProvider",
+        "tradingagents.dataflows.news.news_service.MarketAuxProvider",
         lambda *_args, **_kwargs: MarketAuxProviderStub(),
     )
 
@@ -360,11 +360,11 @@ def test_news_service_uses_marketaux_when_google_news_is_below_threshold(monkeyp
             return ProviderFetchResult(provider=self.provider, status="success", articles=articles)
 
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.GoogleNewsLightProvider",
+        "tradingagents.dataflows.news.news_service.GoogleNewsLightProvider",
         lambda *_args, **_kwargs: Provider("google_news_light"),
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.MarketAuxProvider",
+        "tradingagents.dataflows.news.news_service.MarketAuxProvider",
         lambda *_args, **_kwargs: Provider("marketaux"),
     )
 
@@ -407,9 +407,9 @@ def test_news_service_accepts_list_provider_config_with_cache(monkeypatch):
                 provider="google_news_light", status="success", articles=articles
             )
 
-    monkeypatch.setattr("tradingagents.dataflows.news_service.SQLiteTTLCache", None)
+    monkeypatch.setattr("tradingagents.dataflows.news.news_service.SQLiteTTLCache", None)
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.GoogleNewsLightProvider",
+        "tradingagents.dataflows.news.news_service.GoogleNewsLightProvider",
         lambda *_args, **_kwargs: GoogleProvider(),
     )
 
@@ -466,11 +466,11 @@ def test_news_service_deduplicates_and_filters_low_relevance(monkeypatch):
             return ProviderFetchResult(provider=self.provider, status="success", articles=selected)
 
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.MarketAuxProvider",
+        "tradingagents.dataflows.news.news_service.MarketAuxProvider",
         lambda *_args, **_kwargs: Provider("marketaux"),
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service.NewsDataProvider",
+        "tradingagents.dataflows.news.news_service.NewsDataProvider",
         lambda *_args, **_kwargs: Provider("newsdata"),
     )
 

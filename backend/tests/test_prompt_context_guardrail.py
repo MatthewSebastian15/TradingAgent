@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from tradingagents.dataflows.news_context_builder import build_news_context
+from tradingagents.dataflows.news.news_context_builder import build_news_context
 from tradingagents.graph.prompt_context_builder import PromptContext, build_prompt_context
 from tradingagents.llm.llm_router import apply_guardrail
 

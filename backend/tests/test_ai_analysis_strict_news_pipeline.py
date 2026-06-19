@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.news_models import NewsEntity, NormalizedNewsArticle
-from tradingagents.dataflows.news_provider_base import ProviderFetchResult
-from tradingagents.dataflows.news_service import NewsService, format_news_for_prompt
+from tradingagents.dataflows.news.news_models import NewsEntity, NormalizedNewsArticle
+from tradingagents.dataflows.news.news_provider_base import ProviderFetchResult
+from tradingagents.dataflows.news.news_service import NewsService, format_news_for_prompt
 
 
 def _article(
@@ -55,7 +55,7 @@ def test_strict_news_pipeline_calls_all_providers(monkeypatch):
         NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service._fetch_yfinance_fallback",
+        "tradingagents.dataflows.news.news_service._fetch_yfinance_fallback",
         lambda *_args, **_kwargs: yfinance_called.append("yfinance") or [],
     )
 
@@ -88,7 +88,7 @@ def test_strict_news_pipeline_does_not_skip_secondary_when_primary_has_articles(
         NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service._fetch_yfinance_fallback",
+        "tradingagents.dataflows.news.news_service._fetch_yfinance_fallback",
         lambda *_args, **_kwargs: [],
     )
 
@@ -116,7 +116,7 @@ def test_strict_news_pipeline_provider_failure_continues(monkeypatch):
         NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service._fetch_yfinance_fallback",
+        "tradingagents.dataflows.news.news_service._fetch_yfinance_fallback",
         lambda *_args, **_kwargs: [],
     )
 
@@ -147,7 +147,7 @@ def test_yfinance_is_called_last_and_only_once(monkeypatch):
         NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service._fetch_yfinance_fallback", fake_yfinance
+        "tradingagents.dataflows.news.news_service._fetch_yfinance_fallback", fake_yfinance
     )
 
     NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
@@ -204,7 +204,7 @@ def test_strict_api_response_contract_and_debug(monkeypatch):
         NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
     )
     monkeypatch.setattr(
-        "tradingagents.dataflows.news_service._fetch_yfinance_fallback",
+        "tradingagents.dataflows.news.news_service._fetch_yfinance_fallback",
         lambda *_args, **_kwargs: [],
     )
 

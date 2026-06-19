@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.financial_rows import FinancialRow
-from tradingagents.dataflows.fundamental_calculator import (
+from tradingagents.dataflows.fundamentals.financial_rows import FinancialRow
+from tradingagents.dataflows.fundamentals.fundamental_calculator import (
     build_fundamental_field_quality,
     calculate_market_aware_metrics,
 )
-from tradingagents.dataflows.fundamental_gap_mapper import estimate_financial_row_fields
+from tradingagents.dataflows.fundamentals.fundamental_gap_mapper import (
+    estimate_financial_row_fields,
+)
 
-from routes.serializers import parse_final_result, shape_result
+from routes.serializers_analysis import parse_final_result, shape_result
 
 
 def test_field_quality_marks_primary_fallback_estimated_and_unavailable_fields():

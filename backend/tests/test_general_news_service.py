@@ -4,10 +4,10 @@ import inspect
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
-from tradingagents.dataflows import general_news_service
-from tradingagents.dataflows.general_news_service import GeneralNewsService
-from tradingagents.dataflows.news_models import NormalizedNewsArticle
-from tradingagents.dataflows.news_provider_base import ProviderFetchResult
+from tradingagents.dataflows.news import general_news_service
+from tradingagents.dataflows.news.general_news_service import GeneralNewsService
+from tradingagents.dataflows.news.news_models import NormalizedNewsArticle
+from tradingagents.dataflows.news.news_provider_base import ProviderFetchResult
 
 
 def _config(tmp_path, **overrides):

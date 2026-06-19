@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tradingagents.dataflows.idx_financials_parser import (
+from tradingagents.dataflows.fundamentals.idx_financials_parser import (
     build_idx_financial_statement_from_report,
     download_idx_report,
     find_idx_financial_reports,
     parse_idx_financial_statement,
 )
-from tradingagents.dataflows.idx_official import get_idx_financial_statements
+from tradingagents.dataflows.fundamentals.idx_official import get_idx_financial_statements
 
 
 def _write_report(tmp_path: Path) -> Path:

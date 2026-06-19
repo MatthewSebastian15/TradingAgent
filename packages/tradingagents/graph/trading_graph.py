@@ -26,8 +26,8 @@ from tradingagents.agents.utils.news_data_tools import (
 )
 from tradingagents.agents.utils.sentiment_data_tools import get_news_sentiment, get_social_sentiment
 from tradingagents.agents.utils.technical_indicators_tools import get_indicators
-from tradingagents.dataflows.config import set_config
-from tradingagents.dataflows.utils import safe_ticker_component
+from tradingagents.dataflows.market.utils import safe_ticker_component
+from tradingagents.dataflows.providers.config import set_config
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
 from tradingagents.yfinance_runtime import yf

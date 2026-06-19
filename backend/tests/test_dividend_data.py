@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.dividend_data import build_dividend_status
+from tradingagents.dataflows.fundamentals.dividend_data import build_dividend_status
 
 
 def test_no_dividend_history_reason():

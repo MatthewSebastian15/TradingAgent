@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.fundamental_calculator import (
+from tradingagents.dataflows.fundamentals.fundamental_calculator import (
     calculate_derived_fundamentals,
     calculate_growth,
     safe_div,

@@ -7,7 +7,7 @@ from typing import Any
 
 import requests
 
-from .config import get_config
+from tradingagents.dataflows.providers.config import get_config
 
 TICKER_URL = "https://www.sec.gov/files/company_tickers.json"
 FACTS_URL_PREFIX = "https://data.sec.gov/api/xbrl/companyfacts/CIK"

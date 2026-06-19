@@ -19,7 +19,7 @@ stockstats_stub.wrap = lambda data: data
 sys.modules.setdefault("stockstats", stockstats_stub)
 
 _build_related_news = importlib.import_module(
-    "tradingagents.pipeline_balanced_data"
+    "tradingagents.pipeline.orchestrator"
 )._build_related_news
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.position_sizing import PositionSizing, calculate_position_sizing
+from tradingagents.dataflows.market.position_sizing import PositionSizing, calculate_position_sizing
 
 
 def test_position_sizing_dataclass_and_function_are_available():

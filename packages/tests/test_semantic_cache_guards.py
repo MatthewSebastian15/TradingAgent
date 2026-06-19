@@ -1,4 +1,4 @@
-from tradingagents.dataflows.config import get_config, set_config
+from tradingagents.dataflows.providers.config import get_config, set_config
 from tradingagents.llm_cache.semantic_cache import (
     cosine_similarity,
     get_semantic_cache,

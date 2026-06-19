@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.pipeline_balanced_data import (
+from tradingagents.pipeline.orchestrator import (
     latest_financial_as_of,
     latest_news_published_at,
     latest_price_as_of,

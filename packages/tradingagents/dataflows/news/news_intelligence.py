@@ -4,11 +4,11 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from tradingagents.dataflows.news_aggregator import normalize_title, normalize_url, rank_news
-from tradingagents.dataflows.news_dedup import dedup_news_articles_with_metadata
-from tradingagents.dataflows.news_impact import classify_news_impact
-from tradingagents.dataflows.news_noise_filter import route_news_bucket
-from tradingagents.dataflows.news_relevance import score_news_relevance
+from tradingagents.dataflows.news.news_aggregator import normalize_title, normalize_url, rank_news
+from tradingagents.dataflows.news.news_dedup_dict import dedup_news_articles_with_metadata
+from tradingagents.dataflows.news.news_impact import classify_news_impact
+from tradingagents.dataflows.news.news_noise_filter import route_news_bucket
+from tradingagents.dataflows.news.news_relevance import score_news_relevance
 
 MATERIAL_KEYWORDS = {
     "earnings": [

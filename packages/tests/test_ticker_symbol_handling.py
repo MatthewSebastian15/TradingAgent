@@ -15,7 +15,7 @@ class TickerSymbolHandlingTests(unittest.TestCase):
 
 
 def test_yfinance_ticker_cache_evicts_oldest_symbol(monkeypatch):
-    from tradingagents.dataflows import y_finance
+    from tradingagents.dataflows.providers import y_finance
 
     created = []
 

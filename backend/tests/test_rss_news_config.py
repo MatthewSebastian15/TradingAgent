@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from tradingagents.dataflows import rss_news
-from tradingagents.dataflows.rss_news import RSSContextProvider, _select_feeds
-from tradingagents.dataflows.rss_news_config import (
+from tradingagents.dataflows.providers import rss_news
+from tradingagents.dataflows.providers.rss_news import RSSContextProvider, _select_feeds
+from tradingagents.dataflows.providers.rss_news_config import (
     DEFAULT_RSS_FEEDS,
     GOOGLE_NEWS_FALLBACK_RSS_FEEDS,
     RSSFeedConfig,

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import tradingagents.dataflows.normalizers as normalizers
-from tradingagents.dataflows.financial_rows import (
+import tradingagents.dataflows.fundamentals.normalizers as normalizers
+from tradingagents.dataflows.fundamentals.financial_rows import (
     FinancialRow,
     build_period_label,
     normalize_currency,
     normalize_unit,
 )
-from tradingagents.dataflows.normalizers import (
+from tradingagents.dataflows.fundamentals.normalizers import (
     merge_financial_rows_yfinance_first,
     normalize_finnhub_financials,
     normalize_yfinance_financials,

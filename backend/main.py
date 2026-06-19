@@ -100,9 +100,9 @@ async def shutdown_resources() -> None:
 
 
 async def general_news_background_worker() -> None:
-    from tradingagents.dataflows.config import use_config
-    from tradingagents.dataflows.general_news_service import GeneralNewsService
-    from tradingagents.dataflows.general_news_stream import general_news_event_bus
+    from tradingagents.dataflows.news.general_news_service import GeneralNewsService
+    from tradingagents.dataflows.news.general_news_stream import general_news_event_bus
+    from tradingagents.dataflows.providers.config import use_config
 
     while True:
         try:

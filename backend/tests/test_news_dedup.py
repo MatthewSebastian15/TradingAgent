@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from tradingagents.dataflows.news_dedup import (
+from tradingagents.dataflows.news.news_dedup_dict import (
     dedup_news_articles,
     dedup_news_articles_with_metadata,
 )
-from tradingagents.dataflows.news_deduplication import deduplicate_news_articles
-from tradingagents.dataflows.news_models import NormalizedNewsArticle
+from tradingagents.dataflows.news.news_dedup_normalized import deduplicate_news_articles
+from tradingagents.dataflows.news.news_models import NormalizedNewsArticle
 
 
 def test_news_dedup_title_same_day_topic():

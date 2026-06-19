@@ -276,7 +276,7 @@ def test_parse_final_result_treats_invalid_pd_obj_as_missing():
 
 
 def test_summary_shape_keeps_investment_thesis():
-    from routes.serializers import shape_result
+    from routes.serializers_analysis import shape_result
 
     shaped = shape_result(
         {
@@ -295,7 +295,7 @@ def test_summary_shape_keeps_investment_thesis():
 
 
 def test_summary_shape_keeps_financial_highlights():
-    from routes.serializers import shape_result
+    from routes.serializers_analysis import shape_result
 
     financial_highlights = {
         "periods": [{"key": "FY25", "label": "FY25"}],
@@ -326,7 +326,7 @@ def test_summary_and_parse_final_result_preserve_phase_2_fundamentals():
     from tradingagents.agents.schemas import PortfolioRating
 
     from routes.analysis import _parse_final_result
-    from routes.serializers import shape_result
+    from routes.serializers_analysis import shape_result
 
     fundamentals = {
         "financial_trends": {"periods": [{"key": "FY25"}]},
@@ -348,7 +348,7 @@ def test_summary_and_parse_final_result_preserve_phase_2_fundamentals():
 
 
 def test_summary_shape_keeps_company_profile():
-    from routes.serializers import shape_result
+    from routes.serializers_analysis import shape_result
 
     company_profile = {"available": True, "ticker": "BBCA.JK", "name": "PT Bank Central Asia Tbk"}
 
@@ -369,7 +369,7 @@ def test_parse_final_result_preserves_company_profile():
 
 
 def test_summary_shape_keeps_price_chart():
-    from routes.serializers import shape_result
+    from routes.serializers_analysis import shape_result
 
     price_chart = {
         "available": True,
@@ -394,7 +394,7 @@ def test_parse_final_result_preserves_price_chart():
 
 
 def test_summary_shape_keeps_related_news():
-    from routes.serializers import shape_result
+    from routes.serializers_analysis import shape_result
 
     related_news = {
         "available": True,
@@ -419,7 +419,7 @@ def test_parse_final_result_preserves_related_news():
 
 
 def test_summary_shape_keeps_news_context():
-    from routes.serializers import shape_result
+    from routes.serializers_analysis import shape_result
 
     news = {"ticker": "BBCA.JK", "articles": [{"provider": "marketaux", "title": "Headline"}]}
 

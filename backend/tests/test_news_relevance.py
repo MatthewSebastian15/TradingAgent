@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.news_relevance import build_news_relevance_terms, is_relevant_news
+from tradingagents.dataflows.news.news_relevance import build_news_relevance_terms, is_relevant_news
 
 
 def test_build_news_relevance_terms_for_bbca():

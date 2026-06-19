@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.period_metadata import (
+from tradingagents.dataflows.fundamentals.period_metadata import (
     attach_period_metadata_to_rows,
     build_annual_period_metadata,
     build_quarter_period_metadata,

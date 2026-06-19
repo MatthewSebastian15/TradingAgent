@@ -10,15 +10,14 @@ import pandas as pd
 import pytz
 from dateutil.relativedelta import relativedelta
 
-from tradingagents.yfinance_runtime import yf
-
-from .stockstats_utils import (
+from tradingagents.dataflows.market.stockstats_utils import (
     StockstatsUtils,
     filter_financials_by_date,
     load_ohlcv,
     yf_deadline,
     yf_retry,
 )
+from tradingagents.yfinance_runtime import yf
 
 logger = logging.getLogger(__name__)
 
@@ -736,8 +735,6 @@ def _latest_numeric_from_frame(data: Any, keys: tuple[str, ...]) -> float | None
 
 
 def _load_optional_ticker_table(ticker_obj: Any, attribute: str) -> Any | None:
-    if not hasattr(ticker_obj, attribute):
-        return None
     try:
         return yf_retry(lambda: getattr(ticker_obj, attribute))
     except Exception as exc:

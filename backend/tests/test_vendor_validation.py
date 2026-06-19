@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.validators import (
+from tradingagents.dataflows.quality.validators import (
     validate_fundamental_consistency,
     validate_price_consistency,
     validate_volume_consistency,

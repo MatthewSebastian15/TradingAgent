@@ -28,9 +28,9 @@ def test_run_cache_key_includes_job_id_and_isolation():
 
 
 def test_run_cache_hit_does_not_count_vendor_call(monkeypatch):
-    from tradingagents.dataflows import interface
-    from tradingagents.dataflows.config import use_config
-    from tradingagents.dataflows.vendor_budget import VendorBudget
+    from tradingagents.dataflows.providers import interface
+    from tradingagents.dataflows.providers.config import use_config
+    from tradingagents.dataflows.providers.vendor_budget import VendorBudget
 
     budget = VendorBudget(max_total_calls=10, per_vendor_limits={"yfinance": 10})
     run_cache = RunCache("job-cache")

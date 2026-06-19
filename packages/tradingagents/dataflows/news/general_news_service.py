@@ -10,20 +10,21 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
+from tradingagents.dataflows.providers.google_news_light import GoogleNewsLightProvider
+from tradingagents.dataflows.providers.marketaux_news import MarketAuxProvider
+from tradingagents.dataflows.providers.newsdata_news import NewsDataProvider
+from tradingagents.dataflows.providers.rss_news import RSSContextProvider
+
 from .general_news_cache import GeneralNewsCache, GeneralNewsCacheEntry
 from .general_news_categories import (
     is_allowed_category,
     map_general_news_category,
     normalize_general_news_category,
 )
-from .google_news_light import GoogleNewsLightProvider
-from .marketaux_news import MarketAuxProvider
-from .news_deduplication import deduplicate_news_articles
+from .news_dedup_normalized import deduplicate_news_articles
 from .news_models import NormalizedNewsArticle
 from .news_provider_base import ProviderFetchResult, sanitize_error
 from .news_scoring import content_hash
-from .newsdata_news import NewsDataProvider
-from .rss_news import RSSContextProvider
 
 logger = logging.getLogger(__name__)
 

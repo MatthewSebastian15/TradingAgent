@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.normalizers import (
+from tradingagents.dataflows.fundamentals.normalizers import (
     normalize_financial_field,
     normalize_financial_value,
     parse_numeric_value,

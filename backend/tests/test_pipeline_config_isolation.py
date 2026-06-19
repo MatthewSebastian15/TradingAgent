@@ -4,7 +4,7 @@ import asyncio
 
 
 def test_parallel_pipeline_configs_do_not_overwrite_each_other():
-    from tradingagents.dataflows.config import get_config, initialize_config, use_config
+    from tradingagents.dataflows.providers.config import get_config, initialize_config, use_config
 
     async def pipeline(timeout: int, release: asyncio.Event) -> tuple[int, str]:
         with use_config({"timeout": timeout, "llm_provider": f"provider-{timeout}"}):

@@ -8,6 +8,28 @@ from typing import Any
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
+from tradingagents.dataflows.fundamentals.idx_official import (
+    get_idx_company_profile,
+    get_idx_corporate_actions,
+    get_idx_financial_statements,
+)
+from tradingagents.dataflows.fundamentals.sec_companyfacts import (
+    get_balance_sheet as get_sec_balance_sheet,
+)
+from tradingagents.dataflows.fundamentals.sec_companyfacts import (
+    get_cashflow as get_sec_cashflow,
+)
+from tradingagents.dataflows.fundamentals.sec_companyfacts import (
+    get_income_statement as get_sec_income_statement,
+)
+from tradingagents.dataflows.quality.data_quality import (
+    looks_missing,
+    validate_fundamentals,
+    validate_news,
+    validate_ohlcv,
+    validate_quote,
+    validate_sentiment,
+)
 from tradingagents.utils_resilience import TTLCache, call_with_retry, call_with_timeout
 
 from .alpha_vantage import (
@@ -47,14 +69,6 @@ from .alpha_vantage_common import AlphaVantagePermanentError, AlphaVantageRateLi
 
 # Configuration and routing logic
 from .config import get_config
-from .data_quality import (
-    looks_missing,
-    validate_fundamentals,
-    validate_news,
-    validate_ohlcv,
-    validate_quote,
-    validate_sentiment,
-)
 from .errors import ErrorCode
 from .finnhub_common import (
     FinnhubRateLimitError,
@@ -111,22 +125,8 @@ from .finnhub_stock import (
     get_stock as get_finnhub_stock,
 )
 from .google_news_light import get_news as get_google_news_light_news
-from .idx_official import (
-    get_idx_company_profile,
-    get_idx_corporate_actions,
-    get_idx_financial_statements,
-)
 from .marketaux_news import get_news as get_marketaux_news
 from .newsdata_news import get_news as get_newsdata_news
-from .sec_companyfacts import (
-    get_balance_sheet as get_sec_balance_sheet,
-)
-from .sec_companyfacts import (
-    get_cashflow as get_sec_cashflow,
-)
-from .sec_companyfacts import (
-    get_income_statement as get_sec_income_statement,
-)
 from .source_priority import get_field_vendor_order
 from .vendor_budget import get_budget
 from .vendor_router import VendorAttempt, get_attempt_recorder, sanitize_error
@@ -481,7 +481,7 @@ def _normalize_args_for_vendor(method: str, vendor: str, args: tuple) -> tuple:
     if method not in TICKER_FIRST_ARG_METHODS or not args:
         return args
 
-    from tradingagents.dataflows.vendor_symbol import normalize_symbol_for_vendor
+    from tradingagents.dataflows.providers.vendor_symbol import normalize_symbol_for_vendor
 
     normalized = normalize_symbol_for_vendor(args[0], vendor)
     return (normalized, *args[1:])

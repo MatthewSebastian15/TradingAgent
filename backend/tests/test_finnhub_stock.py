@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tradingagents.dataflows.finnhub_stock import get_quote, get_stock, get_stock_ohlcv
+from tradingagents.dataflows.providers.finnhub_stock import get_quote, get_stock, get_stock_ohlcv
 
 
 def test_get_quote_success_normalizes_fields(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_stock.make_api_request",
+        "tradingagents.dataflows.providers.finnhub_stock.make_api_request",
         lambda *a, **k: {"c": 100, "pc": 95, "o": 97, "h": 101, "l": 96, "t": 1},
     )
     quote = get_quote("AAPL")
@@ -15,7 +15,8 @@ def test_get_quote_success_normalizes_fields(monkeypatch):
 
 def test_get_quote_zero_current_price_unavailable(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_stock.make_api_request", lambda *a, **k: {"c": 0, "pc": 95}
+        "tradingagents.dataflows.providers.finnhub_stock.make_api_request",
+        lambda *a, **k: {"c": 0, "pc": 95},
     )
     try:
         get_quote("AAPL")
@@ -25,7 +26,7 @@ def test_get_quote_zero_current_price_unavailable(monkeypatch):
 
 def test_get_quote_missing_previous_close_partial_confidence(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_stock.make_api_request",
+        "tradingagents.dataflows.providers.finnhub_stock.make_api_request",
         lambda *a, **k: {"c": 100, "pc": None},
     )
     quote = get_quote("AAPL")
@@ -34,7 +35,7 @@ def test_get_quote_missing_previous_close_partial_confidence(monkeypatch):
 
 def test_get_stock_success_returns_csv(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_stock.make_api_request",
+        "tradingagents.dataflows.providers.finnhub_stock.make_api_request",
         lambda *a, **k: {
             "s": "ok",
             "t": [1779840000],
@@ -50,7 +51,7 @@ def test_get_stock_success_returns_csv(monkeypatch):
 
 def test_get_stock_object_schema(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_stock.make_api_request",
+        "tradingagents.dataflows.providers.finnhub_stock.make_api_request",
         lambda *a, **k: {
             "s": "ok",
             "t": [1779840000],
@@ -68,7 +69,8 @@ def test_get_stock_object_schema(monkeypatch):
 
 def test_get_stock_no_data_status_unavailable(monkeypatch):
     monkeypatch.setattr(
-        "tradingagents.dataflows.finnhub_stock.make_api_request", lambda *a, **k: {"s": "no_data"}
+        "tradingagents.dataflows.providers.finnhub_stock.make_api_request",
+        lambda *a, **k: {"s": "no_data"},
     )
     text = get_stock("AAPL", "2026-05-26", "2026-05-28")
     assert text.lower().startswith("finnhub unavailable")

@@ -4,8 +4,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from tradingagents.dataflows.source_priority import market_from_symbol, normalize_market
-from tradingagents.dataflows.vendor_capabilities import SPRINT_1_VENDORS, supports_vendor
+from tradingagents.dataflows.providers.source_priority import market_from_symbol, normalize_market
+from tradingagents.dataflows.providers.vendor_capabilities import SPRINT_1_VENDORS, supports_vendor
 
 
 @dataclass(frozen=True)
