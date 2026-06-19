@@ -1,6 +1,6 @@
 # TradingAgent AI Context
 
-Last synced: 2026-06-18.
+Last synced: 2026-06-19.
 
 This file is the main context for the coding agent. Read it before editing code, docs,
 Docker, env, tests, or API contracts.
@@ -13,6 +13,11 @@ Docker, env, tests, or API contracts.
 - Do not show long reasoning.
 - Do not change files outside the scope.
 - Do not revert user changes.
+- If you start any local process that binds to a port, stop it after the task or verification finishes.
+- Track the command, port, and PID for every dev server, API server, preview server,
+  Docker Compose service, or test server you start.
+- Before the final response, confirm your started port-bound processes are stopped
+  or state that the user explicitly asked to keep one running.
 - Do not commit secrets, `.env`, cache files, SQLite databases, build output, or `node_modules`.
 - If you change backend/frontend contracts, update the `ai/` docs and related tests.
 
@@ -41,8 +46,8 @@ multi-agent LLMs.
 - Backend: FastAPI in `backend/`.
 - Agent engine: editable package `packages`, imported as `tradingagents`.
 - Frontend: React 18 + Vite in `frontend/`.
-- Main UI: AI Agent terminal, market dashboard, general news, research
-  placeholder, economic placeholder.
+- Main UI: Home dashboard with top news summary, AI Agent terminal, watchlist,
+  market dashboard, general news, research placeholder, economic placeholder.
 - Analysis output: Buy, Hold, Sell, Wait, risk, thesis, chart, news,
   fundamentals, HTML/PDF report.
 - The report disclaimer must remain. This is a research tool, not financial advice.
@@ -85,6 +90,10 @@ multi-agent LLMs.
   `FUND`, `UNKNOWN`.
 - Non-ID suffixes such as `.HK`, `.T`, `.DE` are accepted when they are canonical yfinance symbols.
 - The `/market` page is active and uses overview, presets, movers, and ticker tape.
+- The `/watchlist` page is active. It stores groups in browser localStorage and
+  uses market quotes plus sparklines from the backend.
+- The `/home` page shows `HomeNewsSummary`, fed by `useGeneralNews()` with the
+  top 3 newest articles.
 - `/research` page placeholder.
 - The `/econ` page is a placeholder. `/economic` redirects to `/econ`.
 
@@ -105,8 +114,8 @@ TradingAgents/
     routes/
       analysis.py             analyze, jobs, SSE, status, ticker validate
       analysis_history.py     SQLite history API
-      market.py               presets, validate-symbol, overview, movers, search, OHLCV, quotes
-      news.py                 company news, general news, news SSE
+      market.py               presets, validate-symbol, overview, movers, search, OHLCV, sparklines, quotes
+      news.py                 company news, ticker news SSE, general news, general news SSE
       reports.py              disclaimer, HTML/PDF report
       session.py              owner session cookie
       debug.py                debug endpoints gated by env/development
@@ -139,11 +148,16 @@ TradingAgents/
       config.js               frontend env resolver
       api/market.js           market dashboard API client
       domain/analysisContract.js request payload and validation
+      services/watchlistStorage.js local watchlist persistence
       utils/api.js            API URL and owner session bootstrap
       hooks/useAnalysisJob.js job API and SSE stream
       hooks/useGeneralNews.js general news fetch and SSE
+      hooks/useWatchlistStore.js local watchlist groups
+      hooks/useWatchlistQuotes.js watchlist quote and trend polling
       components/             UI components
-      pages/                  Dashboard, AIAgent, AIAgentMock, News, Market, Research, Economic
+      components/home/         Home dashboard widgets
+      components/watchlist/    Watchlist groups, input, table, trend bars
+      pages/                  Dashboard, AIAgent, AIAgentMock, Watchlist, News, Market, Research, Economic
   image/                      README screenshots
 ```
 
@@ -164,6 +178,7 @@ Frontend:
 /analysis/:resourceId     -> redirect /ai-agent/:resourceId
 /analysis-live            -> redirect /ai-agent
 /research                 -> Research placeholder
+/watchlist                -> Watchlist
 /news                     -> General News page
 /market                   -> Market dashboard
 /econ                     -> Economic placeholder
@@ -200,10 +215,12 @@ POST   /api/market/overview
 GET    /api/market/movers
 GET    /api/market/search
 GET    /api/market/ohlcv
+GET    /api/market/sparklines
 GET    /api/market/quotes
 GET    /api/news/general
 GET    /api/news/general/categories
 GET    /api/news/general/stream
+GET    /api/news/{ticker}/stream
 GET    /api/news/{ticker}
 GET    /api/reports/disclaimer
 GET    /api/analysis/jobs/{job_id}/report.html
@@ -337,7 +354,7 @@ Important defaults:
 News has two paths:
 
 - Strict company news for AI analysis: `NewsService`, exposed at
-  `/api/news/{ticker}`.
+  `/api/news/{ticker}` and optional ticker update stream `/api/news/{ticker}/stream`.
 - General news page: `GeneralNewsService`, exposed at `/api/news/general` and
   `/api/news/general/stream`.
 
@@ -347,6 +364,9 @@ Market dashboard uses:
 - `GET /api/market/validate-symbol`
 - `POST /api/market/overview`
 - `GET /api/market/movers`
+- `GET /api/market/search`
+- `GET /api/market/ohlcv`
+- `GET /api/market/sparklines`
 - `GET /api/market/quotes`
 
 General news background refresh starts when:
@@ -427,12 +447,17 @@ News:
 ```text
 backend/routes/news.py
 backend/config_defaults.py
-packages/tradingagents/dataflows/news_service.py
-packages/tradingagents/dataflows/general_news_service.py
+packages/tradingagents/dataflows/news/news_service.py
+packages/tradingagents/dataflows/news/general_news_service.py
+packages/tradingagents/dataflows/news/general_news_stream.py
+packages/tradingagents/dataflows/news/ticker_news_stream.py
+frontend/src/components/home/HomeNewsSummary.jsx
+frontend/src/pages/Dashboard.jsx
 frontend/src/pages/News.jsx
 frontend/src/hooks/useGeneralNews.js
 frontend/src/services/generalNewsApi.js
 backend/tests/test_general_news_routes.py
+backend/tests/test_news_routes.py
 ```
 
 Market/ticker:
@@ -446,11 +471,17 @@ frontend/src/api/market.js
 frontend/src/hooks/useMarketOverviewConfig.js
 frontend/src/hooks/useMarketOverviewData.js
 frontend/src/hooks/useMarketMovers.js
+frontend/src/hooks/useWatchlistQuotes.js
+frontend/src/hooks/useWatchlistStore.js
 frontend/src/components/TickerSearchBar.jsx
+frontend/src/components/watchlist/WatchlistPage.jsx
+frontend/src/components/watchlist/WatchlistTickerInput.jsx
 frontend/src/domain/analysisContract.js
 frontend/src/components/results/tabs/ChartPriceTab.jsx
 backend/tests/test_market_routes.py
 backend/tests/test_validation.py
+frontend/src/pages/Watchlist.test.jsx
+frontend/src/components/watchlist/WatchlistPage.test.jsx
 ```
 
 Report:
@@ -487,6 +518,8 @@ frontend/src/constants/routes.js
 frontend/src/components/Navbar.jsx
 frontend/src/pages/AIAgent.jsx
 frontend/src/pages/AIAgentMock.jsx
+frontend/src/pages/Dashboard.jsx
+frontend/src/pages/Watchlist.jsx
 ```
 
 ## Commands
@@ -554,6 +587,8 @@ npm run format:check
 - Do not call LLM/vendor live in unit tests.
 - Do not remove report disclaimer.
 - Do not assume Docker Compose uses nginx runtime. It uses Vite dev target now.
+- Do not add backend persistence for watchlists unless the user asks for synced
+  watchlists. Current watchlists are browser localStorage only.
 
 ## Docs Index
 

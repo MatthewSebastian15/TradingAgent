@@ -1,6 +1,6 @@
 # Setup Guide
 
-Last synced: 2026-06-18.
+Last synced: 2026-06-19.
 
 This guide follows the active code for local dev, Docker, env, tests, and common
 problems.
@@ -29,6 +29,30 @@ Python 3.13 is not supported by the core package in `packages/`.
 | Backend health | `http://127.0.0.1:8000/health` | same | `http://localhost:8000/health` |
 | Frontend Compose health | root page | `http://127.0.0.1:3000/` | `http://127.0.0.1:3000/` |
 | Nginx runtime health | manual mapping | not used by default compose | `http://127.0.0.1:8080/health` |
+
+## Port Process Cleanup
+
+When an agent starts any process that binds to a port, it must track and stop
+that process after verification unless the user explicitly asks to keep it
+running.
+
+Track:
+
+```text
+command
+port
+PID or container/service name
+```
+
+Common cleanup:
+
+```powershell
+# Local process by PID
+Stop-Process -Id <PID>
+
+# Docker Compose services
+docker compose down
+```
 
 ## Local Backend Setup
 
@@ -77,6 +101,17 @@ LLM_PROVIDER=openai
 LLM_API_KEY=your_openai_key
 QUICK_THINK_LLM=gpt-4o-mini
 DEEP_THINK_LLM=gpt-4o
+```
+
+Minimum Anthropic:
+
+```env
+APP_ENV=development
+LLM_PROVIDER=anthropic
+LLM_API_KEY=your_anthropic_key
+ANTHROPIC_API_KEY=your_anthropic_key
+QUICK_THINK_LLM=claude-haiku-4-5
+DEEP_THINK_LLM=claude-sonnet-4-6
 ```
 
 Minimum DeepSeek:
@@ -179,6 +214,12 @@ Primary analysis page:
 http://127.0.0.1:3000/ai-agent
 ```
 
+Watchlist:
+
+```text
+http://127.0.0.1:3000/watchlist
+```
+
 Alternative direct API env:
 
 ```env
@@ -237,6 +278,28 @@ Legacy mock routes redirect:
 /analysis.test/:resourceId
 /analysis-mock
 ```
+
+## Watchlist Local State
+
+The `/watchlist` page has no backend CRUD setup.
+
+Browser storage:
+
+```text
+localStorage key: tradingagents:watchlists:v1
+```
+
+Backend endpoints used by the page:
+
+```text
+GET /api/market/search
+GET /api/market/validate-symbol
+GET /api/market/quotes
+GET /api/market/sparklines
+```
+
+Quote polling runs every 100 seconds in the browser. Trend sparklines use
+`range=1M` and browser cache TTL is 5 minutes.
 
 ## Docker Compose Setup
 
@@ -626,10 +689,13 @@ OPENROUTER_API_KEY
 
 ### Company News
 
+These values are runtime config defaults from `backend/config_defaults.py`.
+Some RSS values are hardcoded constants, not parsed from `.env`.
+
 | Variable | Default |
 |---|---|
 | `NEWS_STRICT_AI_ANALYSIS_MODE` | `true` |
-| `NEWS_FORCE_ALL_PROVIDERS` | `true` |
+| `NEWS_FORCE_ALL_PROVIDERS` | `false` |
 | `NEWS_PROVIDER_PRIORITY` | `google_news_light,marketaux,rss_context,newsdata,yfinance` |
 | `NEWS_ENABLED_PROVIDERS` | `google_news_light,marketaux,rss_context,newsdata,yfinance` |
 | `NEWS_DEFAULT_WINDOW_DAYS` | `30` |
@@ -641,12 +707,12 @@ OPENROUTER_API_KEY
 | `NEWS_DECISION_MIN_RELEVANCE_SCORE` | `70` |
 | `NEWS_RSS_DECISION_MIN_RELEVANCE_SCORE` | `80` |
 | `NEWS_RSS_ENABLED` | `true` |
-| `NEWS_RSS_MAX_FEEDS` | `10` |
+| `NEWS_RSS_MAX_FEEDS` | `50` |
 | `NEWS_RSS_MAX_ITEMS_PER_FEED` | `20` |
-| `NEWS_RSS_INCLUDE_TRIAL_FEEDS` | `false` |
+| `NEWS_RSS_INCLUDE_TRIAL_FEEDS` | `true` |
 | `NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED` | `true` |
 | `NEWS_RSS_ENABLED_FEED_IDS` | blank |
-| `NEWS_RSS_DISABLED_FEED_IDS` | `theblock-trial` |
+| `NEWS_RSS_DISABLED_FEED_IDS` | empty list |
 | `NEWS_RSS_USER_AGENT` | `TradingAgent/0.1 RSS Reader` |
 | `NEWS_CACHE_ENABLED` | `true` |
 | `NEWS_CACHE_TTL_MINUTES` | `60` |
@@ -661,6 +727,9 @@ OPENROUTER_API_KEY
 | `NEWS_ENABLE_YFINANCE_FALLBACK` | `true` |
 
 ### General News
+
+These values are runtime config defaults from `backend/config_defaults.py`.
+Allowed categories and RSS feed caps are hardcoded constants.
 
 | Variable | Default |
 |---|---|
@@ -677,9 +746,9 @@ OPENROUTER_API_KEY
 | `GENERAL_NEWS_MAX_ARTICLES_FOR_UI` | `100` |
 | `GENERAL_NEWS_DEFAULT_LIMIT` | `50` |
 | `GENERAL_NEWS_DEFAULT_CATEGORY` | `all` |
-| `GENERAL_NEWS_ALLOWED_CATEGORIES` | `all,market,macro,crypto,forex,commodities,regulatory,indonesia` |
+| `GENERAL_NEWS_ALLOWED_CATEGORIES` | `all,markets,world,finance,tech,macro,central_bank,regulatory,forex,crypto` |
 | `GENERAL_NEWS_RSS_PRIMARY` | `true` |
-| `GENERAL_NEWS_RSS_MAX_FEEDS` | `20` |
+| `GENERAL_NEWS_RSS_MAX_FEEDS` | `50` |
 | `GENERAL_NEWS_RSS_MAX_ITEMS_PER_FEED` | `30` |
 | `GENERAL_NEWS_VENDOR_TIMEOUT_SECONDS` | `10` |
 | `GENERAL_NEWS_VENDOR_MAX_RETRIES` | `1` |

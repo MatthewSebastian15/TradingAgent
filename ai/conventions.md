@@ -1,6 +1,6 @@
 # Coding Conventions
 
-Last synced: 2026-06-18.
+Last synced: 2026-06-19.
 
 Follow the active code patterns. Do not use generic preferences that conflict with the repo.
 
@@ -36,6 +36,14 @@ work.
   HttpOnly cookie.
 - Do not write `backtest/` or `assets/` as active folders. Neither exists in
   the tree right now.
+
+## Process Hygiene
+
+- If you start a dev server, API server, preview server, Docker Compose stack,
+  or any other port-bound process, track the command, port, and PID/service.
+- Stop every port-bound process after verification unless the user explicitly
+  asks to keep it running.
+- Before final response, state whether any started port-bound process remains.
 
 ## Python Backend
 
@@ -168,6 +176,8 @@ heartbeat
 result
 error
 general_news_updated
+ticker_news_stream_ready
+ticker_news_updated
 ```
 
 Do not compress SSE paths. Keep `SkipSseCompressionMiddleware`.
@@ -260,7 +270,9 @@ bloomberg-subtle
 |---|---|
 | Page | `frontend/src/pages/` |
 | Shared component | `frontend/src/components/` |
+| Home component | `frontend/src/components/home/` |
 | Market component | `frontend/src/components/market/` |
+| Watchlist component | `frontend/src/components/watchlist/` |
 | Result component | `frontend/src/components/results/` |
 | Result tab | `frontend/src/components/results/tabs/` |
 | API client | `frontend/src/api/` |
@@ -269,6 +281,15 @@ bloomberg-subtle
 | Domain contract | `frontend/src/domain/` |
 | Constants | `frontend/src/constants/` |
 | Dev mock data | `frontend/dev/` |
+
+Route changes usually touch:
+
+```text
+frontend/src/App.jsx
+frontend/src/constants/routes.js
+frontend/src/components/Navbar.jsx
+frontend/src/pages/
+```
 
 ### Routes
 
@@ -292,6 +313,7 @@ Other routes:
 ```text
 /home
 /research
+/watchlist
 /news
 /market
 /econ
@@ -363,6 +385,9 @@ Use `frontend/src/api/market.js` helpers:
 ```text
 getMarketPresets()
 validateMarketSymbol()
+searchMarketTickers()
+getMarketQuotes()
+getMarketSparklines()
 getMarketOverview()
 getMarketMovers()
 ```
@@ -374,10 +399,32 @@ GET  /api/market/presets
 GET  /api/market/validate-symbol
 POST /api/market/overview
 GET  /api/market/movers
+GET  /api/market/search
+GET  /api/market/ohlcv
+GET  /api/market/sparklines
+GET  /api/market/quotes
 ```
 
-`/api/market/quotes` remains ticker tape endpoint.
-`/api/market/ohlcv` remains result chart endpoint.
+### Home Dashboard
+
+- `/home` uses `frontend/src/pages/Dashboard.jsx`.
+- Dashboard shows `HomeNewsSummary` from `frontend/src/components/home/`.
+- `HomeNewsSummary` consumes `useGeneralNews({ category: 'all', windowDays: 7, limit: 100 })`.
+- It normalizes articles, sorts newest first, and renders top 3.
+- Do not add a separate home news endpoint unless backend requirements change.
+
+### Watchlist
+
+- `/watchlist` uses `frontend/src/pages/Watchlist.jsx`.
+- Watchlist state is browser localStorage only.
+- Storage key: `tradingagents:watchlists:v1`.
+- Use `useWatchlistStore()` for groups and tickers.
+- Use `useWatchlistQuotes()` for quote polling and sparkline trend data.
+- Manual ticker validation must call `validateMarketSymbol()`.
+- Search add should use `WatchlistTickerInput` and `searchMarketTickers()`.
+- Quote data comes from `/api/market/quotes`.
+- Trend bars come from `/api/market/sparklines`.
+- Do not add backend watchlist persistence unless requested.
 
 ### Mock Route
 
@@ -463,9 +510,13 @@ POST /api/market/overview
 GET  /api/market/movers
 GET  /api/market/search
 GET  /api/market/ohlcv
+GET  /api/market/sparklines
+GET  /api/market/quotes
 GET  /api/news/general
 GET  /api/news/general/categories
 GET  /api/news/general/stream
+GET  /api/news/{ticker}/stream
+GET  /api/news/{ticker}
 GET  /api/reports/disclaimer
 ```
 

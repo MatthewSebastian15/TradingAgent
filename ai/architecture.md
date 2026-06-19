@@ -1,6 +1,6 @@
 # Architecture
 
-Last synced: 2026-06-18.
+Last synced: 2026-06-19.
 
 This document explains the active code architecture. Use it when changing routes,
 frontend flow, pipeline, cache, Docker, env, market, news, or reports.
@@ -82,6 +82,7 @@ SSE compression skip paths:
 ```text
 /api/analyze/stream
 /api/news/general/stream
+/api/news/{ticker}/stream
 /api/analysis/jobs/{job_id}/events
 ```
 
@@ -160,6 +161,7 @@ Rate limiter:
 | request | 20 | 2 |
 | status | 120 | 8 |
 | stream | 8 | 1 |
+| market | 180 | 16 |
 
 Storage:
 
@@ -405,6 +407,9 @@ GET  /api/market/presets
 GET  /api/market/validate-symbol
 POST /api/market/overview
 GET  /api/market/movers
+GET  /api/market/search
+GET  /api/market/ohlcv
+GET  /api/market/sparklines
 GET  /api/market/quotes
 ```
 
@@ -419,6 +424,19 @@ frontend/src/components/market/MarketMoversTable.jsx
 ```
 
 Data comes from yfinance through `backend/services/market_yfinance_service.py`.
+Quote, OHLCV, search, and sparkline endpoints also use short in-process caches
+inside `backend/routes/market.py`.
+
+Market endpoint limits:
+
+| Endpoint | Main cap |
+|---|---|
+| `/market/overview` | 3 to 6 normalized symbols. |
+| `/market/movers` | limit is one of 5, 10, 15, 20. |
+| `/market/search` | query min 2, limit 1 to 20. |
+| `/market/ohlcv` | ranges `YTD`, `1Y`, `6M`, `3M`, `1M`, `1W`. |
+| `/market/sparklines` | max 20 symbols, same range set as OHLCV. |
+| `/market/quotes` | max 20 symbols. |
 
 ## Data Collection
 
@@ -461,6 +479,11 @@ GET /api/news/{ticker}
   -> normalize_ticker_symbol
   -> NewsService.fetch_news
   -> providers: google_news_light, marketaux, rss_context, newsdata, yfinance
+
+GET /api/news/{ticker}/stream
+  -> normalize_ticker_symbol
+  -> poll NewsService.fetch_news(force_refresh=True)
+  -> ticker_news_event_bus
 ```
 
 General news:
@@ -478,6 +501,16 @@ General news stream event:
 
 ```text
 event: general_news_updated
+data: {...}
+```
+
+Ticker news stream events:
+
+```text
+event: ticker_news_stream_ready
+data: {"ticker": "...", "poll_seconds": 120}
+
+event: ticker_news_updated
 data: {...}
 ```
 
@@ -522,6 +555,7 @@ Routes in `frontend/src/App.jsx`:
 /analysis/:resourceId     -> redirect /ai-agent/:resourceId
 /analysis-live            -> redirect /ai-agent
 /research                 -> Research placeholder
+/watchlist                -> Watchlist
 /news                     -> News
 /market                   -> Market dashboard
 /econ                     -> Economic placeholder
@@ -544,6 +578,7 @@ State/storage:
 |---|---|
 | Owner session token | HttpOnly cookie from backend |
 | Owner session expiry | `sessionStorage` key `_ta_owner_session_expires_at` |
+| Watchlist groups | `localStorage` key `tradingagents:watchlists:v1` |
 | Local history summary | `localStorage` key `ta_analysis_history` |
 | Mock history summary | `localStorage` key `ta_analysis_mock_history` |
 | Full history | Backend SQLite |
@@ -558,6 +593,89 @@ buildApiUrl(path)
 
 `buildHeaders()` and `buildAuthHeaders()` call `ensureOwnerSession()`.
 They rely on cookie for auth.
+
+## Home Dashboard
+
+Frontend path:
+
+```text
+/home -> frontend/src/pages/Dashboard.jsx
+```
+
+Current behavior:
+
+- Renders `Navbar`.
+- Calls `useGeneralNews({ category: "all", windowDays: 7, limit: 100 })`.
+- Passes `data.articles` into `HomeNewsSummary`.
+- `HomeNewsSummary` normalizes article shape, sorts by newest, and shows top 3.
+- Empty, loading, and error states are local UI states. No separate home API
+  exists.
+
+Files:
+
+```text
+frontend/src/pages/Dashboard.jsx
+frontend/src/components/home/HomeNewsSummary.jsx
+frontend/src/lib/news/normalizeNewsItem.js
+frontend/src/lib/news/sortNewsItemsByNewest.js
+frontend/src/lib/news/formatNewsTime.js
+frontend/src/hooks/useGeneralNews.js
+```
+
+## Watchlist
+
+Frontend path:
+
+```text
+/watchlist -> frontend/src/pages/Watchlist.jsx
+```
+
+State model:
+
+```text
+localStorage key: tradingagents:watchlists:v1
+shape:
+  version
+  activeGroupId
+  groups[]
+    id
+    name
+    createdAt
+    updatedAt
+    items[]
+      symbol
+      name
+      exchange
+      market
+      type
+      source
+      addedAt
+```
+
+Behavior:
+
+- Watchlist groups are local browser state only.
+- Group names are required, unique case-insensitively, and max 40 characters.
+- Manual ticker add validates through `GET /api/market/validate-symbol`.
+- Search-backed ticker add uses `WatchlistTickerInput` and market search data.
+- Quotes poll every 100 seconds through `GET /api/market/quotes`.
+- Trend mini-series use `GET /api/market/sparklines?range=1M`.
+- Trend cache TTL in the browser is 5 minutes.
+
+Files:
+
+```text
+frontend/src/pages/Watchlist.jsx
+frontend/src/components/watchlist/WatchlistPage.jsx
+frontend/src/components/watchlist/WatchlistTickerInput.jsx
+frontend/src/components/watchlist/WatchlistTable.jsx
+frontend/src/components/watchlist/WatchlistGroupBar.jsx
+frontend/src/components/watchlist/WatchlistGroupDialog.jsx
+frontend/src/services/watchlistStorage.js
+frontend/src/hooks/useWatchlistStore.js
+frontend/src/hooks/useWatchlistQuotes.js
+frontend/src/utils/watchlistFormatters.js
+```
 
 ## Docker Architecture
 

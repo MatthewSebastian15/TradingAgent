@@ -1,6 +1,6 @@
 # Technical Decisions
 
-Last synced: 2026-06-16.
+Last synced: 2026-06-19.
 
 This document records the technical decisions that shape the active code.
 
@@ -411,6 +411,9 @@ GET  /api/market/presets
 GET  /api/market/validate-symbol
 POST /api/market/overview
 GET  /api/market/movers
+GET  /api/market/search
+GET  /api/market/ohlcv
+GET  /api/market/sparklines
 GET  /api/market/quotes
 ```
 
@@ -425,3 +428,65 @@ Implication:
 - Keep `frontend/src/api/market.js` as client boundary.
 - Keep yfinance request caps in backend route/service.
 - Do not describe `/market` as shell-only.
+
+## ADR-025: Watchlist Is Local Browser State
+
+Decision: `/watchlist` is an active frontend page with localStorage persistence,
+not a backend-synced resource.
+
+Storage key:
+
+```text
+tradingagents:watchlists:v1
+```
+
+Reason:
+
+- The current product need is fast personal ticker grouping.
+- Existing market endpoints already provide validation, quotes, and sparklines.
+- Avoiding backend CRUD keeps auth, migration, and sync complexity out until a
+  synced watchlist requirement exists.
+
+Implication:
+
+- Use `useWatchlistStore()` and `watchlistStorage.js` for state.
+- Use `/api/market/search`, `/api/market/validate-symbol`, `/api/market/quotes`,
+  and `/api/market/sparklines` for data.
+- Do not add database tables or watchlist routes unless requested.
+
+## ADR-026: Home Summary Reuses General News
+
+Decision: `/home` shows `HomeNewsSummary` from existing General News data.
+
+Reason:
+
+- General market news already has provider routing, cache, SSE, and polling.
+- The home page only needs a compact top-news view, not a separate backend
+  contract.
+- Reusing `useGeneralNews()` keeps article normalization and fallback behavior
+  consistent with `/news`.
+
+Implication:
+
+- Dashboard calls `useGeneralNews({ category: "all", windowDays: 7, limit: 100 })`.
+- `HomeNewsSummary` sorts normalized articles by newest and displays top 3.
+- Do not create a separate `/api/home/news` endpoint unless the backend needs a
+  different aggregation contract.
+
+## ADR-027: Ticker News SSE Is Separate from General News SSE
+
+Decision: company-specific news can stream through `/api/news/{ticker}/stream`,
+while general news still streams through `/api/news/general/stream`.
+
+Reason:
+
+- General news updates are category/global market oriented.
+- Ticker news updates must poll `NewsService` for one normalized ticker and
+  publish only changed ticker payloads.
+- Separate event names keep frontend consumers simple.
+
+Implication:
+
+- Keep `ticker_news_stream_ready` and `ticker_news_updated` event names stable.
+- Keep all `/api/news/*/stream` paths uncompressed.
+- Stream availability follows `general_news.enable_sse`.

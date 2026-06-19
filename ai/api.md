@@ -1,6 +1,6 @@
 # API Reference
 
-Last synced: 2026-06-16.
+Last synced: 2026-06-19.
 
 All app routes use the `/api` prefix, except `/health`.
 
@@ -668,6 +668,35 @@ warning
 
 For `1W`, backend tries `5m`, `15m`, `30m`, `60m`, then `1d`.
 
+### GET /api/market/sparklines
+
+Compact close-price series for watchlist trend bars.
+
+Query:
+
+| Field | Rule |
+|---|---|
+| `symbols` | Required comma-separated yfinance quote symbols, max 20. |
+| `range` | `YTD`, `1Y`, `6M`, `3M`, `1M`, `1W`. Default `1M`. |
+
+Response:
+
+```json
+{
+  "sparklines": {
+    "AAPL": [190.1, 191.2, 189.7],
+    "BBCA.JK": [9250.0, 9300.0, 9225.0]
+  }
+}
+```
+
+Behavior:
+
+- Symbols use the same quote normalization as `/api/market/quotes`.
+- Backend fetches OHLCV data and returns the last close values, capped to the
+  final 20 values per symbol.
+- In-process cache TTL is 300 seconds.
+
 ### GET /api/market/quotes
 
 Ticker tape quotes.
@@ -694,6 +723,7 @@ Response:
       "chg": "+1.25%",
       "pos": true,
       "price": 65000.0,
+      "volume": 1234567,
       "error": false
     }
   ]
@@ -761,6 +791,12 @@ articles
 
 Returns category list from `general_news_categories.py`.
 
+Current allowed categories from config:
+
+```text
+all, markets, world, finance, tech, macro, central_bank, regulatory, forex, crypto
+```
+
 ### GET /api/news/general/stream
 
 SSE updates for General News page.
@@ -770,6 +806,27 @@ Event:
 ```text
 general_news_updated
 ```
+
+Returns 404 if `general_news.enable_sse` is false.
+
+### GET /api/news/{ticker}/stream
+
+SSE updates for ticker-specific company news.
+
+Query:
+
+| Field | Rule |
+|---|---|
+| `window_days` | 1 to 365, default 30. |
+| `limit` | 1 to 100, default 20. |
+| `poll_seconds` | 30 to 900, default 120. |
+
+Events:
+
+| Event | Payload |
+|---|---|
+| `ticker_news_stream_ready` | `{ "ticker": "...", "poll_seconds": 120 }` |
+| `ticker_news_updated` | Latest ticker news event from `ticker_news_event_bus`. |
 
 Returns 404 if `general_news.enable_sse` is false.
 
@@ -816,6 +873,25 @@ Query:
 | `window_days` | 1 to 365, default 30. |
 | `limit` | 1 to 100, default 20. |
 | `include_raw` | Boolean, default false. |
+
+## Frontend-Only Watchlist API Usage
+
+No backend watchlist CRUD API exists right now.
+
+The `/watchlist` page stores groups in browser localStorage:
+
+```text
+tradingagents:watchlists:v1
+```
+
+It uses existing market endpoints:
+
+```text
+GET /api/market/search
+GET /api/market/validate-symbol
+GET /api/market/quotes
+GET /api/market/sparklines
+```
 
 ## Reports API
 
@@ -920,6 +996,13 @@ Defaults:
 | `MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY` | 8 |
 | `MAX_CONCURRENT_STREAMS_PER_KEY` | 1 |
 | `REQUEST_BODY_MAX_BYTES` | 16777216 |
+
+Market endpoints use a separate in-code policy:
+
+| Scope | Limit |
+|---|---:|
+| `market` per minute | 180 |
+| `market` concurrent | 16 |
 
 Rate limit key is owner session, not browser IP.
 
