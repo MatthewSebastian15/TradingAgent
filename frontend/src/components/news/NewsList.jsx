@@ -1,22 +1,12 @@
 import PropTypes from 'prop-types';
 
 import { Card } from '@/components/ui/card';
+import { sortNewsItemsByNewest } from '@/lib/news/sortNewsItemsByNewest';
 
 import NewsRow from './NewsRow';
 
-function parseArticleTime(article) {
-  const value = article?.published_at || article?.publishedAt || article?.date;
-  if (!value) return 0;
-  const time = new Date(value).getTime();
-  return Number.isNaN(time) ? 0 : time;
-}
-
-function sortArticlesByNewest(articles) {
-  return [...articles].sort((left, right) => parseArticleTime(right) - parseArticleTime(left));
-}
-
 export default function NewsList({ articles }) {
-  const sortedArticles = sortArticlesByNewest(articles);
+  const sortedArticles = sortNewsItemsByNewest(articles);
 
   if (!sortedArticles.length) {
     return (

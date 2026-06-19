@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import Navbar from '../components/Navbar';
 import NewsFilterBar from '../components/news/NewsFilterBar';
 import NewsList from '../components/news/NewsList';
-import TickerTape from '../components/TickerTape';
 import { useGeneralNews } from '../hooks/useGeneralNews';
 
 const CATEGORY_ALIASES = {
@@ -43,7 +42,6 @@ export default function News() {
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] text-bloomberg-white">
       <Navbar />
-      <TickerTape />
       <main className="terminal-news px-3 py-3 font-mono">
         <Card className="terminal-news-panel overflow-hidden rounded-lg border-bloomberg-border bg-black/30 text-bloomberg-white shadow-lg shadow-black/20">
           <CardContent className="p-3">
