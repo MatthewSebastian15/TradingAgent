@@ -331,8 +331,11 @@ TOOLS_CATEGORIES = {
 }
 
 _TOOL_CACHE = TTLCache(maxsize=512, ttl_seconds=900)
+_PRICE_TOOL_CACHE = TTLCache(maxsize=512, ttl_seconds=90)
 _PERSISTENT_TOOL_CACHE = None
 _PERSISTENT_TOOL_CACHE_CONFIG = None
+_PERSISTENT_PRICE_TOOL_CACHE = None
+_PERSISTENT_PRICE_TOOL_CACHE_CONFIG = None
 
 VENDOR_LIST = [
     "idx_official",
@@ -466,15 +469,13 @@ TICKER_FIRST_ARG_METHODS = {
     "get_corporate_actions",
 }
 
-# Price-sensitive calls must never be served from the app/tool cache. Historical
-# OHLCV, quote, and indicator payloads are anchored to the requested trade_date
-# and a stale cached response can make the Analysis and Chart & Price tabs show
-# different anchors. Fundamentals/news may still use the regular cache.
-PRICE_CACHE_DISABLED_METHODS = {"get_stock_data", "get_quote", "get_indicators"}
+# Price-sensitive calls use a short TTL. The cache key still includes the full
+# call args, including trade_date/end_date, so data cannot cross date anchors.
+PRICE_CACHE_SHORT_TTL_METHODS = {"get_stock_data", "get_quote", "get_indicators"}
 
 
-def _is_price_cache_disabled(method: str) -> bool:
-    return method in PRICE_CACHE_DISABLED_METHODS
+def _is_price_short_ttl_method(method: str) -> bool:
+    return method in PRICE_CACHE_SHORT_TTL_METHODS
 
 
 def _normalize_args_for_vendor(method: str, vendor: str, args: tuple) -> tuple:
@@ -668,7 +669,7 @@ def _purge_cached_vendor_result(
     try:
         vendor_args = _normalize_args_for_vendor(method, vendor, args)
         cache_key = _cache_key(method, vendor, vendor_args, kwargs)
-        _delete_cache_key(_active_cache(config), cache_key)
+        _delete_cache_key(_cache_for_method(method, config), cache_key)
     except Exception:
         logger.debug(
             "Unable to purge stale vendor cache entry for %s/%s", vendor, method, exc_info=True
@@ -733,7 +734,7 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         _record_attempt(config, method, vendor, "cache_hit")
         return cached
 
-    cache = None if _is_price_cache_disabled(method) else _active_cache(config)
+    cache = _cache_for_method(method, config)
     cache_key = _cache_key(method, vendor, vendor_args, kwargs)
     if cache is not None:
         cached = cache.get(cache_key)
@@ -817,6 +818,41 @@ def _active_cache(config: dict):
         )
         _PERSISTENT_TOOL_CACHE_CONFIG = cache_config
     return _PERSISTENT_TOOL_CACHE
+
+
+def _active_price_cache(config: dict):
+    """Return the short-TTL cache for price-sensitive tool calls."""
+    global _PERSISTENT_PRICE_TOOL_CACHE, _PERSISTENT_PRICE_TOOL_CACHE_CONFIG
+
+    backend = str(config.get("data_cache_backend", "memory")).lower()
+    ttl_seconds = int(config.get("price_cache_ttl_seconds", 90))
+    if backend != "sqlite" or SQLiteTTLCache is None:
+        _PRICE_TOOL_CACHE.maxsize = int(config.get("cache_max_entries", 512))
+        _PRICE_TOOL_CACHE.ttl_seconds = ttl_seconds
+        return _PRICE_TOOL_CACHE
+
+    cache_config = (
+        config.get("data_cache_db_path", ".cache/market_data.sqlite3"),
+        ttl_seconds,
+        int(config.get("data_cache_max_entries", config.get("cache_max_entries", 512))),
+    )
+    if (
+        _PERSISTENT_PRICE_TOOL_CACHE is None
+        or cache_config != _PERSISTENT_PRICE_TOOL_CACHE_CONFIG
+    ):
+        _PERSISTENT_PRICE_TOOL_CACHE = SQLiteTTLCache(
+            db_path=str(cache_config[0]),
+            ttl_seconds=int(cache_config[1]),
+            max_entries=int(cache_config[2]),
+        )
+        _PERSISTENT_PRICE_TOOL_CACHE_CONFIG = cache_config
+    return _PERSISTENT_PRICE_TOOL_CACHE
+
+
+def _cache_for_method(method: str, config: dict):
+    if _is_price_short_ttl_method(method):
+        return _active_price_cache(config)
+    return _active_cache(config)
 
 
 def get_tool_cache_stats() -> dict:

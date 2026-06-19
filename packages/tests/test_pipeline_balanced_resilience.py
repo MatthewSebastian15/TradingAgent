@@ -798,7 +798,140 @@ def test_current_price_anchor_uses_ohlcv_before_profile():
     }
 
 
-def test_router_falls_back_and_does_not_cache_price_ohlcv(monkeypatch):
+def test_router_caches_usable_price_ohlcv_with_short_ttl(monkeypatch):
+    from tradingagents.dataflows.providers import interface
+
+    price_csv = "\n".join(
+        [
+            "Date,Open,High,Low,Close,Volume",
+            "2026-06-10,20,21,19,20.5,2000",
+        ]
+    )
+    calls = {"yfinance": 0}
+
+    monkeypatch.setattr(
+        interface,
+        "get_config",
+        lambda: {
+            "tool_timeout_seconds": 1,
+            "tool_max_retries": 2,
+            "cache_ttl_seconds": 900,
+            "price_cache_ttl_seconds": 90,
+            "cache_max_entries": 10,
+            "circuit_breaker_failure_threshold": 5,
+            "circuit_recovery_seconds": 60,
+            "price_max_fallback_days": 7,
+        },
+    )
+    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance")
+
+    def yf_payload(*args, **kwargs):
+        calls["yfinance"] += 1
+        return price_csv
+
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", yf_payload)
+    monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
+    monkeypatch.setattr(interface, "call_with_retry", lambda func, **kwargs: func())
+    interface._PRICE_TOOL_CACHE._data.clear()
+
+    result_1 = interface.route_to_vendor("get_stock_data", "TEST", "2025-06-10", "2026-06-10")
+    result_2 = interface.route_to_vendor("get_stock_data", "TEST", "2025-06-10", "2026-06-10")
+
+    assert result_1 == price_csv
+    assert result_2 == price_csv
+    assert calls["yfinance"] == 1
+
+
+def test_router_price_cache_key_keeps_trade_date_separate(monkeypatch):
+    from tradingagents.dataflows.providers import interface
+
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        interface,
+        "get_config",
+        lambda: {
+            "tool_timeout_seconds": 1,
+            "tool_max_retries": 2,
+            "cache_ttl_seconds": 900,
+            "price_cache_ttl_seconds": 90,
+            "cache_max_entries": 10,
+            "circuit_breaker_failure_threshold": 5,
+            "circuit_recovery_seconds": 60,
+            "price_max_fallback_days": 7,
+        },
+    )
+    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance")
+
+    def yf_payload(_symbol, _start, end, **_kwargs):
+        calls.append(end)
+        return "\n".join(
+            [
+                "Date,Open,High,Low,Close,Volume",
+                f"{end},20,21,19,20.5,2000",
+            ]
+        )
+
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", yf_payload)
+    monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
+    monkeypatch.setattr(interface, "call_with_retry", lambda func, **kwargs: func())
+    interface._PRICE_TOOL_CACHE._data.clear()
+
+    first = interface.route_to_vendor("get_stock_data", "TEST", "2025-06-10", "2026-06-10")
+    second = interface.route_to_vendor("get_stock_data", "TEST", "2025-06-11", "2026-06-11")
+    first_again = interface.route_to_vendor("get_stock_data", "TEST", "2025-06-10", "2026-06-10")
+
+    assert "2026-06-10" in first
+    assert "2026-06-11" in second
+    assert first_again == first
+    assert calls == ["2026-06-10", "2026-06-11"]
+
+
+def test_router_price_cache_expires(monkeypatch):
+    from tradingagents.dataflows.providers import interface
+
+    calls = {"yfinance": 0}
+
+    monkeypatch.setattr(
+        interface,
+        "get_config",
+        lambda: {
+            "tool_timeout_seconds": 1,
+            "tool_max_retries": 2,
+            "cache_ttl_seconds": 900,
+            "price_cache_ttl_seconds": 90,
+            "cache_max_entries": 10,
+            "circuit_breaker_failure_threshold": 5,
+            "circuit_recovery_seconds": 60,
+            "price_max_fallback_days": 7,
+        },
+    )
+    monkeypatch.setattr(interface, "get_vendor", lambda category, method=None: "yfinance")
+
+    def yf_payload(*args, **kwargs):
+        calls["yfinance"] += 1
+        return "\n".join(
+            [
+                "Date,Open,High,Low,Close,Volume",
+                "2026-06-10,20,21,19,20.5,2000",
+            ]
+        )
+
+    monkeypatch.setitem(interface.VENDOR_METHODS["get_stock_data"], "yfinance", yf_payload)
+    monkeypatch.setattr(interface, "call_with_timeout", lambda func, **kwargs: func())
+    monkeypatch.setattr(interface, "call_with_retry", lambda func, **kwargs: func())
+    interface._PRICE_TOOL_CACHE._data.clear()
+
+    interface.route_to_vendor("get_stock_data", "TEST", "2025-06-10", "2026-06-10")
+    with interface._PRICE_TOOL_CACHE._lock:
+        for key, (_expires_at, value) in list(interface._PRICE_TOOL_CACHE._data.items()):
+            interface._PRICE_TOOL_CACHE._data[key] = (0.0, value)
+    interface.route_to_vendor("get_stock_data", "TEST", "2025-06-10", "2026-06-10")
+
+    assert calls["yfinance"] == 2
+
+
+def test_router_falls_back_and_caches_usable_price_ohlcv(monkeypatch):
     from tradingagents.dataflows.providers import interface
 
     stale_csv = "\n".join(
@@ -822,6 +955,7 @@ def test_router_falls_back_and_does_not_cache_price_ohlcv(monkeypatch):
             "tool_timeout_seconds": 1,
             "tool_max_retries": 2,
             "cache_ttl_seconds": 60,
+            "price_cache_ttl_seconds": 90,
             "cache_max_entries": 10,
             "circuit_breaker_failure_threshold": 5,
             "circuit_recovery_seconds": 60,
@@ -851,5 +985,5 @@ def test_router_falls_back_and_does_not_cache_price_ohlcv(monkeypatch):
 
     assert result_1 == fresh_csv
     assert result_2 == fresh_csv
-    assert calls["alpha_vantage"] == 2
+    assert calls["alpha_vantage"] == 1
     assert calls["yfinance"] == 2

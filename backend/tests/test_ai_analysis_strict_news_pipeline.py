@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from threading import Event
+
 from tradingagents.dataflows.news.news_models import NewsEntity, NormalizedNewsArticle
 from tradingagents.dataflows.news.news_provider_base import ProviderFetchResult
 from tradingagents.dataflows.news.news_service import NewsService, format_news_for_prompt
@@ -61,7 +63,7 @@ def test_strict_news_pipeline_calls_all_providers(monkeypatch):
 
     NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
 
-    assert called == ["google_news_light", "marketaux", "rss_context", "newsdata"]
+    assert set(called) == {"google_news_light", "marketaux", "rss_context", "newsdata"}
     assert yfinance_called == ["yfinance"]
 
 
@@ -94,7 +96,7 @@ def test_strict_news_pipeline_does_not_skip_secondary_when_primary_has_articles(
 
     result = NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
 
-    assert called == ["google_news_light", "marketaux", "rss_context", "newsdata"]
+    assert set(called) == {"google_news_light", "marketaux", "rss_context", "newsdata"}
     assert "skipped_sufficient_primary" not in result["provider_status"].values()
 
 
@@ -122,7 +124,7 @@ def test_strict_news_pipeline_provider_failure_continues(monkeypatch):
 
     result = NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
 
-    assert called == ["google_news_light", "marketaux", "rss_context", "newsdata"]
+    assert set(called) == {"google_news_light", "marketaux", "rss_context", "newsdata"}
     assert result["provider_status"]["marketaux"] == "unavailable"
     assert "newsdata" in result["provider_status"]
 
@@ -152,8 +154,98 @@ def test_yfinance_is_called_last_and_only_once(monkeypatch):
 
     NewsService(_service_config()).fetch_news("BBCA.JK", bypass_cache=True)
 
-    assert call_order == ["google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"]
+    assert set(call_order[:-1]) == {"google_news_light", "marketaux", "rss_context", "newsdata"}
+    assert call_order[-1] == "yfinance"
     assert call_order.count("yfinance") == 1
+
+
+def test_strict_news_parallel_providers_preserve_priority_output(monkeypatch):
+    started: list[str] = []
+    both_started = Event()
+    release = Event()
+
+    class FakeProvider:
+        def __init__(self, name: str) -> None:
+            self.provider_name = name
+            self.api_key = "key"
+
+        def fetch_news(self, *_args, **_kwargs):
+            started.append(self.provider_name)
+            if len(started) == 2:
+                both_started.set()
+                release.set()
+            both_started.wait(timeout=1)
+            release.wait(timeout=1)
+            return ProviderFetchResult(
+                provider=self.provider_name,
+                status="success",
+                articles=[
+                    _article(
+                        self.provider_name,
+                        f"{self.provider_name} Bank Central Asia profit update",
+                    )
+                ],
+            )
+
+    monkeypatch.setattr(
+        NewsService, "_provider", lambda _self, provider_name: FakeProvider(provider_name)
+    )
+
+    result = NewsService(
+        {
+            **_service_config(),
+            "provider_priority": "google_news_light,marketaux",
+            "enabled_providers": "google_news_light,marketaux",
+            "force_all_providers": True,
+            "enable_yfinance_fallback": False,
+        }
+    ).fetch_news("BBCA.JK", bypass_cache=True)
+
+    assert set(started) == {"google_news_light", "marketaux"}
+    assert result["providers_used"] == ["google_news_light", "marketaux"]
+    assert [article["provider"] for article in result["articles"]] == [
+        "google_news_light",
+        "marketaux",
+    ]
+
+
+def test_strict_news_default_stops_before_yfinance_when_enough_articles(monkeypatch):
+    google_articles = [
+        _article("google_news_light", f"Bank Central Asia article {index}") for index in range(5)
+    ]
+    yfinance_called: list[str] = []
+
+    class GoogleProvider:
+        api_key = "key"
+
+        def fetch_news(self, *_args, **_kwargs):
+            return ProviderFetchResult(
+                provider="google_news_light", status="success", articles=google_articles
+            )
+
+    monkeypatch.setattr(
+        NewsService, "_provider", lambda _self, _provider_name: GoogleProvider()
+    )
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news.news_service._fetch_yfinance_fallback",
+        lambda *_args, **_kwargs: yfinance_called.append("yfinance") or [],
+    )
+
+    result = NewsService(
+        {
+            **_service_config(),
+            "provider_priority": "google_news_light,yfinance",
+            "enabled_providers": "google_news_light,yfinance",
+            "force_all_providers": False,
+            "secondary_fetch_threshold": 5,
+        }
+    ).fetch_news("BBCA.JK", bypass_cache=True)
+
+    assert result["provider_status"] == {
+        "google_news_light": "success",
+        "yfinance": "skipped_sufficient_primary",
+    }
+    assert yfinance_called == []
 
 
 def test_format_news_for_prompt_uses_decision_company_news_only():

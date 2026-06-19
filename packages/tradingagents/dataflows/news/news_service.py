@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
@@ -121,66 +122,65 @@ class NewsService:
         max_per_provider = max(1, int(self.config.get("max_articles_per_provider", 10)))
         required_primary_count = max(1, int(self.config.get("secondary_fetch_threshold", 5)))
         min_relevance = float(self.config.get("min_relevance_score", 50))
-        force_all = bool(self.config.get("force_all_providers", True))
         strict_mode = bool(self.config.get("strict_ai_analysis_mode", True))
+        force_all = bool(self.config.get("force_all_providers", False if strict_mode else True))
 
-        for index, provider_name in enumerate(provider_priority):
-            if provider_name not in STRUCTURED_NEWS_PROVIDERS:
-                provider_status[provider_name] = "disabled"
-                continue
-            if provider_name not in enabled_providers:
-                provider_status[provider_name] = "disabled"
-                provider_health[provider_name] = _provider_health(False, "disabled")
-                continue
-            if provider_name == "yfinance":
-                if not self.config.get("enable_yfinance_fallback", True):
-                    provider_status[provider_name] = "disabled"
-                    provider_health[provider_name] = _provider_health(False, "disabled")
-                    continue
-                if not self._consume_budget("yfinance"):
-                    provider_status[provider_name] = "budget_exceeded"
-                    provider_health[provider_name] = _provider_health(True, "budget_exceeded")
-                    debug_attempts[provider_name] = [
-                        {"strategy": "yfinance_get_news", "status": "budget_exceeded"}
-                    ]
-                    self._record_attempt("yfinance", "budget_exceeded")
-                    continue
-                yfinance_articles = _fetch_yfinance_fallback(profile, limit=max_per_provider)
-                articles.extend(yfinance_articles)
-                provider_status[provider_name] = "success" if yfinance_articles else "unavailable"
-                provider_health[provider_name] = _provider_health(
-                    True, provider_status[provider_name]
-                )
-                debug_attempts[provider_name] = [
-                    {
-                        "strategy": "yfinance_get_news",
-                        "status": provider_status[provider_name],
-                        "items_used": len(yfinance_articles),
-                    }
-                ]
-                self._record_attempt(provider_name, provider_status[provider_name])
-                continue
-            if (
-                not force_all
-                and not strict_mode
-                and index > 0
-                and not self.config.get("fetch_secondary_always", False)
-                and len([item for item in articles if item.relevance_score >= min_relevance])
+        def enough_relevant(candidate_articles: list[NormalizedNewsArticle]) -> bool:
+            return (
+                len([item for item in candidate_articles if item.relevance_score >= min_relevance])
                 >= required_primary_count
-            ):
-                provider_status[provider_name] = "skipped_sufficient_primary"
-                provider_health[provider_name] = _provider_health(
-                    True, "skipped_sufficient_primary"
-                )
-                continue
+            )
+
+        def should_stop_for_enough(candidate_articles: list[NormalizedNewsArticle]) -> bool:
+            if force_all:
+                return False
+            if strict_mode:
+                return enough_relevant(candidate_articles)
+            if self.config.get("fetch_secondary_always", False):
+                return False
+            return enough_relevant(candidate_articles)
+
+        def skipped_sufficient_primary(provider_name: str) -> None:
+            provider_status[provider_name] = "skipped_sufficient_primary"
+            provider_health[provider_name] = _provider_health(True, "skipped_sufficient_primary")
+
+        def fetch_provider(provider_name: str) -> dict[str, Any]:
+            if provider_name == "yfinance":
+                if not self._consume_budget("yfinance"):
+                    self._record_attempt("yfinance", "budget_exceeded")
+                    return {
+                        "status": "budget_exceeded",
+                        "health": _provider_health(True, "budget_exceeded"),
+                        "attempts": [
+                            {"strategy": "yfinance_get_news", "status": "budget_exceeded"}
+                        ],
+                        "articles": [],
+                    }
+                yfinance_articles = _fetch_yfinance_fallback(profile, limit=max_per_provider)
+                status = "success" if yfinance_articles else "unavailable"
+                self._record_attempt(provider_name, status)
+                return {
+                    "status": status,
+                    "health": _provider_health(True, status),
+                    "attempts": [
+                        {
+                            "strategy": "yfinance_get_news",
+                            "status": status,
+                            "items_used": len(yfinance_articles),
+                        }
+                    ],
+                    "articles": yfinance_articles,
+                }
+
             provider = self._provider(provider_name)
             if provider.api_key and not self._consume_budget(provider_name):
-                provider_status[provider_name] = "budget_exceeded"
-                provider_health[provider_name] = _provider_health(
-                    bool(provider.api_key), "budget_exceeded"
-                )
                 self._record_attempt(provider_name, "budget_exceeded")
-                continue
+                return {
+                    "status": "budget_exceeded",
+                    "health": _provider_health(bool(provider.api_key), "budget_exceeded"),
+                    "attempts": [],
+                    "articles": [],
+                }
             try:
                 fetch_result = provider.fetch_news(
                     profile,
@@ -196,21 +196,20 @@ class NewsService:
                     profile["ticker"],
                     exc,
                 )
-                provider_status[provider_name] = "unavailable"
-                provider_health[provider_name] = _provider_health(
-                    bool(provider.api_key), "unavailable"
-                )
-                debug_attempts[provider_name] = [
-                    {"strategy": provider_name, "status": "unavailable", "error": str(exc)[:300]}
-                ]
                 self._record_attempt(provider_name, "unavailable")
-                continue
-            provider_status[provider_name] = fetch_result.status
-            provider_health[provider_name] = _provider_health(
-                bool(provider.api_key), fetch_result.status
-            )
-            debug_attempts[provider_name] = fetch_result.attempts
-            articles.extend(fetch_result.articles)
+                return {
+                    "status": "unavailable",
+                    "health": _provider_health(bool(provider.api_key), "unavailable"),
+                    "attempts": [
+                        {
+                            "strategy": provider_name,
+                            "status": "unavailable",
+                            "error": str(exc)[:300],
+                        }
+                    ],
+                    "articles": [],
+                }
+
             self._record_attempt(provider_name, fetch_result.status)
             if self.config.get("log_provider_requests", True):
                 logger.info(
@@ -220,6 +219,92 @@ class NewsService:
                     fetch_result.status,
                     len(fetch_result.articles),
                 )
+            return {
+                "status": fetch_result.status,
+                "health": _provider_health(bool(provider.api_key), fetch_result.status),
+                "attempts": fetch_result.attempts,
+                "articles": fetch_result.articles,
+            }
+
+        active_providers: list[str] = []
+        deferred_yfinance = False
+        for provider_name in provider_priority:
+            if provider_name not in STRUCTURED_NEWS_PROVIDERS:
+                provider_status[provider_name] = "disabled"
+                continue
+            if provider_name not in enabled_providers:
+                provider_status[provider_name] = "disabled"
+                provider_health[provider_name] = _provider_health(False, "disabled")
+                continue
+            if provider_name == "yfinance":
+                if not self.config.get("enable_yfinance_fallback", True):
+                    provider_status[provider_name] = "disabled"
+                    provider_health[provider_name] = _provider_health(False, "disabled")
+                    continue
+                deferred_yfinance = True
+                continue
+            active_providers.append(provider_name)
+
+        completed_results: dict[str, dict[str, Any]] = {}
+        stopped_after_sufficient = False
+        parallel_providers = active_providers
+        if active_providers and not force_all:
+            first_provider = active_providers[0]
+            completed_results[first_provider] = fetch_provider(first_provider)
+            current_articles = completed_results[first_provider].get("articles", [])
+            if should_stop_for_enough(current_articles):
+                stopped_after_sufficient = True
+                parallel_providers = []
+            else:
+                parallel_providers = active_providers[1:]
+
+        if parallel_providers:
+            executor = ThreadPoolExecutor(
+                max_workers=len(parallel_providers), thread_name_prefix="news-provider"
+            )
+            futures = {
+                executor.submit(fetch_provider, provider_name): provider_name
+                for provider_name in parallel_providers
+            }
+            try:
+                for future in as_completed(futures):
+                    provider_name = futures[future]
+                    completed_results[provider_name] = future.result()
+                    current_articles = [
+                        article
+                        for name in provider_priority
+                        for article in completed_results.get(name, {}).get("articles", [])
+                    ]
+                    if should_stop_for_enough(current_articles):
+                        stopped_after_sufficient = True
+                        for pending in futures:
+                            if pending is not future:
+                                pending.cancel()
+                        break
+            finally:
+                executor.shutdown(wait=not stopped_after_sufficient, cancel_futures=True)
+
+        for provider_name in provider_priority:
+            if provider_name not in active_providers:
+                continue
+            result = completed_results.get(provider_name)
+            if result is None:
+                skipped_sufficient_primary(provider_name)
+                continue
+            provider_status[provider_name] = result["status"]
+            provider_health[provider_name] = result["health"]
+            debug_attempts[provider_name] = result["attempts"]
+            articles.extend(result["articles"])
+
+        if deferred_yfinance:
+            if should_stop_for_enough(articles):
+                skipped_sufficient_primary("yfinance")
+            else:
+                result = fetch_provider("yfinance")
+                provider_status["yfinance"] = result["status"]
+                provider_health["yfinance"] = result["health"]
+                debug_attempts["yfinance"] = result["attempts"]
+                articles.extend(result["articles"])
 
         if (
             not strict_mode
