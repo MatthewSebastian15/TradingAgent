@@ -348,6 +348,116 @@ def _normalize_ohlcv_rows(
     return points
 
 
+def _ohlcv_raw_cache_key(symbol: str, end_dt: datetime, interval: str) -> tuple[str, str, str]:
+    return (symbol, end_dt.strftime("%Y-%m-%d"), interval)
+
+
+def _parse_ohlcv_point_date(point: dict[str, Any]) -> datetime | None:
+    raw_date = str(point.get("date") or "").strip()
+    if not raw_date:
+        return None
+    for date_format in ("%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            normalized_date = raw_date[:16] if " " in raw_date else raw_date[:10]
+            return datetime.strptime(normalized_date, date_format)
+        except ValueError:
+            continue
+    return None
+
+
+def _slice_ohlcv_rows(
+    rows: list[dict[str, Any]], start_dt: datetime, end_dt: datetime
+) -> list[dict[str, Any]]:
+    start_date = start_dt.date()
+    end_date = end_dt.date()
+    sliced: list[dict[str, Any]] = []
+    for row in rows:
+        point_dt = _parse_ohlcv_point_date(row)
+        if point_dt is None:
+            continue
+        if start_date <= point_dt.date() <= end_date:
+            sliced.append(dict(row))
+    return sliced
+
+
+def _cached_ohlcv_rows(
+    symbol: str, start_dt: datetime, end_dt: datetime, interval: str, now: float
+) -> tuple[bool, list[dict[str, Any]]]:
+    cached_at, cached_payload = _OHLCV_CACHE.get(
+        _ohlcv_raw_cache_key(symbol, end_dt, interval), (0.0, {})
+    )
+    if not cached_payload or now - cached_at > _OHLCV_CACHE_TTL_SECONDS:
+        return False, []
+
+    cached_start = str(cached_payload.get("start_date") or "")
+    cached_end = str(cached_payload.get("end_date") or "")
+    if cached_start > start_dt.strftime("%Y-%m-%d") or cached_end < end_dt.strftime("%Y-%m-%d"):
+        return False, []
+
+    rows = cached_payload.get("rows")
+    if not isinstance(rows, list):
+        return False, []
+    return True, _slice_ohlcv_rows(rows, start_dt, end_dt)
+
+
+def _cache_ohlcv_rows(
+    symbol: str,
+    start_dt: datetime,
+    end_dt: datetime,
+    interval: str,
+    rows: list[dict[str, Any]],
+) -> None:
+    _OHLCV_CACHE[_ohlcv_raw_cache_key(symbol, end_dt, interval)] = (
+        monotonic(),
+        {
+            "ticker": symbol,
+            "interval": interval,
+            "start_date": start_dt.strftime("%Y-%m-%d"),
+            "end_date": end_dt.strftime("%Y-%m-%d"),
+            "rows": [dict(row) for row in rows],
+        },
+    )
+
+
+def _build_ohlcv_payload(
+    *,
+    symbol: str,
+    range_key: str,
+    interval: str | None,
+    requested_start_dt: datetime,
+    requested_end_dt: datetime,
+    rows: list[dict[str, Any]],
+    fallback_to_daily: bool,
+    warning: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "available": len(rows) >= 2,
+        "source": f"yfinance:{interval}" if interval else "yfinance",
+        "ticker": symbol,
+        "range": range_key,
+        "interval": interval,
+        "fallback_to_daily": fallback_to_daily,
+        "requested_trade_date": requested_end_dt.strftime("%Y-%m-%d"),
+        "start_date": requested_start_dt.strftime("%Y-%m-%d"),
+        "end_date": requested_end_dt.strftime("%Y-%m-%d"),
+        "last_trade_date": str(rows[-1]["date"])[:10] if rows else None,
+        "points": [dict(row) for row in rows],
+        "data": [dict(row) for row in rows],
+        "data_quality": {
+            "status": "complete" if len(rows) >= 2 else "partial" if rows else "unavailable",
+            "missing_fields": [] if rows else ["ohlcv"],
+            "point_count": len(rows),
+        },
+        "warning": warning
+        if warning is not None
+        else None
+        if len(rows) >= 2
+        else "Only one OHLCV candle was available for this range."
+        if rows
+        else "No OHLCV candles returned for the selected range.",
+    }
+
+
 def _fetch_ohlcv_range(symbol: str, range_key: str, trade_date: str | None) -> dict[str, Any]:
     end_dt = _parse_ohlcv_trade_date(trade_date)
     start_dt = _ohlcv_start_date(end_dt, range_key)
@@ -355,57 +465,54 @@ def _fetch_ohlcv_range(symbol: str, range_key: str, trade_date: str | None) -> d
     last_error: Exception | None = None
 
     for interval in intervals:
+        now = monotonic()
+        cache_hit, cached_rows = _cached_ohlcv_rows(symbol, start_dt, end_dt, interval, now)
+        if cache_hit:
+            if cached_rows or interval == intervals[-1]:
+                return _build_ohlcv_payload(
+                    symbol=symbol,
+                    range_key=range_key,
+                    interval=interval,
+                    requested_start_dt=start_dt,
+                    requested_end_dt=end_dt,
+                    rows=cached_rows,
+                    fallback_to_daily=interval == "1d" and intervals[0] != "1d",
+                )
+            continue
+
         try:
             rows = _normalize_ohlcv_rows(
                 _download_ohlcv(symbol, start_dt, end_dt, interval), start_dt, end_dt, interval
             )
+            _cache_ohlcv_rows(symbol, start_dt, end_dt, interval, rows)
             if not rows:
                 continue
             if len(rows) < 2 and interval != intervals[-1]:
                 continue
-            return {
-                "available": len(rows) >= 2,
-                "source": f"yfinance:{interval}",
-                "ticker": symbol,
-                "range": range_key,
-                "interval": interval,
-                "fallback_to_daily": interval == "1d" and intervals[0] != "1d",
-                "requested_trade_date": end_dt.strftime("%Y-%m-%d"),
-                "start_date": start_dt.strftime("%Y-%m-%d"),
-                "end_date": end_dt.strftime("%Y-%m-%d"),
-                "last_trade_date": str(rows[-1]["date"])[:10],
-                "points": rows,
-                "data": rows,
-                "data_quality": {
-                    "status": "complete" if len(rows) >= 2 else "partial",
-                    "missing_fields": [],
-                    "point_count": len(rows),
-                },
-                "warning": None
-                if len(rows) >= 2
-                else "Only one OHLCV candle was available for this range.",
-            }
+            return _build_ohlcv_payload(
+                symbol=symbol,
+                range_key=range_key,
+                interval=interval,
+                requested_start_dt=start_dt,
+                requested_end_dt=end_dt,
+                rows=rows,
+                fallback_to_daily=interval == "1d" and intervals[0] != "1d",
+            )
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             logger.debug("OHLCV fetch failed for %s %s %s: %s", symbol, range_key, interval, exc)
 
     warning = str(last_error or "No OHLCV candles returned for the selected range.")
-    return {
-        "available": False,
-        "source": "yfinance",
-        "ticker": symbol,
-        "range": range_key,
-        "interval": None,
-        "fallback_to_daily": intervals[-1] == "1d" and intervals[0] != "1d",
-        "requested_trade_date": end_dt.strftime("%Y-%m-%d"),
-        "start_date": start_dt.strftime("%Y-%m-%d"),
-        "end_date": end_dt.strftime("%Y-%m-%d"),
-        "last_trade_date": None,
-        "points": [],
-        "data": [],
-        "data_quality": {"status": "unavailable", "missing_fields": ["ohlcv"], "point_count": 0},
-        "warning": warning,
-    }
+    return _build_ohlcv_payload(
+        symbol=symbol,
+        range_key=range_key,
+        interval=None,
+        requested_start_dt=start_dt,
+        requested_end_dt=end_dt,
+        rows=[],
+        fallback_to_daily=intervals[-1] == "1d" and intervals[0] != "1d",
+        warning=warning,
+    )
 
 
 def _fast_info_value(info: Any, *names: str) -> Any:
@@ -701,16 +808,9 @@ async def get_market_ohlcv(
                 details={"fields": {"range": "Range must be one of YTD, 1Y, 6M, 3M, 1M, 1W."}},
             )
         parsed_trade_date = _parse_ohlcv_trade_date(trade_date).strftime("%Y-%m-%d")
-        cache_key = (symbol, normalized_range, parsed_trade_date)
-        cached_at, cached_payload = _OHLCV_CACHE.get(cache_key, (0.0, {}))
-        now = monotonic()
-        if cached_payload and now - cached_at <= _OHLCV_CACHE_TTL_SECONDS:
-            return _clone_ohlcv_payload(cached_payload)
-
         payload = await asyncio.to_thread(
             _fetch_ohlcv_range, symbol, normalized_range, parsed_trade_date
         )
-        _OHLCV_CACHE[cache_key] = (now, _clone_ohlcv_payload(payload))
 
     return payload
 

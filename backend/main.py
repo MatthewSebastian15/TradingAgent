@@ -70,6 +70,7 @@ class SkipSseCompressionMiddleware:
         return (
             path == "/api/analyze/stream"
             or path == "/api/news/general/stream"
+            or (path.startswith("/api/news/") and path.endswith("/stream"))
             or (path.startswith("/api/analysis/jobs/") and path.endswith("/events"))
         )
 

@@ -23,6 +23,8 @@ _SUPPORTED_DEBUG_PROVIDERS = {
     "yfinance",
 }
 _SUPPORTED_GENERAL_PROVIDERS = {"google_news_light", "marketaux", "rss_context", "newsdata"}
+_TICKER_NEWS_STREAM_DEFAULT_POLL_SECONDS = 120
+_TICKER_NEWS_STREAM_MIN_POLL_SECONDS = 30
 
 
 def _fetch_general_news(
@@ -118,6 +120,7 @@ def _fetch_news(
     provider: str | None = None,
     debug: bool = False,
     include_raw: bool = False,
+    force_refresh: bool = False,
 ) -> dict[str, Any]:
     from tradingagents.dataflows.news.news_service import NewsService
     from tradingagents.dataflows.providers.config import use_config
@@ -131,8 +134,79 @@ def _fetch_news(
             provider_filter=provider,
             debug=debug,
             include_raw=include_raw,
-            bypass_cache=bool(debug and include_raw),
+            bypass_cache=bool(force_refresh or (debug and include_raw)),
         )
+
+
+async def _stream_ticker_news_events(
+    request: Request,
+    rate_limit_lease,
+    *,
+    ticker: str,
+    window_days: int,
+    limit: int,
+    poll_seconds: int,
+):
+    from tradingagents.dataflows.news.ticker_news_stream import ticker_news_event_bus
+
+    async def poll_for_updates() -> None:
+        while True:
+            if await request.is_disconnected():
+                return
+            result = await asyncio.to_thread(
+                _fetch_news,
+                ticker,
+                window_days=window_days,
+                limit=limit,
+                force_refresh=True,
+            )
+            await ticker_news_event_bus.publish_if_changed(result)
+            await asyncio.sleep(max(_TICKER_NEWS_STREAM_MIN_POLL_SECONDS, poll_seconds))
+
+    poll_task = asyncio.create_task(poll_for_updates())
+    try:
+        yield {
+            "event": "ticker_news_stream_ready",
+            "data": json.dumps({"ticker": ticker, "poll_seconds": poll_seconds}),
+        }
+        async for event in ticker_news_event_bus.subscribe(ticker):
+            if await request.is_disconnected():
+                return
+            yield {"event": "ticker_news_updated", "data": json.dumps(event)}
+    finally:
+        poll_task.cancel()
+        try:
+            await poll_task
+        except asyncio.CancelledError:
+            pass
+        await rate_limit_lease.__aexit__(None, None, None)
+
+
+@router.get("/news/{ticker}/stream")
+async def stream_ticker_news(
+    ticker: str,
+    request: Request,
+    window_days: int = Query(default=30, ge=1, le=365),
+    limit: int = Query(default=20, ge=1, le=100),
+    poll_seconds: int = Query(default=_TICKER_NEWS_STREAM_DEFAULT_POLL_SECONDS, ge=30, le=900),
+):
+    config = build_tradingagents_config()
+    if not bool((config.get("general_news") or {}).get("enable_sse", True)):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    normalized_ticker = normalize_ticker_symbol(ticker)
+    rate_limit_lease = limit_request(request, stream_policy())
+    await rate_limit_lease.__aenter__()
+    return EventSourceResponse(
+        _stream_ticker_news_events(
+            request,
+            rate_limit_lease,
+            ticker=normalized_ticker,
+            window_days=window_days,
+            limit=limit,
+            poll_seconds=poll_seconds,
+        )
+    )
 
 
 @router.get("/news/{ticker}", response_model=NewsResponse, response_model_exclude_none=True)

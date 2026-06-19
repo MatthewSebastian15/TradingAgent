@@ -137,3 +137,87 @@ def test_debug_news_endpoint_runs_full_pipeline_without_provider(monkeypatch):
     assert response.status_code == 200
     assert calls[0]["provider"] is None
     assert calls[0]["debug"] is True
+
+
+def test_ticker_news_stream_route_is_registered_without_changing_news_schema():
+    response = _news_client(is_development=True).get("/api/news/BBCA.JK/stream?poll_seconds=1")
+
+    assert response.status_code == 422
+    assert "poll_seconds" in response.text
+
+
+def test_ticker_news_stream_generator_emits_ready_event(monkeypatch):
+    import asyncio
+    import json
+
+    from routes.news import _stream_ticker_news_events
+
+    class FakeRequest:
+        async def is_disconnected(self):
+            return False
+
+    class FakeLease:
+        def __init__(self):
+            self.exited = False
+
+        async def __aexit__(self, *_args):
+            self.exited = True
+
+    async def exercise_stream():
+        monkeypatch.setattr(
+            "routes.news._fetch_news", lambda ticker, **_kwargs: _news_response(ticker)
+        )
+        lease = FakeLease()
+        stream = _stream_ticker_news_events(
+            FakeRequest(),
+            lease,
+            ticker="BBCA.JK",
+            window_days=30,
+            limit=20,
+            poll_seconds=30,
+        )
+        event = await anext(stream)
+        await stream.aclose()
+
+        assert lease.exited is True
+        assert event["event"] == "ticker_news_stream_ready"
+        assert json.loads(event["data"]) == {"ticker": "BBCA.JK", "poll_seconds": 30}
+
+    asyncio.run(exercise_stream())
+
+
+def test_ticker_news_event_bus_publishes_only_new_articles():
+    import asyncio
+
+    from tradingagents.dataflows.news.ticker_news_stream import ticker_news_event_bus
+
+    async def exercise_bus():
+        ticker_news_event_bus.reset_for_tests()
+        baseline = {
+            "ticker": "BBCA.JK",
+            "articles_found": 1,
+            "latest_article_date": "2026-06-19",
+            "articles": [{"url": "https://example.com/1"}],
+        }
+        changed = {
+            **baseline,
+            "articles_found": 2,
+            "articles": [
+                {"url": "https://example.com/1"},
+                {"url": "https://example.com/2"},
+            ],
+        }
+
+        assert await ticker_news_event_bus.publish_if_changed(baseline) is False
+        stream = ticker_news_event_bus.subscribe("bbca.jk")
+        next_event = asyncio.create_task(anext(stream))
+        await asyncio.sleep(0)
+        assert await ticker_news_event_bus.publish_if_changed(changed) is True
+        event = await asyncio.wait_for(next_event, timeout=1)
+        await stream.aclose()
+
+        assert event["ticker"] == "BBCA.JK"
+        assert event["new_count"] == 1
+        assert event["articles_found"] == 2
+
+    asyncio.run(exercise_bus())
