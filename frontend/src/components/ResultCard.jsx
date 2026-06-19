@@ -374,7 +374,7 @@ function DecisionBadge({ decision }) {
   const c = cfg[signal] || cfg.HOLD;
   return (
     <span
-      className={`inline-block border px-4 py-1.5 font-mono text-sm font-bold tracking-widest ${c.classes}`}
+      className={`inline-block border px-3 py-1 font-mono text-xs font-bold tracking-widest ${c.classes}`}
     >
       {c.label}
     </span>
@@ -450,7 +450,7 @@ function DataQuality({
       <SectionHeader label="DATA QUALITY" />
       <div className="flex flex-wrap gap-2">
         <span
-          className={`font-mono text-xs px-2.5 py-1 border tracking-wider ${getStatusClasses(
+          className={`font-mono text-[11px] px-2 py-0.5 border tracking-wider ${getStatusClasses(
             tradePlanStatus.tone
           )}`}
         >
@@ -459,7 +459,7 @@ function DataQuality({
         {items.map(({ label, status }) => (
           <span
             key={label}
-            className={`font-mono text-xs px-2.5 py-1 border tracking-wider ${getStatusClasses(
+            className={`font-mono text-[11px] px-2 py-0.5 border tracking-wider ${getStatusClasses(
               getDataQualityTone(label, status)
             )}`}
           >
@@ -468,15 +468,15 @@ function DataQuality({
         ))}
       </div>
       {dataWarningDetails.length > 0 && (
-        <div className="mt-3">
-          <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-1.5">
+        <div className="mt-2">
+          <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-bloomberg-muted">
             Data Warnings
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1">
             {dataWarningDetails.slice(0, 3).map((warning, i) => (
               <div
                 key={`${warning.code}-${i}`}
-                className={`font-mono text-xs px-2.5 py-1 border leading-relaxed ${getStatusClasses(
+                className={`font-mono text-[11px] px-2 py-0.5 border leading-snug ${getStatusClasses(
                   warning.severity
                 )}`}
               >
@@ -488,15 +488,15 @@ function DataQuality({
         </div>
       )}
       {validationDetails.length > 0 && (
-        <div className="mt-3">
-          <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-1.5">
+        <div className="mt-2">
+          <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-bloomberg-muted">
             Validation Warnings
           </div>
           <div className="flex flex-wrap gap-2">
             {validationDetails.map((warning, i) => (
               <span
                 key={`${warning.code}-${i}`}
-                className={`font-mono text-xs px-2.5 py-1 border tracking-wider ${getStatusClasses(
+                className={`font-mono text-[11px] px-2 py-0.5 border tracking-wider ${getStatusClasses(
                   warning.severity
                 )}`}
               >
@@ -507,15 +507,15 @@ function DataQuality({
         </div>
       )}
       {readableRequestWarnings.length > 0 && (
-        <div className="mt-3">
-          <div className="font-mono text-xs text-bloomberg-muted tracking-wider uppercase mb-1.5">
+        <div className="mt-2">
+          <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-bloomberg-muted">
             Request Warnings
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1">
             {readableRequestWarnings.map((warning) => (
               <div
                 key={warning}
-                className="font-mono text-xs px-2.5 py-1 border border-bloomberg-amber bg-bloomberg-amber-dim text-bloomberg-amber leading-relaxed"
+                className="border border-bloomberg-amber bg-bloomberg-amber-dim px-2 py-0.5 font-mono text-[11px] leading-snug text-bloomberg-amber"
               >
                 {warning}
               </div>
@@ -613,7 +613,7 @@ function ActionableMetrics({ result, currentPrice, riskReward }) {
     <AnalysisStatusRow
       label="ACTION PLAN"
       metrics={metrics}
-      columnsClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2"
+      columnsClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2"
       reason={result.position_sizing_reason}
       reasonRenderer={parseBold}
     />
@@ -688,12 +688,12 @@ function ExpandableTextSection({
   const visibleText = expanded || !needsToggle ? text : truncateWords(text, collapsedWords);
 
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border">
+    <div className="px-4 py-3 border-b border-bloomberg-border">
       <SectionHeader label={label} />
       <div
         className={`relative ${expanded ? `${expandedMaxClass} overflow-y-auto pr-2` : 'overflow-hidden'}`}
       >
-        <p className="ai-summary-paragraph font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">
+        <p className="ai-summary-paragraph text-justify font-mono text-xs leading-relaxed text-bloomberg-muted">
           {parseBold(visibleText)}
         </p>
         {!expanded && needsToggle && (
@@ -704,7 +704,7 @@ function ExpandableTextSection({
         <button
           type="button"
           onClick={onToggle}
-          className="mt-2 font-mono text-xs text-bloomberg-orange hover:text-orange-300 transition-colors tracking-wider"
+          className="mt-1.5 font-mono text-[11px] tracking-wider text-bloomberg-orange transition-colors hover:text-orange-300"
         >
           {expanded ? 'Collapse' : expandLabel}
         </button>
@@ -793,13 +793,13 @@ function buildResultViewModel(result) {
 function ResultError({ error }) {
   return (
     <div className="border border-bloomberg-red bg-bloomberg-red-dim animate-fade-up">
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-bloomberg-red border-opacity-30">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-bloomberg-red border-opacity-30">
         <span className="font-mono text-xs font-semibold text-bloomberg-red tracking-wider">
           PIPELINE ERROR
         </span>
       </div>
-      <div className="px-4 py-4">
-        <pre className="font-mono text-xs text-bloomberg-red leading-relaxed whitespace-pre-wrap">
+      <div className="px-3 py-3">
+        <pre className="whitespace-pre-wrap font-mono text-[11px] leading-snug text-bloomberg-red">
           {getError(error)}
         </pre>
       </div>
@@ -823,24 +823,24 @@ function ResultCardHeader({
   onToggleRerun,
 }) {
   return (
-    <div className="bg-black px-4 py-2 border-b border-bloomberg-border flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-xs text-bloomberg-muted tracking-wider">
+    <div className="flex flex-col gap-2 border-b border-bloomberg-border bg-black px-4 py-2 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-xs tracking-wider text-bloomberg-muted">
           ANALYSIS COMPLETE
         </span>
         <span className="font-mono text-xs text-bloomberg-green">●</span>
       </div>
-      <div className="flex items-center gap-3 min-w-0 flex-wrap justify-end">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
         {timeHorizon && (
-          <span className="font-mono text-xs text-bloomberg-orange truncate">
+          <span className="truncate font-mono text-xs text-bloomberg-orange">
             Analysis Horizon: {timeHorizon}
           </span>
         )}
-        <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
+        <span className="flex-shrink-0 font-mono text-xs text-bloomberg-muted">
           Trade Date: {formatTradeDateLabel(result.trade_date)}
         </span>
         {createdAtLabel && (
-          <span className="font-mono text-xs text-bloomberg-muted flex-shrink-0">
+          <span className="flex-shrink-0 font-mono text-xs text-bloomberg-muted">
             Created: {createdAtLabel}
           </span>
         )}
@@ -872,28 +872,28 @@ ResultCardHeader.propTypes = {
 
 function DecisionHero({ result, vm }) {
   return (
-    <div className="px-4 py-5 border-b border-bloomberg-border flex items-start justify-between gap-4">
-      <div>
-        <div className={`font-display text-5xl font-bold tracking-wider ${vm.decisionColor}`}>
+    <div className="flex flex-col gap-4 border-b border-bloomberg-border px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="min-w-0">
+        <div className={`font-display text-4xl font-bold tracking-wider ${vm.decisionColor}`}>
           {formatTickerLabel(vm.displayTicker)}
         </div>
-        <div className="mt-3">
+        <div className="mt-2">
           <DecisionBadge decision={vm.finalDecision} />
         </div>
         {vm.currentPriceSource && (
-          <div className="mt-1 font-mono text-[11px] text-bloomberg-muted tracking-wider break-all">
+          <div className="mt-0.5 break-all font-mono text-[10px] tracking-wider text-bloomberg-muted">
             <span className="text-bloomberg-white">{vm.currentPriceSource}</span>
           </div>
         )}
         {vm.rawAiSignal && vm.rawAiSignal !== vm.finalDecision && (
-          <div className="mt-1 font-mono text-xs text-bloomberg-muted tracking-wider">
+          <div className="mt-0.5 font-mono text-[11px] tracking-wider text-bloomberg-muted">
             LLM: {vm.rawAiSignal} → FINAL: {String(vm.finalDecision).toUpperCase()}
           </div>
         )}
       </div>
 
-      <div className="min-w-0 flex-shrink-0 w-full lg:w-[43rem] max-w-full">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div className="min-w-0 w-full lg:w-[44rem] lg:flex-shrink-0 max-w-full">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {hasDisplayValue(vm.currentPrice) && (
             <MetricBox
               label="LAST PRICE"
@@ -926,7 +926,7 @@ function DecisionHero({ result, vm }) {
         </div>
         <ConfidenceBreakdown breakdown={result.confidence_breakdown} />
         {result.price_is_fallback && (
-          <div className="mt-2 font-mono text-[11px] text-bloomberg-amber leading-relaxed">
+          <div className="mt-2 font-mono text-xs leading-relaxed text-bloomberg-amber">
             ⚠ Harga tidak tersedia saat analisis dibuat. Menampilkan harga penutupan terakhir.
           </div>
         )}
@@ -943,7 +943,7 @@ DecisionHero.propTypes = {
 function ValidationNotices({ result, vm }) {
   if (!result.decision_adjusted && !(vm.isActionable && !vm.tradePlanValid)) return null;
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border">
+    <div className="px-3 py-3 border-b border-bloomberg-border">
       {result.decision_adjusted && (
         <NoticeBox title="DECISION ADJUSTED">
           {result.decision_adjusted_reason || 'Backend validation changed the final decision.'}
@@ -967,13 +967,13 @@ ValidationNotices.propTypes = {
 
 function PipelineLimitNotice({ agentsSkipped }) {
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5">
+    <div className="border-b border-bloomberg-border bg-bloomberg-amber bg-opacity-5 px-3 py-3">
       <SectionHeader label="PIPELINE LIMIT" />
-      <p className="font-mono text-xs text-bloomberg-amber leading-relaxed">
+      <p className="font-mono text-xs leading-relaxed text-bloomberg-amber">
         LLM call budget exhausted before all stages completed. Treat this analysis as incomplete.
       </p>
       {agentsSkipped.length > 0 && (
-        <div className="mt-2 font-mono text-xs text-bloomberg-muted">
+        <div className="mt-1.5 font-mono text-xs text-bloomberg-muted">
           SKIPPED: {agentsSkipped.join(', ')}
         </div>
       )}
@@ -988,17 +988,17 @@ PipelineLimitNotice.propTypes = {
 function CatalystInvalidationGrid({ catalysts, invalidations }) {
   if (!catalysts.length && !invalidations.length) return null;
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4 border-b border-bloomberg-border px-4 py-3 lg:grid-cols-2">
       {catalysts.length > 0 && (
         <div>
           <SectionHeader label="KEY CATALYSTS" />
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-1">
             {catalysts.map((c, i) => (
               <li key={i} className="flex items-start gap-2">
-                <span className="font-mono text-xs text-bloomberg-green flex-shrink-0 mt-0.5">
+                <span className="mt-0.5 flex-shrink-0 font-mono text-[11px] text-bloomberg-green">
                   +
                 </span>
-                <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">{c}</span>
+                <span className="font-mono text-xs leading-relaxed text-bloomberg-muted">{c}</span>
               </li>
             ))}
           </ul>
@@ -1007,11 +1007,13 @@ function CatalystInvalidationGrid({ catalysts, invalidations }) {
       {invalidations.length > 0 && (
         <div>
           <SectionHeader label="INVALIDATION CONDITIONS" />
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-1">
             {invalidations.map((inv, i) => (
               <li key={i} className="flex items-start gap-2">
-                <span className="font-mono text-xs text-bloomberg-red flex-shrink-0 mt-0.5">✕</span>
-                <span className="font-mono text-xs text-bloomberg-muted leading-relaxed">
+                <span className="mt-0.5 flex-shrink-0 font-mono text-[11px] text-bloomberg-red">
+                  ✕
+                </span>
+                <span className="font-mono text-xs leading-relaxed text-bloomberg-muted">
                   {inv}
                 </span>
               </li>
@@ -1031,9 +1033,9 @@ CatalystInvalidationGrid.propTypes = {
 function RecommendationRiskSection({ text }) {
   if (!text) return null;
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border">
+    <div className="px-4 py-3 border-b border-bloomberg-border">
       <SectionHeader label="KEY REASONS & RISK SUMMARY" />
-      <p className="ai-summary-paragraph font-mono text-xs text-bloomberg-muted leading-relaxed text-justify">
+      <p className="ai-summary-paragraph text-justify font-mono text-xs leading-relaxed text-bloomberg-muted">
         {text}
       </p>
     </div>
@@ -1046,15 +1048,15 @@ RecommendationRiskSection.propTypes = {
 
 function RawJsonDebug({ result, showRaw, onToggle }) {
   return (
-    <div className="px-4 py-3">
+    <div className="px-3 py-2.5">
       <button
         onClick={onToggle}
-        className="font-mono text-xs text-bloomberg-muted hover:text-bloomberg-white tracking-wider transition-colors"
+        className="font-mono text-[11px] tracking-wider text-bloomberg-muted transition-colors hover:text-bloomberg-white"
       >
         {showRaw ? '▲ HIDE' : '▼ RAW JSON'} (DEBUG)
       </button>
       {showRaw && (
-        <pre className="mt-3 bg-black border border-bloomberg-border p-3 text-xs font-mono text-bloomberg-muted overflow-x-auto leading-relaxed whitespace-pre-wrap">
+        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap border border-bloomberg-border bg-black p-2.5 font-mono text-[11px] leading-snug text-bloomberg-muted">
           {JSON.stringify(result, null, 2)}
         </pre>
       )}
@@ -1083,7 +1085,7 @@ function AnalysisTab({
       <DecisionHero result={result} vm={vm} />
 
       {!hasDisplayValue(vm.currentPrice) && (
-        <div className="px-4 py-4 border-b border-bloomberg-border">
+        <div className="px-3 py-3 border-b border-bloomberg-border">
           <NoticeBox title="PRICE DATA MISSING" tone="red">
             Last price is unavailable, so no synthetic price is shown.
           </NoticeBox>

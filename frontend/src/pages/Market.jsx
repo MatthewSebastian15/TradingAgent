@@ -6,7 +6,7 @@ import TickerTape from '../components/TickerTape';
 
 export default function Market() {
   return (
-    <div className="min-h-screen bg-bloomberg-bg">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px]">
       <Navbar />
       <TickerTape />
       <MarketTab />

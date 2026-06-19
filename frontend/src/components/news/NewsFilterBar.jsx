@@ -18,8 +18,8 @@ const NEWS_CATEGORIES = [
 
 export default function NewsFilterBar({ selectedCategory, onChange, onRefresh }) {
   return (
-    <div className="terminal-news-toolbar flex items-center justify-between gap-3 border-b border-bloomberg-border pb-3">
-      <div className="terminal-news-filter flex flex-wrap gap-2">
+    <div className="terminal-news-toolbar flex items-center gap-2">
+      <div className="terminal-news-filter flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1">
         {NEWS_CATEGORIES.map((item) => (
           <Button
             key={item.key}
@@ -31,8 +31,8 @@ export default function NewsFilterBar({ selectedCategory, onChange, onRefresh })
             }}
             className={
               selectedCategory === item.key
-                ? 'terminal-news-filter-tab h-8 rounded-full bg-bloomberg-orange px-3 font-mono text-xs font-bold text-black shadow-sm shadow-bloomberg-orange/20 hover:bg-bloomberg-orange/90'
-                : 'terminal-news-filter-tab h-8 rounded-full border-bloomberg-border bg-black/60 px-3 font-mono text-xs text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange'
+                ? 'terminal-news-filter-tab h-7 shrink-0 rounded-md bg-bloomberg-orange px-2.5 font-mono text-[10px] font-bold text-black shadow-sm shadow-bloomberg-orange/20 hover:bg-bloomberg-orange/90'
+                : 'terminal-news-filter-tab h-7 shrink-0 rounded-md border-bloomberg-border bg-black/50 px-2.5 font-mono text-[10px] text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange'
             }
           >
             {item.label}
@@ -46,9 +46,9 @@ export default function NewsFilterBar({ selectedCategory, onChange, onRefresh })
           variant="outline"
           size="sm"
           onClick={onRefresh}
-          className="terminal-news-filter-tab terminal-news-refresh-button h-8 shrink-0 rounded-full border-bloomberg-border bg-black/60 px-3 font-mono text-xs text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
+          className="terminal-news-filter-tab terminal-news-refresh-button h-7 shrink-0 rounded-md border-bloomberg-border bg-black/50 px-2.5 font-mono text-[10px] text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
         >
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCw className="h-3 w-3" />
           REFRESH
         </Button>
       )}

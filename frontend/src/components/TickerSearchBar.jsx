@@ -14,7 +14,7 @@ const SEARCH_REFRESH_DELAY_MS = 50;
 const SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const SEARCH_CACHE_PREFIX = 'ta:ticker-search:';
 const SEARCH_LIMIT = 10;
-const DROPDOWN_WIDTH = 520;
+const DROPDOWN_WIDTH = 480;
 
 const searchMemoryCache = new Map();
 
@@ -133,7 +133,7 @@ export default function TickerSearchBar({
     if (!rect) return;
     const viewportWidth = window.innerWidth || DROPDOWN_WIDTH;
     setDropdownPosition({
-      top: rect.bottom + 8,
+      top: rect.bottom + 6,
       left: rect.left,
       width: Math.min(DROPDOWN_WIDTH, Math.max(320, viewportWidth - rect.left - 16)),
     });
@@ -312,7 +312,7 @@ export default function TickerSearchBar({
     <div
       ref={dropdownRef}
       role="listbox"
-      className="fixed z-[9999] max-h-[420px] overflow-y-auto border border-bloomberg-border bg-black shadow-xl shadow-black/70"
+      className="fixed z-[9999] max-h-[320px] overflow-y-auto border border-bloomberg-border bg-black shadow-xl shadow-black/70"
       style={{
         top: dropdownPosition.top,
         left: dropdownPosition.left,
@@ -320,19 +320,19 @@ export default function TickerSearchBar({
       }}
     >
       {loading && !results.length && (
-        <div className="px-4 py-3 font-mono text-xs text-bloomberg-muted tracking-wider">
+        <div className="px-3 py-2 font-mono text-[11px] text-bloomberg-muted tracking-wider">
           SEARCHING CACHE...
         </div>
       )}
 
       {!results.length && searchError && (
-        <div className="px-4 py-3 font-mono text-xs text-bloomberg-red tracking-wider">
+        <div className="px-3 py-2 font-mono text-[11px] text-bloomberg-red tracking-wider">
           {searchError}
         </div>
       )}
 
       {!loading && !searchError && canSearch && !results.length && (
-        <div className="px-4 py-3 font-mono text-xs text-bloomberg-muted tracking-wider">
+        <div className="px-3 py-2 font-mono text-[11px] text-bloomberg-muted tracking-wider">
           NO SYMBOL MATCHES
         </div>
       )}
@@ -348,20 +348,20 @@ export default function TickerSearchBar({
             selectResult(item);
           }}
           onMouseEnter={() => setActiveIndex(index)}
-          className={`grid w-full grid-cols-[88px_1fr_130px_90px] items-center gap-3 border-b border-bloomberg-border px-4 py-3 text-left last:border-b-0 cursor-pointer transition-colors duration-100 ${
+          className={`grid w-full grid-cols-[76px_1fr_112px_76px] items-center gap-2 border-b border-bloomberg-border px-3 py-2 text-left last:border-b-0 cursor-pointer transition-colors duration-100 ${
             activeIndex === index ? 'bg-bloomberg-surface' : 'bg-black hover:bg-bloomberg-surface'
           }`}
         >
-          <span className="truncate font-mono text-xs font-bold text-bloomberg-orange">
+          <span className="truncate font-mono text-[11px] font-bold text-bloomberg-orange">
             {String(item.symbol || '').toUpperCase()}
           </span>
-          <span className="truncate font-mono text-xs text-bloomberg-white">
+          <span className="truncate font-mono text-[11px] text-bloomberg-white">
             {tickerName(item)}
           </span>
-          <span className="truncate border border-bloomberg-border px-2 py-1 text-center font-mono text-[10px] uppercase text-bloomberg-muted">
+          <span className="truncate border border-bloomberg-border px-1.5 py-0.5 text-center font-mono text-[9px] uppercase text-bloomberg-muted">
             {exchangeLabel(item)}
           </span>
-          <span className="truncate text-right font-mono text-xs font-bold text-bloomberg-white">
+          <span className="truncate text-right font-mono text-[11px] font-bold text-bloomberg-white">
             {formatPrice(tickerPrice(item))}
           </span>
         </button>
@@ -378,7 +378,10 @@ export default function TickerSearchBar({
             : 'border-bloomberg-border focus-within:border-bloomberg-orange'
         } ${disabled ? 'opacity-50' : ''}`}
       >
-        <Search className="ml-3 mr-2 h-4 w-4 shrink-0 text-bloomberg-muted" aria-hidden="true" />
+        <Search
+          className="ml-2.5 mr-2 h-3.5 w-3.5 shrink-0 text-bloomberg-muted"
+          aria-hidden="true"
+        />
         <Input
           type="text"
           role="combobox"
@@ -392,7 +395,7 @@ export default function TickerSearchBar({
           }}
           placeholder="Search ticker symbol"
           disabled={disabled}
-          className="h-12 border-0 bg-black px-1 font-mono text-sm tracking-wider shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
+          className="h-10 border-0 bg-black px-1 font-mono text-xs tracking-wider shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
         />
       </div>
 

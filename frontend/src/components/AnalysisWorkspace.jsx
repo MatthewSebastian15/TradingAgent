@@ -241,14 +241,14 @@ export default function AnalysisWorkspace({
   });
 
   const panelOpen = Boolean(activePanel);
-  const mainOffsetClass = panelOpen ? 'ml-10 md:ml-[20.5rem]' : 'ml-10';
+  const mainOffsetClass = panelOpen ? 'ml-10 md:ml-[22.5rem]' : 'ml-10';
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px]">
       <Navbar />
       <TickerTape />
 
-      <div className="fixed bottom-0 left-0 top-[68px] z-[45] w-10 border-bloomberg-border border-r bg-black">
+      <div className="fixed bottom-0 left-0 top-[60px] z-[45] w-10 border-bloomberg-border border-r bg-black">
         <PanelButton
           active={activePanel === 'config'}
           title="Configuration"
@@ -304,27 +304,27 @@ export default function AnalysisWorkspace({
 
       <main
         data-testid="analysis-main"
-        className={`${mainOffsetClass} min-h-screen min-w-0 pt-10 transition-[margin-left] duration-200 ease-out will-change-[margin-left]`}
+        className={`${mainOffsetClass} min-h-screen min-w-0 transition-[margin-left] duration-200 ease-out will-change-[margin-left]`}
       >
-        <div className="space-y-4 p-4">
+        <div className="space-y-3 p-3">
           <StatusBar loading={loading} status={status} />
 
           {!loading && !result && (
-            <div className="border border-bloomberg-border bg-bloomberg-card p-6 text-center shadow-xl shadow-black/40 sm:p-8">
-              <div className="font-display text-4xl font-bold tracking-widest text-bloomberg-border sm:text-6xl">
+            <div className="border border-bloomberg-border bg-bloomberg-card p-4 text-center shadow-xl shadow-black/40 sm:p-5">
+              <div className="font-display text-3xl font-bold tracking-widest text-bloomberg-border sm:text-5xl">
                 READY
               </div>
-              <div className="mx-auto mt-4 max-w-2xl font-mono text-xs tracking-wider text-bloomberg-muted sm:text-sm">
+              <div className="mx-auto mt-2.5 max-w-2xl font-mono text-[11px] tracking-wider text-bloomberg-muted sm:text-xs">
                 {emptyDescription}
               </div>
-              <div className="mx-auto mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="mx-auto mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 sm:grid-cols-3">
                 {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
                   <div
                     key={step}
-                    className="border border-bloomberg-border bg-black p-4 text-center"
+                    className="border border-bloomberg-border bg-black p-3 text-center"
                   >
-                    <div className="font-mono text-2xl text-bloomberg-border">{index + 1}</div>
-                    <div className="mt-2 font-mono text-xs tracking-wider text-bloomberg-muted">
+                    <div className="font-mono text-xl text-bloomberg-border">{index + 1}</div>
+                    <div className="mt-1.5 font-mono text-[11px] tracking-wider text-bloomberg-muted">
                       {step}
                     </div>
                   </div>

@@ -206,6 +206,7 @@ body::after {
   width: 100%;
   height: 28px;
   overflow: hidden;
+  font-variant-numeric: tabular-nums;
 }
 .ticker-tape__item {
   display: flex;

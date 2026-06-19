@@ -1,4 +1,13 @@
-import { Landmark, Microscope, Newspaper, Home, Sparkles, Star, TrendingUp } from 'lucide-react';
+import {
+  Cpu,
+  Landmark,
+  Microscope,
+  Newspaper,
+  Home,
+  Sparkles,
+  Star,
+  TrendingUp,
+} from 'lucide-react';
 import PropTypes from 'prop-types';
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -18,6 +27,7 @@ import {
   LEGACY_ANALYSIS_PATH,
   WATCHLIST_PATH,
 } from '../constants/routes';
+import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 import { createClockFormatter, resolveClockConfig } from '../utils/clock';
 
 const CLOCK_CONFIG = resolveClockConfig();
@@ -46,6 +56,33 @@ const AI_AGENT_MATCH_PREFIXES = [
   LEGACY_ANALYSIS_LIVE_PATH,
   LEGACY_ANALYSIS_MOCK_PATH,
   LEGACY_ANALYSIS_MOCK_ALIAS_PATH,
+];
+
+const ENGINE_STATUS_ROWS = [
+  {
+    key: 'agentPipeline',
+    label: 'AGENT PIPELINE',
+    getReady: (status) => status.ok,
+    getOfflineStatus: () => 'UNKNOWN',
+  },
+  {
+    key: 'llmBackend',
+    label: 'LLM BACKEND',
+    getReady: (status) => status.ok,
+    getOfflineStatus: () => 'OFFLINE',
+  },
+  {
+    key: 'marketData',
+    label: 'MARKET DATA',
+    getReady: (status) => status.toolCacheOk,
+    getOfflineStatus: () => 'LIMITED',
+  },
+  {
+    key: 'sseStream',
+    label: 'SSE STREAM',
+    getReady: (status) => status.ok,
+    getOfflineStatus: () => 'UNKNOWN',
+  },
 ];
 
 const NAV_ITEMS = [
@@ -93,6 +130,133 @@ function Clock() {
         {CLOCK_FORMATTER.format(now)} {CLOCK_CONFIG.label}
       </span>
     </div>
+  );
+}
+
+function buildEngineRows(status) {
+  return ENGINE_STATUS_ROWS.map((row) => {
+    const ready = Boolean(row.getReady(status));
+    const tone = status.loading ? 'warn' : ready ? 'ok' : row.key === 'marketData' ? 'warn' : 'bad';
+
+    return {
+      key: row.key,
+      label: row.label,
+      status: status.loading ? 'CHECKING' : ready ? 'READY' : row.getOfflineStatus(status),
+      tone,
+    };
+  });
+}
+
+function EngineStatus() {
+  const [status, setStatus] = useState({
+    loading: true,
+    ok: false,
+    error: null,
+    toolCacheOk: false,
+  });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
+    async function checkEngineStatus() {
+      try {
+        const response = await fetch(buildApiUrl('/status'), {
+          headers: await buildAuthHeaders(),
+          credentials: 'include',
+          signal: controller.signal,
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const payload = await response.json();
+
+        if (!active) return;
+
+        setStatus({
+          loading: false,
+          ok: true,
+          error: null,
+          toolCacheOk: !payload.tool_cache?.error,
+        });
+      } catch (error) {
+        if (!active || error.name === 'AbortError') return;
+
+        setStatus({
+          loading: false,
+          ok: false,
+          error: error.message || 'Backend unavailable',
+          toolCacheOk: false,
+        });
+      }
+    }
+
+    checkEngineStatus();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
+
+  const rows = buildEngineRows(status);
+  const readyCount = rows.filter((row) => row.status === 'READY').length;
+  const statusLabel = status.loading
+    ? 'CHECKING'
+    : readyCount === rows.length
+      ? `${readyCount}/${rows.length} READY`
+      : `${readyCount}/${rows.length} LIMITED`;
+  const statusClass = status.loading
+    ? 'text-bloomberg-amber'
+    : readyCount === rows.length
+      ? 'text-bloomberg-green'
+      : 'text-bloomberg-amber';
+  const toneClass = {
+    ok: 'text-bloomberg-green',
+    warn: 'text-bloomberg-amber',
+    bad: 'text-bloomberg-red',
+  };
+  const toneMarker = {
+    ok: '●',
+    warn: '◐',
+    bad: '○',
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-7 items-center gap-1.5 border border-bloomberg-border bg-bloomberg-bg px-2 font-mono text-[10px] leading-none tracking-wider text-bloomberg-muted transition-colors hover:border-bloomberg-orange/70 hover:text-bloomberg-white"
+          aria-label={`Engine status ${statusLabel}`}
+        >
+          <Cpu className="h-3.5 w-3.5" strokeWidth={1.8} />
+          <span className={statusClass}>{statusLabel}</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        align="end"
+        className="w-64 rounded-none border-bloomberg-border bg-black p-0 font-mono text-xs text-bloomberg-muted shadow-xl shadow-black/40"
+      >
+        <div className="border-b border-bloomberg-border px-3 py-2 text-[10px] font-bold tracking-[0.25em] text-bloomberg-orange">
+          ENGINE STATUS
+        </div>
+        <div className="px-3 py-2">
+          {rows.map((row) => (
+            <div
+              key={row.key}
+              title={row.tone === 'bad' ? status.error || 'Backend status check failed' : undefined}
+              className="flex items-center justify-between gap-3 py-1"
+            >
+              <span className="text-[10px] tracking-wider text-bloomberg-muted">{row.label}</span>
+              <span className={`text-[10px] tracking-wider ${toneClass[row.tone]}`}>
+                {toneMarker[row.tone]} {row.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -163,7 +327,7 @@ export default function Navbar() {
 
   return (
     <TooltipProvider delayDuration={150}>
-      <nav className="sticky top-0 z-50 border-b border-bloomberg-border bg-black">
+      <nav className="fixed left-0 right-0 top-0 z-50 bg-black">
         <div className="flex h-8 items-center justify-between border-b border-bloomberg-border">
           <div className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto">
             {NAV_ITEMS.map((item) => (
@@ -177,6 +341,7 @@ export default function Navbar() {
           </div>
 
           <div className="ml-auto flex min-w-max items-center gap-3 px-3">
+            <EngineStatus />
             <LiveStatus />
             <Clock />
           </div>

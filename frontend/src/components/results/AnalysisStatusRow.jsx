@@ -14,7 +14,7 @@ export default function AnalysisStatusRow({
   if (!metrics.length) return null;
 
   return (
-    <div className="px-4 py-4 border-b border-bloomberg-border">
+    <div className="px-4 py-3 border-b border-bloomberg-border">
       <SectionHeader label={label} />
       <div className={columnsClass}>
         {metrics.map((metric) => (
@@ -28,11 +28,12 @@ export default function AnalysisStatusRow({
             tone={metric.tone}
             preserveSlot
             dataTestId={metric.dataTestId}
+            compact
           />
         ))}
       </div>
       {reason && (
-        <p className="mt-3 font-mono text-xs text-bloomberg-muted leading-relaxed">
+        <p className="mt-2 font-mono text-xs text-bloomberg-muted leading-relaxed">
           {reasonRenderer ? reasonRenderer(reason) : reason}
         </p>
       )}

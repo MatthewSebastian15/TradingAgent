@@ -78,9 +78,9 @@ export default function MetricBox({
   const isEmpty = !hasDisplayValue(value);
   const toneClasses = getToneClasses(tone, highlight, isEmpty);
 
-  const boxPadding = compact ? 'px-3 py-2' : 'p-3';
-  const labelSpacing = compact ? 'mb-1' : 'mb-1.5';
-  const valueSize = compact ? 'text-xs' : 'text-base';
+  const boxPadding = compact ? 'px-2.5 py-2' : 'p-2.5';
+  const labelSpacing = compact ? 'mb-0.5' : 'mb-1';
+  const valueSize = compact ? 'text-xs' : 'text-sm';
 
   return (
     <div
@@ -89,7 +89,7 @@ export default function MetricBox({
       className={`border bg-bloomberg-surface ${boxPadding} ${toneClasses.border}`}
     >
       <div
-        className={`font-mono text-xs text-bloomberg-muted tracking-wider uppercase ${labelSpacing}`}
+        className={`font-mono text-[10px] text-bloomberg-muted tracking-wider uppercase ${labelSpacing}`}
       >
         {label}
       </div>
@@ -97,17 +97,17 @@ export default function MetricBox({
         {displayValue}
       </div>
       {displayPayload.reason && (
-        <div className="mt-1 font-mono text-[11px] text-bloomberg-muted leading-relaxed">
+        <div className="mt-0.5 font-mono text-[11px] text-bloomberg-muted leading-snug">
           Reason: {displayPayload.reason}
         </div>
       )}
       {hasDisplayValue(subValue) && (
-        <div className="mt-1 font-mono text-[11px] text-bloomberg-muted leading-relaxed">
+        <div className="mt-0.5 font-mono text-[11px] text-bloomberg-muted leading-snug">
           {subValue}
         </div>
       )}
       {normalizedQuality && (
-        <div className="mt-2">
+        <div className="mt-1.5">
           <DataStatusBadge compact quality={normalizedQuality} />
         </div>
       )}

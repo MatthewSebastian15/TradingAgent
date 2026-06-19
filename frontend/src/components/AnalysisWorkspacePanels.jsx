@@ -70,7 +70,7 @@ export function PanelButton({ active, title, onClick, children }) {
       aria-label={title}
       aria-pressed={active}
       onClick={onClick}
-      className={`h-10 w-10 rounded-none border-l-2 transition-colors duration-150 ${
+      className={`h-9 w-10 rounded-none border-l-2 transition-colors duration-150 ${
         active
           ? 'border-bloomberg-orange bg-bloomberg-orange/10 text-bloomberg-orange shadow-[inset_0_0_18px_rgba(249,115,22,0.12)] hover:bg-bloomberg-orange/15 hover:text-bloomberg-orange'
           : 'border-transparent text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
@@ -92,14 +92,14 @@ export function DrawerPanel({ open, title, onClose, children }) {
   return (
     <aside
       aria-hidden={!open}
-      className={`fixed bottom-0 left-10 top-[68px] z-[35] flex w-72 flex-col border-r border-bloomberg-border bg-card/95 shadow-2xl shadow-black/60 backdrop-blur transition-[opacity,transform] duration-200 ease-out will-change-transform ${
+      className={`fixed bottom-0 left-10 top-[60px] z-[35] flex w-80 max-w-[calc(100vw-2.5rem)] flex-col border-r border-bloomberg-border bg-card/95 shadow-2xl shadow-black/60 backdrop-blur transition-[opacity,transform] duration-200 ease-out will-change-transform ${
         open
           ? 'pointer-events-auto translate-x-0 opacity-100'
           : 'pointer-events-none -translate-x-full opacity-0'
       }`}
     >
-      <div className="flex h-11 flex-shrink-0 items-center justify-between border-b border-bloomberg-border bg-bloomberg-surface/70 px-3">
-        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bloomberg-orange">
+      <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-bloomberg-border bg-bloomberg-surface/70 px-2.5">
+        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-bloomberg-orange">
           {title}
         </span>
         <Button
@@ -108,7 +108,7 @@ export function DrawerPanel({ open, title, onClose, children }) {
           size="icon"
           aria-label={`Close ${title.toLowerCase()} panel`}
           onClick={onClose}
-          className="h-7 w-7 rounded-md font-mono text-lg leading-none text-bloomberg-muted hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
+          className="h-6 w-6 rounded-md font-mono text-base leading-none text-bloomberg-muted hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
         >
           ×
         </Button>
@@ -174,17 +174,17 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
   if (!history.length) return null;
 
   return (
-    <div className="p-2">
-      <Card className="overflow-hidden rounded-xl border-bloomberg-border bg-bloomberg-surface/80 shadow-lg shadow-black/30">
+    <div className="p-1.5">
+      <Card className="overflow-hidden rounded-lg border-bloomberg-border bg-bloomberg-surface/80 shadow-lg shadow-black/30">
         <CardContent className="p-0">
-          <div className="flex items-center justify-between px-3 py-2.5">
+          <div className="flex items-center justify-between px-2.5 py-2">
             <div className="flex items-center gap-2">
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
                 RECENT
               </span>
               <Badge
                 variant="outline"
-                className="rounded-full border-bloomberg-border bg-black/60 px-2 py-0 font-mono text-[9px] text-bloomberg-muted"
+                className="rounded-full border-bloomberg-border bg-black/60 px-1.5 py-0 font-mono text-[8px] text-bloomberg-muted"
               >
                 {history.length}
               </Badge>
@@ -195,7 +195,7 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
               size="sm"
               disabled={clearing}
               onClick={handleClearHistory}
-              className="h-7 rounded-md px-2 font-mono text-[9px] tracking-wider text-bloomberg-muted hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange disabled:opacity-40"
+              className="h-6 rounded-md px-1.5 font-mono text-[8px] tracking-wider text-bloomberg-muted hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange disabled:opacity-40"
             >
               {clearing ? 'CLEARING...' : 'CLEAR'}
             </Button>
@@ -206,7 +206,7 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
               {clearError}
             </div>
           )}
-          <div className="grid gap-2 p-2">
+          <div className="grid gap-1.5 p-1.5">
             {history.map((item, index) => {
               const createdAtLabel = formatDateTimeLabel(item.analysis_created_at || item.saved_at);
               const displaySignal = item.display_signal || item.decision;
@@ -221,20 +221,20 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
                     `${item.ticker || 'item'}-${item.trade_date || index}`
                   }
                   onClick={() => onSelect(item)}
-                  className="w-full rounded-lg border border-bloomberg-border bg-black/60 px-3 py-2.5 text-left shadow-sm shadow-black/20 transition-all duration-150 hover:border-bloomberg-orange/50 hover:bg-bloomberg-orange/5"
+                  className="w-full rounded-md border border-bloomberg-border bg-black/60 px-2.5 py-2 text-left shadow-sm shadow-black/20 transition-all duration-150 hover:border-bloomberg-orange/50 hover:bg-bloomberg-orange/5"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-mono text-[11px] font-semibold tracking-wide text-bloomberg-white">
+                    <span className="truncate font-mono text-[10px] font-semibold tracking-wide text-bloomberg-white">
                       {item.ticker || 'N/A'}
                     </span>
                     <Badge
                       variant="outline"
-                      className={`flex-shrink-0 rounded-full px-2 py-0.5 font-mono text-[8px] font-semibold tracking-wider ${decisionStyle(displaySignal)}`}
+                      className={`flex-shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[8px] font-semibold tracking-wider ${decisionStyle(displaySignal)}`}
                     >
                       {(displaySignal || 'N/A').toUpperCase()}
                     </Badge>
                   </div>
-                  <div className="mt-1 flex items-center gap-3 font-mono text-[9px] text-bloomberg-muted">
+                  <div className="mt-1 flex items-center gap-2 font-mono text-[8px] text-bloomberg-muted">
                     <span>{formatTradeDateLabel(item.trade_date) || 'N/A'}</span>
                     <span>{formatHistoryHorizon(item.time_horizon_months) || '—'}</span>
                     <span className={confidenceScoreStyle(item.confidence_tier)}>
@@ -242,7 +242,7 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
                     </span>
                   </div>
                   {createdAtLabel && (
-                    <div className="mt-1 truncate font-mono text-[8px] text-bloomberg-subtle">
+                    <div className="mt-0.5 truncate font-mono text-[8px] text-bloomberg-subtle">
                       {createdAtLabel}
                     </div>
                   )}
@@ -266,9 +266,9 @@ HistoryPanel.propTypes = {
 export function StatusBar({ loading, status }) {
   if (!loading) return null;
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-bloomberg-border bg-card px-4 py-2 shadow-lg shadow-black/30">
+    <div className="flex items-center gap-2 rounded-md border border-bloomberg-border bg-card px-3 py-1.5 shadow-lg shadow-black/30">
       <span className="w-1.5 h-1.5 rounded-full bg-bloomberg-orange animate-pulse-dot flex-shrink-0" />
-      <span className="font-mono text-xs text-bloomberg-orange tracking-wider truncate">
+      <span className="truncate font-mono text-[11px] tracking-wider text-bloomberg-orange">
         {status || 'RUNNING...'}
       </span>
     </div>
