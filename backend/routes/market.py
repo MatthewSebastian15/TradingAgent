@@ -49,7 +49,7 @@ _DEFAULT_TICKERS: list[str] = [
     "^JKSE",
 ]
 _QUOTE_SYMBOL_RE = re.compile(r"^[A-Z0-9^]{1,15}(?:[.=:-][A-Z0-9]{1,12}){0,3}$")
-_QUOTE_CACHE_TTL_SECONDS = 60.0
+_QUOTE_CACHE_TTL_SECONDS = 90.0
 _SEARCH_CACHE_TTL_SECONDS = 60.0
 _OHLCV_CACHE_TTL_SECONDS = 60.0
 _QUOTE_CACHE: dict[tuple[str, ...], tuple[float, list[dict]]] = {}

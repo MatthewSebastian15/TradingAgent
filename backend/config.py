@@ -63,6 +63,7 @@ from config_defaults import (
     DATA_CACHE_MAX_ENTRIES,
     DATA_CACHE_TTL_SECONDS,
     DATA_COLLECTION_WORKERS,
+    PRICE_CACHE_TTL_SECONDS,
     PRICE_MAX_FALLBACK_DAYS,
     DATA_VENDOR_ANALYST_RATING,
     DATA_VENDOR_CORE_STOCK_APIS,
@@ -246,6 +247,7 @@ class _BackendSettingsShim:
     max_concurrent_llm_calls = MAX_CONCURRENT_LLM_CALLS
     cache_ttl_seconds = CACHE_TTL_SECONDS
     cache_max_entries = CACHE_MAX_ENTRIES
+    price_cache_ttl_seconds = PRICE_CACHE_TTL_SECONDS
     llm_exact_cache_enabled = LLM_EXACT_CACHE_ENABLED
     llm_exact_cache_ttl_seconds = LLM_EXACT_CACHE_TTL_SECONDS
     llm_exact_cache_max_entries = LLM_EXACT_CACHE_MAX_ENTRIES

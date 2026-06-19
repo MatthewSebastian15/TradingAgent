@@ -40,6 +40,7 @@ DEFAULT_CONFIG = {
     # Cache
     "cache_ttl_seconds": 900,
     "cache_max_entries": 512,
+    "price_cache_ttl_seconds": int(_env("PRICE_CACHE_TTL_SECONDS") or "90"),
     "llm_exact_cache_enabled": _env_bool("LLM_EXACT_CACHE_ENABLED", True),
     "llm_exact_cache_ttl_seconds": int(_env("LLM_EXACT_CACHE_TTL_SECONDS") or "1800"),
     "llm_exact_cache_max_entries": int(_env("LLM_EXACT_CACHE_MAX_ENTRIES") or "1024"),
@@ -123,7 +124,7 @@ DEFAULT_CONFIG = {
         "marketaux_api_key": _env("MARKETAUX_API_KEY"),
         "newsdata_api_key": _env("NEWSDATA_API_KEY"),
         "strict_ai_analysis_mode": _env_bool("NEWS_STRICT_AI_ANALYSIS_MODE", True),
-        "force_all_providers": _env_bool("NEWS_FORCE_ALL_PROVIDERS", True),
+        "force_all_providers": _env_bool("NEWS_FORCE_ALL_PROVIDERS", False),
         "provider_priority": _env("NEWS_PROVIDER_PRIORITY")
         or "google_news_light,marketaux,rss_context,newsdata,yfinance",
         "enabled_providers": _env("NEWS_ENABLED_PROVIDERS")

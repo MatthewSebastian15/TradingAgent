@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getMarketOverview } from '../api/market';
 
 const OVERVIEW_REFRESH_MS = 60 * 1000;
-const OVERVIEW_CACHE_TTL_MS = 120 * 1000;
+const OVERVIEW_CACHE_TTL_MS = 180 * 1000;
 const overviewCache = new Map();
 const overviewInflight = new Map();
 
@@ -46,6 +46,10 @@ async function loadOverviewPayload(symbols, { signal, force = false } = {}) {
 
   overviewInflight.set(key, request);
   return request;
+}
+
+export function prefetchMarketOverviewData(symbols, options = {}) {
+  return loadOverviewPayload(symbols, options).catch(() => null);
 }
 
 export function clearMarketOverviewClientCacheForTests() {
