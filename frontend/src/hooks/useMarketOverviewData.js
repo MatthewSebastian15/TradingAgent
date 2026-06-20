@@ -126,11 +126,11 @@ export function seedMarketOverviewClientCacheForTests(symbols, data) {
 }
 
 export function useMarketOverviewData(symbols) {
-  const initialCacheRef = useRef(cachedOverviewData(symbols));
-  const [data, setData] = useState(initialCacheRef.current);
-  const [status, setStatus] = useState(hasItems(initialCacheRef.current) ? 'success' : 'idle');
+  const initialCache = cachedOverviewData(symbols);
+  const [data, setData] = useState(initialCache);
+  const [status, setStatus] = useState(hasItems(initialCache) ? 'success' : 'idle');
   const [error, setError] = useState('');
-  const dataRef = useRef(initialCacheRef.current);
+  const dataRef = useRef(initialCache);
   const requestIdRef = useRef(0);
 
   const loadOverview = useCallback(

@@ -3,7 +3,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ExportReportButtons from './ExportReportButtons';
-import { MOCK_RESPONSE } from '../../dev/mockData';
+import { TEST_RESPONSE } from '../../test/analysisResultFixtures';
 
 function mockPdfResponse() {
   return new Response(new Blob(['%PDF-1.4']), {
@@ -15,7 +15,7 @@ function mockPdfResponse() {
   });
 }
 
-function mockReportNotFoundResponse() {
+function reportNotFoundResponse() {
   return new Response(
     JSON.stringify({
       error: { code: 'report_not_found', message: 'Analysis result was not found or has expired.' },
@@ -68,7 +68,7 @@ describe('ExportReportButtons', () => {
   it('opens request_id HTML report when the job_id report is expired', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(mockReportNotFoundResponse())
+      .mockResolvedValueOnce(reportNotFoundResponse())
       .mockResolvedValueOnce(
         new Response('<html><body>Request Report</body></html>', { status: 200 })
       );
@@ -80,11 +80,11 @@ describe('ExportReportButtons', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:request-report');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
-    render(<ExportReportButtons resourceId="expired-job" result={MOCK_RESPONSE} />);
+    render(<ExportReportButtons resourceId="expired-job" result={TEST_RESPONSE} />);
     fireEvent.click(screen.getByText('PREVIEW HTML'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/mock-nvda-buy/report.html');
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/test-nvda-buy/report.html');
     expect(fetchMock.mock.calls[1][1].method).toBe('GET');
     expect(openMock).toHaveBeenCalledWith('blob:request-report', '_blank', 'noopener,noreferrer');
   });
@@ -92,8 +92,8 @@ describe('ExportReportButtons', () => {
   it('falls back to payload HTML preview when stored reports are expired', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(mockReportNotFoundResponse())
-      .mockResolvedValueOnce(mockReportNotFoundResponse())
+      .mockResolvedValueOnce(reportNotFoundResponse())
+      .mockResolvedValueOnce(reportNotFoundResponse())
       .mockResolvedValueOnce(
         new Response('<html><body>Fallback Report</body></html>', { status: 200 })
       );
@@ -105,13 +105,13 @@ describe('ExportReportButtons', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fallback-report');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
-    render(<ExportReportButtons resourceId="expired-request" result={MOCK_RESPONSE} />);
+    render(<ExportReportButtons resourceId="expired-request" result={TEST_RESPONSE} />);
     fireEvent.click(screen.getByText('PREVIEW HTML'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock.mock.calls[2][0]).toBe('/api/analysis/report.html');
     expect(fetchMock.mock.calls[2][1].method).toBe('POST');
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body).ticker).toBe(MOCK_RESPONSE.ticker);
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).ticker).toBe(TEST_RESPONSE.ticker);
     expect(openMock).toHaveBeenCalledWith('blob:fallback-report', '_blank', 'noopener,noreferrer');
   });
 
@@ -141,7 +141,7 @@ describe('ExportReportButtons', () => {
   it('downloads request_id PDF when the job_id report is expired', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(mockReportNotFoundResponse())
+      .mockResolvedValueOnce(reportNotFoundResponse())
       .mockResolvedValueOnce(mockPdfResponse());
     vi.stubGlobal('fetch', fetchMock);
     if (!URL.createObjectURL) URL.createObjectURL = vi.fn();
@@ -155,11 +155,11 @@ describe('ExportReportButtons', () => {
       tagName === 'a' ? anchor : originalCreateElement(tagName, options)
     );
 
-    render(<ExportReportButtons resourceId="expired-job" result={MOCK_RESPONSE} />);
+    render(<ExportReportButtons resourceId="expired-job" result={TEST_RESPONSE} />);
     fireEvent.click(screen.getByText('EXPORT PDF'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/mock-nvda-buy/report.pdf');
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/analysis/test-nvda-buy/report.pdf');
     expect(fetchMock.mock.calls[1][1].method).toBe('GET');
     expect(anchor.download).toBe('NVDA_2026-05-18.pdf');
   });
@@ -167,8 +167,8 @@ describe('ExportReportButtons', () => {
   it('falls back to payload PDF export when stored reports are expired', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(mockReportNotFoundResponse())
-      .mockResolvedValueOnce(mockReportNotFoundResponse())
+      .mockResolvedValueOnce(reportNotFoundResponse())
+      .mockResolvedValueOnce(reportNotFoundResponse())
       .mockResolvedValueOnce(mockPdfResponse());
     vi.stubGlobal('fetch', fetchMock);
     if (!URL.createObjectURL) URL.createObjectURL = vi.fn();
@@ -177,74 +177,14 @@ describe('ExportReportButtons', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-    render(<ExportReportButtons resourceId="expired-request" result={MOCK_RESPONSE} />);
+    render(<ExportReportButtons resourceId="expired-request" result={TEST_RESPONSE} />);
     fireEvent.click(screen.getByText('EXPORT PDF'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock.mock.calls[2][0]).toBe('/api/analysis/report.pdf');
     expect(fetchMock.mock.calls[2][1].method).toBe('POST');
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body).ticker).toBe(MOCK_RESPONSE.ticker);
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).ticker).toBe(TEST_RESPONSE.ticker);
   });
 
-  it('opens mock HTML report without backend report URL', async () => {
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ disclaimer: 'Mock disclaimer.' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-    );
-    const openMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(window, 'open').mockImplementation(openMock);
-    if (!URL.createObjectURL) URL.createObjectURL = vi.fn();
-    if (!URL.revokeObjectURL) URL.revokeObjectURL = vi.fn();
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-report');
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
-    render(<ExportReportButtons resourceId="mock-nvda-buy" result={MOCK_RESPONSE} mockReport />);
-    fireEvent.click(screen.getByText('PREVIEW HTML'));
-
-    await waitFor(() =>
-      expect(openMock).toHaveBeenCalledWith('blob:mock-report', '_blank', 'noopener,noreferrer')
-    );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/reports/disclaimer');
-  });
-
-  it('exports mock PDF through browser print without fetching backend PDF', async () => {
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ disclaimer: 'Mock disclaimer.' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-    );
-    const printWindow = {
-      document: {
-        open: vi.fn(),
-        write: vi.fn(),
-        close: vi.fn(),
-      },
-      focus: vi.fn(),
-      print: vi.fn(),
-    };
-    vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(window, 'open').mockImplementation(() => printWindow);
-
-    render(<ExportReportButtons resourceId="mock-nvda-buy" result={MOCK_RESPONSE} mockReport />);
-    fireEvent.click(screen.getByText('EXPORT PDF'));
-
-    await waitFor(() => expect(printWindow.print).toHaveBeenCalledTimes(1));
-    if (fetchMock.mock.calls.length > 0) {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock.mock.calls[0][0]).toBe('/api/reports/disclaimer');
-    }
-    expect(printWindow.document.write.mock.calls[0][0]).toContain(
-      'TradingAgent Mock Analysis Report'
-    );
-    expect(printWindow.document.write.mock.calls[0][0]).not.toContain('Price Target');
-    expect(printWindow.document.write.mock.calls[0][0]).not.toContain('Risk Per Share');
-    expect(printWindow.document.write.mock.calls[0][0]).not.toContain('Reward Per Share');
-  });
 });

@@ -2,12 +2,12 @@ import { Trash2 } from 'lucide-react';
 import PropTypes from 'prop-types';
 import React from 'react';
 
+import WatchlistTrendBars from './WatchlistTrendBars';
 import {
   formatChangePercent,
   formatLastPrice,
   formatVolume,
 } from '../../utils/watchlistFormatters';
-import WatchlistTrendBars from './WatchlistTrendBars';
 
 function quoteForSymbol(quotesBySymbol, symbol) {
   if (quotesBySymbol instanceof Map) return quotesBySymbol.get(symbol);

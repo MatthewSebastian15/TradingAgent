@@ -1,9 +1,8 @@
 import PropTypes from 'prop-types';
 
+import NoticeBox from '@/components/results/NoticeBox';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-import NoticeBox from '@/components/results/NoticeBox';
 
 import TickerNewsQualityBadge from './TickerNewsQualityBadge';
 

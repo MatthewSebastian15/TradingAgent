@@ -2,10 +2,9 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AI_AGENT_MOCK_PATH, AI_AGENT_PATH } from './constants/routes';
+import { AI_AGENT_PATH } from './constants/routes';
 
-async function renderApp(path, enableMock) {
-  vi.stubEnv('VITE_ENABLE_MOCK', enableMock ? 'true' : 'false');
+async function renderApp(path) {
   vi.resetModules();
   const { default: App } = await import('./App');
 
@@ -24,7 +23,7 @@ afterEach(() => {
 
 describe('App', () => {
   it('renders the dashboard route', async () => {
-    await renderApp('/', false);
+    await renderApp('/');
 
     expect(await screen.findByRole('button', { name: /home/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /ai agent/i })).toBeTruthy();
@@ -33,49 +32,34 @@ describe('App', () => {
     ).toBeNull();
   }, 10000);
 
-  it('registers the Research placeholder route', async () => {
-    await renderApp('/research', false);
+  it('registers the Research route', async () => {
+    await renderApp('/research');
 
-    expect(await screen.findByText('COMING SOON')).toBeTruthy();
-    expect(screen.getByText('Research module is under development.')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /research/i })).toBeTruthy();
   });
 
   it('registers the Watchlist route', async () => {
-    await renderApp('/watchlist', false);
+    await renderApp('/watchlist');
 
     expect(await screen.findByRole('heading', { name: /watchlist/i })).toBeTruthy();
     expect(screen.getByText('No watchlist group yet')).toBeTruthy();
   });
 
-  it('registers the ECON placeholder route', async () => {
-    await renderApp('/econ', false);
+  it('registers the ECON route', async () => {
+    await renderApp('/econ');
 
-    expect(await screen.findByText('COMING SOON')).toBeTruthy();
-    expect(screen.getByText('Economic dashboard is under development.')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /economic/i })).toBeTruthy();
   });
 
   it('registers the AI Agent route', async () => {
-    await renderApp(AI_AGENT_PATH, false);
+    await renderApp(AI_AGENT_PATH);
 
     expect(await screen.findByTitle('Configuration')).toBeTruthy();
     expect(await screen.findByRole('button', { name: /execute analysis/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /ai agent/i })).toBeTruthy();
   });
 
-  it('does not register mock routes when mock mode is disabled', async () => {
-    await renderApp(AI_AGENT_MOCK_PATH, false);
-
-    expect(await screen.findByText('PAGE NOT FOUND')).toBeTruthy();
-  });
-
-  it('registers mock routes when mock mode is enabled', async () => {
-    await renderApp(AI_AGENT_MOCK_PATH, true);
-
-    expect(await screen.findByRole('button', { name: /execute analysis/i })).toBeTruthy();
-  });
-
   it('prefetches market overview defaults on mount', async () => {
-    vi.stubEnv('VITE_ENABLE_MOCK', 'false');
     vi.resetModules();
     const prefetchMarketOverviewData = vi.fn(() => Promise.resolve(null));
     vi.doMock('./hooks/useMarketOverviewData', () => ({ prefetchMarketOverviewData }));

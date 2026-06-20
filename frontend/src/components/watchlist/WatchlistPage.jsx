@@ -1,14 +1,14 @@
 import React, { useMemo, useState } from 'react';
 
-import { validateMarketSymbol } from '../../api/market';
-import { useWatchlistQuotes } from '../../hooks/useWatchlistQuotes';
-import { useWatchlistStore } from '../../hooks/useWatchlistStore';
-import { normalizeWatchlistSymbol } from '../../utils/watchlistFormatters';
 import WatchlistEmptyState from './WatchlistEmptyState';
 import WatchlistGroupBar from './WatchlistGroupBar';
 import WatchlistGroupDialog from './WatchlistGroupDialog';
 import WatchlistTable from './WatchlistTable';
 import WatchlistTickerInput from './WatchlistTickerInput';
+import { validateMarketSymbol } from '../../api/market';
+import { useWatchlistQuotes } from '../../hooks/useWatchlistQuotes';
+import { useWatchlistStore } from '../../hooks/useWatchlistStore';
+import { normalizeWatchlistSymbol } from '../../utils/watchlistFormatters';
 
 const SYMBOL_PATTERN = /^[A-Z0-9^][A-Z0-9^._=-]{0,24}$/;
 

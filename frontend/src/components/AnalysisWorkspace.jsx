@@ -88,7 +88,6 @@ export default function AnalysisWorkspace({
   lookupResult = null,
   backendHistoryEnabled = true,
   enableReportExport = true,
-  mockReportExport = false,
 }) {
   const navigate = useNavigate();
   const { resourceId } = useParams();
@@ -337,7 +336,6 @@ export default function AnalysisWorkspace({
             <ResultCard
               result={result}
               enableReportExport={enableReportExport && Boolean(resultPathBase)}
-              mockReport={mockReportExport}
               onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
               rerunRunning={rerunJob.running || loading}
             />
@@ -356,5 +354,4 @@ AnalysisWorkspace.propTypes = {
   lookupResult: PropTypes.func,
   backendHistoryEnabled: PropTypes.bool,
   enableReportExport: PropTypes.bool,
-  mockReportExport: PropTypes.bool,
 };

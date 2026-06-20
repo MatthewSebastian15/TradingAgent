@@ -1,5 +1,0 @@
-services:
-  frontend:
-    build:
-      args:
-        VITE_ENABLE_MOCK: "true"

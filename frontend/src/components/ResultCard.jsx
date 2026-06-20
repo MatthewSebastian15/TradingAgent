@@ -817,7 +817,6 @@ function ResultCardHeader({
   timeHorizon,
   createdAtLabel,
   enableReportExport,
-  mockReport,
   onRerunSubmit,
   rerunRunning,
   onToggleRerun,
@@ -848,7 +847,6 @@ function ResultCardHeader({
           result={result}
           displayResult={displayResult}
           enableReportExport={enableReportExport}
-          mockReport={mockReport}
           onRerunSubmit={onRerunSubmit}
           rerunRunning={rerunRunning}
           onToggleRerun={onToggleRerun}
@@ -862,7 +860,6 @@ ResultCardHeader.propTypes = {
   createdAtLabel: PropTypes.string,
   displayResult: PropTypes.object,
   enableReportExport: PropTypes.bool.isRequired,
-  mockReport: PropTypes.bool.isRequired,
   onRerunSubmit: PropTypes.func,
   onToggleRerun: PropTypes.func.isRequired,
   rerunRunning: PropTypes.bool.isRequired,
@@ -1151,7 +1148,6 @@ AnalysisTab.propTypes = {
 export default function ResultCard({
   result,
   enableReportExport = true,
-  mockReport = false,
   onRerunSubmit = null,
   rerunRunning = false,
 }) {
@@ -1174,7 +1170,6 @@ export default function ResultCard({
         timeHorizon={vm.timeHorizon}
         createdAtLabel={vm.createdAtLabel}
         enableReportExport={enableReportExport}
-        mockReport={mockReport}
         onRerunSubmit={onRerunSubmit}
         rerunRunning={rerunRunning}
         onToggleRerun={() => setShowRerunPanel((value) => !value)}
@@ -1228,7 +1223,6 @@ export default function ResultCard({
 ResultCard.propTypes = {
   result: PropTypes.object,
   enableReportExport: PropTypes.bool,
-  mockReport: PropTypes.bool,
   onRerunSubmit: PropTypes.func,
   rerunRunning: PropTypes.bool,
 };

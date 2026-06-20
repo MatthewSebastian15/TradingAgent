@@ -10,7 +10,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 3000",
     "test": "vitest --environment jsdom",
     "lint": "eslint .",
-    "format:check": "prettier --check \"src/**/*.{js,jsx,css}\" \"dev/**/*.{js,jsx,css}\" \"*.{js,json,html}\"",
+    "format:check": "prettier --check \"src/**/*.{js,jsx,css}\" \"*.{js,json,html}\"",
     "quality": "npm run lint && npm run format:check && npm test -- --run",
     "dev:lan": "vite --host 0.0.0.0 --port 3000",
     "preview:lan": "vite preview --host 0.0.0.0 --port 3000"
