@@ -280,7 +280,6 @@ bloomberg-subtle
 | Utility | `frontend/src/utils/` |
 | Domain contract | `frontend/src/domain/` |
 | Constants | `frontend/src/constants/` |
-| Dev mock data | `frontend/dev/` |
 
 Route changes usually touch:
 
@@ -302,10 +301,6 @@ Keep legacy redirects unless doing planned route migration:
 /ai-research
 /analysis
 /analysis-live
-/AI-Research.test
-/ai-research.test
-/analysis.test
-/analysis-mock
 ```
 
 Other routes:
@@ -332,7 +327,6 @@ Relevant env:
 ```text
 VITE_API_BASE_URL
 VITE_API_URL
-VITE_ENABLE_MOCK
 VITE_DEV_HOST
 VITE_DEV_PORT
 VITE_BACKEND_PROXY_TARGET
@@ -426,40 +420,6 @@ GET  /api/market/quotes
 - Trend bars come from `/api/market/sparklines`.
 - Do not add backend watchlist persistence unless requested.
 
-### Mock Route
-
-Mock route is enabled only when `VITE_ENABLE_MOCK=true`.
-
-Files:
-
-```text
-frontend/src/pages/AIAgentMock.jsx
-frontend/src/components/StockFormMock.jsx
-frontend/src/hooks/useMockAnalysisJob.js
-frontend/dev/mockData.js
-frontend/src/utils/mockReport.js
-```
-
-Primary mock route:
-
-```text
-/ai-agent.test
-/ai-agent.test/:resourceId
-```
-
-Legacy mock routes redirect:
-
-```text
-/AI-Research.test
-/AI-Research.test/:resourceId
-/ai-research.test
-/ai-research.test/:resourceId
-/analysis.test
-/analysis.test/:resourceId
-/analysis-mock
-```
-
-Do not import mock fixture into production code path.
 
 ### Frontend Tests
 
@@ -543,7 +503,6 @@ POST /api/session/refresh
 backend/services/report_service.py
 backend/templates/reports/analysis_report.html
 frontend/src/utils/reportApi.js
-frontend/src/utils/mockReport.js
 backend/tests/test_report_service.py
 backend/tests/test_report_routes.py
 ```

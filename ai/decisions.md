@@ -367,8 +367,6 @@ Implication:
 - Do not document Compose frontend as nginx unless compose file changes.
 - Production nginx runtime remains in Dockerfile but is separate from default
   compose.
-- `docker-compose.mock.yml` build arg does not guarantee mock in dev target;
-  use `VITE_ENABLE_MOCK=true` env when testing mock route.
 
 ## ADR-022: Startup Validation Logs for Debug
 

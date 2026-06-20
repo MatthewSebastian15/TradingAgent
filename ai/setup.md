@@ -192,7 +192,6 @@ VITE_API_BASE_URL=/api
 VITE_BACKEND_PROXY_TARGET=http://localhost:8000
 VITE_DEV_HOST=127.0.0.1
 VITE_DEV_PORT=3000
-VITE_ENABLE_MOCK=false
 ```
 
 Run:
@@ -238,46 +237,11 @@ Frontend scripts:
 | `preview` | `vite preview --host 127.0.0.1 --port 3000` |
 | `test` | `vitest --environment jsdom` |
 | `lint` | `eslint .` |
-| `format:check` | `prettier --check "src/**/*.{js,jsx,css}" "dev/**/*.{js,jsx,css}" "*.{js,json,html}"` |
+| `format:check` | `prettier --check "src/**/*.{js,jsx,css}" "*.{js,json,html}"` |
 | `quality` | lint, format check, tests |
 | `dev:lan` | `vite --host 0.0.0.0 --port 3000` |
 | `preview:lan` | `vite preview --host 0.0.0.0 --port 3000` |
 
-## Mock UI
-
-Enable:
-
-```env
-VITE_ENABLE_MOCK=true
-```
-
-Open:
-
-```text
-http://127.0.0.1:3000/ai-agent.test
-```
-
-Files:
-
-```text
-frontend/src/pages/AIAgentMock.jsx
-frontend/src/components/StockFormMock.jsx
-frontend/src/hooks/useMockAnalysisJob.js
-frontend/dev/mockData.js
-frontend/src/utils/mockReport.js
-```
-
-Legacy mock routes redirect:
-
-```text
-/AI-Research.test
-/AI-Research.test/:resourceId
-/ai-research.test
-/ai-research.test/:resourceId
-/analysis.test
-/analysis.test/:resourceId
-/analysis-mock
-```
 
 ## Watchlist Local State
 
@@ -401,25 +365,6 @@ Runtime nginx listens on container port `8080`.
 
 Default compose does not run this target.
 
-## Docker Mock Overlay
-
-Current `docker-compose.mock.yml` only sets build arg `VITE_ENABLE_MOCK=true`.
-Default compose frontend target is `dev`, so use frontend environment
-`VITE_ENABLE_MOCK=true` when you need mock route in Compose.
-
-Local reliable command:
-
-```powershell
-cd frontend
-$env:VITE_ENABLE_MOCK="true"
-npm run dev
-```
-
-Open:
-
-```text
-http://localhost:3000/ai-agent.test
-```
 
 ## Backend Tests
 
@@ -494,16 +439,6 @@ Full quality:
 npm run quality
 ```
 
-## Seed Development History
-
-Add one mock snapshot to SQLite history without provider/LLM call:
-
-```powershell
-cd d:\CODING\TradingAgents\backend
-python scripts\seed_mock_analysis.py
-```
-
-Snapshot goes to `ANALYSIS_DB_PATH`.
 
 ## Backend Env Reference
 
@@ -772,7 +707,6 @@ Resolved by `frontend/src/config.js`:
 |---|---|
 | `VITE_API_BASE_URL` | `/api` |
 | `VITE_API_URL` | blank legacy fallback |
-| `VITE_ENABLE_MOCK` | `false` |
 
 Used by `frontend/vite.config.js`:
 

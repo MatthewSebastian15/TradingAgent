@@ -57,7 +57,6 @@ multi-agent LLMs.
 - Primary UI route: `/ai-agent`.
 - Legacy `/AI-Research`, `/ai-research`, `/analysis`, and `/analysis-live`
   redirect to `/ai-agent`.
-- The mock route is active only when `VITE_ENABLE_MOCK=true`: `/ai-agent.test`.
 - Backend API prefix: `/api`.
 - Health endpoint without prefix: `/health`.
 - Frontend default API base: `/api`.
@@ -70,8 +69,6 @@ multi-agent LLMs.
 - `backtest/` and `assets/` are not in the tree right now.
 - `image/` contains README screenshots.
 - `graphify-out/` is graph cache output, not runtime app source.
-- `docker-compose.mock.yml` only sets a build arg. With the compose dev target,
-  mock mode is safer to enable through env `VITE_ENABLE_MOCK=true`.
 - Browser auth uses the HttpOnly `ta_owner_token` cookie from `POST /api/session`.
 - The frontend does not send `x-owner-token`; `buildAuthHeaders()` only ensures
   the session cookie exists.
@@ -157,7 +154,7 @@ TradingAgents/
       components/             UI components
       components/home/         Home dashboard widgets
       components/watchlist/    Watchlist groups, input, table, trend bars
-      pages/                  Dashboard, AIAgent, AIAgentMock, Watchlist, News, Market, Research, Economic
+      pages/                  Dashboard, AIAgent, Watchlist, News, Market, Research, Economic
   image/                      README screenshots
 ```
 
@@ -183,15 +180,6 @@ Frontend:
 /market                   -> Market dashboard
 /econ                     -> Economic placeholder
 /economic                 -> redirect /econ
-/ai-agent.test            -> mock AIAgent if VITE_ENABLE_MOCK=true
-/ai-agent.test/:resourceId -> mock AIAgent lookup if VITE_ENABLE_MOCK=true
-/AI-Research.test         -> legacy mock redirect if VITE_ENABLE_MOCK=true
-/AI-Research.test/:resourceId -> legacy mock redirect if VITE_ENABLE_MOCK=true
-/ai-research.test         -> legacy mock redirect if VITE_ENABLE_MOCK=true
-/ai-research.test/:resourceId -> legacy mock redirect if VITE_ENABLE_MOCK=true
-/analysis.test            -> legacy mock redirect if VITE_ENABLE_MOCK=true
-/analysis.test/:resourceId -> legacy mock redirect if VITE_ENABLE_MOCK=true
-/analysis-mock            -> legacy mock redirect if VITE_ENABLE_MOCK=true
 *                         -> NotFound
 ```
 
@@ -503,7 +491,6 @@ Docker/setup:
 Dockerfile.backend
 Dockerfile.frontend
 docker-compose.yml
-docker-compose.mock.yml
 frontend/vite.config.js
 frontend/nginx.conf
 backend/.env.example
@@ -517,7 +504,6 @@ frontend/src/App.jsx
 frontend/src/constants/routes.js
 frontend/src/components/Navbar.jsx
 frontend/src/pages/AIAgent.jsx
-frontend/src/pages/AIAgentMock.jsx
 frontend/src/pages/Dashboard.jsx
 frontend/src/pages/Watchlist.jsx
 ```

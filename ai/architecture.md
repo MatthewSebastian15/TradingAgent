@@ -560,15 +560,6 @@ Routes in `frontend/src/App.jsx`:
 /market                   -> Market dashboard
 /econ                     -> Economic placeholder
 /economic                 -> redirect /econ
-/ai-agent.test            -> mock AIAgent if enabled
-/ai-agent.test/:resourceId -> mock AIAgent lookup if enabled
-/AI-Research.test         -> legacy mock redirect if enabled
-/AI-Research.test/:resourceId -> legacy mock redirect if enabled
-/ai-research.test         -> legacy mock redirect if enabled
-/ai-research.test/:resourceId -> legacy mock redirect if enabled
-/analysis.test            -> legacy mock redirect if enabled
-/analysis.test/:resourceId -> legacy mock redirect if enabled
-/analysis-mock            -> legacy mock redirect if enabled
 *                         -> NotFound
 ```
 
@@ -580,7 +571,6 @@ State/storage:
 | Owner session expiry | `sessionStorage` key `_ta_owner_session_expires_at` |
 | Watchlist groups | `localStorage` key `tradingagents:watchlists:v1` |
 | Local history summary | `localStorage` key `ta_analysis_history` |
-| Mock history summary | `localStorage` key `ta_analysis_mock_history` |
 | Full history | Backend SQLite |
 
 API helper:
