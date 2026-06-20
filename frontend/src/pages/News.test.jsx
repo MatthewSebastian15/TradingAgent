@@ -43,6 +43,35 @@ describe('News page', () => {
     vi.clearAllMocks();
   });
 
+  it('renders compact skeleton while loading news', () => {
+    useGeneralNews.mockReturnValue({
+      data: null,
+      status: 'loading',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.getByRole('status', { name: 'Loading news' })).toBeInTheDocument();
+    expect(screen.queryByText('Loading news...')).not.toBeInTheDocument();
+    expect(screen.queryByText('No news found for this category.')).not.toBeInTheDocument();
+  });
+
+  it('renders compact skeleton while refreshing news', () => {
+    useGeneralNews.mockReturnValue({
+      data: { articles },
+      status: 'refreshing',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.getByRole('status', { name: 'Loading news' })).toBeInTheDocument();
+    expect(screen.queryByText('Stocks gain after earnings')).not.toBeInTheDocument();
+  });
+
   it('fetches all news once and filters categories on the client', async () => {
     const user = userEvent.setup();
     useGeneralNews.mockReturnValue({
