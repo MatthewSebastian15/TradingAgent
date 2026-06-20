@@ -66,13 +66,20 @@ export async function getMarketSparklines(symbols, { range = '1M', signal } = {}
   return parseMarketResponse(response);
 }
 
-export async function getMarketOverview(symbols, { signal } = {}) {
-  const response = await fetch(buildApiUrl('/market/overview'), {
+export async function getMarketOverview(symbols, { signal, forceRefresh = false } = {}) {
+  const params = new URLSearchParams();
+  if (forceRefresh) {
+    params.set('force_refresh', 'true');
+    params.set('_ts', String(Date.now()));
+  }
+  const query = params.toString();
+  const response = await fetch(buildApiUrl(`/market/overview${query ? `?${query}` : ''}`), {
     method: 'POST',
     headers: await buildHeaders(),
     credentials: 'include',
     body: JSON.stringify({ symbols }),
     signal,
+    cache: forceRefresh ? 'no-store' : 'default',
   });
   return parseMarketResponse(response);
 }

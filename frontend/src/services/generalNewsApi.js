@@ -15,6 +15,7 @@ export async function fetchGeneralNews({
 
   if (forceRefresh) {
     params.set('force_refresh', 'true');
+    params.set('_ts', String(Date.now()));
   }
 
   const response = await fetch(buildApiUrl(`/news/general?${params.toString()}`), {
@@ -22,6 +23,7 @@ export async function fetchGeneralNews({
     headers: await buildAuthHeaders(),
     credentials: 'include',
     signal,
+    cache: forceRefresh ? 'no-store' : 'default',
   });
 
   if (!response.ok) {

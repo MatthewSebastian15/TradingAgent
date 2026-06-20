@@ -39,7 +39,7 @@ export default function News() {
     if (category === 'all') return articles;
     return articles.filter((article) => normalizeCategory(article?.category) === category);
   }, [articles, category]);
-  const isLoadingNews = status === 'loading' || status === 'refreshing';
+  const isInitialLoading = status === 'loading' && !displayedArticles.length;
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] text-bloomberg-white">
@@ -54,7 +54,7 @@ export default function News() {
               <span>Newest first</span>
             </div>
 
-            {isLoadingNews ? (
+            {isInitialLoading ? (
               <NewsListSkeleton count={5} />
             ) : (
               <>

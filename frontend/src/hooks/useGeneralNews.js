@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchGeneralNews } from '../services/generalNewsApi';
 
-const POLL_MS = 120000;
+const NEWS_AUTO_REFRESH_INTERVAL_MS = 60000;
+const NEWS_VISIBILITY_REFRESH_MIN_GAP_MS = 15000;
 const CACHE_TTL_MS = 120000;
 const STORAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const STORAGE_PREFIX = 'tradingagents:general-news:v2:';
@@ -12,6 +13,7 @@ const RATE_LIMIT_BACKOFF_MS = 90000;
 const responseCache = new Map();
 const inflightRequests = new Map();
 const backoffUntilByKey = new Map();
+let forceRequestSequence = 0;
 
 function buildCacheKey({ category, windowDays, limit }) {
   return `${category || 'all'}:${windowDays || 7}:${limit || 50}`;
@@ -106,7 +108,7 @@ async function loadGeneralNews({ category, windowDays, limit, force = false }) {
     throw new Error('General news refresh is cooling down after a recent failed request.');
   }
 
-  const requestKey = force ? `${key}:force:${nowMs()}` : key;
+  const requestKey = force ? `${key}:force:${nowMs()}:${(forceRequestSequence += 1)}` : key;
   const request = fetchGeneralNews({ category, windowDays, limit, forceRefresh: force })
     .then((data) => {
       const entry = { data, fetchedAt: nowMs() };
@@ -132,6 +134,7 @@ export function clearGeneralNewsClientStateForTests() {
   responseCache.clear();
   inflightRequests.clear();
   backoffUntilByKey.clear();
+  forceRequestSequence = 0;
   clearStoredCaches();
 }
 
@@ -148,33 +151,39 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
   const [error, setError] = useState(null);
   const mountedRef = useRef(false);
   const requestIdRef = useRef(0);
+  const dataRef = useRef(initialData);
+  const lastRefreshAtRef = useRef(initialData ? nowMs() : 0);
 
   const load = useCallback(
-    async ({ force = false } = {}) => {
+    async ({ force = false, silent = false } = {}) => {
       const requestId = requestIdRef.current + 1;
       requestIdRef.current = requestId;
 
-      setStatus((current) => (current === 'success' ? 'refreshing' : 'loading'));
+      if (!silent) {
+        setStatus(dataRef.current ? 'refreshing' : 'loading');
+      }
       setError(null);
 
       try {
         const result = await loadGeneralNews({ category, windowDays, limit, force });
         if (!mountedRef.current || requestIdRef.current !== requestId) return result;
+        dataRef.current = result;
         setData(result);
         setStatus('success');
         setError(null);
+        lastRefreshAtRef.current = nowMs();
         return result;
       } catch (err) {
         if (!mountedRef.current || requestIdRef.current !== requestId) return null;
         setError(err);
-        setStatus('error');
+        setStatus(dataRef.current ? 'success' : 'error');
         return null;
       }
     },
     [category, limit, windowDays]
   );
 
-  const reload = useCallback(() => load({ force: true }), [load]);
+  const reload = useCallback(() => load({ force: true, silent: false }), [load]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -185,16 +194,35 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
   }, []);
 
   useEffect(() => {
-    load();
+    load({ force: false, silent: false }).catch(() => {});
   }, [load]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      load();
-    }, POLL_MS);
+      if (document.visibilityState === 'visible') {
+        load({ force: true, silent: true }).catch(() => {});
+      }
+    }, NEWS_AUTO_REFRESH_INTERVAL_MS);
 
     return () => {
       window.clearInterval(intervalId);
+    };
+  }, [load]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      const elapsed = nowMs() - lastRefreshAtRef.current;
+      if (elapsed < NEWS_VISIBILITY_REFRESH_MIN_GAP_MS) return;
+
+      load({ force: true, silent: true }).catch(() => {});
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [load]);
 
