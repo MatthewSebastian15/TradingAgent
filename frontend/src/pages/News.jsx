@@ -66,7 +66,8 @@ export default function News() {
   });
 
   const displayedArticles = useMemo(() => dedupeNewsItems(data?.articles || []), [data]);
-  const showSkeleton = status === 'loading' || status === 'refreshing';
+  const showSkeleton =
+    (status === 'loading' || status === 'refreshing') && !displayedArticles.length;
   const showStaleWarning = status === 'stale' && displayedArticles.length > 0;
   const showRefreshCooldown = data?.refresh?.reason === 'manual_refresh_cooldown';
   const emptyMessage = emptyMessageFor({ category, data, error });

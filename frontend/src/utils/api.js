@@ -2,6 +2,7 @@ import { frontendConfig } from '../config';
 
 const OWNER_SESSION_EXPIRES_AT_KEY = '_ta_owner_session_expires_at';
 const OWNER_SESSION_REFRESH_SKEW_SECONDS = 30;
+const OWNER_SESSION_REQUEST_TIMEOUT_MS = 10000;
 
 let ownerSessionPromise = null;
 let ownerSessionExpiresAt = 0;
@@ -33,13 +34,27 @@ function hasFreshOwnerSession() {
 }
 
 async function bootstrapOwnerSession() {
-  const response = await fetch(buildApiUrl('/session'), {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-    },
-    credentials: 'include',
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), OWNER_SESSION_REQUEST_TIMEOUT_MS);
+  let response;
+
+  try {
+    response = await fetch(buildApiUrl('/session'), {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+      },
+      credentials: 'include',
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Backend owner session request timed out.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 
   if (!response.ok) throw new Error(await readHttpError(response));
 

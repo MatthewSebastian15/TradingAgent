@@ -14,7 +14,13 @@ from analysis_cache import AnalysisJobLimitError
 from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
 from errors import NotFoundError, RateLimitError, sanitize_message
 from logging_config import request_id_ctx
-from rate_limiter import limit_request, request_policy, status_policy, stream_policy
+from rate_limiter import (
+    analysis_read_policy,
+    limit_request,
+    request_policy,
+    status_policy,
+    stream_policy,
+)
 from routes import jobs, pipeline_runner, serializers, sse
 from routes.sse import EventSourceResponse
 from routes.validation import (
@@ -482,7 +488,7 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
     response_model_exclude_none=True,
 )
 async def get_analysis_job(job_id: str, request: Request):
-    async with limit_request(request, request_policy()) as lease:
+    async with limit_request(request, analysis_read_policy()) as lease:
         job_store = _job_store_for_request(request)
         job = await job_store.get(job_id, owner_id=lease.identifier)
         if job is None:
@@ -503,7 +509,7 @@ async def get_analysis_job(job_id: str, request: Request):
     include_in_schema=False,
 )
 async def get_analysis_result_by_request_id(request_id: str, request: Request):
-    async with limit_request(request, request_policy()) as lease:
+    async with limit_request(request, analysis_read_policy()) as lease:
         job_store = _job_store_for_request(request)
         job = await job_store.get_by_request_id(request_id, owner_id=lease.identifier)
         if job is not None and job.result is not None:
