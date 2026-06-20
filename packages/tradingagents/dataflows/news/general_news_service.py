@@ -14,6 +14,10 @@ from tradingagents.dataflows.providers.google_news_light import GoogleNewsLightP
 from tradingagents.dataflows.providers.marketaux_news import MarketAuxProvider
 from tradingagents.dataflows.providers.newsdata_news import NewsDataProvider
 from tradingagents.dataflows.providers.rss_news import RSSContextProvider
+from tradingagents.dataflows.providers.rss_news_config import (
+    DEFAULT_RSS_FEEDS,
+    GOOGLE_NEWS_FALLBACK_RSS_FEEDS,
+)
 
 from .general_news_cache import GeneralNewsCache, GeneralNewsCacheEntry
 from .general_news_categories import (
@@ -27,6 +31,35 @@ from .news_provider_base import ProviderFetchResult, sanitize_error
 from .news_scoring import content_hash
 
 logger = logging.getLogger(__name__)
+
+try:
+    from services.news_feed_rotation import rotate_feed_ids
+    from services.news_provider_budget import (
+        is_provider_available,
+        mark_provider_429,
+        mark_provider_failure,
+        mark_provider_success,
+        result_has_429,
+    )
+except Exception:  # pragma: no cover - package can run without backend service path
+    def rotate_feed_ids(feeds, batch_size):
+        return [str(getattr(feed, "id", "") or "") for feed in feeds[:batch_size]]
+
+    def is_provider_available(_provider: str) -> bool:
+        return True
+
+    def mark_provider_429(_provider: str, **_kwargs) -> None:
+        return None
+
+    def mark_provider_failure(_provider: str, _error: str) -> None:
+        return None
+
+    def mark_provider_success(_provider: str) -> None:
+        return None
+
+    def result_has_429(_result) -> bool:
+        return False
+
 
 GENERAL_NEWS_PROVIDER_ORDER = ["rss_context", "google_news_light", "marketaux", "newsdata"]
 GENERAL_NEWS_PROVIDER_SET = set(GENERAL_NEWS_PROVIDER_ORDER)
@@ -44,6 +77,8 @@ FAILURE_STATUSES = {
     "parse_error",
     "error",
     "disabled",
+    "rate_limited",
+    "cooldown",
 }
 GENERAL_QUERY_BY_CATEGORY = {
     "all": [
@@ -184,9 +219,22 @@ class GeneralNewsService:
             "cache": {
                 "enabled": self._cache is not None,
                 "hit": False,
+                "stale": False,
                 "age_seconds": 0,
+                "ttl_seconds": int(self.config.get("cache_ttl_seconds", 300)),
+                "stale_ttl_seconds": int(self.config.get("stale_ttl_seconds", 3600)),
+            },
+            "refresh": {
+                "queued": False,
+                "skipped": False,
+                "reason": "provider_fetch" if force_refresh else None,
             },
             "provider_status": provider_status,
+            "debug": {
+                "articles_before_dedup": len(articles),
+                "articles_after_dedup": len(normalized),
+                "articles_returned": len(normalized),
+            },
             "articles_found": len(normalized),
             "articles": normalized,
         }
@@ -238,19 +286,40 @@ class GeneralNewsService:
     ) -> ProviderFetchResult:
         if provider_name not in GENERAL_NEWS_PROVIDER_SET:
             return ProviderFetchResult(provider=provider_name, status="disabled")
+        if not is_provider_available(provider_name):
+            return ProviderFetchResult(provider=provider_name, status="cooldown")
+
         if provider_name == "rss_context":
-            return self._fetch_rss_context(window_days=window_days, limit=max_per_provider)
-        if provider_name == "google_news_light":
-            return self._fetch_google_news_light(
+            result = self._fetch_rss_context(window_days=window_days, limit=max_per_provider)
+        elif provider_name == "google_news_light":
+            result = self._fetch_google_news_light(
                 category=category, window_days=window_days, limit=max_per_provider
             )
-        if provider_name == "marketaux":
-            return self._fetch_marketaux(
+        elif provider_name == "marketaux":
+            result = self._fetch_marketaux(
                 category=category, window_days=window_days, limit=max_per_provider
             )
-        if provider_name == "newsdata":
-            return self._fetch_newsdata(category=category, limit=max_per_provider)
-        return ProviderFetchResult(provider=provider_name, status="disabled")
+        elif provider_name == "newsdata":
+            result = self._fetch_newsdata(category=category, limit=max_per_provider)
+        else:
+            result = ProviderFetchResult(provider=provider_name, status="disabled")
+
+        self._record_provider_budget(result)
+        return result
+
+    def _record_provider_budget(self, result: ProviderFetchResult) -> None:
+        provider_name = result.provider
+        if result_has_429(result):
+            mark_provider_429(
+                provider_name,
+                cooldown_seconds=int(self.config.get("provider_429_cooldown_seconds", 1800)),
+            )
+            return
+        if result.status == "success" or result.articles:
+            mark_provider_success(provider_name)
+            return
+        if result.status not in {"missing_api_key", "disabled", "empty", "cooldown"}:
+            mark_provider_failure(provider_name, result.status)
 
     def _fetch_providers(
         self,
@@ -264,7 +333,7 @@ class GeneralNewsService:
             return {}
 
         max_workers = min(
-            max(1, int(self.config.get("provider_fetch_workers", 4))), len(provider_order)
+            max(1, int(self.config.get("provider_max_concurrency", 2))), len(provider_order)
         )
         results: dict[str, ProviderFetchResult] = {}
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -312,8 +381,23 @@ class GeneralNewsService:
             "rss_user_agent": str(
                 self.config.get("rss_user_agent") or "TradingAgent/0.1 RSS Reader"
             ),
-            "rss_fetch_workers": max(1, int(self.config.get("rss_fetch_workers", 8))),
+            "rss_fetch_workers": max(
+                1,
+                int(
+                    self.config.get(
+                        "rss_max_concurrency",
+                        self.config.get("rss_fetch_workers", 8),
+                    )
+                ),
+            ),
         }
+        if bool(self.config.get("enable_feed_rotation", True)):
+            feed_ids = rotate_feed_ids(
+                _available_general_rss_feeds(rss_config),
+                int(self.config.get("rss_rotation_batch_size", 20)),
+            )
+            if feed_ids and not str(rss_config.get("rss_enabled_feed_ids") or "").strip():
+                rss_config["rss_enabled_feed_ids"] = ",".join(feed_ids)
         provider = RSSContextProvider(
             "",
             timeout_seconds=int(self.config.get("vendor_timeout_seconds", 10)),
@@ -525,9 +609,30 @@ def _active_cache(config: dict[str, Any]) -> GeneralNewsCache | None:
         return None
     return GeneralNewsCache(
         db_path=str(config.get("cache_db_path") or ".cache/general_news.sqlite3"),
-        ttl_seconds=max(30, int(config.get("cache_ttl_seconds", 120))),
+        ttl_seconds=max(30, int(config.get("cache_ttl_seconds", 300))),
+        stale_ttl_seconds=max(30, int(config.get("stale_ttl_seconds", 3600))),
         max_entries=max(1, int(config.get("cache_max_entries", 1000))),
     )
+
+
+def _available_general_rss_feeds(config: dict[str, Any]) -> list[Any]:
+    feeds = list(DEFAULT_RSS_FEEDS)
+    if bool(config.get("rss_google_news_fallback_enabled", True)):
+        feeds.extend(GOOGLE_NEWS_FALLBACK_RSS_FEEDS)
+
+    enabled_ids = set(_string_list(config.get("rss_enabled_feed_ids")))
+    disabled_ids = set(_string_list(config.get("rss_disabled_feed_ids")))
+    include_trial = bool(config.get("rss_include_trial_feeds", True))
+    selected = []
+    for feed in feeds:
+        if enabled_ids and feed.id not in enabled_ids:
+            continue
+        if feed.id in disabled_ids:
+            continue
+        if not feed.enabled and not include_trial:
+            continue
+        selected.append(feed)
+    return selected
 
 
 def _general_profile() -> dict[str, Any]:
@@ -752,7 +857,9 @@ def _public_status(status: str, articles: list[NormalizedNewsArticle]) -> str:
         "timeout": "timeout",
         "vendor_auth_error": "auth_or_forbidden",
         "auth_or_forbidden": "auth_or_forbidden",
-        "vendor_quota_error": "auth_or_forbidden",
+        "vendor_quota_error": "rate_limited",
+        "rate_limited": "rate_limited",
+        "cooldown": "cooldown",
         "vendor_empty_response": "unavailable",
         "unavailable": "unavailable",
         "vendor_schema_error": "error",

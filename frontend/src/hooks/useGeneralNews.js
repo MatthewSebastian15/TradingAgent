@@ -10,7 +10,8 @@ const STORAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const STORAGE_PREFIX = 'tradingagents:general-news:v2:';
 const ERROR_BACKOFF_MS = 60000;
 const RATE_LIMIT_BACKOFF_MS = 90000;
-const FORCE_REFRESH_MIN_GAP_MS = 15000;
+export const MANUAL_REFRESH_COOLDOWN_MS = 90_000;
+const LAST_FORCE_REFRESH_KEY = 'ta:last-news-force-refresh';
 
 const responseCache = new Map();
 const inflightRequests = new Map();
@@ -18,7 +19,7 @@ const backoffUntilByKey = new Map();
 const lastForceRefreshByKey = new Map();
 
 function buildCacheKey({ category, windowDays, limit }) {
-  return `${category || 'all'}:${windowDays || 7}:${limit || 50}`;
+  return `${category || 'all'}:${windowDays || 7}:${limit || 100}`;
 }
 
 function nowMs() {
@@ -39,6 +40,10 @@ function backoffMsForError(error) {
 
 function storageKey(key) {
   return `${STORAGE_PREFIX}${key}`;
+}
+
+function forceRefreshStorageKey(key) {
+  return `${LAST_FORCE_REFRESH_KEY}:${key}`;
 }
 
 function sleep(ms) {
@@ -66,8 +71,47 @@ function writeStoredCache(key, entry) {
   try {
     window.sessionStorage.setItem(storageKey(key), JSON.stringify(entry));
   } catch {
-    // Cache storage can fail. Memory cache still avoids duplicate requests.
+    // Memory cache still avoids duplicate requests if browser storage fails.
   }
+}
+
+function readLastForceRefreshAt(key) {
+  if (typeof window === 'undefined') return lastForceRefreshByKey.get(key) || 0;
+
+  try {
+    return Number(window.localStorage.getItem(forceRefreshStorageKey(key)) || 0);
+  } catch {
+    return lastForceRefreshByKey.get(key) || 0;
+  }
+}
+
+function markForceRefresh(key) {
+  const value = nowMs();
+  lastForceRefreshByKey.set(key, value);
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(forceRefreshStorageKey(key), String(value));
+  } catch {
+    // Memory fallback already recorded the timestamp.
+  }
+}
+
+function canForceRefresh(key) {
+  return nowMs() - readLastForceRefreshAt(key) > MANUAL_REFRESH_COOLDOWN_MS;
+}
+
+function decorateCooldownData(data) {
+  return {
+    ...(data || {}),
+    message: 'Refresh is cooling down. Showing latest cached news.',
+    refresh: {
+      ...(data?.refresh || {}),
+      queued: false,
+      skipped: true,
+      reason: 'manual_refresh_cooldown',
+    },
+  };
 }
 
 function readAnyFreshCache(key) {
@@ -92,6 +136,21 @@ function clearStoredCaches() {
   }
 }
 
+function clearForceRefreshMarkers() {
+  if (typeof window === 'undefined') return;
+
+  try {
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith(LAST_FORCE_REFRESH_KEY)) {
+        window.localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Ignore test/browser storage cleanup failures.
+  }
+}
+
 function cachedDataForParams({ category, windowDays, limit }) {
   const key = buildCacheKey({ category, windowDays, limit });
   const cached = readAnyFreshCache(key);
@@ -101,49 +160,59 @@ function cachedDataForParams({ category, windowDays, limit }) {
 async function loadGeneralNews({ category, windowDays, limit, force = false, signal }) {
   const key = buildCacheKey({ category, windowDays, limit });
   const cached = readAnyFreshCache(key);
+  let effectiveForce = force;
+  let cooledDown = false;
 
-  if (!force && cacheFresh(cached)) {
-    return cached.data;
+  if (force) {
+    if (!canForceRefresh(key)) {
+      effectiveForce = false;
+      cooledDown = true;
+    } else {
+      markForceRefresh(key);
+    }
   }
 
-  if (!force && inflightRequests.has(key)) {
-    return inflightRequests.get(key);
+  if (!effectiveForce && cacheFresh(cached)) {
+    return cooledDown ? decorateCooldownData(cached.data) : cached.data;
+  }
+
+  if (!effectiveForce && inflightRequests.has(key)) {
+    const result = await inflightRequests.get(key);
+    return cooledDown ? decorateCooldownData(result) : result;
   }
 
   const backoffUntil = backoffUntilByKey.get(key) || 0;
-  if (!force && backoffUntil > nowMs()) {
-    if (cached?.data) return cached.data;
+  if (!effectiveForce && backoffUntil > nowMs()) {
+    if (cached?.data) return cooledDown ? decorateCooldownData(cached.data) : cached.data;
     throw new Error('General news refresh is cooling down after a recent failed request.');
   }
 
-  if (force) {
-    const lastForceRefreshAt = lastForceRefreshByKey.get(key) || 0;
-    const elapsed = nowMs() - lastForceRefreshAt;
-
-    if (elapsed < FORCE_REFRESH_MIN_GAP_MS && cached?.data) {
-      return cached.data;
-    }
-
-    lastForceRefreshByKey.set(key, nowMs());
-  }
-
-  const requestKey = force ? `${key}:force` : key;
+  const requestKey = effectiveForce ? `${key}:force` : key;
   if (inflightRequests.has(requestKey)) {
-    return inflightRequests.get(requestKey);
+    const result = await inflightRequests.get(requestKey);
+    return cooledDown ? decorateCooldownData(result) : result;
   }
-  const request = fetchGeneralNews({ category, windowDays, limit, forceRefresh: force, signal })
+
+  const request = fetchGeneralNews({
+    category,
+    windowDays,
+    limit,
+    forceRefresh: effectiveForce,
+    signal,
+  })
     .then((data) => {
-      const entry = { data, fetchedAt: nowMs() };
+      const result = cooledDown ? decorateCooldownData(data) : data;
+      const entry = { data: result, fetchedAt: nowMs() };
       responseCache.set(key, entry);
       writeStoredCache(key, entry);
       backoffUntilByKey.delete(key);
-      return data;
+      return result;
     })
     .catch((error) => {
       if (error?.name !== 'AbortError') {
         backoffUntilByKey.set(key, nowMs() + backoffMsForError(error));
       }
-      if (!force && cached?.data) return cached.data;
+      if (cached?.data) return cooledDown ? decorateCooldownData(cached.data) : cached.data;
       throw error;
     })
     .finally(() => {
@@ -168,9 +237,10 @@ export function clearGeneralNewsClientStateForTests() {
   backoffUntilByKey.clear();
   lastForceRefreshByKey.clear();
   clearStoredCaches();
+  clearForceRefreshMarkers();
 }
 
-export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 }) {
+export function useGeneralNews({ category = 'all', windowDays = 7, limit = 100 }) {
   const [{ data: initialData, status: initialStatus }] = useState(() => {
     const cachedData = cachedDataForParams({ category, windowDays, limit });
     return {

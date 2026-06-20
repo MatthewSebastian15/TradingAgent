@@ -18,7 +18,6 @@ from config import (
     CORS_ORIGINS,
     GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH,
     GENERAL_NEWS_ENABLED,
-    GENERAL_NEWS_REFRESH_INTERVAL_SECONDS,
     IS_DEVELOPMENT,
     REQUEST_BODY_MAX_BYTES,
     llm,
@@ -101,25 +100,9 @@ async def shutdown_resources() -> None:
 
 
 async def general_news_background_worker() -> None:
-    from tradingagents.dataflows.news.general_news_service import GeneralNewsService
-    from tradingagents.dataflows.news.general_news_stream import general_news_event_bus
-    from tradingagents.dataflows.providers.config import use_config
+    from services.news_background_worker import news_worker_loop
 
-    while True:
-        try:
-            config = build_tradingagents_config()
-            with use_config(config):
-                service = GeneralNewsService(config.get("general_news", {}))
-                result = await asyncio.to_thread(
-                    service.fetch_general_news, category="all", force_refresh=True
-                )
-            await general_news_event_bus.publish_if_changed(result)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("general news background refresh failed")
-
-        await asyncio.sleep(max(30, int(GENERAL_NEWS_REFRESH_INTERVAL_SECONDS)))
+    await news_worker_loop()
 
 
 async def start_general_news_worker(app: FastAPI) -> None:
@@ -129,12 +112,14 @@ async def start_general_news_worker(app: FastAPI) -> None:
 
 
 async def stop_general_news_worker(app: FastAPI) -> None:
+    from services.news_background_worker import stop_queued_refresh_task
+
     task = getattr(app.state, "general_news_worker_task", None)
-    if task is None:
-        return
-    task.cancel()
-    with suppress(asyncio.CancelledError):
-        await task
+    if task is not None:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+    await stop_queued_refresh_task()
 
 
 @asynccontextmanager
