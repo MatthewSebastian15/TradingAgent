@@ -4,98 +4,21 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 
 import { Input } from '@/components/ui/input';
+import { useTickerSearch } from '@/hooks/useTickerSearch';
+import { useTickerSearchWarmup } from '@/hooks/useTickerSearchWarmup';
+import { normalizeTickerSymbol, tickerExchangeLabel } from '@/utils/tickerSearch';
 
-import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
-import { mergeTickerResults, searchLocalTickers } from '../utils/tickerSearch';
-
-const MIN_QUERY_LENGTH = 1;
-const REMOTE_MIN_QUERY_LENGTH = 2;
-const SEARCH_REFRESH_DELAY_MS = 50;
-const SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const SEARCH_CACHE_PREFIX = 'ta:ticker-search:';
 const SEARCH_LIMIT = 10;
 const DROPDOWN_WIDTH = 480;
-
-const searchMemoryCache = new Map();
-
-function formatPrice(value) {
-  if (value === null || value === undefined || value === '') return '-';
-  const numberValue = Number(value);
-  if (!Number.isFinite(numberValue)) return '-';
-  return numberValue.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 function tickerName(item) {
   return String(item.name || item.shortName || item.longName || item.symbol || '-').trim();
 }
 
-function exchangeLabel(item) {
-  const exchange = String(item.exchange || '')
+function tickerMarket(item) {
+  return String(item.market || '')
     .trim()
-    .toUpperCase();
-  const type = String(item.quoteType || item.type || '')
-    .trim()
-    .toUpperCase();
-  const market = String(item.market || '')
-    .trim()
-    .toUpperCase();
-  const source = String(item.source || '')
-    .trim()
-    .toUpperCase();
-
-  if (exchange && type) return `${exchange} · ${type}`;
-  return exchange || type || market || source || '-';
-}
-
-function tickerPrice(item) {
-  return item.regularMarketPrice ?? item.price ?? '-';
-}
-
-function normalizeQueryKey(query, limit) {
-  return `${String(query || '')
-    .trim()
-    .toLowerCase()}::${limit}`;
-}
-
-function readStoredSearchCache(key) {
-  const memoryValue = searchMemoryCache.get(key);
-  const now = Date.now();
-  if (memoryValue && now - memoryValue.cachedAt <= SEARCH_CACHE_TTL_MS) {
-    return memoryValue.results.map((item) => ({ ...item }));
-  }
-
-  try {
-    const raw = window.localStorage.getItem(`${SEARCH_CACHE_PREFIX}${key}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || now - Number(parsed.cachedAt || 0) > SEARCH_CACHE_TTL_MS) return null;
-    const results = Array.isArray(parsed.results) ? parsed.results : [];
-    searchMemoryCache.set(key, { cachedAt: parsed.cachedAt, results });
-    return results.map((item) => ({ ...item }));
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredSearchCache(key, results) {
-  const payload = {
-    cachedAt: Date.now(),
-    results: results.map((item) => ({ ...item })),
-  };
-  searchMemoryCache.set(key, payload);
-
-  try {
-    window.localStorage.setItem(`${SEARCH_CACHE_PREFIX}${key}`, JSON.stringify(payload));
-  } catch {
-    // Browser storage can be unavailable. Memory cache still covers this session.
-  }
-}
-
-function normalizeSearchResponse(data) {
-  return Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+    .toUpperCase() || '-';
 }
 
 export default function TickerSearchBar({
@@ -106,11 +29,6 @@ export default function TickerSearchBar({
   searchTickers = null,
 }) {
   const [inputValue, setInputValue] = useState(value || '');
-  const [results, setResults] = useState([]);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const [loading, setLoading] = useState(false);
-  const [searchError, setSearchError] = useState('');
-  const [open, setOpen] = useState(false);
   const [userEdited, setUserEdited] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({
     top: 0,
@@ -119,14 +37,29 @@ export default function TickerSearchBar({
   });
   const rootRef = useRef(null);
   const dropdownRef = useRef(null);
-  const requestSeqRef = useRef(0);
+
+  useTickerSearchWarmup({ enabled: !disabled });
 
   const trimmedQuery = useMemo(() => inputValue.trim(), [inputValue]);
-  const canSearch = userEdited && trimmedQuery.length >= MIN_QUERY_LENGTH && !disabled;
-  const canRefreshRemote =
-    userEdited && trimmedQuery.length >= REMOTE_MIN_QUERY_LENGTH && !disabled;
-  const showDropdown =
-    open && !disabled && trimmedQuery.length > 0 && Boolean(canSearch || loading || searchError);
+  const {
+    results,
+    recentResults,
+    loading,
+    error: searchError,
+    activeIndex,
+    setActiveIndex,
+    open,
+    setOpen,
+    selectTicker,
+  } = useTickerSearch({
+    query: trimmedQuery,
+    enabled: !disabled,
+    limit: SEARCH_LIMIT,
+    searchTickers,
+  });
+
+  const displayResults = trimmedQuery ? results : recentResults;
+  const showDropdown = open && !disabled && Boolean(displayResults.length || loading || searchError);
 
   const updateDropdownPosition = useCallback(() => {
     const rect = rootRef.current?.getBoundingClientRect();
@@ -154,7 +87,7 @@ export default function TickerSearchBar({
 
     document.addEventListener('mousedown', handleDocumentMouseDown);
     return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
-  }, []);
+  }, [setActiveIndex, setOpen]);
 
   useEffect(() => {
     if (!showDropdown) return undefined;
@@ -166,110 +99,16 @@ export default function TickerSearchBar({
       window.removeEventListener('resize', updateDropdownPosition);
       window.removeEventListener('scroll', updateDropdownPosition, true);
     };
-  }, [showDropdown, inputValue, results.length, updateDropdownPosition]);
-
-  useEffect(() => {
-    if (!canSearch) {
-      requestSeqRef.current += 1;
-      setResults([]);
-      setLoading(false);
-      setSearchError('');
-      setActiveIndex(-1);
-      return;
-    }
-
-    const localResults = searchLocalTickers(trimmedQuery, SEARCH_LIMIT);
-    const cachedResults =
-      trimmedQuery.length >= REMOTE_MIN_QUERY_LENGTH
-        ? readStoredSearchCache(normalizeQueryKey(trimmedQuery, SEARCH_LIMIT))
-        : null;
-    const nextResults = mergeTickerResults(localResults, cachedResults || []).slice(
-      0,
-      SEARCH_LIMIT
-    );
-
-    setResults(nextResults);
-    setLoading(false);
-    setSearchError('');
-    setOpen(true);
-    setActiveIndex(nextResults.length ? 0 : -1);
-  }, [canSearch, trimmedQuery]);
-
-  useEffect(() => {
-    if (!canRefreshRemote) return undefined;
-
-    const controller = new AbortController();
-    const requestId = requestSeqRef.current + 1;
-    requestSeqRef.current = requestId;
-    const cacheKey = normalizeQueryKey(trimmedQuery, SEARCH_LIMIT);
-
-    const timer = window.setTimeout(async () => {
-      const instantResults = mergeTickerResults(
-        searchLocalTickers(trimmedQuery, SEARCH_LIMIT),
-        readStoredSearchCache(cacheKey) || []
-      );
-      setLoading((currentLoading) => currentLoading || instantResults.length === 0);
-
-      try {
-        let data;
-        if (searchTickers) {
-          data = await searchTickers({
-            query: trimmedQuery,
-            limit: SEARCH_LIMIT,
-            signal: controller.signal,
-          });
-        } else {
-          const response = await fetch(
-            buildApiUrl(
-              `/market/search?q=${encodeURIComponent(trimmedQuery)}&limit=${SEARCH_LIMIT}`
-            ),
-            {
-              headers: await buildAuthHeaders(),
-              credentials: 'include',
-              signal: controller.signal,
-            }
-          );
-
-          if (!response.ok) throw new Error(await readHttpError(response));
-          data = await response.json();
-        }
-
-        if (controller.signal.aborted || requestSeqRef.current !== requestId) return;
-
-        const remoteResults = normalizeSearchResponse(data);
-        writeStoredSearchCache(cacheKey, remoteResults);
-        const localResults = searchLocalTickers(trimmedQuery, SEARCH_LIMIT);
-        const nextResults = mergeTickerResults(localResults, remoteResults).slice(0, SEARCH_LIMIT);
-        setResults(nextResults);
-        setOpen(true);
-        setActiveIndex(nextResults.length ? 0 : -1);
-      } catch (error) {
-        if (error.name === 'AbortError' || requestSeqRef.current !== requestId) return;
-        setSearchError(error.message || 'Ticker search failed.');
-        setOpen(true);
-      } finally {
-        if (!controller.signal.aborted && requestSeqRef.current === requestId) {
-          setLoading(false);
-        }
-      }
-    }, SEARCH_REFRESH_DELAY_MS);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [canRefreshRemote, searchTickers, trimmedQuery]);
+  }, [showDropdown, inputValue, displayResults.length, updateDropdownPosition]);
 
   function selectResult(item) {
-    const symbol = String(item?.symbol || '')
-      .trim()
-      .toUpperCase();
-    if (!symbol) return;
-    setInputValue(symbol);
+    const selected = selectTicker(item);
+    if (!selected.symbol) return;
+    setInputValue(selected.symbol);
     setUserEdited(false);
     setOpen(false);
     setActiveIndex(-1);
-    onSelect({ ...item, symbol });
+    onSelect(selected);
   }
 
   function handleInputChange(event) {
@@ -288,23 +127,23 @@ export default function TickerSearchBar({
       return;
     }
 
-    if (!open || !results.length) return;
+    if (!open || !displayResults.length) return;
 
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setActiveIndex((current) => (current + 1) % results.length);
+      setActiveIndex((current) => (current + 1) % displayResults.length);
       return;
     }
 
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setActiveIndex((current) => (current <= 0 ? results.length - 1 : current - 1));
+      setActiveIndex((current) => (current <= 0 ? displayResults.length - 1 : current - 1));
       return;
     }
 
     if (event.key === 'Enter' && activeIndex >= 0) {
       event.preventDefault();
-      selectResult(results[activeIndex]);
+      selectResult(displayResults[activeIndex]);
     }
   }
 
@@ -319,27 +158,27 @@ export default function TickerSearchBar({
         width: dropdownPosition.width,
       }}
     >
-      {loading && !results.length && (
-        <div className="px-3 py-2 font-mono text-[11px] text-bloomberg-muted tracking-wider">
-          SEARCHING CACHE...
+      {loading && !displayResults.length && (
+        <div className="px-3 py-2 font-mono text-[11px] tracking-wider text-bloomberg-muted">
+          SEARCHING...
         </div>
       )}
 
-      {!results.length && searchError && (
-        <div className="px-3 py-2 font-mono text-[11px] text-bloomberg-red tracking-wider">
+      {!displayResults.length && searchError && (
+        <div className="px-3 py-2 font-mono text-[11px] tracking-wider text-bloomberg-red">
           {searchError}
         </div>
       )}
 
-      {!loading && !searchError && canSearch && !results.length && (
-        <div className="px-3 py-2 font-mono text-[11px] text-bloomberg-muted tracking-wider">
+      {!loading && !searchError && !displayResults.length && userEdited && (
+        <div className="px-3 py-2 font-mono text-[11px] tracking-wider text-bloomberg-muted">
           NO SYMBOL MATCHES
         </div>
       )}
 
-      {results.map((item, index) => (
+      {displayResults.map((item, index) => (
         <button
-          key={`${item.symbol}-${item.exchange || item.quoteType || item.market || index}`}
+          key={`${item.symbol}-${item.exchange || item.type || item.market || index}`}
           type="button"
           role="option"
           aria-selected={activeIndex === index}
@@ -348,21 +187,21 @@ export default function TickerSearchBar({
             selectResult(item);
           }}
           onMouseEnter={() => setActiveIndex(index)}
-          className={`grid w-full grid-cols-[76px_1fr_112px_76px] items-center gap-2 border-b border-bloomberg-border px-3 py-2 text-left last:border-b-0 cursor-pointer transition-colors duration-100 ${
+          className={`grid w-full cursor-pointer grid-cols-[76px_1fr_122px_52px] items-center gap-2 border-b border-bloomberg-border px-3 py-2 text-left transition-colors duration-100 last:border-b-0 ${
             activeIndex === index ? 'bg-bloomberg-surface' : 'bg-black hover:bg-bloomberg-surface'
           }`}
         >
           <span className="truncate font-mono text-[11px] font-bold text-bloomberg-orange">
-            {String(item.symbol || '').toUpperCase()}
+            {normalizeTickerSymbol(item.symbol)}
           </span>
           <span className="truncate font-mono text-[11px] text-bloomberg-white">
             {tickerName(item)}
           </span>
           <span className="truncate border border-bloomberg-border px-1.5 py-0.5 text-center font-mono text-[9px] uppercase text-bloomberg-muted">
-            {exchangeLabel(item)}
+            {tickerExchangeLabel(item)}
           </span>
-          <span className="truncate text-right font-mono text-[11px] font-bold text-bloomberg-white">
-            {formatPrice(tickerPrice(item))}
+          <span className="truncate text-right font-mono text-[10px] uppercase text-bloomberg-muted">
+            {tickerMarket(item)}
           </span>
         </button>
       ))}
@@ -370,7 +209,7 @@ export default function TickerSearchBar({
   ) : null;
 
   return (
-    <div ref={rootRef} className="relative overflow-visible">
+    <div ref={rootRef} className="relative min-w-[320px] max-w-[480px] overflow-visible">
       <div
         className={`flex items-center border bg-black transition-colors duration-150 ${
           open
@@ -390,9 +229,7 @@ export default function TickerSearchBar({
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          onFocus={() => {
-            if (canSearch && results.length) setOpen(true);
-          }}
+          onFocus={() => setOpen(true)}
           placeholder="Search ticker symbol"
           disabled={disabled}
           className="h-10 border-0 bg-black px-1 font-mono text-xs tracking-wider shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
