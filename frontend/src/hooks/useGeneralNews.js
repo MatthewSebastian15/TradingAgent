@@ -6,7 +6,6 @@ const POLL_MS = 120000;
 const CACHE_TTL_MS = 120000;
 const STORAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const STORAGE_PREFIX = 'tradingagents:general-news:v2:';
-const MANUAL_REFRESH_COOLDOWN_MS = 10000;
 const ERROR_BACKOFF_MS = 60000;
 const RATE_LIMIT_BACKOFF_MS = 90000;
 
@@ -97,16 +96,17 @@ async function loadGeneralNews({ category, windowDays, limit, force = false }) {
     return cached.data;
   }
 
-  if (inflightRequests.has(key)) {
+  if (!force && inflightRequests.has(key)) {
     return inflightRequests.get(key);
   }
 
   const backoffUntil = backoffUntilByKey.get(key) || 0;
-  if (backoffUntil > nowMs()) {
+  if (!force && backoffUntil > nowMs()) {
     if (cached?.data) return cached.data;
     throw new Error('General news refresh is cooling down after a recent failed request.');
   }
 
+  const requestKey = force ? `${key}:force:${nowMs()}` : key;
   const request = fetchGeneralNews({ category, windowDays, limit, forceRefresh: force })
     .then((data) => {
       const entry = { data, fetchedAt: nowMs() };
@@ -117,14 +117,14 @@ async function loadGeneralNews({ category, windowDays, limit, force = false }) {
     })
     .catch((error) => {
       backoffUntilByKey.set(key, nowMs() + backoffMsForError(error));
-      if (cached?.data) return cached.data;
+      if (!force && cached?.data) return cached.data;
       throw error;
     })
     .finally(() => {
-      inflightRequests.delete(key);
+      inflightRequests.delete(requestKey);
     });
 
-  inflightRequests.set(key, request);
+  inflightRequests.set(requestKey, request);
   return request;
 }
 
@@ -148,7 +148,6 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
   const [error, setError] = useState(null);
   const mountedRef = useRef(false);
   const requestIdRef = useRef(0);
-  const lastManualRefreshRef = useRef(0);
 
   const load = useCallback(
     async ({ force = false } = {}) => {
@@ -175,18 +174,7 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
     [category, limit, windowDays]
   );
 
-  const reload = useCallback(() => {
-    const currentTime = nowMs();
-    if (
-      lastManualRefreshRef.current &&
-      currentTime - lastManualRefreshRef.current < MANUAL_REFRESH_COOLDOWN_MS
-    ) {
-      return Promise.resolve(data);
-    }
-
-    lastManualRefreshRef.current = currentTime;
-    return load({ force: true });
-  }, [data, load]);
+  const reload = useCallback(() => load({ force: true }), [load]);
 
   useEffect(() => {
     mountedRef.current = true;

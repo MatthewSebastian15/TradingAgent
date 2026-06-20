@@ -98,7 +98,7 @@ describe('useGeneralNews', () => {
     expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
   });
 
-  it('throttles repeated manual refresh clicks', async () => {
+  it('forces every manual refresh click to request fresh news', async () => {
     fetchGeneralNews.mockResolvedValue({ articles: [] });
 
     render(<Harness />);
@@ -106,9 +106,46 @@ describe('useGeneralNews', () => {
     await act(async () => {});
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'reload' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'reload' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'reload' }));
+    });
+
+    expect(fetchGeneralNews).toHaveBeenCalledTimes(3);
+    expect(fetchGeneralNews).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        category: 'all',
+        windowDays: 7,
+        limit: 50,
+        forceRefresh: true,
+      })
+    );
+  });
+
+  it('does not reuse a normal in-flight request for manual force refresh', async () => {
+    let resolveInitialRequest;
+    fetchGeneralNews.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveInitialRequest = resolve;
+        })
+    );
+    fetchGeneralNews.mockResolvedValueOnce({ articles: [{ id: 'fresh' }] });
+
+    render(<Harness />);
+
     fireEvent.click(screen.getByRole('button', { name: 'reload' }));
 
     expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
+    expect(fetchGeneralNews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ forceRefresh: true })
+    );
+
+    await act(async () => {
+      resolveInitialRequest({ articles: [{ id: 'stale' }] });
+    });
   });
 });
