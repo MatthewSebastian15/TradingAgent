@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getMarketOverview } from '../api/market';
 
 const OVERVIEW_REFRESH_MS = 60 * 1000;
-const OVERVIEW_CACHE_TTL_MS = 180 * 1000;
+const OVERVIEW_CACHE_TTL_MS = 120 * 1000;
 const OVERVIEW_STORAGE_PREFIX = 'tradingagents:market-overview:v1:';
 const overviewCache = new Map();
 const overviewInflight = new Map();
@@ -156,7 +156,7 @@ export function useMarketOverviewData(symbols) {
         if (loadError.name === 'AbortError') return null;
         if (requestIdRef.current !== requestId) return null;
         setError('Failed to load market data from yfinance.');
-        setStatus(hasItems(dataRef.current) ? 'success' : 'error');
+        setStatus(hasItems(dataRef.current) ? 'stale' : 'error');
         return null;
       }
     },

@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import React, { useMemo } from 'react';
 
+import { dedupeNewsItems } from '@/lib/news/dedupeNewsItems';
 import { formatNewsTime } from '@/lib/news/formatNewsTime';
 import { normalizeNewsItem } from '@/lib/news/normalizeNewsItem';
 import { sortNewsItemsByNewest } from '@/lib/news/sortNewsItemsByNewest';
@@ -25,7 +26,7 @@ export default function HomeNewsSummary({ news = [], loading = false, error = ''
       normalizeNewsItem(item || {})
     );
 
-    return sortNewsItemsByNewest(normalizedNews).slice(0, 3);
+    return sortNewsItemsByNewest(dedupeNewsItems(normalizedNews)).slice(0, 3);
   }, [news]);
 
   return (

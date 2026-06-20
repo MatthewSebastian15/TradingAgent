@@ -19,3 +19,15 @@ export function formatNewsTime(value) {
 
   return `${diffDays}d ago`;
 }
+
+export function formatNewsTimestamp(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}

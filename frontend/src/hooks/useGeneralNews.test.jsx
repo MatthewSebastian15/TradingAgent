@@ -12,7 +12,7 @@ vi.mock('../services/generalNewsApi', () => ({
 }));
 
 function Harness({ category = 'all', testId = 'count' }) {
-  const { data, status, reload } = useGeneralNews({ category, windowDays: 7, limit: 50 });
+  const { data, status, reload, error } = useGeneralNews({ category, windowDays: 7, limit: 50 });
   const articles = data?.articles || [];
 
   return (
@@ -20,8 +20,12 @@ function Harness({ category = 'all', testId = 'count' }) {
       <span data-testid={`status-${testId}`}>{status}</span>
       <span data-testid={testId}>{articles.length}</span>
       <span data-testid={`ids-${testId}`}>{articles.map((article) => article.id).join(',')}</span>
+      <span data-testid={`error-${testId}`}>{error?.message || ''}</span>
       <button type="button" onClick={reload}>
         reload
+      </button>
+      <button type="button" onClick={() => reload({ force: true, silent: true })}>
+        silent reload
       </button>
     </div>
   );
@@ -59,6 +63,7 @@ describe('useGeneralNews', () => {
     expect(fetchGeneralNews).toHaveBeenCalledWith(
       expect.objectContaining({ category: 'all', windowDays: 7, limit: 50 })
     );
+    expect(fetchGeneralNews).toHaveBeenCalledWith(expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(screen.getByTestId('count')).toHaveTextContent('1');
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
@@ -122,7 +127,7 @@ describe('useGeneralNews', () => {
     );
   });
 
-  it('forces every manual refresh click to request fresh news', async () => {
+  it('forces every manual refresh click to request fresh news and show refreshing status', async () => {
     fetchGeneralNews.mockResolvedValue({ articles: [] });
 
     render(<Harness />);
@@ -133,6 +138,7 @@ describe('useGeneralNews', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'reload' }));
     });
+    expect(screen.getByTestId('status-count')).toHaveTextContent('refreshing');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'reload' }));
@@ -168,7 +174,9 @@ describe('useGeneralNews', () => {
       expect.objectContaining({ forceRefresh: true })
     );
 
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
     expect(screen.getByTestId('ids-count')).toHaveTextContent('fresh');
 
     await act(async () => {
@@ -200,6 +208,54 @@ describe('useGeneralNews', () => {
 
     await act(async () => {
       resolveAutoRefresh({ articles: [{ id: 'new' }] });
+    });
+
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('new');
+  });
+
+  it('keeps old data and marks status stale when refresh fails', async () => {
+    fetchGeneralNews
+      .mockResolvedValueOnce({ articles: [{ id: 'old' }] })
+      .mockRejectedValueOnce(new Error('network failed'));
+
+    render(<Harness />);
+
+    await act(async () => {});
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('old');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'reload' }));
+      await vi.advanceTimersByTimeAsync(700);
+    });
+
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('old');
+    expect(screen.getByTestId('status-count')).toHaveTextContent('stale');
+    expect(screen.getByTestId('error-count')).toHaveTextContent('network failed');
+  });
+
+  it('keeps loaded data visible during silent reload option', async () => {
+    let resolveSilentRefresh;
+    fetchGeneralNews.mockResolvedValueOnce({ articles: [{ id: 'old' }] }).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSilentRefresh = resolve;
+        })
+    );
+
+    render(<Harness />);
+
+    await act(async () => {});
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('old');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'silent reload' }));
+    });
+
+    expect(screen.getByTestId('status-count')).toHaveTextContent('success');
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('old');
+
+    await act(async () => {
+      resolveSilentRefresh({ articles: [{ id: 'new' }] });
     });
 
     expect(screen.getByTestId('ids-count')).toHaveTextContent('new');

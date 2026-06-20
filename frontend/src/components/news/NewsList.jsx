@@ -5,13 +5,13 @@ import { sortNewsItemsByNewest } from '@/lib/news/sortNewsItemsByNewest';
 
 import NewsRow from './NewsRow';
 
-export default function NewsList({ articles }) {
+export default function NewsList({ articles, emptyMessage = 'No news found for this category.' }) {
   const sortedArticles = sortNewsItemsByNewest(articles);
 
   if (!sortedArticles.length) {
     return (
       <Card className="terminal-news-state mt-2 rounded-md border-bloomberg-border bg-black/50 px-3 py-2 text-xs text-bloomberg-muted">
-        No news found for this category.
+        {emptyMessage}
       </Card>
     );
   }
@@ -30,4 +30,5 @@ export default function NewsList({ articles }) {
 
 NewsList.propTypes = {
   articles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  emptyMessage: PropTypes.string,
 };
