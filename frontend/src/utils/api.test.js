@@ -25,10 +25,14 @@ describe('owner session API', () => {
     expect(first).toEqual({});
     expect(second).toEqual(first);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('/api/session', {
-      method: 'POST',
-      headers: { Accept: 'application/json' },
-      credentials: 'include',
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/session',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        credentials: 'include',
+        signal: expect.any(AbortSignal),
+      })
+    );
   });
 });

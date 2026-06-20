@@ -396,7 +396,7 @@ def test_market_quotes_use_separate_bucket_from_analysis_requests(client, monkey
     assert market.json()["quotes"][0]["sym"] == "NVDA"
 
 
-def test_job_event_stream_does_not_consume_request_limit(client, monkeypatch):
+def test_job_read_endpoints_do_not_consume_request_limit(client, monkeypatch):
     async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
         return {
             "decision": "Hold",
@@ -423,6 +423,12 @@ def test_job_event_stream_does_not_consume_request_limit(client, monkeypatch):
             scope="job-events-stream-test", max_per_minute=10, max_concurrent=1
         ),
     )
+    monkeypatch.setattr(
+        "routes.analysis.analysis_read_policy",
+        lambda: RateLimitPolicy(
+            scope="job-events-read-test", max_per_minute=10, max_concurrent=2
+        ),
+    )
 
     headers = {"x-api-key": "same-job-events-key"}
     create = client.post(
@@ -441,4 +447,27 @@ def test_job_event_stream_does_not_consume_request_limit(client, monkeypatch):
     second_summary = client.get(f"/api/analysis/jobs/{job_id}", headers=headers)
 
     assert first_summary.status_code == 200
-    assert second_summary.status_code == 429
+    assert second_summary.status_code == 200
+
+
+def test_analysis_history_reads_do_not_consume_request_limit(client, monkeypatch):
+    monkeypatch.setattr(
+        "routes.analysis_history.request_policy",
+        lambda: RateLimitPolicy(
+            scope="history-request-test", max_per_minute=1, max_concurrent=1
+        ),
+    )
+    monkeypatch.setattr(
+        "routes.analysis_history.analysis_read_policy",
+        lambda: RateLimitPolicy(
+            scope="history-read-test", max_per_minute=10, max_concurrent=2
+        ),
+    )
+
+    headers = {"x-api-key": "same-history-read-key"}
+
+    first = client.get("/api/analysis/history?limit=25", headers=headers)
+    second = client.get("/api/analysis/history?limit=25", headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 200

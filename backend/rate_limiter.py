@@ -433,6 +433,14 @@ def status_policy() -> RateLimitPolicy:
     )
 
 
+def analysis_read_policy() -> RateLimitPolicy:
+    return RateLimitPolicy(
+        scope="analysis-read",
+        max_per_minute=STATUS_RATE_LIMIT_PER_MINUTE,
+        max_concurrent=MAX_CONCURRENT_STATUS_REQUESTS_PER_KEY,
+    )
+
+
 def stream_policy() -> RateLimitPolicy:
     return RateLimitPolicy(
         scope="stream",

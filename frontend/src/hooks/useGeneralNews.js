@@ -5,6 +5,7 @@ import { fetchGeneralNews } from '../services/generalNewsApi';
 const NEWS_AUTO_REFRESH_INTERVAL_MS = 60000;
 const NEWS_VISIBILITY_REFRESH_MIN_GAP_MS = 15000;
 const MIN_REFRESH_SKELETON_MS = 700;
+const NEWS_LOADING_TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 120000;
 const STORAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const STORAGE_PREFIX = 'tradingagents:general-news:v2:';
@@ -50,6 +51,13 @@ function sleep(ms) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function createLoadingTimeoutError() {
+  const error = new Error('General news request timed out. Showing cached data if available.');
+  error.name = 'TimeoutError';
+  error.status = 408;
+  return error;
 }
 
 function readStoredCache(key) {
@@ -262,9 +270,16 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 100 }
       requestIdRef.current = requestId;
       const shouldHoldSkeleton = force && !silent;
       const startedAt = nowMs();
+      let loadingTimeoutId = null;
 
       if (!silent) {
         setStatus(dataRef.current ? 'refreshing' : 'loading');
+        loadingTimeoutId = window.setTimeout(() => {
+          if (!mountedRef.current || requestIdRef.current !== requestId) return;
+          const timeoutError = createLoadingTimeoutError();
+          setError(timeoutError);
+          setStatus(dataRef.current ? 'stale' : 'error');
+        }, NEWS_LOADING_TIMEOUT_MS);
       }
       setError(null);
 
@@ -291,6 +306,8 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 100 }
         setError(err);
         setStatus(dataRef.current ? 'stale' : 'error');
         return null;
+      } finally {
+        if (loadingTimeoutId) window.clearTimeout(loadingTimeoutId);
       }
     },
     [category, limit, windowDays]

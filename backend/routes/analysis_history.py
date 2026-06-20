@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query, Request
 
 from config import ANALYSIS_HISTORY_DEFAULT_LIMIT
 from errors import NotFoundError
-from rate_limiter import limit_request, request_policy
+from rate_limiter import analysis_read_policy, limit_request, request_policy
 from services.analysis_repository import get_analysis_repository
 
 router = APIRouter(tags=["analysis-history"])
@@ -28,7 +28,7 @@ async def list_analysis_history(
 ):
     """Return global analysis history metadata for this personal app."""
 
-    async with limit_request(request, request_policy()):
+    async with limit_request(request, analysis_read_policy()):
         repository = get_analysis_repository()
         items = await asyncio.to_thread(repository.list_analyses, ticker=ticker, limit=limit)
         return {"items": items}
@@ -38,7 +38,7 @@ async def list_analysis_history(
 async def get_analysis_history_result(request_id: str, request: Request):
     """Return one full stored analysis snapshot."""
 
-    async with limit_request(request, request_policy()):
+    async with limit_request(request, analysis_read_policy()):
         repository = get_analysis_repository()
         result = await asyncio.to_thread(
             repository.get_analysis,
