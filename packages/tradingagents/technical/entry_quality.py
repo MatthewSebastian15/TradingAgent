@@ -246,14 +246,15 @@ def calculate_entry_quality(
         )
 
     direction = _entry_direction(levels)
+    technical_with_meta = {**technical, "direction": direction}
     components = {
-        "trend": _trend_alignment_component(direction, current_price, technical),
+        "trend": _trend_alignment_component(direction, current_price, technical_with_meta),
         "risk_reward": _risk_reward_component(
             entry_price, stop_loss, take_profit, risk_reward_ratio
         ),
-        "volume": _volume_component(price_payload, technical),
-        "support_resistance": _support_resistance_component(direction, current_price, technical),
-        "volatility": _volatility_component(current_price, technical),
+        "volume": _volume_component(price_payload, technical_with_meta),
+        "support_resistance": _support_resistance_component(direction, current_price, technical_with_meta),
+        "volatility": _volatility_component(current_price, technical_with_meta),
     }
     if components["risk_reward"] is None:
         return _entry_quality_unavailable("Entry quality requires a non-zero risk/reward setup.")
@@ -364,22 +365,35 @@ def _volume_component(price_data: dict[str, Any], technical: dict[str, Any]) -> 
     volume_trend = str(
         technical.get("volume_trend") or price_data.get("volume_trend") or ""
     ).lower()
+    base_volume_score: float | None = None
     if volume_trend in {"above_average", "strong", "high"}:
-        return 1.0
-    if volume_trend in {"average", "normal", "neutral"}:
-        return 0.65
-    if volume_trend in {"below_average", "weak", "low"}:
-        return 0.25
-    latest_volume = _safe_float(price_data.get("latest_volume"))
-    average_volume = _safe_float(price_data.get("average_volume"))
-    if latest_volume is not None and average_volume and average_volume > 0:
-        ratio = latest_volume / average_volume
-        if ratio >= 1.1:
-            return 1.0
-        if ratio >= 0.9:
-            return 0.65
-        return 0.25
-    return None
+        base_volume_score = 1.0
+    elif volume_trend in {"average", "normal", "neutral"}:
+        base_volume_score = 0.65
+    elif volume_trend in {"below_average", "weak", "low"}:
+        base_volume_score = 0.25
+    else:
+        latest_volume = _safe_float(price_data.get("latest_volume"))
+        average_volume = _safe_float(price_data.get("average_volume"))
+        if latest_volume is not None and average_volume and average_volume > 0:
+            ratio = latest_volume / average_volume
+            if ratio >= 1.1:
+                base_volume_score = 1.0
+            elif ratio >= 0.9:
+                base_volume_score = 0.65
+            else:
+                base_volume_score = 0.25
+
+    if base_volume_score is None:
+        return None
+
+    vwap_signal = str(technical.get("vwap_signal") or "").lower()
+    direction = str(technical.get("direction") or "buy").lower()
+    if vwap_signal == "above_vwap" and direction == "buy":
+        return min(1.0, base_volume_score + 0.2)  # VWAP confirmation bonus
+    elif vwap_signal == "below_vwap" and direction == "buy":
+        return max(0.0, base_volume_score - 0.2)  # VWAP contradiction penalty
+    return base_volume_score
 
 
 def _support_resistance_component(
@@ -471,6 +485,18 @@ def _entry_drivers(components: dict[str, float | None]) -> list[str]:
             else "volatility condition elevated"
         )
     return drivers or ["entry quality uses limited technical data"]
+
+
+def _vwap(rows: list[dict]) -> float | None:
+    total_volume = sum(r.get("volume") or 0 for r in rows if r.get("volume"))
+    if total_volume == 0:
+        return None
+    typical_price_volume = sum(
+        ((r["high"] + r["low"] + r["close"]) / 3) * (r.get("volume") or 0)
+        for r in rows
+        if r.get("volume") and r.get("high") and r.get("low") and r.get("close")
+    )
+    return typical_price_volume / total_volume
 
 
 def build_technical_entry(
@@ -570,9 +596,48 @@ def build_technical_entry(
     if atr is None:
         missing_fields.append("atr")
 
+    vwap = _vwap(rows[-20:])
+    vwap_signal = None
+    if vwap is not None and latest_close is not None:
+        if latest_close > vwap * 1.005:
+            vwap_signal = "above_vwap"
+        elif latest_close < vwap * 0.995:
+            vwap_signal = "below_vwap"
+        else:
+            vwap_signal = "at_vwap"
+
+    entry_quality_result = calculate_entry_quality(
+        price_data={
+            "current_price": latest_close,
+            "volume_trend": volume_trend,
+        },
+        trade_levels={
+            "entry_price": latest_close,
+            "stop_loss": support,
+            "take_profit": resistance,
+            "direction": "buy" if trend == "uptrend" else "sell",
+        },
+        technical_indicators={
+            "trend": trend,
+            "rsi": rsi,
+            "sma_20": sma20,
+            "sma_50": sma50,
+            "macd_signal": macd_signal,
+            "atr": atr,
+            "support": support,
+            "resistance": resistance,
+            "vwap_signal": vwap_signal,
+        },
+    )
+
     return {
         "available": True,
-        "entry_quality": entry_quality,
+        "entry_quality": entry_quality_result.get("label", "N/A") or entry_quality,
+        "entry_quality_score": entry_quality_result.get("score"),
+        "entry_quality_drivers": entry_quality_result.get("drivers", []),
+        "entry_action": entry_quality_result.get("action"),
+        "vwap": round(vwap, 2) if vwap else None,
+        "vwap_signal": vwap_signal,
         "trend": trend,
         "rsi": _round(rsi),
         "rsi_signal": rsi_signal,

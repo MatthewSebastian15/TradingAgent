@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from io import StringIO
 from typing import Any
@@ -594,6 +595,13 @@ def _max_price_fallback_days(config: dict[str, Any] | None = None) -> int:
         return 7
 
 
+def _max_fallback_for_ticker(ticker: str, config: dict[str, Any] | None = None) -> int:
+    base = _max_price_fallback_days(config)
+    if str(ticker or "").upper().endswith(".JK"):
+        return max(base, 14)
+    return base
+
+
 def _expected_trade_date_for_result(method: str, args: tuple) -> str | None:
     if method == "get_stock_data" and len(args) >= 3:
         end_date = str(args[2] or "").strip()
@@ -617,7 +625,7 @@ def _quality_for_result(
             return validate_ohlcv(
                 result,
                 expected_trade_date=_expected_trade_date_for_result(method, args or ()),
-                max_fallback_days=_max_price_fallback_days(config),
+                max_fallback_days=_max_fallback_for_ticker(args[0] if args else "", config),
             )
         except Exception as exc:
             return {
@@ -975,6 +983,78 @@ def route_to_vendor(
         )
 
     attach_metadata = bool(config.get("_vendor_attempt_recorder_id"))
+
+    if method == "get_news":
+        sequence = vendor_order or _vendor_sequence(method)
+        eligible: list[str] = []
+        for vendor in sequence:
+            if vendor not in VENDOR_METHODS[method]:
+                record(vendor, "unsupported", f"Method {method} is not implemented for {vendor}")
+                continue
+            enabled, disabled_reason = _is_vendor_enabled(method, vendor, config)
+            if not enabled:
+                errors.append(f"{vendor}: {disabled_reason}")
+                record(vendor, "disabled", disabled_reason)
+                continue
+            eligible.append(vendor)
+
+        if eligible:
+            futures_map: dict[Any, str] = {}
+            with ThreadPoolExecutor(max_workers=len(eligible), thread_name_prefix="news-vendor") as pool:
+                for vendor in eligible:
+                    futures_map[pool.submit(_call_vendor, method, vendor, args, kwargs, config)] = vendor
+                for future in as_completed(futures_map):
+                    vendor = futures_map[future]
+                    start = time.perf_counter()
+                    try:
+                        result = future.result()
+                        duration_ms = int((time.perf_counter() - start) * 1000)
+                        quality = _quality_for_result(method, result, args, config)
+                        if quality is not None and quality.get("available") is False:
+                            if first_unusable_result is None:
+                                first_unusable_result = result
+                            detail = "; ".join(
+                                quality.get("warnings")
+                                or quality.get("missing_fields")
+                                or ["quality unavailable"]
+                            )
+                            errors.append(f"{vendor}: invalid quality: {detail}")
+                            _purge_cached_vendor_result(method, vendor, args, kwargs, config)
+                            record(vendor, "unavailable", detail, duration_ms=duration_ms)
+                            continue
+                        if _is_unusable_result(result):
+                            if first_unusable_result is None:
+                                first_unusable_result = result
+                            detail = str(
+                                result.get("reason")
+                                if isinstance(result, dict)
+                                else "empty or unusable response"
+                            )
+                            errors.append(f"{vendor}: {detail or 'empty or unusable response'}")
+                            record(vendor, "unavailable", detail or "empty or unusable response", duration_ms=duration_ms)
+                            continue
+                        status = (
+                            "partial"
+                            if quality and quality.get("confidence") in {"low", "medium"}
+                            else "success"
+                        )
+                        record(vendor, status, duration_ms=duration_ms)
+                        return _attach_attempt_metadata(result, local_attempts) if attach_metadata else result
+                    except (AlphaVantagePermanentError, AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
+                        errors.append(f"{vendor}: {sanitize_error(exc)}")
+                        record(vendor, "unavailable", sanitize_error(exc))
+                    except Exception as exc:
+                        errors.append(f"{vendor}: {sanitize_error(exc)}")
+                        status = "budget_exceeded" if "budget" in str(exc).lower() else "failure"
+                        record(vendor, status, sanitize_error(exc))
+
+        if first_unusable_result is not None:
+            return (
+                _attach_attempt_metadata(first_unusable_result, local_attempts)
+                if attach_metadata
+                else first_unusable_result
+            )
+        raise RuntimeError(f"No available vendor for '{method}'. Errors: {' | '.join(errors)}")
 
     for vendor in vendor_order or _vendor_sequence(method):
         if vendor not in VENDOR_METHODS[method]:

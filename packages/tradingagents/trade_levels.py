@@ -12,6 +12,17 @@ from tradingagents.dataflows.providers.errors import ErrorCode
 
 FIXED_RR = 3.0
 RISK_REWARD_DISPLAY = "1:3"
+
+_RR_BY_VOLATILITY: dict[str, float] = {
+    "Low": 2.0,
+    "Medium": 2.5,
+    "High": 3.0,
+    "Very High": 3.5,
+}
+
+
+def _compute_rr_from_volatility(volatility_level: str) -> float:
+    return _RR_BY_VOLATILITY.get(str(volatility_level or "").strip(), FIXED_RR)
 DEFAULT_DECISION = "Hold"
 DEFAULT_VOLATILITY_LEVEL = "Medium"
 
@@ -570,8 +581,7 @@ def _normalize_long(
     if risk <= 0:
         return False
 
-    target_rr, rr_warning = force_fixed_rr(getattr(decision, "risk_reward_ratio", None))
-    _append_warning(warnings, rr_warning)
+    target_rr = _compute_rr_from_volatility(volatility_level)
     take_profit = _round_price(float(entry) + risk * target_rr, ticker, warnings)
     if take_profit is None or float(take_profit) <= float(entry):
         return False
@@ -598,7 +608,7 @@ def _normalize_long(
     decision.price_target = price_target
     decision.risk_per_share = round(risk, 4)
     decision.reward_per_share = round(reward, 4)
-    decision.risk_reward_ratio = FIXED_RR
+    decision.risk_reward_ratio = _compute_rr_from_volatility(volatility_level)
     decision.risk_reward_display = RISK_REWARD_DISPLAY
     return True
 
@@ -635,8 +645,7 @@ def _normalize_short(
     if risk <= 0:
         return False
 
-    target_rr, rr_warning = force_fixed_rr(getattr(decision, "risk_reward_ratio", None))
-    _append_warning(warnings, rr_warning)
+    target_rr = _compute_rr_from_volatility(volatility_level)
     take_profit = _round_price(float(entry) - risk * target_rr, ticker, warnings)
     if take_profit is None or float(take_profit) >= float(entry) or float(take_profit) <= 0:
         return False
@@ -663,7 +672,7 @@ def _normalize_short(
     decision.price_target = price_target
     decision.risk_per_share = round(risk, 4)
     decision.reward_per_share = round(reward, 4)
-    decision.risk_reward_ratio = FIXED_RR
+    decision.risk_reward_ratio = _compute_rr_from_volatility(volatility_level)
     decision.risk_reward_display = RISK_REWARD_DISPLAY
     return True
 

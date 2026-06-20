@@ -15,6 +15,7 @@ from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
 from routes.event_contract import PipelineAgent
 from routes.validation import AnalysisRequest
 from services.report_disclaimer import REPORT_DISCLAIMER
+from tradingagents.risk.thesis_monitor import build_thesis_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,9 @@ SUMMARY_FIELDS = {
     "llm_calls_used",
     "budget_exhausted",
     "agents_skipped",
+    "analysis_incomplete",
+    "llm_budget",
+    "thesis_monitor",
     "financial_highlights",
     "normalized_period_rows",
     "derived_fundamentals",
@@ -779,6 +783,12 @@ def _build_common_result_fields(
         or final_state.get("balanced_gemini_calls_used"),
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
+        "analysis_incomplete": bool(final_state.get("budget_exhausted", False)),
+        "llm_budget": {
+            "used": final_state.get("llm_calls_used") or final_state.get("balanced_gemini_calls_used") or 0,
+            "limit": final_state.get("llm_call_budget") or final_state.get("balanced_gemini_request_budget") or 0,
+            "exhausted": bool(final_state.get("budget_exhausted", False)),
+        },
         "is_partial": bool(final_state.get("is_partial", False)),
         "partial_reason": final_state.get("partial_reason"),
         "completed_stages": final_state.get("completed_stages") or [],
@@ -918,7 +928,13 @@ def parse_final_result(
             common=common,
         )
     )
-    return _with_analysis_overview_and_risk_data_quality(payload, final_state)
+    response = _with_analysis_overview_and_risk_data_quality(payload, final_state)
+    thesis_monitor = build_thesis_monitor(
+        response,
+        data_quality_score=response.get("source_confidence_score"),
+    )
+    response["thesis_monitor"] = thesis_monitor
+    return response
 
 
 def build_partial_result(

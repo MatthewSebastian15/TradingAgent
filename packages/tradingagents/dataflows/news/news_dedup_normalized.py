@@ -5,6 +5,7 @@ from .news_models import NormalizedNewsArticle
 from .news_scoring import PROVIDER_TRUST_SCORE, content_hash
 
 
+# Deprecated: use deduplicate_news from news_aggregator instead
 def deduplicate_news_articles(items: list[NormalizedNewsArticle]) -> list[NormalizedNewsArticle]:
     ranked = sorted(items, key=_dedupe_preference, reverse=True)
     seen_hashes: set[str] = set()

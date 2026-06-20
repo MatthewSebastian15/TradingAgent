@@ -47,6 +47,11 @@ class AnalysisRequest(BaseModel):
     has_existing_position: bool | None = Field(default=False)
     position_quantity: float | None = Field(default=None, ge=0)
     average_entry_price: float | None = Field(default=None, ge=0)
+    portfolio_value_idr: float | None = Field(
+        default=100_000_000,
+        description="User portfolio value in IDR for position sizing calculation.",
+        ge=1_000_000,
+    )
 
 
 def _canonical_from_search_metadata(search_metadata: dict[str, Any] | None) -> str | None:

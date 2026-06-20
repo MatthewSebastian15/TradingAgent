@@ -210,6 +210,7 @@ def run_pipeline_with_progress(
     has_existing_position: bool = False,
     position_quantity: float | None = None,
     average_entry_price: float | None = None,
+    portfolio_value_idr: float | None = None,
 ) -> dict:
     """Run pipeline in-process so SSE can receive real callback events."""
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
@@ -222,6 +223,7 @@ def run_pipeline_with_progress(
     )
     config["time_horizon_months"] = time_horizon_months
     config["job_id"] = request_id
+    config["portfolio_value"] = portfolio_value_idr or 100_000_000
 
     final_state = run_balanced_pipeline(
         ticker,
@@ -252,6 +254,7 @@ def run_pipeline_with_progress_worker(
     has_existing_position: bool = False,
     position_quantity: float | None = None,
     average_entry_price: float | None = None,
+    portfolio_value_idr: float | None = None,
 ) -> dict:
     """Run the progress pipeline inside a process-pool worker."""
 
@@ -280,6 +283,7 @@ def run_pipeline_with_progress_worker(
         has_existing_position,
         position_quantity,
         average_entry_price,
+        portfolio_value_idr,
     )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -64,11 +65,20 @@ def _parse_dt(value: Any) -> datetime:
             return datetime.min.replace(tzinfo=timezone.utc)
 
 
+def _body_hash(item: dict) -> str | None:
+    body = str(item.get("summary") or item.get("description") or item.get("content") or "")
+    normalized = " ".join(body.lower().split())[:120]
+    if len(normalized) < 30:
+        return None
+    return hashlib.md5(normalized.encode()).hexdigest()
+
+
 def deduplicate_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen_urls: set[str] = set()
     seen_titles: set[str] = set()
     seen_similar_titles: list[str] = []
     seen_publisher_date_title: set[str] = set()
+    seen_body_hashes: set[str] = set()
     result: list[dict[str, Any]] = []
 
     for item in items:
@@ -94,6 +104,9 @@ def deduplicate_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         if publisher_key and publisher_key in seen_publisher_date_title:
             continue
+        body_hash = _body_hash(item)
+        if body_hash and body_hash in seen_body_hashes:
+            continue
 
         if normalized_url:
             seen_urls.add(normalized_url)
@@ -101,6 +114,8 @@ def deduplicate_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen_similar_titles.append(normalized_title)
         if publisher_key:
             seen_publisher_date_title.add(publisher_key)
+        if body_hash:
+            seen_body_hashes.add(body_hash)
 
         enriched = dict(item)
         enriched["normalized_title"] = normalized_title

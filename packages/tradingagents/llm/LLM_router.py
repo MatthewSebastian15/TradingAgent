@@ -67,15 +67,24 @@ def apply_guardrail(
         if action in {"BUY", "SELL"}:
             action = "WAIT"
             warnings.append("Action downgraded to WAIT: price data unavailable")
+        return action, warnings
 
     if context.data_quality.get("historical_missing"):
         warnings.append("Technical confidence downgraded: historical data unavailable")
 
-    if context.data_quality.get("financials_missing"):
-        warnings.append("Fundamental confidence downgraded: financial data unavailable")
+    news_missing = context.data_quality.get("news_missing", False)
+    fundamentals_missing = context.data_quality.get("financials_missing", False)
 
-    if context.data_quality.get("news_missing"):
-        warnings.append("Sentiment confidence downgraded: news data unavailable")
+    if news_missing and fundamentals_missing:
+        if action in {"BUY", "SELL"}:
+            action = "WAIT"
+            warnings.append("Action downgraded to WAIT: both news and fundamentals unavailable")
+    elif news_missing:
+        warnings.append("Confidence capped at 60%: news data unavailable")
+        context.data_quality["max_confidence"] = 0.60
+    elif fundamentals_missing:
+        warnings.append("Confidence capped at 55%: fundamental data unavailable")
+        context.data_quality["max_confidence"] = 0.55
 
     if _numeric_score(context.data_quality.get("source_confidence_score", 100), default=100) < 50:
         if action in {"BUY", "SELL"}:
