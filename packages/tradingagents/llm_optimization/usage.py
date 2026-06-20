@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_usage_lock = threading.Lock()
+_daily_usage: dict[str, dict] = defaultdict(lambda: {
+    "calls": 0,
+    "estimated_tokens": 0,
+    "total_latency_ms": 0.0,
+})
 
 
 @dataclass
@@ -124,6 +133,29 @@ def log_usage(record: LLMUsageRecord) -> None:
         record.parse_success,
         record.error,
     )
+
+
+def record_usage(record: LLMUsageRecord) -> None:
+    log_usage(record)
+    with _usage_lock:
+        bucket = _daily_usage[record.agent_name]
+        bucket["calls"] += 1
+        bucket["estimated_tokens"] += record.estimated_input_tokens
+        bucket["total_latency_ms"] += record.latency_ms or 0.0
+
+
+def get_usage_summary() -> dict:
+    with _usage_lock:
+        return {
+            "agents": dict(_daily_usage),
+            "totals": {
+                "calls": sum(v["calls"] for v in _daily_usage.values()),
+                "estimated_tokens": sum(v["estimated_tokens"] for v in _daily_usage.values()),
+            },
+            "free_tier_remaining": max(0, 1500 - sum(
+                v["calls"] for v in _daily_usage.values()
+            )),
+        }
 
 
 class Timer:

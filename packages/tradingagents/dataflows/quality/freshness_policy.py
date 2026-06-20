@@ -2,8 +2,29 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import zoneinfo
+from datetime import datetime, time as dt_time, timezone
 from typing import Any
+
+WIB = zoneinfo.ZoneInfo("Asia/Jakarta")
+_IDX_OPEN = dt_time(9, 0)
+_IDX_CLOSE = dt_time(16, 0)
+
+
+def is_market_open_now(market: str = "IDX") -> bool:
+    _ = market
+    now_wib = datetime.now(WIB)
+    if now_wib.weekday() >= 5:
+        return False
+    return _IDX_OPEN <= now_wib.time() <= _IDX_CLOSE
+
+
+def effective_ttl(field_name: str) -> int:
+    base_ttl = ttl_for_field(field_name)
+    if _canonical_field(field_name) in {"quote", "last_price", "technical_indicators"}:
+        if not is_market_open_now():
+            return 86_400
+    return base_ttl
 
 FIELD_TTL_SECONDS: dict[str, int] = {
     "quote": 300,

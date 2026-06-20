@@ -67,11 +67,11 @@ Do not invent a different horizon such as "short term", "3-6 months", or "6-12 m
 """.strip()
 
 
-def _prompt_json(value: Any, max_chars: int = 9000) -> str:
+def _prompt_json(value: Any, max_chars: int = 9000) -> tuple[str, bool]:
     text = json.dumps(value or {}, indent=2, ensure_ascii=False, default=str)
     if len(text) > max_chars:
-        return text[:max_chars].rstrip() + "\n[TRUNCATED_FOR_PROMPT]"
-    return text
+        return text[:max_chars].rstrip() + "\n[TRUNCATED_FOR_PROMPT]", True
+    return text, False
 
 
 def _get_context(data: CollectedData, key: str) -> dict[str, Any]:
@@ -119,8 +119,13 @@ def market_analyst_prompt(
     data_quality_json: str,
     time_horizon_text: str,
 ) -> str:
-    market_context = _prompt_json(_get_context(data, "market"), max_chars=9000)
-    safety_context = _prompt_json(_get_safety_context(data), max_chars=5000)
+    market_context, market_truncated = _prompt_json(_get_context(data, "market"), max_chars=9000)
+    safety_context, _ = _prompt_json(_get_safety_context(data), max_chars=5000)
+    if market_truncated:
+        quality_dict = json.loads(data_quality_json) if data_quality_json else {}
+        quality_dict["context_truncated"] = True
+        quality_dict["truncated_fields"] = quality_dict.get("truncated_fields", []) + ["market"]
+        data_quality_json = json.dumps(quality_dict)
     return f"""
 [STATIC ROLE]
 You are the Market Analyst.
@@ -155,8 +160,13 @@ def news_social_prompt(
     data_quality_json: str,
     time_horizon_text: str,
 ) -> str:
-    news_context = _prompt_json(_get_context(data, "news_social"), max_chars=8000)
-    safety_context = _prompt_json(_get_safety_context(data), max_chars=5000)
+    news_context, news_truncated = _prompt_json(_get_context(data, "news_social"), max_chars=8000)
+    safety_context, _ = _prompt_json(_get_safety_context(data), max_chars=5000)
+    if news_truncated:
+        quality_dict = json.loads(data_quality_json) if data_quality_json else {}
+        quality_dict["context_truncated"] = True
+        quality_dict["truncated_fields"] = quality_dict.get("truncated_fields", []) + ["news_social"]
+        data_quality_json = json.dumps(quality_dict)
     return f"""
 [STATIC ROLE]
 You are the combined News and Social Sentiment Analyst.
@@ -196,8 +206,13 @@ def fundamentals_prompt(
     data_quality_json: str,
     time_horizon_text: str,
 ) -> str:
-    fundamentals_context = _prompt_json(_get_context(data, "fundamentals"), max_chars=10000)
-    safety_context = _prompt_json(_get_safety_context(data), max_chars=5000)
+    fundamentals_context, fundamentals_truncated = _prompt_json(_get_context(data, "fundamentals"), max_chars=10000)
+    safety_context, _ = _prompt_json(_get_safety_context(data), max_chars=5000)
+    if fundamentals_truncated:
+        quality_dict = json.loads(data_quality_json) if data_quality_json else {}
+        quality_dict["context_truncated"] = True
+        quality_dict["truncated_fields"] = quality_dict.get("truncated_fields", []) + ["fundamentals"]
+        data_quality_json = json.dumps(quality_dict)
     return f"""
 [STATIC ROLE]
 You are the Fundamentals Analyst.
