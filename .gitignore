@@ -65,3 +65,4 @@ graphify-out/
 **/.cache/
 
 CLAUDE.md
+.claude/
