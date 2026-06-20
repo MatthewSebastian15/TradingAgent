@@ -59,6 +59,7 @@ Thumbs.db
 
 # Graphify outputs
 graphify-out/
+.graphifyignore
 
 .cache/
 **/.cache/
