@@ -127,20 +127,21 @@ def test_market_search_returns_local_results_and_warms_yfinance_cache(client, mo
 
     assert first_response.status_code == 200
     assert second_response.status_code == 200
-    assert first_response.json() == {
-        "results": [
-            {
-                "symbol": "BBCA.JK",
-                "name": "Bank Central Asia Tbk PT",
-                "exchange": "IDX",
-                "type": "EQUITY",
-                "market": "ID",
-                "source": "local_universe",
-                "price": None,
-            }
-        ]
+    first_payload = first_response.json()
+    second_payload = second_response.json()
+    assert first_payload["results"][0] == {
+        "symbol": "BBCA.JK",
+        "name": "Bank Central Asia Tbk PT",
+        "exchange": "IDX",
+        "type": "EQUITY",
+        "market": "ID",
+        "source": "local_universe",
+        "rank": first_payload["results"][0]["rank"],
+        "matched_by": "symbol_prefix",
     }
-    assert second_response.json() == first_response.json()
+    assert second_payload["results"] == first_payload["results"]
+    assert first_payload["meta"]["remote_refresh_queued"] is True
+    assert second_payload["meta"]["cache_hit"] is True
     assert calls == [("bbca", 10)]
 
 
@@ -159,8 +160,10 @@ def test_market_search_caches_empty_yfinance_results(client, monkeypatch):
 
     assert first_response.status_code == 200
     assert second_response.status_code == 200
-    assert first_response.json() == {"results": []}
-    assert second_response.json() == {"results": []}
+    assert first_response.json()["results"] == []
+    assert second_response.json()["results"] == []
+    assert first_response.json()["meta"]["remote_refresh_queued"] is True
+    assert second_response.json()["meta"]["cache_hit"] is True
     assert calls == [("zzzzzz!", 5)]
 
 
@@ -177,19 +180,19 @@ def test_market_search_returns_manual_symbol_without_waiting_for_vendor(client, 
     response = client.get("/api/market/search?q=META2&limit=5")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "results": [
-            {
-                "symbol": "META2",
-                "name": "META2",
-                "exchange": "",
-                "type": "SYMBOL",
-                "market": "US",
-                "source": "manual_symbol",
-                "price": None,
-            }
-        ]
-    }
+    assert response.json()["results"] == [
+        {
+            "symbol": "META2",
+            "name": "META2",
+            "exchange": "",
+            "type": "SYMBOL",
+            "market": "US",
+            "source": "manual_symbol",
+            "rank": 99,
+            "matched_by": "manual_symbol",
+        }
+    ]
+    assert response.json()["meta"]["source"] == "manual_symbol"
     assert calls == [("META2", 5)]
 
 

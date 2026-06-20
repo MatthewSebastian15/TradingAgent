@@ -21,7 +21,7 @@ from schemas import (
     MarketQuotesResponse,
     SymbolValidationResponse,
 )
-from services.market_symbol_universe import MARKET_SEARCH_UNIVERSE
+from services.market_search_index import get_popular_tickers, search_local_tickers
 from services.market_yfinance_service import (
     dedupe_symbols,
     get_market_movers,
@@ -62,7 +62,7 @@ _SEARCH_CACHE_TTL_SECONDS = 60.0
 _OHLCV_CACHE_TTL_SECONDS = 60.0
 _SPARKLINE_CACHE_TTL_SECONDS = 300.0
 _QUOTE_CACHE: dict[tuple[str, ...], tuple[float, list[dict]]] = {}
-_SEARCH_CACHE: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
+_SEARCH_CACHE: dict[tuple[str, int, str, str], tuple[float, list[dict[str, Any]]]] = {}
 _OHLCV_CACHE: dict[tuple[str, str, str], tuple[float, dict[str, Any]]] = {}
 _SPARKLINE_CACHE: dict[tuple[tuple[str, ...], str], tuple[float, dict[str, list[float]]]] = {}
 _OHLCV_RANGE_DAYS = {"1W": 7, "1M": 31, "3M": 92, "6M": 183, "1Y": 365}
@@ -610,70 +610,6 @@ async def _fetch_sparklines(symbols: list[str], range_key: str) -> dict[str, lis
     values = await asyncio.gather(*tasks)
     return {symbol: list(series) for symbol, series in zip(symbols, values, strict=False)}
 
-def _compact_search_text(value: Any) -> str:
-    return re.sub(r"[^A-Z0-9]", "", str(value or "").strip().upper())
-
-
-def _local_search_score(item: dict[str, Any], query: str, compact_query: str) -> int | None:
-    symbol = str(item.get("symbol") or "").strip().upper()
-    compact_symbol = _compact_search_text(symbol)
-    haystack = " ".join(
-        str(item.get(key) or "").strip().upper()
-        for key in ("symbol", "name", "exchange", "type", "market")
-    )
-    compact_haystack = _compact_search_text(haystack)
-    tokens = [_compact_search_text(part) for part in re.split(r"[^A-Z0-9^._=-]+", haystack)]
-
-    if symbol == query or compact_symbol == compact_query:
-        return 0
-    if symbol.startswith(query):
-        return 1
-    if compact_symbol.startswith(compact_query):
-        return 2
-    if any(token.startswith(compact_query) for token in tokens if token):
-        return 3
-    if haystack.startswith(query):
-        return 4
-    if query in haystack:
-        return 8
-    if compact_query in compact_haystack:
-        return 9
-    return None
-
-
-def _search_local_tickers(query: str, limit: int) -> list[dict[str, Any]]:
-    normalized_query = str(query or "").strip().upper()
-    compact_query = _compact_search_text(normalized_query)
-    if not compact_query:
-        return []
-
-    scored: list[tuple[int, int, dict[str, Any]]] = []
-    for index, item in enumerate(MARKET_SEARCH_UNIVERSE):
-        score = _local_search_score(item, normalized_query, compact_query)
-        if score is None:
-            continue
-        scored.append((score, index, item))
-
-    results = [
-        {**item, "symbol": str(item["symbol"]).upper(), "source": "local_universe", "price": None}
-        for score, index, item in sorted(scored, key=lambda value: (value[0], value[1]))[:limit]
-    ]
-    if results or len(compact_query) < 2 or not _QUOTE_SYMBOL_RE.fullmatch(normalized_query):
-        return results
-
-    return [
-        {
-            "symbol": normalized_query,
-            "name": normalized_query,
-            "exchange": "",
-            "type": "SYMBOL",
-            "market": "ID" if normalized_query.endswith(".JK") else "US",
-            "source": "manual_symbol",
-            "price": None,
-        }
-    ]
-
-
 def _merge_search_results(*groups: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -721,22 +657,14 @@ def _extract_search_quotes(search: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _fetch_last_price(yf: Any, symbol: str) -> float | None:
-    try:
-        info = yf.Ticker(symbol).fast_info
-        value = _fast_info_value(
-            info,
-            "last_price",
-            "regularMarketPrice",
-            "lastPrice",
-            "previous_close",
-            "regularMarketPreviousClose",
-        )
-        number_value = float(value) if value is not None else None
-        return round(number_value, 2) if number_value is not None else None
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("Failed to fetch search price for %s: %s", symbol, exc)
-        return None
+def _infer_search_market(symbol: str, asset_type: str) -> str:
+    if symbol.endswith(".JK"):
+        return "ID"
+    if asset_type == "CRYPTO" or symbol.endswith("-USD"):
+        return "CRYPTO"
+    if asset_type == "FX" or symbol.endswith("=X"):
+        return "FX"
+    return "US"
 
 
 def _clean_search_result(raw: dict[str, Any]) -> dict[str, Any] | None:
@@ -752,16 +680,14 @@ def _clean_search_result(raw: dict[str, Any]) -> dict[str, Any] | None:
         or symbol
     )
     exchange = raw.get("exchDisp") or raw.get("exchange") or raw.get("fullExchangeName") or ""
-    quote_type = raw.get("quoteType") or raw.get("typeDisp") or raw.get("type") or ""
-    raw_price = raw.get("regularMarketPrice") or raw.get("price")
-    price = _as_float(raw_price)
+    quote_type = str(raw.get("quoteType") or raw.get("typeDisp") or raw.get("type") or "").strip().upper()
 
     return {
         "symbol": symbol,
         "name": str(name).strip(),
         "exchange": str(exchange).strip().upper(),
-        "type": str(quote_type).strip().upper(),
-        "price": round(price, 2) if price is not None else None,
+        "type": quote_type,
+        "market": _infer_search_market(symbol, quote_type),
         "source": "yfinance_search",
     }
 
@@ -790,47 +716,161 @@ def _search_tickers(query: str, limit: int) -> list[dict[str, Any]]:
         return []
 
 
-def _refresh_search_cache(query: str, limit: int, local_results: list[dict[str, Any]]) -> None:
+def _refresh_search_cache(
+    query: str,
+    limit: int,
+    market: str,
+    asset_type: str,
+    local_results: list[dict[str, Any]],
+) -> None:
     remote_results = _search_tickers(query, limit)
     results = _merge_search_results(local_results, remote_results, limit=limit)
-    _SEARCH_CACHE[(query.lower(), limit)] = (monotonic(), _clone_search_results(results))
+    _SEARCH_CACHE[(query.lower(), limit, market, asset_type)] = (monotonic(), _clone_search_results(results))
+
+
+def _search_meta(
+    *,
+    started_at: float,
+    query: str,
+    limit: int,
+    market: str,
+    asset_type: str,
+    source: str,
+    cache_hit: bool = False,
+    remote_refresh_queued: bool = False,
+) -> dict[str, Any]:
+    return {
+        "query": query,
+        "limit": limit,
+        "market": market,
+        "type": asset_type,
+        "source": source,
+        "cache_hit": cache_hit,
+        "remote_refresh_queued": remote_refresh_queued,
+        "latency_ms": int((monotonic() - started_at) * 1000),
+    }
 
 
 @router.get("/market/search", tags=["market"])
 async def search_market_tickers(
     background_tasks: BackgroundTasks,
     request: Request,
-    q: str = Query(..., min_length=2, description="Ticker or company search query."),
+    q: str = Query(default="", description="Ticker or company search query."),
     limit: int = Query(default=10, ge=1, le=20, description="Maximum number of search results."),
-) -> dict[str, list[dict[str, Any]]]:
-    """Search yfinance tickers and return canonical symbols for the frontend autocomplete."""
+    market: str = Query(default="ALL"),
+    asset_type: str = Query(default="ALL", alias="type"),
+) -> dict[str, Any]:
+    """Search ticker metadata without blocking on yfinance quote data."""
+    started_at = monotonic()
     async with _market_data_limit(request):
         query = q.strip()
+        normalized_market = str(market or "ALL").strip().upper() or "ALL"
+        normalized_type = str(asset_type or "ALL").strip().upper() or "ALL"
         if len(query) < 2:
-            return {"results": []}
+            return {
+                "results": [],
+                "meta": _search_meta(
+                    started_at=started_at,
+                    query=query,
+                    limit=limit,
+                    market=normalized_market,
+                    asset_type=normalized_type,
+                    source="empty",
+                    remote_refresh_queued=False,
+                ),
+            }
 
-        cache_key = (query.lower(), limit)
+        cache_key = (query.lower(), limit, normalized_market, normalized_type)
         now = monotonic()
-        local_results = _search_local_tickers(query, limit)
+        local_results = search_local_tickers(
+            query, limit, market=normalized_market, asset_type=normalized_type
+        )
         if len(local_results) >= limit:
-            return {"results": local_results[:limit]}
+            source = "manual_symbol" if local_results[0].get("source") == "manual_symbol" else "local_universe"
+            return {
+                "results": local_results[:limit],
+                "meta": _search_meta(
+                    started_at=started_at,
+                    query=query,
+                    limit=limit,
+                    market=normalized_market,
+                    asset_type=normalized_type,
+                    source=source,
+                ),
+            }
 
         cached = _SEARCH_CACHE.get(cache_key)
         if cached is not None:
             cached_at, cached_results = cached
             if now - cached_at <= _SEARCH_CACHE_TTL_SECONDS:
+                results = _merge_search_results(
+                    local_results, _clone_search_results(cached_results), limit=limit
+                )
+                if local_results and cached_results:
+                    source = "local_plus_remote_cache"
+                elif cached_results:
+                    source = "remote_cache"
+                elif local_results and local_results[0].get("source") == "manual_symbol":
+                    source = "manual_symbol"
+                elif local_results:
+                    source = "local_universe"
+                else:
+                    source = "empty"
                 return {
-                    "results": _merge_search_results(
-                        local_results, _clone_search_results(cached_results), limit=limit
-                    )
+                    "results": results,
+                    "meta": _search_meta(
+                        started_at=started_at,
+                        query=query,
+                        limit=limit,
+                        market=normalized_market,
+                        asset_type=normalized_type,
+                        source=source,
+                        cache_hit=True,
+                    ),
                 }
 
         background_tasks.add_task(
-            _refresh_search_cache, query, limit, _clone_search_results(local_results)
+            _refresh_search_cache,
+            query,
+            limit,
+            normalized_market,
+            normalized_type,
+            _clone_search_results(local_results),
         )
         results = local_results[:limit]
+        if results and results[0].get("source") == "manual_symbol":
+            source = "manual_symbol"
+        elif results:
+            source = "local_with_remote_refresh_queued"
+        else:
+            source = "empty"
 
-    return {"results": results}
+    return {
+        "results": results,
+        "meta": _search_meta(
+            started_at=started_at,
+            query=query,
+            limit=limit,
+            market=normalized_market,
+            asset_type=normalized_type,
+            source=source,
+            remote_refresh_queued=True,
+        ),
+    }
+
+
+@router.get("/market/search/warmup", tags=["market"])
+async def warmup_market_search(request: Request, limit: int = Query(default=100, ge=1, le=100)) -> dict[str, Any]:
+    """Return lightweight popular search metadata for local-first autocomplete warmup."""
+    async with _market_data_limit(request):
+        popular = get_popular_tickers(limit)
+
+    return {
+        "popular": popular,
+        "markets": ["ALL", "US", "ID", "ETF", "FX", "CRYPTO", "INDEX"],
+        "types": ["ALL", "EQUITY", "ETF", "INDEX", "FX", "CRYPTO", "FUTURE"],
+        "meta": {"source": "local_universe", "count": len(popular)},
+    }
 
 
 @router.get("/market/ohlcv", tags=["market"])

@@ -26,12 +26,26 @@ export async function validateMarketSymbol(symbol, { signal } = {}) {
   return parseMarketResponse(response);
 }
 
-export async function searchMarketTickers(query, { limit = 10, signal } = {}) {
+export async function searchMarketTickers(
+  query,
+  { limit = 10, market = 'ALL', type = 'ALL', signal } = {}
+) {
   const params = new URLSearchParams({
     q: String(query || ''),
     limit: String(limit),
+    market: String(market || 'ALL'),
+    type: String(type || 'ALL'),
   });
   const response = await fetch(buildApiUrl(`/market/search?${params.toString()}`), {
+    headers: await buildAuthHeaders(),
+    credentials: 'include',
+    signal,
+  });
+  return parseMarketResponse(response);
+}
+
+export async function getMarketSearchWarmup({ signal } = {}) {
+  const response = await fetch(buildApiUrl('/market/search/warmup'), {
     headers: await buildAuthHeaders(),
     credentials: 'include',
     signal,
