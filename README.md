@@ -140,7 +140,6 @@ TradingAgent-main/
 ├─ Dockerfile.backend
 ├─ Dockerfile.frontend
 ├─ docker-compose.yml
-├─ docker-compose.mock.yml
 └─ README.md
 ```
 
@@ -283,8 +282,6 @@ The analysis response can include:
 | `/market` | Market dashboard |
 | `/econ` | Economic placeholder, `Coming Soon` |
 | `/economic` | Redirects to `/econ` |
-| `/ai-agent.test` | Mock AI Agent, only when `VITE_ENABLE_MOCK=true` |
-| `/ai-agent.test/:resourceId` | Mock detail, only when mock mode is enabled |
 
 Legacy redirects:
 
@@ -294,10 +291,6 @@ Legacy redirects:
 | `/analysis-live` | `/ai-agent` |
 | `/AI-Research` | `/ai-agent` |
 | `/ai-research` | `/ai-agent` |
-| `/analysis.test` | `/ai-agent.test` |
-| `/analysis-mock` | `/ai-agent.test` |
-| `/AI-Research.test` | `/ai-agent.test` |
-| `/ai-research.test` | `/ai-agent.test` |
 
 ---
 
@@ -639,7 +632,6 @@ Variables read by the frontend:
 |---|---|---|
 | `VITE_API_BASE_URL` | `/api` | Browser API base path. |
 | `VITE_API_URL` | empty | Legacy/compatibility API URL override. |
-| `VITE_ENABLE_MOCK` | `false` | Enables the mock route `/ai-agent.test`. |
 | `VITE_DEV_HOST` | `127.0.0.1` | Vite dev server host. |
 | `VITE_DEV_PORT` | `3000` | Vite dev server port. |
 | `VITE_BACKEND_PROXY_TARGET` | `http://backend:8000` | Proxy target for `/api` during dev. |
@@ -684,17 +676,6 @@ The development compose stack uses:
 - Result volume `tradingagent-results`.
 - Frontend `node_modules` volume.
 
-### Docker with Mock Frontend
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build
-```
-
-The mock route is available at:
-
-```text
-http://localhost:3000/ai-agent.test
-```
 
 ### Docker with Ollama
 
