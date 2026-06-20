@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from threading import Lock
@@ -23,6 +24,7 @@ from tradingagents.yfinance_runtime import yf
 from .news_decision_filter import split_ai_analysis_news
 from .news_dedup_normalized import deduplicate_news_articles
 from .news_models import NewsEntity, NormalizedNewsArticle, article_to_dict
+from .news_query_builder import build_ticker_news_queries
 from .news_relevance import is_relevant_news
 from .news_scoring import score_news_article
 from .news_ticker_aliases import resolve_news_ticker
@@ -70,6 +72,7 @@ class NewsService:
         debug: bool = False,
         include_raw: bool = False,
         bypass_cache: bool = False,
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
         profile = resolve_news_ticker(ticker)
         window_days = max(1, int(window_days or self.config.get("default_window_days", 30)))
@@ -97,11 +100,11 @@ class NewsService:
         )
         cache = _active_cache(self.config)
 
-        if self.config.get("cache_enabled", True) and not bypass_cache and not debug:
+        if self.config.get("cache_enabled", True) and not (bypass_cache or force_refresh) and not debug:
             cached = cache.get(cache_key)
             if isinstance(cached, dict):
                 result = copy.deepcopy(cached)
-                result["cache"] = {"hit": True}
+                result["cache"] = {**dict(result.get("cache") or {}), "enabled": True, "hit": True}
                 return result
 
         enabled_providers = _string_list(
@@ -116,6 +119,7 @@ class NewsService:
                 enabled_providers.append(provider_filter)
 
         provider_status: dict[str, str] = {}
+        ticker_queries = build_ticker_news_queries(profile, max_queries=12)
         provider_health: dict[str, dict[str, Any]] = {}
         debug_attempts: dict[str, list[dict[str, Any]]] = {}
         articles: list[NormalizedNewsArticle] = []
@@ -398,9 +402,13 @@ class NewsService:
         )
         result = {
             "enabled": bool(enabled_providers or self.config.get("enable_yfinance_fallback", True)),
+            "mode": "ticker_news",
             "ticker": profile["ticker"],
             "company_name": profile["company_name"],
+            "aliases": profile.get("aliases", []),
             "window_days": window_days,
+            "limit": ui_limit,
+            "last_updated": datetime.now(timezone.utc).isoformat(),
             "providers_used": providers_used,
             "provider_status": provider_status,
             "provider_health": provider_health,
@@ -423,8 +431,13 @@ class NewsService:
                 "market_context_news_count": len(market_context_news),
                 "excluded_news_count": len(excluded_news),
             },
+            "limitations": []
+            if prompt_articles
+            else [
+                "No company-specific news passed the strict decision filter. Market context was not used as direct company evidence."
+            ],
             "empty_reason": None if ui_articles else "No relevant company-specific news was found.",
-            "cache": {"hit": False},
+            "cache": {"enabled": bool(self.config.get("cache_enabled", True)), "hit": False},
         }
         if debug:
             result["debug"] = {
@@ -433,8 +446,16 @@ class NewsService:
                 "deduplication": {
                     "articles_before": len(articles),
                     "articles_after": len(deduped),
+                    "removed_count": dedup_removed_count,
                     "articles_for_ui": len(ui_articles),
                     "articles_for_prompt": len(prompt_articles),
+                },
+                "ticker_profile": profile,
+                "queries": ticker_queries,
+                "decision_filter": {
+                    "decision_min_relevance_score": decision_min,
+                    "rss_decision_min_relevance_score": rss_decision_min,
+                    "excluded_reasons": dict(Counter(str(item["reason"]) for item in excluded_news)),
                 },
                 "strict_news_filter": {
                     "excluded_news": [
@@ -499,7 +520,10 @@ def format_news_for_prompt(context: dict[str, Any]) -> str:
         articles = []
     if not isinstance(articles, list) or not articles:
         ticker = context.get("ticker") if isinstance(context, dict) else "ticker"
-        return f"No high-relevance company-specific news found for {ticker}."
+        return (
+            f"No company-specific news passed the strict decision filter for {ticker}. "
+            "Broad market context is available only as background and should not be used as direct company catalyst evidence."
+        )
 
     lines = [
         f"## Company News Used for AI Decision: {context.get('ticker')}",

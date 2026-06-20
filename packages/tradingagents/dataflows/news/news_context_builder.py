@@ -33,7 +33,8 @@ def build_news_context(
     """
     result = dict(news_result or {})
     limit = max(1, min(int(max_articles or 8), 10))
-    articles = _candidate_articles(result)
+    strict_mode = bool(result.get("strict_news_filter", {}).get("enabled", True))
+    articles = _candidate_articles(result, strict=strict_mode)
     company_name = result.get("company_name")
     aliases = result.get("aliases")
     relevant = [
@@ -50,6 +51,27 @@ def build_news_context(
     ranked = sorted(relevant, key=lambda article: _rank_score(article, symbol), reverse=True)
     top_articles = [_compact_article(article) for article in ranked[:limit]]
     vendor_summary = _vendor_summary(result, articles)
+    if strict_mode and not top_articles:
+        return {
+            "news_context": {
+                "status": "limited",
+                "articles_fetched": int(result.get("articles_found") or 0),
+                "used_in_prompt_count": 0,
+                "articles_used_in_prompt": 0,
+                "top_articles": [],
+                "limitations": [
+                    "No company-specific news passed the strict decision filter. Market context was not used as direct company evidence."
+                ],
+                "vendor_summary": vendor_summary,
+                "market": market,
+                "provider_status": result.get("provider_status"),
+                "providers_used": result.get("providers_used"),
+                "strict_news_filter": result.get("strict_news_filter"),
+                "articles_found": result.get("articles_found"),
+                "market_context_news_count": len(result.get("market_context_news") or []),
+            }
+        }
+
     limitations = _limitations(result, top_articles)
     status = _status(result, top_articles)
     return {
@@ -57,22 +79,30 @@ def build_news_context(
             "status": status,
             "articles_fetched": int(result.get("articles_found") or len(articles) or 0),
             "used_in_prompt_count": len(top_articles),
+            "articles_used_in_prompt": len(top_articles),
             "top_articles": top_articles,
             "limitations": limitations,
             "vendor_summary": vendor_summary,
             "market": market,
+            "provider_status": result.get("provider_status"),
+            "providers_used": result.get("providers_used"),
+            "strict_news_filter": result.get("strict_news_filter"),
+            "articles_found": result.get("articles_found"),
+            "market_context_news_count": len(result.get("market_context_news") or []),
         }
     }
 
 
-def _candidate_articles(result: dict[str, Any]) -> list[Any]:
+def _candidate_articles(result: dict[str, Any], *, strict: bool = True) -> list[Any]:
     decision_articles = result.get("decision_company_news")
     prompt_articles = result.get("prompt_articles")
-    articles = result.get("articles")
     if isinstance(decision_articles, list) and decision_articles:
         return decision_articles
     if isinstance(prompt_articles, list) and prompt_articles:
         return prompt_articles
+    if strict:
+        return []
+    articles = result.get("articles")
     return articles if isinstance(articles, list) else []
 
 

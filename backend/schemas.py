@@ -257,36 +257,60 @@ class NewsEntity(ApiSchema):
 
 
 class NewsArticle(ApiSchema):
-    provider: str
-    ticker: str
-    title: str
-    url: str
+    provider: str | None = None
+    provider_article_id: str | None = None
+    ticker: str | None = None
+    company_name: str | None = None
+    title: str | None = None
+    url: str | None = None
     summary: str | None = None
     image_url: str | None = None
     source: str | None = None
     source_domain: str | None = None
+    category: str | None = None
+    feed_id: str | None = None
+    feed_tier: int | None = None
     published_at: str | None = None
     sentiment_label: str | None = None
     sentiment_score: float | None = None
     relevance_score: float = 0
+    relevance_category: str | None = None
     relevance_reasons: list[str] = Field(default_factory=list)
+    entity_match: str | None = None
+    matched_terms: list[str] = Field(default_factory=list)
+    bucket: str | None = None
+    market_context_only: bool | None = None
+    provider_trust_score: float | None = None
+    final_rank_score: float | None = None
+    decision_filter_reason: str | None = None
     entities: list[NewsEntity] = Field(default_factory=list)
 
 
 class NewsResponse(ApiSchema):
-    enabled: bool = True
-    ticker: str
+    enabled: bool | None = None
+    mode: str | None = None
+    ticker: str | None = None
     company_name: str | None = None
-    window_days: int = 30
+    aliases: list[str] | None = None
+    window_days: int | None = None
+    limit: int | None = None
+    last_updated: str | None = None
     providers_used: list[str] = Field(default_factory=list)
-    provider_status: dict[str, str] = Field(default_factory=dict)
-    provider_health: dict[str, Any] = Field(default_factory=dict)
-    articles_found: int = 0
-    articles_used_in_prompt: int = 0
+    provider_status: dict[str, str] | None = None
+    provider_health: dict[str, Any] | None = None
+    articles_found: int | None = None
+    articles_used_in_prompt: int | None = None
+    dedup_removed_count: int | None = None
+    duplicate_removed_count: int | None = None
     average_sentiment: str | None = None
-    articles: list[NewsArticle] = Field(default_factory=list)
+    articles: list[NewsArticle] | None = None
+    decision_company_news: list[NewsArticle] | None = None
+    market_context_news: list[NewsArticle] | None = None
+    prompt_articles: list[NewsArticle] | None = None
+    strict_news_filter: dict[str, Any] | None = None
+    limitations: list[str] | None = None
     empty_reason: str | None = None
-    cache: dict[str, Any] = Field(default_factory=dict)
+    cache: dict[str, Any] | None = None
 
 
 class NewsImpactItem(ApiSchema):

@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 from tradingagents.dataflows.news.news_dedup_normalized import deduplicate_news_articles
 from tradingagents.dataflows.news.news_models import NormalizedNewsArticle
 from tradingagents.dataflows.news.news_provider_base import BaseNewsProvider, ProviderFetchResult
+from tradingagents.dataflows.news.news_query_builder import build_ticker_news_queries
 from tradingagents.dataflows.news.news_scoring import score_news_article
 from tradingagents.dataflows.news.news_ticker_aliases import resolve_news_ticker
 
@@ -106,18 +107,16 @@ class GoogleNewsLightProvider(BaseNewsProvider):
 
 
 def _build_query(ticker_profile: dict[str, Any]) -> str:
-    aliases = [str(item).strip() for item in ticker_profile.get("aliases", []) if str(item).strip()]
+    queries = build_ticker_news_queries(ticker_profile, max_queries=8)
+    if queries:
+        return " OR ".join(f"({query})" for query in queries)
+
     company_name = str(ticker_profile.get("company_name") or "").strip()
     short_ticker = str(
         ticker_profile.get("short_ticker") or ticker_profile.get("ticker") or ""
     ).strip()
-    if ticker_profile.get("country") == "id":
-        terms = list(dict.fromkeys([company_name, short_ticker, *aliases]))[:4]
-        quoted = " OR ".join(f'"{term}"' for term in terms if len(term) >= 3)
-        return f"({quoted}) saham"
-    terms = list(dict.fromkeys([short_ticker, company_name, *aliases]))[:4]
-    quoted = " OR ".join(f'"{term}"' for term in terms if len(term) >= 2)
-    return f"({quoted}) stock"
+    suffix = "saham" if ticker_profile.get("country") == "id" else "stock"
+    return f'"{company_name or short_ticker}" {suffix}'
 
 
 def _time_period(window_days: int) -> str:

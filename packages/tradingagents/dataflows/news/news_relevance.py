@@ -6,8 +6,9 @@ import re
 from typing import Any
 
 from .news_entity_resolver import resolve_news_entities
+from .news_ticker_aliases import resolve_news_ticker
 
-NEWS_PRIORITY = ["yfinance", "google_news_light", "newsdata", "marketaux"]
+NEWS_PRIORITY = ["google_news_light", "marketaux", "rss_context", "newsdata", "yfinance"]
 
 NEWS_RELEVANCE_CATEGORIES = {
     "company_specific",
@@ -32,11 +33,40 @@ MARKET_MOVING_KEYWORDS = {
     "rights issue",
     "fundraising",
     "ipo",
+    "guidance",
+    "buyback",
+    "share buyback",
     "stock split",
-    "regulatory",
-    "sanksi",
     "lawsuit",
+    "probe",
+    "regulator",
+    "default",
+    "debt",
+    "downgrade",
+    "upgrade",
+    "analyst rating",
+    "target price",
 }
+
+INDONESIA_MARKET_MOVING_KEYWORDS = {
+    "laba bersih",
+    "pendapatan",
+    "dividen",
+    "rights issue",
+    "akuisisi",
+    "merger",
+    "ekspansi",
+    "utang",
+    "obligasi",
+    "buyback saham",
+    "pemecahan saham",
+    "stock split",
+    "suspensi",
+    "BEI",
+    "OJK",
+}
+
+ALL_MARKET_MOVING_KEYWORDS = MARKET_MOVING_KEYWORDS | INDONESIA_MARKET_MOVING_KEYWORDS
 
 MACRO_KEYWORDS = {
     "rupiah",
@@ -104,6 +134,12 @@ def build_news_relevance_terms(
     terms.extend([canonical, base])
     terms.extend(_company_aliases(company_name))
     terms.extend(str(alias or "").strip() for alias in aliases or [])
+    try:
+        profile = resolve_news_ticker(canonical)
+    except ValueError:
+        profile = {}
+    terms.extend(str(alias or "").strip() for alias in profile.get("aliases", []))
+    terms.extend(str(alias or "").strip() for alias in profile.get("subsidiaries", []))
     return {term for raw in terms if (term := _clean_term(raw))}
 
 
@@ -187,7 +223,7 @@ def score_news_relevance(
     if sector and _contains_term(text, sector):
         score += 15
         reasons.append("sector_match")
-    if any(keyword in text for keyword in MARKET_MOVING_KEYWORDS):
+    if any(keyword.lower() in text for keyword in ALL_MARKET_MOVING_KEYWORDS):
         score += 20
         reasons.append("market_moving_keyword")
     if any(keyword in text for keyword in MACRO_KEYWORDS):

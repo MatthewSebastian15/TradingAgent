@@ -283,15 +283,14 @@ describe('NewsTab', () => {
     expect(screen.getByText('Jakarta Composite Tracks Regional Risk Appetite')).toBeInTheDocument();
   });
 
-  it('renders strict news split in compact sections', () => {
+  it('renders strict news split in company-specific and market context sections', () => {
     render(<NewsTab result={makeStrictNewsResult()} />);
 
-    const decisionSection = screen.getByText('Company News').closest('.rounded-md');
-    const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
+    const decisionSection = screen.getByText('Company-specific News').closest('.rounded-md');
+    const contextSection = screen.getByText('Market Context').closest('.rounded-md');
 
     expect(decisionSection).toBeTruthy();
     expect(contextSection).toBeTruthy();
-    expect(screen.queryByText('Company News Used for Decision')).not.toBeInTheDocument();
     expect(
       within(decisionSection).getByText('Bank Central Asia Reports Profit Growth')
     ).toBeInTheDocument();
@@ -301,6 +300,7 @@ describe('NewsTab', () => {
     expect(
       within(contextSection).getByText('Asian Markets Rise Before Fed Decision')
     ).toBeInTheDocument();
+    expect(screen.getByText('Market Context, not direct company evidence')).toBeInTheDocument();
     expect(screen.getByText('Excluded News Debug')).toBeInTheDocument();
     expect(screen.getByText('Weak RSS Item Without Company Match')).toBeInTheDocument();
   });
@@ -308,130 +308,61 @@ describe('NewsTab', () => {
   it('hides strict excluded news when debug rows are absent', () => {
     render(<NewsTab result={makeStrictNewsResult({ includeExcluded: false })} />);
 
-    expect(screen.getByText('Company News')).toBeInTheDocument();
-    expect(screen.getByText('Market Context News')).toBeInTheDocument();
+    expect(screen.getByText('Company-specific News')).toBeInTheDocument();
+    expect(screen.getByText('Market Context')).toBeInTheDocument();
     expect(screen.queryByText('Excluded News Debug')).not.toBeInTheDocument();
   });
 
-  it('limits strict company and market context news to 5 and shows all on demand', () => {
+  it('does not fallback to market context inside company-specific news', () => {
     render(
       <NewsTab
         result={makeStrictNewsResult({
           includeExcluded: false,
-          companyCount: 7,
-          marketContextCount: 10,
+          companyCount: 0,
+          marketContextCount: 1,
         })}
       />
     );
 
-    const companySection = screen.getByText('Company News').closest('.rounded-md');
-    const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
+    const companySection = screen.getByText('Company-specific News').closest('.rounded-md');
+    const contextSection = screen.getByText('Market Context').closest('.rounded-md');
 
-    expect(within(companySection).getByText('Company Overflow Article 7')).toBeInTheDocument();
+    expect(within(companySection).getByText(/No company-specific news/i)).toBeInTheDocument();
     expect(
-      within(companySection).queryByText('Bank Central Asia Reports Profit Growth')
+      within(companySection).queryByText('Asian Markets Rise Before Fed Decision')
     ).not.toBeInTheDocument();
-    fireEvent.click(within(companySection).getByRole('button', { name: 'Show All (7)' }));
     expect(
-      within(companySection).getByText('Bank Central Asia Reports Profit Growth')
-    ).toBeInTheDocument();
-
-    expect(
-      within(contextSection).getByText('Market Context Overflow Article 10')
-    ).toBeInTheDocument();
-    expect(
-      within(contextSection).queryByText('Market Context Overflow Article 5')
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(within(contextSection).getByRole('button', { name: 'Show All (10)' }));
-
-    expect(
-      within(contextSection).getByText('Market Context Overflow Article 5')
+      within(contextSection).getByText('Asian Markets Rise Before Fed Decision')
     ).toBeInTheDocument();
   });
 
-  it('sorts strict company news preview by impact without showing all', () => {
-    render(
-      <NewsTab
-        result={makeStrictNewsResult({
-          includeExcluded: false,
-          companyCount: 6,
-          companyOverrides: [
-            { impact: 'low', impact_score: 20, title: 'Low Company News' },
-            { impact: 'high', impact_score: 90, title: 'High Company News' },
-            { impact: 'medium', impact_score: 60, title: 'Medium Company News' },
-            { impact: 'low', impact_score: 10, title: 'Hidden Low Company News' },
-            { impact: 'high', impact_score: 95, title: 'Second High Company News' },
-            { impact: 'medium', impact_score: 65, title: 'Second Medium Company News' },
-          ],
-        })}
-      />
-    );
+  it('renders strict filter summary for AI-used and excluded counts', () => {
+    const result = makeStrictNewsResult({ includeExcluded: false });
+    result.news_context.strict_news_filter = {
+      decision_company_news_count: 1,
+      market_context_news_count: 1,
+      excluded_news_count: 12,
+      rss_decision_min_relevance_score: 80,
+    };
 
-    const companySection = screen.getByText('Company News').closest('.rounded-md');
-    fireEvent.click(within(companySection).getByRole('button', { name: 'Impact' }));
+    render(<NewsTab result={result} />);
 
-    expect(
-      within(companySection)
-        .getAllByRole('heading', { level: 3 })
-        .map((node) => node.textContent)
-    ).toEqual([
-      'Second High Company News',
-      'High Company News',
-      'Second Medium Company News',
-      'Medium Company News',
-      'Low Company News',
-    ]);
-    expect(within(companySection).queryByText('Hidden Low Company News')).not.toBeInTheDocument();
-  });
-
-  it('sorts strict market context news preview by sentiment without showing all', () => {
-    render(
-      <NewsTab
-        result={makeStrictNewsResult({
-          includeExcluded: false,
-          marketContextCount: 6,
-          marketOverrides: [
-            { sentiment: 'negative', title: 'Negative Market Context' },
-            { sentiment: 'neutral', title: 'Neutral Market Context' },
-            { sentiment: 'positive', title: 'Positive Market Context' },
-            { sentiment: 'negative', title: 'Hidden Negative Market Context' },
-            { sentiment: 'positive', title: 'Second Positive Market Context' },
-            { sentiment: 'neutral', title: 'Second Neutral Market Context' },
-          ],
-        })}
-      />
-    );
-
-    const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
-    fireEvent.click(within(contextSection).getByRole('button', { name: 'Sentiment' }));
-
-    expect(
-      within(contextSection)
-        .getAllByRole('heading', { level: 3 })
-        .map((node) => node.textContent)
-    ).toEqual([
-      'Positive Market Context',
-      'Second Positive Market Context',
-      'Neutral Market Context',
-      'Second Neutral Market Context',
-      'Negative Market Context',
-    ]);
-    expect(
-      within(contextSection).queryByText('Hidden Negative Market Context')
-    ).not.toBeInTheDocument();
+    expect(screen.getByText('1 used for AI')).toBeInTheDocument();
+    expect(screen.getByText('1 market context')).toBeInTheDocument();
+    expect(screen.getByText('12 excluded')).toBeInTheDocument();
+    expect(screen.getByText('RSS threshold 80')).toBeInTheDocument();
   });
 
   it('shows provider status when strict market context is empty', () => {
     render(<NewsTab result={makeStrictNewsResultWithEmptyMarketContext()} />);
 
-    const contextSection = screen.getByText('Market Context News').closest('.rounded-md');
+    const contextSection = screen.getByText('Market Context').closest('.rounded-md');
 
     expect(
       within(contextSection).getByText('No market context news was returned.')
     ).toBeInTheDocument();
-    expect(within(contextSection).getByText('rss_context: EMPTY')).toBeInTheDocument();
-    expect(within(contextSection).getByText('google_news_light: EMPTY')).toBeInTheDocument();
+    expect(screen.getByText(/rss_context/i)).toBeInTheDocument();
+    expect(screen.getByText(/google_news_light/i)).toBeInTheDocument();
   });
 
   it('links titles only when url is valid http or https', () => {

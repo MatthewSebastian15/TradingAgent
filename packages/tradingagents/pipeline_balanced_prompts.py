@@ -35,6 +35,16 @@ STATIC_TRADING_RULES = (
     + "- Risk/reward must be internally consistent when provided.\n"
 ).strip()
 
+NEWS_AGENT_RULES = """
+News evidence rules:
+- Company-specific conclusion may only use top_articles, prompt_articles, or decision_company_news that passed the strict decision filter.
+- Market context can explain environment, but cannot be cited as direct company evidence.
+- If top_articles is empty, write that company-specific news is unavailable or limited.
+- Never turn broad index, macro, sector, or RSS context into a direct company catalyst.
+- Mention provider limitations when provider_status indicates missing_api_key, timeout, or fallback-only coverage.
+- Lower confidence when relevance_score is low or missing.
+""".strip()
+
 
 def _horizon_instruction(time_horizon_text: str) -> str:
     return f"""
@@ -161,6 +171,8 @@ Separate company-specific catalysts from broad market and macroeconomic pressure
 - If news coverage is partial or missing, state that sentiment assessment is limited.
 - Do not assert market sentiment with confidence when news data is incomplete.
 - Separate article evidence, insider activity, social sentiment, and analyst consensus.
+
+{NEWS_AGENT_RULES}
 
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
@@ -537,6 +549,7 @@ rebalance otherwise.
 it must not imply a separate new trade. It should describe add-only, maintain, trim, or exit \
 context.
 - Backend validation remains the final source of truth for position action fields.
+- When using news input, prioritize News Analyst conclusions only if they were based on company-specific news that passed the strict news filter. If the news report says coverage is limited, do not upgrade confidence based on news.
 - Use Hold when no safe actionable setup exists.
 - executive_summary must be 250-300 words in exactly 5 parts, written as continuous paragraphs \
 without headers, section numbers, or bullet points.
