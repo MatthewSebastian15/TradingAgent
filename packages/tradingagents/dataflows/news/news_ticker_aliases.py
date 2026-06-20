@@ -2,63 +2,266 @@ from __future__ import annotations
 
 from typing import Any
 
-IDX_COMPANY_ALIASES: dict[str, dict[str, Any]] = {
-    "BBCA.JK": {
-        "company_name": "Bank Central Asia",
-        "aliases": ["BBCA", "BCA", "Bank Central Asia", "PT Bank Central Asia Tbk"],
-        "sector": "Financial Services",
-    },
-    "BBRI.JK": {
-        "company_name": "Bank Rakyat Indonesia",
-        "aliases": ["BBRI", "BRI", "Bank Rakyat Indonesia", "PT Bank Rakyat Indonesia Tbk"],
-        "sector": "Financial Services",
-    },
-    "BMRI.JK": {
-        "company_name": "Bank Mandiri",
-        "aliases": ["BMRI", "Bank Mandiri", "PT Bank Mandiri Tbk"],
-        "sector": "Financial Services",
-    },
-    "TLKM.JK": {
-        "company_name": "Telkom Indonesia",
-        "aliases": ["TLKM", "Telkom", "Telkom Indonesia", "PT Telkom Indonesia Tbk"],
-        "sector": "Communication Services",
-    },
-    "ASII.JK": {
-        "company_name": "Astra International",
-        "aliases": ["ASII", "Astra", "Astra International", "PT Astra International Tbk"],
-        "sector": "Industrials",
-    },
-    "UNVR.JK": {
-        "company_name": "Unilever Indonesia",
-        "aliases": ["UNVR", "Unilever Indonesia", "PT Unilever Indonesia Tbk"],
-        "sector": "Consumer Defensive",
-    },
-    "ICBP.JK": {
-        "company_name": "Indofood CBP Sukses Makmur",
-        "aliases": ["ICBP", "Indofood CBP", "PT Indofood CBP Sukses Makmur Tbk"],
-        "sector": "Consumer Defensive",
-    },
-    "ADRO.JK": {
-        "company_name": "Alamtri Resources Indonesia",
-        "aliases": [
-            "ADRO",
-            "Adaro",
-            "Alamtri Resources Indonesia",
-            "PT Alamtri Resources Indonesia Tbk",
-        ],
-        "sector": "Energy",
-    },
-    "ANTM.JK": {
-        "company_name": "Aneka Tambang",
-        "aliases": ["ANTM", "Antam", "Aneka Tambang", "PT Aneka Tambang Tbk"],
-        "sector": "Basic Materials",
-    },
-    "GOTO.JK": {
-        "company_name": "GoTo Gojek Tokopedia",
-        "aliases": ["GOTO", "GoTo", "Gojek Tokopedia", "PT GoTo Gojek Tokopedia Tbk"],
-        "sector": "Technology",
-    },
+
+def _profile(
+    company_name: str,
+    aliases: list[str],
+    *,
+    subsidiaries: list[str] | None = None,
+    negative_terms: list[str] | None = None,
+    sector: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "company_name": company_name,
+        "aliases": aliases,
+        "subsidiaries": subsidiaries or [],
+        "negative_terms": negative_terms or [],
+        "sector": sector,
+    }
+
+
+IDX_TICKER_ALIASES: dict[str, dict[str, Any]] = {
+    "BBCA.JK": _profile(
+        "Bank Central Asia",
+        ["BBCA", "BCA", "Bank Central Asia", "PT Bank Central Asia Tbk"],
+        subsidiaries=["BCA Digital", "blu by BCA"],
+        sector="Financial Services",
+    ),
+    "BBRI.JK": _profile(
+        "Bank Rakyat Indonesia",
+        ["BBRI", "BRI", "Bank Rakyat Indonesia", "PT Bank Rakyat Indonesia Tbk"],
+        subsidiaries=["BRImo", "BRI Finance", "Pegadaian", "PNM"],
+        sector="Financial Services",
+    ),
+    "BMRI.JK": _profile(
+        "Bank Mandiri",
+        ["BMRI", "Mandiri", "Bank Mandiri", "PT Bank Mandiri Tbk"],
+        subsidiaries=["Livin by Mandiri", "Mandiri Sekuritas", "Mandiri Tunas Finance"],
+        sector="Financial Services",
+    ),
+    "BBNI.JK": _profile(
+        "Bank Negara Indonesia",
+        ["BBNI", "BNI", "Bank Negara Indonesia", "PT Bank Negara Indonesia Tbk"],
+        subsidiaries=["BNI Sekuritas", "BNI Life", "wondr by BNI"],
+        sector="Financial Services",
+    ),
+    "TLKM.JK": _profile(
+        "Telkom Indonesia",
+        ["TLKM", "Telkom", "Telkom Indonesia", "PT Telkom Indonesia Tbk"],
+        subsidiaries=["Telkomsel", "IndiHome", "NeutraDC"],
+        sector="Communication Services",
+    ),
+    "ASII.JK": _profile(
+        "Astra International",
+        ["ASII", "Astra", "Astra International", "PT Astra International Tbk"],
+        subsidiaries=["United Tractors", "Astra Honda Motor", "Astra Otoparts", "Astra Financial"],
+        sector="Industrials",
+    ),
+    "GOTO.JK": _profile(
+        "GoTo Gojek Tokopedia",
+        ["GOTO", "GoTo", "GoTo Gojek Tokopedia", "PT GoTo Gojek Tokopedia Tbk"],
+        subsidiaries=["Gojek", "Tokopedia", "GoPay", "GoTo Financial"],
+        negative_terms=["go to market", "goto statement", "go to the"],
+        sector="Technology",
+    ),
+    "ANTM.JK": _profile(
+        "Aneka Tambang",
+        ["ANTM", "Antam", "Aneka Tambang", "PT Aneka Tambang Tbk"],
+        sector="Basic Materials",
+    ),
+    "ADRO.JK": _profile(
+        "Adaro Energy Indonesia",
+        ["ADRO", "Adaro", "Adaro Energy", "PT Adaro Energy Indonesia Tbk"],
+        subsidiaries=["Alamtri", "Adaro Minerals"],
+        sector="Energy",
+    ),
+    "UNTR.JK": _profile(
+        "United Tractors",
+        ["UNTR", "United Tractors", "PT United Tractors Tbk"],
+        subsidiaries=["Pamapersada", "PAMA", "Agincourt Resources"],
+        sector="Industrials",
+    ),
+    "INDF.JK": _profile(
+        "Indofood Sukses Makmur",
+        ["INDF", "Indofood", "Indofood Sukses Makmur", "PT Indofood Sukses Makmur Tbk"],
+        subsidiaries=["Indofood CBP", "Bogasari"],
+        sector="Consumer Defensive",
+    ),
+    "ICBP.JK": _profile(
+        "Indofood CBP Sukses Makmur",
+        ["ICBP", "Indofood CBP", "PT Indofood CBP Sukses Makmur Tbk"],
+        subsidiaries=["Indomie", "Pop Mie", "Chitato"],
+        sector="Consumer Defensive",
+    ),
+    "AMRT.JK": _profile(
+        "Sumber Alfaria Trijaya",
+        ["AMRT", "Alfamart", "Sumber Alfaria Trijaya", "PT Sumber Alfaria Trijaya Tbk"],
+        subsidiaries=["Alfamidi"],
+        sector="Consumer Defensive",
+    ),
+    "KLBF.JK": _profile(
+        "Kalbe Farma",
+        ["KLBF", "Kalbe", "Kalbe Farma", "PT Kalbe Farma Tbk"],
+        subsidiaries=["Sido Muncul", "Bintang Toedjoe"],
+        sector="Healthcare",
+    ),
+    "UNVR.JK": _profile(
+        "Unilever Indonesia",
+        ["UNVR", "Unilever Indonesia", "PT Unilever Indonesia Tbk"],
+        sector="Consumer Defensive",
+    ),
+    "HMSP.JK": _profile(
+        "Hanjaya Mandala Sampoerna",
+        ["HMSP", "Sampoerna", "HM Sampoerna", "PT Hanjaya Mandala Sampoerna Tbk"],
+        sector="Consumer Defensive",
+    ),
+    "INCO.JK": _profile(
+        "Vale Indonesia",
+        ["INCO", "Vale Indonesia", "PT Vale Indonesia Tbk"],
+        sector="Basic Materials",
+    ),
+    "MDKA.JK": _profile(
+        "Merdeka Copper Gold",
+        ["MDKA", "Merdeka Copper Gold", "PT Merdeka Copper Gold Tbk"],
+        subsidiaries=["Merdeka Battery Materials"],
+        sector="Basic Materials",
+    ),
+    "BRPT.JK": _profile(
+        "Barito Pacific",
+        ["BRPT", "Barito Pacific", "PT Barito Pacific Tbk"],
+        subsidiaries=["Chandra Asri", "Star Energy"],
+        sector="Basic Materials",
+    ),
+    "TPIA.JK": _profile(
+        "Chandra Asri Pacific",
+        ["TPIA", "Chandra Asri", "Chandra Asri Pacific", "PT Chandra Asri Pacific Tbk"],
+        sector="Basic Materials",
+    ),
+    "PGAS.JK": _profile(
+        "Perusahaan Gas Negara",
+        ["PGAS", "PGN", "Perusahaan Gas Negara", "PT Perusahaan Gas Negara Tbk"],
+        sector="Utilities",
+    ),
+    "EXCL.JK": _profile(
+        "XL Axiata",
+        ["EXCL", "XL Axiata", "PT XL Axiata Tbk"],
+        sector="Communication Services",
+    ),
+    "ISAT.JK": _profile(
+        "Indosat Ooredoo Hutchison",
+        ["ISAT", "Indosat", "Indosat Ooredoo Hutchison", "PT Indosat Tbk"],
+        subsidiaries=["IM3", "Tri Indonesia"],
+        sector="Communication Services",
+    ),
+    "MEDC.JK": _profile(
+        "Medco Energi Internasional",
+        ["MEDC", "Medco", "Medco Energi", "PT Medco Energi Internasional Tbk"],
+        sector="Energy",
+    ),
+    "ITMG.JK": _profile(
+        "Indo Tambangraya Megah",
+        ["ITMG", "Indo Tambangraya Megah", "PT Indo Tambangraya Megah Tbk"],
+        sector="Energy",
+    ),
+    "PTBA.JK": _profile(
+        "Bukit Asam",
+        ["PTBA", "Bukit Asam", "PT Bukit Asam Tbk"],
+        sector="Energy",
+    ),
+    "CPIN.JK": _profile(
+        "Charoen Pokphand Indonesia",
+        ["CPIN", "Charoen Pokphand Indonesia", "PT Charoen Pokphand Indonesia Tbk"],
+        sector="Consumer Defensive",
+    ),
+    "JPFA.JK": _profile(
+        "Japfa Comfeed Indonesia",
+        ["JPFA", "Japfa", "Japfa Comfeed", "PT Japfa Comfeed Indonesia Tbk"],
+        sector="Consumer Defensive",
+    ),
+    "MAPI.JK": _profile(
+        "Mitra Adiperkasa",
+        ["MAPI", "Mitra Adiperkasa", "MAP Group", "PT Mitra Adiperkasa Tbk"],
+        subsidiaries=["MAP Aktif Adiperkasa"],
+        sector="Consumer Cyclical",
+    ),
+    "ACES.JK": _profile(
+        "Aspirasi Hidup Indonesia",
+        ["ACES", "Ace Hardware Indonesia", "Aspirasi Hidup Indonesia", "PT Aspirasi Hidup Indonesia Tbk"],
+        sector="Consumer Cyclical",
+    ),
+    "EMTK.JK": _profile(
+        "Elang Mahkota Teknologi",
+        ["EMTK", "Emtek", "Elang Mahkota Teknologi", "PT Elang Mahkota Teknologi Tbk"],
+        subsidiaries=["SCM", "SCTV", "Vidio"],
+        sector="Communication Services",
+    ),
+    "BUKA.JK": _profile(
+        "Bukalapak.com",
+        ["BUKA", "Bukalapak", "Bukalapak.com", "PT Bukalapak.com Tbk"],
+        sector="Technology",
+    ),
+    "ARTO.JK": _profile(
+        "Bank Jago",
+        ["ARTO", "Bank Jago", "PT Bank Jago Tbk"],
+        subsidiaries=["Jago Syariah"],
+        sector="Financial Services",
+    ),
+    "SMGR.JK": _profile(
+        "Semen Indonesia",
+        ["SMGR", "Semen Indonesia", "PT Semen Indonesia Tbk", "SIG"],
+        subsidiaries=["Semen Gresik", "Semen Padang", "Semen Tonasa"],
+        sector="Basic Materials",
+    ),
 }
+
+US_TICKER_ALIASES: dict[str, dict[str, Any]] = {
+    "AAPL": _profile(
+        "Apple Inc",
+        ["AAPL", "Apple", "Apple Inc", "Apple stock"],
+        subsidiaries=["iPhone", "App Store", "Apple Services"],
+        negative_terms=["apple fruit", "apple cider"],
+        sector="Technology",
+    ),
+    "MSFT": _profile(
+        "Microsoft Corporation",
+        ["MSFT", "Microsoft", "Microsoft Corporation"],
+        subsidiaries=["Azure", "GitHub", "LinkedIn", "OpenAI partnership"],
+        sector="Technology",
+    ),
+    "NVDA": _profile(
+        "NVIDIA Corporation",
+        ["NVDA", "NVIDIA", "Nvidia Corporation"],
+        subsidiaries=["GeForce", "CUDA", "Blackwell", "Hopper"],
+        sector="Technology",
+    ),
+    "TSLA": _profile(
+        "Tesla Inc",
+        ["TSLA", "Tesla", "Tesla Inc"],
+        subsidiaries=["Tesla Energy", "Supercharger", "Cybertruck", "Model Y"],
+        sector="Consumer Cyclical",
+    ),
+}
+
+
+def _dedupe_strings(values: list[Any]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        key = text.casefold()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        result.append(text)
+    return result
+
+
+def _metadata_for(ticker: str) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    if ticker in IDX_TICKER_ALIASES:
+        return IDX_TICKER_ALIASES[ticker], "IDX", "id"
+    if ticker in US_TICKER_ALIASES:
+        return US_TICKER_ALIASES[ticker], "US", "us"
+    return None, None, None
 
 
 def resolve_news_ticker(value: str) -> dict[str, Any]:
@@ -66,21 +269,8 @@ def resolve_news_ticker(value: str) -> dict[str, Any]:
     if not ticker:
         raise ValueError("Ticker is required.")
 
-    if ticker in IDX_COMPANY_ALIASES:
-        metadata = IDX_COMPANY_ALIASES[ticker]
-        short_ticker = ticker.removesuffix(".JK")
-        return {
-            "input": value,
-            "ticker": ticker,
-            "short_ticker": short_ticker,
-            "exchange": "IDX",
-            "country": "id",
-            "company_name": metadata["company_name"],
-            "aliases": list(dict.fromkeys([short_ticker, ticker, *metadata["aliases"]])),
-            "sector": metadata["sector"],
-        }
-
-    if ticker.endswith(".JK"):
+    metadata, exchange, country = _metadata_for(ticker)
+    if metadata is None and ticker.endswith(".JK"):
         short_ticker = ticker.removesuffix(".JK")
         return {
             "input": value,
@@ -89,17 +279,36 @@ def resolve_news_ticker(value: str) -> dict[str, Any]:
             "exchange": "IDX",
             "country": "id",
             "company_name": short_ticker,
-            "aliases": [short_ticker, ticker],
+            "aliases": _dedupe_strings([short_ticker, ticker]),
+            "subsidiaries": [],
+            "negative_terms": [],
             "sector": None,
         }
 
+    if metadata is None:
+        return {
+            "input": value,
+            "ticker": ticker,
+            "short_ticker": ticker,
+            "exchange": "US",
+            "country": "us",
+            "company_name": ticker,
+            "aliases": _dedupe_strings([ticker]),
+            "subsidiaries": [],
+            "negative_terms": [],
+            "sector": None,
+        }
+
+    short_ticker = ticker.removesuffix(".JK")
     return {
         "input": value,
         "ticker": ticker,
-        "short_ticker": ticker,
-        "exchange": None,
-        "country": None,
-        "company_name": ticker,
-        "aliases": [ticker],
-        "sector": None,
+        "short_ticker": short_ticker,
+        "exchange": exchange,
+        "country": country,
+        "company_name": metadata["company_name"],
+        "aliases": _dedupe_strings([short_ticker, ticker, metadata["company_name"], *metadata.get("aliases", [])]),
+        "subsidiaries": _dedupe_strings(metadata.get("subsidiaries", [])),
+        "negative_terms": _dedupe_strings(metadata.get("negative_terms", [])),
+        "sector": metadata.get("sector"),
     }

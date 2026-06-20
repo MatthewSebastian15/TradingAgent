@@ -20,8 +20,9 @@ from tradingagents.dataflows.news.news_provider_base import (
     ProviderFetchResult,
     sanitize_error,
 )
+from tradingagents.dataflows.news.news_query_builder import build_ticker_news_queries
 from tradingagents.dataflows.news.news_relevance import is_relevant_news
-from tradingagents.dataflows.news.news_scoring import content_hash
+from tradingagents.dataflows.news.news_scoring import content_hash, score_news_article
 
 from .config import get_config
 from .rss_news_config import (
@@ -177,35 +178,7 @@ def _select_feeds(
 
 
 def build_company_rss_queries(ticker_profile: dict[str, Any]) -> list[str]:
-    ticker = ticker_profile.get("ticker")
-    short_ticker = ticker_profile.get("short_ticker") or str(ticker or "").split(".", 1)[0]
-    company_name = ticker_profile.get("company_name")
-    aliases = ticker_profile.get("aliases") or []
-    sector = ticker_profile.get("sector")
-    industry = ticker_profile.get("industry")
-    exchange = ticker_profile.get("exchange")
-    region = ticker_profile.get("region") or ticker_profile.get("country")
-
-    query_terms = [
-        str(value).strip()
-        for value in [ticker, short_ticker, company_name, *aliases]
-        if str(value or "").strip()
-    ]
-    query_terms = list(dict.fromkeys(query_terms))
-
-    queries: list[str] = []
-    suffixes = ["stock", "earnings", "revenue", "shares", "financial results"]
-    for suffix in suffixes:
-        for value in query_terms:
-            queries.append(f"{value} {suffix}")
-
-    primary = str(company_name or short_ticker or ticker or "").strip()
-    for context in [sector, industry, exchange, region]:
-        text = str(context or "").strip()
-        if primary and text:
-            queries.append(f"{primary} {text} stock")
-
-    return list(dict.fromkeys(queries))[:8]
+    return build_ticker_news_queries(ticker_profile, max_queries=12)[:8]
 
 
 def _company_google_news_feeds(ticker_profile: dict[str, Any] | None) -> list[RSSFeedConfig]:
@@ -318,7 +291,7 @@ def _normalize_feed_entries(
             )
         except ValueError:
             continue
-        articles.append(article)
+        articles.append(score_news_article(article, ticker_profile))
     return articles
 
 

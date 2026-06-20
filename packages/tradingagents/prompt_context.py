@@ -119,6 +119,8 @@ def build_news_context(
         "providers_used": news_context.get("providers_used"),
         "articles_found": news_context.get("articles_found"),
         "articles_used_in_prompt": news_context.get("articles_used_in_prompt"),
+        "strict_news_filter": news_context.get("strict_news_filter"),
+        "market_context_news_count": len(news_context.get("market_context_news") or []),
         "average_sentiment": news_context.get("average_sentiment"),
         "related_news_summary": (data.related_news or {}).get("summary")
         if isinstance(data.related_news, dict)
@@ -129,6 +131,7 @@ def build_news_context(
         "analyst_consensus": _compact_mapping(data.analyst_consensus, max_items=12),
         "top_articles": news_context.get("top_articles")
         or news_context.get("prompt_articles")
+        or news_context.get("decision_company_news")
         or [],
         "limitations": news_context.get("limitations") or [],
         "data_quality": _model_dump(data.data_quality),

@@ -131,7 +131,7 @@ DEFAULT_CONFIG = {
         or "google_news_light,marketaux,rss_context,newsdata,yfinance",
         "default_window_days": int(_env("NEWS_DEFAULT_WINDOW_DAYS") or "30"),
         "max_articles_per_provider": int(_env("NEWS_MAX_ARTICLES_PER_PROVIDER") or "20"),
-        "max_articles_for_prompt": int(_env("NEWS_MAX_ARTICLES_FOR_PROMPT") or "8"),
+        "max_articles_for_prompt": int(_env("NEWS_MAX_ARTICLES_FOR_PROMPT") or "5"),
         "max_articles_for_ui": int(_env("NEWS_MAX_ARTICLES_FOR_UI") or "30"),
         "min_relevance_score": float(_env("NEWS_MIN_RELEVANCE_SCORE") or "55"),
         "prompt_min_relevance_score": float(_env("NEWS_PROMPT_MIN_RELEVANCE_SCORE") or "70"),

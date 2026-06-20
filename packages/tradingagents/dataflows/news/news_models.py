@@ -48,6 +48,9 @@ class NormalizedNewsArticle(BaseModel):
     raw_payload: dict[str, Any] | None = None
     query_strategy: str | None = None
     market_context_only: bool = False
+    provider_trust_score: float | None = None
+    final_rank_score: float | None = None
+    decision_filter_reason: str | None = None
 
 
 def article_to_dict(article: NormalizedNewsArticle, *, include_raw: bool = False) -> dict[str, Any]:

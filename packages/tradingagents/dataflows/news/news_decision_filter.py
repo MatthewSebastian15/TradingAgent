@@ -12,10 +12,6 @@ COMPANY_NEWS_PROVIDERS = {
     "yfinance",
 }
 
-MARKET_CONTEXT_PROVIDERS = {
-    "rss_context",
-}
-
 DECISION_ALLOWED_CATEGORIES = {
     "company_specific",
     "subsidiary_related",
@@ -24,6 +20,14 @@ DECISION_ALLOWED_CATEGORIES = {
 
 DECISION_ALLOWED_BUCKETS = {
     "full_news",
+}
+
+PROVIDER_TRUST_SCORE = {
+    "google_news_light": 5,
+    "marketaux": 4,
+    "newsdata": 3,
+    "yfinance": 2,
+    "rss_context": 1,
 }
 
 
@@ -47,11 +51,15 @@ def split_ai_analysis_news(
             rss_decision_min_score=rss_decision_min_score,
         )
         bucket = verdict["bucket"]
+        article.decision_filter_reason = verdict["reason"]
         if bucket == "decision_company_news":
+            article.bucket = article.bucket or "full_news"
             decision.append(article)
         elif bucket == "market_context_news":
+            article.market_context_only = True
             market_context.append(article)
         else:
+            article.bucket = "discard" if not article.bucket else article.bucket
             excluded.append({"article": article, "reason": verdict["reason"]})
 
     decision = sorted(decision, key=_rank_decision_article, reverse=True)[
@@ -81,6 +89,9 @@ def classify_article_for_ai_decision(
     if not article.title or not article.url:
         return {"bucket": "excluded_news", "reason": "missing_title_or_url"}
 
+    if article.entity_match == "negative":
+        return {"bucket": "excluded_news", "reason": "negative_entity_match"}
+
     if bucket == "discard":
         return {"bucket": "excluded_news", "reason": "discard_bucket"}
 
@@ -90,7 +101,7 @@ def classify_article_for_ai_decision(
         str(ticker_profile.get("ticker") or article.ticker),
         ticker_profile.get("company_name"),
         ticker_profile.get("aliases"),
-    )
+    ) or article.entity_match in {"company_exact", "subsidiary", "provider_entity"}
 
     if provider == "rss_context":
         if article.market_context_only:
@@ -122,14 +133,9 @@ def classify_article_for_ai_decision(
 
 
 def _rank_decision_article(article: NormalizedNewsArticle) -> float:
-    provider_priority = {
-        "google_news_light": 5,
-        "marketaux": 4,
-        "newsdata": 3,
-        "yfinance": 2,
-        "rss_context": 1,
-    }
-    return float(article.relevance_score or 0) + provider_priority.get(article.provider, 0)
+    trust = float(article.provider_trust_score or PROVIDER_TRUST_SCORE.get(article.provider, 0))
+    article.final_rank_score = float(article.relevance_score or 0) + trust
+    return article.final_rank_score
 
 
 def _rank_context_article(article: NormalizedNewsArticle) -> float:

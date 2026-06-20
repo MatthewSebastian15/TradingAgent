@@ -270,7 +270,8 @@ def _fetch_news(
             provider_filter=provider,
             debug=debug,
             include_raw=include_raw,
-            bypass_cache=bool(force_refresh or (debug and include_raw)),
+            bypass_cache=bool(debug and include_raw),
+            force_refresh=force_refresh,
         )
 
 
@@ -351,11 +352,27 @@ async def get_news(
     request: Request,
     window_days: int = Query(default=30, ge=1, le=365),
     limit: int = Query(default=20, ge=1, le=100),
+    provider: str | None = Query(default=None),
+    force_refresh: bool = Query(default=False),
 ):
+    normalized_provider = provider.strip().lower() if provider else None
+    if normalized_provider is not None and normalized_provider not in _SUPPORTED_DEBUG_PROVIDERS:
+        raise BadRequestError(
+            "Unsupported news provider.",
+            details={
+                "provider": provider,
+                "supported_providers": sorted(_SUPPORTED_DEBUG_PROVIDERS),
+            },
+        )
     normalized_ticker = normalize_ticker_symbol(ticker)
     async with limit_request(request, request_policy()):
         return await asyncio.to_thread(
-            _fetch_news, normalized_ticker, window_days=window_days, limit=limit
+            _fetch_news,
+            normalized_ticker,
+            window_days=window_days,
+            limit=limit,
+            provider=normalized_provider,
+            force_refresh=force_refresh,
         )
 
 

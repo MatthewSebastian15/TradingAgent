@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import TickerNewsList from '@/components/news/TickerNewsList';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import NoticeBox from '../NoticeBox';
@@ -19,7 +20,6 @@ const VENDOR_PUBLISHERS = new Set([
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const SORT_OPTIONS = ['Date', 'Impact', 'Sentiment'];
-const STRICT_NEWS_PREVIEW_COUNT = 5;
 const IMPACT_SORT_RANK = {
   critical: 3,
   very_high: 3,
@@ -217,38 +217,6 @@ function dedupeNewsItems(items) {
   });
 
   return result;
-}
-
-function providerStatusRows(payload) {
-  const rows = [];
-  const seen = new Set();
-  const objectEntries = (value) =>
-    value && typeof value === 'object' && !Array.isArray(value) ? Object.entries(value) : [];
-  const addRow = (provider, status) => {
-    const providerText = readableText(provider);
-    const statusText = readableText(status);
-    if (!providerText || !statusText) return;
-    const key = providerText.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    rows.push({ provider: providerText, status: statusText });
-  };
-
-  objectEntries(payload?.provider_status).forEach(([provider, status]) => {
-    addRow(provider, status);
-  });
-
-  objectEntries(payload?.provider_health).forEach(([provider, health]) => {
-    addRow(provider, health?.status || health?.last_error);
-  });
-
-  objectEntries(payload?.debug?.provider_attempts).forEach(([provider, attempts]) => {
-    const list = Array.isArray(attempts) ? attempts : [];
-    const latest = [...list].reverse().find((attempt) => attempt?.status);
-    addRow(provider, latest?.status);
-  });
-
-  return rows;
 }
 
 const IMPACT_RANK = {
@@ -597,10 +565,12 @@ export default function NewsTab({ result }) {
     const decisionItems = Array.isArray(strictPayload.decision_company_news)
       ? strictPayload.decision_company_news.filter((item) => !item?.market_context_only)
       : [];
+    const promptItems = Array.isArray(strictPayload.prompt_articles)
+      ? strictPayload.prompt_articles.filter((item) => !item?.market_context_only)
+      : [];
     const contextItems = Array.isArray(strictPayload.market_context_news)
       ? strictPayload.market_context_news
       : [];
-    const contextProviderRows = contextItems.length > 0 ? [] : providerStatusRows(strictPayload);
     const excludedItems = Array.isArray(strictPayload.debug?.strict_news_filter?.excluded_news)
       ? strictPayload.debug.strict_news_filter.excluded_news
           .filter((item) => item?.title)
@@ -615,20 +585,13 @@ export default function NewsTab({ result }) {
 
     return (
       <div className="terminal-news space-y-4 border-b border-border p-4">
-        <StrictNewsSection
-          label="Company News"
-          items={decisionItems}
-          emptyText="No company-specific decision news was returned."
-          initialLimit={STRICT_NEWS_PREVIEW_COUNT}
-          sortable
-        />
-        <StrictNewsSection
-          label="Market Context News"
-          items={contextItems}
-          emptyText="No market context news was returned."
-          initialLimit={STRICT_NEWS_PREVIEW_COUNT}
-          providerRows={contextProviderRows}
-          sortable
+        <TickerNewsList
+          decisionCompanyNews={decisionItems}
+          promptArticles={promptItems}
+          marketContextNews={contextItems}
+          providerStatus={strictPayload.provider_status || {}}
+          strictNewsFilter={strictPayload.strict_news_filter || {}}
+          debug={Boolean(strictPayload.debug)}
         />
         {excludedItems.length > 0 && (
           <StrictNewsSection

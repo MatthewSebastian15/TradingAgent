@@ -6,6 +6,7 @@ from typing import Any
 from tradingagents.dataflows.news.news_dedup_normalized import deduplicate_news_articles
 from tradingagents.dataflows.news.news_models import NewsEntity, NormalizedNewsArticle
 from tradingagents.dataflows.news.news_provider_base import BaseNewsProvider, ProviderFetchResult
+from tradingagents.dataflows.news.news_query_builder import build_ticker_news_queries
 from tradingagents.dataflows.news.news_scoring import map_sentiment_label, score_news_article
 from tradingagents.dataflows.news.news_ticker_aliases import resolve_news_ticker
 
@@ -39,9 +40,11 @@ class NewsDataProvider(BaseNewsProvider):
         if ticker_profile.get("country"):
             common["country"] = ticker_profile["country"]
 
+        smart_queries = build_ticker_news_queries(ticker_profile, max_queries=4)
         query_attempts = [
             ("symbol", {**common, "symbol": ticker_profile["short_ticker"]}),
             ("company_name_in_title", {**common, "qInTitle": ticker_profile["company_name"]}),
+            *[(f"smart_query_{index}", {**common, "q": query}) for index, query in enumerate(smart_queries, start=1)],
             ("alias_query", {**common, "q": build_newsdata_alias_query(ticker_profile["aliases"])}),
         ]
         attempts: list[dict[str, Any]] = []
