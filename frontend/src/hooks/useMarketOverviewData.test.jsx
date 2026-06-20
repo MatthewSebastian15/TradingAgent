@@ -15,10 +15,10 @@ vi.mock('../api/market', () => ({
   getMarketOverview: vi.fn(),
 }));
 
-const DEFAULT_SYMBOLS = ['SPY'];
+const DEFAULT_SYMBOLS = ['SPY', 'QQQ', 'DIA'];
 
 function Harness({ symbols = DEFAULT_SYMBOLS }) {
-  const { data, status, loading, refresh } = useMarketOverviewData(symbols);
+  const { data, status, loading, error, refresh } = useMarketOverviewData(symbols);
   const items = data?.items || [];
 
   return (
@@ -26,6 +26,8 @@ function Harness({ symbols = DEFAULT_SYMBOLS }) {
       <span data-testid="status">{status}</span>
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="symbols">{items.map((item) => item.symbol).join(',')}</span>
+      <span data-testid="error">{error}</span>
+      <span data-testid="metadata">{data?.source || ''}:{String(data?.cache?.hit ?? '')}</span>
       <button type="button" onClick={refresh}>
         refresh
       </button>
@@ -107,6 +109,39 @@ describe('useMarketOverviewData', () => {
       expect.objectContaining({ forceRefresh: true })
     );
     await waitFor(() => expect(screen.getByTestId('symbols')).toHaveTextContent('QQQ'));
+  });
+
+  it('keeps cached market data visible and marks stale when refresh fails', async () => {
+    seedMarketOverviewClientCacheForTests(DEFAULT_SYMBOLS, {
+      items: [{ symbol: 'CACHE', last: 100, status: 'ok' }],
+      source: 'yfinance',
+      cache: { hit: true },
+    });
+    getMarketOverview.mockRejectedValueOnce(new Error('network failed'));
+
+    render(<Harness />);
+
+    expect(screen.getByTestId('symbols')).toHaveTextContent('CACHE');
+    await waitFor(() => expect(getMarketOverview).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('stale'));
+    expect(screen.getByTestId('symbols')).toHaveTextContent('CACHE');
+    expect(screen.getByTestId('error')).toHaveTextContent(
+      'Failed to load market data from yfinance.'
+    );
+  });
+
+  it('keeps freshness metadata from market overview payload', async () => {
+    getMarketOverview.mockResolvedValue({
+      items: [{ symbol: 'SPY', last: 500, status: 'ok' }],
+      source: 'yfinance',
+      cache: { hit: false },
+    });
+
+    render(<Harness />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('metadata')).toHaveTextContent('yfinance:false')
+    );
   });
 
   it('does not let an older market request overwrite a newer refresh result', async () => {

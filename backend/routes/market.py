@@ -219,10 +219,13 @@ async def validate_market_symbol(
 async def get_market_overview(
     payload: MarketOverviewRequest,
     request: Request,
+    force_refresh: bool = Query(default=False),
 ) -> dict[str, Any]:
     normalized_symbols = _normalize_market_request_symbols(payload.symbols)
     async with _market_data_limit(request):
-        return await asyncio.to_thread(get_overview_data, normalized_symbols)
+        return await asyncio.to_thread(
+            get_overview_data, normalized_symbols, force_refresh=force_refresh
+        )
 
 
 @router.get("/market/movers", tags=["market"], response_model=MarketMoversResponse)

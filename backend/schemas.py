@@ -457,9 +457,18 @@ class MarketOverviewItem(ApiSchema):
     reason: str | None = None
 
 
+class MarketOverviewCacheInfo(ApiSchema):
+    hit: bool = False
+    ttl_seconds: int | None = None
+    force_refresh: bool = False
+
+
 class MarketOverviewResponse(ApiSchema):
     items: list[MarketOverviewItem] = Field(default_factory=list)
     message: str | None = None
+    source: str = "yfinance"
+    last_updated: str | None = None
+    cache: MarketOverviewCacheInfo = Field(default_factory=MarketOverviewCacheInfo)
 
 
 class MarketMoverItem(ApiSchema):

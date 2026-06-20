@@ -4,16 +4,18 @@ import { fetchGeneralNews } from '../services/generalNewsApi';
 
 const NEWS_AUTO_REFRESH_INTERVAL_MS = 60000;
 const NEWS_VISIBILITY_REFRESH_MIN_GAP_MS = 15000;
+const MIN_REFRESH_SKELETON_MS = 700;
 const CACHE_TTL_MS = 120000;
 const STORAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const STORAGE_PREFIX = 'tradingagents:general-news:v2:';
 const ERROR_BACKOFF_MS = 60000;
 const RATE_LIMIT_BACKOFF_MS = 90000;
+const FORCE_REFRESH_MIN_GAP_MS = 15000;
 
 const responseCache = new Map();
 const inflightRequests = new Map();
 const backoffUntilByKey = new Map();
-let forceRequestSequence = 0;
+const lastForceRefreshByKey = new Map();
 
 function buildCacheKey({ category, windowDays, limit }) {
   return `${category || 'all'}:${windowDays || 7}:${limit || 50}`;
@@ -37,6 +39,12 @@ function backoffMsForError(error) {
 
 function storageKey(key) {
   return `${STORAGE_PREFIX}${key}`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function readStoredCache(key) {
@@ -90,7 +98,7 @@ function cachedDataForParams({ category, windowDays, limit }) {
   return cached?.data || null;
 }
 
-async function loadGeneralNews({ category, windowDays, limit, force = false }) {
+async function loadGeneralNews({ category, windowDays, limit, force = false, signal }) {
   const key = buildCacheKey({ category, windowDays, limit });
   const cached = readAnyFreshCache(key);
 
@@ -108,8 +116,22 @@ async function loadGeneralNews({ category, windowDays, limit, force = false }) {
     throw new Error('General news refresh is cooling down after a recent failed request.');
   }
 
-  const requestKey = force ? `${key}:force:${nowMs()}:${(forceRequestSequence += 1)}` : key;
-  const request = fetchGeneralNews({ category, windowDays, limit, forceRefresh: force })
+  if (force) {
+    const lastForceRefreshAt = lastForceRefreshByKey.get(key) || 0;
+    const elapsed = nowMs() - lastForceRefreshAt;
+
+    if (elapsed < FORCE_REFRESH_MIN_GAP_MS && cached?.data) {
+      return cached.data;
+    }
+
+    lastForceRefreshByKey.set(key, nowMs());
+  }
+
+  const requestKey = force ? `${key}:force` : key;
+  if (inflightRequests.has(requestKey)) {
+    return inflightRequests.get(requestKey);
+  }
+  const request = fetchGeneralNews({ category, windowDays, limit, forceRefresh: force, signal })
     .then((data) => {
       const entry = { data, fetchedAt: nowMs() };
       responseCache.set(key, entry);
@@ -118,7 +140,9 @@ async function loadGeneralNews({ category, windowDays, limit, force = false }) {
       return data;
     })
     .catch((error) => {
-      backoffUntilByKey.set(key, nowMs() + backoffMsForError(error));
+      if (error?.name !== 'AbortError') {
+        backoffUntilByKey.set(key, nowMs() + backoffMsForError(error));
+      }
       if (!force && cached?.data) return cached.data;
       throw error;
     })
@@ -130,11 +154,19 @@ async function loadGeneralNews({ category, windowDays, limit, force = false }) {
   return request;
 }
 
+function isReloadOptions(value) {
+  return (
+    value &&
+    typeof value === 'object' &&
+    ('force' in value || 'silent' in value || 'signal' in value)
+  );
+}
+
 export function clearGeneralNewsClientStateForTests() {
   responseCache.clear();
   inflightRequests.clear();
   backoffUntilByKey.clear();
-  forceRequestSequence = 0;
+  lastForceRefreshByKey.clear();
   clearStoredCaches();
 }
 
@@ -155,9 +187,11 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
   const lastRefreshAtRef = useRef(initialData ? nowMs() : 0);
 
   const load = useCallback(
-    async ({ force = false, silent = false } = {}) => {
+    async ({ force = false, silent = false, signal } = {}) => {
       const requestId = requestIdRef.current + 1;
       requestIdRef.current = requestId;
+      const shouldHoldSkeleton = force && !silent;
+      const startedAt = nowMs();
 
       if (!silent) {
         setStatus(dataRef.current ? 'refreshing' : 'loading');
@@ -165,8 +199,13 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
       setError(null);
 
       try {
-        const result = await loadGeneralNews({ category, windowDays, limit, force });
-        if (!mountedRef.current || requestIdRef.current !== requestId) return result;
+        const result = await loadGeneralNews({ category, windowDays, limit, force, signal });
+        if (shouldHoldSkeleton) {
+          await sleep(Math.max(0, MIN_REFRESH_SKELETON_MS - (nowMs() - startedAt)));
+        }
+        if (signal?.aborted || !mountedRef.current || requestIdRef.current !== requestId) {
+          return result;
+        }
         dataRef.current = result;
         setData(result);
         setStatus('success');
@@ -174,16 +213,30 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
         lastRefreshAtRef.current = nowMs();
         return result;
       } catch (err) {
+        if (shouldHoldSkeleton) {
+          await sleep(Math.max(0, MIN_REFRESH_SKELETON_MS - (nowMs() - startedAt)));
+        }
+        if (err?.name === 'AbortError') return null;
         if (!mountedRef.current || requestIdRef.current !== requestId) return null;
         setError(err);
-        setStatus(dataRef.current ? 'success' : 'error');
+        setStatus(dataRef.current ? 'stale' : 'error');
         return null;
       }
     },
     [category, limit, windowDays]
   );
 
-  const reload = useCallback(() => load({ force: true, silent: false }), [load]);
+  const reload = useCallback(
+    (options = {}) => {
+      const reloadOptions = isReloadOptions(options) ? options : {};
+      return load({
+        force: reloadOptions.force ?? true,
+        silent: reloadOptions.silent ?? false,
+        signal: reloadOptions.signal,
+      });
+    },
+    [load]
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -194,13 +247,29 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
   }, []);
 
   useEffect(() => {
-    load({ force: false, silent: false }).catch(() => {});
-  }, [load]);
+    const cachedData = cachedDataForParams({ category, windowDays, limit });
+    if (cachedData) {
+      dataRef.current = cachedData;
+      setData(cachedData);
+      setStatus('success');
+    } else {
+      dataRef.current = null;
+      setData(null);
+      setStatus('idle');
+    }
+
+    const controller = new AbortController();
+    load({ force: false, silent: false, signal: controller.signal }).catch(() => {});
+
+    return () => {
+      controller.abort();
+    };
+  }, [category, limit, load, windowDays]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
-        load({ force: true, silent: true }).catch(() => {});
+        load({ force: false, silent: true }).catch(() => {});
       }
     }, NEWS_AUTO_REFRESH_INTERVAL_MS);
 
@@ -216,7 +285,7 @@ export function useGeneralNews({ category = 'all', windowDays = 7, limit = 50 })
       const elapsed = nowMs() - lastRefreshAtRef.current;
       if (elapsed < NEWS_VISIBILITY_REFRESH_MIN_GAP_MS) return;
 
-      load({ force: true, silent: true }).catch(() => {});
+      load({ force: false, silent: true }).catch(() => {});
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);

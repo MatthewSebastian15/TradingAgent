@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import News from './News';
 import { useGeneralNews } from '../hooks/useGeneralNews';
+import { useGeneralNewsStream } from '../hooks/useGeneralNewsStream';
 
 vi.mock('../components/Navbar', () => ({
   default: () => <nav>Navbar</nav>,
@@ -18,6 +19,10 @@ vi.mock('../components/TickerTape', () => ({
 
 vi.mock('../hooks/useGeneralNews', () => ({
   useGeneralNews: vi.fn(),
+}));
+
+vi.mock('../hooks/useGeneralNewsStream', () => ({
+  useGeneralNewsStream: vi.fn(),
 }));
 
 const articles = [
@@ -58,7 +63,7 @@ describe('News page', () => {
     expect(screen.queryByText('No news found for this category.')).not.toBeInTheDocument();
   });
 
-  it('keeps loaded news visible while refreshing news', () => {
+  it('replaces loaded news with skeleton while manual refresh is running', () => {
     useGeneralNews.mockReturnValue({
       data: { articles },
       status: 'refreshing',
@@ -68,11 +73,11 @@ describe('News page', () => {
 
     render(<News />);
 
-    expect(screen.queryByRole('status', { name: 'Loading news' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('Stocks gain after earnings').length).toBeGreaterThan(0);
+    expect(screen.getByRole('status', { name: 'Loading news' })).toBeInTheDocument();
+    expect(screen.queryByText('Stocks gain after earnings')).not.toBeInTheDocument();
   });
 
-  it('fetches all news once and filters categories on the client', async () => {
+  it('passes the active category to useGeneralNews instead of relying on client filtering', async () => {
     const user = userEvent.setup();
     useGeneralNews.mockReturnValue({
       data: { articles },
@@ -90,10 +95,65 @@ describe('News page', () => {
 
     await user.click(screen.getByRole('button', { name: 'CRYPTO' }));
 
-    expect(screen.queryAllByText('Stocks gain after earnings')).toHaveLength(0);
-    expect(screen.getAllByText('Bitcoin rises after ETF flows').length).toBeGreaterThan(0);
-    expect(useGeneralNews).not.toHaveBeenCalledWith(
-      expect.objectContaining({ category: 'crypto' })
-    );
+    expect(useGeneralNews).toHaveBeenLastCalledWith({
+      category: 'crypto',
+      windowDays: 7,
+      limit: 100,
+    });
+  });
+
+  it('connects the general news SSE stream and uses silent force reload on updates', () => {
+    const reload = vi.fn();
+    useGeneralNews.mockReturnValue({
+      data: { articles },
+      status: 'success',
+      error: null,
+      reload,
+    });
+
+    render(<News />);
+
+    expect(useGeneralNewsStream).toHaveBeenCalledWith({
+      enabled: true,
+      onUpdate: expect.any(Function),
+    });
+
+    useGeneralNewsStream.mock.calls[0][0].onUpdate();
+    expect(reload).toHaveBeenCalledWith({ force: true, silent: true });
+  });
+
+  it('renders compact freshness metadata in the header', () => {
+    useGeneralNews.mockReturnValue({
+      data: {
+        articles,
+        last_updated: '2026-06-17T12:00:00Z',
+        cache: { hit: false },
+        provider_status: { rss_context: 'success' },
+      },
+      status: 'success',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.getByText('2 stories')).toBeInTheDocument();
+    expect(screen.getByText(/Updated/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cache fresh/i)).toBeInTheDocument();
+    expect(screen.getByText(/Providers OK/i)).toBeInTheDocument();
+  });
+
+  it('keeps stale news visible when refresh fails', () => {
+    useGeneralNews.mockReturnValue({
+      data: { articles, cache: { hit: true } },
+      status: 'stale',
+      error: new Error('Network failed'),
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.getAllByText('Stocks gain after earnings').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Showing cached news because the latest refresh failed/i)).toBeInTheDocument();
   });
 });

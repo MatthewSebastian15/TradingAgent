@@ -294,3 +294,27 @@ def test_market_ohlcv_slices_shared_daily_cache_for_shorter_range(client, monkey
     ]
     assert three_month_response.json()["range"] == "3M"
     assert three_month_response.json()["start_date"] == "2026-03-09"
+
+
+def test_market_overview_forwards_force_refresh_query(client, monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    def fake_get_overview_data(symbols, *, force_refresh=False):
+        calls.append({"symbols": symbols, "force_refresh": force_refresh})
+        return {
+            "items": [],
+            "source": "yfinance",
+            "last_updated": "2026-06-17T12:00:00Z",
+            "cache": {"hit": False, "ttl_seconds": 120, "force_refresh": force_refresh},
+        }
+
+    monkeypatch.setattr(market_routes, "get_overview_data", fake_get_overview_data)
+
+    response = client.post(
+        "/api/market/overview?force_refresh=true",
+        json={"symbols": ["SPY", "QQQ", "DIA"]},
+    )
+
+    assert response.status_code == 200
+    assert calls == [{"symbols": ["SPY", "QQQ", "DIA"], "force_refresh": True}]
+    assert response.json()["cache"]["force_refresh"] is True

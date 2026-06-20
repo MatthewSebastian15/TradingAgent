@@ -207,20 +207,51 @@ def _build_overview_items(symbols: list[str]) -> list[dict[str, Any]]:
     return [by_symbol.get(symbol) or _build_overview_item(symbol) for symbol in symbols]
 
 
-def get_overview_data(symbols: list[str]) -> dict[str, Any]:
+def _overview_cache_metadata(*, hit: bool, force_refresh: bool) -> dict[str, Any]:
+    return {
+        "hit": hit,
+        "ttl_seconds": OVERVIEW_TTL_SECONDS,
+        "force_refresh": force_refresh,
+    }
+
+
+def _with_overview_cache_metadata(
+    payload: dict[str, Any], *, hit: bool, force_refresh: bool
+) -> dict[str, Any]:
+    return {
+        **payload,
+        "source": payload.get("source") or "yfinance",
+        "last_updated": payload.get("last_updated") or _now_iso(),
+        "cache": _overview_cache_metadata(hit=hit, force_refresh=force_refresh),
+    }
+
+
+def get_overview_data(
+    symbols: list[str], *, force_refresh: bool = False
+) -> dict[str, Any]:
     normalized_symbols = dedupe_symbols(symbols)
     symbols_hash = sha256("|".join(normalized_symbols).encode("utf-8")).hexdigest()[:16]
     cache_key = f"market:overview:{symbols_hash}"
     cached = market_cache.get(cache_key)
-    if cached is not None:
-        return cached
+    if cached is not None and not force_refresh:
+        return _with_overview_cache_metadata(
+            cached, hit=True, force_refresh=False
+        )
 
     items = _build_overview_items(normalized_symbols)
     ok_items = [item for item in items if item.get("status") == "ok"]
-    payload: dict[str, Any] = {"items": items}
+    payload: dict[str, Any] = {
+        "items": items,
+        "source": "yfinance",
+        "last_updated": _now_iso(),
+    }
     if not ok_items:
         payload["message"] = "No market data available from yfinance"
-    return market_cache.set(cache_key, payload, OVERVIEW_TTL_SECONDS)
+
+    cached_payload = market_cache.set(cache_key, payload, OVERVIEW_TTL_SECONDS)
+    return _with_overview_cache_metadata(
+        cached_payload, hit=False, force_refresh=force_refresh
+    )
 
 
 def validate_symbol(symbol: str) -> dict[str, Any]:
