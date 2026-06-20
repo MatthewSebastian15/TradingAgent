@@ -5,6 +5,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchTickerNews } from '@/services/tickerNewsApi';
+
 import { clearTickerNewsClientStateForTests, useTickerNews } from './useTickerNews';
 
 vi.mock('@/services/tickerNewsApi', () => ({

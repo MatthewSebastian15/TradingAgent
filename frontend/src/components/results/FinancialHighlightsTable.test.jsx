@@ -3,14 +3,14 @@ import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import FinancialHighlightsTable from './FinancialHighlightsTable';
-import { MOCK_FINANCIAL_HIGHLIGHTS } from '../../../dev/mockData';
+import { TEST_FINANCIAL_HIGHLIGHTS } from '../../../test/analysisResultFixtures';
 
 describe('FinancialHighlightsTable', () => {
   afterEach(() => cleanup());
 
   it('renders title, backend period headers, rows, and unavailable values', () => {
     const { container } = render(
-      <FinancialHighlightsTable financialHighlights={MOCK_FINANCIAL_HIGHLIGHTS} />
+      <FinancialHighlightsTable financialHighlights={TEST_FINANCIAL_HIGHLIGHTS} />
     );
 
     expect(screen.getByText('Key Financial Highlights')).toBeTruthy();
@@ -81,7 +81,7 @@ describe('FinancialHighlightsTable', () => {
   it('renders grouped metric tables with latest value, growth, and status columns', () => {
     const rowKeys = new Set(['revenue', 'revenue_growth']);
     const groupedPayload = {
-      ...MOCK_FINANCIAL_HIGHLIGHTS,
+      ...TEST_FINANCIAL_HIGHLIGHTS,
       point_in_time: [],
       sections: [
         {
@@ -91,7 +91,7 @@ describe('FinancialHighlightsTable', () => {
             {
               key: 'revenue_gross_profit',
               title: 'Revenue & Gross Profit',
-              rows: MOCK_FINANCIAL_HIGHLIGHTS.rows.filter((row) => rowKeys.has(row.key)),
+              rows: TEST_FINANCIAL_HIGHLIGHTS.rows.filter((row) => rowKeys.has(row.key)),
             },
           ],
         },

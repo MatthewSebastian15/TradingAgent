@@ -3,7 +3,6 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import StockForm from './StockForm';
-import StockFormMock from './StockFormMock';
 
 function callbacks() {
   return {
@@ -358,22 +357,6 @@ describe('StockForm cleanup', () => {
     });
   });
 
-  it('clears mock pipeline timers when unmounted', () => {
-    vi.useFakeTimers();
-    const props = callbacks();
-
-    const { unmount } = render(<StockFormMock {...props} selectedResult={selectedTicker()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /execute analysis/i }));
-    expect(props.onResult).toHaveBeenCalledWith(null);
-
-    unmount();
-    act(() => {
-      vi.runOnlyPendingTimers();
-    });
-
-    expect(props.onResult).toHaveBeenCalledTimes(1);
-  });
 
   it('renders the Bloomberg search bar and removes legacy market tabs', () => {
     const props = callbacks();

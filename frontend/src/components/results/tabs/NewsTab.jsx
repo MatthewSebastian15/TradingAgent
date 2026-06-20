@@ -1,9 +1,9 @@
 import PropTypes from 'prop-types';
 import { useState } from 'react';
 
+import TickerNewsList from '@/components/news/TickerNewsList';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import TickerNewsList from '@/components/news/TickerNewsList';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import NoticeBox from '../NoticeBox';

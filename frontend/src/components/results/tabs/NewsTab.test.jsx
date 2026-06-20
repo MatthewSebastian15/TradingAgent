@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -114,42 +114,30 @@ function makeStrictNewsResult({
   companyOverrides = [],
   marketOverrides = [],
 } = {}) {
-  const decisionCompanyNews = [
-    makeArticle('Decision Company', 1, {
-      title: 'Bank Central Asia Reports Profit Growth',
+  const decisionCompanyNews = Array.from({ length: companyCount }, (_, index) =>
+    makeArticle('Decision Company', index + 1, {
+      title: index === 0 ? 'Bank Central Asia Reports Profit Growth' : `Company Overflow Article ${index + 1}`,
       provider: 'marketaux',
       market_context_only: false,
-      summary: 'Bank Central Asia reports resilient earnings growth.',
-      ...companyOverrides[0],
-    }),
-    ...Array.from({ length: Math.max(companyCount - 1, 0) }, (_, index) =>
-      makeArticle('Decision Company', index + 2, {
-        title: `Company Overflow Article ${index + 2}`,
-        provider: 'marketaux',
-        market_context_only: false,
-        summary: `Company overflow article ${index + 2}.`,
-        ...companyOverrides[index + 1],
-      })
-    ),
-  ];
-  const marketContextNews = [
-    makeArticle('Market Context', 1, {
-      title: 'Asian Markets Rise Before Fed Decision',
+      summary:
+        index === 0
+          ? 'Bank Central Asia reports resilient earnings growth.'
+          : `Company overflow article ${index + 1}.`,
+      ...companyOverrides[index],
+    })
+  );
+  const marketContextNews = Array.from({ length: marketContextCount }, (_, index) =>
+    makeArticle('Market Context', index + 1, {
+      title: index === 0 ? 'Asian Markets Rise Before Fed Decision' : `Market Context Overflow Article ${index + 1}`,
       provider: 'rss_context',
       market_context_only: true,
-      summary: 'Regional markets rose before the Fed decision.',
-      ...marketOverrides[0],
-    }),
-    ...Array.from({ length: Math.max(marketContextCount - 1, 0) }, (_, index) =>
-      makeArticle('Market Context', index + 2, {
-        title: `Market Context Overflow Article ${index + 2}`,
-        provider: 'rss_context',
-        market_context_only: true,
-        summary: `Market context overflow article ${index + 2}.`,
-        ...marketOverrides[index + 1],
-      })
-    ),
-  ];
+      summary:
+        index === 0
+          ? 'Regional markets rose before the Fed decision.'
+          : `Market context overflow article ${index + 1}.`,
+      ...marketOverrides[index],
+    })
+  );
 
   return {
     ticker: 'BBCA.JK',

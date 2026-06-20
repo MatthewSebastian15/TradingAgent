@@ -3,12 +3,7 @@ import React, { useState } from 'react';
 
 import { downloadAnalysisPdf, openAnalysisHtmlReport } from '../utils/reportApi';
 
-export default function ExportReportButtons({
-  resourceId,
-  result = null,
-  disabled = false,
-  mockReport = false,
-}) {
+export default function ExportReportButtons({ resourceId, result = null, disabled = false }) {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,7 +13,7 @@ export default function ExportReportButtons({
     if (disabled) return;
     setError('');
     try {
-      await openAnalysisHtmlReport({ resourceId, result, mock: mockReport });
+      await openAnalysisHtmlReport({ resourceId, result });
     } catch (ex) {
       setError(ex.message || 'Failed to open HTML report.');
     }
@@ -29,7 +24,7 @@ export default function ExportReportButtons({
     setError('');
     setDownloading(true);
     try {
-      await downloadAnalysisPdf(resourceId, { result, mock: mockReport });
+      await downloadAnalysisPdf(resourceId, { result });
     } catch (ex) {
       setError(ex.message || 'Failed to download PDF report.');
     } finally {
@@ -66,7 +61,6 @@ export default function ExportReportButtons({
 
 ExportReportButtons.propTypes = {
   disabled: PropTypes.bool,
-  mockReport: PropTypes.bool,
   resourceId: PropTypes.string,
   result: PropTypes.object,
 };

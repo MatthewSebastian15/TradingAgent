@@ -7,7 +7,6 @@ export default function ReportActions({
   result,
   displayResult,
   enableReportExport,
-  mockReport,
   onRerunSubmit,
   rerunRunning,
   onToggleRerun,
@@ -29,7 +28,6 @@ export default function ReportActions({
           resourceId={result.job_id || result.request_id}
           result={displayResult}
           disabled={Boolean(result.error)}
-          mockReport={mockReport}
         />
       )}
     </>
@@ -40,7 +38,6 @@ ReportActions.propTypes = {
   result: PropTypes.object.isRequired,
   displayResult: PropTypes.object.isRequired,
   enableReportExport: PropTypes.bool.isRequired,
-  mockReport: PropTypes.bool.isRequired,
   onRerunSubmit: PropTypes.func,
   rerunRunning: PropTypes.bool.isRequired,
   onToggleRerun: PropTypes.func.isRequired,

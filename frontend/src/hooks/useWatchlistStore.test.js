@@ -1,8 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { WATCHLIST_STORAGE_KEY } from '../services/watchlistStorage';
 import { useWatchlistStore } from './useWatchlistStore';
+import { WATCHLIST_STORAGE_KEY } from '../services/watchlistStorage';
 
 beforeEach(() => {
   window.localStorage.clear();
