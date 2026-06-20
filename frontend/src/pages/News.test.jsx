@@ -102,7 +102,7 @@ describe('News page', () => {
     });
   });
 
-  it('connects the general news SSE stream and uses silent force reload on updates', () => {
+  it('connects the general news SSE stream and reloads cache without force on updates', () => {
     const reload = vi.fn();
     useGeneralNews.mockReturnValue({
       data: { articles },
@@ -119,10 +119,10 @@ describe('News page', () => {
     });
 
     useGeneralNewsStream.mock.calls[0][0].onUpdate();
-    expect(reload).toHaveBeenCalledWith({ force: true, silent: true });
+    expect(reload).toHaveBeenCalledWith({ force: false, silent: true });
   });
 
-  it('renders compact freshness metadata in the header', () => {
+  it('hides category buttons and frontend status metadata that should not be shown', () => {
     useGeneralNews.mockReturnValue({
       data: {
         articles,
@@ -137,10 +137,33 @@ describe('News page', () => {
 
     render(<News />);
 
-    expect(screen.getByText('2 stories')).toBeInTheDocument();
-    expect(screen.getByText(/Updated/i)).toBeInTheDocument();
-    expect(screen.getByText(/Cache fresh/i)).toBeInTheDocument();
-    expect(screen.getByText(/Providers OK/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'FINANCE' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'TECH' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'CENTRAL BANK' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'REGULATORY' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/stories/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Updated/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cache fresh/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Providers OK/i)).not.toBeInTheDocument();
+  });
+
+  it('renders refresh metadata and manual cooldown notice', () => {
+    useGeneralNews.mockReturnValue({
+      data: {
+        articles,
+        refresh: { queued: false, skipped: true, reason: 'manual_refresh_cooldown' },
+      },
+      status: 'success',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.queryByText(/Refresh cooldown/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Refresh is cooling down. Showing latest cached news/i)
+    ).toBeInTheDocument();
   });
 
   it('keeps stale news visible when refresh fails', () => {

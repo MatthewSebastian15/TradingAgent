@@ -21,6 +21,7 @@ function Harness({ category = 'all', testId = 'count' }) {
       <span data-testid={testId}>{articles.length}</span>
       <span data-testid={`ids-${testId}`}>{articles.map((article) => article.id).join(',')}</span>
       <span data-testid={`error-${testId}`}>{error?.message || ''}</span>
+      <span data-testid={`message-${testId}`}>{data?.message || ''}</span>
       <button type="button" onClick={reload}>
         reload
       </button>
@@ -61,9 +62,16 @@ describe('useGeneralNews', () => {
 
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
     expect(fetchGeneralNews).toHaveBeenCalledWith(
-      expect.objectContaining({ category: 'all', windowDays: 7, limit: 50 })
+      expect.objectContaining({
+        category: 'all',
+        windowDays: 7,
+        limit: 50,
+        forceRefresh: false,
+      })
     );
-    expect(fetchGeneralNews).toHaveBeenCalledWith(expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(fetchGeneralNews).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
     expect(screen.getByTestId('count')).toHaveTextContent('1');
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
@@ -85,7 +93,7 @@ describe('useGeneralNews', () => {
     expect(screen.getByTestId('second')).toHaveTextContent('2');
   });
 
-  it('auto refreshes news with force refresh while visible', async () => {
+  it('auto refreshes news without force refresh while visible', async () => {
     fetchGeneralNews.mockResolvedValue({ articles: [] });
 
     render(<Harness />);
@@ -104,7 +112,7 @@ describe('useGeneralNews', () => {
 
     expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
     expect(fetchGeneralNews).toHaveBeenLastCalledWith(
-      expect.objectContaining({ forceRefresh: true })
+      expect.objectContaining({ forceRefresh: false })
     );
   });
 
@@ -123,11 +131,11 @@ describe('useGeneralNews', () => {
 
     expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
     expect(fetchGeneralNews).toHaveBeenLastCalledWith(
-      expect.objectContaining({ forceRefresh: true })
+      expect.objectContaining({ forceRefresh: false })
     );
   });
 
-  it('forces every manual refresh click to request fresh news and show refreshing status', async () => {
+  it('manual refresh uses force once and falls back to cached reload during cooldown', async () => {
     fetchGeneralNews.mockResolvedValue({ articles: [] });
 
     render(<Harness />);
@@ -144,7 +152,7 @@ describe('useGeneralNews', () => {
       fireEvent.click(screen.getByRole('button', { name: 'reload' }));
     });
 
-    expect(fetchGeneralNews).toHaveBeenCalledTimes(3);
+    expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
     expect(fetchGeneralNews).toHaveBeenLastCalledWith(
       expect.objectContaining({
         category: 'all',
@@ -152,6 +160,14 @@ describe('useGeneralNews', () => {
         limit: 50,
         forceRefresh: true,
       })
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+
+    expect(screen.getByTestId('message-count')).toHaveTextContent(
+      'Refresh is cooling down. Showing latest cached news.'
     );
   });
 

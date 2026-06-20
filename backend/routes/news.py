@@ -35,18 +35,86 @@ def _fetch_general_news(
     provider: str | None = None,
     force_refresh: bool = False,
 ) -> dict[str, Any]:
-    from tradingagents.dataflows.news.general_news_service import GeneralNewsService
-    from tradingagents.dataflows.providers.config import use_config
+    from services.news_article_store import NewsArticleStore
+    from services.news_provider_budget import provider_status_snapshot
+    from tradingagents.dataflows.news.general_news_categories import (
+        is_allowed_category,
+        normalize_general_news_category,
+    )
+    from tradingagents.dataflows.news.general_news_service import GENERAL_NEWS_PROVIDER_ORDER
 
     config = build_tradingagents_config()
-    with use_config(config):
-        return GeneralNewsService(config.get("general_news", {})).fetch_general_news(
-            category=category,
-            window_days=window_days,
-            limit=limit,
-            provider_filter=provider,
-            force_refresh=force_refresh,
-        )
+    general_config = dict(config.get("general_news", {}) or {})
+    if not bool(general_config.get("enabled", True)):
+        return {
+            "enabled": False,
+            "mode": "general_news",
+            "articles": [],
+            "articles_found": 0,
+        }
+
+    normalized_category = str(category or general_config.get("default_category") or "all").lower()
+    normalized_category = normalized_category.strip().replace(" ", "_") or "all"
+    if normalized_category != "all" and not is_allowed_category(normalized_category):
+        normalized_category = "all"
+    if normalized_category != "all":
+        normalized_category = normalize_general_news_category(normalized_category)
+
+    configured_limit = max(1, int(general_config.get("ui_default_limit") or 100))
+    max_ui = max(1, int(general_config.get("max_articles_for_ui") or 100))
+    limit = min(max(1, int(limit or configured_limit)), max_ui)
+    ttl_seconds = max(30, int(general_config.get("cache_ttl_seconds") or 300))
+    stale_ttl_seconds = max(ttl_seconds, int(general_config.get("stale_ttl_seconds") or 3600))
+
+    store = NewsArticleStore(
+        db_path=str(general_config.get("cache_db_path") or ".cache/general_news.sqlite3"),
+        max_articles=max(1, int(general_config.get("max_stored_articles") or 2000)),
+        retention_days=max(1, int(general_config.get("article_retention_days") or 30)),
+    )
+    query = store.list_articles(
+        category=normalized_category,
+        window_days=max(1, int(window_days)),
+        limit=limit,
+        provider=provider,
+    )
+    age_seconds = int(query.age_seconds or 0)
+    stale = bool(query.articles) and age_seconds > ttl_seconds
+    provider_order = list(general_config.get("provider_priority") or GENERAL_NEWS_PROVIDER_ORDER)
+
+    return {
+        "enabled": True,
+        "mode": "general_news",
+        "category": normalized_category,
+        "window_days": max(1, int(window_days)),
+        "limit": limit,
+        "last_updated": query.last_updated,
+        "refresh_interval_seconds": int(
+            general_config.get("background_refresh_seconds")
+            or general_config.get("refresh_interval_seconds")
+            or 300
+        ),
+        "cache": {
+            "enabled": True,
+            "hit": bool(query.articles),
+            "stale": stale,
+            "age_seconds": age_seconds if query.articles else None,
+            "ttl_seconds": ttl_seconds,
+            "stale_ttl_seconds": stale_ttl_seconds,
+        },
+        "refresh": {
+            "queued": False,
+            "skipped": bool(force_refresh),
+            "reason": "get_force_refresh_ignored" if force_refresh else None,
+        },
+        "provider_status": provider_status_snapshot(provider_order),
+        "debug": {
+            "articles_before_dedup": query.total_available,
+            "articles_after_dedup": query.total_available,
+            "articles_returned": len(query.articles),
+        },
+        "articles_found": len(query.articles),
+        "articles": query.articles,
+    }
 
 
 def _general_news_categories() -> dict[str, Any]:
@@ -55,16 +123,13 @@ def _general_news_categories() -> dict[str, Any]:
     return {"categories": GENERAL_NEWS_CATEGORIES}
 
 
-async def _stream_general_news_events(request: Request, rate_limit_lease):
+async def _stream_general_news_events(request: Request):
     from tradingagents.dataflows.news.general_news_stream import general_news_event_bus
 
-    try:
-        async for event in general_news_event_bus.subscribe():
-            if await request.is_disconnected():
-                return
-            yield {"event": "general_news_updated", "data": json.dumps(event)}
-    finally:
-        await rate_limit_lease.__aexit__(None, None, None)
+    async for event in general_news_event_bus.subscribe():
+        if await request.is_disconnected():
+            return
+        yield {"event": "general_news_updated", "data": json.dumps(event)}
 
 
 @router.get("/news/general")
@@ -72,7 +137,7 @@ async def get_general_news(
     request: Request,
     category: str = Query(default="all"),
     window_days: int = Query(default=7, ge=1, le=365),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=100, ge=1, le=100),
     provider: str | None = Query(default=None),
     force_refresh: bool = Query(default=False),
 ):
@@ -85,21 +150,94 @@ async def get_general_news(
                 "supported_providers": sorted(_SUPPORTED_GENERAL_PROVIDERS),
             },
         )
-    async with limit_request(request, request_policy()):
-        return await asyncio.to_thread(
-            _fetch_general_news,
-            category=category,
-            window_days=window_days,
-            limit=limit,
-            provider=normalized_provider,
-            force_refresh=force_refresh,
+    result = await asyncio.to_thread(
+        _fetch_general_news,
+        category=category,
+        window_days=window_days,
+        limit=limit,
+        provider=normalized_provider,
+        force_refresh=force_refresh,
+    )
+    if _should_queue_read_refresh(result, force_refresh=force_refresh):
+        from services.news_background_worker import queue_general_news_refresh
+
+        refresh_status = await queue_general_news_refresh(
+            "legacy_force_refresh" if force_refresh else "cache_stale"
         )
+        result["refresh"] = {**dict(result.get("refresh") or {}), **refresh_status}
+    return result
+
+
+@router.post("/news/general/refresh")
+async def refresh_general_news(
+    request: Request,
+    category: str = Query(default="all"),
+    window_days: int = Query(default=7, ge=1, le=365),
+    limit: int = Query(default=100, ge=1, le=100),
+    provider: str | None = Query(default=None),
+):
+    normalized_provider = provider.strip().lower() if provider else None
+    if normalized_provider is not None and normalized_provider not in _SUPPORTED_GENERAL_PROVIDERS:
+        raise BadRequestError(
+            "Unsupported general news provider.",
+            details={
+                "provider": provider,
+                "supported_providers": sorted(_SUPPORTED_GENERAL_PROVIDERS),
+            },
+        )
+
+    from services.news_background_worker import (
+        manual_refresh_cooldown_remaining,
+        mark_manual_refresh_requested,
+        queue_general_news_refresh,
+    )
+
+    result = await asyncio.to_thread(
+        _fetch_general_news,
+        category=category,
+        window_days=window_days,
+        limit=limit,
+        provider=normalized_provider,
+        force_refresh=False,
+    )
+    remaining = manual_refresh_cooldown_remaining()
+    if remaining > 0:
+        result["status"] = "skipped"
+        result["message"] = "Refresh is cooling down. Showing latest cached news."
+        result["refresh"] = {
+            **dict(result.get("refresh") or {}),
+            "queued": False,
+            "skipped": True,
+            "reason": "manual_refresh_cooldown",
+            "cooldown_remaining_seconds": remaining,
+        }
+        return result
+
+    mark_manual_refresh_requested()
+    refresh_status = await queue_general_news_refresh("manual_refresh")
+    result["status"] = "queued" if refresh_status.get("queued") else "skipped"
+    result["message"] = (
+        "News refresh queued"
+        if refresh_status.get("queued")
+        else "News refresh already running. Showing latest cached news."
+    )
+    result["refresh"] = {**dict(result.get("refresh") or {}), **refresh_status}
+    return result
+
+
+def _should_queue_read_refresh(result: dict[str, Any], *, force_refresh: bool) -> bool:
+    if force_refresh:
+        return True
+    cache = result.get("cache") if isinstance(result, dict) else {}
+    refresh = result.get("refresh") if isinstance(result, dict) else {}
+    if not isinstance(cache, dict) or not isinstance(refresh, dict):
+        return False
+    return bool(cache.get("stale")) and not bool(refresh.get("queued"))
 
 
 @router.get("/news/general/categories")
 async def get_general_news_categories(request: Request):
-    async with limit_request(request, request_policy()):
-        return _general_news_categories()
+    return _general_news_categories()
 
 
 @router.get("/news/general/stream")
@@ -107,9 +245,7 @@ async def stream_general_news(request: Request):
     config = build_tradingagents_config()
     if not bool((config.get("general_news") or {}).get("enable_sse", True)):
         raise HTTPException(status_code=404, detail="Not found")
-    rate_limit_lease = limit_request(request, stream_policy())
-    await rate_limit_lease.__aenter__()
-    return EventSourceResponse(_stream_general_news_events(request, rate_limit_lease))
+    return EventSourceResponse(_stream_general_news_events(request))
 
 
 def _fetch_news(

@@ -29,9 +29,19 @@ class GeneralNewsCacheEntry:
 
 
 class GeneralNewsCache:
-    def __init__(self, *, db_path: str, ttl_seconds: int, max_entries: int) -> None:
+    def __init__(
+        self,
+        *,
+        db_path: str,
+        ttl_seconds: int,
+        max_entries: int,
+        stale_ttl_seconds: int | None = None,
+    ) -> None:
         self.db_path = Path(db_path)
         self.ttl_seconds = max(1, int(ttl_seconds))
+        self.stale_ttl_seconds = max(
+            self.ttl_seconds, int(stale_ttl_seconds or self.ttl_seconds * 24)
+        )
         self.max_entries = max(1, int(max_entries))
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = _write_lock_for_path(self.db_path)
@@ -49,7 +59,10 @@ class GeneralNewsCache:
                 return None
 
             created_at, expires_at, payload_json = row
+            age_seconds = max(0, int(now - float(created_at)))
             if expires_at <= now and not allow_stale:
+                return None
+            if allow_stale and age_seconds > self.stale_ttl_seconds:
                 return None
 
             try:
@@ -139,7 +152,7 @@ class GeneralNewsCache:
             )
 
     def _evict(self, conn: sqlite3.Connection, now: float) -> None:
-        stale_cutoff = now - (self.ttl_seconds * 24)
+        stale_cutoff = now - self.stale_ttl_seconds
         conn.execute("DELETE FROM general_news_cache WHERE expires_at < ?", (stale_cutoff,))
         rows = conn.execute(
             "SELECT key FROM general_news_cache ORDER BY last_accessed_at DESC LIMIT -1 OFFSET ?",

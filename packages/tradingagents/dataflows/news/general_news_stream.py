@@ -45,6 +45,7 @@ class GeneralNewsEventBus:
 
         await self.publish(
             {
+                "event": "general_news_updated",
                 "last_updated": result.get("last_updated"),
                 "new_count": len(new_ids),
             }
