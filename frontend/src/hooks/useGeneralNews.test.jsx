@@ -13,11 +13,13 @@ vi.mock('../services/generalNewsApi', () => ({
 
 function Harness({ category = 'all', testId = 'count' }) {
   const { data, status, reload } = useGeneralNews({ category, windowDays: 7, limit: 50 });
+  const articles = data?.articles || [];
 
   return (
     <div>
       <span data-testid={`status-${testId}`}>{status}</span>
-      <span data-testid={testId}>{data?.articles?.length || 0}</span>
+      <span data-testid={testId}>{articles.length}</span>
+      <span data-testid={`ids-${testId}`}>{articles.map((article) => article.id).join(',')}</span>
       <button type="button" onClick={reload}>
         reload
       </button>
@@ -78,24 +80,46 @@ describe('useGeneralNews', () => {
     expect(screen.getByTestId('second')).toHaveTextContent('2');
   });
 
-  it('polls at a low frequency without stream fallback spam', async () => {
+  it('auto refreshes news with force refresh while visible', async () => {
     fetchGeneralNews.mockResolvedValue({ articles: [] });
 
     render(<Harness />);
 
     await act(async () => {});
-
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(119999);
+      await vi.advanceTimersByTimeAsync(59999);
     });
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
     });
+
     expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
+    expect(fetchGeneralNews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ forceRefresh: true })
+    );
+  });
+
+  it('refreshes news when the browser tab returns to visible after the minimum gap', async () => {
+    fetchGeneralNews.mockResolvedValue({ articles: [] });
+
+    render(<Harness />);
+
+    await act(async () => {});
+    expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
+    expect(fetchGeneralNews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ forceRefresh: true })
+    );
   });
 
   it('forces every manual refresh click to request fresh news', async () => {
@@ -144,8 +168,40 @@ describe('useGeneralNews', () => {
       expect.objectContaining({ forceRefresh: true })
     );
 
+    await act(async () => {});
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('fresh');
+
     await act(async () => {
       resolveInitialRequest({ articles: [{ id: 'stale' }] });
     });
+
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('fresh');
+  });
+
+  it('keeps existing news visible during silent auto refresh', async () => {
+    let resolveAutoRefresh;
+    fetchGeneralNews.mockResolvedValueOnce({ articles: [{ id: 'old' }] }).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAutoRefresh = resolve;
+        })
+    );
+
+    render(<Harness />);
+
+    await act(async () => {});
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('old');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60000);
+    });
+
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('old');
+
+    await act(async () => {
+      resolveAutoRefresh({ articles: [{ id: 'new' }] });
+    });
+
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('new');
   });
 });

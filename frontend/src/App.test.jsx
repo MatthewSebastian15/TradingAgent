@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -90,10 +90,14 @@ describe('App', () => {
     );
   });
 
-  it('reuses prefetched market overview cache in the hook', async () => {
+  it('shows prefetched market overview cache and refreshes latest data in the hook', async () => {
     vi.resetModules();
-    const payload = { items: [{ symbol: '^GSPC' }] };
-    const getMarketOverview = vi.fn(() => Promise.resolve(payload));
+    const cachedPayload = { items: [{ symbol: '^GSPC' }] };
+    const freshPayload = { items: [{ symbol: '^IXIC' }] };
+    const getMarketOverview = vi
+      .fn()
+      .mockResolvedValueOnce(cachedPayload)
+      .mockResolvedValueOnce(freshPayload);
     vi.doMock('./api/market', () => ({ getMarketOverview }));
     const {
       clearMarketOverviewClientCacheForTests,
@@ -113,6 +117,11 @@ describe('App', () => {
     render(<Probe />);
 
     expect(screen.getByText('^GSPC')).toBeTruthy();
-    expect(getMarketOverview).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(getMarketOverview).toHaveBeenCalledTimes(2));
+    expect(getMarketOverview).toHaveBeenLastCalledWith(
+      symbols,
+      expect.objectContaining({ forceRefresh: true })
+    );
+    expect(await screen.findByText('^IXIC')).toBeTruthy();
   });
 });
