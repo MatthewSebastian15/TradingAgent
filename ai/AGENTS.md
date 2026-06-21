@@ -1,4 +1,4 @@
-# TradingAgent AI Context
+﻿# TradingAgent AI Context
 
 Last synced: 2026-06-19.
 
@@ -508,58 +508,6 @@ frontend/src/pages/Dashboard.jsx
 frontend/src/pages/Watchlist.jsx
 ```
 
-## Commands
-
-Backend local:
-
-```powershell
-cd d:\CODING\TradingAgents\backend
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-uvicorn main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-Frontend local:
-
-```powershell
-cd d:\CODING\TradingAgents\frontend
-npm install
-$env:VITE_API_BASE_URL="/api"
-$env:VITE_BACKEND_PROXY_TARGET="http://localhost:8000"
-npm run dev
-```
-
-Docker:
-
-```powershell
-docker compose up --build
-```
-
-Backend tests:
-
-```powershell
-cd d:\CODING\TradingAgents\backend
-pytest tests/ -m "not integration and not live_api" -v
-python -m ruff check .
-python -m ruff format --check .
-```
-
-Core tests:
-
-```powershell
-cd d:\CODING\TradingAgents
-python -m pytest packages/tests -m "not integration and not live_api" -v
-```
-
-Frontend tests:
-
-```powershell
-cd d:\CODING\TradingAgents\frontend
-npm test -- --run
-npm run lint
-npm run format:check
-```
-
 ## Do Not
 
 - Do not restore old IDX auto suffix behavior unless requested.
@@ -576,11 +524,4 @@ npm run format:check
 - Do not add backend persistence for watchlists unless the user asks for synced
   watchlists. Current watchlists are browser localStorage only.
 
-## Docs Index
 
-- `ai/AGENTS.md`: main agent context.
-- `ai/architecture.md`: system architecture and module boundaries.
-- `ai/api.md`: current backend API contract.
-- `ai/setup.md`: local, Docker, env, tests.
-- `ai/conventions.md`: coding and testing rules.
-- `ai/decisions.md`: technical decisions and implications.

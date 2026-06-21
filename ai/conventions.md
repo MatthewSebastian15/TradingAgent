@@ -1,4 +1,4 @@
-# Coding Conventions
+﻿# Coding Conventions
 
 Last synced: 2026-06-19.
 
@@ -575,3 +575,4 @@ frontend/coverage/
 - Do not run live vendor/LLM tests as unit tests.
 - Do not claim old US/ID-only validation. Backend now accepts broader
   yfinance canonical markets.
+
