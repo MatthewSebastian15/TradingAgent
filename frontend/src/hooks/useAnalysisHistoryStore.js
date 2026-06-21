@@ -141,6 +141,12 @@ export function clearHistory(historyKey) {
   }
 }
 
+export function removeHistoryItem(historyKey, item) {
+  const history = readHistory(historyKey);
+  const updated = history.filter((entry) => !isSameHistoryEntry(entry, item));
+  writeHistory(historyKey, updated);
+}
+
 export function withAnalysisCreatedAt(result) {
   if (!result || result.error || result.analysis_created_at) return result;
   return { ...result, analysis_created_at: new Date().toISOString() };

@@ -242,7 +242,7 @@ export default function AnalysisWorkspace({
   const mainOffsetClass = panelOpen ? 'ml-10 md:ml-[22.5rem]' : 'ml-10';
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px]">
+    <div className="h-screen overflow-hidden bg-bloomberg-bg pt-[60px]">
       <Navbar />
 
       <div className="fixed bottom-0 left-0 top-[60px] z-[45] w-10 border-bloomberg-border border-r bg-black">
@@ -301,7 +301,7 @@ export default function AnalysisWorkspace({
 
       <main
         data-testid="analysis-main"
-        className={`${mainOffsetClass} min-h-screen min-w-0 transition-[margin-left] duration-200 ease-out will-change-[margin-left]`}
+        className={`${mainOffsetClass} h-full min-w-0 overflow-auto transition-[margin-left] duration-200 ease-out will-change-[margin-left]`}
       >
         <div className="space-y-3 p-3">
           <StatusBar loading={loading} status={status} />
