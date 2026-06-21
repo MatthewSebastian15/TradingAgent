@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import News from './News';
 import { useGeneralNews } from '../hooks/useGeneralNews';
@@ -19,6 +19,7 @@ vi.mock('../components/TickerTape', () => ({
 
 vi.mock('../hooks/useGeneralNews', () => ({
   useGeneralNews: vi.fn(),
+  loadGeneralNews: vi.fn(() => Promise.resolve(null)),
 }));
 
 vi.mock('../hooks/useGeneralNewsStream', () => ({
@@ -43,6 +44,10 @@ const articles = [
 ];
 
 describe('News page', () => {
+  beforeEach(() => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -177,6 +182,8 @@ describe('News page', () => {
     render(<News />);
 
     expect(screen.getAllByText('Stocks gain after earnings').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Showing cached news because the latest refresh failed/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Showing cached news because the latest refresh failed/i)
+    ).toBeInTheDocument();
   });
 });

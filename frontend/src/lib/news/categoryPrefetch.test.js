@@ -5,6 +5,7 @@ vi.mock('@/hooks/useGeneralNews', () => ({
 }));
 
 import { loadGeneralNews } from '@/hooks/useGeneralNews';
+
 import { prefetchCategory } from './categoryPrefetch';
 
 describe('prefetchCategory', () => {
