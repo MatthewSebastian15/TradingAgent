@@ -209,7 +209,7 @@ export default function TickerSearchBar({
   ) : null;
 
   return (
-    <div ref={rootRef} className="relative min-w-[320px] max-w-[480px] overflow-visible">
+    <div ref={rootRef} className="relative w-full overflow-visible">
       <div
         className={`flex items-center border bg-black transition-colors duration-150 ${
           open
@@ -232,7 +232,7 @@ export default function TickerSearchBar({
           onFocus={() => setOpen(true)}
           placeholder="Search ticker symbol"
           disabled={disabled}
-          className="h-10 border-0 bg-black px-1 font-mono text-xs tracking-wider shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
+          className="h-10 border-0 bg-black pl-1 pr-2.5 font-mono text-xs tracking-wider shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
         />
       </div>
 

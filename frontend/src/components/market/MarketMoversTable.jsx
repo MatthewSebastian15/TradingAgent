@@ -33,9 +33,13 @@ export default function MarketMoversTable({ title, items, loading, limit, emptyT
         <CardTitle className="rounded-md bg-bloomberg-orange px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-black">
           {title}
         </CardTitle>
-        <span className={`font-mono text-[10px] font-bold uppercase tracking-widest ${toneClass}`}>
-          {loading ? 'Loading' : `${items.length} shown`}
-        </span>
+        {loading ? (
+          <Skeleton className="h-4 w-16 bg-bloomberg-surface" />
+        ) : (
+          <span className={`font-mono text-[10px] font-bold uppercase tracking-widest ${toneClass}`}>
+            {`${items.length} shown`}
+          </span>
+        )}
       </CardHeader>
       <CardContent className="overflow-x-auto p-0">
         <Table className="min-w-[390px]">
@@ -62,9 +66,20 @@ export default function MarketMoversTable({ title, items, loading, limit, emptyT
             {loading &&
               loadingRows(limit).map((row) => (
                 <TableRow key={row} className="border-bloomberg-border hover:bg-transparent">
-                  <TableCell colSpan="5" className="px-2 py-1">
-                    <Skeleton className="h-3.5 w-40 rounded-full bg-bloomberg-surface" />
-                    <span className="sr-only">LOADING MARKET DATA...</span>
+                  <TableCell className="px-2 py-1.5">
+                    <Skeleton className="h-3 w-12 bg-bloomberg-surface" />
+                  </TableCell>
+                  <TableCell className="px-2 py-1.5 text-right">
+                    <Skeleton className="ml-auto h-3 w-16 bg-bloomberg-surface" />
+                  </TableCell>
+                  <TableCell className="px-2 py-1.5 text-right">
+                    <Skeleton className="ml-auto h-3 w-10 bg-bloomberg-surface" />
+                  </TableCell>
+                  <TableCell className="hidden px-2 py-1.5 sm:table-cell">
+                    <Skeleton className="ml-auto h-3 w-14 bg-bloomberg-surface" />
+                  </TableCell>
+                  <TableCell className="px-2 py-1.5">
+                    <Skeleton className="h-6 w-full bg-bloomberg-surface" />
                   </TableCell>
                 </TableRow>
               ))}
