@@ -75,14 +75,10 @@ describe('App', () => {
     );
   });
 
-  it('shows prefetched market overview cache and refreshes latest data in the hook', async () => {
+  it('shows prefetched market overview cache immediately without a second fetch', async () => {
     vi.resetModules();
     const cachedPayload = { items: [{ symbol: '^GSPC' }] };
-    const freshPayload = { items: [{ symbol: '^IXIC' }] };
-    const getMarketOverview = vi
-      .fn()
-      .mockResolvedValueOnce(cachedPayload)
-      .mockResolvedValueOnce(freshPayload);
+    const getMarketOverview = vi.fn().mockResolvedValueOnce(cachedPayload);
     vi.doMock('./api/market', () => ({ getMarketOverview }));
     const {
       clearMarketOverviewClientCacheForTests,
@@ -101,12 +97,8 @@ describe('App', () => {
 
     render(<Probe />);
 
+    // Prefetched data renders immediately; mount does not fire a second backend call.
     expect(screen.getByText('^GSPC')).toBeTruthy();
-    await waitFor(() => expect(getMarketOverview).toHaveBeenCalledTimes(2));
-    expect(getMarketOverview).toHaveBeenLastCalledWith(
-      symbols,
-      expect.objectContaining({ forceRefresh: true })
-    );
-    expect(await screen.findByText('^IXIC')).toBeTruthy();
+    expect(getMarketOverview).toHaveBeenCalledTimes(1);
   });
 });

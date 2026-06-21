@@ -57,9 +57,10 @@ describe('useMarketOverviewData', () => {
     render(<Harness />);
 
     await waitFor(() => expect(getMarketOverview).toHaveBeenCalledTimes(1));
+    // mount uses force:false — backend cache is respected (forceRefresh:false)
     expect(getMarketOverview).toHaveBeenCalledWith(
       DEFAULT_SYMBOLS,
-      expect.objectContaining({ forceRefresh: true })
+      expect.objectContaining({ forceRefresh: false })
     );
     await waitFor(() => expect(screen.getByTestId('symbols')).toHaveTextContent('SPY'));
   });
@@ -74,21 +75,17 @@ describe('useMarketOverviewData', () => {
     expect(screen.getByTestId('symbols')).toHaveTextContent('');
   });
 
-  it('shows cached market data immediately and refreshes latest data in background', async () => {
+  it('shows cached market data immediately without backend call when cache is fresh', async () => {
     seedMarketOverviewClientCacheForTests(DEFAULT_SYMBOLS, {
       items: [{ symbol: 'CACHE', last: 100, status: 'ok' }],
     });
-    getMarketOverview.mockResolvedValue({ items: [{ symbol: 'FRESH', last: 101, status: 'ok' }] });
 
     render(<Harness />);
 
+    // Fresh frontend cache served immediately; no backend round-trip needed.
     expect(screen.getByTestId('symbols')).toHaveTextContent('CACHE');
-    await waitFor(() => expect(getMarketOverview).toHaveBeenCalledTimes(1));
-    expect(getMarketOverview).toHaveBeenCalledWith(
-      DEFAULT_SYMBOLS,
-      expect.objectContaining({ forceRefresh: true })
-    );
-    await waitFor(() => expect(screen.getByTestId('symbols')).toHaveTextContent('FRESH'));
+    expect(screen.getByTestId('status')).toHaveTextContent('success');
+    expect(getMarketOverview).not.toHaveBeenCalled();
   });
 
   it('forces market refresh when refresh button is clicked', async () => {
@@ -111,20 +108,14 @@ describe('useMarketOverviewData', () => {
     await waitFor(() => expect(screen.getByTestId('symbols')).toHaveTextContent('QQQ'));
   });
 
-  it('keeps cached market data visible and marks stale when refresh fails', async () => {
-    seedMarketOverviewClientCacheForTests(DEFAULT_SYMBOLS, {
-      items: [{ symbol: 'CACHE', last: 100, status: 'ok' }],
-      source: 'yfinance',
-      cache: { hit: true },
-    });
+  it('shows error state when initial fetch fails with no cached data', async () => {
+    // No cache seeded — hook must fetch from backend on mount.
     getMarketOverview.mockRejectedValueOnce(new Error('network failed'));
 
     render(<Harness />);
 
-    expect(screen.getByTestId('symbols')).toHaveTextContent('CACHE');
     await waitFor(() => expect(getMarketOverview).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('stale'));
-    expect(screen.getByTestId('symbols')).toHaveTextContent('CACHE');
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('error'));
     expect(screen.getByTestId('error')).toHaveTextContent(
       'Failed to load market data from yfinance.'
     );
