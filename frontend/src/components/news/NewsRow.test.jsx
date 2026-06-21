@@ -35,9 +35,10 @@ describe('NewsRow', () => {
     expect(screen.getByText('BLOOMBERG')).toBeInTheDocument();
     expect(screen.getByText('CRYPTO')).toBeInTheDocument();
     expect(screen.getByText('11h')).toBeInTheDocument();
-    expect(screen.getByText('CRYPTO').closest('.terminal-news-meta')).toHaveTextContent(
-      /CRYPTO\s*-\s*BLOOMBERG\s*-\s*11h/
-    );
+    const metaEl = screen.getByText('CRYPTO').closest('.terminal-news-meta');
+    expect(metaEl).toHaveTextContent('11h');
+    expect(metaEl).toHaveTextContent('BLOOMBERG');
+    expect(metaEl).toHaveTextContent('CRYPTO');
     expect(
       screen.getByRole('link', { name: 'Bitcoin slips as traders await macro data' })
     ).toHaveAttribute('href', 'https://example.com/news');
@@ -123,5 +124,62 @@ describe('NewsRow final category labels', () => {
     );
 
     expect(screen.getByText('MARKETS')).toBeInTheDocument();
+  });
+});
+
+describe('NewsRow category badge colors', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('renders crypto badge with cyan color', () => {
+    render(
+      <NewsRow
+        article={{
+          title: 'Bitcoin update',
+          source: 'CoinDesk',
+          category: 'crypto',
+          published_at: '2026-06-15T01:00:00Z',
+        }}
+      />
+    );
+    const badge = screen.getByText('CRYPTO');
+    expect(badge.style.color).toBe('rgb(6, 182, 212)');
+  });
+
+  it('renders regulatory badge with red color', () => {
+    render(
+      <NewsRow
+        article={{
+          title: 'SEC update',
+          source: 'Reuters',
+          category: 'regulatory',
+          published_at: '2026-06-15T01:00:00Z',
+        }}
+      />
+    );
+    const badge = screen.getByText('REGULATORY');
+    expect(badge.style.color).toBe('rgb(239, 68, 68)');
+  });
+
+  it('renders unknown category badge with muted fallback color', () => {
+    render(
+      <NewsRow
+        article={{
+          title: 'Misc update',
+          source: 'Reuters',
+          category: 'unknown_xyz',
+          published_at: '2026-06-15T01:00:00Z',
+        }}
+      />
+    );
+    const badge = screen.getByText('UNKNOWN');
+    expect(badge.style.color).toBe('rgb(82, 82, 82)');
   });
 });

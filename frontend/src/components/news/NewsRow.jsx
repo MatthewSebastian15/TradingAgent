@@ -1,5 +1,7 @@
 import PropTypes from 'prop-types';
 
+import { getCategoryColor } from '@/lib/news/categoryColors';
+
 const PROVIDER_NAMES = new Set(['marketaux', 'newsdata', 'google_news_light', 'rss_context']);
 const CATEGORY_LABELS = {
   markets: 'MARKETS',
@@ -99,9 +101,11 @@ export default function NewsRow({ article }) {
   const title = normalizeText(article.title) || 'Untitled news';
   const url = normalizeText(article.url);
   const source = getDataSource(article);
+  const categoryKey = normalizeCategory(article.category);
   const category = getCategoryLabel(article);
   const date = getDisplayDate(article);
   const description = limitDescriptionWords(article.description || article.summary, title);
+  const categoryColor = getCategoryColor(categoryKey);
 
   const titleNode = url ? (
     <a
@@ -119,18 +123,22 @@ export default function NewsRow({ article }) {
   return (
     <article className="terminal-news-row border-b border-bloomberg-border/70 bg-black/25 px-3 py-2 transition-colors last:border-b-0 hover:bg-bloomberg-orange/5">
       <div className="min-w-0 space-y-0.5">
-        <div className="terminal-news-meta flex min-w-0 items-center gap-1.5 truncate font-mono text-[9px] font-semibold uppercase leading-4 tracking-wide text-bloomberg-muted">
-          <span className="terminal-news-category shrink-0 text-bloomberg-orange">{category}</span>
-          <span aria-hidden="true" className="text-neutral-600">
-            -
-          </span>
-          <span className="terminal-news-source truncate text-bloomberg-green">
+        <div className="terminal-news-meta flex min-w-0 items-center gap-1.5 font-mono text-[9px] font-semibold uppercase leading-4 tracking-wide text-bloomberg-muted">
+          <span className="terminal-news-time shrink-0 text-neutral-400">{date}</span>
+          <span className="terminal-news-source min-w-0 truncate text-bloomberg-green">
             {source.toUpperCase()}
           </span>
-          <span aria-hidden="true" className="shrink-0 text-neutral-600">
-            -
+          <span
+            aria-label={`Category: ${category}`}
+            className="terminal-news-category ml-auto shrink-0 border px-1.5 py-px text-[8px] font-bold"
+            style={{
+              color: categoryColor.text,
+              borderColor: categoryColor.border,
+              backgroundColor: categoryColor.bg,
+            }}
+          >
+            {category}
           </span>
-          <span className="terminal-news-date shrink-0 text-neutral-400">{date}</span>
         </div>
 
         <div className="terminal-news-headline truncate text-[13px] font-bold leading-5 text-neutral-100">
