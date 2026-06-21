@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from .persistent_cache import SQLiteTTLCache
+from persistent_cache import SQLiteTTLCache
 
 
 class TTLCacheBackend(Protocol):
