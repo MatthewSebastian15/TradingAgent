@@ -176,7 +176,7 @@ export function useMarketOverviewData(symbols) {
     }
 
     const controller = new AbortController();
-    loadOverview({ signal: controller.signal, force: true, silent: hasItems(cached) }).catch(
+    loadOverview({ signal: controller.signal, force: false, silent: hasItems(cached) }).catch(
       () => {}
     );
     const interval = window.setInterval(() => {
