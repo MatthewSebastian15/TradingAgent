@@ -5,6 +5,7 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import MiniSparkline from './MiniSparkline';
 import { labelForMarketSymbol } from '../../utils/marketDefaults';
@@ -21,7 +22,7 @@ function valueColorClass(state) {
   return 'text-bloomberg-muted';
 }
 
-export default function MarketOverviewCard({ item, canDelete, onDelete }) {
+export default function MarketOverviewCard({ item, canDelete, onDelete, loading }) {
   const state = marketChangeState(item.change);
   const positive = state === 'positive' ? true : state === 'negative' ? false : null;
   const label = item.label || labelForMarketSymbol(item.symbol);
@@ -32,15 +33,24 @@ export default function MarketOverviewCard({ item, canDelete, onDelete }) {
       <CardContent className="p-2.5">
         <div className="mb-1.5 flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="truncate text-[10px] font-bold uppercase tracking-wider text-bloomberg-orange">
-              {label}
-            </div>
-            <Badge
-              variant="outline"
-              className="mt-0.5 rounded-full border-bloomberg-border bg-black/60 px-1.5 py-0 font-mono text-[9px] text-bloomberg-muted"
-            >
-              {item.symbol}
-            </Badge>
+            {loading ? (
+              <>
+                <Skeleton className="h-3 w-24 bg-bloomberg-surface" />
+                <Skeleton className="mt-1.5 h-4 w-16 rounded-full bg-bloomberg-surface" />
+              </>
+            ) : (
+              <>
+                <div className="truncate text-[10px] font-bold uppercase tracking-wider text-bloomberg-orange">
+                  {label}
+                </div>
+                <Badge
+                  variant="outline"
+                  className="mt-0.5 rounded-full border-bloomberg-border bg-black/60 px-1.5 py-0 font-mono text-[9px] text-bloomberg-muted"
+                >
+                  {item.symbol}
+                </Badge>
+              </>
+            )}
           </div>
           <Button
             type="button"
@@ -59,7 +69,13 @@ export default function MarketOverviewCard({ item, canDelete, onDelete }) {
           </Button>
         </div>
 
-        {unavailable ? (
+        {loading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-28 bg-bloomberg-surface" />
+            <Skeleton className="h-3 w-20 bg-bloomberg-surface" />
+            <Skeleton className="mt-2 h-8 w-full bg-bloomberg-surface" />
+          </div>
+        ) : unavailable ? (
           <div className="flex h-16 items-center rounded-md border border-bloomberg-red/30 bg-bloomberg-red/10 px-3 text-[11px] text-bloomberg-red">
             {item.reason || 'Market data unavailable'}
           </div>
@@ -96,4 +112,5 @@ MarketOverviewCard.propTypes = {
   }).isRequired,
   canDelete: PropTypes.bool.isRequired,
   onDelete: PropTypes.func.isRequired,
+  loading: PropTypes.bool,
 };

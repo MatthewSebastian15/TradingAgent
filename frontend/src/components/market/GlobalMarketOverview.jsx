@@ -151,6 +151,7 @@ export default function GlobalMarketOverview({
           <MarketOverviewCard
             key={item.symbol}
             item={item}
+            loading={loading}
             canDelete={canDelete}
             onDelete={() => onDeleteSymbol(item.symbol)}
           />
