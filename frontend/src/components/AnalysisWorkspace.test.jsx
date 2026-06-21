@@ -204,7 +204,7 @@ describe('AnalysisWorkspace history storage', () => {
     });
   });
 
-  it('switches from config panel to history panel when history icon is clicked while config is open', async () => {
+  it('keeps both configuration and history visible when history icon is clicked while panel is open', async () => {
     function EmptyForm() {
       return null;
     }
@@ -214,8 +214,9 @@ describe('AnalysisWorkspace history storage', () => {
 
     openHistoryPanel();
 
+    // Combined panel: both headers are always visible together
     expect(screen.getByText(/history/i)).toBeTruthy();
-    expect(screen.queryByText(/configuration/i)).toBeNull();
+    expect(screen.getByText(/configuration/i)).toBeTruthy();
   });
 
   it('closes the active panel when the drawer close button is clicked', async () => {
@@ -332,16 +333,18 @@ describe('AnalysisWorkspace history storage', () => {
     expect(await screen.findByText(/configuration/i)).toBeTruthy();
   });
 
-  it('offsets the analysis content while a side panel is open', async () => {
+  it('renders main content in a flex layout adjacent to the panel', async () => {
     function EmptyForm() {
       return null;
     }
 
     renderWorkspace(EmptyForm);
     const main = screen.getByTestId('analysis-main');
-    expect(main.className).toContain('ml-10');
+    // Flex layout: main takes remaining space — no manual ml offset needed
+    expect(main.className).toContain('flex-1');
     await waitFor(() => {
-      expect(main.className).toContain('md:ml-[22.5rem]');
+      // Panel auto-opens in the ready state
+      expect(screen.queryByText(/configuration/i)).not.toBeNull();
     });
   });
 

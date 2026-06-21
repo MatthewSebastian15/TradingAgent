@@ -2,11 +2,12 @@ import PropTypes from 'prop-types';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { Button } from '@/components/ui/button';
+
 import AgentLog from './AgentLog';
 import {
   ClockIcon,
   ConfigIcon,
-  DrawerPanel,
   HistoryPanel,
   PanelButton,
   StatusBar,
@@ -95,48 +96,23 @@ export default function AnalysisWorkspace({
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [status, setStatus] = useState(resourceId ? 'Loading saved analysis...' : '');
   const [agentProgress, setAgentProgress] = useState(null);
-  const initialPanel = resourceId ? null : 'config';
-  const [activePanel, setActivePanel] = useState(initialPanel);
-  const [visiblePanel, setVisiblePanel] = useState(initialPanel);
+  const [panelOpen, setPanelOpen] = useState(!resourceId);
   const isReadyState = !loading && !result && !resourceId;
   const wasReadyState = useRef(isReadyState);
-
-  function togglePanel(name) {
-    if (activePanel === name) {
-      setActivePanel(null);
-      return;
-    }
-
-    setVisiblePanel(name);
-    setActivePanel(name);
-  }
 
   useEffect(() => {
     const enteredReadyState = isReadyState && !wasReadyState.current;
     wasReadyState.current = isReadyState;
 
     if (enteredReadyState) {
-      setVisiblePanel('config');
-      setActivePanel('config');
+      setPanelOpen(true);
       return;
     }
 
     if (result || resourceId) {
-      setActivePanel((currentPanel) => (currentPanel === 'config' ? null : currentPanel));
+      setPanelOpen(false);
     }
   }, [isReadyState, result, resourceId]);
-
-  useEffect(() => {
-    if (activePanel) {
-      setVisiblePanel(activePanel);
-      return undefined;
-    }
-
-    if (!visiblePanel) return undefined;
-
-    const timeoutId = setTimeout(() => setVisiblePanel(null), 200);
-    return () => clearTimeout(timeoutId);
-  }, [activePanel, visiblePanel]);
 
   useEffect(() => {
     if (!resourceId) return undefined;
@@ -238,110 +214,138 @@ export default function AnalysisWorkspace({
     onAgentProgress: setAgentProgress,
   });
 
-  const panelOpen = Boolean(activePanel);
-  const mainOffsetClass = panelOpen ? 'ml-10 md:ml-[22.5rem]' : 'ml-10';
-
   return (
-    <div className="h-screen overflow-hidden bg-bloomberg-bg pt-[60px]">
+    <div className="h-screen bg-bloomberg-bg pt-[60px]">
       <Navbar />
 
-      <div className="fixed bottom-0 left-0 top-[60px] z-[45] w-10 border-bloomberg-border border-r bg-black">
-        <PanelButton
-          active={activePanel === 'config'}
-          title="Configuration"
-          onClick={() => togglePanel('config')}
-        >
-          <ConfigIcon />
-        </PanelButton>
-        <PanelButton
-          active={activePanel === 'history'}
-          title="History"
-          onClick={() => togglePanel('history')}
-        >
-          <ClockIcon />
-        </PanelButton>
-      </div>
+      {/* Content area: starts to the right of the global nav sidebar (w-12) */}
+      <div className="fixed bottom-0 left-12 right-0 top-[60px] flex">
+        {/* Toggle strip — always visible, holds Config and History buttons */}
+        <div className="flex w-10 flex-shrink-0 flex-col border-r border-bloomberg-border bg-black">
+          <PanelButton
+            active={panelOpen}
+            title="Configuration"
+            onClick={() => setPanelOpen((prev) => !prev)}
+          >
+            <ConfigIcon />
+          </PanelButton>
+          <PanelButton
+            active={panelOpen}
+            title="History"
+            onClick={() => setPanelOpen(true)}
+          >
+            <ClockIcon />
+          </PanelButton>
+        </div>
 
-      {visiblePanel === 'config' && (
-        <DrawerPanel
-          open={activePanel === 'config'}
-          title="CONFIGURATION"
-          onClose={() => setActivePanel(null)}
+        {/* Combined panel: Configuration (left) + History (right) */}
+        <div
+          className={`flex-shrink-0 overflow-hidden border-r border-bloomberg-border bg-card/95 shadow-2xl shadow-black/60 backdrop-blur transition-[width] duration-200 ease-out will-change-[width] ${
+            panelOpen ? 'w-[480px]' : 'w-0'
+          }`}
         >
-          <FormComponent
-            onResult={handleResult}
-            onLoading={setLoading}
-            onStatus={setStatus}
-            onAgentProgress={setAgentProgress}
-            selectedResult={result && !result.error ? result : null}
-            agentProgress={agentProgress}
-            status={status}
-          />
-        </DrawerPanel>
-      )}
-
-      {visiblePanel === 'history' && (
-        <DrawerPanel
-          open={activePanel === 'history'}
-          title="HISTORY"
-          onClose={() => setActivePanel(null)}
-        >
-          <HistoryPanel
-            backendHistoryEnabled={backendHistoryEnabled}
-            currentResourceId={historyResourceId(result)}
-            historyKey={historyKey}
-            onSelect={(item) => {
-              const nextPath = resultPath(resultPathBase, historyResourceId(item));
-              if (nextPath) navigate(nextPath);
-              setActivePanel(null);
-            }}
-          />
-        </DrawerPanel>
-      )}
-
-      <main
-        data-testid="analysis-main"
-        className={`${mainOffsetClass} h-full min-w-0 overflow-auto transition-[margin-left] duration-200 ease-out will-change-[margin-left]`}
-      >
-        <div className="space-y-3 p-3">
-          <StatusBar loading={loading} status={status} />
-
-          {!loading && !result && (
-            <div className="border border-bloomberg-border bg-bloomberg-card p-4 text-center shadow-xl shadow-black/40 sm:p-5">
-              <div className="font-display text-3xl font-bold tracking-widest text-bloomberg-border sm:text-5xl">
-                READY
-              </div>
-              <div className="mx-auto mt-2.5 max-w-2xl font-mono text-[11px] tracking-wider text-bloomberg-muted sm:text-xs">
-                {emptyDescription}
-              </div>
-              <div className="mx-auto mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 sm:grid-cols-3">
-                {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
-                  <div
-                    key={step}
-                    className="border border-bloomberg-border bg-black p-3 text-center"
+          {/* Conditionally mount content so RTL queries return null when closed */}
+          {panelOpen && (
+            <div className="flex h-full w-[480px]">
+              {/* Configuration column */}
+              <div className="flex min-w-0 flex-[1.3] flex-col border-r border-bloomberg-border">
+                <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-bloomberg-border bg-bloomberg-surface/70 px-2.5">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-bloomberg-orange">
+                    CONFIGURATION
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Close configuration panel"
+                    onClick={() => setPanelOpen(false)}
+                    className="h-6 w-6 rounded-md font-mono text-base leading-none text-bloomberg-muted hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
                   >
-                    <div className="font-mono text-xl text-bloomberg-border">{index + 1}</div>
-                    <div className="mt-1.5 font-mono text-[11px] tracking-wider text-bloomberg-muted">
-                      {step}
-                    </div>
-                  </div>
-                ))}
+                    ×
+                  </Button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <FormComponent
+                    onResult={handleResult}
+                    onLoading={setLoading}
+                    onStatus={setStatus}
+                    onAgentProgress={setAgentProgress}
+                    selectedResult={result && !result.error ? result : null}
+                    agentProgress={agentProgress}
+                    status={status}
+                  />
+                </div>
+              </div>
+
+              {/* History column */}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex h-10 flex-shrink-0 items-center border-b border-bloomberg-border bg-bloomberg-surface/70 px-2.5">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-bloomberg-orange">
+                    HISTORY
+                  </span>
+                </div>
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <HistoryPanel
+                    backendHistoryEnabled={backendHistoryEnabled}
+                    currentResourceId={historyResourceId(result)}
+                    historyKey={historyKey}
+                    onSelect={(item) => {
+                      const nextPath = resultPath(resultPathBase, historyResourceId(item));
+                      if (nextPath) navigate(nextPath);
+                      setPanelOpen(false);
+                    }}
+                  />
+                </div>
               </div>
             </div>
           )}
-
-          {loading && <AgentLog status={status} agentProgress={agentProgress} />}
-
-          {result && !loading && (
-            <ResultCard
-              result={result}
-              enableReportExport={enableReportExport && Boolean(resultPathBase)}
-              onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
-              rerunRunning={rerunJob.running || loading}
-            />
-          )}
         </div>
-      </main>
+
+        {/* Main content */}
+        <main
+          data-testid="analysis-main"
+          className="flex-1 h-full min-w-0 overflow-auto"
+        >
+          <div className="space-y-3 p-3">
+            <StatusBar loading={loading} status={status} />
+
+            {!loading && !result && (
+              <div className="border border-bloomberg-border bg-bloomberg-card p-4 text-center shadow-xl shadow-black/40 sm:p-5">
+                <div className="font-display text-3xl font-bold tracking-widest text-bloomberg-border sm:text-5xl">
+                  READY
+                </div>
+                <div className="mx-auto mt-2.5 max-w-2xl font-mono text-[11px] tracking-wider text-bloomberg-muted sm:text-xs">
+                  {emptyDescription}
+                </div>
+                <div className="mx-auto mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 sm:grid-cols-3">
+                  {['MARKET DATA', 'AI DEBATE', 'DECISION'].map((step, index) => (
+                    <div
+                      key={step}
+                      className="border border-bloomberg-border bg-black p-3 text-center"
+                    >
+                      <div className="font-mono text-xl text-bloomberg-border">{index + 1}</div>
+                      <div className="mt-1.5 font-mono text-[11px] tracking-wider text-bloomberg-muted">
+                        {step}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {loading && <AgentLog status={status} agentProgress={agentProgress} />}
+
+            {result && !loading && (
+              <ResultCard
+                result={result}
+                enableReportExport={enableReportExport && Boolean(resultPathBase)}
+                onRerunSubmit={(payload) => rerunJob.startAnalysis(payload)}
+                rerunRunning={rerunJob.running || loading}
+              />
+            )}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

@@ -25,11 +25,11 @@ describe('App', () => {
   it('renders the dashboard route', async () => {
     await renderApp('/');
 
-    expect(await screen.findByRole('button', { name: /home/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /ai agent/i })).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: /research/i }).getAttribute('aria-disabled')
-    ).toBeNull();
+    // Both top navbar and left sidebar render nav buttons — use getAllByRole
+    expect((await screen.findAllByRole('button', { name: /home/i })).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /ai agent/i }).length).toBeGreaterThan(0);
+    const [researchBtn] = screen.getAllByRole('button', { name: /research/i });
+    expect(researchBtn.getAttribute('aria-disabled')).toBeNull();
   }, 10000);
 
   it('registers the Research route', async () => {
@@ -56,7 +56,8 @@ describe('App', () => {
 
     expect(await screen.findByTitle('Configuration')).toBeTruthy();
     expect(await screen.findByRole('button', { name: /execute analysis/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /ai agent/i })).toBeTruthy();
+    // Both top navbar and left sidebar have an AI Agent button
+    expect(screen.getAllByRole('button', { name: /ai agent/i }).length).toBeGreaterThan(0);
   });
 
   it('prefetches market overview defaults on mount', async () => {

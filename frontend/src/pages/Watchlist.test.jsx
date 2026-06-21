@@ -19,6 +19,7 @@ describe('Watchlist page', () => {
     );
 
     expect(await screen.findByRole('heading', { name: /watchlist/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /watchlist/i })).toBeTruthy();
+    // Both top navbar and left sidebar render a Watchlist button
+    expect(screen.getAllByRole('button', { name: /watchlist/i }).length).toBeGreaterThan(0);
   });
 });
