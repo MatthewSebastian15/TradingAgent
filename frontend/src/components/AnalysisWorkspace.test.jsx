@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,10 +53,6 @@ function renderWorkspace(
       <LocationProbe />
     </MemoryRouter>
   );
-}
-
-function clickConfigTab() {
-  fireEvent.click(screen.getByRole('button', { name: 'Configuration' }));
 }
 
 function clickHistoryTab() {
