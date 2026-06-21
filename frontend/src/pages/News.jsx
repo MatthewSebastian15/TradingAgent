@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 
+import CategoryTransition from '@/components/news/CategoryTransition';
 import { Card, CardContent } from '@/components/ui/card';
 import { dedupeNewsItems } from '@/lib/news/dedupeNewsItems';
 
@@ -84,31 +85,33 @@ export default function News() {
               onRefresh={() => reload()}
             />
 
-            {showSkeleton ? (
-              <NewsListSkeleton count={5} />
-            ) : (
-              <>
-                {showStaleWarning && (
-                  <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-amber/40 bg-bloomberg-amber/10 px-3 py-2 text-xs text-bloomberg-amber">
-                    Showing cached news because the latest refresh failed.
-                  </div>
-                )}
+            <CategoryTransition categoryKey={category}>
+              {showSkeleton ? (
+                <NewsListSkeleton count={5} />
+              ) : (
+                <>
+                  {showStaleWarning && (
+                    <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-amber/40 bg-bloomberg-amber/10 px-3 py-2 text-xs text-bloomberg-amber">
+                      Showing cached news because the latest refresh failed.
+                    </div>
+                  )}
 
-                {showRefreshCooldown && (
-                  <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-amber/40 bg-bloomberg-amber/10 px-3 py-2 text-xs text-bloomberg-amber">
-                    Refresh is cooling down. Showing latest cached news.
-                  </div>
-                )}
+                  {showRefreshCooldown && (
+                    <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-amber/40 bg-bloomberg-amber/10 px-3 py-2 text-xs text-bloomberg-amber">
+                      Refresh is cooling down. Showing latest cached news.
+                    </div>
+                  )}
 
-                {error && !displayedArticles.length && (
-                  <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-red/40 bg-bloomberg-red/10 px-3 py-2 text-xs text-bloomberg-red">
-                    Failed to load general news.
-                  </div>
-                )}
+                  {error && !displayedArticles.length && (
+                    <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-red/40 bg-bloomberg-red/10 px-3 py-2 text-xs text-bloomberg-red">
+                      Failed to load general news.
+                    </div>
+                  )}
 
-                <NewsList articles={displayedArticles} emptyMessage={emptyMessage} />
-              </>
-            )}
+                  <NewsList articles={displayedArticles} emptyMessage={emptyMessage} />
+                </>
+              )}
+            </CategoryTransition>
           </CardContent>
         </Card>
       </main>

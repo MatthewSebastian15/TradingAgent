@@ -10,6 +10,7 @@ vi.mock('@/lib/news/categoryPrefetch', () => ({
 }));
 
 import { prefetchCategory } from '@/lib/news/categoryPrefetch';
+
 import NewsFilterBar from './NewsFilterBar';
 
 describe('NewsFilterBar', () => {
