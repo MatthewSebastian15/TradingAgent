@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_MARKET_DATA_POLICY = RateLimitPolicy(scope="market", max_per_minute=180, max_concurrent=16)
+_MARKET_DATA_POLICY = RateLimitPolicy(scope="market", max_per_minute=180, max_concurrent=32)
 
 
 def _market_data_limit(request: Request):
@@ -574,13 +574,25 @@ def _fetch_quote(symbol: str) -> dict:
         return {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "volume": None, "error": True}
 
 
+_QUOTE_FETCH_TIMEOUT_SECONDS = 12.0
+_QUOTES_INFLIGHT: dict[tuple, asyncio.Future] = {}
+
+
+async def _fetch_one_quote_timed(symbol: str) -> dict:
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_fetch_quote, symbol),
+            timeout=_QUOTE_FETCH_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        return {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "volume": None, "error": True}
+
+
 async def _fetch_quotes(symbols: list[str]) -> list[dict]:
     """Fetch quotes without blocking the FastAPI event loop."""
     if not symbols:
         return []
-    tasks = [asyncio.to_thread(_fetch_quote, symbol) for symbol in symbols]
-    return await asyncio.gather(*tasks)
-
+    return list(await asyncio.gather(*[_fetch_one_quote_timed(s) for s in symbols]))
 
 
 def _clone_sparklines(payload: dict[str, list[float]]) -> dict[str, list[float]]:
@@ -946,19 +958,35 @@ async def get_market_quotes(
     symbol, no historical download).  Results are returned even when some
     symbols fail — failed tickers include ``\"error\": true`` and ``\"chg\": \"N/A\"``.
     """
+    raw_symbols = [s.strip() for s in symbols.split(",") if s.strip()]
+    capped = [_normalize_quote_symbol(sym) for sym in raw_symbols[:20]]
+    cache_key = tuple(capped)
+
+    # Admission control + cache check: release the active slot before slow yfinance I/O
+    # so it doesn't accumulate while Yahoo Finance is slow or hanging.
     async with _market_data_limit(request):
-        raw_symbols = [s.strip() for s in symbols.split(",") if s.strip()]
-
-        # Cap at 20 to avoid overloading yfinance on a single request.
-        capped = [_normalize_quote_symbol(sym) for sym in raw_symbols[:20]]
-
-        cache_key = tuple(capped)
         cached_at, cached_quotes = _QUOTE_CACHE.get(cache_key, (0.0, []))
         now = monotonic()
         if cached_quotes and now - cached_at <= _QUOTE_CACHE_TTL_SECONDS:
             return {"quotes": _clone_quotes(cached_quotes)}
+        # Slot released here; yfinance fetch happens outside the lease.
 
+    # Deduplicate concurrent fetches for the same symbol set.
+    if cache_key in _QUOTES_INFLIGHT:
+        quotes = await asyncio.shield(_QUOTES_INFLIGHT[cache_key])
+        return {"quotes": _clone_quotes(quotes)}
+
+    loop = asyncio.get_event_loop()
+    future: asyncio.Future = loop.create_future()
+    _QUOTES_INFLIGHT[cache_key] = future
+    try:
         quotes = await _fetch_quotes(capped)
-        _QUOTE_CACHE[cache_key] = (now, _clone_quotes(quotes))
+        future.set_result(quotes)
+    except Exception as exc:
+        future.set_exception(exc)
+        raise
+    finally:
+        _QUOTES_INFLIGHT.pop(cache_key, None)
 
+    _QUOTE_CACHE[cache_key] = (monotonic(), _clone_quotes(quotes))
     return {"quotes": quotes}
