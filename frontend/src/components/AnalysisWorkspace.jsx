@@ -253,10 +253,7 @@ export default function AnalysisWorkspace({
         </div>
 
         {/* Main content */}
-        <main
-          data-testid="analysis-main"
-          className="flex-1 h-full min-w-0 overflow-auto"
-        >
+        <main data-testid="analysis-main" className="flex-1 h-full min-w-0 overflow-auto">
           <div className="space-y-3 p-3">
             <StatusBar loading={loading} status={status} />
 
