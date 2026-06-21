@@ -6,11 +6,7 @@ export default function CategoryTransition({ categoryKey, children }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [categoryKey]);
 
-  return (
-    <div key={categoryKey} className="animate-fade-up">
-      {children}
-    </div>
-  );
+  return <div className="animate-fade-up">{children}</div>;
 }
 
 CategoryTransition.propTypes = {

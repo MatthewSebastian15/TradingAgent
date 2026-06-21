@@ -85,7 +85,7 @@ export default function News() {
               onRefresh={() => reload()}
             />
 
-            <CategoryTransition categoryKey={category}>
+            <CategoryTransition key={category} categoryKey={category}>
               {showSkeleton ? (
                 <NewsListSkeleton count={5} />
               ) : (
