@@ -165,7 +165,7 @@ function cachedDataForParams({ category, windowDays, limit }) {
   return cached?.data || null;
 }
 
-async function loadGeneralNews({ category, windowDays, limit, force = false, signal }) {
+export async function loadGeneralNews({ category, windowDays, limit, force = false, signal }) {
   const key = buildCacheKey({ category, windowDays, limit });
   const cached = readAnyFreshCache(key);
   let effectiveForce = force;
