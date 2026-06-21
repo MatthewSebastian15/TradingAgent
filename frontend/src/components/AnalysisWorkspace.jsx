@@ -228,27 +228,29 @@ export default function AnalysisWorkspace({
 
           {/* Tab content */}
           <div className="min-h-0 flex-1 overflow-hidden">
-            {activeTab === 'configuration' ? (
-              <FormComponent
-                onResult={handleResult}
-                onLoading={setLoading}
-                onStatus={setStatus}
-                onAgentProgress={setAgentProgress}
-                selectedResult={result && !result.error ? result : null}
-                agentProgress={agentProgress}
-                status={status}
-              />
-            ) : (
-              <HistoryPanel
-                backendHistoryEnabled={backendHistoryEnabled}
-                currentResourceId={historyResourceId(result)}
-                historyKey={historyKey}
-                onSelect={(item) => {
-                  const nextPath = resultPath(resultPathBase, historyResourceId(item));
-                  if (nextPath) navigate(nextPath);
-                }}
-              />
-            )}
+            <div key={activeTab} className="animate-fade-up h-full">
+              {activeTab === 'configuration' ? (
+                <FormComponent
+                  onResult={handleResult}
+                  onLoading={setLoading}
+                  onStatus={setStatus}
+                  onAgentProgress={setAgentProgress}
+                  selectedResult={result && !result.error ? result : null}
+                  agentProgress={agentProgress}
+                  status={status}
+                />
+              ) : (
+                <HistoryPanel
+                  backendHistoryEnabled={backendHistoryEnabled}
+                  currentResourceId={historyResourceId(result)}
+                  historyKey={historyKey}
+                  onSelect={(item) => {
+                    const nextPath = resultPath(resultPathBase, historyResourceId(item));
+                    if (nextPath) navigate(nextPath);
+                  }}
+                />
+              )}
+            </div>
           </div>
         </div>
 

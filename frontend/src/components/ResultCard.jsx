@@ -1192,30 +1192,32 @@ export default function ResultCard({
         tabStatus={result.tab_status}
       />
 
-      {activeTab === 'analisis' && (
-        <AnalysisTab
-          result={result}
-          vm={vm}
-          summaryExpanded={summaryExpanded}
-          thesisExpanded={thesisExpanded}
-          showRaw={showRaw}
-          onToggleSummary={() => setSummaryExpanded(!summaryExpanded)}
-          onToggleThesis={() => setThesisExpanded(!thesisExpanded)}
-          onToggleRaw={() => setShowRaw(!showRaw)}
-        />
-      )}
+      <div key={activeTab} className="animate-fade-up">
+        {activeTab === 'analisis' && (
+          <AnalysisTab
+            result={result}
+            vm={vm}
+            summaryExpanded={summaryExpanded}
+            thesisExpanded={thesisExpanded}
+            showRaw={showRaw}
+            onToggleSummary={() => setSummaryExpanded(!summaryExpanded)}
+            onToggleThesis={() => setThesisExpanded(!thesisExpanded)}
+            onToggleRaw={() => setShowRaw(!showRaw)}
+          />
+        )}
 
-      {activeTab === 'profile' && <ProfileTab profile={result.company_profile} result={result} />}
+        {activeTab === 'profile' && <ProfileTab profile={result.company_profile} result={result} />}
 
-      {activeTab === 'fundamental' && (
-        <FundamentalTab financialHighlights={result.financial_highlights} result={result} />
-      )}
+        {activeTab === 'fundamental' && (
+          <FundamentalTab financialHighlights={result.financial_highlights} result={result} />
+        )}
 
-      {activeTab === 'chart_price' && <ChartPriceTab result={result} />}
+        {activeTab === 'chart_price' && <ChartPriceTab result={result} />}
 
-      {activeTab === 'news' && <NewsTab result={result} />}
+        {activeTab === 'news' && <NewsTab result={result} />}
 
-      <DisclaimerFooter disclaimer={result?.disclaimer} />
+        <DisclaimerFooter disclaimer={result?.disclaimer} />
+      </div>
     </div>
   );
 }
