@@ -1,17 +1,9 @@
 import PropTypes from 'prop-types';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
-
 import AgentLog from './AgentLog';
-import {
-  ClockIcon,
-  ConfigIcon,
-  HistoryPanel,
-  PanelButton,
-  StatusBar,
-} from './AnalysisWorkspacePanels';
+import { HistoryPanel, StatusBar } from './AnalysisWorkspacePanels';
 import Navbar from './Navbar';
 import ResultCard from './ResultCard';
 import {
@@ -96,23 +88,7 @@ export default function AnalysisWorkspace({
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [status, setStatus] = useState(resourceId ? 'Loading saved analysis...' : '');
   const [agentProgress, setAgentProgress] = useState(null);
-  const [panelOpen, setPanelOpen] = useState(!resourceId);
-  const isReadyState = !loading && !result && !resourceId;
-  const wasReadyState = useRef(isReadyState);
-
-  useEffect(() => {
-    const enteredReadyState = isReadyState && !wasReadyState.current;
-    wasReadyState.current = isReadyState;
-
-    if (enteredReadyState) {
-      setPanelOpen(true);
-      return;
-    }
-
-    if (result || resourceId) {
-      setPanelOpen(false);
-    }
-  }, [isReadyState, result, resourceId]);
+  const [activeTab, setActiveTab] = useState('configuration');
 
   useEffect(() => {
     if (!resourceId) return undefined;
@@ -220,85 +196,60 @@ export default function AnalysisWorkspace({
 
       {/* Content area: starts to the right of the global nav sidebar (w-12) */}
       <div className="fixed bottom-0 left-12 right-0 top-[60px] flex">
-        {/* Toggle strip — always visible, holds Config and History buttons */}
-        <div className="flex w-10 flex-shrink-0 flex-col border-r border-bloomberg-border bg-black">
-          <PanelButton
-            active={panelOpen}
-            title="Configuration"
-            onClick={() => setPanelOpen((prev) => !prev)}
-          >
-            <ConfigIcon />
-          </PanelButton>
-          <PanelButton
-            active={panelOpen}
-            title="History"
-            onClick={() => setPanelOpen(true)}
-          >
-            <ClockIcon />
-          </PanelButton>
-        </div>
+        {/* Tab panel — always visible */}
+        <div className="flex w-[272px] flex-shrink-0 flex-col border-r border-bloomberg-border bg-card/95 shadow-2xl shadow-black/60 backdrop-blur">
+          {/* Tab bar */}
+          <div className="flex h-10 flex-shrink-0 border-b border-bloomberg-border bg-bloomberg-surface/70">
+            <button
+              type="button"
+              aria-label="Configuration"
+              onClick={() => setActiveTab('configuration')}
+              className={`flex-1 border-b-2 font-mono text-[9px] uppercase tracking-[0.2em] transition-colors ${
+                activeTab === 'configuration'
+                  ? 'border-bloomberg-orange bg-bloomberg-orange/10 text-bloomberg-orange'
+                  : 'border-transparent text-bloomberg-muted hover:bg-bloomberg-surface/50 hover:text-bloomberg-white'
+              }`}
+            >
+              CONFIGURATION
+            </button>
+            <button
+              type="button"
+              aria-label="History"
+              onClick={() => setActiveTab('history')}
+              className={`flex-1 border-b-2 font-mono text-[9px] uppercase tracking-[0.2em] transition-colors ${
+                activeTab === 'history'
+                  ? 'border-bloomberg-orange bg-bloomberg-orange/10 text-bloomberg-orange'
+                  : 'border-transparent text-bloomberg-muted hover:bg-bloomberg-surface/50 hover:text-bloomberg-white'
+              }`}
+            >
+              HISTORY
+            </button>
+          </div>
 
-        {/* Combined panel: Configuration (left) + History (right) */}
-        <div
-          className={`flex-shrink-0 overflow-hidden border-r border-bloomberg-border bg-card/95 shadow-2xl shadow-black/60 backdrop-blur transition-[width] duration-200 ease-out will-change-[width] ${
-            panelOpen ? 'w-[480px]' : 'w-0'
-          }`}
-        >
-          {/* Conditionally mount content so RTL queries return null when closed */}
-          {panelOpen && (
-            <div className="flex h-full w-[480px]">
-              {/* Configuration column */}
-              <div className="flex min-w-0 flex-[1.3] flex-col border-r border-bloomberg-border">
-                <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-bloomberg-border bg-bloomberg-surface/70 px-2.5">
-                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-bloomberg-orange">
-                    CONFIGURATION
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Close configuration panel"
-                    onClick={() => setPanelOpen(false)}
-                    className="h-6 w-6 rounded-md font-mono text-base leading-none text-bloomberg-muted hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
-                  >
-                    ×
-                  </Button>
-                </div>
-                <div className="min-h-0 flex-1 overflow-hidden">
-                  <FormComponent
-                    onResult={handleResult}
-                    onLoading={setLoading}
-                    onStatus={setStatus}
-                    onAgentProgress={setAgentProgress}
-                    selectedResult={result && !result.error ? result : null}
-                    agentProgress={agentProgress}
-                    status={status}
-                  />
-                </div>
-              </div>
-
-              {/* History column */}
-              <div className="flex min-w-0 flex-1 flex-col">
-                <div className="flex h-10 flex-shrink-0 items-center border-b border-bloomberg-border bg-bloomberg-surface/70 px-2.5">
-                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-bloomberg-orange">
-                    HISTORY
-                  </span>
-                </div>
-                <div className="min-h-0 flex-1 overflow-hidden">
-                  <HistoryPanel
-                    backendHistoryEnabled={backendHistoryEnabled}
-                    currentResourceId={historyResourceId(result)}
-                    historyKey={historyKey}
-                    onSelect={(item) => {
-                      const nextPath = resultPath(resultPathBase, historyResourceId(item));
-                      if (nextPath) navigate(nextPath);
-                      setPanelOpen(false);
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Tab content */}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {activeTab === 'configuration' ? (
+              <FormComponent
+                onResult={handleResult}
+                onLoading={setLoading}
+                onStatus={setStatus}
+                onAgentProgress={setAgentProgress}
+                selectedResult={result && !result.error ? result : null}
+                agentProgress={agentProgress}
+                status={status}
+              />
+            ) : (
+              <HistoryPanel
+                backendHistoryEnabled={backendHistoryEnabled}
+                currentResourceId={historyResourceId(result)}
+                historyKey={historyKey}
+                onSelect={(item) => {
+                  const nextPath = resultPath(resultPathBase, historyResourceId(item));
+                  if (nextPath) navigate(nextPath);
+                }}
+              />
+            )}
+          </div>
         </div>
 
         {/* Main content */}
