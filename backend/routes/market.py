@@ -585,7 +585,8 @@ async def _fetch_one_quote_timed(symbol: str) -> dict:
             timeout=_QUOTE_FETCH_TIMEOUT_SECONDS,
         )
     except Exception:
-        return {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "volume": None, "error": True}
+        return {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "volume": None,
+                "error": True}
 
 
 async def _fetch_quotes(symbols: list[str]) -> list[dict]:
