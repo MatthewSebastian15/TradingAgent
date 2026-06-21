@@ -74,24 +74,82 @@ const ENGINE_STATUS_ROWS = [
 ];
 
 const NAV_ITEMS = [
-  { label: 'Home', path: '/home', matchPrefixes: ['/home'], Icon: Home },
+  { label: 'Home', shortLabel: 'HM', path: '/home', matchPrefixes: ['/home'], Icon: Home },
   {
     label: 'AI Agent',
+    shortLabel: 'AI',
     path: AI_AGENT_PATH,
     matchPrefixes: AI_AGENT_MATCH_PREFIXES,
     Icon: Sparkles,
   },
   {
     label: 'Research',
+    shortLabel: 'RS',
     path: '/research',
     matchPrefixes: ['/research'],
     Icon: Microscope,
   },
-  { label: 'Watchlist', path: WATCHLIST_PATH, matchPrefixes: [WATCHLIST_PATH], Icon: Star },
-  { label: 'News', path: '/news', matchPrefixes: ['/news'], Icon: Newspaper },
-  { label: 'Market', path: '/market', matchPrefixes: ['/market'], Icon: TrendingUp },
-  { label: 'ECON', path: '/econ', matchPrefixes: ['/econ', '/economic'], Icon: Landmark },
+  {
+    label: 'Watchlist',
+    shortLabel: 'WL',
+    path: WATCHLIST_PATH,
+    matchPrefixes: [WATCHLIST_PATH],
+    Icon: Star,
+  },
+  { label: 'News', shortLabel: 'NW', path: '/news', matchPrefixes: ['/news'], Icon: Newspaper },
+  {
+    label: 'Market',
+    shortLabel: 'MK',
+    path: '/market',
+    matchPrefixes: ['/market'],
+    Icon: TrendingUp,
+  },
+  {
+    label: 'ECON',
+    shortLabel: 'EC',
+    path: '/econ',
+    matchPrefixes: ['/econ', '/economic'],
+    Icon: Landmark,
+  },
 ];
+
+function LeftNavSidebar() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  return (
+    <nav
+      aria-label="Main navigation sidebar"
+      className="fixed bottom-0 left-0 top-[60px] z-[45] flex w-12 flex-col overflow-y-auto border-r border-bloomberg-border bg-black"
+    >
+      {NAV_ITEMS.map((item) => {
+        const active = isNavItemActive(item, location.pathname);
+        const Icon = item.Icon;
+        return (
+          <button
+            key={item.path}
+            type="button"
+            title={item.label}
+            aria-label={item.label}
+            aria-current={active ? 'page' : undefined}
+            onClick={() => navigate(item.path)}
+            className={`relative flex h-14 w-full flex-col items-center justify-center gap-0.5 font-mono transition-colors duration-150 ${
+              active
+                ? 'bg-bloomberg-orange/10 text-bloomberg-orange'
+                : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
+            }`}
+          >
+            {active && (
+              <span className="absolute bottom-0 left-0 top-0 w-0.5 bg-bloomberg-orange" />
+            )}
+            <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.8} />
+            <span className="text-[8px] leading-none tracking-[0.12em]">{item.shortLabel}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
 
 function formatDate(value) {
   const parts = DATE_FORMATTER.formatToParts(value);
@@ -300,6 +358,7 @@ NavButton.propTypes = {
   item: PropTypes.shape({
     disabled: PropTypes.bool,
     label: PropTypes.string.isRequired,
+    shortLabel: PropTypes.string,
     matchPrefixes: PropTypes.arrayOf(PropTypes.string).isRequired,
     path: PropTypes.string.isRequired,
     Icon: PropTypes.elementType.isRequired,
@@ -336,6 +395,7 @@ export default function Navbar() {
         </div>
         <TickerTape />
       </nav>
+      <LeftNavSidebar />
     </TooltipProvider>
   );
 }

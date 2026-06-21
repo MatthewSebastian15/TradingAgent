@@ -5,7 +5,7 @@ import Navbar from '../components/Navbar';
 
 export default function Market() {
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px]">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
       <Navbar />
       <MarketTab />
     </div>

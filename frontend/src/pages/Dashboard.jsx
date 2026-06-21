@@ -13,7 +13,7 @@ export default function Dashboard() {
   const newsError = error ? error.message || 'Unable to load summary news.' : '';
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px]">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
       <Navbar />
       <main className="space-y-3 px-4 py-4">
         <HomeNewsSummary
