@@ -68,13 +68,13 @@ describe('NewsRow', () => {
 
     expect(screen.queryByRole('link', { name: 'Market update' })).not.toBeInTheDocument();
     expect(screen.getByText('Market update')).toBeInTheDocument();
-    expect(screen.getByText('1 Day')).toBeInTheDocument();
+    expect(screen.getByText('1d')).toBeInTheDocument();
     expect(screen.getByText('MARKETS')).toBeInTheDocument();
     expect(screen.getByText('EXAMPLE.COM')).toBeInTheDocument();
     expect(screen.queryByText('RSS_CONTEXT')).not.toBeInTheDocument();
   });
 
-  it('renders weeks after seven days', () => {
+  it('renders compact weeks after seven days', () => {
     render(
       <NewsRow
         article={{
@@ -87,7 +87,7 @@ describe('NewsRow', () => {
       />
     );
 
-    expect(screen.getByText('2 W')).toBeInTheDocument();
+    expect(screen.getByText('2w')).toBeInTheDocument();
   });
 });
 

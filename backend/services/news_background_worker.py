@@ -49,13 +49,13 @@ async def refresh_general_news_background(reason: str = "scheduled") -> dict[str
         config = build_tradingagents_config()
         general_config = dict(config.get("general_news", {}) or {})
         general_config["force_refresh_allowed"] = True
-        limit = max(1, int(general_config.get("max_articles_for_ui") or 100))
+        limit = max(1, int(general_config.get("max_articles_for_ui") or 2000))
 
         with use_config(config):
             result = await asyncio.to_thread(
                 GeneralNewsService(general_config).fetch_general_news,
                 category="all",
-                window_days=max(1, int(general_config.get("default_window_days", 7))),
+                window_days=max(1, int(general_config.get("default_window_days", 14))),
                 limit=limit,
                 force_refresh=True,
             )

@@ -1,23 +1,25 @@
+// Compact relative time: 45s, 5m, 12h, 7d, 2w, 6mo, 5y. No verbose "ago" forms.
 export function formatNewsTime(value) {
-  if (!value) return 'Recently';
+  if (!value) return '';
 
-  const time = new Date(value).getTime();
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  if (Number.isNaN(time)) return '';
 
-  if (Number.isNaN(time)) return 'Recently';
+  const seconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
+  if (seconds < 60) return `${Math.max(1, seconds)}s`;
 
-  const diffMs = Date.now() - time;
-  const diffMinutes = Math.floor(diffMs / 60000);
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
 
-  if (diffMinutes < 1) return 'Just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
 
-  const diffHours = Math.floor(diffMinutes / 60);
-
-  if (diffHours < 24) return `${diffHours}h ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-
-  return `${diffDays}d ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  if (days < 30) return `${Math.floor(days / 7)}w`;
+  // ponytail: 30d≈1mo, 365d≈1y — calendar drift acceptable for relative labels.
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${Math.floor(days / 365)}y`;
 }
 
 export function formatNewsTimestamp(value) {

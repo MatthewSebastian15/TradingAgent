@@ -248,7 +248,7 @@ export function clearGeneralNewsClientStateForTests() {
   clearForceRefreshMarkers();
 }
 
-export function useGeneralNews({ category = 'all', windowDays = 7, limit = 100 }) {
+export function useGeneralNews({ category = 'all', windowDays = 14, limit = 2000 }) {
   const [{ data: initialData, status: initialStatus }] = useState(() => {
     const cachedData = cachedDataForParams({ category, windowDays, limit });
     return {
