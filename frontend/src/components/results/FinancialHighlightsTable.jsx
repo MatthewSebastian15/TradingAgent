@@ -98,6 +98,41 @@ function formatCellValue(cell, unit) {
   return appendUnit(text, unit);
 }
 
+function parseCellNumber(cell) {
+  if (!cell || cell.status === 'unavailable') return null;
+  const raw = cell.value ?? cell.display;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const num = Number(String(raw).replace(/[,%\s]/g, ''));
+  return Number.isFinite(num) ? num : null;
+}
+
+function isDirectionalRow(row) {
+  const key = String(row?.key || '').toLowerCase();
+  const label = String(row?.label || '').toLowerCase();
+  return (
+    key.includes('growth') ||
+    label.includes('growth') ||
+    key === 'roa' ||
+    key === 'roe' ||
+    key === 'roic' ||
+    label === 'roa (%)' ||
+    label === 'roe (%)' ||
+    label === 'roic (%)'
+  );
+}
+
+function cellColorClass(cell, row) {
+  const num = parseCellNumber(cell);
+  if (num === null) return { cls: 'text-bloomberg-muted', prefix: '' };
+  if (isDirectionalRow(row)) {
+    if (num > 0) return { cls: 'text-bloomberg-green', prefix: '+' };
+    if (num < 0) return { cls: 'text-bloomberg-red', prefix: '' };
+    return { cls: 'text-bloomberg-muted', prefix: '' };
+  }
+  if (num < 0) return { cls: 'text-bloomberg-red', prefix: '' };
+  return { cls: 'text-bloomberg-white', prefix: '' };
+}
+
 function FinancialTable({ periods, rows, groups }) {
   const displayPeriods = sortPeriodsForDisplay(periods);
   const rowGroups =
@@ -136,14 +171,22 @@ function FinancialTable({ periods, rows, groups }) {
                   <td className="sticky left-0 z-10 bg-black px-3 py-2 text-bloomberg-white whitespace-nowrap min-w-[190px]">
                     <div>{row.label}</div>
                   </td>
-                  {displayPeriods.map((period) => (
-                    <td
-                      key={period.key}
-                      className="px-3 py-2 text-right text-bloomberg-white whitespace-nowrap min-w-[86px]"
-                    >
-                      <div>{formatCellValue(row.values?.[period.key], row.unit)}</div>
-                    </td>
-                  ))}
+                  {displayPeriods.map((period) => {
+                    const cell = row.values?.[period.key];
+                    const formatted = formatCellValue(cell, row.unit);
+                    const isNA = formatted === 'N/A';
+                    const { cls, prefix } = isNA
+                      ? { cls: 'text-bloomberg-muted', prefix: '' }
+                      : cellColorClass(cell, row);
+                    return (
+                      <td
+                        key={period.key}
+                        className={`px-3 py-2 text-right whitespace-nowrap min-w-[86px] font-mono text-xs ${cls}`}
+                      >
+                        {isNA ? formatted : `${prefix}${formatted}`}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </React.Fragment>
