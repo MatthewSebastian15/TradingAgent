@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 
 import { getCategoryColor } from '@/lib/news/categoryColors';
+import { formatNewsTime } from '@/lib/news/formatNewsTime';
 
 const PROVIDER_NAMES = new Set(['marketaux', 'newsdata', 'google_news_light', 'rss_context']);
 const CATEGORY_LABELS = {
@@ -24,10 +25,6 @@ const CATEGORY_ALIASES = {
   indonesia: 'markets',
 };
 const MAX_DESCRIPTION_WORDS = 35;
-const MINUTE_MS = 60 * 1000;
-const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
-const WEEK_DAYS = 7;
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -62,32 +59,9 @@ function getDataSource(article) {
   return normalizeText(source) || 'Unknown Source';
 }
 
-function parsePublishedDate(article) {
-  const value = article.published_at || article.publishedAt || article.date;
-  if (!value) return null;
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
 function getDisplayDate(article) {
-  const date = parsePublishedDate(article);
-  if (!date) return normalizeText(article.published_age) || '-';
-
-  const elapsedMs = Math.max(MINUTE_MS, Date.now() - date.getTime());
-  if (elapsedMs < HOUR_MS) {
-    return `${Math.floor(elapsedMs / MINUTE_MS)}m`;
-  }
-  if (elapsedMs < DAY_MS) {
-    return `${Math.floor(elapsedMs / HOUR_MS)}h`;
-  }
-
-  const days = Math.floor(elapsedMs / DAY_MS);
-  if (days < WEEK_DAYS) {
-    return `${days} ${days === 1 ? 'Day' : 'Days'}`;
-  }
-
-  return `${Math.floor(days / WEEK_DAYS)} W`;
+  const value = article.published_at || article.publishedAt || article.date;
+  return formatNewsTime(value) || normalizeText(article.published_age) || '-';
 }
 
 function limitDescriptionWords(value, fallback) {

@@ -41,7 +41,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    expect(useGeneralNews).toHaveBeenCalledWith({ category: 'all', windowDays: 7, limit: 100 });
+    expect(useGeneralNews).toHaveBeenCalledWith({ category: 'all', windowDays: 14, limit: 100 });
     expect(screen.getByText('Dashboard market headline')).toBeInTheDocument();
 
     const summaryHeading = screen.getByRole('heading', { name: 'Summary News' });

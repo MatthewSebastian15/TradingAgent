@@ -5,6 +5,7 @@ import TickerNewsList from '@/components/news/TickerNewsList';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatNewsTime } from '@/lib/news/formatNewsTime';
 
 import NoticeBox from '../NoticeBox';
 import SectionHeader from '../SectionHeader';
@@ -17,8 +18,6 @@ const VENDOR_PUBLISHERS = new Set([
   'rsscontext',
 ]);
 
-const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
 const SORT_OPTIONS = ['Date', 'Impact', 'Sentiment'];
 const IMPACT_SORT_RANK = {
   critical: 3,
@@ -75,54 +74,33 @@ function parseNewsDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatRelativeNewsAge(date) {
-  if (!date) return '-';
-
-  const diffMs = Math.max(0, Date.now() - date.getTime());
-  const diffHours = Math.floor(diffMs / HOUR_MS);
-
-  if (diffHours < 1) return '<1h';
-  if (diffHours < 24) return `${diffHours}h`;
-
-  const diffDays = Math.floor(diffMs / DAY_MS);
-  return `${diffDays} ${diffDays === 1 ? 'day' : 'days'}`;
-}
-
 function formatNewsDateFromDate(date) {
-  return formatRelativeNewsAge(date);
+  return date ? formatNewsTime(date) || '-' : '-';
 }
 
+// Compact age from a free-text label ("5 minutes", "3 hours") when no parseable date exists.
 function formatAge(value) {
   const text = String(value || '')
     .trim()
     .toLowerCase();
   if (!text || text === 'n/a') return '-';
-  if (text === 'today') return '<1h';
+  if (text === 'today') return '1d';
 
-  let match = text.match(/(\d+)\s*(second|seconds|sec|secs|s)\b/);
-  if (match) return '<1h';
-
-  match = text.match(/(\d+)\s*(minute|minutes|min|mins|m)\b/);
-  if (match) return '<1h';
-
-  match = text.match(/(\d+)\s*(hour|hours|hr|hrs|h)\b/);
-  if (match) {
-    const hours = Number(match[1]);
-    if (!Number.isFinite(hours)) return '-';
-    if (hours < 1) return '<1h';
-    if (hours < 24) return `${hours}h`;
-
-    const days = Math.floor(hours / 24);
-    return `${days} ${days === 1 ? 'day' : 'days'}`;
+  const units = [
+    [/(\d+)\s*(second|seconds|sec|secs|s)\b/, 's'],
+    [/(\d+)\s*(minute|minutes|min|mins|m)\b/, 'm'],
+    [/(\d+)\s*(hour|hours|hr|hrs|h)\b/, 'h'],
+    [/(\d+)\s*(day|days|d)\b/, 'd'],
+  ];
+  for (const [pattern, suffix] of units) {
+    const match = text.match(pattern);
+    if (match) {
+      const amount = Number(match[1]);
+      if (!Number.isFinite(amount)) return '-';
+      return `${Math.max(1, amount)}${suffix}`;
+    }
   }
-
-  match = text.match(/(\d+)\s*(day|days|d)\b/);
-  if (!match) return '-';
-
-  const days = Number(match[1]);
-  if (!Number.isFinite(days)) return '-';
-  if (days <= 0) return '<1h';
-  return `${days} ${days === 1 ? 'day' : 'days'}`;
+  return '-';
 }
 
 function formatDate(value) {

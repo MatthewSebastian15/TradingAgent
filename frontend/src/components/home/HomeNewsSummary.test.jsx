@@ -73,14 +73,14 @@ describe('HomeNewsSummary', () => {
   it('renders metadata, headline, description, and one-line clamp classes', () => {
     render(<HomeNewsSummary news={news} />);
 
-    const metadata = screen.getByText('MARKETS - Bloomberg - 12m ago');
+    const metadata = screen.getByText('MARKETS - Bloomberg - 12m');
     const headline = screen.getByText('US stocks rise as tech shares lead gains');
     const description = screen.getByText('Major indexes moved higher after earnings guidance.');
 
     expect(metadata).toHaveClass('truncate', 'text-[9px]');
     expect(headline).toHaveClass('line-clamp-1', 'text-[13px]');
     expect(description).toHaveClass('line-clamp-1', 'text-[11px]');
-    expect(screen.getByText('WORLD - Reuters - 28m ago')).toBeInTheDocument();
+    expect(screen.getByText('WORLD - Reuters - 28m')).toBeInTheDocument();
   });
 
   it('renders an empty state when news is empty', () => {

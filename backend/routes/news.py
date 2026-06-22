@@ -60,8 +60,8 @@ def _fetch_general_news(
     if normalized_category != "all":
         normalized_category = normalize_general_news_category(normalized_category)
 
-    configured_limit = max(1, int(general_config.get("ui_default_limit") or 100))
-    max_ui = max(1, int(general_config.get("max_articles_for_ui") or 100))
+    configured_limit = max(1, int(general_config.get("ui_default_limit") or 2000))
+    max_ui = max(1, int(general_config.get("max_articles_for_ui") or 2000))
     limit = min(max(1, int(limit or configured_limit)), max_ui)
     ttl_seconds = max(30, int(general_config.get("cache_ttl_seconds") or 300))
     stale_ttl_seconds = max(ttl_seconds, int(general_config.get("stale_ttl_seconds") or 3600))
@@ -136,8 +136,8 @@ async def _stream_general_news_events(request: Request):
 async def get_general_news(
     request: Request,
     category: str = Query(default="all"),
-    window_days: int = Query(default=7, ge=1, le=365),
-    limit: int = Query(default=100, ge=1, le=100),
+    window_days: int = Query(default=14, ge=1, le=365),
+    limit: int = Query(default=2000, ge=1, le=2000),
     provider: str | None = Query(default=None),
     force_refresh: bool = Query(default=False),
 ):
@@ -172,8 +172,8 @@ async def get_general_news(
 async def refresh_general_news(
     request: Request,
     category: str = Query(default="all"),
-    window_days: int = Query(default=7, ge=1, le=365),
-    limit: int = Query(default=100, ge=1, le=100),
+    window_days: int = Query(default=14, ge=1, le=365),
+    limit: int = Query(default=2000, ge=1, le=2000),
     provider: str | None = Query(default=None),
 ):
     normalized_provider = provider.strip().lower() if provider else None

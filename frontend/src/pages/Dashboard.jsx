@@ -7,7 +7,7 @@ import { useGeneralNews } from '../hooks/useGeneralNews';
 export default function Dashboard() {
   const { data, status, error } = useGeneralNews({
     category: 'all',
-    windowDays: 7,
+    windowDays: 14,
     limit: 100,
   });
   const newsError = error ? error.message || 'Unable to load summary news.' : '';

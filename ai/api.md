@@ -766,8 +766,8 @@ Query:
 | Field | Rule |
 |---|---|
 | `category` | Default `all`. |
-| `window_days` | 1 to 365, default 7. |
-| `limit` | 1 to 100, default 50. |
+| `window_days` | 1 to 365, default 14. |
+| `limit` | 1 to 2000, default 2000 (capped at stored-article ceiling). |
 | `provider` | Optional: `google_news_light`, `marketaux`, `rss_context`, `newsdata`. |
 | `force_refresh` | Optional bool, default false. |
 

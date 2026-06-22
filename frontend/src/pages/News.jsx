@@ -55,11 +55,10 @@ function emptyMessageFor({ category, data, error }) {
 
 export default function News() {
   const [category, setCategory] = useState('all');
-  const { data, status, error, reload } = useGeneralNews({
-    category,
-    windowDays: 7,
-    limit: 100,
-  });
+  // Stage the fetch: a small first batch paints instantly, the full 14-day set swaps in behind it.
+  const fast = useGeneralNews({ category, windowDays: 14, limit: 100 });
+  const full = useGeneralNews({ category, windowDays: 14, limit: 2000 });
+  const { data, status, error, reload } = full.data ? full : fast;
 
   useGeneralNewsStream({
     enabled: true,

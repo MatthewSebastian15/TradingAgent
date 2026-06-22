@@ -93,7 +93,7 @@ describe('News page', () => {
 
     render(<News />);
 
-    expect(useGeneralNews).toHaveBeenCalledWith({ category: 'all', windowDays: 7, limit: 100 });
+    expect(useGeneralNews).toHaveBeenCalledWith({ category: 'all', windowDays: 14, limit: 2000 });
     expect(screen.queryByRole('button', { name: 'INDONESIA' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Stocks gain after earnings').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bitcoin rises after ETF flows').length).toBeGreaterThan(0);
@@ -102,8 +102,8 @@ describe('News page', () => {
 
     expect(useGeneralNews).toHaveBeenLastCalledWith({
       category: 'crypto',
-      windowDays: 7,
-      limit: 100,
+      windowDays: 14,
+      limit: 2000,
     });
   });
 
