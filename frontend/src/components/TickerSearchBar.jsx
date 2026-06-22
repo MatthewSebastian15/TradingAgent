@@ -27,6 +27,9 @@ export default function TickerSearchBar({
   onClear,
   disabled = false,
   searchTickers = null,
+  placeholder = 'Search ticker symbol',
+  bare = false,
+  onSubmit = null,
 }) {
   const [inputValue, setInputValue] = useState(value || '');
   const [userEdited, setUserEdited] = useState(false);
@@ -127,6 +130,17 @@ export default function TickerSearchBar({
       return;
     }
 
+    if (event.key === 'Enter' && activeIndex < 0 && onSubmit) {
+      const raw = inputValue.trim().toUpperCase();
+      if (raw) {
+        event.preventDefault();
+        setOpen(false);
+        setActiveIndex(-1);
+        onSubmit(raw);
+      }
+      return;
+    }
+
     if (!open || !displayResults.length) return;
 
     if (event.key === 'ArrowDown') {
@@ -211,16 +225,22 @@ export default function TickerSearchBar({
   return (
     <div ref={rootRef} className="relative w-full overflow-visible">
       <div
-        className={`flex items-center border bg-black transition-colors duration-150 ${
-          open
-            ? 'border-bloomberg-orange'
-            : 'border-bloomberg-border focus-within:border-bloomberg-orange'
-        } ${disabled ? 'opacity-50' : ''}`}
+        className={
+          bare
+            ? `flex items-center bg-transparent ${disabled ? 'opacity-50' : ''}`
+            : `flex items-center border bg-black transition-colors duration-150 ${
+                open
+                  ? 'border-bloomberg-orange'
+                  : 'border-bloomberg-border focus-within:border-bloomberg-orange'
+              } ${disabled ? 'opacity-50' : ''}`
+        }
       >
-        <Search
-          className="ml-2.5 mr-2 h-3.5 w-3.5 shrink-0 text-bloomberg-muted"
-          aria-hidden="true"
-        />
+        {!bare && (
+          <Search
+            className="ml-2.5 mr-2 h-3.5 w-3.5 shrink-0 text-bloomberg-muted"
+            aria-hidden="true"
+          />
+        )}
         <Input
           type="text"
           role="combobox"
@@ -230,9 +250,13 @@ export default function TickerSearchBar({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={() => setOpen(true)}
-          placeholder="Search ticker symbol"
+          placeholder={placeholder}
           disabled={disabled}
-          className="h-10 border-0 bg-black pl-1 pr-2.5 font-mono text-xs tracking-wider shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
+          className={
+            bare
+              ? 'h-9 w-full border-0 bg-transparent px-0 font-mono text-xs uppercase tracking-wider shadow-none placeholder:text-bloomberg-muted placeholder:normal-case focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed'
+              : 'h-10 border-0 bg-black pl-1 pr-2.5 font-mono text-xs tracking-wider shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed'
+          }
         />
       </div>
 
@@ -247,4 +271,7 @@ TickerSearchBar.propTypes = {
   onClear: PropTypes.func.isRequired,
   disabled: PropTypes.bool,
   searchTickers: PropTypes.func,
+  placeholder: PropTypes.string,
+  bare: PropTypes.bool,
+  onSubmit: PropTypes.func,
 };
