@@ -35,13 +35,14 @@ def _fetch_general_news(
     provider: str | None = None,
     force_refresh: bool = False,
 ) -> dict[str, Any]:
-    from services.news_article_store import NewsArticleStore
-    from services.news_provider_budget import provider_status_snapshot
     from tradingagents.dataflows.news.general_news_categories import (
         is_allowed_category,
         normalize_general_news_category,
     )
     from tradingagents.dataflows.news.general_news_service import GENERAL_NEWS_PROVIDER_ORDER
+
+    from services.news_article_store import NewsArticleStore
+    from services.news_provider_budget import provider_status_snapshot
 
     config = build_tradingagents_config()
     general_config = dict(config.get("general_news", {}) or {})

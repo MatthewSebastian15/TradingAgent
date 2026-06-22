@@ -355,7 +355,6 @@ export async function downloadAnalysisPdf(resourceId, options = {}) {
   const preferredFilename = reportPdfFilename(options.result);
   const fallbackFilename = preferredFilename || `TradingAgent_${resourceId}.pdf`;
 
-
   try {
     const response = await fetchPdfByResourceId(resourceId);
     await downloadPdfResponse(response, fallbackFilename, preferredFilename);

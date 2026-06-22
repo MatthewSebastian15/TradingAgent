@@ -71,13 +71,14 @@ def score_news_article(
     ticker = str(ticker_profile.get("ticker") or article.ticker).upper()
     short_ticker = str(ticker_profile.get("short_ticker") or ticker.removesuffix(".JK")).upper()
     company_name = str(ticker_profile.get("company_name") or "").strip()
-    aliases = [str(alias).strip() for alias in ticker_profile.get("aliases", []) if str(alias).strip()]
+    aliases = [
+        str(alias).strip() for alias in ticker_profile.get("aliases", []) if str(alias).strip()
+    ]
     subsidiaries = [
         str(alias).strip() for alias in ticker_profile.get("subsidiaries", []) if str(alias).strip()
     ]
     title = str(article.title or "").lower()
     summary = str(article.summary or "").lower()
-    text = f"{title} {summary}"
     score = 0.0
     reasons: list[str] = []
 

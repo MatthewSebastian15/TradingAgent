@@ -42,6 +42,7 @@ try:
         result_has_429,
     )
 except Exception:  # pragma: no cover - package can run without backend service path
+
     def rotate_feed_ids(feeds, batch_size):
         return [str(getattr(feed, "id", "") or "") for feed in feeds[:batch_size]]
 

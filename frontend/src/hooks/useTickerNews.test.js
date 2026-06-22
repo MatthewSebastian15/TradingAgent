@@ -29,9 +29,13 @@ function Harness({ ticker = 'BBCA.JK', testId = 'ticker-news' }) {
       <span data-testid={`${testId}-decision-count`}>{decisionCompanyNews.length}</span>
       <span data-testid={`${testId}-market-count`}>{marketContextNews.length}</span>
       <span data-testid={`${testId}-providers`}>{Object.keys(providerStatus).join(',')}</span>
-      <span data-testid={`${testId}-used`}>{strictNewsFilter.decision_company_news_count ?? ''}</span>
+      <span data-testid={`${testId}-used`}>
+        {strictNewsFilter.decision_company_news_count ?? ''}
+      </span>
       <span data-testid={`${testId}-error`}>{error?.message || ''}</span>
-      <button type="button" onClick={() => reload({ force: true })}>force reload</button>
+      <button type="button" onClick={() => reload({ force: true })}>
+        force reload
+      </button>
     </div>
   );
 }
@@ -64,7 +68,11 @@ describe('useTickerNews', () => {
     await act(async () => {});
 
     expect(fetchTickerNews).toHaveBeenCalledWith(
-      expect.objectContaining({ ticker: 'BBCA.JK', forceRefresh: false, signal: expect.any(AbortSignal) })
+      expect.objectContaining({
+        ticker: 'BBCA.JK',
+        forceRefresh: false,
+        signal: expect.any(AbortSignal),
+      })
     );
     expect(screen.getByTestId('ticker-news-decision-count')).toHaveTextContent('1');
     expect(screen.getByTestId('ticker-news-market-count')).toHaveTextContent('1');
@@ -82,7 +90,9 @@ describe('useTickerNews', () => {
     fireEvent.click(screen.getByRole('button', { name: 'force reload' }));
     await act(async () => {});
 
-    expect(fetchTickerNews).toHaveBeenLastCalledWith(expect.objectContaining({ forceRefresh: true }));
+    expect(fetchTickerNews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ forceRefresh: true })
+    );
   });
 
   it('keeps cached data when refresh fails', async () => {

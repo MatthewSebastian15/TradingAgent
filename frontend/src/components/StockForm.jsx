@@ -136,9 +136,7 @@ function WatchlistItems({ items, activeTicker, onSelect, disabled }) {
             <div className="min-w-0 flex-1 overflow-hidden">
               <div
                 className={`truncate font-mono text-[10px] font-bold uppercase tracking-wider ${
-                  isActive
-                    ? 'text-black'
-                    : 'text-bloomberg-white group-hover:text-bloomberg-orange'
+                  isActive ? 'text-black' : 'text-bloomberg-white group-hover:text-bloomberg-orange'
                 }`}
               >
                 {item.symbol}

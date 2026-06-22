@@ -11,9 +11,11 @@ import { normalizeWatchlistSymbol } from '../../utils/watchlistFormatters';
 const SEARCH_LIMIT = 10;
 
 function tickerMarket(item) {
-  return String(item?.market || '')
-    .trim()
-    .toUpperCase() || '-';
+  return (
+    String(item?.market || '')
+      .trim()
+      .toUpperCase() || '-'
+  );
 }
 
 export default function WatchlistTickerInput({
@@ -152,9 +154,7 @@ export default function WatchlistTickerInput({
                 </div>
               )}
               {!displayResults.length && searchError && (
-                <div className="px-3 py-2 font-mono text-xs text-bloomberg-red">
-                  {searchError}
-                </div>
+                <div className="px-3 py-2 font-mono text-xs text-bloomberg-red">{searchError}</div>
               )}
               {!searching && !searchError && !displayResults.length && trimmedQuery && (
                 <div className="px-3 py-2 font-mono text-xs uppercase tracking-wider text-bloomberg-muted">

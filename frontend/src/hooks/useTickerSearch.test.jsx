@@ -92,9 +92,12 @@ describe('useTickerSearch', () => {
       .fn()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
-    const { result, rerender } = renderHook(({ query }) => useTickerSearch({ query, searchTickers }), {
-      initialProps: { query: 'AA' },
-    });
+    const { result, rerender } = renderHook(
+      ({ query }) => useTickerSearch({ query, searchTickers }),
+      {
+        initialProps: { query: 'AA' },
+      }
+    );
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(150);

@@ -50,7 +50,6 @@ function writeCache(key, data) {
   return entry;
 }
 
-
 export function clearTickerNewsClientStateForTests() {
   MEMORY_CACHE.clear();
   if (typeof window === 'undefined') return;
@@ -70,8 +69,17 @@ function normalizeStatus({ cached, loading, refreshing, error }) {
   return 'success';
 }
 
-export function useTickerNews({ ticker, windowDays = 30, limit = 30, provider, enabled = true } = {}) {
-  const key = useMemo(() => storageKey({ ticker: ticker || '', windowDays, limit }), [ticker, windowDays, limit]);
+export function useTickerNews({
+  ticker,
+  windowDays = 30,
+  limit = 30,
+  provider,
+  enabled = true,
+} = {}) {
+  const key = useMemo(
+    () => storageKey({ ticker: ticker || '', windowDays, limit }),
+    [ticker, windowDays, limit]
+  );
   const initialCache = useMemo(() => readCache(key), [key]);
   const [data, setData] = useState(initialCache?.data || null);
   const [error, setError] = useState(null);
@@ -132,7 +140,10 @@ export function useTickerNews({ ticker, windowDays = 30, limit = 30, provider, e
     return () => controllerRef.current?.abort();
   }, [load, initialCache?.data]);
 
-  const reload = useCallback(({ force = false } = {}) => load({ force, silent: Boolean(data) }), [data, load]);
+  const reload = useCallback(
+    ({ force = false } = {}) => load({ force, silent: Boolean(data) }),
+    [data, load]
+  );
 
   return {
     data,

@@ -64,7 +64,10 @@ function inferMarket(symbol, type = '') {
 }
 
 function resultItem(item, index) {
-  const normalizedItem = normalizeTickerSearchResult({ ...item, source: item.source || 'local_universe' });
+  const normalizedItem = normalizeTickerSearchResult({
+    ...item,
+    source: item.source || 'local_universe',
+  });
   const { symbol, name, exchange, type, market } = normalizedItem;
   const haystack = normalizeText(`${symbol} ${name} ${exchange} ${type} ${market}`);
   const compactSymbol = compactText(symbol);

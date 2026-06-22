@@ -155,7 +155,9 @@ export function useTickerSearch({
         setMeta(data?.meta || { query: trimmedQuery, limit, source: 'remote_cache' });
       } catch (err) {
         if (err.name === 'AbortError' || requestSeqRef.current !== requestId) return;
-        setError(resultsRef.current.length ? '' : 'Ticker search failed. Showing local matches only.');
+        setError(
+          resultsRef.current.length ? '' : 'Ticker search failed. Showing local matches only.'
+        );
       } finally {
         if (!controller.signal.aborted && requestSeqRef.current === requestId) {
           setLoading(false);

@@ -356,7 +356,12 @@ function TradingDataCard({ data, loading }) {
             ['AVG VOL', fmtLarge(data.avg_volume), ''],
             ['AVG VOL 10D', fmtLarge(data.avg_volume_10d), ''],
           ].map(([label, value, cls]) => (
-            <DataRow key={label} label={label} value={value} valueClass={cls || 'text-bloomberg-white'} />
+            <DataRow
+              key={label}
+              label={label}
+              value={value}
+              valueClass={cls || 'text-bloomberg-white'}
+            />
           ))}
     </SectionCard>
   );
@@ -373,7 +378,12 @@ function QuickStatsCard({ data, loading }) {
             ['BETA', fmtNum(data.beta), negClass(data.beta)],
             ['SHORT RATIO', fmtNum(data.short_ratio), ''],
           ].map(([label, value, cls]) => (
-            <DataRow key={label} label={label} value={value} valueClass={cls || 'text-bloomberg-white'} />
+            <DataRow
+              key={label}
+              label={label}
+              value={value}
+              valueClass={cls || 'text-bloomberg-white'}
+            />
           ))}
     </SectionCard>
   );
@@ -396,7 +406,12 @@ function ValuationCard({ data, loading }) {
             ['EPS (FWD)', fmtNum(data.eps_fwd), negClass(data.eps_fwd)],
             ['BOOK VALUE', fmtNum(data.book_value), ''],
           ].map(([label, value, cls]) => (
-            <DataRow key={label} label={label} value={value} valueClass={cls || 'text-bloomberg-white'} />
+            <DataRow
+              key={label}
+              label={label}
+              value={value}
+              valueClass={cls || 'text-bloomberg-white'}
+            />
           ))}
     </SectionCard>
   );
@@ -540,10 +555,26 @@ function GrowthIncomeCard({ data, loading }) {
             valueClass={signClass(data.quarterly_earnings_growth)}
           />
           <DataRow label="REVENUE" value={fmtLarge(data.revenue)} />
-          <DataRow label="GROSS PROFITS" value={fmtLarge(data.gross_profits)} valueClass={negClass(data.gross_profits)} />
-          <DataRow label="EBITDA" value={fmtLarge(data.ebitda)} valueClass={negClass(data.ebitda)} />
-          <DataRow label="OPER CASHFLOW" value={fmtLarge(data.operating_cashflow)} valueClass={negClass(data.operating_cashflow)} />
-          <DataRow label="FREE CASHFLOW" value={fmtLarge(data.free_cashflow)} valueClass={negClass(data.free_cashflow)} />
+          <DataRow
+            label="GROSS PROFITS"
+            value={fmtLarge(data.gross_profits)}
+            valueClass={negClass(data.gross_profits)}
+          />
+          <DataRow
+            label="EBITDA"
+            value={fmtLarge(data.ebitda)}
+            valueClass={negClass(data.ebitda)}
+          />
+          <DataRow
+            label="OPER CASHFLOW"
+            value={fmtLarge(data.operating_cashflow)}
+            valueClass={negClass(data.operating_cashflow)}
+          />
+          <DataRow
+            label="FREE CASHFLOW"
+            value={fmtLarge(data.free_cashflow)}
+            valueClass={negClass(data.free_cashflow)}
+          />
         </>
       )}
     </SectionCard>
@@ -741,62 +772,62 @@ export default function Research() {
           />
         </div>
         <main className="flex-1 px-4 py-4 space-y-3">
-        {!activeTicker && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-            <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-bloomberg-orange">
-              ■ RESEARCH
-            </div>
-            <p className="font-mono text-xs text-bloomberg-muted">
-              Enter a ticker to load stock overview
-            </p>
-          </div>
-        )}
-
-        {activeTicker && (
-          <>
-            <StockHeader data={data} loading={loading} />
-
-            {error && (
-              <div className="px-4 py-6 font-mono text-xs text-bloomberg-red">
-                ■ FAILED TO LOAD: {error}
+          {!activeTicker && (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+              <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-bloomberg-orange">
+                ■ RESEARCH
               </div>
-            )}
+              <p className="font-mono text-xs text-bloomberg-muted">
+                Enter a ticker to load stock overview
+              </p>
+            </div>
+          )}
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <PriceChartCard
-                  ticker={activeTicker}
-                  ohlcvData={ohlcvData}
-                  ohlcvLoading={ohlcvLoading}
-                  activeRange={activeRange}
-                  setActiveRange={setActiveRange}
-                />
+          {activeTicker && (
+            <>
+              <StockHeader data={data} loading={loading} />
+
+              {error && (
+                <div className="px-4 py-6 font-mono text-xs text-bloomberg-red">
+                  ■ FAILED TO LOAD: {error}
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <PriceChartCard
+                    ticker={activeTicker}
+                    ohlcvData={ohlcvData}
+                    ohlcvLoading={ohlcvLoading}
+                    activeRange={activeRange}
+                    setActiveRange={setActiveRange}
+                  />
+                </div>
+                <div className="space-y-3">
+                  <TradingDataCard data={data} loading={loading} />
+                  <QuickStatsCard data={data} loading={loading} />
+                  <Range52WCard data={data} loading={loading} />
+                </div>
               </div>
-              <div className="space-y-3">
-                <TradingDataCard data={data} loading={loading} />
-                <QuickStatsCard data={data} loading={loading} />
-                <Range52WCard data={data} loading={loading} />
+
+              <div className="grid grid-cols-3 gap-3">
+                <ValuationCard data={data} loading={loading} />
+                <AnalystConsensusCard data={data} loading={loading} />
+                <DividendsCard data={data} loading={loading} />
               </div>
-            </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <ValuationCard data={data} loading={loading} />
-              <AnalystConsensusCard data={data} loading={loading} />
-              <DividendsCard data={data} loading={loading} />
-            </div>
+              <div className="grid grid-cols-3 gap-3">
+                <ProfitabilityCard data={data} loading={loading} />
+                <GrowthIncomeCard data={data} loading={loading} />
+                <BalanceSheetCard data={data} loading={loading} />
+              </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <ProfitabilityCard data={data} loading={loading} />
-              <GrowthIncomeCard data={data} loading={loading} />
-              <BalanceSheetCard data={data} loading={loading} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <SharesOwnershipCard data={data} loading={loading} />
-              <RiskAssessmentCard data={data} loading={loading} />
-            </div>
-          </>
-        )}
+              <div className="grid grid-cols-2 gap-3">
+                <SharesOwnershipCard data={data} loading={loading} />
+                <RiskAssessmentCard data={data} loading={loading} />
+              </div>
+            </>
+          )}
         </main>
       </div>
     </div>

@@ -223,9 +223,7 @@ def test_strict_news_default_stops_before_yfinance_when_enough_articles(monkeypa
                 provider="google_news_light", status="success", articles=google_articles
             )
 
-    monkeypatch.setattr(
-        NewsService, "_provider", lambda _self, _provider_name: GoogleProvider()
-    )
+    monkeypatch.setattr(NewsService, "_provider", lambda _self, _provider_name: GoogleProvider())
     monkeypatch.setattr(
         "tradingagents.dataflows.news.news_service._fetch_yfinance_fallback",
         lambda *_args, **_kwargs: yfinance_called.append("yfinance") or [],

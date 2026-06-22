@@ -357,7 +357,6 @@ describe('StockForm cleanup', () => {
     });
   });
 
-
   it('renders the Bloomberg search bar and removes legacy market tabs', () => {
     const props = callbacks();
     render(<StockForm {...props} />);

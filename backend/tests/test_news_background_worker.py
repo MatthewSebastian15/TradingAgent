@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+from tradingagents.dataflows.news.general_news_service import GeneralNewsService
 
 from services.news_article_store import NewsArticleStore
 from services.news_background_worker import (
@@ -12,7 +13,6 @@ from services.news_background_worker import (
     reset_news_worker_state_for_tests,
 )
 from services.news_inflight_dedupe import clear_inflight_for_tests
-from tradingagents.dataflows.news.general_news_service import GeneralNewsService
 
 
 @pytest.fixture(autouse=True)
@@ -91,6 +91,7 @@ def test_manual_refresh_cooldown_tracks_recent_refresh(tmp_path, monkeypatch):
     mark_manual_refresh_requested()
 
     assert manual_refresh_cooldown_remaining() > 0
+
 
 class _Feed:
     def __init__(self, feed_id: str) -> None:

@@ -41,7 +41,9 @@ function Harness({ onUpdate = vi.fn() }) {
     <div>
       <span data-testid="new-count">{newCount}</span>
       <span data-testid="stream-status">{streamStatus}</span>
-      <button type="button" onClick={clearNewCount}>clear</button>
+      <button type="button" onClick={clearNewCount}>
+        clear
+      </button>
     </div>
   );
 }
@@ -62,12 +64,14 @@ describe('useTickerNewsStream', () => {
     const onUpdate = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        makeStreamResponse([
-          'event: ticker_news_stream_ready\ndata: {}\n\n',
-          'event: ticker_news_updated\ndata: {"ticker":"BBCA.JK"}\n\n',
-        ])
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          makeStreamResponse([
+            'event: ticker_news_stream_ready\ndata: {}\n\n',
+            'event: ticker_news_updated\ndata: {"ticker":"BBCA.JK"}\n\n',
+          ])
+        )
     );
 
     render(<Harness onUpdate={onUpdate} />);

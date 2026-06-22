@@ -23,6 +23,8 @@ _RR_BY_VOLATILITY: dict[str, float] = {
 
 def _compute_rr_from_volatility(volatility_level: str) -> float:
     return _RR_BY_VOLATILITY.get(str(volatility_level or "").strip(), FIXED_RR)
+
+
 DEFAULT_DECISION = "Hold"
 DEFAULT_VOLATILITY_LEVEL = "Medium"
 

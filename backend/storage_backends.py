@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Runtime storage abstractions for cache and analysis persistence."""
 
 from __future__ import annotations

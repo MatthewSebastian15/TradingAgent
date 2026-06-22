@@ -58,7 +58,9 @@ export default function ResearchSidebar({ activeTicker, collapsed, onToggle, onS
             type="button"
             onClick={() => setTab(t)}
             className={`flex-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${
-              tab === t ? 'text-bloomberg-orange' : 'text-bloomberg-muted hover:text-bloomberg-white'
+              tab === t
+                ? 'text-bloomberg-orange'
+                : 'text-bloomberg-muted hover:text-bloomberg-white'
             }`}
           >
             {t}

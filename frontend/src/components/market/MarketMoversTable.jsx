@@ -36,7 +36,9 @@ export default function MarketMoversTable({ title, items, loading, limit, emptyT
         {loading ? (
           <Skeleton className="h-4 w-16 bg-bloomberg-surface" />
         ) : (
-          <span className={`font-mono text-[10px] font-bold uppercase tracking-widest ${toneClass}`}>
+          <span
+            className={`font-mono text-[10px] font-bold uppercase tracking-widest ${toneClass}`}
+          >
             {`${items.length} shown`}
           </span>
         )}

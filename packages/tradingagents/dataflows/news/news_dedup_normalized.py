@@ -56,7 +56,9 @@ def deduplicate_news_articles(items: list[NormalizedNewsArticle]) -> list[Normal
     return result
 
 
-def _dedupe_preference(article: NormalizedNewsArticle) -> tuple[float, float, float, int, int, int, float]:
+def _dedupe_preference(
+    article: NormalizedNewsArticle,
+) -> tuple[float, float, float, int, int, int, float]:
     trust = float(article.provider_trust_score or PROVIDER_TRUST_SCORE.get(article.provider, 0))
     published = article.published_at.timestamp() if article.published_at else 0.0
     has_summary = 1 if str(article.summary or "").strip() else 0

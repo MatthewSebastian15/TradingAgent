@@ -35,7 +35,9 @@ def resolve_news_entities(
 ) -> dict[str, Any]:
     profile = resolve_news_ticker(ticker)
     canonical = str(profile.get("ticker") or ticker or "").upper()
-    text = f"{article.get('title') or ''} {article.get('summary') or article.get('description') or ''}"
+    text = (
+        f"{article.get('title') or ''} {article.get('summary') or article.get('description') or ''}"
+    )
 
     for negative in profile.get("negative_terms", []):
         if _contains(text, negative):

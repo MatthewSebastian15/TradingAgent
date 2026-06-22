@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import zoneinfo
-from datetime import datetime, time as dt_time, timezone
+from datetime import datetime, timezone
+from datetime import time as dt_time
 from typing import Any
 
 WIB = zoneinfo.ZoneInfo("Asia/Jakarta")
@@ -25,6 +26,7 @@ def effective_ttl(field_name: str) -> int:
         if not is_market_open_now():
             return 86_400
     return base_ttl
+
 
 FIELD_TTL_SECONDS: dict[str, int] = {
     "quote": 300,

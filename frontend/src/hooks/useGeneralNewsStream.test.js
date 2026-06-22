@@ -55,9 +55,9 @@ describe('useGeneralNewsStream', () => {
     const onUpdate = vi.fn();
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        streamResponse(['event: general_news_updated\ndata: {"count":1}\n\n'])
-      )
+      vi
+        .fn()
+        .mockResolvedValue(streamResponse(['event: general_news_updated\ndata: {"count":1}\n\n']))
     );
 
     render(<Harness enabled onUpdate={onUpdate} />);
@@ -74,11 +74,13 @@ describe('useGeneralNewsStream', () => {
     const onUpdate = vi.fn();
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        streamResponse([
-          Array.from({ length: 5 }, () => 'event: general_news_updated\ndata: {}\n\n').join(''),
-        ])
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          streamResponse([
+            Array.from({ length: 5 }, () => 'event: general_news_updated\ndata: {}\n\n').join(''),
+          ])
+        )
     );
 
     render(<Harness enabled onUpdate={onUpdate} />);
@@ -96,7 +98,8 @@ describe('useGeneralNewsStream', () => {
   it('reconnects after stream failure', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn()
+      vi
+        .fn()
         .mockResolvedValueOnce({ ok: false, status: 503, body: null })
         .mockResolvedValueOnce(streamResponse([], true))
     );
