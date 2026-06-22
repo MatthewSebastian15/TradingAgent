@@ -73,17 +73,19 @@ def _prompt_json(value: Any, max_chars: int = 9000) -> tuple[str, bool]:
         return text, False
     # Compact output has no indent boundary to walk back to, so build up complete
     # top-level keys until the budget is hit — output stays valid JSON, no mid-value cuts.
-    # ponytail: O(keys × size) reserialize per key; fine for small context dicts
+    # Track serialized length incrementally (O(keys)) instead of reserializing the whole dict per key.
     if isinstance(value, dict):
         kept: dict[str, Any] = {}
+        running = 2  # opening + closing brace
         for k, v in value.items():
-            candidate = {**kept, k: v}
-            if (
-                len(json.dumps(candidate, separators=(",", ":"), ensure_ascii=False, default=str))
-                > max_chars
-            ):
+            frag = json.dumps({k: v}, separators=(",", ":"), ensure_ascii=False, default=str)
+            added = len(frag) - 2  # drop the fragment's own braces
+            if kept:
+                added += 1  # comma joining to prior entries
+            if running + added > max_chars:
                 break
-            kept = candidate
+            kept[k] = v
+            running += added
         body = json.dumps(kept, separators=(",", ":"), ensure_ascii=False, default=str)
         return body + "[TRUNCATED_FOR_PROMPT]", True
     return text[:max_chars].rstrip() + "[TRUNCATED_FOR_PROMPT]", True

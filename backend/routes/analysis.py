@@ -21,7 +21,8 @@ from rate_limiter import (
     status_policy,
     stream_policy,
 )
-from routes import jobs, pipeline_runner, serializers, sse
+from routes import jobs, pipeline_runner, sse
+from routes import serializers_analysis as serializers
 from routes.sse import EventSourceResponse
 from routes.validation import (
     AnalysisRequest,

@@ -4,29 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 
 from persistent_cache import SQLiteTTLCache
-
-
-class TTLCacheBackend(Protocol):
-    # Sync-only contract by design. Async callers (e.g. AnalysisResultCache) must wrap these
-    # in asyncio.to_thread(), which they do. A second backend must keep get/set/delete/stats sync.
-    def get(self, key): ...
-
-    def set(self, key, value) -> None: ...
-
-    def delete(self, key) -> None: ...
-
-    def stats(self) -> dict[str, int | str]: ...
-
-
-class RuntimeStorageBackend(Protocol):
-    name: str
-
-    def ttl_cache(self, path: str, *, ttl_seconds: int, max_entries: int) -> TTLCacheBackend: ...
-
-    def sqlite_path(self, path: str) -> str: ...
 
 
 @dataclass(frozen=True)
@@ -44,7 +23,8 @@ class SQLiteRuntimeStorage:
         return str(resolved)
 
 
-def build_runtime_storage(backend: str) -> RuntimeStorageBackend:
+def build_runtime_storage(backend: str) -> SQLiteRuntimeStorage:
+    # ponytail: one backend. Validation stays — backend name comes from config. Add branches if a second lands.
     if backend == "sqlite":
         return SQLiteRuntimeStorage()
     raise ValueError(f"Unsupported runtime storage backend: {backend}")

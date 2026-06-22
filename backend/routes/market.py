@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from time import monotonic
 from typing import Any
@@ -62,21 +63,32 @@ _QUOTE_CACHE_TTL_SECONDS = 90.0
 _SEARCH_CACHE_TTL_SECONDS = 60.0
 _OHLCV_CACHE_TTL_SECONDS = 60.0
 _SPARKLINE_CACHE_TTL_SECONDS = 300.0
-_QUOTE_CACHE: dict[tuple[str, ...], tuple[float, list[dict]]] = {}
-_SEARCH_CACHE: dict[tuple[str, int, str, str], tuple[float, list[dict[str, Any]]]] = {}
-_OHLCV_CACHE: dict[tuple[str, str, str], tuple[float, dict[str, Any]]] = {}
-_SPARKLINE_CACHE: dict[tuple[tuple[str, ...], str], tuple[float, dict[str, list[float]]]] = {}
+_QUOTE_CACHE: OrderedDict[tuple[str, ...], tuple[float, list[dict]]] = OrderedDict()
+_SEARCH_CACHE: OrderedDict[tuple[str, int, str, str], tuple[float, list[dict[str, Any]]]] = (
+    OrderedDict()
+)
+_OHLCV_CACHE: OrderedDict[tuple[str, str, str], tuple[float, dict[str, Any]]] = OrderedDict()
+_SPARKLINE_CACHE: OrderedDict[tuple[tuple[str, ...], str], tuple[float, dict[str, list[float]]]] = (
+    OrderedDict()
+)
 _OHLCV_RANGE_DAYS = {"1W": 7, "1M": 31, "3M": 92, "6M": 183, "1Y": 365}
 _OHLCV_RANGE_OPTIONS = {"YTD", *_OHLCV_RANGE_DAYS.keys()}
 _MOVER_LIMITS = {5, 10, 15, 20}
 _MAX_CACHE_ENTRIES = 500
 
 
-def _cache_set(cache: dict, key, value) -> None:
-    # ponytail: FIFO eviction; upgrade to LRU OrderedDict if hit rate matters
-    if len(cache) >= _MAX_CACHE_ENTRIES:
-        cache.pop(next(iter(cache)))
+def _cache_set(cache: OrderedDict, key, value) -> None:
     cache[key] = value
+    cache.move_to_end(key)  # most-recently-used end
+    if len(cache) > _MAX_CACHE_ENTRIES:
+        cache.popitem(last=False)  # evict least-recently-used
+
+
+def _cache_get(cache: OrderedDict, key, default=None):
+    if key in cache:
+        cache.move_to_end(key)  # reads count as use, so LRU tracks access not insertion
+        return cache[key]
+    return default
 
 
 _IDX_AUTO_SUFFIX_SYMBOLS = {
@@ -262,7 +274,7 @@ def _as_float(value: Any) -> float | None:
 
 
 _OVERVIEW_CACHE_TTL_SECONDS = 300.0
-_OVERVIEW_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_OVERVIEW_CACHE: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
 
 
 def _build_stock_overview(symbol: str) -> dict[str, Any]:
@@ -384,7 +396,7 @@ async def get_stock_overview_data(
     async with _market_data_limit(request):
         normalized = _normalize_quote_symbol(ticker)
         cache_key = f"overview:{normalized}"
-        cached = _OVERVIEW_CACHE.get(cache_key)
+        cached = _cache_get(_OVERVIEW_CACHE, cache_key)
         if cached:
             ts, payload = cached
             if monotonic() - ts < _OVERVIEW_CACHE_TTL_SECONDS:
@@ -539,8 +551,8 @@ def _slice_ohlcv_rows(
 def _cached_ohlcv_rows(
     symbol: str, start_dt: datetime, end_dt: datetime, interval: str, now: float
 ) -> tuple[bool, list[dict[str, Any]]]:
-    cached_at, cached_payload = _OHLCV_CACHE.get(
-        _ohlcv_raw_cache_key(symbol, end_dt, interval), (0.0, {})
+    cached_at, cached_payload = _cache_get(
+        _OHLCV_CACHE, _ohlcv_raw_cache_key(symbol, end_dt, interval), (0.0, {})
     )
     if not cached_payload or now - cached_at > _OHLCV_CACHE_TTL_SECONDS:
         return False, []
@@ -982,7 +994,7 @@ async def search_market_tickers(
                 ),
             }
 
-        cached = _SEARCH_CACHE.get(cache_key)
+        cached = _cache_get(_SEARCH_CACHE, cache_key)
         if cached is not None:
             cached_at, cached_results = cached
             if now - cached_at <= _SEARCH_CACHE_TTL_SECONDS:
@@ -1108,7 +1120,7 @@ async def get_market_sparklines(
 
         capped = [_normalize_quote_symbol(symbol) for symbol in raw_symbols]
         cache_key = (tuple(capped), normalized_range)
-        cached_at, cached_sparklines = _SPARKLINE_CACHE.get(cache_key, (0.0, {}))
+        cached_at, cached_sparklines = _cache_get(_SPARKLINE_CACHE, cache_key, (0.0, {}))
         now = monotonic()
         if cached_sparklines and now - cached_at <= _SPARKLINE_CACHE_TTL_SECONDS:
             return {"sparklines": _clone_sparklines(cached_sparklines)}
@@ -1140,7 +1152,7 @@ async def get_market_quotes(
     # Admission control + cache check: release the active slot before slow yfinance I/O
     # so it doesn't accumulate while Yahoo Finance is slow or hanging.
     async with _market_data_limit(request):
-        cached_at, cached_quotes = _QUOTE_CACHE.get(cache_key, (0.0, []))
+        cached_at, cached_quotes = _cache_get(_QUOTE_CACHE, cache_key, (0.0, []))
         now = monotonic()
         if cached_quotes and now - cached_at <= _QUOTE_CACHE_TTL_SECONDS:
             return {"quotes": _clone_quotes(cached_quotes)}
