@@ -541,6 +541,78 @@ class SymbolValidationResponse(ApiSchema):
     reason: str | None = None
 
 
+class StockOverviewResponse(ApiSchema):
+    ticker: str
+    name: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    exchange: str | None = None
+    currency: str | None = None
+    description: str | None = None
+    price: float | None = None
+    prev_close: float | None = None
+    open: float | None = None
+    day_high: float | None = None
+    day_low: float | None = None
+    bid: float | None = None
+    ask: float | None = None
+    volume: float | None = None
+    avg_volume: float | None = None
+    avg_volume_10d: float | None = None
+    week_52_high: float | None = None
+    week_52_low: float | None = None
+    ma_50d: float | None = None
+    ma_200d: float | None = None
+    market_cap: float | None = None
+    enterprise_value: float | None = None
+    pe_ttm: float | None = None
+    forward_pe: float | None = None
+    pb: float | None = None
+    ps_ttm: float | None = None
+    ev_revenue: float | None = None
+    ev_ebitda: float | None = None
+    eps_ttm: float | None = None
+    eps_fwd: float | None = None
+    book_value: float | None = None
+    gross_margin: float | None = None
+    operating_margin: float | None = None
+    ebitda_margin: float | None = None
+    net_margin: float | None = None
+    roa: float | None = None
+    roe: float | None = None
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
+    quarterly_earnings_growth: float | None = None
+    revenue: float | None = None
+    gross_profits: float | None = None
+    ebitda: float | None = None
+    operating_cashflow: float | None = None
+    free_cashflow: float | None = None
+    total_cash: float | None = None
+    total_debt: float | None = None
+    net_cash_debt: float | None = None
+    debt_equity: float | None = None
+    current_ratio: float | None = None
+    quick_ratio: float | None = None
+    shares_outstanding: float | None = None
+    insider_pct: float | None = None
+    institution_pct: float | None = None
+    short_ratio: float | None = None
+    dividend_yield: float | None = None
+    div_rate: float | None = None
+    payout_ratio: float | None = None
+    ex_div_date: str | None = None
+    beta: float | None = None
+    recommendation: str | None = None
+    consensus_score: float | None = None
+    analyst_count: int | None = None
+    target_low: float | None = None
+    target_mean: float | None = None
+    target_median: float | None = None
+    target_high: float | None = None
+    upside_downside_pct: float | None = None
+
+
 class ApiStatusResponse(ApiSchema):
     provider: str
     quick_model: str

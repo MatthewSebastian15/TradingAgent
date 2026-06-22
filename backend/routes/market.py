@@ -19,6 +19,7 @@ from schemas import (
     MarketOverviewResponse,
     MarketPresetsResponse,
     MarketQuotesResponse,
+    StockOverviewResponse,
     SymbolValidationResponse,
 )
 from services.market_search_index import get_popular_tickers, search_local_tickers
@@ -250,6 +251,140 @@ def _as_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if number == number else None
+
+
+_OVERVIEW_CACHE_TTL_SECONDS = 300.0
+_OVERVIEW_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def _build_stock_overview(symbol: str) -> dict[str, Any]:
+    """Fetch yfinance .info and map to StockOverviewResponse shape."""
+    from tradingagents.yfinance_runtime import yf  # noqa: PLC0415
+
+    info: dict[str, Any] = yf.Ticker(symbol).info or {}
+
+    def f(key: str) -> float | None:
+        return _as_float(info.get(key))
+
+    def upside(price: float | None, target: float | None) -> float | None:
+        if price and target and price > 0:
+            return round((target - price) / price * 100, 2)
+        return None
+
+    price = f("currentPrice") or f("regularMarketPrice") or f("previousClose")
+    target_mean = f("targetMeanPrice")
+
+    raw_rec = info.get("recommendationKey") or info.get("recommendation")
+    recommendation = str(raw_rec).upper().replace("_", " ") if raw_rec else None
+
+    ex_div = info.get("exDividendDate")
+    ex_div_str: str | None = None
+    if ex_div:
+        try:
+            from datetime import timezone  # noqa: PLC0415
+
+            ex_div_str = datetime.fromtimestamp(int(ex_div), tz=timezone.utc).strftime("%b %d, %Y")
+        except Exception:  # noqa: BLE001
+            ex_div_str = str(ex_div)
+
+    total_cash = f("totalCash")
+    total_debt = f("totalDebt")
+    net_cash_debt = (
+        round(total_cash - total_debt, 2)
+        if total_cash is not None and total_debt is not None
+        else None
+    )
+
+    return {
+        "ticker": symbol,
+        "name": info.get("longName") or info.get("shortName"),
+        "sector": info.get("sector"),
+        "industry": info.get("industry"),
+        "exchange": info.get("exchange") or info.get("fullExchangeName"),
+        "currency": info.get("currency"),
+        "description": info.get("longBusinessSummary"),
+        "price": price,
+        "prev_close": f("previousClose") or f("regularMarketPreviousClose"),
+        "open": f("open") or f("regularMarketOpen"),
+        "day_high": f("dayHigh") or f("regularMarketDayHigh"),
+        "day_low": f("dayLow") or f("regularMarketDayLow"),
+        "bid": f("bid"),
+        "ask": f("ask"),
+        "volume": f("volume") or f("regularMarketVolume"),
+        "avg_volume": f("averageVolume"),
+        "avg_volume_10d": f("averageVolume10days") or f("averageDailyVolume10Day"),
+        "week_52_high": f("fiftyTwoWeekHigh"),
+        "week_52_low": f("fiftyTwoWeekLow"),
+        "ma_50d": f("fiftyDayAverage"),
+        "ma_200d": f("twoHundredDayAverage"),
+        "market_cap": f("marketCap"),
+        "enterprise_value": f("enterpriseValue"),
+        "pe_ttm": f("trailingPE"),
+        "forward_pe": f("forwardPE"),
+        "pb": f("priceToBook"),
+        "ps_ttm": f("priceToSalesTrailing12Months"),
+        "ev_revenue": f("enterpriseToRevenue"),
+        "ev_ebitda": f("enterpriseToEbitda"),
+        "eps_ttm": f("trailingEps"),
+        "eps_fwd": f("forwardEps"),
+        "book_value": f("bookValue"),
+        "gross_margin": f("grossMargins"),
+        "operating_margin": f("operatingMargins"),
+        "ebitda_margin": f("ebitdaMargins"),
+        "net_margin": f("profitMargins"),
+        "roa": f("returnOnAssets"),
+        "roe": f("returnOnEquity"),
+        "revenue_growth": f("revenueGrowth"),
+        "earnings_growth": f("earningsGrowth"),
+        "quarterly_earnings_growth": f("earningsQuarterlyGrowth"),
+        "revenue": f("totalRevenue"),
+        "gross_profits": f("grossProfits"),
+        "ebitda": f("ebitda"),
+        "operating_cashflow": f("operatingCashflow"),
+        "free_cashflow": f("freeCashflow"),
+        "total_cash": total_cash,
+        "total_debt": total_debt,
+        "net_cash_debt": net_cash_debt,
+        "debt_equity": f("debtToEquity"),
+        "current_ratio": f("currentRatio"),
+        "quick_ratio": f("quickRatio"),
+        "shares_outstanding": f("sharesOutstanding") or f("impliedSharesOutstanding"),
+        "insider_pct": f("heldPercentInsiders"),
+        "institution_pct": f("heldPercentInstitutions"),
+        "short_ratio": f("shortRatio"),
+        "dividend_yield": f("dividendYield"),
+        "div_rate": f("dividendRate"),
+        "payout_ratio": f("payoutRatio"),
+        "ex_div_date": ex_div_str,
+        "beta": f("beta"),
+        "recommendation": recommendation,
+        "consensus_score": f("recommendationMean"),
+        "analyst_count": info.get("numberOfAnalystOpinions"),
+        "target_low": f("targetLowPrice"),
+        "target_mean": target_mean,
+        "target_median": f("targetMedianPrice"),
+        "target_high": f("targetHighPrice"),
+        "upside_downside_pct": upside(price, target_mean),
+    }
+
+
+@router.get("/market/stock-overview", tags=["market"], response_model=StockOverviewResponse)
+async def get_stock_overview_data(
+    request: Request,
+    ticker: str = Query(..., min_length=1, description="Ticker symbol, e.g. BBCA.JK"),
+) -> dict[str, Any]:
+    async with _market_data_limit(request):
+        normalized = _normalize_quote_symbol(ticker)
+        cache_key = f"overview:{normalized}"
+        cached = _OVERVIEW_CACHE.get(cache_key)
+        if cached:
+            ts, payload = cached
+            if monotonic() - ts < _OVERVIEW_CACHE_TTL_SECONDS:
+                return payload
+
+    payload = await asyncio.to_thread(_build_stock_overview, normalized)
+    _OVERVIEW_CACHE[cache_key] = (monotonic(), payload)
+    return payload
 
 
 def _parse_ohlcv_trade_date(value: str | None) -> datetime:
@@ -571,7 +706,14 @@ def _fetch_quote(symbol: str) -> dict:
 
     except Exception as exc:  # noqa: BLE001
         logger.warning("Failed to fetch quote for %s: %s", symbol, exc)
-        return {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "volume": None, "error": True}
+        return {
+            "sym": symbol,
+            "chg": "N/A",
+            "pos": True,
+            "price": None,
+            "volume": None,
+            "error": True,
+        }
 
 
 _QUOTE_FETCH_TIMEOUT_SECONDS = 12.0
@@ -585,8 +727,14 @@ async def _fetch_one_quote_timed(symbol: str) -> dict:
             timeout=_QUOTE_FETCH_TIMEOUT_SECONDS,
         )
     except Exception:
-        return {"sym": symbol, "chg": "N/A", "pos": True, "price": None, "volume": None,
-                "error": True}
+        return {
+            "sym": symbol,
+            "chg": "N/A",
+            "pos": True,
+            "price": None,
+            "volume": None,
+            "error": True,
+        }
 
 
 async def _fetch_quotes(symbols: list[str]) -> list[dict]:
@@ -622,6 +770,7 @@ async def _fetch_sparklines(symbols: list[str], range_key: str) -> dict[str, lis
     tasks = [asyncio.to_thread(_fetch_sparkline, symbol, range_key) for symbol in symbols]
     values = await asyncio.gather(*tasks)
     return {symbol: list(series) for symbol, series in zip(symbols, values, strict=False)}
+
 
 def _merge_search_results(*groups: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
@@ -693,7 +842,8 @@ def _clean_search_result(raw: dict[str, Any]) -> dict[str, Any] | None:
         or symbol
     )
     exchange = raw.get("exchDisp") or raw.get("exchange") or raw.get("fullExchangeName") or ""
-    quote_type = str(raw.get("quoteType") or raw.get("typeDisp") or raw.get("type") or "").strip().upper()
+    qt_raw = raw.get("quoteType") or raw.get("typeDisp") or raw.get("type") or ""
+    quote_type = str(qt_raw).strip().upper()
 
     return {
         "symbol": symbol,
@@ -738,7 +888,10 @@ def _refresh_search_cache(
 ) -> None:
     remote_results = _search_tickers(query, limit)
     results = _merge_search_results(local_results, remote_results, limit=limit)
-    _SEARCH_CACHE[(query.lower(), limit, market, asset_type)] = (monotonic(), _clone_search_results(results))
+    _SEARCH_CACHE[(query.lower(), limit, market, asset_type)] = (
+        monotonic(),
+        _clone_search_results(results),
+    )
 
 
 def _search_meta(
@@ -799,7 +952,11 @@ async def search_market_tickers(
             query, limit, market=normalized_market, asset_type=normalized_type
         )
         if len(local_results) >= limit:
-            source = "manual_symbol" if local_results[0].get("source") == "manual_symbol" else "local_universe"
+            source = (
+                "manual_symbol"
+                if local_results[0].get("source") == "manual_symbol"
+                else "local_universe"
+            )
             return {
                 "results": local_results[:limit],
                 "meta": _search_meta(
@@ -873,7 +1030,9 @@ async def search_market_tickers(
 
 
 @router.get("/market/search/warmup", tags=["market"])
-async def warmup_market_search(request: Request, limit: int = Query(default=100, ge=1, le=100)) -> dict[str, Any]:
+async def warmup_market_search(
+    request: Request, limit: int = Query(default=100, ge=1, le=100)
+) -> dict[str, Any]:
     """Return lightweight popular search metadata for local-first autocomplete warmup."""
     async with _market_data_limit(request):
         popular = get_popular_tickers(limit)
@@ -915,7 +1074,9 @@ async def get_market_ohlcv(
 async def get_market_sparklines(
     request: Request,
     symbols: str = Query(..., min_length=1, description="Comma-separated list of ticker symbols."),
-    range_key: str = Query(default="1M", alias="range", description="One of YTD, 1Y, 6M, 3M, 1M, 1W."),
+    range_key: str = Query(
+        default="1M", alias="range", description="One of YTD, 1Y, 6M, 3M, 1M, 1W."
+    ),
 ) -> dict[str, dict[str, list[float]]]:
     async with _market_data_limit(request):
         raw_symbols = [symbol.strip() for symbol in symbols.split(",") if symbol.strip()]
