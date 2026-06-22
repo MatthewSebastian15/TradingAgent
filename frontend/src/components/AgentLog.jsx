@@ -163,63 +163,80 @@ export default function AgentLog({ status, agentProgress }) {
             </h3>
             <div className="mt-0.5 font-mono text-[11px] text-bloomberg-muted">SSE stream</div>
           </div>
-          <div className="flex items-center gap-2 font-mono text-[11px]">
-            <span className="text-bloomberg-white">
-              {doneCount}/{totalSteps} agents
+          <div className="flex items-center gap-3 font-mono text-[11px]">
+            <span className="text-bloomberg-muted">
+              <span className="text-bloomberg-white">{doneCount}</span>/{totalSteps} agents
             </span>
-            <span className="text-bloomberg-orange">{formatTime(elapsed)}</span>
+            <span className="tabular-nums text-bloomberg-orange">{formatTime(elapsed)}</span>
+            {pct === 100 && (
+              <span className="text-[10px] uppercase tracking-wider text-bloomberg-green">
+                ✓ DONE
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       <div className="h-px bg-bloomberg-border">
         <div
-          className="h-full bg-bloomberg-orange transition-all duration-500"
+          className={`h-full transition-all duration-500 ${pct === 100 ? 'bg-bloomberg-green' : 'bg-bloomberg-orange'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
 
       <div className="p-3">
-        <div className="h-72 overflow-y-auto pr-2">
-          <ol className="relative space-y-2 border-l border-bloomberg-border pl-3">
-            {PIPELINE.map((step) => {
-              const done = doneIds.has(step.id);
-              const active = activeIds.has(step.id);
-              const error = errorIds.has(step.id);
-              const statusValue = pillStatus({ done, active, error });
-              const elapsedTime = agentTimes[step.id] || (active ? formatTime(elapsed) : undefined);
-              const meta = STATUS_UI[statusValue];
-              const Icon = meta.Icon;
+        <ol className="relative space-y-1.5 border-l border-bloomberg-border pl-3">
+          {PIPELINE.map((step, index) => {
+            const done = doneIds.has(step.id);
+            const active = activeIds.has(step.id);
+            const error = errorIds.has(step.id);
+            const statusValue = pillStatus({ done, active, error });
+            const elapsedTime = agentTimes[step.id] || (active ? formatTime(elapsed) : undefined);
+            const meta = STATUS_UI[statusValue];
+            const Icon = meta.Icon;
+            const useCustomColor = (done || active) && step.color && !error;
 
-              return (
-                <li key={step.id} className="animate-in fade-in duration-300">
-                  <span
-                    className={`absolute -left-1 mt-2.5 h-2.5 w-2.5 rounded-full border border-bloomberg-card transition-colors ${meta.dot}`}
-                  />
-                  <div
-                    className={`grid min-h-[30px] grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 border px-2.5 py-1.5 font-mono text-[11px] transition-colors ${meta.row}`}
-                  >
-                    <Icon className={`h-3 w-3 ${meta.icon || ''}`} aria-hidden="true" />
-                    <span className="truncate text-bloomberg-white">{titleCase(step.label)}</span>
-                    <span className="uppercase tracking-wider">{statusValue}</span>
-                    {elapsedTime && <span className="text-bloomberg-muted">{elapsedTime}</span>}
+            return (
+              <li key={step.id} className="animate-in fade-in duration-300">
+                <span
+                  className={`absolute -left-1 mt-2.5 h-2.5 w-2.5 rounded-full border border-bloomberg-card transition-colors${useCustomColor ? '' : ` ${meta.dot}`}`}
+                  style={useCustomColor ? { backgroundColor: step.color } : undefined}
+                />
+                <div
+                  className={`grid min-h-[28px] grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 border px-2.5 py-1 font-mono text-[11px] transition-colors ${meta.row}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-4 flex-shrink-0 text-right font-mono text-[9px] tabular-nums text-bloomberg-muted">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <Icon className={`h-3 w-3 flex-shrink-0 ${meta.icon || ''}`} aria-hidden="true" />
                   </div>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
+                  <span className="truncate">{titleCase(step.label)}</span>
+                  <span className="text-[10px] uppercase tracking-wider">{statusValue}</span>
+                  {elapsedTime
+                    ? <span className="text-[10px] tabular-nums text-bloomberg-muted">{elapsedTime}</span>
+                    : <span className="w-8" />
+                  }
+                </div>
+              </li>
+            );
+          })}
+        </ol>
 
-        <div className="mt-3 border border-bloomberg-border bg-black px-2.5 py-1.5">
-          <div className="line-clamp-2 font-mono text-[11px] leading-snug text-bloomberg-muted">
+        <div className="mt-3 flex items-start gap-2 border border-bloomberg-border bg-black px-2.5 py-1.5">
+          <span className="mt-0.5 h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-bloomberg-orange" />
+          <div className="line-clamp-3 font-mono text-[10px] leading-relaxed text-bloomberg-muted">
             {status || 'Waiting for pipeline...'}
           </div>
         </div>
 
-        <div className="mt-2 flex items-center gap-2 font-mono text-[11px] text-bloomberg-muted">
-          <span className="h-2 w-2 rounded-full bg-bloomberg-orange animate-pulse" />
-          <span>
-            Progress: {pct}% - {doneCount} of {totalSteps} agents complete
+        <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-bloomberg-muted">
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-bloomberg-orange" />
+            <span>{doneCount} of {totalSteps} agents complete</span>
+          </div>
+          <span className={pct === 100 ? 'text-bloomberg-green' : 'text-bloomberg-orange'}>
+            {pct}%
           </span>
         </div>
       </div>
