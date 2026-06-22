@@ -23,9 +23,9 @@ const VOLUME_HEIGHT = 82;
 const VOLUME_TOP = 312;
 const PADDING = {
   top: 24,
-  right: 24,
-  bottom: 30,
-  left: 112,
+  right: 28,
+  bottom: 32,
+  left: 116,
 };
 
 function dynamicSeriesWidth(step, rangeKey, type = 'candle') {
@@ -45,51 +45,6 @@ function formatChangePercent(point, previousPoint) {
   const value = ((point.close - reference) / reference) * 100;
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 }
-
-function TradingDataPanel({ point, previousPoint, ticker }) {
-  const change = point.close - (previousPoint?.close ?? point.open);
-  const up = isUpCandle(point, previousPoint);
-  const changeClass = up ? 'text-green-400' : 'text-red-400';
-  const rows = [
-    ['Open', displayPrice(point.open, ticker)],
-    ['High', displayPrice(point.high, ticker)],
-    ['Low', displayPrice(point.low, ticker)],
-    ['Prev Close', displayPrice(previousPoint?.close, ticker)],
-    ['Vol', formatCompactNumber(point.volume)],
-  ];
-
-  return (
-    <aside className="flex h-full basis-1/5 flex-col border-l border-bloomberg-border bg-[#050505] p-3 font-mono text-[11px]">
-      <div className="mb-2 text-bloomberg-orange tracking-wider uppercase">Trading Data</div>
-      <div className="mb-3 text-bloomberg-muted">{point.date}</div>
-      <div className="space-y-2">
-        {rows.map(([label, value]) => (
-          <div
-            key={label}
-            className="flex items-center justify-between gap-2 border-b border-white/5 pb-1"
-          >
-            <span className="text-bloomberg-muted">{label}</span>
-            <span className="text-right text-white">{value}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-auto grid grid-cols-2 gap-x-2 gap-y-1 border-t border-bloomberg-border pt-3">
-        <span className="text-bloomberg-muted">Change</span>
-        <span className={`text-right ${changeClass}`}>{displayPrice(change, ticker)}</span>
-        <span className="text-bloomberg-muted">Change %</span>
-        <span className={`text-right ${changeClass}`}>
-          {formatChangePercent(point, previousPoint)}
-        </span>
-      </div>
-    </aside>
-  );
-}
-
-TradingDataPanel.propTypes = {
-  point: PropTypes.object.isRequired,
-  previousPoint: PropTypes.object,
-  ticker: PropTypes.string,
-};
 
 function CandlestickTooltip({ point, previousPoint, ticker, position }) {
   const change = point.close - (previousPoint?.close ?? point.open);
@@ -165,12 +120,21 @@ export default function CandlestickPriceChart({
     const maxVolume = Math.max(...normalizedPoints.map((point) => point.volume || 0), 1);
     const volumeTicks = [maxVolume, maxVolume / 2, 0];
 
+    // Drop X ticks too close together to prevent date label overlap at full width.
+    const stepPx = (WIDTH - PADDING.left - PADDING.right) / normalizedPoints.length;
+    const rawXTicks = buildXAxisTicks(normalizedPoints);
+    const xTicks = rawXTicks.filter((tick, i, arr) => {
+      if (i === 0 || i === arr.length - 1) return true;
+      const prev = arr[i - 1];
+      return (tick.index - prev.index) * stepPx >= 68;
+    });
+
     return {
       points: normalizedPoints,
       minPrice,
       maxPrice,
       maxVolume,
-      xTicks: buildXAxisTicks(normalizedPoints),
+      xTicks,
       yTicks,
       volumeTicks,
     };
@@ -208,7 +172,8 @@ export default function CandlestickPriceChart({
   const indexToX = (index) => PADDING.left + step * index + step / 2;
   const lastPoint = chart.points[chart.points.length - 1];
   const lastCloseY = priceToY(lastPoint.close);
-  const lastPreviousPoint = previousByDate.get(lastPoint.date) || null;
+  const nearTick = chart.yTicks.some((tick) => Math.abs(priceToY(tick) - lastCloseY) < 14);
+  const lastPriceLabelY = nearTick ? lastCloseY - 16 : lastCloseY - 6;
   const hoverIndex = hover?.index ?? null;
   const hoverPoint = hoverIndex === null ? null : chart.points[hoverIndex];
 
@@ -247,8 +212,8 @@ export default function CandlestickPriceChart({
   };
 
   return (
-    <div className="relative flex h-[420px] overflow-hidden border border-bloomberg-border bg-black">
-      <div className="relative h-full min-w-0 basis-4/5">
+    <div className="relative h-[420px] overflow-hidden border border-bloomberg-border bg-black">
+      <div className="relative h-full w-full">
         {hoverPoint && hover && (
           <CandlestickTooltip
             point={hoverPoint}
@@ -282,7 +247,7 @@ export default function CandlestickPriceChart({
                   strokeDasharray="5 6"
                 />
                 <text
-                  x={PADDING.left - 12}
+                  x={PADDING.left - 8}
                   y={y + 4}
                   fill={TEXT_COLOR}
                   fontFamily="monospace"
@@ -387,10 +352,11 @@ export default function CandlestickPriceChart({
           />
           <text
             x={PADDING.left - 12}
-            y={lastCloseY - 6}
+            y={lastPriceLabelY}
             fill={LAST_PRICE_COLOR}
             fontFamily="monospace"
             fontSize="11"
+            fontWeight="bold"
             textAnchor="end"
           >
             {displayPrice(lastPoint.close, ticker)}
@@ -447,10 +413,10 @@ export default function CandlestickPriceChart({
             <text
               key={`${index}-${label}`}
               x={indexToX(index)}
-              y={HEIGHT - 8}
+              y={HEIGHT - 6}
               fill={TEXT_COLOR}
               fontFamily="monospace"
-              fontSize="10"
+              fontSize="11"
               textAnchor="middle"
             >
               {label}
@@ -458,7 +424,6 @@ export default function CandlestickPriceChart({
           ))}
         </svg>
       </div>
-      <TradingDataPanel point={lastPoint} previousPoint={lastPreviousPoint} ticker={ticker} />
     </div>
   );
 }

@@ -322,21 +322,40 @@ function Range52WCard({ data, loading }) {
 Range52WCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
 
 function TradingDataCard({ data, loading }) {
+  const change =
+    data?.price != null && data?.prev_close != null
+      ? parseFloat((data.price - data.prev_close).toFixed(2))
+      : null;
+  const changePct =
+    data?.price != null && data?.prev_close != null && data.prev_close !== 0
+      ? parseFloat((((data.price - data.prev_close) / data.prev_close) * 100).toFixed(2))
+      : null;
+
   return (
     <SectionCard title="TRADING DATA">
       {loading || !data
         ? Array.from({ length: 9 }).map((_, i) => <SkeletonRow key={i} />)
         : [
-            ['OPEN', fmtNum(data.open)],
-            ['HIGH', fmtNum(data.day_high)],
-            ['LOW', fmtNum(data.day_low)],
-            ['PREV CLOSE', fmtNum(data.prev_close)],
-            ['BID', fmtNum(data.bid)],
-            ['ASK', fmtNum(data.ask)],
-            ['VOLUME', fmtLarge(data.volume)],
-            ['AVG VOL', fmtLarge(data.avg_volume)],
-            ['AVG VOL 10D', fmtLarge(data.avg_volume_10d)],
-          ].map(([label, value]) => <DataRow key={label} label={label} value={value} />)}
+            ['OPEN', fmtNum(data.open), ''],
+            ['HIGH', fmtNum(data.day_high), ''],
+            ['LOW', fmtNum(data.day_low), ''],
+            ['PREV CLOSE', fmtNum(data.prev_close), ''],
+            [
+              'CHANGE',
+              change != null ? `${change >= 0 ? '+' : ''}${change.toFixed(2)}` : 'N/A',
+              signClass(change),
+            ],
+            [
+              'CHANGE %',
+              changePct != null ? `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%` : 'N/A',
+              signClass(changePct),
+            ],
+            ['VOLUME', fmtLarge(data.volume), ''],
+            ['AVG VOL', fmtLarge(data.avg_volume), ''],
+            ['AVG VOL 10D', fmtLarge(data.avg_volume_10d), ''],
+          ].map(([label, value, cls]) => (
+            <DataRow key={label} label={label} value={value} valueClass={cls || 'text-bloomberg-white'} />
+          ))}
     </SectionCard>
   );
 }
@@ -721,7 +740,7 @@ export default function Research() {
             )}
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2 space-y-3">
+              <div className="col-span-2">
                 <PriceChartCard
                   ticker={activeTicker}
                   ohlcvData={ohlcvData}
@@ -729,11 +748,11 @@ export default function Research() {
                   activeRange={activeRange}
                   setActiveRange={setActiveRange}
                 />
-                <Range52WCard data={data} loading={loading} />
               </div>
               <div className="space-y-3">
                 <TradingDataCard data={data} loading={loading} />
                 <QuickStatsCard data={data} loading={loading} />
+                <Range52WCard data={data} loading={loading} />
               </div>
             </div>
 
