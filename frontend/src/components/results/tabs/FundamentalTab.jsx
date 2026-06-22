@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 import FinancialHighlightsTable from '../FinancialHighlightsTable';
+import { displayPeriodLabel } from '../fundamentalPeriod';
 import SectionHeader from '../SectionHeader';
 
 const UNAVAILABLE_CELL = { value: null, display: 'N/A', status: 'unavailable' };
@@ -681,31 +682,6 @@ function unitForFormat(formatType, financialHighlights) {
   if (formatType === 'per_share') return `${financialHighlights?.currency || ''}/share`;
   if (formatType === 'number') return '';
   return '';
-}
-
-function expandYear(value) {
-  const year = Number(value);
-  if (!Number.isFinite(year)) return null;
-  if (year < 100) return year < 50 ? 2000 + year : 1900 + year;
-  return year;
-}
-
-function displayPeriodLabel(period) {
-  const raw = String(period?.display_period || period?.label || period?.period || '').trim();
-  let match = raw.match(/^FY\s?(\d{2}|\d{4})$/i);
-  if (match) {
-    const year = expandYear(match[1]);
-    return year ? `FY ${year}` : '-';
-  }
-
-  match = raw.match(/^FY\s?(\d{2}|\d{4})Q([1-4])$/i) || raw.match(/^Q([1-4])\s?(\d{2}|\d{4})$/i);
-  if (match) {
-    const quarter = match[0].toUpperCase().startsWith('FY') ? match[2] : match[1];
-    const year = expandYear(match[0].toUpperCase().startsWith('FY') ? match[1] : match[2]);
-    return year ? `Q${quarter} ${year}` : '-';
-  }
-
-  return raw || '-';
 }
 
 function periodSortValue(period) {
@@ -1585,8 +1561,14 @@ export default function FundamentalTab({ financialHighlights, result = {} }) {
   const activeGroup =
     FUNDAMENTAL_GROUPS.find((group) => group.id === selectedFundamentalGroup) ||
     FUNDAMENTAL_GROUPS[0];
-  const tablePayload = appendLegacyFundamentalSections(financialHighlights, result);
-  const groupedTablePayload = groupFundamentalTableHighlights(tablePayload, activeGroup);
+  const tablePayload = useMemo(
+    () => appendLegacyFundamentalSections(financialHighlights, result),
+    [financialHighlights, result]
+  );
+  const groupedTablePayload = useMemo(
+    () => groupFundamentalTableHighlights(tablePayload, activeGroup),
+    [tablePayload, activeGroup]
+  );
 
   return (
     <>

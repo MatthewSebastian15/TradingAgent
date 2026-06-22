@@ -630,9 +630,11 @@ def collect_market_data(
         progress_callback,
         "data_collection",
         "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
-        lambda: cached_data
-        if cached_data is not None
-        else _collect_raw_market_data(ticker, trade_date, config, cancel_check=cancel_check),
+        lambda: (
+            cached_data
+            if cached_data is not None
+            else _collect_raw_market_data(ticker, trade_date, config, cancel_check=cancel_check)
+        ),
         cancel_check=cancel_check,
         timings=pipeline_timings,
     )
@@ -644,7 +646,7 @@ def collect_market_data(
         f"{(data.news_context or {}).get('articles_found', 0)} article(s).",
     )
     data_fetched_at = datetime.now(timezone.utc).isoformat()
-    data_quality_json = json.dumps(data.data_quality.model_dump(), indent=2)
+    data_quality_json = json.dumps(data.data_quality.model_dump(), separators=(",", ":"))
     last_close_text = (
         f"{data.last_close_price:.2f}" if data.last_close_price is not None else "Unavailable"
     )

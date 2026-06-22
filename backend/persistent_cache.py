@@ -62,7 +62,9 @@ class SQLiteTTLCache:
             except (TypeError, ValueError):
                 self._conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
                 return None
-            self._conn.execute("UPDATE cache SET last_accessed_at = ? WHERE key = ?", (now, key_hash))
+            self._conn.execute(
+                "UPDATE cache SET last_accessed_at = ? WHERE key = ?", (now, key_hash)
+            )
             return value
 
     def set(self, key: Any, value: Any) -> None:
@@ -71,7 +73,6 @@ class SQLiteTTLCache:
         expires_at = now + self.ttl_seconds
         serialized_value = self._dumps(value)
         with self._write_lock, self._conn:
-            self._conn.execute("BEGIN IMMEDIATE")
             self._conn.execute(
                 """
                     INSERT OR REPLACE INTO cache (key, expires_at, last_accessed_at, value)

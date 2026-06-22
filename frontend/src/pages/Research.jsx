@@ -123,6 +123,7 @@ RangeDot.propTypes = { pct: PropTypes.number };
 // ── Section cards ─────────────────────────────────────────────────────────────
 
 function StockHeader({ data, loading }) {
+  const [descExpanded, setDescExpanded] = useState(false);
   const price = data?.price;
   const prevClose = data?.prev_close;
   const change = price != null && prevClose != null ? price - prevClose : null;
@@ -181,6 +182,24 @@ function StockHeader({ data, loading }) {
                 {[data.exchange, data.currency].filter(Boolean).join(' • ')}
               </div>
             )}
+            {data?.description && (
+              <div className="mt-2">
+                <p
+                  className={`font-mono text-[11px] text-bloomberg-muted leading-relaxed ${descExpanded ? '' : 'line-clamp-3'}`}
+                >
+                  {data.description}
+                </p>
+                {data.description.length > 200 && (
+                  <button
+                    type="button"
+                    onClick={() => setDescExpanded(!descExpanded)}
+                    className="font-mono text-[10px] text-bloomberg-orange mt-1"
+                  >
+                    {descExpanded ? 'Show less' : 'Show more...'}
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -204,30 +223,6 @@ function StockHeader({ data, loading }) {
   );
 }
 StockHeader.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
-
-function StockDescription({ data }) {
-  const [expanded, setExpanded] = useState(false);
-  if (!data?.description) return null;
-  return (
-    <div className="px-4 py-3 border border-bloomberg-border bg-bloomberg-card rounded-sm">
-      <p
-        className={`font-mono text-[11px] text-bloomberg-muted leading-relaxed ${expanded ? '' : 'line-clamp-3'}`}
-      >
-        {data.description}
-      </p>
-      {data.description.length > 200 && (
-        <button
-          type="button"
-          onClick={() => setExpanded(!expanded)}
-          className="font-mono text-[10px] text-bloomberg-orange mt-1"
-        >
-          {expanded ? 'Show less' : 'Show more...'}
-        </button>
-      )}
-    </div>
-  );
-}
-StockDescription.propTypes = { data: PropTypes.object };
 
 function PriceChartCard({ ticker, ohlcvData, ohlcvLoading, activeRange, setActiveRange }) {
   const points = ohlcvData?.points || [];
@@ -724,8 +719,6 @@ export default function Research() {
                 ■ FAILED TO LOAD: {error}
               </div>
             )}
-
-            {data && <StockDescription data={data} />}
 
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 space-y-3">
