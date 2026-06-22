@@ -98,6 +98,18 @@ export async function getMarketOverview(symbols, { signal, forceRefresh = false 
   return parseMarketResponse(response);
 }
 
+export async function getStockOverview(ticker, { signal } = {}) {
+  const response = await fetch(
+    buildApiUrl(`/market/stock-overview?ticker=${encodeURIComponent(ticker)}`),
+    {
+      headers: await buildAuthHeaders(),
+      credentials: 'include',
+      signal,
+    }
+  );
+  return parseMarketResponse(response);
+}
+
 export async function getMarketMovers({ country, exchange, limit }, { signal } = {}) {
   const params = new URLSearchParams({
     country,
