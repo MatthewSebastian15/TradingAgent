@@ -267,9 +267,9 @@ _OVERVIEW_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 def _build_stock_overview(symbol: str) -> dict[str, Any]:
     """Fetch yfinance .info and map to StockOverviewResponse shape."""
-    from tradingagents.yfinance_runtime import yf  # noqa: PLC0415
+    from tradingagents.dataflows.providers.y_finance import _get_ticker_info  # noqa: PLC0415
 
-    info: dict[str, Any] = yf.Ticker(symbol).info or {}
+    info: dict[str, Any] = _get_ticker_info(symbol) or {}
 
     def f(key: str) -> float | None:
         return _as_float(info.get(key))

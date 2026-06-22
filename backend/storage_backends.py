@@ -10,8 +10,8 @@ from persistent_cache import SQLiteTTLCache
 
 
 class TTLCacheBackend(Protocol):
-    # TODO: callers using AnalysisResultCache expect async get(); SQLiteTTLCache.get() is sync.
-    # Enforce one contract before adding a second storage backend.
+    # Sync-only contract by design. Async callers (e.g. AnalysisResultCache) must wrap these
+    # in asyncio.to_thread(), which they do. A second backend must keep get/set/delete/stats sync.
     def get(self, key): ...
 
     def set(self, key, value) -> None: ...

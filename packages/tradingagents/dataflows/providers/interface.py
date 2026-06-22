@@ -844,10 +844,7 @@ def _active_price_cache(config: dict):
         ttl_seconds,
         int(config.get("data_cache_max_entries", config.get("cache_max_entries", 512))),
     )
-    if (
-        _PERSISTENT_PRICE_TOOL_CACHE is None
-        or cache_config != _PERSISTENT_PRICE_TOOL_CACHE_CONFIG
-    ):
+    if _PERSISTENT_PRICE_TOOL_CACHE is None or cache_config != _PERSISTENT_PRICE_TOOL_CACHE_CONFIG:
         _PERSISTENT_PRICE_TOOL_CACHE = SQLiteTTLCache(
             db_path=str(cache_config[0]),
             ttl_seconds=int(cache_config[1]),
@@ -932,13 +929,6 @@ def collect_vendor_values(vendor_results: dict[str, Any], field_name: str) -> di
     return values
 
 
-def collect_vendor_numeric_values(
-    vendor_results: dict[str, Any], field_name: str
-) -> dict[str, float]:
-    """Backward-compatible alias for older tests/imports."""
-    return collect_vendor_values(vendor_results, field_name)
-
-
 def _attach_attempt_metadata(result: Any, attempts: list[VendorAttempt]) -> Any:
     if isinstance(result, dict):
         enriched = dict(result)
@@ -1000,9 +990,13 @@ def route_to_vendor(
 
         if eligible:
             futures_map: dict[Any, str] = {}
-            with ThreadPoolExecutor(max_workers=len(eligible), thread_name_prefix="news-vendor") as pool:
+            with ThreadPoolExecutor(
+                max_workers=len(eligible), thread_name_prefix="news-vendor"
+            ) as pool:
                 for vendor in eligible:
-                    futures_map[pool.submit(_call_vendor, method, vendor, args, kwargs, config)] = vendor
+                    futures_map[pool.submit(_call_vendor, method, vendor, args, kwargs, config)] = (
+                        vendor
+                    )
                 for future in as_completed(futures_map):
                     vendor = futures_map[future]
                     start = time.perf_counter()
@@ -1031,7 +1025,12 @@ def route_to_vendor(
                                 else "empty or unusable response"
                             )
                             errors.append(f"{vendor}: {detail or 'empty or unusable response'}")
-                            record(vendor, "unavailable", detail or "empty or unusable response", duration_ms=duration_ms)
+                            record(
+                                vendor,
+                                "unavailable",
+                                detail or "empty or unusable response",
+                                duration_ms=duration_ms,
+                            )
                             continue
                         status = (
                             "partial"
@@ -1039,8 +1038,16 @@ def route_to_vendor(
                             else "success"
                         )
                         record(vendor, status, duration_ms=duration_ms)
-                        return _attach_attempt_metadata(result, local_attempts) if attach_metadata else result
-                    except (AlphaVantagePermanentError, AlphaVantageRateLimitError, FinnhubRateLimitError) as exc:
+                        return (
+                            _attach_attempt_metadata(result, local_attempts)
+                            if attach_metadata
+                            else result
+                        )
+                    except (
+                        AlphaVantagePermanentError,
+                        AlphaVantageRateLimitError,
+                        FinnhubRateLimitError,
+                    ) as exc:
                         errors.append(f"{vendor}: {sanitize_error(exc)}")
                         record(vendor, "unavailable", sanitize_error(exc))
                     except Exception as exc:

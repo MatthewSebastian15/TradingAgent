@@ -301,7 +301,7 @@ def _safe_local_indicator_field(price_field: DataField) -> DataField:
 
         price_df = _extract_price_dataframe(price_field)
         indicators = calculate_local_indicators(price_df)
-        text = json.dumps(indicators, indent=2, ensure_ascii=False)
+        text = json.dumps(indicators, separators=(",", ":"), ensure_ascii=False)
         if indicators.get("available"):
             return DataField(value=text, status="ok", warning=None)
         reason = str(indicators.get("reason") or "Indicators unavailable")

@@ -68,17 +68,37 @@ Do not invent a different horizon such as "short term", "3-6 months", or "6-12 m
 
 
 def _prompt_json(value: Any, max_chars: int = 9000) -> tuple[str, bool]:
-    text = json.dumps(value or {}, indent=2, ensure_ascii=False, default=str)
+    text = json.dumps(value or {}, separators=(",", ":"), ensure_ascii=False, default=str)
     if len(text) <= max_chars:
         return text, False
-    # Walk back to the last complete top-level key (indent=2 → "\n  \"" prefix)
-    cut = text.rfind('\n  "', 0, max_chars)
-    if cut > 0:
-        body = text[:cut].rstrip()
-        if body.endswith(","):
-            body = body[:-1]
-        return body + "\n}\n[TRUNCATED_FOR_PROMPT]", True
-    return text[:max_chars].rstrip() + "\n[TRUNCATED_FOR_PROMPT]", True
+    # Compact output has no indent boundary to walk back to, so build up complete
+    # top-level keys until the budget is hit — output stays valid JSON, no mid-value cuts.
+    # ponytail: O(keys × size) reserialize per key; fine for small context dicts
+    if isinstance(value, dict):
+        kept: dict[str, Any] = {}
+        for k, v in value.items():
+            candidate = {**kept, k: v}
+            if (
+                len(json.dumps(candidate, separators=(",", ":"), ensure_ascii=False, default=str))
+                > max_chars
+            ):
+                break
+            kept = candidate
+        body = json.dumps(kept, separators=(",", ":"), ensure_ascii=False, default=str)
+        return body + "[TRUNCATED_FOR_PROMPT]", True
+    return text[:max_chars].rstrip() + "[TRUNCATED_FOR_PROMPT]", True
+
+
+def _data_quality_with_truncation(data: CollectedData, field: str) -> str:
+    """Flag a truncated context field on the data-quality dict, serialized once (compact).
+
+    Reads the dict straight from ``data.data_quality`` instead of parsing the
+    pre-serialized JSON string, avoiding a json.loads → json.dumps round-trip.
+    """
+    dq = data.data_quality.model_dump() if getattr(data, "data_quality", None) else {}
+    dq["context_truncated"] = True
+    dq["truncated_fields"] = dq.get("truncated_fields", []) + [field]
+    return json.dumps(dq, separators=(",", ":"))
 
 
 def _get_context(data: CollectedData, key: str) -> dict[str, Any]:
@@ -129,10 +149,7 @@ def market_analyst_prompt(
     market_context, market_truncated = _prompt_json(_get_context(data, "market"), max_chars=9000)
     safety_context, _ = _prompt_json(_get_safety_context(data), max_chars=5000)
     if market_truncated:
-        quality_dict = json.loads(data_quality_json) if data_quality_json else {}
-        quality_dict["context_truncated"] = True
-        quality_dict["truncated_fields"] = quality_dict.get("truncated_fields", []) + ["market"]
-        data_quality_json = json.dumps(quality_dict)
+        data_quality_json = _data_quality_with_truncation(data, "market")
     return f"""
 [STATIC ROLE]
 You are the Market Analyst.
@@ -170,10 +187,7 @@ def news_social_prompt(
     news_context, news_truncated = _prompt_json(_get_context(data, "news_social"), max_chars=8000)
     safety_context, _ = _prompt_json(_get_safety_context(data), max_chars=5000)
     if news_truncated:
-        quality_dict = json.loads(data_quality_json) if data_quality_json else {}
-        quality_dict["context_truncated"] = True
-        quality_dict["truncated_fields"] = quality_dict.get("truncated_fields", []) + ["news_social"]
-        data_quality_json = json.dumps(quality_dict)
+        data_quality_json = _data_quality_with_truncation(data, "news_social")
     return f"""
 [STATIC ROLE]
 You are the combined News and Social Sentiment Analyst.
@@ -213,13 +227,12 @@ def fundamentals_prompt(
     data_quality_json: str,
     time_horizon_text: str,
 ) -> str:
-    fundamentals_context, fundamentals_truncated = _prompt_json(_get_context(data, "fundamentals"), max_chars=10000)
+    fundamentals_context, fundamentals_truncated = _prompt_json(
+        _get_context(data, "fundamentals"), max_chars=10000
+    )
     safety_context, _ = _prompt_json(_get_safety_context(data), max_chars=5000)
     if fundamentals_truncated:
-        quality_dict = json.loads(data_quality_json) if data_quality_json else {}
-        quality_dict["context_truncated"] = True
-        quality_dict["truncated_fields"] = quality_dict.get("truncated_fields", []) + ["fundamentals"]
-        data_quality_json = json.dumps(quality_dict)
+        data_quality_json = _data_quality_with_truncation(data, "fundamentals")
     return f"""
 [STATIC ROLE]
 You are the Fundamentals Analyst.
