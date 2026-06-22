@@ -101,6 +101,31 @@ No `console.log` in production paths found. No lists exceeding 50 items rendered
 
 ---
 
+### Completed Fixes
+
+**Priority 1 — #9** `pipeline_balanced_prompts.py:73`
+- [x] `_prompt_json()` truncates at last complete top-level key boundary (`rfind('\n  "')`) instead of arbitrary char cut
+- [x] Trailing comma stripped and `}` appended before truncation marker — output is valid JSON
+
+**Priority 2 — #5** `persistent_cache.py:102`
+- [x] `self._conn` opened once in `__init__` with `check_same_thread=False`
+- [x] `_connect()` method removed
+- [x] All `get()`, `set()`, `delete()`, `stats()`, `_ensure_schema()` use `self._conn` via `with self._write_lock, self._conn:`
+- [x] `stats()` now holds `_write_lock` for thread safety
+
+**Priority 3 — #2** `y_finance.py:641, 788`
+- [x] `functools` imported
+- [x] `_get_ticker_info(symbol)` added with `@functools.lru_cache(maxsize=32)` — fetches `.info` once per ticker
+- [x] `get_fundamentals()` uses `_get_ticker_info(ticker)` (redundant `ticker_obj` line removed)
+- [x] `get_company_profile()` uses `_get_ticker_info(ticker)` (keeps `ticker_obj` for `_load_optional_ticker_table`)
+
+**Priority 4 — #12** `routes/market.py:65–68`
+- [x] `_MAX_CACHE_ENTRIES = 500` constant added
+- [x] `_cache_set(cache, key, value)` helper added — FIFO eviction via `next(iter(cache))`
+- [x] All 5 write sites converted: `_OVERVIEW_CACHE`, `_OHLCV_CACHE`, `_SEARCH_CACHE`, `_SPARKLINE_CACHE`, `_QUOTE_CACHE`
+
+---
+
 ## Files Scanned
 
 ```

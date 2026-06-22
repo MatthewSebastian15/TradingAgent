@@ -40,27 +40,29 @@ class SQLiteTTLCache:
         self.max_entries = max_entries
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._write_lock = _write_lock_for_path(self.db_path)
+        self._conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
+        self._conn.execute("PRAGMA busy_timeout = 30000")
         self._ensure_schema()
 
     def get(self, key: Any) -> Any | None:
         key_hash = self._hash_key(key)
         now = time.time()
-        with self._write_lock, self._connect() as conn:
-            row = conn.execute(
+        with self._write_lock, self._conn:
+            row = self._conn.execute(
                 "SELECT expires_at, value FROM cache WHERE key = ?", (key_hash,)
             ).fetchone()
             if row is None:
                 return None
             expires_at, serialized_value = row
             if expires_at <= now:
-                conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
+                self._conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
                 return None
             try:
                 value = self._loads(serialized_value)
             except (TypeError, ValueError):
-                conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
+                self._conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
                 return None
-            conn.execute("UPDATE cache SET last_accessed_at = ? WHERE key = ?", (now, key_hash))
+            self._conn.execute("UPDATE cache SET last_accessed_at = ? WHERE key = ?", (now, key_hash))
             return value
 
     def set(self, key: Any, value: Any) -> None:
@@ -68,28 +70,28 @@ class SQLiteTTLCache:
         now = time.time()
         expires_at = now + self.ttl_seconds
         serialized_value = self._dumps(value)
-        with self._write_lock, self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
+        with self._write_lock, self._conn:
+            self._conn.execute("BEGIN IMMEDIATE")
+            self._conn.execute(
                 """
                     INSERT OR REPLACE INTO cache (key, expires_at, last_accessed_at, value)
                     VALUES (?, ?, ?, ?)
                     """,
                 (key_hash, expires_at, now, serialized_value),
             )
-            self._evict(conn)
+            self._evict(self._conn)
 
     def delete(self, key: Any) -> None:
         key_hash = self._hash_key(key)
-        with self._write_lock, self._connect() as conn:
-            conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
+        with self._write_lock, self._conn:
+            self._conn.execute("DELETE FROM cache WHERE key = ?", (key_hash,))
 
     def stats(self) -> dict[str, int | str]:
-        with self._connect() as conn:
-            count = conn.execute(
+        with self._write_lock, self._conn:
+            count = self._conn.execute(
                 "SELECT COUNT(*) FROM cache WHERE expires_at > ?", (time.time(),)
             ).fetchone()[0]
-            schema_version = self._get_schema_version(conn)
+            schema_version = self._get_schema_version(self._conn)
         return {
             "backend": "sqlite",
             "path": self.db_path.name,
@@ -99,15 +101,10 @@ class SQLiteTTLCache:
             "schema_version": int(schema_version),
         }
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=30)
-        conn.execute("PRAGMA busy_timeout = 30000")
-        return conn
-
     def _ensure_schema(self) -> None:
-        with self._write_lock, self._connect() as conn:
-            conn.execute("PRAGMA journal_mode = WAL")
-            self._migrate(conn)
+        with self._write_lock, self._conn:
+            self._conn.execute("PRAGMA journal_mode = WAL")
+            self._migrate(self._conn)
 
     def _migrate(self, conn: sqlite3.Connection) -> None:
         version = self._get_schema_version(conn)

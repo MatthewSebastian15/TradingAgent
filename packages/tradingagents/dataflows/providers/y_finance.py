@@ -1,3 +1,4 @@
+import functools
 import logging
 import math
 import os
@@ -128,6 +129,13 @@ def _get_ticker(symbol: str):
         if len(_ticker_cache) > _TICKER_CACHE_MAX_ENTRIES:
             _ticker_cache.popitem(last=False)
         return ticker_obj
+
+
+@functools.lru_cache(maxsize=32)
+def _get_ticker_info(symbol: str) -> dict:
+    """Fetch and cache .info once per ticker to avoid duplicate HTTP round-trips."""
+    ticker_obj = _get_ticker(symbol)
+    return yf_retry(lambda: ticker_obj.info) or {}
 
 
 def _currency_for_symbol(symbol: str) -> str:
@@ -637,8 +645,7 @@ def get_fundamentals(
     """Get company fundamentals overview from yfinance."""
     try:
         ticker = normalize_ticker(ticker)
-        ticker_obj = _get_ticker(ticker)
-        info = yf_retry(lambda: ticker_obj.info)
+        info = _get_ticker_info(ticker)
 
         if not info:
             return f"No fundamentals data found for symbol '{ticker}'"
@@ -785,7 +792,7 @@ def get_company_profile(
     try:
         ticker = normalize_ticker(ticker)
         ticker_obj = _get_ticker(ticker)
-        info = yf_retry(lambda: ticker_obj.info)
+        info = _get_ticker_info(ticker)
 
         if not info:
             return {

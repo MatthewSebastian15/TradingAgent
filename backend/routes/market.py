@@ -69,6 +69,14 @@ _SPARKLINE_CACHE: dict[tuple[tuple[str, ...], str], tuple[float, dict[str, list[
 _OHLCV_RANGE_DAYS = {"1W": 7, "1M": 31, "3M": 92, "6M": 183, "1Y": 365}
 _OHLCV_RANGE_OPTIONS = {"YTD", *_OHLCV_RANGE_DAYS.keys()}
 _MOVER_LIMITS = {5, 10, 15, 20}
+_MAX_CACHE_ENTRIES = 500
+
+
+def _cache_set(cache: dict, key, value) -> None:
+    # ponytail: FIFO eviction; upgrade to LRU OrderedDict if hit rate matters
+    if len(cache) >= _MAX_CACHE_ENTRIES:
+        cache.pop(next(iter(cache)))
+    cache[key] = value
 
 
 _IDX_AUTO_SUFFIX_SYMBOLS = {
@@ -383,7 +391,7 @@ async def get_stock_overview_data(
                 return payload
 
     payload = await asyncio.to_thread(_build_stock_overview, normalized)
-    _OVERVIEW_CACHE[cache_key] = (monotonic(), payload)
+    _cache_set(_OVERVIEW_CACHE, cache_key, (monotonic(), payload))
     return payload
 
 
@@ -555,15 +563,19 @@ def _cache_ohlcv_rows(
     interval: str,
     rows: list[dict[str, Any]],
 ) -> None:
-    _OHLCV_CACHE[_ohlcv_raw_cache_key(symbol, end_dt, interval)] = (
-        monotonic(),
-        {
-            "ticker": symbol,
-            "interval": interval,
-            "start_date": start_dt.strftime("%Y-%m-%d"),
-            "end_date": end_dt.strftime("%Y-%m-%d"),
-            "rows": [dict(row) for row in rows],
-        },
+    _cache_set(
+        _OHLCV_CACHE,
+        _ohlcv_raw_cache_key(symbol, end_dt, interval),
+        (
+            monotonic(),
+            {
+                "ticker": symbol,
+                "interval": interval,
+                "start_date": start_dt.strftime("%Y-%m-%d"),
+                "end_date": end_dt.strftime("%Y-%m-%d"),
+                "rows": [dict(row) for row in rows],
+            },
+        ),
     )
 
 
@@ -888,9 +900,10 @@ def _refresh_search_cache(
 ) -> None:
     remote_results = _search_tickers(query, limit)
     results = _merge_search_results(local_results, remote_results, limit=limit)
-    _SEARCH_CACHE[(query.lower(), limit, market, asset_type)] = (
-        monotonic(),
-        _clone_search_results(results),
+    _cache_set(
+        _SEARCH_CACHE,
+        (query.lower(), limit, market, asset_type),
+        (monotonic(), _clone_search_results(results)),
     )
 
 
@@ -1101,7 +1114,7 @@ async def get_market_sparklines(
             return {"sparklines": _clone_sparklines(cached_sparklines)}
 
         sparklines = await _fetch_sparklines(capped, normalized_range)
-        _SPARKLINE_CACHE[cache_key] = (now, _clone_sparklines(sparklines))
+        _cache_set(_SPARKLINE_CACHE, cache_key, (now, _clone_sparklines(sparklines)))
 
     return {"sparklines": sparklines}
 
@@ -1150,5 +1163,5 @@ async def get_market_quotes(
     finally:
         _QUOTES_INFLIGHT.pop(cache_key, None)
 
-    _QUOTE_CACHE[cache_key] = (monotonic(), _clone_quotes(quotes))
+    _cache_set(_QUOTE_CACHE, cache_key, (monotonic(), _clone_quotes(quotes)))
     return {"quotes": quotes}
