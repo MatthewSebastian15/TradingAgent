@@ -22,6 +22,13 @@ DECISION_ALLOWED_BUCKETS = {
     "full_news",
 }
 
+# Excluded reasons that still guarantee a company match (the score gate runs only after the
+# match + category gates pass). Safe to promote when the strict feed would otherwise be blank.
+FALLBACK_DECISION_REASONS = {
+    "score_below_decision_threshold",
+    "rss_score_below_decision_threshold",
+}
+
 PROVIDER_TRUST_SCORE = {
     "google_news_light": 5,
     "marketaux": 4,
@@ -61,6 +68,22 @@ def split_ai_analysis_news(
         else:
             article.bucket = "discard" if not article.bucket else article.bucket
             excluded.append({"article": article, "reason": verdict["reason"]})
+
+    # Strict thresholds can empty the decision feed even when ticker-matched news was
+    # retrieved, blanking the decision-maker news. Promote the best company-matched
+    # near-misses so the section stays populated whenever relevant news exists.
+    if not decision:
+        promoted = [item for item in excluded if item["reason"] in FALLBACK_DECISION_REASONS]
+        if promoted:
+            for item in promoted:
+                article = item["article"]
+                article.bucket = article.bucket if article.bucket != "discard" else "full_news"
+                article.market_context_only = False
+                article.decision_filter_reason = "fallback_below_threshold"
+                decision.append(article)
+            excluded = [
+                item for item in excluded if item["reason"] not in FALLBACK_DECISION_REASONS
+            ]
 
     decision = sorted(decision, key=_rank_decision_article, reverse=True)[
         : max(1, int(prompt_limit))
