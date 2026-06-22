@@ -69,9 +69,16 @@ Do not invent a different horizon such as "short term", "3-6 months", or "6-12 m
 
 def _prompt_json(value: Any, max_chars: int = 9000) -> tuple[str, bool]:
     text = json.dumps(value or {}, indent=2, ensure_ascii=False, default=str)
-    if len(text) > max_chars:
-        return text[:max_chars].rstrip() + "\n[TRUNCATED_FOR_PROMPT]", True
-    return text, False
+    if len(text) <= max_chars:
+        return text, False
+    # Walk back to the last complete top-level key (indent=2 → "\n  \"" prefix)
+    cut = text.rfind('\n  "', 0, max_chars)
+    if cut > 0:
+        body = text[:cut].rstrip()
+        if body.endswith(","):
+            body = body[:-1]
+        return body + "\n}\n[TRUNCATED_FOR_PROMPT]", True
+    return text[:max_chars].rstrip() + "\n[TRUNCATED_FOR_PROMPT]", True
 
 
 def _get_context(data: CollectedData, key: str) -> dict[str, Any]:
