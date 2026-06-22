@@ -23,6 +23,7 @@ import {
   validateAnalysisInput,
 } from '../domain/analysisContract';
 import { useAnalysisJob } from '../hooks/useAnalysisJob';
+import { useWatchlistStore } from '../hooks/useWatchlistStore';
 
 const TERMINAL_INPUT_CLASS =
   'h-8 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-[11px] tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
@@ -105,6 +106,78 @@ SelectField.propTypes = {
   value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
 };
 
+function WatchlistItems({ items, activeTicker, onSelect, disabled }) {
+  if (items.length === 0) {
+    return (
+      <div className="py-2 text-center">
+        <span className="font-mono text-[9px] tracking-[0.12em] text-bloomberg-muted">
+          No tickers — add from Watchlist tab.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="-mx-2 -mb-2 flex flex-col">
+      {items.map((item) => {
+        const isActive = activeTicker && activeTicker.toUpperCase() === item.symbol;
+        return (
+          <button
+            key={item.symbol}
+            type="button"
+            disabled={disabled}
+            onClick={() => onSelect(item)}
+            className={`group flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+              isActive
+                ? 'bg-bloomberg-orange'
+                : 'hover:bg-bloomberg-orange/10 focus-visible:bg-bloomberg-orange/10 focus-visible:outline-none'
+            }`}
+          >
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <div
+                className={`truncate font-mono text-[10px] font-bold uppercase tracking-wider ${
+                  isActive
+                    ? 'text-black'
+                    : 'text-bloomberg-white group-hover:text-bloomberg-orange'
+                }`}
+              >
+                {item.symbol}
+              </div>
+              {item.name && item.name !== item.symbol && (
+                <div
+                  className={`truncate font-mono text-[8px] leading-tight ${
+                    isActive ? 'text-black/70' : 'text-bloomberg-muted'
+                  }`}
+                >
+                  {item.name}
+                </div>
+              )}
+            </div>
+            {isActive && (
+              <span
+                className={`shrink-0 font-mono text-[8px] uppercase tracking-wider ${
+                  disabled ? 'text-black/60' : 'text-black/80'
+                }`}
+              >
+                {disabled ? 'RUNNING' : 'ACTIVE'}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+WatchlistItems.propTypes = {
+  items: PropTypes.arrayOf(
+    PropTypes.shape({ symbol: PropTypes.string.isRequired, name: PropTypes.string })
+  ).isRequired,
+  activeTicker: PropTypes.string,
+  onSelect: PropTypes.func.isRequired,
+  disabled: PropTypes.bool,
+};
+
 export default function StockForm({
   onResult,
   onLoading,
@@ -130,6 +203,8 @@ export default function StockForm({
     onStatus,
     onAgentProgress,
   });
+  const { activeGroup } = useWatchlistStore();
+  const watchlistItems = activeGroup?.items || [];
 
   useEffect(() => {
     if (!selectedResult || selectedResult.error || running) return;
@@ -167,6 +242,45 @@ export default function StockForm({
     );
     setError('');
   }, [running, selectedResult]);
+
+  async function handleWatchlistTicker(item) {
+    if (running) return;
+    const newTicker = item.symbol;
+    setTicker(newTicker);
+    setError('');
+    const apiDate = displayToApiDate(date);
+    if (!apiDate) {
+      setError('Date must be DD-MM-YYYY');
+      onResult({ error: 'Date must be DD-MM-YYYY' });
+      return;
+    }
+    const validationError = validateAnalysisInput({
+      ticker: newTicker,
+      date: apiDate,
+      timeHorizonMonths,
+      rounds,
+      analysisDepth,
+      responseDetail,
+    });
+    if (validationError) {
+      setError(validationError);
+      onResult({ error: validationError });
+      return;
+    }
+    await startAnalysis(
+      buildAnalysisPayload({
+        ticker: newTicker,
+        date: apiDate,
+        timeHorizonMonths,
+        rounds,
+        analysisDepth,
+        responseDetail,
+        hasExistingPosition,
+        positionQuantity: hasExistingPosition ? positionQuantity || null : null,
+        averageEntryPrice: hasExistingPosition ? averageEntryPrice || null : null,
+      })
+    );
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -235,6 +349,15 @@ export default function StockForm({
                 }}
               />
             </div>
+          </ConfigSection>
+
+          <ConfigSection title="Watchlist">
+            <WatchlistItems
+              items={watchlistItems}
+              activeTicker={ticker}
+              onSelect={handleWatchlistTicker}
+              disabled={running}
+            />
           </ConfigSection>
 
           <ConfigSection title="Analysis Horizon">

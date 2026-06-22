@@ -100,6 +100,7 @@ export function writeWatchlistState(state) {
   if (typeof window !== 'undefined') {
     try {
       window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(normalized));
+      window.dispatchEvent(new CustomEvent('ta:watchlist-updated'));
     } catch {
       // Keep the in-memory React state usable when browser storage is blocked.
     }
