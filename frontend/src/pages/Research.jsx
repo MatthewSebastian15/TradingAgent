@@ -666,6 +666,8 @@ RiskAssessmentCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool
 
 export default function Research() {
   const [activeTicker, setActiveTicker] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [autoCollapsed, setAutoCollapsed] = useState(false);
   const [activeRange, setActiveRange] = useState('1Y');
   const [ohlcvData, setOhlcvData] = useState(null);
   const [ohlcvLoading, setOhlcvLoading] = useState(false);
@@ -678,6 +680,14 @@ export default function Research() {
     saveRecentTicker({ symbol: sym });
     setActiveTicker(sym);
   }, []);
+
+  // Auto-collapse sidebar once, the first time research content loads.
+  useEffect(() => {
+    if (activeTicker && !autoCollapsed) {
+      setCollapsed(true);
+      setAutoCollapsed(true);
+    }
+  }, [activeTicker, autoCollapsed]);
 
   useEffect(() => {
     if (!activeTicker) return;
@@ -721,8 +731,15 @@ export default function Research() {
           loading={loading}
         />
       </div>
-      <div className="flex">
-        <ResearchSidebar onSelect={handleSelect} />
+      <div className="flex flex-row">
+        <div className="sticky top-[60px] h-[calc(100vh-60px)] shrink-0 self-start">
+          <ResearchSidebar
+            activeTicker={activeTicker}
+            collapsed={collapsed}
+            onToggle={() => setCollapsed((c) => !c)}
+            onSelect={handleSelect}
+          />
+        </div>
         <main className="flex-1 px-4 py-4 space-y-3">
         {!activeTicker && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
