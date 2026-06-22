@@ -63,6 +63,17 @@ export function useWatchlistStore() {
     writeWatchlistState(state);
   }, [state]);
 
+  useEffect(() => {
+    function onWatchlistUpdated() {
+      setState((prev) => {
+        const next = readWatchlistState();
+        return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+      });
+    }
+    window.addEventListener('ta:watchlist-updated', onWatchlistUpdated);
+    return () => window.removeEventListener('ta:watchlist-updated', onWatchlistUpdated);
+  }, []);
+
   const groups = state.groups;
   const activeGroupId = state.activeGroupId;
   const activeGroup = useMemo(
