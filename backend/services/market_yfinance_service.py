@@ -226,17 +226,13 @@ def _with_overview_cache_metadata(
     }
 
 
-def get_overview_data(
-    symbols: list[str], *, force_refresh: bool = False
-) -> dict[str, Any]:
+def get_overview_data(symbols: list[str], *, force_refresh: bool = False) -> dict[str, Any]:
     normalized_symbols = dedupe_symbols(symbols)
     symbols_hash = sha256("|".join(normalized_symbols).encode("utf-8")).hexdigest()[:16]
     cache_key = f"market:overview:{symbols_hash}"
     cached = market_cache.get(cache_key)
     if cached is not None and not force_refresh:
-        return _with_overview_cache_metadata(
-            cached, hit=True, force_refresh=False
-        )
+        return _with_overview_cache_metadata(cached, hit=True, force_refresh=False)
 
     items = _build_overview_items(normalized_symbols)
     ok_items = [item for item in items if item.get("status") == "ok"]
@@ -249,9 +245,7 @@ def get_overview_data(
         payload["message"] = "No market data available from yfinance"
 
     cached_payload = market_cache.set(cache_key, payload, OVERVIEW_TTL_SECONDS)
-    return _with_overview_cache_metadata(
-        cached_payload, hit=False, force_refresh=force_refresh
-    )
+    return _with_overview_cache_metadata(cached_payload, hit=False, force_refresh=force_refresh)
 
 
 def validate_symbol(symbol: str) -> dict[str, Any]:

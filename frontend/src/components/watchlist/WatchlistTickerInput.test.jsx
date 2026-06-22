@@ -94,6 +94,9 @@ describe('WatchlistTickerInput', () => {
       await Promise.resolve();
     });
 
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/market/search?'), expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/market/search?'),
+      expect.any(Object)
+    );
   });
 });

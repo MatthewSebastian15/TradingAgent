@@ -66,14 +66,18 @@ export function useTickerNewsStream({
       });
 
       try {
-        const response = await fetch(buildApiUrl(`/news/${encodeURIComponent(ticker)}/stream?${params}`), {
-          method: 'GET',
-          headers: await buildAuthHeaders(),
-          credentials: 'include',
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          buildApiUrl(`/news/${encodeURIComponent(ticker)}/stream?${params}`),
+          {
+            method: 'GET',
+            headers: await buildAuthHeaders(),
+            credentials: 'include',
+            signal: controller.signal,
+          }
+        );
 
-        if (!response.ok || !response.body) throw new Error(`Ticker news stream failed: HTTP ${response.status}`);
+        if (!response.ok || !response.body)
+          throw new Error(`Ticker news stream failed: HTTP ${response.status}`);
 
         setStreamStatus('connected');
         reconnectDelay = RECONNECT_MIN_MS;

@@ -9,13 +9,13 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
+from tradingagents.risk.thesis_monitor import build_thesis_monitor
 
 from analysis_cache import AnalysisCacheKey
 from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
 from routes.event_contract import PipelineAgent
 from routes.validation import AnalysisRequest
 from services.report_disclaimer import REPORT_DISCLAIMER
-from tradingagents.risk.thesis_monitor import build_thesis_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -785,8 +785,12 @@ def _build_common_result_fields(
         "agents_skipped": final_state.get("agents_skipped", []) or [],
         "analysis_incomplete": bool(final_state.get("budget_exhausted", False)),
         "llm_budget": {
-            "used": final_state.get("llm_calls_used") or final_state.get("balanced_gemini_calls_used") or 0,
-            "limit": final_state.get("llm_call_budget") or final_state.get("balanced_gemini_request_budget") or 0,
+            "used": final_state.get("llm_calls_used")
+            or final_state.get("balanced_gemini_calls_used")
+            or 0,
+            "limit": final_state.get("llm_call_budget")
+            or final_state.get("balanced_gemini_request_budget")
+            or 0,
             "exhausted": bool(final_state.get("budget_exhausted", False)),
         },
         "is_partial": bool(final_state.get("is_partial", False)),

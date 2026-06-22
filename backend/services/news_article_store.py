@@ -5,7 +5,6 @@ import json
 import re
 import sqlite3
 import threading
-import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -148,9 +147,7 @@ class NewsArticleStore:
             last_updated_row = conn.execute("SELECT MAX(updated_at) FROM news_articles").fetchone()
 
         last_updated = (
-            str(last_updated_row[0])
-            if last_updated_row and last_updated_row[0]
-            else None
+            str(last_updated_row[0]) if last_updated_row and last_updated_row[0] else None
         )
         age_seconds = _age_seconds(last_updated) if last_updated else None
         articles = []

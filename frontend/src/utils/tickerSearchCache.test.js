@@ -39,9 +39,7 @@ describe('tickerSearchCache', () => {
   });
 
   it('normalizes query key case-insensitively', () => {
-    expect(normalizeTickerSearchCacheKey('BB', 10)).toBe(
-      normalizeTickerSearchCacheKey('bb', 10)
-    );
+    expect(normalizeTickerSearchCacheKey('BB', 10)).toBe(normalizeTickerSearchCacheKey('bb', 10));
   });
 
   it('survives localStorage read/write error', () => {

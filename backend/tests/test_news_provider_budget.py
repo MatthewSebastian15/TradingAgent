@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+from tradingagents.dataflows.news.news_provider_base import ProviderFetchResult
+
 from services.news_provider_budget import (
     clear_provider_budget_for_tests,
     is_provider_available,
@@ -11,7 +13,6 @@ from services.news_provider_budget import (
     provider_status,
     result_has_429,
 )
-from tradingagents.dataflows.news.news_provider_base import ProviderFetchResult
 
 
 def setup_function():

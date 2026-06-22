@@ -44,7 +44,10 @@ class NewsDataProvider(BaseNewsProvider):
         query_attempts = [
             ("symbol", {**common, "symbol": ticker_profile["short_ticker"]}),
             ("company_name_in_title", {**common, "qInTitle": ticker_profile["company_name"]}),
-            *[(f"smart_query_{index}", {**common, "q": query}) for index, query in enumerate(smart_queries, start=1)],
+            *[
+                (f"smart_query_{index}", {**common, "q": query})
+                for index, query in enumerate(smart_queries, start=1)
+            ],
             ("alias_query", {**common, "q": build_newsdata_alias_query(ticker_profile["aliases"])}),
         ]
         attempts: list[dict[str, Any]] = []

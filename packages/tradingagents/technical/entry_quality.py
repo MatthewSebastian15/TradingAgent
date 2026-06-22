@@ -253,7 +253,9 @@ def calculate_entry_quality(
             entry_price, stop_loss, take_profit, risk_reward_ratio
         ),
         "volume": _volume_component(price_payload, technical_with_meta),
-        "support_resistance": _support_resistance_component(direction, current_price, technical_with_meta),
+        "support_resistance": _support_resistance_component(
+            direction, current_price, technical_with_meta
+        ),
         "volatility": _volatility_component(current_price, technical_with_meta),
     }
     if components["risk_reward"] is None:

@@ -45,7 +45,9 @@ describe('TickerNewsList', () => {
     const contextSection = screen.getByText('Market Context').closest('.rounded-md');
 
     expect(within(companySection).getByText(/No company-specific news/i)).toBeInTheDocument();
-    expect(within(companySection).queryByText('IHSG weakens on Fed concern')).not.toBeInTheDocument();
+    expect(
+      within(companySection).queryByText('IHSG weakens on Fed concern')
+    ).not.toBeInTheDocument();
     expect(within(contextSection).getByText('IHSG weakens on Fed concern')).toBeInTheDocument();
     expect(screen.getByText('Market Context, not direct company evidence')).toBeInTheDocument();
   });
@@ -77,7 +79,9 @@ describe('TickerNewsList', () => {
     render(<TickerNewsList decisionCompanyNews={[companyArticle]} debug />);
 
     expect(screen.getByText(/Score 88/i)).toBeInTheDocument();
-    expect(screen.getByText(/Reason: company_name_in_title, market_moving_keyword/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Reason: company_name_in_title, market_moving_keyword/i)
+    ).toBeInTheDocument();
     expect(screen.getByText(/Matched: Bank Central Asia, BBCA/i)).toBeInTheDocument();
     expect(screen.getByText(/entity_match: company_exact/i)).toBeInTheDocument();
   });

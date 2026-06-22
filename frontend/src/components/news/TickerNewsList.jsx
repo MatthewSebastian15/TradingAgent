@@ -22,7 +22,9 @@ function articleUrl(article) {
 }
 
 function articleKey(article, index) {
-  return readable(article?.content_hash || article?.url || article?.title) || `ticker-news-${index}`;
+  return (
+    readable(article?.content_hash || article?.url || article?.title) || `ticker-news-${index}`
+  );
 }
 
 function metaValue(article) {
@@ -30,7 +32,9 @@ function metaValue(article) {
     readable(article?.provider),
     readable(article?.source || article?.source_domain),
     readable(article?.published_at),
-    article?.relevance_score !== undefined ? `Score ${Math.round(Number(article.relevance_score) || 0)}` : '',
+    article?.relevance_score !== undefined
+      ? `Score ${Math.round(Number(article.relevance_score) || 0)}`
+      : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -54,10 +58,18 @@ function StrictFilterSummary({ strictNewsFilter }) {
 
   return (
     <div className="flex flex-wrap gap-2 font-mono text-xs text-muted-foreground">
-      <Badge variant="outline" className="rounded-md border-border">{decision} used for AI</Badge>
-      <Badge variant="outline" className="rounded-md border-border">{context} market context</Badge>
-      <Badge variant="outline" className="rounded-md border-border">{excluded} excluded</Badge>
-      <Badge variant="outline" className="rounded-md border-border">RSS threshold {rssThreshold}</Badge>
+      <Badge variant="outline" className="rounded-md border-border">
+        {decision} used for AI
+      </Badge>
+      <Badge variant="outline" className="rounded-md border-border">
+        {context} market context
+      </Badge>
+      <Badge variant="outline" className="rounded-md border-border">
+        {excluded} excluded
+      </Badge>
+      <Badge variant="outline" className="rounded-md border-border">
+        RSS threshold {rssThreshold}
+      </Badge>
     </div>
   );
 }
@@ -67,7 +79,8 @@ StrictFilterSummary.propTypes = {
 };
 
 function ProviderStatus({ providerStatus }) {
-  const rows = providerStatus && typeof providerStatus === 'object' ? Object.entries(providerStatus) : [];
+  const rows =
+    providerStatus && typeof providerStatus === 'object' ? Object.entries(providerStatus) : [];
   if (!rows.length) return null;
 
   return (
@@ -111,8 +124,10 @@ function ArticleCard({ article, debug = false }) {
         {reason && <p className="font-mono text-xs text-bloomberg-muted">{reason}</p>}
         {debug && (
           <p className="font-mono text-xs text-bloomberg-muted">
-            entity_match: {readable(article?.entity_match) || 'none'} · bucket: {readable(article?.bucket) || 'none'} · category:{' '}
-            {readable(article?.relevance_category) || 'none'} · filter: {readable(article?.decision_filter_reason) || 'none'}
+            entity_match: {readable(article?.entity_match) || 'none'} · bucket:{' '}
+            {readable(article?.bucket) || 'none'} · category:{' '}
+            {readable(article?.relevance_category) || 'none'} · filter:{' '}
+            {readable(article?.decision_filter_reason) || 'none'}
           </p>
         )}
       </CardContent>
@@ -134,9 +149,13 @@ function NewsSection({ title, label, items, emptyText, debug }) {
       </CardHeader>
       <CardContent className="space-y-3 p-4 pt-0">
         {items.length ? (
-          items.map((article, index) => <ArticleCard key={articleKey(article, index)} article={article} debug={debug} />)
+          items.map((article, index) => (
+            <ArticleCard key={articleKey(article, index)} article={article} debug={debug} />
+          ))
         ) : (
-          <NoticeBox title="NO NEWS" tone="amber">{emptyText}</NoticeBox>
+          <NoticeBox title="NO NEWS" tone="amber">
+            {emptyText}
+          </NoticeBox>
         )}
       </CardContent>
     </Card>

@@ -116,7 +116,10 @@ function makeStrictNewsResult({
 } = {}) {
   const decisionCompanyNews = Array.from({ length: companyCount }, (_, index) =>
     makeArticle('Decision Company', index + 1, {
-      title: index === 0 ? 'Bank Central Asia Reports Profit Growth' : `Company Overflow Article ${index + 1}`,
+      title:
+        index === 0
+          ? 'Bank Central Asia Reports Profit Growth'
+          : `Company Overflow Article ${index + 1}`,
       provider: 'marketaux',
       market_context_only: false,
       summary:
@@ -128,7 +131,10 @@ function makeStrictNewsResult({
   );
   const marketContextNews = Array.from({ length: marketContextCount }, (_, index) =>
     makeArticle('Market Context', index + 1, {
-      title: index === 0 ? 'Asian Markets Rise Before Fed Decision' : `Market Context Overflow Article ${index + 1}`,
+      title:
+        index === 0
+          ? 'Asian Markets Rise Before Fed Decision'
+          : `Market Context Overflow Article ${index + 1}`,
       provider: 'rss_context',
       market_context_only: true,
       summary:

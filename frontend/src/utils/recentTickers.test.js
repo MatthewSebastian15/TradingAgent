@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearRecentTickers, readRecentTickers, removeRecentTicker, saveRecentTicker } from './recentTickers';
+import {
+  clearRecentTickers,
+  readRecentTickers,
+  removeRecentTicker,
+  saveRecentTicker,
+} from './recentTickers';
 
 describe('recentTickers', () => {
   beforeEach(() => {
@@ -9,7 +14,13 @@ describe('recentTickers', () => {
   });
 
   it('saves selected ticker', () => {
-    saveRecentTicker({ symbol: 'bbca.jk', name: 'Bank Central Asia', exchange: 'IDX', type: 'EQUITY', market: 'ID' });
+    saveRecentTicker({
+      symbol: 'bbca.jk',
+      name: 'Bank Central Asia',
+      exchange: 'IDX',
+      type: 'EQUITY',
+      market: 'ID',
+    });
 
     expect(readRecentTickers()[0]).toMatchObject({ symbol: 'BBCA.JK', source: 'recent' });
   });

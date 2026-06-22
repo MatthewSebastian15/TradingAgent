@@ -16,7 +16,9 @@ def test_market_search_returns_meta_object(client):
     assert isinstance(payload["meta"]["latency_ms"], int)
 
 
-def test_market_search_returns_local_result_without_yfinance_if_local_result_enough(client, monkeypatch):
+def test_market_search_returns_local_result_without_yfinance_if_local_result_enough(
+    client, monkeypatch
+):
     market_routes._SEARCH_CACHE.clear()
 
     def fail_search(query: str, limit: int):

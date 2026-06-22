@@ -185,6 +185,4 @@ describe('ExportReportButtons', () => {
     expect(fetchMock.mock.calls[2][1].method).toBe('POST');
     expect(JSON.parse(fetchMock.mock.calls[2][1].body).ticker).toBe(TEST_RESPONSE.ticker);
   });
-
-
 });

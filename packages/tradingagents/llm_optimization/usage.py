@@ -10,11 +10,13 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _usage_lock = threading.Lock()
-_daily_usage: dict[str, dict] = defaultdict(lambda: {
-    "calls": 0,
-    "estimated_tokens": 0,
-    "total_latency_ms": 0.0,
-})
+_daily_usage: dict[str, dict] = defaultdict(
+    lambda: {
+        "calls": 0,
+        "estimated_tokens": 0,
+        "total_latency_ms": 0.0,
+    }
+)
 
 
 @dataclass
@@ -152,9 +154,7 @@ def get_usage_summary() -> dict:
                 "calls": sum(v["calls"] for v in _daily_usage.values()),
                 "estimated_tokens": sum(v["estimated_tokens"] for v in _daily_usage.values()),
             },
-            "free_tier_remaining": max(0, 1500 - sum(
-                v["calls"] for v in _daily_usage.values()
-            )),
+            "free_tier_remaining": max(0, 1500 - sum(v["calls"] for v in _daily_usage.values())),
         }
 
 

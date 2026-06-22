@@ -425,9 +425,7 @@ def test_job_read_endpoints_do_not_consume_request_limit(client, monkeypatch):
     )
     monkeypatch.setattr(
         "routes.analysis.analysis_read_policy",
-        lambda: RateLimitPolicy(
-            scope="job-events-read-test", max_per_minute=10, max_concurrent=2
-        ),
+        lambda: RateLimitPolicy(scope="job-events-read-test", max_per_minute=10, max_concurrent=2),
     )
 
     headers = {"x-api-key": "same-job-events-key"}
@@ -453,15 +451,11 @@ def test_job_read_endpoints_do_not_consume_request_limit(client, monkeypatch):
 def test_analysis_history_reads_do_not_consume_request_limit(client, monkeypatch):
     monkeypatch.setattr(
         "routes.analysis_history.request_policy",
-        lambda: RateLimitPolicy(
-            scope="history-request-test", max_per_minute=1, max_concurrent=1
-        ),
+        lambda: RateLimitPolicy(scope="history-request-test", max_per_minute=1, max_concurrent=1),
     )
     monkeypatch.setattr(
         "routes.analysis_history.analysis_read_policy",
-        lambda: RateLimitPolicy(
-            scope="history-read-test", max_per_minute=10, max_concurrent=2
-        ),
+        lambda: RateLimitPolicy(scope="history-read-test", max_per_minute=10, max_concurrent=2),
     )
 
     headers = {"x-api-key": "same-history-read-key"}

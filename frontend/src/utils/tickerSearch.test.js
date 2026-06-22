@@ -40,7 +40,9 @@ describe('tickerSearch', () => {
   });
 
   it('market filter filters result', () => {
-    expect(searchLocalTickers('bank', 10, { market: 'ID' }).every((item) => item.market === 'ID')).toBe(true);
+    expect(
+      searchLocalTickers('bank', 10, { market: 'ID' }).every((item) => item.market === 'ID')
+    ).toBe(true);
   });
 
   it('type filter filters result', () => {
@@ -52,7 +54,10 @@ describe('tickerSearch', () => {
 
   it('mergeTickerResults dedupes by symbol', () => {
     expect(
-      mergeTickerResults([{ symbol: 'aapl', name: 'Apple' }], [{ symbol: 'AAPL', name: 'Duplicate' }])
+      mergeTickerResults(
+        [{ symbol: 'aapl', name: 'Apple' }],
+        [{ symbol: 'AAPL', name: 'Duplicate' }]
+      )
     ).toHaveLength(1);
   });
 });

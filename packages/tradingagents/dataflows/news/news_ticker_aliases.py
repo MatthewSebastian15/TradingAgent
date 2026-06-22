@@ -186,7 +186,12 @@ IDX_TICKER_ALIASES: dict[str, dict[str, Any]] = {
     ),
     "ACES.JK": _profile(
         "Aspirasi Hidup Indonesia",
-        ["ACES", "Ace Hardware Indonesia", "Aspirasi Hidup Indonesia", "PT Aspirasi Hidup Indonesia Tbk"],
+        [
+            "ACES",
+            "Ace Hardware Indonesia",
+            "Aspirasi Hidup Indonesia",
+            "PT Aspirasi Hidup Indonesia Tbk",
+        ],
         sector="Consumer Cyclical",
     ),
     "EMTK.JK": _profile(
@@ -307,7 +312,9 @@ def resolve_news_ticker(value: str) -> dict[str, Any]:
         "exchange": exchange,
         "country": country,
         "company_name": metadata["company_name"],
-        "aliases": _dedupe_strings([short_ticker, ticker, metadata["company_name"], *metadata.get("aliases", [])]),
+        "aliases": _dedupe_strings(
+            [short_ticker, ticker, metadata["company_name"], *metadata.get("aliases", [])]
+        ),
         "subsidiaries": _dedupe_strings(metadata.get("subsidiaries", [])),
         "negative_terms": _dedupe_strings(metadata.get("negative_terms", [])),
         "sector": metadata.get("sector"),

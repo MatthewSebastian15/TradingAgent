@@ -27,7 +27,9 @@ function Harness({ symbols = DEFAULT_SYMBOLS }) {
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="symbols">{items.map((item) => item.symbol).join(',')}</span>
       <span data-testid="error">{error}</span>
-      <span data-testid="metadata">{data?.source || ''}:{String(data?.cache?.hit ?? '')}</span>
+      <span data-testid="metadata">
+        {data?.source || ''}:{String(data?.cache?.hit ?? '')}
+      </span>
       <button type="button" onClick={refresh}>
         refresh
       </button>
@@ -130,9 +132,7 @@ describe('useMarketOverviewData', () => {
 
     render(<Harness />);
 
-    await waitFor(() =>
-      expect(screen.getByTestId('metadata')).toHaveTextContent('yfinance:false')
-    );
+    await waitFor(() => expect(screen.getByTestId('metadata')).toHaveTextContent('yfinance:false'));
   });
 
   it('does not let an older market request overwrite a newer refresh result', async () => {

@@ -94,8 +94,8 @@ def test_get_general_news_ignores_legacy_force_refresh_and_queues(tmp_path, monk
 
 
 def test_get_general_news_returns_stale_cache_and_queues_refresh(tmp_path, monkeypatch):
-    old_updated_at = (datetime.now(timezone.utc) - timedelta(seconds=600)).isoformat().replace(
-        "+00:00", "Z"
+    old_updated_at = (
+        (datetime.now(timezone.utc) - timedelta(seconds=600)).isoformat().replace("+00:00", "Z")
     )
     _seed_article(tmp_path, updated_at=old_updated_at)
     client = _client(tmp_path, monkeypatch)

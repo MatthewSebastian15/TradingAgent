@@ -5,7 +5,13 @@ import { useEffect, useState } from 'react';
 import TickerSearchBar from '../TickerSearchBar';
 
 // Bloomberg command-line style bar: bracket label, search input, asset tag, status dot.
-export default function ResearchCommandBar({ value, onSelect, onSubmit, onClear, loading = false }) {
+export default function ResearchCommandBar({
+  value,
+  onSelect,
+  onSubmit,
+  onClear,
+  loading = false,
+}) {
   // Mirror the selected ticker so the clear button can reset the visible input.
   const [text, setText] = useState(value || '');
   useEffect(() => setText(value || ''), [value]);

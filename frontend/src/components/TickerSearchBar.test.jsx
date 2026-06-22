@@ -52,7 +52,9 @@ describe('TickerSearchBar', () => {
   it('shows instant local result after typing one character', () => {
     renderSearch();
 
-    fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), { target: { value: 'B' } });
+    fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), {
+      target: { value: 'B' },
+    });
 
     expect(screen.getByRole('option', { name: /BBCA\.JK/i })).toBeInTheDocument();
   });
@@ -60,7 +62,9 @@ describe('TickerSearchBar', () => {
   it('uses Symbol | Name | Exchange · Type | Market layout without price column', () => {
     renderSearch();
 
-    fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), { target: { value: 'AAPL' } });
+    fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), {
+      target: { value: 'AAPL' },
+    });
 
     expect(screen.getByText('NASDAQ · EQUITY')).toBeInTheDocument();
     expect(screen.getByText('US')).toBeInTheDocument();
@@ -71,7 +75,9 @@ describe('TickerSearchBar', () => {
     const onSelect = vi.fn();
     renderSearch({ onSelect });
 
-    fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), { target: { value: 'aapl' } });
+    fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), {
+      target: { value: 'aapl' },
+    });
     fireEvent.mouseDown(screen.getByRole('option', { name: /AAPL/i }));
 
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ symbol: 'AAPL' }));
@@ -115,7 +121,9 @@ describe('TickerSearchBar', () => {
     const searchTickers = vi.fn(() => Promise.resolve({ results: [{ symbol: 'REMOTE' }] }));
     renderSearch({ searchTickers });
 
-    fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), { target: { value: 'AA' } });
+    fireEvent.change(screen.getByPlaceholderText(/search ticker symbol/i), {
+      target: { value: 'AA' },
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(150);
       await Promise.resolve();

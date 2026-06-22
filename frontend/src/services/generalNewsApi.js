@@ -99,7 +99,9 @@ export async function requestGeneralNewsRefresh({
   );
 
   if (!response.ok) {
-    const error = new Error(`Failed to queue general news refresh: ${await readHttpError(response)}`);
+    const error = new Error(
+      `Failed to queue general news refresh: ${await readHttpError(response)}`
+    );
     error.status = response.status;
     throw error;
   }

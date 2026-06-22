@@ -44,7 +44,9 @@ def test_market_sparklines_rejects_too_many_symbols(client, monkeypatch):
     response = client.get(f"/api/market/sparklines?symbols={symbols}&range=1M")
 
     assert response.status_code == 400
-    assert response.json()["error"]["details"]["fields"]["symbols"] == "symbols.length must be <= 20."
+    assert (
+        response.json()["error"]["details"]["fields"]["symbols"] == "symbols.length must be <= 20."
+    )
 
 
 def test_market_sparklines_uses_cache(client, monkeypatch):

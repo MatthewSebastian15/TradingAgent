@@ -16,9 +16,11 @@ function tickerName(item) {
 }
 
 function tickerMarket(item) {
-  return String(item.market || '')
-    .trim()
-    .toUpperCase() || '-';
+  return (
+    String(item.market || '')
+      .trim()
+      .toUpperCase() || '-'
+  );
 }
 
 export default function TickerSearchBar({
@@ -62,7 +64,8 @@ export default function TickerSearchBar({
   });
 
   const displayResults = trimmedQuery ? results : recentResults;
-  const showDropdown = open && !disabled && Boolean(displayResults.length || loading || searchError);
+  const showDropdown =
+    open && !disabled && Boolean(displayResults.length || loading || searchError);
 
   const updateDropdownPosition = useCallback(() => {
     const rect = rootRef.current?.getBoundingClientRect();

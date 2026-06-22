@@ -209,14 +209,20 @@ export default function AgentLog({ status, agentProgress }) {
                     <span className="w-4 flex-shrink-0 text-right font-mono text-[9px] tabular-nums text-bloomberg-muted">
                       {String(index + 1).padStart(2, '0')}
                     </span>
-                    <Icon className={`h-3 w-3 flex-shrink-0 ${meta.icon || ''}`} aria-hidden="true" />
+                    <Icon
+                      className={`h-3 w-3 flex-shrink-0 ${meta.icon || ''}`}
+                      aria-hidden="true"
+                    />
                   </div>
                   <span className="truncate">{titleCase(step.label)}</span>
                   <span className="text-[10px] uppercase tracking-wider">{statusValue}</span>
-                  {elapsedTime
-                    ? <span className="text-[10px] tabular-nums text-bloomberg-muted">{elapsedTime}</span>
-                    : <span className="w-8" />
-                  }
+                  {elapsedTime ? (
+                    <span className="text-[10px] tabular-nums text-bloomberg-muted">
+                      {elapsedTime}
+                    </span>
+                  ) : (
+                    <span className="w-8" />
+                  )}
                 </div>
               </li>
             );
@@ -233,7 +239,9 @@ export default function AgentLog({ status, agentProgress }) {
         <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-bloomberg-muted">
           <div className="flex items-center gap-2">
             <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-bloomberg-orange" />
-            <span>{doneCount} of {totalSteps} agents complete</span>
+            <span>
+              {doneCount} of {totalSteps} agents complete
+            </span>
           </div>
           <span className={pct === 100 ? 'text-bloomberg-green' : 'text-bloomberg-orange'}>
             {pct}%

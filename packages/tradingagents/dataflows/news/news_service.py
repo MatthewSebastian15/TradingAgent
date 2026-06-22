@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 from __future__ import annotations
 
 import copy
@@ -21,8 +22,8 @@ from tradingagents.dataflows.providers.yfinance_news import _extract_article_dat
 from tradingagents.utils_resilience import TTLCache
 from tradingagents.yfinance_runtime import yf
 
-from .news_decision_filter import split_ai_analysis_news
 from .news_aggregator import deduplicate_news as deduplicate_news_articles
+from .news_decision_filter import split_ai_analysis_news
 from .news_models import NewsEntity, NormalizedNewsArticle, article_to_dict
 from .news_query_builder import build_ticker_news_queries
 from .news_relevance import is_relevant_news
@@ -100,7 +101,11 @@ class NewsService:
         )
         cache = _active_cache(self.config)
 
-        if self.config.get("cache_enabled", True) and not (bypass_cache or force_refresh) and not debug:
+        if (
+            self.config.get("cache_enabled", True)
+            and not (bypass_cache or force_refresh)
+            and not debug
+        ):
             cached = cache.get(cache_key)
             if isinstance(cached, dict):
                 result = copy.deepcopy(cached)
@@ -455,7 +460,9 @@ class NewsService:
                 "decision_filter": {
                     "decision_min_relevance_score": decision_min,
                     "rss_decision_min_relevance_score": rss_decision_min,
-                    "excluded_reasons": dict(Counter(str(item["reason"]) for item in excluded_news)),
+                    "excluded_reasons": dict(
+                        Counter(str(item["reason"]) for item in excluded_news)
+                    ),
                 },
                 "strict_news_filter": {
                     "excluded_news": [

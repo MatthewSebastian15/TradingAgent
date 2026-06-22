@@ -65,7 +65,11 @@ function createThrottledUpdate(onUpdate, throttleMs) {
   return { trigger, cancel };
 }
 
-export function useGeneralNewsStream({ enabled = true, onUpdate, throttleMs = SSE_REFRESH_THROTTLE_MS } = {}) {
+export function useGeneralNewsStream({
+  enabled = true,
+  onUpdate,
+  throttleMs = SSE_REFRESH_THROTTLE_MS,
+} = {}) {
   const onUpdateRef = useRef(onUpdate);
 
   useEffect(() => {
@@ -79,10 +83,7 @@ export function useGeneralNewsStream({ enabled = true, onUpdate, throttleMs = SS
     let reconnectDelay = SSE_RECONNECT_MIN_MS;
     let reconnectTimer = null;
     let controller = null;
-    const throttledUpdate = createThrottledUpdate(
-      () => onUpdateRef.current?.(),
-      throttleMs
-    );
+    const throttledUpdate = createThrottledUpdate(() => onUpdateRef.current?.(), throttleMs);
 
     async function connect() {
       controller = new AbortController();
