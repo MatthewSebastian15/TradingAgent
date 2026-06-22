@@ -1,11 +1,13 @@
 import PropTypes from 'prop-types';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import Navbar from '../components/Navbar';
+import ResearchCommandBar from '../components/research/ResearchCommandBar';
+import ResearchSidebar from '../components/research/ResearchSidebar';
 import CandlestickPriceChart from '../components/results/tabs/CandlestickPriceChart';
-import TickerSearchBar from '../components/TickerSearchBar';
 import { useStockOverview } from '../hooks/useStockOverview';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
+import { saveRecentTicker } from '../utils/recentTickers';
 
 // ── Format helpers ────────────────────────────────────────────────────────────
 
@@ -670,6 +672,13 @@ export default function Research() {
 
   const { data, loading, error } = useStockOverview(activeTicker);
 
+  const handleSelect = useCallback((symbol) => {
+    const sym = String(symbol || '').toUpperCase();
+    if (!sym) return;
+    saveRecentTicker({ symbol: sym });
+    setActiveTicker(sym);
+  }, []);
+
   useEffect(() => {
     if (!activeTicker) return;
     const controller = new AbortController();
@@ -704,20 +713,17 @@ export default function Research() {
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
       <Navbar />
-      <main className="px-4 py-4 space-y-3">
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-[10px] uppercase tracking-[0.35em] text-bloomberg-orange">
-            ■ RESEARCH
-          </span>
-          <div className="w-72">
-            <TickerSearchBar
-              value={activeTicker || ''}
-              onSelect={(item) => setActiveTicker(item.symbol)}
-              onClear={() => setActiveTicker(null)}
-            />
-          </div>
-        </div>
-
+      <div className="px-4 pt-4">
+        <ResearchCommandBar
+          value={activeTicker || ''}
+          onSelect={(item) => handleSelect(item.symbol)}
+          onSubmit={({ symbol }) => handleSelect(symbol)}
+          loading={loading}
+        />
+      </div>
+      <div className="flex">
+        <ResearchSidebar onSelect={handleSelect} />
+        <main className="flex-1 px-4 py-4 space-y-3">
         {!activeTicker && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
             <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-bloomberg-orange">
@@ -774,7 +780,8 @@ export default function Research() {
             </div>
           </>
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
