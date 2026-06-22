@@ -57,6 +57,33 @@ def test_goto_false_positive_go_to_market_is_excluded():
     assert result["excluded_news"]
 
 
+def test_low_score_company_match_falls_back_into_decision_news():
+    # Ticker-matched article scoring just below the strict threshold must still surface as
+    # decision news, otherwise the decision-maker news section goes blank intermittently.
+    article = make_article(relevance_category="company_specific", relevance_score=50)
+    profile = resolve_news_ticker("BBCA.JK")
+    result = split_ai_analysis_news([article], profile, decision_min_score=70, prompt_limit=5)
+
+    assert len(result["decision_company_news"]) == 1
+    assert result["decision_company_news"][0].decision_filter_reason == "fallback_below_threshold"
+
+
+def test_offticker_near_miss_is_not_promoted_by_fallback():
+    # A non-matching article must stay excluded even when the decision feed is empty.
+    article = make_article(
+        provider="rss_context",
+        title="IHSG melemah karena sentimen global",
+        summary="Pasar saham tertekan.",
+        url="https://example.com/ihsg",
+        relevance_category="macro_context",
+        relevance_score=90,
+    )
+    profile = resolve_news_ticker("BBCA.JK")
+    result = split_ai_analysis_news([article], profile, decision_min_score=70, prompt_limit=5)
+
+    assert len(result["decision_company_news"]) == 0
+
+
 def test_rss_ihsg_general_context_not_used_as_company_news():
     article = make_article(
         provider="rss_context",
