@@ -21,6 +21,7 @@ vi.mock('../hooks/useRagChat', () => ({
     conversations: [],
     activeId: null,
     sendMessage: vi.fn(),
+    stop: vi.fn(),
     clearMessages: vi.fn(),
     newChat: vi.fn(),
     selectChat: vi.fn(),

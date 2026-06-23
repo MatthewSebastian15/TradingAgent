@@ -6,23 +6,28 @@ import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from '../../constants
 import { useWatchlistStore } from '../../hooks/useWatchlistStore';
 import { readRecentTickers } from '../../utils/recentTickers';
 
-function TickerRow({ symbol, active, onSelect }) {
+function TickerRow({ item, active, onSelect }) {
+  const exchange = String(item.exchange || '').trim();
+  const label = exchange ? `${item.symbol}-${exchange}` : item.symbol;
   return (
     <button
       type="button"
-      onClick={() => onSelect(symbol)}
+      onClick={() => onSelect(item)}
       className={`flex h-9 w-full items-center border-b border-[#1a1a1a] border-l-2 px-4 text-left font-mono text-[13px] ${
         active
           ? 'border-l-bloomberg-orange text-bloomberg-orange'
           : 'border-l-transparent text-bloomberg-white hover:text-bloomberg-orange'
       }`}
     >
-      {symbol}
+      {label}
     </button>
   );
 }
 TickerRow.propTypes = {
-  symbol: PropTypes.string.isRequired,
+  item: PropTypes.shape({
+    symbol: PropTypes.string.isRequired,
+    exchange: PropTypes.string,
+  }).isRequired,
   active: PropTypes.bool,
   onSelect: PropTypes.func.isRequired,
 };
@@ -87,7 +92,7 @@ export default function ResearchSidebar({ activeTicker, collapsed, onToggle, onS
           rows.map((item) => (
             <TickerRow
               key={item.symbol}
-              symbol={item.symbol}
+              item={item}
               active={item.symbol === activeTicker}
               onSelect={onSelect}
             />
