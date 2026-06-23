@@ -128,9 +128,17 @@ async def lifespan(app: FastAPI):
     app.state.rate_limiter_state = create_rate_limiter_state()
     await validate_config()
     await start_general_news_worker(app)
+    # Fire-and-forget: warm market overview/movers caches so the first market-tab
+    # visit hits cache instead of a cold yfinance fetch. Never blocks startup.
+    from services.market_yfinance_service import warmup_market_caches
+
+    app.state.market_warmup_task = asyncio.create_task(asyncio.to_thread(warmup_market_caches))
     try:
         yield
     finally:
+        app.state.market_warmup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await app.state.market_warmup_task
         await stop_general_news_worker(app)
         await shutdown_resources()
 

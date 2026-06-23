@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -23,6 +25,85 @@ VALIDATION_TTL_SECONDS = 3600
 YFINANCE_WORKERS = 8
 
 
+# ponytail: per-key locks grow with distinct cache keys (symbol sets, country/
+# exchange combos) — bounded by user config in practice, so no eviction. Add a
+# bounded LRU here only if key cardinality ever becomes unbounded.
+_refresh_locks: dict[str, threading.Lock] = {}
+_fetch_seq: dict[str, int] = {}  # bumped (under the key lock) each completed fetch
+_locks_guard = threading.Lock()
+
+
+def _get_lock(key: str) -> threading.Lock:
+    with _locks_guard:
+        return _refresh_locks.setdefault(key, threading.Lock())
+
+
+def _store(cache_key: str, fetch: Callable[[], Any], ttl: float) -> Any:
+    """Fetch, cache, and bump the fetch generation. Caller must hold the key lock."""
+    result = fetch()
+    market_cache.set(cache_key, result, ttl)
+    _fetch_seq[cache_key] = _fetch_seq.get(cache_key, 0) + 1
+    return result
+
+
+def _fetch_and_store(
+    cache_key: str, fetch: Callable[[], Any], ttl: float, *, force: bool = False
+) -> Any:
+    """Run *fetch* under the per-key lock so concurrent callers dedupe to one
+    yfinance round trip; late arrivals get the freshly cached result.
+
+    A forced fetch ignores an existing fresh entry (so manual refresh actually
+    refetches) but still dedupes against a *concurrent* fetch that completed
+    while this caller waited for the lock — detected via the fetch generation
+    counter, which is robust to coarse monotonic-clock resolution."""
+    lock = _get_lock(cache_key)
+    seq_before = _fetch_seq.get(cache_key, 0)
+    with lock:
+        value, age = market_cache.get_with_age(cache_key)
+        if value is not None and age is not None:
+            if force:
+                if _fetch_seq.get(cache_key, 0) != seq_before:  # concurrent fetch refreshed it
+                    return value
+            elif age <= ttl:  # someone refreshed while we waited; it's fresh
+                return value
+        return _store(cache_key, fetch, ttl)
+
+
+def _schedule_refresh(cache_key: str, fetch: Callable[[], Any], ttl: float) -> None:
+    """Refresh *cache_key* in a background thread, deduped via the same per-key
+    lock. No-op if a fetch/refresh for this key is already running."""
+    lock = _get_lock(cache_key)
+    if not lock.acquire(blocking=False):
+        return
+
+    def _run() -> None:
+        try:
+            _store(cache_key, fetch, ttl)
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            lock.release()
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _swr_cached(
+    cache_key: str, fetch: Callable[[], Any], ttl: float, *, force_refresh: bool
+) -> tuple[Any, bool]:
+    """Stale-while-revalidate read. Returns (value, served_from_cache).
+
+    - fresh hit: serve cache.
+    - stale hit: serve stale immediately, refresh in background.
+    - cold / force_refresh: fetch synchronously (deduped)."""
+    if not force_refresh:
+        value, is_stale = market_cache.get_with_state(cache_key)
+        if value is not None:
+            if is_stale:
+                _schedule_refresh(cache_key, fetch, ttl)
+            return value, True
+    return _fetch_and_store(cache_key, fetch, ttl, force=force_refresh), False
+
+
 def normalize_market_symbol(symbol: str) -> str:
     return str(symbol or "").strip().upper()
 
@@ -41,6 +122,23 @@ def dedupe_symbols(symbols: list[str]) -> list[str]:
 
 def get_market_presets() -> dict[str, Any]:
     return {"categories": MARKET_PRESETS, "exchanges": MARKET_EXCHANGE_PRESETS}
+
+
+# Defaults the frontend shows first (EQUITIES preset + US/NASDAQ movers). Warming
+# these at startup turns the first visit's cold yfinance fetch into a cache hit.
+_WARMUP_OVERVIEW_SYMBOLS = ["^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "DX-Y.NYB"]
+
+
+def warmup_market_caches() -> None:
+    """Prime overview + movers caches. Best-effort; swallow yfinance errors."""
+    try:
+        get_overview_data(_WARMUP_OVERVIEW_SYMBOLS)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        get_market_movers("United States", "NASDAQ", 5)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _now_iso() -> str:
@@ -230,22 +328,21 @@ def get_overview_data(symbols: list[str], *, force_refresh: bool = False) -> dic
     normalized_symbols = dedupe_symbols(symbols)
     symbols_hash = sha256("|".join(normalized_symbols).encode("utf-8")).hexdigest()[:16]
     cache_key = f"market:overview:{symbols_hash}"
-    cached = market_cache.get(cache_key)
-    if cached is not None and not force_refresh:
-        return _with_overview_cache_metadata(cached, hit=True, force_refresh=False)
 
-    items = _build_overview_items(normalized_symbols)
-    ok_items = [item for item in items if item.get("status") == "ok"]
-    payload: dict[str, Any] = {
-        "items": items,
-        "source": "yfinance",
-        "last_updated": _now_iso(),
-    }
-    if not ok_items:
-        payload["message"] = "No market data available from yfinance"
+    def fetch() -> dict[str, Any]:
+        items = _build_overview_items(normalized_symbols)
+        ok_items = [item for item in items if item.get("status") == "ok"]
+        payload: dict[str, Any] = {
+            "items": items,
+            "source": "yfinance",
+            "last_updated": _now_iso(),
+        }
+        if not ok_items:
+            payload["message"] = "No market data available from yfinance"
+        return payload
 
-    cached_payload = market_cache.set(cache_key, payload, OVERVIEW_TTL_SECONDS)
-    return _with_overview_cache_metadata(cached_payload, hit=False, force_refresh=force_refresh)
+    value, hit = _swr_cached(cache_key, fetch, OVERVIEW_TTL_SECONDS, force_refresh=force_refresh)
+    return _with_overview_cache_metadata(value, hit=hit, force_refresh=force_refresh)
 
 
 def validate_symbol(symbol: str) -> dict[str, Any]:
@@ -355,51 +452,52 @@ def get_market_movers(country: str, exchange: str, limit: int) -> dict[str, Any]
     cache_key = (
         f"market:movers:{normalized_country}:{normalized_exchange.upper()}:{normalized_limit}"
     )
-    cached = market_cache.get(cache_key)
-    if cached is not None:
-        return cached
 
-    symbols = get_symbol_universe(normalized_country, normalized_exchange)
-    require_volume = True
-    frames: dict[str, Any] = {}
+    def fetch() -> dict[str, Any]:
+        symbols = get_symbol_universe(normalized_country, normalized_exchange)
+        require_volume = True
+        frames: dict[str, Any] = {}
 
-    try:
-        frames = _download_movers(symbols)
-    except Exception:
-        frames = {}
+        try:
+            frames = _download_movers(symbols)
+        except Exception:
+            frames = {}
 
-    missing_symbols = [symbol for symbol in symbols if frames.get(symbol) is None]
-    if missing_symbols:
-        max_workers = min(YFINANCE_WORKERS, len(missing_symbols))
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(_download_symbol, symbol): symbol for symbol in missing_symbols
-            }
-            for future in as_completed(futures):
-                try:
-                    frames[futures[future]] = future.result()
-                except Exception:
-                    frames[futures[future]] = None
+        missing_symbols = [symbol for symbol in symbols if frames.get(symbol) is None]
+        if missing_symbols:
+            max_workers = min(YFINANCE_WORKERS, len(missing_symbols))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(_download_symbol, symbol): symbol for symbol in missing_symbols
+                }
+                for future in as_completed(futures):
+                    try:
+                        frames[futures[future]] = future.result()
+                    except Exception:
+                        frames[futures[future]] = None
 
-    items: list[dict[str, Any]] = []
-    for symbol in symbols:
-        item = _mover_from_history(symbol, frames.get(symbol), require_volume=require_volume)
-        if item is not None:
-            items.append(item)
+        items: list[dict[str, Any]] = []
+        for symbol in symbols:
+            item = _mover_from_history(symbol, frames.get(symbol), require_volume=require_volume)
+            if item is not None:
+                items.append(item)
 
-    gainers = sorted(items, key=lambda item: item["change_percent"], reverse=True)[
-        :normalized_limit
-    ]
-    losers = sorted(items, key=lambda item: item["change_percent"])[:normalized_limit]
-    payload = {
-        "country": normalized_country,
-        "exchange": normalized_exchange,
-        "limit": normalized_limit,
-        "updated_at": _now_iso(),
-        "gainers": gainers,
-        "losers": losers,
-        "source": "yfinance",
-    }
-    if not gainers and not losers:
-        payload["message"] = "No valid market movers found for selected country/exchange."
-    return market_cache.set(cache_key, payload, MOVERS_TTL_SECONDS)
+        gainers = sorted(items, key=lambda item: item["change_percent"], reverse=True)[
+            :normalized_limit
+        ]
+        losers = sorted(items, key=lambda item: item["change_percent"])[:normalized_limit]
+        payload = {
+            "country": normalized_country,
+            "exchange": normalized_exchange,
+            "limit": normalized_limit,
+            "updated_at": _now_iso(),
+            "gainers": gainers,
+            "losers": losers,
+            "source": "yfinance",
+        }
+        if not gainers and not losers:
+            payload["message"] = "No valid market movers found for selected country/exchange."
+        return payload
+
+    value, _hit = _swr_cached(cache_key, fetch, MOVERS_TTL_SECONDS, force_refresh=False)
+    return value

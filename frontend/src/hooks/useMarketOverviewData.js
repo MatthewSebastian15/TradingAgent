@@ -180,7 +180,10 @@ export function useMarketOverviewData(symbols) {
       () => {}
     );
     const interval = window.setInterval(() => {
-      loadOverview({ force: true, silent: true }).catch(() => {});
+      // ponytail: force:false lets the backend TTL cache absorb auto-refresh.
+      // force:true here re-fetched yfinance cold every 60s, ignoring both caches.
+      // Manual refresh (refresh()) still forces a fresh fetch.
+      loadOverview({ force: false, silent: true }).catch(() => {});
     }, OVERVIEW_REFRESH_MS);
 
     return () => {
