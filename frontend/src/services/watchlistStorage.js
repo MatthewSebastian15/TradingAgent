@@ -1,6 +1,11 @@
 export const WATCHLIST_STORAGE_KEY = 'tradingagents:watchlists:v1';
 export const WATCHLIST_STORAGE_VERSION = 1;
 
+// Bound growth so the watchlist can't silently blow the localStorage quota.
+// ponytail: generous flat caps; raise if a real user hits them.
+export const MAX_WATCHLIST_GROUPS = 50;
+export const MAX_WATCHLIST_ITEMS_PER_GROUP = 100;
+
 export const EMPTY_WATCHLIST_STATE = {
   version: WATCHLIST_STORAGE_VERSION,
   activeGroupId: null,
@@ -56,7 +61,8 @@ function sanitizeGroup(group) {
       if (seen.has(item.symbol)) return false;
       seen.add(item.symbol);
       return true;
-    });
+    })
+    .slice(0, MAX_WATCHLIST_ITEMS_PER_GROUP);
 
   return {
     id,
@@ -70,7 +76,8 @@ function sanitizeGroup(group) {
 export function normalizeWatchlistState(value) {
   const groups = (Array.isArray(value?.groups) ? value.groups : [])
     .map(sanitizeGroup)
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, MAX_WATCHLIST_GROUPS);
   const activeGroupId = groups.some((group) => group.id === value?.activeGroupId)
     ? value.activeGroupId
     : groups[0]?.id || null;

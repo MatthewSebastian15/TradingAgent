@@ -21,20 +21,46 @@ def test_pool_status_endpoint(client):
     assert r.json()["news"]["available"] is True
 
 
-def test_chat_out_of_scope(client):
-    async def fake_translate(text, _message):
-        return text
-
+def test_chat_out_of_scope_indonesian_fast_path(client):
+    # Indonesian stopwords -> precomputed ID warning, no LLM translate call.
+    translate = AsyncMock()
     with (
         patch("routes.rag_chat.check_scope", return_value=False),
-        patch("routes.rag_chat.translate_message", side_effect=fake_translate),
+        patch("routes.rag_chat.translate_message", translate),
     ):
         r = client.post("/api/rag/chat", json={"message": "Buatkan resep nasi goreng"})
     assert r.status_code == 200
     data = r.json()
     assert data["out_of_scope"] is True
     assert data["pool_used"] == []
-    assert "permitted context" in data["answer"]
+    assert "di luar konteks" in data["answer"]
+    translate.assert_not_called()
+
+
+def test_chat_out_of_scope_english_fast_path(client):
+    translate = AsyncMock()
+    with (
+        patch("routes.rag_chat.check_scope", return_value=False),
+        patch("routes.rag_chat.translate_message", translate),
+    ):
+        r = client.post("/api/rag/chat", json={"message": "Give me a fried rice recipe"})
+    assert r.status_code == 200
+    assert "permitted context" in r.json()["answer"]
+    translate.assert_not_called()
+
+
+def test_chat_out_of_scope_other_language_uses_llm(client):
+    # Non-ASCII falls through to the LLM translator.
+    async def fake_translate(_text, _message):
+        return "范围之外"
+
+    with (
+        patch("routes.rag_chat.check_scope", return_value=False),
+        patch("routes.rag_chat.translate_message", side_effect=fake_translate),
+    ):
+        r = client.post("/api/rag/chat", json={"message": "你好吗"})
+    assert r.status_code == 200
+    assert r.json()["answer"] == "范围之外"
 
 
 def test_chat_valid_with_data(client):
@@ -67,7 +93,7 @@ def test_chat_empty_context_skips_llm(client):
 
     assert r.status_code == 200
     mock_llm.assert_not_called()
-    assert "tidak ada data" in r.json()["answer"].lower()
+    assert "no relevant data" in r.json()["answer"].lower()
 
 
 def test_chat_with_watchlist_context(client):

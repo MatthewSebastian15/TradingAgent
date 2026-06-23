@@ -32,6 +32,11 @@ class SQLiteTTLCache:
     This is intentionally small and dependency-free. It is not Redis, because
     this project is personal-scale and apparently not every nail needs a cloud
     invoice attached to it.
+
+    Scope: this cache is process-global and shared across all owner sessions
+    (unlike AnalysisRepository, which is owner_id-scoped). Only store vendor
+    data keyed by request params here — never per-user PII or owner-scoped
+    results, or one user's data leaks into another's cache hit.
     """
 
     def __init__(self, db_path: str, ttl_seconds: int, max_entries: int) -> None:
