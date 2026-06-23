@@ -7,55 +7,65 @@ import pytest
 
 def test_check_scope_valid_news():
     from services.rag_service import check_scope
+
     assert check_scope("Apa berita terbaru tentang Tesla?") is True
 
 
 def test_check_scope_valid_market():
     from services.rag_service import check_scope
+
     assert check_scope("Market hari ini sedang bagaimana?") is True
 
 
 def test_check_scope_valid_analysis():
     from services.rag_service import check_scope
+
     assert check_scope("Kenapa META diberi HOLD dalam analisis?") is True
 
 
 def test_check_scope_invalid_recipe():
     from services.rag_service import check_scope
+
     assert check_scope("Buatkan resep nasi goreng.") is False
 
 
 def test_check_scope_invalid_coding():
     from services.rag_service import check_scope
+
     assert check_scope("Bagaimana cara membuat website React?") is False
 
 
 def test_detect_intent_news():
     from services.rag_service import detect_intent
+
     result = detect_intent("Ringkas berita terbaru hari ini.", "all")
     assert "news" in result
 
 
 def test_detect_intent_market():
     from services.rag_service import detect_intent
+
     result = detect_intent("Ticker apa yang paling naik hari ini?", "all")
     assert "market" in result
 
 
 def test_detect_intent_analysis():
     from services.rag_service import detect_intent
+
     result = detect_intent("Ringkas hasil analisis META.", "all")
     assert "analysis" in result
 
 
 def test_detect_intent_respects_filter():
     from services.rag_service import detect_intent
+
     result = detect_intent("ceritakan apapun", "news")
     assert result == ["news"]
 
 
 def test_detect_intent_mixed():
     from services.rag_service import detect_intent
+
     result = detect_intent("Apakah news terbaru mendukung hasil analisis NVDA?", "all")
     assert "news" in result
     assert "analysis" in result

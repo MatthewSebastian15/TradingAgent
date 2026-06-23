@@ -8,6 +8,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def clear_pool_cache():
     import services.rag_pool as pool
+
     pool._news_cache = None
     pool._market_cache = None
     yield
@@ -23,8 +24,8 @@ async def test_get_news_pool_returns_articles():
     mock_result.articles = [{"id": "1", "title": "Test"}]
     mock_result.last_updated = "2026-06-23T10:00:00Z"
 
-    with patch("services.rag_pool.NewsArticleStore") as MockStore:
-        MockStore.return_value.list_articles.return_value = mock_result
+    with patch("services.rag_pool.NewsArticleStore") as mock_store:
+        mock_store.return_value.list_articles.return_value = mock_result
         articles = await get_news_pool()
 
     assert articles == [{"id": "1", "title": "Test"}]
@@ -38,11 +39,11 @@ async def test_get_news_pool_caches_result():
     mock_result.articles = [{"id": "1"}]
     mock_result.last_updated = "2026-06-23T10:00:00Z"
 
-    with patch("services.rag_pool.NewsArticleStore") as MockStore:
-        MockStore.return_value.list_articles.return_value = mock_result
+    with patch("services.rag_pool.NewsArticleStore") as mock_store:
+        mock_store.return_value.list_articles.return_value = mock_result
         await get_news_pool()
         await get_news_pool()
-        assert MockStore.call_count == 1  # second call hits cache
+        assert mock_store.call_count == 1  # second call hits cache
 
 
 @pytest.mark.asyncio
