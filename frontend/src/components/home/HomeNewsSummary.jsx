@@ -1,5 +1,6 @@
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import PropTypes from 'prop-types';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 
 import { dedupeNewsItems } from '@/lib/news/dedupeNewsItems';
 import { formatNewsTime } from '@/lib/news/formatNewsTime';
@@ -21,6 +22,7 @@ function HomeNewsSummarySkeleton() {
 }
 
 export default function HomeNewsSummary({ news = [], loading = false, error = '' }) {
+  const [collapsed, setCollapsed] = useState(false);
   const topNews = useMemo(() => {
     const normalizedNews = (Array.isArray(news) ? news : []).map((item) =>
       normalizeNewsItem(item || {})
@@ -34,16 +36,22 @@ export default function HomeNewsSummary({ news = [], loading = false, error = ''
       aria-labelledby="home-news-summary-title"
       className="max-h-[240px] overflow-hidden rounded-lg border border-border bg-card/80 p-2 font-mono text-card-foreground shadow-sm sm:max-h-[230px] sm:p-2.5 lg:max-h-[220px]"
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <h2 id="home-news-summary-title" className="text-sm font-semibold leading-none">
-          Summary News
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
+        className={`flex w-full items-center justify-between gap-2 ${collapsed ? '' : 'mb-1.5'}`}
+      >
+        <h2 id="home-news-summary-title" className="flex items-center gap-1 text-sm font-semibold leading-none">
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          News
         </h2>
         <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
           Top 3 Latest
         </span>
-      </div>
+      </button>
 
-      {loading ? (
+      {collapsed ? null : loading ? (
         <HomeNewsSummarySkeleton />
       ) : error ? (
         <div

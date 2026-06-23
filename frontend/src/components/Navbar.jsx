@@ -4,6 +4,7 @@ import {
   MessageSquare,
   Microscope,
   Newspaper,
+  Briefcase,
   Home,
   Sparkles,
   Star,
@@ -97,6 +98,13 @@ const NAV_ITEMS = [
     path: WATCHLIST_PATH,
     matchPrefixes: [WATCHLIST_PATH],
     Icon: Star,
+  },
+  {
+    label: 'Portfolio',
+    shortLabel: 'PF',
+    path: '/portfolio',
+    matchPrefixes: ['/portfolio'],
+    Icon: Briefcase,
   },
   { label: 'News', shortLabel: 'NW', path: '/news', matchPrefixes: ['/news'], Icon: Newspaper },
   {
