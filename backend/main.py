@@ -40,6 +40,7 @@ from routes.debug import router as debug_router
 from routes.jobs import create_analysis_runtime, install_analysis_runtime
 from routes.market import router as market_router
 from routes.news import include_news_routes
+from routes.rag_chat import router as rag_router
 from routes.reports import router as reports_router
 from routes.session import router as session_router
 from services.report_service import report_asset_health
@@ -179,6 +180,7 @@ app.include_router(analysis_router, prefix="/api")
 app.include_router(debug_router, prefix="/api")
 app.include_router(market_router, prefix="/api")
 include_news_routes(app, prefix="/api", is_development=IS_DEVELOPMENT)
+app.include_router(rag_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(session_router, prefix="/api")
 

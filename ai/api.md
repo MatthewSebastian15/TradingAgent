@@ -874,6 +874,19 @@ Query:
 | `limit` | 1 to 100, default 20. |
 | `include_raw` | Boolean, default false. |
 
+## RAG Chatbot API
+
+Scoped chatbot over the News, Market, and AI Agent Analysis data pools.
+
+```
+POST   /api/rag/chat
+GET    /api/rag/pool/status
+```
+
+`POST /api/rag/chat` enforces scope guardrails and calls the LLM only when
+in-scope and data is available. `GET /api/rag/pool/status` reports which pools
+currently have data.
+
 ## Frontend-Only Watchlist API Usage
 
 No backend watchlist CRUD API exists right now.
