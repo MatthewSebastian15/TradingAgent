@@ -9,7 +9,7 @@ function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
-async function buildWatchlistContext(contextFilter) {
+async function buildWatchlistContext(contextFilter, signal) {
   if (contextFilter !== 'all' && contextFilter !== 'watchlist') return null;
 
   const state = readWatchlistState();
@@ -32,6 +32,7 @@ async function buildWatchlistContext(contextFilter) {
   try {
     const res = await fetch(buildApiUrl(`/market/quotes?symbols=${symbols.join(',')}`), {
       credentials: 'include',
+      signal,
     });
     if (res.ok) quotes = await res.json();
   } catch {
@@ -51,6 +52,7 @@ export function useRagChat(contextFilter = 'all') {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const mountedRef = useRef(true);
+  const abortRef = useRef(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -102,13 +104,17 @@ export function useRagChat(contextFilter = 'all') {
       setIsLoading(true);
       setError(null);
 
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       try {
-        const watchlistContext = await buildWatchlistContext(contextFilter);
+        const watchlistContext = await buildWatchlistContext(contextFilter, controller.signal);
         const data = await fetchRagChat({
           message: trimmed,
           contextFilter,
           chatHistory: history,
           watchlistContext,
+          signal: controller.signal,
         });
 
         if (!mountedRef.current) return;
@@ -134,13 +140,23 @@ export function useRagChat(contextFilter = 'all') {
           )
         );
       } catch (err) {
+        // User pressed Stop — leave the partial conversation, no error shown.
+        if (err.name === 'AbortError') return;
         if (mountedRef.current) setError(err.message || 'Failed to reach the chatbot.');
       } finally {
-        if (mountedRef.current) setIsLoading(false);
+        if (abortRef.current === controller) abortRef.current = null;
+        if (mountedRef.current && !controller.signal.aborted) setIsLoading(false);
       }
     },
     [messages, activeId, isLoading, contextFilter, commit]
   );
+
+  // Interrupt an in-flight request.
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (mountedRef.current) setIsLoading(false);
+  }, []);
 
   const newChat = useCallback(() => {
     setActiveId(null);
@@ -174,6 +190,7 @@ export function useRagChat(contextFilter = 'all') {
     conversations,
     activeId,
     sendMessage,
+    stop,
     clearMessages,
     newChat,
     selectChat,

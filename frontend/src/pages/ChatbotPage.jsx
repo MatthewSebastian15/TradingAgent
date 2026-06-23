@@ -15,7 +15,7 @@ export function ChatbotPage() {
     conversations,
     activeId,
     sendMessage,
-    clearMessages,
+    stop,
     newChat,
     selectChat,
     deleteChat,
@@ -47,7 +47,7 @@ export function ChatbotPage() {
                 isLoading={isLoading}
                 error={error}
                 onSend={sendMessage}
-                onClear={clearMessages}
+                onStop={stop}
               />
             </div>
             {/* Disclaimer */}
