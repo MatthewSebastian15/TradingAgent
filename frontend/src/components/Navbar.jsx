@@ -1,6 +1,7 @@
 import {
   Cpu,
   Landmark,
+  MessageSquare,
   Microscope,
   Newspaper,
   Home,
@@ -22,6 +23,7 @@ import {
   LEGACY_ANALYSIS_LIVE_PATH,
   LEGACY_ANALYSIS_PATH,
   WATCHLIST_PATH,
+  CHATBOT_PATH,
 } from '../constants/routes';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 import { createClockFormatter, resolveClockConfig } from '../utils/clock';
@@ -110,6 +112,13 @@ const NAV_ITEMS = [
     path: '/econ',
     matchPrefixes: ['/econ', '/economic'],
     Icon: Landmark,
+  },
+  {
+    label: 'Chatbot',
+    shortLabel: 'CB',
+    path: CHATBOT_PATH,
+    matchPrefixes: [CHATBOT_PATH],
+    Icon: MessageSquare,
   },
 ];
 
