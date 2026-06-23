@@ -48,7 +48,8 @@ async function buildWatchlistContext(contextFilter, signal) {
 
 export function useRagChat(contextFilter = 'all') {
   const [conversations, setConversations] = useState(loadConversations);
-  const [activeId, setActiveId] = useState(() => loadConversations()[0]?.id ?? null);
+  // Always land on a fresh "new chat"; past conversations stay in the sidebar.
+  const [activeId, setActiveId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const mountedRef = useRef(true);

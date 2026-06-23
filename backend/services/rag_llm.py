@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from tradingagents.llm_clients.factory import create_llm_client
 
 logger = logging.getLogger(__name__)
+
+# Trim any number with 3+ decimals down to 2 (e.g. 123.4567 -> 123.46).
+# ponytail: also rounds dotted non-numbers like IPs/version strings — rare in
+# chat answers; tighten the regex if that ever bites.
+_LONG_DECIMAL_RE = re.compile(r"\d+\.\d{3,}")
+
+
+def _round_decimals(text: str) -> str:
+    return _LONG_DECIMAL_RE.sub(lambda m: f"{float(m.group()):.2f}", text)
 
 _SYSTEM_PROMPT = """You are a RAG assistant for TradingAgent application.
 
@@ -15,23 +25,16 @@ STRICT RULES:
 3. If the context does not contain enough information, say so clearly.
 4. Do not run new analysis or make new recommendations beyond what is in the context.
 5. Always use the same language as the user's question.
-6. At the end of each answer, briefly mention which data source you used
-   (News / Market / AI Agent Analysis / Watchlist).
-7. Keep answers concise and grounded in the data.
+6. Keep answers concise and grounded in the data. Do not append a data-source
+   line or any "Data Source:" footer.
 
 If the context is empty, reply:
 "Tidak ada data yang relevan ditemukan di RAG Data Pool untuk pertanyaan ini."
 """
 
 
-async def call_rag_llm(
-    context: str,
-    user_message: str,
-    chat_history: list[dict[str, Any]],
-) -> str:
-    """Call LLM with strict RAG prompt via existing llm_clients factory."""
-    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-
+def _get_llm():
+    """Build the RAG LLM and return (llm, model_name)."""
     from config import RAG_CHATBOT_LLM_MODEL
     from config import llm as llm_config
 
@@ -42,7 +45,44 @@ async def call_rag_llm(
         base_url=llm_config.base_url or None,
         api_key=llm_config.llm_api_key or None,
     )
-    llm = client.get_llm()
+    return client.get_llm(), model
+
+
+def _flatten(content: Any) -> str:
+    if isinstance(content, list):
+        content = " ".join(
+            item.get("text", "") if isinstance(item, dict) else str(item) for item in content
+        )
+    return str(content or "").strip()
+
+
+async def translate_message(text: str, user_message: str) -> str:
+    """Restate `text` in the same language as the user's input. Falls back to `text`."""
+    from langchain_core.messages import HumanMessage
+
+    try:
+        llm, _ = _get_llm()
+        prompt = (
+            "Restate the message below in the same language as this user input, "
+            "keeping the meaning. Reply with only the restated message.\n\n"
+            f"User input: {user_message}\n\nMessage: {text}"
+        )
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        return _flatten(response.content) or text
+    except Exception:  # noqa: BLE001 — localization is best-effort
+        logger.warning("Out-of-scope localization failed; using fallback text")
+        return text
+
+
+async def call_rag_llm(
+    context: str,
+    user_message: str,
+    chat_history: list[dict[str, Any]],
+) -> str:
+    """Call LLM with strict RAG prompt via existing llm_clients factory."""
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+    llm, model = _get_llm()
 
     # Gemma on the Gemini API rejects system instructions; fold the prompt into
     # the user turn instead. Gemini models keep it as a real SystemMessage.
@@ -64,9 +104,4 @@ async def call_rag_llm(
     messages.append(HumanMessage(content=final_turn))
 
     response = await llm.ainvoke(messages)
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(
-            item.get("text", "") if isinstance(item, dict) else str(item) for item in content
-        )
-    return str(content or "").strip()
+    return _round_decimals(_flatten(response.content))

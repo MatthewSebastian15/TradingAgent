@@ -11,7 +11,7 @@ from config import RAG_CHATBOT_CHAT_TIMEOUT_SECONDS, RAG_CHATBOT_ENABLED
 from errors import BadRequestError
 from rate_limiter import limit_request, request_policy
 from schemas import ApiSchema
-from services.rag_llm import call_rag_llm
+from services.rag_llm import call_rag_llm, translate_message
 from services.rag_pool import get_pool_status
 from services.rag_service import build_context, check_scope, detect_intent
 
@@ -19,9 +19,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["rag-chatbot"])
 
 _OUT_OF_SCOPE = (
-    "Pertanyaan ini di luar konteks yang diizinkan. "
-    "Chatbot hanya bisa menjawab berdasarkan data News, Market, "
-    "Watchlist, dan hasil analisis AI Agent yang sudah tersimpan."
+    "This question is outside the permitted context. The chatbot can only answer "
+    "based on stored News, Market, Watchlist data, and AI Agent analysis results."
 )
 _NO_DATA = "Tidak ada data yang relevan ditemukan di RAG Data Pool untuk pertanyaan ini."
 
@@ -65,9 +64,14 @@ async def rag_chat(body: RagChatRequest, request: Request) -> RagChatResponse:
         watchlist_ctx = body.watchlist_context
 
         if not check_scope(message):
-            return RagChatResponse(
-                answer=_OUT_OF_SCOPE, out_of_scope=True, pool_used=[], sources=[]
-            )
+            try:
+                warning = await asyncio.wait_for(
+                    translate_message(_OUT_OF_SCOPE, message),
+                    timeout=RAG_CHATBOT_CHAT_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                warning = _OUT_OF_SCOPE
+            return RagChatResponse(answer=warning, out_of_scope=True, pool_used=[], sources=[])
 
         intent = detect_intent(message, context_filter)
 

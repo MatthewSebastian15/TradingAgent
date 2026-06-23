@@ -22,13 +22,19 @@ def test_pool_status_endpoint(client):
 
 
 def test_chat_out_of_scope(client):
-    with patch("routes.rag_chat.check_scope", return_value=False):
+    async def fake_translate(text, _message):
+        return text
+
+    with (
+        patch("routes.rag_chat.check_scope", return_value=False),
+        patch("routes.rag_chat.translate_message", side_effect=fake_translate),
+    ):
         r = client.post("/api/rag/chat", json={"message": "Buatkan resep nasi goreng"})
     assert r.status_code == 200
     data = r.json()
     assert data["out_of_scope"] is True
     assert data["pool_used"] == []
-    assert "di luar konteks" in data["answer"]
+    assert "permitted context" in data["answer"]
 
 
 def test_chat_valid_with_data(client):
