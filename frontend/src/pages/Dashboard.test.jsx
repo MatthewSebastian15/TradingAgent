@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { cleanup, render, screen } from '@testing-library/react';
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import Dashboard from './Dashboard';
@@ -21,7 +22,7 @@ describe('Dashboard', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Home News Summary before existing Home heading with the News tab data source', () => {
+  it('renders the News summary and a chat bar that links to the chatbot', () => {
     useGeneralNews.mockReturnValue({
       data: {
         articles: [
@@ -39,16 +40,15 @@ describe('Dashboard', () => {
       status: 'success',
     });
 
-    render(<Dashboard />);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
 
     expect(useGeneralNews).toHaveBeenCalledWith({ category: 'all', windowDays: 14, limit: 100 });
     expect(screen.getByText('Dashboard market headline')).toBeInTheDocument();
-
-    const summaryHeading = screen.getByRole('heading', { name: 'Summary News' });
-    const homeHeading = screen.getByRole('heading', { name: 'Home' });
-
-    expect(
-      summaryHeading.compareDocumentPosition(homeHeading) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'News' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -58,7 +58,7 @@ describe('HomeNewsSummary', () => {
   it('renders the title and compact top-three news from the same final order as News', () => {
     render(<HomeNewsSummary news={news} />);
 
-    expect(screen.getByRole('heading', { name: 'Summary News' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'News' })).toBeInTheDocument();
     expect(screen.getByText('Top 3 Latest')).toBeInTheDocument();
 
     const headlines = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
@@ -81,6 +81,17 @@ describe('HomeNewsSummary', () => {
     expect(headline).toHaveClass('line-clamp-1', 'text-[13px]');
     expect(description).toHaveClass('line-clamp-1', 'text-[11px]');
     expect(screen.getByText('WORLD - Reuters - 28m')).toBeInTheDocument();
+  });
+
+  it('collapses to a single bar when the header is clicked', () => {
+    render(<HomeNewsSummary news={news} />);
+
+    expect(screen.getByText('US stocks rise as tech shares lead gains')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { expanded: true }));
+    expect(
+      screen.queryByText('US stocks rise as tech shares lead gains')
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument();
   });
 
   it('renders an empty state when news is empty', () => {

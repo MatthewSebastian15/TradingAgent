@@ -1,4 +1,6 @@
 import { MessageSquare } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { ChatHistorySidebar } from '../components/chatbot/ChatHistorySidebar';
 import { ChatWindow } from '../components/chatbot/ChatWindow';
@@ -20,6 +22,18 @@ export function ChatbotPage() {
     selectChat,
     deleteChat,
   } = useRagChat('all');
+
+  // Auto-send a prompt seeded from the home chat bar (navigate state), once.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const seeded = useRef(false);
+  useEffect(() => {
+    const prompt = location.state?.prompt;
+    if (!prompt || seeded.current) return;
+    seeded.current = true;
+    sendMessage(prompt);
+    navigate(location.pathname, { replace: true }); // clear state so refresh won't resend
+  }, [location, navigate, sendMessage]);
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12 text-bloomberg-white">
