@@ -1,10 +1,10 @@
-import { Send, Trash2 } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { useEffect, useRef, useState } from 'react';
 
 import { ChatMessage } from './ChatMessage';
 
-export function ChatWindow({ messages, isLoading, error, onSend, onClear }) {
+export function ChatWindow({ messages, isLoading, error, onSend, onStop }) {
   const [input, setInput] = useState('');
   const bottomRef = useRef(null);
 
@@ -76,20 +76,22 @@ export function ChatWindow({ messages, isLoading, error, onSend, onClear }) {
             disabled={isLoading}
             className="flex-1 resize-none bg-bloomberg-card border border-bloomberg-border rounded-lg px-3 py-2 text-sm text-bloomberg-white placeholder-bloomberg-muted focus:outline-none focus:border-bloomberg-orange disabled:opacity-50"
           />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="px-3 py-2 rounded-lg bg-bloomberg-orange text-black disabled:opacity-40 hover:opacity-90"
-          >
-            <Send size={16} />
-          </button>
-          {messages.length > 0 && (
+          {isLoading ? (
             <button
               type="button"
-              onClick={onClear}
-              className="px-3 py-2 rounded-lg bg-bloomberg-card border border-bloomberg-border text-bloomberg-muted hover:text-bloomberg-red hover:border-bloomberg-red"
+              onClick={onStop}
+              title="Stop"
+              className="px-3 py-2 rounded-lg bg-bloomberg-card border border-bloomberg-red text-bloomberg-red hover:bg-bloomberg-red/10"
             >
-              <Trash2 size={16} />
+              <Square size={16} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!input.trim()}
+              className="px-3 py-2 rounded-lg bg-bloomberg-orange text-black disabled:opacity-40 hover:opacity-90"
+            >
+              <Send size={16} />
             </button>
           )}
         </form>
@@ -106,5 +108,5 @@ ChatWindow.propTypes = {
   isLoading: PropTypes.bool.isRequired,
   error: PropTypes.string,
   onSend: PropTypes.func.isRequired,
-  onClear: PropTypes.func.isRequired,
+  onStop: PropTypes.func.isRequired,
 };

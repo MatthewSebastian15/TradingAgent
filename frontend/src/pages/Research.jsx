@@ -705,10 +705,12 @@ export default function Research() {
 
   const { data, loading, error } = useStockOverview(activeTicker);
 
-  const handleSelect = useCallback((symbol) => {
-    const sym = String(symbol || '').toUpperCase();
+  const handleSelect = useCallback((selection) => {
+    const item = typeof selection === 'string' ? { symbol: selection } : selection || {};
+    const sym = String(item.symbol || '').toUpperCase();
     if (!sym) return;
-    saveRecentTicker({ symbol: sym });
+    // Keep exchange/name so the sidebar can show "TICKER-EXCHANGE".
+    saveRecentTicker({ ...item, symbol: sym });
     setActiveTicker(sym);
   }, []);
 
@@ -757,7 +759,7 @@ export default function Research() {
       <div className="px-4 pt-4">
         <ResearchCommandBar
           value={activeTicker || ''}
-          onSelect={(item) => handleSelect(item.symbol)}
+          onSelect={(item) => handleSelect(item)}
           onSubmit={({ symbol }) => handleSelect(symbol)}
           loading={loading}
         />

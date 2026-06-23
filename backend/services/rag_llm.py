@@ -44,7 +44,10 @@ async def call_rag_llm(
     )
     llm = client.get_llm()
 
-    messages: list = [SystemMessage(content=_SYSTEM_PROMPT)]
+    # Gemma on the Gemini API rejects system instructions; fold the prompt into
+    # the user turn instead. Gemini models keep it as a real SystemMessage.
+    is_gemma = "gemma" in model.lower()
+    messages: list = [] if is_gemma else [SystemMessage(content=_SYSTEM_PROMPT)]
 
     for entry in chat_history:
         role = str(entry.get("role", "")).lower()
@@ -55,7 +58,10 @@ async def call_rag_llm(
             messages.append(AIMessage(content=content))
 
     context_block = f"\n\n--- CONTEXT DATA ---\n{context}\n--- END CONTEXT ---\n" if context else ""
-    messages.append(HumanMessage(content=f"{context_block}\nUser question: {user_message}"))
+    final_turn = f"{context_block}\nUser question: {user_message}"
+    if is_gemma:
+        final_turn = f"{_SYSTEM_PROMPT}\n{final_turn}"
+    messages.append(HumanMessage(content=final_turn))
 
     response = await llm.ainvoke(messages)
     content = response.content

@@ -1,10 +1,16 @@
 import { buildApiUrl, buildHeaders } from '../utils/api';
 
 /**
- * @param {{ message: string, contextFilter: string, chatHistory: Array<{role:string,content:string}>, watchlistContext: object|null }} params
+ * @param {{ message: string, contextFilter: string, chatHistory: Array<{role:string,content:string}>, watchlistContext: object|null, signal?: AbortSignal }} params
  * @returns {Promise<{answer: string, out_of_scope: boolean, pool_used: string[], sources: object[]}>}
  */
-export async function fetchRagChat({ message, contextFilter, chatHistory, watchlistContext }) {
+export async function fetchRagChat({
+  message,
+  contextFilter,
+  chatHistory,
+  watchlistContext,
+  signal,
+}) {
   const body = {
     message,
     context_filter: contextFilter || 'all',
@@ -19,6 +25,7 @@ export async function fetchRagChat({ message, contextFilter, chatHistory, watchl
     credentials: 'include',
     headers: await buildHeaders(),
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok) {
