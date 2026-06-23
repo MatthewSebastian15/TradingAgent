@@ -15,10 +15,12 @@ STRICT RULES:
 3. If the context does not contain enough information, say so clearly.
 4. Do not run new analysis or make new recommendations beyond what is in the context.
 5. Always use the same language as the user's question.
-6. At the end of each answer, briefly mention which data source you used (News / Market / AI Agent Analysis / Watchlist).
+6. At the end of each answer, briefly mention which data source you used
+   (News / Market / AI Agent Analysis / Watchlist).
 7. Keep answers concise and grounded in the data.
 
-If the context is empty, reply: "Tidak ada data yang relevan ditemukan di RAG Data Pool untuk pertanyaan ini."
+If the context is empty, reply:
+"Tidak ada data yang relevan ditemukan di RAG Data Pool untuk pertanyaan ini."
 """
 
 
@@ -30,7 +32,8 @@ async def call_rag_llm(
     """Call LLM with strict RAG prompt via existing llm_clients factory."""
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-    from config import RAG_CHATBOT_LLM_MODEL, llm as llm_config
+    from config import RAG_CHATBOT_LLM_MODEL
+    from config import llm as llm_config
 
     model = RAG_CHATBOT_LLM_MODEL or llm_config.quick_think_llm
     client = create_llm_client(

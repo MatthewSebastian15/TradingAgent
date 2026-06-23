@@ -17,9 +17,17 @@ logger = logging.getLogger(__name__)
 # ─── Scope guardrail ──────────────────────────────────────────────────────────
 
 _IN_SCOPE = [
-    re.compile(r"\b(news|berita|headline|artikel|breaking|latest|sentiment|impact|provider)\b", re.I),
-    re.compile(r"\b(market|harga|price|volume|change|gainer|loser|mover|index|crypto|etf|forex|saham)\b", re.I),
-    re.compile(r"\b(analisis|analysis|ai.agent|recommendation|rekomendasi|confidence|risk|entry|thesis|hold|buy|sell|wait|history|analisa)\b", re.I),
+    re.compile(
+        r"\b(news|berita|headline|artikel|breaking|latest|sentiment|impact|provider)\b", re.I
+    ),
+    re.compile(
+        r"\b(market|harga|price|volume|change|gainer|loser|mover|index|crypto|etf|forex|saham)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(analisis|analysis|ai.agent|recommendation|rekomendasi|confidence|risk|entry|thesis|hold|buy|sell|wait|history|analisa)\b",
+        re.I,
+    ),
     re.compile(r"\b(stop.loss|take.profit|allocation|ticker|stock|aset|asset|watchlist)\b", re.I),
 ]
 
@@ -92,13 +100,17 @@ def detect_intent(message: str, context_filter: str) -> list[str]:
 
 # ─── Context formatters ───────────────────────────────────────────────────────
 
+
 def _extract_keywords(message: str) -> list[str]:
     stopwords = {"the", "and", "for", "apa", "yang", "dari", "ini", "itu", "ada", "dengan", "atau"}
     return [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", message.lower()) if w not in stopwords]
 
 
 def _score_article(article: dict[str, Any], keywords: list[str]) -> int:
-    text = " ".join(str(article.get(f, "") or "") for f in ("title", "description", "summary", "category", "source")).lower()
+    text = " ".join(
+        str(article.get(f, "") or "")
+        for f in ("title", "description", "summary", "category", "source")
+    ).lower()
     score = sum(kw in text for kw in keywords)
     if article.get("impact") == "high":
         score += 2
@@ -112,16 +124,20 @@ def _format_news_context(articles: list[dict[str, Any]]) -> tuple[str, list[dict
     for a in articles:
         title = a.get("title", "")
         desc = a.get("description") or a.get("summary", "")
-        lines.append(f"[NEWS] {title} | {a.get('source','')} | {a.get('category','')} | {a.get('published_at','')} | {desc}")
-        sources.append({
-            "type": "news",
-            "id": a.get("id", ""),
-            "title": title,
-            "source": a.get("source", ""),
-            "category": a.get("category", ""),
-            "published_at": a.get("published_at", ""),
-            "url": a.get("url", ""),
-        })
+        lines.append(
+            f"[NEWS] {title} | {a.get('source', '')} | {a.get('category', '')} | {a.get('published_at', '')} | {desc}"  # noqa: E501
+        )
+        sources.append(
+            {
+                "type": "news",
+                "id": a.get("id", ""),
+                "title": title,
+                "source": a.get("source", ""),
+                "category": a.get("category", ""),
+                "published_at": a.get("published_at", ""),
+                "url": a.get("url", ""),
+            }
+        )
     return "\n".join(lines), sources
 
 
@@ -130,22 +146,36 @@ def _format_market_context(market: dict[str, Any]) -> tuple[str, list[dict[str, 
     for item in (market.get("overview") or {}).get("items") or []:
         sym = item.get("symbol", "")
         lines.append(
-            f"[MARKET:OVERVIEW] {sym} | {item.get('label','')} | last={item.get('last','')} | "
-            f"change={item.get('change','')} | change_percent={item.get('change_percent','')}% | "
-            f"currency={item.get('currency','')} | status={item.get('status','')} | updated_at={item.get('updated_at','')}"
+            f"[MARKET:OVERVIEW] {sym} | {item.get('label', '')} | last={item.get('last', '')} | "
+            f"change={item.get('change', '')} | change_percent={item.get('change_percent', '')}% | "
+            f"currency={item.get('currency', '')} | status={item.get('status', '')} | updated_at={item.get('updated_at', '')}"  # noqa: E501
         )
-        sources.append({"type": "market", "symbol": sym, "label": item.get("label", ""), "updated_at": item.get("updated_at", "")})
+        sources.append(
+            {
+                "type": "market",
+                "symbol": sym,
+                "label": item.get("label", ""),
+                "updated_at": item.get("updated_at", ""),
+            }
+        )
 
     movers = market.get("movers") or {}
     updated_at = movers.get("updated_at", "")
     for side in ("gainers", "losers"):
-        for m in (movers.get(side) or []):
+        for m in movers.get(side) or []:
             sym = m.get("symbol", "")
             lines.append(
-                f"[MARKET:{side.upper()}] {sym} | {m.get('name','')} | last={m.get('last','')} | "
-                f"change_percent={m.get('change_percent','')}% | volume={m.get('volume','')} | updated_at={updated_at}"
+                f"[MARKET:{side.upper()}] {sym} | {m.get('name', '')} | last={m.get('last', '')} | "
+                f"change_percent={m.get('change_percent', '')}% | volume={m.get('volume', '')} | updated_at={updated_at}"  # noqa: E501
             )
-            sources.append({"type": "market", "symbol": sym, "label": m.get("name", ""), "updated_at": updated_at})
+            sources.append(
+                {
+                    "type": "market",
+                    "symbol": sym,
+                    "label": m.get("name", ""),
+                    "updated_at": updated_at,
+                }
+            )
 
     return "\n".join(lines), sources
 
@@ -157,31 +187,39 @@ def _format_analysis_context(analyses: list[dict[str, Any]]) -> tuple[str, list[
         decision = a.get("display_signal") or a.get("decision") or a.get("recommendation", "")
         overview = a.get("analysis_overview") or {}
         reasons = overview.get("key_reasons") or a.get("key_reasons") or []
-        reasons_str = "; ".join(str(r) for r in (reasons[:3] if isinstance(reasons, list) else [reasons]))
-        risk = (overview.get("risk_summary") or {}).get("short_reason") or a.get("mini_risk_summary", "")
+        reasons_str = "; ".join(
+            str(r) for r in (reasons[:3] if isinstance(reasons, list) else [reasons])
+        )
+        risk = (overview.get("risk_summary") or {}).get("short_reason") or a.get(
+            "mini_risk_summary", ""
+        )
         line = (
-            f"[ANALYSIS] {ticker} | {a.get('trade_date','')} | decision={decision} | "
-            f"confidence={a.get('confidence_score','')} | allocation={a.get('suggested_allocation_percent','')}% | "
-            f"entry={a.get('entry_price','')} | stop_loss={a.get('stop_loss','')} | take_profit={a.get('take_profit','')} | "
-            f"created={a.get('analysis_created_at') or a.get('created_at','')}\n"
-            f"  summary: {overview.get('executive_summary') or a.get('executive_summary','')}\n"
-            f"  thesis: {overview.get('investment_thesis') or a.get('investment_thesis','')}\n"
+            f"[ANALYSIS] {ticker} | {a.get('trade_date', '')} | decision={decision} | "
+            f"confidence={a.get('confidence_score', '')} | allocation={a.get('suggested_allocation_percent', '')}% | "  # noqa: E501
+            f"entry={a.get('entry_price', '')} | stop_loss={a.get('stop_loss', '')} | take_profit={a.get('take_profit', '')} | "  # noqa: E501
+            f"created={a.get('analysis_created_at') or a.get('created_at', '')}\n"
+            f"  summary: {overview.get('executive_summary') or a.get('executive_summary', '')}\n"
+            f"  thesis: {overview.get('investment_thesis') or a.get('investment_thesis', '')}\n"
             f"  reasons: {reasons_str}\n"
             f"  risk: {risk}"
         )
         lines.append(line)
-        sources.append({
-            "type": "analysis",
-            "ticker": ticker,
-            "trade_date": a.get("trade_date", ""),
-            "decision": decision,
-            "request_id": a.get("request_id", ""),
-            "created_at": a.get("analysis_created_at") or a.get("created_at", ""),
-        })
+        sources.append(
+            {
+                "type": "analysis",
+                "ticker": ticker,
+                "trade_date": a.get("trade_date", ""),
+                "decision": decision,
+                "request_id": a.get("request_id", ""),
+                "created_at": a.get("analysis_created_at") or a.get("created_at", ""),
+            }
+        )
     return "\n".join(lines), sources
 
 
-def _format_watchlist_context(watchlist_context: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
+def _format_watchlist_context(
+    watchlist_context: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]]]:
     """Format frontend-supplied watchlist data (groups + quotes) into context string."""
     lines, sources = [], []
     groups = watchlist_context.get("groups") or []
@@ -204,25 +242,28 @@ def _format_watchlist_context(watchlist_context: dict[str, Any]) -> tuple[str, l
             direction = "UP" if q.get("pos") else "DOWN" if q.get("pos") is False else "N/A"
             error = q.get("error", "")
             line = (
-                f"[WATCHLIST] group={group_name} | {sym} | {name} | exchange={exchange} | market={market} | "
+                f"[WATCHLIST] group={group_name} | {sym} | {name} | exchange={exchange} | market={market} | "  # noqa: E501
                 f"price={price} | change={chg} | direction={direction}"
             )
             if error:
                 line += f" | error={error}"
             lines.append(line)
-            sources.append({
-                "type": "watchlist",
-                "symbol": sym,
-                "name": name,
-                "group": group_name,
-                "price": price,
-                "fetched_at": fetched_at,
-            })
+            sources.append(
+                {
+                    "type": "watchlist",
+                    "symbol": sym,
+                    "name": name,
+                    "group": group_name,
+                    "price": price,
+                    "fetched_at": fetched_at,
+                }
+            )
 
     return "\n".join(lines), sources
 
 
 # ─── Main entry point ─────────────────────────────────────────────────────────
+
 
 async def build_context(
     message: str,
@@ -237,7 +278,9 @@ async def build_context(
     if "news" in intent:
         articles = await get_news_pool()
         if articles:
-            top = sorted(articles, key=lambda a: _score_article(a, keywords), reverse=True)[: RAG_CHATBOT_MAX_CONTEXT_ARTICLES]
+            top = sorted(articles, key=lambda a: _score_article(a, keywords), reverse=True)[
+                :RAG_CHATBOT_MAX_CONTEXT_ARTICLES
+            ]
             ctx, srcs = _format_news_context(top)
             if ctx:
                 context_parts.append(f"=== NEWS DATA ===\n{ctx}")
@@ -260,7 +303,7 @@ async def build_context(
                 reverse=True,
             )
             detailed: list[dict[str, Any]] = []
-            for item in sorted_history[: RAG_CHATBOT_MAX_CONTEXT_ANALYSES]:
+            for item in sorted_history[:RAG_CHATBOT_MAX_CONTEXT_ANALYSES]:
                 req_id = item.get("request_id")
                 full = await get_analysis_detail(req_id) if req_id else None
                 detailed.append(full if full else item)

@@ -38,7 +38,10 @@ async def get_news_pool() -> list[dict[str, Any]]:
     """Return cached general news articles from NewsArticleStore SQLite."""
     global _news_cache
     now = time.time()
-    if _news_cache is not None and (now - _news_cache.fetched_at) < RAG_CHATBOT_NEWS_POOL_TTL_SECONDS:
+    if (
+        _news_cache is not None
+        and (now - _news_cache.fetched_at) < RAG_CHATBOT_NEWS_POOL_TTL_SECONDS
+    ):
         return _news_cache.data
 
     def _fetch() -> list[dict[str, Any]]:
@@ -59,7 +62,10 @@ async def get_market_pool() -> dict[str, Any] | None:
     """Return cached market overview + movers snapshot."""
     global _market_cache
     now = time.time()
-    if _market_cache is not None and (now - _market_cache.fetched_at) < RAG_CHATBOT_MARKET_POOL_TTL_SECONDS:
+    if (
+        _market_cache is not None
+        and (now - _market_cache.fetched_at) < RAG_CHATBOT_MARKET_POOL_TTL_SECONDS
+    ):
         return _market_cache.data
 
     def _fetch() -> dict[str, Any]:
