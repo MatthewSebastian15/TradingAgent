@@ -1,6 +1,6 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import PropTypes from 'prop-types';
-import React from 'react';
+import React, { useState } from 'react';
 
 function normalizeWarnings(warnings) {
   if (!Array.isArray(warnings)) return [];
@@ -30,7 +30,8 @@ function normalizeWarnings(warnings) {
 }
 
 export default function WarningToastStack({ warnings = [] }) {
-  const visibleWarnings = normalizeWarnings(warnings);
+  const [dismissed, setDismissed] = useState(() => new Set());
+  const visibleWarnings = normalizeWarnings(warnings).filter((w) => !dismissed.has(w.id));
 
   if (visibleWarnings.length === 0) return null;
 
@@ -48,7 +49,15 @@ export default function WarningToastStack({ warnings = [] }) {
         >
           <div className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-[0.2em] text-bloomberg-amber">
             <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" strokeWidth={1.8} />
-            <span>{warning.title}</span>
+            <span className="flex-1">{warning.title}</span>
+            <button
+              type="button"
+              onClick={() => setDismissed((prev) => new Set(prev).add(warning.id))}
+              aria-label="Dismiss warning"
+              className="flex-shrink-0 text-bloomberg-amber/70 transition-colors hover:text-bloomberg-amber"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
           </div>
           <p className="mt-1 font-mono text-[11px] leading-relaxed text-bloomberg-white">
             {warning.message}
