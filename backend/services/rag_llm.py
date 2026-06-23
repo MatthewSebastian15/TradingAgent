@@ -29,7 +29,7 @@ STRICT RULES:
    line or any "Data Source:" footer.
 
 If the context is empty, reply:
-"Tidak ada data yang relevan ditemukan di RAG Data Pool untuk pertanyaan ini."
+"No relevant data found in the RAG Data Pool for this question."
 """
 
 

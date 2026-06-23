@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -22,7 +23,32 @@ _OUT_OF_SCOPE = (
     "This question is outside the permitted context. The chatbot can only answer "
     "based on stored News, Market, Watchlist data, and AI Agent analysis results."
 )
-_NO_DATA = "Tidak ada data yang relevan ditemukan di RAG Data Pool untuk pertanyaan ini."
+_OUT_OF_SCOPE_ID = (
+    "Pertanyaan ini di luar konteks yang diizinkan. Chatbot hanya dapat menjawab "
+    "berdasarkan data News, Market, Watchlist yang tersimpan, dan hasil analisis AI Agent."
+)
+_NO_DATA = "No relevant data found in the RAG Data Pool for this question."
+_NO_DATA_ID = "Tidak ada data yang relevan ditemukan di RAG Data Pool untuk pertanyaan ini."
+
+# Cheap localization for the two languages this app actually serves: English is
+# the default, Indonesian is detected by stopwords. The LLM translator is
+# reserved for anything else, so the common cases never pay an LLM round-trip.
+# ponytail: a stopword heuristic, not a language detector — other Latin-script
+# languages fall through to English. Add a constant + markers for a 3rd language.
+_ID_MARKERS = frozenset(
+    {
+        "apa", "saya", "yang", "tidak", "buatkan", "resep", "kenapa", "mengapa",
+        "bagaimana", "tolong", "berapa", "adalah", "dan", "untuk", "saham", "harga",
+    }
+)
+
+
+def _localize(text_en: str, text_id: str, message: str) -> str | None:
+    """EN/ID fast path. Returns None when the language is neither (LLM needed)."""
+    if not message.isascii():
+        return None
+    words = set(re.findall(r"[a-z]+", message.lower()))
+    return text_id if words & _ID_MARKERS else text_en
 
 
 class _ChatHistoryItem(ApiSchema):
@@ -64,13 +90,15 @@ async def rag_chat(body: RagChatRequest, request: Request) -> RagChatResponse:
         watchlist_ctx = body.watchlist_context
 
         if not check_scope(message):
-            try:
-                warning = await asyncio.wait_for(
-                    translate_message(_OUT_OF_SCOPE, message),
-                    timeout=RAG_CHATBOT_CHAT_TIMEOUT_SECONDS,
-                )
-            except asyncio.TimeoutError:
-                warning = _OUT_OF_SCOPE
+            warning = _localize(_OUT_OF_SCOPE, _OUT_OF_SCOPE_ID, message)
+            if warning is None:
+                try:
+                    warning = await asyncio.wait_for(
+                        translate_message(_OUT_OF_SCOPE, message),
+                        timeout=RAG_CHATBOT_CHAT_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    warning = _OUT_OF_SCOPE
             return RagChatResponse(answer=warning, out_of_scope=True, pool_used=[], sources=[])
 
         intent = detect_intent(message, context_filter)
@@ -86,7 +114,10 @@ async def rag_chat(body: RagChatRequest, request: Request) -> RagChatResponse:
 
         if not context_str.strip():
             return RagChatResponse(
-                answer=_NO_DATA, out_of_scope=False, pool_used=intent, sources=[]
+                answer=_localize(_NO_DATA, _NO_DATA_ID, message) or _NO_DATA,
+                out_of_scope=False,
+                pool_used=intent,
+                sources=[],
             )
 
         try:

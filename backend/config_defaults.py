@@ -272,6 +272,9 @@ NEWS_RSS_DISABLED_FEED_IDS: list[str] = []
 NEWS_RSS_USER_AGENT = "TradingAgent/0.1 RSS Reader"
 NEWS_CACHE_ENABLED = env_bool("NEWS_CACHE_ENABLED", True)
 NEWS_CACHE_TTL_MINUTES = env_int("NEWS_CACHE_TTL_MINUTES", 60, min_value=1)
+# Ticker-scoped news cache used by the per-ticker news UI. Distinct from
+# general_news.sqlite3 below, which is the standalone article store feeding the
+# RAG chatbot news pool (services/rag_pool.py). Keep the two separate.
 NEWS_CACHE_DB_PATH = ".cache/news_data.sqlite3"
 NEWS_CACHE_MAX_ENTRIES = env_int("NEWS_CACHE_MAX_ENTRIES", 512, min_value=1)
 NEWS_DEBUG_RAW_RESPONSE = env_bool("NEWS_DEBUG_RAW_RESPONSE", False)
@@ -356,6 +359,9 @@ GENERAL_NEWS_VENDOR_TIMEOUT_SECONDS = env_int(
 GENERAL_NEWS_VENDOR_MAX_RETRIES = env_int("GENERAL_NEWS_VENDOR_MAX_RETRIES", 1, min_value=0)
 
 GENERAL_NEWS_CACHE_ENABLED = env_bool("GENERAL_NEWS_CACHE_ENABLED", True)
+# NewsArticleStore DB: market-wide articles. Also read by the RAG chatbot as
+# its News pool (services/rag_pool.py). See NEWS_CACHE_DB_PATH for the separate
+# per-ticker cache.
 GENERAL_NEWS_CACHE_DB_PATH = ".cache/general_news.sqlite3"
 GENERAL_NEWS_CACHE_MAX_ENTRIES = env_int("GENERAL_NEWS_CACHE_MAX_ENTRIES", 1000, min_value=1)
 
