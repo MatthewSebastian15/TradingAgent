@@ -240,6 +240,14 @@ python -m pytest packages/tests -m "not integration and not live_api" -v
 - `import/order` groups imports as builtin, external, internal alias, then
   relative.
 
+Sidebars:
+
+- Every in-page sidebar (Research, Chatbot history, future tabs) MUST size from
+  `frontend/src/constants/sidebar.js`: `SIDEBAR_COLLAPSED_WIDTH` (`w-12`, 48px,
+  matches the global nav rail) and `SIDEBAR_EXPANDED_WIDTH` (`w-60`, 240px).
+- Do not hardcode sidebar widths (`w-[200px]`, `w-7`, etc.). Change the
+  constants to resize all sidebars at once.
+
 Color tokens:
 
 ```text

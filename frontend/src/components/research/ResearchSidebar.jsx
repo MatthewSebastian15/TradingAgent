@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { useState } from 'react';
 
+import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from '../../constants/sidebar';
 import { useWatchlistStore } from '../../hooks/useWatchlistStore';
 import { readRecentTickers } from '../../utils/recentTickers';
 
@@ -38,7 +39,7 @@ export default function ResearchSidebar({ activeTicker, collapsed, onToggle, onS
         type="button"
         onClick={onToggle}
         aria-label="Expand sidebar"
-        className="flex h-full w-7 shrink-0 items-center justify-center border-r border-bloomberg-border bg-[#111111] text-bloomberg-orange transition-all duration-200 ease-in-out"
+        className={`flex h-full ${SIDEBAR_COLLAPSED_WIDTH} shrink-0 items-center justify-center border-r border-bloomberg-border bg-[#111111] text-bloomberg-orange transition-all duration-200 ease-in-out`}
       >
         <ChevronRight className="h-4 w-4" aria-hidden="true" />
       </button>
@@ -50,7 +51,9 @@ export default function ResearchSidebar({ activeTicker, collapsed, onToggle, onS
   const rows = tab === 'RECENT' ? recent : watchlist;
 
   return (
-    <aside className="flex h-full w-[200px] shrink-0 flex-col border-r border-bloomberg-border bg-[#111111] transition-all duration-200 ease-in-out">
+    <aside
+      className={`flex h-full ${SIDEBAR_EXPANDED_WIDTH} shrink-0 flex-col border-r border-bloomberg-border bg-[#111111] transition-all duration-200 ease-in-out`}
+    >
       <div className="flex h-10 shrink-0 border-b border-bloomberg-border">
         {['RECENT', 'WATCHLIST'].map((t) => (
           <button

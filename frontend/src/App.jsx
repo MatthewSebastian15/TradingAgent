@@ -8,9 +8,11 @@ import {
   LEGACY_ANALYSIS_LIVE_PATH,
   LEGACY_ANALYSIS_PATH,
   WATCHLIST_PATH,
+  CHATBOT_PATH,
 } from './constants/routes';
 import { prefetchMarketOverviewData } from './hooks/useMarketOverviewData';
 import AIAgent from './pages/AIAgent';
+import { ChatbotPage } from './pages/ChatbotPage';
 import Dashboard from './pages/Dashboard';
 import Economic from './pages/Economic';
 import Market from './pages/Market';
@@ -92,6 +94,7 @@ function App() {
           <Route path="/news" element={<News />} />
           <Route path="/market" element={<Market />} />
           <Route path="/econ" element={<Economic />} />
+          <Route path={CHATBOT_PATH} element={<ChatbotPage />} />
           <Route path="/economic" element={<Navigate to="/econ" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
