@@ -522,13 +522,38 @@ RESPONSE_DETAILS=summary,full,debug
 | `ANALYSIS_JOB_STORE_BACKEND` | `sqlite` |
 | `ANALYSIS_JOB_ROUTING_MODE` | `sticky_sessions` |
 | `ANALYSIS_DB_PATH` | `.cache/analysis_history.sqlite3` |
-| `ANALYSIS_STORAGE_BACKEND` | `sqlite` |
+| `ANALYSIS_STORAGE_BACKEND` | `sqlite` (or `postgres`) |
+| `ANALYSIS_DATABASE_URL` | blank (required when backend is `postgres`) |
+| `POSTGRES_PASSWORD` | blank (compose-only, for the `postgres` service) |
 | `ANALYSIS_HISTORY_MAX_ROWS` | `1000` |
 | `ANALYSIS_HISTORY_DEFAULT_LIMIT` | `25` |
 | `DATA_CACHE_BACKEND` | `sqlite` |
 | `DATA_CACHE_DB_PATH` | `.cache/market_data.sqlite3` |
 | `DATA_CACHE_TTL_SECONDS` | `900` |
 | `DATA_CACHE_MAX_ENTRIES` | `512` |
+
+#### Optional: Postgres backend for analysis history
+
+Only the `analyses` table can move to Postgres; every cache stays on SQLite.
+Default backend is `sqlite` — leave it unless you need shared writes across
+backend instances. To switch:
+
+```powershell
+# 1. Start Postgres (POSTGRES_PASSWORD must be in shell or root .env for compose)
+$env:POSTGRES_PASSWORD = "<password>"
+docker compose up -d postgres
+# 2. Apply schema
+docker compose exec -T postgres psql -U tradingagents -d tradingagents -f - < backend\scripts\postgres_schema.sql
+# 3. Copy existing rows (idempotent, safe to re-run)
+cd backend; $env:PYTHONPATH = "."; python scripts\migrate_analyses_to_postgres.py; cd ..
+# 4. Cut over: set in backend/.env
+#    ANALYSIS_STORAGE_BACKEND=postgres
+#    ANALYSIS_DATABASE_URL=postgresql://tradingagents:<password>@localhost:5432/tradingagents
+```
+
+Rollback is one line: set `ANALYSIS_STORAGE_BACKEND=sqlite` and restart. The
+SQLite file is the untouched read-only source. Postgres repo tests are opt-in
+(`pytest -m postgres` with `ANALYSIS_DATABASE_URL` set).
 
 ### LLM
 

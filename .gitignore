@@ -66,3 +66,5 @@ graphify-out/
 
 CLAUDE.md
 .claude/
+# Local migration backups
+backend/.cache.bak/

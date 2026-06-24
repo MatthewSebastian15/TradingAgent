@@ -523,7 +523,7 @@ Local defaults:
 
 | Data | Path |
 |---|---|
-| Analysis history | `.cache/analysis_history.sqlite3` |
+| Analysis history | `.cache/analysis_history.sqlite3` (or Postgres when `ANALYSIS_STORAGE_BACKEND=postgres`) |
 | Analysis job TTL cache | `.cache/analysis_jobs.sqlite3` |
 | Rate limits | `.cache/rate_limits.sqlite3` |
 | Market data cache | `.cache/market_data.sqlite3` |
@@ -571,7 +571,7 @@ State/storage:
 | Owner session expiry | `sessionStorage` key `_ta_owner_session_expires_at` |
 | Watchlist groups | `localStorage` key `tradingagents:watchlists:v1` |
 | Local history summary | `localStorage` key `ta_analysis_history` |
-| Full history | Backend SQLite |
+| Full history | Backend SQLite (or Postgres via `ANALYSIS_STORAGE_BACKEND=postgres`) |
 
 API helper:
 

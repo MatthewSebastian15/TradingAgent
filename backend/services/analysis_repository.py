@@ -520,10 +520,15 @@ class AnalysisRepository:
 _REPOSITORY: AnalysisRepository | None = None
 
 
-def get_analysis_repository() -> AnalysisRepository:
+def get_analysis_repository():
     global _REPOSITORY
     if _REPOSITORY is None:
-        _REPOSITORY = AnalysisRepository(ANALYSIS_DB_PATH, max_rows=ANALYSIS_HISTORY_MAX_ROWS)
+        if ANALYSIS_STORAGE_BACKEND == "postgres":
+            from services.analysis_repository_postgres import PostgresAnalysisRepository
+
+            _REPOSITORY = PostgresAnalysisRepository(max_rows=ANALYSIS_HISTORY_MAX_ROWS)
+        else:
+            _REPOSITORY = AnalysisRepository(ANALYSIS_DB_PATH, max_rows=ANALYSIS_HISTORY_MAX_ROWS)
     return _REPOSITORY
 
 
