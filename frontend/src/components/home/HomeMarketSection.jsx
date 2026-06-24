@@ -47,13 +47,11 @@ export default function HomeMarketSection() {
           return (
             <div
               key={p.symbol}
-              className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-bloomberg-border px-2 py-1.5 text-[11px] last:border-b-0"
+              className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)] items-center gap-2 border-b border-bloomberg-border px-2 py-1.5 text-[11px] last:border-b-0"
             >
-              <span className="min-w-0">
-                <span className="block truncate font-bold text-bloomberg-orange">{p.label}</span>
-                <span className="block text-[9px] uppercase tracking-wider text-bloomberg-muted">
-                  {MARKET_CATEGORY_LABELS[p.category]}
-                </span>
+              <span className="truncate font-bold text-bloomberg-orange">{p.symbol}</span>
+              <span className="truncate text-[9px] uppercase tracking-wider text-bloomberg-muted">
+                {MARKET_CATEGORY_LABELS[p.category]}
               </span>
               <span className="text-right font-bold text-bloomberg-white">
                 {formatLastPrice(quote?.price)}

@@ -212,9 +212,6 @@ export default function HomeWatchlistSidebar() {
         <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-bloomberg-orange">
           Watchlist
         </h2>
-        <span className="text-[9px] uppercase tracking-wider text-bloomberg-muted">
-          {updatedAt ? `@ ${updatedAt}` : 'LIVE'}
-        </span>
       </div>
 
       <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_64px] gap-1 border-b border-bloomberg-border bg-bloomberg-card px-2 py-1 text-[9px] font-bold text-bloomberg-muted">
