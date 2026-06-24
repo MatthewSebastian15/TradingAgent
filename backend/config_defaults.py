@@ -176,8 +176,11 @@ if ANALYSIS_JOB_ROUTING_MODE not in {"single_instance", "sticky_sessions"}:
     raise ValueError("ANALYSIS_JOB_ROUTING_MODE must be one of: single_instance, sticky_sessions.")
 ANALYSIS_DB_PATH = env("ANALYSIS_DB_PATH", ".cache/analysis_history.sqlite3")
 ANALYSIS_STORAGE_BACKEND = env("ANALYSIS_STORAGE_BACKEND", "sqlite").lower().strip()
-if ANALYSIS_STORAGE_BACKEND not in {"sqlite"}:
-    raise ValueError("ANALYSIS_STORAGE_BACKEND must be sqlite.")
+if ANALYSIS_STORAGE_BACKEND not in {"sqlite", "postgres"}:
+    raise ValueError("ANALYSIS_STORAGE_BACKEND must be one of: sqlite, postgres.")
+ANALYSIS_DATABASE_URL = env("ANALYSIS_DATABASE_URL", "")
+if ANALYSIS_STORAGE_BACKEND == "postgres" and not ANALYSIS_DATABASE_URL:
+    raise ValueError("ANALYSIS_DATABASE_URL is required when ANALYSIS_STORAGE_BACKEND=postgres.")
 ANALYSIS_HISTORY_MAX_ROWS = env_int("ANALYSIS_HISTORY_MAX_ROWS", 1000, min_value=1)
 ANALYSIS_HISTORY_DEFAULT_LIMIT = env_int("ANALYSIS_HISTORY_DEFAULT_LIMIT", 25, min_value=1)
 OWNER_SESSION_SECRET = env("OWNER_SESSION_SECRET", "")

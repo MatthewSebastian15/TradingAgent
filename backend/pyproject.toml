@@ -7,6 +7,7 @@ testpaths = ["tests", "../packages/tests"]
 addopts = "-ra"
 markers = [
     "live_api: manual tests that call live vendor APIs",
+    "postgres: tests requiring a live Postgres instance (skipped by default CI)",
 ]
 filterwarnings = [
     "error::DeprecationWarning:backend.*",

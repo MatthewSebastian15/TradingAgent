@@ -17,6 +17,7 @@ _LONG_DECIMAL_RE = re.compile(r"\d+\.\d{3,}")
 def _round_decimals(text: str) -> str:
     return _LONG_DECIMAL_RE.sub(lambda m: f"{float(m.group()):.2f}", text)
 
+
 _SYSTEM_PROMPT = """You are a RAG assistant for TradingAgent application.
 
 STRICT RULES:

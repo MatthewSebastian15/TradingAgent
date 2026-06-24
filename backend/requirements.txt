@@ -5,3 +5,5 @@ sse-starlette==3.0.3
 python-multipart==0.0.28
 jinja2==3.1.6
 weasyprint==63.1
+
+psycopg[binary]>=3.1

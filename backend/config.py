@@ -33,6 +33,7 @@ from config_defaults import (
     ANALYSIS_DEPTH_CONFIG,
     ANALYSIS_DEPTH_LLM_BUDGETS,
     ANALYSIS_DEPTHS,
+    ANALYSIS_DATABASE_URL,
     ANALYSIS_DB_PATH,
     ANALYSIS_HISTORY_DEFAULT_LIMIT,
     ANALYSIS_HISTORY_MAX_ROWS,
@@ -286,6 +287,7 @@ class _BackendSettingsShim:
     analysis_job_store_backend = ANALYSIS_JOB_STORE_BACKEND
     analysis_job_routing_mode = ANALYSIS_JOB_ROUTING_MODE
     analysis_storage_backend = ANALYSIS_STORAGE_BACKEND
+    analysis_database_url = ANALYSIS_DATABASE_URL
     rate_limit_storage_backend = RATE_LIMIT_STORAGE_BACKEND
     rate_limit_db_path = RATE_LIMIT_DB_PATH
     owner_session_secret = OWNER_SESSION_SECRET
