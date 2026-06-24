@@ -35,6 +35,11 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./packages:/app/packages
+      # ponytail: ./backend is a 9p/drvfs bind mount (Windows host). SQLite WAL needs
+      # shared-memory mmap, which 9p can't do -> "disk I/O error". Overlay .cache with
+      # the ext4 cache volume (already owned by uid 999 via the image) so every
+      # relative-path .cache/*.sqlite3 DB works. Same pattern as frontend-node-modules.
+      - tradingagent-cache:/app/backend/.cache
       - tradingagent-cache:/home/tradingagent/.tradingagents/cache
       - tradingagent-results:/home/tradingagent/.tradingagents/logs
     restart: unless-stopped
@@ -90,12 +95,21 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    # ponytail: opt-in only. Backend defaults to sqlite (ANALYSIS_STORAGE_BACKEND),
+    # so postgres is dead weight unless you switch. Run: docker compose --profile postgres up
+    profiles:
+      - postgres
+    # POSTGRES_PASSWORD comes from backend/.env via env_file (real password injected
+    # into the container). Avoids ${...} interpolation, which can't read backend/.env.
+    env_file:
+      - ./backend/.env
     environment:
       POSTGRES_USER: tradingagents
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in backend/.env}
       POSTGRES_DB: tradingagents
-    ports:
-      - "5432:5432"
+    # ponytail: host port disabled to avoid clashing with a local Postgres. Backend
+    # reaches it in-network as postgres:5432. Re-add this block if you need host access.
+    # ports:
+    #   - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
