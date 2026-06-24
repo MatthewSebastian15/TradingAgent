@@ -53,9 +53,6 @@ export default function HomeNewsSummary({ news = [], loading = false, error = ''
           )}
           News
         </h2>
-        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-          Top 3 Latest
-        </span>
       </button>
 
       {collapsed ? null : loading ? (

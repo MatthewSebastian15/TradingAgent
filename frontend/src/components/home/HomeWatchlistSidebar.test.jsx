@@ -35,13 +35,11 @@ describe('HomeWatchlistSidebar', () => {
     vi.clearAllMocks();
   });
 
-  it('searches by symbol', () => {
+  it('renders watchlist tickers', () => {
     setup({
       quotes: { AAPL: { price: 1, chg: '+1%', pos: true }, TSLA: { price: 2, chg: '-1%' } },
     });
     expect(screen.getByText('AAPL')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Search watchlist'), { target: { value: 'tsla' } });
-    expect(screen.queryByText('AAPL')).not.toBeInTheDocument();
     expect(screen.getByText('TSLA')).toBeInTheDocument();
   });
 

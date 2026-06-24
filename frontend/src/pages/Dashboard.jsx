@@ -22,7 +22,7 @@ function HomeChatBar() {
   return (
     <form
       onSubmit={submit}
-      className="flex items-center gap-2 rounded-lg border border-border bg-card/80 p-2"
+      className="flex h-[100px] items-center gap-2 rounded-lg border border-border bg-card/80 p-2"
     >
       <input
         value={text}
@@ -50,16 +50,12 @@ export default function Dashboard() {
     limit: 100,
   });
   const newsError = error ? error.message || 'Unable to load summary news.' : '';
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
       <Navbar />
-      <main
-        className={`space-y-3 px-4 py-4 transition-[padding] duration-150 ${
-          sidebarCollapsed ? 'md:pr-[40px]' : 'md:pr-[280px]'
-        }`}
-      >
+      {/* Right padding = sidebar width (280px) + a 16px gap, matching the left px-4. */}
+      <main className="space-y-3 px-4 pb-4 pt-2 md:pr-[296px]">
         <HomeNewsSummary
           news={data?.articles || []}
           loading={status === 'loading'}
@@ -67,10 +63,7 @@ export default function Dashboard() {
         />
         <HomeChatBar />
       </main>
-      <HomeWatchlistSidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
-      />
+      <HomeWatchlistSidebar />
     </div>
   );
 }

@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import PropTypes from 'prop-types';
 import React, { memo, useEffect, useMemo, useState } from 'react';
 
-import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from '../../constants/sidebar';
+import HomeMarketSection from './HomeMarketSection';
+import { SIDEBAR_EXPANDED_WIDTH } from '../../constants/sidebar';
 import { useWatchlistQuotes } from '../../hooks/useWatchlistQuotes';
 import { useWatchlistStore } from '../../hooks/useWatchlistStore';
 import {
@@ -164,7 +165,7 @@ function Skeleton() {
   );
 }
 
-export default function HomeWatchlistSidebar({ collapsed = false, onToggle = () => {} }) {
+export default function HomeWatchlistSidebar() {
   const { activeGroup } = useWatchlistStore();
   const symbols = useMemo(
     () => (activeGroup?.items || []).map((item) => item.symbol),
@@ -172,7 +173,6 @@ export default function HomeWatchlistSidebar({ collapsed = false, onToggle = () 
   );
   const { quotesBySymbol, trendsBySymbol, loadingQuotes, error } = useWatchlistQuotes(symbols);
 
-  const [query, setQuery] = useState('');
   const [sort, setSort] = useState({ field: 'sym', dir: 'asc' });
   const [expanded, setExpanded] = useState(null);
   const [updatedAt, setUpdatedAt] = useState('');
@@ -182,26 +182,15 @@ export default function HomeWatchlistSidebar({ collapsed = false, onToggle = () 
   }, [quotesBySymbol]);
 
   const rows = useMemo(() => {
-    const items = activeGroup?.items || [];
-    const q = query.trim().toUpperCase();
-    const built = items
-      .filter(
-        (item) =>
-          !q ||
-          item.symbol.includes(q) ||
-          String(item.name || '')
-            .toUpperCase()
-            .includes(q)
-      )
-      .map((item) => ({
-        item,
-        quote: quotesBySymbol.get(item.symbol),
-        trend: trendsBySymbol.get(item.symbol) || [],
-      }));
+    const built = (activeGroup?.items || []).map((item) => ({
+      item,
+      quote: quotesBySymbol.get(item.symbol),
+      trend: trendsBySymbol.get(item.symbol) || [],
+    }));
     const sorted = built.sort(SORTERS[sort.field]);
     if (sort.dir === 'desc') sorted.reverse();
     return sorted;
-  }, [activeGroup, query, quotesBySymbol, trendsBySymbol, sort]);
+  }, [activeGroup, quotesBySymbol, trendsBySymbol, sort]);
 
   function onSort(field) {
     setSort((prev) =>
@@ -214,58 +203,18 @@ export default function HomeWatchlistSidebar({ collapsed = false, onToggle = () 
   const totalSymbols = (activeGroup?.items || []).length;
   const showSkeleton = loadingQuotes && quotesBySymbol.size === 0 && totalSymbols > 0;
 
-  // Pinned to the viewport's top (below navbar), bottom, and right edges.
-  const anchor = 'fixed right-0 top-[60px] bottom-0 z-30 transition-[width] duration-150';
-
-  if (collapsed) {
-    return (
-      <aside
-        className={`${anchor} flex ${SIDEBAR_COLLAPSED_WIDTH} flex-col border-l border-bloomberg-border bg-black`}
-      >
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label="Expand watchlist"
-          className="flex h-full w-full items-center justify-center text-bloomberg-orange"
-        >
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </button>
-      </aside>
-    );
-  }
-
   return (
     <aside
-      className={`${anchor} flex ${SIDEBAR_EXPANDED_WIDTH} flex-col border-l border-bloomberg-border bg-black font-mono text-bloomberg-white`}
+      // Pinned to the viewport's top (below navbar), bottom, and right edges.
+      className={`fixed bottom-0 right-0 top-[60px] z-30 flex ${SIDEBAR_EXPANDED_WIDTH} flex-col border-l border-bloomberg-border bg-black font-mono text-bloomberg-white`}
     >
       <div className="flex items-center justify-between gap-2 border-b border-bloomberg-border bg-bloomberg-card px-2 py-1.5">
         <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-bloomberg-orange">
           Watchlist
         </h2>
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] uppercase tracking-wider text-bloomberg-muted">
-            {updatedAt ? `@ ${updatedAt}` : 'LIVE'}
-          </span>
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-label="Collapse watchlist"
-            className="text-bloomberg-orange"
-          >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-
-      <div className="relative border-b border-bloomberg-border">
-        <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-bloomberg-muted" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search ticker..."
-          aria-label="Search watchlist"
-          className="w-full bg-transparent py-1.5 pl-7 pr-2 text-[11px] outline-none placeholder:text-bloomberg-muted"
-        />
+        <span className="text-[9px] uppercase tracking-wider text-bloomberg-muted">
+          {updatedAt ? `@ ${updatedAt}` : 'LIVE'}
+        </span>
       </div>
 
       <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_64px] gap-1 border-b border-bloomberg-border bg-bloomberg-card px-2 py-1 text-[9px] font-bold text-bloomberg-muted">
@@ -312,11 +261,8 @@ export default function HomeWatchlistSidebar({ collapsed = false, onToggle = () 
           ))
         )}
       </div>
+
+      <HomeMarketSection />
     </aside>
   );
 }
-
-HomeWatchlistSidebar.propTypes = {
-  collapsed: PropTypes.bool,
-  onToggle: PropTypes.func,
-};

@@ -59,7 +59,6 @@ describe('HomeNewsSummary', () => {
     render(<HomeNewsSummary news={news} />);
 
     expect(screen.getByRole('heading', { name: 'News' })).toBeInTheDocument();
-    expect(screen.getByText('Top 3 Latest')).toBeInTheDocument();
 
     const headlines = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
     const expectedHeadlines = sortNewsItemsByNewest(news)
