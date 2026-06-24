@@ -50,23 +50,27 @@ export default function Dashboard() {
     limit: 100,
   });
   const newsError = error ? error.message || 'Unable to load summary news.' : '';
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
       <Navbar />
-      <main className="gap-3 px-4 py-4 md:grid md:grid-cols-[minmax(0,1fr)_220px] lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-3">
-          <HomeNewsSummary
-            news={data?.articles || []}
-            loading={status === 'loading'}
-            error={newsError}
-          />
-          <HomeChatBar />
-        </div>
-        <div className="mt-3 md:mt-0 md:self-start md:sticky md:top-[68px]">
-          <HomeWatchlistSidebar />
-        </div>
+      <main
+        className={`space-y-3 px-4 py-4 transition-[padding] duration-150 ${
+          sidebarCollapsed ? 'md:pr-[40px]' : 'md:pr-[280px]'
+        }`}
+      >
+        <HomeNewsSummary
+          news={data?.articles || []}
+          loading={status === 'loading'}
+          error={newsError}
+        />
+        <HomeChatBar />
       </main>
+      <HomeWatchlistSidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((c) => !c)}
+      />
     </div>
   );
 }
