@@ -12,7 +12,7 @@ function makeId() {
 async function buildWatchlistContext(contextFilter, signal) {
   if (contextFilter !== 'all' && contextFilter !== 'watchlist') return null;
 
-  const state = readWatchlistState();
+  const state = await readWatchlistState();
   const groups = (state?.groups || []).map((g) => ({
     id: g.id,
     name: g.name,
@@ -47,7 +47,7 @@ async function buildWatchlistContext(contextFilter, signal) {
 }
 
 export function useRagChat(contextFilter = 'all') {
-  const [conversations, setConversations] = useState(loadConversations);
+  const [conversations, setConversations] = useState([]);
   // Always land on a fresh "new chat"; past conversations stay in the sidebar.
   const [activeId, setActiveId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,6 +62,18 @@ export function useRagChat(contextFilter = 'all') {
     };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    // Don't overwrite a conversation the user started before the async load
+    // resolved — only hydrate into still-empty state.
+    loadConversations().then((l) => {
+      if (alive) setConversations((prev) => (prev.length ? prev : l));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const messages = useMemo(
     () => conversations.find((c) => c.id === activeId)?.messages ?? [],
     [conversations, activeId]
@@ -71,7 +83,7 @@ export function useRagChat(contextFilter = 'all') {
   const commit = useCallback((updater) => {
     setConversations((prev) => {
       const next = updater(prev);
-      saveConversations(next);
+      void saveConversations(next);
       return next;
     });
   }, []);

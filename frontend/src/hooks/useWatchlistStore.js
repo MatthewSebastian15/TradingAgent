@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   EMPTY_WATCHLIST_STATE,
@@ -57,17 +57,32 @@ function normalizeTickerItem(item) {
 }
 
 export function useWatchlistStore() {
-  const [state, setState] = useState(() => readWatchlistState());
+  const [state, setState] = useState(EMPTY_WATCHLIST_STATE);
+  // Don't persist until the async read has hydrated state, or the mount-time
+  // write effect would clobber stored data with EMPTY before it loads.
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
-    writeWatchlistState(state);
+    let alive = true;
+    readWatchlistState().then((loaded) => {
+      if (!alive) return;
+      hydratedRef.current = true;
+      setState(loaded);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    void writeWatchlistState(state);
   }, [state]);
 
   useEffect(() => {
     function onWatchlistUpdated() {
-      setState((prev) => {
-        const next = readWatchlistState();
-        return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+      readWatchlistState().then((next) => {
+        setState((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
       });
     }
     window.addEventListener('ta:watchlist-updated', onWatchlistUpdated);

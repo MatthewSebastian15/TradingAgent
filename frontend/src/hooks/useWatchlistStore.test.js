@@ -1,23 +1,38 @@
-import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import 'fake-indexeddb/auto';
+import { webcrypto } from 'node:crypto';
+
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { useWatchlistStore } from './useWatchlistStore';
+import { decryptJSON } from '../services/secureStorage';
 import { WATCHLIST_STORAGE_KEY } from '../services/watchlistStorage';
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
+});
 
 beforeEach(() => {
   window.localStorage.clear();
 });
 
+// Mount the hook and wait for its async (encrypted) read to hydrate state.
+async function mountStore() {
+  const rendered = renderHook(() => useWatchlistStore());
+  await act(async () => {});
+  return rendered;
+}
+
 describe('useWatchlistStore', () => {
-  it('starts empty when localStorage is empty', () => {
-    const { result } = renderHook(() => useWatchlistStore());
+  it('starts empty when localStorage is empty', async () => {
+    const { result } = await mountStore();
 
     expect(result.current.groups).toEqual([]);
     expect(result.current.activeGroup).toBeNull();
   });
 
-  it('creates a group and makes it active', () => {
-    const { result } = renderHook(() => useWatchlistStore());
+  it('creates a group and makes it active', async () => {
+    const { result } = await mountStore();
 
     act(() => result.current.createGroup('US Tech'));
 
@@ -26,8 +41,8 @@ describe('useWatchlistStore', () => {
     expect(result.current.activeGroupId).toBe(result.current.groups[0].id);
   });
 
-  it('rejects duplicate group names case-insensitively', () => {
-    const { result } = renderHook(() => useWatchlistStore());
+  it('rejects duplicate group names case-insensitively', async () => {
+    const { result } = await mountStore();
 
     act(() => result.current.createGroup('US Tech'));
 
@@ -36,8 +51,8 @@ describe('useWatchlistStore', () => {
     }).toThrow('Group name already exists.');
   });
 
-  it('adds and removes a ticker in the active group', () => {
-    const { result } = renderHook(() => useWatchlistStore());
+  it('adds and removes a ticker in the active group', async () => {
+    const { result } = await mountStore();
 
     act(() => result.current.createGroup('US Tech'));
     act(() => result.current.addTicker({ symbol: 'nvda', name: 'NVIDIA Corporation' }));
@@ -52,8 +67,8 @@ describe('useWatchlistStore', () => {
     expect(result.current.activeGroup.items).toEqual([]);
   });
 
-  it('does not add duplicate tickers in the same group', () => {
-    const { result } = renderHook(() => useWatchlistStore());
+  it('does not add duplicate tickers in the same group', async () => {
+    const { result } = await mountStore();
 
     act(() => result.current.createGroup('US Tech'));
     act(() => result.current.addTicker({ symbol: 'AAPL' }));
@@ -66,8 +81,8 @@ describe('useWatchlistStore', () => {
     expect(result.current.activeGroup.items).toHaveLength(1);
   });
 
-  it('allows the same ticker in different groups', () => {
-    const { result } = renderHook(() => useWatchlistStore());
+  it('allows the same ticker in different groups', async () => {
+    const { result } = await mountStore();
 
     act(() => result.current.createGroup('US Tech'));
     const firstGroupId = result.current.activeGroupId;
@@ -80,8 +95,8 @@ describe('useWatchlistStore', () => {
     expect(result.current.groups[1].items).toHaveLength(1);
   });
 
-  it('deletes a group and moves active group to the first remaining group', () => {
-    const { result } = renderHook(() => useWatchlistStore());
+  it('deletes a group and moves active group to the first remaining group', async () => {
+    const { result } = await mountStore();
 
     act(() => result.current.createGroup('US Tech'));
     const firstGroupId = result.current.activeGroupId;
@@ -93,8 +108,8 @@ describe('useWatchlistStore', () => {
     expect(result.current.activeGroupId).toBe(firstGroupId);
   });
 
-  it('sets activeGroupId to null when the last group is deleted', () => {
-    const { result } = renderHook(() => useWatchlistStore());
+  it('sets activeGroupId to null when the last group is deleted', async () => {
+    const { result } = await mountStore();
 
     act(() => result.current.createGroup('US Tech'));
     act(() => result.current.deleteGroup(result.current.activeGroupId));
@@ -103,15 +118,19 @@ describe('useWatchlistStore', () => {
     expect(result.current.activeGroupId).toBeNull();
   });
 
-  it('saves data to localStorage', () => {
-    const { result } = renderHook(() => useWatchlistStore());
+  it('saves encrypted data to localStorage', async () => {
+    const { result } = await mountStore();
 
     act(() => result.current.createGroup('US Tech'));
     act(() => result.current.addTicker({ symbol: 'MSFT' }));
 
-    const stored = JSON.parse(window.localStorage.getItem(WATCHLIST_STORAGE_KEY));
-
-    expect(stored.groups[0].name).toBe('US Tech');
-    expect(stored.groups[0].items[0].symbol).toBe('MSFT');
+    // Writes are async (encrypt + IndexedDB). Poll until the MSFT entry lands.
+    await waitFor(async () => {
+      const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+      expect(raw).toContain('"iv"'); // encrypted envelope, not plaintext
+      const stored = await decryptJSON(raw);
+      expect(stored?.groups?.[0]?.name).toBe('US Tech');
+      expect(stored?.groups?.[0]?.items?.[0]?.symbol).toBe('MSFT');
+    });
   });
 });

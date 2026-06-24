@@ -61,7 +61,11 @@ function SortHeader({ label, field, sort, onSort, className = '' }) {
     >
       {label}
       {active &&
-        (sort.dir === 'asc' ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />)}
+        (sort.dir === 'asc' ? (
+          <ArrowUp className="h-2.5 w-2.5" />
+        ) : (
+          <ArrowDown className="h-2.5 w-2.5" />
+        ))}
     </button>
   );
 }
@@ -115,10 +119,7 @@ const Row = memo(function Row({ row, expanded, onToggle, timestamp }) {
           <div className="col-span-2 truncate text-bloomberg-white">{item.name || item.symbol}</div>
           <Detail label="Volume" value={formatVolume(quote?.volume)} />
           <Detail label="Status" value={status.label} valueClass={status.tone} />
-          <Detail
-            label="Exchange"
-            value={item.exchange || item.market || item.type || '-'}
-          />
+          <Detail label="Exchange" value={item.exchange || item.market || item.type || '-'} />
           <Detail label="As of" value={timestamp || '-'} />
         </dl>
       )}
@@ -187,7 +188,9 @@ export default function HomeWatchlistSidebar() {
         (item) =>
           !q ||
           item.symbol.includes(q) ||
-          String(item.name || '').toUpperCase().includes(q)
+          String(item.name || '')
+            .toUpperCase()
+            .includes(q)
       )
       .map((item) => ({
         item,
@@ -234,9 +237,21 @@ export default function HomeWatchlistSidebar() {
 
       <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_64px] gap-1 border-b border-bloomberg-border bg-bloomberg-card px-2 py-1 text-[9px] font-bold text-bloomberg-muted">
         <SortHeader label="Ticker" field="sym" sort={sort} onSort={onSort} />
-        <SortHeader label="Last" field="price" sort={sort} onSort={onSort} className="justify-end" />
+        <SortHeader
+          label="Last"
+          field="price"
+          sort={sort}
+          onSort={onSort}
+          className="justify-end"
+        />
         <SortHeader label="Chg%" field="chg" sort={sort} onSort={onSort} className="justify-end" />
-        <SortHeader label="Vol" field="volume" sort={sort} onSort={onSort} className="justify-end" />
+        <SortHeader
+          label="Vol"
+          field="volume"
+          sort={sort}
+          onSort={onSort}
+          className="justify-end"
+        />
       </div>
 
       <div className="max-h-[60vh] overflow-y-auto lg:max-h-none">

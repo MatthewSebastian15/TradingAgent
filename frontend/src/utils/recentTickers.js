@@ -1,3 +1,4 @@
+// ponytail: intentionally plaintext — recent tickers are public UI state, not sensitive. Do not encrypt.
 import { normalizeTickerSearchResult } from './tickerSearch';
 
 const RECENT_TICKERS_KEY = 'ta:recent-tickers';

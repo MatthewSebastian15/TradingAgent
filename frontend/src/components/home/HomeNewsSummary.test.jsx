@@ -88,9 +88,7 @@ describe('HomeNewsSummary', () => {
 
     expect(screen.getByText('US stocks rise as tech shares lead gains')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { expanded: true }));
-    expect(
-      screen.queryByText('US stocks rise as tech shares lead gains')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('US stocks rise as tech shares lead gains')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument();
   });
 

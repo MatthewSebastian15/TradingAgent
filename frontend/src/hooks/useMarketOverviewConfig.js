@@ -1,3 +1,4 @@
+// ponytail: intentionally plaintext — UI layout config, not sensitive. Do not encrypt.
 import { useCallback, useEffect, useState } from 'react';
 
 import {

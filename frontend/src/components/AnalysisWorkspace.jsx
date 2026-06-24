@@ -109,7 +109,7 @@ export default function AnalysisWorkspace({
           const enrichedResult = withAnalysisCreatedAt(loadedResult);
           if (cancelled) return;
           setResult(enrichedResult);
-          saveToHistory(historyKey, enrichedResult);
+          void saveToHistory(historyKey, enrichedResult);
         } catch (error) {
           if (!cancelled) setResult({ error: error.message || RESULT_EXPIRED_MESSAGE });
         } finally {
@@ -149,7 +149,7 @@ export default function AnalysisWorkspace({
 
         const enrichedResult = withAnalysisCreatedAt(loadedResult);
         setResult(enrichedResult);
-        saveToHistory(historyKey, enrichedResult);
+        void saveToHistory(historyKey, enrichedResult);
       } catch (error) {
         if (error.name === 'AbortError') return;
         setResult({ error: error.message || RESULT_EXPIRED_MESSAGE });
@@ -174,7 +174,7 @@ export default function AnalysisWorkspace({
 
     const enrichedResult = withAnalysisCreatedAt(nextResult);
     setResult(enrichedResult);
-    saveToHistory(historyKey, enrichedResult);
+    void saveToHistory(historyKey, enrichedResult);
 
     const nextPath = resultPath(
       resultPathBase,

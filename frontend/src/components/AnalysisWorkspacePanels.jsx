@@ -32,8 +32,11 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
 
   useEffect(() => {
     if (!backendHistoryEnabled) {
-      setHistory(readHistory(historyKey));
-      return undefined;
+      let alive = true;
+      readHistory(historyKey).then((items) => alive && setHistory(items));
+      return () => {
+        alive = false;
+      };
     }
 
     const controller = new AbortController();
@@ -44,11 +47,11 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
           await fetchAnalysisHistory({ limit: 25, signal: controller.signal })
         );
         if (controller.signal.aborted) return;
-        writeHistory(historyKey, items);
+        await writeHistory(historyKey, items);
         setHistory(items);
       } catch (error) {
         if (error.name === 'AbortError') return;
-        setHistory(readHistory(historyKey));
+        setHistory(await readHistory(historyKey));
       }
     }
 
@@ -62,7 +65,7 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
     setClearing(true);
     try {
       if (backendHistoryEnabled) await clearAnalysisHistory();
-      clearHistory(historyKey);
+      await clearHistory(historyKey);
       setHistory([]);
     } catch (error) {
       setClearError(error.message || 'Failed to clear history.');
@@ -79,7 +82,7 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
       if (backendHistoryEnabled && resourceId) {
         await deleteAnalysisHistoryResult(resourceId);
       }
-      removeHistoryItem(historyKey, item);
+      await removeHistoryItem(historyKey, item);
       setHistory((prev) => prev.filter((h) => historyResourceId(h) !== resourceId));
     } catch {
       // Silent fail — item stays in list

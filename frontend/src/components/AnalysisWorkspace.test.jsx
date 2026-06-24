@@ -1,9 +1,22 @@
+import 'fake-indexeddb/auto';
+import { webcrypto } from 'node:crypto';
+
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AnalysisWorkspace from './AnalysisWorkspace';
+import { decryptJSON } from '../services/secureStorage';
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
+});
+
+// History is now persisted AES-GCM-encrypted; decrypt before asserting on it.
+function readStored(key = 'analysis-history-test') {
+  return decryptJSON(localStorage.getItem(key));
+}
 
 function LocationProbe() {
   const location = useLocation();
@@ -151,7 +164,7 @@ describe('AnalysisWorkspace history storage', () => {
     expect(screen.getByText('READY')).toBeTruthy();
   });
 
-  it('clicking HISTORY tab shows history content', () => {
+  it('clicking HISTORY tab shows history content', async () => {
     localStorage.setItem(
       'analysis-history-test',
       JSON.stringify([
@@ -173,7 +186,7 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(EmptyForm);
     clickHistoryTab();
 
-    expect(screen.getByText('AAPL')).toBeTruthy();
+    expect(await screen.findByText('AAPL')).toBeTruthy();
   });
 
   it('renders main content in a flex layout adjacent to the tab panel', async () => {
@@ -188,7 +201,7 @@ describe('AnalysisWorkspace history storage', () => {
     expect(screen.getByRole('button', { name: 'History' })).toBeTruthy();
   });
 
-  it('stores only version 2 summary fields for debug responses', () => {
+  it('stores only version 2 summary fields for debug responses', async () => {
     function DebugForm({ onResult }) {
       return (
         <button
@@ -219,19 +232,22 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(DebugForm, 'analysis-history-test', '/analysis', { resultPathBase: null });
     fireEvent.click(screen.getByRole('button', { name: /emit debug/i }));
 
-    const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
-    expect(stored).toEqual([
-      historySummary({
-        job_id: 'job-debug',
-        request_id: 'debug-request',
-        ticker: 'AAPL',
-        market: 'US',
-        trade_date: '2026-05-14',
-        decision: 'Buy',
-        time_horizon_months: 2,
-        analysis_created_at: expect.any(String),
-      }),
-    ]);
+    let stored;
+    await waitFor(async () => {
+      stored = await readStored();
+      expect(stored).toEqual([
+        historySummary({
+          job_id: 'job-debug',
+          request_id: 'debug-request',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-14',
+          decision: 'Buy',
+          time_horizon_months: 2,
+          analysis_created_at: expect.any(String),
+        }),
+      ]);
+    });
     expect(localStorage.getItem('analysis-history-test:result:debug-request')).toBeNull();
     expect(stored[0]).not.toHaveProperty('position_quantity');
     expect(stored[0]).not.toHaveProperty('average_entry_price');
@@ -239,7 +255,7 @@ describe('AnalysisWorkspace history storage', () => {
     expect(stored[0]).not.toHaveProperty('executive_summary');
   });
 
-  it('persists every summary without a hard history cap', () => {
+  it('persists every summary without a hard history cap', async () => {
     function BatchForm({ onResult }) {
       return (
         <button
@@ -266,21 +282,23 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(BatchForm, 'analysis-history-test', '/analysis', { resultPathBase: null });
     fireEvent.click(screen.getByRole('button', { name: /emit batch/i }));
 
-    const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
-    expect(stored).toHaveLength(12);
-    expect(stored[0]).toMatchObject({
-      schema_version: 2,
-      job_id: 'job-11',
-      request_id: 'request-11',
-      ticker: 'T11',
-      trade_date: '2026-05-12',
-    });
-    expect(stored[11]).toMatchObject({
-      schema_version: 2,
-      job_id: 'job-0',
-      request_id: 'request-0',
-      ticker: 'T0',
-      trade_date: '2026-05-01',
+    await waitFor(async () => {
+      const stored = await readStored();
+      expect(stored).toHaveLength(12);
+      expect(stored[0]).toMatchObject({
+        schema_version: 2,
+        job_id: 'job-11',
+        request_id: 'request-11',
+        ticker: 'T11',
+        trade_date: '2026-05-12',
+      });
+      expect(stored[11]).toMatchObject({
+        schema_version: 2,
+        job_id: 'job-0',
+        request_id: 'request-0',
+        ticker: 'T0',
+        trade_date: '2026-05-01',
+      });
     });
   });
 
@@ -318,7 +336,7 @@ describe('AnalysisWorkspace history storage', () => {
     });
   });
 
-  it('migrates old history entries and removes legacy payload keys', () => {
+  it('migrates old history entries and removes legacy payload keys', async () => {
     const savedAt = new Date().toISOString();
     localStorage.setItem(
       'analysis-history-test',
@@ -348,16 +366,18 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(EmptyForm);
     clickHistoryTab();
 
-    expect(JSON.parse(localStorage.getItem('analysis-history-test'))).toEqual([
-      historySummary({
-        request_id: 'legacy-request',
-        ticker: 'AAPL',
-        market: 'US',
-        trade_date: '2026-05-14',
-        decision: 'Buy',
-        saved_at: savedAt,
-      }),
-    ]);
+    await waitFor(async () => {
+      expect(await readStored()).toEqual([
+        historySummary({
+          request_id: 'legacy-request',
+          ticker: 'AAPL',
+          market: 'US',
+          trade_date: '2026-05-14',
+          decision: 'Buy',
+          saved_at: savedAt,
+        }),
+      ]);
+    });
     expect(localStorage.getItem('analysis-history-test:result:legacy-request')).toBeNull();
   });
 
@@ -394,19 +414,22 @@ describe('AnalysisWorkspace history storage', () => {
     );
     expect(localStorage.getItem('analysis-history-test:result:job-1')).toBeNull();
 
-    const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
-    expect(stored).toEqual([
-      historySummary({
-        job_id: 'job-1',
-        request_id: 'request-backend',
-        ticker: 'MSFT',
-        market: 'US',
-        trade_date: '2026-05-14',
-        decision: 'Buy',
-        time_horizon_months: 1,
-        analysis_created_at: expect.any(String),
-      }),
-    ]);
+    let stored;
+    await waitFor(async () => {
+      stored = await readStored();
+      expect(stored).toEqual([
+        historySummary({
+          job_id: 'job-1',
+          request_id: 'request-backend',
+          ticker: 'MSFT',
+          market: 'US',
+          trade_date: '2026-05-14',
+          decision: 'Buy',
+          time_horizon_months: 1,
+          analysis_created_at: expect.any(String),
+        }),
+      ]);
+    });
     expect(stored[0]).not.toHaveProperty('position_quantity');
     expect(stored[0]).not.toHaveProperty('average_entry_price');
     expect(stored[0]).not.toHaveProperty('raw_agent_state');
@@ -444,7 +467,7 @@ describe('AnalysisWorkspace history storage', () => {
     expect(await screen.findByText('Result expired. Please submit a new analysis.')).toBeTruthy();
   });
 
-  it('keeps global recent analyses in localStorage history', () => {
+  it('keeps global recent analyses in localStorage history', async () => {
     localStorage.setItem(
       'analysis-history-test',
       JSON.stringify([
@@ -482,20 +505,22 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(EmptyForm);
     clickHistoryTab();
 
-    expect(screen.getByText('700.HK')).toBeTruthy();
+    expect(await screen.findByText('700.HK')).toBeTruthy();
     expect(screen.getByText('AAPL')).toBeTruthy();
     expect(screen.getByText('BBCA.JK')).toBeTruthy();
 
-    const stored = JSON.parse(localStorage.getItem('analysis-history-test'));
-    expect(stored.map((item) => item.request_id)).toEqual([
-      'global-request',
-      'us-request',
-      'id-request',
-    ]);
-    expect(stored.every((item) => item.schema_version === 2)).toBe(true);
+    await waitFor(async () => {
+      const stored = await readStored();
+      expect(stored.map((item) => item.request_id)).toEqual([
+        'global-request',
+        'us-request',
+        'id-request',
+      ]);
+      expect(stored.every((item) => item.schema_version === 2)).toBe(true);
+    });
   });
 
-  it('clears summary history and legacy payload keys from the browser', () => {
+  it('clears summary history and legacy payload keys from the browser', async () => {
     const savedAt = new Date().toISOString();
     localStorage.setItem(
       'analysis-history-test',
@@ -522,13 +547,14 @@ describe('AnalysisWorkspace history storage', () => {
 
     renderWorkspace(EmptyForm);
     clickHistoryTab();
+    expect(await screen.findByText('AAPL')).toBeTruthy();
     localStorage.setItem(
       'analysis-history-test:result:request-clear',
       JSON.stringify({ raw_agent_state: { internal: true } })
     );
     fireEvent.click(screen.getByRole('button', { name: /clear/i }));
 
-    expect(localStorage.getItem('analysis-history-test')).toBeNull();
+    await waitFor(() => expect(localStorage.getItem('analysis-history-test')).toBeNull());
     expect(localStorage.getItem('analysis-history-test:result:request-clear')).toBeNull();
     expect(screen.queryByText('AAPL')).toBeNull();
   });
@@ -577,19 +603,21 @@ describe('AnalysisWorkspace history storage', () => {
     expect(fetchMock.mock.calls.filter(([url]) => url.includes('/analysis/history?'))).toHaveLength(
       1
     );
-    expect(JSON.parse(localStorage.getItem('analysis-history-test'))).toEqual([
-      historySummary({
-        job_id: 'job-db',
-        request_id: 'request-db',
-        ticker: 'MSFT',
-        market: 'US',
-        trade_date: '2026-05-28',
-        decision: 'Buy',
-        time_horizon_months: 1,
-        analysis_created_at: '2026-05-28T08:00:00.000Z',
-        saved_at: '2026-05-28T08:01:00.000Z',
-      }),
-    ]);
+    await waitFor(async () => {
+      expect(await readStored()).toEqual([
+        historySummary({
+          job_id: 'job-db',
+          request_id: 'request-db',
+          ticker: 'MSFT',
+          market: 'US',
+          trade_date: '2026-05-28',
+          decision: 'Buy',
+          time_horizon_months: 1,
+          analysis_created_at: '2026-05-28T08:00:00.000Z',
+          saved_at: '2026-05-28T08:01:00.000Z',
+        }),
+      ]);
+    });
   });
 
   it('opens a backend history item by request id through the history detail fallback', async () => {

@@ -1,3 +1,4 @@
+// ponytail: sessionStorage cache of public market data; dies on tab close. Intentionally not encrypted.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getMarketOverview } from '../api/market';
