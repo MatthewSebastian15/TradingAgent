@@ -37,8 +37,22 @@ _NO_DATA_ID = "Tidak ada data yang relevan ditemukan di RAG Data Pool untuk pert
 # languages fall through to English. Add a constant + markers for a 3rd language.
 _ID_MARKERS = frozenset(
     {
-        "apa", "saya", "yang", "tidak", "buatkan", "resep", "kenapa", "mengapa",
-        "bagaimana", "tolong", "berapa", "adalah", "dan", "untuk", "saham", "harga",
+        "apa",
+        "saya",
+        "yang",
+        "tidak",
+        "buatkan",
+        "resep",
+        "kenapa",
+        "mengapa",
+        "bagaimana",
+        "tolong",
+        "berapa",
+        "adalah",
+        "dan",
+        "untuk",
+        "saham",
+        "harga",
     }
 )
 
