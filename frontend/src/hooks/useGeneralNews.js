@@ -1,3 +1,4 @@
+// ponytail: sessionStorage cache of public vendor news; dies on tab close. Intentionally not encrypted.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchGeneralNews } from '../services/generalNewsApi';

@@ -1,3 +1,4 @@
+// ponytail: intentionally plaintext — public ticker-search cache, not sensitive. Do not encrypt.
 const SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const SEARCH_CACHE_PREFIX = 'ta:ticker-search:';
 const MAX_STORED_SEARCH_KEYS = 100;

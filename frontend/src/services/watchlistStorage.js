@@ -1,3 +1,5 @@
+import { decryptJSON, encryptJSON } from './secureStorage';
+
 export const WATCHLIST_STORAGE_KEY = 'tradingagents:watchlists:v1';
 export const WATCHLIST_STORAGE_VERSION = 1;
 
@@ -89,24 +91,32 @@ export function normalizeWatchlistState(value) {
   };
 }
 
-export function readWatchlistState() {
+export async function readWatchlistState() {
   if (typeof window === 'undefined') return cloneState(EMPTY_WATCHLIST_STATE);
 
   try {
     const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
     if (!raw) return cloneState(EMPTY_WATCHLIST_STATE);
-    return normalizeWatchlistState(JSON.parse(raw));
+    let parsed = await decryptJSON(raw); // new envelope
+    if (parsed === null) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return cloneState(EMPTY_WATCHLIST_STATE);
+      }
+    } // legacy plaintext
+    return normalizeWatchlistState(parsed);
   } catch {
     return cloneState(EMPTY_WATCHLIST_STATE);
   }
 }
 
-export function writeWatchlistState(state) {
+export async function writeWatchlistState(state) {
   const normalized = normalizeWatchlistState(state);
 
   if (typeof window !== 'undefined') {
     try {
-      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(normalized));
+      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, await encryptJSON(normalized));
       window.dispatchEvent(new CustomEvent('ta:watchlist-updated'));
     } catch {
       // Keep the in-memory React state usable when browser storage is blocked.

@@ -36,7 +36,9 @@ describe('HomeWatchlistSidebar', () => {
   });
 
   it('searches by symbol', () => {
-    setup({ quotes: { AAPL: { price: 1, chg: '+1%', pos: true }, TSLA: { price: 2, chg: '-1%' } } });
+    setup({
+      quotes: { AAPL: { price: 1, chg: '+1%', pos: true }, TSLA: { price: 2, chg: '-1%' } },
+    });
     expect(screen.getByText('AAPL')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Search watchlist'), { target: { value: 'tsla' } });
     expect(screen.queryByText('AAPL')).not.toBeInTheDocument();
@@ -51,7 +53,10 @@ describe('HomeWatchlistSidebar', () => {
   });
 
   it('derives ERR status for a failed quote', () => {
-    setup({ quotes: { AAPL: { error: true, price: null, chg: 'N/A' } }, group: { items: [items[0]] } });
+    setup({
+      quotes: { AAPL: { error: true, price: null, chg: 'N/A' } },
+      group: { items: [items[0]] },
+    });
     expect(screen.getByText('ERR')).toBeInTheDocument();
   });
 
@@ -71,7 +76,10 @@ describe('HomeWatchlistSidebar', () => {
   });
 
   it('expands a row to reveal detail metrics on click', () => {
-    setup({ quotes: { AAPL: { price: 10, chg: '+1%', volume: 1500000 } }, group: { items: [items[0]] } });
+    setup({
+      quotes: { AAPL: { price: 10, chg: '+1%', volume: 1500000 } },
+      group: { items: [items[0]] },
+    });
     fireEvent.click(screen.getByRole('button', { expanded: false }));
     const detail = screen.getByText('Volume').closest('dl');
     expect(within(detail).getByText('1.5M')).toBeInTheDocument();

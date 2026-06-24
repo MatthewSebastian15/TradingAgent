@@ -1,3 +1,4 @@
+// ponytail: sessionStorage cache of public vendor news; dies on tab close. Intentionally not encrypted.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchTickerNews } from '@/services/tickerNewsApi';

@@ -1,5 +1,7 @@
 // Persists chatbot conversations so history survives reloads.
 // Shape: [{ id, title, messages: [...], updatedAt }] newest-first.
+import { decryptJSON, encryptJSON } from './secureStorage';
+
 export const CHAT_HISTORY_KEY = 'tradingagents:chatbot:history:v1';
 
 // Bound growth so we never silently hit the ~5MB localStorage quota.
@@ -19,18 +21,27 @@ export function pruneConversations(list) {
     .slice(0, MAX_CONVERSATIONS); // newest-first, so this keeps the latest
 }
 
-export function loadConversations() {
+export async function loadConversations() {
   try {
-    const list = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '[]');
+    const raw = localStorage.getItem(CHAT_HISTORY_KEY);
+    if (!raw) return [];
+    let list = await decryptJSON(raw); // new envelope
+    if (list === null) {
+      try {
+        list = JSON.parse(raw);
+      } catch {
+        list = [];
+      }
+    } // legacy plaintext
     return pruneConversations(Array.isArray(list) ? list : []);
   } catch {
     return [];
   }
 }
 
-export function saveConversations(list) {
+export async function saveConversations(list) {
   try {
-    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(pruneConversations(list)));
+    localStorage.setItem(CHAT_HISTORY_KEY, await encryptJSON(pruneConversations(list)));
   } catch {
     // ponytail: ignore quota/serialization errors — history is best-effort
   }

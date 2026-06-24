@@ -42,8 +42,15 @@ export default function HomeNewsSummary({ news = [], loading = false, error = ''
         aria-expanded={!collapsed}
         className={`flex w-full items-center justify-between gap-2 ${collapsed ? '' : 'mb-1.5'}`}
       >
-        <h2 id="home-news-summary-title" className="flex items-center gap-1 text-sm font-semibold leading-none">
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        <h2
+          id="home-news-summary-title"
+          className="flex items-center gap-1 text-sm font-semibold leading-none"
+        >
+          {collapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )}
           News
         </h2>
         <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">

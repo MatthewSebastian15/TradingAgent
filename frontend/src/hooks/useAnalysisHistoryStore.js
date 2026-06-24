@@ -1,5 +1,21 @@
+import { decryptJSON, encryptJSON } from '../services/secureStorage';
+
 const HISTORY_SCHEMA_VERSION = 2;
 const HISTORY_TTL_DAYS = 30;
+
+// Serialize read-modify-write operations. Encryption made save/remove async, so
+// rapid concurrent calls would otherwise read the same snapshot and clobber each
+// other (lost updates). ponytail: one global chain; go per-key only if a second
+// history key is ever written concurrently.
+let writeChain = Promise.resolve();
+function enqueueWrite(task) {
+  const run = writeChain.then(task, task);
+  writeChain = run.then(
+    () => {},
+    () => {}
+  );
+  return run;
+}
 
 function isExpired(entry) {
   if (!entry?.saved_at) return false;
@@ -92,12 +108,20 @@ function toHistorySummary(entry) {
   };
 }
 
-export function readHistory(historyKey) {
+export async function readHistory(historyKey) {
   try {
     removeLegacyStoredResults(historyKey);
     const raw = localStorage.getItem(historyKey);
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    let parsed = await decryptJSON(raw); // new envelope
+    if (parsed === null) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        localStorage.removeItem(historyKey);
+        return [];
+      }
+    } // legacy plaintext
     if (!Array.isArray(parsed)) {
       localStorage.removeItem(historyKey);
       return [];
@@ -105,7 +129,7 @@ export function readHistory(historyKey) {
 
     const clean = parsed.map(toHistorySummary).filter(Boolean);
     if (JSON.stringify(clean) !== JSON.stringify(parsed)) {
-      localStorage.setItem(historyKey, JSON.stringify(clean));
+      localStorage.setItem(historyKey, await encryptJSON(clean));
     }
 
     return clean;
@@ -119,11 +143,11 @@ export function readHistory(historyKey) {
   }
 }
 
-export function writeHistory(historyKey, entries) {
+export async function writeHistory(historyKey, entries) {
   try {
     const clean = entries.map(toHistorySummary).filter(Boolean);
     if (clean.length) {
-      localStorage.setItem(historyKey, JSON.stringify(clean));
+      localStorage.setItem(historyKey, await encryptJSON(clean));
     } else {
       localStorage.removeItem(historyKey);
     }
@@ -132,7 +156,7 @@ export function writeHistory(historyKey, entries) {
   }
 }
 
-export function clearHistory(historyKey) {
+export async function clearHistory(historyKey) {
   try {
     removeLegacyStoredResults(historyKey);
     localStorage.removeItem(historyKey);
@@ -142,9 +166,11 @@ export function clearHistory(historyKey) {
 }
 
 export function removeHistoryItem(historyKey, item) {
-  const history = readHistory(historyKey);
-  const updated = history.filter((entry) => !isSameHistoryEntry(entry, item));
-  writeHistory(historyKey, updated);
+  return enqueueWrite(async () => {
+    const history = await readHistory(historyKey);
+    const updated = history.filter((entry) => !isSameHistoryEntry(entry, item));
+    await writeHistory(historyKey, updated);
+  });
 }
 
 export function withAnalysisCreatedAt(result) {
@@ -153,17 +179,19 @@ export function withAnalysisCreatedAt(result) {
 }
 
 export function saveToHistory(historyKey, result) {
-  if (!result || result.error) return;
+  if (!result || result.error) return Promise.resolve();
 
   const summary = toHistorySummary({
     ...result,
     saved_at: result.saved_at || new Date().toISOString(),
   });
-  if (!summary) return;
+  if (!summary) return Promise.resolve();
 
-  const history = readHistory(historyKey);
-  const deduped = history.filter((item) => !isSameHistoryEntry(item, summary));
-  writeHistory(historyKey, [summary, ...deduped]);
+  return enqueueWrite(async () => {
+    const history = await readHistory(historyKey);
+    const deduped = history.filter((item) => !isSameHistoryEntry(item, summary));
+    await writeHistory(historyKey, [summary, ...deduped]);
+  });
 }
 
 export function normalizeBackendHistory(entries) {
