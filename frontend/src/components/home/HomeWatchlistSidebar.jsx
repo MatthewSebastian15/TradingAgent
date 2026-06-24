@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowUp, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import PropTypes from 'prop-types';
 import React, { memo, useEffect, useMemo, useState } from 'react';
 
+import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from '../../constants/sidebar';
 import { useWatchlistQuotes } from '../../hooks/useWatchlistQuotes';
 import { useWatchlistStore } from '../../hooks/useWatchlistStore';
 import {
@@ -163,7 +164,7 @@ function Skeleton() {
   );
 }
 
-export default function HomeWatchlistSidebar() {
+export default function HomeWatchlistSidebar({ collapsed = false, onToggle = () => {} }) {
   const { activeGroup } = useWatchlistStore();
   const symbols = useMemo(
     () => (activeGroup?.items || []).map((item) => item.symbol),
@@ -213,15 +214,47 @@ export default function HomeWatchlistSidebar() {
   const totalSymbols = (activeGroup?.items || []).length;
   const showSkeleton = loadingQuotes && quotesBySymbol.size === 0 && totalSymbols > 0;
 
+  // Pinned to the viewport's top (below navbar), bottom, and right edges.
+  const anchor = 'fixed right-0 top-[60px] bottom-0 z-30 transition-[width] duration-150';
+
+  if (collapsed) {
+    return (
+      <aside
+        className={`${anchor} flex ${SIDEBAR_COLLAPSED_WIDTH} flex-col border-l border-bloomberg-border bg-black`}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label="Expand watchlist"
+          className="flex h-full w-full items-center justify-center text-bloomberg-orange"
+        >
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="flex flex-col border border-bloomberg-border bg-black font-mono text-bloomberg-white">
+    <aside
+      className={`${anchor} flex ${SIDEBAR_EXPANDED_WIDTH} flex-col border-l border-bloomberg-border bg-black font-mono text-bloomberg-white`}
+    >
       <div className="flex items-center justify-between gap-2 border-b border-bloomberg-border bg-bloomberg-card px-2 py-1.5">
         <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-bloomberg-orange">
           Watchlist
         </h2>
-        <span className="text-[9px] uppercase tracking-wider text-bloomberg-muted">
-          {updatedAt ? `@ ${updatedAt}` : 'LIVE'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] uppercase tracking-wider text-bloomberg-muted">
+            {updatedAt ? `@ ${updatedAt}` : 'LIVE'}
+          </span>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label="Collapse watchlist"
+            className="text-bloomberg-orange"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
       <div className="relative border-b border-bloomberg-border">
@@ -254,7 +287,7 @@ export default function HomeWatchlistSidebar() {
         />
       </div>
 
-      <div className="max-h-[60vh] overflow-y-auto lg:max-h-none">
+      <div className="max-h-[60vh] flex-1 overflow-y-auto md:max-h-none">
         {error ? (
           <div role="alert" className="px-2 py-4 text-[11px] text-bloomberg-red">
             {error}
@@ -282,3 +315,8 @@ export default function HomeWatchlistSidebar() {
     </aside>
   );
 }
+
+HomeWatchlistSidebar.propTypes = {
+  collapsed: PropTypes.bool,
+  onToggle: PropTypes.func,
+};

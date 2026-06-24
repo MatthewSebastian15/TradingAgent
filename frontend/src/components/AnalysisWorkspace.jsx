@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import PropTypes from 'prop-types';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -89,6 +90,7 @@ export default function AnalysisWorkspace({
   const [status, setStatus] = useState(resourceId ? 'Loading saved analysis...' : '');
   const [agentProgress, setAgentProgress] = useState(null);
   const [activeTab, setActiveTab] = useState('configuration');
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   useEffect(() => {
     if (!resourceId) return undefined;
@@ -196,8 +198,22 @@ export default function AnalysisWorkspace({
 
       {/* Content area: starts to the right of the global nav sidebar (w-12) */}
       <div className="fixed bottom-0 left-12 right-0 top-[60px] flex">
-        {/* Tab panel — always visible */}
-        <div className="flex w-[272px] flex-shrink-0 flex-col border-r border-bloomberg-border bg-card/95 shadow-2xl shadow-black/60 backdrop-blur">
+        {/* Collapsed: panel takes no width; floating button re-expands it. */}
+        {panelCollapsed && (
+          <button
+            type="button"
+            onClick={() => setPanelCollapsed(false)}
+            aria-label="Expand panel"
+            className="absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center border border-bloomberg-border bg-bloomberg-surface/90 text-bloomberg-orange backdrop-blur"
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+
+        {/* Tab panel — collapses to none, expands to 280px */}
+        <div
+          className={`${panelCollapsed ? 'hidden' : 'flex w-[280px]'} flex-shrink-0 flex-col border-r border-bloomberg-border bg-card/95 shadow-2xl shadow-black/60 backdrop-blur`}
+        >
           {/* Tab bar */}
           <div className="flex h-10 flex-shrink-0 border-b border-bloomberg-border bg-bloomberg-surface/70">
             <button
@@ -223,6 +239,14 @@ export default function AnalysisWorkspace({
               }`}
             >
               HISTORY
+            </button>
+            <button
+              type="button"
+              onClick={() => setPanelCollapsed(true)}
+              aria-label="Collapse panel"
+              className="flex w-7 shrink-0 items-center justify-center border-l border-bloomberg-border text-bloomberg-orange"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
 
