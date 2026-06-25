@@ -1,6 +1,6 @@
 import { Play, Square } from 'lucide-react';
 import PropTypes from 'prop-types';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,16 +14,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 
 import TickerSearchBar from './TickerSearchBar';
-import {
-  buildAnalysisPayload,
-  DEFAULT_DEBATE_ROUNDS,
-  DEPTH_OPTIONS,
-  HORIZON_OPTIONS,
-  today,
-  validateAnalysisInput,
-} from '../domain/analysisContract';
-import { useAnalysisJob } from '../hooks/useAnalysisJob';
-import { useWatchlistStore } from '../hooks/useWatchlistStore';
+import { DEPTH_OPTIONS, HORIZON_OPTIONS } from '../domain/analysisContract';
+import { useStockForm } from '../hooks/useStockForm';
 
 const TERMINAL_INPUT_CLASS =
   'h-8 rounded-none border-bloomberg-border bg-bloomberg-bg font-mono text-[11px] tracking-wider text-bloomberg-white placeholder:text-bloomberg-muted focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
@@ -37,18 +29,6 @@ const TERMINAL_PRIMARY_BUTTON_CLASS =
   'h-9 w-full max-w-[208px] rounded-none border border-bloomberg-orange bg-bloomberg-orange px-3 font-mono text-[11px] font-bold uppercase tracking-widest text-black hover:bg-orange-400 focus-visible:ring-1 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
 const TERMINAL_STOP_BUTTON_CLASS =
   'h-9 w-full max-w-[208px] rounded-none border border-bloomberg-red bg-bloomberg-red px-3 font-mono text-[11px] font-bold uppercase tracking-widest text-black hover:bg-red-400 focus-visible:ring-1 focus-visible:ring-bloomberg-red focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-45';
-
-function apiToDisplayDate(value) {
-  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value || '');
-}
-
-function displayToApiDate(value) {
-  const match = String(value || '')
-    .trim()
-    .match(/^(\d{2})-(\d{2})-(\d{4})$/);
-  return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
-}
 
 function ConfigSection({ title, children }) {
   return (
@@ -181,150 +161,43 @@ export default function StockForm({
   onLoading,
   onStatus,
   onAgentProgress,
-  useAnalysisJobHook = useAnalysisJob,
+  useAnalysisJobHook = undefined,
   selectedResult = null,
   tickerSearch = null,
 }) {
-  const [ticker, setTicker] = useState('');
-  const [date, setDate] = useState(apiToDisplayDate(today()));
-  const [rounds, setRounds] = useState(DEFAULT_DEBATE_ROUNDS);
-  const [timeHorizonMonths, setTimeHorizonMonths] = useState(1);
-  const [analysisDepth, setDepth] = useState('balanced');
-  const [responseDetail, setDetail] = useState('full');
-  const [hasExistingPosition, setHasExistingPosition] = useState(false);
-  const [positionQuantity, setPositionQuantity] = useState('');
-  const [averageEntryPrice, setAverageEntryPrice] = useState('');
-  const [error, setError] = useState('');
-  const { running, startAnalysis, stopAnalysis } = useAnalysisJobHook({
+  const {
+    ticker,
+    setTicker,
+    date,
+    setDate,
+    rounds,
+    setRounds,
+    timeHorizonMonths,
+    setTimeHorizonMonths,
+    analysisDepth,
+    setDepth,
+    responseDetail,
+    setDetail,
+    hasExistingPosition,
+    setHasExistingPosition,
+    positionQuantity,
+    setPositionQuantity,
+    averageEntryPrice,
+    setAverageEntryPrice,
+    error,
+    setError,
+    running,
+    watchlistItems,
+    handleSubmit,
+    handleWatchlistTicker,
+  } = useStockForm({
     onResult,
     onLoading,
     onStatus,
     onAgentProgress,
+    useAnalysisJobHook,
+    selectedResult,
   });
-  const { activeGroup } = useWatchlistStore();
-  const watchlistItems = activeGroup?.items || [];
-
-  useEffect(() => {
-    if (!selectedResult || selectedResult.error || running) return;
-
-    const resultTicker = String(
-      selectedResult.normalized_ticker || selectedResult.ticker || selectedResult.input_ticker || ''
-    )
-      .trim()
-      .toUpperCase();
-
-    if (resultTicker) setTicker(resultTicker);
-    if (selectedResult.trade_date) setDate(apiToDisplayDate(selectedResult.trade_date));
-    if (selectedResult.time_horizon_months) {
-      setTimeHorizonMonths(Number(selectedResult.time_horizon_months));
-    }
-    if (selectedResult.max_debate_rounds) setRounds(Number(selectedResult.max_debate_rounds));
-    if (selectedResult.analysis_depth) setDepth(selectedResult.analysis_depth);
-    if (selectedResult.response_detail) setDetail(selectedResult.response_detail);
-
-    const hasPosition = Boolean(selectedResult.has_existing_position);
-    setHasExistingPosition(hasPosition);
-    setPositionQuantity(
-      hasPosition &&
-        selectedResult.position_quantity !== null &&
-        selectedResult.position_quantity !== undefined
-        ? String(selectedResult.position_quantity)
-        : ''
-    );
-    setAverageEntryPrice(
-      hasPosition &&
-        selectedResult.average_entry_price !== null &&
-        selectedResult.average_entry_price !== undefined
-        ? String(selectedResult.average_entry_price)
-        : ''
-    );
-    setError('');
-  }, [running, selectedResult]);
-
-  async function handleWatchlistTicker(item) {
-    if (running) return;
-    const newTicker = item.symbol;
-    setTicker(newTicker);
-    setError('');
-    const apiDate = displayToApiDate(date);
-    if (!apiDate) {
-      setError('Date must be DD-MM-YYYY');
-      onResult({ error: 'Date must be DD-MM-YYYY' });
-      return;
-    }
-    const validationError = validateAnalysisInput({
-      ticker: newTicker,
-      date: apiDate,
-      timeHorizonMonths,
-      rounds,
-      analysisDepth,
-      responseDetail,
-    });
-    if (validationError) {
-      setError(validationError);
-      onResult({ error: validationError });
-      return;
-    }
-    await startAnalysis(
-      buildAnalysisPayload({
-        ticker: newTicker,
-        date: apiDate,
-        timeHorizonMonths,
-        rounds,
-        analysisDepth,
-        responseDetail,
-        hasExistingPosition,
-        positionQuantity: hasExistingPosition ? positionQuantity || null : null,
-        averageEntryPrice: hasExistingPosition ? averageEntryPrice || null : null,
-      })
-    );
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-
-    if (running) {
-      stopAnalysis();
-      return;
-    }
-
-    const apiDate = displayToApiDate(date);
-    if (!apiDate) {
-      const validationError = 'Date must be DD-MM-YYYY';
-      setError(validationError);
-      onResult({ error: validationError });
-      return;
-    }
-
-    const validationError = validateAnalysisInput({
-      ticker,
-      date: apiDate,
-      timeHorizonMonths,
-      rounds,
-      analysisDepth,
-      responseDetail,
-    });
-    if (validationError) {
-      setError(validationError);
-      onResult({ error: validationError });
-      return;
-    }
-
-    setError('');
-    await startAnalysis(
-      buildAnalysisPayload({
-        ticker,
-        date: apiDate,
-        timeHorizonMonths,
-        rounds,
-        analysisDepth,
-        responseDetail,
-        hasExistingPosition,
-        positionQuantity: hasExistingPosition ? positionQuantity || null : null,
-        averageEntryPrice: hasExistingPosition ? averageEntryPrice || null : null,
-      })
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="font-mono h-full flex flex-col">
