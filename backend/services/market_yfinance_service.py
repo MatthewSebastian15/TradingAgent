@@ -181,6 +181,7 @@ def _ticker_name(ticker: Any, symbol: str) -> str:
         if value:
             return str(value)
     except Exception:
+        # ponytail: best-effort name lookup; falls back to the static label below
         pass
     return MARKET_LABELS.get(symbol, symbol)
 

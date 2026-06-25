@@ -1,24 +1,10 @@
 import PropTypes from 'prop-types';
 import React from 'react';
 
-function money(value) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
-  return value.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  });
-}
+import { money as fmtMoney, pct as fmtPct, signClass } from '../../utils/formatting';
 
-function pct(value) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '';
-  return ` (${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%)`;
-}
-
-function signClass(value) {
-  if (!Number.isFinite(value)) return 'text-bloomberg-white';
-  return value >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red';
-}
+const money = (value) => fmtMoney(value, { currency: true });
+const pct = (value) => fmtPct(value, { parens: true, invalid: '' });
 
 function Cell({ label, value, valueClass = 'text-bloomberg-white' }) {
   return (

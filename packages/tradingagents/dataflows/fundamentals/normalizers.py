@@ -1521,6 +1521,7 @@ def build_financial_highlights_from_normalized_rows(
                     source_field="last_close_on_or_before_period_end",
                 )
         except Exception:
+            # ponytail: reference-price enrichment is optional; skip if pricing lookup fails
             pass
     shares_outstanding = profile.get("shares_outstanding") or profile.get("sharesOutstanding")
     for period in periods:

@@ -2,24 +2,12 @@ import { Plus, Trash2 } from 'lucide-react';
 import PropTypes from 'prop-types';
 import React, { useState } from 'react';
 
+import { money, pct, signClass as fmtSignClass } from '../../utils/formatting';
 import { positionStats } from '../../utils/holdingsPerf';
 import { formatChangePercent } from '../../utils/watchlistFormatters';
 import WatchlistTrendBars from '../watchlist/WatchlistTrendBars';
 
-function money(value) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
-  return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function pct(value) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
-  return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`;
-}
-
-function signClass(value) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return 'text-bloomberg-muted';
-  return value >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red';
-}
+const signClass = (value) => fmtSignClass(value, { neutral: 'text-bloomberg-muted' });
 
 const HEADERS = [
   'Ticker',

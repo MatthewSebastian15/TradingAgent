@@ -15,6 +15,24 @@ export function formatPrice(price, ticker = '', currency = '') {
   return `${normalizedCurrency} ${value}`;
 }
 
+export function money(value, { currency = false } = {}) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
+  return currency
+    ? value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+    : value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function pct(value, { parens = false, invalid = '-' } = {}) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return invalid;
+  const body = `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`;
+  return parens ? ` (${body})` : body;
+}
+
+export function signClass(value, { neutral = 'text-bloomberg-white' } = {}) {
+  if (!Number.isFinite(value)) return neutral;
+  return value >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red';
+}
+
 export function formatTickerLabel(ticker = '') {
   if (ticker === null || ticker === undefined) return '';
   return String(ticker).trim().toUpperCase();

@@ -7,6 +7,7 @@ import ResearchSidebar from '../components/research/ResearchSidebar';
 import CandlestickPriceChart from '../components/results/tabs/CandlestickPriceChart';
 import { useStockOverview } from '../hooks/useStockOverview';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
+import { signClass as baseSignClass } from '../utils/formatting';
 import { saveRecentTicker } from '../utils/recentTickers';
 
 // ── Format helpers ────────────────────────────────────────────────────────────
@@ -33,10 +34,7 @@ function fmtNum(n, decimals = 2) {
   return n.toLocaleString('en-US', { maximumFractionDigits: decimals });
 }
 
-function signClass(n) {
-  if (!Number.isFinite(n)) return 'text-bloomberg-muted';
-  return n >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red';
-}
+const signClass = (n) => baseSignClass(n, { neutral: 'text-bloomberg-muted' });
 
 function negClass(n) {
   if (!Number.isFinite(n)) return 'text-bloomberg-white';

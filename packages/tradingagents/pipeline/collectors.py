@@ -718,6 +718,7 @@ def _release_collection_runtime(budget_id: str, attempt_id: str) -> None:
         release_budget(budget_id)
         release_attempt_recorder(attempt_id)
     except Exception:
+        # ponytail: best-effort cleanup; runtime release failure must not mask the real result
         pass
 
 
