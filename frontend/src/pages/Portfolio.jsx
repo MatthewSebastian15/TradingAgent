@@ -2,16 +2,25 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getMarketQuotes } from '../api/market';
 import Navbar from '../components/Navbar';
+import HoldingsSummaryBar from '../components/portfolio/HoldingsSummaryBar';
+import HoldingsTable from '../components/portfolio/HoldingsTable';
 import PortfolioSummaryBar from '../components/portfolio/PortfolioSummaryBar';
 import SignalsSidebar from '../components/portfolio/SignalsSidebar';
 import TrackedPositionsTable from '../components/portfolio/TrackedPositionsTable';
 import { historyResourceId, readHistory } from '../hooks/useAnalysisHistoryStore';
+import { useHoldingsStore } from '../hooks/useHoldingsStore';
 import { usePortfolioStore } from '../hooks/usePortfolioStore';
 import { useWatchlistQuotes } from '../hooks/useWatchlistQuotes';
+import { summarizeHoldings } from '../utils/holdingsPerf';
 import { summarize } from '../utils/portfolioPerf';
 import { normalizeWatchlistSymbol } from '../utils/watchlistFormatters';
 
 const HISTORY_KEY = 'ta_analysis_history';
+
+const TABS = [
+  { id: 'ai', label: 'AI Tracker' },
+  { id: 'holdings', label: 'My Holdings' },
+];
 
 function toSignal(entry) {
   const id = historyResourceId(entry);
@@ -32,9 +41,12 @@ function toSignal(entry) {
 
 export default function Portfolio() {
   const { tracked, trackedIds, track, untrack } = usePortfolioStore();
+  const { holdings, add: addHolding, remove: removeHolding } = useHoldingsStore();
+  const [tab, setTab] = useState('ai');
   const [signals, setSignals] = useState([]);
   const [trackingId, setTrackingId] = useState(null);
   const [error, setError] = useState('');
+  const [holdingsError, setHoldingsError] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -48,9 +60,13 @@ export default function Portfolio() {
   }, []);
 
   const symbols = useMemo(() => {
-    const all = [...tracked.map((t) => t.ticker), ...signals.map((s) => s.ticker)];
+    const all = [
+      ...tracked.map((t) => t.ticker),
+      ...signals.map((s) => s.ticker),
+      ...holdings.map((h) => h.ticker),
+    ];
     return Array.from(new Set(all.map(normalizeWatchlistSymbol).filter(Boolean)));
-  }, [tracked, signals]);
+  }, [tracked, signals, holdings]);
 
   const { quotesBySymbol, trendsBySymbol } = useWatchlistQuotes(symbols);
 
@@ -72,7 +88,23 @@ export default function Portfolio() {
     [tracked, quotesBySymbol, trendsBySymbol]
   );
 
+  const holdingRows = useMemo(
+    () =>
+      holdings.map((holding) => {
+        const key = normalizeWatchlistSymbol(holding.ticker);
+        const quote = quotesBySymbol.get(key);
+        return {
+          holding,
+          price: Number(quote?.price),
+          chg: quote?.chg,
+          trend: trendsBySymbol.get(key) || [],
+        };
+      }),
+    [holdings, quotesBySymbol, trendsBySymbol]
+  );
+
   const summary = useMemo(() => summarize(tracked, priceFor), [tracked, priceFor]);
+  const holdingsSummary = useMemo(() => summarizeHoldings(holdingRows), [holdingRows]);
 
   const handleTrack = useCallback(
     async (signal) => {
@@ -111,32 +143,93 @@ export default function Portfolio() {
     [track]
   );
 
+  const handleAddHolding = useCallback(
+    async (record) => {
+      setHoldingsError('');
+      const ticker = normalizeWatchlistSymbol(record.ticker);
+      if (!ticker) {
+        setHoldingsError('Enter a ticker symbol.');
+        return false;
+      }
+      if (!Number.isFinite(record.shares) || record.shares <= 0) {
+        setHoldingsError('Shares must be a positive number.');
+        return false;
+      }
+      if (!Number.isFinite(record.cost_basis) || record.cost_basis < 0) {
+        setHoldingsError('Average cost must be zero or more.');
+        return false;
+      }
+      await addHolding({ ticker, shares: record.shares, cost_basis: record.cost_basis });
+      return true;
+    },
+    [addHolding]
+  );
+
+  const showSidebar = tab === 'ai';
+
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
       <Navbar />
-      <main className="space-y-3 px-4 py-4 md:pr-[296px]">
+      <main className={`space-y-3 px-4 py-4 ${showSidebar ? 'md:pr-[296px]' : ''}`}>
         <div className="flex items-center justify-between">
           <h1 className="font-mono text-[11px] uppercase tracking-[0.35em] text-bloomberg-orange">
-            ■ Portfolio — AI Recommendation Tracker
+            ■ Portfolio
           </h1>
         </div>
 
-        <PortfolioSummaryBar summary={summary} />
-        <TrackedPositionsTable rows={rows} onRemove={untrack} />
+        <div className="flex gap-1 border-b border-bloomberg-border">
+          {TABS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`-mb-px border-b-2 px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] ${
+                tab === id
+                  ? 'border-bloomberg-orange text-bloomberg-orange'
+                  : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-        <p className="font-mono text-[10px] leading-relaxed text-bloomberg-muted">
-          Tracked performance is directional by the AI&apos;s decision and is a research tool, not
-          financial advice. Entry prices are frozen at the moment you track a signal.
-        </p>
+        {tab === 'ai' ? (
+          <>
+            <PortfolioSummaryBar summary={summary} />
+            <TrackedPositionsTable rows={rows} onRemove={untrack} />
+            <p className="font-mono text-[10px] leading-relaxed text-bloomberg-muted">
+              Tracked performance is directional by the AI&apos;s decision and is a research tool, not
+              financial advice. Entry prices are frozen at the moment you track a signal.
+            </p>
+          </>
+        ) : (
+          <>
+            <HoldingsSummaryBar summary={holdingsSummary} />
+            <HoldingsTable
+              rows={holdingRows}
+              totalValue={holdingsSummary.totalValue}
+              onAdd={handleAddHolding}
+              onRemove={removeHolding}
+              error={holdingsError}
+            />
+            <p className="font-mono text-[10px] leading-relaxed text-bloomberg-muted">
+              Holdings are entered by you and stored encrypted on this device only. Prices and P/L
+              are live; nothing here is financial advice.
+            </p>
+          </>
+        )}
       </main>
 
-      <SignalsSidebar
-        signals={signals}
-        trackedIds={trackedIds}
-        trackingId={trackingId}
-        error={error}
-        onTrack={handleTrack}
-      />
+      {showSidebar && (
+        <SignalsSidebar
+          signals={signals}
+          trackedIds={trackedIds}
+          trackingId={trackingId}
+          error={error}
+          onTrack={handleTrack}
+        />
+      )}
     </div>
   );
 }
