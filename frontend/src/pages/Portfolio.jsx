@@ -7,10 +7,16 @@ import HoldingsTable from '../components/portfolio/HoldingsTable';
 import PortfolioSummaryBar from '../components/portfolio/PortfolioSummaryBar';
 import SignalsSidebar from '../components/portfolio/SignalsSidebar';
 import TrackedPositionsTable from '../components/portfolio/TrackedPositionsTable';
-import { historyResourceId, readHistory } from '../hooks/useAnalysisHistoryStore';
+import {
+  historyResourceId,
+  normalizeBackendHistory,
+  readHistory,
+  writeHistory,
+} from '../hooks/useAnalysisHistoryStore';
 import { useHoldingsStore } from '../hooks/useHoldingsStore';
 import { usePortfolioStore } from '../hooks/usePortfolioStore';
 import { useWatchlistQuotes } from '../hooks/useWatchlistQuotes';
+import { fetchAnalysisHistory } from '../utils/analysisHistoryApi';
 import { summarizeHoldings } from '../utils/holdingsPerf';
 import { summarize } from '../utils/portfolioPerf';
 import { normalizeWatchlistSymbol } from '../utils/watchlistFormatters';
@@ -49,13 +55,27 @@ export default function Portfolio() {
   const [holdingsError, setHoldingsError] = useState('');
 
   useEffect(() => {
+    // Backend `analyses` is authoritative; localStorage is its offline mirror.
+    // Match HistoryPanel: fetch backend, refresh the mirror, fall back on failure.
     let alive = true;
-    readHistory(HISTORY_KEY).then((entries) => {
-      if (!alive) return;
-      setSignals(entries.map(toSignal).filter(Boolean));
-    });
+    const controller = new AbortController();
+    const apply = (entries) => alive && setSignals(entries.map(toSignal).filter(Boolean));
+
+    fetchAnalysisHistory({ limit: 25, signal: controller.signal })
+      .then(async (data) => {
+        if (controller.signal.aborted) return;
+        const items = normalizeBackendHistory(data);
+        await writeHistory(HISTORY_KEY, items);
+        apply(items);
+      })
+      .catch(async (error) => {
+        if (error.name === 'AbortError') return;
+        apply(await readHistory(HISTORY_KEY));
+      });
+
     return () => {
       alive = false;
+      controller.abort();
     };
   }, []);
 
