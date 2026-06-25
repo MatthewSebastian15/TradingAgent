@@ -1,0 +1,1602 @@
+{
+  "asset_turnover|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "asset_turnover|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "asset_turnover|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "asset_turnover|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "beta|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "beta|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "beta|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "beta|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "bvps|FY23": [
+    "calculated",
+    55.0,
+    "55.00"
+  ],
+  "bvps|FY24": [
+    "calculated",
+    60.0,
+    "60.00"
+  ],
+  "bvps|FY25": [
+    "calculated",
+    66.0,
+    "66.00"
+  ],
+  "bvps|FY26Q1": [
+    "calculated",
+    70.0,
+    "70.00"
+  ],
+  "capex_intensity_percent|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "capex_intensity_percent|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "capex_intensity_percent|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "capex_intensity_percent|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "capital_expenditure|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "capital_expenditure|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "capital_expenditure|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "capital_expenditure|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_dividends_paid|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_dividends_paid|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_dividends_paid|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_dividends_paid|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_per_share|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_per_share|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_per_share|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_per_share|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_ratio|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_ratio|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_ratio|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash_ratio|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cash|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cfo_growth|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cfo_growth|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cfo_growth|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cfo_growth|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cfo_to_net_income|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cfo_to_net_income|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cfo_to_net_income|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cfo_to_net_income|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "change_in_working_capital|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "change_in_working_capital|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "change_in_working_capital|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "change_in_working_capital|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cost_of_revenue|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cost_of_revenue|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cost_of_revenue|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "cost_of_revenue|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_assets|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_assets|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_assets|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_assets|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_liabilities|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_liabilities|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_liabilities|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_liabilities|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_ratio|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_ratio|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_ratio|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "current_ratio|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "debt_ratio|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "debt_ratio|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "debt_ratio|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "debt_ratio|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "debt_to_ebitda|FY23": [
+    "calculated",
+    0.4583333333333333,
+    "0.46x"
+  ],
+  "debt_to_ebitda|FY24": [
+    "calculated",
+    0.4444444444444444,
+    "0.44x"
+  ],
+  "debt_to_ebitda|FY25": [
+    "calculated",
+    0.44,
+    "0.44x"
+  ],
+  "debt_to_ebitda|FY26Q1": [
+    "calculated",
+    1.75,
+    "1.75x"
+  ],
+  "depreciation_amortization|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "depreciation_amortization|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "depreciation_amortization|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "depreciation_amortization|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "der|FY23": [
+    "calculated",
+    0.2,
+    "0.20x"
+  ],
+  "der|FY24": [
+    "calculated",
+    0.2,
+    "0.20x"
+  ],
+  "der|FY25": [
+    "calculated",
+    0.2,
+    "0.20x"
+  ],
+  "der|FY26Q1": [
+    "calculated",
+    0.2,
+    "0.20x"
+  ],
+  "dividend_coverage_by_fcf|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "dividend_coverage_by_fcf|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "dividend_coverage_by_fcf|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "dividend_coverage_by_fcf|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "dividend_yield|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "dividend_yield|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "dividend_yield|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "dividend_yield|FY26Q1": [
+    "calculated",
+    2.0,
+    "2.00%"
+  ],
+  "earnings_yield|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "earnings_yield|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "earnings_yield|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "earnings_yield|FY26Q1": [
+    "calculated",
+    4.0,
+    "4.00%"
+  ],
+  "ebitda_growth|FY23": [
+    "calculated",
+    20.0,
+    "20.00%"
+  ],
+  "ebitda_growth|FY24": [
+    "calculated",
+    12.5,
+    "12.50%"
+  ],
+  "ebitda_growth|FY25": [
+    "calculated",
+    11.11111111111111,
+    "11.11%"
+  ],
+  "ebitda_growth|FY26Q1": [
+    "calculated",
+    14.285714285714285,
+    "14.29%"
+  ],
+  "ebitda_margin|FY23": [
+    "calculated",
+    20.0,
+    "20.00%"
+  ],
+  "ebitda_margin|FY24": [
+    "calculated",
+    20.454545454545457,
+    "20.45%"
+  ],
+  "ebitda_margin|FY25": [
+    "calculated",
+    20.0,
+    "20.00%"
+  ],
+  "ebitda_margin|FY26Q1": [
+    "calculated",
+    20.0,
+    "20.00%"
+  ],
+  "ebitda|FY23": [
+    "reported",
+    24000.0,
+    "24,000.0"
+  ],
+  "ebitda|FY24": [
+    "reported",
+    27000.0,
+    "27,000.0"
+  ],
+  "ebitda|FY25": [
+    "reported",
+    30000.0,
+    "30,000.0"
+  ],
+  "ebitda|FY26Q1": [
+    "reported",
+    8000.0,
+    "8,000.0"
+  ],
+  "enterprise_value|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "enterprise_value|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "enterprise_value|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "enterprise_value|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "eps|FY23": [
+    "calculated",
+    12.0,
+    "12.00"
+  ],
+  "eps|FY24": [
+    "calculated",
+    13.0,
+    "13.00"
+  ],
+  "eps|FY25": [
+    "calculated",
+    15.0,
+    "15.00"
+  ],
+  "eps|FY26Q1": [
+    "calculated",
+    4.0,
+    "4.00"
+  ],
+  "equity_multiplier|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "equity_multiplier|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "equity_multiplier|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "equity_multiplier|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "equity_ratio|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "equity_ratio|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "equity_ratio|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "equity_ratio|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_ebitda|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_ebitda|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_ebitda|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_ebitda|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_fcf|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_fcf|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_fcf|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_fcf|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_sales|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_sales|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_sales|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ev_sales|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_coverage|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_coverage|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_coverage|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_coverage|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_growth|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_growth|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_growth|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_growth|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_margin|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_margin|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_margin|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_margin|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_yield|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_yield|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_yield|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "fcf_yield|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "financing_cash_flow|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "financing_cash_flow|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "financing_cash_flow|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "financing_cash_flow|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "float_shares|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "float_shares|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "float_shares|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "float_shares|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "free_cash_flow|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "free_cash_flow|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "free_cash_flow|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "free_cash_flow|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "gross_margin|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "gross_margin|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "gross_margin|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "gross_margin|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "gross_profit|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "gross_profit|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "gross_profit|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "gross_profit|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "income_tax_expense|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "income_tax_expense|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "income_tax_expense|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "income_tax_expense|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "interest_coverage|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "interest_coverage|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "interest_coverage|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "interest_coverage|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "interest_expense|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "interest_expense|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "interest_expense|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "interest_expense|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "invested_capital|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "invested_capital|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "invested_capital|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "invested_capital|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "investing_cash_flow|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "investing_cash_flow|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "investing_cash_flow|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "investing_cash_flow|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "market_cap|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "market_cap|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "market_cap|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "market_cap|FY26Q1": [
+    "calculated",
+    100000.0,
+    "100,000.0"
+  ],
+  "net_debt_to_equity|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "net_debt_to_equity|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "net_debt_to_equity|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "net_debt_to_equity|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "net_debt|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "net_debt|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "net_debt|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "net_debt|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "net_profit_growth|FY23": [
+    "calculated",
+    20.0,
+    "20.00%"
+  ],
+  "net_profit_growth|FY24": [
+    "calculated",
+    8.333333333333332,
+    "8.33%"
+  ],
+  "net_profit_growth|FY25": [
+    "calculated",
+    15.384615384615385,
+    "15.38%"
+  ],
+  "net_profit_growth|FY26Q1": [
+    "calculated",
+    14.285714285714285,
+    "14.29%"
+  ],
+  "net_profit_margin|FY23": [
+    "calculated",
+    10.0,
+    "10.00%"
+  ],
+  "net_profit_margin|FY24": [
+    "calculated",
+    9.848484848484848,
+    "9.85%"
+  ],
+  "net_profit_margin|FY25": [
+    "calculated",
+    10.0,
+    "10.00%"
+  ],
+  "net_profit_margin|FY26Q1": [
+    "calculated",
+    10.0,
+    "10.00%"
+  ],
+  "net_profit|FY23": [
+    "reported",
+    12000.0,
+    "12,000.0"
+  ],
+  "net_profit|FY24": [
+    "reported",
+    13000.0,
+    "13,000.0"
+  ],
+  "net_profit|FY25": [
+    "reported",
+    15000.0,
+    "15,000.0"
+  ],
+  "net_profit|FY26Q1": [
+    "reported",
+    4000.0,
+    "4,000.0"
+  ],
+  "operating_cash_flow|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_cash_flow|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_cash_flow|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_cash_flow|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_income_growth|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_income_growth|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_income_growth|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_income_growth|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_income|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_income|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_income|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_income|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_margin|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_margin|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_margin|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "operating_margin|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "payout_ratio|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "payout_ratio|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "payout_ratio|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "payout_ratio|FY26Q1": [
+    "calculated",
+    50.0,
+    "50.00%"
+  ],
+  "pbv|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pbv|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pbv|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pbv|FY26Q1": [
+    "calculated",
+    1.4285714285714286,
+    "1.43x"
+  ],
+  "peg_ratio|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "peg_ratio|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "peg_ratio|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "peg_ratio|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pe|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pe|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pe|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pe|FY26Q1": [
+    "calculated",
+    25.0,
+    "25.00x"
+  ],
+  "pretax_income|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pretax_income|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pretax_income|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "pretax_income|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "price_fcf|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "price_fcf|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "price_fcf|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "price_fcf|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ps|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ps|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ps|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "ps|FY26Q1": [
+    "calculated",
+    2.5,
+    "2.50x"
+  ],
+  "quick_ratio|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "quick_ratio|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "quick_ratio|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "quick_ratio|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "revenue_growth|FY23": [
+    "calculated",
+    20.0,
+    "20.00%"
+  ],
+  "revenue_growth|FY24": [
+    "calculated",
+    10.0,
+    "10.00%"
+  ],
+  "revenue_growth|FY25": [
+    "calculated",
+    13.636363636363635,
+    "13.64%"
+  ],
+  "revenue_growth|FY26Q1": [
+    "calculated",
+    14.285714285714285,
+    "14.29%"
+  ],
+  "revenue_per_share|FY23": [
+    "calculated",
+    120.0,
+    "120.00"
+  ],
+  "revenue_per_share|FY24": [
+    "calculated",
+    132.0,
+    "132.00"
+  ],
+  "revenue_per_share|FY25": [
+    "calculated",
+    150.0,
+    "150.00"
+  ],
+  "revenue_per_share|FY26Q1": [
+    "calculated",
+    40.0,
+    "40.00"
+  ],
+  "revenue|FY23": [
+    "reported",
+    120000.0,
+    "120,000.0"
+  ],
+  "revenue|FY24": [
+    "reported",
+    132000.0,
+    "132,000.0"
+  ],
+  "revenue|FY25": [
+    "reported",
+    150000.0,
+    "150,000.0"
+  ],
+  "revenue|FY26Q1": [
+    "reported",
+    40000.0,
+    "40,000.0"
+  ],
+  "roa|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "roa|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "roa|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "roa|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "roe|FY23": [
+    "calculated",
+    22.857142857142858,
+    "22.86%"
+  ],
+  "roe|FY24": [
+    "calculated",
+    22.608695652173914,
+    "22.61%"
+  ],
+  "roe|FY25": [
+    "calculated",
+    23.809523809523807,
+    "23.81%"
+  ],
+  "roe|FY26Q1": [
+    "calculated",
+    5.88235294117647,
+    "5.88%"
+  ],
+  "roic|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "roic|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "roic|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "roic|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "share_repurchase|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "share_repurchase|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "share_repurchase|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "share_repurchase|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "shares_outstanding|FY23": [
+    "reported",
+    1000000000.0,
+    "1,000,000,000.00"
+  ],
+  "shares_outstanding|FY24": [
+    "reported",
+    1000000000.0,
+    "1,000,000,000.00"
+  ],
+  "shares_outstanding|FY25": [
+    "reported",
+    1000000000.0,
+    "1,000,000,000.00"
+  ],
+  "shares_outstanding|FY26Q1": [
+    "reported",
+    1000000000.0,
+    "1,000,000,000.00"
+  ],
+  "stock_based_compensation|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "stock_based_compensation|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "stock_based_compensation|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "stock_based_compensation|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "tax_rate|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "tax_rate|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "tax_rate|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "tax_rate|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "total_assets|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "total_assets|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "total_assets|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "total_assets|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "total_debt|FY23": [
+    "reported",
+    11000.0,
+    "11,000.0"
+  ],
+  "total_debt|FY24": [
+    "reported",
+    12000.0,
+    "12,000.0"
+  ],
+  "total_debt|FY25": [
+    "reported",
+    13200.0,
+    "13,200.0"
+  ],
+  "total_debt|FY26Q1": [
+    "reported",
+    14000.0,
+    "14,000.0"
+  ],
+  "total_equity|FY23": [
+    "reported",
+    55000.0,
+    "55,000.0"
+  ],
+  "total_equity|FY24": [
+    "reported",
+    60000.0,
+    "60,000.0"
+  ],
+  "total_equity|FY25": [
+    "reported",
+    66000.0,
+    "66,000.0"
+  ],
+  "total_equity|FY26Q1": [
+    "reported",
+    70000.0,
+    "70,000.0"
+  ],
+  "total_liabilities|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "total_liabilities|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "total_liabilities|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "total_liabilities|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "working_capital|FY23": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "working_capital|FY24": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "working_capital|FY25": [
+    "unavailable",
+    null,
+    "-"
+  ],
+  "working_capital|FY26Q1": [
+    "unavailable",
+    null,
+    "-"
+  ]
+}

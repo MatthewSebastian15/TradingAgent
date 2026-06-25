@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 from .formatter import convert_amount, currency_metadata, format_financial_value
@@ -246,12 +247,16 @@ def _previous_equity_period_key(period: FinancialPeriod) -> str:
     return f"FY{str(period.year)[-2:]}Q{int(period.quarter or 1) - 1}"
 
 
-def _build_period_cells(
+def _derive_period_inputs(
     period: FinancialPeriod,
     normalized: dict[str, Any],
     *,
     scale_divisor: float,
-) -> dict[str, FinancialCell]:
+) -> SimpleNamespace:
+    """Resolve every scalar and pre-built cell the period needs, applying fallbacks.
+
+    Returns a namespace consumed by the per-statement cell builders below.
+    """
     key = period.key
     previous_key = _previous_period_key(period)
     revenue = _number(normalized, key, "revenue")
@@ -390,7 +395,74 @@ def _build_period_cells(
     if revenue_per_share_value is None:
         revenue_per_share_value = safe_divide(revenue, shares_outstanding)
 
-    cells = {
+    return SimpleNamespace(
+        revenue=revenue,
+        previous_revenue=previous_revenue,
+        ebitda=ebitda,
+        previous_ebitda=previous_ebitda,
+        gross_profit=gross_profit,
+        operating_income=operating_income,
+        operating_expense=operating_expense,
+        previous_operating_income=previous_operating_income,
+        effective_ebitda=effective_ebitda,
+        net_profit=net_profit,
+        previous_net_profit=previous_net_profit,
+        pretax_income=pretax_income,
+        income_tax_expense=income_tax_expense,
+        interest_expense=interest_expense,
+        total_equity=total_equity,
+        total_debt=total_debt,
+        cash=cash,
+        current_assets=current_assets,
+        current_liabilities=current_liabilities,
+        total_liabilities=total_liabilities,
+        total_assets=total_assets,
+        operating_cash_flow=operating_cash_flow,
+        previous_operating_cash_flow=previous_operating_cash_flow,
+        capex=capex,
+        dividend_paid=dividend_paid,
+        shares_outstanding=shares_outstanding,
+        reference_price=reference_price,
+        eps_value=eps_value,
+        average_equity=average_equity,
+        eps_cell=eps_cell,
+        market_cap_from_price=market_cap_from_price,
+        market_cap_record=market_cap_record,
+        market_cap_value=market_cap_value,
+        enterprise_value_value=enterprise_value_value,
+        free_cash_flow_value=free_cash_flow_value,
+        previous_free_cash_flow=previous_free_cash_flow,
+        dividend_yield_cell=dividend_yield_cell,
+        payout_ratio_cell=payout_ratio_cell,
+        net_debt_value=net_debt_value,
+        working_capital_value=working_capital_value,
+        invested_capital_value=invested_capital_value,
+        nopat=nopat,
+        der=der,
+        fcf_coverage=fcf_coverage,
+        current_ratio_value=current_ratio_value,
+        quick_ratio_value=quick_ratio_value,
+        revenue_per_share_value=revenue_per_share_value,
+    )
+
+
+def _income_statement_cells(
+    normalized: dict[str, Any], key: str, scale_divisor: float, d: SimpleNamespace
+) -> dict[str, FinancialCell]:
+    revenue = d.revenue
+    previous_revenue = d.previous_revenue
+    ebitda = d.ebitda
+    previous_ebitda = d.previous_ebitda
+    net_profit = d.net_profit
+    previous_net_profit = d.previous_net_profit
+    eps_cell = d.eps_cell
+    gross_profit = d.gross_profit
+    operating_income = d.operating_income
+    operating_expense = d.operating_expense
+    previous_operating_income = d.previous_operating_income
+    income_tax_expense = d.income_tax_expense
+    pretax_income = d.pretax_income
+    return {
         "revenue": _reported_cell(
             _record(normalized, key, "revenue"),
             format_type="currency_scaled",
@@ -488,6 +560,25 @@ def _build_period_cells(
             "Income Tax Expense / Pretax Income * 100",
             format_type="percent",
         ),
+    }
+
+
+def _balance_sheet_cells(
+    normalized: dict[str, Any], key: str, scale_divisor: float, d: SimpleNamespace
+) -> dict[str, FinancialCell]:
+    total_equity = d.total_equity
+    shares_outstanding = d.shares_outstanding
+    net_debt_value = d.net_debt_value
+    cash = d.cash
+    current_liabilities = d.current_liabilities
+    total_liabilities = d.total_liabilities
+    total_assets = d.total_assets
+    total_debt = d.total_debt
+    working_capital_value = d.working_capital_value
+    invested_capital_value = d.invested_capital_value
+    current_ratio_value = d.current_ratio_value
+    quick_ratio_value = d.quick_ratio_value
+    return {
         "bvps": _reported_or_calculated_cell(
             _record(normalized, key, "bvps"),
             safe_divide(total_equity, shares_outstanding),
@@ -582,6 +673,22 @@ def _build_period_cells(
         "debt_ratio": _calculated_cell(
             safe_divide(total_debt, total_assets), "Total Debt / Total Assets", format_type="ratio"
         ),
+    }
+
+
+def _cash_flow_cells(
+    normalized: dict[str, Any], key: str, scale_divisor: float, d: SimpleNamespace
+) -> dict[str, FinancialCell]:
+    free_cash_flow_value = d.free_cash_flow_value
+    operating_cash_flow = d.operating_cash_flow
+    net_profit = d.net_profit
+    capex = d.capex
+    revenue = d.revenue
+    fcf_coverage = d.fcf_coverage
+    previous_free_cash_flow = d.previous_free_cash_flow
+    previous_operating_cash_flow = d.previous_operating_cash_flow
+    dividend_paid = d.dividend_paid
+    return {
         "free_cash_flow": _reported_or_calculated_cell(
             _record(normalized, key, "free_cash_flow"),
             free_cash_flow_value,
@@ -670,6 +777,37 @@ def _build_period_cells(
             "Free Cash Flow / Cash Dividends Paid",
             format_type="ratio",
         ),
+    }
+
+
+def _ratio_valuation_cells(
+    normalized: dict[str, Any], key: str, scale_divisor: float, d: SimpleNamespace
+) -> dict[str, FinancialCell]:
+    net_profit = d.net_profit
+    average_equity = d.average_equity
+    total_equity = d.total_equity
+    der = d.der
+    total_debt = d.total_debt
+    effective_ebitda = d.effective_ebitda
+    dividend_yield_cell = d.dividend_yield_cell
+    payout_ratio_cell = d.payout_ratio_cell
+    market_cap_record = d.market_cap_record
+    market_cap_from_price = d.market_cap_from_price
+    market_cap_value = d.market_cap_value
+    enterprise_value_value = d.enterprise_value_value
+    revenue = d.revenue
+    nopat = d.nopat
+    invested_capital_value = d.invested_capital_value
+    operating_income = d.operating_income
+    interest_expense = d.interest_expense
+    total_assets = d.total_assets
+    eps_value = d.eps_value
+    reference_price = d.reference_price
+    free_cash_flow_value = d.free_cash_flow_value
+    revenue_per_share_value = d.revenue_per_share_value
+    cash = d.cash
+    shares_outstanding = d.shares_outstanding
+    return {
         "roe": _reported_or_calculated_cell(
             _record(normalized, key, "roe"),
             safe_percent(
@@ -814,7 +952,22 @@ def _build_period_cells(
         "dividend_yield_percent": dividend_yield_cell,
         "payout_ratio_percent": payout_ratio_cell,
     }
-    return cells
+
+
+def _build_period_cells(
+    period: FinancialPeriod,
+    normalized: dict[str, Any],
+    *,
+    scale_divisor: float,
+) -> dict[str, FinancialCell]:
+    key = period.key
+    d = _derive_period_inputs(period, normalized, scale_divisor=scale_divisor)
+    return {
+        **_income_statement_cells(normalized, key, scale_divisor, d),
+        **_balance_sheet_cells(normalized, key, scale_divisor, d),
+        **_cash_flow_cells(normalized, key, scale_divisor, d),
+        **_ratio_valuation_cells(normalized, key, scale_divisor, d),
+    }
 
 
 def build_metric_rows(
