@@ -60,4 +60,4 @@ def migrate(sqlite_path: str, pg_url: str) -> int:
 
 if __name__ == "__main__":
     count = migrate(ANALYSIS_DB_PATH, ANALYSIS_DATABASE_URL)
-    print(f"Migrated {count} analyses")
+    print(f"Migrated {count} analyses")  # ponytail: CLI result on stdout, not request-path debug

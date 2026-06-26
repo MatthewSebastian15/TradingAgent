@@ -153,6 +153,127 @@ def _finite_float(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _as_float(value: Any) -> float | None:
+    # ponytail: NaN-only filter (keeps inf), distinct from _finite_float; preserves the
+    # original route-side behavior of build_stock_overview verbatim.
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None
+
+
+def build_stock_overview(symbol: str) -> dict[str, Any]:
+    """Fetch yfinance .info and map to StockOverviewResponse shape."""
+    from tradingagents.dataflows.providers.y_finance import _get_ticker_info  # noqa: PLC0415
+
+    info: dict[str, Any] = _get_ticker_info(symbol) or {}
+
+    def f(key: str) -> float | None:
+        return _as_float(info.get(key))
+
+    def upside(price: float | None, target: float | None) -> float | None:
+        if price and target and price > 0:
+            return round((target - price) / price * 100, 2)
+        return None
+
+    price = f("currentPrice") or f("regularMarketPrice") or f("previousClose")
+    target_mean = f("targetMeanPrice")
+
+    raw_rec = info.get("recommendationKey") or info.get("recommendation")
+    recommendation = str(raw_rec).upper().replace("_", " ") if raw_rec else None
+
+    ex_div = info.get("exDividendDate")
+    ex_div_str: str | None = None
+    if ex_div:
+        try:
+            from datetime import timezone  # noqa: PLC0415
+
+            ex_div_str = datetime.fromtimestamp(int(ex_div), tz=timezone.utc).strftime("%b %d, %Y")
+        except Exception:  # noqa: BLE001
+            ex_div_str = str(ex_div)
+
+    total_cash = f("totalCash")
+    total_debt = f("totalDebt")
+    net_cash_debt = (
+        round(total_cash - total_debt, 2)
+        if total_cash is not None and total_debt is not None
+        else None
+    )
+
+    return {
+        "ticker": symbol,
+        "name": info.get("longName") or info.get("shortName"),
+        "sector": info.get("sector"),
+        "industry": info.get("industry"),
+        "exchange": info.get("exchange") or info.get("fullExchangeName"),
+        "currency": info.get("currency"),
+        "description": info.get("longBusinessSummary"),
+        "price": price,
+        "prev_close": f("previousClose") or f("regularMarketPreviousClose"),
+        "open": f("open") or f("regularMarketOpen"),
+        "day_high": f("dayHigh") or f("regularMarketDayHigh"),
+        "day_low": f("dayLow") or f("regularMarketDayLow"),
+        "bid": f("bid"),
+        "ask": f("ask"),
+        "volume": f("volume") or f("regularMarketVolume"),
+        "avg_volume": f("averageVolume"),
+        "avg_volume_10d": f("averageVolume10days") or f("averageDailyVolume10Day"),
+        "week_52_high": f("fiftyTwoWeekHigh"),
+        "week_52_low": f("fiftyTwoWeekLow"),
+        "ma_50d": f("fiftyDayAverage"),
+        "ma_200d": f("twoHundredDayAverage"),
+        "market_cap": f("marketCap"),
+        "enterprise_value": f("enterpriseValue"),
+        "pe_ttm": f("trailingPE"),
+        "forward_pe": f("forwardPE"),
+        "pb": f("priceToBook"),
+        "ps_ttm": f("priceToSalesTrailing12Months"),
+        "ev_revenue": f("enterpriseToRevenue"),
+        "ev_ebitda": f("enterpriseToEbitda"),
+        "eps_ttm": f("trailingEps"),
+        "eps_fwd": f("forwardEps"),
+        "book_value": f("bookValue"),
+        "gross_margin": f("grossMargins"),
+        "operating_margin": f("operatingMargins"),
+        "ebitda_margin": f("ebitdaMargins"),
+        "net_margin": f("profitMargins"),
+        "roa": f("returnOnAssets"),
+        "roe": f("returnOnEquity"),
+        "revenue_growth": f("revenueGrowth"),
+        "earnings_growth": f("earningsGrowth"),
+        "quarterly_earnings_growth": f("earningsQuarterlyGrowth"),
+        "revenue": f("totalRevenue"),
+        "gross_profits": f("grossProfits"),
+        "ebitda": f("ebitda"),
+        "operating_cashflow": f("operatingCashflow"),
+        "free_cashflow": f("freeCashflow"),
+        "total_cash": total_cash,
+        "total_debt": total_debt,
+        "net_cash_debt": net_cash_debt,
+        "debt_equity": f("debtToEquity"),
+        "current_ratio": f("currentRatio"),
+        "quick_ratio": f("quickRatio"),
+        "shares_outstanding": f("sharesOutstanding") or f("impliedSharesOutstanding"),
+        "insider_pct": f("heldPercentInsiders"),
+        "institution_pct": f("heldPercentInstitutions"),
+        "short_ratio": f("shortRatio"),
+        "dividend_yield": f("dividendYield"),
+        "div_rate": f("dividendRate"),
+        "payout_ratio": f("payoutRatio"),
+        "ex_div_date": ex_div_str,
+        "beta": f("beta"),
+        "recommendation": recommendation,
+        "consensus_score": f("recommendationMean"),
+        "analyst_count": info.get("numberOfAnalystOpinions"),
+        "target_low": f("targetLowPrice"),
+        "target_mean": target_mean,
+        "target_median": f("targetMedianPrice"),
+        "target_high": f("targetHighPrice"),
+        "upside_downside_pct": upside(price, target_mean),
+    }
+
+
 def _series_values(frame: Any, column_name: str) -> list[float]:
     if frame is None or getattr(frame, "empty", True) or column_name not in frame:
         return []

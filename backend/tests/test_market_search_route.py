@@ -88,7 +88,7 @@ def test_market_search_never_calls_quote_or_price_fetch_functions(client, monkey
         lambda symbol, range_key: (_ for _ in ()).throw(AssertionError("sparkline called")),
     )
     monkeypatch.setattr(
-        "routes.market._fetch_ohlcv_range",
+        "routes.market.fetch_ohlcv_range",
         lambda symbol, range_key, trade_date: (_ for _ in ()).throw(AssertionError("ohlcv called")),
     )
 

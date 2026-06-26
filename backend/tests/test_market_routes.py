@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pandas as pd
 
 import routes.market as market_routes
+import services.market_ohlcv_service as ohlcv_service
 
 
 def test_market_quotes_returns_valid_symbols(client, monkeypatch):
@@ -253,7 +254,7 @@ def test_market_search_returns_manual_symbol_without_waiting_for_vendor(client, 
 
 
 def test_market_ohlcv_ytd_uses_january_first_and_daily(client, monkeypatch):
-    market_routes._OHLCV_CACHE.clear()
+    ohlcv_service._OHLCV_CACHE.clear()
     calls: list[tuple[str, str, str, str]] = []
 
     def fake_download(symbol, start_dt, end_dt, interval):
@@ -270,7 +271,7 @@ def test_market_ohlcv_ytd_uses_january_first_and_daily(client, monkeypatch):
             index=pd.to_datetime(["2026-01-02", "2026-06-08"]),
         )
 
-    monkeypatch.setattr(market_routes, "_download_ohlcv", fake_download)
+    monkeypatch.setattr(ohlcv_service, "_download_ohlcv", fake_download)
 
     response = client.get("/api/market/ohlcv?ticker=NVDA&range=YTD&trade_date=2026-06-09")
 
@@ -284,7 +285,7 @@ def test_market_ohlcv_ytd_uses_january_first_and_daily(client, monkeypatch):
 
 
 def test_market_ohlcv_uses_daily_when_detail_intervals_empty(client, monkeypatch):
-    market_routes._OHLCV_CACHE.clear()
+    ohlcv_service._OHLCV_CACHE.clear()
     calls: list[str] = []
 
     def fake_download(_symbol, _start_dt, _end_dt, interval):
@@ -302,7 +303,7 @@ def test_market_ohlcv_uses_daily_when_detail_intervals_empty(client, monkeypatch
             index=pd.to_datetime(["2026-06-08", "2026-06-09"]),
         )
 
-    monkeypatch.setattr(market_routes, "_download_ohlcv", fake_download)
+    monkeypatch.setattr(ohlcv_service, "_download_ohlcv", fake_download)
 
     response = client.get("/api/market/ohlcv?ticker=AAPL&range=1W&trade_date=2026-06-09")
 
@@ -315,7 +316,7 @@ def test_market_ohlcv_uses_daily_when_detail_intervals_empty(client, monkeypatch
 
 
 def test_market_ohlcv_slices_shared_daily_cache_for_shorter_range(client, monkeypatch):
-    market_routes._OHLCV_CACHE.clear()
+    ohlcv_service._OHLCV_CACHE.clear()
     calls: list[tuple[str, str, str, str]] = []
 
     def fake_download(symbol, start_dt, end_dt, interval):
@@ -332,7 +333,7 @@ def test_market_ohlcv_slices_shared_daily_cache_for_shorter_range(client, monkey
             index=pd.to_datetime(["2025-06-10", "2026-04-01", "2026-06-08"]),
         )
 
-    monkeypatch.setattr(market_routes, "_download_ohlcv", fake_download)
+    monkeypatch.setattr(ohlcv_service, "_download_ohlcv", fake_download)
 
     one_year_response = client.get("/api/market/ohlcv?ticker=NVDA&range=1Y&trade_date=2026-06-09")
     three_month_response = client.get(

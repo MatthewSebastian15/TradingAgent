@@ -6,7 +6,7 @@ import asyncio
 import logging
 import re
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import datetime
 from time import monotonic
 from typing import Any
 
@@ -23,8 +23,14 @@ from schemas import (
     StockOverviewResponse,
     SymbolValidationResponse,
 )
+from services.market_ohlcv_service import (
+    OHLCV_RANGE_OPTIONS,
+    fetch_ohlcv_range,
+    parse_ohlcv_trade_date,
+)
 from services.market_search_index import get_popular_tickers, search_local_tickers
 from services.market_yfinance_service import (
+    build_stock_overview,
     dedupe_symbols,
     get_market_movers,
     get_market_presets,
@@ -61,18 +67,14 @@ _DEFAULT_TICKERS: list[str] = [
 _QUOTE_SYMBOL_RE = re.compile(r"^[A-Z0-9^]{1,15}(?:[.=:-][A-Z0-9]{1,12}){0,3}$")
 _QUOTE_CACHE_TTL_SECONDS = 90.0
 _SEARCH_CACHE_TTL_SECONDS = 60.0
-_OHLCV_CACHE_TTL_SECONDS = 60.0
 _SPARKLINE_CACHE_TTL_SECONDS = 300.0
 _QUOTE_CACHE: OrderedDict[tuple[str, ...], tuple[float, list[dict]]] = OrderedDict()
 _SEARCH_CACHE: OrderedDict[tuple[str, int, str, str], tuple[float, list[dict[str, Any]]]] = (
     OrderedDict()
 )
-_OHLCV_CACHE: OrderedDict[tuple[str, str, str], tuple[float, dict[str, Any]]] = OrderedDict()
 _SPARKLINE_CACHE: OrderedDict[tuple[tuple[str, ...], str], tuple[float, dict[str, list[float]]]] = (
     OrderedDict()
 )
-_OHLCV_RANGE_DAYS = {"1W": 7, "1M": 31, "3M": 92, "6M": 183, "1Y": 365}
-_OHLCV_RANGE_OPTIONS = {"YTD", *_OHLCV_RANGE_DAYS.keys()}
 _MOVER_LIMITS = {5, 10, 15, 20}
 _MAX_CACHE_ENTRIES = 500
 
@@ -212,14 +214,6 @@ def _clone_search_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]
     return [dict(item) for item in results]
 
 
-def _clone_ohlcv_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        **payload,
-        "points": [dict(item) for item in payload.get("points") or []],
-        "data": [dict(item) for item in payload.get("data") or []],
-    }
-
-
 @router.get("/market/presets", tags=["market"], response_model=MarketPresetsResponse)
 async def get_market_preset_data(request: Request) -> dict[str, Any]:
     async with _market_data_limit(request):
@@ -277,117 +271,6 @@ _OVERVIEW_CACHE_TTL_SECONDS = 300.0
 _OVERVIEW_CACHE: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
 
 
-def _build_stock_overview(symbol: str) -> dict[str, Any]:
-    """Fetch yfinance .info and map to StockOverviewResponse shape."""
-    from tradingagents.dataflows.providers.y_finance import _get_ticker_info  # noqa: PLC0415
-
-    info: dict[str, Any] = _get_ticker_info(symbol) or {}
-
-    def f(key: str) -> float | None:
-        return _as_float(info.get(key))
-
-    def upside(price: float | None, target: float | None) -> float | None:
-        if price and target and price > 0:
-            return round((target - price) / price * 100, 2)
-        return None
-
-    price = f("currentPrice") or f("regularMarketPrice") or f("previousClose")
-    target_mean = f("targetMeanPrice")
-
-    raw_rec = info.get("recommendationKey") or info.get("recommendation")
-    recommendation = str(raw_rec).upper().replace("_", " ") if raw_rec else None
-
-    ex_div = info.get("exDividendDate")
-    ex_div_str: str | None = None
-    if ex_div:
-        try:
-            from datetime import timezone  # noqa: PLC0415
-
-            ex_div_str = datetime.fromtimestamp(int(ex_div), tz=timezone.utc).strftime("%b %d, %Y")
-        except Exception:  # noqa: BLE001
-            ex_div_str = str(ex_div)
-
-    total_cash = f("totalCash")
-    total_debt = f("totalDebt")
-    net_cash_debt = (
-        round(total_cash - total_debt, 2)
-        if total_cash is not None and total_debt is not None
-        else None
-    )
-
-    return {
-        "ticker": symbol,
-        "name": info.get("longName") or info.get("shortName"),
-        "sector": info.get("sector"),
-        "industry": info.get("industry"),
-        "exchange": info.get("exchange") or info.get("fullExchangeName"),
-        "currency": info.get("currency"),
-        "description": info.get("longBusinessSummary"),
-        "price": price,
-        "prev_close": f("previousClose") or f("regularMarketPreviousClose"),
-        "open": f("open") or f("regularMarketOpen"),
-        "day_high": f("dayHigh") or f("regularMarketDayHigh"),
-        "day_low": f("dayLow") or f("regularMarketDayLow"),
-        "bid": f("bid"),
-        "ask": f("ask"),
-        "volume": f("volume") or f("regularMarketVolume"),
-        "avg_volume": f("averageVolume"),
-        "avg_volume_10d": f("averageVolume10days") or f("averageDailyVolume10Day"),
-        "week_52_high": f("fiftyTwoWeekHigh"),
-        "week_52_low": f("fiftyTwoWeekLow"),
-        "ma_50d": f("fiftyDayAverage"),
-        "ma_200d": f("twoHundredDayAverage"),
-        "market_cap": f("marketCap"),
-        "enterprise_value": f("enterpriseValue"),
-        "pe_ttm": f("trailingPE"),
-        "forward_pe": f("forwardPE"),
-        "pb": f("priceToBook"),
-        "ps_ttm": f("priceToSalesTrailing12Months"),
-        "ev_revenue": f("enterpriseToRevenue"),
-        "ev_ebitda": f("enterpriseToEbitda"),
-        "eps_ttm": f("trailingEps"),
-        "eps_fwd": f("forwardEps"),
-        "book_value": f("bookValue"),
-        "gross_margin": f("grossMargins"),
-        "operating_margin": f("operatingMargins"),
-        "ebitda_margin": f("ebitdaMargins"),
-        "net_margin": f("profitMargins"),
-        "roa": f("returnOnAssets"),
-        "roe": f("returnOnEquity"),
-        "revenue_growth": f("revenueGrowth"),
-        "earnings_growth": f("earningsGrowth"),
-        "quarterly_earnings_growth": f("earningsQuarterlyGrowth"),
-        "revenue": f("totalRevenue"),
-        "gross_profits": f("grossProfits"),
-        "ebitda": f("ebitda"),
-        "operating_cashflow": f("operatingCashflow"),
-        "free_cashflow": f("freeCashflow"),
-        "total_cash": total_cash,
-        "total_debt": total_debt,
-        "net_cash_debt": net_cash_debt,
-        "debt_equity": f("debtToEquity"),
-        "current_ratio": f("currentRatio"),
-        "quick_ratio": f("quickRatio"),
-        "shares_outstanding": f("sharesOutstanding") or f("impliedSharesOutstanding"),
-        "insider_pct": f("heldPercentInsiders"),
-        "institution_pct": f("heldPercentInstitutions"),
-        "short_ratio": f("shortRatio"),
-        "dividend_yield": f("dividendYield"),
-        "div_rate": f("dividendRate"),
-        "payout_ratio": f("payoutRatio"),
-        "ex_div_date": ex_div_str,
-        "beta": f("beta"),
-        "recommendation": recommendation,
-        "consensus_score": f("recommendationMean"),
-        "analyst_count": info.get("numberOfAnalystOpinions"),
-        "target_low": f("targetLowPrice"),
-        "target_mean": target_mean,
-        "target_median": f("targetMedianPrice"),
-        "target_high": f("targetHighPrice"),
-        "upside_downside_pct": upside(price, target_mean),
-    }
-
-
 @router.get("/market/stock-overview", tags=["market"], response_model=StockOverviewResponse)
 async def get_stock_overview_data(
     request: Request,
@@ -402,289 +285,9 @@ async def get_stock_overview_data(
             if monotonic() - ts < _OVERVIEW_CACHE_TTL_SECONDS:
                 return payload
 
-    payload = await asyncio.to_thread(_build_stock_overview, normalized)
+    payload = await asyncio.to_thread(build_stock_overview, normalized)
     _cache_set(_OVERVIEW_CACHE, cache_key, (monotonic(), payload))
     return payload
-
-
-def _parse_ohlcv_trade_date(value: str | None) -> datetime:
-    if not value:
-        return datetime.utcnow()
-    try:
-        return datetime.strptime(str(value)[:10], "%Y-%m-%d")
-    except ValueError as exc:
-        raise BadRequestError(
-            "Invalid trade date.",
-            details={"fields": {"trade_date": "Trade date must use YYYY-MM-DD format."}},
-        ) from exc
-
-
-def _ohlcv_start_date(end_dt: datetime, range_key: str) -> datetime:
-    if range_key == "YTD":
-        return datetime(end_dt.year, 1, 1)
-    return end_dt - timedelta(days=_OHLCV_RANGE_DAYS[range_key])
-
-
-def _ohlcv_intervals(range_key: str) -> list[str]:
-    if range_key == "1W":
-        return ["5m", "15m", "30m", "60m", "1d"]
-    if range_key == "1M":
-        return ["60m", "1d"]
-    return ["1d"]
-
-
-def _download_ohlcv(symbol: str, start_dt: datetime, end_dt: datetime, interval: str) -> Any:
-    from tradingagents.yfinance_runtime import yf  # noqa: PLC0415
-
-    start = start_dt.strftime("%Y-%m-%d")
-    end = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
-    data = yf.download(
-        symbol,
-        start=start,
-        end=end,
-        interval=interval,
-        multi_level_index=False,
-        progress=False,
-        auto_adjust=False,
-        threads=False,
-    )
-    if data is None or getattr(data, "empty", True):
-        data = yf.Ticker(symbol).history(start=start, end=end, interval=interval, auto_adjust=False)
-    return data
-
-
-def _normalize_ohlcv_rows(
-    data: Any, start_dt: datetime, end_dt: datetime, interval: str
-) -> list[dict[str, Any]]:
-    import pandas as pd  # noqa: PLC0415
-
-    if data is None or getattr(data, "empty", True):
-        return []
-
-    frame = data.copy()
-    if isinstance(frame.columns, pd.MultiIndex):
-        frame.columns = [str(col[0] if col[0] else col[-1]) for col in frame.columns]
-    frame = frame.sort_index()
-    frame = frame[~frame.index.duplicated(keep="last")]
-    if getattr(frame.index, "tz", None) is not None:
-        frame.index = frame.index.tz_localize(None)
-    frame.index = pd.to_datetime(frame.index, errors="coerce")
-    frame = frame[frame.index.notna()]
-
-    columns = {str(column).strip().lower(): column for column in frame.columns}
-    open_col = columns.get("open")
-    high_col = columns.get("high")
-    low_col = columns.get("low")
-    close_col = columns.get("close")
-    adjusted_col = columns.get("adj close") or columns.get("adjusted close")
-    volume_col = columns.get("volume")
-    if not all([open_col, high_col, low_col, close_col]):
-        return []
-
-    points: list[dict[str, Any]] = []
-    start_date = start_dt.date()
-    end_date = end_dt.date()
-    for index, row in frame.iterrows():
-        row_date = index.date()
-        if row_date < start_date or row_date > end_date:
-            continue
-
-        open_price = _as_float(row.get(open_col))
-        high_price = _as_float(row.get(high_col))
-        low_price = _as_float(row.get(low_col))
-        close_price = _as_float(row.get(close_col))
-        if any(value is None for value in (open_price, high_price, low_price, close_price)):
-            continue
-
-        has_time = interval != "1d" and any((index.hour, index.minute, index.second))
-        date_text = index.strftime("%Y-%m-%d %H:%M") if has_time else index.strftime("%Y-%m-%d")
-        volume_value = _as_float(row.get(volume_col)) if volume_col else None
-        adjusted_close = _as_float(row.get(adjusted_col)) if adjusted_col else close_price
-        points.append(
-            {
-                "date": date_text,
-                "open": open_price,
-                "high": max(high_price, open_price, close_price, low_price),
-                "low": min(low_price, open_price, close_price, high_price),
-                "close": close_price,
-                "adjusted_close": adjusted_close if adjusted_close is not None else close_price,
-                "volume": int(volume_value)
-                if volume_value is not None and volume_value >= 0
-                else None,
-            }
-        )
-    return points
-
-
-def _ohlcv_raw_cache_key(symbol: str, end_dt: datetime, interval: str) -> tuple[str, str, str]:
-    return (symbol, end_dt.strftime("%Y-%m-%d"), interval)
-
-
-def _parse_ohlcv_point_date(point: dict[str, Any]) -> datetime | None:
-    raw_date = str(point.get("date") or "").strip()
-    if not raw_date:
-        return None
-    for date_format in ("%Y-%m-%d %H:%M", "%Y-%m-%d"):
-        try:
-            normalized_date = raw_date[:16] if " " in raw_date else raw_date[:10]
-            return datetime.strptime(normalized_date, date_format)
-        except ValueError:
-            continue
-    return None
-
-
-def _slice_ohlcv_rows(
-    rows: list[dict[str, Any]], start_dt: datetime, end_dt: datetime
-) -> list[dict[str, Any]]:
-    start_date = start_dt.date()
-    end_date = end_dt.date()
-    sliced: list[dict[str, Any]] = []
-    for row in rows:
-        point_dt = _parse_ohlcv_point_date(row)
-        if point_dt is None:
-            continue
-        if start_date <= point_dt.date() <= end_date:
-            sliced.append(dict(row))
-    return sliced
-
-
-def _cached_ohlcv_rows(
-    symbol: str, start_dt: datetime, end_dt: datetime, interval: str, now: float
-) -> tuple[bool, list[dict[str, Any]]]:
-    cached_at, cached_payload = _cache_get(
-        _OHLCV_CACHE, _ohlcv_raw_cache_key(symbol, end_dt, interval), (0.0, {})
-    )
-    if not cached_payload or now - cached_at > _OHLCV_CACHE_TTL_SECONDS:
-        return False, []
-
-    cached_start = str(cached_payload.get("start_date") or "")
-    cached_end = str(cached_payload.get("end_date") or "")
-    if cached_start > start_dt.strftime("%Y-%m-%d") or cached_end < end_dt.strftime("%Y-%m-%d"):
-        return False, []
-
-    rows = cached_payload.get("rows")
-    if not isinstance(rows, list):
-        return False, []
-    return True, _slice_ohlcv_rows(rows, start_dt, end_dt)
-
-
-def _cache_ohlcv_rows(
-    symbol: str,
-    start_dt: datetime,
-    end_dt: datetime,
-    interval: str,
-    rows: list[dict[str, Any]],
-) -> None:
-    _cache_set(
-        _OHLCV_CACHE,
-        _ohlcv_raw_cache_key(symbol, end_dt, interval),
-        (
-            monotonic(),
-            {
-                "ticker": symbol,
-                "interval": interval,
-                "start_date": start_dt.strftime("%Y-%m-%d"),
-                "end_date": end_dt.strftime("%Y-%m-%d"),
-                "rows": [dict(row) for row in rows],
-            },
-        ),
-    )
-
-
-def _build_ohlcv_payload(
-    *,
-    symbol: str,
-    range_key: str,
-    interval: str | None,
-    requested_start_dt: datetime,
-    requested_end_dt: datetime,
-    rows: list[dict[str, Any]],
-    fallback_to_daily: bool,
-    warning: str | None = None,
-) -> dict[str, Any]:
-    return {
-        "available": len(rows) >= 2,
-        "source": f"yfinance:{interval}" if interval else "yfinance",
-        "ticker": symbol,
-        "range": range_key,
-        "interval": interval,
-        "fallback_to_daily": fallback_to_daily,
-        "requested_trade_date": requested_end_dt.strftime("%Y-%m-%d"),
-        "start_date": requested_start_dt.strftime("%Y-%m-%d"),
-        "end_date": requested_end_dt.strftime("%Y-%m-%d"),
-        "last_trade_date": str(rows[-1]["date"])[:10] if rows else None,
-        "points": [dict(row) for row in rows],
-        "data": [dict(row) for row in rows],
-        "data_quality": {
-            "status": "complete" if len(rows) >= 2 else "partial" if rows else "unavailable",
-            "missing_fields": [] if rows else ["ohlcv"],
-            "point_count": len(rows),
-        },
-        "warning": warning
-        if warning is not None
-        else None
-        if len(rows) >= 2
-        else "Only one OHLCV candle was available for this range."
-        if rows
-        else "No OHLCV candles returned for the selected range.",
-    }
-
-
-def _fetch_ohlcv_range(symbol: str, range_key: str, trade_date: str | None) -> dict[str, Any]:
-    end_dt = _parse_ohlcv_trade_date(trade_date)
-    start_dt = _ohlcv_start_date(end_dt, range_key)
-    intervals = _ohlcv_intervals(range_key)
-    last_error: Exception | None = None
-
-    for interval in intervals:
-        now = monotonic()
-        cache_hit, cached_rows = _cached_ohlcv_rows(symbol, start_dt, end_dt, interval, now)
-        if cache_hit:
-            if cached_rows or interval == intervals[-1]:
-                return _build_ohlcv_payload(
-                    symbol=symbol,
-                    range_key=range_key,
-                    interval=interval,
-                    requested_start_dt=start_dt,
-                    requested_end_dt=end_dt,
-                    rows=cached_rows,
-                    fallback_to_daily=interval == "1d" and intervals[0] != "1d",
-                )
-            continue
-
-        try:
-            rows = _normalize_ohlcv_rows(
-                _download_ohlcv(symbol, start_dt, end_dt, interval), start_dt, end_dt, interval
-            )
-            _cache_ohlcv_rows(symbol, start_dt, end_dt, interval, rows)
-            if not rows:
-                continue
-            if len(rows) < 2 and interval != intervals[-1]:
-                continue
-            return _build_ohlcv_payload(
-                symbol=symbol,
-                range_key=range_key,
-                interval=interval,
-                requested_start_dt=start_dt,
-                requested_end_dt=end_dt,
-                rows=rows,
-                fallback_to_daily=interval == "1d" and intervals[0] != "1d",
-            )
-        except Exception as exc:  # noqa: BLE001
-            last_error = exc
-            logger.debug("OHLCV fetch failed for %s %s %s: %s", symbol, range_key, interval, exc)
-
-    warning = str(last_error or "No OHLCV candles returned for the selected range.")
-    return _build_ohlcv_payload(
-        symbol=symbol,
-        range_key=range_key,
-        interval=None,
-        requested_start_dt=start_dt,
-        requested_end_dt=end_dt,
-        rows=[],
-        fallback_to_daily=intervals[-1] == "1d" and intervals[0] != "1d",
-        warning=warning,
-    )
 
 
 def _fast_info_value(info: Any, *names: str) -> Any:
@@ -783,7 +386,7 @@ def _sparkline_values_from_payload(payload: dict[str, Any]) -> list[float]:
 
 def _fetch_sparkline(symbol: str, range_key: str) -> list[float]:
     trade_date = datetime.utcnow().strftime("%Y-%m-%d")
-    payload = _fetch_ohlcv_range(symbol, range_key, trade_date)
+    payload = fetch_ohlcv_range(symbol, range_key, trade_date)
     return _sparkline_values_from_payload(payload)
 
 
@@ -1082,14 +685,14 @@ async def get_market_ohlcv(
     async with _market_data_limit(request):
         symbol = _normalize_quote_symbol(ticker)
         normalized_range = str(range_key or "").strip().upper()
-        if normalized_range not in _OHLCV_RANGE_OPTIONS:
+        if normalized_range not in OHLCV_RANGE_OPTIONS:
             raise BadRequestError(
                 "Invalid chart range.",
                 details={"fields": {"range": "Range must be one of YTD, 1Y, 6M, 3M, 1M, 1W."}},
             )
-        parsed_trade_date = _parse_ohlcv_trade_date(trade_date).strftime("%Y-%m-%d")
+        parsed_trade_date = parse_ohlcv_trade_date(trade_date).strftime("%Y-%m-%d")
         payload = await asyncio.to_thread(
-            _fetch_ohlcv_range, symbol, normalized_range, parsed_trade_date
+            fetch_ohlcv_range, symbol, normalized_range, parsed_trade_date
         )
 
     return payload
@@ -1112,7 +715,7 @@ async def get_market_sparklines(
             )
 
         normalized_range = str(range_key or "").strip().upper()
-        if normalized_range not in _OHLCV_RANGE_OPTIONS:
+        if normalized_range not in OHLCV_RANGE_OPTIONS:
             raise BadRequestError(
                 "Invalid chart range.",
                 details={"fields": {"range": "Range must be one of YTD, 1Y, 6M, 3M, 1M, 1W."}},

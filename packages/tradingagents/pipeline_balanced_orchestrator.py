@@ -660,43 +660,28 @@ def collect_market_data(
     )
 
 
-def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> AgentStageResult:
+def _run_debate_phase(
+    context: PipelineContext,
+    *,
+    market_report: AnalystReport,
+    news_social_report: AnalystReport,
+    fundamentals_report: AnalystReport,
+    market_md: str,
+    news_social_md: str,
+    fundamentals_md: str,
+    data_quality_json: str,
+) -> tuple[DebateArgument, DebateArgument, list[str]]:
+    """Bull/bear debate phase (synthetic in fast mode, LLM-driven otherwise)."""
     ticker = context.ticker
     trade_date = context.trade_date
-    config = context.config
     quick_llm = context.quick_llm
-    deep_llm = context.deep_llm
     analysis_depth = context.analysis_depth
     extra_debate_rounds = context.extra_debate_rounds
-    extra_risk_rounds = context.extra_risk_rounds
     time_horizon_text = context.time_horizon_text
     llm_budget = context.llm_budget
     pipeline_timings = context.pipeline_timings
     progress_callback = context.progress_callback
     cancel_check = context.cancel_check
-    has_existing_position = context.has_existing_position
-    position_quantity = context.position_quantity
-    average_entry_price = context.average_entry_price
-    data = data_stage.data
-    data_quality_json = data_stage.data_quality_json
-    last_close_text = data_stage.last_close_text
-    market_report, news_social_report, fundamentals_report = _build_initial_analyst_reports(
-        ticker,
-        trade_date,
-        config,
-        quick_llm,
-        data,
-        data_quality_json,
-        time_horizon_text,
-        llm_budget,
-        progress_callback,
-        cancel_check,
-        pipeline_timings,
-    )
-
-    market_md = _report_to_markdown(market_report)
-    news_social_md = _report_to_markdown(news_social_report)
-    fundamentals_md = _report_to_markdown(fundamentals_report)
 
     debate_history: list[str] = []
 
@@ -942,78 +927,35 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
             )
             debate_history.append(render_debate_argument(bear, f"Bear Researcher R{round_number}"))
 
-    debate_md = "\n\n".join(debate_history)
+    return bull, bear, debate_history
 
-    research_plan = _run_tracked(
-        progress_callback,
-        "research_manager",
-        "Research Manager is weighing bull and bear arguments...",
-        lambda: _invoke_once(
-            deep_llm,
-            ResearchPlanLite,
-            research_manager_prompt(
-                ticker,
-                trade_date,
-                time_horizon_text,
-                market_md,
-                news_social_md,
-                fundamentals_md,
-                debate_md,
-                data_quality_json,
-            ),
-            ResearchPlanLite(
-                recommendation=PortfolioRating.HOLD,
-                confidence=0.35,
-                rationale=(
-                    "The evidence is incomplete or the research manager call failed, so the "
-                    + "safest recommendation is Hold until the analysis is verified."
-                ),
-                strategic_actions=(
-                    "Avoid new exposure until data quality, model output, and key risk/reward "
-                    + "assumptions are reviewed."
-                ),
-            ),
-            "Research Manager",
-            llm_budget,
-            cancel_check,
-        ),
-        timings=pipeline_timings,
-    )
-    investment_plan = _research_plan_to_markdown(research_plan)
 
-    trader_proposal = _run_tracked(
-        progress_callback,
-        "trader",
-        "Trader is turning the plan into trade execution guidance...",
-        lambda: _invoke_once(
-            quick_llm,
-            TraderProposal,
-            trader_prompt(
-                ticker, trade_date, time_horizon_text, market_md, investment_plan, data_quality_json
-            ),
-            TraderProposal(
-                confidence=0.35,
-                action=TraderAction.HOLD,
-                reasoning=(
-                    "The balanced pipeline could not generate a reliable trader proposal, so no "
-                    + "new trade should be opened."
-                ),
-                entry_price=None,
-                stop_loss=None,
-                suggested_allocation_percent=0.0,
-                position_sizing="0% new allocation until reviewed.",
-                position_sizing_reason="Fallback output used; no reliable trade sizing available.",
-                rebalancing_action="Maintain position",
-                key_catalysts=[],
-                invalidation_conditions=["Data quality or model output cannot be verified."],
-            ),
-            "Trader",
-            llm_budget,
-            cancel_check,
-        ),
-        timings=pipeline_timings,
-    )
-    trader_plan = render_trader_proposal(trader_proposal)
+def _run_risk_phase(
+    context: PipelineContext,
+    *,
+    data: CollectedData,
+    market_report: AnalystReport,
+    news_social_report: AnalystReport,
+    fundamentals_report: AnalystReport,
+    market_md: str,
+    news_social_md: str,
+    fundamentals_md: str,
+    debate_md: str,
+    investment_plan: str,
+    trader_plan: str,
+    data_quality_json: str,
+) -> RiskCommitteeReport:
+    """Risk committee phase (synthetic in fast mode, LLM-driven otherwise)."""
+    ticker = context.ticker
+    trade_date = context.trade_date
+    quick_llm = context.quick_llm
+    analysis_depth = context.analysis_depth
+    extra_risk_rounds = context.extra_risk_rounds
+    time_horizon_text = context.time_horizon_text
+    llm_budget = context.llm_budget
+    pipeline_timings = context.pipeline_timings
+    progress_callback = context.progress_callback
+    cancel_check = context.cancel_check
 
     if analysis_depth == "fast":
         _emit_progress(
@@ -1143,6 +1085,141 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
                 ),
                 timings=pipeline_timings,
             )
+    return risk_report
+
+
+def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> AgentStageResult:
+    ticker = context.ticker
+    trade_date = context.trade_date
+    config = context.config
+    quick_llm = context.quick_llm
+    deep_llm = context.deep_llm
+    time_horizon_text = context.time_horizon_text
+    llm_budget = context.llm_budget
+    pipeline_timings = context.pipeline_timings
+    progress_callback = context.progress_callback
+    cancel_check = context.cancel_check
+    has_existing_position = context.has_existing_position
+    position_quantity = context.position_quantity
+    average_entry_price = context.average_entry_price
+    data = data_stage.data
+    data_quality_json = data_stage.data_quality_json
+    last_close_text = data_stage.last_close_text
+    market_report, news_social_report, fundamentals_report = _build_initial_analyst_reports(
+        ticker,
+        trade_date,
+        config,
+        quick_llm,
+        data,
+        data_quality_json,
+        time_horizon_text,
+        llm_budget,
+        progress_callback,
+        cancel_check,
+        pipeline_timings,
+    )
+
+    market_md = _report_to_markdown(market_report)
+    news_social_md = _report_to_markdown(news_social_report)
+    fundamentals_md = _report_to_markdown(fundamentals_report)
+
+    bull, bear, debate_history = _run_debate_phase(
+        context,
+        market_report=market_report,
+        news_social_report=news_social_report,
+        fundamentals_report=fundamentals_report,
+        market_md=market_md,
+        news_social_md=news_social_md,
+        fundamentals_md=fundamentals_md,
+        data_quality_json=data_quality_json,
+    )
+    debate_md = "\n\n".join(debate_history)
+
+    research_plan = _run_tracked(
+        progress_callback,
+        "research_manager",
+        "Research Manager is weighing bull and bear arguments...",
+        lambda: _invoke_once(
+            deep_llm,
+            ResearchPlanLite,
+            research_manager_prompt(
+                ticker,
+                trade_date,
+                time_horizon_text,
+                market_md,
+                news_social_md,
+                fundamentals_md,
+                debate_md,
+                data_quality_json,
+            ),
+            ResearchPlanLite(
+                recommendation=PortfolioRating.HOLD,
+                confidence=0.35,
+                rationale=(
+                    "The evidence is incomplete or the research manager call failed, so the "
+                    + "safest recommendation is Hold until the analysis is verified."
+                ),
+                strategic_actions=(
+                    "Avoid new exposure until data quality, model output, and key risk/reward "
+                    + "assumptions are reviewed."
+                ),
+            ),
+            "Research Manager",
+            llm_budget,
+            cancel_check,
+        ),
+        timings=pipeline_timings,
+    )
+    investment_plan = _research_plan_to_markdown(research_plan)
+
+    trader_proposal = _run_tracked(
+        progress_callback,
+        "trader",
+        "Trader is turning the plan into trade execution guidance...",
+        lambda: _invoke_once(
+            quick_llm,
+            TraderProposal,
+            trader_prompt(
+                ticker, trade_date, time_horizon_text, market_md, investment_plan, data_quality_json
+            ),
+            TraderProposal(
+                confidence=0.35,
+                action=TraderAction.HOLD,
+                reasoning=(
+                    "The balanced pipeline could not generate a reliable trader proposal, so no "
+                    + "new trade should be opened."
+                ),
+                entry_price=None,
+                stop_loss=None,
+                suggested_allocation_percent=0.0,
+                position_sizing="0% new allocation until reviewed.",
+                position_sizing_reason="Fallback output used; no reliable trade sizing available.",
+                rebalancing_action="Maintain position",
+                key_catalysts=[],
+                invalidation_conditions=["Data quality or model output cannot be verified."],
+            ),
+            "Trader",
+            llm_budget,
+            cancel_check,
+        ),
+        timings=pipeline_timings,
+    )
+    trader_plan = render_trader_proposal(trader_proposal)
+
+    risk_report = _run_risk_phase(
+        context,
+        data=data,
+        market_report=market_report,
+        news_social_report=news_social_report,
+        fundamentals_report=fundamentals_report,
+        market_md=market_md,
+        news_social_md=news_social_md,
+        fundamentals_md=fundamentals_md,
+        debate_md=debate_md,
+        investment_plan=investment_plan,
+        trader_plan=trader_plan,
+        data_quality_json=data_quality_json,
+    )
     risk_md = _risk_to_markdown(risk_report)
 
     portfolio_decision = _run_tracked(
