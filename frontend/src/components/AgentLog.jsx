@@ -75,31 +75,39 @@ const STATUS_UI = {
   },
 };
 
+// Leaf that owns the 1s interval so the per-second tick re-renders only the
+// time text, not the whole AgentLog tree. Reads wall-clock elapsed from a
+// shared startMs, so multiple instances (header + active row) always agree and
+// never drift like independent setInterval counters would.
+function LiveTime({ startMs, running }) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const tick = () => setSeconds(Math.max(0, Math.floor((Date.now() - startMs) / 1000)));
+    tick();
+    if (!running) return undefined;
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [running, startMs]);
+  return formatTime(seconds);
+}
+
+LiveTime.propTypes = {
+  startMs: PropTypes.number.isRequired,
+  running: PropTypes.bool,
+};
+
 export default function AgentLog({ status, agentProgress }) {
-  const [elapsed, setElapsed] = useState(0);
   const [activeIds, setActiveIds] = useState(new Set());
   const [doneIds, setDoneIds] = useState(new Set());
   const [errorIds, setErrorIds] = useState(new Set());
   const [agentTimes, setAgentTimes] = useState({});
-  const elapsedRef = useRef(0);
+  const [startMs, setStartMs] = useState(() => Date.now());
   const lastEventSignatureRef = useRef('');
 
   useEffect(() => {
-    const t = setInterval(() => {
-      setElapsed((p) => {
-        const next = p + 1;
-        elapsedRef.current = next;
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
     if (agentProgress === null) {
-      elapsedRef.current = 0;
       lastEventSignatureRef.current = '';
-      setElapsed(0);
+      setStartMs(Date.now());
       setActiveIds(new Set());
       setDoneIds(new Set());
       setErrorIds(new Set());
@@ -145,9 +153,12 @@ export default function AgentLog({ status, agentProgress }) {
       isPipelineAgent &&
       (eventStatus === PIPELINE_STATUSES.COMPLETED || eventStatus === PIPELINE_STATUSES.FAILED)
     ) {
-      setAgentTimes((prev) => ({ ...prev, [agentId]: formatTime(elapsedRef.current) }));
+      setAgentTimes((prev) => ({
+        ...prev,
+        [agentId]: formatTime(Math.max(0, Math.floor((Date.now() - startMs) / 1000))),
+      }));
     }
-  }, [agentProgress]);
+  }, [agentProgress, startMs]);
 
   const doneCount = Math.min(doneIds.size, PIPELINE.length);
   const totalSteps = PIPELINE.length;
@@ -167,7 +178,9 @@ export default function AgentLog({ status, agentProgress }) {
             <span className="text-bloomberg-muted">
               <span className="text-bloomberg-white">{doneCount}</span>/{totalSteps} agents
             </span>
-            <span className="tabular-nums text-bloomberg-orange">{formatTime(elapsed)}</span>
+            <span className="tabular-nums text-bloomberg-orange">
+              <LiveTime startMs={startMs} running={pct !== 100} />
+            </span>
             {pct === 100 && (
               <span className="text-[10px] uppercase tracking-wider text-bloomberg-green">
                 ✓ DONE
@@ -191,7 +204,9 @@ export default function AgentLog({ status, agentProgress }) {
             const active = activeIds.has(step.id);
             const error = errorIds.has(step.id);
             const statusValue = pillStatus({ done, active, error });
-            const elapsedTime = agentTimes[step.id] || (active ? formatTime(elapsed) : undefined);
+            const elapsedTime =
+              agentTimes[step.id] ||
+              (active ? <LiveTime startMs={startMs} running /> : undefined);
             const meta = STATUS_UI[statusValue];
             const Icon = meta.Icon;
             const useCustomColor = (done || active) && step.color && !error;

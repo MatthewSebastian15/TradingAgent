@@ -11,17 +11,22 @@ import {
   CHATBOT_PATH,
 } from './constants/routes';
 import { prefetchMarketOverviewData } from './hooks/useMarketOverviewData';
-import AIAgent from './pages/AIAgent';
-import { ChatbotPage } from './pages/ChatbotPage';
 import Dashboard from './pages/Dashboard';
-import Economic from './pages/Economic';
-import Market from './pages/Market';
-import News from './pages/News';
-import NotFound from './pages/NotFound';
-import Portfolio from './pages/Portfolio';
-import Research from './pages/Research';
-import Watchlist from './pages/Watchlist';
 import { MARKET_DEFAULT_SYMBOLS } from './utils/marketDefaults';
+
+// Dashboard stays eager — it is the /home landing, lazy would flash the fallback
+// on first paint. Everything else is split out of the initial bundle.
+const AIAgent = React.lazy(() => import('./pages/AIAgent'));
+const ChatbotPage = React.lazy(() =>
+  import('./pages/ChatbotPage').then((m) => ({ default: m.ChatbotPage }))
+);
+const Economic = React.lazy(() => import('./pages/Economic'));
+const Market = React.lazy(() => import('./pages/Market'));
+const News = React.lazy(() => import('./pages/News'));
+const NotFound = React.lazy(() => import('./pages/NotFound'));
+const Portfolio = React.lazy(() => import('./pages/Portfolio'));
+const Research = React.lazy(() => import('./pages/Research'));
+const Watchlist = React.lazy(() => import('./pages/Watchlist'));
 import './index.css';
 
 function buildResourceRedirectPath(basePath, resourceId) {

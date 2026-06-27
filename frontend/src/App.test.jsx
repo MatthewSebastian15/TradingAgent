@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AI_AGENT_PATH } from './constants/routes';
 
 async function renderApp(path) {
-  vi.resetModules();
+  // No vi.resetModules() here: routes are React.lazy, and resetting the module
+  // registry mid-flight races the deferred page imports (heavy pages never
+  // mount). afterEach already resets modules; the prefetch tests below opt in.
   const { default: App } = await import('./App');
 
   window.history.pushState({}, '', path);
@@ -35,30 +37,38 @@ describe('App', () => {
   it('registers the Research route', async () => {
     await renderApp('/research');
 
-    expect(await screen.findByRole('heading', { name: /research/i })).toBeTruthy();
-  });
+    // Routes are React.lazy now — the chunk import + first render can exceed the
+    // 1000ms findBy default for heavy pages, so wait longer.
+    expect(
+      await screen.findByRole('heading', { name: /research/i }, { timeout: 5000 })
+    ).toBeTruthy();
+  }, 10000);
 
   it('registers the Watchlist route', async () => {
     await renderApp('/watchlist');
 
-    expect(await screen.findByRole('heading', { name: /watchlist/i })).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { name: /watchlist/i }, { timeout: 5000 })
+    ).toBeTruthy();
     expect(screen.getByText('No watchlist group yet')).toBeTruthy();
-  });
+  }, 10000);
 
   it('registers the ECON route', async () => {
     await renderApp('/econ');
 
-    expect(await screen.findByRole('heading', { name: /economic/i })).toBeTruthy();
-  });
+    expect(
+      await screen.findByRole('heading', { name: /economic/i }, { timeout: 5000 })
+    ).toBeTruthy();
+  }, 10000);
 
   it('registers the AI Agent route', async () => {
     await renderApp(AI_AGENT_PATH);
 
-    expect(await screen.findByTitle('Configuration')).toBeTruthy();
+    expect(await screen.findByTitle('Configuration', {}, { timeout: 5000 })).toBeTruthy();
     expect(await screen.findByRole('button', { name: /execute analysis/i })).toBeTruthy();
     // Both top navbar and left sidebar have an AI Agent button
     expect(screen.getAllByRole('button', { name: /ai agent/i }).length).toBeGreaterThan(0);
-  });
+  }, 10000);
 
   it('prefetches market overview defaults on mount', async () => {
     vi.resetModules();
