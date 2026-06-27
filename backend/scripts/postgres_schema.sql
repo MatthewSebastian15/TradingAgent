@@ -31,3 +31,11 @@ CREATE INDEX IF NOT EXISTS idx_analyses_job_id            ON analyses (job_id);
 CREATE INDEX IF NOT EXISTS idx_analyses_created_at        ON analyses (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_analyses_ticker_created_at ON analyses (ticker, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_analyses_market_created_at ON analyses (market, created_at DESC);
+
+-- Schema version tracking. Mirrors SQLite's PRAGMA user_version.
+-- To migrate: run your ALTER TABLE, then bump the version (see ai/setup.md).
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version    INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+);
+INSERT INTO schema_migrations (version) VALUES (1) ON CONFLICT (version) DO NOTHING;
