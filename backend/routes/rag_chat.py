@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Request
 from pydantic import Field
@@ -66,8 +66,8 @@ def _localize(text_en: str, text_id: str, message: str) -> str | None:
 
 
 class _ChatHistoryItem(ApiSchema):
-    role: str
-    content: str
+    role: Literal["user", "assistant"]
+    content: str = Field(..., max_length=5000)
 
 
 class RagChatRequest(ApiSchema):
