@@ -179,8 +179,11 @@ ANALYSIS_STORAGE_BACKEND = env("ANALYSIS_STORAGE_BACKEND", "sqlite").lower().str
 if ANALYSIS_STORAGE_BACKEND not in {"sqlite", "postgres"}:
     raise ValueError("ANALYSIS_STORAGE_BACKEND must be one of: sqlite, postgres.")
 ANALYSIS_DATABASE_URL = env("ANALYSIS_DATABASE_URL", "")
-if ANALYSIS_STORAGE_BACKEND == "postgres" and not ANALYSIS_DATABASE_URL:
-    raise ValueError("ANALYSIS_DATABASE_URL is required when ANALYSIS_STORAGE_BACKEND=postgres.")
+if ANALYSIS_STORAGE_BACKEND == "postgres":
+    if not ANALYSIS_DATABASE_URL:
+        raise ValueError("ANALYSIS_DATABASE_URL is required when ANALYSIS_STORAGE_BACKEND=postgres.")
+    if "change-me" in ANALYSIS_DATABASE_URL or env("POSTGRES_PASSWORD", "") == "change-me":
+        raise ValueError("Default 'change-me' credential is not allowed. Generate one: openssl rand -hex 16.")
 ANALYSIS_HISTORY_MAX_ROWS = env_int("ANALYSIS_HISTORY_MAX_ROWS", 1000, min_value=1)
 ANALYSIS_HISTORY_DEFAULT_LIMIT = env_int("ANALYSIS_HISTORY_DEFAULT_LIMIT", 25, min_value=1)
 OWNER_SESSION_SECRET = env("OWNER_SESSION_SECRET", "")
