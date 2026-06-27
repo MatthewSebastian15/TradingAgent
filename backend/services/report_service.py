@@ -72,6 +72,8 @@ logger = logging.getLogger(__name__)
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 TEMPLATE_DIR = BACKEND_DIR / "templates"
+# Trusted project asset: rendered into the report's <style> block unescaped (CSS
+# context). Must stay read-only — never mount user-writable over backend/static.
 REPORT_CSS_PATH = BACKEND_DIR / "static" / "reports" / "analysis_report.css"
 
 SUPPORTED_REPORT_MARKETS = {"US", "ID"}
