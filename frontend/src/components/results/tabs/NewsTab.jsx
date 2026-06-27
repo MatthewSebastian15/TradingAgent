@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
 import TickerNewsList from '@/components/news/TickerNewsList';
 import { Badge } from '@/components/ui/badge';
@@ -532,7 +532,7 @@ StrictNewsSection.propTypes = {
   sortable: PropTypes.bool,
 };
 
-export default function NewsTab({ result }) {
+function NewsTab({ result }) {
   const [activeSort, setActiveSort] = useState('Date');
   const relatedNews = result?.related_news || {};
   const newsImpact = result?.news_impact || {};
@@ -670,3 +670,5 @@ export default function NewsTab({ result }) {
 NewsTab.propTypes = {
   result: PropTypes.object.isRequired,
 };
+
+export default memo(NewsTab);

@@ -1,6 +1,6 @@
 import { Activity, BarChart3, Landmark, Percent, Table2, TrendingUp } from 'lucide-react';
 import PropTypes from 'prop-types';
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
@@ -1555,15 +1555,16 @@ FundamentalChartsPanel.propTypes = {
   financialHighlights: PropTypes.object,
 };
 
-export default function FundamentalTab({ financialHighlights, result = {} }) {
+function FundamentalTab({ financialHighlights, result = {} }) {
   const [selectedFundamentalGroup, setSelectedFundamentalGroup] = useState('income');
   const [fundamentalViewMode, setFundamentalViewMode] = useState('table');
   const activeGroup =
     FUNDAMENTAL_GROUPS.find((group) => group.id === selectedFundamentalGroup) ||
     FUNDAMENTAL_GROUPS[0];
+  const safeResult = useMemo(() => result ?? {}, [result]);
   const tablePayload = useMemo(
-    () => appendLegacyFundamentalSections(financialHighlights, result),
-    [financialHighlights, result]
+    () => appendLegacyFundamentalSections(financialHighlights, safeResult),
+    [financialHighlights, safeResult]
   );
   const groupedTablePayload = useMemo(
     () => groupFundamentalTableHighlights(tablePayload, activeGroup),
@@ -1637,3 +1638,5 @@ FundamentalTab.propTypes = {
   financialHighlights: PropTypes.object,
   result: PropTypes.object,
 };
+
+export default memo(FundamentalTab);

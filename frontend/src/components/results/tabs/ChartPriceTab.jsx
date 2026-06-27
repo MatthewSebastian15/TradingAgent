@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,7 +59,7 @@ function remoteCacheKey(ticker, rangeKey, tradeDate) {
   return `${ticker || ''}:${rangeKey}:${tradeDate || ''}`;
 }
 
-export default function ChartPriceTab({ result }) {
+function ChartPriceTab({ result }) {
   const [activeRange, setActiveRange] = useState(DEFAULT_PRICE_RANGE);
   const [remoteRanges, setRemoteRanges] = useState({});
   const chart = result?.price_chart || EMPTY_PRICE_CHART;
@@ -280,3 +280,5 @@ export default function ChartPriceTab({ result }) {
 ChartPriceTab.propTypes = {
   result: PropTypes.object.isRequired,
 };
+
+export default memo(ChartPriceTab);

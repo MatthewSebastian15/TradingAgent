@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { memo } from 'react';
 
 import { formatPrice } from '../../../utils/formatting';
 import { safeExternalUrl } from '../../../utils/url';
@@ -377,7 +378,7 @@ OwnershipChart.propTypes = {
   profile: PropTypes.object.isRequired,
 };
 
-export default function ProfileTab({ profile, result = {} }) {
+function ProfileTab({ profile, result = {} }) {
   if (!profile || !profile.available) {
     return (
       <div className="border-b border-bloomberg-border p-4 font-mono">
@@ -439,3 +440,5 @@ ProfileTab.propTypes = {
   profile: PropTypes.object,
   result: PropTypes.object,
 };
+
+export default memo(ProfileTab);

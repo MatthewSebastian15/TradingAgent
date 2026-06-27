@@ -28,6 +28,19 @@ export default defineConfig(({ mode }) => {
   );
 
   return {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (/[\\/]@radix-ui[\\/]/.test(id)) return 'radix';
+            if (/[\\/](react|react-dom|react-router|react-router-dom)[\\/]/.test(id))
+              return 'vendor';
+            return undefined;
+          },
+        },
+      },
+    },
     plugins: [react()],
     resolve: {
       alias: {
