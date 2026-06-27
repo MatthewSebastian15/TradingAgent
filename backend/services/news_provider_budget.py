@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import asdict, dataclass
 from typing import Any
+
+from config import NEWS_PROVIDER_429_COOLDOWN_SECONDS
 
 
 @dataclass
@@ -15,18 +16,10 @@ class ProviderState:
 
 
 _PROVIDER_STATE: dict[str, ProviderState] = {}
-DEFAULT_429_COOLDOWN_SECONDS = 1800
 
 
 def _utc_now_text() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
-
-def _cooldown_seconds(default: int = DEFAULT_429_COOLDOWN_SECONDS) -> int:
-    try:
-        return max(1, int(os.environ.get("NEWS_PROVIDER_429_COOLDOWN_SECONDS", default)))
-    except (TypeError, ValueError):
-        return default
 
 
 def is_provider_available(provider: str) -> bool:
@@ -45,7 +38,7 @@ def provider_cooldown_remaining(provider: str) -> int:
 
 def mark_provider_429(provider: str, *, cooldown_seconds: int | None = None) -> None:
     state = _PROVIDER_STATE.setdefault(provider, ProviderState())
-    state.cooldown_until = time.time() + int(cooldown_seconds or _cooldown_seconds())
+    state.cooldown_until = time.time() + int(cooldown_seconds or NEWS_PROVIDER_429_COOLDOWN_SECONDS)
     state.last_error = "429"
     state.last_failure_at = _utc_now_text()
 

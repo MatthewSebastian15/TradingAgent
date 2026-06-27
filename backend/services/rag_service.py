@@ -44,13 +44,18 @@ _OUT_OF_SCOPE = [
 
 
 def check_scope(message: str) -> bool:
-    """True if message is within allowed scope (News/Market/Analysis/Watchlist)."""
+    """True if message is within allowed scope (News/Market/Analysis/Watchlist).
+
+    Requires a positive in-scope signal. Unrecognized queries (no in-scope and no
+    out-of-scope keyword) are treated as out-of-scope, so the LLM is not the only
+    guardrail for the gap case.
+    """
     text = str(message or "").strip()
     has_in = any(p.search(text) for p in _IN_SCOPE)
     has_out = any(p.search(text) for p in _OUT_OF_SCOPE)
     if has_out and not has_in:
         return False
-    return True
+    return has_in
 
 
 # ─── Intent detection ─────────────────────────────────────────────────────────

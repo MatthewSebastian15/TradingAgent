@@ -35,6 +35,14 @@ def test_check_scope_invalid_coding():
     assert check_scope("Bagaimana cara membuat website React?") is False
 
 
+def test_check_scope_unrecognized_is_out_of_scope():
+    # No in-scope and no out-of-scope keyword: must default to out-of-scope.
+    from services.rag_service import check_scope
+
+    assert check_scope("What is 2 + 2?") is False
+    assert check_scope("") is False
+
+
 def test_detect_intent_news():
     from services.rag_service import detect_intent
 
