@@ -1,4 +1,4 @@
-import { BarChart3, Building2, CandlestickChart, Newspaper, Sparkles } from 'lucide-react';
+import { BarChart3, Building2, CandlestickChart, Newspaper, Sigma, Sparkles } from 'lucide-react';
 import PropTypes from 'prop-types';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,6 +9,7 @@ const TABS = [
   { id: 'fundamental', statusKey: 'fundamental', label: 'Fundamental', Icon: BarChart3 },
   { id: 'chart_price', statusKey: 'chart_price', label: 'Chart & Price', Icon: CandlestickChart },
   { id: 'news', statusKey: 'news', label: 'News', Icon: Newspaper },
+  { id: 'quant', statusKey: 'quant', label: 'Quant', Icon: Sigma },
 ];
 
 function statusMeta(status, label) {

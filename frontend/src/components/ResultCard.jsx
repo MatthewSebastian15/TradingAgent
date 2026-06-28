@@ -40,10 +40,10 @@ import ChartPriceTab from './results/tabs/ChartPriceTab';
 import FundamentalTab from './results/tabs/FundamentalTab';
 import NewsTab from './results/tabs/NewsTab';
 import ProfileTab from './results/tabs/ProfileTab';
+import QuantTab from './results/tabs/QuantTab';
 import ResultTabs from './results/tabs/ResultTabs';
 
 const ACTIONABLE_DECISIONS = new Set(['BUY', 'SELL', 'Buy', 'Overweight', 'Sell', 'Underweight']);
-
 
 function DecisionBadge({ decision }) {
   const signal = normalizeSignal(decision);
@@ -82,7 +82,6 @@ function DecisionBadge({ decision }) {
 DecisionBadge.propTypes = {
   decision: PropTypes.string,
 };
-
 
 function ExpandableTextSection({
   label,
@@ -626,6 +625,8 @@ export default function ResultCard({
         {activeTab === 'chart_price' && <ChartPriceTab result={result} />}
 
         {activeTab === 'news' && <NewsTab result={result} />}
+
+        {activeTab === 'quant' && <QuantTab result={result} />}
 
         <DisclaimerFooter disclaimer={result?.disclaimer} />
       </div>
