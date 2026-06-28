@@ -209,6 +209,58 @@ export function monteCarloGBM(spot, mu, sigma, days, paths, seed) {
   };
 }
 
+// --- benchmark-relative (v2) ----------------------------------------------
+
+// Pair two date->close series on their common trading days, in stock order.
+// -> { stock:number[], market:number[] } of equal length.
+export function alignByDate(stockPoints, marketPoints) {
+  const byDate = new Map();
+  for (const p of marketPoints || []) {
+    const date = String(p?.date || '').slice(0, 10);
+    const close = p?.adjusted_close ?? p?.close;
+    if (date && close != null) byDate.set(date, close);
+  }
+  const stock = [];
+  const market = [];
+  for (const p of stockPoints || []) {
+    const date = String(p?.date || '').slice(0, 10);
+    const close = p?.adjusted_close ?? p?.close;
+    if (date && close != null && byDate.has(date)) {
+      stock.push(close);
+      market.push(byDate.get(date));
+    }
+  }
+  return { stock, market };
+}
+
+// Sample covariance (n-1) of two equal-length series.
+function covariance(xs, ys) {
+  const n = Math.min(xs.length, ys.length);
+  if (n < 2) return null;
+  const mx = mean(xs);
+  const my = mean(ys);
+  let sum = 0;
+  for (let i = 0; i < n; i += 1) sum += (xs[i] - mx) * (ys[i] - my);
+  return sum / (n - 1);
+}
+
+// Beta: how much the stock moves per unit of market move. cov/var, both sample.
+export function beta(stockReturns, marketReturns) {
+  const cov = covariance(stockReturns, marketReturns);
+  const varM = stdDev(marketReturns) ** 2;
+  if (cov === null || !varM) return null;
+  return cov / varM;
+}
+
+// Jensen's alpha, annualized %. rf is the per-period (daily) risk-free rate.
+export function alpha(stockReturns, marketReturns, rf = 0) {
+  const b = beta(stockReturns, marketReturns);
+  if (b === null || stockReturns.length < 2) return null;
+  const excessStock = mean(stockReturns) - rf;
+  const excessMarket = mean(marketReturns) - rf;
+  return (excessStock - b * excessMarket) * TRADING_DAYS * 100;
+}
+
 // Bin any number array into a histogram. Works for returns or terminal prices.
 export function returnHistogram(values, bins = 30) {
   if (values.length === 0) return [];

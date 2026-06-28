@@ -1,11 +1,15 @@
 import PropTypes from 'prop-types';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
+import { getApiStatus, getMarketOhlcv } from '../../../api/market';
 import NoticeBox from '../NoticeBox';
 import { GRID_COLOR, LAST_PRICE_COLOR } from './priceChartUtils';
 import PriceMetricLineChart from './PriceMetricLineChart';
 import {
+  alignByDate,
+  alpha,
   annualizedVol,
+  beta,
   cvar,
   downsideDeviation,
   ewmaVol,
@@ -26,6 +30,10 @@ import {
 const ROLLING_WINDOW = 21;
 const MC_PATHS = 5000; // perf cap (Section 4.5)
 const MC_DAYS = 126; // ~6 months
+const TRADING_DAYS = 252;
+// ponytail: fixed US benchmark. Beta vs ^GSPC is approximate for non-US tickers;
+// the card tooltip says so. Swap to a per-market index map only if anyone asks.
+const BENCHMARK_SYMBOL = '^GSPC';
 
 const SECTIONS = [
   { id: 'volatility', label: 'Volatility' },
@@ -65,6 +73,20 @@ function volBucket(vol) {
 function ratioTone(v) {
   if (!finite(v)) return 'neutral';
   if (v >= 1) return 'good';
+  if (v < 0) return 'bad';
+  return 'neutral';
+}
+
+function fmtNum2(v) {
+  return finite(v) ? v.toFixed(2) : DASH;
+}
+// Signed percent: the +/- sign is the colorblind-safe direction cue (4B.6).
+function fmtSignedPct(v) {
+  return finite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` : DASH;
+}
+function signedTone(v) {
+  if (!finite(v)) return 'neutral';
+  if (v > 0) return 'good';
   if (v < 0) return 'bad';
   return 'neutral';
 }
@@ -293,7 +315,11 @@ VolatilitySection.propTypes = {
   rollingPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 
-function RiskSection({ dd, histVaR, paramVaR, cv, downDev, shp, srt }) {
+function RiskSection({ dd, histVaR, paramVaR, cv, downDev, shp, srt, bta, alf, rfPct, benchAvailable }) {
+  const excessLabel = `excess over ${rfPct.toFixed(1)}%`;
+  const benchNote = benchAvailable
+    ? 'Benchmark: S&P 500 (^GSPC). Approximate for non-US tickers.'
+    : 'S&P 500 (^GSPC) benchmark data is unavailable.';
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-subtle">
@@ -338,18 +364,31 @@ function RiskSection({ dd, histVaR, paramVaR, cv, downDev, shp, srt }) {
           formula="√(mean of min(0, return)²) × √252 × 100%."
         />
         <MetricCard
-          label="Sharpe (excess over 0%)"
+          label={`Sharpe (${excessLabel})`}
           value={fmtRatio(shp)}
           tone={ratioTone(shp)}
           gloss="Return per unit of total risk. Higher is a better deal."
-          formula="mean(returns) / stddev(returns) × √252. v1 uses risk-free rate = 0, so this is excess over 0%."
+          formula={`(mean(returns) − rf) / stddev(returns) × √252. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
         />
         <MetricCard
-          label="Sortino (excess over 0%)"
+          label={`Sortino (${excessLabel})`}
           value={fmtRatio(srt)}
           tone={ratioTone(srt)}
           gloss="Like Sharpe but only penalizes downside risk — fairer to big upside moves."
-          formula="mean(returns) / downside-deviation × √252. v1 uses risk-free rate = 0."
+          formula={`(mean(returns) − rf) / downside-deviation × √252. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
+        />
+        <MetricCard
+          label="Beta (vs S&P 500)"
+          value={fmtNum2(bta)}
+          gloss="1.0 moves with the market; above 1 is jumpier, below 1 is calmer."
+          formula={`cov(stock, S&P 500) / var(S&P 500), on overlapping trading days. ${benchNote}`}
+        />
+        <MetricCard
+          label="Alpha (annualized)"
+          value={fmtSignedPct(alf)}
+          tone={signedTone(alf)}
+          gloss="Return beyond what beta alone would predict — the 'skill' return vs the market."
+          formula={`Jensen's alpha: (stock − rf) − β·(market − rf), annualized. ${benchNote}`}
         />
       </div>
     </div>
@@ -364,6 +403,10 @@ RiskSection.propTypes = {
   downDev: PropTypes.number,
   shp: PropTypes.number,
   srt: PropTypes.number,
+  bta: PropTypes.number,
+  alf: PropTypes.number,
+  rfPct: PropTypes.number.isRequired,
+  benchAvailable: PropTypes.bool.isRequired,
 };
 
 function StochasticSection({ sim, spot, ccy, seed, onReroll, onSeedChange, returnBins }) {
@@ -446,10 +489,36 @@ StochasticSection.propTypes = {
 function QuantTab({ result }) {
   const [section, setSection] = useState('volatility');
   const [seed, setSeed] = useState(42);
+  const [rf, setRf] = useState(0); // annual risk-free rate as a fraction
+  const [benchPoints, setBenchPoints] = useState(null); // null = loading, [] = unavailable
 
   const points = useMemo(() => result?.price_chart?.points ?? [], [result]);
   const closes = useMemo(() => points.map((p) => p.adjusted_close ?? p.close), [points]);
   const ccy = result?.price_chart?.currency || result?.currency || '';
+  const rfDaily = rf / TRADING_DAYS;
+
+  // On-demand: pull the risk-free rate (config) and the ^GSPC benchmark series
+  // only when the tab mounts. Both fail soft — rf falls back to 0, beta/alpha to —.
+  useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
+    getApiStatus({ signal: controller.signal })
+      .then((s) => {
+        if (alive && Number.isFinite(s?.quant_risk_free_rate)) setRf(s.quant_risk_free_rate);
+      })
+      .catch(() => {});
+    getMarketOhlcv(BENCHMARK_SYMBOL, { range: '1Y', signal: controller.signal })
+      .then((p) => {
+        if (alive) setBenchPoints(Array.isArray(p?.points) ? p.points : []);
+      })
+      .catch(() => {
+        if (alive) setBenchPoints([]);
+      });
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+  }, []);
 
   const returns = useMemo(() => simpleReturns(closes), [closes]);
   const logRet = useMemo(() => logReturns(closes), [closes]);
@@ -472,11 +541,21 @@ function QuantTab({ result }) {
       paramVaR: parametricVaR(returns),
       cv: cvar(returns),
       downDev: downsideDeviation(returns),
-      shp: sharpe(returns),
-      srt: sortino(returns),
+      shp: sharpe(returns, rfDaily),
+      srt: sortino(returns, rfDaily),
     }),
-    [closes, returns]
+    [closes, returns, rfDaily]
   );
+
+  // Benchmark-relative metrics from the aligned ^GSPC series (v2 slice).
+  const benchmark = useMemo(() => {
+    if (!benchPoints || benchPoints.length === 0) return { beta: null, alpha: null, available: false };
+    const { stock, market } = alignByDate(points, benchPoints);
+    if (stock.length < 3) return { beta: null, alpha: null, available: false };
+    const sr = simpleReturns(stock);
+    const mr = simpleReturns(market);
+    return { beta: beta(sr, mr), alpha: alpha(sr, mr, rfDaily), available: true };
+  }, [points, benchPoints, rfDaily]);
 
   // Only run the simulation when the section is open and there's enough data;
   // keyed so unrelated re-renders (e.g. streaming updates) don't re-roll it.
@@ -538,6 +617,10 @@ function QuantTab({ result }) {
           downDev={metrics.downDev}
           shp={metrics.shp}
           srt={metrics.srt}
+          bta={benchmark.beta}
+          alf={benchmark.alpha}
+          rfPct={rf * 100}
+          benchAvailable={benchmark.available}
         />
       )}
 

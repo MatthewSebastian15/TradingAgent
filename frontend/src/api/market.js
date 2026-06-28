@@ -53,6 +53,27 @@ export async function getMarketSearchWarmup({ signal } = {}) {
   return parseMarketResponse(response);
 }
 
+export async function getMarketOhlcv(ticker, { range = '1Y', tradeDate, signal } = {}) {
+  const params = new URLSearchParams({ ticker: String(ticker || ''), range: String(range) });
+  if (tradeDate) params.set('trade_date', String(tradeDate));
+  const response = await fetch(buildApiUrl(`/market/ohlcv?${params.toString()}`), {
+    headers: await buildAuthHeaders(),
+    credentials: 'include',
+    signal,
+  });
+  return parseMarketResponse(response);
+}
+
+// Backend runtime config (used by the Quant tab for the risk-free rate).
+export async function getApiStatus({ signal } = {}) {
+  const response = await fetch(buildApiUrl('/status'), {
+    headers: await buildAuthHeaders(),
+    credentials: 'include',
+    signal,
+  });
+  return parseMarketResponse(response);
+}
+
 export async function getMarketQuotes(symbols, { signal } = {}) {
   const symbolList = Array.isArray(symbols) ? symbols.join(',') : String(symbols || '');
   const response = await fetch(

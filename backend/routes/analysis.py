@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 
 from analysis_cache import AnalysisJobLimitError
-from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, llm
+from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, QUANT_RISK_FREE_RATE, llm
 from errors import NotFoundError, RateLimitError, sanitize_message
 from logging_config import request_id_ctx
 from rate_limiter import (
@@ -649,6 +649,7 @@ async def _api_status_payload(runtime: jobs.AnalysisRuntimeState | None = None):
         "deep_model": llm.deep_think_llm,
         "analysis_mode": ANALYSIS_MODE,
         "default_analysis_depth": DEFAULT_ANALYSIS_DEPTH,
+        "quant_risk_free_rate": QUANT_RISK_FREE_RATE,
         "limits": {
             "pipeline_timeout_seconds": pipeline_runner.PIPELINE_TIMEOUT_SECONDS,
         },

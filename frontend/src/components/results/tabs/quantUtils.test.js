@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  alignByDate,
+  alpha,
   annualizedVol,
+  beta,
   cvar,
   ewmaVol,
   historicalVaR,
@@ -143,6 +146,47 @@ describe('monteCarloGBM', () => {
     const a = monteCarloGBM(100, 0.0005, 0.02, 30, 500, 1);
     const b = monteCarloGBM(100, 0.0005, 0.02, 30, 500, 2);
     expect(a.terminal).not.toEqual(b.terminal);
+  });
+});
+
+describe('beta / alpha — benchmark-relative', () => {
+  const stockPts = [
+    { date: '2024-01-02', close: 100 },
+    { date: '2024-01-03', close: 102 },
+    { date: '2024-01-04', close: 101 },
+    { date: '2024-01-05', close: 104 },
+  ];
+
+  it('alignByDate keeps only common days, in stock order', () => {
+    const market = [
+      { date: '2024-01-03', close: 50 },
+      { date: '2024-01-05', close: 52 },
+      { date: '2024-01-09', close: 99 }, // not in stock -> dropped
+    ];
+    const { stock, market: m } = alignByDate(stockPts, market);
+    expect(stock).toEqual([102, 104]);
+    expect(m).toEqual([50, 52]);
+  });
+
+  it('beta of a series against itself is 1', () => {
+    const r = simpleReturns([100, 102, 101, 104, 103]);
+    expect(beta(r, r)).toBeCloseTo(1, 10);
+  });
+
+  it('beta scales: stock = 2x market moves -> beta 2', () => {
+    const market = [0.01, -0.02, 0.015, -0.005];
+    const stock = market.map((x) => 2 * x);
+    expect(beta(stock, market)).toBeCloseTo(2, 10);
+  });
+
+  it('alpha is ~0 when stock == market and rf consistent', () => {
+    const r = simpleReturns([100, 103, 101, 105, 104]);
+    expect(alpha(r, r, 0)).toBeCloseTo(0, 10);
+  });
+
+  it('too-few / non-overlapping -> null', () => {
+    expect(beta([0.01], [0.01])).toBeNull();
+    expect(alpha([], [], 0)).toBeNull();
   });
 });
 

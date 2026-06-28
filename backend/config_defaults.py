@@ -58,6 +58,11 @@ PROCESS_POOL_WORKERS = env_int("PROCESS_POOL_WORKERS", 2, min_value=1)
 PROCESS_POOL_MAX_TASKS_PER_CHILD = env_int("PROCESS_POOL_MAX_TASKS_PER_CHILD", 1, min_value=1)
 DATA_COLLECTION_WORKERS = env_int("DATA_COLLECTION_WORKERS", 12, min_value=1)
 PRICE_MAX_FALLBACK_DAYS = env_int("PRICE_MAX_FALLBACK_DAYS", 7, min_value=0)
+
+# Annual risk-free rate (as a fraction, e.g. 0.04 = 4%) used by the Quant tab's
+# Sharpe/Sortino. Exposed to the browser via GET /api/status. Default 0 keeps the
+# v1 "excess over 0%" behavior.
+QUANT_RISK_FREE_RATE = env_float("QUANT_RISK_FREE_RATE", 0.0, min_value=0.0, max_value=1.0)
 ANALYST_PARALLEL_WORKERS = env_int("ANALYST_PARALLEL_WORKERS", 3, min_value=1)
 DEFAULT_MAX_DEBATE_ROUNDS = env_int("DEFAULT_MAX_DEBATE_ROUNDS", 3, min_value=1)
 MAX_RISK_DISCUSS_ROUNDS = 1
