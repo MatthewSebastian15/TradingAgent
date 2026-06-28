@@ -124,6 +124,10 @@ body::after {
   );
   pointer-events: none;
   z-index: 9999;
+  /* Promote to its own GPU layer: paint the gradient once, never repaint it when
+     content underneath animates (ticker marquee, pulse dot, clock, cursor). */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 @keyframes fadeUp {

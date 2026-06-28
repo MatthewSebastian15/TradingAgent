@@ -5,7 +5,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import AgentLog from './AgentLog';
 import { HistoryPanel, StatusBar } from './AnalysisWorkspacePanels';
-import Navbar from './Navbar';
 import ResultCard from './ResultCard';
 import {
   historyResourceId,
@@ -194,8 +193,6 @@ export default function AnalysisWorkspace({
 
   return (
     <div className="h-screen bg-bloomberg-bg pt-[60px]">
-      <Navbar />
-
       {/* Content area: starts to the right of the global nav sidebar (w-12) */}
       <div className="fixed bottom-0 left-12 right-0 top-[60px] flex">
         {/* Collapsed: panel takes no width; floating button re-expands it. */}

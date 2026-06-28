@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 
 import HomeNewsSummary from '../components/home/HomeNewsSummary';
 import HomeWatchlistSidebar from '../components/home/HomeWatchlistSidebar';
-import Navbar from '../components/Navbar';
 import { CHATBOT_PATH } from '../constants/routes';
 import { useGeneralNews } from '../hooks/useGeneralNews';
 
@@ -53,7 +52,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
-      <Navbar />
       {/* Right padding = sidebar width (280px) + a 16px gap, matching the left px-4. */}
       <main className="space-y-3 px-4 pb-4 pt-2 md:pr-[296px]">
         <HomeNewsSummary

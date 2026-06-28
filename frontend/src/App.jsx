@@ -1,6 +1,7 @@
 import React, { Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
 
+import Navbar from './components/Navbar';
 import {
   AI_AGENT_PATH,
   LEGACY_AI_AGENT_LOWER_PATH,
@@ -53,6 +54,18 @@ function LoadingScreen() {
   );
 }
 
+// Navbar (fixed top bar + left rail) lives here so it stays mounted across route
+// changes — only <Outlet/> swaps. Previously every page rendered its own <Navbar/>,
+// so each navigation remounted it and re-fired its status/quotes fetches + intervals.
+function AppLayout() {
+  return (
+    <>
+      <Navbar />
+      <Outlet />
+    </>
+  );
+}
+
 function App() {
   useEffect(() => {
     const controller = new AbortController();
@@ -69,6 +82,7 @@ function App() {
     >
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
+          <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Dashboard />} />
           <Route path={AI_AGENT_PATH} element={<AIAgent />} />
@@ -104,6 +118,7 @@ function App() {
           <Route path={CHATBOT_PATH} element={<ChatbotPage />} />
           <Route path="/economic" element={<Navigate to="/econ" replace />} />
           <Route path="*" element={<NotFound />} />
+          </Route>
         </Routes>
       </Suspense>
     </BrowserRouter>

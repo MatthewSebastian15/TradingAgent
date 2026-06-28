@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getMarketQuotes } from '../api/market';
-import Navbar from '../components/Navbar';
 import HoldingsSummaryBar from '../components/portfolio/HoldingsSummaryBar';
 import HoldingsTable from '../components/portfolio/HoldingsTable';
 import PortfolioSummaryBar from '../components/portfolio/PortfolioSummaryBar';
@@ -189,7 +188,6 @@ export default function Portfolio() {
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
-      <Navbar />
       <main className={`space-y-3 px-4 py-4 ${showSidebar ? 'md:pr-[296px]' : ''}`}>
         <div className="flex items-center justify-between">
           <h1 className="font-mono text-[11px] uppercase tracking-[0.35em] text-bloomberg-orange">

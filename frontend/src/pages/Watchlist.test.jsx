@@ -18,8 +18,7 @@ describe('Watchlist page', () => {
       </MemoryRouter>
     );
 
+    // Navbar moved to the shared AppLayout, so the page unit only renders WatchlistPage.
     expect(await screen.findByRole('heading', { name: /watchlist/i })).toBeTruthy();
-    // Both top navbar and left sidebar render a Watchlist button
-    expect(screen.getAllByRole('button', { name: /watchlist/i }).length).toBeGreaterThan(0);
   });
 });

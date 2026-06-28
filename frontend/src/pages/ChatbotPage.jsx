@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { ChatHistorySidebar } from '../components/chatbot/ChatHistorySidebar';
 import { ChatWindow } from '../components/chatbot/ChatWindow';
-import Navbar from '../components/Navbar';
 import { useRagChat } from '../hooks/useRagChat';
 
 export function ChatbotPage() {
@@ -37,7 +36,6 @@ export function ChatbotPage() {
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12 text-bloomberg-white">
-      <Navbar />
       <main className="flex flex-col h-[calc(100vh-60px)]">
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-4 border-b border-bloomberg-border bg-bloomberg-surface">

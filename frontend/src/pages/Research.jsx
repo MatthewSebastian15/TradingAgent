@@ -1,7 +1,6 @@
 import PropTypes from 'prop-types';
 import { useCallback, useEffect, useState } from 'react';
 
-import Navbar from '../components/Navbar';
 import ResearchCommandBar from '../components/research/ResearchCommandBar';
 import ResearchSidebar from '../components/research/ResearchSidebar';
 import CandlestickPriceChart from '../components/results/tabs/CandlestickPriceChart';
@@ -753,7 +752,6 @@ export default function Research() {
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
-      <Navbar />
       <div className="px-4 pt-4">
         <ResearchCommandBar
           value={activeTicker || ''}
