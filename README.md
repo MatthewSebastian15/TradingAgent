@@ -24,7 +24,7 @@ The application receives a stock ticker, market, analysis date, investment horiz
 - Research and ECON pages are available as `Coming Soon` placeholders.
 - Owner-session-based analysis history.
 - HTML/PDF report.
-- Docker development stack for backend, frontend, and optional Ollama.
+- Docker development stack for backend and frontend.
 - SQLite cache for analysis jobs, history, rate limit, market data, news, and exact LLM cache.
 
 ![Investment Analysis Flow](image/Investment%20Analysis%20Flow.png)
@@ -66,7 +66,6 @@ Default ports:
 | Frontend dev | `http://localhost:3000` |
 | Backend API | `http://localhost:8000` |
 | Backend health | `http://localhost:8000/health` |
-| Optional Ollama | `http://localhost:11434` |
 
 ---
 
@@ -102,7 +101,7 @@ Default ports:
 - Finnhub and Alpha Vantage as optional vendors.
 - SEC companyfacts for US fundamentals.
 - Google News Light, Marketaux, NewsData, RSS context, and yfinance news for news data.
-- LLM providers: Google, OpenAI, Anthropic, DeepSeek, OpenRouter, and Ollama.
+- LLM providers: Google, OpenAI, Anthropic, and DeepSeek.
 
 ---
 
@@ -546,24 +545,7 @@ DEEP_THINK_LLM=claude-sonnet-4-5
 LLM_API_KEY=your_anthropic_key
 ```
 
-```env
-LLM_PROVIDER=openrouter
-QUICK_THINK_LLM=openai/gpt-4o-mini
-DEEP_THINK_LLM=openai/gpt-4o
-LLM_API_KEY=your_openrouter_key
-```
-
-Local Ollama:
-
-```env
-LLM_PROVIDER=ollama
-QUICK_THINK_LLM=llama3:latest
-DEEP_THINK_LLM=llama3:latest
-LLM_API_KEY=ollama-local
-OLLAMA_BASE_URL=http://localhost:11434
-```
-
-The current startup validation expects `LLM_API_KEY` to be non-empty. For Ollama, use a non-empty placeholder such as `ollama-local` if the validator displays a warning.
+The current startup validation expects `LLM_API_KEY` to be non-empty.
 
 ### Important Backend Env Variables
 
@@ -580,7 +562,6 @@ The current startup validation expects `LLM_API_KEY` to be non-empty. For Ollama
 | `DEEP_THINK_LLM` | Reasoning/synthesis model. |
 | `LLM_API_KEY` | Main LLM API key. |
 | `LLM_BASE_URL` | Custom base URL for compatible providers. |
-| `OLLAMA_BASE_URL` | Local/container Ollama URL. |
 | `ALPHA_VANTAGE_API_KEY` | Optional market/fundamental fallback. |
 | `FINNHUB_API_KEY` | Optional market/news/fundamental enrichment. |
 | `SEC_USER_AGENT` | User agent for SEC companyfacts. |
@@ -675,29 +656,6 @@ The development compose stack uses:
 - SQLite cache volume `tradingagent-cache`.
 - Result volume `tradingagent-results`.
 - Frontend `node_modules` volume.
-
-
-### Docker with Ollama
-
-```bash
-docker compose --profile ollama up --build
-```
-
-Pull a model inside the Ollama container:
-
-```bash
-docker compose exec ollama ollama pull llama3:latest
-```
-
-Use this backend env config:
-
-```env
-LLM_PROVIDER=ollama
-QUICK_THINK_LLM=llama3:latest
-DEEP_THINK_LLM=llama3:latest
-LLM_API_KEY=ollama-local
-OLLAMA_BASE_URL=http://ollama:11434
-```
 
 ---
 

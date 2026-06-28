@@ -137,8 +137,6 @@ _PASSTHROUGH_KWARGS = (
 # Provider base URLs and API key env vars
 _PROVIDER_CONFIG = {
     "deepseek": ("https://api.deepseek.com", ("DEEPSEEK_API_KEY",)),
-    "openrouter": ("https://openrouter.ai/api/v1", ("OPENROUTER_API_KEY",)),
-    "ollama": ("http://localhost:11434/v1", None),
 }
 
 
@@ -172,14 +170,11 @@ class OpenAIClient(BaseLLMClient):
         if self.provider in _PROVIDER_CONFIG:
             default_base, api_key_envs = _PROVIDER_CONFIG[self.provider]
             llm_kwargs["base_url"] = self.base_url or default_base
-            if api_key_envs:
-                api_key = next(
-                    (os.environ.get(name) for name in api_key_envs if os.environ.get(name)), None
-                )
-                if api_key:
-                    llm_kwargs["api_key"] = api_key
-            else:
-                llm_kwargs["api_key"] = "ollama"
+            api_key = next(
+                (os.environ.get(name) for name in api_key_envs if os.environ.get(name)), None
+            )
+            if api_key:
+                llm_kwargs["api_key"] = api_key
         elif self.base_url:
             llm_kwargs["base_url"] = self.base_url
 

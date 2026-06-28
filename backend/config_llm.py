@@ -142,7 +142,6 @@ from config_env import env
 
 # Re-export the core catalog for legacy imports while keeping one source.
 SUPPORTED_PROVIDERS = llm_model_catalog.SUPPORTED_PROVIDERS
-OPEN_MODEL_PROVIDERS = llm_model_catalog.OPEN_MODEL_PROVIDERS
 MODEL_CATALOG = llm_model_catalog.MODEL_CATALOG
 KNOWN_MODELS = llm_model_catalog.KNOWN_MODELS
 
@@ -156,9 +155,6 @@ class LLMSettings:
     quick_think_llm: str = field(default_factory=lambda: env("QUICK_THINK_LLM"))
     llm_api_key: str = field(default_factory=lambda: env("LLM_API_KEY", ""))
     base_url: str = field(default_factory=lambda: env("LLM_BASE_URL", "").rstrip("/"))
-    ollama_base_url: str = field(
-        default_factory=lambda: env("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-    )
 
     def __post_init__(self) -> None:
         if self.provider == "google":
@@ -168,8 +164,6 @@ class LLMSettings:
     def backend_url(self) -> str | None:
         if self.base_url:
             return self.base_url
-        if self.provider == "ollama":
-            return self.ollama_base_url
         return None
 
     def metadata(self) -> dict[str, Any]:

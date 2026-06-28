@@ -21,7 +21,6 @@ services:
       ANALYSIS_JOB_ROUTING_MODE: sticky_sessions
       ANALYSIS_STORAGE_BACKEND: sqlite
       DATA_CACHE_BACKEND: sqlite
-      OLLAMA_BASE_URL: http://ollama:11434
       XDG_CACHE_HOME: /home/tradingagent/.tradingagents/cache
       YFINANCE_CACHE_DIR: /home/tradingagent/.tradingagents/cache/py-yfinance
       ANALYSIS_JOB_CACHE_DB_PATH: /home/tradingagent/.tradingagents/cache/analysis_jobs.sqlite3
@@ -70,20 +69,6 @@ services:
       retries: 3
       start_period: 10s
 
-  ollama:
-    image: ollama/ollama:0.24.0@sha256:32f9c3895f3a37cfcf637da5cabfd2d5d600cf3222ab294b366dae316e429589
-    container_name: tradingagent-ollama
-    dns:
-      - 1.1.1.1
-      - 1.0.0.1
-    profiles:
-      - ollama
-    ports:
-      - "127.0.0.1:11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    restart: unless-stopped
-
   postgres:
     image: postgres:16-alpine
     profiles:
@@ -104,5 +89,4 @@ services:
 volumes:
   tradingagent-cache:
   tradingagent-results:
-  ollama-data:
   pg_data:

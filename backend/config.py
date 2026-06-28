@@ -222,7 +222,6 @@ from config_llm import (
     KNOWN_MODELS,
     LLMSettings,
     MODEL_CATALOG,
-    OPEN_MODEL_PROVIDERS,
     SUPPORTED_PROVIDERS,
     build_tradingagents_config,
     llm,
@@ -385,10 +384,6 @@ class _BackendSettingsShim:
     @property
     def quick_think_llm(self):
         return llm.quick_think_llm
-
-    @property
-    def ollama_base_url(self):
-        return llm.ollama_base_url
 
     @property
     def api_key(self):

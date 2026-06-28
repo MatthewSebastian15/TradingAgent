@@ -61,10 +61,6 @@ PROVIDER_KEY_REQUIREMENTS: dict[str, tuple[tuple[str, ...], str]] = {
         "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic.",
     ),
     "deepseek": (("DEEPSEEK_API_KEY",), "DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek."),
-    "openrouter": (
-        ("OPENROUTER_API_KEY",),
-        "OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter.",
-    ),
 }
 
 

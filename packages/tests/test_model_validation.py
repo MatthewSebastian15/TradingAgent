@@ -37,9 +37,6 @@ class DummyLLMClient(BaseLLMClient):
 class ModelValidationTests(unittest.TestCase):
     def test_cli_catalog_models_are_all_validator_approved(self):
         for provider, models in get_known_models().items():
-            if provider in ("ollama", "openrouter"):
-                continue
-
             for model in models:
                 with self.subTest(provider=provider, model=model):
                     self.assertTrue(validate_model(provider, model))
@@ -59,13 +56,12 @@ class ModelValidationTests(unittest.TestCase):
         self.assertIn("not-a-real-openai-model", str(caught[0].message))
         self.assertIn("openai", str(caught[0].message))
 
-    def test_openrouter_and_ollama_accept_custom_models_without_warning(self):
-        for provider in ("openrouter", "ollama"):
-            client = DummyLLMClient(provider, "custom-model-name")
+    def test_unknown_provider_accepts_custom_models_without_warning(self):
+        # Forward-compatibility: a provider with no catalog accepts any model.
+        client = DummyLLMClient("some-future-provider", "custom-model-name")
 
-            with self.subTest(provider=provider):
-                with warnings.catch_warnings(record=True) as caught:
-                    warnings.simplefilter("always")
-                    client.get_llm()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            client.get_llm()
 
-                self.assertEqual(caught, [])
+        self.assertEqual(caught, [])

@@ -5,7 +5,7 @@ canonical pattern:
 
 1. At agent creation, wrap the LLM with ``with_structured_output(Schema)``
    so the model returns a typed Pydantic instance. If the provider does
-   not support structured output (rare; mostly older Ollama models), the
+   not support structured output (rare for modern providers), the
    wrap is skipped and the agent uses free-text generation instead.
 2. At invocation, run the structured call and render the result back to
    markdown. If the structured call itself fails for any reason
@@ -15,7 +15,7 @@ canonical pattern:
 PERUBAHAN vs original:
 - Timeout sekarang ditangani di level HTTP oleh ChatOpenAI melalui key
   "timeout" di DEFAULT_CONFIG. Nilai ini diteruskan ke httpx session, jadi
-  jika Ollama hang, httpx.ReadTimeout akan dilempar dan ditangkap di sini
+  jika model LLM hang, httpx.ReadTimeout akan dilempar dan ditangkap di sini
   sebagai Exception biasa, lalu dilanjutkan ke free-text fallback.
 - Free-text fallback juga menangkap semua Exception termasuk timeout, dan
   mengembalikan string placeholder agar pipeline tidak berhenti total.
@@ -66,7 +66,7 @@ def invoke_structured_or_freetext(
     """Run the structured call and render to markdown; fall back to free-text on any failure.
 
     Timeout diatur melalui key "timeout" di DEFAULT_CONFIG yang diteruskan ke
-    ChatOpenAI. Ketika Ollama tidak merespons dalam batas waktu itu, httpx
+    ChatOpenAI. Ketika model LLM tidak merespons dalam batas waktu itu, httpx
     akan raise ReadTimeout, yang ditangkap di sini sebagai Exception biasa.
 
     Alur:
@@ -101,7 +101,7 @@ def invoke_structured_or_freetext(
         return (
             f"**Rating**: Hold\n\n"
             f"**Executive Summary**: {agent_name} gagal menghasilkan analisis. "
-            f"Error: {exc}. Periksa apakah Ollama berjalan dan model tersedia.\n\n"
+            f"Error: {exc}. Periksa konfigurasi dan ketersediaan model LLM.\n\n"
             f"**Investment Thesis**: Analisis tidak tersedia karena error pada model."
         )
 
