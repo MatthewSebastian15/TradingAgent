@@ -32,7 +32,7 @@ export function ChatWindow({ messages, isLoading, error, onSend, onStop }) {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full text-bloomberg-muted text-sm">
-            Ask about your news, market, AI analysis, or watchlist.
+            Ask about your news, market, AI analysis, watchlist, portfolio, or the economy.
           </div>
         )}
         {messages.map((msg) => (
@@ -71,7 +71,7 @@ export function ChatWindow({ messages, isLoading, error, onSend, onStop }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about news, market, analysis, or watchlist..."
+            placeholder="Ask about news, market, analysis, watchlist, portfolio, or economy..."
             rows={1}
             disabled={isLoading}
             className="flex-1 resize-none bg-bloomberg-card border border-bloomberg-border rounded-lg px-3 py-2 text-sm text-bloomberg-white placeholder-bloomberg-muted focus:outline-none focus:border-bloomberg-orange disabled:opacity-50"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchRagChat } from '../api/ragChat';
 import { loadConversations, saveConversations, titleFrom } from '../services/chatHistory';
+import { readHoldings } from '../services/holdingsStore';
 import { readWatchlistState } from '../services/watchlistStorage';
 import { buildApiUrl } from '../utils/api';
 
@@ -41,6 +42,33 @@ async function buildWatchlistContext(contextFilter, signal) {
 
   return {
     groups,
+    quotes: Array.isArray(quotes) ? quotes : [],
+    fetched_at: new Date().toISOString(),
+  };
+}
+
+// Holdings live in localStorage only (no backend persistence), so the browser
+// ships them as context — same pattern as the watchlist.
+async function buildPortfolioContext(contextFilter, signal) {
+  if (contextFilter !== 'all' && contextFilter !== 'portfolio') return null;
+
+  const holdings = await readHoldings();
+  if (!holdings.length) return null;
+
+  const symbols = holdings.map((h) => h.ticker);
+  let quotes = [];
+  try {
+    const res = await fetch(buildApiUrl(`/market/quotes?symbols=${symbols.join(',')}`), {
+      credentials: 'include',
+      signal,
+    });
+    if (res.ok) quotes = await res.json();
+  } catch {
+    // non-fatal; send holdings without quotes
+  }
+
+  return {
+    holdings,
     quotes: Array.isArray(quotes) ? quotes : [],
     fetched_at: new Date().toISOString(),
   };
@@ -121,12 +149,16 @@ export function useRagChat(contextFilter = 'all') {
       abortRef.current = controller;
 
       try {
-        const watchlistContext = await buildWatchlistContext(contextFilter, controller.signal);
+        const [watchlistContext, portfolioContext] = await Promise.all([
+          buildWatchlistContext(contextFilter, controller.signal),
+          buildPortfolioContext(contextFilter, controller.signal),
+        ]);
         const data = await fetchRagChat({
           message: trimmed,
           contextFilter,
           chatHistory: history,
           watchlistContext,
+          portfolioContext,
           signal: controller.signal,
         });
 

@@ -8,6 +8,7 @@ from config import RAG_CHATBOT_MAX_CONTEXT_ANALYSES, RAG_CHATBOT_MAX_CONTEXT_ART
 from services.rag_pool import (
     get_analysis_detail,
     get_analysis_pool,
+    get_econ_pool,
     get_market_pool,
     get_news_pool,
 )
@@ -29,6 +30,18 @@ _IN_SCOPE = [
         re.I,
     ),
     re.compile(r"\b(stop.loss|take.profit|allocation|ticker|stock|aset|asset|watchlist)\b", re.I),
+    re.compile(
+        r"\b(quant|sharpe|sortino|beta|alpha|volatility|volatilitas|drawdown|risk.?adjusted|risk.?reward|upside|downside)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(portfolio|portofolio|holding|posisi|position|p.?n.?l|profit.?loss|cost.?basis|shares|lembar|gain|loss|untung|rugi)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(economic|ekonomi|macro|makro|inflation|inflasi|gdp|fed|interest.?rate|suku.?bunga|yield|treasury|recession|resesi|dxy|vix)\b",
+        re.I,
+    ),
 ]
 
 _OUT_OF_SCOPE = [
@@ -68,12 +81,23 @@ _MARKET_RE = re.compile(
     r"\b(market|harga|price|volume|change|percent|gainer|loser|mover|index|crypto|etf|forex|quote|ohlcv|saham|naik|turun)\b",
     re.I,
 )
+# Quant questions (sharpe/beta/drawdown/risk-reward) are answered from the
+# risk-adjusted fields already inside each stored analysis, so they route to the
+# analysis pool — no separate quant pool.
 _ANALYSIS_RE = re.compile(
-    r"\b(analisis|analysis|ai.agent|recommendation|rekomendasi|confidence|risk|entry|thesis|hold|buy|sell|wait|history|analisa|stop.loss|take.profit|allocation|fundamental|profile|chart|technical)\b",
+    r"\b(analisis|analysis|ai.agent|recommendation|rekomendasi|confidence|risk|entry|thesis|hold|buy|sell|wait|history|analisa|stop.loss|take.profit|allocation|fundamental|profile|chart|technical|quant|sharpe|sortino|beta|alpha|volatility|volatilitas|drawdown|risk.?adjusted|risk.?reward|upside|downside)\b",
     re.I,
 )
 _WATCHLIST_RE = re.compile(
-    r"\b(watchlist|watch.?list|daftar pantau|porto|portofolio|grup.?saham)\b",
+    r"\b(watchlist|watch.?list|daftar pantau|grup.?saham)\b",
+    re.I,
+)
+_PORTFOLIO_RE = re.compile(
+    r"\b(portfolio|portofolio|holding|posisi|position|p.?n.?l|profit.?loss|cost.?basis|shares|lembar|gain|loss|untung|rugi)\b",
+    re.I,
+)
+_ECON_RE = re.compile(
+    r"\b(economic|ekonomi|macro|makro|inflation|inflasi|gdp|fed|interest.?rate|suku.?bunga|yield|treasury|recession|resesi|dxy|vix)\b",
     re.I,
 )
 
@@ -82,6 +106,8 @@ _FILTER_MAP: dict[str, list[str]] = {
     "market": ["market"],
     "analysis": ["analysis"],
     "watchlist": ["watchlist"],
+    "portfolio": ["portfolio"],
+    "economic": ["economic"],
 }
 
 
@@ -100,6 +126,10 @@ def detect_intent(message: str, context_filter: str) -> list[str]:
         pools.append("analysis")
     if _WATCHLIST_RE.search(text):
         pools.append("watchlist")
+    if _PORTFOLIO_RE.search(text):
+        pools.append("portfolio")
+    if _ECON_RE.search(text):
+        pools.append("economic")
     return pools or ["news", "market", "analysis"]
 
 
@@ -198,6 +228,14 @@ def _format_analysis_context(analyses: list[dict[str, Any]]) -> tuple[str, list[
         risk = (overview.get("risk_summary") or {}).get("short_reason") or a.get(
             "mini_risk_summary", ""
         )
+        rar_raw = a.get("risk_adjusted_return")
+        rar = rar_raw if isinstance(rar_raw, dict) else {}
+        quant = (
+            f"  quant: risk_reward={a.get('risk_reward_display') or a.get('risk_reward_ratio') or rar.get('risk_reward_ratio', 'N/A')} | "  # noqa: E501
+            f"expected_return={rar.get('expected_return_label', 'N/A')} | upside={rar.get('upside_percent', 'N/A')}% | "  # noqa: E501
+            f"downside={rar.get('downside_percent', 'N/A')}% | max_drawdown={a.get('max_drawdown_estimate', 'N/A')} | "  # noqa: E501
+            f"volatility={a.get('volatility_level', 'N/A')}"
+        )
         line = (
             f"[ANALYSIS] {ticker} | {a.get('trade_date', '')} | decision={decision} | "
             f"confidence={a.get('confidence_score', '')} | allocation={a.get('suggested_allocation_percent', '')}% | "  # noqa: E501
@@ -206,7 +244,8 @@ def _format_analysis_context(analyses: list[dict[str, Any]]) -> tuple[str, list[
             f"  summary: {overview.get('executive_summary') or a.get('executive_summary', '')}\n"
             f"  thesis: {overview.get('investment_thesis') or a.get('investment_thesis', '')}\n"
             f"  reasons: {reasons_str}\n"
-            f"  risk: {risk}"
+            f"  risk: {risk}\n"
+            f"{quant}"
         )
         lines.append(line)
         sources.append(
@@ -267,6 +306,91 @@ def _format_watchlist_context(
     return "\n".join(lines), sources
 
 
+def _latest_point(points: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Last point of an ascending [{date, value}] series; yield-curve is by tenor."""
+    return points[-1] if points else None
+
+
+def _format_econ_context(econ: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
+    """Format the macro snapshot (fed funds, yield curve, gauges) into context."""
+    lines, sources = [], []
+    for key, result in econ.items():
+        if key == "fetched_at" or not isinstance(result, dict):
+            continue
+        unit = result.get("valueType", "")
+        if isinstance(result.get("data"), list):
+            if key.endswith("yield_curve"):
+                pts = ", ".join(f"{p.get('date', '')}={p.get('value', '')}" for p in result["data"])
+                lines.append(f"[ECON:{key}] yield curve ({unit}): {pts}")
+            else:
+                latest = _latest_point(result["data"])
+                if latest:
+                    lines.append(
+                        f"[ECON:{key}] {latest.get('date', '')} = {latest.get('value', '')} {unit}"
+                    )
+            sources.append({"type": "economic", "indicator": key})
+        elif isinstance(result.get("series"), dict):
+            for label, pts in result["series"].items():
+                latest = _latest_point(pts if isinstance(pts, list) else [])
+                if latest:
+                    lines.append(
+                        f"[ECON:{key}] {label} {latest.get('date', '')} = {latest.get('value', '')} {unit}"  # noqa: E501
+                    )
+            sources.append({"type": "economic", "indicator": key})
+    return "\n".join(lines), sources
+
+
+def _format_portfolio_context(
+    portfolio_context: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]]]:
+    """Format frontend-supplied holdings (localStorage) + live quotes into context."""
+    lines, sources = [], []
+    holdings = portfolio_context.get("holdings") or []
+    quotes_map: dict[str, dict] = {
+        q["sym"]: q for q in (portfolio_context.get("quotes") or []) if q.get("sym")
+    }
+    fetched_at = portfolio_context.get("fetched_at", "")
+
+    for h in holdings:
+        ticker = str(h.get("ticker", "")).upper()
+        shares = h.get("shares")
+        cost = h.get("cost_basis")
+        q = quotes_map.get(ticker, {})
+        price = q.get("price")
+        cost_value = (
+            (shares * cost)
+            if isinstance(shares, (int, float)) and isinstance(cost, (int, float))
+            else None
+        )  # noqa: E501
+        market_value = (
+            (shares * price)
+            if isinstance(shares, (int, float)) and isinstance(price, (int, float))
+            else None
+        )  # noqa: E501
+        pnl = (
+            (market_value - cost_value)
+            if market_value is not None and cost_value is not None
+            else None
+        )  # noqa: E501
+        pnl_pct = (pnl / cost_value * 100) if pnl is not None and cost_value else None
+        line = (
+            f"[PORTFOLIO] {ticker} | shares={shares} | cost_basis={cost} | price={price if price is not None else 'N/A'} | "  # noqa: E501
+            f"market_value={round(market_value, 2) if market_value is not None else 'N/A'} | "
+            f"pnl={round(pnl, 2) if pnl is not None else 'N/A'} | pnl_percent={round(pnl_pct, 2) if pnl_pct is not None else 'N/A'}%"  # noqa: E501
+        )
+        lines.append(line)
+        sources.append(
+            {
+                "type": "portfolio",
+                "ticker": ticker,
+                "shares": shares,
+                "price": price,
+                "fetched_at": fetched_at,
+            }
+        )
+    return "\n".join(lines), sources
+
+
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
 
@@ -274,6 +398,7 @@ async def build_context(
     message: str,
     intent: list[str],
     watchlist_context: dict[str, Any] | None = None,
+    portfolio_context: dict[str, Any] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Retrieve and format context from the relevant pools."""
     keywords = _extract_keywords(message)
@@ -322,5 +447,19 @@ async def build_context(
         if ctx:
             context_parts.append(f"=== WATCHLIST DATA ===\n{ctx}")
             all_sources.extend(srcs)
+
+    if "portfolio" in intent and portfolio_context:
+        ctx, srcs = _format_portfolio_context(portfolio_context)
+        if ctx:
+            context_parts.append(f"=== PORTFOLIO DATA ===\n{ctx}")
+            all_sources.extend(srcs)
+
+    if "economic" in intent:
+        econ = await get_econ_pool()
+        if econ:
+            ctx, srcs = _format_econ_context(econ)
+            if ctx:
+                context_parts.append(f"=== ECONOMIC DATA ===\n{ctx}")
+                all_sources.extend(srcs)
 
     return "\n\n".join(context_parts), all_sources

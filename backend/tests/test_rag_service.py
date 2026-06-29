@@ -79,6 +79,70 @@ def test_detect_intent_mixed():
     assert "analysis" in result
 
 
+def test_check_scope_valid_quant_portfolio_economic():
+    from services.rag_service import check_scope
+
+    assert check_scope("What is the Sharpe ratio and max drawdown for NVDA?") is True
+    assert check_scope("Berapa profit/loss portofolio saya?") is True
+    assert check_scope("What is the latest fed funds rate and yield curve?") is True
+
+
+def test_detect_intent_quant_routes_to_analysis():
+    from services.rag_service import detect_intent
+
+    result = detect_intent("Show me the beta, volatility and risk-reward.", "all")
+    assert "analysis" in result
+
+
+def test_detect_intent_portfolio_and_economic():
+    from services.rag_service import detect_intent
+
+    assert detect_intent("Bagaimana untung-rugi holding saya?", "all") == ["portfolio"]
+    assert detect_intent("Apa dampak inflasi dan suku bunga fed?", "all") == ["economic"]
+    assert detect_intent("anything", "portfolio") == ["portfolio"]
+    assert detect_intent("anything", "economic") == ["economic"]
+
+
+@pytest.mark.asyncio
+async def test_build_context_portfolio():
+    from services.rag_service import build_context
+
+    portfolio_ctx = {
+        "holdings": [{"ticker": "AAPL", "shares": 10, "cost_basis": 100}],
+        "quotes": [{"sym": "AAPL", "price": 150}],
+        "fetched_at": "2026-06-29T00:00:00Z",
+    }
+    context, sources = await build_context(
+        "portfolio pnl", ["portfolio"], portfolio_context=portfolio_ctx
+    )
+    assert "[PORTFOLIO] AAPL" in context
+    assert "pnl=500 " in context  # (150-100)*10
+    assert any(s["type"] == "portfolio" for s in sources)
+
+
+@pytest.mark.asyncio
+async def test_build_context_economic():
+    from services.rag_service import build_context
+
+    fake_econ = {
+        "fetched_at": 0.0,
+        "federal_reserve:federal_funds_rate": {
+            "valueType": "percent",
+            "data": [{"date": "2026-06-27", "value": 4.33}],
+        },
+        "yfinance:gauges": {
+            "valueType": "number",
+            "series": {"VIX": [{"date": "2026-06-27", "value": 13.2}]},
+        },
+    }
+    with patch("services.rag_service.get_econ_pool", return_value=fake_econ):
+        context, sources = await build_context("fed funds rate today", ["economic"])
+
+    assert "4.33" in context
+    assert "VIX" in context
+    assert any(s["type"] == "economic" for s in sources)
+
+
 @pytest.mark.asyncio
 async def test_build_context_news_only():
     from services.rag_service import build_context

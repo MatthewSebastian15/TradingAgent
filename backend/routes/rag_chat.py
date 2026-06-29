@@ -21,11 +21,13 @@ router = APIRouter(tags=["rag-chatbot"])
 
 _OUT_OF_SCOPE = (
     "This question is outside the permitted context. The chatbot can only answer "
-    "based on stored News, Market, Watchlist data, and AI Agent analysis results."
+    "based on stored News, Market, Watchlist, Portfolio, and Economic data, and "
+    "AI Agent analysis results (including their quant/risk metrics)."
 )
 _OUT_OF_SCOPE_ID = (
     "Pertanyaan ini di luar konteks yang diizinkan. Chatbot hanya dapat menjawab "
-    "berdasarkan data News, Market, Watchlist yang tersimpan, dan hasil analisis AI Agent."
+    "berdasarkan data News, Market, Watchlist, Portofolio, dan Ekonomi yang tersimpan, "
+    "serta hasil analisis AI Agent (termasuk metrik kuant/risiko)."
 )
 _NO_DATA = "No relevant data found in the RAG Data Pool for this question."
 _NO_DATA_ID = "Tidak ada data yang relevan ditemukan di RAG Data Pool untuk pertanyaan ini."
@@ -75,6 +77,7 @@ class RagChatRequest(ApiSchema):
     context_filter: str = Field(default="all")
     chat_history: list[_ChatHistoryItem] = Field(default_factory=list)
     watchlist_context: dict[str, Any] | None = Field(default=None)
+    portfolio_context: dict[str, Any] | None = Field(default=None)
 
 
 class RagChatResponse(ApiSchema):
@@ -98,10 +101,19 @@ async def rag_chat(body: RagChatRequest, request: Request) -> RagChatResponse:
     async with limit_request(request, request_policy()):
         message = body.message.strip()
         context_filter = str(body.context_filter or "all").lower()
-        if context_filter not in {"all", "news", "market", "analysis", "watchlist"}:
+        if context_filter not in {
+            "all",
+            "news",
+            "market",
+            "analysis",
+            "watchlist",
+            "portfolio",
+            "economic",
+        }:
             context_filter = "all"
         history = [{"role": h.role, "content": h.content} for h in body.chat_history[-10:]]
         watchlist_ctx = body.watchlist_context
+        portfolio_ctx = body.portfolio_context
 
         if not check_scope(message):
             warning = _localize(_OUT_OF_SCOPE, _OUT_OF_SCOPE_ID, message)
@@ -119,7 +131,12 @@ async def rag_chat(body: RagChatRequest, request: Request) -> RagChatResponse:
 
         try:
             context_str, sources = await asyncio.wait_for(
-                build_context(message, intent, watchlist_context=watchlist_ctx),
+                build_context(
+                    message,
+                    intent,
+                    watchlist_context=watchlist_ctx,
+                    portfolio_context=portfolio_ctx,
+                ),
                 timeout=RAG_CHATBOT_CHAT_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:

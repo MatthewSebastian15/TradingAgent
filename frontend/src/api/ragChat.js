@@ -1,7 +1,7 @@
 import { buildApiUrl, buildHeaders } from '../utils/api';
 
 /**
- * @param {{ message: string, contextFilter: string, chatHistory: Array<{role:string,content:string}>, watchlistContext: object|null, signal?: AbortSignal }} params
+ * @param {{ message: string, contextFilter: string, chatHistory: Array<{role:string,content:string}>, watchlistContext: object|null, portfolioContext: object|null, signal?: AbortSignal }} params
  * @returns {Promise<{answer: string, out_of_scope: boolean, pool_used: string[], sources: object[]}>}
  */
 export async function fetchRagChat({
@@ -9,6 +9,7 @@ export async function fetchRagChat({
   contextFilter,
   chatHistory,
   watchlistContext,
+  portfolioContext,
   signal,
 }) {
   const body = {
@@ -18,6 +19,9 @@ export async function fetchRagChat({
   };
   if (watchlistContext) {
     body.watchlist_context = watchlistContext;
+  }
+  if (portfolioContext) {
+    body.portfolio_context = portfolioContext;
   }
 
   const res = await fetch(buildApiUrl('/rag/chat'), {

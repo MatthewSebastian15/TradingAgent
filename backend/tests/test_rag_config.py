@@ -14,4 +14,5 @@ def test_rag_chatbot_defaults_are_importable(monkeypatch):
     assert d.RAG_CHATBOT_MAX_CONTEXT_ANALYSES == 5
     assert d.RAG_CHATBOT_NEWS_POOL_TTL_SECONDS == 300
     assert d.RAG_CHATBOT_MARKET_POOL_TTL_SECONDS == 120
+    assert d.RAG_CHATBOT_ECON_POOL_TTL_SECONDS == 1800
     assert d.RAG_CHATBOT_CHAT_TIMEOUT_SECONDS == 30

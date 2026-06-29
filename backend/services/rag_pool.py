@@ -9,10 +9,12 @@ from typing import Any
 
 from config import (
     GENERAL_NEWS_CACHE_DB_PATH,
+    RAG_CHATBOT_ECON_POOL_TTL_SECONDS,
     RAG_CHATBOT_MARKET_POOL_TTL_SECONDS,
     RAG_CHATBOT_NEWS_POOL_TTL_SECONDS,
 )
 from services.analysis_repository import get_analysis_repository
+from services.economic_service import get_economic_data
 from services.market_yfinance_service import get_market_movers, get_overview_data
 from services.news_article_store import NewsArticleStore
 
@@ -32,6 +34,15 @@ class _CacheEntry:
 
 _news_cache: _CacheEntry | None = None
 _market_cache: _CacheEntry | None = None
+_econ_cache: _CacheEntry | None = None
+
+# ponytail: fixed US-macro snapshot. Add more (source, command, params) rows here
+# if the chatbot needs CPI/GDP per-country — those need a countries param.
+_ECON_SNAPSHOT = (
+    ("federal_reserve", "federal_funds_rate", {"days": 5}),
+    ("federal_reserve", "yield_curve", {}),
+    ("yfinance", "gauges", {}),
+)
 
 
 async def get_news_pool() -> list[dict[str, Any]]:
@@ -82,6 +93,29 @@ async def get_market_pool() -> dict[str, Any] | None:
         return _market_cache.data if _market_cache is not None else None
 
 
+async def get_econ_pool() -> dict[str, Any] | None:
+    """Return cached macro snapshot: fed funds, treasury yield curve, market gauges."""
+    global _econ_cache
+    now = time.time()
+    if (
+        _econ_cache is not None
+        and (now - _econ_cache.fetched_at) < RAG_CHATBOT_ECON_POOL_TTL_SECONDS
+    ):
+        return _econ_cache.data
+
+    snapshot: dict[str, Any] = {"fetched_at": now}
+    for source, command, params in _ECON_SNAPSHOT:
+        try:
+            snapshot[f"{source}:{command}"] = await get_economic_data(source, command, params)
+        except Exception:
+            logger.exception("RAG: failed to fetch econ %s/%s", source, command)
+    has_data = any(k != "fetched_at" for k in snapshot)
+    if not has_data:
+        return _econ_cache.data if _econ_cache is not None else None
+    _econ_cache = _CacheEntry(data=snapshot, fetched_at=now)
+    return snapshot
+
+
 async def get_analysis_pool(limit: int = 20) -> list[dict[str, Any]]:
     """Return latest completed analysis history metadata."""
     repo = get_analysis_repository()
@@ -112,15 +146,17 @@ def _utc_iso(ts: float) -> str:
 
 async def get_pool_status() -> dict[str, Any]:
     """Return availability status for all three pools."""
-    news, market, analyses = await asyncio.gather(
+    news, market, econ, analyses = await asyncio.gather(
         get_news_pool(),
         get_market_pool(),
+        get_econ_pool(),
         get_analysis_pool(limit=100),
         return_exceptions=True,
     )
 
     news_list: list = news if isinstance(news, list) else []
     market_data: dict | None = market if isinstance(market, dict) else None
+    econ_data: dict | None = econ if isinstance(econ, dict) else None
     analysis_list: list = analyses if isinstance(analyses, list) else []
 
     return {
@@ -132,6 +168,10 @@ async def get_pool_status() -> dict[str, Any]:
         "market": {
             "available": market_data is not None,
             "snapshot_at": _utc_iso(float(market_data["fetched_at"])) if market_data else None,
+        },
+        "economic": {
+            "available": econ_data is not None,
+            "snapshot_at": _utc_iso(float(econ_data["fetched_at"])) if econ_data else None,
         },
         "analysis": {
             "available": len(analysis_list) > 0,

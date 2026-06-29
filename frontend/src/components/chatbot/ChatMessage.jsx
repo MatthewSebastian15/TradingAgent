@@ -5,6 +5,8 @@ const POOL_LABELS = {
   market: 'Market',
   analysis: 'AI Analysis',
   watchlist: 'Watchlist',
+  portfolio: 'Portfolio',
+  economic: 'Economic',
 };
 
 export function ChatMessage({ message }) {
