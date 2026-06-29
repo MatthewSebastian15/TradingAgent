@@ -50,8 +50,15 @@ function percent(value) {
   return `${number.toFixed(2)}%`;
 }
 
+function plainNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(2) : 'N/A';
+}
+
 function defaultFormatValue(value, valueType, currency) {
-  return valueType === 'currency' ? compactCurrency(value, currency) : percent(value);
+  if (valueType === 'currency') return compactCurrency(value, currency);
+  if (valueType === 'number') return plainNumber(value);
+  return percent(value);
 }
 
 export default function PriceMetricLineChart({
@@ -246,7 +253,7 @@ PriceMetricLineChart.propTypes = {
       value: PropTypes.number,
     })
   ),
-  valueType: PropTypes.oneOf(['currency', 'percent']),
+  valueType: PropTypes.oneOf(['currency', 'percent', 'number']),
   currency: PropTypes.string,
   emptyMessage: PropTypes.string,
 };

@@ -26,6 +26,7 @@ const Market = React.lazy(() => import('./pages/Market'));
 const News = React.lazy(() => import('./pages/News'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
 const Portfolio = React.lazy(() => import('./pages/Portfolio'));
+const Quant = React.lazy(() => import('./pages/Quant'));
 const Research = React.lazy(() => import('./pages/Research'));
 const Watchlist = React.lazy(() => import('./pages/Watchlist'));
 import './index.css';
@@ -109,6 +110,7 @@ function App() {
             path={LEGACY_ANALYSIS_LIVE_PATH}
             element={<Navigate to={AI_AGENT_PATH} replace />}
           />
+          <Route path="/quant" element={<Quant />} />
           <Route path="/research" element={<Research />} />
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path={WATCHLIST_PATH} element={<Watchlist />} />

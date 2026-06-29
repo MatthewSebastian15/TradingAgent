@@ -166,11 +166,31 @@ export function randNormal(rng) {
 
 const QUANTILE = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
 
-// Geometric Brownian Motion Monte Carlo. mu/sigma are per-day (log) estimates.
-// Returns terminal prices, <=10 sample paths, a per-step p10/p50/p90 band, and
-// the terminal p10/p50/p90. dt = 1 day.
+// Shared path-matrix summary: terminal prices, <=10 sample paths, a per-step
+// p10/p50/p90 band, and terminal p10/p50/p90. Used by both MC engines.
 // ponytail: stores the full paths x days matrix to compute the band. Fine at the
 // capped 5000 x 126 (~5MB, a few ms); switch to online quantiles only if caps grow.
+function summarizePaths(all, days, paths) {
+  const terminal = all.map((p) => p[days]);
+  const sortedTerminal = [...terminal].sort((a, b) => a - b);
+  const band = [];
+  for (let d = 0; d <= days; d += 1) {
+    const col = all.map((p) => p[d]).sort((a, b) => a - b);
+    band.push({ step: d, p10: QUANTILE(col, 0.1), p50: QUANTILE(col, 0.5), p90: QUANTILE(col, 0.9) });
+  }
+  return {
+    terminal,
+    samplePaths: all.slice(0, Math.min(10, paths)),
+    band,
+    percentiles: {
+      p10: QUANTILE(sortedTerminal, 0.1),
+      p50: QUANTILE(sortedTerminal, 0.5),
+      p90: QUANTILE(sortedTerminal, 0.9),
+    },
+  };
+}
+
+// Geometric Brownian Motion Monte Carlo. mu/sigma are per-day (log) estimates.
 export function monteCarloGBM(spot, mu, sigma, days, paths, seed) {
   const rng = mulberry32(seed);
   const drift = mu - 0.5 * sigma * sigma;
@@ -185,28 +205,26 @@ export function monteCarloGBM(spot, mu, sigma, days, paths, seed) {
     }
     all.push(path);
   }
-  const terminal = all.map((p) => p[days]);
-  const sortedTerminal = [...terminal].sort((a, b) => a - b);
-  const band = [];
-  for (let d = 0; d <= days; d += 1) {
-    const col = all.map((p) => p[d]).sort((a, b) => a - b);
-    band.push({
-      step: d,
-      p10: QUANTILE(col, 0.1),
-      p50: QUANTILE(col, 0.5),
-      p90: QUANTILE(col, 0.9),
-    });
+  return summarizePaths(all, days, paths);
+}
+
+// Bootstrap Monte Carlo: resample actual historical daily simple returns with
+// replacement (fat tails preserved) instead of drawing from a normal.
+export function bootstrapMC(spot, returns, days, paths, seed) {
+  if (!returns || returns.length === 0) return null;
+  const rng = mulberry32(seed);
+  const all = [];
+  for (let p = 0; p < paths; p += 1) {
+    const path = new Array(days + 1);
+    path[0] = spot;
+    let price = spot;
+    for (let d = 1; d <= days; d += 1) {
+      price *= 1 + returns[Math.floor(rng() * returns.length)];
+      path[d] = price;
+    }
+    all.push(path);
   }
-  return {
-    terminal,
-    samplePaths: all.slice(0, Math.min(10, paths)),
-    band,
-    percentiles: {
-      p10: QUANTILE(sortedTerminal, 0.1),
-      p50: QUANTILE(sortedTerminal, 0.5),
-      p90: QUANTILE(sortedTerminal, 0.9),
-    },
-  };
+  return summarizePaths(all, days, paths);
 }
 
 // --- benchmark-relative (v2) ----------------------------------------------
@@ -275,6 +293,326 @@ export function returnHistogram(values, bins = 30) {
   for (const v of values) {
     const idx = Math.min(bins - 1, Math.max(0, Math.floor((v - min) / width)));
     out[idx].count += 1;
+  }
+  return out;
+}
+
+// --- distribution shape (Phase 4) -----------------------------------------
+// Population moments (÷n) — standard for sample skew/kurtosis descriptors.
+
+export function skewness(xs) {
+  const n = xs.length;
+  if (n < 3) return null;
+  const m = mean(xs);
+  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
+  if (!s) return 0;
+  const m3 = xs.reduce((a, x) => a + (x - m) ** 3, 0) / n;
+  return m3 / s ** 3;
+}
+
+// Excess kurtosis: 0 for a normal distribution, >0 for fat tails.
+export function kurtosis(xs) {
+  const n = xs.length;
+  if (n < 4) return null;
+  const m = mean(xs);
+  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
+  if (!s) return 0;
+  const m4 = xs.reduce((a, x) => a + (x - m) ** 4, 0) / n;
+  return m4 / s ** 4 - 3;
+}
+
+// --- drawdown / rolling series (Phase 4) ----------------------------------
+
+// Underwater curve: % below the running peak at each point (<= 0).
+export function drawdownSeries(closes) {
+  let peak = null;
+  return closes.map((close) => {
+    if (peak === null || close > peak) peak = close;
+    return peak ? ((close - peak) / peak) * 100 : 0;
+  });
+}
+
+// Annualized Sharpe over a sliding window; entries can be null (flat window).
+export function rollingSharpe(returns, window = 63, rf = 0) {
+  const out = [];
+  for (let end = window; end <= returns.length; end += 1) {
+    out.push(sharpe(returns.slice(end - window, end), rf));
+  }
+  return out;
+}
+
+// Beta vs benchmark over a sliding window; entries can be null.
+export function rollingBeta(stockReturns, marketReturns, window = 63) {
+  const n = Math.min(stockReturns.length, marketReturns.length);
+  const out = [];
+  for (let end = window; end <= n; end += 1) {
+    out.push(beta(stockReturns.slice(end - window, end), marketReturns.slice(end - window, end)));
+  }
+  return out;
+}
+
+// Calmar: CAGR ÷ |max drawdown|. null if no history or no drawdown.
+export function calmar(closes) {
+  const n = closes.length;
+  if (n < 2 || !closes[0]) return null;
+  const years = (n - 1) / TRADING_DAYS;
+  if (years <= 0) return null;
+  const cagr = (closes.at(-1) / closes[0]) ** (1 / years) - 1;
+  const dd = maxDrawdown(closes) / 100;
+  if (dd === 0) return null;
+  return cagr / Math.abs(dd);
+}
+
+// --- regime / persistence (Phase 4) ---------------------------------------
+
+// Hurst exponent via single-window rescaled-range (R/S). >0.5 trending,
+// <0.5 mean-reverting, ~0.5 random walk.
+// ponytail: crude one-window R/S. Upgrade to multi-window log-log regression
+// if a tighter estimate is ever needed.
+export function hurst(xs) {
+  const n = xs.length;
+  if (n < 20) return null;
+  const m = mean(xs);
+  let cum = 0;
+  const dev = [];
+  for (const x of xs) {
+    cum += x - m;
+    dev.push(cum);
+  }
+  const range = Math.max(...dev) - Math.min(...dev);
+  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
+  if (!s || range <= 0) return null;
+  return Math.log(range / s) / Math.log(n);
+}
+
+// Percentile rank (0–100) of the latest value within its own history.
+export function volPercentile(vols) {
+  const v = vols.filter(Number.isFinite);
+  if (v.length < 2) return null;
+  const last = v.at(-1);
+  return (v.filter((x) => x <= last).length / v.length) * 100;
+}
+
+// --- position sizing (Phase 4) --------------------------------------------
+
+// Continuous Kelly fraction = mean / variance of per-period returns. Unbounded;
+// callers clamp/half-Kelly for real use.
+export function kellyFraction(returns) {
+  const v = stdDev(returns) ** 2;
+  if (returns.length < 2 || !v) return null;
+  return mean(returns) / v;
+}
+
+// Vol-target weight = target annual vol % ÷ realized annual vol %. >1 means lever.
+export function volTargetWeight(annualVol, target = 15) {
+  if (!annualVol) return null;
+  return target / annualVol;
+}
+
+// --- lite backtester (Phase 4) --------------------------------------------
+
+function smaAt(arr, w, i) {
+  if (i + 1 < w) return null;
+  let s = 0;
+  for (let k = i - w + 1; k <= i; k += 1) s += arr[k];
+  return s / w;
+}
+
+// Canned long/flat strategies on the price series. Position is decided on day i
+// and earns day i+1's return (no look-ahead). No costs/slippage modeled.
+// ponytail: three hard-coded strategies, long/flat only. Not a general engine.
+export function backtest(closes, strategy, params = {}) {
+  const n = closes.length;
+  if (n < 30) return null;
+  const signal = new Array(n).fill(0);
+  for (let i = 0; i < n; i += 1) {
+    if (strategy === 'sma') {
+      const f = smaAt(closes, params.fast || 20, i);
+      const s = smaAt(closes, params.slow || 50, i);
+      signal[i] = f != null && s != null && f > s ? 1 : 0;
+    } else if (strategy === 'momentum') {
+      const lb = params.lookback || 60;
+      signal[i] = i >= lb && closes[i] > closes[i - lb] ? 1 : 0;
+    } else if (strategy === 'meanrev') {
+      const w = params.lookback || 20;
+      const m = smaAt(closes, w, i);
+      signal[i] = m != null && closes[i] < m ? 1 : 0;
+    }
+  }
+  let eq = 1;
+  let bh = 1;
+  const equity = [1];
+  const buyhold = [1];
+  const stratRets = [];
+  let wins = 0;
+  let inDays = 0;
+  for (let i = 1; i < n; i += 1) {
+    const r = closes[i - 1] ? (closes[i] - closes[i - 1]) / closes[i - 1] : 0;
+    bh *= 1 + r;
+    const sr = signal[i - 1] * r;
+    eq *= 1 + sr;
+    equity.push(eq);
+    buyhold.push(bh);
+    stratRets.push(sr);
+    if (signal[i - 1]) {
+      inDays += 1;
+      if (r > 0) wins += 1;
+    }
+  }
+  const years = (n - 1) / TRADING_DAYS;
+  return {
+    equity,
+    buyhold,
+    cagr: years > 0 ? (eq ** (1 / years) - 1) * 100 : null,
+    sharpe: sharpe(stratRets),
+    maxDD: maxDrawdown(equity),
+    winRate: inDays ? (wins / inDays) * 100 : null,
+    finalReturn: (eq - 1) * 100,
+    buyHoldReturn: (bh - 1) * 100,
+    exposure: (inDays / (n - 1)) * 100,
+  };
+}
+
+// --- correlation + optimizer (Phase 5) ------------------------------------
+
+// Pearson correlation of two equal-length return series, in [-1, 1].
+export function correlation(xs, ys) {
+  const cov = covariance(xs, ys);
+  const sx = stdDev(xs);
+  const sy = stdDev(ys);
+  if (cov === null || !sx || !sy) return null;
+  return cov / (sx * sy);
+}
+
+// Correlation over a sliding window; entries can be null.
+export function rollingCorrelation(xs, ys, window = 63) {
+  const n = Math.min(xs.length, ys.length);
+  const out = [];
+  for (let end = window; end <= n; end += 1) {
+    out.push(correlation(xs.slice(end - window, end), ys.slice(end - window, end)));
+  }
+  return out;
+}
+
+// Align N close-series on the trading days common to ALL of them.
+// series: [{ symbol, points }]. -> { dates, closes: { symbol: number[] } }.
+export function alignManyByDate(series) {
+  if (!series || series.length === 0) return { dates: [], closes: {} };
+  const maps = series.map((s) => {
+    const m = new Map();
+    for (const p of s.points || []) {
+      const d = String(p?.date || '').slice(0, 10);
+      const c = p?.adjusted_close ?? p?.close;
+      if (d && c != null) m.set(d, c);
+    }
+    return m;
+  });
+  const dates = [];
+  const closes = {};
+  series.forEach((s) => {
+    closes[s.symbol] = [];
+  });
+  for (const p of series[0].points || []) {
+    const d = String(p?.date || '').slice(0, 10);
+    if (!d || !maps.every((m) => m.has(d))) continue;
+    dates.push(d);
+    series.forEach((s, i) => closes[s.symbol].push(maps[i].get(d)));
+  }
+  return { dates, closes };
+}
+
+// NxN Pearson correlation matrix for aligned return series keyed by symbol.
+export function correlationMatrix(symbols, returnsBySymbol) {
+  return symbols.map((a) =>
+    symbols.map((b) => (a === b ? 1 : correlation(returnsBySymbol[a], returnsBySymbol[b])))
+  );
+}
+
+// KxK sample covariance matrix from a list of aligned return series.
+export function covarianceMatrix(returnsList) {
+  const k = returnsList.length;
+  const M = Array.from({ length: k }, () => new Array(k).fill(0));
+  for (let i = 0; i < k; i += 1) {
+    for (let j = i; j < k; j += 1) {
+      const c = covariance(returnsList[i], returnsList[j]);
+      M[i][j] = c ?? 0;
+      M[j][i] = M[i][j];
+    }
+  }
+  return M;
+}
+
+// Gauss-Jordan inverse of a square matrix. -> number[][] or null if singular.
+// ponytail: dense O(n^3) inverse. Fine for the handful of tickers a user picks.
+export function invertMatrix(A) {
+  const n = A.length;
+  if (n === 0 || A.some((row) => row.length !== n)) return null;
+  const M = A.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let col = 0; col < n; col += 1) {
+    let pivot = col;
+    for (let r = col + 1; r < n; r += 1) {
+      if (Math.abs(M[r][col]) > Math.abs(M[pivot][col])) pivot = r;
+    }
+    if (Math.abs(M[pivot][col]) < 1e-12) return null;
+    [M[col], M[pivot]] = [M[pivot], M[col]];
+    const d = M[col][col];
+    for (let j = 0; j < 2 * n; j += 1) M[col][j] /= d;
+    for (let r = 0; r < n; r += 1) {
+      if (r === col) continue;
+      const f = M[r][col];
+      for (let j = 0; j < 2 * n; j += 1) M[r][j] -= f * M[col][j];
+    }
+  }
+  return M.map((row) => row.slice(n));
+}
+
+function matVec(A, v) {
+  return A.map((row) => row.reduce((s, a, j) => s + a * v[j], 0));
+}
+
+function normalizeWeights(w) {
+  const sum = w.reduce((a, b) => a + b, 0);
+  if (!sum) return null;
+  return w.map((x) => x / sum);
+}
+
+// Global minimum-variance weights: w ∝ Σ⁻¹·1, normalized to sum 1.
+export function gmvWeights(cov) {
+  const inv = invertMatrix(cov);
+  if (!inv) return null;
+  return normalizeWeights(matVec(inv, new Array(cov.length).fill(1)));
+}
+
+// Tangency (max-Sharpe) weights: w ∝ Σ⁻¹·(μ − rf), normalized to sum 1.
+// May be negative (short) — unconstrained two-fund solution.
+export function tangencyWeights(cov, mu, rf = 0) {
+  const inv = invertMatrix(cov);
+  if (!inv) return null;
+  return normalizeWeights(matVec(inv, mu.map((m) => m - rf)));
+}
+
+// Portfolio mean/vol for weights w (per-period mu/cov).
+export function portfolioStats(w, mu, cov) {
+  const ret = w.reduce((s, x, i) => s + x * mu[i], 0);
+  const variance = w.reduce(
+    (s, x, i) => s + x * cov[i].reduce((t, c, j) => t + c * w[j], 0),
+    0
+  );
+  return { ret, vol: Math.sqrt(Math.max(0, variance)) };
+}
+
+// Efficient frontier via two-fund separation: blend GMV and tangency portfolios.
+// -> [{ vol, ret }] with vol/ret annualized to %. Empty if either fund is singular.
+export function efficientFrontier(cov, mu, rf = 0, steps = 25) {
+  const gmv = gmvWeights(cov);
+  const tan = tangencyWeights(cov, mu, rf);
+  if (!gmv || !tan) return [];
+  const out = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const a = -0.5 + (2 * i) / steps; // -0.5 .. 1.5 mix
+    const w = gmv.map((g, k) => (1 - a) * g + a * tan[k]);
+    const { ret, vol } = portfolioStats(w, mu, cov);
+    out.push({ vol: vol * Math.sqrt(TRADING_DAYS) * 100, ret: ret * TRADING_DAYS * 100 });
   }
   return out;
 }

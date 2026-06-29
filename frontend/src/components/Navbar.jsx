@@ -6,6 +6,7 @@ import {
   Newspaper,
   Briefcase,
   Home,
+  Sigma,
   Sparkles,
   Star,
   TrendingUp,
@@ -84,6 +85,13 @@ const NAV_ITEMS = [
     path: AI_AGENT_PATH,
     matchPrefixes: AI_AGENT_MATCH_PREFIXES,
     Icon: Sparkles,
+  },
+  {
+    label: 'Quant',
+    shortLabel: 'QT',
+    path: '/quant',
+    matchPrefixes: ['/quant'],
+    Icon: Sigma,
   },
   {
     label: 'Research',
