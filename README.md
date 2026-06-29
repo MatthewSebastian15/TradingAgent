@@ -10,24 +10,16 @@ The application receives a stock ticker, market, analysis date, investment horiz
 
 ## Main Features
 
-- AI Agent for ticker analysis through an async pipeline.
-- Real-time progress streaming with Server-Sent Events.
-- Analysis modes: `fast`, `balanced`, and `deep`.
-- Global yfinance symbols such as `AAPL`, `BBCA.JK`, `BTC-USD`, `SPY`, `0700.HK`, and `9984.T`.
-- Market context support: `US`, `ID`, `IDX`, `GLOBAL`, `CRYPTO`, `ETF`, `FUND`, and `UNKNOWN`.
-- Validation for ticker, market, trade date, horizon, depth, and existing position fields.
-- Price data, price chart, performance, technical entry, profile, news, analyst consensus, and fundamental data.
-- Structured fundamental tables grouped by Income, Balance Sheet, Cash Flow, and Ratios.
-- Fundamental charts using a 2-column by 3-row layout per section.
-- Global market dashboard, ticker tape, movers, symbol search, and OHLCV data.
-- General news dashboard with categories and SSE refresh.
-- Research and ECON pages are available as `Coming Soon` placeholders.
-- Owner-session-based analysis history.
-- HTML/PDF report.
-- Docker development stack for backend and frontend.
-- SQLite cache for analysis jobs, history, rate limit, market data, news, and exact LLM cache.
-
-![Investment Analysis Flow](image/Investment%20Analysis%20Flow.png)
+| Feature | Description |
+|---------|-------------|
+| 🤖 **AI Agent Analysis** | Async, job-based pipeline of 9 LLM agents (Market, News/Social, Fundamentals, Bull/Bear, Research Manager, Trader, Risk, Portfolio Manager) returning a Buy/Hold/Sell/Wait decision with thesis, action plan, and risk validation. `fast`/`balanced`/`deep` depth, multi-provider LLM (Google, OpenAI, Anthropic, DeepSeek). |
+| 🧮 **Quant & Fundamentals** | Result tabs for risk-adjusted return (Sharpe/Sortino, beta/alpha), drawdown, volatility, and risk-reward, alongside Income/Balance/Cash Flow/Ratios tables, fundamental charts, company profile, and technical entry quality. |
+| 📈 **Market Dashboard** | Overview presets, movers, ticker tape, symbol search, OHLCV charts, sparklines, and live quotes over global yfinance symbols and markets (`US`, `ID`, `IDX`, `GLOBAL`, `CRYPTO`, `ETF`, `FUND`). |
+| 🌐 **Economic Dashboard** | Macro tab spanning Rates & Money, Growth, Inflation, Fiscal, Trade, and Development, sourced from multiple economic data providers. |
+| 📰 **News** | General news dashboard with categories and SSE refresh, per-ticker news streams, and multi-provider aggregation (Google News Light, Marketaux, NewsData, RSS, yfinance, Finnhub). |
+| 💬 **RAG Chatbot** | Scoped retrieval chatbot answering over News, Market, Analysis, Portfolio, and Economic data pools. |
+| 💼 **Watchlist & Portfolio** | Browser-local watchlist groups and holdings tracking, priced with live market quotes and trend sparklines. |
+| 🔎 **Research Workspace** | Command-bar and sidebar research page for ad-hoc lookups. |
 
 ---
 
