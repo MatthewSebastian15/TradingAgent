@@ -37,6 +37,7 @@ from routes.analysis import router as analysis_router
 from routes.analysis import shutdown_executor
 from routes.analysis_history import router as analysis_history_router
 from routes.debug import router as debug_router
+from routes.economic import router as economic_router
 from routes.jobs import create_analysis_runtime, install_analysis_runtime
 from routes.market import router as market_router
 from routes.news import include_news_routes
@@ -178,6 +179,7 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 app.include_router(analysis_history_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
 app.include_router(debug_router, prefix="/api")
+app.include_router(economic_router, prefix="/api")
 app.include_router(market_router, prefix="/api")
 include_news_routes(app, prefix="/api", is_development=IS_DEVELOPMENT)
 app.include_router(rag_router, prefix="/api")

@@ -186,9 +186,13 @@ if ANALYSIS_STORAGE_BACKEND not in {"sqlite", "postgres"}:
 ANALYSIS_DATABASE_URL = env("ANALYSIS_DATABASE_URL", "")
 if ANALYSIS_STORAGE_BACKEND == "postgres":
     if not ANALYSIS_DATABASE_URL:
-        raise ValueError("ANALYSIS_DATABASE_URL is required when ANALYSIS_STORAGE_BACKEND=postgres.")
+        raise ValueError(
+            "ANALYSIS_DATABASE_URL is required when ANALYSIS_STORAGE_BACKEND=postgres."
+        )
     if "change-me" in ANALYSIS_DATABASE_URL or env("POSTGRES_PASSWORD", "") == "change-me":
-        raise ValueError("Default 'change-me' credential is not allowed. Generate one: openssl rand -hex 16.")
+        raise ValueError(
+            "Default 'change-me' credential is not allowed. Generate one: openssl rand -hex 16."
+        )
 ANALYSIS_HISTORY_MAX_ROWS = env_int("ANALYSIS_HISTORY_MAX_ROWS", 1000, min_value=1)
 ANALYSIS_HISTORY_DEFAULT_LIMIT = env_int("ANALYSIS_HISTORY_DEFAULT_LIMIT", 25, min_value=1)
 OWNER_SESSION_SECRET = env("OWNER_SESSION_SECRET", "")
@@ -246,6 +250,9 @@ GOOGLE_NEWS_LIGHT_API_KEY = env("GOOGLE_NEWS_LIGHT_API_KEY", "")
 MARKETAUX_API_KEY = env("MARKETAUX_API_KEY", "")
 NEWSDATA_API_KEY = env("NEWSDATA_API_KEY", "")
 FINNHUB_API_KEY = env("FINNHUB_API_KEY", "")
+# Economic tab — WTO is the only source needing a key (free registration). Empty
+# => the Trade tab hides the WTO panel.
+ECONOMIC_WTO_API_KEY = env("ECONOMIC_WTO_API_KEY", "")
 ALPHA_VANTAGE_API_KEY = env("ALPHA_VANTAGE_API_KEY", "")
 NEWS_STRICT_AI_ANALYSIS_MODE = env_bool("NEWS_STRICT_AI_ANALYSIS_MODE", True)
 NEWS_FORCE_ALL_PROVIDERS = env_bool("NEWS_FORCE_ALL_PROVIDERS", False)
