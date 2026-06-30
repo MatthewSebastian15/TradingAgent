@@ -73,3 +73,6 @@ docs/
 
 # Local migration backups
 backend/.cache.bak/
+
+#AI 
+ai/
