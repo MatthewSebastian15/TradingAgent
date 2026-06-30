@@ -442,6 +442,35 @@ def _attach_dividend_and_peer_rows(report: dict[str, Any]) -> None:
     report["peer_comparison_rows"] = _peer_comparison_rows(report["peer_comparison"])
 
 
+_SNAPSHOT_BLANK = {"-", "N/A", "", None}
+
+
+def _snapshot_rows(report: dict[str, Any]) -> list[dict[str, str]]:
+    """Right-rail key-stats: price + valuation multiples + dividend yield.
+
+    Only *selects* already-rendered display strings; invents nothing and drops
+    blank values so the snapshot never shows a `-` row.
+    """
+    rows: list[dict[str, str]] = []
+    price = report.get("current_price_display")
+    if price not in _SNAPSHOT_BLANK:
+        rows.append({"label": "Price", "value": price})
+    rows.extend(
+        row for row in report.get("valuation_rows", []) if row.get("value") not in _SNAPSHOT_BLANK
+    )
+    dividend_yield = next(
+        (
+            row
+            for row in report.get("dividend_quality_rows", [])
+            if row.get("label") == "Dividend Yield"
+        ),
+        None,
+    )
+    if dividend_yield and dividend_yield.get("value") not in _SNAPSHOT_BLANK:
+        rows.append(dividend_yield)
+    return rows
+
+
 def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize backend analysis payload into a template-friendly report dict."""
     validate_report_scope(result)
@@ -451,6 +480,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
     _attach_market_report_sections(report, result)
     _attach_core_report_rows(report, result)
     _attach_risk_report_sections(report)
+    report["snapshot_rows"] = _snapshot_rows(report)
     return report
 
 

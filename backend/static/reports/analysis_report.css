@@ -1,6 +1,26 @@
 @page {
   size: A4;
   margin: 18mm;
+  /* Running header (page 2+) + page number. HTML sets `doc-header` via
+     string-set in phase 2; blank until then. */
+  @top-right {
+    content: string(doc-header);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 8pt;
+    color: #666;
+  }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 8pt;
+    color: #666;
+  }
+}
+
+@page :first {
+  @top-right {
+    content: none;
+  }
 }
 
 * {
@@ -8,17 +28,25 @@
 }
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  /* Research-note pairing: serif prose, sans tables/labels (set per element). */
+  font-family: Georgia, "Times New Roman", Times, serif;
   font-size: 11pt;
   line-height: 1.45;
   color: #222;
   background: #fff;
   margin: 0;
+  counter-reset: section;
 }
 
 .report {
   max-width: 190mm;
   margin: 0 auto;
+}
+
+h1,
+h2,
+h3 {
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 h1 {
@@ -37,6 +65,13 @@ h2 {
   break-after: avoid;
 }
 
+/* Section numbering: class="numbered" on the <section> (keeps <h2> text
+   untouched) counts body sections — appendices/disclaimer stay unnumbered. */
+.numbered > h2::before {
+  counter-increment: section;
+  content: counter(section) ". ";
+}
+
 h3 {
   font-size: 12pt;
   margin: 6mm 0 2mm;
@@ -53,6 +88,8 @@ table {
   width: 100%;
   border-collapse: collapse;
   margin: 4mm 0 7mm;
+  font-family: Arial, Helvetica, sans-serif;
+  font-variant-numeric: tabular-nums;
   page-break-inside: avoid;
   break-inside: avoid;
 }
@@ -405,4 +442,142 @@ footer {
   .financial-highlights-table td {
     padding: 4px 5px;
   }
+}
+
+/* --- Phase 1: bank-note primitives (markup wired in phase 2) --- */
+
+/* Labels stay sans even though body is now serif. */
+.meta-grid,
+.metric-label,
+.snapshot {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Running-header source: hidden element whose text feeds @top-right via
+   string(doc-header). */
+.doc-header-source {
+  string-set: doc-header content();
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  font-size: 0;
+}
+
+/* Banner — masthead: company/ticker left, rating + price right. */
+.banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8mm;
+}
+
+.banner-main h1 {
+  margin: 0 0 1mm;
+}
+
+.banner-ticker {
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.banner-sub {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9pt;
+  color: #6b7280;
+}
+
+.banner-side {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.banner-fv,
+.banner-price {
+  font-family: Arial, Helvetica, sans-serif;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2mm;
+  font-size: 10pt;
+  color: #374151;
+}
+
+.banner-fv span,
+.banner-price span {
+  display: block;
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9ca3af;
+}
+
+/* Rating badge — reuse decision color semantics (Buy/Overweight=green,
+   Hold=amber, Sell/Underweight=red). */
+.rating-badge {
+  display: inline-block;
+  padding: 2mm 4mm;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #6b7280; /* fallback / unknown */
+  border-radius: 1mm;
+}
+
+.rating-badge--buy {
+  background: #15803d;
+}
+
+.rating-badge--hold {
+  background: #b45309;
+}
+
+.rating-badge--sell {
+  background: #b91c1c;
+}
+
+/* Snapshot box — bordered right-rail key-stats card, ~30% page width. */
+.snapshot {
+  float: right;
+  width: 58mm;
+  margin: 0 0 5mm 6mm;
+  border: 1px solid #9ca3af;
+  font-size: 9pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.snapshot-header {
+  background: #f3f4f6;
+  border-bottom: 1px solid #9ca3af;
+  padding: 2mm 3mm;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 8pt;
+  color: #374151;
+}
+
+.snapshot-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 3mm;
+  padding: 1.5mm 3mm;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.snapshot-row:last-child {
+  border-bottom: none;
+}
+
+.snapshot-label {
+  color: #6b7280;
+}
+
+.snapshot-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-weight: 600;
+  color: #111;
 }
