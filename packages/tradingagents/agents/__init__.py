@@ -24,13 +24,9 @@ _EXPORTS = {
     "InvestDebateState": ("tradingagents.agents.utils.agent_states", "InvestDebateState"),
     "RiskDebateState": ("tradingagents.agents.utils.agent_states", "RiskDebateState"),
     "create_msg_delete": ("tradingagents.agents.utils.agent_utils", "create_msg_delete"),
-    "create_bear_researcher": (
-        "tradingagents.agents.researchers.bear_researcher",
-        "create_bear_researcher",
-    ),
-    "create_bull_researcher": (
-        "tradingagents.agents.researchers.bull_researcher",
-        "create_bull_researcher",
+    "create_researcher": (
+        "tradingagents.agents.researchers.researcher_factory",
+        "create_researcher",
     ),
     "create_research_manager": (
         "tradingagents.agents.managers.research_manager",

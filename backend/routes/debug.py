@@ -11,10 +11,8 @@ from tradingagents.dataflows.providers.vendor_capabilities import (
     vendor_requires_api_key,
 )
 from tradingagents.dataflows.providers.vendor_symbol import resolve_symbol
-from tradingagents.observability.health_aggregator import (
-    get_observability_summary,
-    get_vendor_stats,
-)
+from tradingagents.observability.health_aggregator import get_vendor_stats
+from tradingagents.observability.metrics_collector import get_metrics_collector
 
 import config as app_config
 from routes.validation import normalize_ticker_symbol
@@ -148,7 +146,7 @@ async def debug_symbol(ticker: str) -> dict[str, Any]:
 @router.get("/debug/metrics")
 async def debug_metrics() -> dict[str, Any]:
     _guard_debug_enabled()
-    return get_observability_summary()
+    return get_metrics_collector().get_summary()
 
 
 @router.get("/debug/vendor-stats")

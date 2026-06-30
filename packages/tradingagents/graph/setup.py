@@ -7,8 +7,6 @@ from langgraph.prebuilt import ToolNode
 
 from tradingagents.agents import (
     create_aggressive_debator,
-    create_bear_researcher,
-    create_bull_researcher,
     create_conservative_debator,
     create_fundamentals_analyst,
     create_market_analyst,
@@ -17,6 +15,7 @@ from tradingagents.agents import (
     create_news_analyst,
     create_portfolio_manager,
     create_research_manager,
+    create_researcher,
     create_social_media_analyst,
     create_trader,
 )
@@ -83,8 +82,8 @@ class GraphSetup:
             tool_nodes["fundamentals"] = self.tool_nodes["fundamentals"]
 
         # Create researcher and manager nodes
-        bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
-        bear_researcher_node = create_bear_researcher(self.quick_thinking_llm)
+        bull_researcher_node = create_researcher("bull", self.quick_thinking_llm)
+        bear_researcher_node = create_researcher("bear", self.quick_thinking_llm)
         research_manager_node = create_research_manager(self.deep_thinking_llm)
         trader_node = create_trader(self.quick_thinking_llm)
 

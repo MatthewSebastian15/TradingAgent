@@ -99,10 +99,10 @@ export function historicalVaR(returns, alpha = 0.95) {
 }
 
 // Parametric (normal) VaR. z=1.645 for 95%; v1 only ever asks for 95%.
-// ponytail: single hard-coded z, not a z-table. Add a table if other levels ship.
-export function parametricVaR(returns, alpha = 0.95) {
+// ponytail: single hard-coded z (95% only). Add a z-table if other levels ship.
+export function parametricVaR(returns) {
   if (returns.length < 2) return null;
-  const z = alpha === 0.95 ? 1.645 : 1.645;
+  const z = 1.645;
   return (mean(returns) - z * stdDev(returns)) * 100;
 }
 
