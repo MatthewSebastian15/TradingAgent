@@ -6,6 +6,7 @@ import {
   alpha,
   annualizedVol,
   backtest,
+  benchmarkForSymbol,
   beta,
   bootstrapMC,
   calmar,
@@ -340,6 +341,27 @@ describe('backtest', () => {
     const split = backtest(zigzag, 'sma', { fast: 5, slow: 15, oosFrac: 0.3 });
     expect(Number.isFinite(split.inSampleReturn)).toBe(true);
     expect(Number.isFinite(split.outSampleReturn)).toBe(true);
+  });
+
+  it('a positive risk-free rate lowers the strategy Sharpe', () => {
+    const withoutRf = backtest(rising, 'sma', { fast: 10, slow: 30 }, 0);
+    const withRf = backtest(rising, 'sma', { fast: 10, slow: 30 }, 0.001);
+    expect(withRf.sharpe).toBeLessThan(withoutRf.sharpe);
+  });
+});
+
+describe('benchmarkForSymbol', () => {
+  it('no suffix -> US S&P 500', () => {
+    expect(benchmarkForSymbol('AAPL').symbol).toBe('^GSPC');
+  });
+
+  it('known market suffix -> that market index', () => {
+    expect(benchmarkForSymbol('BBCA.JK').symbol).toBe('^JKSE');
+    expect(benchmarkForSymbol('0700.HK').symbol).toBe('^HSI');
+  });
+
+  it('unknown suffix falls back to US', () => {
+    expect(benchmarkForSymbol('FOO.ZZ').symbol).toBe('^GSPC');
   });
 });
 

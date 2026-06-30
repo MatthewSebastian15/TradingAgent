@@ -678,7 +678,7 @@ async def get_market_ohlcv(
     request: Request,
     ticker: str = Query(..., min_length=1, description="Ticker symbol."),
     range_key: str = Query(
-        default="1Y", alias="range", description="One of YTD, 1Y, 6M, 3M, 1M, 1W."
+        default="1Y", alias="range", description="One of YTD, 5Y, 2Y, 1Y, 6M, 3M, 1M, 1W."
     ),
     trade_date: str | None = Query(default=None, description="Optional YYYY-MM-DD upper bound."),
 ) -> dict[str, Any]:
@@ -688,7 +688,9 @@ async def get_market_ohlcv(
         if normalized_range not in OHLCV_RANGE_OPTIONS:
             raise BadRequestError(
                 "Invalid chart range.",
-                details={"fields": {"range": "Range must be one of YTD, 1Y, 6M, 3M, 1M, 1W."}},
+                details={
+                    "fields": {"range": "Range must be one of YTD, 5Y, 2Y, 1Y, 6M, 3M, 1M, 1W."}
+                },
             )
         parsed_trade_date = parse_ohlcv_trade_date(trade_date).strftime("%Y-%m-%d")
         payload = await asyncio.to_thread(
@@ -703,7 +705,7 @@ async def get_market_sparklines(
     request: Request,
     symbols: str = Query(..., min_length=1, description="Comma-separated list of ticker symbols."),
     range_key: str = Query(
-        default="1M", alias="range", description="One of YTD, 1Y, 6M, 3M, 1M, 1W."
+        default="1M", alias="range", description="One of YTD, 5Y, 2Y, 1Y, 6M, 3M, 1M, 1W."
     ),
 ) -> dict[str, dict[str, list[float]]]:
     async with _market_data_limit(request):
@@ -718,7 +720,9 @@ async def get_market_sparklines(
         if normalized_range not in OHLCV_RANGE_OPTIONS:
             raise BadRequestError(
                 "Invalid chart range.",
-                details={"fields": {"range": "Range must be one of YTD, 1Y, 6M, 3M, 1M, 1W."}},
+                details={
+                    "fields": {"range": "Range must be one of YTD, 5Y, 2Y, 1Y, 6M, 3M, 1M, 1W."}
+                },
             )
 
         capped = [_normalize_quote_symbol(symbol) for symbol in raw_symbols]

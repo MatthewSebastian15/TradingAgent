@@ -18,7 +18,7 @@ from services.market_yfinance_service import _as_float
 _MAX_CACHE_ENTRIES = 500
 _OHLCV_CACHE_TTL_SECONDS = 60.0
 _OHLCV_CACHE: OrderedDict[tuple[str, str, str], tuple[float, dict[str, Any]]] = OrderedDict()
-_OHLCV_RANGE_DAYS = {"1W": 7, "1M": 31, "3M": 92, "6M": 183, "1Y": 365}
+_OHLCV_RANGE_DAYS = {"1W": 7, "1M": 31, "3M": 92, "6M": 183, "1Y": 365, "2Y": 730, "5Y": 1825}
 OHLCV_RANGE_OPTIONS = {"YTD", *_OHLCV_RANGE_DAYS.keys()}
 
 

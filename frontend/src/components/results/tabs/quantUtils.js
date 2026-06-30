@@ -234,6 +234,36 @@ export function bootstrapMC(spot, returns, days, paths, seed) {
 
 // --- benchmark-relative (v2) ----------------------------------------------
 
+// Map a ticker to its home-market headline index, by yfinance suffix. No suffix
+// (or unknown) → US S&P 500. Picking the right index makes beta/alpha correct for
+// non-US names instead of "approximate vs ^GSPC".
+// ponytail: suffix lookup table. Add a row when a new market actually matters.
+const US_BENCHMARK = { symbol: '^GSPC', label: 'S&P 500' };
+const MARKET_BENCHMARKS = {
+  JK: { symbol: '^JKSE', label: 'IDX Composite' },
+  HK: { symbol: '^HSI', label: 'Hang Seng' },
+  T: { symbol: '^N225', label: 'Nikkei 225' },
+  L: { symbol: '^FTSE', label: 'FTSE 100' },
+  AX: { symbol: '^AXJO', label: 'ASX 200' },
+  NS: { symbol: '^NSEI', label: 'NIFTY 50' },
+  BO: { symbol: '^BSESN', label: 'SENSEX' },
+  SS: { symbol: '000001.SS', label: 'SSE Composite' },
+  SZ: { symbol: '399001.SZ', label: 'SZSE Component' },
+  DE: { symbol: '^GDAXI', label: 'DAX' },
+  PA: { symbol: '^FCHI', label: 'CAC 40' },
+  TO: { symbol: '^GSPTSE', label: 'S&P/TSX' },
+  SI: { symbol: '^STI', label: 'Straits Times' },
+  KS: { symbol: '^KS11', label: 'KOSPI' },
+  SW: { symbol: '^SSMI', label: 'SMI' },
+};
+
+export function benchmarkForSymbol(symbol) {
+  const s = String(symbol || '').toUpperCase();
+  const dot = s.lastIndexOf('.');
+  if (dot === -1) return US_BENCHMARK;
+  return MARKET_BENCHMARKS[s.slice(dot + 1)] || US_BENCHMARK;
+}
+
 // Pair two date->close series on their common trading days, in stock order.
 // -> { stock:number[], market:number[] } of equal length.
 export function alignByDate(stockPoints, marketPoints) {
@@ -428,8 +458,10 @@ function smaAt(arr, w, i) {
 // transaction cost (bps of notional) each time the position flips — set 0 for the
 // frictionless case. params.oosFrac (0..1) marks the trailing fraction as
 // out-of-sample so the UI can flag in-sample overfit.
+// rf is the per-period (daily) risk-free rate, passed through to the strategy
+// Sharpe so it matches the Risk tab's rf-adjusted figure (was hard-coded 0).
 // ponytail: three hard-coded strategies, long/flat only. Not a general engine.
-export function backtest(closes, strategy, params = {}) {
+export function backtest(closes, strategy, params = {}, rf = 0) {
   const n = closes.length;
   if (n < 30) return null;
   const cost = (params.costBps || 0) / 10000;
@@ -487,7 +519,7 @@ export function backtest(closes, strategy, params = {}) {
     equity,
     buyhold,
     cagr: years > 0 ? (eq ** (1 / years) - 1) * 100 : null,
-    sharpe: sharpe(stratRets),
+    sharpe: sharpe(stratRets, rf),
     maxDD: maxDrawdown(equity),
     winRate: inDays ? (wins / inDays) * 100 : null,
     finalReturn: (eq - 1) * 100,

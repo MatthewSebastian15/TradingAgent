@@ -5,9 +5,9 @@ import QuantPanel from '../components/results/tabs/QuantPanel';
 import TickerSearchBar from '../components/TickerSearchBar';
 import { fetchAnalysisHistory, fetchAnalysisHistoryResult } from '../utils/analysisHistoryApi';
 
-// Backend /market/ohlcv only serves these keys (2Y/5Y from the plan aren't supported
-// without a backend change). 1M (~21 trading days) trips QuantPanel's <30-day notice.
-const RANGES = ['1M', '3M', '6M', 'YTD', '1Y'];
+// Backend /market/ohlcv range keys. Longer ranges (2Y/5Y) give MC, backtest, Hurst
+// and regime detection enough history. 1M (~21 trading days) trips the <30-day notice.
+const RANGES = ['1M', '3M', '6M', 'YTD', '1Y', '2Y', '5Y'];
 const DEFAULT_RANGE = '1Y';
 
 function pointsFromResult(result) {

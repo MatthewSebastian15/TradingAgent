@@ -11,6 +11,7 @@ import {
   alpha,
   annualizedVol,
   backtest,
+  benchmarkForSymbol,
   beta,
   blackScholes,
   bootstrapMC,
@@ -61,9 +62,7 @@ const MC_DAYS = 126; // ~6 months
 const MC_HORIZONS = [21, 63, 126, 252]; // 1M / 3M / 6M / 1Y
 const TRADING_DAYS = 252;
 const VOL_TARGET = 15; // annual % target for vol-target sizing
-// ponytail: fixed US benchmark. Beta vs ^GSPC is approximate for non-US tickers;
-// the card tooltip says so. Swap to a per-market index map only if anyone asks.
-const BENCHMARK_SYMBOL = '^GSPC';
+// Benchmark is picked per market from the ticker suffix (benchmarkForSymbol).
 
 const SECTIONS = [
   { id: 'volatility', label: 'Volatility' },
@@ -493,6 +492,7 @@ function RiskSection({
   alf,
   rfPct,
   benchAvailable,
+  benchLabel,
   ddPoints,
   rsPoints,
   rbPoints,
@@ -500,8 +500,8 @@ function RiskSection({
 }) {
   const excessLabel = `excess over ${rfPct.toFixed(1)}%`;
   const benchNote = benchAvailable
-    ? 'Benchmark: S&P 500 (^GSPC). Approximate for non-US tickers.'
-    : 'S&P 500 (^GSPC) benchmark data is unavailable.';
+    ? `Benchmark: ${benchLabel}, matched to the ticker's home market.`
+    : `${benchLabel} benchmark data is unavailable.`;
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-subtle">
@@ -560,10 +560,10 @@ function RiskSection({
           formula={`(mean(returns) − rf) / downside-deviation × √252. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
         />
         <MetricCard
-          label="Beta (vs S&P 500)"
+          label={`Beta (vs ${benchLabel})`}
           value={fmtNum2(bta)}
           gloss="1.0 moves with the market; above 1 is jumpier, below 1 is calmer."
-          formula={`cov(stock, S&P 500) / var(S&P 500), on overlapping trading days. ${benchNote}`}
+          formula={`cov(stock, ${benchLabel}) / var(${benchLabel}), on overlapping trading days. ${benchNote}`}
         />
         <MetricCard
           label="Alpha (annualized)"
@@ -631,7 +631,7 @@ function RiskSection({
       />
 
       <PriceMetricLineChart
-        title="Rolling Beta vs S&P 500 (63-day)"
+        title={`Rolling Beta vs ${benchLabel} (63-day)`}
         subtitle={benchAvailable ? 'Market sensitivity over time' : 'Benchmark data unavailable'}
         points={rbPoints}
         valueType="number"
@@ -654,6 +654,7 @@ RiskSection.propTypes = {
   alf: PropTypes.number,
   rfPct: PropTypes.number.isRequired,
   benchAvailable: PropTypes.bool.isRequired,
+  benchLabel: PropTypes.string.isRequired,
   ddPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
   rsPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
   rbPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
@@ -2002,18 +2003,26 @@ function QuantPanel({ points, currency, symbol }) {
   const closes = useMemo(() => points.map((p) => p.adjusted_close ?? p.close), [points]);
   const ccy = currency || '';
   const rfDaily = rf / TRADING_DAYS;
+  const benchmarkInfo = useMemo(() => benchmarkForSymbol(symbol), [symbol]);
 
-  // On-demand: pull the risk-free rate (config) and the ^GSPC benchmark series
-  // only when the tab mounts. Both fail soft — rf falls back to 0, beta/alpha to —.
+  // Pull the risk-free rate (config) once on mount. Fails soft → rf stays 0.
   useEffect(() => {
-    let alive = true;
     const controller = new AbortController();
     getApiStatus({ signal: controller.signal })
       .then((s) => {
-        if (alive && Number.isFinite(s?.quant_risk_free_rate)) setRf(s.quant_risk_free_rate);
+        if (Number.isFinite(s?.quant_risk_free_rate)) setRf(s.quant_risk_free_rate);
       })
       .catch(() => {});
-    getMarketOhlcv(BENCHMARK_SYMBOL, { range: '1Y', signal: controller.signal })
+    return () => controller.abort();
+  }, []);
+
+  // Fetch the market-matched benchmark series; refetch when the ticker's market
+  // changes. Fails soft → benchPoints = [] and beta/alpha render as —.
+  useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
+    setBenchPoints(null);
+    getMarketOhlcv(benchmarkInfo.symbol, { range: '1Y', signal: controller.signal })
       .then((p) => {
         if (alive) setBenchPoints(Array.isArray(p?.points) ? p.points : []);
       })
@@ -2024,7 +2033,7 @@ function QuantPanel({ points, currency, symbol }) {
       alive = false;
       controller.abort();
     };
-  }, []);
+  }, [benchmarkInfo.symbol]);
 
   const returns = useMemo(() => simpleReturns(closes), [closes]);
   const logRet = useMemo(() => logReturns(closes), [closes]);
@@ -2083,7 +2092,7 @@ function QuantPanel({ points, currency, symbol }) {
     [returns, points, rfDaily]
   );
 
-  // Benchmark-relative metrics + rolling beta from the aligned ^GSPC series.
+  // Benchmark-relative metrics + rolling beta from the aligned benchmark series.
   const benchmark = useMemo(() => {
     if (!benchPoints || benchPoints.length === 0)
       return { beta: null, alpha: null, available: false, rollBeta: [] };
@@ -2129,8 +2138,8 @@ function QuantPanel({ points, currency, symbol }) {
 
   const backtestResult = useMemo(() => {
     if (section !== 'backtest') return null;
-    return backtest(closes, strategy, btParams);
-  }, [section, closes, strategy, btParams]);
+    return backtest(closes, strategy, btParams, rfDaily);
+  }, [section, closes, strategy, btParams, rfDaily]);
 
   const returnBins = useMemo(() => returnHistogram(returns, 30), [returns]);
   const volWeight = useMemo(() => volTargetWeight(metrics.vol, VOL_TARGET), [metrics.vol]);
@@ -2290,6 +2299,7 @@ function QuantPanel({ points, currency, symbol }) {
           alf={benchmark.alpha}
           rfPct={rf * 100}
           benchAvailable={benchmark.available}
+          benchLabel={benchmarkInfo.label}
           ddPoints={ddPoints}
           rsPoints={rsPoints}
           rbPoints={rbPoints}
