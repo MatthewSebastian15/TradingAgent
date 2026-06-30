@@ -5,7 +5,9 @@ import { getEconomicData } from '../api/economic';
 // Fetches one Economic-tab source/command. params is serialized into the query.
 export function useEconomicData(source, command, params = {}) {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  // Start loading so the first paint shows a skeleton (like the news section)
+  // instead of empty/dash rows while the initial fetch is in flight.
+  const [loading, setLoading] = useState(Boolean(source && command));
   const [error, setError] = useState(null);
   const paramsKey = JSON.stringify(params);
 

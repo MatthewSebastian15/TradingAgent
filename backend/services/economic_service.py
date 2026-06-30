@@ -17,6 +17,7 @@ import json
 import urllib.request
 from datetime import datetime, timezone
 from time import monotonic
+from urllib.parse import urlparse
 
 from config import ECONOMIC_WTO_API_KEY
 from errors import BadRequestError, PipelineExecutionError
@@ -42,13 +43,20 @@ _UNESCO = "https://api.uis.unesco.org/api/public"
 
 _MAX_COUNTRIES = 6
 
-_throttle_lock = asyncio.Lock()
-_last_call_at = 0.0
+# Throttle is per-host: independent sources (NY Fed, World Bank, IMF, ECB,
+# Treasury…) run concurrently; only same-host calls space out by _MIN_INTERVAL.
+_throttle_guard = asyncio.Lock()
+_host_locks: dict[str, asyncio.Lock] = {}
+_last_call_at: dict[str, float] = {}
 
 
 def _http_get(url: str, extra_headers: dict | None = None) -> bytes:
-    # IMF DataMapper 403s without an Accept header; the others ignore it.
-    headers = {"User-Agent": _USER_AGENT, "Accept": "*/*"}
+    # All sources want an Accept header. IMF's WAF, however, 403s any custom or
+    # browser User-Agent and only lets urllib's built-in default through — so for
+    # imf.org we omit our UA and let urllib supply its own.
+    headers = {"Accept": "*/*"}
+    if "imf.org" not in urlparse(url).netloc:
+        headers["User-Agent"] = _USER_AGENT
     if extra_headers:
         headers.update(extra_headers)
     request = urllib.request.Request(url, headers=headers)
@@ -57,12 +65,14 @@ def _http_get(url: str, extra_headers: dict | None = None) -> bytes:
 
 
 async def _throttled_get(url: str, extra_headers: dict | None = None) -> bytes:
-    global _last_call_at
-    async with _throttle_lock:
-        wait = _MIN_INTERVAL_SECONDS - (monotonic() - _last_call_at)
+    host = urlparse(url).netloc
+    async with _throttle_guard:
+        lock = _host_locks.setdefault(host, asyncio.Lock())
+    async with lock:
+        wait = _MIN_INTERVAL_SECONDS - (monotonic() - _last_call_at.get(host, 0.0))
         if wait > 0:
             await asyncio.sleep(wait)
-        _last_call_at = monotonic()
+        _last_call_at[host] = monotonic()
     return await asyncio.to_thread(_http_get, url, extra_headers)
 
 
@@ -269,13 +279,13 @@ async def _interest_expense(years: int) -> list[dict]:
 async def _ecb_exchange_rates(currencies: list[str], years: int) -> dict[str, list[dict]]:
     """EUR reference rates per currency → {CUR: [{date, value}]}. ECB is EUR-only."""
     count = max(30, min(years * 252, 2000))
-    series: dict[str, list[dict]] = {}
-    for currency in currencies:
+
+    async def fetch(currency: str) -> tuple[str, list[dict]]:
         url = f"{_ECB}/EXR/D.{currency}.EUR.SP00.A?format=jsondata&lastNObservations={count}"
-        points = _ecb_sdmx_series(await _throttled_get(url))
-        if points:
-            series[currency] = points
-    return series
+        return currency, _ecb_sdmx_series(await _throttled_get(url))
+
+    pairs = await asyncio.gather(*(fetch(c) for c in currencies))
+    return {currency: points for currency, points in pairs if points}
 
 
 # WTO reporters use M49 numeric codes, not ISO-3. Map the country presets.
@@ -336,16 +346,16 @@ async def _unesco_indicator(
     indicator: str, countries: list[str], years: int
 ) -> dict[str, list[dict]]:
     end = datetime.now(timezone.utc).year
-    series: dict[str, list[dict]] = {}
-    for country in countries:
+
+    async def fetch(country: str) -> tuple[str, list[dict]]:
         url = (
             f"{_UNESCO}/data/indicators?indicator={indicator}"
             f"&geoUnit={country}&start={end - years}&end={end}"
         )
-        points = _unesco_series(await _throttled_get(url))
-        if points:
-            series[country] = points
-    return series
+        return country, _unesco_series(await _throttled_get(url))
+
+    pairs = await asyncio.gather(*(fetch(c) for c in countries))
+    return {country: points for country, points in pairs if points}
 
 
 # --- Market gauges via yfinance (already a project dependency) ---------------
@@ -371,13 +381,12 @@ def _ohlcv_points(payload: dict) -> list[dict]:
 
 
 async def _yfinance_gauges() -> dict[str, list[dict]]:
-    series: dict[str, list[dict]] = {}
-    for label, symbol in _YF_GAUGES.items():
+    async def fetch(label: str, symbol: str) -> tuple[str, list[dict]]:
         payload = await asyncio.to_thread(fetch_ohlcv_range, symbol, "1Y", None)
-        points = _ohlcv_points(payload)
-        if points:
-            series[label] = points
-    return series
+        return label, _ohlcv_points(payload)
+
+    pairs = await asyncio.gather(*(fetch(label, symbol) for label, symbol in _YF_GAUGES.items()))
+    return {label: points for label, points in pairs if points}
 
 
 # (source, command) -> (valueType, builder(params)). Builder returns a list

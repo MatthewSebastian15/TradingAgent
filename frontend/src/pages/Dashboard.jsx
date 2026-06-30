@@ -2,6 +2,7 @@ import { SendHorizontal } from 'lucide-react';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import HomeEconomicSummary from '../components/home/HomeEconomicSummary';
 import HomeNewsSummary from '../components/home/HomeNewsSummary';
 import HomeWatchlistSidebar from '../components/home/HomeWatchlistSidebar';
 import { CHATBOT_PATH } from '../constants/routes';
@@ -59,6 +60,7 @@ export default function Dashboard() {
           loading={status === 'loading'}
           error={newsError}
         />
+        <HomeEconomicSummary />
         <HomeChatBar />
       </main>
       <HomeWatchlistSidebar />

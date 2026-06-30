@@ -118,19 +118,21 @@ function RatesPanel() {
           />
         </div>
 
-        <PriceMetricLineChart
-          title="SOFR — Last 90 Days"
-          points={sofr.data?.data}
-          valueType="percent"
-          emptyMessage={sofr.loading ? 'Loading…' : 'SOFR data unavailable.'}
-        />
-        <PriceMetricLineChart
-          title="Treasury Yield Curve — Latest"
-          subtitle="Par yields by maturity"
-          points={curve.data?.data}
-          valueType="percent"
-          emptyMessage={curve.loading ? 'Loading…' : 'Yield curve data unavailable.'}
-        />
+        <div className="grid gap-3 lg:grid-cols-2">
+          <PriceMetricLineChart
+            title="SOFR — Last 90 Days"
+            points={sofr.data?.data}
+            valueType="percent"
+            emptyMessage={sofr.loading ? 'Loading…' : 'SOFR data unavailable.'}
+          />
+          <PriceMetricLineChart
+            title="Treasury Yield Curve — Latest"
+            subtitle="Par yields by maturity"
+            points={curve.data?.data}
+            valueType="percent"
+            emptyMessage={curve.loading ? 'Loading…' : 'Yield curve data unavailable.'}
+          />
+        </div>
       </CardContent>
     </Card>
   );
