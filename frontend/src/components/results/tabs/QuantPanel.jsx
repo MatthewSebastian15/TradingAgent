@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
-import { getApiStatus, getMarketOhlcv } from '../../../api/market';
+import { getApiStatus, getMarketOhlcv, getStockOverview } from '../../../api/market';
 import NoticeBox from '../NoticeBox';
 import { GRID_COLOR, LAST_PRICE_COLOR } from './priceChartUtils';
 import PriceMetricLineChart from './PriceMetricLineChart';
@@ -12,18 +12,23 @@ import {
   annualizedVol,
   backtest,
   beta,
+  blackScholes,
   bootstrapMC,
   calmar,
   correlationMatrix,
   covarianceMatrix,
   cvar,
+  dcf,
+  dcfMonteCarlo,
   downsideDeviation,
   drawdownSeries,
+  drawdownStats,
   efficientFrontier,
   ewmaVol,
   gmvWeights,
   historicalVaR,
   hurst,
+  impliedVol,
   kellyFraction,
   kurtosis,
   logReturns,
@@ -32,6 +37,7 @@ import {
   monteCarloGBM,
   parametricVaR,
   portfolioStats,
+  regimeShifts,
   returnHistogram,
   rollingBeta,
   rollingCorrelation,
@@ -42,6 +48,7 @@ import {
   skewness,
   sortino,
   stdDev,
+  stressScenarios,
   tangencyWeights,
   volPercentile,
   volTargetWeight,
@@ -66,6 +73,9 @@ const SECTIONS = [
   { id: 'backtest', label: 'Backtest' },
   { id: 'sizing', label: 'Sizing' },
   { id: 'correlation', label: 'Correlation' },
+  { id: 'options', label: 'Options' },
+  { id: 'valuation', label: 'Valuation' },
+  { id: 'scenario', label: 'Scenario' },
 ];
 
 const STRATEGIES = [
@@ -328,7 +338,9 @@ function NormalOverlayHistogram({ bins, mu, sigma, label }) {
   const bw = (W - P.l - P.r) / (bins.length || 1);
   // Normal pdf scaled to counts: pdf(x) * total * binWidth, then to maxCount px.
   const pdf = (x) =>
-    sigma > 0 ? (Math.exp(-((x - mu) ** 2) / (2 * sigma * sigma)) / (sigma * Math.sqrt(2 * Math.PI))) : 0;
+    sigma > 0
+      ? Math.exp(-((x - mu) ** 2) / (2 * sigma * sigma)) / (sigma * Math.sqrt(2 * Math.PI))
+      : 0;
   const curve = bins
     .map((b, i) => {
       const mid = (b.binStart + b.binEnd) / 2;
@@ -359,7 +371,13 @@ function NormalOverlayHistogram({ bins, mu, sigma, label }) {
           />
         );
       })}
-      <path d={curve} fill="none" stroke={GRID_COLOR} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      <path
+        d={curve}
+        fill="none"
+        stroke={GRID_COLOR}
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 }
@@ -382,7 +400,9 @@ function DualLineChart({ a, b, label }) {
   const x = (i, len) => P.l + (i / (len - 1 || 1)) * (W - P.l - P.r);
   const y = (v) => P.t + ((max - v) / (max - min || 1)) * (H - P.t - P.b);
   const line = (vals) =>
-    vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i, vals.length).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+    vals
+      .map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i, vals.length).toFixed(1)} ${y(v).toFixed(1)}`)
+      .join(' ');
   return (
     <svg
       role="img"
@@ -391,8 +411,20 @@ function DualLineChart({ a, b, label }) {
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
     >
-      <path d={line(b)} fill="none" stroke={GRID_COLOR} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-      <path d={line(a)} fill="none" stroke={LAST_PRICE_COLOR} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      <path
+        d={line(b)}
+        fill="none"
+        stroke={GRID_COLOR}
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
+      <path
+        d={line(a)}
+        fill="none"
+        stroke={LAST_PRICE_COLOR}
+        strokeWidth="2"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 }
@@ -464,6 +496,7 @@ function RiskSection({
   ddPoints,
   rsPoints,
   rbPoints,
+  ddStats,
 }) {
   const excessLabel = `excess over ${rfPct.toFixed(1)}%`;
   const benchNote = benchAvailable
@@ -548,6 +581,39 @@ function RiskSection({
         />
       </div>
 
+      {ddStats && (
+        <div className="space-y-1">
+          <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
+            Drawdown recovery
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <MetricCard
+              label="Max DD Duration"
+              value={`${ddStats.maxDDDuration}d`}
+              gloss="Trading days from the peak to full recovery (or to today if still underwater)."
+            />
+            <MetricCard
+              label="Recovery Time"
+              value={ddStats.recoveryDays != null ? `${ddStats.recoveryDays}d` : 'Not recovered'}
+              tone={ddStats.maxDDRecovered ? 'neutral' : 'bad'}
+              gloss="Trading days from the deepest trough back to the prior peak."
+            />
+            <MetricCard
+              label="Currently Underwater"
+              value={ddStats.currentUnderwaterDays > 0 ? `${ddStats.currentUnderwaterDays}d` : 'No'}
+              tone={ddStats.currentUnderwaterDays > 0 ? 'bad' : 'good'}
+              gloss="Trading days below the last all-time high, as of today."
+            />
+            <MetricCard
+              label="Drawdowns > 5%"
+              value={String(ddStats.episodes)}
+              gloss="Count of distinct peak-to-recovery episodes deeper than 5%."
+            />
+            <MetricCard label="Max Drawdown" value={fmtLoss(ddStats.maxDD)} tone="bad" />
+          </div>
+        </div>
+      )}
+
       <PriceMetricLineChart
         title="Underwater (drawdown) curve"
         subtitle="Percent below the running peak — depth and duration of every dip"
@@ -591,6 +657,7 @@ RiskSection.propTypes = {
   ddPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
   rsPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
   rbPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
+  ddStats: PropTypes.object,
 };
 
 function StochasticSection({
@@ -606,6 +673,8 @@ function StochasticSection({
   horizonLabel,
   method,
   onMethodChange,
+  drift,
+  onDriftChange,
 }) {
   const fmtMoney = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
   const controls = (
@@ -629,6 +698,27 @@ function StochasticSection({
           </button>
         ))}
       </div>
+      {method === 'gbm' && (
+        <div className="flex gap-1">
+          {[
+            { id: 'historical', label: 'Historical drift' },
+            { id: 'riskneutral', label: 'Risk-neutral (rf)' },
+          ].map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => onDriftChange(d.id)}
+              className={`rounded-none border px-2.5 py-1 text-[11px] tracking-wide ${
+                drift === d.id
+                  ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
+                  : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
+              }`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex gap-1">
         {MC_HORIZONS.map((h) => (
           <button
@@ -730,6 +820,8 @@ StochasticSection.propTypes = {
   horizonLabel: PropTypes.string.isRequired,
   method: PropTypes.oneOf(['gbm', 'bootstrap']).isRequired,
   onMethodChange: PropTypes.func.isRequired,
+  drift: PropTypes.oneOf(['historical', 'riskneutral']).isRequired,
+  onDriftChange: PropTypes.func.isRequired,
 };
 
 // --- new sections (Phase 4) -----------------------------------------------
@@ -738,8 +830,15 @@ function DistributionSection({ skew, kurt, var95, var99, bins, mu, sigma }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-subtle">
-        Daily returns are {finite(skew) && skew < -0.1 ? 'left-skewed (crash-prone)' : finite(skew) && skew > 0.1 ? 'right-skewed' : 'roughly symmetric'}
-        {finite(kurt) && kurt > 1 ? ' with fat tails — big moves happen more often than a bell curve predicts.' : '.'}
+        Daily returns are{' '}
+        {finite(skew) && skew < -0.1
+          ? 'left-skewed (crash-prone)'
+          : finite(skew) && skew > 0.1
+            ? 'right-skewed'
+            : 'roughly symmetric'}
+        {finite(kurt) && kurt > 1
+          ? ' with fat tails — big moves happen more often than a bell curve predicts.'
+          : '.'}
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
@@ -800,8 +899,9 @@ function BacktestSection({ strategy, onStrategyChange, params, onParamChange, re
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-subtle">
-        Canned long/flat strategies on this price series, compared to buy &amp; hold. No fees or
-        slippage — a sanity check, not a trading system.
+        Canned long/flat strategies on this price series, compared to buy &amp; hold. Transaction
+        cost is modeled per position flip; the optional out-of-sample split flags in-sample overfit.
+        Still a sanity check, not a trading system.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1">
@@ -820,20 +920,62 @@ function BacktestSection({ strategy, onStrategyChange, params, onParamChange, re
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() => onParamChange('oosFrac', params.oosFrac > 0 ? 0 : 0.3)}
+          className={`rounded-none border px-2.5 py-1 text-[11px] tracking-wide ${
+            params.oosFrac > 0
+              ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
+              : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
+          }`}
+        >
+          Out-of-sample 30%
+        </button>
       </div>
       <div className="flex flex-wrap gap-4">
         {strategy === 'sma' && (
           <>
-            <SliderField label="Fast SMA" value={params.fast} min={5} max={50} onChange={(v) => onParamChange('fast', v)} />
-            <SliderField label="Slow SMA" value={params.slow} min={20} max={200} onChange={(v) => onParamChange('slow', v)} />
+            <SliderField
+              label="Fast SMA"
+              value={params.fast}
+              min={5}
+              max={50}
+              onChange={(v) => onParamChange('fast', v)}
+            />
+            <SliderField
+              label="Slow SMA"
+              value={params.slow}
+              min={20}
+              max={200}
+              onChange={(v) => onParamChange('slow', v)}
+            />
           </>
         )}
         {strategy === 'momentum' && (
-          <SliderField label="Lookback (days)" value={params.lookback} min={10} max={200} onChange={(v) => onParamChange('lookback', v)} />
+          <SliderField
+            label="Lookback (days)"
+            value={params.lookback}
+            min={10}
+            max={200}
+            onChange={(v) => onParamChange('lookback', v)}
+          />
         )}
         {strategy === 'meanrev' && (
-          <SliderField label="SMA window" value={params.lookback} min={5} max={100} onChange={(v) => onParamChange('lookback', v)} />
+          <SliderField
+            label="SMA window"
+            value={params.lookback}
+            min={5}
+            max={100}
+            onChange={(v) => onParamChange('lookback', v)}
+          />
         )}
+        <SliderField
+          label="Cost / trade (bps)"
+          value={params.costBps}
+          min={0}
+          max={50}
+          onChange={(v) => onParamChange('costBps', v)}
+        />
       </div>
       {!result ? (
         <NoticeBox title="Backtest">Not enough price history to backtest.</NoticeBox>
@@ -845,15 +987,49 @@ function BacktestSection({ strategy, onStrategyChange, params, onParamChange, re
             label="Strategy equity (orange) vs buy & hold (grey)"
           />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <MetricCard label="Strategy Return" value={fmtSignedPct(result.finalReturn)} tone={signedTone(result.finalReturn)} />
-            <MetricCard label="Buy & Hold" value={fmtSignedPct(result.buyHoldReturn)} tone={signedTone(result.buyHoldReturn)} />
-            <MetricCard label="CAGR" value={fmtSignedPct(result.cagr)} tone={signedTone(result.cagr)} />
-            <MetricCard label="Sharpe" value={fmtRatio(result.sharpe)} tone={ratioTone(result.sharpe)} />
+            <MetricCard
+              label="Strategy Return"
+              value={fmtSignedPct(result.finalReturn)}
+              tone={signedTone(result.finalReturn)}
+            />
+            <MetricCard
+              label="Buy & Hold"
+              value={fmtSignedPct(result.buyHoldReturn)}
+              tone={signedTone(result.buyHoldReturn)}
+            />
+            <MetricCard
+              label="CAGR"
+              value={fmtSignedPct(result.cagr)}
+              tone={signedTone(result.cagr)}
+            />
+            <MetricCard
+              label="Sharpe"
+              value={fmtRatio(result.sharpe)}
+              tone={ratioTone(result.sharpe)}
+            />
             <MetricCard label="Max Drawdown" value={fmtLoss(result.maxDD)} tone="bad" />
             <MetricCard label="Win Rate" value={fmtPercent(result.winRate)} />
           </div>
+          {result.outSampleReturn != null && (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <MetricCard
+                label="In-sample Return"
+                value={fmtSignedPct(result.inSampleReturn)}
+                tone={signedTone(result.inSampleReturn)}
+                gloss="First 70% of history — the part a tuned strategy can overfit."
+              />
+              <MetricCard
+                label="Out-of-sample Return"
+                value={fmtSignedPct(result.outSampleReturn)}
+                tone={signedTone(result.outSampleReturn)}
+                gloss="Trailing 30% the parameters never saw. A big drop here = overfit."
+              />
+              <MetricCard label="Trades" value={String(result.trades)} />
+            </div>
+          )}
           <p className="text-[11px] text-bloomberg-subtle">
-            Time in market: {fmtPercent(result.exposure)}.
+            Time in market: {fmtPercent(result.exposure)}
+            {result.outSampleReturn == null ? ` · ${result.trades} trades` : ''}.
           </p>
         </>
       )}
@@ -949,6 +1125,569 @@ SizingSection.propTypes = {
   hurstVal: PropTypes.number,
 };
 
+// Free-form numeric input, styled to match SliderField.
+function NumberField({ label, value, onChange, step = 'any', suffix }) {
+  return (
+    <label className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-muted">
+      <span className="tracking-wider uppercase">
+        {label}
+        {suffix ? ` (${suffix})` : ''}
+      </span>
+      <input
+        type="number"
+        step={step}
+        value={value}
+        onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+        className="w-32 border border-bloomberg-border bg-black px-2 py-1 text-white accent-bloomberg-orange"
+      />
+    </label>
+  );
+}
+
+NumberField.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+  onChange: PropTypes.func.isRequired,
+  step: PropTypes.string,
+  suffix: PropTypes.string,
+};
+
+// Black-Scholes-Merton option pricer + Greeks. Spot is the last close; vol/rate
+// default to the figures the tab already computed (annualized vol, config rf).
+function OptionsSection({ spot, defaultVol, defaultRate, ccy }) {
+  const [strike, setStrike] = useState(Number(spot.toFixed(2)));
+  const [days, setDays] = useState(30);
+  const [vol, setVol] = useState(finite(defaultVol) ? Number(defaultVol.toFixed(1)) : 25);
+  const [rate, setRate] = useState(Number((defaultRate * 100).toFixed(2)));
+  const [type, setType] = useState('call');
+  const [marketPrice, setMarketPrice] = useState(''); // optional: solve implied vol
+
+  const greeks = useMemo(
+    () =>
+      blackScholes(
+        spot,
+        Number(strike),
+        Number(days) / 365,
+        Number(rate) / 100,
+        Number(vol) / 100,
+        type
+      ),
+    [spot, strike, days, rate, vol, type]
+  );
+  // Implied vol from a quoted market price — the inverse of the pricer above.
+  const iv = useMemo(() => {
+    if (marketPrice === '' || !(Number(marketPrice) > 0)) return null;
+    return impliedVol(
+      Number(marketPrice),
+      spot,
+      Number(strike),
+      Number(days) / 365,
+      Number(rate) / 100,
+      type
+    );
+  }, [marketPrice, spot, strike, days, rate, type]);
+  const money = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-bloomberg-subtle">
+        European option fair value via Black-Scholes-Merton. Spot is today&apos;s close (
+        {money(spot)}); volatility pre-fills with this name&apos;s realized annual vol. Research
+        only.
+      </p>
+      <div className="flex flex-wrap items-end gap-4">
+        <NumberField label="Strike" value={strike} onChange={setStrike} />
+        <NumberField label="Days to Expiry" value={days} onChange={setDays} step="1" />
+        <NumberField label="Volatility" value={vol} onChange={setVol} suffix="%" />
+        <NumberField label="Risk-free Rate" value={rate} onChange={setRate} suffix="%" />
+        <label className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-muted">
+          <span className="tracking-wider uppercase">Type</span>
+          <div className="flex gap-1">
+            {['call', 'put'].map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setType(t)}
+                className={`border border-bloomberg-border px-3 py-1 text-xs uppercase ${
+                  type === t
+                    ? 'bg-bloomberg-orange text-black'
+                    : 'text-bloomberg-muted hover:text-white'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </label>
+      </div>
+      {greeks ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <MetricCard
+            label={`${type} Fair Value`}
+            value={money(greeks.price)}
+            tone="neutral"
+            formula="Black-Scholes-Merton, no dividend. S·N(d1) − K·e^{−rT}·N(d2) for a call."
+          />
+          <MetricCard
+            label="Delta"
+            value={fmtNum2(greeks.delta)}
+            gloss="∂Price/∂Spot. Shares-equivalent exposure per option."
+          />
+          <MetricCard
+            label="Gamma"
+            value={greeks.gamma.toFixed(4)}
+            gloss="∂Delta/∂Spot. How fast delta moves."
+          />
+          <MetricCard
+            label="Vega"
+            value={fmtNum2(greeks.vega)}
+            gloss="Price change per +1% volatility."
+          />
+          <MetricCard
+            label="Theta"
+            value={fmtNum2(greeks.theta)}
+            tone={greeks.theta < 0 ? 'bad' : 'neutral'}
+            gloss="Price change per day of time decay."
+          />
+          <MetricCard
+            label="Rho"
+            value={fmtNum2(greeks.rho)}
+            gloss="Price change per +1% risk-free rate."
+          />
+        </div>
+      ) : (
+        <NoticeBox title="Check inputs">
+          Strike, days, and volatility must all be positive.
+        </NoticeBox>
+      )}
+
+      <div className="border border-bloomberg-border bg-bloomberg-card p-3">
+        <div className="flex flex-wrap items-end gap-4">
+          <NumberField label="Market Price" value={marketPrice} onChange={setMarketPrice} />
+          <div className="font-mono text-[11px] text-bloomberg-muted">
+            <div className="tracking-wider uppercase">Implied Volatility</div>
+            <div className="mt-1 text-2xl text-white">
+              {iv != null ? `${(iv * 100).toFixed(1)}%` : DASH}
+            </div>
+          </div>
+          <p className="max-w-xs text-[11px] text-bloomberg-subtle">
+            Enter a quoted option price to back out the volatility the market is pricing in
+            (bisection on Black-Scholes).
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+OptionsSection.propTypes = {
+  spot: PropTypes.number.isRequired,
+  defaultVol: PropTypes.number,
+  defaultRate: PropTypes.number.isRequired,
+  ccy: PropTypes.string,
+};
+
+// Two-stage DCF + market multiples. FCF/shares/net-debt auto-fill from the
+// /market/stock-overview endpoint (yfinance .info); every field stays editable.
+function ValuationSection({ spot, defaultRate, ccy, symbol }) {
+  const [fcf, setFcf] = useState(1000); // base free cash flow (millions)
+  const [growth, setGrowth] = useState(8); // % near-term FCF growth
+  const [years, setYears] = useState(5);
+  const [wacc, setWacc] = useState(Number(Math.max(8, defaultRate * 100 + 5).toFixed(1)));
+  const [terminalGrowth, setTerminalGrowth] = useState(2.5);
+  const [shares, setShares] = useState(100); // millions
+  const [netDebt, setNetDebt] = useState(0); // millions
+  const [overview, setOverview] = useState(null); // null=idle/loading, {} = fundamentals
+  const [ovError, setOvError] = useState(false);
+  const [showMC, setShowMC] = useState(false); // DCF Monte Carlo toggle
+
+  // Pull fundamentals once when the section mounts. Powers the comparables table
+  // and the one-click DCF auto-fill. Fails soft — manual inputs still work.
+  useEffect(() => {
+    if (!symbol) return undefined;
+    const controller = new AbortController();
+    let alive = true;
+    getStockOverview(symbol, { signal: controller.signal })
+      .then((d) => {
+        if (alive) setOverview(d && typeof d === 'object' ? d : {});
+      })
+      .catch(() => {
+        if (alive) setOvError(true);
+      });
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+  }, [symbol]);
+
+  // yfinance reports FCF/debt/cash/shares in absolute currency; DCF inputs are in
+  // millions, so scale by 1e6. Net debt = total debt − cash.
+  const autoFill = () => {
+    if (!overview) return;
+    const M = 1e6;
+    if (Number.isFinite(overview.free_cashflow))
+      setFcf(Number((overview.free_cashflow / M).toFixed(1)));
+    if (Number.isFinite(overview.shares_outstanding))
+      setShares(Number((overview.shares_outstanding / M).toFixed(1)));
+    const debt = Number.isFinite(overview.total_debt) ? overview.total_debt : 0;
+    const cash = Number.isFinite(overview.total_cash) ? overview.total_cash : 0;
+    setNetDebt(Number(((debt - cash) / M).toFixed(1)));
+    if (Number.isFinite(overview.earnings_growth)) {
+      // Clamp a noisy single-year growth read to a sane DCF stage-1 range.
+      setGrowth(Number(Math.max(0, Math.min(25, overview.earnings_growth * 100)).toFixed(1)));
+    }
+  };
+
+  const result = useMemo(
+    () =>
+      dcf({
+        fcf: Number(fcf),
+        growth: Number(growth) / 100,
+        years: Number(years),
+        wacc: Number(wacc) / 100,
+        terminalGrowth: Number(terminalGrowth) / 100,
+        shares: Number(shares),
+        netDebt: Number(netDebt),
+      }),
+    [fcf, growth, years, wacc, terminalGrowth, shares, netDebt]
+  );
+  const money = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
+  const upside = result && spot > 0 ? (result.fairValuePerShare / spot - 1) * 100 : null;
+
+  // #3 Monte Carlo: vary the three soft assumptions ±a spread around the inputs and
+  // collect the fair-value distribution. Reuses the seeded MC engine. ponytail:
+  // fixed spreads, not per-input range fields — add those only if anyone asks.
+  const mc = useMemo(() => {
+    if (!showMC) return null;
+    return dcfMonteCarlo(
+      { fcf: Number(fcf), years: Number(years), shares: Number(shares), netDebt: Number(netDebt) },
+      {
+        growth: [Number(growth) / 100 - 0.03, Number(growth) / 100 + 0.03],
+        wacc: [Number(wacc) / 100 - 0.015, Number(wacc) / 100 + 0.015],
+        terminalGrowth: [
+          Number(terminalGrowth) / 100 - 0.005,
+          Number(terminalGrowth) / 100 + 0.005,
+        ],
+      },
+      2000,
+      42
+    );
+  }, [showMC, fcf, growth, years, wacc, terminalGrowth, shares, netDebt]);
+
+  // Sensitivity grid: WACC (rows, ±2%) × terminal growth (cols, ±1%). DCF is very
+  // sensitive to both, so the single point above is misleading on its own.
+  // ponytail: 25 trivial dcf() calls per render — no memo needed.
+  const waccAxis = [-2, -1, 0, 1, 2].map((d) => Number(wacc) + d);
+  const tgAxis = [-1, -0.5, 0, 0.5, 1].map((d) => Number(terminalGrowth) + d);
+  const grid = waccAxis.map((w) =>
+    tgAxis.map((tg) => {
+      const r = dcf({
+        fcf: Number(fcf),
+        growth: Number(growth) / 100,
+        years: Number(years),
+        wacc: w / 100,
+        terminalGrowth: tg / 100,
+        shares: Number(shares),
+        netDebt: Number(netDebt),
+      });
+      return r ? r.fairValuePerShare : null;
+    })
+  );
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-bloomberg-subtle">
+        Two-stage discounted cash flow: {years} years of FCF grown at {growth}%, then a Gordon
+        terminal value. FCF, shares, and net debt are in millions. Research only — not advice.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={autoFill}
+          disabled={!overview}
+          className="rounded-none border border-bloomberg-orange bg-bloomberg-orange-dim px-3 py-1 text-[11px] tracking-wide text-bloomberg-orange uppercase hover:bg-bloomberg-orange hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          ⤓ Auto-fill from fundamentals
+        </button>
+        <span className="text-[11px] text-bloomberg-subtle">
+          {ovError
+            ? 'Fundamentals unavailable — enter inputs manually.'
+            : !overview
+              ? 'Loading fundamentals…'
+              : `From ${symbol} fundamentals (yfinance). Every field stays editable.`}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-end gap-4">
+        <NumberField label="Base FCF" value={fcf} onChange={setFcf} suffix="M" />
+        <NumberField label="FCF Growth" value={growth} onChange={setGrowth} suffix="%" />
+        <NumberField label="Years" value={years} onChange={setYears} step="1" />
+        <NumberField label="WACC" value={wacc} onChange={setWacc} suffix="%" />
+        <NumberField
+          label="Terminal Growth"
+          value={terminalGrowth}
+          onChange={setTerminalGrowth}
+          suffix="%"
+        />
+        <NumberField label="Shares Out" value={shares} onChange={setShares} suffix="M" />
+        <NumberField label="Net Debt" value={netDebt} onChange={setNetDebt} suffix="M" />
+      </div>
+      {result ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            label="Fair Value / Share"
+            value={money(result.fairValuePerShare)}
+            tone="neutral"
+            formula="(Σ discounted FCF + discounted terminal value − net debt) ÷ shares."
+          />
+          <MetricCard
+            label="Upside vs Spot"
+            value={finite(upside) ? fmtSignedPct(upside) : DASH}
+            tone={signedTone(upside)}
+            gloss={`Fair value vs today's close (${money(spot)}).`}
+          />
+          <MetricCard label="Equity Value" value={`${money(result.equityValue)}M`} />
+          <MetricCard label="Enterprise Value" value={`${money(result.enterpriseValue)}M`} />
+        </div>
+      ) : (
+        <NoticeBox title="Check inputs">
+          WACC must exceed terminal growth (else the terminal value diverges) and shares must be
+          positive.
+        </NoticeBox>
+      )}
+
+      {result && (
+        <div className="space-y-1">
+          <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
+            Sensitivity: fair value / share (WACC × terminal growth)
+          </div>
+          <div className="overflow-x-auto border border-bloomberg-border">
+            <table className="terminal-table w-full font-mono text-xs">
+              <thead>
+                <tr>
+                  <th className="px-2 py-1 text-bloomberg-muted">WACC ＼ g</th>
+                  {tgAxis.map((tg) => (
+                    <th key={tg} className="px-2 py-1 text-right text-bloomberg-muted">
+                      {tg.toFixed(1)}%
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {grid.map((row, ri) => (
+                  <tr key={waccAxis[ri]}>
+                    <td className="px-2 py-1 text-bloomberg-muted">{waccAxis[ri].toFixed(1)}%</td>
+                    {row.map((cell, ci) => {
+                      const base =
+                        waccAxis[ri] === Number(wacc) && tgAxis[ci] === Number(terminalGrowth);
+                      const tone =
+                        cell == null || !(spot > 0)
+                          ? 'text-bloomberg-muted'
+                          : cell >= spot
+                            ? 'text-bloomberg-green'
+                            : 'text-bloomberg-red';
+                      return (
+                        <td
+                          key={ci}
+                          className={`px-2 py-1 text-right ${tone} ${base ? 'bg-bloomberg-orange-dim font-bold' : ''}`}
+                        >
+                          {cell == null ? DASH : money(cell)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-bloomberg-subtle">
+            Green = fair value above today&apos;s close ({money(spot)}); highlighted cell = your
+            inputs. Small WACC/growth shifts move the valuation a lot — treat any single number with
+            caution.
+          </p>
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowMC((v) => !v)}
+            className={`rounded-none border px-3 py-1 text-[11px] tracking-wide uppercase ${
+              showMC
+                ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
+                : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
+            }`}
+          >
+            🎲 Monte Carlo (growth ±3% · WACC ±1.5% · terminal ±0.5%)
+          </button>
+          {showMC &&
+            (mc ? (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  <MetricCard
+                    label="Fair Value P10"
+                    value={money(mc.p10)}
+                    tone="bad"
+                    gloss="10th percentile across 2,000 assumption draws."
+                  />
+                  <MetricCard label="Fair Value P50 (median)" value={money(mc.p50)} />
+                  <MetricCard
+                    label="Fair Value P90"
+                    value={money(mc.p90)}
+                    tone="good"
+                    gloss="90th percentile — the optimistic tail."
+                  />
+                </div>
+                <Histogram
+                  bins={returnHistogram(mc.values, 30)}
+                  label="Distribution of DCF fair value across sampled assumptions"
+                />
+                <p className="text-[11px] text-bloomberg-subtle">
+                  A wide P10–P90 band means the valuation is assumption-driven, not robust. Spot
+                  today: {money(spot)}.
+                </p>
+              </>
+            ) : (
+              <NoticeBox title="Monte Carlo">
+                No valid draws — widen WACC above terminal growth.
+              </NoticeBox>
+            ))}
+        </div>
+      )}
+
+      {overview && (
+        <div className="space-y-1">
+          <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
+            Market multiples ({symbol})
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <MetricCard
+              label="P/E (TTM)"
+              value={fmtNum2(overview.pe_ttm)}
+              gloss="Price ÷ trailing earnings."
+            />
+            <MetricCard
+              label="Forward P/E"
+              value={fmtNum2(overview.forward_pe)}
+              gloss="Price ÷ next-year estimated earnings."
+            />
+            <MetricCard label="P/B" value={fmtNum2(overview.pb)} gloss="Price ÷ book value." />
+            <MetricCard label="P/S (TTM)" value={fmtNum2(overview.ps_ttm)} gloss="Price ÷ sales." />
+            <MetricCard
+              label="EV/EBITDA"
+              value={fmtNum2(overview.ev_ebitda)}
+              gloss="Enterprise value ÷ EBITDA. Capital-structure neutral."
+            />
+            <MetricCard
+              label="Market Cap"
+              value={finite(overview.market_cap) ? `${money(overview.market_cap / 1e6)}M` : DASH}
+            />
+          </div>
+          <p className="text-[11px] text-bloomberg-subtle">
+            Cross-check the DCF fair value above against these multiples — a DCF that disagrees
+            wildly with how the market prices peers deserves a second look at the assumptions.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ValuationSection.propTypes = {
+  spot: PropTypes.number.isRequired,
+  defaultRate: PropTypes.number.isRequired,
+  ccy: PropTypes.string,
+  symbol: PropTypes.string,
+};
+
+// #4 stress test + #6 regime-shift detection. Both are derived from figures the tab
+// already computes (annual vol, rolling vols) — no new data.
+function ScenarioSection({ spot, vol, ccy, regime }) {
+  const money = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
+  const stress = useMemo(() => stressScenarios(spot, finite(vol) ? vol : 0), [spot, vol]);
+  const regimeTone = (label) =>
+    label === 'Stressed' ? 'bad' : label === 'Calm' ? 'good' : 'neutral';
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-bloomberg-subtle">
+        How today&apos;s price ({money(spot)}) would move under a one-day shock — σ-based moves from
+        this name&apos;s own volatility ({fmtPercent(vol)} annual) plus famous crash days. Research
+        only.
+      </p>
+
+      <div className="overflow-x-auto border border-bloomberg-border">
+        <table className="terminal-table w-full font-mono text-xs">
+          <thead>
+            <tr>
+              <th className="px-2 py-1 text-left text-bloomberg-muted">Scenario</th>
+              <th className="px-2 py-1 text-right text-bloomberg-muted">Shock</th>
+              <th className="px-2 py-1 text-right text-bloomberg-muted">Price after</th>
+              <th className="px-2 py-1 text-right text-bloomberg-muted">P&amp;L</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stress.map((s) => (
+              <tr key={s.label}>
+                <td className="px-2 py-1 text-bloomberg-white">{s.label}</td>
+                <td className="px-2 py-1 text-right text-bloomberg-red">
+                  {fmtSignedPct(s.lossPct)}
+                </td>
+                <td className="px-2 py-1 text-right text-bloomberg-white">{money(s.price)}</td>
+                <td className="px-2 py-1 text-right text-bloomberg-red">{money(s.price - spot)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="space-y-1">
+        <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
+          Volatility regime
+        </div>
+        {regime ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <MetricCard
+              label="Current Regime"
+              value={regime.current}
+              tone={regimeTone(regime.current)}
+              gloss="Latest rolling-vol bucket vs this series' own history (Calm / Normal / Stressed)."
+            />
+            <MetricCard
+              label="Days in Regime"
+              value={`${regime.daysSince}d`}
+              gloss="Trading days since the last regime change."
+            />
+            <MetricCard
+              label="Recent Shifts"
+              value={String(regime.shifts.length)}
+              gloss="Number of regime transitions in the recent window (last 5 shown)."
+            />
+          </div>
+        ) : (
+          <NoticeBox title="Regime">Not enough history to detect regime shifts.</NoticeBox>
+        )}
+        {regime && regime.shifts.length > 0 && (
+          <p className="text-[11px] text-bloomberg-subtle">
+            Latest:{' '}
+            {regime.shifts
+              .slice(-3)
+              .map((s) => `${s.from}→${s.to}`)
+              .join(', ')}
+            .
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ScenarioSection.propTypes = {
+  spot: PropTypes.number.isRequired,
+  vol: PropTypes.number,
+  ccy: PropTypes.string,
+  regime: PropTypes.object,
+};
+
 // Always-visible headline strip (vol / Sharpe / max DD / VaR + regime + Hurst).
 function HeadlineStrip({ vol, shp, dd, var95, regime, hurstVal }) {
   const item = (label, value, tone) => (
@@ -956,7 +1695,11 @@ function HeadlineStrip({ vol, shp, dd, var95, regime, hurstVal }) {
       <span className="text-[10px] tracking-wider text-bloomberg-muted uppercase">{label}</span>
       <span
         className={`text-sm ${
-          tone === 'bad' ? 'text-bloomberg-red' : tone === 'good' ? 'text-bloomberg-green' : 'text-white'
+          tone === 'bad'
+            ? 'text-bloomberg-red'
+            : tone === 'good'
+              ? 'text-bloomberg-green'
+              : 'text-white'
         }`}
       >
         {value}
@@ -1081,7 +1824,10 @@ function WeightsTable({ title, symbols, weights, color }) {
   if (!weights) return null;
   return (
     <div className="border border-bloomberg-border bg-bloomberg-card p-3">
-      <div className="mb-1 flex items-center gap-2 text-[11px] tracking-wider uppercase" style={{ color }}>
+      <div
+        className="mb-1 flex items-center gap-2 text-[11px] tracking-wider uppercase"
+        style={{ color }}
+      >
         <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
         {title}
       </div>
@@ -1166,7 +1912,9 @@ function CorrelationSection({
       )}
 
       {symbols.length < 2 ? (
-        <NoticeBox title="Correlation">Add at least one peer ticker to compute correlations.</NoticeBox>
+        <NoticeBox title="Correlation">
+          Add at least one peer ticker to compute correlations.
+        </NoticeBox>
       ) : (
         <>
           <div className="space-y-1">
@@ -1195,7 +1943,12 @@ function CorrelationSection({
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
               <FrontierChart frontier={frontier} gmv={gmv} tangency={tangency} />
               <div className="space-y-3">
-                <WeightsTable title="Min-Variance" symbols={symbols} weights={gmvW} color="#3b82f6" />
+                <WeightsTable
+                  title="Min-Variance"
+                  symbols={symbols}
+                  weights={gmvW}
+                  color="#3b82f6"
+                />
                 <WeightsTable title="Max-Sharpe" symbols={symbols} weights={tanW} color="#22c55e" />
               </div>
             </div>
@@ -1233,8 +1986,15 @@ function QuantPanel({ points, currency, symbol }) {
   const [benchPoints, setBenchPoints] = useState(null); // null = loading, [] = unavailable
   const [mcHorizon, setMcHorizon] = useState(MC_DAYS);
   const [mcMethod, setMcMethod] = useState('gbm'); // 'gbm' | 'bootstrap'
+  const [mcDrift, setMcDrift] = useState('historical'); // 'historical' | 'riskneutral'
   const [strategy, setStrategy] = useState('sma');
-  const [btParams, setBtParams] = useState({ fast: 20, slow: 50, lookback: 60 });
+  const [btParams, setBtParams] = useState({
+    fast: 20,
+    slow: 50,
+    lookback: 60,
+    costBps: 0,
+    oosFrac: 0,
+  });
   const [peerInput, setPeerInput] = useState('');
   const [peers, setPeers] = useState([]); // [{ symbol, points }]
   const [peerLoading, setPeerLoading] = useState(false);
@@ -1302,6 +2062,8 @@ function QuantPanel({ points, currency, symbol }) {
   // Regime (vol percentile) + Hurst (trend vs mean-revert) for the headline + sizing.
   const regime = useMemo(() => regimeLabel(volPercentile(rollingVols)), [rollingVols]);
   const hurstVal = useMemo(() => hurst(returns), [returns]);
+  const ddStats = useMemo(() => drawdownStats(closes), [closes]);
+  const regimeShift = useMemo(() => regimeShifts(rollingVols), [rollingVols]);
 
   // Underwater curve, zipped to dates (drops the first point — no prior peak).
   const ddPoints = useMemo(
@@ -1354,8 +2116,11 @@ function QuantPanel({ points, currency, symbol }) {
     if (mcMethod === 'bootstrap') {
       return bootstrapMC(spot, returns, mcHorizon, MC_PATHS, seed);
     }
-    return monteCarloGBM(spot, mean(logRet), stdDev(logRet), mcHorizon, MC_PATHS, seed);
-  }, [section, closes, logRet, returns, seed, mcHorizon, mcMethod]);
+    // Risk-neutral drift uses the risk-free rate instead of the historical mean,
+    // removing the optimistic bias when the sample window was a bull run.
+    const drift = mcDrift === 'riskneutral' ? rfDaily : mean(logRet);
+    return monteCarloGBM(spot, drift, stdDev(logRet), mcHorizon, MC_PATHS, seed);
+  }, [section, closes, logRet, returns, seed, mcHorizon, mcMethod, mcDrift, rfDaily]);
 
   const horizonLabel = useMemo(() => {
     const months = Math.round((mcHorizon / TRADING_DAYS) * 12);
@@ -1528,6 +2293,7 @@ function QuantPanel({ points, currency, symbol }) {
           ddPoints={ddPoints}
           rsPoints={rsPoints}
           rbPoints={rbPoints}
+          ddStats={ddStats}
         />
       )}
 
@@ -1557,6 +2323,8 @@ function QuantPanel({ points, currency, symbol }) {
           horizonLabel={horizonLabel}
           method={mcMethod}
           onMethodChange={setMcMethod}
+          drift={mcDrift}
+          onDriftChange={setMcDrift}
         />
       )}
 
@@ -1598,6 +2366,18 @@ function QuantPanel({ points, currency, symbol }) {
           gmvWeights={corr.gmvW}
           tangencyWeights={corr.tanW}
         />
+      )}
+
+      {section === 'options' && (
+        <OptionsSection spot={closes.at(-1)} defaultVol={metrics.vol} defaultRate={rf} ccy={ccy} />
+      )}
+
+      {section === 'valuation' && (
+        <ValuationSection spot={closes.at(-1)} defaultRate={rf} ccy={ccy} symbol={baseSymbol} />
+      )}
+
+      {section === 'scenario' && (
+        <ScenarioSection spot={closes.at(-1)} vol={metrics.vol} ccy={ccy} regime={regimeShift} />
       )}
     </div>
   );

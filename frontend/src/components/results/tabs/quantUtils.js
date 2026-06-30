@@ -176,7 +176,12 @@ function summarizePaths(all, days, paths) {
   const band = [];
   for (let d = 0; d <= days; d += 1) {
     const col = all.map((p) => p[d]).sort((a, b) => a - b);
-    band.push({ step: d, p10: QUANTILE(col, 0.1), p50: QUANTILE(col, 0.5), p90: QUANTILE(col, 0.9) });
+    band.push({
+      step: d,
+      p10: QUANTILE(col, 0.1),
+      p50: QUANTILE(col, 0.5),
+      p90: QUANTILE(col, 0.9),
+    });
   }
   return {
     terminal,
@@ -419,11 +424,15 @@ function smaAt(arr, w, i) {
 }
 
 // Canned long/flat strategies on the price series. Position is decided on day i
-// and earns day i+1's return (no look-ahead). No costs/slippage modeled.
+// and earns day i+1's return (no look-ahead). params.costBps charges a one-way
+// transaction cost (bps of notional) each time the position flips — set 0 for the
+// frictionless case. params.oosFrac (0..1) marks the trailing fraction as
+// out-of-sample so the UI can flag in-sample overfit.
 // ponytail: three hard-coded strategies, long/flat only. Not a general engine.
 export function backtest(closes, strategy, params = {}) {
   const n = closes.length;
   if (n < 30) return null;
+  const cost = (params.costBps || 0) / 10000;
   const signal = new Array(n).fill(0);
   for (let i = 0; i < n; i += 1) {
     if (strategy === 'sma') {
@@ -446,15 +455,29 @@ export function backtest(closes, strategy, params = {}) {
   const stratRets = [];
   let wins = 0;
   let inDays = 0;
+  let trades = 0;
+  let prevPos = 0;
+  // Split index: returns at i >= oosStart count as out-of-sample.
+  const oosStart = params.oosFrac > 0 ? Math.floor(n * (1 - params.oosFrac)) : n;
+  let isEq = 1;
+  let oosEq = 1;
   for (let i = 1; i < n; i += 1) {
     const r = closes[i - 1] ? (closes[i] - closes[i - 1]) / closes[i - 1] : 0;
     bh *= 1 + r;
-    const sr = signal[i - 1] * r;
+    const pos = signal[i - 1];
+    if (pos !== prevPos) {
+      eq *= 1 - cost; // pay the spread/commission when entering or exiting
+      trades += 1;
+    }
+    prevPos = pos;
+    const sr = pos * r;
     eq *= 1 + sr;
+    if (i >= oosStart) oosEq *= 1 + sr;
+    else isEq *= 1 + sr;
     equity.push(eq);
     buyhold.push(bh);
     stratRets.push(sr);
-    if (signal[i - 1]) {
+    if (pos) {
       inDays += 1;
       if (r > 0) wins += 1;
     }
@@ -470,6 +493,9 @@ export function backtest(closes, strategy, params = {}) {
     finalReturn: (eq - 1) * 100,
     buyHoldReturn: (bh - 1) * 100,
     exposure: (inDays / (n - 1)) * 100,
+    trades,
+    inSampleReturn: params.oosFrac > 0 ? (isEq - 1) * 100 : null,
+    outSampleReturn: params.oosFrac > 0 ? (oosEq - 1) * 100 : null,
   };
 }
 
@@ -588,16 +614,18 @@ export function gmvWeights(cov) {
 export function tangencyWeights(cov, mu, rf = 0) {
   const inv = invertMatrix(cov);
   if (!inv) return null;
-  return normalizeWeights(matVec(inv, mu.map((m) => m - rf)));
+  return normalizeWeights(
+    matVec(
+      inv,
+      mu.map((m) => m - rf)
+    )
+  );
 }
 
 // Portfolio mean/vol for weights w (per-period mu/cov).
 export function portfolioStats(w, mu, cov) {
   const ret = w.reduce((s, x, i) => s + x * mu[i], 0);
-  const variance = w.reduce(
-    (s, x, i) => s + x * cov[i].reduce((t, c, j) => t + c * w[j], 0),
-    0
-  );
+  const variance = w.reduce((s, x, i) => s + x * cov[i].reduce((t, c, j) => t + c * w[j], 0), 0);
   return { ret, vol: Math.sqrt(Math.max(0, variance)) };
 }
 
@@ -615,4 +643,194 @@ export function efficientFrontier(cov, mu, rf = 0, steps = 25) {
     out.push({ vol: vol * Math.sqrt(TRADING_DAYS) * 100, ret: ret * TRADING_DAYS * 100 });
   }
   return out;
+}
+
+// Standard normal CDF via Abramowitz-Stegun 7.1.26 (|error| < 7.5e-8). JS has no
+// built-in erf/normCDF, and this is the only piece Black-Scholes is missing.
+export function normCDF(x) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const d = 0.3989423 * Math.exp((-x * x) / 2);
+  const p =
+    d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return x > 0 ? 1 - p : p;
+}
+
+// Black-Scholes-Merton (no dividend) for a European call/put.
+//   S spot, K strike, T years to expiry, r risk-free (decimal), sigma vol (decimal).
+// -> { price, delta, gamma, vega, theta, rho }. vega/rho per 1% move, theta per day.
+export function blackScholes(S, K, T, r, sigma, type = 'call') {
+  if (!(S > 0) || !(K > 0) || !(T > 0) || !(sigma > 0)) return null;
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * sqrtT);
+  const d2 = d1 - sigma * sqrtT;
+  const pdf = 0.3989423 * Math.exp((-d1 * d1) / 2);
+  const isCall = type === 'call';
+  const price = isCall
+    ? S * normCDF(d1) - K * Math.exp(-r * T) * normCDF(d2)
+    : K * Math.exp(-r * T) * normCDF(-d2) - S * normCDF(-d1);
+  const theta =
+    (-(S * pdf * sigma) / (2 * sqrtT) -
+      (isCall ? 1 : -1) * r * K * Math.exp(-r * T) * normCDF(isCall ? d2 : -d2)) /
+    365;
+  return {
+    price,
+    delta: isCall ? normCDF(d1) : normCDF(d1) - 1,
+    gamma: pdf / (S * sigma * sqrtT),
+    vega: (S * pdf * sqrtT) / 100,
+    theta,
+    rho: ((isCall ? 1 : -1) * K * T * Math.exp(-r * T) * normCDF(isCall ? d2 : -d2)) / 100,
+  };
+}
+
+// Implied vol via bisection: the sigma that reprices the option to `target`.
+// -> sigma (decimal) or null if no bracket in [1e-4, 5].
+export function impliedVol(target, S, K, T, r, type = 'call') {
+  if (!(target > 0) || !(S > 0) || !(K > 0) || !(T > 0)) return null;
+  let lo = 1e-4;
+  let hi = 5;
+  const price = (s) => blackScholes(S, K, T, r, s, type).price;
+  if ((price(lo) - target) * (price(hi) - target) > 0) return null;
+  for (let i = 0; i < 100; i += 1) {
+    const mid = (lo + hi) / 2;
+    const diff = price(mid) - target;
+    if (Math.abs(diff) < 1e-6) return mid;
+    if ((price(lo) - target) * diff < 0) hi = mid;
+    else lo = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+// Two-stage DCF: `years` of FCF grown at `growth`, then a Gordon terminal value
+// at `terminalGrowth`, all discounted at `wacc`. Rates are decimals.
+// Requires wacc > terminalGrowth, else the terminal value diverges -> returns null.
+// -> { enterpriseValue, equityValue, fairValuePerShare }.
+export function dcf({ fcf, growth, years = 5, wacc, terminalGrowth, shares, netDebt = 0 }) {
+  if (!(wacc > terminalGrowth) || !(shares > 0) || !(wacc > 0)) return null;
+  let pv = 0;
+  let cf = fcf;
+  for (let t = 1; t <= years; t += 1) {
+    cf *= 1 + growth;
+    pv += cf / (1 + wacc) ** t;
+  }
+  const terminal = (cf * (1 + terminalGrowth)) / (wacc - terminalGrowth);
+  pv += terminal / (1 + wacc) ** years;
+  const equityValue = pv - netDebt;
+  return { enterpriseValue: pv, equityValue, fairValuePerShare: equityValue / shares };
+}
+
+// DCF Monte Carlo: sample growth / wacc / terminalGrowth uniformly inside their
+// [lo, hi] ranges (decimals) and collect the fair-value-per-share distribution.
+// Seeded for reproducibility; draws that violate wacc > terminalGrowth are dropped.
+// -> { p10, p50, p90, mean, values } or null if nothing was valid.
+export function dcfMonteCarlo(base, ranges, paths = 2000, seed = 42) {
+  const rng = mulberry32(seed);
+  const pick = ([lo, hi]) => lo + rng() * (hi - lo);
+  const values = [];
+  for (let i = 0; i < paths; i += 1) {
+    const r = dcf({
+      ...base,
+      growth: pick(ranges.growth),
+      wacc: pick(ranges.wacc),
+      terminalGrowth: pick(ranges.terminalGrowth),
+    });
+    if (r && Number.isFinite(r.fairValuePerShare)) values.push(r.fairValuePerShare);
+  }
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return {
+    p10: QUANTILE(sorted, 0.1),
+    p50: QUANTILE(sorted, 0.5),
+    p90: QUANTILE(sorted, 0.9),
+    mean: mean(values),
+    values,
+  };
+}
+
+// Stress test: apply both σ-based daily shocks and canned historical crash days to
+// a spot price. annualVolPct is this name's annualized vol (%); shocks are decimals.
+// -> [{ label, shock, price, lossPct }] sorted worst-last.
+export function stressScenarios(spot, annualVolPct) {
+  const sigma = annualVolPct > 0 ? annualVolPct / 100 / Math.sqrt(TRADING_DAYS) : 0;
+  const rows = [
+    { label: '−1σ day', shock: -sigma },
+    { label: '−2σ day', shock: -2 * sigma },
+    { label: '−3σ day', shock: -3 * sigma },
+    { label: 'GFC worst day (2008)', shock: -0.0903 },
+    { label: 'COVID crash (Mar 2020)', shock: -0.12 },
+    { label: 'Black Monday (1987)', shock: -0.2261 },
+  ];
+  return rows.map((r) => ({ ...r, price: spot * (1 + r.shock), lossPct: r.shock * 100 }));
+}
+
+// Drawdown recovery stats: walks the close series, grouping each peak-to-recovery
+// underwater episode. threshold is the % depth (positive) that counts as a "real"
+// drawdown episode. -> { maxDD, maxDDDuration, maxDDRecovered, recoveryDays,
+// currentUnderwaterDays, episodes } or null.
+export function drawdownStats(closes, threshold = 5) {
+  if (closes.length < 2) return null;
+  let peak = closes[0];
+  let peakIdx = 0;
+  let cur = null; // active underwater episode
+  const episodes = [];
+  for (let i = 1; i < closes.length; i += 1) {
+    const c = closes[i];
+    if (c >= peak) {
+      if (cur) {
+        episodes.push({ ...cur, recoveredIdx: i, end: i });
+        cur = null;
+      }
+      peak = c;
+      peakIdx = i;
+    } else if (!cur) {
+      cur = { start: peakIdx, trough: c, troughIdx: i, depth: ((c - peak) / peak) * 100 };
+    } else if (c < cur.trough) {
+      cur.trough = c;
+      cur.troughIdx = i;
+      cur.depth = ((c - peak) / peak) * 100;
+    }
+  }
+  const currentUnderwaterDays = cur ? closes.length - 1 - cur.start : 0;
+  if (cur) episodes.push({ ...cur, recoveredIdx: null, end: closes.length - 1 });
+  if (episodes.length === 0) {
+    return {
+      maxDD: 0,
+      maxDDDuration: 0,
+      maxDDRecovered: true,
+      recoveryDays: null,
+      currentUnderwaterDays: 0,
+      episodes: 0,
+    };
+  }
+  const maxEp = episodes.reduce((a, e) => (e.depth < a.depth ? e : a));
+  return {
+    maxDD: maxEp.depth,
+    maxDDDuration: (maxEp.recoveredIdx ?? maxEp.end) - maxEp.start,
+    maxDDRecovered: maxEp.recoveredIdx != null,
+    recoveryDays: maxEp.recoveredIdx != null ? maxEp.recoveredIdx - maxEp.troughIdx : null,
+    currentUnderwaterDays,
+    episodes: episodes.filter((e) => e.depth <= -threshold).length,
+  };
+}
+
+// Regime-shift detection: bucket each rolling-vol reading into Calm/Normal/Stressed
+// by its percentile rank over the whole window, then find the transitions.
+// -> { current, daysSince, shifts: [{ index, from, to }] (last 5) } or null.
+export function regimeShifts(rollingVols) {
+  if (rollingVols.length < 5) return null;
+  const sorted = [...rollingVols].sort((a, b) => a - b);
+  const bucket = (v) => {
+    const pct = (sorted.filter((x) => x <= v).length / sorted.length) * 100;
+    return pct < 33 ? 'Calm' : pct < 66 ? 'Normal' : 'Stressed';
+  };
+  const labels = rollingVols.map(bucket);
+  const shifts = [];
+  for (let i = 1; i < labels.length; i += 1) {
+    if (labels[i] !== labels[i - 1]) shifts.push({ index: i, from: labels[i - 1], to: labels[i] });
+  }
+  const lastShiftIdx = shifts.length ? shifts[shifts.length - 1].index : 0;
+  return {
+    current: labels[labels.length - 1],
+    daysSince: labels.length - 1 - lastShiftIdx,
+    shifts: shifts.slice(-5),
+  };
 }

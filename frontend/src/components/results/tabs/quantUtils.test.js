@@ -13,20 +13,26 @@ import {
   correlationMatrix,
   covarianceMatrix,
   cvar,
+  dcf,
+  dcfMonteCarlo,
   drawdownSeries,
+  drawdownStats,
   efficientFrontier,
   ewmaVol,
   gmvWeights,
   historicalVaR,
   hurst,
+  impliedVol,
   invertMatrix,
   kellyFraction,
   kurtosis,
+  blackScholes,
   logReturns,
   maxDrawdown,
   mean,
   monteCarloGBM,
   parametricVaR,
+  regimeShifts,
   returnHistogram,
   rollingBeta,
   rollingCorrelation,
@@ -36,6 +42,7 @@ import {
   simpleReturns,
   skewness,
   sortino,
+  stressScenarios,
   stdDev,
   tangencyWeights,
   volPercentile,
@@ -315,6 +322,25 @@ describe('backtest', () => {
   it('too-short series -> null', () => {
     expect(backtest([1, 2, 3], 'momentum')).toBeNull();
   });
+
+  // Oscillating series forces the SMA cross to flip repeatedly -> trades + cost.
+  const zigzag = Array.from({ length: 120 }, (_, i) => 100 + 10 * Math.sin(i / 3));
+
+  it('transaction cost lowers return and only bites when the position flips', () => {
+    const free = backtest(zigzag, 'sma', { fast: 5, slow: 15, costBps: 0 });
+    const costly = backtest(zigzag, 'sma', { fast: 5, slow: 15, costBps: 25 });
+    expect(costly.trades).toBeGreaterThan(0);
+    expect(costly.finalReturn).toBeLessThan(free.finalReturn);
+  });
+
+  it('no oosFrac -> in/out-sample returns are null; oosFrac splits the window', () => {
+    const plain = backtest(zigzag, 'sma', { fast: 5, slow: 15 });
+    expect(plain.inSampleReturn).toBeNull();
+    expect(plain.outSampleReturn).toBeNull();
+    const split = backtest(zigzag, 'sma', { fast: 5, slow: 15, oosFrac: 0.3 });
+    expect(Number.isFinite(split.inSampleReturn)).toBe(true);
+    expect(Number.isFinite(split.outSampleReturn)).toBe(true);
+  });
 });
 
 describe('correlation', () => {
@@ -325,7 +351,12 @@ describe('correlation', () => {
 
   it('a series correlates -1 with its negation', () => {
     const r = [0.01, -0.02, 0.015, -0.005, 0.02];
-    expect(correlation(r, r.map((x) => -x))).toBeCloseTo(-1, 10);
+    expect(
+      correlation(
+        r,
+        r.map((x) => -x)
+      )
+    ).toBeCloseTo(-1, 10);
   });
 
   it('rollingCorrelation yields one value per full window', () => {
@@ -337,8 +368,20 @@ describe('correlation', () => {
 describe('alignManyByDate', () => {
   it('keeps only days present in every series', () => {
     const series = [
-      { symbol: 'A', points: [{ date: '2024-01-02', close: 1 }, { date: '2024-01-03', close: 2 }] },
-      { symbol: 'B', points: [{ date: '2024-01-03', close: 9 }, { date: '2024-01-04', close: 8 }] },
+      {
+        symbol: 'A',
+        points: [
+          { date: '2024-01-02', close: 1 },
+          { date: '2024-01-03', close: 2 },
+        ],
+      },
+      {
+        symbol: 'B',
+        points: [
+          { date: '2024-01-03', close: 9 },
+          { date: '2024-01-04', close: 8 },
+        ],
+      },
     ];
     const { dates, closes } = alignManyByDate(series);
     expect(dates).toEqual(['2024-01-03']);
@@ -367,7 +410,12 @@ describe('matrices + optimizer', () => {
   });
 
   it('singular matrix -> null', () => {
-    expect(invertMatrix([[1, 2], [2, 4]])).toBeNull();
+    expect(
+      invertMatrix([
+        [1, 2],
+        [2, 4],
+      ])
+    ).toBeNull();
   });
 
   it('gmvWeights sum to 1', () => {
@@ -391,5 +439,145 @@ describe('matrices + optimizer', () => {
     const frontier = efficientFrontier(cov, mu);
     expect(frontier.length).toBeGreaterThan(0);
     expect(Number.isFinite(frontier[0].vol)).toBe(true);
+  });
+});
+
+describe('black-scholes / greeks', () => {
+  // Textbook reference: S=100, K=100, T=1, r=5%, sigma=20% -> call ≈ 10.4506.
+  it('prices an ATM call to the known value', () => {
+    expect(blackScholes(100, 100, 1, 0.05, 0.2, 'call').price).toBeCloseTo(10.4506, 3);
+  });
+
+  it('respects put-call parity: C - P = S - K·e^{-rT}', () => {
+    const c = blackScholes(100, 90, 0.5, 0.03, 0.25, 'call').price;
+    const p = blackScholes(100, 90, 0.5, 0.03, 0.25, 'put').price;
+    expect(c - p).toBeCloseTo(100 - 90 * Math.exp(-0.03 * 0.5), 6);
+  });
+
+  it('call delta in (0,1), put delta in (-1,0)', () => {
+    expect(blackScholes(100, 100, 1, 0.05, 0.2, 'call').delta).toBeCloseTo(0.6368, 3);
+    expect(blackScholes(100, 100, 1, 0.05, 0.2, 'put').delta).toBeCloseTo(-0.3632, 3);
+  });
+
+  it('invalid inputs -> null', () => {
+    expect(blackScholes(0, 100, 1, 0.05, 0.2)).toBeNull();
+    expect(blackScholes(100, 100, 1, 0.05, 0)).toBeNull();
+  });
+
+  it('impliedVol recovers the sigma used to price', () => {
+    const price = blackScholes(100, 110, 0.75, 0.04, 0.3, 'call').price;
+    expect(impliedVol(price, 100, 110, 0.75, 0.04, 'call')).toBeCloseTo(0.3, 4);
+  });
+});
+
+describe('dcf', () => {
+  // growth=0 -> level FCF is a 5-year annuity + Gordon terminal, all discountable
+  // by hand: 100 cash flows discounted at 10%, terminal = 100/0.1.
+  it('matches a hand-computed flat-FCF valuation', () => {
+    const r = 0.1;
+    let pv = 0;
+    for (let t = 1; t <= 5; t += 1) pv += 100 / (1 + r) ** t;
+    pv += 100 / r / (1 + r) ** 5;
+    const out = dcf({ fcf: 100, growth: 0, years: 5, wacc: r, terminalGrowth: 0, shares: 10 });
+    expect(out.enterpriseValue).toBeCloseTo(pv, 6);
+    expect(out.fairValuePerShare).toBeCloseTo((pv - 0) / 10, 6);
+  });
+
+  it('subtracts net debt from enterprise value', () => {
+    const a = dcf({
+      fcf: 50,
+      growth: 0.05,
+      wacc: 0.09,
+      terminalGrowth: 0.02,
+      shares: 20,
+      netDebt: 0,
+    });
+    const b = dcf({
+      fcf: 50,
+      growth: 0.05,
+      wacc: 0.09,
+      terminalGrowth: 0.02,
+      shares: 20,
+      netDebt: 100,
+    });
+    expect(a.equityValue - b.equityValue).toBeCloseTo(100, 6);
+  });
+
+  it('null when wacc <= terminalGrowth (terminal diverges)', () => {
+    expect(dcf({ fcf: 50, growth: 0.05, wacc: 0.02, terminalGrowth: 0.03, shares: 20 })).toBeNull();
+  });
+});
+
+describe('dcfMonteCarlo', () => {
+  const base = { fcf: 100, years: 5, shares: 10, netDebt: 0 };
+  const ranges = { growth: [0.05, 0.1], wacc: [0.09, 0.12], terminalGrowth: [0.02, 0.03] };
+
+  it('p10 <= p50 <= p90 and brackets the deterministic mid-point estimate', () => {
+    const mc = dcfMonteCarlo(base, ranges, 1000, 7);
+    expect(mc.p10).toBeLessThanOrEqual(mc.p50);
+    expect(mc.p50).toBeLessThanOrEqual(mc.p90);
+    const mid = dcf({ ...base, growth: 0.075, wacc: 0.105, terminalGrowth: 0.025 });
+    expect(mid.fairValuePerShare).toBeGreaterThan(mc.p10);
+    expect(mid.fairValuePerShare).toBeLessThan(mc.p90);
+  });
+
+  it('same seed -> identical distribution', () => {
+    const a = dcfMonteCarlo(base, ranges, 500, 3);
+    const b = dcfMonteCarlo(base, ranges, 500, 3);
+    expect(a.values).toEqual(b.values);
+  });
+});
+
+describe('stressScenarios', () => {
+  it('σ shocks scale with vol; price = spot·(1+shock)', () => {
+    const rows = stressScenarios(100, 32); // 32% annual vol ~ 2%/day sigma
+    const oneSig = rows.find((r) => r.label === '−1σ day');
+    const twoSig = rows.find((r) => r.label === '−2σ day');
+    expect(twoSig.shock).toBeCloseTo(2 * oneSig.shock, 10);
+    expect(oneSig.price).toBeCloseTo(100 * (1 + oneSig.shock), 10);
+  });
+
+  it('historical crash days are fixed regardless of vol', () => {
+    const rows = stressScenarios(50, 5);
+    expect(rows.find((r) => r.label === 'Black Monday (1987)').shock).toBeCloseTo(-0.2261, 6);
+  });
+});
+
+describe('drawdownStats', () => {
+  it('recovered V-shape: depth, trough->recovery, and not currently underwater', () => {
+    // peak 100 -> trough 80 (-20%) -> back to 100+
+    const closes = [100, 90, 80, 90, 101];
+    const s = drawdownStats(closes);
+    expect(s.maxDD).toBeCloseTo(-20, 6);
+    expect(s.maxDDRecovered).toBe(true);
+    expect(s.recoveryDays).toBe(2); // idx 2 (trough) -> idx 4 (recover)
+    expect(s.currentUnderwaterDays).toBe(0);
+  });
+
+  it('still-underwater series reports current underwater duration', () => {
+    const closes = [100, 110, 95, 90, 92]; // peak at idx1, never recovers
+    const s = drawdownStats(closes);
+    expect(s.maxDDRecovered).toBe(false);
+    expect(s.recoveryDays).toBeNull();
+    expect(s.currentUnderwaterDays).toBe(3); // from peak idx1 to end idx4
+  });
+
+  it('always-rising series -> no drawdown', () => {
+    expect(drawdownStats([10, 20, 30]).maxDD).toBe(0);
+  });
+});
+
+describe('regimeShifts', () => {
+  it('flags the transition from calm to stressed and counts days since', () => {
+    // low vol then a jump to high vol at the end
+    const vols = [10, 10, 11, 10, 40, 42, 45];
+    const r = regimeShifts(vols);
+    expect(r.current).toBe('Stressed');
+    expect(r.shifts.length).toBeGreaterThan(0);
+    expect(r.shifts.at(-1).to).toBe('Stressed');
+  });
+
+  it('too-short input -> null', () => {
+    expect(regimeShifts([1, 2, 3])).toBeNull();
   });
 });
