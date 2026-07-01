@@ -528,6 +528,10 @@ class PipelineContext:
     has_existing_position: bool
     position_quantity: float | None
     average_entry_price: float | None
+    deep_think_agents: frozenset[str] = frozenset()
+
+    def llm_for(self, agent: str) -> Any:
+        return self.deep_llm if agent in self.deep_think_agents else self.quick_llm
 
 
 @dataclass(frozen=True)
@@ -614,6 +618,9 @@ def prepare_context(
         has_existing_position=has_existing_position,
         position_quantity=position_quantity,
         average_entry_price=average_entry_price,
+        deep_think_agents=frozenset(
+            str(name).lower() for name in (config.get("deep_think_agents") or [])
+        ),
     )
 
 
@@ -680,7 +687,8 @@ def _run_debate_phase(
     """Bull/bear debate phase (synthetic in fast mode, LLM-driven otherwise)."""
     ticker = context.ticker
     trade_date = context.trade_date
-    quick_llm = context.quick_llm
+    bull_llm = context.llm_for("bull_researcher")
+    bear_llm = context.llm_for("bear_researcher")
     analysis_depth = context.analysis_depth
     extra_debate_rounds = context.extra_debate_rounds
     time_horizon_text = context.time_horizon_text
@@ -767,7 +775,7 @@ def _run_debate_phase(
             "bull_researcher",
             "Bull Researcher is building the upside case...",
             lambda: _invoke_once(
-                quick_llm,
+                bull_llm,
                 DebateArgument,
                 bull_prompt(
                     ticker,
@@ -808,7 +816,7 @@ def _run_debate_phase(
             "bear_researcher",
             "Bear Researcher is challenging the thesis...",
             lambda: _invoke_once(
-                quick_llm,
+                bear_llm,
                 DebateArgument,
                 bear_prompt(
                     ticker,
@@ -857,7 +865,7 @@ def _run_debate_phase(
                 "bull_researcher",
                 f"Deep mode bull review round {round_number} is refining the upside case...",
                 lambda round_number=round_number: _invoke_once(
-                    quick_llm,
+                    bull_llm,
                     DebateArgument,
                     bull_prompt(
                         ticker,
@@ -897,7 +905,7 @@ def _run_debate_phase(
                 "bear_researcher",
                 f"Deep mode bear review round {round_number} is challenging the refined thesis...",
                 lambda bull=bull, round_number=round_number: _invoke_once(
-                    quick_llm,
+                    bear_llm,
                     DebateArgument,
                     bear_prompt(
                         ticker,
@@ -954,7 +962,7 @@ def _run_risk_phase(
     """Risk committee phase (synthetic in fast mode, LLM-driven otherwise)."""
     ticker = context.ticker
     trade_date = context.trade_date
-    quick_llm = context.quick_llm
+    risk_llm = context.llm_for("risk_analysts")
     analysis_depth = context.analysis_depth
     extra_risk_rounds = context.extra_risk_rounds
     time_horizon_text = context.time_horizon_text
@@ -1006,7 +1014,7 @@ def _run_risk_phase(
             "risk_analysts",
             "Risk Analysts are checking sizing, downside, and invalidation triggers...",
             lambda: _invoke_once(
-                quick_llm,
+                risk_llm,
                 RiskCommitteeReport,
                 risk_committee_prompt(
                     ticker,
@@ -1053,7 +1061,7 @@ def _run_risk_phase(
                 "risk_analysts",
                 f"Deep mode risk review round {round_number} is stress-testing the trade plan...",
                 lambda prior_risk_md=prior_risk_md, round_number=round_number: _invoke_once(
-                    quick_llm,
+                    risk_llm,
                     RiskCommitteeReport,
                     risk_committee_prompt(
                         ticker,
@@ -1398,6 +1406,51 @@ def persist_metrics(context: PipelineContext) -> PipelineMetrics:
     )
 
 
+_DATA_STATUS_SCORE = {"ok": 1.0, "market_closed": 0.8, "partial": 0.5, "stale": 0.4}
+CONFIDENCE_DIVERGENCE_THRESHOLD = 0.2
+
+
+def reconcile_confidence(
+    pm_confidence: float,
+    *,
+    analyst_confidences: list[float],
+    data_status: tuple[str, str, str],
+    bull_confidence: float,
+    bear_confidence: float,
+    budget_partial: bool,
+    threshold: float = CONFIDENCE_DIVERGENCE_THRESHOLD,
+) -> tuple[float, bool, str | None]:
+    """Down-clamp an over-confident PM score against data quality + debate spread.
+
+    Pure post-processing, no LLM call. Only ever lowers confidence.
+    """
+    completeness = sum(_DATA_STATUS_SCORE.get(str(s).lower(), 0.0) for s in data_status) / 3
+    analyst = (
+        sum(analyst_confidences) / len(analyst_confidences)
+        if analyst_confidences
+        else pm_confidence
+    )
+    # High when bull and bear land near the same conviction; a wide spread = unresolved debate.
+    agreement = 1.0 - min(1.0, abs(bull_confidence - bear_confidence))
+    derived = (completeness + analyst + agreement) / 3
+    if budget_partial:
+        # ponytail: a budget-truncated run can't earn high confidence; hard cap.
+        derived = min(derived, 0.4)
+    if pm_confidence - derived <= threshold:
+        return pm_confidence, False, None
+    reasons = []
+    if completeness < 0.7:
+        reasons.append("thin/stale data")
+    if agreement < 0.7:
+        reasons.append("unresolved bull/bear debate")
+    if budget_partial:
+        reasons.append("incomplete LLM budget")
+    reason = "Confidence clamped from {:.2f} to {:.2f}: {}".format(
+        pm_confidence, derived, ", ".join(reasons) or "diverged from data-derived estimate"
+    )
+    return round(derived, 4), True, reason
+
+
 def build_response(
     context: PipelineContext,
     data_stage: MarketDataStageResult,
@@ -1455,6 +1508,26 @@ def build_response(
         (bucket or {}).get("fallbacks") for bucket in llm_usage_summary.get("agents", {}).values()
     )
     budget_partial = "Portfolio Manager" in set(budget_snapshot.get("agents_skipped", []))
+    reconciled_confidence, confidence_reconciled, confidence_reconciled_reason = (
+        reconcile_confidence(
+            float(getattr(portfolio_decision, "confidence_score", 0.0) or 0.0),
+            analyst_confidences=[
+                agent_stage.market_report.confidence,
+                agent_stage.news_social_report.confidence,
+                agent_stage.fundamentals_report.confidence,
+            ],
+            data_status=(
+                data.data_quality.price_data,
+                data.data_quality.fundamentals,
+                data.data_quality.news,
+            ),
+            bull_confidence=bull.confidence,
+            bear_confidence=bear.confidence,
+            budget_partial=budget_partial,
+        )
+    )
+    if confidence_reconciled:
+        portfolio_decision.confidence_score = reconciled_confidence
     limitations = list(data.data_limitations or [])
     partial_fields = (
         {
@@ -1571,6 +1644,8 @@ def build_response(
         "llm_usage": llm_usage_summary,
         "degraded": degraded,
         "degraded_reason": DEGRADED_BANNER if degraded else None,
+        "confidence_reconciled": confidence_reconciled,
+        "confidence_reconciled_reason": confidence_reconciled_reason,
         **partial_fields,
     }
 

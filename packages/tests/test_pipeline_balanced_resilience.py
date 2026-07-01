@@ -989,3 +989,47 @@ def test_router_falls_back_and_caches_usable_price_ohlcv(monkeypatch):
     assert result_2 == fresh_csv
     assert calls["alpha_vantage"] == 1
     assert calls["yfinance"] == 2
+
+
+def test_llm_for_routes_listed_agents_to_deep_llm():
+    from types import SimpleNamespace
+
+    from tradingagents.pipeline_balanced_orchestrator import PipelineContext
+
+    ctx = SimpleNamespace(
+        quick_llm="QUICK", deep_llm="DEEP", deep_think_agents=frozenset({"bull_researcher"})
+    )
+    assert PipelineContext.llm_for(ctx, "bull_researcher") == "DEEP"
+    assert PipelineContext.llm_for(ctx, "risk_analysts") == "QUICK"
+
+
+def test_reconcile_confidence_clamps_high_pm_on_poor_data():
+    from tradingagents.pipeline_balanced_orchestrator import reconcile_confidence
+
+    final, reconciled, reason = reconcile_confidence(
+        0.9,
+        analyst_confidences=[0.4, 0.4, 0.4],
+        data_status=("missing", "missing", "missing"),
+        bull_confidence=0.8,
+        bear_confidence=0.2,
+        budget_partial=False,
+    )
+    assert reconciled is True
+    assert final < 0.9
+    assert reason
+
+
+def test_reconcile_confidence_keeps_confidence_on_clean_run():
+    from tradingagents.pipeline_balanced_orchestrator import reconcile_confidence
+
+    final, reconciled, reason = reconcile_confidence(
+        0.8,
+        analyst_confidences=[0.8, 0.8, 0.8],
+        data_status=("ok", "ok", "ok"),
+        bull_confidence=0.8,
+        bear_confidence=0.75,
+        budget_partial=False,
+    )
+    assert reconciled is False
+    assert final == 0.8
+    assert reason is None

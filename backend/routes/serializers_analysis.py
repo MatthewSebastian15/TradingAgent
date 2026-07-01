@@ -122,6 +122,8 @@ SUMMARY_FIELDS = {
     "analysis_incomplete",
     "degraded",
     "degraded_reason",
+    "confidence_reconciled",
+    "confidence_reconciled_reason",
     "llm_budget",
     "thesis_monitor",
     "financial_highlights",
@@ -789,6 +791,8 @@ def _build_common_result_fields(
         "analysis_incomplete": bool(final_state.get("budget_exhausted", False)),
         "degraded": bool(final_state.get("degraded", False)),
         "degraded_reason": final_state.get("degraded_reason"),
+        "confidence_reconciled": bool(final_state.get("confidence_reconciled", False)),
+        "confidence_reconciled_reason": final_state.get("confidence_reconciled_reason"),
         "llm_budget": {
             "used": final_state.get("llm_calls_used")
             or final_state.get("balanced_gemini_calls_used")

@@ -93,6 +93,7 @@ from config_defaults import (
     DEBATE_CONSENSUS_THRESHOLD,
     DEBATE_MIN_ROUNDS,
     DEBUG_ENDPOINTS_ENABLED,
+    DEEP_THINK_AGENTS,
     DEFAULT_ANALYSIS_DEPTH,
     DEFAULT_DEV_CORS_ORIGINS,
     DEFAULT_MAX_DEBATE_ROUNDS,
@@ -264,6 +265,7 @@ class _BackendSettingsShim:
     require_api_key_for_rate_limit = REQUIRE_API_KEY_FOR_RATE_LIMIT
     llm_timeout_seconds = LLM_TIMEOUT_SECONDS
     llm_max_retries = LLM_MAX_RETRIES
+    deep_think_agents = DEEP_THINK_AGENTS
     provider_sdk_max_retries = PROVIDER_SDK_MAX_RETRIES
     max_concurrent_llm_calls = MAX_CONCURRENT_LLM_CALLS
     cache_ttl_seconds = CACHE_TTL_SECONDS
