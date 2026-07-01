@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from tradingagents.dataflows.news.news_decision_filter import split_ai_analysis_news
 from tradingagents.dataflows.news.news_models import NormalizedNewsArticle
+from tradingagents.dataflows.news.news_relevance import has_company_match_in_title_or_entities
 from tradingagents.dataflows.news.news_scoring import score_news_article
 from tradingagents.dataflows.news.news_service import _filter_articles_by_window
 from tradingagents.dataflows.news.news_ticker_aliases import resolve_news_ticker
@@ -118,6 +119,46 @@ def test_window_filter_keeps_dateless_articles():
     assert "https://example.com/dated" in kept_urls
     assert "https://example.com/old" not in kept_urls
     assert next(a for a in kept if a.url.endswith("no-date")).date_missing is True
+
+
+def test_ticker_only_in_url_is_not_company_match():
+    # F4: a stray ticker token in the URL must not count as a company match.
+    profile = resolve_news_ticker("BBCA.JK")
+    article = {
+        "title": "Market roundup for Tuesday",
+        "summary": "General market notes with no company focus.",
+        "url": "https://example.com/tag/bbca",
+    }
+    assert not has_company_match_in_title_or_entities(
+        article, "BBCA.JK", profile["company_name"], profile["aliases"]
+    )
+
+
+def test_ticker_in_title_is_company_match():
+    profile = resolve_news_ticker("BBCA.JK")
+    article = {"title": "BBCA posts record quarterly profit", "summary": "", "url": "https://x/a"}
+    assert has_company_match_in_title_or_entities(
+        article, "BBCA.JK", profile["company_name"], profile["aliases"]
+    )
+
+
+def test_ambiguous_ticker_bare_word_is_not_company_match():
+    # F1 tail: ticker "ON" against a "switch it on" sentence must not match.
+    article = {
+        "title": "Turn the lights on tonight",
+        "summary": "A lifestyle piece about evening routines.",
+        "url": "https://x/a",
+    }
+    assert not has_company_match_in_title_or_entities(
+        article, "ON", "ON Semiconductor", ["ON", "ON Semiconductor"]
+    )
+
+
+def test_ambiguous_ticker_with_company_name_is_company_match():
+    article = {"title": "ON Semiconductor beats earnings estimates", "summary": "", "url": "https://x/a"}
+    assert has_company_match_in_title_or_entities(
+        article, "ON", "ON Semiconductor", ["ON", "ON Semiconductor"]
+    )
 
 
 def test_rss_ihsg_general_context_not_used_as_company_news():

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .news_models import NormalizedNewsArticle
-from .news_relevance import is_relevant_news
+from .news_relevance import has_company_match_in_title_or_entities
 
 COMPANY_NEWS_PROVIDERS = {
     "google_news_light",
@@ -147,10 +147,10 @@ def classify_article_for_ai_decision(
         return {"bucket": "excluded_news", "reason": "discard_bucket"}
 
     article_payload = article.model_dump(mode="json")
-    has_company_match = is_relevant_news(
+    has_company_match = has_company_match_in_title_or_entities(
         article_payload,
         str(ticker_profile.get("ticker") or article.ticker),
-        ticker_profile.get("company_name"),
+        ticker_profile.get("company_name") or "",
         ticker_profile.get("aliases"),
     ) or article.entity_match in {"company_exact", "subsidiary", "provider_entity"}
 

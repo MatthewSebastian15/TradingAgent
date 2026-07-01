@@ -189,6 +189,59 @@ def is_relevant_news(
     return any(_contains_term(text, term) for term in terms)
 
 
+# Tickers that collide with common words need a stronger signal than a bare token match.
+AMBIGUOUS_TICKER_MAX_LEN = 3
+COMMON_WORD_TICKERS = {
+    "on", "in", "at", "it", "go", "so", "by", "or", "up", "an", "as", "be", "do", "no",
+    "all", "one", "are", "key", "car", "fun", "now", "new", "old", "big", "hot", "run",
+    "cash", "real", "open", "well", "play", "love", "food", "fast", "best", "gold", "life",
+    "turn", "flow", "post", "wave", "edge", "core", "peak", "true",
+}
+
+
+def has_company_match_in_title_or_entities(
+    article: dict[str, Any],
+    ticker: str,
+    company_name: str = "",
+    aliases: list[str] | None = None,
+) -> bool:
+    """Company match requires the ticker/name in the TITLE or a resolved entity match.
+
+    A stray token in the URL or buried body no longer counts (F4). Ambiguous short
+    tickers (<= 3 chars or a common word) need a name/entity hit or a market-moving
+    keyword — never a bare ticker token in the title (F1 tail).
+    """
+    scored = score_news_relevance(article, ticker, company_name or "")
+    short = _base_symbol(ticker).lower()
+    symbols = {str(ticker or "").lower(), short}
+    ambiguous = len(short) <= AMBIGUOUS_TICKER_MAX_LEN or short in COMMON_WORD_TICKERS
+
+    # Trust an entity match unless it only fired on the bare ambiguous symbol itself.
+    matched = [str(term).lower() for term in scored.get("matched_terms", [])]
+    strong_matched = any(term and term not in symbols for term in matched)
+    if scored.get("entity_match") in {"company_exact", "subsidiary"} and (
+        strong_matched or not ambiguous
+    ):
+        return True
+
+    title = str(article.get("title") or "").lower()
+    name_terms = [
+        term
+        for term in [company_name or "", *(aliases or [])]
+        if term and str(term).lower() not in symbols
+    ]
+    if any(_contains_term(title, str(term)) for term in name_terms):
+        return True
+
+    if short and _contains_term(title, short):
+        if not ambiguous:
+            return True
+        text = f"{title} {article.get('summary') or ''}".lower()
+        if any(keyword.lower() in text for keyword in ALL_MARKET_MOVING_KEYWORDS):
+            return True
+    return False
+
+
 def score_news_relevance(
     article: dict[str, Any], ticker: str, company_name: str = "", sector: str = ""
 ) -> dict[str, Any]:
