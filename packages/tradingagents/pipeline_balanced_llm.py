@@ -13,6 +13,7 @@ from tradingagents.llm.llm_router import create_llms as _router_create_llms
 from tradingagents.llm.llm_router import provider_kwargs as _router_provider_kwargs
 from tradingagents.llm_cache.exact_cache import get_exact_llm_cache
 from tradingagents.llm_cache.keys import build_exact_cache_key
+from tradingagents.llm_cache.semantic_cache import embed_text, get_semantic_cache
 from tradingagents.llm_optimization.usage import (
     LLMUsageRecord,
     Timer,
@@ -71,6 +72,20 @@ def _coerce_structured(raw: Any, schema: type[T]) -> T | None:
     return _coerce_with_error(raw, schema)[0]
 
 
+def _semantic_targets(config: dict[str, Any]) -> set[str]:
+    raw = str(config.get("llm_semantic_cache_targets") or "")
+    return {token.strip() for token in raw.split(",") if token.strip()}
+
+
+# Phase 8: data-bound agents whose output is a pure function of the price/fundamentals
+# snapshot, so a semantic hit within the same data_hash bucket can never serve a stale view.
+# Map agent name -> the token that must appear in `llm_semantic_cache_targets` to opt in.
+_SEMANTIC_AGENT_TARGETS = {
+    "Market Analyst": "market_analyst",
+    "Fundamentals Analyst": "fundamentals_analyst",
+}
+
+
 def _invoke_once(
     llm: Any,
     schema: type[T],
@@ -79,6 +94,7 @@ def _invoke_once(
     agent_name: str,
     budget: LLMBudget | None = None,
     cancel_check=None,
+    data_hash: str | None = None,
 ) -> T:
     """Call the LLM once for a structured result while enforcing budget."""
     _check_cancel(cancel_check)
@@ -112,6 +128,37 @@ def _invoke_once(
             usage_record.latency_ms = timer.elapsed_ms()
             record_usage(usage_record)
             return cached
+
+    # Phase 8: semantic cache for data-bound analysts only. The guard pins ticker-agnostic
+    # identity + data_hash, so a changed price/fundamentals snapshot lands in a different
+    # bucket and can never be served — the mandated data-safety guarantee.
+    semantic_target = _SEMANTIC_AGENT_TARGETS.get(agent_name)
+    semantic_cache = None
+    semantic_guard: dict[str, Any] = {}
+    semantic_embedding: list[float] = []
+    if semantic_target and data_hash and semantic_target in _semantic_targets(config):
+        semantic_cache = get_semantic_cache(config)
+        if semantic_cache is not None:
+            semantic_guard = {
+                "agent_name": agent_name,
+                "schema_name": schema.__name__,
+                "provider": provider,
+                "model": model,
+                "data_hash": data_hash,
+            }
+            semantic_embedding = embed_text(prompt)
+            hit = semantic_cache.find(
+                namespace="agent", guard=semantic_guard, embedding=semantic_embedding
+            )
+            if hit is not None:
+                coerced = _coerce_structured(hit["value"], schema)
+                if coerced is not None:
+                    usage_record.cache_layer = "semantic"
+                    usage_record.cache_hit = True
+                    usage_record.parse_success = True
+                    usage_record.latency_ms = timer.elapsed_ms()
+                    record_usage(usage_record)
+                    return coerced
 
     # One parse-repair retry loop: on unparseable structured output, re-invoke
     # with the validation error appended before giving up to the local fallback.
@@ -148,6 +195,13 @@ def _invoke_once(
             if parsed is not None:
                 if exact_cache is not None:
                     exact_cache.set(exact_cache_key, parsed)
+                if semantic_cache is not None:
+                    semantic_cache.set(
+                        namespace="agent",
+                        guard=semantic_guard,
+                        embedding=semantic_embedding,
+                        value=parsed.model_dump(),
+                    )
                 usage_record.parse_success = True
                 if attempt > 0:
                     usage_record.extra["repaired_on_attempt"] = attempt + 1

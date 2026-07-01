@@ -1,12 +1,33 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import re
 import sqlite3
 import threading
 import time
 from pathlib import Path
 from typing import Any
+
+_EMBED_DIMS = 256
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def embed_text(text: str, dims: int = _EMBED_DIMS) -> list[float]:
+    """Deterministic local embedding via signed feature hashing (no API, no deps).
+
+    ponytail: bag-of-tokens hashing, not a learned embedding. Good enough to match
+    near-duplicate prompts sharing a data snapshot; swap for a real embedding model
+    only if telemetry shows the hashed vector misses meaningful near-hits.
+    """
+    vec = [0.0] * dims
+    for token in _TOKEN_RE.findall((text or "").lower()):
+        digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
+        h = int.from_bytes(digest, "big")
+        vec[h % dims] += 1.0 if (h >> 8) & 1 else -1.0
+    norm = math.sqrt(sum(v * v for v in vec))
+    return [v / norm for v in vec] if norm else vec
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:

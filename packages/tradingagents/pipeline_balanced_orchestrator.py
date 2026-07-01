@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import queue
@@ -50,6 +51,7 @@ from tradingagents.pipeline_balanced_progress import (
     _run_tracked,
 )
 from tradingagents.pipeline_balanced_prompts import (
+    _get_context,
     bear_prompt,
     bull_prompt,
     fundamentals_prompt,
@@ -385,6 +387,16 @@ def _build_portfolio_manager_fallback(
     )
 
 
+def _analyst_data_hash(data: Any, context_key: str) -> str:
+    """Hash the price/fundamentals snapshot an analyst reads (Phase 8 semantic guard).
+
+    Coarser than the full prompt so semantic hits can match, but a changed snapshot
+    yields a different hash → a stale view can never be served.
+    """
+    payload = json.dumps(_get_context(data, context_key), sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def _build_initial_analyst_reports(
     ticker: str,
     trade_date: str,
@@ -445,6 +457,7 @@ def _build_initial_analyst_reports(
                 "Market Analyst",
                 llm_budget,
                 cancel_check,
+                data_hash=_analyst_data_hash(data, "market"),
             ),
             timings=timings,
         )
@@ -487,6 +500,7 @@ def _build_initial_analyst_reports(
                 "Fundamentals Analyst",
                 llm_budget,
                 cancel_check,
+                data_hash=_analyst_data_hash(data, "fundamentals"),
             ),
             timings=timings,
         )
@@ -884,8 +898,7 @@ def _run_debate_phase(
                     DebateArgument(
                         stance="bull",
                         thesis=(
-                            "Could not generate an additional bullish refinement "
-                            f"for {ticker}."
+                            f"Could not generate an additional bullish refinement for {ticker}."
                         ),
                         evidence=[
                             "Prior analyst reports remain available.",
