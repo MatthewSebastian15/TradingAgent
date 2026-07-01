@@ -1,6 +1,66 @@
 from __future__ import annotations
 
+import re
+import threading
 from typing import Any
+
+# Process-local yfinance identity, seeded once per analysis by the data-collection
+# stage before any news resolution runs. Lets every independent resolve_news_ticker
+# caller (providers, relevance, entity resolver) share the real company name for
+# tickers that are not in the curated table.
+# ponytail: in-worker dict, reset per run; keyed by ticker so cross-ticker staleness
+# is harmless. No cross-process sharing needed — news resolves in the same worker.
+_METADATA_LOCK = threading.Lock()
+_TICKER_METADATA: dict[str, dict[str, str]] = {}
+
+_LEGAL_SUFFIX_RE = re.compile(
+    r"\b(PT|TBK|Tbk|Inc|Corp|Corporation|Ltd|PLC|LLC|Co)\b\.?", re.IGNORECASE
+)
+_ALIAS_STOPWORDS = {"the", "and", "of", "for"}
+
+
+def _clean(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def register_news_ticker_metadata(
+    ticker: str, *, company_name: str | None = None, sector: str | None = None
+) -> None:
+    """Seed real yfinance company_name/sector for a ticker (non-curated tickers)."""
+    key = str(ticker or "").strip().upper()
+    name = _clean(company_name)
+    if not key or not name:
+        return
+    with _METADATA_LOCK:
+        _TICKER_METADATA[key] = {"company_name": name, "sector": _clean(sector) or ""}
+
+
+def reset_news_ticker_metadata() -> None:
+    with _METADATA_LOCK:
+        _TICKER_METADATA.clear()
+
+
+def _registered_metadata(ticker: str) -> dict[str, str]:
+    with _METADATA_LOCK:
+        return dict(_TICKER_METADATA.get(ticker) or {})
+
+
+def _derive_aliases(company_name: str) -> list[str]:
+    """Full name, name-without-legal-suffix, and acronym."""
+    clean = " ".join(_LEGAL_SUFFIX_RE.sub("", company_name).split())
+    aliases = [company_name]
+    if clean and clean.casefold() != company_name.casefold():
+        aliases.append(clean)
+    words = [
+        word
+        for word in re.split(r"[^A-Za-z0-9]+", clean)
+        if word and word.lower() not in _ALIAS_STOPWORDS
+    ]
+    acronym = "".join(word[0] for word in words)
+    if len(acronym) >= 2:
+        aliases.append(acronym.upper())
+    return aliases
 
 
 def _profile(
@@ -269,39 +329,43 @@ def _metadata_for(ticker: str) -> tuple[dict[str, Any] | None, str | None, str |
     return None, None, None
 
 
-def resolve_news_ticker(value: str) -> dict[str, Any]:
+def resolve_news_ticker(
+    value: str, *, company_name: str | None = None, sector: str | None = None
+) -> dict[str, Any]:
     ticker = str(value or "").strip().upper()
     if not ticker:
         raise ValueError("Ticker is required.")
 
     metadata, exchange, country = _metadata_for(ticker)
-    if metadata is None and ticker.endswith(".JK"):
-        short_ticker = ticker.removesuffix(".JK")
+    if metadata is None:
+        # Non-curated ticker: enrich with supplied or registered yfinance identity.
+        # Falls back to the ticker-only degenerate profile when no name is known.
+        is_jk = ticker.endswith(".JK")
+        short_ticker = ticker.removesuffix(".JK") if is_jk else ticker
+        registered = _registered_metadata(ticker)
+        resolved_name = _clean(company_name) or _clean(registered.get("company_name"))
+        resolved_sector = _clean(sector) or _clean(registered.get("sector"))
+
+        if resolved_name and resolved_name.upper() != short_ticker:
+            company = resolved_name
+            aliases = _dedupe_strings(
+                [short_ticker, ticker, resolved_name, *_derive_aliases(resolved_name)]
+            )
+        else:
+            company = short_ticker
+            aliases = _dedupe_strings([short_ticker, ticker])
+
         return {
             "input": value,
             "ticker": ticker,
             "short_ticker": short_ticker,
-            "exchange": "IDX",
-            "country": "id",
-            "company_name": short_ticker,
-            "aliases": _dedupe_strings([short_ticker, ticker]),
+            "exchange": "IDX" if is_jk else "US",
+            "country": "id" if is_jk else "us",
+            "company_name": company,
+            "aliases": aliases,
             "subsidiaries": [],
             "negative_terms": [],
-            "sector": None,
-        }
-
-    if metadata is None:
-        return {
-            "input": value,
-            "ticker": ticker,
-            "short_ticker": ticker,
-            "exchange": "US",
-            "country": "us",
-            "company_name": ticker,
-            "aliases": _dedupe_strings([ticker]),
-            "subsidiaries": [],
-            "negative_terms": [],
-            "sector": None,
+            "sector": resolved_sector,
         }
 
     short_ticker = ticker.removesuffix(".JK")

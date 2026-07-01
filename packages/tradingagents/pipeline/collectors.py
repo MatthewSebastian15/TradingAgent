@@ -39,6 +39,10 @@ from tradingagents.dataflows.news.news_intelligence import (
     build_news_impact,
 )
 from tradingagents.dataflows.news.news_service import NewsService, format_news_for_prompt
+from tradingagents.dataflows.news.news_ticker_aliases import (
+    register_news_ticker_metadata,
+    reset_news_ticker_metadata,
+)
 from tradingagents.dataflows.providers.config import get_config, set_config, use_config
 from tradingagents.dataflows.providers.interface import (
     collect_vendor_values,
@@ -814,6 +818,17 @@ def collect_market_data(
     start_price, start_news, end = _date_window(trade_date, time_horizon_months)
 
     news_context: dict[str, Any] = {}
+    # Seed the news profile with real yfinance identity BEFORE news resolves, so
+    # non-curated tickers match by company name instead of the bare ticker (F1/F2/F6).
+    # Profile already ran sequentially after the batch, so moving it up is latency-neutral.
+    reset_news_ticker_metadata()
+    company_profile = _safe_company_profile(ticker, trade_date)
+    if isinstance(company_profile, dict):
+        register_news_ticker_metadata(
+            ticker,
+            company_name=company_profile.get("company_name"),
+            sector=company_profile.get("sector"),
+        )
     results, annual_statement_results = _run_market_collection_tasks(
         ticker=ticker,
         trade_date=trade_date,
@@ -842,7 +857,6 @@ def collect_market_data(
     event_risk = fields["event_risk"]
     recommendation_trends = fields["recommendation_trends"]
     technical_indicators = fields["technical_indicators"]
-    company_profile = _safe_company_profile(ticker, trade_date)
     data_quality = _build_data_quality(
         trade_date,
         price,
