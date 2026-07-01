@@ -9,14 +9,30 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_usage_lock = threading.Lock()
-_daily_usage: dict[str, dict] = defaultdict(
-    lambda: {
+
+def _new_bucket() -> dict:
+    return {
         "calls": 0,
         "estimated_tokens": 0,
         "total_latency_ms": 0.0,
+        "cache_hits": 0,
+        "fallbacks": 0,
+        "parse_ok": 0,
     }
-)
+
+
+_usage_lock = threading.Lock()
+_daily_usage: dict[str, dict] = defaultdict(_new_bucket)
+
+# Process-wide telemetry accumulated in the FastAPI parent process (fed per
+# completed analysis via ingest_analysis_telemetry). Separate from _daily_usage,
+# which lives in each pipeline worker and is reset per analysis.
+# ponytail: in-memory, resets on restart; persist to sqlite if cross-restart
+# weekly history is ever needed.
+_telemetry_lock = threading.Lock()
+_telemetry_agents: dict[str, dict] = defaultdict(_new_bucket)
+_telemetry_news_blanks: list[dict] = []
+_TELEMETRY_BLANK_CAP = 200
 
 
 @dataclass
@@ -144,18 +160,97 @@ def record_usage(record: LLMUsageRecord) -> None:
         bucket["calls"] += 1
         bucket["estimated_tokens"] += record.estimated_input_tokens
         bucket["total_latency_ms"] += record.latency_ms or 0.0
+        if record.cache_hit:
+            bucket["cache_hits"] += 1
+        if record.fallback_used:
+            bucket["fallbacks"] += 1
+        if record.parse_success:
+            bucket["parse_ok"] += 1
+
+
+def reset_usage() -> None:
+    """Clear per-analysis usage. Called at the start of each pipeline run."""
+    with _usage_lock:
+        _daily_usage.clear()
 
 
 def get_usage_summary() -> dict:
     with _usage_lock:
         return {
-            "agents": dict(_daily_usage),
+            "agents": {name: dict(bucket) for name, bucket in _daily_usage.items()},
             "totals": {
                 "calls": sum(v["calls"] for v in _daily_usage.values()),
                 "estimated_tokens": sum(v["estimated_tokens"] for v in _daily_usage.values()),
             },
             "free_tier_remaining": max(0, 1500 - sum(v["calls"] for v in _daily_usage.values())),
         }
+
+
+def _agent_row(bucket: dict) -> dict:
+    calls = bucket.get("calls", 0) or 0
+    return {
+        **bucket,
+        "avg_latency_ms": round((bucket.get("total_latency_ms", 0.0) / calls), 1) if calls else 0.0,
+        "fallback_rate": round(bucket.get("fallbacks", 0) / calls, 3) if calls else 0.0,
+        "cache_hit_rate": round(bucket.get("cache_hits", 0) / calls, 3) if calls else 0.0,
+    }
+
+
+def _news_blank_reason(news: Any) -> str | None:
+    """Best-effort: did this analysis blank the company-news feed?"""
+    if not isinstance(news, dict):
+        return None
+    if news.get("empty_reason"):
+        return str(news["empty_reason"])[:200]
+    strict = news.get("strict_news_filter")
+    count = strict.get("decision_company_news_count") if isinstance(strict, dict) else None
+    if count is None:
+        count = news.get("articles_used_in_prompt")
+    if count == 0:
+        return "no_company_news"
+    return None
+
+
+def ingest_analysis_telemetry(
+    summary: dict | None, *, ticker: str | None = None, news: Any = None
+) -> None:
+    """Merge one completed analysis's per-agent usage into process-wide telemetry."""
+    agents = (summary or {}).get("agents") or {}
+    with _telemetry_lock:
+        for name, bucket in agents.items():
+            if not isinstance(bucket, dict):
+                continue
+            target = _telemetry_agents[name]
+            for key in ("calls", "estimated_tokens", "cache_hits", "fallbacks", "parse_ok"):
+                target[key] += int(bucket.get(key) or 0)
+            target["total_latency_ms"] += float(bucket.get("total_latency_ms") or 0.0)
+        blank = _news_blank_reason(news)
+        if blank and ticker:
+            _telemetry_news_blanks.append({"ticker": ticker, "reason": blank})
+            del _telemetry_news_blanks[:-_TELEMETRY_BLANK_CAP]
+
+
+def get_telemetry_summary() -> dict:
+    """Aggregated per-agent telemetry for the /api/debug/llm-usage endpoint."""
+    with _telemetry_lock:
+        agents = {name: _agent_row(bucket) for name, bucket in _telemetry_agents.items()}
+        return {
+            "agents": agents,
+            "totals": {
+                "calls": sum(v["calls"] for v in agents.values()),
+                "fallbacks": sum(v["fallbacks"] for v in agents.values()),
+                "cache_hits": sum(v["cache_hits"] for v in agents.values()),
+            },
+            "news_blank_feeds": list(_telemetry_news_blanks[-50:]),
+            "news_blank_count": len(_telemetry_news_blanks),
+        }
+
+
+def reset_telemetry() -> None:
+    """Test helper: clear process-wide telemetry."""
+    with _telemetry_lock:
+        _telemetry_agents.clear()
+        _telemetry_news_blanks.clear()
 
 
 class Timer:

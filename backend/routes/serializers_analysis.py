@@ -50,6 +50,7 @@ SUMMARY_FIELDS = {
     "input_ticker",
     "total_pipeline_seconds",
     "agent_pipeline",
+    "llm_usage",
     "technical_levels",
     "data_sources",
     "field_sources",
@@ -119,6 +120,8 @@ SUMMARY_FIELDS = {
     "budget_exhausted",
     "agents_skipped",
     "analysis_incomplete",
+    "degraded",
+    "degraded_reason",
     "llm_budget",
     "thesis_monitor",
     "financial_highlights",
@@ -784,6 +787,8 @@ def _build_common_result_fields(
         "budget_exhausted": bool(final_state.get("budget_exhausted", False)),
         "agents_skipped": final_state.get("agents_skipped", []) or [],
         "analysis_incomplete": bool(final_state.get("budget_exhausted", False)),
+        "degraded": bool(final_state.get("degraded", False)),
+        "degraded_reason": final_state.get("degraded_reason"),
         "llm_budget": {
             "used": final_state.get("llm_calls_used")
             or final_state.get("balanced_gemini_calls_used")
@@ -868,6 +873,7 @@ def _build_common_market_fields(final_state: dict[str, Any]) -> dict[str, Any]:
         "technical_levels": final_state.get("technical_levels") or {},
         "agent_pipeline": final_state.get("agent_pipeline") or [],
         "total_pipeline_seconds": final_state.get("total_pipeline_seconds"),
+        "llm_usage": final_state.get("llm_usage") or {},
     }
 
 

@@ -130,6 +130,8 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
         {
             "budget_exhausted": True,
             "agents_skipped": ["Portfolio Manager"],
+            "degraded": True,
+            "degraded_reason": "Analysis incomplete — rerun recommended.",
             "data_fetched_at": "2026-05-20T10:11:12.123456",
             "last_close_price": 100.0,
             "last_close_price_as_of": "2026-05-18",
@@ -141,6 +143,8 @@ def test_parse_final_result_uses_typed_fields_without_rerendering_markdown():
     assert parsed["full_decision"] == "existing markdown should be passed through"
     assert parsed["data_fetched_at"] == "2026-05-20T10:11:12.123456"
     assert parsed["budget_exhausted"] is True
+    assert parsed["degraded"] is True
+    assert parsed["degraded_reason"] == "Analysis incomplete — rerun recommended."
     assert parsed["agents_skipped"] == ["Portfolio Manager"]
     assert parsed["current_price"] == 100.0
     assert parsed["current_price_as_of"] == "2026-05-18"

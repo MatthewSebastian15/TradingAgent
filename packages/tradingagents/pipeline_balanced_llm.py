@@ -19,8 +19,8 @@ from tradingagents.llm_optimization.usage import (
     estimate_tokens_from_text,
     extract_usage_metadata,
     get_llm_identity,
-    log_usage,
     normalize_usage_numbers,
+    record_usage,
 )
 from tradingagents.pipeline.orchestrator import _check_cancel
 from tradingagents.pipeline_balanced_types import (
@@ -44,26 +44,31 @@ def _create_llms(config: dict[str, Any]) -> tuple[Any, Any]:
     return _router_create_llms(config)
 
 
-def _coerce_structured(raw: Any, schema: type[T]) -> T | None:
+def _coerce_with_error(raw: Any, schema: type[T]) -> tuple[T | None, str | None]:
+    """Coerce a raw model response into the schema, returning any validation error."""
     if raw is None:
-        return None
+        return None, "empty response"
     if isinstance(raw, schema):
-        return raw
+        return raw, None
     try:
         if isinstance(raw, dict):
-            return schema.model_validate(raw)
+            return schema.model_validate(raw), None
         if hasattr(raw, "model_dump"):
-            return schema.model_validate(raw.model_dump())
+            return schema.model_validate(raw.model_dump()), None
         content = getattr(raw, "content", raw)
         if isinstance(content, str):
             cleaned = content.strip()
             if cleaned.startswith("```"):
                 cleaned = cleaned.strip("`")
                 cleaned = cleaned.removeprefix("json").strip()
-            return schema.model_validate_json(cleaned)
-    except Exception:
-        return None
-    return None
+            return schema.model_validate_json(cleaned), None
+    except Exception as exc:
+        return None, str(exc)[:300]
+    return None, "unsupported response type"
+
+
+def _coerce_structured(raw: Any, schema: type[T]) -> T | None:
+    return _coerce_with_error(raw, schema)[0]
 
 
 def _invoke_once(
@@ -105,61 +110,82 @@ def _invoke_once(
             usage_record.cache_hit = True
             usage_record.parse_success = True
             usage_record.latency_ms = timer.elapsed_ms()
-            log_usage(usage_record)
+            record_usage(usage_record)
             return cached
 
-    if budget is not None and not budget.consume(agent_name):
-        usage_record.fallback_used = True
-        usage_record.error = ErrorCode.LLM_BUDGET_EXCEEDED
-        usage_record.latency_ms = timer.elapsed_ms()
-        log_usage(usage_record)
-        return fallback
-
+    # One parse-repair retry loop: on unparseable structured output, re-invoke
+    # with the validation error appended before giving up to the local fallback.
+    # Bounded by llm_max_retries; every attempt is counted against the budget.
+    max_attempts = 1 + max(0, int(config.get("llm_max_retries", 1)))
     structured = bind_structured(llm, schema, agent_name)
-    try:
+    repair_hint = ""
 
-        def invoke_model() -> Any:
-            if structured is not None:
-                return structured.invoke(prompt)
-            return llm.invoke(
-                prompt
-                + "\n\nReturn only valid JSON matching this schema: "
-                + json.dumps(schema.model_json_schema())
-            )
-
-        result = invoke_model()
-        _check_cancel(cancel_check)
-        metadata = extract_usage_metadata(result)
-        output_tokens, cached_input_tokens = normalize_usage_numbers(metadata)
-        usage_record.output_tokens = output_tokens
-        usage_record.cached_input_tokens = cached_input_tokens
-
-        parsed = _coerce_structured(result, schema)
-        if parsed is not None:
-            if exact_cache is not None:
-                exact_cache.set(exact_cache_key, parsed)
-            usage_record.parse_success = True
+    for attempt in range(max_attempts):
+        if budget is not None and not budget.consume(agent_name):
+            usage_record.fallback_used = True
+            usage_record.error = ErrorCode.LLM_BUDGET_EXCEEDED
             usage_record.latency_ms = timer.elapsed_ms()
-            log_usage(usage_record)
-            return parsed
-        logger.warning(
-            "%s returned unparseable structured output. Using local fallback.", agent_name
-        )
-        usage_record.fallback_used = True
-        usage_record.error = "unparseable_structured_output"
-        if budget is not None:
-            budget.record_warning(
-                ErrorCode.LLM_SCHEMA_INVALID,
-                f"{agent_name} returned invalid structured output; fallback used.",
+            record_usage(usage_record)
+            return fallback
+
+        try:
+            if structured is not None:
+                result = structured.invoke(prompt + repair_hint)
+            else:
+                result = llm.invoke(
+                    prompt
+                    + repair_hint
+                    + "\n\nReturn only valid JSON matching this schema: "
+                    + json.dumps(schema.model_json_schema())
+                )
+            _check_cancel(cancel_check)
+            metadata = extract_usage_metadata(result)
+            output_tokens, cached_input_tokens = normalize_usage_numbers(metadata)
+            usage_record.output_tokens = output_tokens
+            usage_record.cached_input_tokens = cached_input_tokens
+
+            parsed, parse_error = _coerce_with_error(result, schema)
+            if parsed is not None:
+                if exact_cache is not None:
+                    exact_cache.set(exact_cache_key, parsed)
+                usage_record.parse_success = True
+                if attempt > 0:
+                    usage_record.extra["repaired_on_attempt"] = attempt + 1
+                usage_record.latency_ms = timer.elapsed_ms()
+                record_usage(usage_record)
+                return parsed
+
+            logger.warning(
+                "%s returned unparseable structured output (attempt %d/%d): %s",
+                agent_name,
+                attempt + 1,
+                max_attempts,
+                parse_error,
             )
-    except AnalysisCancelledError:
-        raise
-    except Exception as exc:
-        logger.warning("%s LLM call failed in balanced pipeline: %s", agent_name, exc)
-        usage_record.fallback_used = True
-        usage_record.error = str(exc)
+            repair_hint = (
+                f"\n\nYour previous output failed validation: {parse_error}. "
+                "Return only valid JSON for this schema, with no prose or code fences."
+            )
+        except AnalysisCancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("%s LLM call failed in balanced pipeline: %s", agent_name, exc)
+            usage_record.fallback_used = True
+            usage_record.error = str(exc)
+            usage_record.latency_ms = timer.elapsed_ms()
+            record_usage(usage_record)
+            return fallback
+
+    usage_record.fallback_used = True
+    usage_record.error = "unparseable_structured_output"
+    if budget is not None:
+        budget.record_warning(
+            ErrorCode.LLM_SCHEMA_INVALID,
+            f"{agent_name} returned invalid structured output after "
+            f"{max_attempts} attempt(s); fallback used.",
+        )
     usage_record.latency_ms = timer.elapsed_ms()
-    log_usage(usage_record)
+    record_usage(usage_record)
     return fallback
 
 
@@ -169,7 +195,7 @@ def _fallback_report(title: str, summary: str) -> AnalystReport:
         summary=summary,
         key_points=[summary],
         risks=["Data quality should be verified before trading."],
-        confidence=0.35,
+        confidence=0.0,
     )
 
 

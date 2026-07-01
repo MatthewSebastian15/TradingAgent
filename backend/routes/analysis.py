@@ -115,6 +115,16 @@ async def _save_analysis_result_async(
     if not isinstance(result, dict) or result.get("error"):
         return
     try:
+        from tradingagents.llm_optimization.usage import ingest_analysis_telemetry
+
+        ingest_analysis_telemetry(
+            result.get("llm_usage"),
+            ticker=result.get("normalized_ticker") or result.get("ticker") or req.ticker,
+            news=result.get("news"),
+        )
+    except Exception:
+        logger.debug("Failed to ingest analysis telemetry", exc_info=True)
+    try:
         repository = get_analysis_repository()
         await asyncio.to_thread(
             repository.save_analysis,

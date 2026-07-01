@@ -25,6 +25,7 @@ from tradingagents.dataflows.providers.config import set_config
 from tradingagents.dataflows.providers.y_finance import normalize_ticker
 from tradingagents.graph.run_cache import SHORT_LIVED_TICKER_CACHE, RunCache
 from tradingagents.llm.llm_router import apply_guardrail, llm_metadata
+from tradingagents.llm_optimization.usage import get_usage_summary, reset_usage
 from tradingagents.pipeline.orchestrator import (
     _normalize_time_horizon_months,
     _run_with_config,
@@ -68,6 +69,11 @@ from tradingagents.pipeline_balanced_types import (
 from tradingagents.trade_levels import normalize_trade_levels
 
 logger = logging.getLogger(__name__)
+
+DEGRADED_BANNER = (
+    "Analysis incomplete — one or more agents failed validation and used a "
+    "placeholder result. Confidence is not reliable; rerun recommended."
+)
 
 PIPELINE_TIMING_ORDER = [
     "data_collection",
@@ -317,7 +323,7 @@ def _build_portfolio_manager_fallback(
 ) -> PortfolioDecision:
     """Build a safe PortfolioDecision fallback that satisfies strict schema validators."""
     return PortfolioDecision(
-        confidence_score=0.35,
+        confidence_score=0.0,
         rating=PortfolioRating.HOLD,
         executive_summary=_fallback_portfolio_executive_summary(ticker, time_horizon_text),
         investment_thesis=_fallback_portfolio_investment_thesis(ticker, time_horizon_text),
@@ -1444,6 +1450,10 @@ def build_response(
         if message:
             response_warnings.append(message)
     total_pipeline_seconds = metrics.total_pipeline_seconds
+    llm_usage_summary = get_usage_summary()
+    degraded = any(
+        (bucket or {}).get("fallbacks") for bucket in llm_usage_summary.get("agents", {}).values()
+    )
     budget_partial = "Portfolio Manager" in set(budget_snapshot.get("agents_skipped", []))
     limitations = list(data.data_limitations or [])
     partial_fields = (
@@ -1558,6 +1568,9 @@ def build_response(
         "agents_skipped": budget_snapshot["agents_skipped"],
         "agent_pipeline": _build_agent_pipeline_rows(pipeline_timings),
         "total_pipeline_seconds": total_pipeline_seconds,
+        "llm_usage": llm_usage_summary,
+        "degraded": degraded,
+        "degraded_reason": DEGRADED_BANNER if degraded else None,
         **partial_fields,
     }
 
@@ -1573,6 +1586,7 @@ def run_balanced_pipeline(
     average_entry_price: float | None = None,
 ) -> dict[str, Any]:
     """Run the balanced pipeline through explicit maintainable stages."""
+    reset_usage()
     normalized_ticker = normalize_ticker(ticker)
     cached_data = SHORT_LIVED_TICKER_CACHE.get(normalized_ticker, trade_date)
     run_cache = RunCache(

@@ -158,6 +158,6 @@ async def debug_vendor_stats() -> dict[str, Any]:
 @router.get("/debug/llm-usage")
 def llm_usage() -> dict[str, Any]:
     _guard_debug_enabled()
-    from tradingagents.llm_optimization.usage import get_usage_summary
+    from tradingagents.llm_optimization.usage import get_telemetry_summary
 
-    return get_usage_summary()
+    return get_telemetry_summary()
