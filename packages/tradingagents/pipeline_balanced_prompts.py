@@ -87,7 +87,7 @@ def _prompt_json(value: Any, max_chars: int = 9000) -> tuple[str, bool]:
             kept = candidate
         body = json.dumps(kept, separators=(",", ":"), ensure_ascii=False, default=str)
         omitted = [str(k) for k in value if k not in kept]
-        marker = f'[TRUNCATED_FOR_PROMPT omitted_context_keys={json.dumps(omitted)}]'
+        marker = f"[TRUNCATED_FOR_PROMPT omitted_context_keys={json.dumps(omitted)}]"
         return body + marker, True
     return text[:max_chars].rstrip() + "[TRUNCATED_FOR_PROMPT]", True
 
@@ -644,6 +644,39 @@ Set the structured time_horizon field exactly to "{time_horizon_text}".
 
 [DYNAMIC RISK COMMITTEE REPORT]
 {risk_md}
+
+[DYNAMIC DATA QUALITY JSON]
+{data_quality_json}
+""".strip()
+
+
+def self_critique_prompt(
+    ticker: str,
+    trade_date: str,
+    time_horizon_text: str,
+    decision_md: str,
+    data_quality_json: str,
+) -> str:
+    return f"""
+[STATIC ROLE]
+You are an independent risk reviewer auditing a finished investment decision before it ships.
+Be adversarial. Your job is to catch decisions that are wrong or overconfident, not to agree.
+
+{STATIC_DATA_QUALITY_RULES}
+
+[STATIC SELF-CRITIQUE RULES]
+- Flag a violation only when it is concrete and grounded in the reports below:
+  the decision contradicts a stated input value, overstates confidence relative to
+  data_quality, or relies on data marked partial, stale, or unavailable.
+- Set should_downgrade to true only when at least one violation is serious enough that a
+  Buy or Sell should become a cautious Hold. A minor caveat is not a downgrade.
+- If the decision is well supported, return should_downgrade=false and an empty violations list.
+- Do not invent numbers or new analysis. Judge only what is present.
+
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
+
+[DYNAMIC FINAL DECISION UNDER REVIEW]
+{decision_md}
 
 [DYNAMIC DATA QUALITY JSON]
 {data_quality_json}

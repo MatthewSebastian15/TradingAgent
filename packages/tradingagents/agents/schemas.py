@@ -594,6 +594,25 @@ class PortfolioDecision(BaseModel):
     validation_warnings: list[str] = Field(default_factory=list)
 
 
+class SelfCritiqueResult(BaseModel):
+    """9A: adversarial review of the final decision against its inputs (deep mode only)."""
+
+    should_downgrade: bool = Field(
+        description=(
+            "True only if a listed violation is serious enough that the Buy/Sell decision "
+            "must be downgraded to a cautious Hold. False when the decision is sound."
+        ),
+    )
+    violations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Concrete problems: the decision contradicts an input value, overstates "
+            "confidence given the data quality, or relies on missing/stale data. "
+            "Empty when the decision holds up."
+        ),
+    )
+
+
 def render_pm_decision(decision: PortfolioDecision) -> str:
     parts = [
         f"**Rating**: {decision.rating.value}",

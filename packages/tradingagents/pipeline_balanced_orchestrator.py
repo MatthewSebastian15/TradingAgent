@@ -15,10 +15,12 @@ from tradingagents.agents.schemas import (
     DebateArgument,
     PortfolioDecision,
     PortfolioRating,
+    SelfCritiqueResult,
     TraderAction,
     TraderProposal,
     VolatilityLevel,
     render_debate_argument,
+    render_pm_decision,
     render_trader_proposal,
 )
 from tradingagents.dataflows.providers.config import set_config
@@ -56,6 +58,7 @@ from tradingagents.pipeline_balanced_prompts import (
     portfolio_manager_prompt,
     research_manager_prompt,
     risk_committee_prompt,
+    self_critique_prompt,
     trader_prompt,
 )
 from tradingagents.pipeline_balanced_types import (
@@ -86,6 +89,7 @@ PIPELINE_TIMING_ORDER = [
     "trader",
     "risk_analysts",
     "portfolio_manager",
+    "self_critique",
 ]
 
 
@@ -1405,6 +1409,52 @@ def _downgrade_decision_to_wait(
     )
 
 
+def run_self_critique(
+    context: PipelineContext,
+    data_stage: MarketDataStageResult,
+    decision: PortfolioDecision,
+) -> PortfolioDecision:
+    """9A: adversarial review of the final decision, deep depth only.
+
+    One deep_llm call flags a decision that contradicts its inputs, overstates confidence,
+    or leans on missing data, then downgrades a Buy/Sell to a cautious Hold. Budget-gated:
+    `_invoke_once` consumes `LLMBudget` and returns the no-op fallback when exhausted.
+    """
+    if context.analysis_depth != "deep":
+        return decision
+    if _decision_action(decision) not in {"BUY", "SELL"}:
+        # A Hold has nothing to downgrade; skip the call and its budget cost.
+        return decision
+
+    critique = _run_tracked(
+        context.progress_callback,
+        "self_critique",
+        "Independent reviewer is auditing the final decision...",
+        lambda: _invoke_once(
+            context.deep_llm,
+            SelfCritiqueResult,
+            self_critique_prompt(
+                context.ticker,
+                context.trade_date,
+                context.time_horizon_text,
+                render_pm_decision(decision),
+                data_stage.data_quality_json,
+            ),
+            SelfCritiqueResult(should_downgrade=False, violations=[]),
+            "Self-Critique",
+            context.llm_budget,
+            context.cancel_check,
+        ),
+        timings=context.pipeline_timings,
+    )
+
+    if critique.should_downgrade and critique.violations:
+        warnings = [f"Self-critique: {v}" for v in critique.violations][:5]
+        _append_guardrail_warnings(data_stage.data, decision, warnings)
+        _downgrade_decision_to_wait(decision, warnings, context.has_existing_position)
+    return decision
+
+
 def persist_metrics(context: PipelineContext) -> PipelineMetrics:
     llm_budget = context.llm_budget
     pipeline_started_at = context.pipeline_started_at
@@ -1700,6 +1750,7 @@ def run_balanced_pipeline(
             SHORT_LIVED_TICKER_CACHE.set(normalized_ticker, trade_date, data_stage.data)
         agent_stage = run_agents(context, data_stage)
         portfolio_decision = aggregate_decision(context, data_stage, agent_stage)
+        portfolio_decision = run_self_critique(context, data_stage, portfolio_decision)
         metrics = persist_metrics(context)
         return build_response(context, data_stage, agent_stage, portfolio_decision, metrics)
     finally:

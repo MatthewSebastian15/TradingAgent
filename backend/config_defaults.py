@@ -83,7 +83,8 @@ LLM_BUDGET_BY_ANALYSIS_DEPTH: dict[str, dict[str, int]] = {
         "max_total_llm_calls": env_int("LLM_BUDGET_BALANCED", 10, min_value=0),
     },
     "deep": {
-        "max_total_llm_calls": env_int("LLM_BUDGET_DEEP", 12, min_value=0),
+        # 12 prior agents + 1 for the deep-only final self-critique pass (9A).
+        "max_total_llm_calls": env_int("LLM_BUDGET_DEEP", 13, min_value=0),
     },
 }
 ANALYSIS_DEPTH_CONFIG: dict[str, dict[str, int]] = {
