@@ -196,9 +196,11 @@ def test_rss_dynamic_company_queries_are_added_before_generic_fallbacks():
         profile,
     )
 
-    assert "BBCA.JK stock" in queries
-    assert "BBCA earnings" in queries
-    assert "Bank Central Asia stock" in queries
+    # BBCA.JK is a curated `id` ticker: RSS queries localize to Indonesian to match the
+    # id-ID Google News locale (saham = stock, laba = earnings), not English suffixes.
+    assert "BBCA saham" in queries
+    assert "BBCA laba" in queries
+    assert '"Bank Central Asia" saham' in queries
     assert any(feed.id.startswith("company-google-news-") for feed in feeds)
     assert len(feeds) == 10
 
