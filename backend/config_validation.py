@@ -26,7 +26,12 @@ from config_defaults import (
     RATE_LIMIT_STORAGE_BACKEND,
     REQUIRE_API_KEY_FOR_RATE_LIMIT,
 )
-from config_llm import SUPPORTED_PROVIDERS, build_tradingagents_config, llm
+from config_llm import (
+    PROVIDER_API_KEY_ENV,
+    SUPPORTED_PROVIDERS,
+    build_tradingagents_config,
+    llm,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,17 +55,13 @@ def _validate_writable_parent(path: str, key: str, errors: list[str]) -> None:
     _validate_writable_dir(str(Path(path).expanduser().parent), key, errors)
 
 
+# Derived from the single source in config_llm so the two never drift.
 PROVIDER_KEY_REQUIREMENTS: dict[str, tuple[tuple[str, ...], str]] = {
-    "google": (
-        ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
-        "GOOGLE_API_KEY or GEMINI_API_KEY is required when LLM_PROVIDER=google.",
-    ),
-    "openai": (("OPENAI_API_KEY",), "OPENAI_API_KEY is required when LLM_PROVIDER=openai."),
-    "anthropic": (
-        ("ANTHROPIC_API_KEY",),
-        "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic.",
-    ),
-    "deepseek": (("DEEPSEEK_API_KEY",), "DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek."),
+    provider: (
+        keys,
+        f"{' or '.join(keys)} is required when LLM_PROVIDER={provider}.",
+    )
+    for provider, keys in PROVIDER_API_KEY_ENV.items()
 }
 
 
@@ -95,7 +96,10 @@ def validate_startup_config() -> list[str]:
         )
 
     if not llm.llm_api_key:
-        errors.append("CRITICAL: LLM_API_KEY is not set. LLM calls will fail.")
+        _keys, message = PROVIDER_KEY_REQUIREMENTS.get(
+            provider, ((), "An LLM API key is required.")
+        )
+        errors.append(f"CRITICAL: {message} LLM calls will fail.")
 
     if not llm.deep_think_llm:
         errors.append("CRITICAL: DEEP_THINK_LLM is not set. Deep thinking calls will fail.")

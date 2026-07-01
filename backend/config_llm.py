@@ -147,6 +147,24 @@ SUPPORTED_PROVIDERS = llm_model_catalog.SUPPORTED_PROVIDERS
 MODEL_CATALOG = llm_model_catalog.MODEL_CATALOG
 KNOWN_MODELS = llm_model_catalog.KNOWN_MODELS
 
+# Single source of truth: provider -> env var(s) holding its key, in priority order.
+PROVIDER_API_KEY_ENV: dict[str, tuple[str, ...]] = {
+    "google": ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+    "openai": ("OPENAI_API_KEY",),
+    "anthropic": ("ANTHROPIC_API_KEY",),
+    "deepseek": ("DEEPSEEK_API_KEY",),
+}
+
+
+def _resolve_llm_api_key() -> str:
+    """Key comes from the active provider's own env var; LLM_API_KEY is legacy fallback."""
+    provider = env("LLM_PROVIDER").lower()
+    for name in PROVIDER_API_KEY_ENV.get(provider, ()):
+        value = env(name, "").strip()
+        if value:
+            return value
+    return env("LLM_API_KEY", "").strip()  # ponytail: legacy fallback, drop once no .env sets it
+
 
 @dataclass(frozen=True)
 class LLMSettings:
@@ -155,7 +173,7 @@ class LLMSettings:
     provider: str = field(default_factory=lambda: env("LLM_PROVIDER").lower())
     deep_think_llm: str = field(default_factory=lambda: env("DEEP_THINK_LLM"))
     quick_think_llm: str = field(default_factory=lambda: env("QUICK_THINK_LLM"))
-    llm_api_key: str = field(default_factory=lambda: env("LLM_API_KEY", ""))
+    llm_api_key: str = field(default_factory=_resolve_llm_api_key)
     base_url: str = field(default_factory=lambda: env("LLM_BASE_URL", "").rstrip("/"))
 
     def __post_init__(self) -> None:
