@@ -93,7 +93,10 @@ export default function HoldingsTable({ rows, totalValue, onAdd, onRemove, error
       <AddHoldingForm onAdd={onAdd} busy={busy} />
 
       {error && (
-        <div role="alert" className="border-b border-bloomberg-border px-3 py-2 font-mono text-[10px] text-bloomberg-red">
+        <div
+          role="alert"
+          className="border-b border-bloomberg-border px-3 py-2 font-mono text-[10px] text-bloomberg-red"
+        >
           {error}
         </div>
       )}

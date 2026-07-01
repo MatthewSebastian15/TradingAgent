@@ -18,7 +18,11 @@ export function formatPrice(price, ticker = '', currency = '') {
 export function money(value, { currency = false } = {}) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '-';
   return currency
-    ? value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+    ? value.toLocaleString('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 2,
+      })
     : value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 

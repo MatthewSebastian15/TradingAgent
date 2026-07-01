@@ -84,42 +84,45 @@ function App() {
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
           <Route element={<AppLayout />}>
-          <Route path="/" element={<Navigate to="/home" replace />} />
-          <Route path="/home" element={<Dashboard />} />
-          <Route path={AI_AGENT_PATH} element={<AIAgent />} />
-          <Route path={`${AI_AGENT_PATH}/:resourceId`} element={<AIAgent />} />
-          <Route
-            path={LEGACY_AI_AGENT_OLD_PATH}
-            element={<Navigate to={AI_AGENT_PATH} replace />}
-          />
-          <Route
-            path={LEGACY_AI_AGENT_LOWER_PATH}
-            element={<Navigate to={AI_AGENT_PATH} replace />}
-          />
-          <Route
-            path={`${LEGACY_AI_AGENT_OLD_PATH}/:resourceId`}
-            element={<LegacyAIAgentRedirect />}
-          />
-          <Route
-            path={`${LEGACY_AI_AGENT_LOWER_PATH}/:resourceId`}
-            element={<LegacyAIAgentRedirect />}
-          />
-          <Route path={LEGACY_ANALYSIS_PATH} element={<Navigate to={AI_AGENT_PATH} replace />} />
-          <Route path={`${LEGACY_ANALYSIS_PATH}/:resourceId`} element={<LegacyAIAgentRedirect />} />
-          <Route
-            path={LEGACY_ANALYSIS_LIVE_PATH}
-            element={<Navigate to={AI_AGENT_PATH} replace />}
-          />
-          <Route path="/quant" element={<Quant />} />
-          <Route path="/research" element={<Research />} />
-          <Route path="/portfolio" element={<Portfolio />} />
-          <Route path={WATCHLIST_PATH} element={<Watchlist />} />
-          <Route path="/news" element={<News />} />
-          <Route path="/market" element={<Market />} />
-          <Route path="/econ" element={<Economic />} />
-          <Route path={CHATBOT_PATH} element={<ChatbotPage />} />
-          <Route path="/economic" element={<Navigate to="/econ" replace />} />
-          <Route path="*" element={<NotFound />} />
+            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route path="/home" element={<Dashboard />} />
+            <Route path={AI_AGENT_PATH} element={<AIAgent />} />
+            <Route path={`${AI_AGENT_PATH}/:resourceId`} element={<AIAgent />} />
+            <Route
+              path={LEGACY_AI_AGENT_OLD_PATH}
+              element={<Navigate to={AI_AGENT_PATH} replace />}
+            />
+            <Route
+              path={LEGACY_AI_AGENT_LOWER_PATH}
+              element={<Navigate to={AI_AGENT_PATH} replace />}
+            />
+            <Route
+              path={`${LEGACY_AI_AGENT_OLD_PATH}/:resourceId`}
+              element={<LegacyAIAgentRedirect />}
+            />
+            <Route
+              path={`${LEGACY_AI_AGENT_LOWER_PATH}/:resourceId`}
+              element={<LegacyAIAgentRedirect />}
+            />
+            <Route path={LEGACY_ANALYSIS_PATH} element={<Navigate to={AI_AGENT_PATH} replace />} />
+            <Route
+              path={`${LEGACY_ANALYSIS_PATH}/:resourceId`}
+              element={<LegacyAIAgentRedirect />}
+            />
+            <Route
+              path={LEGACY_ANALYSIS_LIVE_PATH}
+              element={<Navigate to={AI_AGENT_PATH} replace />}
+            />
+            <Route path="/quant" element={<Quant />} />
+            <Route path="/research" element={<Research />} />
+            <Route path="/portfolio" element={<Portfolio />} />
+            <Route path={WATCHLIST_PATH} element={<Watchlist />} />
+            <Route path="/news" element={<News />} />
+            <Route path="/market" element={<Market />} />
+            <Route path="/econ" element={<Economic />} />
+            <Route path={CHATBOT_PATH} element={<ChatbotPage />} />
+            <Route path="/economic" element={<Navigate to="/econ" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </Suspense>

@@ -205,8 +205,7 @@ export default function AgentLog({ status, agentProgress }) {
             const error = errorIds.has(step.id);
             const statusValue = pillStatus({ done, active, error });
             const elapsedTime =
-              agentTimes[step.id] ||
-              (active ? <LiveTime startMs={startMs} running /> : undefined);
+              agentTimes[step.id] || (active ? <LiveTime startMs={startMs} running /> : undefined);
             const meta = STATUS_UI[statusValue];
             const Icon = meta.Icon;
             const useCustomColor = (done || active) && step.color && !error;

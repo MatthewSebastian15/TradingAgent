@@ -425,7 +425,7 @@ describe('matrices + optimizer', () => {
       [2, 6],
     ];
     const inv = invertMatrix(A);
-    const prod = A.map((row, i) => inv[0].map((_, j) => row[0] * inv[0][j] + row[1] * inv[1][j]));
+    const prod = A.map((row) => inv[0].map((_, j) => row[0] * inv[0][j] + row[1] * inv[1][j]));
     expect(prod[0][0]).toBeCloseTo(1, 8);
     expect(prod[1][1]).toBeCloseTo(1, 8);
     expect(prod[0][1]).toBeCloseTo(0, 8);

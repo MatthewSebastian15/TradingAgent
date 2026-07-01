@@ -35,11 +35,7 @@ export default function HoldingsSummaryBar({ summary }) {
         value={totalPL === null ? '-' : `${money(totalPL)}${pct(totalPLPct)}`}
         valueClass={signClass(totalPL)}
       />
-      <Cell
-        label="Day P/L"
-        value={money(totalDayPL)}
-        valueClass={signClass(totalDayPL)}
-      />
+      <Cell label="Day P/L" value={money(totalDayPL)} valueClass={signClass(totalDayPL)} />
     </div>
   );
 }
