@@ -22,8 +22,8 @@ from tradingagents.dataflows.providers.yfinance_news import _extract_article_dat
 from tradingagents.utils_resilience import TTLCache
 from tradingagents.yfinance_runtime import yf
 
-from .news_aggregator import deduplicate_news as deduplicate_news_articles
 from .news_decision_filter import split_ai_analysis_news
+from .news_dedup_normalized import deduplicate_news_articles
 from .news_models import NewsEntity, NormalizedNewsArticle, article_to_dict
 from .news_query_builder import build_ticker_news_queries
 from .news_relevance import is_relevant_news

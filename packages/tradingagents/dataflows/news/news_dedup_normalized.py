@@ -58,19 +58,21 @@ def deduplicate_news_articles(items: list[NormalizedNewsArticle]) -> list[Normal
 
 def _dedupe_preference(
     article: NormalizedNewsArticle,
-) -> tuple[float, float, float, int, int, int, float]:
+) -> tuple[int, float, float, float, int, int, float]:
     trust = float(article.provider_trust_score or PROVIDER_TRUST_SCORE.get(article.provider, 0))
     published = article.published_at.timestamp() if article.published_at else 0.0
     has_summary = 1 if str(article.summary or "").strip() else 0
     summary_length = len(str(article.summary or ""))
     direct_rss = 0 if _is_google_news_fallback(article) else 1
+    # direct_rss ranks first so a direct source always wins a duplicate against the
+    # google-news mirror, even when the mirror reports a higher relevance_score.
     return (
+        direct_rss,
         float(article.relevance_score or 0),
         trust,
         published,
         has_summary,
         summary_length,
-        direct_rss,
         published,
     )
 
