@@ -62,7 +62,9 @@ export default function Quant() {
 
   const loadTicker = useCallback(
     (sym, rng) => {
-      const symbol = String(sym || '').trim().toUpperCase();
+      const symbol = String(sym || '')
+        .trim()
+        .toUpperCase();
       if (!symbol) return;
       setTicker(symbol);
       run(async (signal) => {
@@ -90,7 +92,7 @@ export default function Quant() {
   }
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10">
       <main className="space-y-4 px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -120,7 +122,7 @@ export default function Quant() {
                   const id = it.request_id || it.job_id;
                   return (
                     <option key={id} value={id}>
-                      {(it.ticker || it.normalized_ticker || '—')}
+                      {it.ticker || it.normalized_ticker || '—'}
                       {it.trade_date ? ` · ${it.trade_date}` : ''}
                     </option>
                   );

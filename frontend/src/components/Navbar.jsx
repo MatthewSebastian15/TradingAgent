@@ -145,7 +145,7 @@ function LeftNavSidebar() {
   return (
     <nav
       aria-label="Main navigation sidebar"
-      className="fixed bottom-0 left-0 top-[60px] z-[45] flex w-12 flex-col overflow-y-auto border-r border-bloomberg-border bg-black"
+      className="fixed bottom-0 left-0 top-[60px] z-[45] flex w-10 flex-col overflow-y-auto border-r border-bloomberg-border bg-black"
     >
       {NAV_ITEMS.map((item) => {
         const active = isNavItemActive(item, location.pathname);

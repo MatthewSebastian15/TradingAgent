@@ -633,7 +633,7 @@ export default function Economic() {
   const [active, setActive] = useState('rates');
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10">
       <main className="space-y-4 px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="font-mono text-sm font-bold tracking-[0.35em] text-bloomberg-orange uppercase">

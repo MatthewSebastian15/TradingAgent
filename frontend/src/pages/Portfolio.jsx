@@ -187,7 +187,7 @@ export default function Portfolio() {
   const showSidebar = tab === 'ai';
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10">
       <main className={`space-y-3 px-4 py-4 ${showSidebar ? 'md:pr-[296px]' : ''}`}>
         <div className="flex items-center justify-between">
           <h1 className="font-mono text-[11px] uppercase tracking-[0.35em] text-bloomberg-orange">
@@ -217,8 +217,8 @@ export default function Portfolio() {
             <PortfolioSummaryBar summary={summary} />
             <TrackedPositionsTable rows={rows} onRemove={untrack} />
             <p className="font-mono text-[10px] leading-relaxed text-bloomberg-muted">
-              Tracked performance is directional by the AI&apos;s decision and is a research tool, not
-              financial advice. Entry prices are frozen at the moment you track a signal.
+              Tracked performance is directional by the AI&apos;s decision and is a research tool,
+              not financial advice. Entry prices are frozen at the moment you track a signal.
             </p>
           </>
         ) : (

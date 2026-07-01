@@ -52,7 +52,7 @@ export default function Dashboard() {
   const newsError = error ? error.message || 'Unable to load summary news.' : '';
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10">
       {/* Right padding = sidebar width (280px) + a 16px gap, matching the left px-4. */}
       <main className="space-y-3 px-4 pb-4 pt-2 md:pr-[296px]">
         <HomeNewsSummary

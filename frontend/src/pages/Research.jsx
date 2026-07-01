@@ -751,7 +751,7 @@ export default function Research() {
   }, [activeTicker, activeRange]);
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10">
       <div className="px-4 pt-4">
         <ResearchCommandBar
           value={activeTicker || ''}

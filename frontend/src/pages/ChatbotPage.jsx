@@ -35,7 +35,7 @@ export function ChatbotPage() {
   }, [location, navigate, sendMessage]);
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12 text-bloomberg-white">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10 text-bloomberg-white">
       <main className="flex flex-col h-[calc(100vh-60px)]">
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-4 border-b border-bloomberg-border bg-bloomberg-surface">

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function NotFound() {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10">
       <div
         className="flex flex-col items-center justify-center"
         style={{ minHeight: 'calc(100vh - 60px)' }}

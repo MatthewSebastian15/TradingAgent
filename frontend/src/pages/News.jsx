@@ -72,7 +72,7 @@ export default function News() {
   const emptyMessage = emptyMessageFor({ category, data, error });
 
   return (
-    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-12 text-bloomberg-white">
+    <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10 text-bloomberg-white">
       <main className="terminal-news px-3 py-3 font-mono">
         <Card className="terminal-news-panel overflow-hidden rounded-lg border-bloomberg-border bg-black/30 text-bloomberg-white shadow-lg shadow-black/20">
           <CardContent className="p-3">

@@ -193,8 +193,8 @@ export default function AnalysisWorkspace({
 
   return (
     <div className="h-screen bg-bloomberg-bg pt-[60px]">
-      {/* Content area: starts to the right of the global nav sidebar (w-12) */}
-      <div className="fixed bottom-0 left-12 right-0 top-[60px] flex">
+      {/* Content area: starts to the right of the global nav sidebar (w-10) */}
+      <div className="fixed bottom-0 left-10 right-0 top-[60px] flex">
         {/* Collapsed: panel takes no width; floating button re-expands it. */}
         {panelCollapsed && (
           <button
