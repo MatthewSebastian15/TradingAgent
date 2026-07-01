@@ -108,3 +108,53 @@ def test_exact_cache_hit_does_not_consume_budget(tmp_path):
     assert second.title == "Market Report"
     assert llm.calls == 1
     assert budget.snapshot()["used"] == 1
+
+
+def test_exact_cache_misses_on_changed_data_snapshot(tmp_path):
+    # Phase 8: a data-bound agent prompt embeds the price/fundamentals snapshot, so a
+    # changed snapshot is a different prompt -> cache miss -> fresh call. A stale price
+    # can never be served, and identical data reuses the cached result.
+    class SnapshotLLM:
+        provider = "google"
+        model_name = "gemini-test"
+
+        def __init__(self):
+            self.calls = 0
+
+        def with_structured_output(self, schema):
+            return self
+
+        def invoke(self, prompt):
+            self.calls += 1
+            return AnalystReport(
+                title=f"Report {self.calls}",
+                summary="Summary",
+                key_points=["Point"],
+                risks=["Risk"],
+                confidence=0.5,
+            )
+
+    set_config(
+        {
+            "llm_exact_cache_enabled": True,
+            "llm_exact_cache_db_path": str(tmp_path / "llm_exact.sqlite3"),
+            "llm_exact_cache_ttl_seconds": 60,
+            "llm_exact_cache_max_entries": 10,
+        }
+    )
+    llm = SnapshotLLM()
+    budget = LLMBudget(limit=5)
+    fallback = AnalystReport(
+        title="Fallback", summary="Fallback", key_points=[], risks=[], confidence=0.1
+    )
+    prompt_v1 = "Market analysis for NVDA on 2026-06-30\nprice_snapshot={close:100.0}"
+    prompt_v2 = "Market analysis for NVDA on 2026-06-30\nprice_snapshot={close:101.0}"
+
+    first = _invoke_once(llm, AnalystReport, prompt_v1, fallback, "Market Analyst", budget)
+    cached = _invoke_once(llm, AnalystReport, prompt_v1, fallback, "Market Analyst", budget)
+    changed = _invoke_once(llm, AnalystReport, prompt_v2, fallback, "Market Analyst", budget)
+
+    assert first.title == "Report 1"
+    assert cached.title == "Report 1"  # identical data snapshot -> cache hit
+    assert changed.title == "Report 2"  # changed price -> fresh call, never the stale value
+    assert llm.calls == 2
