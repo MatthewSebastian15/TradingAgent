@@ -340,14 +340,16 @@ class NewsService:
             ]
             self._record_attempt("yfinance", provider_status["yfinance"])
 
+        raw_articles = articles
         articles = _filter_articles_by_window(
-            articles, as_of_date=as_of_date, window_days=window_days
+            raw_articles, as_of_date=as_of_date, window_days=window_days
         )
         deduped = deduplicate_news_articles(articles)
         dedup_removed_count = max(0, len(articles) - len(deduped))
         prompt_limit = max(1, int(self.config.get("max_articles_for_prompt", 5)))
         decision_min = float(self.config.get("decision_min_relevance_score", 70))
         rss_decision_min = float(self.config.get("rss_decision_min_relevance_score", 80))
+        window_widened = False
         if strict_mode:
             split_news = split_ai_analysis_news(
                 deduped,
@@ -356,6 +358,24 @@ class NewsService:
                 rss_decision_min_score=rss_decision_min,
                 prompt_limit=prompt_limit,
             )
+            # 6C: empty decision feed -> retry the split once on a wider window using the
+            # already-fetched articles. No re-fetch, so no vendor budget is spent.
+            widen_days = int(self.config.get("news_widen_window_days", 90))
+            if as_of_date and not split_news["decision_company_news"] and widen_days > window_days:
+                wide_split = split_ai_analysis_news(
+                    deduplicate_news_articles(
+                        _filter_articles_by_window(
+                            raw_articles, as_of_date=as_of_date, window_days=widen_days
+                        )
+                    ),
+                    profile,
+                    decision_min_score=decision_min,
+                    rss_decision_min_score=rss_decision_min,
+                    prompt_limit=prompt_limit,
+                )
+                if wide_split["decision_company_news"]:
+                    split_news = wide_split
+                    window_widened = True
             decision_company_news = split_news["decision_company_news"]
             market_context_news = split_news["market_context_news"]
             excluded_news = split_news["excluded_news"]
@@ -435,6 +455,7 @@ class NewsService:
                 "decision_company_news_count": len(decision_company_news),
                 "market_context_news_count": len(market_context_news),
                 "excluded_news_count": len(excluded_news),
+                "window_widened": window_widened,
             },
             "limitations": []
             if prompt_articles

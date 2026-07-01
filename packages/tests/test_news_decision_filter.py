@@ -121,6 +121,21 @@ def test_window_filter_keeps_dateless_articles():
     assert next(a for a in kept if a.url.endswith("no-date")).date_missing is True
 
 
+def test_widen_window_recovers_decision_feed():
+    # 6C: a company article just outside the 30d window is dropped (blank feed), but the
+    # 90d widen keeps it -> decision feed recovers, all from already-fetched articles.
+    article = make_article(
+        url="https://example.com/bbca-old",
+        published_at=datetime(2026, 5, 10, tzinfo=timezone.utc),
+    )
+    narrow = _filter_articles_by_window([article], as_of_date="2026-06-30", window_days=30)
+    assert narrow == []  # blank at the default window
+
+    wide = _filter_articles_by_window([article], as_of_date="2026-06-30", window_days=90)
+    result = score_and_split("BBCA.JK", wide)
+    assert len(result["decision_company_news"]) == 1
+
+
 def test_ticker_only_in_url_is_not_company_match():
     # F4: a stray ticker token in the URL must not count as a company match.
     profile = resolve_news_ticker("BBCA.JK")
@@ -155,7 +170,11 @@ def test_ambiguous_ticker_bare_word_is_not_company_match():
 
 
 def test_ambiguous_ticker_with_company_name_is_company_match():
-    article = {"title": "ON Semiconductor beats earnings estimates", "summary": "", "url": "https://x/a"}
+    article = {
+        "title": "ON Semiconductor beats earnings estimates",
+        "summary": "",
+        "url": "https://x/a",
+    }
     assert has_company_match_in_title_or_entities(
         article, "ON", "ON Semiconductor", ["ON", "ON Semiconductor"]
     )

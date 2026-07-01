@@ -5,6 +5,18 @@ from tradingagents.dataflows.news.news_ticker_aliases import (
 )
 
 
+def test_suffix_maps_to_market_country():
+    # 6C: exchange suffix drives market/country instead of defaulting to US.
+    hk = resolve_news_ticker("0700.HK")
+    assert (hk["exchange"], hk["country"]) == ("HKEX", "hk")
+    assert resolve_news_ticker("7203.T")["country"] == "jp"
+    assert resolve_news_ticker("SAP.DE")["country"] == "de"
+    # unknown suffix still defaults to US
+    assert resolve_news_ticker("SOME.XYZ")["country"] == "us"
+    # no suffix -> US
+    assert resolve_news_ticker("AMD")["country"] == "us"
+
+
 def test_curated_ticker_uses_rich_table():
     profile = resolve_news_ticker("BBCA.JK")
     assert profile["company_name"] == "Bank Central Asia"
@@ -44,8 +56,11 @@ def test_registered_metadata_is_used_by_later_resolve():
     assert profile["sector"] == "Technology"
 
     reset_news_ticker_metadata()
-    # F7 (global suffix -> country/short-ticker) is Phase 6; unknown non-.JK keeps full symbol.
-    assert resolve_news_ticker("0700.HK")["company_name"] == "0700.HK"
+    # Exchange suffix is stripped for the short ticker (0700.HK -> 0700); no-name fallback
+    # uses the bare code. Country localization for non-.JK suffixes stays deferred (F7).
+    resolved = resolve_news_ticker("0700.HK")
+    assert resolved["company_name"] == "0700"
+    assert resolved["short_ticker"] == "0700"
 
 
 def test_curated_table_wins_over_registry():

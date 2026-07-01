@@ -329,6 +329,23 @@ def _metadata_for(ticker: str) -> tuple[dict[str, Any] | None, str | None, str |
     return None, None, None
 
 
+# 6C: exchange-suffix -> (exchange, country) so non-.JK global tickers tag the right
+# market instead of defaulting to US. Query localization beyond id/us stays English
+# (US_SUFFIXES) until a market gets its own keyword corpus — F7 tail.
+SUFFIX_MARKET: dict[str, tuple[str, str]] = {
+    "JK": ("IDX", "id"),
+    "HK": ("HKEX", "hk"),
+    "T": ("TSE", "jp"),
+    "DE": ("XETRA", "de"),
+    "L": ("LSE", "gb"),
+    "SS": ("SSE", "cn"),
+    "SZ": ("SZSE", "cn"),
+    "KS": ("KRX", "kr"),
+    "SI": ("SGX", "sg"),
+    "AX": ("ASX", "au"),
+}
+
+
 def resolve_news_ticker(
     value: str, *, company_name: str | None = None, sector: str | None = None
 ) -> dict[str, Any]:
@@ -340,8 +357,11 @@ def resolve_news_ticker(
     if metadata is None:
         # Non-curated ticker: enrich with supplied or registered yfinance identity.
         # Falls back to the ticker-only degenerate profile when no name is known.
-        is_jk = ticker.endswith(".JK")
-        short_ticker = ticker.removesuffix(".JK") if is_jk else ticker
+        # Strip the exchange suffix so the short ticker / query term is the bare code
+        # (0700.HK -> 0700), and map the suffix to its real market (6C).
+        suffix = ticker.rsplit(".", 1)[1] if "." in ticker else ""
+        short_ticker = ticker.rsplit(".", 1)[0] if "." in ticker else ticker
+        exchange, country = SUFFIX_MARKET.get(suffix, ("US", "us"))
         registered = _registered_metadata(ticker)
         resolved_name = _clean(company_name) or _clean(registered.get("company_name"))
         resolved_sector = _clean(sector) or _clean(registered.get("sector"))
@@ -359,8 +379,8 @@ def resolve_news_ticker(
             "input": value,
             "ticker": ticker,
             "short_ticker": short_ticker,
-            "exchange": "IDX" if is_jk else "US",
-            "country": "id" if is_jk else "us",
+            "exchange": exchange,
+            "country": country,
             "company_name": company,
             "aliases": aliases,
             "subsidiaries": [],

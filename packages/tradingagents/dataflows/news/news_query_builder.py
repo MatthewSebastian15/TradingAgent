@@ -61,6 +61,9 @@ def build_ticker_news_queries(profile: dict[str, Any], *, max_queries: int = 12)
             ticker,
         ]
     )
+    # ponytail: only id has a localized corpus; every other market uses English (US)
+    # terms — English financial coverage is global. Add a per-market corpus when a
+    # non-en market is actually onboarded (F7 tail).
     suffixes = ID_SUFFIXES if country == "id" or ticker.endswith(".JK") else US_SUFFIXES
 
     queries: list[str] = []
