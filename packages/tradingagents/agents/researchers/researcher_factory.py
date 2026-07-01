@@ -33,9 +33,7 @@ _SIDE_CONFIG = {
 }
 
 
-def _fallback_argument(
-    side: ResearcherSide, label: str, confidence: float = 0.35
-) -> DebateArgument:
+def _fallback_argument(side: ResearcherSide, label: str, confidence: float = 0.0) -> DebateArgument:
     return DebateArgument(
         stance=side,
         thesis=f"{label} could not produce a fully validated argument, so confidence is low.",

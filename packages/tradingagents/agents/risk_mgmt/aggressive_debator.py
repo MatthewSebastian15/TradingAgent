@@ -6,7 +6,7 @@ from tradingagents.agents.utils.agent_utils import build_instrument_context
 from tradingagents.agents.utils.structured import bind_structured, invoke_typed_or_none
 
 
-def _fallback_argument(side: str, label: str, confidence: float = 0.35) -> DebateArgument:
+def _fallback_argument(side: str, label: str, confidence: float = 0.0) -> DebateArgument:
     return DebateArgument(
         stance=side,
         thesis=(

@@ -801,7 +801,7 @@ def _run_debate_phase(
                         + "decision."
                     ),
                     risk_flags=["Model output fallback used."],
-                    confidence=0.35,
+                    confidence=0.0,
                     consensus_signal=False,
                 ),
                 "Bull Researcher",
@@ -843,7 +843,7 @@ def _run_debate_phase(
                         + "overconfidence."
                     ),
                     risk_flags=["Model output fallback used."],
-                    confidence=0.35,
+                    confidence=0.0,
                     consensus_signal=False,
                 ),
                 "Bear Researcher",
@@ -889,7 +889,7 @@ def _run_debate_phase(
                         ],
                         counterargument="No extra bullish refinement was generated.",
                         risk_flags=["Debate rebuttal fallback used."],
-                        confidence=0.35,
+                        confidence=0.0,
                         consensus_signal=False,
                     ),
                     f"Bull Researcher R{round_number}",
@@ -940,7 +940,7 @@ def _run_debate_phase(
                         ],
                         counterargument="No extra bearish refinement was generated.",
                         risk_flags=["Deep debate fallback used."],
-                        confidence=0.35,
+                        confidence=0.0,
                         consensus_signal=False,
                     ),
                     f"Bear Researcher R{round_number}",
@@ -1056,7 +1056,7 @@ def _run_risk_phase(
                         "Use no new allocation or a very small test position only after manual "
                         + "review."
                     ),
-                    confidence=0.35,
+                    confidence=0.0,
                 ),
                 "Risk Committee",
                 llm_budget,
@@ -1101,7 +1101,7 @@ def _run_risk_phase(
                         mitigation_plan=(
                             "Keep the previous risk controls and manually verify sizing."
                         ),
-                        confidence=0.35,
+                        confidence=0.0,
                     ),
                     f"Risk Committee R{round_number}",
                     llm_budget,
