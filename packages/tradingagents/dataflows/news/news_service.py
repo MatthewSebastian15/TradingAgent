@@ -635,6 +635,10 @@ def _filter_articles_by_window(
     for article in articles:
         published_at = article.published_at
         if published_at is None:
+            # Some providers (RSS/newsdata) omit dates; dropping them blanked otherwise
+            # relevant feeds (F3). Keep dateless articles and tag them instead.
+            article.date_missing = True
+            filtered.append(article)
             continue
         if published_at.tzinfo is None:
             published_at = published_at.replace(tzinfo=timezone.utc)

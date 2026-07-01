@@ -51,6 +51,7 @@ class NormalizedNewsArticle(BaseModel):
     provider_trust_score: float | None = None
     final_rank_score: float | None = None
     decision_filter_reason: str | None = None
+    date_missing: bool = False
 
 
 def article_to_dict(article: NormalizedNewsArticle, *, include_raw: bool = False) -> dict[str, Any]:

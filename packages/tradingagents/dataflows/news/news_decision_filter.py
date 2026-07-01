@@ -29,6 +29,16 @@ FALLBACK_DECISION_REASONS = {
     "rss_score_below_decision_threshold",
 }
 
+# Second-tier rescue: articles that matched the company but were excluded on category, not
+# on match. The category gate runs only after has_company_match passes, so these are still
+# genuine company hits — safe to surface (capped) when no score near-misses exist either.
+# Never rescue no_company_match: that reintroduces random news.
+WEAK_PROFILE_RESCUE_REASONS = {
+    "category_not_decision_allowed",
+    "rss_category_not_decision_allowed",
+}
+WEAK_PROFILE_RESCUE_LIMIT = 3
+
 PROVIDER_TRUST_SCORE = {
     "google_news_light": 5,
     "marketaux": 4,
@@ -84,6 +94,24 @@ def split_ai_analysis_news(
             excluded = [
                 item for item in excluded if item["reason"] not in FALLBACK_DECISION_REASONS
             ]
+
+    # Still blank and no score near-misses: surface the best company-matched articles that
+    # only failed the category gate, so a weak/atypical category can't hide real company news.
+    if not decision:
+        candidates = sorted(
+            (item for item in excluded if item["reason"] in WEAK_PROFILE_RESCUE_REASONS),
+            key=lambda item: _rank_decision_article(item["article"]),
+            reverse=True,
+        )
+        rescued = candidates[:WEAK_PROFILE_RESCUE_LIMIT]
+        for item in rescued:
+            article = item["article"]
+            article.bucket = article.bucket if article.bucket != "discard" else "full_news"
+            article.market_context_only = False
+            article.decision_filter_reason = "fallback_weak_profile"
+            decision.append(article)
+        rescued_ids = {id(item["article"]) for item in rescued}
+        excluded = [item for item in excluded if id(item["article"]) not in rescued_ids]
 
     decision = sorted(decision, key=_rank_decision_article, reverse=True)[
         : max(1, int(prompt_limit))

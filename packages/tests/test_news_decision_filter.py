@@ -1,6 +1,9 @@
+from datetime import datetime, timezone
+
 from tradingagents.dataflows.news.news_decision_filter import split_ai_analysis_news
 from tradingagents.dataflows.news.news_models import NormalizedNewsArticle
 from tradingagents.dataflows.news.news_scoring import score_news_article
+from tradingagents.dataflows.news.news_service import _filter_articles_by_window
 from tradingagents.dataflows.news.news_ticker_aliases import resolve_news_ticker
 
 
@@ -82,6 +85,39 @@ def test_offticker_near_miss_is_not_promoted_by_fallback():
     result = split_ai_analysis_news([article], profile, decision_min_score=70, prompt_limit=5)
 
     assert len(result["decision_company_news"]) == 0
+
+
+def test_category_excluded_company_match_rescued_as_weak_profile():
+    # Company-matched article excluded only on category (not on match) must be surfaced
+    # when the decision feed is otherwise blank, tagged as a lower-confidence rescue.
+    article = make_article(relevance_category="macro_context", relevance_score=90, bucket=None)
+    profile = resolve_news_ticker("BBCA.JK")
+    result = split_ai_analysis_news([article], profile, decision_min_score=70, prompt_limit=5)
+
+    assert len(result["decision_company_news"]) == 1
+    assert result["decision_company_news"][0].decision_filter_reason == "fallback_weak_profile"
+
+
+def test_window_filter_keeps_dateless_articles():
+    dateless = make_article(url="https://example.com/no-date", published_at=None)
+    in_window = make_article(
+        url="https://example.com/dated",
+        published_at=datetime(2026, 6, 20, tzinfo=timezone.utc),
+    )
+    out_of_window = make_article(
+        url="https://example.com/old",
+        published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+
+    kept = _filter_articles_by_window(
+        [dateless, in_window, out_of_window], as_of_date="2026-06-30", window_days=30
+    )
+
+    kept_urls = {article.url for article in kept}
+    assert "https://example.com/no-date" in kept_urls  # dateless survives (F3)
+    assert "https://example.com/dated" in kept_urls
+    assert "https://example.com/old" not in kept_urls
+    assert next(a for a in kept if a.url.endswith("no-date")).date_missing is True
 
 
 def test_rss_ihsg_general_context_not_used_as_company_news():
