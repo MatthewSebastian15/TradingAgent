@@ -51,13 +51,14 @@ def _collected_data(trade_date: str = "2026-05-18") -> pipeline.CollectedData:
         ),
         (
             "balanced",
-            9,
+            10,
             [
                 "Market Analyst",
                 "News + Social Analyst",
                 "Fundamentals Analyst",
                 "Bull Researcher",
                 "Bear Researcher",
+                "Bull Researcher R2",
                 "Research Manager",
                 "Trader",
                 "Risk Committee",

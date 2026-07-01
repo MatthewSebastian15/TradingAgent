@@ -79,7 +79,8 @@ LLM_BUDGET_BY_ANALYSIS_DEPTH: dict[str, dict[str, int]] = {
         "max_total_llm_calls": env_int("LLM_BUDGET_FAST", 6, min_value=0),
     },
     "balanced": {
-        "max_total_llm_calls": env_int("LLM_BUDGET_BALANCED", 9, min_value=0),
+        # 9 core agents + 1 for the balanced bull rebuttal round (7A).
+        "max_total_llm_calls": env_int("LLM_BUDGET_BALANCED", 10, min_value=0),
     },
     "deep": {
         "max_total_llm_calls": env_int("LLM_BUDGET_DEEP", 12, min_value=0),

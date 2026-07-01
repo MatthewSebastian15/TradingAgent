@@ -859,12 +859,12 @@ def _run_debate_phase(
             ]
         )
 
-        for round_number in range(2, extra_debate_rounds + 2):
-            bull = _run_tracked(
+        def _bull_rebuttal(round_number: int) -> DebateArgument:
+            return _run_tracked(
                 progress_callback,
                 "bull_researcher",
-                f"Deep mode bull review round {round_number} is refining the upside case...",
-                lambda round_number=round_number: _invoke_once(
+                f"Bull review round {round_number} is refining the upside case against the bear...",
+                lambda: _invoke_once(
                     bull_llm,
                     DebateArgument,
                     bull_prompt(
@@ -880,7 +880,7 @@ def _run_debate_phase(
                     DebateArgument(
                         stance="bull",
                         thesis=(
-                            "Deep mode could not generate an additional bullish refinement "
+                            "Could not generate an additional bullish refinement "
                             f"for {ticker}."
                         ),
                         evidence=[
@@ -888,7 +888,7 @@ def _run_debate_phase(
                             "The prior debate remains available for review.",
                         ],
                         counterargument="No extra bullish refinement was generated.",
-                        risk_flags=["Deep debate fallback used."],
+                        risk_flags=["Debate rebuttal fallback used."],
                         confidence=0.35,
                         consensus_signal=False,
                     ),
@@ -898,6 +898,16 @@ def _run_debate_phase(
                 ),
                 timings=pipeline_timings,
             )
+
+        # 7A: one bull rebuttal in balanced so the manager judges a reply to the bear,
+        # not just the opening statements. Budget-gated inside _invoke_once. Deep mode
+        # runs its own multi-round refinement loop below instead.
+        if analysis_depth == "balanced":
+            bull = _bull_rebuttal(2)
+            debate_history.append(render_debate_argument(bull, "Bull Researcher R2"))
+
+        for round_number in range(2, extra_debate_rounds + 2):
+            bull = _bull_rebuttal(round_number)
             debate_history.append(render_debate_argument(bull, f"Bull Researcher R{round_number}"))
 
             bear = _run_tracked(

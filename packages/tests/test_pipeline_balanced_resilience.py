@@ -1033,3 +1033,60 @@ def test_reconcile_confidence_keeps_confidence_on_clean_run():
     assert reconciled is False
     assert final == 0.8
     assert reason is None
+
+
+def test_balanced_debate_runs_bull_rebuttal_round():
+    # 7A: balanced debate is Bull -> Bear -> Bull-rebuttal, so the manager judges a
+    # reply to the bear rather than only the opening statements.
+    from types import SimpleNamespace
+
+    from tradingagents.agents.schemas import DebateArgument
+    from tradingagents.dataflows.providers.config import set_config
+    from tradingagents.pipeline_balanced_orchestrator import _run_debate_phase
+
+    class DebateLLM:
+        provider = "google"
+        model_name = "gemini-test"
+
+        def with_structured_output(self, schema):
+            return self
+
+        def invoke(self, prompt):
+            return DebateArgument(
+                stance="bull",
+                thesis="The upside case for the ticker remains intact this quarter.",
+                evidence=["Point one from the reports.", "Point two from the reports."],
+                counterargument="Bears understate the durable margin expansion here.",
+                risk_flags=["Execution risk."],
+                confidence=0.6,
+                consensus_signal=False,
+            )
+
+    set_config({})
+    llm = DebateLLM()
+    ctx = SimpleNamespace(
+        ticker="NVDA",
+        trade_date="2026-06-30",
+        analysis_depth="balanced",
+        extra_debate_rounds=0,
+        time_horizon_text="1 month",
+        llm_budget=LLMBudget(limit=20),
+        pipeline_timings={},
+        progress_callback=None,
+        cancel_check=None,
+        llm_for=lambda name: llm,
+    )
+    report = AnalystReport(title="t", summary="s", key_points=["p"], risks=["r"], confidence=0.5)
+
+    _bull, _bear, history = _run_debate_phase(
+        ctx,
+        market_report=report,
+        news_social_report=report,
+        fundamentals_report=report,
+        market_md="M",
+        news_social_md="N",
+        fundamentals_md="F",
+        data_quality_json="{}",
+    )
+
+    assert len(history) == 3
