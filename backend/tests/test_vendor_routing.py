@@ -27,9 +27,13 @@ from tradingagents.dataflows.providers.vendor_router import VendorAttemptRecorde
 def clear_interface_cache():
     from tradingagents.dataflows.providers import interface
 
+    # get_quote/get_stock_data/get_indicators use the separate price cache; clear both
+    # or a cached quote from one test leaks into the next (breaks fallback assertions).
     interface._TOOL_CACHE._data.clear()
+    interface._PRICE_TOOL_CACHE._data.clear()
     yield
     interface._TOOL_CACHE._data.clear()
+    interface._PRICE_TOOL_CACHE._data.clear()
 
 
 BASE_CONFIG = {

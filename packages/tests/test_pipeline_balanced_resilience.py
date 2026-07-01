@@ -350,7 +350,9 @@ def test_build_related_news_deduplicates_limits_and_truncates_vendor_items():
                 "ticker": "BBCA.JK",
                 "title": title,
                 "url": f"https://example.com/news-{index}",
-                "summary": "A" * 500,
+                # Distinct per-article body: identical bodies are correctly collapsed by
+                # the body-hash dedup, so keep them unique to test URL dedup + truncation.
+                "summary": f"{title}. " + "A" * 500,
                 "source": "Example",
                 "published_at": f"2026-05-{20 + index:02d}T10:00:00Z",
                 "relevance_score": 90 - index,
