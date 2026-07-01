@@ -136,6 +136,7 @@ from config_defaults import (
     PRICE_MAX_FALLBACK_DAYS,
     PROVIDER_SDK_MAX_RETRIES,
     RESPONSE_DETAILS,
+    TARGET_RISK_REWARD,
     TOOL_MAX_RETRIES,
     TOOL_TIMEOUT_SECONDS,
 )
@@ -193,6 +194,7 @@ class LLMSettings:
             "deep_think_llm": self.deep_think_llm,
             "quick_think_llm": self.quick_think_llm,
             "deep_think_agents": list(DEEP_THINK_AGENTS),
+            "target_risk_reward": TARGET_RISK_REWARD,
             "backend_url": self.backend_url(),
             "llm_api_key": self.llm_api_key,
             "llm": self.metadata(),

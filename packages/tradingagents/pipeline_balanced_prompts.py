@@ -86,7 +86,9 @@ def _prompt_json(value: Any, max_chars: int = 9000) -> tuple[str, bool]:
                 break
             kept = candidate
         body = json.dumps(kept, separators=(",", ":"), ensure_ascii=False, default=str)
-        return body + "[TRUNCATED_FOR_PROMPT]", True
+        omitted = [str(k) for k in value if k not in kept]
+        marker = f'[TRUNCATED_FOR_PROMPT omitted_context_keys={json.dumps(omitted)}]'
+        return body + marker, True
     return text[:max_chars].rstrip() + "[TRUNCATED_FOR_PROMPT]", True
 
 

@@ -115,6 +115,22 @@ def test_buy_always_forces_risk_reward_to_one_to_three(raw_rr):
     assert "RR_FORCED_TO_3" in normalized.validation_warnings
 
 
+def test_normalize_honors_non_default_target_risk_reward():
+    # 9B: a non-default TARGET_RISK_REWARD reshapes reward/take-profit and display.
+    decision = make_decision(risk_reward_ratio=3.0, stop_loss=95.0)
+
+    normalized = normalize_trade_levels(
+        decision, 100.0, ticker="NVDA", target_risk_reward=2.0
+    )
+
+    assert normalized.risk_reward_ratio == pytest.approx(2.0)
+    assert normalized.risk_reward_display == "1:2"
+    assert normalized.risk_per_share == pytest.approx(5.0)
+    assert normalized.reward_per_share == pytest.approx(10.0)
+    assert normalized.take_profit == pytest.approx(110.0)
+    assert "RR_FORCED_TO_3" in normalized.validation_warnings
+
+
 def test_buy_with_exact_rr_three_does_not_add_rr_warning():
     decision = make_decision(risk_reward_ratio=3.0, stop_loss=95.0)
 

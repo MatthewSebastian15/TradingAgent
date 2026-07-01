@@ -218,6 +218,7 @@ from config_defaults import (
     RISK_MIN_ROUNDS,
     STATUS_RATE_LIMIT_PER_MINUTE,
     STREAM_RATE_LIMIT_PER_MINUTE,
+    TARGET_RISK_REWARD,
     TOOL_MAX_RETRIES,
     TOOL_TIMEOUT_SECONDS,
 )
@@ -266,6 +267,7 @@ class _BackendSettingsShim:
     llm_timeout_seconds = LLM_TIMEOUT_SECONDS
     llm_max_retries = LLM_MAX_RETRIES
     deep_think_agents = DEEP_THINK_AGENTS
+    target_risk_reward = TARGET_RISK_REWARD
     provider_sdk_max_retries = PROVIDER_SDK_MAX_RETRIES
     max_concurrent_llm_calls = MAX_CONCURRENT_LLM_CALLS
     cache_ttl_seconds = CACHE_TTL_SECONDS

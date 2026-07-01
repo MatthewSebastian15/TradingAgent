@@ -36,3 +36,15 @@ def test_initial_analyst_prompts_use_compact_context(sample_collected_data):
     assert "\nPRICE DATA:" not in market_prompt
     assert "\nCOMPANY NEWS:" not in news_prompt
     assert "\nBALANCE SHEET:" not in fundamentals
+
+
+def test_prompt_json_names_omitted_keys_on_truncation():
+    from tradingagents.pipeline_balanced_prompts import _prompt_json
+
+    value = {"a": "x" * 200, "b": "y" * 200, "c": "z" * 200}
+    text, truncated = _prompt_json(value, max_chars=220)
+
+    assert truncated is True
+    assert "omitted_context_keys=" in text
+    # At least one late key must be reported as dropped.
+    assert '"c"' in text.split("omitted_context_keys=", 1)[1]

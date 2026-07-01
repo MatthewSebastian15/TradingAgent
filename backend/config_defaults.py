@@ -141,6 +141,8 @@ LLM_RETRIES_BY_DEPTH: dict[str, int] = {
 # Agents (by progress key) that should run on the deep model instead of the quick one.
 # Accepted: bull_researcher, bear_researcher, risk_analysts. Empty = current behavior.
 DEEP_THINK_AGENTS = [name.lower() for name in env_list("DEEP_THINK_AGENTS", [])]
+# Target Risk:Reward ratio forced onto every trade plan (reward = target × risk).
+TARGET_RISK_REWARD = env_float("TARGET_RISK_REWARD", 3.0, min_value=0.1)
 LLM_RETRY_BASE_DELAY = 1.5
 LLM_RETRY_MAX_DELAY = 30
 LLM_429_MAX_WAIT_SECONDS = 20

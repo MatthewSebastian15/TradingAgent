@@ -66,7 +66,7 @@ from tradingagents.pipeline_balanced_types import (
     ResearchPlanLite,
     RiskCommitteeReport,
 )
-from tradingagents.trade_levels import normalize_trade_levels
+from tradingagents.trade_levels import DEFAULT_TARGET_RR, normalize_trade_levels
 
 logger = logging.getLogger(__name__)
 
@@ -1316,6 +1316,7 @@ def aggregate_decision(
         average_entry_price=average_entry_price,
         price_data=data.price_data,
         data_quality=data.data_quality.model_dump(),
+        target_risk_reward=context.config.get("target_risk_reward", DEFAULT_TARGET_RR),
     )
     safety_context = getattr(data, "safety_prompt_context", None)
     if safety_context is not None:

@@ -10,19 +10,11 @@ from typing import Any
 from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 from tradingagents.dataflows.providers.errors import ErrorCode
 
-FIXED_RR = 3.0
-RISK_REWARD_DISPLAY = "1:3"
-
-_RR_BY_VOLATILITY: dict[str, float] = {
-    "Low": 2.0,
-    "Medium": 2.5,
-    "High": 3.0,
-    "Very High": 3.5,
-}
+DEFAULT_TARGET_RR = 3.0
 
 
-def _compute_rr_from_volatility(volatility_level: str) -> float:
-    return _RR_BY_VOLATILITY.get(str(volatility_level or "").strip(), FIXED_RR)
+def _rr_display(target_rr: float) -> str:
+    return f"1:{target_rr:g}"
 
 
 DEFAULT_DECISION = "Hold"
@@ -124,24 +116,16 @@ def _blocking_quality_reason(data_quality: dict[str, Any] | None) -> str | None:
     return None
 
 
-def force_fixed_rr(value: float | None) -> tuple[float, str | None]:
-    """Return the only Risk:Reward ratio allowed by the trade contract."""
+def _apply_target_rr(decision: PortfolioDecision, target_rr: float, warnings: list[str]) -> None:
+    """Force the decision's Risk:Reward to the target, warning if the LLM value differed."""
     try:
-        numeric = float(value) if value is not None else None
+        raw = float(getattr(decision, "risk_reward_ratio", None))
     except (TypeError, ValueError):
-        numeric = None
-    if numeric is not None and abs(numeric - FIXED_RR) < 1e-9:
-        return FIXED_RR, None
-    return FIXED_RR, "RR_FORCED_TO_3"
-
-
-def clamp_rr(value: float | None) -> tuple[float, str | None]:
-    """Backward-compatible wrapper for the old clamp API.
-
-    New analysis output is not clamped to a range anymore; it is forced to
-    Risk:Reward 1:3.
-    """
-    return force_fixed_rr(value)
+        raw = None
+    if raw is None or abs(raw - target_rr) > 1e-6:
+        _append_warning(warnings, "RR_FORCED_TO_3")
+    decision.risk_reward_ratio = target_rr
+    decision.risk_reward_display = _rr_display(target_rr)
 
 
 def get_idx_tick_size(price: float) -> int:
@@ -558,6 +542,7 @@ def _normalize_long(
     warnings: list[str],
     price_data: str | None,
     volatility_level: str,
+    target_rr: float,
 ) -> bool:
     entry = _round_price(float(current_price), ticker, warnings)
     if entry is None:
@@ -583,7 +568,6 @@ def _normalize_long(
     if risk <= 0:
         return False
 
-    target_rr = _compute_rr_from_volatility(volatility_level)
     take_profit = _round_price(float(entry) + risk * target_rr, ticker, warnings)
     if take_profit is None or float(take_profit) <= float(entry):
         return False
@@ -610,8 +594,7 @@ def _normalize_long(
     decision.price_target = price_target
     decision.risk_per_share = round(risk, 4)
     decision.reward_per_share = round(reward, 4)
-    decision.risk_reward_ratio = _compute_rr_from_volatility(volatility_level)
-    decision.risk_reward_display = RISK_REWARD_DISPLAY
+    _apply_target_rr(decision, target_rr, warnings)
     return True
 
 
@@ -622,6 +605,7 @@ def _normalize_short(
     warnings: list[str],
     price_data: str | None,
     volatility_level: str,
+    target_rr: float,
 ) -> bool:
     entry = _round_price(float(current_price), ticker, warnings)
     if entry is None:
@@ -647,7 +631,6 @@ def _normalize_short(
     if risk <= 0:
         return False
 
-    target_rr = _compute_rr_from_volatility(volatility_level)
     take_profit = _round_price(float(entry) - risk * target_rr, ticker, warnings)
     if take_profit is None or float(take_profit) >= float(entry) or float(take_profit) <= 0:
         return False
@@ -674,8 +657,7 @@ def _normalize_short(
     decision.price_target = price_target
     decision.risk_per_share = round(risk, 4)
     decision.reward_per_share = round(reward, 4)
-    decision.risk_reward_ratio = _compute_rr_from_volatility(volatility_level)
-    decision.risk_reward_display = RISK_REWARD_DISPLAY
+    _apply_target_rr(decision, target_rr, warnings)
     return True
 
 
@@ -721,8 +703,15 @@ def normalize_trade_levels(
     average_entry_price: float | None = None,
     price_data: str | None = None,
     data_quality: dict[str, Any] | None = None,
+    target_risk_reward: float = DEFAULT_TARGET_RR,
 ) -> PortfolioDecision:
     warnings = list(getattr(decision, "validation_warnings", None) or [])
+    try:
+        target_rr = float(target_risk_reward)
+    except (TypeError, ValueError):
+        target_rr = DEFAULT_TARGET_RR
+    if target_rr <= 0:
+        target_rr = DEFAULT_TARGET_RR
     raw_llm_current_price = getattr(decision, "current_price", None)
     raw_llm_decision = (
         getattr(decision, "llm_decision", None)
@@ -859,11 +848,23 @@ def normalize_trade_levels(
 
     if final_decision in LONG_DECISIONS:
         valid = _normalize_long(
-            decision, float(current_price), ticker, warnings, price_data, normalized_volatility
+            decision,
+            float(current_price),
+            ticker,
+            warnings,
+            price_data,
+            normalized_volatility,
+            target_rr,
         )
     elif final_decision in SHORT_DECISIONS:
         valid = _normalize_short(
-            decision, float(current_price), ticker, warnings, price_data, normalized_volatility
+            decision,
+            float(current_price),
+            ticker,
+            warnings,
+            price_data,
+            normalized_volatility,
+            target_rr,
         )
     else:
         valid = False
