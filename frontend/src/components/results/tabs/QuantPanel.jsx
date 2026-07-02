@@ -64,19 +64,6 @@ const TRADING_DAYS = 252;
 const VOL_TARGET = 15; // annual % target for vol-target sizing
 // Benchmark is picked per market from the ticker suffix (benchmarkForSymbol).
 
-const SECTIONS = [
-  { id: 'volatility', label: 'Volatility' },
-  { id: 'risk', label: 'Risk' },
-  { id: 'distribution', label: 'Distribution' },
-  { id: 'stochastic', label: 'Stochastic' },
-  { id: 'backtest', label: 'Backtest' },
-  { id: 'sizing', label: 'Sizing' },
-  { id: 'correlation', label: 'Correlation' },
-  { id: 'options', label: 'Options' },
-  { id: 'valuation', label: 'Valuation' },
-  { id: 'scenario', label: 'Scenario' },
-];
-
 const STRATEGIES = [
   { id: 'sma', label: 'SMA Crossover' },
   { id: 'momentum', label: 'Momentum' },
@@ -1978,10 +1965,30 @@ CorrelationSection.propTypes = {
   tangencyWeights: PropTypes.arrayOf(PropTypes.number),
 };
 
+// Labeled wrapper so stacked sections stay distinguishable when several show at once.
+function SectionBlock({ title, children }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="border-b border-bloomberg-border pb-1 text-xs font-bold tracking-[0.2em] text-bloomberg-orange uppercase">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+SectionBlock.propTypes = {
+  title: PropTypes.string.isRequired,
+  children: PropTypes.node.isRequired,
+};
+
 // --- main -----------------------------------------------------------------
 
-function QuantPanel({ points, currency, symbol }) {
-  const [section, setSection] = useState('volatility');
+function QuantPanel({ points, currency, symbol, sections }) {
+  // sections: array of visible tab ids from the page sidebar. Undefined = show all
+  // (keeps QuantPanel usable standalone without importing the tab list).
+  const visible = useMemo(() => (sections ? new Set(sections) : null), [sections]);
+  const show = (id) => !visible || visible.has(id);
   const [seed, setSeed] = useState(42);
   const [rf, setRf] = useState(0); // annual risk-free rate as a fraction
   const [benchPoints, setBenchPoints] = useState(null); // null = loading, [] = unavailable
@@ -2120,7 +2127,7 @@ function QuantPanel({ points, currency, symbol }) {
   // Only run the simulation when the section is open and there's enough data;
   // keyed so unrelated re-renders (e.g. streaming updates) don't re-roll it.
   const sim = useMemo(() => {
-    if (section !== 'stochastic' || closes.length < 30) return null;
+    if ((visible && !visible.has('stochastic')) || closes.length < 30) return null;
     const spot = closes.at(-1);
     if (mcMethod === 'bootstrap') {
       return bootstrapMC(spot, returns, mcHorizon, MC_PATHS, seed);
@@ -2129,7 +2136,7 @@ function QuantPanel({ points, currency, symbol }) {
     // removing the optimistic bias when the sample window was a bull run.
     const drift = mcDrift === 'riskneutral' ? rfDaily : mean(logRet);
     return monteCarloGBM(spot, drift, stdDev(logRet), mcHorizon, MC_PATHS, seed);
-  }, [section, closes, logRet, returns, seed, mcHorizon, mcMethod, mcDrift, rfDaily]);
+  }, [visible, closes, logRet, returns, seed, mcHorizon, mcMethod, mcDrift, rfDaily]);
 
   const horizonLabel = useMemo(() => {
     const months = Math.round((mcHorizon / TRADING_DAYS) * 12);
@@ -2137,9 +2144,9 @@ function QuantPanel({ points, currency, symbol }) {
   }, [mcHorizon]);
 
   const backtestResult = useMemo(() => {
-    if (section !== 'backtest') return null;
+    if (visible && !visible.has('backtest')) return null;
     return backtest(closes, strategy, btParams, rfDaily);
-  }, [section, closes, strategy, btParams, rfDaily]);
+  }, [visible, closes, strategy, btParams, rfDaily]);
 
   const returnBins = useMemo(() => returnHistogram(returns, 30), [returns]);
   const volWeight = useMemo(() => volTargetWeight(metrics.vol, VOL_TARGET), [metrics.vol]);
@@ -2194,7 +2201,7 @@ function QuantPanel({ points, currency, symbol }) {
       rollPoints: [],
       rollLabel: '',
     };
-    if (peers.length === 0 || section !== 'correlation') return empty;
+    if (peers.length === 0 || (visible && !visible.has('correlation'))) return empty;
     const series = [{ symbol: baseSymbol, points }, ...peers];
     const { dates, closes } = alignManyByDate(series);
     if (dates.length < 30) return empty;
@@ -2232,7 +2239,7 @@ function QuantPanel({ points, currency, symbol }) {
       rollPoints,
       rollLabel: `${baseSymbol} vs ${peerSym}`,
     };
-  }, [peers, section, baseSymbol, points, rfDaily]);
+  }, [peers, visible, baseSymbol, points, rfDaily]);
 
   // Loading: result is here but price history hasn't streamed in yet.
   // ponytail: 0 points = still loading; 1–29 = genuinely too short (NoticeBox).
@@ -2259,135 +2266,149 @@ function QuantPanel({ points, currency, symbol }) {
         hurstVal={hurstVal}
       />
 
-      <div className="flex flex-wrap gap-2">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => setSection(s.id)}
-            className={`rounded-full border border-bloomberg-border px-3 py-1 text-xs tracking-wide ${
-              section === s.id
-                ? 'bg-bloomberg-orange text-black'
-                : 'text-bloomberg-muted hover:text-white'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {section === 'volatility' && (
-        <VolatilitySection
-          vol={metrics.vol}
-          ewma={metrics.ewma}
-          rollingVols={rollingVols}
-          rollingPoints={rollingPoints}
-        />
+      {visible && visible.size === 0 && (
+        <NoticeBox title="No tabs selected">
+          Pick one or more tabs in the sidebar to display.
+        </NoticeBox>
       )}
 
-      {section === 'risk' && (
-        <RiskSection
-          dd={metrics.dd}
-          cal={metrics.cal}
-          histVaR={metrics.histVaR}
-          paramVaR={metrics.paramVaR}
-          cv={metrics.cv}
-          downDev={metrics.downDev}
-          shp={metrics.shp}
-          srt={metrics.srt}
-          bta={benchmark.beta}
-          alf={benchmark.alpha}
-          rfPct={rf * 100}
-          benchAvailable={benchmark.available}
-          benchLabel={benchmarkInfo.label}
-          ddPoints={ddPoints}
-          rsPoints={rsPoints}
-          rbPoints={rbPoints}
-          ddStats={ddStats}
-        />
+      {show('volatility') && (
+        <SectionBlock title="Volatility">
+          <VolatilitySection
+            vol={metrics.vol}
+            ewma={metrics.ewma}
+            rollingVols={rollingVols}
+            rollingPoints={rollingPoints}
+          />
+        </SectionBlock>
       )}
 
-      {section === 'distribution' && (
-        <DistributionSection
-          skew={metrics.skew}
-          kurt={metrics.kurt}
-          var95={metrics.var95}
-          var99={metrics.var99}
-          bins={returnBins}
-          mu={mean(returns)}
-          sigma={stdDev(returns)}
-        />
+      {show('risk') && (
+        <SectionBlock title="Risk">
+          <RiskSection
+            dd={metrics.dd}
+            cal={metrics.cal}
+            histVaR={metrics.histVaR}
+            paramVaR={metrics.paramVaR}
+            cv={metrics.cv}
+            downDev={metrics.downDev}
+            shp={metrics.shp}
+            srt={metrics.srt}
+            bta={benchmark.beta}
+            alf={benchmark.alpha}
+            rfPct={rf * 100}
+            benchAvailable={benchmark.available}
+            benchLabel={benchmarkInfo.label}
+            ddPoints={ddPoints}
+            rsPoints={rsPoints}
+            rbPoints={rbPoints}
+            ddStats={ddStats}
+          />
+        </SectionBlock>
       )}
 
-      {section === 'stochastic' && (
-        <StochasticSection
-          sim={sim}
-          spot={closes.at(-1)}
-          ccy={ccy}
-          seed={seed}
-          onReroll={() => setSeed((s) => (s + 1) >>> 0)}
-          onSeedChange={(v) => setSeed(Number.isFinite(v) ? v : 0)}
-          returnBins={returnBins}
-          horizon={mcHorizon}
-          onHorizonChange={setMcHorizon}
-          horizonLabel={horizonLabel}
-          method={mcMethod}
-          onMethodChange={setMcMethod}
-          drift={mcDrift}
-          onDriftChange={setMcDrift}
-        />
+      {show('distribution') && (
+        <SectionBlock title="Distribution">
+          <DistributionSection
+            skew={metrics.skew}
+            kurt={metrics.kurt}
+            var95={metrics.var95}
+            var99={metrics.var99}
+            bins={returnBins}
+            mu={mean(returns)}
+            sigma={stdDev(returns)}
+          />
+        </SectionBlock>
       )}
 
-      {section === 'backtest' && (
-        <BacktestSection
-          strategy={strategy}
-          onStrategyChange={setStrategy}
-          params={btParams}
-          onParamChange={(k, v) => setBtParams((prev) => ({ ...prev, [k]: v }))}
-          result={backtestResult}
-        />
+      {show('stochastic') && (
+        <SectionBlock title="Stochastic">
+          <StochasticSection
+            sim={sim}
+            spot={closes.at(-1)}
+            ccy={ccy}
+            seed={seed}
+            onReroll={() => setSeed((s) => (s + 1) >>> 0)}
+            onSeedChange={(v) => setSeed(Number.isFinite(v) ? v : 0)}
+            returnBins={returnBins}
+            horizon={mcHorizon}
+            onHorizonChange={setMcHorizon}
+            horizonLabel={horizonLabel}
+            method={mcMethod}
+            onMethodChange={setMcMethod}
+            drift={mcDrift}
+            onDriftChange={setMcDrift}
+          />
+        </SectionBlock>
       )}
 
-      {section === 'sizing' && (
-        <SizingSection
-          kelly={metrics.kelly}
-          volWeight={volWeight}
-          vol={metrics.vol}
-          regime={regime}
-          hurstVal={hurstVal}
-        />
+      {show('backtest') && (
+        <SectionBlock title="Backtest">
+          <BacktestSection
+            strategy={strategy}
+            onStrategyChange={setStrategy}
+            params={btParams}
+            onParamChange={(k, v) => setBtParams((prev) => ({ ...prev, [k]: v }))}
+            result={backtestResult}
+          />
+        </SectionBlock>
       )}
 
-      {section === 'correlation' && (
-        <CorrelationSection
-          peerInput={peerInput}
-          onPeerInputChange={setPeerInput}
-          onAddPeers={addPeers}
-          peers={peers}
-          onRemovePeer={removePeer}
-          loading={peerLoading}
-          symbols={corr.symbols}
-          matrix={corr.matrix}
-          rollPoints={corr.rollPoints}
-          rollLabel={corr.rollLabel}
-          frontier={corr.frontier}
-          gmv={corr.gmv}
-          tangency={corr.tangency}
-          gmvWeights={corr.gmvW}
-          tangencyWeights={corr.tanW}
-        />
+      {show('sizing') && (
+        <SectionBlock title="Sizing">
+          <SizingSection
+            kelly={metrics.kelly}
+            volWeight={volWeight}
+            vol={metrics.vol}
+            regime={regime}
+            hurstVal={hurstVal}
+          />
+        </SectionBlock>
       )}
 
-      {section === 'options' && (
-        <OptionsSection spot={closes.at(-1)} defaultVol={metrics.vol} defaultRate={rf} ccy={ccy} />
+      {show('correlation') && (
+        <SectionBlock title="Correlation">
+          <CorrelationSection
+            peerInput={peerInput}
+            onPeerInputChange={setPeerInput}
+            onAddPeers={addPeers}
+            peers={peers}
+            onRemovePeer={removePeer}
+            loading={peerLoading}
+            symbols={corr.symbols}
+            matrix={corr.matrix}
+            rollPoints={corr.rollPoints}
+            rollLabel={corr.rollLabel}
+            frontier={corr.frontier}
+            gmv={corr.gmv}
+            tangency={corr.tangency}
+            gmvWeights={corr.gmvW}
+            tangencyWeights={corr.tanW}
+          />
+        </SectionBlock>
       )}
 
-      {section === 'valuation' && (
-        <ValuationSection spot={closes.at(-1)} defaultRate={rf} ccy={ccy} symbol={baseSymbol} />
+      {show('options') && (
+        <SectionBlock title="Options">
+          <OptionsSection
+            spot={closes.at(-1)}
+            defaultVol={metrics.vol}
+            defaultRate={rf}
+            ccy={ccy}
+          />
+        </SectionBlock>
       )}
 
-      {section === 'scenario' && (
-        <ScenarioSection spot={closes.at(-1)} vol={metrics.vol} ccy={ccy} regime={regimeShift} />
+      {show('valuation') && (
+        <SectionBlock title="Valuation">
+          <ValuationSection spot={closes.at(-1)} defaultRate={rf} ccy={ccy} symbol={baseSymbol} />
+        </SectionBlock>
+      )}
+
+      {show('scenario') && (
+        <SectionBlock title="Scenario">
+          <ScenarioSection spot={closes.at(-1)} vol={metrics.vol} ccy={ccy} regime={regimeShift} />
+        </SectionBlock>
       )}
     </div>
   );
@@ -2397,6 +2418,7 @@ QuantPanel.propTypes = {
   points: PropTypes.arrayOf(PropTypes.object).isRequired,
   currency: PropTypes.string,
   symbol: PropTypes.string,
+  sections: PropTypes.arrayOf(PropTypes.string),
 };
 
 export default memo(QuantPanel);
