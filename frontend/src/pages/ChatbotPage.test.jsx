@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom/vitest';
+﻿import '@testing-library/jest-dom/vitest';
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -35,7 +35,7 @@ vi.mock('../services/watchlistStorage', () => ({
 
 describe('ChatbotPage', () => {
   it('renders page title', async () => {
-    const { ChatbotPage } = await import('../pages/ChatbotPage.jsx');
+    const { ChatbotPage } = await import('./ChatbotPage.jsx');
     render(
       <MemoryRouter>
         <ChatbotPage />

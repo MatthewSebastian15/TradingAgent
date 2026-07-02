@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react';
+﻿import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../api/ragChat.js', () => ({
@@ -17,7 +17,7 @@ describe('useRagChat', () => {
   });
 
   it('starts with empty messages', async () => {
-    const { useRagChat } = await import('../hooks/useRagChat.js');
+    const { useRagChat } = await import('./useRagChat.js');
     const { result } = renderHook(() => useRagChat('all'));
     expect(result.current.messages).toEqual([]);
     expect(result.current.isLoading).toBe(false);
@@ -32,7 +32,7 @@ describe('useRagChat', () => {
       sources: [],
     });
 
-    const { useRagChat } = await import('../hooks/useRagChat.js');
+    const { useRagChat } = await import('./useRagChat.js');
     const { result } = renderHook(() => useRagChat('all'));
 
     await act(async () => {
@@ -54,7 +54,7 @@ describe('useRagChat', () => {
       sources: [],
     });
 
-    const { useRagChat } = await import('../hooks/useRagChat.js');
+    const { useRagChat } = await import('./useRagChat.js');
     const { result } = renderHook(() => useRagChat('all'));
 
     await act(async () => {

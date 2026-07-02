@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../utils/api', () => ({
   buildApiUrl: (path) => `http://localhost:8000${path}`,
@@ -11,7 +11,7 @@ beforeEach(() => {
 
 describe('fetchRagChat', () => {
   it('posts message and returns answer', async () => {
-    const { fetchRagChat } = await import('../api/ragChat.js');
+    const { fetchRagChat } = await import('./ragChat.js');
 
     globalThis.fetch.mockResolvedValueOnce({
       ok: true,
@@ -35,7 +35,7 @@ describe('fetchRagChat', () => {
   });
 
   it('throws on non-ok response', async () => {
-    const { fetchRagChat } = await import('../api/ragChat.js');
+    const { fetchRagChat } = await import('./ragChat.js');
 
     globalThis.fetch.mockResolvedValueOnce({
       ok: false,
