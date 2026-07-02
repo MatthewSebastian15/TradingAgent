@@ -36,7 +36,9 @@ function streamResponse(chunks = [], pending = true) {
 
 describe('useGeneralNewsStream', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    // Real-time advancing keeps waitFor/react scheduling alive while still
+    // letting advanceTimersByTimeAsync drive the throttle/reconnect timers.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     sessionStorage.setItem(
       '_ta_owner_session_expires_at',
       String(Math.floor(Date.now() / 1000) + 3600)

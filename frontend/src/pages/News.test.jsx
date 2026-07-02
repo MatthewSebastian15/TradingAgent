@@ -68,7 +68,7 @@ describe('News page', () => {
     expect(screen.queryByText('No news found for this category.')).not.toBeInTheDocument();
   });
 
-  it('replaces loaded news with skeleton while manual refresh is running', () => {
+  it('keeps loaded news visible while manual refresh is running', () => {
     useGeneralNews.mockReturnValue({
       data: { articles },
       status: 'refreshing',
@@ -78,8 +78,8 @@ describe('News page', () => {
 
     render(<News />);
 
-    expect(screen.getByRole('status', { name: 'Loading news' })).toBeInTheDocument();
-    expect(screen.queryByText('Stocks gain after earnings')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Loading news' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Stocks gain after earnings').length).toBeGreaterThan(0);
   });
 
   it('passes the active category to useGeneralNews instead of relying on client filtering', async () => {

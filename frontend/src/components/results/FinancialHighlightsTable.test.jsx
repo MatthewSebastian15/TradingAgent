@@ -36,7 +36,8 @@ describe('FinancialHighlightsTable', () => {
     expect(screen.getByText('BALANCE SHEET RISK')).toBeTruthy();
     expect(screen.getByText('DIVIDEND QUALITY')).toBeTruthy();
     expect(screen.getByText(/Currency: USD \(US Dollar\)/)).toBeTruthy();
-    expect(screen.getByText('126.00 %')).toBeTruthy();
+    // Positive growth rows carry a "+" prefix from the directional color-coding.
+    expect(screen.getByText('+126.00 %')).toBeTruthy();
     expect(screen.getByText('0.45x')).toBeTruthy();
     expect(screen.queryByText('Source unavailable')).toBeNull();
     expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
@@ -108,7 +109,7 @@ describe('FinancialHighlightsTable', () => {
       )
     ).toEqual(['Metric', 'Q1 2026', 'FY 2025', 'FY 2024', 'FY 2023']);
     expect(screen.getByText('208,700.0 Mn')).toBeTruthy();
-    expect(screen.getByText('59.90 %')).toBeTruthy();
+    expect(screen.getByText('+59.90 %')).toBeTruthy();
     expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
   });
 

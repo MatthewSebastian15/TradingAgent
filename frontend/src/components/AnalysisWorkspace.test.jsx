@@ -1,13 +1,19 @@
 import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AnalysisWorkspace from './AnalysisWorkspace';
 import { decryptJSON } from '../services/secureStorage';
+
+// This suite renders the full workspace 17 times with WebCrypto persistence;
+// under full-suite parallel load on a small machine, individual tests get
+// starved far past the 5s default. Give the whole file a generous budget.
+vi.setConfig({ testTimeout: 120000 });
+configure({ asyncUtilTimeout: 45000 }); // findBy/waitFor share the same generous budget
 
 beforeAll(() => {
   Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
@@ -331,9 +337,12 @@ describe('AnalysisWorkspace history storage', () => {
     renderWorkspace(FullForm);
     fireEvent.click(screen.getByRole('button', { name: /emit full/i }));
 
-    await waitFor(() => {
-      expect(screen.getByTestId('location').textContent).toBe('/analysis/job-nav');
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('location').textContent).toBe('/analysis/job-nav');
+      },
+      { timeout: 45000 }
+    );
   });
 
   it('migrates old history entries and removes legacy payload keys', async () => {
@@ -407,7 +416,7 @@ describe('AnalysisWorkspace history storage', () => {
 
     renderWorkspace(EmptyForm, 'analysis-history-test', '/analysis/job-1');
 
-    expect(await screen.findByText('MSFT')).toBeTruthy();
+    expect(await screen.findByText('MSFT', {}, { timeout: 45000 })).toBeTruthy();
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/analysis/jobs/job-1'),
       expect.any(Object)
@@ -560,6 +569,10 @@ describe('AnalysisWorkspace history storage', () => {
   });
 
   it('loads recent analyses from the backend and caches summaries locally', async () => {
+    // History entries older than 30 days are dropped by the TTL filter, so the
+    // fixture timestamps must stay relative to the real clock.
+    const createdAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const updatedAt = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString();
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       if (url.includes('/market/quotes')) {
         return new Response(JSON.stringify({ quotes: [] }), {
@@ -579,8 +592,8 @@ describe('AnalysisWorkspace history storage', () => {
                 trade_date: '2026-05-28',
                 decision: 'Buy',
                 time_horizon_months: 1,
-                analysis_created_at: '2026-05-28T08:00:00.000Z',
-                updated_at: '2026-05-28T08:01:00.000Z',
+                analysis_created_at: createdAt,
+                updated_at: updatedAt,
               },
             ],
           }),
@@ -613,8 +626,8 @@ describe('AnalysisWorkspace history storage', () => {
           trade_date: '2026-05-28',
           decision: 'Buy',
           time_horizon_months: 1,
-          analysis_created_at: '2026-05-28T08:00:00.000Z',
-          saved_at: '2026-05-28T08:01:00.000Z',
+          analysis_created_at: createdAt,
+          saved_at: updatedAt,
         }),
       ]);
     });

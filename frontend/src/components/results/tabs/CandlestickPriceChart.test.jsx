@@ -168,7 +168,8 @@ describe('CandlestickPriceChart', () => {
 
     const tooltip = screen.getByTestId('candlestick-tooltip');
     expect(within(tooltip).getByText('2026-01-02')).toBeTruthy();
-    expect(screen.getByText('2026-01-03')).toBeTruthy();
+    // Axis labels drop the year (formatXAxisDate → MM-DD).
+    expect(screen.getByText('01-03')).toBeTruthy();
     expect(within(tooltip).getByText('O')).toBeTruthy();
     expect(within(tooltip).getByText('H')).toBeTruthy();
     expect(within(tooltip).getByText('L')).toBeTruthy();
@@ -178,13 +179,13 @@ describe('CandlestickPriceChart', () => {
     expect(within(tooltip).getByText('Chg')).toBeTruthy();
   });
 
-  it('renders integrated volume bars and the right trading data panel', () => {
+  it('renders integrated volume bars with axis section labels', () => {
+    // The trading-data side panel now lives in TradingDataCard, not this chart.
     const { container } = render(<CandlestickPriceChart points={POINTS} ticker="TEST" />);
 
     const volumeBars = Array.from(container.querySelectorAll('[data-testid="volume-bar"]'));
     expect(volumeBars).toHaveLength(3);
-    expect(screen.getByText('Trading Data')).toBeTruthy();
-    expect(screen.getByText('Prev Close')).toBeTruthy();
-    expect(screen.getByText('Vol')).toBeTruthy();
+    expect(screen.getByText('PRICE')).toBeTruthy();
+    expect(screen.getByText('VOLUME')).toBeTruthy();
   });
 });

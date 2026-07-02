@@ -71,18 +71,19 @@ describe('TickerNewsList', () => {
     expect(screen.getByText('1 market context')).toBeInTheDocument();
     expect(screen.getByText('3 excluded')).toBeInTheDocument();
     expect(screen.getByText('RSS threshold 80')).toBeInTheDocument();
-    expect(screen.getByText(/google_news_light/i)).toBeInTheDocument();
-    expect(screen.getByText(/marketaux/i)).toBeInTheDocument();
+    // Provider name appears both on the article row and in the status summary.
+    expect(screen.getAllByText(/google_news_light/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/marketaux/i).length).toBeGreaterThan(0);
   });
 
   it('renders relevance score and debug reasons', () => {
     render(<TickerNewsList decisionCompanyNews={[companyArticle]} debug />);
 
-    expect(screen.getByText(/Score 88/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Score 88/i).length).toBeGreaterThan(0);
     expect(
-      screen.getByText(/Reason: company_name_in_title, market_moving_keyword/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Matched: Bank Central Asia, BBCA/i)).toBeInTheDocument();
-    expect(screen.getByText(/entity_match: company_exact/i)).toBeInTheDocument();
+      screen.getAllByText(/Reason: company_name_in_title, market_moving_keyword/i).length
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Matched: Bank Central Asia, BBCA/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/entity_match: company_exact/i).length).toBeGreaterThan(0);
   });
 });

@@ -93,7 +93,7 @@ describe('useGeneralNews', () => {
     expect(screen.getByTestId('second')).toHaveTextContent('2');
   });
 
-  it('auto refreshes news without force refresh while visible', async () => {
+  it('auto refreshes news once the cache TTL expires, without force refresh', async () => {
     fetchGeneralNews.mockResolvedValue({ articles: [] });
 
     render(<Harness />);
@@ -101,13 +101,15 @@ describe('useGeneralNews', () => {
     await act(async () => {});
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
 
+    // 60s interval tick is served from the 120s response cache — no network call.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(59999);
+      await vi.advanceTimersByTimeAsync(60000);
     });
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
 
+    // The 120s tick finds the cache expired and refetches.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(60000);
     });
 
     expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
@@ -116,7 +118,7 @@ describe('useGeneralNews', () => {
     );
   });
 
-  it('refreshes news when the browser tab returns to visible after the minimum gap', async () => {
+  it('refreshes news when the tab returns to visible with an expired cache', async () => {
     fetchGeneralNews.mockResolvedValue({ articles: [] });
 
     render(<Harness />);
@@ -124,10 +126,27 @@ describe('useGeneralNews', () => {
     await act(async () => {});
     expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(15000);
-      document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
     });
+    try {
+      // Hidden tab: interval ticks at 60s/120s are skipped, cache goes stale.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(130000);
+      });
+      expect(fetchGeneralNews).toHaveBeenCalledTimes(1);
+
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+    } finally {
+      delete document.visibilityState;
+    }
 
     expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
     expect(fetchGeneralNews).toHaveBeenLastCalledWith(
@@ -216,8 +235,9 @@ describe('useGeneralNews', () => {
     await act(async () => {});
     expect(screen.getByTestId('ids-count')).toHaveTextContent('old');
 
+    // The 120s tick starts a real refetch (60s tick is cache-served).
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(60000);
+      await vi.advanceTimersByTimeAsync(120000);
     });
 
     expect(screen.getByTestId('ids-count')).toHaveTextContent('old');
@@ -229,7 +249,7 @@ describe('useGeneralNews', () => {
     expect(screen.getByTestId('ids-count')).toHaveTextContent('new');
   });
 
-  it('keeps old data and marks status stale when refresh fails', async () => {
+  it('falls back to cached news silently when a forced refresh fails', async () => {
     fetchGeneralNews
       .mockResolvedValueOnce({ articles: [{ id: 'old' }] })
       .mockRejectedValueOnce(new Error('network failed'));
@@ -244,9 +264,10 @@ describe('useGeneralNews', () => {
       await vi.advanceTimersByTimeAsync(700);
     });
 
+    // Fresh cache absorbs the failure: old data stays, no user-facing error.
     expect(screen.getByTestId('ids-count')).toHaveTextContent('old');
-    expect(screen.getByTestId('status-count')).toHaveTextContent('stale');
-    expect(screen.getByTestId('error-count')).toHaveTextContent('network failed');
+    expect(screen.getByTestId('status-count')).toHaveTextContent('success');
+    expect(screen.getByTestId('error-count')).toHaveTextContent('');
   });
 
   it('keeps loaded data visible during silent reload option', async () => {

@@ -1,18 +1,25 @@
 import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
 
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { useWatchlistStore } from './useWatchlistStore';
 import { decryptJSON } from '../services/secureStorage';
-import { WATCHLIST_STORAGE_KEY } from '../services/watchlistStorage';
+import { pendingWatchlistWriteForTests, WATCHLIST_STORAGE_KEY } from '../services/watchlistStorage';
 
 beforeAll(() => {
   Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
 });
 
-beforeEach(() => {
+// Unmount previous hooks: a stale instance hears 'ta:watchlist-updated' and
+// re-persists its old groups into the next test's clean storage.
+afterEach(cleanup);
+
+beforeEach(async () => {
+  // A straggler encrypted write from the previous test must settle before the
+  // wipe, or it re-persists stale groups into this test's clean storage.
+  await pendingWatchlistWriteForTests();
   window.localStorage.clear();
 });
 

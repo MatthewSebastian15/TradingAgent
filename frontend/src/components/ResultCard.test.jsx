@@ -58,17 +58,19 @@ describe('ResultCard risk-engine contract', () => {
 
     expect(await screen.findByText(/automated AI-assisted analysis system/i)).toBeTruthy();
 
+    // Each tab switch remounts the tab container (key={activeTab}), so the
+    // disclaimer re-resolves asynchronously — await it after every click.
     fireEvent.click(screen.getByText('Profil'));
-    expect(screen.getByText(/automated AI-assisted analysis system/i)).toBeTruthy();
+    expect(await screen.findByText(/automated AI-assisted analysis system/i)).toBeTruthy();
 
     fireEvent.click(screen.getByText('Fundamental'));
-    expect(screen.getByText(/automated AI-assisted analysis system/i)).toBeTruthy();
+    expect(await screen.findByText(/automated AI-assisted analysis system/i)).toBeTruthy();
 
     fireEvent.click(screen.getByText('Chart & Price'));
-    expect(screen.getByText(/automated AI-assisted analysis system/i)).toBeTruthy();
+    expect(await screen.findByText(/automated AI-assisted analysis system/i)).toBeTruthy();
 
     fireEvent.click(screen.getByText('News'));
-    expect(screen.getByText(/automated AI-assisted analysis system/i)).toBeTruthy();
+    expect(await screen.findByText(/automated AI-assisted analysis system/i)).toBeTruthy();
   });
 
   it('does not render Key Levels in the Analisis tab', () => {

@@ -53,7 +53,8 @@ describe('GlobalMarketOverview', () => {
 
     expect(screen.getByText(/YFINANCE/i)).toBeInTheDocument();
     expect(screen.getByText(/UPDATED/i)).toBeInTheDocument();
-    expect(screen.getByText(/FRESH/i)).toBeInTheDocument();
+    // \b keeps this from also matching the REFRESH button label.
+    expect(screen.getByText(/\bFRESH\b/)).toBeInTheDocument();
   });
 
   it('renders cache hit metadata when response comes from cache', () => {

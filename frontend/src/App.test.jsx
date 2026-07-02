@@ -38,10 +38,10 @@ describe('App', () => {
     await renderApp('/research');
 
     // Routes are React.lazy now — the chunk import + first render can exceed the
-    // 1000ms findBy default for heavy pages, so wait longer.
-    expect(
-      await screen.findByRole('heading', { name: /research/i }, { timeout: 5000 })
-    ).toBeTruthy();
+    // 1000ms findBy default for heavy pages, so wait longer. The page has no
+    // heading element; its empty state renders the RESEARCH marker text.
+    expect(await screen.findByText(/■ RESEARCH/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(screen.getByText(/Enter a ticker to load stock overview/i)).toBeTruthy();
   }, 10000);
 
   it('registers the Watchlist route', async () => {
@@ -64,7 +64,10 @@ describe('App', () => {
   it('registers the AI Agent route', async () => {
     await renderApp(AI_AGENT_PATH);
 
-    expect(await screen.findByTitle('Configuration', {}, { timeout: 5000 })).toBeTruthy();
+    // The config sidebar toggle is an aria-labelled button now, not a title attr.
+    expect(
+      await screen.findByRole('button', { name: 'Configuration' }, { timeout: 5000 })
+    ).toBeTruthy();
     expect(await screen.findByRole('button', { name: /execute analysis/i })).toBeTruthy();
     // Both top navbar and left sidebar have an AI Agent button
     expect(screen.getAllByRole('button', { name: /ai agent/i }).length).toBeGreaterThan(0);

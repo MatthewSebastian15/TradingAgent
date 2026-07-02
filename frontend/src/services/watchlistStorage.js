@@ -111,16 +111,27 @@ export async function readWatchlistState() {
   }
 }
 
+// Writes are async (encryptJSON); track the latest one so tests can await it
+// before clearing storage — otherwise a straggler write pollutes the next test.
+let lastWatchlistWrite = Promise.resolve();
+
+export function pendingWatchlistWriteForTests() {
+  return lastWatchlistWrite;
+}
+
 export async function writeWatchlistState(state) {
   const normalized = normalizeWatchlistState(state);
 
   if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, await encryptJSON(normalized));
-      window.dispatchEvent(new CustomEvent('ta:watchlist-updated'));
-    } catch {
-      // Keep the in-memory React state usable when browser storage is blocked.
-    }
+    lastWatchlistWrite = (async () => {
+      try {
+        window.localStorage.setItem(WATCHLIST_STORAGE_KEY, await encryptJSON(normalized));
+        window.dispatchEvent(new CustomEvent('ta:watchlist-updated'));
+      } catch {
+        // Keep the in-memory React state usable when browser storage is blocked.
+      }
+    })();
+    await lastWatchlistWrite;
   }
 
   return normalized;
