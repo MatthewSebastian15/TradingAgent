@@ -106,6 +106,9 @@ export default function AgentLog({ status, agentProgress }) {
 
   useEffect(() => {
     if (agentProgress === null) {
+      // Reset once per stream, not on every run: setStartMs changes a dep of
+      // this effect, so an unguarded reset loops forever while progress stays null.
+      if (!lastEventSignatureRef.current) return;
       lastEventSignatureRef.current = '';
       setStartMs(Date.now());
       setActiveIds(new Set());
