@@ -36,6 +36,67 @@ os.environ["QUICK_THINK_LLM"] = _GOOGLE_QUICK_LLM
 os.environ["DEEP_THINK_LLM"] = _GOOGLE_DEEP_LLM
 
 
+class FakeStructuredRunnable:
+    """Stands in for llm.with_structured_output(schema); returns a fixed result."""
+
+    def __init__(self, result):
+        self.result = result
+        self.prompts = []
+
+    def invoke(self, prompt):
+        self.prompts.append(prompt)
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+
+class FakeDebateLLM:
+    """LLM stub for structured debate agents (researchers, risk debators)."""
+
+    def __init__(self, result):
+        self.structured = FakeStructuredRunnable(result)
+
+    def with_structured_output(self, _schema):
+        return self.structured
+
+    def invoke(self, _prompt):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(content="free-text fallback")
+
+
+class FakeChatLLM:
+    """LLM stub for tool-calling analyst nodes built on prompt | llm.bind_tools()."""
+
+    def __init__(self, content="analyst report", tool_calls=None):
+        self.content = content
+        self.tool_calls = tool_calls or []
+        self.bound_tools = None
+        self.last_prompt = None
+
+    def bind_tools(self, tools):
+        from langchain_core.messages import AIMessage
+        from langchain_core.runnables import RunnableLambda
+
+        self.bound_tools = list(tools)
+
+        def respond(prompt_value):
+            self.last_prompt = prompt_value
+            return AIMessage(content=self.content, tool_calls=self.tool_calls)
+
+        return RunnableLambda(respond)
+
+
+@pytest.fixture()
+def fake_debate_llm():
+    return FakeDebateLLM
+
+
+@pytest.fixture()
+def fake_chat_llm():
+    return FakeChatLLM
+
+
 def pytest_configure(config):
     for marker in ("unit", "integration", "smoke"):
         config.addinivalue_line("markers", f"{marker}: {marker}-level tests")
