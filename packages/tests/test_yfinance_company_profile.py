@@ -1,7 +1,18 @@
 from types import SimpleNamespace
 
+import pytest
+
 from tradingagents.dataflows.providers import y_finance
 from tradingagents.pipeline import collectors as pipeline_data
+
+
+@pytest.fixture(autouse=True)
+def _fresh_ticker_info_cache():
+    # _get_ticker_info is lru_cached per symbol; without clearing, a prior test's
+    # mocked payload leaks into later tests and masks their own mocks.
+    y_finance._get_ticker_info.cache_clear()
+    yield
+    y_finance._get_ticker_info.cache_clear()
 
 
 def test_get_company_profile_returns_clean_frontend_payload(monkeypatch):
@@ -159,7 +170,9 @@ def test_get_company_profile_ignores_optional_table_errors(monkeypatch):
 def test_get_company_profile_returns_unavailable_payload_on_error(monkeypatch):
     monkeypatch.setattr(y_finance, "_get_ticker", lambda _ticker: SimpleNamespace(info={}))
     monkeypatch.setattr(
-        y_finance, "yf_retry", lambda _func: (_ for _ in ()).throw(RuntimeError("offline"))
+        y_finance,
+        "yf_retry",
+        lambda _func, **_kwargs: (_ for _ in ()).throw(RuntimeError("offline")),
     )
 
     profile = y_finance.get_company_profile("AAPL")
