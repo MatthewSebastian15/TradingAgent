@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import PropTypes from 'prop-types';
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -139,7 +139,6 @@ const NAV_ITEMS = [
 ];
 
 function LeftNavSidebar() {
-  const navigate = useNavigate();
   const location = useLocation();
 
   return (
@@ -151,13 +150,12 @@ function LeftNavSidebar() {
         const active = isNavItemActive(item, location.pathname);
         const Icon = item.Icon;
         return (
-          <button
+          <Link
             key={item.path}
-            type="button"
+            to={item.path}
             title={item.label}
             aria-label={item.label}
             aria-current={active ? 'page' : undefined}
-            onClick={() => navigate(item.path)}
             className={`relative flex h-14 w-full flex-col items-center justify-center gap-0.5 font-mono transition-colors duration-150 ${
               active
                 ? 'bg-bloomberg-orange/10 text-bloomberg-orange'
@@ -169,7 +167,7 @@ function LeftNavSidebar() {
             )}
             <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.8} />
             <span className="text-[8px] leading-none tracking-[0.12em]">{item.shortLabel}</span>
-          </button>
+          </Link>
         );
       })}
     </nav>
@@ -346,32 +344,39 @@ function isNavItemActive(item, pathname) {
   );
 }
 
-function NavButton({ item, active, onClick }) {
+function NavButton({ item, active }) {
   const Icon = item.Icon;
-  const button = (
-    <button
-      type="button"
-      aria-disabled={item.disabled || undefined}
-      onClick={item.disabled ? undefined : onClick}
-      className={`relative inline-flex h-8 items-center gap-1.5 border-r border-bloomberg-border px-3 font-mono text-[11px] font-medium leading-none tracking-wider transition-colors duration-150 first:border-l sm:px-4 ${
-        item.disabled
-          ? 'cursor-not-allowed text-bloomberg-border opacity-55'
-          : active
-            ? 'bg-bloomberg-orange text-black'
-            : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
-      }`}
-    >
+  const className = `relative inline-flex h-8 items-center gap-1.5 border-r border-bloomberg-border px-3 font-mono text-[11px] font-medium leading-none tracking-wider transition-colors duration-150 first:border-l sm:px-4 ${
+    item.disabled
+      ? 'cursor-not-allowed text-bloomberg-border opacity-55'
+      : active
+        ? 'bg-bloomberg-orange text-black'
+        : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
+  }`;
+  const content = (
+    <>
       <Icon className="h-3.5 w-3.5 flex-shrink-0" strokeWidth={1.8} />
       {item.label}
       {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-bloomberg-orange" />}
-    </button>
+    </>
   );
 
-  if (!item.disabled) return button;
+  // Real links so middle-click / ctrl+click / "open in new tab" work.
+  if (!item.disabled) {
+    return (
+      <Link to={item.path} aria-current={active ? 'page' : undefined} className={className}>
+        {content}
+      </Link>
+    );
+  }
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipTrigger asChild>
+        <button type="button" aria-disabled className={className}>
+          {content}
+        </button>
+      </TooltipTrigger>
       <TooltipContent className="rounded-none border-bloomberg-border bg-black font-mono text-xs text-bloomberg-orange">
         {item.tooltip || 'Coming soon'}
       </TooltipContent>
@@ -390,11 +395,9 @@ NavButton.propTypes = {
     tooltip: PropTypes.string,
   }).isRequired,
   active: PropTypes.bool.isRequired,
-  onClick: PropTypes.func.isRequired,
 };
 
 export default function Navbar() {
-  const navigate = useNavigate();
   const location = useLocation();
 
   return (
@@ -407,7 +410,6 @@ export default function Navbar() {
                 key={item.path}
                 item={item}
                 active={isNavItemActive(item, location.pathname)}
-                onClick={() => navigate(item.path)}
               />
             ))}
           </div>

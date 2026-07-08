@@ -81,17 +81,19 @@ export function ChatWindow({ messages, isLoading, error, onSend, onStop }) {
               type="button"
               onClick={onStop}
               title="Stop"
+              aria-label="Stop response"
               className="px-3 py-2 rounded-lg bg-bloomberg-card border border-bloomberg-red text-bloomberg-red hover:bg-bloomberg-red/10"
             >
-              <Square size={16} fill="currentColor" />
+              <Square size={16} fill="currentColor" aria-hidden="true" />
             </button>
           ) : (
             <button
               type="submit"
               disabled={!input.trim()}
+              aria-label="Send message"
               className="px-3 py-2 rounded-lg bg-bloomberg-orange text-black disabled:opacity-40 hover:opacity-90"
             >
-              <Send size={16} />
+              <Send size={16} aria-hidden="true" />
             </button>
           )}
         </form>

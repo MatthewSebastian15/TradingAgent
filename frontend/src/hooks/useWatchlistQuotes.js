@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getMarketQuotes, getMarketSparklines } from '../api/market';
+import { startVisiblePolling } from '../utils/visiblePolling';
 import { normalizeWatchlistSymbol } from '../utils/watchlistFormatters';
 
 const QUOTE_POLL_MS = 100 * 1000;
@@ -125,11 +126,11 @@ export function useWatchlistQuotes(symbols) {
 
   useEffect(() => {
     refresh();
-    const intervalId = window.setInterval(refresh, QUOTE_POLL_MS);
+    const stopPolling = startVisiblePolling(refresh, QUOTE_POLL_MS);
 
     return () => {
       controllerRef.current?.abort();
-      window.clearInterval(intervalId);
+      stopPolling();
     };
   }, [refresh, symbolKey]);
 

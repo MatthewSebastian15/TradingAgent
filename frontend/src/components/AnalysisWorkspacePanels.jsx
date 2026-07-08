@@ -198,6 +198,7 @@ export function HistoryPanel({ backendHistoryEnabled, currentResourceId, history
                       handleDeleteItem(item);
                     }}
                     title="Delete this analysis"
+                    aria-label={`Delete analysis for ${item.ticker || 'unknown ticker'}`}
                     className="flex h-full w-9 items-center justify-center text-bloomberg-border transition-colors hover:bg-bloomberg-red/10 hover:text-bloomberg-red disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     {isDeleting ? (

@@ -39,7 +39,7 @@ function CategoryTab({ item, isActive, onChange }) {
       onClick={() => {
         if (!isActive) onChange(item.key);
       }}
-      className="terminal-news-filter-tab h-7 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 font-mono text-[10px] text-bloomberg-muted"
+      className="terminal-news-filter-tab h-7 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted"
     >
       {item.label}
     </Button>
@@ -57,7 +57,7 @@ CategoryTab.propTypes = {
 
 export default function NewsFilterBar({ selectedCategory, onChange, onRefresh }) {
   return (
-    <div className="terminal-news-toolbar flex items-center justify-end gap-2">
+    <div className="terminal-news-toolbar flex items-center justify-end gap-3">
       <div className="terminal-news-filter flex gap-1.5 overflow-x-auto">
         {NEWS_CATEGORIES.map((item) => (
           <CategoryTab
@@ -75,9 +75,9 @@ export default function NewsFilterBar({ selectedCategory, onChange, onRefresh })
           variant="outline"
           size="sm"
           onClick={onRefresh}
-          className="terminal-news-filter-tab terminal-news-refresh-button h-7 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 font-mono text-[10px] text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
+          className="terminal-news-filter-tab terminal-news-refresh-button ml-auto h-7 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
         >
-          <RefreshCw className="h-3 w-3" />
+          <RefreshCw className="h-3.5 w-3.5" />
           REFRESH
         </Button>
       )}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
+import { startVisiblePolling } from '../utils/visiblePolling';
 
 export const GLOBAL_TICKER_TAPE = [
   { label: 'S&P', name: 'S&P 500 Futures', ticker: 'ES=F' },
@@ -118,12 +119,12 @@ export function useTickerQuotes() {
     }
 
     load();
-    const interval = setInterval(load, TICKER_REFRESH_MS);
+    const stopPolling = startVisiblePolling(load, TICKER_REFRESH_MS);
 
     return () => {
       cancelled = true;
       controller?.abort();
-      clearInterval(interval);
+      stopPolling();
     };
   }, [fallbackQuotes]);
 

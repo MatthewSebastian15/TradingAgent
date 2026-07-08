@@ -73,8 +73,8 @@ export default function News() {
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10 text-bloomberg-white">
-      <main className="terminal-news px-3 py-3 font-mono">
-        <Card className="terminal-news-panel overflow-hidden rounded-lg border-bloomberg-border bg-black/30 text-bloomberg-white shadow-lg shadow-black/20">
+      <main className="terminal-news px-3 py-3">
+        <Card className="terminal-news-panel overflow-hidden rounded-lg border-white/[0.08] bg-[#050505] text-bloomberg-white shadow-lg shadow-black/20">
           <CardContent className="p-3">
             <NewsFilterBar
               selectedCategory={category}

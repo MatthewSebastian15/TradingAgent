@@ -86,20 +86,20 @@ export default function NewsRow({ article }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="terminal-news-headline font-bold text-bloomberg-white transition-colors hover:text-bloomberg-orange"
+      className="terminal-news-headline font-bold text-neutral-100 transition-colors hover:text-bloomberg-orange"
     >
       {title}
     </a>
   ) : (
-    <span className="terminal-news-headline font-bold text-bloomberg-white">{title}</span>
+    <span className="terminal-news-headline font-bold text-neutral-100">{title}</span>
   );
 
   return (
-    <article className="terminal-news-row border-b border-bloomberg-border/70 bg-black/25 px-3 py-2 transition-colors last:border-b-0 hover:bg-bloomberg-orange/5">
+    <article className="terminal-news-row rounded-lg border border-white/[0.08] bg-[#050505] px-3.5 py-2.5 transition-colors hover:bg-bloomberg-orange/5">
       <div className="min-w-0 space-y-0.5">
-        <div className="terminal-news-meta flex min-w-0 items-center gap-1.5 font-mono text-[9px] font-semibold uppercase leading-4 tracking-wide text-bloomberg-muted">
-          <span className="terminal-news-time shrink-0 text-neutral-400">{date}</span>
-          <span className="terminal-news-source min-w-0 truncate text-bloomberg-green">
+        <div className="terminal-news-meta flex min-w-0 items-center gap-1.5 uppercase leading-4 tracking-wide">
+          <span className="terminal-news-time shrink-0 text-[11px] text-gray-500">{date}</span>
+          <span className="terminal-news-source min-w-0 truncate text-xs font-bold text-bloomberg-green">
             {source.toUpperCase()}
           </span>
           <span
@@ -115,11 +115,11 @@ export default function NewsRow({ article }) {
           </span>
         </div>
 
-        <div className="terminal-news-headline truncate text-[13px] font-bold leading-5 text-neutral-100">
+        <div className="terminal-news-headline truncate text-[15px] font-bold leading-tight text-neutral-100">
           {titleNode}
         </div>
 
-        <div className="terminal-news-summary truncate text-[11px] leading-4 text-bloomberg-muted">
+        <div className="terminal-news-summary truncate text-xs leading-[1.4] text-[#8a8f98]">
           {description}
         </div>
       </div>

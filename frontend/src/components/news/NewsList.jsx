@@ -29,7 +29,7 @@ export default function NewsList({ articles, emptyMessage = 'No news found for t
 
   if (!sortedArticles.length) {
     return (
-      <Card className="terminal-news-state mt-2 rounded-md border-bloomberg-border bg-black/50 px-3 py-2 text-xs text-bloomberg-muted">
+      <Card className="terminal-news-state mt-2 rounded-lg border-white/[0.08] bg-[#050505] px-3.5 py-2.5 text-[11px] leading-[1.35] text-[#8a8f98]">
         {emptyMessage}
       </Card>
     );

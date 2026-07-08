@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getMarketOverview } from '../api/market';
+import { startVisiblePolling } from '../utils/visiblePolling';
 
 const OVERVIEW_REFRESH_MS = 60 * 1000;
 const OVERVIEW_CACHE_TTL_MS = 120 * 1000;
@@ -180,7 +181,7 @@ export function useMarketOverviewData(symbols) {
     loadOverview({ signal: controller.signal, force: false, silent: hasItems(cached) }).catch(
       () => {}
     );
-    const interval = window.setInterval(() => {
+    const stopPolling = startVisiblePolling(() => {
       // ponytail: force:false lets the backend TTL cache absorb auto-refresh.
       // force:true here re-fetched yfinance cold every 60s, ignoring both caches.
       // Manual refresh (refresh()) still forces a fresh fetch.
@@ -189,7 +190,7 @@ export function useMarketOverviewData(symbols) {
 
     return () => {
       controller.abort();
-      window.clearInterval(interval);
+      stopPolling();
     };
   }, [loadOverview, symbols]);
 

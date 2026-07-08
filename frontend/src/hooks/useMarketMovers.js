@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getMarketMovers } from '../api/market';
 import { MARKET_MOVERS_LIMIT } from '../utils/marketDefaults';
+import { startVisiblePolling } from '../utils/visiblePolling';
 
 const MOVERS_REFRESH_MS = 120 * 1000;
 const MOVERS_CACHE_TTL_MS = 180 * 1000;
@@ -116,13 +117,13 @@ export function useMarketMovers() {
   useEffect(() => {
     const controller = new AbortController();
     loadMovers(appliedFilters, { signal: controller.signal });
-    const interval = window.setInterval(() => {
+    const stopPolling = startVisiblePolling(() => {
       loadMovers(appliedFilters);
     }, MOVERS_REFRESH_MS);
 
     return () => {
       controller.abort();
-      window.clearInterval(interval);
+      stopPolling();
     };
   }, [appliedFilters, loadMovers]);
 

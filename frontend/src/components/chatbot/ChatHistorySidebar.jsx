@@ -18,6 +18,7 @@ export function ChatHistorySidebar({ conversations, activeId, onNew, onSelect, o
         type="button"
         onClick={onNew}
         title="New chat"
+        aria-label="New chat"
         className="flex items-center gap-2 m-2 px-2 py-2 rounded-lg bg-bloomberg-card border border-bloomberg-border text-bloomberg-white hover:border-bloomberg-orange"
       >
         <SquarePen size={18} className="shrink-0 text-bloomberg-orange" />
@@ -49,9 +50,10 @@ export function ChatHistorySidebar({ conversations, activeId, onNew, onSelect, o
                   onDelete(c.id);
                 }}
                 title="Delete chat"
+                aria-label={`Delete chat: ${c.title}`}
                 className="opacity-0 group-hover:opacity-100 text-bloomberg-muted hover:text-bloomberg-red"
               >
-                <Trash2 size={14} />
+                <Trash2 size={14} aria-hidden="true" />
               </button>
             )}
           </div>

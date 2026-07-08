@@ -333,7 +333,7 @@ function SummaryMetric({ label, value }) {
   return (
     <Badge
       variant="outline"
-      className="terminal-news-insight rounded-md border-border font-mono text-xs"
+      className="terminal-news-insight rounded-md border-border text-[11px] font-normal leading-[1.35]"
     >
       {label}: {value}
     </Badge>
@@ -353,7 +353,7 @@ function SortButton({ label, active, onClick }) {
       size="sm"
       aria-pressed={active}
       onClick={onClick}
-      className="terminal-news-filter-tab h-8 font-mono text-xs uppercase tracking-wide"
+      className="terminal-news-filter-tab h-8 text-[10px] font-bold uppercase tracking-wide"
     >
       {label}
     </Button>
@@ -368,7 +368,7 @@ SortButton.propTypes = {
 
 function SortControls({ activeSort, onSortChange }) {
   return (
-    <div className="terminal-news-sort-controls mb-2 flex flex-wrap items-center gap-2">
+    <div className="terminal-news-sort-controls mb-2 flex flex-wrap items-center gap-1.5">
       {SORT_OPTIONS.map((option, index) => (
         <span key={option} className="flex items-center gap-2">
           <SortButton
@@ -377,7 +377,7 @@ function SortControls({ activeSort, onSortChange }) {
             onClick={() => onSortChange(option)}
           />
           {index < SORT_OPTIONS.length - 1 && (
-            <span className="terminal-news-label font-mono text-xs text-bloomberg-muted">|</span>
+            <span className="terminal-news-label text-[11px] text-gray-500">|</span>
           )}
         </span>
       ))}
@@ -397,27 +397,27 @@ function NewsRow({ item }) {
   const sentiment = displayLabel(item.sentiment || item.sentiment_label);
 
   return (
-    <Card className="terminal-news-row rounded-md border-border bg-card">
-      <CardContent className="terminal-news-row-content min-w-0 space-y-2 p-4">
+    <Card className="terminal-news-row rounded-lg border-white/[0.08] bg-[#050505]">
+      <CardContent className="terminal-news-row-content min-w-0 space-y-2 px-3.5 py-2.5">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="terminal-news-time font-mono text-xs tracking-wide text-primary">
+          <span className="terminal-news-time text-[11px] tracking-wide text-gray-500">
             {publishedLabel(item)}
           </span>
           <Badge
             variant="outline"
-            className="terminal-news-source rounded-md border-border font-mono text-xs"
+            className="terminal-news-source rounded-md border-border text-xs font-bold text-bloomberg-green"
           >
             {publisherLabel(item)}
           </Badge>
-          <Badge className="terminal-news-label rounded-md border-yellow-500/60 bg-yellow-500/15 font-mono text-xs text-yellow-300">
+          <Badge className="terminal-news-label rounded-md border-yellow-500/60 bg-yellow-500/15 text-[11px] font-normal text-yellow-300">
             {sentiment}
           </Badge>
-          <Badge className="terminal-news-label rounded-md border-primary/60 bg-primary/15 font-mono text-xs text-primary">
+          <Badge className="terminal-news-label rounded-md border-primary/60 bg-primary/15 text-[11px] font-normal text-primary">
             {impact}
           </Badge>
         </div>
         <div className="min-w-0">
-          <h3 className="terminal-news-headline text-sm font-semibold leading-snug text-foreground">
+          <h3 className="terminal-news-headline text-[15px] font-bold leading-tight text-neutral-100">
             {url ? (
               <a
                 href={url}
@@ -432,7 +432,7 @@ function NewsRow({ item }) {
             )}
           </h3>
         </div>
-        <p className="terminal-news-summary text-sm leading-relaxed text-muted-foreground">
+        <p className="terminal-news-summary text-xs leading-[1.4] text-[#8a8f98]">
           {summaryText(item)}
         </p>
       </CardContent>
@@ -447,7 +447,7 @@ NewsRow.propTypes = {
 function ProviderStatusRows({ rows }) {
   if (!rows.length) return null;
   return (
-    <div className="terminal-news-insight mt-2 space-y-1 font-mono text-xs text-bloomberg-muted">
+    <div className="terminal-news-insight mt-2 space-y-1 text-[11px] leading-[1.35] text-bloomberg-muted">
       {rows.map((row) => (
         <div key={row.provider}>
           {row.provider}: {displayLabel(row.status)}
@@ -482,9 +482,9 @@ function StrictNewsSection({
   const visibleItems = canLimit && !showAll ? sortedItems.slice(0, initialLimit) : sortedItems;
 
   return (
-    <Card className="terminal-news-panel rounded-md border-border bg-card">
+    <Card className="terminal-news-panel rounded-lg border-white/[0.08] bg-[#050505]">
       <CardHeader className="p-4">
-        <CardTitle className="terminal-news-panel-title text-sm uppercase tracking-widest">
+        <CardTitle className="terminal-news-panel-title text-xs font-bold uppercase leading-tight tracking-widest">
           {label}
         </CardTitle>
       </CardHeader>
@@ -501,7 +501,7 @@ function StrictNewsSection({
                 variant="outline"
                 size="sm"
                 onClick={() => setShowAll((current) => !current)}
-                className="terminal-news-filter-tab h-8 font-mono text-xs uppercase tracking-wide"
+                className="terminal-news-filter-tab h-8 text-[10px] font-bold uppercase tracking-wide"
               >
                 {showAll ? 'Show Less' : `Show All (${items.length})`}
               </Button>
@@ -581,7 +581,7 @@ function NewsTab({ result }) {
         {analystConsensus.available && (
           <section>
             <SectionHeader label="ANALYST RECOMMENDATION TREND" />
-            <div className="terminal-news-insight grid grid-cols-2 gap-2 font-mono text-xs sm:grid-cols-3 lg:grid-cols-6">
+            <div className="terminal-news-insight grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3 lg:grid-cols-6">
               <SummaryMetric label="PERIOD" value={analystConsensus.period || 'N/A'} />
               <SummaryMetric label="STRONG BUY" value={analystConsensus.strong_buy ?? 0} />
               <SummaryMetric label="BUY" value={analystConsensus.buy ?? 0} />
@@ -606,7 +606,7 @@ function NewsTab({ result }) {
   if (!hasNewsPayload(result)) {
     return (
       <div className="terminal-news border-b border-border p-4">
-        <Card className="terminal-news-panel rounded-md border-border bg-card">
+        <Card className="terminal-news-panel rounded-lg border-white/[0.08] bg-[#050505]">
           <CardContent className="p-4">
             <NoticeBox title="NEWS UNAVAILABLE" tone="amber">
               {relatedNews.warning || 'No usable related news was returned for this analysis.'}
@@ -619,9 +619,9 @@ function NewsTab({ result }) {
 
   return (
     <div className="terminal-news space-y-4 border-b border-border p-4">
-      <Card className="terminal-news-panel rounded-md border-border bg-card">
+      <Card className="terminal-news-panel rounded-lg border-white/[0.08] bg-[#050505]">
         <CardHeader className="p-4">
-          <CardTitle className="terminal-news-panel-title text-sm uppercase tracking-widest">
+          <CardTitle className="terminal-news-panel-title text-xs font-bold uppercase leading-tight tracking-widest">
             NEWS
           </CardTitle>
         </CardHeader>
@@ -641,13 +641,13 @@ function NewsTab({ result }) {
         </CardContent>
       </Card>
       {analystConsensus.available && (
-        <Card className="terminal-news-panel rounded-md border-border bg-card">
+        <Card className="terminal-news-panel rounded-lg border-white/[0.08] bg-[#050505]">
           <CardHeader className="p-4">
-            <CardTitle className="terminal-news-panel-title text-sm uppercase tracking-widest">
+            <CardTitle className="terminal-news-panel-title text-xs font-bold uppercase leading-tight tracking-widest">
               ANALYST RECOMMENDATION TREND
             </CardTitle>
           </CardHeader>
-          <CardContent className="terminal-news-insight grid grid-cols-2 gap-2 p-4 pt-0 font-mono text-xs sm:grid-cols-3 lg:grid-cols-6">
+          <CardContent className="terminal-news-insight grid grid-cols-2 gap-2 p-4 pt-0 text-[11px] sm:grid-cols-3 lg:grid-cols-6">
             <SummaryMetric label="PERIOD" value={analystConsensus.period || 'N/A'} />
             <SummaryMetric label="STRONG BUY" value={analystConsensus.strong_buy ?? 0} />
             <SummaryMetric label="BUY" value={analystConsensus.buy ?? 0} />

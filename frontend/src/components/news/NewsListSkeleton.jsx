@@ -14,7 +14,7 @@ export default function NewsListSkeleton({ count = 5 }) {
       {items.map((item) => (
         <article
           key={`news-skeleton-${item}`}
-          className="terminal-news-row border-b border-bloomberg-border/70 bg-black/25 px-3 py-2 last:border-b-0"
+          className="terminal-news-row rounded-lg border border-white/[0.08] bg-[#050505] px-3.5 py-2.5"
         >
           <div className="min-w-0 space-y-1">
             <Skeleton className="h-2.5 w-44 rounded-sm bg-bloomberg-border/50" />
