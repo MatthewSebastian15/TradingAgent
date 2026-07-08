@@ -17,20 +17,68 @@ SNAPSHOT = Path(__file__).parent / "fixtures" / "financial_highlights_snapshot.j
 VENDOR_PAYLOADS = {
     "yfinance": {
         "income_statement": {
-            "FY22": {"revenue": 100_000_000_000, "ebitda": 20_000_000_000, "net_profit": 10_000_000_000},
-            "FY23": {"revenue": 120_000_000_000, "ebitda": 24_000_000_000, "net_profit": 12_000_000_000},
-            "FY24": {"revenue": 132_000_000_000, "ebitda": 27_000_000_000, "net_profit": 13_000_000_000},
-            "FY25": {"revenue": 150_000_000_000, "ebitda": 30_000_000_000, "net_profit": 15_000_000_000},
-            "FY25Q1": {"revenue": 35_000_000_000, "ebitda": 7_000_000_000, "net_profit": 3_500_000_000},
-            "FY26Q1": {"revenue": 40_000_000_000, "ebitda": 8_000_000_000, "net_profit": 4_000_000_000},
+            "FY22": {
+                "revenue": 100_000_000_000,
+                "ebitda": 20_000_000_000,
+                "net_profit": 10_000_000_000,
+            },
+            "FY23": {
+                "revenue": 120_000_000_000,
+                "ebitda": 24_000_000_000,
+                "net_profit": 12_000_000_000,
+            },
+            "FY24": {
+                "revenue": 132_000_000_000,
+                "ebitda": 27_000_000_000,
+                "net_profit": 13_000_000_000,
+            },
+            "FY25": {
+                "revenue": 150_000_000_000,
+                "ebitda": 30_000_000_000,
+                "net_profit": 15_000_000_000,
+            },
+            "FY25Q1": {
+                "revenue": 35_000_000_000,
+                "ebitda": 7_000_000_000,
+                "net_profit": 3_500_000_000,
+            },
+            "FY26Q1": {
+                "revenue": 40_000_000_000,
+                "ebitda": 8_000_000_000,
+                "net_profit": 4_000_000_000,
+            },
         },
         "balance_sheet": {
-            "FY22": {"total_equity": 50_000_000_000, "total_debt": 10_000_000_000, "shares_outstanding": 1_000_000_000},
-            "FY23": {"total_equity": 55_000_000_000, "total_debt": 11_000_000_000, "shares_outstanding": 1_000_000_000},
-            "FY24": {"total_equity": 60_000_000_000, "total_debt": 12_000_000_000, "shares_outstanding": 1_000_000_000},
-            "FY25": {"total_equity": 66_000_000_000, "total_debt": 13_200_000_000, "shares_outstanding": 1_000_000_000},
-            "FY25Q1": {"total_equity": 62_000_000_000, "total_debt": 12_400_000_000, "shares_outstanding": 1_000_000_000},
-            "FY26Q1": {"total_equity": 70_000_000_000, "total_debt": 14_000_000_000, "shares_outstanding": 1_000_000_000},
+            "FY22": {
+                "total_equity": 50_000_000_000,
+                "total_debt": 10_000_000_000,
+                "shares_outstanding": 1_000_000_000,
+            },
+            "FY23": {
+                "total_equity": 55_000_000_000,
+                "total_debt": 11_000_000_000,
+                "shares_outstanding": 1_000_000_000,
+            },
+            "FY24": {
+                "total_equity": 60_000_000_000,
+                "total_debt": 12_000_000_000,
+                "shares_outstanding": 1_000_000_000,
+            },
+            "FY25": {
+                "total_equity": 66_000_000_000,
+                "total_debt": 13_200_000_000,
+                "shares_outstanding": 1_000_000_000,
+            },
+            "FY25Q1": {
+                "total_equity": 62_000_000_000,
+                "total_debt": 12_400_000_000,
+                "shares_outstanding": 1_000_000_000,
+            },
+            "FY26Q1": {
+                "total_equity": 70_000_000_000,
+                "total_debt": 14_000_000_000,
+                "shares_outstanding": 1_000_000_000,
+            },
         },
         "dividends": {"FY26Q1": {"dividend_per_share": 2.0, "reference_price": 100.0}},
     }

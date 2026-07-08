@@ -119,9 +119,7 @@ def test_normalize_honors_non_default_target_risk_reward():
     # 9B: a non-default TARGET_RISK_REWARD reshapes reward/take-profit and display.
     decision = make_decision(risk_reward_ratio=3.0, stop_loss=95.0)
 
-    normalized = normalize_trade_levels(
-        decision, 100.0, ticker="NVDA", target_risk_reward=2.0
-    )
+    normalized = normalize_trade_levels(decision, 100.0, ticker="NVDA", target_risk_reward=2.0)
 
     assert normalized.risk_reward_ratio == pytest.approx(2.0)
     assert normalized.risk_reward_display == "1:2"
