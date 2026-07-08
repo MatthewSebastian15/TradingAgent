@@ -58,6 +58,17 @@ describe('QuantPanel', () => {
     expect(screen.queryByRole('heading', { name: 'Backtest' })).toBeNull();
   });
 
+  it('uses the fetched long history when it is longer than the prop series', async () => {
+    const { getMarketOhlcv } = await import('../../../api/market');
+    getMarketOhlcv.mockResolvedValueOnce({ points: buildPoints(60) });
+    await renderPanel({ points: buildPoints(10), sections: ['volatility'] });
+
+    expect(getMarketOhlcv).toHaveBeenCalledWith('AAPL', expect.objectContaining({ range: '2Y' }));
+    // 10 prop points alone would show the short-history notice; 60 fetched points render sections.
+    expect(screen.queryByText('Not enough data')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Volatility' })).toBeTruthy();
+  });
+
   it('renders every section when sections is undefined', async () => {
     await renderPanel({ points: buildPoints(40) });
 

@@ -55,6 +55,7 @@ import {
   volTargetWeight,
 } from './quantUtils';
 
+const QUANT_RANGE = '2Y'; // longer window than the 1Y analysis chart for stabler stats
 const ROLLING_WINDOW = 21;
 const ROLLING_RATIO_WINDOW = 63; // ~3 months for rolling Sharpe / beta
 const MC_PATHS = 5000; // perf cap (Section 4.5)
@@ -1861,7 +1862,7 @@ function CorrelationSection({
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-subtle">
         Add peer tickers to see how this name co-moves with them, and a quick mean-variance
-        optimization over the basket. Each peer is one extra price fetch (1Y daily). Weights are
+        optimization over the basket. Each peer is one extra price fetch (2Y daily). Weights are
         unconstrained — they can go short (negative).
       </p>
 
@@ -2007,7 +2008,28 @@ function QuantPanel({ points, currency, symbol, sections }) {
   const [peers, setPeers] = useState([]); // [{ symbol, points }]
   const [peerLoading, setPeerLoading] = useState(false);
 
-  const closes = useMemo(() => points.map((p) => p.adjusted_close ?? p.close), [points]);
+  // Fetch a longer history than the 1Y analysis chart; fall back to the prop on failure.
+  const [longPoints, setLongPoints] = useState(null);
+  useEffect(() => {
+    if (!symbol) return undefined;
+    let alive = true;
+    const controller = new AbortController();
+    setLongPoints(null);
+    getMarketOhlcv(symbol, { range: QUANT_RANGE, signal: controller.signal })
+      .then((res) => {
+        if (alive && Array.isArray(res?.points) && res.points.length > 0) {
+          setLongPoints(res.points);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+  }, [symbol]);
+
+  const history = longPoints && longPoints.length > points.length ? longPoints : points;
+  const closes = useMemo(() => history.map((p) => p.adjusted_close ?? p.close), [history]);
   const ccy = currency || '';
   const rfDaily = rf / TRADING_DAYS;
   const benchmarkInfo = useMemo(() => benchmarkForSymbol(symbol), [symbol]);
@@ -2029,7 +2051,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
     let alive = true;
     const controller = new AbortController();
     setBenchPoints(null);
-    getMarketOhlcv(benchmarkInfo.symbol, { range: '1Y', signal: controller.signal })
+    getMarketOhlcv(benchmarkInfo.symbol, { range: QUANT_RANGE, signal: controller.signal })
       .then((p) => {
         if (alive) setBenchPoints(Array.isArray(p?.points) ? p.points : []);
       })
@@ -2049,9 +2071,9 @@ function QuantPanel({ points, currency, symbol, sections }) {
   const rollingPoints = useMemo(
     () =>
       rollingVols
-        .map((value, m) => ({ date: String(points[ROLLING_WINDOW + m]?.date || ''), value }))
+        .map((value, m) => ({ date: String(history[ROLLING_WINDOW + m]?.date || ''), value }))
         .filter((p) => p.date),
-    [rollingVols, points]
+    [rollingVols, history]
   );
 
   const metrics = useMemo(
@@ -2085,25 +2107,25 @@ function QuantPanel({ points, currency, symbol, sections }) {
   const ddPoints = useMemo(
     () =>
       drawdownSeries(closes)
-        .map((value, i) => ({ date: String(points[i]?.date || ''), value }))
+        .map((value, i) => ({ date: String(history[i]?.date || ''), value }))
         .filter((p) => p.date),
-    [closes, points]
+    [closes, history]
   );
 
   // Rolling Sharpe zipped to dates (window offset + 1 for the returns→price shift).
   const rsPoints = useMemo(
     () =>
       rollingSharpe(returns, ROLLING_RATIO_WINDOW, rfDaily)
-        .map((value, m) => ({ date: String(points[ROLLING_RATIO_WINDOW + m]?.date || ''), value }))
+        .map((value, m) => ({ date: String(history[ROLLING_RATIO_WINDOW + m]?.date || ''), value }))
         .filter((p) => p.date && Number.isFinite(p.value)),
-    [returns, points, rfDaily]
+    [returns, history, rfDaily]
   );
 
   // Benchmark-relative metrics + rolling beta from the aligned benchmark series.
   const benchmark = useMemo(() => {
     if (!benchPoints || benchPoints.length === 0)
       return { beta: null, alpha: null, available: false, rollBeta: [] };
-    const { stock, market } = alignByDate(points, benchPoints);
+    const { stock, market } = alignByDate(history, benchPoints);
     if (stock.length < 3) return { beta: null, alpha: null, available: false, rollBeta: [] };
     const sr = simpleReturns(stock);
     const mr = simpleReturns(market);
@@ -2113,7 +2135,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       available: true,
       rollBeta: rollingBeta(sr, mr, ROLLING_RATIO_WINDOW),
     };
-  }, [points, benchPoints, rfDaily]);
+  }, [history, benchPoints, rfDaily]);
 
   // Rolling beta has no clean date axis (aligned days differ), so index it.
   const rbPoints = useMemo(
@@ -2164,7 +2186,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
     setPeerLoading(true);
     Promise.allSettled(
       wanted.map((sym) =>
-        getMarketOhlcv(sym, { range: '1Y' }).then((res) => ({
+        getMarketOhlcv(sym, { range: QUANT_RANGE }).then((res) => ({
           symbol: sym,
           points: Array.isArray(res?.points) ? res.points : [],
         }))
@@ -2202,7 +2224,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       rollLabel: '',
     };
     if (peers.length === 0 || (visible && !visible.has('correlation'))) return empty;
-    const series = [{ symbol: baseSymbol, points }, ...peers];
+    const series = [{ symbol: baseSymbol, points: history }, ...peers];
     const { dates, closes } = alignManyByDate(series);
     if (dates.length < 30) return empty;
     const symbols = series.map((s) => s.symbol);
@@ -2239,7 +2261,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       rollPoints,
       rollLabel: `${baseSymbol} vs ${peerSym}`,
     };
-  }, [peers, visible, baseSymbol, points, rfDaily]);
+  }, [peers, visible, baseSymbol, history, rfDaily]);
 
   // Loading: result is here but price history hasn't streamed in yet.
   // ponytail: 0 points = still loading; 1–29 = genuinely too short (NoticeBox).
