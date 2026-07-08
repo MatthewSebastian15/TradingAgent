@@ -79,7 +79,7 @@ from tradingagents.graph.prompt_context_builder import (
 )
 from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
 from tradingagents.prompt_context import build_prompt_context as build_legacy_prompt_context
-from tradingagents.technical.entry_quality import build_technical_entry
+from tradingagents.technical.entry_quality import apply_earnings_proximity, build_technical_entry
 
 logger = logging.getLogger(__name__)
 
@@ -1089,6 +1089,7 @@ def collect_market_data(
         news_context=news_context,
     )
     catalyst_tracker = build_catalyst_tracker(news_impact, event_risk.value)
+    apply_earnings_proximity(technical_entry, catalyst_tracker.get("upcoming_events"), trade_date)
     analyst_consensus = build_analyst_consensus(recommendation_trends.value)
     financial_highlights = build_financial_highlights_from_normalized_rows(
         normalized_period_rows,

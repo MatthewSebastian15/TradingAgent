@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-import math
-import statistics
 from typing import Any
 
+from tradingagents.dataflows.market.technical_calculator import (
+    annualized_volatility_value,
+    atr_value,
+)
 from tradingagents.utils.normalization import number as _number
 
 
@@ -22,17 +24,6 @@ def _ohlcv_rows(price_chart: dict[str, Any] | None) -> list[dict[str, Any]]:
     return sorted(normalized, key=lambda row: str(row.get("date") or ""))
 
 
-def _annualized_volatility(closes: list[float]) -> float | None:
-    returns = [
-        (closes[index] - closes[index - 1]) / closes[index - 1]
-        for index in range(1, len(closes))
-        if closes[index - 1] not in (0, None)
-    ]
-    if len(returns) < 2:
-        return None
-    return statistics.stdev(returns) * math.sqrt(252) * 100
-
-
 def _max_drawdown(closes: list[float]) -> float | None:
     peak: float | None = None
     max_drawdown = 0.0
@@ -43,29 +34,6 @@ def _max_drawdown(closes: list[float]) -> float | None:
         if peak:
             max_drawdown = min(max_drawdown, ((close - peak) / peak) * 100)
     return max_drawdown
-
-
-def _atr(rows: list[dict[str, Any]], period: int = 14) -> float | None:
-    true_ranges: list[float] = []
-    previous_close: float | None = None
-    for row in rows:
-        high = _number(row.get("high"))
-        low = _number(row.get("low"))
-        close = _number(row.get("close"))
-        if high is None or low is None:
-            previous_close = close
-            continue
-        if previous_close is None:
-            true_range = high - low
-        else:
-            true_range = max(high - low, abs(high - previous_close), abs(low - previous_close))
-        if true_range >= 0:
-            true_ranges.append(true_range)
-        previous_close = close
-    if not true_ranges:
-        return None
-    window = true_ranges[-period:]
-    return sum(window) / len(window)
 
 
 def _risk_bucket(
@@ -103,14 +71,16 @@ def build_market_risk(
     summary = price_performance if isinstance(price_performance, dict) else {}
     technical = technical_entry if isinstance(technical_entry, dict) else {}
 
-    volatility = _annualized_volatility(closes)
+    volatility = annualized_volatility_value(closes)
+    if volatility is not None:
+        volatility *= 100
     drawdown = _number(summary.get("max_drawdown_percent"))
     if drawdown is None:
         drawdown = _max_drawdown(closes)
 
     atr = _number(technical.get("atr"))
     if atr is None:
-        atr = _atr(rows)
+        atr = atr_value(rows)
 
     highs = [_number(row.get("high")) for row in rows]
     lows = [_number(row.get("low")) for row in rows]

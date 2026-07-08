@@ -54,39 +54,73 @@ def extract_closes(price_history: list[dict[str, Any]] | str | Any) -> list[floa
     return values
 
 
-def calculate_volatility(closes: list[float]) -> dict[str, Any]:
-    if len(closes) < 2:
-        return build_indicator_value(None, "volatility", len(closes), 2)
+def annualized_volatility_value(closes: list[float]) -> float | None:
+    """Annualized volatility as a fraction (sample stdev of daily returns * sqrt(252))."""
     returns = []
     for prev, curr in zip(closes, closes[1:], strict=False):
         if prev:
             returns.append((curr - prev) / prev)
     if len(returns) < 2:
-        return build_indicator_value(None, "volatility", len(closes), 3)
+        return None
     mean = sum(returns) / len(returns)
     variance = sum((value - mean) ** 2 for value in returns) / (len(returns) - 1)
-    return build_indicator_value(math.sqrt(variance) * math.sqrt(252), "volatility", len(closes), 3)
+    return math.sqrt(variance) * math.sqrt(252)
+
+
+def rsi_value(closes: list[float], window: int = 14) -> float | None:
+    """Wilder-smoothed RSI over the full series. Flat series reads neutral (50)."""
+    if len(closes) <= window:
+        return None
+    changes = [curr - prev for prev, curr in zip(closes, closes[1:], strict=False)]
+    gains = [max(change, 0.0) for change in changes]
+    losses = [max(-change, 0.0) for change in changes]
+    avg_gain = sum(gains[:window]) / window
+    avg_loss = sum(losses[:window]) / window
+    for gain, loss in zip(gains[window:], losses[window:], strict=False):
+        avg_gain = (avg_gain * (window - 1) + gain) / window
+        avg_loss = (avg_loss * (window - 1) + loss) / window
+    if avg_loss == 0:
+        return 100.0 if avg_gain > 0 else 50.0
+    return 100 - (100 / (1 + avg_gain / avg_loss))
+
+
+def atr_value(rows: list[dict[str, Any]], window: int = 14) -> float | None:
+    """Wilder-smoothed average true range; skips rows missing high/low."""
+    true_ranges: list[float] = []
+    previous_close: float | None = None
+    for row in rows:
+        high = indicator_numeric_value(row.get("high"))
+        low = indicator_numeric_value(row.get("low"))
+        close = indicator_numeric_value(row.get("close"))
+        if high is None or low is None:
+            previous_close = close
+            continue
+        if previous_close is None:
+            true_range = high - low
+        else:
+            true_range = max(high - low, abs(high - previous_close), abs(low - previous_close))
+        if true_range >= 0:
+            true_ranges.append(true_range)
+        previous_close = close
+    if not true_ranges:
+        return None
+    if len(true_ranges) <= window:
+        # ponytail: short history degrades to a plain average instead of returning None
+        return sum(true_ranges) / len(true_ranges)
+    atr = sum(true_ranges[:window]) / window
+    for true_range in true_ranges[window:]:
+        atr = (atr * (window - 1) + true_range) / window
+    return atr
+
+
+def calculate_volatility(closes: list[float]) -> dict[str, Any]:
+    if len(closes) < 2:
+        return build_indicator_value(None, "volatility", len(closes), 2)
+    return build_indicator_value(annualized_volatility_value(closes), "volatility", len(closes), 3)
 
 
 def calculate_rsi(closes: list[float], window: int = 14) -> dict[str, Any]:
-    if len(closes) <= window:
-        return build_indicator_value(None, "rsi_14", len(closes), window + 1)
-    gains: list[float] = []
-    losses: list[float] = []
-    for prev, curr in zip(closes[-window - 1 : -1], closes[-window:], strict=False):
-        change = curr - prev
-        if change >= 0:
-            gains.append(change)
-            losses.append(0.0)
-        else:
-            gains.append(0.0)
-            losses.append(abs(change))
-    avg_gain = sum(gains) / window
-    avg_loss = sum(losses) / window
-    if avg_loss == 0:
-        return build_indicator_value(100.0, "rsi_14", len(closes), window + 1)
-    rs = avg_gain / avg_loss
-    return build_indicator_value(100 - (100 / (1 + rs)), "rsi_14", len(closes), window + 1)
+    return build_indicator_value(rsi_value(closes, window), "rsi_14", len(closes), window + 1)
 
 
 def build_indicator_value(

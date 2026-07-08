@@ -23,7 +23,11 @@ from tradingagents.pipeline_balanced import (
     _extract_last_close_price,
     _invoke_once,
 )
-from tradingagents.technical.entry_quality import build_technical_entry
+from tradingagents.technical.entry_quality import (
+    _volume_trend,
+    apply_earnings_proximity,
+    build_technical_entry,
+)
 from tradingagents.utils_resilience import (
     CircuitBreaker,
     CircuitOpenError,
@@ -219,6 +223,51 @@ def test_build_technical_entry_calculates_indicators_and_support_resistance():
     assert technical["support"] == 138.0
     assert technical["resistance"] == 161.0
     assert technical["data_quality"]["status"] == "partial"
+
+
+def test_volume_trend_uses_recent_average_not_single_day():
+    # One quiet final session must not flip the signal on its own.
+    one_quiet_day = [{"volume": 1000}] * 29 + [{"volume": 500}]
+    assert _volume_trend(one_quiet_day) == "average"
+    hot_week = [{"volume": 1000}] * 25 + [{"volume": 2000}] * 5
+    assert _volume_trend(hot_week) == "above_average"
+    quiet_week = [{"volume": 1000}] * 25 + [{"volume": 400}] * 5
+    assert _volume_trend(quiet_week) == "below_average"
+
+
+def test_apply_earnings_proximity_downgrades_entry_quality():
+    entry = {
+        "available": True,
+        "entry_quality": "Good Entry",
+        "entry_quality_score": 7.0,
+        "entry_quality_drivers": ["trend aligned with entry direction"],
+        "entry_action": "Proceed with reduced position size",
+        "reasons": ["Price is above the 20-day moving average."],
+    }
+    events = [{"type": "earnings", "date": "2026-05-04"}]
+
+    result = apply_earnings_proximity(entry, events, "2026-05-01")
+
+    assert result is entry  # adjusted in place
+    assert entry["earnings_within_days"] == 3
+    assert entry["entry_quality_score"] == 5.5
+    assert entry["entry_quality"] == "Acceptable Entry"
+    assert "earnings event imminent" in entry["entry_quality_drivers"]
+    assert any("Earnings event within 3 day(s)" in reason for reason in entry["reasons"])
+
+
+def test_apply_earnings_proximity_ignores_far_or_past_events():
+    entry = {"available": True, "entry_quality_score": 7.0, "reasons": []}
+    far = apply_earnings_proximity(
+        dict(entry), [{"type": "earnings", "date": "2026-06-01"}], "2026-05-01"
+    )
+    past = apply_earnings_proximity(
+        dict(entry), [{"type": "earnings", "date": "2026-04-28"}], "2026-05-01"
+    )
+
+    assert far["entry_quality_score"] == 7.0
+    assert past["entry_quality_score"] == 7.0
+    assert "earnings_within_days" not in far
 
 
 def test_build_technical_entry_handles_insufficient_data():

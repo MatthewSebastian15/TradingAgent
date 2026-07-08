@@ -46,8 +46,9 @@ def calculate_local_indicators(price_df: pd.DataFrame) -> dict[str, Any]:
     }
 
     delta = close.diff()
-    gain = delta.clip(lower=0).rolling(14).mean()
-    loss = (-delta.clip(upper=0)).rolling(14).mean()
+    # Wilder smoothing (ewm alpha=1/14) to match standard charting-platform RSI/ATR values.
+    gain = delta.clip(lower=0).ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
     rs = gain / loss.replace(0, pd.NA)
     rsi = 100 - (100 / (1 + rs))
     result["rsi"] = _to_float(rsi.iloc[-1])
@@ -76,7 +77,9 @@ def calculate_local_indicators(price_df: pd.DataFrame) -> dict[str, Any]:
             ],
             axis=1,
         ).max(axis=1)
-        result["atr"] = _to_float(tr.rolling(14).mean().iloc[-1])
+        result["atr"] = _to_float(
+            tr.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean().iloc[-1]
+        )
     else:
         result["atr"] = None
 

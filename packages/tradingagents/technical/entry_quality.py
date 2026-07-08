@@ -2,8 +2,15 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Iterable
+from datetime import date
 from io import StringIO
 from typing import Any
+
+from tradingagents.dataflows.market.technical_calculator import (
+    atr_value,
+    calculate_sma,
+    rsi_value,
+)
 
 
 def _safe_float(value: Any) -> float | None:
@@ -97,12 +104,6 @@ def _normalize_rows(ohlcv_data: Any) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda row: row["date"])
 
 
-def _sma(values: list[float], window: int) -> float | None:
-    if len(values) < window:
-        return None
-    return sum(values[-window:]) / window
-
-
 def _ema_series(values: list[float], span: int) -> list[float]:
     if not values:
         return []
@@ -111,21 +112,6 @@ def _ema_series(values: list[float], span: int) -> list[float]:
     for value in values[1:]:
         result.append((value * alpha) + (result[-1] * (1 - alpha)))
     return result
-
-
-def _rsi(closes: list[float], window: int = 14) -> float | None:
-    if len(closes) <= window:
-        return None
-    changes = [closes[index] - closes[index - 1] for index in range(1, len(closes))]
-    recent = changes[-window:]
-    gains = [max(change, 0) for change in recent]
-    losses = [abs(min(change, 0)) for change in recent]
-    avg_gain = sum(gains) / window
-    avg_loss = sum(losses) / window
-    if avg_loss == 0:
-        return 100.0 if avg_gain > 0 else 50.0
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
 
 
 def _macd(closes: list[float]) -> tuple[float | None, float | None]:
@@ -138,30 +124,18 @@ def _macd(closes: list[float]) -> tuple[float | None, float | None]:
     return macd_values[-1], signal_values[-1] if signal_values else None
 
 
-def _atr(rows: list[dict[str, Any]], window: int = 14) -> float | None:
-    if len(rows) <= window:
-        return None
-    true_ranges: list[float] = []
-    for index, row in enumerate(rows):
-        high = float(row["high"])
-        low = float(row["low"])
-        if index == 0:
-            true_ranges.append(high - low)
-            continue
-        previous_close = float(rows[index - 1]["close"])
-        true_ranges.append(max(high - low, abs(high - previous_close), abs(low - previous_close)))
-    return sum(true_ranges[-window:]) / window
-
-
 def _volume_trend(rows: list[dict[str, Any]]) -> str:
     volumes = [int(row["volume"]) for row in rows if row.get("volume") is not None]
     if len(volumes) < 2:
         return "N/A"
-    average_volume = sum(volumes) / len(volumes)
-    latest_volume = volumes[-1]
-    if latest_volume >= average_volume * 1.1:
+    # 5-day vs 20-day average so one quiet session cannot flip the signal.
+    recent = volumes[-5:]
+    baseline = volumes[-20:]
+    recent_average = sum(recent) / len(recent)
+    baseline_average = sum(baseline) / len(baseline)
+    if recent_average >= baseline_average * 1.1:
         return "above_average"
-    if latest_volume <= average_volume * 0.9:
+    if recent_average <= baseline_average * 0.9:
         return "below_average"
     return "average"
 
@@ -489,6 +463,56 @@ def _entry_drivers(components: dict[str, float | None]) -> list[str]:
     return drivers or ["entry quality uses limited technical data"]
 
 
+EARNINGS_PROXIMITY_WINDOW_DAYS = 7
+EARNINGS_PROXIMITY_PENALTY = 1.5  # ~one label step on the 0-10 scale
+
+
+def apply_earnings_proximity(
+    technical_entry: dict[str, Any],
+    upcoming_events: list[dict[str, Any]] | None,
+    trade_date: str | None,
+    window_days: int = EARNINGS_PROXIMITY_WINDOW_DAYS,
+) -> dict[str, Any]:
+    """Downgrade entry quality in place when an earnings event lands within *window_days*."""
+    entry = technical_entry if isinstance(technical_entry, dict) else {}
+    if not entry.get("available") or not trade_date:
+        return entry
+    try:
+        anchor = date.fromisoformat(str(trade_date)[:10])
+    except ValueError:
+        return entry
+    days: int | None = None
+    for event in upcoming_events or []:
+        if not isinstance(event, dict) or str(event.get("type")) != "earnings":
+            continue
+        try:
+            event_date = date.fromisoformat(str(event.get("date"))[:10])
+        except (TypeError, ValueError):
+            continue
+        delta = (event_date - anchor).days
+        if 0 <= delta <= window_days and (days is None or delta < days):
+            days = delta
+    if days is None:
+        return entry
+    entry["earnings_within_days"] = days
+    reasons = list(entry.get("reasons") or [])
+    reasons.append(
+        f"Earnings event within {days} day(s); expect elevated volatility around the report."
+    )
+    entry["reasons"] = reasons[:7]
+    score = _safe_float(entry.get("entry_quality_score"))
+    if score is not None:
+        adjusted = max(0.0, round(score - EARNINGS_PROXIMITY_PENALTY, 1))
+        entry["entry_quality_score"] = adjusted
+        entry["entry_quality"] = score_to_label(adjusted)
+        entry["entry_action"] = _entry_action(adjusted)
+        entry["entry_quality_drivers"] = [
+            *(entry.get("entry_quality_drivers") or []),
+            "earnings event imminent",
+        ]
+    return entry
+
+
 def _vwap(rows: list[dict]) -> float | None:
     total_volume = sum(r.get("volume") or 0 for r in rows if r.get("volume"))
     if total_volume == 0:
@@ -531,12 +555,12 @@ def build_technical_entry(
 
     closes = [float(row["close"]) for row in rows]
     latest_close = _safe_float(current_price) or closes[-1]
-    sma20 = _sma(closes, 20)
-    sma50 = _sma(closes, 50)
-    sma200 = _sma(closes, 200)
-    rsi = _rsi(closes)
+    sma20 = calculate_sma(closes, 20)
+    sma50 = calculate_sma(closes, 50)
+    sma200 = calculate_sma(closes, 200)
+    rsi = rsi_value(closes)
     macd, macd_signal_value = _macd(closes)
-    atr = _atr(rows)
+    atr = atr_value(rows)
     recent_rows = rows[-20:]
     support = min(float(row["low"]) for row in recent_rows)
     resistance = max(float(row["high"]) for row in recent_rows)
