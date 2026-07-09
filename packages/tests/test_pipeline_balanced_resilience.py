@@ -1091,7 +1091,7 @@ def test_balanced_debate_runs_bull_rebuttal_round():
 
     from tradingagents.agents.schemas import DebateArgument
     from tradingagents.dataflows.providers.config import set_config
-    from tradingagents.pipeline_balanced_orchestrator import _run_debate_phase
+    from tradingagents.pipeline_balanced_debate import _run_debate_phase
 
     class DebateLLM:
         provider = "google"
