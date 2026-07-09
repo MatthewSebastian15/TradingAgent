@@ -132,12 +132,16 @@ describe('useWatchlistStore', () => {
     act(() => result.current.addTicker({ symbol: 'MSFT' }));
 
     // Writes are async (encrypt + IndexedDB). Poll until the MSFT entry lands.
-    await waitFor(async () => {
-      const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
-      expect(raw).toContain('"iv"'); // encrypted envelope, not plaintext
-      const stored = await decryptJSON(raw);
-      expect(stored?.groups?.[0]?.name).toBe('US Tech');
-      expect(stored?.groups?.[0]?.items?.[0]?.symbol).toBe('MSFT');
-    });
+    // ponytail: 5s timeout — default 1s flakes on slow CI runners (Web Crypto).
+    await waitFor(
+      async () => {
+        const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+        expect(raw).toContain('"iv"'); // encrypted envelope, not plaintext
+        const stored = await decryptJSON(raw);
+        expect(stored?.groups?.[0]?.name).toBe('US Tech');
+        expect(stored?.groups?.[0]?.items?.[0]?.symbol).toBe('MSFT');
+      },
+      { timeout: 5000 }
+    );
   });
 });
