@@ -12,7 +12,7 @@ from fastapi import APIRouter, Request
 
 from analysis_cache import AnalysisJobLimitError
 from config import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, QUANT_RISK_FREE_RATE, llm
-from errors import NotFoundError, RateLimitError, sanitize_message
+from errors import RateLimitError, sanitize_message
 from logging_config import request_id_ctx
 from rate_limiter import (
     analysis_read_policy,
@@ -400,10 +400,6 @@ def _job_not_found(job_id: str):
     return jobs.job_not_found(job_id)
 
 
-def _analysis_result_not_found(request_id: str):
-    return NotFoundError("Analysis result was not found.", details={"request_id": request_id})
-
-
 async def _forward_job_progress(job, source_queue: asyncio.Queue) -> None:
     await jobs.forward_job_progress(job, source_queue)
 
@@ -520,30 +516,6 @@ async def get_analysis_job(job_id: str, request: Request):
         return job.public_summary()
 
 
-@router.get(
-    "/analysis/{request_id}",
-    response_model=AnalysisResponse,
-    response_model_exclude_none=True,
-    deprecated=True,
-    include_in_schema=False,
-)
-async def get_analysis_result_by_request_id(request_id: str, request: Request):
-    _log_legacy_endpoint_hit("GET /api/analysis/{request_id}")
-    async with limit_request(request, analysis_read_policy()) as lease:
-        job_store = _job_store_for_request(request)
-        job = await job_store.get_by_request_id(request_id, owner_id=lease.identifier)
-        if job is not None and job.result is not None:
-            return job.result
-        if await job_store.get_by_request_id(request_id) is not None:
-            raise _analysis_result_not_found(request_id)
-
-        repository = get_analysis_repository()
-        result = await asyncio.to_thread(repository.get_analysis, request_id)
-        if result is None:
-            raise _analysis_result_not_found(request_id)
-        return result
-
-
 @router.get("/analysis/jobs/{job_id}/events")
 async def analysis_job_events(job_id: str, request: Request):
     rate_limit_lease = limit_request(request, stream_policy())
@@ -571,19 +543,6 @@ async def cancel_analysis_job(job_id: str, request: Request):
         if job is None:
             raise _job_not_found(job_id)
         return job.public_summary()
-
-
-@router.delete(
-    "/analysis/{job_id}",
-    response_model=AnalysisJobSummaryResponse,
-    response_model_exclude_none=True,
-    deprecated=True,
-    include_in_schema=False,
-)
-async def cancel_analysis_job_alias(job_id: str, request: Request):
-    """Deprecated compatibility alias for the canonical job cancellation endpoint."""
-    _log_legacy_endpoint_hit("DELETE /api/analysis/{job_id}")
-    return await cancel_analysis_job(job_id, request)
 
 
 @router.get("/ticker/validate", response_model=TickerValidationResponse)

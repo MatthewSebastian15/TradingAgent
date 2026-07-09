@@ -1,17 +1,8 @@
 import React, { Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
 import Navbar from './components/Navbar';
-import {
-  AI_AGENT_PATH,
-  LEGACY_AI_AGENT_LOWER_PATH,
-  LEGACY_AI_AGENT_OLD_PATH,
-  LEGACY_ANALYSIS_LIVE_PATH,
-  LEGACY_ANALYSIS_PATH,
-  WATCHLIST_PATH,
-  CHATBOT_PATH,
-  QUANT_PATH,
-} from './constants/routes';
+import { AI_AGENT_PATH, WATCHLIST_PATH, CHATBOT_PATH, QUANT_PATH } from './constants/routes';
 import { prefetchMarketOverviewData } from './hooks/useMarketOverviewData';
 import Dashboard from './pages/Dashboard';
 import { MARKET_DEFAULT_SYMBOLS } from './utils/marketDefaults';
@@ -31,22 +22,6 @@ const Quant = React.lazy(() => import('./pages/Quant'));
 const Research = React.lazy(() => import('./pages/Research'));
 const Watchlist = React.lazy(() => import('./pages/Watchlist'));
 import './index.css';
-
-function buildResourceRedirectPath(basePath, resourceId) {
-  const normalizedResourceId = typeof resourceId === 'string' ? resourceId.trim() : '';
-
-  if (!normalizedResourceId) {
-    return basePath;
-  }
-
-  return `${basePath}/${encodeURIComponent(normalizedResourceId)}`;
-}
-
-function LegacyAIAgentRedirect() {
-  const { resourceId } = useParams();
-
-  return <Navigate to={buildResourceRedirectPath(AI_AGENT_PATH, resourceId)} replace />;
-}
 
 function LoadingScreen() {
   return (
@@ -89,31 +64,6 @@ function App() {
             <Route path="/home" element={<Dashboard />} />
             <Route path={AI_AGENT_PATH} element={<AIAgent />} />
             <Route path={`${AI_AGENT_PATH}/:resourceId`} element={<AIAgent />} />
-            <Route
-              path={LEGACY_AI_AGENT_OLD_PATH}
-              element={<Navigate to={AI_AGENT_PATH} replace />}
-            />
-            <Route
-              path={LEGACY_AI_AGENT_LOWER_PATH}
-              element={<Navigate to={AI_AGENT_PATH} replace />}
-            />
-            <Route
-              path={`${LEGACY_AI_AGENT_OLD_PATH}/:resourceId`}
-              element={<LegacyAIAgentRedirect />}
-            />
-            <Route
-              path={`${LEGACY_AI_AGENT_LOWER_PATH}/:resourceId`}
-              element={<LegacyAIAgentRedirect />}
-            />
-            <Route path={LEGACY_ANALYSIS_PATH} element={<Navigate to={AI_AGENT_PATH} replace />} />
-            <Route
-              path={`${LEGACY_ANALYSIS_PATH}/:resourceId`}
-              element={<LegacyAIAgentRedirect />}
-            />
-            <Route
-              path={LEGACY_ANALYSIS_LIVE_PATH}
-              element={<Navigate to={AI_AGENT_PATH} replace />}
-            />
             <Route path={QUANT_PATH} element={<Quant />} />
             <Route path="/research" element={<Research />} />
             <Route path="/portfolio" element={<Portfolio />} />

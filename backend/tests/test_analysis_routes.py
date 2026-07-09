@@ -9,7 +9,7 @@ from datetime import datetime
 import pytest
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
-from owner_session import issue_owner_session, owner_identifier, owner_identifier_from_token
+from owner_session import owner_identifier
 
 _TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
@@ -420,41 +420,6 @@ def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
     assert wrong_delete.json()["error"]["code"] == "BAD_REQUEST"
 
 
-def test_analysis_result_endpoint_looks_up_by_request_id(client, monkeypatch):
-    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
-    owner_token = issue_owner_session()["owner_token"]
-    other_token = issue_owner_session()["owner_token"]
-
-    async def create_completed_job():
-        job = await store.create(
-            owner_id=owner_identifier_from_token(owner_token),
-            request_id="request-lookup",
-            cache_key=_cache_key("MSFT"),
-            payload={"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1},
-        )
-        await job.complete(
-            {
-                "request_id": "request-lookup",
-                "ticker": "MSFT",
-                "trade_date": "2026-05-14",
-                "decision": "Buy",
-            }
-        )
-
-    asyncio.run(create_completed_job())
-
-    response = client.get("/api/analysis/request-lookup", headers={"x-owner-token": owner_token})
-    wrong_owner_response = client.get(
-        "/api/analysis/request-lookup", headers={"x-owner-token": other_token}
-    )
-
-    assert response.status_code == 200
-    assert response.json()["request_id"] == "request-lookup"
-    assert response.json()["ticker"] == "MSFT"
-    assert wrong_owner_response.status_code == 404
-
-
 def test_job_lookup_rejects_request_id_fallback(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     monkeypatch.setattr("routes.analysis._JOB_STORE", store)
@@ -474,37 +439,6 @@ def test_job_lookup_rejects_request_id_fallback(client, monkeypatch):
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "BAD_REQUEST"
-
-
-def test_analysis_result_endpoint_returns_404_for_expired_result(client, monkeypatch):
-    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
-
-    response = client.get("/api/analysis/missing-request")
-
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "NOT_FOUND"
-
-
-def test_analysis_result_endpoint_falls_back_to_history_repository(
-    client, monkeypatch, analysis_repository
-):
-    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
-    result = {
-        "request_id": "history-request",
-        "ticker": "MSFT",
-        "market": "US",
-        "trade_date": "2026-05-14",
-    }
-    analysis_repository.save_analysis(result=result, owner_id=_TEST_OWNER_IDENTIFIER)
-
-    response = client.get("/api/analysis/history-request")
-
-    assert response.status_code == 200
-    assert response.json()["request_id"] == "history-request"
-    assert response.json()["ticker"] == "MSFT"
-    assert response.json()["trade_date"] == "2026-05-14"
 
 
 def test_analysis_job_endpoint_falls_back_to_history_repository(

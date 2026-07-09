@@ -18,16 +18,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import TickerTape from './TickerTape';
-import {
-  AI_AGENT_PATH,
-  LEGACY_AI_AGENT_LOWER_PATH,
-  LEGACY_AI_AGENT_OLD_PATH,
-  LEGACY_ANALYSIS_LIVE_PATH,
-  LEGACY_ANALYSIS_PATH,
-  WATCHLIST_PATH,
-  CHATBOT_PATH,
-  QUANT_PATH,
-} from '../constants/routes';
+import { AI_AGENT_PATH, WATCHLIST_PATH, CHATBOT_PATH, QUANT_PATH } from '../constants/routes';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 import { createClockFormatter, resolveClockConfig } from '../utils/clock';
 
@@ -40,16 +31,7 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 });
 
-const AI_AGENT_MATCH_PREFIXES = [
-  AI_AGENT_PATH,
-  encodeURI(AI_AGENT_PATH),
-  LEGACY_AI_AGENT_OLD_PATH,
-  encodeURI(LEGACY_AI_AGENT_OLD_PATH),
-  LEGACY_AI_AGENT_LOWER_PATH,
-  encodeURI(LEGACY_AI_AGENT_LOWER_PATH),
-  LEGACY_ANALYSIS_PATH,
-  LEGACY_ANALYSIS_LIVE_PATH,
-];
+const AI_AGENT_MATCH_PREFIXES = [AI_AGENT_PATH, encodeURI(AI_AGENT_PATH)];
 
 const ENGINE_STATUS_ROWS = [
   {
