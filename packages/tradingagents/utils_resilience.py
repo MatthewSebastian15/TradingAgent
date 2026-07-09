@@ -22,6 +22,8 @@ from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+from tradingagents import env
+
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
@@ -99,14 +101,7 @@ _CIRCUITS_LOCK = threading.Lock()
 
 
 def _env_int(name: str, default: int, *, min_value: int = 1) -> int:
-    raw = os.getenv(name)
-    if raw is None or raw == "":
-        return default
-    try:
-        return max(min_value, int(raw))
-    except ValueError:
-        logger.warning("Invalid integer for %s=%r; using default %s", name, raw, default)
-        return default
+    return env.integer(name, default, min_value=min_value)
 
 
 _TIMEOUT_MAX_ACTIVE_CALLS = _env_int(

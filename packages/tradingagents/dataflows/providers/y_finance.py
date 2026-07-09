@@ -1,7 +1,6 @@
 import functools
 import logging
 import math
-import os
 import threading
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -11,6 +10,7 @@ import pandas as pd
 import pytz
 from dateutil.relativedelta import relativedelta
 
+from tradingagents import env
 from tradingagents.dataflows.market.stockstats_utils import (
     StockstatsUtils,
     filter_financials_by_date,
@@ -97,10 +97,7 @@ def normalize_ticker(ticker: str) -> str:
 
 
 def _ticker_cache_max_entries() -> int:
-    try:
-        return max(1, int(os.getenv("YFINANCE_TICKER_CACHE_MAX_ENTRIES", "512")))
-    except ValueError:
-        return 512
+    return env.integer("YFINANCE_TICKER_CACHE_MAX_ENTRIES", 512)
 
 
 _TICKER_CACHE_MAX_ENTRIES = _ticker_cache_max_entries()

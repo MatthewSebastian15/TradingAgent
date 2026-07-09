@@ -1,10 +1,12 @@
 import os
 
+from tradingagents import env
+
 _TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
 
 
 def _env(name: str) -> str:
-    return os.getenv(name, "").strip()
+    return env.stripped(name)
 
 
 def _env_bool(name: str, default: bool) -> bool:

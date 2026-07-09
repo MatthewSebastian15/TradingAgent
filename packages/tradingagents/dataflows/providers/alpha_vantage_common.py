@@ -1,12 +1,13 @@
 import json
 import logging
-import os
 from datetime import datetime
 from io import StringIO
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import pandas as pd
 import requests
+
+from tradingagents import env
 
 from .config import get_config
 
@@ -40,7 +41,7 @@ def _sanitize_response_url(response: requests.Response) -> str:
 
 def get_api_key() -> str:
     """Retrieve the API key for Alpha Vantage from environment variables."""
-    api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "").strip()
+    api_key = env.alpha_vantage_key()
     if not api_key:
         raise ValueError("ALPHA_VANTAGE_API_KEY environment variable is not set.")
     return api_key

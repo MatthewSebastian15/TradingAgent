@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 from functools import lru_cache
 from typing import Any
 
 import requests
 
+from tradingagents import env
 from tradingagents.dataflows.providers.config import get_config
 
 TICKER_URL = "https://www.sec.gov/files/company_tickers.json"
@@ -55,9 +55,7 @@ FIELD_CONCEPTS = {
 
 
 def _headers() -> dict[str, str]:
-    user_agent = (
-        os.getenv("SEC_USER_AGENT", "").strip() or "TradingAgents/1.0 tradingagents@example.com"
-    )
+    user_agent = env.stripped("SEC_USER_AGENT") or "TradingAgents/1.0 tradingagents@example.com"
     return {
         "User-Agent": user_agent,
         "Accept-Encoding": "gzip, deflate",

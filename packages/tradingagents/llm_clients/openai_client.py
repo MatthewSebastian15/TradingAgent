@@ -1,9 +1,9 @@
-import os
 from typing import Any
 
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
+from tradingagents import env
 from tradingagents.dataflows.providers.config import get_config
 from tradingagents.utils_resilience import call_with_retry
 
@@ -170,9 +170,7 @@ class OpenAIClient(BaseLLMClient):
         if self.provider in _PROVIDER_CONFIG:
             default_base, api_key_envs = _PROVIDER_CONFIG[self.provider]
             llm_kwargs["base_url"] = self.base_url or default_base
-            api_key = next(
-                (os.environ.get(name) for name in api_key_envs if os.environ.get(name)), None
-            )
+            api_key = env.first_set(*api_key_envs)
             if api_key:
                 llm_kwargs["api_key"] = api_key
         elif self.base_url:

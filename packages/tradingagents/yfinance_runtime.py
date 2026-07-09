@@ -8,8 +8,9 @@ writable timezone cache directory. This prevents noisy messages such as:
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
+
+from tradingagents import env
 
 try:
     import yfinance as yf
@@ -29,11 +30,11 @@ logger = logging.getLogger(__name__)
 
 def _default_cache_dir() -> Path:
     """Return the yfinance cache directory used by the Docker backend."""
-    configured = os.getenv("YFINANCE_CACHE_DIR")
+    configured = env.raw("YFINANCE_CACHE_DIR")
     if configured:
         return Path(configured).expanduser()
 
-    xdg_cache_home = os.getenv("XDG_CACHE_HOME")
+    xdg_cache_home = env.raw("XDG_CACHE_HOME")
     if xdg_cache_home:
         return Path(xdg_cache_home).expanduser() / "py-yfinance"
 

@@ -14,7 +14,6 @@ import csv
 import hashlib
 import ipaddress
 import json
-import os
 import re
 import socket
 import tempfile
@@ -27,6 +26,7 @@ from typing import Any
 from urllib.parse import urlsplit
 from xml.etree import ElementTree as ET
 
+from tradingagents import env
 from tradingagents.utils.normalization import as_dict as _as_dict
 
 from .normalizers import normalize_financial_value
@@ -85,11 +85,7 @@ _IDX_DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 def _env(name: str) -> str | None:
-    value = os.getenv(name)
-    if value is None:
-        return None
-    value = value.strip()
-    return value or None
+    return env.stripped_or_none(name)
 
 
 def _now_iso() -> str:

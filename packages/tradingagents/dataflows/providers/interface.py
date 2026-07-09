@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -9,6 +8,7 @@ from typing import Any
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
+from tradingagents import env
 from tradingagents.dataflows.fundamentals.idx_official import (
     get_idx_company_profile,
     get_idx_corporate_actions,
@@ -710,7 +710,7 @@ def _consume_budget(config: dict, method: str, vendor: str) -> tuple[bool, str |
 
 
 def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, str | None]:
-    if vendor == "alpha_vantage" and not os.getenv("ALPHA_VANTAGE_API_KEY", "").strip():
+    if vendor == "alpha_vantage" and not env.alpha_vantage_key():
         return False, "Alpha Vantage disabled: ALPHA_VANTAGE_API_KEY is not configured."
     if vendor != "finnhub":
         return True, None

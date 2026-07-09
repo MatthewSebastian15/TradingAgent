@@ -1,6 +1,5 @@
 import logging
 import math
-import os
 import random
 import time
 from datetime import timedelta
@@ -25,6 +24,7 @@ except ImportError:  # pragma: no cover - dependency may be absent before instal
         pass
 
 
+from tradingagents import env
 from tradingagents.utils_resilience import call_with_timeout
 from tradingagents.yfinance_runtime import yf
 
@@ -72,14 +72,7 @@ _RETRYABLE_YF_EXCEPTIONS = tuple(dict.fromkeys(_retryable_yf_errors))
 
 
 def _env_float(name: str, default: float, *, min_value: float = 0.0) -> float:
-    raw = os.getenv(name)
-    if raw is None or raw == "":
-        return default
-    try:
-        return max(min_value, float(raw))
-    except ValueError:
-        logger.warning("Invalid float for %s=%r; using default %s", name, raw, default)
-        return default
+    return env.floating(name, default, min_value=min_value)
 
 
 _YFINANCE_CALL_TIMEOUT_SECONDS = _env_float("YFINANCE_CALL_TIMEOUT_SECONDS", 20.0, min_value=1.0)
