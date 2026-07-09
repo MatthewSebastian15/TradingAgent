@@ -6,6 +6,8 @@ The implementation is split by concern:
 - pipeline_balanced_llm.py: LLM invocation, local fallbacks, and render helpers
 - pipeline_balanced_progress.py: SSE/progress event helpers
 - pipeline_balanced_orchestrator.py: the pipeline control flow
+- pipeline_balanced_debate.py: debate and risk-committee phases
+- pipeline_balanced_fallbacks.py: deterministic fallback texts (no LLM)
 """
 
 from __future__ import annotations
