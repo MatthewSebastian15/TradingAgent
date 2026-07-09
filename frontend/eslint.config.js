@@ -11,7 +11,7 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ['vite.config.js'],
+    files: ['vite.config.js', 'src/**/*.parity.test.js'],
     languageOptions: {
       globals: globals.node,
     },
