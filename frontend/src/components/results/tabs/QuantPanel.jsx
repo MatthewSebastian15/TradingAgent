@@ -65,6 +65,20 @@ const TRADING_DAYS = 252;
 const VOL_TARGET = 15; // annual % target for vol-target sizing
 // Benchmark is picked per market from the ticker suffix (benchmarkForSymbol).
 
+// Result tabs, in display order. Ids match the `sections` prop from the page sidebar.
+const TABS = [
+  { id: 'volatility', label: 'Volatility' },
+  { id: 'risk', label: 'Risk' },
+  { id: 'distribution', label: 'Distribution' },
+  { id: 'stochastic', label: 'Stochastic' },
+  { id: 'backtest', label: 'Backtest' },
+  { id: 'sizing', label: 'Sizing' },
+  { id: 'correlation', label: 'Correlation' },
+  { id: 'options', label: 'Options' },
+  { id: 'valuation', label: 'Valuation' },
+  { id: 'scenario', label: 'Scenario' },
+];
+
 const STRATEGIES = [
   { id: 'sma', label: 'SMA Crossover' },
   { id: 'momentum', label: 'Momentum' },
@@ -1966,10 +1980,11 @@ CorrelationSection.propTypes = {
   tangencyWeights: PropTypes.arrayOf(PropTypes.number),
 };
 
-// Labeled wrapper so stacked sections stay distinguishable when several show at once.
-function SectionBlock({ title, children }) {
+// Tab panel wrapper. Inactive panels stay mounted but hidden (native `hidden`
+// attribute) so per-section state (option/DCF inputs, MC seed) survives switches.
+function SectionBlock({ title, hidden, children }) {
   return (
-    <section className="space-y-3">
+    <section role="tabpanel" hidden={hidden} className="space-y-3">
       <h2 className="border-b border-bloomberg-border pb-1 text-xs font-bold tracking-[0.2em] text-bloomberg-orange uppercase">
         {title}
       </h2>
@@ -1980,6 +1995,7 @@ function SectionBlock({ title, children }) {
 
 SectionBlock.propTypes = {
   title: PropTypes.string.isRequired,
+  hidden: PropTypes.bool,
   children: PropTypes.node.isRequired,
 };
 
@@ -1990,6 +2006,10 @@ function QuantPanel({ points, currency, symbol, sections }) {
   // (keeps QuantPanel usable standalone without importing the tab list).
   const visible = useMemo(() => (sections ? new Set(sections) : null), [sections]);
   const show = (id) => !visible || visible.has(id);
+  const tabs = TABS.filter((t) => show(t.id));
+  const [active, setActive] = useState(TABS[0].id);
+  // Fall back to the first available tab when the active one gets deselected.
+  const activeId = tabs.some((t) => t.id === active) ? active : tabs[0]?.id;
   const [seed, setSeed] = useState(42);
   const [rf, setRf] = useState(0); // annual risk-free rate as a fraction
   const [benchPoints, setBenchPoints] = useState(null); // null = loading, [] = unavailable
@@ -2176,7 +2196,9 @@ function QuantPanel({ points, currency, symbol, sections }) {
   // --- correlation + optimizer (Phase 5) ----------------------------------
   const baseSymbol = (symbol || 'BASE').toUpperCase();
 
-  const addPeers = useCallback(() => {
+  // Plain function: the React Compiler memoizes it; a manual dep list here made
+  // the compiler bail (react-hooks/preserve-manual-memoization).
+  const addPeers = () => {
     const wanted = peerInput
       .split(/[,\s]+/)
       .map((s) => s.trim().toUpperCase())
@@ -2203,7 +2225,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
         setPeerInput('');
       })
       .finally(() => setPeerLoading(false));
-  }, [peerInput, baseSymbol]);
+  };
 
   const removePeer = useCallback(
     (sym) => setPeers((prev) => prev.filter((p) => p.symbol !== sym)),
@@ -2294,8 +2316,33 @@ function QuantPanel({ points, currency, symbol, sections }) {
         </NoticeBox>
       )}
 
+      {tabs.length > 0 && (
+        <div
+          role="tablist"
+          aria-label="Quant sections"
+          className="flex flex-wrap border-b border-bloomberg-border"
+        >
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={t.id === activeId}
+              onClick={() => setActive(t.id)}
+              className={`px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase ${
+                t.id === activeId
+                  ? 'bg-bloomberg-orange text-black'
+                  : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-white'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {show('volatility') && (
-        <SectionBlock title="Volatility">
+        <SectionBlock title="Volatility" hidden={activeId !== 'volatility'}>
           <VolatilitySection
             vol={metrics.vol}
             ewma={metrics.ewma}
@@ -2306,7 +2353,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       )}
 
       {show('risk') && (
-        <SectionBlock title="Risk">
+        <SectionBlock title="Risk" hidden={activeId !== 'risk'}>
           <RiskSection
             dd={metrics.dd}
             cal={metrics.cal}
@@ -2330,7 +2377,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       )}
 
       {show('distribution') && (
-        <SectionBlock title="Distribution">
+        <SectionBlock title="Distribution" hidden={activeId !== 'distribution'}>
           <DistributionSection
             skew={metrics.skew}
             kurt={metrics.kurt}
@@ -2344,7 +2391,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       )}
 
       {show('stochastic') && (
-        <SectionBlock title="Stochastic">
+        <SectionBlock title="Stochastic" hidden={activeId !== 'stochastic'}>
           <StochasticSection
             sim={sim}
             spot={closes.at(-1)}
@@ -2365,7 +2412,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       )}
 
       {show('backtest') && (
-        <SectionBlock title="Backtest">
+        <SectionBlock title="Backtest" hidden={activeId !== 'backtest'}>
           <BacktestSection
             strategy={strategy}
             onStrategyChange={setStrategy}
@@ -2377,7 +2424,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       )}
 
       {show('sizing') && (
-        <SectionBlock title="Sizing">
+        <SectionBlock title="Sizing" hidden={activeId !== 'sizing'}>
           <SizingSection
             kelly={metrics.kelly}
             volWeight={volWeight}
@@ -2389,7 +2436,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       )}
 
       {show('correlation') && (
-        <SectionBlock title="Correlation">
+        <SectionBlock title="Correlation" hidden={activeId !== 'correlation'}>
           <CorrelationSection
             peerInput={peerInput}
             onPeerInputChange={setPeerInput}
@@ -2411,7 +2458,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       )}
 
       {show('options') && (
-        <SectionBlock title="Options">
+        <SectionBlock title="Options" hidden={activeId !== 'options'}>
           <OptionsSection
             spot={closes.at(-1)}
             defaultVol={metrics.vol}
@@ -2422,13 +2469,13 @@ function QuantPanel({ points, currency, symbol, sections }) {
       )}
 
       {show('valuation') && (
-        <SectionBlock title="Valuation">
+        <SectionBlock title="Valuation" hidden={activeId !== 'valuation'}>
           <ValuationSection spot={closes.at(-1)} defaultRate={rf} ccy={ccy} symbol={baseSymbol} />
         </SectionBlock>
       )}
 
       {show('scenario') && (
-        <SectionBlock title="Scenario">
+        <SectionBlock title="Scenario" hidden={activeId !== 'scenario'}>
           <ScenarioSection spot={closes.at(-1)} vol={metrics.vol} ccy={ccy} regime={regimeShift} />
         </SectionBlock>
       )}

@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,13 +49,21 @@ describe('QuantPanel', () => {
     expect(screen.queryByRole('heading', { name: 'Volatility' })).toBeNull();
   });
 
-  it('renders only the requested sections', async () => {
+  it('shows one tab per requested section and switches the active panel on click', async () => {
     await renderPanel({ points: buildPoints(40), sections: ['volatility', 'sizing'] });
 
+    expect(screen.getByRole('tab', { name: 'Volatility' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Sizing' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: 'Risk' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Backtest' })).toBeNull();
+
+    // First tab is active; the other panel is mounted but hidden.
     expect(screen.getByRole('heading', { name: 'Volatility' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Sizing' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Sizing' }));
     expect(screen.getByRole('heading', { name: 'Sizing' })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Risk' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Backtest' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Volatility' })).toBeNull();
   });
 
   it('uses the fetched long history when it is longer than the prop series', async () => {
@@ -69,7 +77,7 @@ describe('QuantPanel', () => {
     expect(screen.getByRole('heading', { name: 'Volatility' })).toBeTruthy();
   });
 
-  it('renders every section when sections is undefined', async () => {
+  it('renders every tab when sections is undefined', async () => {
     await renderPanel({ points: buildPoints(40) });
 
     for (const title of [
@@ -84,7 +92,7 @@ describe('QuantPanel', () => {
       'Valuation',
       'Scenario',
     ]) {
-      expect(screen.getByRole('heading', { name: title })).toBeTruthy();
+      expect(screen.getByRole('tab', { name: title })).toBeTruthy();
     }
   });
 });
