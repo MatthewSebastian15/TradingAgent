@@ -26,6 +26,7 @@ import {
   LEGACY_ANALYSIS_PATH,
   WATCHLIST_PATH,
   CHATBOT_PATH,
+  QUANT_PATH,
 } from '../constants/routes';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 import { createClockFormatter, resolveClockConfig } from '../utils/clock';
@@ -89,8 +90,8 @@ const NAV_ITEMS = [
   {
     label: 'Quant',
     shortLabel: 'QT',
-    path: '/quant',
-    matchPrefixes: ['/quant'],
+    path: QUANT_PATH,
+    matchPrefixes: [QUANT_PATH],
     Icon: Sigma,
   },
   {

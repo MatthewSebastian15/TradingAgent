@@ -10,6 +10,7 @@ import {
   LEGACY_ANALYSIS_PATH,
   WATCHLIST_PATH,
   CHATBOT_PATH,
+  QUANT_PATH,
 } from './constants/routes';
 import { prefetchMarketOverviewData } from './hooks/useMarketOverviewData';
 import Dashboard from './pages/Dashboard';
@@ -113,7 +114,7 @@ function App() {
               path={LEGACY_ANALYSIS_LIVE_PATH}
               element={<Navigate to={AI_AGENT_PATH} replace />}
             />
-            <Route path="/quant" element={<Quant />} />
+            <Route path={QUANT_PATH} element={<Quant />} />
             <Route path="/research" element={<Research />} />
             <Route path="/portfolio" element={<Portfolio />} />
             <Route path={WATCHLIST_PATH} element={<Watchlist />} />
