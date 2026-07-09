@@ -73,6 +73,12 @@ _response_payload = serializers.response_payload
 _log_request_accepted = serializers.log_request_accepted
 
 
+def _log_legacy_endpoint_hit(endpoint: str) -> None:
+    # Deprecation clock (audit API-002): watch these counts for a cycle, then
+    # delete the legacy surface together with its tests and SSE path branch.
+    logger.warning("DEPRECATED endpoint hit: %s — migrate to /api/analysis/jobs", endpoint)
+
+
 # Public aliases kept in this route module for tests and route-level callers.
 def normalize_ticker(ticker: str, market: str | None) -> str:
     """Normalize a user ticker before analysis work starts."""
@@ -435,6 +441,7 @@ async def _stream_job_events(request: Request, job):
 @router.post("/analyze/stream")
 async def analyze_stream(req: AnalysisRequest, request: Request):
     """SSE endpoint with cache hit shortcut, heartbeat, and cancellation on disconnect."""
+    _log_legacy_endpoint_hit("POST /api/analyze/stream")
     req = normalize_and_validate_analysis_request(req)
     request_id = request_id_ctx.get()
     rate_limit_lease = limit_request(request, stream_policy())
@@ -448,6 +455,7 @@ async def analyze_stream(req: AnalysisRequest, request: Request):
 @router.post("/analyze", response_model=AnalysisResponse, response_model_exclude_none=True)
 async def analyze(req: AnalysisRequest, request: Request):
     """Standard JSON endpoint with final-result cache and in-flight de-duplication."""
+    _log_legacy_endpoint_hit("POST /api/analyze")
     req = normalize_and_validate_analysis_request(req)
     request_id = request_id_ctx.get()
     _log_request_accepted("request", request_id, req)
@@ -520,6 +528,7 @@ async def get_analysis_job(job_id: str, request: Request):
     include_in_schema=False,
 )
 async def get_analysis_result_by_request_id(request_id: str, request: Request):
+    _log_legacy_endpoint_hit("GET /api/analysis/{request_id}")
     async with limit_request(request, analysis_read_policy()) as lease:
         job_store = _job_store_for_request(request)
         job = await job_store.get_by_request_id(request_id, owner_id=lease.identifier)
@@ -573,6 +582,7 @@ async def cancel_analysis_job(job_id: str, request: Request):
 )
 async def cancel_analysis_job_alias(job_id: str, request: Request):
     """Deprecated compatibility alias for the canonical job cancellation endpoint."""
+    _log_legacy_endpoint_hit("DELETE /api/analysis/{job_id}")
     return await cancel_analysis_job(job_id, request)
 
 
