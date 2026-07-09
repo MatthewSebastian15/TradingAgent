@@ -68,5 +68,11 @@ graphify-out/
 CLAUDE.md
 .claude/
 
+#Docs (local-only, never push)
+docs/
+
+#AI context (local-only, never push)
+ai/
+
 # Local migration backups
 backend/.cache.bak/
