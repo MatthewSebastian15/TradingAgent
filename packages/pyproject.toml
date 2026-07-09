@@ -30,9 +30,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-backtesting = [
-    "backtrader==1.9.78.123",
-]
 dev = [
     "ruff==0.15.14",
 ]
