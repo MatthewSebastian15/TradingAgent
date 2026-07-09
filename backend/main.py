@@ -19,6 +19,7 @@ from config import (
     GENERAL_NEWS_ENABLE_BACKGROUND_REFRESH,
     GENERAL_NEWS_ENABLED,
     IS_DEVELOPMENT,
+    IS_PRODUCTION,
     REQUEST_BODY_MAX_BYTES,
     llm,
     validate_startup_config,
@@ -77,13 +78,18 @@ class SkipSseCompressionMiddleware:
 
 
 async def validate_config() -> None:
-    """Log sanitized startup config issues without blocking local debug."""
+    """Log sanitized startup config issues; refuse to start on CRITICAL in production."""
     issues = validate_startup_config()
 
     if issues:
+        critical = [msg for msg in issues if str(msg).startswith("CRITICAL:")]
         for msg in issues:
             log = logger.critical if str(msg).startswith("CRITICAL:") else logger.warning
             log("STARTUP CONFIG ISSUE: %s", msg)
+        if critical and IS_PRODUCTION:
+            raise RuntimeError(
+                f"{len(critical)} critical config issue(s) in production; refusing to start"
+            )
         logger.warning(
             "%d startup config issue(s) found. Server continues for debugging.", len(issues)
         )
