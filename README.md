@@ -10,16 +10,17 @@ The application receives a stock ticker, market, analysis date, investment horiz
 
 ## Main Features
 
-| Feature | Description |
-|---------|-------------|
-| 🤖 **AI Agent Analysis** | Async, job-based pipeline of 9 LLM agents (Market, News/Social, Fundamentals, Bull/Bear, Research Manager, Trader, Risk, Portfolio Manager) returning a Buy/Hold/Sell/Wait decision with thesis, action plan, and risk validation. `fast`/`balanced`/`deep` depth, multi-provider LLM (Google, OpenAI, Anthropic, DeepSeek). |
-| 🧮 **Quant & Fundamentals** | Result tabs for risk-adjusted return (Sharpe/Sortino, beta/alpha), drawdown, volatility, and risk-reward, alongside Income/Balance/Cash Flow/Ratios tables, fundamental charts, company profile, and technical entry quality. |
-| 📈 **Market Dashboard** | Overview presets, movers, ticker tape, symbol search, OHLCV charts, sparklines, and live quotes over global yfinance symbols and markets (`US`, `ID`, `IDX`, `GLOBAL`, `CRYPTO`, `ETF`, `FUND`). |
-| 🌐 **Economic Dashboard** | Macro tab spanning Rates & Money, Growth, Inflation, Fiscal, Trade, and Development, sourced from multiple economic data providers. |
-| 📰 **News** | General news dashboard with categories and SSE refresh, per-ticker news streams, and multi-provider aggregation (Google News Light, Marketaux, NewsData, RSS, yfinance, Finnhub). |
-| 💬 **RAG Chatbot** | Scoped retrieval chatbot answering over News, Market, Analysis, Portfolio, and Economic data pools. |
-| 💼 **Watchlist & Portfolio** | Browser-local watchlist groups and holdings tracking, priced with live market quotes and trend sparklines. |
-| 🔎 **Research Workspace** | Command-bar and sidebar research page for ad-hoc lookups. |
+| Feature | What it does | What it produces |
+|---------|--------------|------------------|
+| 🤖 **AI Agent** | The main feature. You give it a ticker, market, date, horizon, depth, and position status; it runs 9+ LLM agents (Market, News/Social, Fundamentals, Bull/Bear debate, Research Manager, Trader, Risk, Portfolio Manager) as a background job with live progress. Depth is `fast`/`balanced`/`deep`; LLM can be Google, OpenAI, Anthropic, or DeepSeek. | A clear **Buy / Hold / Sell / Wait** decision with executive summary, thesis, action plan with entry/stop/target levels, risk validation, and data-quality notes — plus result tabs (chart, news, fundamentals, quant) and an HTML/PDF report. |
+| 🧮 **Quant** | Quantitative calculator for any symbol — pick a ticker and a price range (1M–5Y), no AI needed. Ten calculation tabs:<br>• **Volatility** — annualized & EWMA volatility, rolling volatility, volatility regime (calm → turbulent) and regime shifts<br>• **Risk** — Sharpe, Sortino, Calmar, max drawdown, VaR 95/99% (historical & parametric), CVaR, downside deviation, beta/alpha vs a market benchmark<br>• **Distribution** — return histogram with normal overlay, skewness, kurtosis<br>• **Stochastic** — Monte Carlo price simulation (GBM or bootstrap, historical or risk-neutral drift, adjustable horizon)<br>• **Backtest** — simple strategy test (SMA crossover / momentum) with trading costs and out-of-sample split<br>• **Sizing** — Kelly fraction and volatility-target position weight<br>• **Correlation** — peer correlation matrix, efficient frontier, minimum-variance & tangency portfolio weights<br>• **Options** — Black-Scholes pricing and implied volatility<br>• **Valuation** — DCF and Monte Carlo DCF fair-value estimate<br>• **Scenario** — stress scenarios and historical drawdown episodes | Metric cards, fan charts, histograms, heatmaps, and an equity curve — a full quantitative risk/return picture of one symbol, plus a headline strip with regime and Hurst (trending vs mean-reverting) signals. |
+| 🔎 **Research** | Workspace with a command bar and sidebar: search any symbol or reopen past analyses in one place. | Quick symbol lookups and a browsable list of your stored analysis results. |
+| ⭐ **Watchlist** | Lets you group tickers into named lists. Everything is saved in your browser (localStorage) — no account needed; prices come live from the backend. | Watch tables per group with live price, daily change, and a small trend sparkline for each ticker. |
+| 💼 **Portfolio** | Records your holdings (symbol, quantity, buy price) in the browser and reprices them with live quotes. | A holdings table plus a summary bar: total value, gain/loss, and performance per position. |
+| 📰 **News** | Shows general market news by category with live auto-refresh (SSE), and a separate news stream per ticker. Articles are merged from many providers (Google News Light, Marketaux, NewsData, RSS, yfinance, Finnhub). | An always-fresh categorized news feed; the top articles also fill the Home summary and feed the AI analysis. |
+| 📈 **Market** | Market dashboard for global yfinance symbols (`US`, `ID`, `IDX`, `GLOBAL`, `CRYPTO`, `ETF`, `FUND`): index/preset overview, top gainers & losers, ticker tape, symbol search, and per-stock detail. | Live quotes, OHLCV price charts, sparklines, and mover rankings; its symbol search is also the canonical ticker input for the whole app. |
+| 🌐 **ECON** | Macro-economic dashboard covering Rates & Money, Growth, Inflation, Fiscal, Trade, and Development, pulled from multiple economic data providers. | Indicator tables and time series for interest rates, GDP growth, inflation, fiscal, and trade data. |
+| 💬 **Chatbot** | RAG chatbot that answers questions using only the app's own stored data (News, Market, Analysis, Portfolio, Economic pools) — it never invents answers from the open web. | Streamed chat answers grounded in your data, with a chat-history sidebar to revisit past conversations. |
 
 ---
 
@@ -247,37 +248,14 @@ Create the file from the example:
 cp backend/.env.example backend/.env
 ```
 
-Minimal LLM config:
+Minimal LLM config (example — pick any supported provider: `google`, `openai`, `anthropic`, `deepseek`):
 
 ```env
 APP_ENV=development
-LLM_PROVIDER=deepseek
-QUICK_THINK_LLM=deepseek-chat
-DEEP_THINK_LLM=deepseek-chat
+LLM_PROVIDER=<provider>            # e.g. google | openai | anthropic | deepseek
+QUICK_THINK_LLM=<model_name>       # e.g. gemini-2.5-flash, gpt-4o-mini, deepseek-chat
+DEEP_THINK_LLM=<model_name>        # e.g. gemini-2.5-pro, gpt-4o, deepseek-chat
 LLM_API_KEY=your_key_here
-```
-
-Other providers still use `LLM_API_KEY` in the current backend logic.
-
-```env
-LLM_PROVIDER=openai
-QUICK_THINK_LLM=gpt-4o-mini
-DEEP_THINK_LLM=gpt-4o
-LLM_API_KEY=your_openai_key
-```
-
-```env
-LLM_PROVIDER=google
-QUICK_THINK_LLM=gemini-2.5-flash
-DEEP_THINK_LLM=gemini-2.5-pro
-LLM_API_KEY=your_google_key
-```
-
-```env
-LLM_PROVIDER=anthropic
-QUICK_THINK_LLM=claude-haiku-4-5
-DEEP_THINK_LLM=claude-sonnet-4-5
-LLM_API_KEY=your_anthropic_key
 ```
 
 The current startup validation expects `LLM_API_KEY` to be non-empty.
@@ -489,32 +467,6 @@ DATA_VENDOR_NEWS_MIN_RELEVANCE_SCORE=0.35
 ```
 
 If a vendor fails, the pipeline tries fallback providers and can still return a partial result when minimum data is available.
-
----
-
-## Report Export
-
-HTML/PDF reports use:
-
-- Jinja2 template.
-- CSS at `backend/static/reports/analysis_report.css`.
-- WeasyPrint for PDF rendering.
-- Stored job/report result.
-- Server-side disclaimer.
-
-Main export endpoints:
-
-```http
-GET /api/analysis/jobs/{job_id}/report.html
-GET /api/analysis/jobs/{job_id}/report.pdf
-```
-
-Current limitations:
-
-- Export only supports `US` and `ID` markets.
-- Default PDF render timeout is 30 seconds.
-- Default PDF concurrency is 2.
-- Export by job id fails if the job has expired or is missing from storage.
 
 ---
 
