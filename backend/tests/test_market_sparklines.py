@@ -28,7 +28,7 @@ def test_market_sparklines_rejects_invalid_range(client, monkeypatch):
 
     monkeypatch.setattr("routes.market._fetch_sparklines", should_not_fetch)
 
-    response = client.get("/api/market/sparklines?symbols=NVDA&range=2Y")
+    response = client.get("/api/market/sparklines?symbols=NVDA&range=9Y")
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "BAD_REQUEST"

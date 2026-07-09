@@ -67,7 +67,8 @@ def _collected_data(trade_date: str = "2026-05-18") -> pipeline.CollectedData:
         ),
         (
             "deep",
-            12,
+            # 12 agents + 1 deep-only self-critique pass (see config_defaults LLM_BUDGET_DEEP)
+            13,
             [
                 "Market Analyst",
                 "News + Social Analyst",
@@ -97,7 +98,9 @@ def test_analysis_depth_controls_llm_agent_calls(
     def fake_collect_market_data(ticker, trade_date, config, cancel_check=None):
         return _collected_data(trade_date)
 
-    def fake_invoke_once(llm, schema, prompt, fallback, agent_name, budget=None, cancel_check=None):
+    def fake_invoke_once(
+        llm, schema, prompt, fallback, agent_name, budget=None, cancel_check=None, **kwargs
+    ):
         if budget is not None and not budget.consume(agent_name):
             return fallback
         with lock:
@@ -117,6 +120,8 @@ def test_analysis_depth_controls_llm_agent_calls(
     assert Counter(called_agents) == Counter(expected_agents)
     assert result["analysis_depth"] == depth
     assert result["balanced_gemini_request_budget"] == expected_budget
-    assert result["balanced_gemini_calls_used"] == expected_budget
+    # deep reserves one extra call for self-critique, which only fires on BUY/SELL;
+    # the stubbed fallback decision is not BUY/SELL, so calls_used tracks the agent list
+    assert result["balanced_gemini_calls_used"] == len(expected_agents)
     assert result["analysis_depth_config"]["llm_budget"] == expected_budget
     assert result["agents_skipped"] == []

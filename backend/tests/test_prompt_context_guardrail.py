@@ -93,6 +93,9 @@ def test_build_news_context_filters_unrelated_articles():
         {
             "company_name": "Apple Inc",
             "provider_status": {"marketaux": "success"},
+            # strict mode only reads decision_company_news/prompt_articles;
+            # disable it so the raw-article relevance filter is what gets tested
+            "strict_news_filter": {"enabled": False},
             "articles": [
                 {
                     "title": "Apple reports stronger earnings",
