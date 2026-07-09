@@ -17,6 +17,7 @@ jobs:
       - run: python -m ruff check . ../packages
       - run: python -m ruff format --check . ../packages
       - run: python -m pytest tests ../packages/tests -m "not integration and not live_api"
+      - run: python -m pip_audit -r requirements.txt
 
   frontend:
     runs-on: ubuntu-latest
