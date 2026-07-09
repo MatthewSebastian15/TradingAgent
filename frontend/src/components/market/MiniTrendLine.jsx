@@ -18,7 +18,7 @@ function buildPoints(values) {
     .join(' ');
 }
 
-export default function MiniTrendLine({ values, positive }) {
+export default function MiniTrendLine({ values = [], positive = true }) {
   const points = useMemo(() => buildPoints(values), [values]);
   const colorClass = positive ? 'text-bloomberg-green' : 'text-bloomberg-red';
 
@@ -45,9 +45,4 @@ export default function MiniTrendLine({ values, positive }) {
 MiniTrendLine.propTypes = {
   values: PropTypes.arrayOf(PropTypes.number),
   positive: PropTypes.bool,
-};
-
-MiniTrendLine.defaultProps = {
-  values: [],
-  positive: true,
 };

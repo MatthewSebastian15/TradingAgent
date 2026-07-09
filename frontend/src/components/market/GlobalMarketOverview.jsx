@@ -55,9 +55,9 @@ function freshnessText(data) {
 export default function GlobalMarketOverview({
   activeCategory,
   symbols,
-  data,
+  data = { items: [] },
   loading,
-  error,
+  error = '',
   canAdd,
   canDelete,
   onAddSymbol,
@@ -192,9 +192,4 @@ GlobalMarketOverview.propTypes = {
   onDeleteSymbol: PropTypes.func.isRequired,
   onRefresh: PropTypes.func.isRequired,
   onChangeCategory: PropTypes.func.isRequired,
-};
-
-GlobalMarketOverview.defaultProps = {
-  data: { items: [] },
-  error: '',
 };

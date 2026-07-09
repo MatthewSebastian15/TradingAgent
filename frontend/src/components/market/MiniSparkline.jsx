@@ -19,7 +19,7 @@ function chartPoints(values) {
     .join(' ');
 }
 
-export default function MiniSparkline({ values, positive }) {
+export default function MiniSparkline({ values = [], positive = null }) {
   const colorClass =
     positive === true
       ? 'text-bloomberg-green'
@@ -48,9 +48,4 @@ export default function MiniSparkline({ values, positive }) {
 MiniSparkline.propTypes = {
   values: PropTypes.arrayOf(PropTypes.number),
   positive: PropTypes.bool,
-};
-
-MiniSparkline.defaultProps = {
-  values: [],
-  positive: null,
 };

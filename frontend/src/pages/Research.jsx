@@ -71,7 +71,7 @@ SectionCard.propTypes = {
   children: PropTypes.node,
 };
 
-function DataRow({ label, value, valueClass }) {
+function DataRow({ label, value, valueClass = 'text-bloomberg-white' }) {
   return (
     <div className="flex justify-between items-center px-3 py-[5px] border-b border-bloomberg-border last:border-0">
       <span className="font-mono text-[10px] text-bloomberg-muted">{label}</span>
@@ -84,7 +84,6 @@ DataRow.propTypes = {
   value: PropTypes.node,
   valueClass: PropTypes.string,
 };
-DataRow.defaultProps = { valueClass: 'text-bloomberg-white' };
 
 function SkeletonRow() {
   return (

@@ -23,7 +23,7 @@ function loadingRows(limit) {
   return Array.from({ length: limit }, (_, index) => `loading-${index}`);
 }
 
-export default function MarketMoversTable({ title, items, loading, limit, emptyText, tone }) {
+export default function MarketMoversTable({ title, items = [], loading, limit, emptyText, tone }) {
   const positive = tone === 'positive';
   const toneClass = positive ? 'text-bloomberg-green' : 'text-bloomberg-red';
 
@@ -144,8 +144,4 @@ MarketMoversTable.propTypes = {
   limit: PropTypes.number.isRequired,
   emptyText: PropTypes.string.isRequired,
   tone: PropTypes.oneOf(['positive', 'negative']).isRequired,
-};
-
-MarketMoversTable.defaultProps = {
-  items: [],
 };
