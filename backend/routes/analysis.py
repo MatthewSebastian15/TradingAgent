@@ -33,7 +33,6 @@ from routes.validation import (
 from schemas import (
     AnalysisJobCreateResponse,
     AnalysisJobSummaryResponse,
-    AnalysisResponse,
     ApiStatusResponse,
     TickerValidationResponse,
 )
@@ -71,12 +70,6 @@ _with_data_fetched_at = serializers.with_data_fetched_at
 _request_warnings = serializers.request_warnings
 _response_payload = serializers.response_payload
 _log_request_accepted = serializers.log_request_accepted
-
-
-def _log_legacy_endpoint_hit(endpoint: str) -> None:
-    # Deprecation clock (audit API-002): watch these counts for a cycle, then
-    # delete the legacy surface together with its tests and SSE path branch.
-    logger.warning("DEPRECATED endpoint hit: %s — migrate to /api/analysis/jobs", endpoint)
 
 
 # Public aliases kept in this route module for tests and route-level callers.
@@ -175,14 +168,6 @@ async def _completed_job_summary_from_history(job_id: str) -> dict[str, Any] | N
     }
 
 
-def _run_pipeline(*args, **kwargs):
-    return pipeline_runner.run_pipeline(*args, **kwargs)
-
-
-def _run_pipeline_with_progress(*args, **kwargs):
-    return pipeline_runner.run_pipeline_with_progress(*args, **kwargs)
-
-
 def _run_pipeline_with_progress_worker(*args, **kwargs):
     return pipeline_runner.run_pipeline_with_progress_worker(*args, **kwargs)
 
@@ -199,39 +184,8 @@ async def _get_cancel_manager():
     return await pipeline_runner.get_cancel_manager()
 
 
-async def _new_cancel_event():
-    return await pipeline_runner.new_cancel_event()
-
-
-def _is_cancel_event_set(cancel_event: Any | None) -> bool:
-    return pipeline_runner.is_cancel_event_set(cancel_event)
-
-
-def _set_cancel_event(cancel_event: Any | None) -> None:
-    pipeline_runner.set_cancel_event(cancel_event)
-
-
-async def _watch_request_disconnect(*args, **kwargs) -> None:
-    await pipeline_runner.watch_request_disconnect(*args, **kwargs)
-
-
 async def shutdown_executor() -> None:
     await pipeline_runner.shutdown_executor()
-
-
-async def _run_pipeline_async(
-    req: AnalysisRequest, request_id: str, request: Request | None = None
-) -> dict:
-    return await pipeline_runner.run_pipeline_async(
-        req,
-        request_id,
-        request=request,
-        get_executor_func=_get_executor,
-        new_cancel_event_func=_new_cancel_event,
-        run_pipeline_func=_run_pipeline,
-        set_cancel_event_func=_set_cancel_event,
-        watch_request_disconnect_func=_watch_request_disconnect,
-    )
 
 
 async def _preflight_market_data(req: AnalysisRequest) -> None:
@@ -240,10 +194,6 @@ async def _preflight_market_data(req: AnalysisRequest) -> None:
         get_executor_func=_get_executor,
         preflight_worker_func=_preflight_market_data_worker,
     )
-
-
-def _callable_accepts_request_argument(func: Callable[..., Any]) -> bool:
-    return _callable_accepts_named_argument(func, "request")
 
 
 def _callable_accepts_named_argument(func: Callable[..., Any], name: str) -> bool:
@@ -256,14 +206,6 @@ def _callable_accepts_named_argument(func: Callable[..., Any], name: str) -> boo
     return any(param.kind == Parameter.VAR_KEYWORD for param in params.values())
 
 
-async def _call_run_pipeline_async(
-    req: AnalysisRequest, request_id: str, request: Request | None
-) -> dict[str, Any]:
-    if _callable_accepts_request_argument(_run_pipeline_async):
-        return await _run_pipeline_async(req, request_id, request=request)
-    return await _run_pipeline_async(req, request_id)
-
-
 async def _call_run_stream_pipeline(
     req: AnalysisRequest,
     request_id: str,
@@ -274,61 +216,6 @@ async def _call_run_stream_pipeline(
     if _callable_accepts_named_argument(_run_stream_pipeline, "runtime"):
         return await _run_stream_pipeline(req, request_id, queue, cancel_event, runtime=runtime)
     return await _run_stream_pipeline(req, request_id, queue, cancel_event)
-
-
-async def _compute_result_fields(
-    req: AnalysisRequest, request_id: str, request: Request | None = None
-) -> dict[str, Any]:
-    if ROUTE_DEPS.run_preflight:
-        await _preflight_market_data(req)
-    result_fields = await _call_run_pipeline_async(req, request_id, request)
-    result_fields = _with_data_fetched_at(result_fields)
-    return _shape_result(result_fields, req.response_detail)
-
-
-async def _get_or_start_analysis(
-    req: AnalysisRequest,
-    factory: Callable[[], Any],
-    *,
-    use_cache: bool,
-    use_deduplication: bool = True,
-    runtime: jobs.AnalysisRuntimeState | None = None,
-) -> dict[str, Any]:
-    runtime = runtime or _runtime_for_request()
-    return await jobs.get_or_start_analysis(
-        req,
-        factory,
-        use_cache=use_cache,
-        use_in_flight=use_deduplication,
-        result_cache=runtime.result_cache,
-        in_flight=runtime.in_flight,
-        cache_key_func=_cache_key,
-    )
-
-
-async def _execute_analysis(
-    request: Request,
-    req: AnalysisRequest,
-    request_id: str,
-    policy,
-) -> dict:
-    """Run cached/deduplicated JSON analysis."""
-    async with limit_request(request, policy) as lease:
-        runtime = _runtime_for_request(request)
-
-        async def factory() -> dict[str, Any]:
-            return await _compute_result_fields(req, request_id, request)
-
-        fields = await _get_or_start_analysis(
-            req,
-            factory,
-            use_cache=ROUTE_DEPS.enable_result_cache,
-            use_deduplication=ROUTE_DEPS.enable_cache_deduplication,
-            runtime=runtime,
-        )
-        payload = _response_payload(request_id, req, fields)
-        await _save_analysis_result_async(payload, req, owner_id=lease.identifier)
-        return payload
 
 
 async def _run_stream_pipeline(
@@ -355,45 +242,6 @@ async def _run_stream_pipeline(
         write_result_cache=ROUTE_DEPS.enable_result_cache,
         run_preflight=ROUTE_DEPS.run_preflight,
     )
-
-
-async def _stream_progress_and_result(
-    request: Request,
-    req: AnalysisRequest,
-    request_id: str,
-    rate_limit_lease=None,
-):
-    runtime = _runtime_for_request(request)
-
-    async def run_stream_pipeline_with_runtime(req, request_id, queue, cancel_event):
-        return await _call_run_stream_pipeline(req, request_id, queue, cancel_event, runtime)
-
-    async def get_or_start_analysis_with_runtime(
-        req, factory, *, use_cache, use_deduplication=True
-    ):
-        return await _get_or_start_analysis(
-            req,
-            factory,
-            use_cache=use_cache,
-            use_deduplication=use_deduplication,
-            runtime=runtime,
-        )
-
-    async for event in sse.stream_progress_and_result(
-        request,
-        req,
-        request_id,
-        rate_limit_lease,
-        result_cache=runtime.result_cache,
-        cache_key_func=_cache_key,
-        response_payload_func=_response_payload,
-        run_stream_pipeline_func=run_stream_pipeline_with_runtime,
-        get_or_start_analysis_func=get_or_start_analysis_with_runtime,
-        persist_result_func=_save_analysis_result_async,
-        use_cache=ROUTE_DEPS.enable_result_cache,
-        use_deduplication=ROUTE_DEPS.enable_cache_deduplication,
-    ):
-        yield event
 
 
 def _job_not_found(job_id: str):
@@ -432,30 +280,6 @@ async def _stream_job_events_with_lease(request: Request, job, rate_limit_lease)
 async def _stream_job_events(request: Request, job):
     async for event in jobs.stream_job_events(request, job):
         yield event
-
-
-@router.post("/analyze/stream")
-async def analyze_stream(req: AnalysisRequest, request: Request):
-    """SSE endpoint with cache hit shortcut, heartbeat, and cancellation on disconnect."""
-    _log_legacy_endpoint_hit("POST /api/analyze/stream")
-    req = normalize_and_validate_analysis_request(req)
-    request_id = request_id_ctx.get()
-    rate_limit_lease = limit_request(request, stream_policy())
-    await rate_limit_lease.__aenter__()
-    _log_request_accepted("stream", request_id, req)
-    return EventSourceResponse(
-        _stream_progress_and_result(request, req, request_id, rate_limit_lease)
-    )
-
-
-@router.post("/analyze", response_model=AnalysisResponse, response_model_exclude_none=True)
-async def analyze(req: AnalysisRequest, request: Request):
-    """Standard JSON endpoint with final-result cache and in-flight de-duplication."""
-    _log_legacy_endpoint_hit("POST /api/analyze")
-    req = normalize_and_validate_analysis_request(req)
-    request_id = request_id_ctx.get()
-    _log_request_accepted("request", request_id, req)
-    return await _execute_analysis(request, req, request_id, request_policy())
 
 
 async def _create_analysis_job_response(

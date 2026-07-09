@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-
-import pytest
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
 from owner_session import owner_identifier
@@ -54,15 +50,34 @@ def _cache_key(ticker: str) -> AnalysisCacheKey:
     )
 
 
-def test_analyze_accepts_valid_request_and_returns_result(client, monkeypatch):
-    async def fake_run_pipeline_async(req, request_id):
+def _create_job_and_get_result(client, monkeypatch, payload, headers):
+    """Create a job with a mocked pipeline and return the completed job summary."""
+
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
         return _mock_result()
 
-    monkeypatch.setattr("routes.analysis._run_pipeline_async", fake_run_pipeline_async)
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
 
-    response = client.post(
-        "/api/analyze",
-        json={
+    create = client.post("/api/analysis/jobs", json=payload, headers=headers)
+    assert create.status_code == 200
+    job_id = create.json()["job_id"]
+
+    for _ in range(50):
+        summary = client.get(f"/api/analysis/jobs/{job_id}", headers=headers)
+        assert summary.status_code == 200
+        if summary.json()["status"] in {"completed", "failed"}:
+            return summary.json()
+        time.sleep(0.05)
+    raise AssertionError("job did not complete in time")
+
+
+def test_job_flow_accepts_valid_request_and_returns_result(client, monkeypatch):
+    summary = _create_job_and_get_result(
+        client,
+        monkeypatch,
+        payload={
             "ticker": "BBCA.JK",
             "trade_date": "2026-05-14",
             "time_horizon_months": 2,
@@ -71,67 +86,39 @@ def test_analyze_accepts_valid_request_and_returns_result(client, monkeypatch):
         headers={"x-api-key": "route-test-key"},
     )
 
-    assert response.status_code == 200
-    body = response.json()
+    assert summary["status"] == "completed"
+    body = summary["result"]
     assert body["ticker"] == "BBCA.JK"
     assert body["trade_date"] == "2026-05-14"
     assert body["time_horizon_months"] == 2
     assert body["decision"] == "Buy"
     assert datetime.fromisoformat(body["analysis_created_at"])
-    assert datetime.fromisoformat(body["data_fetched_at"])
     assert body["data_quality"]["price_data"] == "ok"
 
 
-def test_analyze_persists_completed_result(client, monkeypatch, analysis_repository):
-    async def fake_run_pipeline_async(req, request_id):
-        return _mock_result()
-
-    monkeypatch.setattr("routes.analysis._run_pipeline_async", fake_run_pipeline_async)
-
-    response = client.post(
-        "/api/analyze",
-        json={"ticker": "AAPL", "market": "US", "trade_date": "2026-05-14", "max_debate_rounds": 1},
-    )
-
-    assert response.status_code == 200
-    stored = analysis_repository.get_analysis(
-        response.json()["request_id"], owner_id=_TEST_OWNER_IDENTIFIER
-    )
-    assert stored is not None
-    assert stored["request_id"] == response.json()["request_id"]
-    assert stored["ticker"] == "AAPL"
-    assert stored["decision"] == response.json()["decision"]
-
-
-def test_analyze_returns_result_when_history_write_fails(client, monkeypatch):
-    async def fake_run_pipeline_async(req, request_id):
-        return _mock_result()
-
+def test_job_flow_returns_result_when_history_write_fails(client, monkeypatch):
     class BrokenRepository:
         def save_analysis(self, **kwargs):
             raise OSError("history database unavailable")
 
-    monkeypatch.setattr("routes.analysis._run_pipeline_async", fake_run_pipeline_async)
     monkeypatch.setattr("routes.analysis.get_analysis_repository", lambda: BrokenRepository())
 
-    response = client.post(
-        "/api/analyze",
-        json={"ticker": "AAPL", "market": "US", "trade_date": "2026-05-14", "max_debate_rounds": 1},
+    summary = _create_job_and_get_result(
+        client,
+        monkeypatch,
+        payload={"ticker": "AAPL", "market": "US", "trade_date": "2026-05-14"},
+        headers={"x-api-key": "history-fail-test-key"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["ticker"] == "AAPL"
+    assert summary["status"] == "completed"
+    assert summary["result"]["ticker"] == "AAPL"
 
 
-def test_analyze_fast_mode_warns_when_debate_rounds_are_ignored(client, monkeypatch):
-    async def fake_run_pipeline_async(req, request_id):
-        return _mock_result()
-
-    monkeypatch.setattr("routes.analysis._run_pipeline_async", fake_run_pipeline_async)
-
-    response = client.post(
-        "/api/analyze",
-        json={
+def test_job_flow_fast_mode_warns_when_debate_rounds_are_ignored(client, monkeypatch):
+    summary = _create_job_and_get_result(
+        client,
+        monkeypatch,
+        payload={
             "ticker": "BBCA.JK",
             "trade_date": "2026-05-14",
             "analysis_depth": "fast",
@@ -140,20 +127,19 @@ def test_analyze_fast_mode_warns_when_debate_rounds_are_ignored(client, monkeypa
         headers={"x-api-key": "fast-warning-test-key"},
     )
 
-    assert response.status_code == 200
-    warnings = response.json()["warnings"]
+    warnings = summary["result"]["warnings"]
     assert len(warnings) == 1
     assert "max_debate_rounds greater than 1 is ignored" in warnings[0]
 
 
-def test_analyze_rejects_invalid_date_before_pipeline_runs(client, monkeypatch):
+def test_job_create_rejects_invalid_date_before_pipeline_runs(client, monkeypatch):
     async def should_not_run(*args, **kwargs):
         raise AssertionError("Pipeline should not run for invalid input")
 
-    monkeypatch.setattr("routes.analysis._run_pipeline_async", should_not_run)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", should_not_run)
 
     response = client.post(
-        "/api/analyze",
+        "/api/analysis/jobs",
         json={"ticker": "BBCA.JK", "trade_date": "2026-99-99", "max_debate_rounds": 1},
         headers={"x-api-key": "validation-test-key"},
     )
@@ -161,22 +147,6 @@ def test_analyze_rejects_invalid_date_before_pipeline_runs(client, monkeypatch):
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "BAD_REQUEST"
     assert "trade_date" in response.json()["error"]["details"]["fields"]
-
-
-def test_analyze_rejects_oversized_json_body_before_validation(client, monkeypatch):
-    async def should_not_run(*args, **kwargs):
-        raise AssertionError("Pipeline should not run for oversized input")
-
-    monkeypatch.setattr("routes.analysis._run_pipeline_async", should_not_run)
-
-    response = client.post(
-        "/api/analyze",
-        content='{"ticker":"' + ("A" * 70000) + '"}',
-        headers={"content-type": "application/json", "x-api-key": "body-limit-test-key"},
-    )
-
-    assert response.status_code == 413
-    assert response.json()["error"]["code"] == "REQUEST_BODY_TOO_LARGE"
 
 
 def test_job_create_rejects_oversized_json_body_before_storing_job(client, monkeypatch):
@@ -198,191 +168,42 @@ def test_job_create_rejects_oversized_json_body_before_storing_job(client, monke
     assert asyncio.run(store.stats())["jobs"] == 0
 
 
-def test_preflight_stays_enabled_when_pipeline_callable_is_wrapped(monkeypatch):
-    from routes import analysis
-    from routes.validation import AnalysisRequest
+def test_job_completes_from_result_cache_without_rerunning_pipeline(client, monkeypatch):
+    from routes import analysis as analysis_routes
+    from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
 
-    preflight_calls: list[str] = []
-    pipeline_calls = 0
+    async def should_not_run(*args, **kwargs):
+        raise AssertionError("pipeline must not run on a result-cache hit")
 
-    async def fake_preflight(req: AnalysisRequest) -> None:
-        preflight_calls.append(req.ticker)
-
-    async def renamed_pipeline(req: AnalysisRequest, request_id: str, request=None):
-        nonlocal pipeline_calls
-        pipeline_calls += 1
-        return _mock_result()
-
-    async def decorated_pipeline(*args, **kwargs):
-        return await renamed_pipeline(*args, **kwargs)
-
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    monkeypatch.setattr("routes.analysis._run_stream_pipeline", should_not_run)
     monkeypatch.setattr(
         "routes.analysis.ROUTE_DEPS",
-        analysis.AnalysisRouteDependencies(
-            run_preflight=True,
-            enable_result_cache=False,
-            enable_cache_deduplication=False,
-        ),
-    )
-    monkeypatch.setattr("routes.analysis._preflight_market_data", fake_preflight)
-    monkeypatch.setattr("routes.analysis._run_pipeline_async", decorated_pipeline)
-
-    req = AnalysisRequest(ticker="AAPL", trade_date="2026-05-14", max_debate_rounds=1)
-    result = asyncio.run(analysis._compute_result_fields(req, "wrapped-preflight-test"))
-
-    assert preflight_calls == ["AAPL"]
-    assert pipeline_calls == 1
-    assert result["decision"] == "Buy"
-
-
-def test_route_result_cache_stays_enabled_when_pipeline_callable_is_wrapped(client, monkeypatch):
-    from routes import analysis
-
-    calls = 0
-
-    async def renamed_pipeline(req, request_id, request=None):
-        nonlocal calls
-        calls += 1
-        return _mock_result()
-
-    async def decorated_pipeline(*args, **kwargs):
-        return await renamed_pipeline(*args, **kwargs)
-
-    monkeypatch.setattr(
-        "routes.analysis.ROUTE_DEPS",
-        analysis.AnalysisRouteDependencies(
+        analysis_routes.AnalysisRouteDependencies(
             run_preflight=False,
             enable_result_cache=True,
             enable_cache_deduplication=True,
         ),
     )
-    monkeypatch.setattr("routes.analysis._run_pipeline_async", decorated_pipeline)
 
     payload = {"ticker": "CACHE1", "trade_date": "2026-05-14", "max_debate_rounds": 1}
-    headers = {"x-api-key": "wrapped-cache-test-key"}
+    req = normalize_and_validate_analysis_request(AnalysisRequest(**payload))
+    asyncio.run(analysis_routes._RESULT_CACHE.set(analysis_routes._cache_key(req), _mock_result()))
 
-    first = client.post("/api/analyze", json=payload, headers=headers)
-    second = client.post("/api/analyze", json=payload, headers=headers)
+    headers = {"x-api-key": "job-cache-test-key"}
+    create = client.post("/api/analysis/jobs", json=payload, headers=headers)
+    assert create.status_code == 200
+    job_id = create.json()["job_id"]
 
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert calls == 1
-    assert second.json()["cache"] == {"hit": True, "source": "result_cache"}
+    for _ in range(50):
+        summary = client.get(f"/api/analysis/jobs/{job_id}", headers=headers)
+        if summary.json()["status"] in {"completed", "failed"}:
+            break
+        time.sleep(0.05)
 
-
-def test_route_cache_and_deduplication_can_be_disabled_explicitly():
-    from routes.analysis import _get_or_start_analysis
-    from routes.validation import AnalysisRequest
-
-    calls = 0
-
-    async def main():
-        nonlocal calls
-        req = AnalysisRequest(ticker="NOCACHE1", trade_date="2026-05-14", max_debate_rounds=1)
-
-        async def factory():
-            nonlocal calls
-            calls += 1
-            return {"decision": "Hold"}
-
-        first = await _get_or_start_analysis(req, factory, use_cache=False, use_deduplication=False)
-        second = await _get_or_start_analysis(
-            req, factory, use_cache=False, use_deduplication=False
-        )
-        return first, second
-
-    first, second = asyncio.run(main())
-
-    assert calls == 2
-    assert first == {"decision": "Hold"}
-    assert second == {"decision": "Hold"}
-
-
-def test_get_or_start_analysis_shares_in_flight_work():
-    from routes.analysis import _get_or_start_analysis
-    from routes.validation import AnalysisRequest
-
-    calls = 0
-
-    async def main():
-        nonlocal calls
-        req = AnalysisRequest(ticker="BBCA.JK", trade_date="2026-05-14", max_debate_rounds=1)
-        started = asyncio.Event()
-        release = asyncio.Event()
-
-        async def factory():
-            nonlocal calls
-            calls += 1
-            started.set()
-            await release.wait()
-            return {"decision": "Hold"}
-
-        first = asyncio.create_task(_get_or_start_analysis(req, factory, use_cache=False))
-        await started.wait()
-        second = asyncio.create_task(_get_or_start_analysis(req, factory, use_cache=False))
-        await asyncio.sleep(0)
-        release.set()
-        return await asyncio.gather(first, second)
-
-    results = asyncio.run(main())
-
-    assert calls == 1
-    assert results[0]["decision"] == "Hold"
-    assert results[1]["decision"] == "Hold"
-    assert results[1]["cache"] == {"hit": True, "source": "in_flight"}
-
-
-def test_run_pipeline_async_cancels_worker_on_client_disconnect(monkeypatch):
-    from routes.analysis import _run_pipeline_async
-    from routes.validation import AnalysisRequest
-
-    executor = ThreadPoolExecutor(max_workers=1)
-    started = threading.Event()
-
-    class CancelEvent:
-        def __init__(self):
-            self._event = threading.Event()
-
-        def is_set(self):
-            return self._event.is_set()
-
-        def set(self):
-            self._event.set()
-
-    cancel_event = CancelEvent()
-
-    async def fake_get_executor():
-        return executor
-
-    async def fake_new_cancel_event():
-        return cancel_event
-
-    def fake_run_pipeline(*args):
-        worker_cancel_event = args[-1]
-        started.set()
-        while not worker_cancel_event.is_set():
-            time.sleep(0.01)
-        return {"decision": "Hold"}
-
-    class DisconnectingRequest:
-        async def is_disconnected(self):
-            return await asyncio.to_thread(started.wait, 1)
-
-    monkeypatch.setattr("routes.analysis._get_executor", fake_get_executor)
-    monkeypatch.setattr("routes.analysis._new_cancel_event", fake_new_cancel_event)
-    monkeypatch.setattr("routes.analysis._run_pipeline", fake_run_pipeline)
-
-    async def main():
-        req = AnalysisRequest(ticker="BBCA.JK", trade_date="2026-05-14", max_debate_rounds=1)
-        with pytest.raises(asyncio.CancelledError):
-            await _run_pipeline_async(req, "disconnect-test", request=DisconnectingRequest())
-
-    try:
-        asyncio.run(main())
-        assert started.is_set()
-        assert cancel_event.is_set()
-    finally:
-        executor.shutdown(wait=True, cancel_futures=True)
+    assert summary.json()["status"] == "completed"
+    assert summary.json()["result"]["decision"] == "Buy"
 
 
 def test_job_endpoints_are_bound_to_owner(client, monkeypatch):

@@ -5,7 +5,7 @@ import re
 
 def test_validation_error_details_do_not_echo_raw_input(client):
     response = client.post(
-        "/api/analyze",
+        "/api/analysis/jobs",
         json={"ticker": "AAPL", "trade_date": "2026-05-14", "max_debate_rounds": "not-an-int"},
         headers={"x-api-key": "validation-sanitize-test-key"},
     )

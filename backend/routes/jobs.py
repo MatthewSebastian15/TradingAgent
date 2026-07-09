@@ -104,38 +104,6 @@ def reset_analysis_runtime_for_tests() -> AnalysisRuntimeState:
     return install_analysis_runtime(create_analysis_runtime())
 
 
-async def get_or_start_analysis(
-    req: AnalysisRequest,
-    factory: Callable[[], Any],
-    *,
-    use_cache: bool,
-    use_in_flight: bool = True,
-    result_cache: AnalysisResultCache | None = None,
-    in_flight: InFlightRegistry | None = None,
-    cache_key_func: Callable[[AnalysisRequest], Any],
-) -> dict[str, Any]:
-    runtime = get_analysis_runtime()
-    result_cache = result_cache or runtime.result_cache
-    in_flight = in_flight or runtime.in_flight
-    key = cache_key_func(req)
-    if use_cache:
-        cached = await result_cache.get(key)
-        if cached is not None:
-            return cached
-
-    async def cached_factory() -> dict[str, Any]:
-        fields = await factory()
-        if use_cache:
-            await result_cache.set(key, fields)
-        return fields
-
-    if not use_in_flight:
-        return await cached_factory()
-
-    fields, _joined = await in_flight.run(key, cached_factory)
-    return fields
-
-
 def job_not_found(job_id: str) -> BadRequestError:
     return BadRequestError("Analysis job was not found.", details={"job_id": job_id})
 
