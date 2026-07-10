@@ -5,9 +5,9 @@ import threading
 from collections import OrderedDict
 from datetime import datetime, timedelta
 from typing import Annotated, Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
-import pytz
 from dateutil.relativedelta import relativedelta
 
 from tradingagents import env
@@ -285,7 +285,7 @@ def fetch_current_price(symbol: str, trade_date: str | None = None) -> dict[str,
     with a daily YOY price window. No price result is served from cache here.
     """
     normalized = normalize_ticker(symbol)
-    wib = pytz.timezone("Asia/Jakarta")
+    wib = ZoneInfo("Asia/Jakarta")
     now = datetime.now(wib)
     currency = _currency_for_symbol(normalized)
 

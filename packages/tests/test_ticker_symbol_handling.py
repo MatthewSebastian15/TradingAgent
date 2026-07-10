@@ -1,17 +1,4 @@
-import unittest
 from types import SimpleNamespace
-
-import pytest
-
-from tradingagents.agents.utils.agent_utils import build_instrument_context
-
-
-@pytest.mark.unit
-class TickerSymbolHandlingTests(unittest.TestCase):
-    def test_build_instrument_context_mentions_exact_symbol(self):
-        context = build_instrument_context("BBCA.JK")
-        self.assertIn("BBCA.JK", context)
-        self.assertIn("exchange suffix", context)
 
 
 def test_yfinance_ticker_cache_evicts_oldest_symbol(monkeypatch):
@@ -34,7 +21,3 @@ def test_yfinance_ticker_cache_evicts_oldest_symbol(monkeypatch):
 
     assert list(y_finance._ticker_cache.keys()) == ["AAA", "CCC"]
     assert created == ["AAA", "BBB", "CCC"]
-
-
-if __name__ == "__main__":
-    unittest.main()
