@@ -9,10 +9,10 @@ import pytest
 def clear_pool_cache():
     import services.rag_pool as pool
 
-    pool._news_cache = None
+    pool._news_cache = {}
     pool._market_cache = None
     yield
-    pool._news_cache = None
+    pool._news_cache = {}
     pool._market_cache = None
 
 

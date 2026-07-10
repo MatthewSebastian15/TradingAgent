@@ -269,6 +269,63 @@ async def test_build_context_no_ticker_skips_quote_fetch():
     assert context == ""
 
 
+def test_detect_window_days():
+    from services.rag_service import _detect_window_days
+
+    assert _detect_window_days("berita hari ini") == 7
+    assert _detect_window_days("berita minggu lalu tentang oil") == 14
+    assert _detect_window_days("what happened last week?") == 14
+    assert _detect_window_days("ringkasan bulan ini") == 30
+    assert _detect_window_days("news from the past month") == 30
+    assert _detect_window_days("") == 7
+
+
+@pytest.mark.asyncio
+async def test_build_context_passes_window_days_to_news_pool():
+    from services.rag_service import build_context
+
+    with patch("services.rag_service.get_news_pool", return_value=[]) as mock_news:
+        await build_context("berita minggu lalu", ["news"])
+
+    mock_news.assert_awaited_once_with(window_days=14)
+
+
+@pytest.mark.asyncio
+async def test_build_context_headers_carry_as_of_timestamp():
+    from services.rag_service import build_context
+
+    market = {
+        "fetched_at": 1780000000.0,
+        "overview": {
+            "items": [
+                {
+                    "symbol": "^GSPC",
+                    "label": "S&P 500",
+                    "last": 6000,
+                    "change": 10,
+                    "change_percent": 0.2,
+                    "currency": "USD",
+                    "status": "ok",
+                    "updated_at": "",
+                }
+            ]
+        },
+        "movers": {},
+    }
+    portfolio_ctx = {
+        "holdings": [{"ticker": "AAPL", "shares": 10, "cost_basis": 100}],
+        "quotes": [{"sym": "AAPL", "price": 150}],
+        "fetched_at": "2026-07-10T01:00:00Z",
+    }
+    with patch("services.rag_service.get_market_pool", return_value=market):
+        context, _ = await build_context(
+            "market dan portfolio saya", ["market", "portfolio"], portfolio_context=portfolio_ctx
+        )
+
+    assert "=== MARKET DATA (as of 2026-" in context
+    assert "=== PORTFOLIO DATA (as of 2026-07-10T01:00:00Z) ===" in context
+
+
 def test_extract_keywords_maps_indonesian_finance_terms():
     from services.rag_service import _extract_keywords
 

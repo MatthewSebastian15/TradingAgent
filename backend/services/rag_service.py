@@ -13,6 +13,7 @@ from services.rag_pool import (
     get_news_pool,
     get_ticker_news_pool,
     get_ticker_quotes,
+    utc_iso,
 )
 
 logger = logging.getLogger(__name__)
@@ -480,6 +481,28 @@ def _recent_history_text(chat_history: list[dict[str, Any]] | None) -> str:
     return " ".join(str(h.get("content", "") or "") for h in (chat_history or [])[-3:])
 
 
+# ponytail: three coarse buckets (7/14/30 days), not a date parser. Extend the
+# regexes if users ask for explicit ranges ("dari 3 Juni sampai...").
+def _detect_window_days(message: str) -> int:
+    text = str(message or "").lower()
+    if re.search(r"\b(bulan (ini|lalu|kemarin)|(this|last|past) month|30 (hari|days))\b", text):
+        return 30
+    if re.search(
+        r"\b(minggu (lalu|kemarin)|(last|past) week|2 minggu|two weeks|14 (hari|days))\b", text
+    ):  # noqa: E501
+        return 14
+    return 7
+
+
+def _as_of(fetched_at: Any) -> str:
+    """' (as of <iso>)' suffix for a context header; empty when unknown."""
+    if isinstance(fetched_at, (int, float)) and fetched_at > 0:
+        return f" (as of {utc_iso(float(fetched_at))})"
+    if isinstance(fetched_at, str) and fetched_at:
+        return f" (as of {fetched_at})"
+    return ""
+
+
 async def build_context(
     message: str,
     intent: list[str],
@@ -497,7 +520,7 @@ async def build_context(
     all_sources: list[dict[str, Any]] = []
 
     if "news" in intent:
-        articles = await get_news_pool()
+        articles = await get_news_pool(window_days=_detect_window_days(message))
         if articles:
             top = sorted(articles, key=lambda a: _score_article(a, keywords), reverse=True)[
                 :RAG_CHATBOT_MAX_CONTEXT_ARTICLES
@@ -519,7 +542,9 @@ async def build_context(
         if market:
             ctx, srcs = _format_market_context(market)
             if ctx:
-                context_parts.append(f"=== MARKET DATA ===\n{ctx}")
+                context_parts.append(
+                    f"=== MARKET DATA{_as_of(market.get('fetched_at'))} ===\n{ctx}"
+                )
                 all_sources.extend(srcs)
         if tickers:
             quotes = await get_ticker_quotes(tickers)
@@ -561,13 +586,17 @@ async def build_context(
     if "watchlist" in intent and watchlist_context:
         ctx, srcs = _format_watchlist_context(watchlist_context)
         if ctx:
-            context_parts.append(f"=== WATCHLIST DATA ===\n{ctx}")
+            context_parts.append(
+                f"=== WATCHLIST DATA{_as_of(watchlist_context.get('fetched_at'))} ===\n{ctx}"
+            )
             all_sources.extend(srcs)
 
     if "portfolio" in intent and portfolio_context:
         ctx, srcs = _format_portfolio_context(portfolio_context)
         if ctx:
-            context_parts.append(f"=== PORTFOLIO DATA ===\n{ctx}")
+            context_parts.append(
+                f"=== PORTFOLIO DATA{_as_of(portfolio_context.get('fetched_at'))} ===\n{ctx}"
+            )
             all_sources.extend(srcs)
 
     if "economic" in intent:
@@ -575,7 +604,9 @@ async def build_context(
         if econ:
             ctx, srcs = _format_econ_context(econ)
             if ctx:
-                context_parts.append(f"=== ECONOMIC DATA ===\n{ctx}")
+                context_parts.append(
+                    f"=== ECONOMIC DATA{_as_of(econ.get('fetched_at'))} ===\n{ctx}"
+                )
                 all_sources.extend(srcs)
 
     return "\n\n".join(context_parts), all_sources

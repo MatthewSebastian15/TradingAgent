@@ -33,41 +33,40 @@ class _CacheEntry:
     fetched_at: float
 
 
-_news_cache: _CacheEntry | None = None
+_news_cache: dict[int, _CacheEntry] = {}
 _market_cache: _CacheEntry | None = None
 _econ_cache: _CacheEntry | None = None
 
-# ponytail: fixed US-macro snapshot. Add more (source, command, params) rows here
-# if the chatbot needs CPI/GDP per-country — those need a countries param.
+# ponytail: fixed US-macro snapshot. Add more (source, command, params) rows
+# here; per-country commands take a countries param (ISO-3, default USA).
 _ECON_SNAPSHOT = (
     ("federal_reserve", "federal_funds_rate", {"days": 5}),
     ("federal_reserve", "yield_curve", {}),
     ("yfinance", "gauges", {}),
+    ("world_bank", "cpi", {"countries": "USA", "years": 5}),
+    ("world_bank", "gdp_growth", {"countries": "USA", "years": 5}),
 )
 
 
-async def get_news_pool() -> list[dict[str, Any]]:
+async def get_news_pool(window_days: int = 7) -> list[dict[str, Any]]:
     """Return cached general news articles from NewsArticleStore SQLite."""
-    global _news_cache
     now = time.time()
-    if (
-        _news_cache is not None
-        and (now - _news_cache.fetched_at) < RAG_CHATBOT_NEWS_POOL_TTL_SECONDS
-    ):
-        return _news_cache.data
+    entry = _news_cache.get(window_days)
+    if entry is not None and (now - entry.fetched_at) < RAG_CHATBOT_NEWS_POOL_TTL_SECONDS:
+        return entry.data
 
     def _fetch() -> list[dict[str, Any]]:
         store = NewsArticleStore(db_path=GENERAL_NEWS_CACHE_DB_PATH)
-        result = store.list_articles(category="all", window_days=7, limit=200)
+        result = store.list_articles(category="all", window_days=window_days, limit=200)
         return result.articles
 
     try:
         articles = await asyncio.to_thread(_fetch)
-        _news_cache = _CacheEntry(data=articles, fetched_at=now)
+        _news_cache[window_days] = _CacheEntry(data=articles, fetched_at=now)
         return articles
     except Exception:
         logger.exception("RAG: failed to fetch news pool")
-        return _news_cache.data if _news_cache is not None else []
+        return entry.data if entry is not None else []
 
 
 _ticker_news_cache: dict[str, _CacheEntry] = {}
@@ -181,7 +180,7 @@ async def get_analysis_detail(request_id: str) -> dict[str, Any] | None:
         return None
 
 
-def _utc_iso(ts: float) -> str:
+def utc_iso(ts: float) -> str:
     return (
         datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
         .isoformat()
@@ -204,19 +203,20 @@ async def get_pool_status() -> dict[str, Any]:
     econ_data: dict | None = econ if isinstance(econ, dict) else None
     analysis_list: list = analyses if isinstance(analyses, list) else []
 
+    news_entry = _news_cache.get(7)
     return {
         "news": {
             "available": len(news_list) > 0,
             "count": len(news_list),
-            "last_updated": _utc_iso(_news_cache.fetched_at) if _news_cache and news_list else None,
+            "last_updated": utc_iso(news_entry.fetched_at) if news_entry and news_list else None,
         },
         "market": {
             "available": market_data is not None,
-            "snapshot_at": _utc_iso(float(market_data["fetched_at"])) if market_data else None,
+            "snapshot_at": utc_iso(float(market_data["fetched_at"])) if market_data else None,
         },
         "economic": {
             "available": econ_data is not None,
-            "snapshot_at": _utc_iso(float(econ_data["fetched_at"])) if econ_data else None,
+            "snapshot_at": utc_iso(float(econ_data["fetched_at"])) if econ_data else None,
         },
         "analysis": {
             "available": len(analysis_list) > 0,

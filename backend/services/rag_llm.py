@@ -28,6 +28,9 @@ STRICT RULES:
 5. Always use the same language as the user's question.
 6. Keep answers concise and grounded in the data. Do not append a data-source
    line or any "Data Source:" footer.
+7. Context sections may carry an "(as of <timestamp>)" marker. When quoting a
+   price, quote, or indicator from such a section, mention that the value is
+   as of that time — never present cached data as real-time.
 
 If the context is empty, reply:
 "No relevant data found in the RAG Data Pool for this question."
