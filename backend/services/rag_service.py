@@ -11,9 +11,43 @@ from services.rag_pool import (
     get_econ_pool,
     get_market_pool,
     get_news_pool,
+    get_ticker_quotes,
 )
 
 logger = logging.getLogger(__name__)
+
+# ─── Ticker extraction ────────────────────────────────────────────────────────
+
+_TICKER_RE = re.compile(r"\b[A-Z]{2,6}(?:[.\-][A-Z]{1,3})?\b")
+
+# Uppercase words that look like tickers but are finance/chat acronyms, not
+# symbols the user is asking about.
+_TICKER_STOP = frozenset(
+    {
+        "AI", "API", "ATH", "BUY", "CEO", "CFO", "CPI", "DXY", "EPS", "ETF",
+        "FED", "GDP", "HOLD", "IDR", "IPO", "LLM", "NEWS", "OK", "PDF", "PNL",
+        "RAG", "RR", "SELL", "SL", "TP", "USA", "USD", "VIX", "WAIT", "YTD",
+    }
+)  # fmt: skip
+
+
+def extract_tickers(message: str) -> list[str]:
+    """Uppercase ticker-shaped words in the message, validated later by quote fetch.
+
+    ponytail: pure regex + stoplist, no network. An ALL-CAPS sentence (>3 words)
+    is treated as shouting, not tickers. Invalid symbols are dropped downstream
+    because their quote fetch returns status != ok.
+    """
+    text = str(message or "")
+    words = text.split()
+    if len(words) > 3 and all(w.isupper() for w in words if w.isalpha()):
+        return []
+    tickers: list[str] = []
+    for match in _TICKER_RE.findall(text):
+        if match not in _TICKER_STOP and match not in tickers:
+            tickers.append(match)
+    return tickers[:3]
+
 
 # ─── Scope guardrail ──────────────────────────────────────────────────────────
 
@@ -64,7 +98,7 @@ def check_scope(message: str) -> bool:
     guardrail for the gap case.
     """
     text = str(message or "").strip()
-    has_in = any(p.search(text) for p in _IN_SCOPE)
+    has_in = any(p.search(text) for p in _IN_SCOPE) or bool(extract_tickers(text))
     has_out = any(p.search(text) for p in _OUT_OF_SCOPE)
     if has_out and not has_in:
         return False
@@ -130,6 +164,10 @@ def detect_intent(message: str, context_filter: str) -> list[str]:
         pools.append("portfolio")
     if _ECON_RE.search(text):
         pools.append("economic")
+    if extract_tickers(text):
+        for pool in ("market", "analysis"):
+            if pool not in pools:
+                pools.append(pool)
     return pools or ["news", "market", "analysis"]
 
 
@@ -402,6 +440,7 @@ async def build_context(
 ) -> tuple[str, list[dict[str, Any]]]:
     """Retrieve and format context from the relevant pools."""
     keywords = _extract_keywords(message)
+    tickers = extract_tickers(message)
     context_parts: list[str] = []
     all_sources: list[dict[str, Any]] = []
 
@@ -423,17 +462,35 @@ async def build_context(
             if ctx:
                 context_parts.append(f"=== MARKET DATA ===\n{ctx}")
                 all_sources.extend(srcs)
+        if tickers:
+            quotes = await get_ticker_quotes(tickers)
+            if quotes:
+                ctx, srcs = _format_market_context({"overview": {"items": quotes}})
+                if ctx:
+                    context_parts.append(f"=== TICKER QUOTE DATA ===\n{ctx}")
+                    all_sources.extend(srcs)
 
     if "analysis" in intent:
-        history = await get_analysis_pool(limit=20)
-        if history:
-            sorted_history = sorted(
-                history,
-                key=lambda x: x.get("analysis_created_at") or x.get("created_at") or "",
-                reverse=True,
+
+        def _created(x: dict[str, Any]) -> str:
+            return x.get("analysis_created_at") or x.get("created_at") or ""
+
+        # Ticker-mentioned analyses first, then the latest of everything else.
+        ticker_history: list[dict[str, Any]] = []
+        for t in tickers:
+            ticker_history.extend(
+                await get_analysis_pool(limit=RAG_CHATBOT_MAX_CONTEXT_ANALYSES, ticker=t)
             )
+        general_history = await get_analysis_pool(limit=20)
+        seen_ids = {h.get("request_id") for h in ticker_history}
+        history = sorted(ticker_history, key=_created, reverse=True) + sorted(
+            (g for g in general_history if g.get("request_id") not in seen_ids),
+            key=_created,
+            reverse=True,
+        )
+        if history:
             detailed: list[dict[str, Any]] = []
-            for item in sorted_history[:RAG_CHATBOT_MAX_CONTEXT_ANALYSES]:
+            for item in history[:RAG_CHATBOT_MAX_CONTEXT_ANALYSES]:
                 req_id = item.get("request_id")
                 full = await get_analysis_detail(req_id) if req_id else None
                 detailed.append(full if full else item)

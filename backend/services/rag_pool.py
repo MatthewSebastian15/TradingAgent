@@ -116,13 +116,29 @@ async def get_econ_pool() -> dict[str, Any] | None:
     return snapshot
 
 
-async def get_analysis_pool(limit: int = 20) -> list[dict[str, Any]]:
-    """Return latest completed analysis history metadata."""
+async def get_analysis_pool(limit: int = 20, ticker: str | None = None) -> list[dict[str, Any]]:
+    """Return latest completed analysis history metadata, optionally for one ticker."""
     repo = get_analysis_repository()
     try:
-        return await asyncio.to_thread(repo.list_analyses, limit=limit)
+        return await asyncio.to_thread(repo.list_analyses, limit=limit, ticker=ticker)
     except Exception:
         logger.exception("RAG: failed to fetch analysis pool")
+        return []
+
+
+async def get_ticker_quotes(symbols: list[str]) -> list[dict[str, Any]]:
+    """Live quote snapshot for user-mentioned tickers.
+
+    Reuses get_overview_data (SWR-cached); invalid symbols come back with
+    status != ok and are dropped, so no separate validation call is needed.
+    """
+    if not symbols:
+        return []
+    try:
+        data = await asyncio.to_thread(get_overview_data, symbols)
+        return [i for i in (data.get("items") or []) if i.get("status") == "ok"]
+    except Exception:
+        logger.exception("RAG: failed to fetch ticker quotes %s", symbols)
         return []
 
 
