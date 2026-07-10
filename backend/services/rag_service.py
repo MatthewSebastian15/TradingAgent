@@ -175,9 +175,50 @@ def detect_intent(message: str, context_filter: str) -> list[str]:
 # ─── Context formatters ───────────────────────────────────────────────────────
 
 
+# Indonesian finance terms mapped to the English vocabulary of the stored
+# article corpus, so an Indonesian question can still rank English news.
+# ponytail: a ~30-word dictionary, not a translator — extend the map when a
+# term users actually ask about is missing.
+_ID_EN_KEYWORDS = {
+    "akuisisi": "acquisition",
+    "berita": "news",
+    "bunga": "rate",
+    "dividen": "dividend",
+    "dolar": "dollar",
+    "ekonomi": "economy",
+    "emas": "gold",
+    "energi": "energy",
+    "harga": "price",
+    "imbal": "yield",
+    "inflasi": "inflation",
+    "kripto": "crypto",
+    "kuartal": "quarter",
+    "laba": "profit",
+    "minyak": "oil",
+    "naik": "rise",
+    "obligasi": "bond",
+    "pasar": "market",
+    "pendapatan": "revenue",
+    "penjualan": "sales",
+    "pertumbuhan": "growth",
+    "perusahaan": "company",
+    "prediksi": "forecast",
+    "resesi": "recession",
+    "rugi": "loss",
+    "saham": "stock",
+    "suku": "interest",
+    "teknologi": "technology",
+    "turun": "fall",
+    "untung": "profit",
+}
+
+
 def _extract_keywords(message: str) -> list[str]:
     stopwords = {"the", "and", "for", "apa", "yang", "dari", "ini", "itu", "ada", "dengan", "atau"}
-    return [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", message.lower()) if w not in stopwords]
+    words = [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", message.lower()) if w not in stopwords]
+    # Keep the original word and add its English mapping; dedupe preserves order.
+    words += [_ID_EN_KEYWORDS[w] for w in words if w in _ID_EN_KEYWORDS]
+    return list(dict.fromkeys(words))
 
 
 def _score_article(article: dict[str, Any], keywords: list[str]) -> int:
@@ -185,7 +226,8 @@ def _score_article(article: dict[str, Any], keywords: list[str]) -> int:
         str(article.get(f, "") or "")
         for f in ("title", "description", "summary", "category", "source")
     ).lower()
-    score = sum(kw in text for kw in keywords)
+    # Whole-word match so "art" doesn't score against "quarter".
+    score = sum(1 for kw in keywords if re.search(rf"\b{re.escape(kw)}\b", text))
     if article.get("impact") == "high":
         score += 2
     if float(article.get("relevance_score") or 0) >= 70:

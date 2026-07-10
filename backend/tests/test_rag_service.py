@@ -269,6 +269,54 @@ async def test_build_context_no_ticker_skips_quote_fetch():
     assert context == ""
 
 
+def test_extract_keywords_maps_indonesian_finance_terms():
+    from services.rag_service import _extract_keywords
+
+    keywords = _extract_keywords("kenapa harga minyak naik?")
+    # Original words stay, English mappings are appended.
+    assert "harga" in keywords and "price" in keywords
+    assert "minyak" in keywords and "oil" in keywords
+    assert "naik" in keywords and "rise" in keywords
+    assert len(keywords) == len(set(keywords))
+
+
+def test_score_article_whole_word_match():
+    from services.rag_service import _score_article
+
+    article = {"title": "Strong quarter for chipmakers", "description": ""}
+    # "art" is a substring of "quarter" but not a whole word.
+    assert _score_article(article, ["art"]) == 0
+    assert _score_article(article, ["quarter"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_build_context_indonesian_query_ranks_english_article():
+    from services.rag_service import build_context
+
+    relevant = {
+        "id": "a1",
+        "title": "Oil price rises on supply cut",
+        "description": "Crude oil price jumped.",
+        "source": "Reuters",
+        "category": "commodities",
+        "published_at": "2026-07-09T08:00:00Z",
+        "url": "https://example.com/oil",
+    }
+    irrelevant = {
+        "id": "a2",
+        "title": "Retail earnings preview",
+        "description": "Department stores report next week.",
+        "source": "Reuters",
+        "category": "markets",
+        "published_at": "2026-07-09T09:00:00Z",
+        "url": "https://example.com/retail",
+    }
+    with patch("services.rag_service.get_news_pool", return_value=[irrelevant, relevant]):
+        context, _ = await build_context("kenapa harga minyak naik?", ["news"])
+
+    assert context.index("Oil price rises") < context.index("Retail earnings")
+
+
 @pytest.mark.asyncio
 async def test_build_context_follow_up_uses_history_ticker():
     from services.rag_service import build_context
