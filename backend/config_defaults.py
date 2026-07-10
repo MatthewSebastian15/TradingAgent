@@ -135,7 +135,9 @@ RATE_LIMIT_DB_PATH = Path(env("RATE_LIMIT_DB_PATH", ".cache/rate_limits.sqlite3"
 
 # LLM resilience
 LLM_TIMEOUT_SECONDS = env_int("LLM_TIMEOUT_SECONDS", 60, min_value=1)
-LLM_MAX_RETRIES = env_int("LLM_MAX_RETRIES", 1, min_value=1)
+# Default 2 attempts: one 1.5s-backoff retry rides out transient provider
+# 503/504 spikes instead of instantly downgrading an agent to its fallback.
+LLM_MAX_RETRIES = env_int("LLM_MAX_RETRIES", 2, min_value=1)
 PROVIDER_SDK_MAX_RETRIES = env_int("PROVIDER_SDK_MAX_RETRIES", 0, min_value=0)
 LLM_RETRIES_BY_DEPTH: dict[str, int] = {
     depth: cfg["llm_retries"] for depth, cfg in ANALYSIS_DEPTH_CONFIG.items()
@@ -402,7 +404,9 @@ RAG_CHATBOT_MARKET_POOL_TTL_SECONDS = env_int(
 )
 # Macro moves slowly; cache the econ snapshot for 30 min.
 RAG_CHATBOT_ECON_POOL_TTL_SECONDS = env_int("RAG_CHATBOT_ECON_POOL_TTL_SECONDS", 1800, min_value=60)
-RAG_CHATBOT_CHAT_TIMEOUT_SECONDS = env_int("RAG_CHATBOT_CHAT_TIMEOUT_SECONDS", 30, min_value=5)
+# 60s: a single Gemini 429 sleep (20s) + retry, or queueing behind the analysis
+# pipeline's llm:google semaphore, routinely blew a 30s budget.
+RAG_CHATBOT_CHAT_TIMEOUT_SECONDS = env_int("RAG_CHATBOT_CHAT_TIMEOUT_SECONDS", 60, min_value=5)
 
 # Circuit breaker
 CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5

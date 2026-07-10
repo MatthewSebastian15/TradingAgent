@@ -53,3 +53,11 @@ async def test_call_rag_llm_includes_chat_history():
     messages = mock_llm.ainvoke.call_args[0][0]
     # SystemMessage + 2 history + 1 user question = at least 4
     assert len(messages) >= 4
+
+
+def test_round_decimals_caps_at_two_places():
+    from services.rag_llm import _round_decimals
+
+    assert _round_decimals("NVDA closed at 123.4567 (+1.2345%)") == "NVDA closed at 123.46 (+1.23%)"
+    assert _round_decimals("volume 1,234.5678") == "volume 1,234.57"
+    assert _round_decimals("price 99.5 stays") == "price 99.5 stays"
