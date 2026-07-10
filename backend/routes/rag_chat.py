@@ -115,7 +115,10 @@ async def rag_chat(body: RagChatRequest, request: Request) -> RagChatResponse:
         watchlist_ctx = body.watchlist_context
         portfolio_ctx = body.portfolio_context
 
-        if not check_scope(message):
+        # Follow-ups ("lanjutkan", "jelaskan lagi") carry no keywords of their
+        # own; an in-scope recent history keeps the conversation going.
+        history_text = " ".join(h["content"] for h in history[-3:])
+        if not check_scope(message) and not check_scope(history_text):
             warning = _localize(_OUT_OF_SCOPE, _OUT_OF_SCOPE_ID, message)
             if warning is None:
                 try:
@@ -136,6 +139,7 @@ async def rag_chat(body: RagChatRequest, request: Request) -> RagChatResponse:
                     intent,
                     watchlist_context=watchlist_ctx,
                     portfolio_context=portfolio_ctx,
+                    chat_history=history,
                 ),
                 timeout=RAG_CHATBOT_CHAT_TIMEOUT_SECONDS,
             )

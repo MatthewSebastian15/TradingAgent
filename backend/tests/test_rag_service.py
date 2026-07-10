@@ -267,3 +267,50 @@ async def test_build_context_no_ticker_skips_quote_fetch():
 
     mock_quotes.assert_not_awaited()
     assert context == ""
+
+
+@pytest.mark.asyncio
+async def test_build_context_follow_up_uses_history_ticker():
+    from services.rag_service import build_context
+
+    history = [
+        {"role": "user", "content": "gimana analisis NVDA?"},
+        {"role": "assistant", "content": "NVDA direkomendasikan BUY."},
+    ]
+    with (
+        patch("services.rag_service.get_market_pool", return_value=None),
+        patch("services.rag_service.get_ticker_quotes", return_value=[]) as mock_quotes,
+        patch("services.rag_service.get_analysis_pool", return_value=[]),
+    ):
+        await build_context(
+            "berapa harga terakhirnya?", ["market", "analysis"], chat_history=history
+        )
+
+    # No ticker in the follow-up message itself; history supplies NVDA.
+    mock_quotes.assert_awaited_once_with(["NVDA"])
+
+
+@pytest.mark.asyncio
+async def test_build_context_ticker_news_section():
+    from services.rag_service import build_context
+
+    ticker_articles = [
+        {
+            "id": "t1",
+            "title": "NVDA hits new high",
+            "summary": "Chip demand surges.",
+            "source": "Reuters",
+            "published_at": "2026-07-09T08:00:00Z",
+            "url": "https://example.com/nvda",
+        }
+    ]
+    with (
+        patch("services.rag_service.get_news_pool", return_value=[]),
+        patch("services.rag_service.get_ticker_news_pool", return_value=ticker_articles) as mock_tn,
+    ):
+        context, sources = await build_context("berita NVDA terbaru", ["news"])
+
+    mock_tn.assert_awaited_once_with("NVDA")
+    assert "=== TICKER NEWS DATA (NVDA) ===" in context
+    assert "NVDA hits new high" in context
+    assert any(s["type"] == "news" for s in sources)

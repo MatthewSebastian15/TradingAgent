@@ -96,6 +96,40 @@ def test_chat_empty_context_skips_llm(client):
     assert "no relevant data" in r.json()["answer"].lower()
 
 
+def test_chat_follow_up_in_scope_via_history(client):
+    # Message alone has no scope signal, but recent history does.
+    build_ctx = AsyncMock(return_value=("=== AI AGENT ANALYSIS DATA ===\n[ANALYSIS] NVDA", []))
+    history = [
+        {"role": "user", "content": "gimana analisis NVDA?"},
+        {"role": "assistant", "content": "NVDA direkomendasikan BUY."},
+    ]
+    with (
+        patch("routes.rag_chat.build_context", build_ctx),
+        patch("routes.rag_chat.call_rag_llm", AsyncMock(return_value="Lanjutan jawaban.")),
+    ):
+        r = client.post(
+            "/api/rag/chat",
+            json={"message": "jelaskan lebih detail", "chat_history": history},
+        )
+
+    assert r.status_code == 200
+    assert r.json()["out_of_scope"] is False
+    # History reaches build_context for follow-up ticker extraction.
+    assert build_ctx.await_args.kwargs["chat_history"] == history
+
+
+def test_chat_follow_up_out_of_scope_when_history_also_off_topic(client):
+    r = client.post(
+        "/api/rag/chat",
+        json={
+            "message": "jelaskan lebih detail",
+            "chat_history": [{"role": "user", "content": "halo apa kabar"}],
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["out_of_scope"] is True
+
+
 def test_chat_with_watchlist_context(client):
     fake_ctx = "=== WATCHLIST DATA ===\n[WATCHLIST] group=Tech | AAPL | Apple | price=180"
     fake_src = [{"type": "watchlist", "symbol": "AAPL"}]

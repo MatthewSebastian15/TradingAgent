@@ -11,6 +11,7 @@ from services.rag_pool import (
     get_econ_pool,
     get_market_pool,
     get_news_pool,
+    get_ticker_news_pool,
     get_ticker_quotes,
 )
 
@@ -165,7 +166,7 @@ def detect_intent(message: str, context_filter: str) -> list[str]:
     if _ECON_RE.search(text):
         pools.append("economic")
     if extract_tickers(text):
-        for pool in ("market", "analysis"):
+        for pool in ("news", "market", "analysis"):
             if pool not in pools:
                 pools.append(pool)
     return pools or ["news", "market", "analysis"]
@@ -432,15 +433,24 @@ def _format_portfolio_context(
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
 
+def _recent_history_text(chat_history: list[dict[str, Any]] | None) -> str:
+    """Last 3 history turns joined, for follow-up ticker/keyword extraction."""
+    return " ".join(str(h.get("content", "") or "") for h in (chat_history or [])[-3:])
+
+
 async def build_context(
     message: str,
     intent: list[str],
     watchlist_context: dict[str, Any] | None = None,
     portfolio_context: dict[str, Any] | None = None,
+    chat_history: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Retrieve and format context from the relevant pools."""
-    keywords = _extract_keywords(message)
-    tickers = extract_tickers(message)
+    history_text = _recent_history_text(chat_history)
+    # The current message wins; history only fills the gap on follow-ups
+    # ("berapa stop loss-nya?") that don't repeat the ticker/keywords.
+    keywords = _extract_keywords(message) or _extract_keywords(history_text)
+    tickers = extract_tickers(message) or extract_tickers(history_text)
     context_parts: list[str] = []
     all_sources: list[dict[str, Any]] = []
 
@@ -454,6 +464,13 @@ async def build_context(
             if ctx:
                 context_parts.append(f"=== NEWS DATA ===\n{ctx}")
                 all_sources.extend(srcs)
+        for t in tickers:
+            ticker_articles = await get_ticker_news_pool(t)
+            if ticker_articles:
+                ctx, srcs = _format_news_context(ticker_articles[:RAG_CHATBOT_MAX_CONTEXT_ARTICLES])
+                if ctx:
+                    context_parts.append(f"=== TICKER NEWS DATA ({t}) ===\n{ctx}")
+                    all_sources.extend(srcs)
 
     if "market" in intent:
         market = await get_market_pool()

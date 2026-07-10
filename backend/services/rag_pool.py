@@ -12,6 +12,7 @@ from config import (
     RAG_CHATBOT_ECON_POOL_TTL_SECONDS,
     RAG_CHATBOT_MARKET_POOL_TTL_SECONDS,
     RAG_CHATBOT_NEWS_POOL_TTL_SECONDS,
+    build_tradingagents_config,
 )
 from services.analysis_repository import get_analysis_repository
 from services.economic_service import get_economic_data
@@ -67,6 +68,34 @@ async def get_news_pool() -> list[dict[str, Any]]:
     except Exception:
         logger.exception("RAG: failed to fetch news pool")
         return _news_cache.data if _news_cache is not None else []
+
+
+_ticker_news_cache: dict[str, _CacheEntry] = {}
+
+
+async def get_ticker_news_pool(ticker: str) -> list[dict[str, Any]]:
+    """Per-ticker news via the engine NewsService (vendor results cached in its SQLite)."""
+    now = time.time()
+    entry = _ticker_news_cache.get(ticker)
+    if entry is not None and (now - entry.fetched_at) < RAG_CHATBOT_NEWS_POOL_TTL_SECONDS:
+        return entry.data
+
+    def _fetch() -> list[dict[str, Any]]:
+        from tradingagents.dataflows.news.news_service import NewsService
+        from tradingagents.dataflows.providers.config import use_config
+
+        with use_config(build_tradingagents_config()):
+            result = NewsService().fetch_news(ticker, window_days=7, limit=20)
+        return list(result.get("articles") or [])
+
+    try:
+        articles = await asyncio.to_thread(_fetch)
+        # ponytail: unbounded per-ticker dict; fine at chat volume, add LRU if it grows
+        _ticker_news_cache[ticker] = _CacheEntry(data=articles, fetched_at=now)
+        return articles
+    except Exception:
+        logger.exception("RAG: failed to fetch ticker news pool %s", ticker)
+        return entry.data if entry is not None else []
 
 
 async def get_market_pool() -> dict[str, Any] | None:
