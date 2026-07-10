@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from tradingagents.utils.normalization import number as _number
 
@@ -22,6 +22,10 @@ class DataQualityWarning(BaseModel):
 
 class DataQualityReport(BaseModel):
     """Compact API-facing data quality summary for a yfinance collection run."""
+
+    # Coerce dicts assigned to warning_details after construction (collectors.py)
+    # into DataQualityWarning, silencing Pydantic serializer warnings.
+    model_config = ConfigDict(validate_assignment=True)
 
     price_data: str = Field(
         default="missing",
