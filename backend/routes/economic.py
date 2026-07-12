@@ -22,6 +22,6 @@ _ECONOMIC_POLICY = RateLimitPolicy(scope="economic", max_per_minute=120, max_con
 
 @router.get("/economic/{source}/{command}")
 async def economic_data(source: str, command: str, request: Request):
-    limit_request(request, _ECONOMIC_POLICY)
-    params = dict(request.query_params)
-    return await get_economic_data(source, command, params)
+    async with limit_request(request, _ECONOMIC_POLICY):
+        params = dict(request.query_params)
+        return await get_economic_data(source, command, params)
