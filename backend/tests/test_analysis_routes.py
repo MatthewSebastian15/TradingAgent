@@ -289,6 +289,27 @@ def test_analysis_job_endpoint_falls_back_to_history_repository(
     assert response.json()["result"] == result
 
 
+def test_analysis_job_history_fallback_is_owner_scoped(client, monkeypatch, analysis_repository):
+    store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
+    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    analysis_repository.save_analysis(
+        result={
+            "request_id": "other-owner-request",
+            "ticker": "MSFT",
+            "market": "US",
+            "trade_date": "2026-05-14",
+        },
+        request_payload={"ticker": "MSFT", "trade_date": "2026-05-14"},
+        job_id="other-owner-job",
+        owner_id=owner_identifier("f" * 32),
+    )
+
+    response = client.get("/api/analysis/jobs/other-owner-job")
+
+    assert response.status_code == 400
+    assert "other-owner-request" not in response.text
+
+
 def test_market_quotes_rejects_invalid_ticker_before_fetch(client, monkeypatch):
     async def should_not_fetch(symbols):
         raise AssertionError("market quote fetch should not run for invalid symbols")

@@ -151,9 +151,13 @@ def _timestamp_from_iso(value: str | None) -> float:
         return 0.0
 
 
-async def _completed_job_summary_from_history(job_id: str) -> dict[str, Any] | None:
+async def _completed_job_summary_from_history(
+    job_id: str, owner_id: str
+) -> dict[str, Any] | None:
     repository = get_analysis_repository()
-    record = await asyncio.to_thread(repository.get_analysis_record_by_job_id, job_id)
+    record = await asyncio.to_thread(
+        repository.get_analysis_record_by_job_id, job_id, owner_id=owner_id
+    )
     if record is None:
         return None
     return {
@@ -333,7 +337,9 @@ async def get_analysis_job(job_id: str, request: Request):
         if job is None:
             if await job_store.get(job_id) is not None:
                 raise _job_not_found(job_id)
-            history_summary = await _completed_job_summary_from_history(job_id)
+            history_summary = await _completed_job_summary_from_history(
+                job_id, owner_id=lease.identifier
+            )
             if history_summary is None:
                 raise _job_not_found(job_id)
             return history_summary
