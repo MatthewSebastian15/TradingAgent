@@ -224,6 +224,19 @@ def test_post_pdf_report_succeeds_without_profile_or_financial_highlights(client
     assert response.content.startswith(b"%PDF")
 
 
+def test_post_report_does_not_mark_other_owners_history(client, analysis_repository):
+    from owner_session import owner_identifier
+
+    other_owner = owner_identifier("f" * 32)
+    result = _result(request_id="rid-other-owner")
+    analysis_repository.save_analysis(result=result, owner_id=other_owner)
+
+    response = client.post("/api/analysis/report.html", json=result)
+
+    assert response.status_code == 200
+    assert analysis_repository.list_analyses(owner_id=other_owner)[0]["exported_html_at"] is None
+
+
 def test_html_report_falls_back_to_sqlite_and_marks_export(
     client, monkeypatch, analysis_repository
 ):

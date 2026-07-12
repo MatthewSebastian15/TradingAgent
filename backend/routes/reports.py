@@ -106,13 +106,17 @@ async def get_analysis_disclaimer() -> dict[str, str]:
     return {"disclaimer": REPORT_DISCLAIMER}
 
 
-async def _mark_exported_best_effort(result: dict[str, Any], export_type: str) -> None:
+async def _mark_exported_best_effort(
+    result: dict[str, Any], export_type: str, owner_id: str
+) -> None:
     request_id = str(result.get("request_id") or "").strip()
     if not request_id:
         return
     try:
         repository = get_analysis_repository()
-        await asyncio.to_thread(repository.mark_exported, request_id, export_type)
+        await asyncio.to_thread(
+            repository.mark_exported, request_id, export_type, owner_id=owner_id
+        )
     except Exception:
         logger.error(
             "Failed to record analysis report export",
@@ -159,7 +163,7 @@ async def get_analysis_report_html(job_id: str, request: Request) -> HTMLRespons
             job_store=jobs.get_analysis_runtime(request).job_store,
         )
         response = _html_response_from_result(result)
-        await _mark_exported_best_effort(result, "html")
+        await _mark_exported_best_effort(result, "html", owner_id=lease.identifier)
         return response
 
 
@@ -174,7 +178,7 @@ async def get_analysis_report_pdf(job_id: str, request: Request) -> Response:
             job_store=jobs.get_analysis_runtime(request).job_store,
         )
         response = await _pdf_response_from_result_async(result)
-        await _mark_exported_best_effort(result, "pdf")
+        await _mark_exported_best_effort(result, "pdf", owner_id=lease.identifier)
         return response
 
 
@@ -194,7 +198,7 @@ async def get_analysis_report_html_alias(request_id: str, request: Request) -> H
             job_store=jobs.get_analysis_runtime(request).job_store,
         )
         response = _html_response_from_result(result)
-        await _mark_exported_best_effort(result, "html")
+        await _mark_exported_best_effort(result, "html", owner_id=lease.identifier)
         return response
 
 
@@ -209,7 +213,7 @@ async def get_analysis_report_pdf_alias(request_id: str, request: Request) -> Re
             job_store=jobs.get_analysis_runtime(request).job_store,
         )
         response = await _pdf_response_from_result_async(result)
-        await _mark_exported_best_effort(result, "pdf")
+        await _mark_exported_best_effort(result, "pdf", owner_id=lease.identifier)
         return response
 
 
@@ -224,10 +228,9 @@ async def post_analysis_report_html(
     """
 
     async with limit_request(request, request_policy()):
-        result_payload = result.to_result_dict()
-        response = _html_response_from_result(result_payload)
-        await _mark_exported_best_effort(result_payload, "html")
-        return response
+        # No export marking here: the request_id is client-asserted, so writing
+        # audit timestamps against it would let any caller stamp other owners' rows.
+        return _html_response_from_result(result.to_result_dict())
 
 
 @router.post("/analysis/report.pdf")
@@ -237,7 +240,5 @@ async def post_analysis_report_pdf(
     """Download a PDF report from an analysis payload supplied by the client."""
 
     async with limit_request(request, request_policy()):
-        result_payload = result.to_result_dict()
-        response = await _pdf_response_from_result_async(result_payload)
-        await _mark_exported_best_effort(result_payload, "pdf")
-        return response
+        # No export marking here: the request_id is client-asserted (see report.html).
+        return await _pdf_response_from_result_async(result.to_result_dict())
