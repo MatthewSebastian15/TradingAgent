@@ -38,15 +38,6 @@ _WRITE_LOCKS: dict[Path, threading.RLock] = {}
 _WRITE_LOCKS_GUARD = threading.Lock()
 
 
-class _ServiceCredential:
-    @property
-    def api_key(self) -> str:
-        return API_KEY
-
-
-llm = _ServiceCredential()
-
-
 @dataclass(frozen=True)
 class RateLimitPolicy:
     scope: str
@@ -356,7 +347,8 @@ def validate_service_credential(request: Request) -> str:
     if not api_key and auth.lower().startswith("bearer "):
         api_key = auth.split(" ", 1)[1].strip()
 
-    configured_api_key = llm.api_key
+    # Module global read at call time so tests can monkeypatch rate_limiter.API_KEY.
+    configured_api_key = API_KEY
     if configured_api_key:
         if not api_key:
             raise AuthenticationError(

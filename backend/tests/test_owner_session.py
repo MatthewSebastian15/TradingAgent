@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
 from config import OWNER_SESSION_TTL_SECONDS
@@ -38,7 +36,7 @@ def test_owner_session_token_rejects_tampered_signature():
 def test_session_endpoint_validates_service_credential_reuses_cookie_and_issues_distinct_owners(
     client, monkeypatch
 ):
-    monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="shared-proxy-key"))
+    monkeypatch.setattr("rate_limiter.API_KEY", "shared-proxy-key")
     client.headers.pop("x-owner-token", None)
 
     rejected = client.post("/api/session", headers={"x-api-key": "wrong-key"})

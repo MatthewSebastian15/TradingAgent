@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 from datetime import date
-from types import SimpleNamespace
 
 from analysis_cache import AnalysisJobStore
 from errors import RateLimitError
@@ -48,7 +47,7 @@ def test_configured_api_key_must_match(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
-    monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="expected-key"))
+    monkeypatch.setattr("rate_limiter.API_KEY", "expected-key")
 
     payload = {"ticker": "BBCA.JK", "trade_date": "2026-05-14", "max_debate_rounds": 1}
 
@@ -66,7 +65,7 @@ def test_configured_api_key_must_match(client, monkeypatch):
 def test_job_create_rejects_invalid_api_key_before_storing_job(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     install_analysis_runtime(monkeypatch, store)
-    monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="expected-key"))
+    monkeypatch.setattr("rate_limiter.API_KEY", "expected-key")
 
     response = client.post(
         "/api/analysis/jobs",
@@ -151,7 +150,7 @@ def test_status_endpoint_uses_separate_request_bucket(client, monkeypatch):
 
 
 def test_shared_proxy_key_uses_separate_owner_session_quotas(client, monkeypatch):
-    monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="shared-proxy-key"))
+    monkeypatch.setattr("rate_limiter.API_KEY", "shared-proxy-key")
     monkeypatch.setattr(
         "routes.analysis.status_policy",
         lambda: RateLimitPolicy(
