@@ -489,6 +489,19 @@ def render_analysis_report_html(report: dict[str, Any]) -> str:
     return template.render(report=report, css=_read_report_css())
 
 
+def _deny_report_url_fetch(url: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Reject every resource fetch during PDF rendering.
+
+    The report is fully self-contained (CSS is inlined into a <style> block, no
+    images or fonts are referenced), so any fetch attempt can only come from
+    injected content. Denying all URLs makes SSRF and local-file reads through
+    WeasyPrint structurally impossible even if a future template change
+    interpolates a user-controlled URL. WeasyPrint treats the raised error as a
+    missing resource and keeps rendering.
+    """
+    raise ValueError(f"Blocked external resource in report PDF render: {url}")
+
+
 def render_analysis_report_pdf(report: dict[str, Any]) -> bytes:
     html = render_analysis_report_html(report)
     if len(html) > REPORT_PDF_MAX_HTML_CHARS:
@@ -510,7 +523,7 @@ def render_analysis_report_pdf(report: dict[str, Any]) -> bytes:
         ) from exc
 
     try:
-        return HTML(string=html, base_url=str(BACKEND_DIR)).write_pdf()
+        return HTML(string=html, url_fetcher=_deny_report_url_fetch).write_pdf()
     except Exception as exc:  # pragma: no cover - exact WeasyPrint failures depend on OS libraries
         logger.exception("Failed to generate analysis report PDF")
         raise ReportGenerationError(

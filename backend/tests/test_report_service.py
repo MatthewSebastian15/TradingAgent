@@ -1010,3 +1010,36 @@ def test_missing_current_price_adds_warning_without_inventing_price():
     assert report["current_price_display"] == "N/A"
     assert "CURRENT_PRICE_MISSING" in report["validation_warnings"]
     assert report["show_trade_plan"] is False
+
+
+def test_pdf_render_blocks_all_external_resources(monkeypatch):
+    """WeasyPrint must run with the deny-all url_fetcher, never the default one."""
+    import sys
+    import types
+
+    from services import report_service
+
+    captured = {}
+
+    class FakeHTML:
+        def __init__(self, *, string, url_fetcher=None, **kwargs):
+            captured["url_fetcher"] = url_fetcher
+            captured["kwargs"] = kwargs
+
+        def write_pdf(self):
+            return b"%PDF-1.4\nfake"
+
+    monkeypatch.setitem(sys.modules, "weasyprint", types.SimpleNamespace(HTML=FakeHTML))
+
+    pdf = report_service.render_analysis_report_pdf(build_report_context(_base_result()))
+
+    assert pdf.startswith(b"%PDF")
+    fetcher = captured["url_fetcher"]
+    assert fetcher is not None, "PDF render must pass a restrictive url_fetcher"
+    for url in (
+        "https://attacker.example/x.png",
+        "file:///etc/passwd",
+        "relative/asset.png",
+    ):
+        with pytest.raises(ValueError):
+            fetcher(url)
