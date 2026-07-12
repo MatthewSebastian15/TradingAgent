@@ -5,6 +5,7 @@ from collections import Counter
 
 import pytest
 import tradingagents.pipeline_balanced as pipeline
+import tradingagents.pipeline_balanced_orchestrator as orchestrator
 from tradingagents.dataflows.quality.data_quality import DataQualityReport
 
 from config import build_tradingagents_config
@@ -107,9 +108,9 @@ def test_analysis_depth_controls_llm_agent_calls(
             called_agents.append(agent_name)
         return fallback
 
-    monkeypatch.setattr(pipeline, "_create_llms", fake_create_llms)
-    monkeypatch.setattr(pipeline, "collect_market_data", fake_collect_market_data)
-    monkeypatch.setattr(pipeline, "_invoke_once", fake_invoke_once)
+    monkeypatch.setattr(orchestrator, "_create_llms", fake_create_llms)
+    monkeypatch.setattr(orchestrator, "_collect_raw_market_data", fake_collect_market_data)
+    monkeypatch.setattr(orchestrator, "_invoke_once", fake_invoke_once)
 
     config = build_tradingagents_config(
         max_debate_rounds=1, analysis_depth=depth, response_detail="summary"

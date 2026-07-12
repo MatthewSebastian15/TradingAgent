@@ -13,16 +13,13 @@ from tradingagents.dataflows.providers.config import get_config, set_config
 from tradingagents.pipeline.orchestrator import (
     _build_price_chart,
     _build_related_news,
+    _date_window,
+    _extract_last_close_price,
     _parse_markdown_news_items,
     _resolve_current_price_anchor,
 )
-from tradingagents.pipeline_balanced import (
-    AnalystReport,
-    LLMBudget,
-    _date_window,
-    _extract_last_close_price,
-    _invoke_once,
-)
+from tradingagents.pipeline_balanced import AnalystReport, LLMBudget
+from tradingagents.pipeline_balanced_llm import _invoke_once
 from tradingagents.technical.entry_quality import (
     _volume_trend,
     apply_earnings_proximity,
