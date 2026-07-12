@@ -151,9 +151,7 @@ def _timestamp_from_iso(value: str | None) -> float:
         return 0.0
 
 
-async def _completed_job_summary_from_history(
-    job_id: str, owner_id: str
-) -> dict[str, Any] | None:
+async def _completed_job_summary_from_history(job_id: str, owner_id: str) -> dict[str, Any] | None:
     repository = get_analysis_repository()
     record = await asyncio.to_thread(
         repository.get_analysis_record_by_job_id, job_id, owner_id=owner_id
