@@ -76,15 +76,6 @@ def create_analysis_runtime() -> AnalysisRuntimeState:
 _RUNTIME = create_analysis_runtime()
 
 
-def __getattr__(name: str):  # pragma: no cover - temporary migration shim
-    if name in {"RESULT_CACHE", "IN_FLIGHT", "JOB_STORE"}:
-        raise RuntimeError(
-            f"routes.jobs.{name} was removed; use get_analysis_runtime() or "
-            "install a runtime on app.state.analysis_runtime (see tests/helpers.py)."
-        )
-    raise AttributeError(name)
-
-
 def get_analysis_runtime(request: Request | None = None) -> AnalysisRuntimeState:
     if request is not None:
         runtime = getattr(request.app.state, "analysis_runtime", None)

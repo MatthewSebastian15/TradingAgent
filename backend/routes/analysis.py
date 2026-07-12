@@ -40,15 +40,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def __getattr__(name: str):  # pragma: no cover - temporary migration shim
-    if name in {"_RESULT_CACHE", "_IN_FLIGHT", "_JOB_STORE"}:
-        raise RuntimeError(
-            f"routes.analysis.{name} was removed; install a runtime on "
-            "app.state.analysis_runtime instead (see tests/helpers.py)."
-        )
-    raise AttributeError(name)
-
-
 _parse_final_result = serializers.parse_final_result
 _cache_key = serializers.cache_key
 _shape_result = serializers.shape_result

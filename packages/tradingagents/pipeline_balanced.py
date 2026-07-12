@@ -28,43 +28,6 @@ from tradingagents.pipeline_balanced_types import (
     RiskCommitteeReport,
 )
 
-_REMOVED_PRIVATE_EXPORTS = {
-    "_AGENT_LABELS",
-    "_call_yfinance_with_resilience",
-    "_check_cancel",
-    "_coerce_structured",
-    "_create_llms",
-    "_date_window",
-    "_emit_data_quality",
-    "_emit_progress",
-    "_extract_last_close_price",
-    "_extract_last_close_price_and_date",
-    "_fallback_report",
-    "_horizon_days",
-    "_invoke_once",
-    "_normalize_time_horizon_months",
-    "_price_lookback_days",
-    "_provider_kwargs",
-    "_report_to_markdown",
-    "_research_plan_to_markdown",
-    "_risk_to_markdown",
-    "_run_tracked",
-    "_run_with_config",
-    "_safe_data_field",
-    "_time_horizon_label",
-    "_truncate",
-}
-
-
-def __getattr__(name: str):  # pragma: no cover - temporary migration shim
-    if name in _REMOVED_PRIVATE_EXPORTS:
-        raise RuntimeError(
-            f"tradingagents.pipeline_balanced.{name} was removed; import it from "
-            "its home module and patch pipeline_balanced_orchestrator for stubs."
-        )
-    raise AttributeError(name)
-
-
 __all__ = [
     "AnalysisCancelledError",
     "AnalystReport",
