@@ -6,9 +6,9 @@ from datetime import date
 from types import SimpleNamespace
 
 from analysis_cache import AnalysisJobStore
-from tests.helpers import install_analysis_runtime
 from errors import RateLimitError
 from rate_limiter import RateLimitPolicy, SQLiteRateLimiterBackend
+from tests.helpers import install_analysis_runtime
 
 
 def test_ticker_validate_is_rate_limited(client, monkeypatch):

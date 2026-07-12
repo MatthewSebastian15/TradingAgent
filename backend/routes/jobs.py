@@ -75,11 +75,14 @@ def create_analysis_runtime() -> AnalysisRuntimeState:
 
 _RUNTIME = create_analysis_runtime()
 
-# Compatibility aliases for existing route code and tests. New code should get
-# state from get_analysis_runtime() so tests can replace the whole container.
-RESULT_CACHE = _RUNTIME.result_cache
-IN_FLIGHT = _RUNTIME.in_flight
-JOB_STORE = _RUNTIME.job_store
+
+def __getattr__(name: str):  # pragma: no cover - temporary migration shim
+    if name in {"RESULT_CACHE", "IN_FLIGHT", "JOB_STORE"}:
+        raise RuntimeError(
+            f"routes.jobs.{name} was removed; use get_analysis_runtime() or "
+            "install a runtime on app.state.analysis_runtime (see tests/helpers.py)."
+        )
+    raise AttributeError(name)
 
 
 def get_analysis_runtime(request: Request | None = None) -> AnalysisRuntimeState:
@@ -91,11 +94,8 @@ def get_analysis_runtime(request: Request | None = None) -> AnalysisRuntimeState
 
 
 def install_analysis_runtime(runtime: AnalysisRuntimeState) -> AnalysisRuntimeState:
-    global _RUNTIME, RESULT_CACHE, IN_FLIGHT, JOB_STORE
+    global _RUNTIME
     _RUNTIME = runtime
-    RESULT_CACHE = runtime.result_cache
-    IN_FLIGHT = runtime.in_flight
-    JOB_STORE = runtime.job_store
     return runtime
 
 

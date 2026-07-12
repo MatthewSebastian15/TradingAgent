@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from inspect import Parameter, signature
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -41,26 +39,14 @@ from services.analysis_repository import get_analysis_repository
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-_RESULT_CACHE = jobs.RESULT_CACHE
-_IN_FLIGHT = jobs.IN_FLIGHT
-_JOB_STORE = jobs.JOB_STORE
-_DEFAULT_RESULT_CACHE = _RESULT_CACHE
-_DEFAULT_IN_FLIGHT = _IN_FLIGHT
-_DEFAULT_JOB_STORE = _JOB_STORE
 
-
-def _runtime_for_request(request: Request | None = None) -> jobs.AnalysisRuntimeState:
-    if (
-        _RESULT_CACHE is not _DEFAULT_RESULT_CACHE
-        or _IN_FLIGHT is not _DEFAULT_IN_FLIGHT
-        or _JOB_STORE is not _DEFAULT_JOB_STORE
-    ):
-        return jobs.AnalysisRuntimeState(_RESULT_CACHE, _IN_FLIGHT, _JOB_STORE)
-    return jobs.get_analysis_runtime(request)
-
-
-def _job_store_for_request(request: Request | None = None):
-    return _runtime_for_request(request).job_store if request is not None else _JOB_STORE
+def __getattr__(name: str):  # pragma: no cover - temporary migration shim
+    if name in {"_RESULT_CACHE", "_IN_FLIGHT", "_JOB_STORE"}:
+        raise RuntimeError(
+            f"routes.analysis.{name} was removed; install a runtime on "
+            "app.state.analysis_runtime instead (see tests/helpers.py)."
+        )
+    raise AttributeError(name)
 
 
 _parse_final_result = serializers.parse_final_result
@@ -198,28 +184,6 @@ async def _preflight_market_data(req: AnalysisRequest) -> None:
     )
 
 
-def _callable_accepts_named_argument(func: Callable[..., Any], name: str) -> bool:
-    try:
-        params = signature(func).parameters
-    except (TypeError, ValueError):
-        return True
-    if name in params:
-        return True
-    return any(param.kind == Parameter.VAR_KEYWORD for param in params.values())
-
-
-async def _call_run_stream_pipeline(
-    req: AnalysisRequest,
-    request_id: str,
-    queue: asyncio.Queue,
-    cancel_event: asyncio.Event | None,
-    runtime: jobs.AnalysisRuntimeState,
-) -> dict[str, Any]:
-    if _callable_accepts_named_argument(_run_stream_pipeline, "runtime"):
-        return await _run_stream_pipeline(req, request_id, queue, cancel_event, runtime=runtime)
-    return await _run_stream_pipeline(req, request_id, queue, cancel_event)
-
-
 async def _run_stream_pipeline(
     req: AnalysisRequest,
     request_id: str,
@@ -227,7 +191,7 @@ async def _run_stream_pipeline(
     cancel_event: asyncio.Event | None = None,
     runtime: jobs.AnalysisRuntimeState | None = None,
 ) -> dict[str, Any]:
-    runtime = runtime or _runtime_for_request()
+    runtime = runtime or jobs.get_analysis_runtime()
     return await sse.run_stream_pipeline(
         req,
         request_id,
@@ -259,10 +223,10 @@ async def _wait_for_job_progress(source_queue: asyncio.Queue) -> None:
 
 
 async def _start_job(job, runtime: jobs.AnalysisRuntimeState | None = None) -> None:
-    runtime = runtime or _runtime_for_request()
+    runtime = runtime or jobs.get_analysis_runtime()
 
     async def run_stream_pipeline_with_runtime(req, request_id, queue, cancel_event):
-        return await _call_run_stream_pipeline(req, request_id, queue, cancel_event, runtime)
+        return await _run_stream_pipeline(req, request_id, queue, cancel_event, runtime=runtime)
 
     await jobs.start_job(
         job,
@@ -314,7 +278,7 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
 
     try:
         async with limit_request(request, stream_policy()) as lease:
-            runtime = _runtime_for_request(request)
+            runtime = jobs.get_analysis_runtime(request)
             return await _create_analysis_job_response(req, request_id, lease.identifier, runtime)
     except AnalysisJobLimitError as exc:
         raise RateLimitError(
@@ -330,7 +294,7 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
 )
 async def get_analysis_job(job_id: str, request: Request):
     async with limit_request(request, analysis_read_policy()) as lease:
-        job_store = _job_store_for_request(request)
+        job_store = jobs.get_analysis_runtime(request).job_store
         job = await job_store.get(job_id, owner_id=lease.identifier)
         if job is None:
             if await job_store.get(job_id) is not None:
@@ -349,7 +313,7 @@ async def analysis_job_events(job_id: str, request: Request):
     rate_limit_lease = limit_request(request, stream_policy())
     await rate_limit_lease.__aenter__()
     try:
-        job = await _job_store_for_request(request).get(
+        job = await jobs.get_analysis_runtime(request).job_store.get(
             job_id, owner_id=rate_limit_lease.identifier
         )
         if job is None:
@@ -367,7 +331,9 @@ async def analysis_job_events(job_id: str, request: Request):
 )
 async def cancel_analysis_job(job_id: str, request: Request):
     async with limit_request(request, request_policy()) as lease:
-        job = await _job_store_for_request(request).cancel(job_id, owner_id=lease.identifier)
+        job = await jobs.get_analysis_runtime(request).job_store.cancel(
+            job_id, owner_id=lease.identifier
+        )
         if job is None:
             raise _job_not_found(job_id)
         return job.public_summary()
@@ -404,7 +370,7 @@ async def validate_ticker(
 @router.get("/status", response_model=ApiStatusResponse)
 async def api_status(request: Request):
     async with limit_request(request, status_policy()):
-        return await _api_status_payload(_runtime_for_request(request))
+        return await _api_status_payload(jobs.get_analysis_runtime(request))
 
 
 async def _api_status_payload(runtime: jobs.AnalysisRuntimeState | None = None):
@@ -446,7 +412,7 @@ async def _api_status_payload(runtime: jobs.AnalysisRuntimeState | None = None):
         circuits = {"error": sanitize_message(str(exc))}
         timeout_workers = {"error": sanitize_message(str(exc))}
 
-    runtime = runtime or _runtime_for_request()
+    runtime = runtime or jobs.get_analysis_runtime()
     cache_stats = await runtime.result_cache.stats()
     inflight_stats = await runtime.in_flight.stats()
     job_stats = await runtime.job_store.stats()
