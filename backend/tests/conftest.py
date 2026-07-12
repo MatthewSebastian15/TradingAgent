@@ -7,12 +7,19 @@ default environment values before tests import the FastAPI app.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
 from dotenv import dotenv_values
 from fastapi.testclient import TestClient
 from tradingagents.llm_clients.model_catalog import MODEL_CATALOG
+
+# Make sibling test helpers importable as plain modules (`from helpers import ...`).
+# backend/tests and packages/tests are both packages named `tests`, so package-form
+# imports (`from tests.helpers import ...`) break when CI runs both suites in one
+# pytest process and `tests` resolves to packages/tests.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 _LIVE_TEST_ENV_KEYS = {"FINNHUB_API_KEY", "FINNHUB_BASE_URL", "FINNHUB_ENABLED"}
 

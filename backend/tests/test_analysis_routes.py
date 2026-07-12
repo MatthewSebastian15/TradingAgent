@@ -4,9 +4,10 @@ import asyncio
 import time
 from datetime import datetime
 
+from helpers import install_analysis_runtime
+
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
 from owner_session import owner_identifier
-from tests.helpers import install_analysis_runtime
 
 _TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 

@@ -4,10 +4,11 @@ import asyncio
 import sqlite3
 from datetime import date
 
+from helpers import install_analysis_runtime
+
 from analysis_cache import AnalysisJobStore
 from errors import RateLimitError
 from rate_limiter import RateLimitPolicy, SQLiteRateLimiterBackend
-from tests.helpers import install_analysis_runtime
 
 
 def test_ticker_validate_is_rate_limited(client, monkeypatch):
