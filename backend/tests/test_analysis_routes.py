@@ -6,6 +6,7 @@ from datetime import datetime
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
 from owner_session import owner_identifier
+from tests.helpers import install_analysis_runtime
 
 _TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
@@ -53,11 +54,11 @@ def _cache_key(ticker: str) -> AnalysisCacheKey:
 def _create_job_and_get_result(client, monkeypatch, payload, headers):
     """Create a job with a mocked pipeline and return the completed job summary."""
 
-    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None, runtime=None):
         return _mock_result()
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
 
     create = client.post("/api/analysis/jobs", json=payload, headers=headers)
@@ -154,7 +155,7 @@ def test_job_create_rejects_oversized_json_body_before_storing_job(client, monke
         raise AssertionError("Pipeline should not run for oversized job input")
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", should_not_run)
 
     response = client.post(
@@ -176,7 +177,7 @@ def test_job_completes_from_result_cache_without_rerunning_pipeline(client, monk
         raise AssertionError("pipeline must not run on a result-cache hit")
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    runtime = install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", should_not_run)
     monkeypatch.setattr(
         "routes.analysis.ROUTE_DEPS",
@@ -189,7 +190,7 @@ def test_job_completes_from_result_cache_without_rerunning_pipeline(client, monk
 
     payload = {"ticker": "CACHE1", "trade_date": "2026-05-14", "max_debate_rounds": 1}
     req = normalize_and_validate_analysis_request(AnalysisRequest(**payload))
-    asyncio.run(analysis_routes._RESULT_CACHE.set(analysis_routes._cache_key(req), _mock_result()))
+    asyncio.run(runtime.result_cache.set(analysis_routes._cache_key(req), _mock_result()))
 
     headers = {"x-api-key": "job-cache-test-key"}
     create = client.post("/api/analysis/jobs", json=payload, headers=headers)
@@ -207,11 +208,11 @@ def test_job_completes_from_result_cache_without_rerunning_pipeline(client, monk
 
 
 def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
-    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None, runtime=None):
         return _mock_result()
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
 
     payload = {"ticker": "MSFT", "trade_date": "2026-05-14", "max_debate_rounds": 1}
@@ -243,7 +244,7 @@ def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
 
 def test_job_lookup_rejects_request_id_fallback(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
 
     async def create_completed_job():
         job = await store.create(
@@ -266,7 +267,7 @@ def test_analysis_job_endpoint_falls_back_to_history_repository(
     client, monkeypatch, analysis_repository
 ):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     result = {
         "request_id": "history-job-request",
         "ticker": "MSFT",
@@ -291,7 +292,7 @@ def test_analysis_job_endpoint_falls_back_to_history_repository(
 
 def test_analysis_job_history_fallback_is_owner_scoped(client, monkeypatch, analysis_repository):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     analysis_repository.save_analysis(
         result={
             "request_id": "other-owner-request",

@@ -6,6 +6,7 @@ import os
 
 from analysis_cache import AnalysisCacheKey, AnalysisJobStore
 from owner_session import owner_identifier
+from tests.helpers import install_analysis_runtime
 
 _TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
@@ -79,7 +80,7 @@ def _analysis_cache_key(response_detail: str = "full") -> AnalysisCacheKey:
 
 
 def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch, analysis_repository):
-    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None, runtime=None):
         await queue.put(
             {
                 "type": "progress",
@@ -97,7 +98,7 @@ def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch, a
         return _stream_result()
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
 
     headers = {"x-api-key": "sse-refresh-test-key"}
@@ -132,7 +133,7 @@ def test_job_event_endpoint_replays_after_browser_refresh(client, monkeypatch, a
 
 
 def test_job_event_stream_is_not_gzipped(client, monkeypatch):
-    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None, runtime=None):
         await queue.put(
             {
                 "type": "progress",
@@ -150,7 +151,7 @@ def test_job_event_stream_is_not_gzipped(client, monkeypatch):
         return _stream_result()
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
 
     headers = {"x-api-key": "sse-no-gzip-test-key", "accept-encoding": "gzip"}
@@ -172,11 +173,11 @@ def test_job_event_stream_is_not_gzipped(client, monkeypatch):
 
 
 def test_job_stream_forwards_pipeline_error_event(client, monkeypatch):
-    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None, runtime=None):
         raise RuntimeError("mock stream failure")
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
 
     headers = {"x-api-key": "sse-error-test-key"}

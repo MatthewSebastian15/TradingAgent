@@ -6,6 +6,7 @@ from datetime import date
 from types import SimpleNamespace
 
 from analysis_cache import AnalysisJobStore
+from tests.helpers import install_analysis_runtime
 from errors import RateLimitError
 from rate_limiter import RateLimitPolicy, SQLiteRateLimiterBackend
 
@@ -33,7 +34,7 @@ def test_ticker_validate_is_rate_limited(client, monkeypatch):
 
 
 def test_configured_api_key_must_match(client, monkeypatch):
-    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None, runtime=None):
         return {
             "decision": "Hold",
             "data_quality": {
@@ -45,7 +46,7 @@ def test_configured_api_key_must_match(client, monkeypatch):
         }
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
     monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="expected-key"))
 
@@ -64,7 +65,7 @@ def test_configured_api_key_must_match(client, monkeypatch):
 
 def test_job_create_rejects_invalid_api_key_before_storing_job(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("rate_limiter.llm", SimpleNamespace(api_key="expected-key"))
 
     response = client.post(
@@ -79,7 +80,7 @@ def test_job_create_rejects_invalid_api_key_before_storing_job(client, monkeypat
 
 
 def test_job_create_rate_limit_runs_before_storing_second_job(client, monkeypatch):
-    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None, runtime=None):
         return {
             "decision": "Hold",
             "data_quality": {
@@ -91,7 +92,7 @@ def test_job_create_rate_limit_runs_before_storing_second_job(client, monkeypatc
         }
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
     monkeypatch.setattr(
         "routes.analysis.stream_policy",
@@ -241,7 +242,7 @@ def test_market_quotes_endpoint_is_rate_limited(client, monkeypatch):
 
 
 def test_market_quotes_use_separate_bucket_from_analysis_jobs(client, monkeypatch):
-    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None, runtime=None):
         return {
             "decision": "Hold",
             "data_quality": {
@@ -266,7 +267,7 @@ def test_market_quotes_use_separate_bucket_from_analysis_jobs(client, monkeypatc
         ]
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
     monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
     monkeypatch.setattr(
@@ -294,7 +295,7 @@ def test_market_quotes_use_separate_bucket_from_analysis_jobs(client, monkeypatc
 
 
 def test_job_read_endpoints_do_not_consume_request_limit(client, monkeypatch):
-    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None):
+    async def fake_run_stream_pipeline(req, request_id, queue, cancel_event=None, runtime=None):
         return {
             "decision": "Hold",
             "data_quality": {
@@ -306,7 +307,7 @@ def test_job_read_endpoints_do_not_consume_request_limit(client, monkeypatch):
         }
 
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
-    monkeypatch.setattr("routes.analysis._JOB_STORE", store)
+    install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
     monkeypatch.setattr(
         "routes.analysis.request_policy",
