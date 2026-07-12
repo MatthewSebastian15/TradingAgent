@@ -28,7 +28,7 @@ from config import (
 )
 from errors import (
     ApiError,
-    BadRequestError,
+    NotFoundError,
     PipelineExecutionError,
     PipelineTimeoutError,
     error_payload,
@@ -104,8 +104,8 @@ def reset_analysis_runtime_for_tests() -> AnalysisRuntimeState:
     return install_analysis_runtime(create_analysis_runtime())
 
 
-def job_not_found(job_id: str) -> BadRequestError:
-    return BadRequestError("Analysis job was not found.", details={"job_id": job_id})
+def job_not_found(job_id: str) -> NotFoundError:
+    return NotFoundError("Analysis job was not found.", details={"job_id": job_id})
 
 
 async def forward_job_progress(job: AnalysisJob, source_queue: asyncio.Queue) -> None:

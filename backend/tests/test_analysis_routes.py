@@ -233,12 +233,12 @@ def test_job_endpoints_are_bound_to_owner(client, monkeypatch):
     wrong_events = client.get(f"/api/analysis/jobs/{job_id}/events", headers=other_headers)
     wrong_delete = client.delete(f"/api/analysis/jobs/{job_id}", headers=other_headers)
 
-    assert wrong_get.status_code == 400
-    assert wrong_get.json()["error"]["code"] == "BAD_REQUEST"
-    assert wrong_events.status_code == 400
-    assert wrong_events.json()["error"]["code"] == "BAD_REQUEST"
-    assert wrong_delete.status_code == 400
-    assert wrong_delete.json()["error"]["code"] == "BAD_REQUEST"
+    assert wrong_get.status_code == 404
+    assert wrong_get.json()["error"]["code"] == "NOT_FOUND"
+    assert wrong_events.status_code == 404
+    assert wrong_events.json()["error"]["code"] == "NOT_FOUND"
+    assert wrong_delete.status_code == 404
+    assert wrong_delete.json()["error"]["code"] == "NOT_FOUND"
 
 
 def test_job_lookup_rejects_request_id_fallback(client, monkeypatch):
@@ -258,8 +258,8 @@ def test_job_lookup_rejects_request_id_fallback(client, monkeypatch):
 
     response = client.get("/api/analysis/jobs/request-fallback")
 
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "BAD_REQUEST"
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
 def test_analysis_job_endpoint_falls_back_to_history_repository(
@@ -306,7 +306,7 @@ def test_analysis_job_history_fallback_is_owner_scoped(client, monkeypatch, anal
 
     response = client.get("/api/analysis/jobs/other-owner-job")
 
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "other-owner-request" not in response.text
 
 
