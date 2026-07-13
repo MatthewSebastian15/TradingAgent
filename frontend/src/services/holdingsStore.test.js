@@ -25,21 +25,22 @@ describe('holdingsStore', () => {
     const holdings = await readHoldings();
     expect(holdings).toHaveLength(1);
     expect(holdings[0]).toMatchObject({
-      id: 'AAPL',
       ticker: 'AAPL',
       shares: 10,
       cost_basis: 150.5,
     });
+    expect(holdings[0].id).toBeTruthy();
     expect(holdings[0].added_at).toBeTruthy();
   });
 
-  it('re-adding the same ticker overwrites the existing lot', async () => {
+  it('re-adding the same ticker creates a second lot', async () => {
     await addHolding({ ticker: 'AAPL', shares: 10, cost_basis: 100 });
     await addHolding({ ticker: 'AAPL', shares: 5, cost_basis: 200 });
 
     const holdings = await readHoldings();
-    expect(holdings).toHaveLength(1);
-    expect(holdings[0].shares).toBe(5);
+    expect(holdings).toHaveLength(2);
+    expect(holdings[0].id).not.toBe(holdings[1].id);
+    expect(holdings.map((h) => h.shares).sort()).toEqual([10, 5].sort());
   });
 
   it('rejects invalid entries silently', async () => {
@@ -54,10 +55,11 @@ describe('holdingsStore', () => {
     await addHolding({ ticker: 'AAPL', shares: 1, cost_basis: 1 });
     await addHolding({ ticker: 'MSFT', shares: 2, cost_basis: 2 });
 
-    await removeHolding('AAPL');
-    expect((await readHoldings()).map((h) => h.id)).toEqual(['MSFT']);
+    const [msft, aapl] = await readHoldings();
+    await removeHolding(aapl.id);
+    expect((await readHoldings()).map((h) => h.ticker)).toEqual(['MSFT']);
 
-    await removeHolding('MSFT');
+    await removeHolding(msft.id);
     expect(await readHoldings()).toEqual([]);
     expect(localStorage.getItem('portfolio_holdings_v1')).toBeNull();
   });

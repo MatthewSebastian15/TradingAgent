@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { addHolding, readHoldings, removeHolding } from '../services/holdingsStore';
 
@@ -38,7 +38,5 @@ export function useHoldingsStore() {
     [refresh]
   );
 
-  const ids = useMemo(() => new Set(holdings.map((entry) => entry.id)), [holdings]);
-
-  return { holdings, ids, hydrated, add, remove };
+  return { holdings, hydrated, add, remove };
 }

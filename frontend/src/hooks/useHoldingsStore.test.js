@@ -21,7 +21,7 @@ describe('useHoldingsStore', () => {
     vi.restoreAllMocks();
   });
 
-  it('hydrates holdings and exposes their ids', async () => {
+  it('hydrates holdings', async () => {
     readHoldings.mockResolvedValue([{ id: 'h1', ticker: 'BBCA.JK' }]);
 
     const { result } = renderHook(() => useHoldingsStore());
@@ -29,7 +29,6 @@ describe('useHoldingsStore', () => {
     expect(result.current.hydrated).toBe(false);
     await waitFor(() => expect(result.current.hydrated).toBe(true));
     expect(result.current.holdings).toEqual([{ id: 'h1', ticker: 'BBCA.JK' }]);
-    expect(result.current.ids.has('h1')).toBe(true);
   });
 
   it('add persists then refreshes', async () => {
