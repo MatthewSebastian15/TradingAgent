@@ -255,10 +255,11 @@ APP_ENV=development
 LLM_PROVIDER=<provider>            # e.g. google | openai | anthropic | deepseek
 QUICK_THINK_LLM=<model_name>       # e.g. gemini-2.5-flash, gpt-4o-mini, deepseek-chat
 DEEP_THINK_LLM=<model_name>        # e.g. gemini-2.5-pro, gpt-4o, deepseek-chat
-LLM_API_KEY=your_key_here
+GOOGLE_API_KEY=your_key_here       # or OPENAI_API_KEY / ANTHROPIC_API_KEY / DEEPSEEK_API_KEY
 ```
 
-The current startup validation expects `LLM_API_KEY` to be non-empty.
+Startup validation expects the active provider's API key env var to be non-empty
+(`GOOGLE_API_KEY`/`GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `DEEPSEEK_API_KEY`).
 
 ### Important Backend Env Variables
 
@@ -273,7 +274,7 @@ The current startup validation expects `LLM_API_KEY` to be non-empty.
 | `LLM_PROVIDER` | LLM provider. |
 | `QUICK_THINK_LLM` | Fast model. |
 | `DEEP_THINK_LLM` | Reasoning/synthesis model. |
-| `LLM_API_KEY` | Main LLM API key. |
+| `GOOGLE_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` | API key for the active LLM provider. |
 | `LLM_BASE_URL` | Custom base URL for compatible providers. |
 | `ALPHA_VANTAGE_API_KEY` | Optional market/fundamental fallback. |
 | `FINNHUB_API_KEY` | Optional market/news/fundamental enrichment. |

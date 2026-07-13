@@ -91,7 +91,6 @@ def test_llm_budget_depth_limits_from_env(monkeypatch):
         env.setenv("LLM_BUDGET_FAST", "2")
         env.setenv("LLM_BUDGET_BALANCED", "3")
         env.setenv("LLM_BUDGET_DEEP", "4")
-        env.setenv("LLM_API_KEY", "test-llm-key")
         reloaded = config.reload_config_for_tests()
 
         assert (

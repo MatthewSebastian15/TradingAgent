@@ -50,7 +50,6 @@ _GOOGLE_DEEP_LLM = MODEL_CATALOG["google"]["deep"][0][1]
 _DEFAULT_ENV = {
     "APP_ENV": "development",
     "LLM_PROVIDER": "google",
-    "LLM_API_KEY": "test-llm-key",
     "DEEP_THINK_LLM": _GOOGLE_DEEP_LLM,
     "QUICK_THINK_LLM": _GOOGLE_QUICK_LLM,
     "GOOGLE_API_KEY": "test-google-key",

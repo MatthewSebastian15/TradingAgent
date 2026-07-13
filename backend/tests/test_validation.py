@@ -250,7 +250,6 @@ def test_deepseek_provider_is_valid_when_api_key_exists(monkeypatch):
 
 def test_startup_config_requires_model_env(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "google")
-    monkeypatch.setenv("LLM_API_KEY", "test-llm-key")
     monkeypatch.delenv("DEEP_THINK_LLM", raising=False)
     monkeypatch.delenv("QUICK_THINK_LLM", raising=False)
 
@@ -267,7 +266,6 @@ def test_startup_config_requires_model_env(monkeypatch):
 
 def test_google_model_env_values_are_normalized_to_lowercase(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "google")
-    monkeypatch.setenv("LLM_API_KEY", "test-llm-key")
     monkeypatch.setenv("DEEP_THINK_LLM", "gemini-3.5-Flash")
     monkeypatch.setenv("QUICK_THINK_LLM", "gemini-3.1-Flash-Lite")
 
@@ -286,7 +284,6 @@ def _restore_test_config(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "google")
     monkeypatch.setenv("DEEP_THINK_LLM", _GOOGLE_DEEP_LLM)
     monkeypatch.setenv("QUICK_THINK_LLM", _GOOGLE_QUICK_LLM)
-    monkeypatch.setenv("LLM_API_KEY", "test-llm-key")
     monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "false")
     monkeypatch.delenv("OWNER_SESSION_SECRET", raising=False)
     monkeypatch.delenv("CORS_ORIGINS", raising=False)

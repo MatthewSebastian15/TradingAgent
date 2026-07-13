@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 os.environ.setdefault("TRADINGAGENTS_SKIP_DOTENV", "true")
 os.environ.setdefault("LLM_PROVIDER", "google")
 os.environ.setdefault("QUICK_THINK_LLM", "gemini-2.0-flash")
-os.environ.setdefault("LLM_API_KEY", "test-key")
+os.environ.setdefault("GOOGLE_API_KEY", "test-key")
 
 
 def test_pool_status_endpoint(client):

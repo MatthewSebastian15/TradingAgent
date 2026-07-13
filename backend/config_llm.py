@@ -157,13 +157,13 @@ PROVIDER_API_KEY_ENV: dict[str, tuple[str, ...]] = {
 
 
 def _resolve_llm_api_key() -> str:
-    """Key comes from the active provider's own env var; LLM_API_KEY is legacy fallback."""
+    """Key comes from the active provider's own env var (see PROVIDER_API_KEY_ENV)."""
     provider = env("LLM_PROVIDER").lower()
     for name in PROVIDER_API_KEY_ENV.get(provider, ()):
         value = env(name, "").strip()
         if value:
             return value
-    return env("LLM_API_KEY", "").strip()  # ponytail: legacy fallback, drop once no .env sets it
+    return ""
 
 
 @dataclass(frozen=True)
