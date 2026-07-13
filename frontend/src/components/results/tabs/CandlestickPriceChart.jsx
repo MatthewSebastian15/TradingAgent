@@ -218,7 +218,9 @@ export default function CandlestickPriceChart({
   };
 
   return (
-    <div className={`relative ${heightClass} overflow-hidden border border-bloomberg-border bg-black`}>
+    <div
+      className={`relative ${heightClass} overflow-hidden border border-bloomberg-border bg-black`}
+    >
       <div className="relative h-full w-full">
         {hoverPoint && hover && (
           <CandlestickTooltip
@@ -376,30 +378,30 @@ export default function CandlestickPriceChart({
 
           {showVolume &&
             chart.volumeTicks.map((tick) => {
-            const y = volumeToY(tick);
-            return (
-              <g key={`volume-${tick}`}>
-                <line
-                  x1={PADDING.left}
-                  x2={WIDTH - PADDING.right}
-                  y1={y}
-                  y2={y}
-                  stroke={GRID_COLOR}
-                  strokeDasharray="4 6"
-                />
-                <text
-                  x={PADDING.left - 12}
-                  y={y + 4}
-                  fill={TEXT_COLOR}
-                  fontFamily="monospace"
-                  fontSize="10"
-                  textAnchor="end"
-                >
-                  {formatCompactNumber(tick)}
-                </text>
-              </g>
-            );
-          })}
+              const y = volumeToY(tick);
+              return (
+                <g key={`volume-${tick}`}>
+                  <line
+                    x1={PADDING.left}
+                    x2={WIDTH - PADDING.right}
+                    y1={y}
+                    y2={y}
+                    stroke={GRID_COLOR}
+                    strokeDasharray="4 6"
+                  />
+                  <text
+                    x={PADDING.left - 12}
+                    y={y + 4}
+                    fill={TEXT_COLOR}
+                    fontFamily="monospace"
+                    fontSize="10"
+                    textAnchor="end"
+                  >
+                    {formatCompactNumber(tick)}
+                  </text>
+                </g>
+              );
+            })}
 
           {hoverPoint && (
             <g>

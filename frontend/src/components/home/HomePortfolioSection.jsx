@@ -2,10 +2,7 @@ import React, { useMemo } from 'react';
 
 import { useHoldingsStore } from '../../hooks/useHoldingsStore';
 import { useWatchlistQuotes } from '../../hooks/useWatchlistQuotes';
-import {
-  formatLastPrice,
-  normalizeWatchlistSymbol,
-} from '../../utils/watchlistFormatters';
+import { formatLastPrice, normalizeWatchlistSymbol } from '../../utils/watchlistFormatters';
 
 function plPercent(price, costBasis) {
   if (!Number.isFinite(price) || !Number.isFinite(costBasis) || costBasis <= 0) return null;
