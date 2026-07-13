@@ -127,6 +127,30 @@ def test_reset_usage_and_per_agent_flags():
     assert get_usage_summary()["totals"]["calls"] == 0
 
 
+def test_telemetry_persists_across_restart(tmp_path, monkeypatch):
+    from tradingagents.llm_optimization import usage
+
+    monkeypatch.setattr(usage, "_TELEMETRY_DB_PATH", tmp_path / "telemetry.sqlite3")
+    usage.reset_telemetry()
+    usage.ingest_analysis_telemetry(
+        {"agents": {"Market Analyst": {"calls": 3, "estimated_tokens": 10}}},
+        ticker="AAPL",
+        news={"empty_reason": "no_company_news"},
+    )
+
+    # Simulate a restart: wipe memory, force re-hydration from the sqlite snapshot.
+    usage._telemetry_agents.clear()
+    usage._telemetry_news_blanks.clear()
+    monkeypatch.setattr(usage, "_telemetry_loaded", False)
+
+    summary = usage.get_telemetry_summary()
+    assert summary["agents"]["Market Analyst"]["calls"] == 3
+    assert summary["news_blank_count"] == 1
+
+    usage.reset_telemetry()
+    assert usage.get_telemetry_summary()["totals"]["calls"] == 0
+
+
 def test_invoke_once_logs_usage_on_success(tmp_path, caplog):
     class DummyLLM:
         provider = "google"

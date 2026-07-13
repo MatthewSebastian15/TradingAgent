@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
 import logging
+import sqlite3
 import threading
 import time
 from collections import defaultdict
+from contextlib import closing
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -26,13 +30,66 @@ _daily_usage: dict[str, dict] = defaultdict(_new_bucket)
 
 # Process-wide telemetry accumulated in the FastAPI parent process (fed per
 # completed analysis via ingest_analysis_telemetry). Separate from _daily_usage,
-# which lives in each pipeline worker and is reset per analysis.
-# ponytail: in-memory, resets on restart; persist to sqlite if cross-restart
-# weekly history is ever needed.
+# which lives in each pipeline worker and is reset per analysis. Snapshotted to
+# sqlite (best-effort) so it survives restarts; failures never break analyses.
 _telemetry_lock = threading.Lock()
 _telemetry_agents: dict[str, dict] = defaultdict(_new_bucket)
 _telemetry_news_blanks: list[dict] = []
 _TELEMETRY_BLANK_CAP = 200
+
+# ponytail: fixed relative path, same convention as the other .cache/*.sqlite3 stores.
+_TELEMETRY_DB_PATH = Path(".cache/llm_telemetry.sqlite3")
+_telemetry_loaded = False
+
+
+def _telemetry_conn() -> sqlite3.Connection:
+    _TELEMETRY_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(_TELEMETRY_DB_PATH)
+    conn.execute("CREATE TABLE IF NOT EXISTS telemetry (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    return conn
+
+
+def _load_telemetry_locked() -> None:
+    """Hydrate in-memory telemetry from the sqlite snapshot once (under _telemetry_lock)."""
+    global _telemetry_loaded
+    if _telemetry_loaded:
+        return
+    _telemetry_loaded = True
+    try:
+        with closing(_telemetry_conn()) as conn:
+            row = conn.execute("SELECT value FROM telemetry WHERE key = 'snapshot'").fetchone()
+        if not row:
+            return
+        snapshot = json.loads(row[0])
+        for name, bucket in (snapshot.get("agents") or {}).items():
+            if isinstance(bucket, dict):
+                target = _telemetry_agents[name]
+                for key in target:
+                    target[key] = type(target[key])(bucket.get(key) or 0)
+        blanks = snapshot.get("news_blanks")
+        if isinstance(blanks, list):
+            _telemetry_news_blanks.extend(blanks[-_TELEMETRY_BLANK_CAP:])
+    except Exception:
+        logger.debug("telemetry: failed to load sqlite snapshot", exc_info=True)
+
+
+def _persist_telemetry_locked() -> None:
+    """Write the whole telemetry snapshot to sqlite (under _telemetry_lock, best-effort)."""
+    try:
+        snapshot = json.dumps(
+            {
+                "agents": {name: dict(bucket) for name, bucket in _telemetry_agents.items()},
+                "news_blanks": _telemetry_news_blanks[-_TELEMETRY_BLANK_CAP:],
+            }
+        )
+        with closing(_telemetry_conn()) as conn, conn:
+            conn.execute(
+                "INSERT INTO telemetry (key, value) VALUES ('snapshot', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (snapshot,),
+            )
+    except Exception:
+        logger.debug("telemetry: failed to persist sqlite snapshot", exc_info=True)
 
 
 @dataclass
@@ -217,6 +274,7 @@ def ingest_analysis_telemetry(
     """Merge one completed analysis's per-agent usage into process-wide telemetry."""
     agents = (summary or {}).get("agents") or {}
     with _telemetry_lock:
+        _load_telemetry_locked()
         for name, bucket in agents.items():
             if not isinstance(bucket, dict):
                 continue
@@ -228,11 +286,13 @@ def ingest_analysis_telemetry(
         if blank and ticker:
             _telemetry_news_blanks.append({"ticker": ticker, "reason": blank})
             del _telemetry_news_blanks[:-_TELEMETRY_BLANK_CAP]
+        _persist_telemetry_locked()
 
 
 def get_telemetry_summary() -> dict:
     """Aggregated per-agent telemetry for the /api/debug/llm-usage endpoint."""
     with _telemetry_lock:
+        _load_telemetry_locked()
         agents = {name: _agent_row(bucket) for name, bucket in _telemetry_agents.items()}
         return {
             "agents": agents,
@@ -247,10 +307,17 @@ def get_telemetry_summary() -> dict:
 
 
 def reset_telemetry() -> None:
-    """Test helper: clear process-wide telemetry."""
+    """Test helper: clear process-wide telemetry (memory and sqlite snapshot)."""
+    global _telemetry_loaded
     with _telemetry_lock:
         _telemetry_agents.clear()
         _telemetry_news_blanks.clear()
+        _telemetry_loaded = True
+        try:
+            with closing(_telemetry_conn()) as conn, conn:
+                conn.execute("DELETE FROM telemetry WHERE key = 'snapshot'")
+        except Exception:
+            logger.debug("telemetry: failed to clear sqlite snapshot", exc_info=True)
 
 
 class Timer:

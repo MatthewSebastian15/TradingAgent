@@ -74,17 +74,17 @@ def _prompt_json(value: Any, max_chars: int = 9000) -> tuple[str, bool]:
         return text, False
     # Compact output has no indent boundary to walk back to, so build up complete
     # top-level keys until the budget is hit — output stays valid JSON, no mid-value cuts.
-    # ponytail: O(keys²) reserialize per key; track running length instead if a context dict exceeds ~50 keys
+    # Running serialized length per entry keeps this O(total chars), one dumps per key.
     if isinstance(value, dict):
         kept: dict[str, Any] = {}
+        length = 2  # the surrounding {}
         for k, v in value.items():
-            candidate = {**kept, k: v}
-            if (
-                len(json.dumps(candidate, separators=(",", ":"), ensure_ascii=False, default=str))
-                > max_chars
-            ):
+            piece = json.dumps({k: v}, separators=(",", ":"), ensure_ascii=False, default=str)
+            added = (len(piece) - 2) + (1 if kept else 0)  # strip braces, +1 comma
+            if length + added > max_chars:
                 break
-            kept = candidate
+            kept[k] = v
+            length += added
         body = json.dumps(kept, separators=(",", ":"), ensure_ascii=False, default=str)
         omitted = [str(k) for k in value if k not in kept]
         marker = f"[TRUNCATED_FOR_PROMPT omitted_context_keys={json.dumps(omitted)}]"

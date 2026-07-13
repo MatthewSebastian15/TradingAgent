@@ -64,8 +64,8 @@ export function summarize(positions, priceFor) {
   };
 }
 
-// ponytail: 30-day months — fine for a horizon badge; swap to date-fns if exact
-// calendar months ever matter.
+// Calendar-month maturity via native Date.setMonth (month-end overflow rolls
+// forward, e.g. Jan 31 + 1M → Mar 3 — acceptable for a horizon badge).
 export function horizonInfo(entryAt, months) {
   const start = new Date(entryAt).getTime();
   if (!Number.isFinite(start)) return { ageDays: null, matured: false, label: '-' };
@@ -73,6 +73,8 @@ export function horizonInfo(entryAt, months) {
   const ageDays = Math.max(0, Math.floor((Date.now() - start) / 86_400_000));
   if (!months) return { ageDays, matured: false, label: `${ageDays}d` };
 
-  const matured = Date.now() >= start + months * 30 * 86_400_000;
+  const maturesAt = new Date(start);
+  maturesAt.setMonth(maturesAt.getMonth() + months);
+  const matured = Date.now() >= maturesAt.getTime();
   return { ageDays, matured, label: `${ageDays}d / ${months}M` };
 }

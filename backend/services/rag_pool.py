@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import logging
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
@@ -69,7 +70,9 @@ async def get_news_pool(window_days: int = 7) -> list[dict[str, Any]]:
         return entry.data if entry is not None else []
 
 
-_ticker_news_cache: dict[str, _CacheEntry] = {}
+# LRU-capped: single event loop mutates it, so no lock needed.
+_TICKER_NEWS_CACHE_MAX = 256
+_ticker_news_cache: OrderedDict[str, _CacheEntry] = OrderedDict()
 
 
 async def get_ticker_news_pool(ticker: str) -> list[dict[str, Any]]:
@@ -77,6 +80,7 @@ async def get_ticker_news_pool(ticker: str) -> list[dict[str, Any]]:
     now = time.time()
     entry = _ticker_news_cache.get(ticker)
     if entry is not None and (now - entry.fetched_at) < RAG_CHATBOT_NEWS_POOL_TTL_SECONDS:
+        _ticker_news_cache.move_to_end(ticker)
         return entry.data
 
     def _fetch() -> list[dict[str, Any]]:
@@ -89,8 +93,10 @@ async def get_ticker_news_pool(ticker: str) -> list[dict[str, Any]]:
 
     try:
         articles = await asyncio.to_thread(_fetch)
-        # ponytail: unbounded per-ticker dict; fine at chat volume, add LRU if it grows
         _ticker_news_cache[ticker] = _CacheEntry(data=articles, fetched_at=now)
+        _ticker_news_cache.move_to_end(ticker)
+        while len(_ticker_news_cache) > _TICKER_NEWS_CACHE_MAX:
+            _ticker_news_cache.popitem(last=False)
         return articles
     except Exception:
         logger.exception("RAG: failed to fetch ticker news pool %s", ticker)

@@ -12,11 +12,13 @@ export function historicalVaR(returns, alpha = 0.95) {
   return sorted[idx] * 100;
 }
 
-// Parametric (normal) VaR. z=1.645 for 95%; v1 only ever asks for 95%.
-// ponytail: single hard-coded z (95% only). Add a z-table if other levels ship.
-export function parametricVaR(returns) {
-  if (returns.length < 2) return null;
-  const z = 1.645;
+// One-tailed z per confidence level; unknown levels return null.
+const Z_BY_ALPHA = { 0.9: 1.282, 0.95: 1.645, 0.99: 2.326 };
+
+// Parametric (normal) VaR at the given confidence level (default 95%).
+export function parametricVaR(returns, alpha = 0.95) {
+  const z = Z_BY_ALPHA[alpha];
+  if (returns.length < 2 || !z) return null;
   return (mean(returns) - z * stdDev(returns)) * 100;
 }
 

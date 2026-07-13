@@ -4,12 +4,24 @@ import { decryptJSON, encryptJSON } from './secureStorage';
 
 export const CHAT_HISTORY_KEY = 'tradingagents:chatbot:history:v1';
 
-// Bound growth so we never silently hit the ~5MB localStorage quota.
-// ponytail: count + age caps only; a single giant conversation can still
-// exceed quota — if a QuotaExceededError is ever observed, add a
-// per-conversation byte cap.
+// Bound growth so we never silently hit the ~5MB localStorage quota:
+// count + age caps, plus a per-conversation byte cap (oldest messages drop first).
 const HISTORY_TTL_DAYS = 30;
 export const MAX_CONVERSATIONS = 50;
+export const MAX_CONVERSATION_BYTES = 200_000;
+
+// ponytail: cap measured on plaintext JSON; the encrypted envelope is larger
+// but proportional, so the quota headroom still holds.
+function capConversationBytes(convo) {
+  if (!Array.isArray(convo?.messages)) return convo;
+  let size = JSON.stringify(convo).length;
+  if (size <= MAX_CONVERSATION_BYTES) return convo;
+  const messages = [...convo.messages];
+  while (messages.length > 1 && size > MAX_CONVERSATION_BYTES) {
+    size -= JSON.stringify(messages.shift()).length + 1; // +1 for the array comma
+  }
+  return { ...convo, messages };
+}
 
 export function pruneConversations(list) {
   if (!Array.isArray(list)) return [];
@@ -19,7 +31,8 @@ export function pruneConversations(list) {
       const ts = c?.updatedAt ? new Date(c.updatedAt).getTime() : NaN;
       return Number.isNaN(ts) || ts >= cutoff;
     })
-    .slice(0, MAX_CONVERSATIONS); // newest-first, so this keeps the latest
+    .slice(0, MAX_CONVERSATIONS) // newest-first, so this keeps the latest
+    .map(capConversationBytes);
 }
 
 export async function loadConversations() {

@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   CHAT_HISTORY_KEY,
+  MAX_CONVERSATION_BYTES,
   MAX_CONVERSATIONS,
   loadConversations,
   pruneConversations,
@@ -42,6 +43,22 @@ describe('pruneConversations', () => {
 
   it('tolerates non-array input', () => {
     expect(pruneConversations(null)).toEqual([]);
+  });
+
+  it('caps a giant conversation by dropping its oldest messages', () => {
+    const msg = (i) => ({ role: 'user', content: `${i}:${'x'.repeat(10_000)}` });
+    const giant = {
+      id: 'g',
+      updatedAt: iso(Date.now()),
+      messages: Array.from({ length: 40 }, (_, i) => msg(i)),
+    };
+
+    const [capped] = pruneConversations([giant]);
+    expect(JSON.stringify(capped).length).toBeLessThanOrEqual(MAX_CONVERSATION_BYTES);
+    expect(capped.messages.length).toBeGreaterThan(0);
+    // Newest messages survive; the dropped ones are the oldest.
+    expect(capped.messages.at(-1)).toEqual(giant.messages.at(-1));
+    expect(capped.messages[0]).not.toEqual(giant.messages[0]);
   });
 });
 
