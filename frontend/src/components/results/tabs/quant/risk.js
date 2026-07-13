@@ -16,10 +16,11 @@ export function historicalVaR(returns, alpha = 0.95) {
 const Z_BY_ALPHA = { 0.9: 1.282, 0.95: 1.645, 0.99: 2.326 };
 
 // Parametric (normal) VaR at the given confidence level (default 95%).
-export function parametricVaR(returns, alpha = 0.95) {
+// sigma overrides the full-history stdDev (e.g. EWMA sigma for regime-aware VaR).
+export function parametricVaR(returns, alpha = 0.95, sigma = null) {
   const z = Z_BY_ALPHA[alpha];
   if (returns.length < 2 || !z) return null;
-  return (mean(returns) - z * stdDev(returns)) * 100;
+  return (mean(returns) - z * (sigma ?? stdDev(returns))) * 100;
 }
 
 // Conditional VaR / Expected Shortfall: mean of the worst tail beyond the VaR

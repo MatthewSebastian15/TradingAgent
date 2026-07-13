@@ -59,16 +59,20 @@ export function rollingVol(closes, window = 21) {
   return out;
 }
 
-// Exponentially weighted volatility (RiskMetrics), recent days weighted more.
-// -> annualized %, or 0 for a flat series.
-export function ewmaVol(closes, lambda = 0.94) {
-  const returns = simpleReturns(closes);
+// Daily EWMA sigma (decimal, not annualized) — input for VaR/MC, not display.
+export function ewmaSigmaDaily(returns, lambda = 0.94) {
   if (returns.length === 0) return 0;
   let variance = returns[0] ** 2;
   for (let i = 1; i < returns.length; i += 1) {
     variance = lambda * variance + (1 - lambda) * returns[i] ** 2;
   }
-  return Math.sqrt(variance) * Math.sqrt(TRADING_DAYS) * 100;
+  return Math.sqrt(variance);
+}
+
+// Exponentially weighted volatility (RiskMetrics), recent days weighted more.
+// -> annualized %, or 0 for a flat series.
+export function ewmaVol(closes, lambda = 0.94) {
+  return ewmaSigmaDaily(simpleReturns(closes), lambda) * Math.sqrt(TRADING_DAYS) * 100;
 }
 
 // Worst peak-to-trough decline in %, 0 if the series never drops.

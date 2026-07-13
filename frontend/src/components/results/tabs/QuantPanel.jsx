@@ -43,6 +43,7 @@ import {
   drawdownSeries,
   drawdownStats,
   efficientFrontier,
+  ewmaSigmaDaily,
   ewmaVol,
   gmvWeights,
   historicalVaR,
@@ -173,7 +174,8 @@ function QuantPanel({ points, currency, symbol, sections }) {
       dd: maxDrawdown(closes),
       cal: calmar(closes),
       histVaR: historicalVaR(returns),
-      paramVaR: parametricVaR(returns),
+      // ponytail: one card — EWMA VaR replaces the flat-stdev number outright.
+      paramVaR: parametricVaR(returns, 0.95, ewmaSigmaDaily(returns)),
       cv: cvar(returns),
       downDev: downsideDeviation(returns),
       shp: sharpe(returns, rfDaily),
@@ -247,7 +249,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
     // Risk-neutral drift uses the risk-free rate instead of the historical mean,
     // removing the optimistic bias when the sample window was a bull run.
     const drift = mcDrift === 'riskneutral' ? rfDaily : mean(logRet);
-    return monteCarloGBM(spot, drift, stdDev(logRet), mcHorizon, MC_PATHS, seed);
+    return monteCarloGBM(spot, drift, ewmaSigmaDaily(logRet), mcHorizon, MC_PATHS, seed);
   }, [visible, closes, logRet, returns, seed, mcHorizon, mcMethod, mcDrift, rfDaily]);
 
   const horizonLabel = useMemo(() => {

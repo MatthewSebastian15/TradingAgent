@@ -63,8 +63,8 @@ export function RiskSection({
           label="Parametric VaR (95%)"
           value={fmtLoss(paramVaR)}
           tone="bad"
-          gloss="Same idea, read off a normal bell curve."
-          formula="mean − 1.645 × stddev of daily returns. Trusts the bell-curve shape (understates rare crashes)."
+          gloss="Same idea, read off a normal bell curve tuned to recent volatility."
+          formula="mean − 1.645 × EWMA vol (λ=0.94, recent days weighted more). Trusts the bell-curve shape (understates rare crashes)."
         />
         <MetricCard
           label="Conditional VaR (95%)"

@@ -19,6 +19,7 @@ import {
   drawdownSeries,
   drawdownStats,
   efficientFrontier,
+  ewmaSigmaDaily,
   ewmaVol,
   gmvWeights,
   historicalVaR,
@@ -117,6 +118,19 @@ describe('ewmaVol', () => {
   });
 });
 
+describe('ewmaSigmaDaily', () => {
+  it('flat returns -> 0; empty -> 0', () => {
+    expect(ewmaSigmaDaily([0, 0, 0, 0])).toBe(0);
+    expect(ewmaSigmaDaily([])).toBe(0);
+  });
+
+  it('recent vol spike -> sigma above full-history stdDev', () => {
+    // 60 calm days then 5 wild ones: EWMA weights the spike, flat stdDev dilutes it.
+    const returns = [...Array.from({ length: 60 }, () => 0.001), 0.05, -0.06, 0.07, -0.05, 0.06];
+    expect(ewmaSigmaDaily(returns)).toBeGreaterThan(stdDev(returns));
+  });
+});
+
 describe('VaR / CVaR', () => {
   // 20 returns, worst five: -0.05..-0.01. 95% -> 5th percentile index = floor(0.05*20)=1.
   const returns = Array.from({ length: 20 }, (_, i) => (i - 10) / 100); // -0.10 .. 0.09
@@ -133,6 +147,11 @@ describe('VaR / CVaR', () => {
     const v = parametricVaR(returns);
     expect(Number.isFinite(v)).toBe(true);
     expect(v).toBeLessThan(0);
+  });
+
+  it('parametricVaR with explicit sigma = (mean − 1.645σ)·100', () => {
+    const m = returns.reduce((a, b) => a + b, 0) / returns.length;
+    expect(parametricVaR(returns, 0.95, 0.02)).toBeCloseTo((m - 1.645 * 0.02) * 100, 10);
   });
 
   it('too-few returns -> null', () => {
