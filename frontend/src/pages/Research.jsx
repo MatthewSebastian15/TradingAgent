@@ -1,9 +1,18 @@
 import PropTypes from 'prop-types';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import ResearchCommandBar from '../components/research/ResearchCommandBar';
 import ResearchSidebar from '../components/research/ResearchSidebar';
 import CandlestickPriceChart from '../components/results/tabs/CandlestickPriceChart';
+import {
+  AXIS_COLOR,
+  buildXAxisTicks,
+  formatCompactNumber,
+  GRID_COLOR,
+  movementColor,
+  normalizePricePoints,
+  TEXT_COLOR,
+} from '../components/results/tabs/priceChartUtils';
 import { useStockOverview } from '../hooks/useStockOverview';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 import { signClass as baseSignClass } from '../utils/formatting';
@@ -225,10 +234,112 @@ function StockHeader({ data, loading }) {
 }
 StockHeader.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
 
+const VOL_WIDTH = 1000;
+const VOL_HEIGHT = 150;
+const VOL_PADDING = { top: 14, right: 28, bottom: 28, left: 116 };
+
+function VolumeBarChart({ points, rangeKey }) {
+  const normalized = useMemo(() => normalizePricePoints(points), [points]);
+  if (normalized.length < 2) return null;
+
+  const plotWidth = VOL_WIDTH - VOL_PADDING.left - VOL_PADDING.right;
+  const plotHeight = VOL_HEIGHT - VOL_PADDING.top - VOL_PADDING.bottom;
+  const step = plotWidth / normalized.length;
+  const denseGap = rangeKey === '1W' ? 4 : rangeKey === '1M' ? 5 : null;
+  const barWidth =
+    denseGap !== null ? Math.max(1.5, step - denseGap) : Math.max(1.5, Math.min(18, step * 0.72));
+  const maxVolume = Math.max(...normalized.map((p) => p.volume || 0), 1);
+  const toY = (v) => VOL_PADDING.top + ((maxVolume - v) / maxVolume) * plotHeight;
+  const toX = (i) => VOL_PADDING.left + step * i + step / 2;
+  // Same 68px spacing rule as the price chart so date labels never overlap.
+  const xTicks = buildXAxisTicks(normalized).filter((tick, i, arr) => {
+    if (i === 0 || i === arr.length - 1) return true;
+    return (tick.index - arr[i - 1].index) * step >= 68;
+  });
+
+  return (
+    <div className="h-[150px] border border-bloomberg-border bg-black">
+      <svg
+        role="img"
+        aria-label="Trading volume bar chart"
+        className="h-full w-full"
+        viewBox={`0 0 ${VOL_WIDTH} ${VOL_HEIGHT}`}
+        preserveAspectRatio="none"
+      >
+        <rect x="0" y="0" width={VOL_WIDTH} height={VOL_HEIGHT} fill="black" />
+        {[maxVolume, maxVolume / 2, 0].map((tick) => (
+          <g key={`vtick-${tick}`}>
+            <line
+              x1={VOL_PADDING.left}
+              x2={VOL_WIDTH - VOL_PADDING.right}
+              y1={toY(tick)}
+              y2={toY(tick)}
+              stroke={GRID_COLOR}
+              strokeDasharray="4 6"
+            />
+            <text
+              x={VOL_PADDING.left - 12}
+              y={toY(tick) + 4}
+              fill={TEXT_COLOR}
+              fontFamily="monospace"
+              fontSize="10"
+              textAnchor="end"
+            >
+              {formatCompactNumber(tick)}
+            </text>
+          </g>
+        ))}
+        <line
+          x1={VOL_PADDING.left}
+          x2={VOL_PADDING.left}
+          y1={VOL_PADDING.top}
+          y2={VOL_HEIGHT - VOL_PADDING.bottom}
+          stroke={AXIS_COLOR}
+        />
+        {normalized.map((point, index) => {
+          const volume = point.volume || 0;
+          const y = toY(volume);
+          return (
+            <rect
+              key={`${point.date}-${index}`}
+              data-testid="research-volume-bar"
+              x={toX(index) - barWidth / 2}
+              y={y}
+              width={barWidth}
+              height={Math.max(VOL_HEIGHT - VOL_PADDING.bottom - y, 1)}
+              fill={movementColor(point, normalized[index - 1] || null)}
+              opacity="0.72"
+            >
+              <title>{`${point.date}: Volume ${formatCompactNumber(point.volume)}`}</title>
+            </rect>
+          );
+        })}
+        {xTicks.map(({ index, label }) => (
+          <text
+            key={`${index}-${label}`}
+            x={toX(index)}
+            y={VOL_HEIGHT - 8}
+            fill={TEXT_COLOR}
+            fontFamily="monospace"
+            fontSize="11"
+            textAnchor="middle"
+          >
+            {label}
+          </text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+VolumeBarChart.propTypes = {
+  points: PropTypes.arrayOf(PropTypes.object).isRequired,
+  rangeKey: PropTypes.string,
+};
+
 function PriceChartCard({ ticker, ohlcvData, ohlcvLoading, activeRange, setActiveRange }) {
   const points = ohlcvData?.points || [];
   return (
-    <SectionCard title="PRICE CHART" className="h-full flex flex-col">
+    <SectionCard title="PRICE CHART" className="h-full">
       <div className="flex gap-2 px-3 py-2 border-b border-bloomberg-border">
         {['1W', '1M', '3M', '6M', '1Y'].map((r) => (
           <button
@@ -246,20 +357,29 @@ function PriceChartCard({ ticker, ohlcvData, ohlcvLoading, activeRange, setActiv
         ))}
       </div>
       {ohlcvLoading ? (
-        <div className="flex-1 min-h-[350px] flex items-center justify-center">
+        <div className="h-[490px] flex items-center justify-center">
           <div className="animate-pulse bg-bloomberg-border rounded h-4 w-32" />
         </div>
       ) : points.length >= 2 ? (
-        <CandlestickPriceChart
-          points={points}
-          allPoints={points}
-          ticker={ticker}
-          rangeKey={activeRange}
-          onZoom={() => {}}
-          heightClass="flex-1 min-h-[420px]"
-        />
+        <>
+          <CandlestickPriceChart
+            points={points}
+            allPoints={points}
+            ticker={ticker}
+            rangeKey={activeRange}
+            onZoom={() => {}}
+            heightClass="h-[324px]"
+            showVolume={false}
+          />
+          <div className="border-y border-bloomberg-border px-3 py-1.5">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
+              VOLUME
+            </span>
+          </div>
+          <VolumeBarChart points={points} rangeKey={activeRange} />
+        </>
       ) : (
-        <div className="flex-1 min-h-[350px] flex items-center justify-center font-mono text-[10px] text-bloomberg-muted">
+        <div className="h-[490px] flex items-center justify-center font-mono text-[10px] text-bloomberg-muted">
           NO CHART DATA
         </div>
       )}

@@ -105,6 +105,7 @@ export default function CandlestickPriceChart({
   onZoom,
   rangeKey = '1Y',
   heightClass = 'h-[420px]',
+  showVolume = true,
 }) {
   const [hover, setHover] = useState(null);
   const chart = useMemo(() => {
@@ -160,6 +161,8 @@ export default function CandlestickPriceChart({
     );
   }
 
+  const svgHeight = showVolume ? HEIGHT : PRICE_HEIGHT + PADDING.bottom;
+  const plotBottom = showVolume ? VOLUME_TOP + VOLUME_HEIGHT : PRICE_HEIGHT;
   const plotWidth = WIDTH - PADDING.left - PADDING.right;
   const pricePlotHeight = PRICE_HEIGHT - PADDING.top;
   const volumePlotHeight = VOLUME_HEIGHT;
@@ -183,13 +186,13 @@ export default function CandlestickPriceChart({
   const resolveHoverIndex = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const relativeX = ((event.clientX - rect.left) / rect.width) * WIDTH;
-    const relativeY = ((event.clientY - rect.top) / rect.height) * HEIGHT;
+    const relativeY = ((event.clientY - rect.top) / rect.height) * svgHeight;
 
     if (
       relativeX < PADDING.left ||
       relativeX > WIDTH - PADDING.right ||
       relativeY < PADDING.top ||
-      relativeY > HEIGHT - PADDING.bottom
+      relativeY > svgHeight - PADDING.bottom
     ) {
       setHover(null);
       return;
@@ -200,7 +203,7 @@ export default function CandlestickPriceChart({
       setHover({
         index,
         x: Math.min(0.98, Math.max(0.02, relativeX / WIDTH)),
-        y: Math.min(0.96, Math.max(0.04, relativeY / HEIGHT)),
+        y: Math.min(0.96, Math.max(0.04, relativeY / svgHeight)),
       });
       return;
     }
@@ -229,13 +232,13 @@ export default function CandlestickPriceChart({
           role="img"
           aria-label="OHLC candlestick price chart with integrated volume"
           className="h-full w-full"
-          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          viewBox={`0 0 ${WIDTH} ${svgHeight}`}
           preserveAspectRatio="none"
           onMouseMove={resolveHoverIndex}
           onMouseLeave={() => setHover(null)}
           onWheel={handleWheel}
         >
-          <rect x="0" y="0" width={WIDTH} height={HEIGHT} fill="black" />
+          <rect x="0" y="0" width={WIDTH} height={svgHeight} fill="black" />
 
           {chart.yTicks.map((tick) => {
             const y = priceToY(tick);
@@ -267,7 +270,7 @@ export default function CandlestickPriceChart({
             x1={PADDING.left}
             x2={PADDING.left}
             y1={PADDING.top}
-            y2={VOLUME_TOP + VOLUME_HEIGHT}
+            y2={plotBottom}
             stroke={AXIS_COLOR}
           />
           <text
@@ -280,23 +283,27 @@ export default function CandlestickPriceChart({
           >
             PRICE
           </text>
-          <text
-            x={PADDING.left + 8}
-            y={VOLUME_TOP - 18}
-            fill={TEXT_COLOR}
-            fontFamily="monospace"
-            fontSize="10"
-            textAnchor="start"
-          >
-            VOLUME
-          </text>
-          <line
-            x1={PADDING.left}
-            x2={WIDTH - PADDING.right}
-            y1={VOLUME_TOP - 12}
-            y2={VOLUME_TOP - 12}
-            stroke={AXIS_COLOR}
-          />
+          {showVolume && (
+            <>
+              <text
+                x={PADDING.left + 8}
+                y={VOLUME_TOP - 18}
+                fill={TEXT_COLOR}
+                fontFamily="monospace"
+                fontSize="10"
+                textAnchor="start"
+              >
+                VOLUME
+              </text>
+              <line
+                x1={PADDING.left}
+                x2={WIDTH - PADDING.right}
+                y1={VOLUME_TOP - 12}
+                y2={VOLUME_TOP - 12}
+                stroke={AXIS_COLOR}
+              />
+            </>
+          )}
 
           {chart.points.map((point, index) => {
             const previousPoint = previousByDate.get(point.date) || null;
@@ -330,17 +337,19 @@ export default function CandlestickPriceChart({
                 >
                   <title>{`${point.date}: O ${point.open}, H ${point.high}, L ${point.low}, C ${point.close}, Prev ${previousPoint?.close ?? 'N/A'}, Adj ${point.adjusted_close ?? 'N/A'}, V ${point.volume ?? 'N/A'}`}</title>
                 </rect>
-                <rect
-                  data-testid="volume-bar"
-                  x={x - barWidth / 2}
-                  y={volumeY}
-                  width={barWidth}
-                  height={Math.max(volumeHeight, 1)}
-                  fill={color}
-                  opacity="0.72"
-                >
-                  <title>{`${point.date}: Volume ${formatCompactNumber(point.volume)}`}</title>
-                </rect>
+                {showVolume && (
+                  <rect
+                    data-testid="volume-bar"
+                    x={x - barWidth / 2}
+                    y={volumeY}
+                    width={barWidth}
+                    height={Math.max(volumeHeight, 1)}
+                    fill={color}
+                    opacity="0.72"
+                  >
+                    <title>{`${point.date}: Volume ${formatCompactNumber(point.volume)}`}</title>
+                  </rect>
+                )}
               </g>
             );
           })}
@@ -365,7 +374,8 @@ export default function CandlestickPriceChart({
             {displayPrice(lastPoint.close, ticker)}
           </text>
 
-          {chart.volumeTicks.map((tick) => {
+          {showVolume &&
+            chart.volumeTicks.map((tick) => {
             const y = volumeToY(tick);
             return (
               <g key={`volume-${tick}`}>
@@ -397,7 +407,7 @@ export default function CandlestickPriceChart({
                 x1={indexToX(hoverIndex)}
                 x2={indexToX(hoverIndex)}
                 y1={PADDING.top}
-                y2={VOLUME_TOP + VOLUME_HEIGHT}
+                y2={plotBottom}
                 stroke={CROSSHAIR_COLOR}
                 strokeDasharray="4 4"
               />
@@ -416,7 +426,7 @@ export default function CandlestickPriceChart({
             <text
               key={`${index}-${label}`}
               x={indexToX(index)}
-              y={HEIGHT - 6}
+              y={svgHeight - 6}
               fill={TEXT_COLOR}
               fontFamily="monospace"
               fontSize="11"
@@ -438,4 +448,5 @@ CandlestickPriceChart.propTypes = {
   onZoom: PropTypes.func,
   rangeKey: PropTypes.string,
   heightClass: PropTypes.string,
+  showVolume: PropTypes.bool,
 };
