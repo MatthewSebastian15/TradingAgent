@@ -17,7 +17,7 @@ function smaAt(arr, w, i) {
 // out-of-sample so the UI can flag in-sample overfit.
 // rf is the per-period (daily) risk-free rate, passed through to the strategy
 // Sharpe so it matches the Risk tab's rf-adjusted figure (was hard-coded 0).
-// ponytail: three hard-coded strategies, long/flat only. Not a general engine.
+// ponytail: three hard-coded strategies, long/flat only. Not a general engine. (deliberate)
 export function backtest(closes, strategy, params = {}, rf = 0) {
   const n = closes.length;
   if (n < 30) return null;

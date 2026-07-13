@@ -9,7 +9,7 @@ from typing import Any
 # caller (providers, relevance, entity resolver) share the real company name for
 # tickers that are not in the curated table.
 # ponytail: in-worker dict, reset per run; keyed by ticker so cross-ticker staleness
-# is harmless. No cross-process sharing needed — news resolves in the same worker.
+# is harmless. No cross-process sharing needed — news resolves in the same worker. (deliberate)
 _METADATA_LOCK = threading.Lock()
 _TICKER_METADATA: dict[str, dict[str, str]] = {}
 

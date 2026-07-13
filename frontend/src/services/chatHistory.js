@@ -6,7 +6,8 @@ export const CHAT_HISTORY_KEY = 'tradingagents:chatbot:history:v1';
 
 // Bound growth so we never silently hit the ~5MB localStorage quota.
 // ponytail: count + age caps only; a single giant conversation can still
-// exceed quota — split per-conversation if that ever shows up.
+// exceed quota — if a QuotaExceededError is ever observed, add a
+// per-conversation byte cap.
 const HISTORY_TTL_DAYS = 30;
 export const MAX_CONVERSATIONS = 50;
 

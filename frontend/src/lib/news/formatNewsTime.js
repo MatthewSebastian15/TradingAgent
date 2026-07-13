@@ -17,7 +17,7 @@ export function formatNewsTime(value) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d`;
   if (days < 30) return `${Math.floor(days / 7)}w`;
-  // ponytail: 30d≈1mo, 365d≈1y — calendar drift acceptable for relative labels.
+  // ponytail: 30d≈1mo, 365d≈1y — calendar drift acceptable for relative labels. (deliberate)
   if (days < 365) return `${Math.floor(days / 30)}mo`;
   return `${Math.floor(days / 365)}y`;
 }

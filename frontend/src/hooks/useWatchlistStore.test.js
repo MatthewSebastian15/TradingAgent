@@ -132,7 +132,7 @@ describe('useWatchlistStore', () => {
     act(() => result.current.addTicker({ symbol: 'MSFT' }));
 
     // Writes are async (encrypt + IndexedDB). Poll until the MSFT entry lands.
-    // ponytail: 5s timeout — default 1s flakes on slow CI runners (Web Crypto).
+    // ponytail: 5s timeout — default 1s flakes on slow CI runners (Web Crypto). (deliberate)
     await waitFor(
       async () => {
         const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);

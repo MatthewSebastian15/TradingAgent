@@ -155,7 +155,7 @@ def _finite_float(value: Any) -> float | None:
 
 def _as_float(value: Any) -> float | None:
     # ponytail: NaN-only filter (keeps inf), distinct from _finite_float; preserves the
-    # original route-side behavior of build_stock_overview verbatim.
+    # original route-side behavior of build_stock_overview verbatim. (deliberate)
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -302,7 +302,7 @@ def _ticker_name(ticker: Any, symbol: str) -> str:
         if value:
             return str(value)
     except Exception:
-        # ponytail: best-effort name lookup; falls back to the static label below
+        # ponytail: best-effort name lookup; falls back to the static label below (deliberate)
         pass
     return MARKET_LABELS.get(symbol, symbol)
 

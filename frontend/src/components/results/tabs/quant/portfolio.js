@@ -71,7 +71,7 @@ export function covarianceMatrix(returnsList) {
 }
 
 // Gauss-Jordan inverse of a square matrix. -> number[][] or null if singular.
-// ponytail: dense O(n^3) inverse. Fine for the handful of tickers a user picks.
+// ponytail: dense O(n^3) inverse. Fine for the handful of tickers a user picks. (deliberate)
 export function invertMatrix(A) {
   const n = A.length;
   if (n === 0 || A.some((row) => row.length !== n)) return null;

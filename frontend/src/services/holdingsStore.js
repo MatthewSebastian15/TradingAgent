@@ -31,7 +31,8 @@ function normalize(entry) {
   return {
     schema_version: SCHEMA_VERSION,
     // ponytail: id == ticker, one lot per symbol. Re-adding a symbol overwrites.
-    // Add lot-splitting (id = uuid) if averaging cost in one row stops being enough.
+    // Add lot-splitting (id = uuid) when a user asks to add to an existing
+    // position instead of replacing it.
     id: ticker,
     ticker,
     shares,
