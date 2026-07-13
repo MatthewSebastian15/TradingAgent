@@ -36,6 +36,7 @@ import {
   beta,
   bootstrapMC,
   calmar,
+  cornishFisherVaR,
   correlationMatrix,
   covarianceMatrix,
   cvar,
@@ -176,6 +177,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       histVaR: historicalVaR(returns),
       // ponytail: one card — EWMA VaR replaces the flat-stdev number outright.
       paramVaR: parametricVaR(returns, 0.95, ewmaSigmaDaily(returns)),
+      cfVaR: cornishFisherVaR(returns),
       cv: cvar(returns),
       downDev: downsideDeviation(returns),
       shp: sharpe(returns, rfDaily),
@@ -431,6 +433,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
             cal={metrics.cal}
             histVaR={metrics.histVaR}
             paramVaR={metrics.paramVaR}
+            cfVaR={metrics.cfVaR}
             cv={metrics.cv}
             downDev={metrics.downDev}
             shp={metrics.shp}

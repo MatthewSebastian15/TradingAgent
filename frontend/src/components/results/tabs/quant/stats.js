@@ -75,6 +75,31 @@ export function ewmaVol(closes, lambda = 0.94) {
   return ewmaSigmaDaily(simpleReturns(closes), lambda) * Math.sqrt(TRADING_DAYS) * 100;
 }
 
+// --- distribution shape ----------------------------------------------------
+// Population moments (÷n) — standard for sample skew/kurtosis descriptors.
+// Live here (not series.js) so risk.js can import them without an import cycle.
+
+export function skewness(xs) {
+  const n = xs.length;
+  if (n < 3) return null;
+  const m = mean(xs);
+  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
+  if (!s) return 0;
+  const m3 = xs.reduce((a, x) => a + (x - m) ** 3, 0) / n;
+  return m3 / s ** 3;
+}
+
+// Excess kurtosis: 0 for a normal distribution, >0 for fat tails.
+export function kurtosis(xs) {
+  const n = xs.length;
+  if (n < 4) return null;
+  const m = mean(xs);
+  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
+  if (!s) return 0;
+  const m4 = xs.reduce((a, x) => a + (x - m) ** 4, 0) / n;
+  return m4 / s ** 4 - 3;
+}
+
 // Worst peak-to-trough decline in %, 0 if the series never drops.
 // Mirrors Python _max_drawdown exactly.
 export function maxDrawdown(closes) {

@@ -18,6 +18,7 @@ export function RiskSection({
   cal,
   histVaR,
   paramVaR,
+  cfVaR,
   cv,
   downDev,
   shp,
@@ -65,6 +66,13 @@ export function RiskSection({
           tone="bad"
           gloss="Same idea, read off a normal bell curve tuned to recent volatility."
           formula="mean − 1.645 × EWMA vol (λ=0.94, recent days weighted more). Trusts the bell-curve shape (understates rare crashes)."
+        />
+        <MetricCard
+          label="Cornish-Fisher VaR (95%)"
+          value={fmtLoss(cfVaR)}
+          tone="bad"
+          gloss="Parametric VaR adjusted for this stock's actual skew and fat tails."
+          formula="Normal z-quantile expanded with sample skewness and excess kurtosis (Cornish-Fisher), × stddev. Blank when the moments are too extreme for the expansion."
         />
         <MetricCard
           label="Conditional VaR (95%)"
@@ -180,6 +188,7 @@ RiskSection.propTypes = {
   cal: PropTypes.number,
   histVaR: PropTypes.number,
   paramVaR: PropTypes.number,
+  cfVaR: PropTypes.number,
   cv: PropTypes.number,
   downDev: PropTypes.number,
   shp: PropTypes.number,

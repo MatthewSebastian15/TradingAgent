@@ -10,6 +10,7 @@ import {
   beta,
   bootstrapMC,
   calmar,
+  cornishFisherVaR,
   correlation,
   correlationMatrix,
   covarianceMatrix,
@@ -157,6 +158,26 @@ describe('VaR / CVaR', () => {
   it('too-few returns -> null', () => {
     expect(historicalVaR([0.01])).toBeNull();
     expect(cvar([])).toBeNull();
+  });
+
+  it('cornishFisherVaR ~ parametricVaR on symmetric data', () => {
+    const cf = cornishFisherVaR(returns);
+    expect(Math.abs(cf - parametricVaR(returns))).toBeLessThan(0.5);
+  });
+
+  it('cornishFisherVaR < parametricVaR on left-skewed fat-tailed data', () => {
+    const leftSkew = [
+      ...Array.from({ length: 30 }, (_, i) => 0.005 + (i % 3) * 0.002),
+      -0.04,
+      -0.05,
+    ];
+    expect(cornishFisherVaR(leftSkew)).toBeLessThan(parametricVaR(leftSkew));
+  });
+
+  it('cornishFisherVaR -> null on extreme moments (expansion breakdown)', () => {
+    const oneHugeOutlier = [...Array.from({ length: 99 }, () => 0.001), 0.9];
+    expect(cornishFisherVaR(oneHugeOutlier)).toBeNull();
+    expect(cornishFisherVaR([0.01, 0.02])).toBeNull(); // too few
   });
 });
 

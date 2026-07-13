@@ -1,4 +1,4 @@
-import { mean, stdDev, TRADING_DAYS } from './stats';
+import { kurtosis, mean, skewness, stdDev, TRADING_DAYS } from './stats';
 
 // --- risk -----------------------------------------------------------------
 // VaR/CVaR are returned as SIGNED percentages (a bad day is negative), so the
@@ -21,6 +21,23 @@ export function parametricVaR(returns, alpha = 0.95, sigma = null) {
   const z = Z_BY_ALPHA[alpha];
   if (returns.length < 2 || !z) return null;
   return (mean(returns) - z * (sigma ?? stdDev(returns))) * 100;
+}
+
+// Cornish-Fisher VaR: normal quantile adjusted for the sample's actual skew
+// and fat tails. Expansion runs at the LOWER-tail quantile (z = -1.645 for
+// 95%) so left skew makes VaR worse, as it should. -> signed %, or null when
+// the expansion breaks down.
+export function cornishFisherVaR(returns, alpha = 0.95) {
+  const zAbs = Z_BY_ALPHA[alpha];
+  const S = skewness(returns);
+  const K = kurtosis(returns);
+  if (returns.length < 4 || !zAbs || S === null || K === null) return null;
+  const z = -zAbs;
+  const q =
+    z + ((z ** 2 - 1) * S) / 6 + ((z ** 3 - 3 * z) * K) / 24 - ((2 * z ** 3 - 5 * z) * S ** 2) / 36;
+  // ponytail: CF expansion is non-monotonic on extreme moments; null is honest, cap if it fires often.
+  if (!Number.isFinite(q) || q >= 0 || Math.abs(q) > 3 * zAbs) return null;
+  return (mean(returns) + q * stdDev(returns)) * 100;
 }
 
 // Conditional VaR / Expected Shortfall: mean of the worst tail beyond the VaR

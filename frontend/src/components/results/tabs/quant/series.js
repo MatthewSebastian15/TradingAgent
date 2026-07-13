@@ -2,30 +2,6 @@ import { beta } from './benchmark';
 import { sharpe } from './risk';
 import { maxDrawdown, mean, stdDev, TRADING_DAYS } from './stats';
 
-// --- distribution shape (Phase 4) -----------------------------------------
-// Population moments (÷n) — standard for sample skew/kurtosis descriptors.
-
-export function skewness(xs) {
-  const n = xs.length;
-  if (n < 3) return null;
-  const m = mean(xs);
-  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
-  if (!s) return 0;
-  const m3 = xs.reduce((a, x) => a + (x - m) ** 3, 0) / n;
-  return m3 / s ** 3;
-}
-
-// Excess kurtosis: 0 for a normal distribution, >0 for fat tails.
-export function kurtosis(xs) {
-  const n = xs.length;
-  if (n < 4) return null;
-  const m = mean(xs);
-  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
-  if (!s) return 0;
-  const m4 = xs.reduce((a, x) => a + (x - m) ** 4, 0) / n;
-  return m4 / s ** 4 - 3;
-}
-
 // --- drawdown / rolling series (Phase 4) ----------------------------------
 
 // Underwater curve: % below the running peak at each point (<= 0).
