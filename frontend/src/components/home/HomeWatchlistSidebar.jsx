@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import React, { memo, useEffect, useMemo, useState } from 'react';
 
 import HomeMarketSection from './HomeMarketSection';
+import HomePortfolioSection from './HomePortfolioSection';
 import { SIDEBAR_EXPANDED_WIDTH } from '../../constants/sidebar';
 import { useWatchlistQuotes } from '../../hooks/useWatchlistQuotes';
 import { useWatchlistStore } from '../../hooks/useWatchlistStore';
@@ -259,6 +260,7 @@ export default function HomeWatchlistSidebar() {
         )}
       </div>
 
+      <HomePortfolioSection />
       <HomeMarketSection />
     </aside>
   );
