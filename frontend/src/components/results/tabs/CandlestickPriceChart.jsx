@@ -104,6 +104,7 @@ export default function CandlestickPriceChart({
   ticker = '',
   onZoom,
   rangeKey = '1Y',
+  heightClass = 'h-[420px]',
 }) {
   const [hover, setHover] = useState(null);
   const chart = useMemo(() => {
@@ -151,7 +152,9 @@ export default function CandlestickPriceChart({
 
   if (!chart) {
     return (
-      <div className="h-[420px] border border-bloomberg-border bg-black p-3 font-mono text-xs text-bloomberg-muted">
+      <div
+        className={`${heightClass} border border-bloomberg-border bg-black p-3 font-mono text-xs text-bloomberg-muted`}
+      >
         Valid OHLCV price chart data is not available for this analysis.
       </div>
     );
@@ -212,7 +215,7 @@ export default function CandlestickPriceChart({
   };
 
   return (
-    <div className="relative h-[420px] overflow-hidden border border-bloomberg-border bg-black">
+    <div className={`relative ${heightClass} overflow-hidden border border-bloomberg-border bg-black`}>
       <div className="relative h-full w-full">
         {hoverPoint && hover && (
           <CandlestickTooltip
@@ -434,4 +437,5 @@ CandlestickPriceChart.propTypes = {
   ticker: PropTypes.string,
   onZoom: PropTypes.func,
   rangeKey: PropTypes.string,
+  heightClass: PropTypes.string,
 };

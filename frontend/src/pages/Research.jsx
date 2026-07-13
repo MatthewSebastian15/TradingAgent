@@ -52,9 +52,11 @@ function recommendationColor(rec) {
 
 // ── Primitives ────────────────────────────────────────────────────────────────
 
-function SectionCard({ title, children }) {
+function SectionCard({ title, children, className = '' }) {
   return (
-    <div className="border border-bloomberg-border bg-bloomberg-card rounded-sm overflow-hidden">
+    <div
+      className={`border border-bloomberg-border bg-bloomberg-card rounded-sm overflow-hidden ${className}`}
+    >
       {title && (
         <div className="border-b border-bloomberg-border px-3 py-1.5">
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
@@ -69,6 +71,7 @@ function SectionCard({ title, children }) {
 SectionCard.propTypes = {
   title: PropTypes.string,
   children: PropTypes.node,
+  className: PropTypes.string,
 };
 
 function DataRow({ label, value, valueClass = 'text-bloomberg-white' }) {
@@ -225,7 +228,7 @@ StockHeader.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
 function PriceChartCard({ ticker, ohlcvData, ohlcvLoading, activeRange, setActiveRange }) {
   const points = ohlcvData?.points || [];
   return (
-    <SectionCard title="PRICE CHART">
+    <SectionCard title="PRICE CHART" className="h-full flex flex-col">
       <div className="flex gap-2 px-3 py-2 border-b border-bloomberg-border">
         {['1W', '1M', '3M', '6M', '1Y'].map((r) => (
           <button
@@ -243,7 +246,7 @@ function PriceChartCard({ ticker, ohlcvData, ohlcvLoading, activeRange, setActiv
         ))}
       </div>
       {ohlcvLoading ? (
-        <div className="h-[350px] flex items-center justify-center">
+        <div className="flex-1 min-h-[350px] flex items-center justify-center">
           <div className="animate-pulse bg-bloomberg-border rounded h-4 w-32" />
         </div>
       ) : points.length >= 2 ? (
@@ -253,9 +256,10 @@ function PriceChartCard({ ticker, ohlcvData, ohlcvLoading, activeRange, setActiv
           ticker={ticker}
           rangeKey={activeRange}
           onZoom={() => {}}
+          heightClass="flex-1 min-h-[420px]"
         />
       ) : (
-        <div className="h-[350px] flex items-center justify-center font-mono text-[10px] text-bloomberg-muted">
+        <div className="flex-1 min-h-[350px] flex items-center justify-center font-mono text-[10px] text-bloomberg-muted">
           NO CHART DATA
         </div>
       )}
