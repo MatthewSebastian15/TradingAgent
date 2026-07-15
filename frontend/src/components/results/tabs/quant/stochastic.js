@@ -72,8 +72,9 @@ export function monteCarloGBM(spot, mu, sigma, days, paths, seed) {
 }
 
 // Bootstrap Monte Carlo: resample actual historical daily simple returns with
-// replacement (fat tails preserved) instead of drawing from a normal.
-export function bootstrapMC(spot, returns, days, paths, seed) {
+// replacement (fat tails preserved) instead of drawing from a normal. Block bootstrap
+// samples contiguous blocks of returns to preserve volatility clustering.
+export function bootstrapMC(spot, returns, days, paths, seed, blockSize = 5) {
   if (!returns || returns.length === 0) return null;
   const rng = mulberry32(seed);
   const all = [];
@@ -81,9 +82,12 @@ export function bootstrapMC(spot, returns, days, paths, seed) {
     const path = new Array(days + 1);
     path[0] = spot;
     let price = spot;
-    for (let d = 1; d <= days; d += 1) {
-      price *= 1 + returns[Math.floor(rng() * returns.length)];
-      path[d] = price;
+    for (let d = 1; d <= days; ) {
+      const start = Math.floor(rng() * returns.length);
+      for (let b = 0; b < blockSize && d <= days; b += 1, d += 1) {
+        price *= 1 + returns[(start + b) % returns.length]; // ponytail: circular wrap = stationary bootstrap approx.
+        path[d] = price;
+      }
     }
     all.push(path);
   }

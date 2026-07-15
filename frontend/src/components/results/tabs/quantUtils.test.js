@@ -347,6 +347,39 @@ describe('bootstrapMC', () => {
     const b = bootstrapMC(100, [0.01, -0.02, 0.015], 30, 200, 3);
     expect(a.terminal).toEqual(b.terminal);
   });
+
+  it('blockSize = 1 reproduces i.i.d. behavior', () => {
+    const returns = [0.01, -0.02, 0.015, -0.005, 0.02];
+    const a = bootstrapMC(100, returns, 30, 200, 42, 1);
+    const b = bootstrapMC(100, returns, 30, 200, 42, 1);
+    expect(a.terminal).toEqual(b.terminal);
+    expect(a.percentiles).toEqual(b.percentiles);
+  });
+
+  it('path length and path[0] === spot invariants hold', () => {
+    const returns = [0.01, -0.02, 0.015];
+    const days = 25;
+    const { samplePaths } = bootstrapMC(100, returns, days, 50, 7, 5);
+    for (const path of samplePaths) {
+      expect(path.length).toBe(days + 1);
+      expect(path[0]).toBeCloseTo(100, 10);
+    }
+  });
+
+  it('blockSize > 1 with clustered data spreads terminal distribution', () => {
+    // calm half + wild half: clustering should increase variance
+    const calmHalf = Array.from({ length: 30 }, () => 0.002);
+    const wildHalf = Array.from({ length: 30 }, () => 0.05);
+    const clusteredReturns = [...calmHalf, ...wildHalf];
+
+    const iid = bootstrapMC(100, clusteredReturns, 50, 500, 99, 1);
+    const block = bootstrapMC(100, clusteredReturns, 50, 500, 99, 5);
+
+    const iidSpread = iid.percentiles.p90 - iid.percentiles.p10;
+    const blockSpread = block.percentiles.p90 - block.percentiles.p10;
+
+    expect(blockSpread).toBeGreaterThanOrEqual(iidSpread);
+  });
 });
 
 describe('backtest', () => {

@@ -95,7 +95,7 @@ export function StochasticSection({
     <div className="space-y-4">
       {controls}
       <p className="text-sm text-bloomberg-subtle">
-        In 80% of {MC_PATHS.toLocaleString()} {method === 'bootstrap' ? 'bootstrap' : 'GBM'}{' '}
+        In 80% of {MC_PATHS.toLocaleString()} {method === 'bootstrap' ? 'block bootstrap' : 'GBM'}{' '}
         simulations, the price in {horizonLabel} landed between{' '}
         <span className="text-white">{fmtMoney(percentiles.p10)}</span> and{' '}
         <span className="text-white">{fmtMoney(percentiles.p90)}</span> (median{' '}
