@@ -76,7 +76,7 @@ export function BacktestSection({ strategy, onStrategyChange, params, onParamCha
             value={params.lookback}
             min={5}
             max={100}
-            onChange={(v) => onParamChange('lookback', v)}
+            onChange={(v) => onParamChange('mrLookback', v)}
           />
         )}
         <SliderField

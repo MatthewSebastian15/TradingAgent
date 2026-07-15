@@ -55,6 +55,7 @@ import {
   maxDrawdown,
   mean,
   monteCarloGBM,
+  ouHalfLife,
   parametricVaR,
   portfolioStats,
   regimeShifts,
@@ -194,6 +195,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
   // Regime (vol percentile) + Hurst (trend vs mean-revert) for the headline + sizing.
   const regime = useMemo(() => regimeLabel(volPercentile(rollingVols)), [rollingVols]);
   const hurstVal = useMemo(() => hurst(returns), [returns]);
+  const ouHL = useMemo(() => ouHalfLife(closes), [closes]);
   const ddStats = useMemo(() => drawdownStats(closes), [closes]);
   const regimeShift = useMemo(() => regimeShifts(rollingVols), [rollingVols]);
 
@@ -259,10 +261,17 @@ function QuantPanel({ points, currency, symbol, sections }) {
     return months >= 12 ? `~${Math.round(months / 12)}y` : `~${months}mo`;
   }, [mcHorizon]);
 
+  // meanrev SMA window defaults to the OU half-life; the slider (mrLookback) overrides.
+  const btEffective = useMemo(() => {
+    if (strategy !== 'meanrev') return btParams;
+    const auto = ouHL ? Math.min(100, Math.max(5, Math.round(ouHL))) : btParams.lookback;
+    return { ...btParams, lookback: btParams.mrLookback ?? auto };
+  }, [btParams, strategy, ouHL]);
+
   const backtestResult = useMemo(() => {
     if (visible && !visible.has('backtest')) return null;
-    return backtest(closes, strategy, btParams, rfDaily);
-  }, [visible, closes, strategy, btParams, rfDaily]);
+    return backtest(closes, strategy, btEffective, rfDaily);
+  }, [visible, closes, strategy, btEffective, rfDaily]);
 
   const returnBins = useMemo(() => returnHistogram(returns, 30), [returns]);
   const volWeight = useMemo(() => volTargetWeight(metrics.vol, VOL_TARGET), [metrics.vol]);
@@ -491,7 +500,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
           <BacktestSection
             strategy={strategy}
             onStrategyChange={setStrategy}
-            params={btParams}
+            params={btEffective}
             onParamChange={(k, v) => setBtParams((prev) => ({ ...prev, [k]: v }))}
             result={backtestResult}
           />
@@ -506,6 +515,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
             vol={metrics.vol}
             regime={regime}
             hurstVal={hurstVal}
+            ouHL={ouHL}
           />
         </SectionBlock>
       )}

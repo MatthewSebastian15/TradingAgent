@@ -34,6 +34,7 @@ import {
   maxDrawdown,
   mean,
   monteCarloGBM,
+  ouHalfLife,
   parametricVaR,
   regimeShifts,
   returnHistogram,
@@ -322,6 +323,34 @@ describe('hurst / regime', () => {
 
   it('volPercentile of a rising series puts the last value at the top', () => {
     expect(volPercentile([1, 2, 3, 4, 5])).toBe(100);
+  });
+});
+
+describe('ouHalfLife', () => {
+  it('recovers ln2/theta on a noiseless OU decay', () => {
+    // logP[t+1] = logP[t] - theta * logP[t], theta = 0.1 -> half-life = ln2 / 0.1
+    const theta = 0.1;
+    let logP = 1;
+    const closes = [];
+    for (let i = 0; i < 100; i += 1) {
+      closes.push(Math.exp(logP));
+      logP -= theta * logP;
+    }
+    expect(ouHalfLife(closes)).toBeCloseTo(Math.LN2 / theta, 6);
+  });
+
+  it('trending series -> null (theta <= 0)', () => {
+    const trend = Array.from({ length: 100 }, (_, i) => 100 * Math.exp(i * 0.01));
+    expect(ouHalfLife(trend)).toBeNull();
+  });
+
+  it('flat series -> null (no variance blowup)', () => {
+    expect(ouHalfLife(Array(50).fill(100))).toBeNull();
+  });
+
+  it('short or non-positive input -> null', () => {
+    expect(ouHalfLife([100, 101, 102])).toBeNull();
+    expect(ouHalfLife([100, -1, ...Array(30).fill(100)])).toBeNull();
   });
 });
 

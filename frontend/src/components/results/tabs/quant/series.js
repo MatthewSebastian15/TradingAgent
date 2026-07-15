@@ -66,6 +66,31 @@ export function hurst(xs) {
   return Math.log(range / s) / Math.log(n);
 }
 
+// Ornstein-Uhlenbeck half-life from AR(1) on log prices: OLS of dlogP on lagged
+// logP, theta = -slope, halfLife = ln(2)/theta. -> days, or null if not
+// mean-reverting or outside [1, 252] (the estimate is noise out there).
+// ponytail: OLS point estimate, no confidence interval. Add stderr if users act on it.
+export function ouHalfLife(closes) {
+  const n = closes.length;
+  if (n < 20 || closes.some((c) => !(c > 0))) return null;
+  const logs = closes.map(Math.log);
+  const x = logs.slice(0, -1);
+  const y = x.map((xi, i) => logs[i + 1] - xi);
+  const mx = mean(x);
+  const my = mean(y);
+  let sxy = 0;
+  let sxx = 0;
+  for (let i = 0; i < x.length; i += 1) {
+    sxy += (x[i] - mx) * (y[i] - my);
+    sxx += (x[i] - mx) ** 2;
+  }
+  if (!sxx) return null;
+  const theta = -(sxy / sxx);
+  if (theta <= 0) return null;
+  const halfLife = Math.LN2 / theta;
+  return halfLife >= 1 && halfLife <= 252 ? halfLife : null;
+}
+
 // Percentile rank (0–100) of the latest value within its own history.
 export function volPercentile(vols) {
   const v = vols.filter(Number.isFinite);

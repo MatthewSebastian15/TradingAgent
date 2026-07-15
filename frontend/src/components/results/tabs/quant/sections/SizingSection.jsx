@@ -4,7 +4,7 @@ import { MetricCard } from '../charts';
 import { VOL_TARGET } from '../config';
 import { finite, DASH, fmtNum2, fmtPercent, hurstLabel } from '../format';
 
-export function SizingSection({ kelly, volWeight, vol, regime, hurstVal }) {
+export function SizingSection({ kelly, volWeight, vol, regime, hurstVal, ouHL }) {
   const kellyClamped = finite(kelly) ? Math.max(0, Math.min(1, kelly)) : null;
   return (
     <div className="space-y-4">
@@ -12,7 +12,7 @@ export function SizingSection({ kelly, volWeight, vol, regime, hurstVal }) {
         How much to hold, from the stats already computed. Kelly is theoretical and aggressive —
         most use a fraction of it.
       </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard
           label="Regime"
           value={regime.label}
@@ -25,6 +25,12 @@ export function SizingSection({ kelly, volWeight, vol, regime, hurstVal }) {
           value={`${fmtNum2(hurstVal)} · ${hurstLabel(hurstVal)}`}
           gloss=">0.5 trending (momentum fits); <0.5 mean-reverting."
           formula="Single-window rescaled-range R/S on daily returns."
+        />
+        <MetricCard
+          label="Mean-Rev Half-Life"
+          value={finite(ouHL) ? `${ouHL.toFixed(0)}d` : DASH}
+          gloss="Days for a deviation to decay halfway back. Dash = no mean reversion detected."
+          formula="AR(1) OLS on log prices: ln 2 / θ. Seeds the mean-reversion backtest window."
         />
         <MetricCard
           label="Kelly Fraction"
@@ -56,4 +62,5 @@ SizingSection.propTypes = {
   vol: PropTypes.number,
   regime: PropTypes.shape({ label: PropTypes.string, tone: PropTypes.string }).isRequired,
   hurstVal: PropTypes.number,
+  ouHL: PropTypes.number,
 };
