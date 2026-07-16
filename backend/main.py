@@ -76,6 +76,28 @@ class SkipSseCompressionMiddleware:
         )
 
 
+class SecurityHeadersMiddleware:
+    """Baseline security headers for direct backend exposure; nginx owns the full CSP set."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                message["headers"] = list(message.get("headers", [])) + [
+                    (b"x-content-type-options", b"nosniff"),
+                    (b"x-frame-options", b"DENY"),
+                ]
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 async def validate_config() -> None:
     """Log sanitized startup config issues; refuse to start on CRITICAL in production."""
     issues = validate_startup_config()
@@ -156,6 +178,7 @@ app.add_middleware(RequestBodyLimitMiddleware, max_bytes=REQUEST_BODY_MAX_BYTES)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(SkipSseCompressionMiddleware)
 app.add_middleware(RequestIdMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
