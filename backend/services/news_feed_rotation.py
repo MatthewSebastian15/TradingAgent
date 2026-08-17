@@ -1,26 +1,29 @@
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 
 class FeedRotationState:
     def __init__(self) -> None:
         self.offset = 0
+        self._lock = threading.Lock()
 
     def next_batch(self, feeds: list[Any], batch_size: int) -> list[Any]:
         if not feeds:
             return []
 
-        size = max(1, min(int(batch_size), len(feeds)))
-        start = self.offset % len(feeds)
-        end = start + size
+        with self._lock:
+            size = max(1, min(int(batch_size), len(feeds)))
+            start = self.offset % len(feeds)
+            end = start + size
 
-        if end <= len(feeds):
-            batch = feeds[start:end]
-        else:
-            batch = feeds[start:] + feeds[: end % len(feeds)]
+            if end <= len(feeds):
+                batch = feeds[start:end]
+            else:
+                batch = feeds[start:] + feeds[: end % len(feeds)]
 
-        self.offset = end % len(feeds)
+            self.offset = end % len(feeds)
         return batch
 
 
@@ -33,4 +36,5 @@ def rotate_feed_ids(feeds: list[Any], batch_size: int) -> list[str]:
 
 
 def clear_feed_rotation_for_tests() -> None:
-    _ROTATION_STATE.offset = 0
+    with _ROTATION_STATE._lock:
+        _ROTATION_STATE.offset = 0

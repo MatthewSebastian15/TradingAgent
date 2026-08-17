@@ -12,6 +12,7 @@ from rate_limiter import limit_request, request_policy, stream_policy
 from routes.sse import EventSourceResponse
 from routes.validation import normalize_ticker_symbol
 from schemas import NewsResponse
+from services.news_inflight_dedupe import run_once
 
 router = APIRouter(tags=["news"])
 debug_router = APIRouter(tags=["news"])
@@ -287,16 +288,21 @@ async def _stream_ticker_news_events(
 ):
     from tradingagents.dataflows.news.ticker_news_stream import ticker_news_event_bus
 
+    dedupe_key = f"ticker_news:{ticker}:{window_days}:{limit}"
+
     async def poll_for_updates() -> None:
         while True:
             if await request.is_disconnected():
                 return
-            result = await asyncio.to_thread(
-                _fetch_news,
-                ticker,
-                window_days=window_days,
-                limit=limit,
-                force_refresh=True,
+            result = await run_once(
+                dedupe_key,
+                lambda: asyncio.to_thread(
+                    _fetch_news,
+                    ticker,
+                    window_days=window_days,
+                    limit=limit,
+                    force_refresh=True,
+                ),
             )
             await ticker_news_event_bus.publish_if_changed(result)
             await asyncio.sleep(max(_TICKER_NEWS_STREAM_MIN_POLL_SECONDS, poll_seconds))

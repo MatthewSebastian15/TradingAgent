@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -16,6 +17,7 @@ class ProviderState:
 
 
 _PROVIDER_STATE: dict[str, ProviderState] = {}
+_LOCK = threading.Lock()
 
 
 def _utc_now_text() -> str:
@@ -23,50 +25,58 @@ def _utc_now_text() -> str:
 
 
 def is_provider_available(provider: str) -> bool:
-    state = _PROVIDER_STATE.get(provider)
-    if state is None:
-        return True
-    return time.time() >= state.cooldown_until
+    with _LOCK:
+        state = _PROVIDER_STATE.get(provider)
+        if state is None:
+            return True
+        return time.time() >= state.cooldown_until
 
 
 def provider_cooldown_remaining(provider: str) -> int:
-    state = _PROVIDER_STATE.get(provider)
-    if state is None:
-        return 0
-    return max(0, int(state.cooldown_until - time.time()))
+    with _LOCK:
+        state = _PROVIDER_STATE.get(provider)
+        if state is None:
+            return 0
+        return max(0, int(state.cooldown_until - time.time()))
 
 
 def mark_provider_429(provider: str, *, cooldown_seconds: int | None = None) -> None:
-    state = _PROVIDER_STATE.setdefault(provider, ProviderState())
-    state.cooldown_until = time.time() + int(cooldown_seconds or NEWS_PROVIDER_429_COOLDOWN_SECONDS)
-    state.last_error = "429"
-    state.last_failure_at = _utc_now_text()
+    with _LOCK:
+        state = _PROVIDER_STATE.setdefault(provider, ProviderState())
+        state.cooldown_until = time.time() + int(
+            cooldown_seconds or NEWS_PROVIDER_429_COOLDOWN_SECONDS
+        )
+        state.last_error = "429"
+        state.last_failure_at = _utc_now_text()
 
 
 def mark_provider_failure(provider: str, error: str) -> None:
-    state = _PROVIDER_STATE.setdefault(provider, ProviderState())
-    state.last_error = str(error or "error")[:120]
-    state.last_failure_at = _utc_now_text()
+    with _LOCK:
+        state = _PROVIDER_STATE.setdefault(provider, ProviderState())
+        state.last_error = str(error or "error")[:120]
+        state.last_failure_at = _utc_now_text()
 
 
 def mark_provider_success(provider: str) -> None:
-    state = _PROVIDER_STATE.setdefault(provider, ProviderState())
-    state.cooldown_until = 0
-    state.last_error = None
-    state.last_success_at = _utc_now_text()
+    with _LOCK:
+        state = _PROVIDER_STATE.setdefault(provider, ProviderState())
+        state.cooldown_until = 0
+        state.last_error = None
+        state.last_success_at = _utc_now_text()
 
 
 def provider_status(provider: str) -> str:
-    state = _PROVIDER_STATE.get(provider)
-    if state is not None and time.time() < state.cooldown_until:
-        return "cooldown"
-    if state is not None and state.last_error == "429":
-        return "rate_limited"
-    if state is not None and state.last_error:
-        return "error"
-    if state is not None and state.last_success_at:
-        return "success"
-    return "skipped"
+    with _LOCK:
+        state = _PROVIDER_STATE.get(provider)
+        if state is not None and time.time() < state.cooldown_until:
+            return "cooldown"
+        if state is not None and state.last_error == "429":
+            return "rate_limited"
+        if state is not None and state.last_error:
+            return "error"
+        if state is not None and state.last_success_at:
+            return "success"
+        return "skipped"
 
 
 def provider_status_snapshot(providers: list[str] | tuple[str, ...]) -> dict[str, str]:
@@ -74,7 +84,8 @@ def provider_status_snapshot(providers: list[str] | tuple[str, ...]) -> dict[str
 
 
 def provider_state_snapshot() -> dict[str, dict[str, Any]]:
-    return {provider: asdict(state) for provider, state in _PROVIDER_STATE.items()}
+    with _LOCK:
+        return {provider: asdict(state) for provider, state in _PROVIDER_STATE.items()}
 
 
 def result_has_429(result: Any) -> bool:
@@ -91,4 +102,5 @@ def result_has_429(result: Any) -> bool:
 
 
 def clear_provider_budget_for_tests() -> None:
-    _PROVIDER_STATE.clear()
+    with _LOCK:
+        _PROVIDER_STATE.clear()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -125,31 +126,48 @@ class RSSContextProvider(BaseNewsProvider):
         config: dict[str, Any],
     ) -> tuple[str, Any | None, dict[str, Any]]:
         headers = {"User-Agent": str(config.get("rss_user_agent") or "TradingAgent/0.1 RSS Reader")}
+        max_retries = max(0, int(config.get("vendor_max_retries", 1)))
+        retry_delays = [0.5, 1.5]
         attempt: dict[str, Any] = {"strategy": feed.id, "feed": feed.name, "url": feed.url}
-        try:
-            response = requests.get(feed.url, headers=headers, timeout=(5, self.timeout_seconds))
-            attempt["status_code"] = response.status_code
-            if response.status_code in {401, 403}:
-                attempt["status"] = "auth_or_forbidden"
-                return "auth_or_forbidden", None, attempt
-            if response.status_code >= 400:
+        for retry in range(max_retries + 1):
+            try:
+                response = requests.get(
+                    feed.url, headers=headers, timeout=(5, self.timeout_seconds)
+                )
+                attempt["status_code"] = response.status_code
+                if response.status_code in {401, 403}:
+                    attempt["status"] = "auth_or_forbidden"
+                    return "auth_or_forbidden", None, attempt
+                if response.status_code >= 500:
+                    attempt["status"] = "unavailable"
+                    if retry < max_retries:
+                        time.sleep(retry_delays[min(retry, len(retry_delays) - 1)])
+                        continue
+                    return "unavailable", None, attempt
+                if response.status_code >= 400:
+                    attempt["status"] = "unavailable"
+                    return "unavailable", None, attempt
+                parsed = feedparser.parse(response.content)
+                if getattr(parsed, "bozo", False):
+                    attempt["status"] = "parse_error"
+                    attempt["error"] = sanitize_error(
+                        getattr(parsed, "bozo_exception", "parse_error")
+                    )
+                    return "parse_error", None, attempt
+                attempt["status"] = "success"
+                return "success", parsed, attempt
+            except requests.Timeout:
+                attempt["status"] = "timeout"
+                if retry < max_retries:
+                    time.sleep(retry_delays[min(retry, len(retry_delays) - 1)])
+                    continue
+                return "timeout", None, attempt
+            except Exception as exc:
+                logger.info("rss_context feed failed feed=%s error=%s", feed.id, exc)
                 attempt["status"] = "unavailable"
+                attempt["error"] = sanitize_error(exc)
                 return "unavailable", None, attempt
-            parsed = feedparser.parse(response.content)
-            if getattr(parsed, "bozo", False):
-                attempt["status"] = "parse_error"
-                attempt["error"] = sanitize_error(getattr(parsed, "bozo_exception", "parse_error"))
-                return "parse_error", None, attempt
-            attempt["status"] = "success"
-            return "success", parsed, attempt
-        except requests.Timeout:
-            attempt["status"] = "timeout"
-            return "timeout", None, attempt
-        except Exception as exc:
-            logger.info("rss_context feed failed feed=%s error=%s", feed.id, exc)
-            attempt["status"] = "unavailable"
-            attempt["error"] = sanitize_error(exc)
-            return "unavailable", None, attempt
+        return attempt.get("status", "unavailable"), None, attempt
 
 
 def _select_feeds(
@@ -368,6 +386,10 @@ def _term_in_text(text: str, term: str) -> bool:
 def _overall_status(statuses: set[str]) -> str:
     if not statuses:
         return "unavailable"
+    if "success" in statuses:
+        # At least one feed fetched fine; zero matching articles is a real
+        # empty result, not an outage, so don't collapse it into "unavailable".
+        return "success"
     if statuses == {"auth_or_forbidden"}:
         return "auth_or_forbidden"
     if statuses == {"timeout"}:
