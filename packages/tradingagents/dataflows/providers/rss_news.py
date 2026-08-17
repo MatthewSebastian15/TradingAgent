@@ -35,6 +35,23 @@ from .rss_news_config import (
 
 logger = logging.getLogger(__name__)
 
+try:
+    from services.news_provider_budget import is_provider_available as _is_feed_available
+    from services.news_provider_budget import mark_provider_failure as _mark_feed_failure
+    from services.news_provider_budget import mark_provider_success as _mark_feed_success
+except Exception:  # pragma: no cover - package can run without backend service path
+
+    def _is_feed_available(_feed_id: str) -> bool:
+        return True
+
+    def _mark_feed_failure(
+        _feed_id: str, _error: str, *, cooldown_seconds: int | None = None
+    ) -> None:
+        return None
+
+    def _mark_feed_success(_feed_id: str) -> None:
+        return None
+
 
 class RSSContextProvider(BaseNewsProvider):
     provider_name = "rss_context"
@@ -125,10 +142,28 @@ class RSSContextProvider(BaseNewsProvider):
         feed: RSSFeedConfig,
         config: dict[str, Any],
     ) -> tuple[str, Any | None, dict[str, Any]]:
+        if not _is_feed_available(feed.id):
+            attempt = {
+                "strategy": feed.id,
+                "feed": feed.name,
+                "url": feed.url,
+                "status": "skipped_cooldown",
+            }
+            return "skipped_cooldown", None, attempt
+
         headers = {"User-Agent": str(config.get("rss_user_agent") or "TradingAgent/0.1 RSS Reader")}
         max_retries = max(0, int(config.get("vendor_max_retries", 1)))
         retry_delays = [0.5, 1.5]
+        failure_cooldown = int(config.get("rss_feed_failure_cooldown_seconds", 600))
         attempt: dict[str, Any] = {"strategy": feed.id, "feed": feed.name, "url": feed.url}
+
+        def _done(status: str, parsed: Any | None) -> tuple[str, Any | None, dict[str, Any]]:
+            if status == "success":
+                _mark_feed_success(feed.id)
+            else:
+                _mark_feed_failure(feed.id, status, cooldown_seconds=failure_cooldown)
+            return status, parsed, attempt
+
         for retry in range(max_retries + 1):
             try:
                 response = requests.get(
@@ -137,37 +172,37 @@ class RSSContextProvider(BaseNewsProvider):
                 attempt["status_code"] = response.status_code
                 if response.status_code in {401, 403}:
                     attempt["status"] = "auth_or_forbidden"
-                    return "auth_or_forbidden", None, attempt
+                    return _done("auth_or_forbidden", None)
                 if response.status_code >= 500:
                     attempt["status"] = "unavailable"
                     if retry < max_retries:
                         time.sleep(retry_delays[min(retry, len(retry_delays) - 1)])
                         continue
-                    return "unavailable", None, attempt
+                    return _done("unavailable", None)
                 if response.status_code >= 400:
                     attempt["status"] = "unavailable"
-                    return "unavailable", None, attempt
+                    return _done("unavailable", None)
                 parsed = feedparser.parse(response.content)
                 if getattr(parsed, "bozo", False):
                     attempt["status"] = "parse_error"
                     attempt["error"] = sanitize_error(
                         getattr(parsed, "bozo_exception", "parse_error")
                     )
-                    return "parse_error", None, attempt
+                    return _done("parse_error", None)
                 attempt["status"] = "success"
-                return "success", parsed, attempt
+                return _done("success", parsed)
             except requests.Timeout:
                 attempt["status"] = "timeout"
                 if retry < max_retries:
                     time.sleep(retry_delays[min(retry, len(retry_delays) - 1)])
                     continue
-                return "timeout", None, attempt
+                return _done("timeout", None)
             except Exception as exc:
                 logger.info("rss_context feed failed feed=%s error=%s", feed.id, exc)
                 attempt["status"] = "unavailable"
                 attempt["error"] = sanitize_error(exc)
-                return "unavailable", None, attempt
-        return attempt.get("status", "unavailable"), None, attempt
+                return _done("unavailable", None)
+        return _done(attempt.get("status", "unavailable"), None)
 
 
 def _select_feeds(

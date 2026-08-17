@@ -177,6 +177,7 @@ from config_defaults import (
     NEWS_RSS_DISABLED_FEED_IDS,
     NEWS_RSS_ENABLED,
     NEWS_RSS_ENABLED_FEED_IDS,
+    NEWS_RSS_FEED_FAILURE_COOLDOWN_SECONDS,
     NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED,
     NEWS_RSS_INCLUDE_TRIAL_FEEDS,
     NEWS_RSS_MAX_FEEDS,
@@ -349,6 +350,7 @@ class _BackendSettingsShim:
     news_rss_google_news_fallback_enabled = NEWS_RSS_GOOGLE_NEWS_FALLBACK_ENABLED
     news_rss_disabled_feed_ids = NEWS_RSS_DISABLED_FEED_IDS
     news_rss_user_agent = NEWS_RSS_USER_AGENT
+    news_rss_feed_failure_cooldown_seconds = NEWS_RSS_FEED_FAILURE_COOLDOWN_SECONDS
     news_cache_enabled = NEWS_CACHE_ENABLED
     news_cache_ttl_minutes = NEWS_CACHE_TTL_MINUTES
     news_cache_max_entries = NEWS_CACHE_MAX_ENTRIES

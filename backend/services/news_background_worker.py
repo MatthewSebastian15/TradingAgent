@@ -16,6 +16,15 @@ _REFRESH_KEY = "general_news_refresh"
 _MANUAL_REFRESH_LAST_AT = 0.0
 _QUEUED_REFRESH_TASK: asyncio.Task | None = None
 
+# Watchdog: the scheduled loop already self-heals (catches, sleeps, retries next
+# cycle), so this is visibility only — how many cycles in a row have failed, so
+# an operator (or /api/debug/health) can tell "quiet" apart from "stuck failing".
+_CONSECUTIVE_FAILURE_WARN_THRESHOLD = 3
+_consecutive_failures = 0
+_last_success_at = 0.0
+_last_failure_at = 0.0
+_last_failure_error: str | None = None
+
 
 def _general_news_config() -> dict[str, Any]:
     return dict((build_tradingagents_config().get("general_news") or {}))
@@ -100,6 +109,7 @@ async def queue_general_news_refresh(reason: str = "queued") -> dict[str, Any]:
 
 
 async def news_worker_loop() -> None:
+    global _consecutive_failures, _last_success_at, _last_failure_at, _last_failure_error
     while True:
         config = _general_news_config()
         interval = max(
@@ -114,9 +124,32 @@ async def news_worker_loop() -> None:
             await refresh_general_news_background(reason="scheduled")
         except asyncio.CancelledError:
             raise
-        except Exception:
-            logger.exception("news worker failed")
+        except Exception as exc:
+            _consecutive_failures += 1
+            _last_failure_at = time.time()
+            _last_failure_error = str(exc)[:300]
+            if _consecutive_failures >= _CONSECUTIVE_FAILURE_WARN_THRESHOLD:
+                logger.warning(
+                    "news worker failed %d consecutive cycles, serving stale cache: %s",
+                    _consecutive_failures,
+                    exc,
+                )
+            else:
+                logger.exception("news worker failed")
+        else:
+            _consecutive_failures = 0
+            _last_success_at = time.time()
         await asyncio.sleep(interval)
+
+
+def get_worker_health() -> dict[str, Any]:
+    return {
+        "consecutive_failures": _consecutive_failures,
+        "degraded": _consecutive_failures >= _CONSECUTIVE_FAILURE_WARN_THRESHOLD,
+        "last_success_at": _last_success_at or None,
+        "last_failure_at": _last_failure_at or None,
+        "last_failure_error": _last_failure_error,
+    }
 
 
 async def stop_queued_refresh_task() -> None:
@@ -132,5 +165,10 @@ async def stop_queued_refresh_task() -> None:
 
 def reset_news_worker_state_for_tests() -> None:
     global _MANUAL_REFRESH_LAST_AT, _QUEUED_REFRESH_TASK
+    global _consecutive_failures, _last_success_at, _last_failure_at, _last_failure_error
     _MANUAL_REFRESH_LAST_AT = 0.0
     _QUEUED_REFRESH_TASK = None
+    _consecutive_failures = 0
+    _last_success_at = 0.0
+    _last_failure_at = 0.0
+    _last_failure_error = None

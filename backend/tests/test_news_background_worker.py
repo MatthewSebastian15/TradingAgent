@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 import pytest
 from tradingagents.dataflows.news.general_news_service import GeneralNewsService
 
+from services import news_background_worker as worker
 from services.news_article_store import NewsArticleStore
 from services.news_background_worker import (
+    get_worker_health,
     manual_refresh_cooldown_remaining,
     mark_manual_refresh_requested,
     refresh_general_news_background,
@@ -91,6 +94,43 @@ def test_manual_refresh_cooldown_tracks_recent_refresh(tmp_path, monkeypatch):
     mark_manual_refresh_requested()
 
     assert manual_refresh_cooldown_remaining() > 0
+
+
+@pytest.mark.asyncio
+async def test_worker_loop_tracks_consecutive_failures_then_recovers(monkeypatch):
+    monkeypatch.setattr(worker, "_general_news_config", lambda: {"background_refresh_seconds": 30})
+
+    calls = {"n": 0}
+
+    async def fake_refresh(reason="scheduled"):
+        calls["n"] += 1
+        if calls["n"] <= 3:
+            raise RuntimeError(f"boom-{calls['n']}")
+        return {}
+
+    sleeps = {"n": 0}
+
+    async def fake_sleep(_seconds):
+        sleeps["n"] += 1
+        if sleeps["n"] >= 4:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(worker, "refresh_general_news_background", fake_refresh)
+    monkeypatch.setattr(worker.asyncio, "sleep", fake_sleep)
+
+    assert get_worker_health()["consecutive_failures"] == 0
+
+    with pytest.raises(asyncio.CancelledError):
+        await worker.news_worker_loop()
+
+    health = get_worker_health()
+    assert calls["n"] == 4
+    # 3rd failure trips the warning threshold, 4th cycle succeeds and resets it.
+    assert health["consecutive_failures"] == 0
+    assert health["degraded"] is False
+    assert health["last_success_at"] is not None
+    assert health["last_failure_at"] is not None
+    assert health["last_failure_error"] == "boom-3"
 
 
 class _Feed:

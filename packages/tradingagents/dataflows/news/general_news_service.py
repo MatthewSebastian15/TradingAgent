@@ -348,6 +348,7 @@ class GeneralNewsService:
                 ): provider_name
                 for provider_name in provider_order
             }
+            log_requests = bool(self.config.get("log_provider_requests", True))
             for future in as_completed(futures):
                 provider_name = futures[future]
                 try:
@@ -360,6 +361,15 @@ class GeneralNewsService:
                         provider=provider_name,
                         status="unavailable",
                         last_error=sanitize_error(exc),
+                    )
+                    continue
+                if log_requests:
+                    result = results[provider_name]
+                    logger.info(
+                        "general_news_provider provider=%s status=%s articles=%d",
+                        provider_name,
+                        result.status,
+                        len(result.articles),
                     )
         return results
 
@@ -390,6 +400,10 @@ class GeneralNewsService:
                         self.config.get("rss_fetch_workers", 8),
                     )
                 ),
+            ),
+            "vendor_max_retries": int(self.config.get("vendor_max_retries", 1)),
+            "rss_feed_failure_cooldown_seconds": int(
+                self.config.get("rss_feed_failure_cooldown_seconds", 600)
             ),
         }
         if bool(self.config.get("enable_feed_rotation", True)):

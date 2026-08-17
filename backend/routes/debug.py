@@ -16,6 +16,7 @@ from tradingagents.observability.metrics_collector import get_metrics_collector
 
 import config as app_config
 from routes.validation import normalize_ticker_symbol
+from services.news_background_worker import get_worker_health
 
 router = APIRouter(tags=["debug"])
 
@@ -90,9 +91,12 @@ async def debug_health() -> dict[str, Any]:
         )
     }
     llm_payload = _llm_debug_payload()
+    news_worker = get_worker_health()
     status = "ok"
-    if not llm_payload["api_key_present"] or any(
-        item["status"] != "ok" for item in vendors.values()
+    if (
+        not llm_payload["api_key_present"]
+        or any(item["status"] != "ok" for item in vendors.values())
+        or news_worker["degraded"]
     ):
         status = "degraded"
     return {
@@ -100,6 +104,7 @@ async def debug_health() -> dict[str, Any]:
         "timestamp": datetime.now().astimezone().isoformat(),
         "vendors": vendors,
         "llm": llm_payload,
+        "general_news_worker": news_worker,
         "feature_flags": {
             "DEBUG_ENDPOINTS_ENABLED": bool(getattr(app_config, "DEBUG_ENDPOINTS_ENABLED", False)),
         },

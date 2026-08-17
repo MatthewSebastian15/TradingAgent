@@ -344,6 +344,11 @@ NEWS_MANUAL_REFRESH_COOLDOWN_SECONDS = env_int(
 NEWS_PROVIDER_429_COOLDOWN_SECONDS = env_int(
     "NEWS_PROVIDER_429_COOLDOWN_SECONDS", 1800, min_value=1
 )
+# Per-feed circuit breaker: a feed that fails a fetch (after its own internal
+# retry) is skipped for this long, instead of eating a full timeout every cycle.
+NEWS_RSS_FEED_FAILURE_COOLDOWN_SECONDS = env_int(
+    "NEWS_RSS_FEED_FAILURE_COOLDOWN_SECONDS", 600, min_value=1
+)
 NEWS_RSS_ROTATION_BATCH_SIZE = env_int("NEWS_RSS_ROTATION_BATCH_SIZE", 20, min_value=1)
 NEWS_MAX_STORED_ARTICLES = env_int("NEWS_MAX_STORED_ARTICLES", 2000, min_value=1)
 NEWS_ARTICLE_RETENTION_DAYS = env_int("NEWS_ARTICLE_RETENTION_DAYS", 30, min_value=1)

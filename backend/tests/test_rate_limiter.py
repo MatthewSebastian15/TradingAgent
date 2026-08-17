@@ -4,11 +4,12 @@ import asyncio
 import sqlite3
 from datetime import date
 
+import pytest
 from helpers import install_analysis_runtime
 
 from analysis_cache import AnalysisJobStore
 from errors import RateLimitError
-from rate_limiter import RateLimitPolicy, SQLiteRateLimiterBackend
+from rate_limiter import RateLimitLease, RateLimitPolicy, SQLiteRateLimiterBackend
 
 
 def test_ticker_validate_is_rate_limited(client, monkeypatch):
@@ -31,6 +32,39 @@ def test_ticker_validate_is_rate_limited(client, monkeypatch):
     assert first.json()["ticker"] == "BBCA.JK"
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "RATE_LIMITED"
+
+
+def test_job_create_not_blocked_by_open_events_stream_on_same_owner():
+    """Regression: POST /api/analysis/jobs used to share the 'stream' scope
+    with GET .../events, which holds its lease for the whole SSE connection
+    (routes/jobs.py:stream_job_events_with_lease). With the production default
+    MAX_CONCURRENT_STREAMS_PER_KEY=1, a second analysis could never be created
+    while the first one's progress stream was still open, even though
+    MAX_CONCURRENT_REQUESTS_PER_KEY=2 is meant to allow two in flight per
+    owner. Job creation now uses the independent 'request' scope."""
+    identifier = "owner-phase5-regression"
+    stream_prod_default = RateLimitPolicy(scope="stream", max_per_minute=8, max_concurrent=1)
+    request_prod_default = RateLimitPolicy(scope="request", max_per_minute=20, max_concurrent=2)
+
+    async def scenario():
+        events_lease = RateLimitLease(identifier, stream_prod_default)
+        await events_lease.__aenter__()
+        try:
+            # Sanity check the harness: two stream-scoped leases for the same
+            # owner really do collide at the production default of 1 — this is
+            # exactly what job creation used to hit before the fix.
+            with pytest.raises(RateLimitError):
+                await RateLimitLease(identifier, stream_prod_default).__aenter__()
+
+            # The fix: creating a second job uses the 'request' scope, so an
+            # open events stream (still holding the 'stream' scope) no longer
+            # blocks it.
+            async with RateLimitLease(identifier, request_prod_default):
+                pass
+        finally:
+            await events_lease.__aexit__(None, None, None)
+
+    asyncio.run(scenario())
 
 
 def test_configured_api_key_must_match(client, monkeypatch):
@@ -95,7 +129,7 @@ def test_job_create_rate_limit_runs_before_storing_second_job(client, monkeypatc
     install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
     monkeypatch.setattr(
-        "routes.analysis.stream_policy",
+        "routes.analysis.request_policy",
         lambda: RateLimitPolicy(scope="job-create-limit-test", max_per_minute=1, max_concurrent=1),
     )
 
@@ -271,7 +305,7 @@ def test_market_quotes_use_separate_bucket_from_analysis_jobs(client, monkeypatc
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
     monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
     monkeypatch.setattr(
-        "routes.analysis.stream_policy",
+        "routes.analysis.request_policy",
         lambda: RateLimitPolicy(
             scope="analysis-market-separation-test", max_per_minute=1, max_concurrent=1
         ),

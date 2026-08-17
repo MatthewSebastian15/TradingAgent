@@ -50,11 +50,15 @@ def mark_provider_429(provider: str, *, cooldown_seconds: int | None = None) -> 
         state.last_failure_at = _utc_now_text()
 
 
-def mark_provider_failure(provider: str, error: str) -> None:
+def mark_provider_failure(
+    provider: str, error: str, *, cooldown_seconds: int | None = None
+) -> None:
     with _LOCK:
         state = _PROVIDER_STATE.setdefault(provider, ProviderState())
         state.last_error = str(error or "error")[:120]
         state.last_failure_at = _utc_now_text()
+        if cooldown_seconds:
+            state.cooldown_until = time.time() + int(cooldown_seconds)
 
 
 def mark_provider_success(provider: str) -> None:

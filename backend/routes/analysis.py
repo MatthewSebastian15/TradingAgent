@@ -268,7 +268,12 @@ async def create_analysis_job(req: AnalysisRequest, request: Request):
     request_id = request_id_ctx.get()
 
     try:
-        async with limit_request(request, stream_policy()) as lease:
+        # Creating a job must not share the 'stream' scope: analysis_job_events
+        # holds that scope's lease for the whole SSE connection (potentially
+        # the full analysis duration), which would otherwise block a second
+        # analysis from ever being created while the first one's progress
+        # stream is still open — defeating MAX_CONCURRENT_REQUESTS_PER_KEY.
+        async with limit_request(request, request_policy()) as lease:
             runtime = jobs.get_analysis_runtime(request)
             return await _create_analysis_job_response(req, request_id, lease.identifier, runtime)
     except AnalysisJobLimitError as exc:
