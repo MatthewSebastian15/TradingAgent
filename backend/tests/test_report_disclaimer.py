@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.report_disclaimer import REPORT_DISCLAIMER
+from services.report.disclaimer import REPORT_DISCLAIMER
 
 
 def test_disclaimer_present_and_substantial():
@@ -18,12 +18,12 @@ def test_disclaimer_present_and_substantial():
 
 
 def test_report_service_uses_same_disclaimer():
-    import services.report_service as report_service
+    import services.report.service as report_service
 
     assert report_service.REPORT_DISCLAIMER is REPORT_DISCLAIMER
 
 
 def test_analysis_response_payload_uses_same_disclaimer():
-    import routes.serializers_analysis as serializers
+    import services.analysis.serializers.analysis as serializers
 
     assert serializers.REPORT_DISCLAIMER is REPORT_DISCLAIMER

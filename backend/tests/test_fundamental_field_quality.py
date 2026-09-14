@@ -9,7 +9,7 @@ from tradingagents.dataflows.fundamentals.fundamental_gap_mapper import (
     estimate_financial_row_fields,
 )
 
-from routes.serializers_analysis import parse_final_result, shape_result
+from services.analysis.serializers.analysis import parse_final_result, shape_result
 
 
 def test_field_quality_marks_primary_fallback_estimated_and_unavailable_fields():

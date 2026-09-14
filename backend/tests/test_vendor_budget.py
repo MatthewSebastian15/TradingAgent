@@ -6,7 +6,7 @@ from tradingagents.dataflows.providers.vendor_budget import (
     VendorBudget,
     create_budget_from_config,
 )
-from tradingagents.pipeline_balanced_types import LLMBudget
+from tradingagents.pipeline_balanced.types import LLMBudget
 
 
 def test_vendor_budget_counts_all_active_vendors():
@@ -85,7 +85,7 @@ def test_total_data_call_exceeded_records_partial_warning():
 
 
 def test_llm_budget_depth_limits_from_env(monkeypatch):
-    import config
+    from config import settings as config
 
     with monkeypatch.context() as env:
         env.setenv("LLM_BUDGET_FAST", "2")

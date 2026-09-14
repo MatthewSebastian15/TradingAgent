@@ -19,10 +19,10 @@ from datetime import datetime, timezone
 from time import monotonic
 from urllib.parse import urlparse
 
-from config import ECONOMIC_WTO_API_KEY
-from errors import BadRequestError, PipelineExecutionError
-from services.market_cache import market_cache
-from services.market_ohlcv_service import fetch_ohlcv_range
+from config.settings import ECONOMIC_WTO_API_KEY
+from core.errors import BadRequestError, PipelineExecutionError
+from services.market.cache import market_cache
+from services.market.ohlcv_service import fetch_ohlcv_range
 
 _CACHE_TTL_SECONDS = 600.0  # 10 minutes
 _MIN_INTERVAL_SECONDS = 0.5  # ~2 requests/sec

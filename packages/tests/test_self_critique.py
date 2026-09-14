@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-import tradingagents.pipeline_balanced_orchestrator as orch
+import tradingagents.pipeline_balanced.orchestrator as orch
 from tradingagents.agents.schemas import (
     PortfolioDecision,
     PortfolioRating,

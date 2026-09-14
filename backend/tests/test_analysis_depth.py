@@ -5,10 +5,10 @@ from collections import Counter
 
 import pytest
 import tradingagents.pipeline_balanced as pipeline
-import tradingagents.pipeline_balanced_orchestrator as orchestrator
+import tradingagents.pipeline_balanced.orchestrator as orchestrator
 from tradingagents.dataflows.quality.data_quality import DataQualityReport
 
-from config import build_tradingagents_config
+from config.settings import build_tradingagents_config
 
 
 def _collected_data(trade_date: str = "2026-05-18") -> pipeline.CollectedData:

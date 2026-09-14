@@ -1,7 +1,7 @@
 import pytest
 
-from tradingagents.pipeline_balanced_progress import AGENT_LABELS, _emit_progress, _run_tracked
-from tradingagents.pipeline_balanced_types import AnalysisCancelledError
+from tradingagents.pipeline_balanced.progress import AGENT_LABELS, _emit_progress, _run_tracked
+from tradingagents.pipeline_balanced.types import AnalysisCancelledError
 
 
 def test_emit_progress_event_shape():

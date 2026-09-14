@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from owner_session import issue_owner_session, owner_identifier
+from core.security.owner_session import issue_owner_session, owner_identifier
 
 _TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 

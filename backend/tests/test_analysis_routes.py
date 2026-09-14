@@ -6,8 +6,8 @@ from datetime import datetime
 
 from helpers import install_analysis_runtime
 
-from analysis_cache import AnalysisCacheKey, AnalysisJobStore
-from owner_session import owner_identifier
+from core.cache.analysis_cache import AnalysisCacheKey, AnalysisJobStore
+from core.security.owner_session import owner_identifier
 
 _TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
@@ -172,7 +172,10 @@ def test_job_create_rejects_oversized_json_body_before_storing_job(client, monke
 
 def test_job_completes_from_result_cache_without_rerunning_pipeline(client, monkeypatch):
     from routes import analysis as analysis_routes
-    from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
+    from services.analysis.validation import (
+        AnalysisRequest,
+        normalize_and_validate_analysis_request,
+    )
 
     async def should_not_run(*args, **kwargs):
         raise AssertionError("pipeline must not run on a result-cache hit")

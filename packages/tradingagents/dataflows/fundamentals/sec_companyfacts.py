@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from tradingagents import env
+from tradingagents.config import env
 from tradingagents.dataflows.providers.config import get_config
 
 TICKER_URL = "https://www.sec.gov/files/company_tickers.json"

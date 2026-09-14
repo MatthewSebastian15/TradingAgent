@@ -7,7 +7,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_call_rag_llm_returns_string():
-    from services.rag_llm import call_rag_llm
+    from services.rag.llm import call_rag_llm
 
     mock_llm = MagicMock()
     mock_response = MagicMock()
@@ -16,7 +16,7 @@ async def test_call_rag_llm_returns_string():
     mock_client = MagicMock()
     mock_client.get_llm.return_value = mock_llm
 
-    with patch("services.rag_llm.create_llm_client", return_value=mock_client):
+    with patch("services.rag.llm.create_llm_client", return_value=mock_client):
         result = await call_rag_llm(
             context="=== NEWS DATA ===\n[NEWS] Tesla Q2...",
             user_message="Ringkas berita Tesla",
@@ -29,7 +29,7 @@ async def test_call_rag_llm_returns_string():
 
 @pytest.mark.asyncio
 async def test_call_rag_llm_includes_chat_history():
-    from services.rag_llm import call_rag_llm
+    from services.rag.llm import call_rag_llm
 
     mock_llm = MagicMock()
     mock_response = MagicMock()
@@ -43,7 +43,7 @@ async def test_call_rag_llm_includes_chat_history():
         {"role": "assistant", "content": "Ya, analisis META menunjukkan HOLD."},
     ]
 
-    with patch("services.rag_llm.create_llm_client", return_value=mock_client):
+    with patch("services.rag.llm.create_llm_client", return_value=mock_client):
         await call_rag_llm(
             context="=== ANALYSIS DATA ===",
             user_message="Apa risikonya?",
@@ -56,7 +56,7 @@ async def test_call_rag_llm_includes_chat_history():
 
 
 def test_round_decimals_caps_at_two_places():
-    from services.rag_llm import _round_decimals
+    from services.rag.llm import _round_decimals
 
     assert _round_decimals("NVDA closed at 123.4567 (+1.2345%)") == "NVDA closed at 123.46 (+1.23%)"
     assert _round_decimals("volume 1,234.5678") == "volume 1,234.57"

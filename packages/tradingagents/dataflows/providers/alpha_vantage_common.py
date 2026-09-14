@@ -7,7 +7,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import pandas as pd
 import requests
 
-from tradingagents import env
+from tradingagents.config import env
 
 from .config import get_config
 

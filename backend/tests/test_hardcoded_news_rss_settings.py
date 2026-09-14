@@ -24,7 +24,7 @@ def test_backend_news_rss_settings_are_hardcoded(monkeypatch):
     for key, value in _ENV_OVERRIDES.items():
         monkeypatch.setenv(key, value)
 
-    import config_defaults
+    from config import defaults as config_defaults
 
     config_defaults = importlib.reload(config_defaults)
 
@@ -59,7 +59,7 @@ def test_core_news_rss_settings_are_hardcoded(monkeypatch):
     for key, value in _ENV_OVERRIDES.items():
         monkeypatch.setenv(key, value)
 
-    import tradingagents.default_config as default_config
+    from tradingagents.config import defaults as default_config
 
     default_config = importlib.reload(default_config)
 

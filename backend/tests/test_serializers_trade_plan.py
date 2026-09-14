@@ -1,6 +1,6 @@
 """Unit tests for routes/serializers_trade_plan.py.
 
-The serializer submodules are linked by importing routes.serializers_analysis
+The serializer submodules are linked by importing services.analysis.serializers.analysis
 (it injects shared helpers into each module's namespace), so import that first.
 """
 
@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import routes.serializers_analysis  # noqa: F401  (links serializer modules)
-from routes.serializers_trade_plan import (
+import services.analysis.serializers.analysis  # noqa: F401  (links serializer modules)
+from services.analysis.serializers.trade_plan import (
     _empty_trade_contract,
     _new_entry_action,
     _portfolio_trade_fields,

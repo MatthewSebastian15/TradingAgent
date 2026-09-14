@@ -6,16 +6,16 @@ from datetime import datetime, timezone
 import pytest
 from tradingagents.dataflows.news.general_news_service import GeneralNewsService
 
-from services import news_background_worker as worker
-from services.news_article_store import NewsArticleStore
-from services.news_background_worker import (
+from services.news import background_worker as worker
+from services.news.article_store import NewsArticleStore
+from services.news.background_worker import (
     get_worker_health,
     manual_refresh_cooldown_remaining,
     mark_manual_refresh_requested,
     refresh_general_news_background,
     reset_news_worker_state_for_tests,
 )
-from services.news_inflight_dedupe import clear_inflight_for_tests
+from services.news.inflight_dedupe import clear_inflight_for_tests
 
 
 @pytest.fixture(autouse=True)
@@ -63,7 +63,7 @@ def _article():
 async def test_background_refresh_stores_articles(tmp_path, monkeypatch):
     config = _config(tmp_path)
     monkeypatch.setattr(
-        "services.news_background_worker.build_tradingagents_config", lambda: config
+        "services.news.background_worker.build_tradingagents_config", lambda: config
     )
     monkeypatch.setattr(
         GeneralNewsService,
@@ -86,7 +86,7 @@ async def test_background_refresh_stores_articles(tmp_path, monkeypatch):
 
 def test_manual_refresh_cooldown_tracks_recent_refresh(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "services.news_background_worker.build_tradingagents_config",
+        "services.news.background_worker.build_tradingagents_config",
         lambda: _config(tmp_path),
     )
 
@@ -139,7 +139,7 @@ class _Feed:
 
 
 def test_feed_rotation_returns_different_batches_per_cycle():
-    from services.news_feed_rotation import FeedRotationState
+    from services.news.feed_rotation import FeedRotationState
 
     state = FeedRotationState()
     feeds = [_Feed("a"), _Feed("b"), _Feed("c"), _Feed("d")]
@@ -150,7 +150,7 @@ def test_feed_rotation_returns_different_batches_per_cycle():
 
 
 def test_feed_rotation_wraps_partial_batch():
-    from services.news_feed_rotation import FeedRotationState
+    from services.news.feed_rotation import FeedRotationState
 
     state = FeedRotationState()
     feeds = [_Feed("a"), _Feed("b"), _Feed("c")]

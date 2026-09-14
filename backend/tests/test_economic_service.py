@@ -7,8 +7,8 @@ import asyncio
 import pytest
 
 import services.economic_service as econ
-from errors import BadRequestError, PipelineExecutionError
-from services.market_cache import market_cache
+from core.errors import BadRequestError, PipelineExecutionError
+from services.market.cache import market_cache
 
 
 @pytest.fixture(autouse=True)

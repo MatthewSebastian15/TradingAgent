@@ -6,7 +6,7 @@ import logging
 import pytest
 
 import main
-from config_validation import validate_startup_config
+from config.validation import validate_startup_config
 
 
 def test_warn_when_finnhub_key_exists_but_disabled(monkeypatch, caplog):

@@ -80,7 +80,7 @@ def test_gap_mapper_and_completeness_report():
 def test_data_collection_workers_default(monkeypatch):
     import importlib
 
-    from tradingagents import default_config
+    from tradingagents.config import defaults as default_config
 
     try:
         monkeypatch.delenv("DATA_COLLECTION_WORKERS", raising=False)

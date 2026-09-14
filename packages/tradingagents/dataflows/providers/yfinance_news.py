@@ -6,7 +6,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from tradingagents.dataflows.market.stockstats_utils import yf_retry
-from tradingagents.yfinance_runtime import yf
+from tradingagents.dataflows.providers.yfinance_runtime import yf
 
 
 def _extract_article_data(article: dict) -> dict:

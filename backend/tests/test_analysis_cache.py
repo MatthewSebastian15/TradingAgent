@@ -6,13 +6,13 @@ import time
 
 import pytest
 
-from analysis_cache import (
+from core.cache.analysis_cache import (
     AnalysisCacheKey,
     AnalysisJobLimitError,
     AnalysisJobStore,
     AnalysisResultCache,
 )
-from persistent_cache import SQLiteTTLCache
+from core.cache.persistent_cache import SQLiteTTLCache
 
 
 class _NoValuesDict(dict):

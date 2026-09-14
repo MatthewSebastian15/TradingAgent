@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from tradingagents.dataflows.news.news_provider_base import ProviderFetchResult
 
-from services.news_provider_budget import (
+from services.news.provider_budget import (
     clear_provider_budget_for_tests,
     is_provider_available,
     mark_provider_429,

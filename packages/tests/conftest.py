@@ -26,7 +26,7 @@ for _env_var in _API_KEY_ENV_VARS:
 
 from tradingagents.dataflows.quality.data_quality import DataQualityReport  # noqa: E402
 from tradingagents.llm_clients.model_catalog import MODEL_CATALOG  # noqa: E402
-from tradingagents.pipeline_balanced_types import CollectedData  # noqa: E402
+from tradingagents.pipeline_balanced.types import CollectedData  # noqa: E402
 from tradingagents.prompt_context import build_prompt_context  # noqa: E402
 
 _GOOGLE_QUICK_LLM = MODEL_CATALOG["google"]["quick"][0][1]

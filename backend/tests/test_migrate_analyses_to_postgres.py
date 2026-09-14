@@ -5,9 +5,9 @@ import os
 import psycopg
 import pytest
 
-from config import ANALYSIS_DATABASE_URL
+from config.settings import ANALYSIS_DATABASE_URL
 from scripts.migrate_analyses_to_postgres import migrate
-from services.analysis_repository import AnalysisRepository
+from services.analysis.repository import AnalysisRepository
 
 pytestmark = [
     pytest.mark.postgres,

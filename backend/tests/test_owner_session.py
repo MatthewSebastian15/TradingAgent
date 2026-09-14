@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from config import OWNER_SESSION_TTL_SECONDS
-from errors import AuthenticationError
-from owner_session import (
+from config.settings import OWNER_SESSION_TTL_SECONDS
+from core.errors import AuthenticationError
+from core.security.owner_session import (
     issue_owner_session,
     owner_identifier,
     owner_identifier_from_token,
@@ -36,7 +36,7 @@ def test_owner_session_token_rejects_tampered_signature():
 def test_session_endpoint_validates_service_credential_reuses_cookie_and_issues_distinct_owners(
     client, monkeypatch
 ):
-    monkeypatch.setattr("rate_limiter.API_KEY", "shared-proxy-key")
+    monkeypatch.setattr("core.security.rate_limiter.API_KEY", "shared-proxy-key")
     client.headers.pop("x-owner-token", None)
 
     rejected = client.post("/api/session", headers={"x-api-key": "wrong-key"})

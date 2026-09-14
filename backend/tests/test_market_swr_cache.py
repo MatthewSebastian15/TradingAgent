@@ -5,8 +5,8 @@ from __future__ import annotations
 import threading
 import time
 
-from services import market_yfinance_service as svc
-from services.market_cache import market_cache
+from services.market import yfinance_service as svc
+from services.market.cache import market_cache
 
 
 def setup_function() -> None:

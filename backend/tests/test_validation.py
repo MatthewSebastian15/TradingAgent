@@ -11,8 +11,8 @@ from tradingagents.llm_clients.model_catalog import (
     MODEL_CATALOG,
 )
 
-from errors import BadRequestError
-from routes.validation import AnalysisRequest, normalize_and_validate_analysis_request
+from core.errors import BadRequestError
+from services.analysis.validation import AnalysisRequest, normalize_and_validate_analysis_request
 
 _GOOGLE_QUICK_LLM = MODEL_CATALOG["google"]["quick"][0][1]
 _GOOGLE_DEEP_LLM = MODEL_CATALOG["google"]["deep"][0][1]
@@ -32,7 +32,7 @@ def test_env_example_does_not_define_duplicate_keys():
 
 
 def test_invalid_boolean_environment_value_is_rejected(monkeypatch):
-    from config_env import env_bool
+    from config.env import env_bool
 
     monkeypatch.setenv("TEST_BOOLEAN_VALUE", "sometimes")
 
@@ -41,7 +41,7 @@ def test_invalid_boolean_environment_value_is_rejected(monkeypatch):
 
 
 def test_invalid_integer_environment_value_is_rejected(monkeypatch):
-    from config_env import env_int
+    from config.env import env_int
 
     monkeypatch.setenv("TEST_INTEGER_VALUE", "1.5")
 
@@ -50,7 +50,7 @@ def test_invalid_integer_environment_value_is_rejected(monkeypatch):
 
 
 def test_out_of_range_float_environment_value_is_rejected(monkeypatch):
-    from config_env import env_float
+    from config.env import env_float
 
     monkeypatch.setenv("TEST_FLOAT_VALUE", "1.5")
 
@@ -59,7 +59,7 @@ def test_out_of_range_float_environment_value_is_rejected(monkeypatch):
 
 
 def test_startup_rejects_invalid_data_vendor_news_relevance_score(monkeypatch):
-    import config
+    from config import settings as config
 
     try:
         with monkeypatch.context() as env:
@@ -237,7 +237,7 @@ def test_deepseek_provider_is_valid_when_api_key_exists(monkeypatch):
     monkeypatch.setenv("ANALYSIS_MODE", "balanced")
     monkeypatch.setenv("MAX_GEMINI_CALLS", "9")
 
-    import config
+    from config import settings as config
 
     reloaded = config.reload_config_for_tests()
     errors = reloaded.validate_startup_config()
@@ -253,7 +253,7 @@ def test_startup_config_requires_model_env(monkeypatch):
     monkeypatch.delenv("DEEP_THINK_LLM", raising=False)
     monkeypatch.delenv("QUICK_THINK_LLM", raising=False)
 
-    import config
+    from config import settings as config
 
     reloaded = config.reload_config_for_tests()
     try:
@@ -269,7 +269,7 @@ def test_google_model_env_values_are_normalized_to_lowercase(monkeypatch):
     monkeypatch.setenv("DEEP_THINK_LLM", "gemini-3.5-Flash")
     monkeypatch.setenv("QUICK_THINK_LLM", "gemini-3.1-Flash-Lite")
 
-    import config
+    from config import settings as config
 
     reloaded = config.reload_config_for_tests()
     try:
@@ -288,7 +288,7 @@ def _restore_test_config(monkeypatch):
     monkeypatch.delenv("OWNER_SESSION_SECRET", raising=False)
     monkeypatch.delenv("CORS_ORIGINS", raising=False)
 
-    import config
+    from config import settings as config
 
     config.reload_config_for_tests()
 
@@ -300,7 +300,7 @@ def test_production_defaults_require_api_key_and_rate_limit(monkeypatch):
     monkeypatch.setenv("OWNER_SESSION_SECRET", "test-owner-session-secret")
     monkeypatch.delenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", raising=False)
 
-    import config
+    from config import settings as config
 
     reloaded = config.reload_config_for_tests()
     try:
@@ -318,7 +318,7 @@ def test_missing_app_env_uses_development_defaults(monkeypatch):
     monkeypatch.delenv("CORS_ORIGINS", raising=False)
     monkeypatch.delenv("API_KEY", raising=False)
 
-    import config
+    from config import settings as config
 
     reloaded = config.reload_config_for_tests()
     try:
@@ -336,7 +336,7 @@ def test_missing_app_env_uses_development_defaults(monkeypatch):
 
 
 def test_invalid_app_env_is_rejected(monkeypatch):
-    import config
+    from config import settings as config
 
     monkeypatch.setenv("APP_ENV", "staging")
 
@@ -348,7 +348,7 @@ def test_invalid_app_env_is_rejected(monkeypatch):
 
 
 def test_production_requires_cors_origins(monkeypatch):
-    import config
+    from config import settings as config
 
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("API_KEY", "test-api-key")
@@ -363,7 +363,7 @@ def test_production_requires_cors_origins(monkeypatch):
 
 
 def test_production_requires_api_key(monkeypatch):
-    import config
+    from config import settings as config
 
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
@@ -377,7 +377,7 @@ def test_production_requires_api_key(monkeypatch):
 
 
 def test_production_requires_owner_session_secret(monkeypatch):
-    import config
+    from config import settings as config
 
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
@@ -395,7 +395,7 @@ def test_production_requires_owner_session_secret(monkeypatch):
 
 
 def test_wildcard_cors_is_rejected(monkeypatch):
-    import config
+    from config import settings as config
 
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("CORS_ORIGINS", "*")
@@ -414,7 +414,7 @@ def test_cors_origins_can_be_overridden_from_environment(monkeypatch):
     monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "true")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com, https://admin.example.com")
 
-    import config
+    from config import settings as config
 
     reloaded = config.reload_config_for_tests()
     try:
@@ -430,7 +430,7 @@ def test_production_rejects_disabled_api_key_requirement(monkeypatch):
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("REQUIRE_API_KEY_FOR_RATE_LIMIT", "false")
 
-    import config
+    from config import settings as config
 
     try:
         with pytest.raises(

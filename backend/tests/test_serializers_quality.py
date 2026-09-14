@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import routes.serializers_analysis  # noqa: F401  (links serializer modules)
-from routes.serializers_quality import (
+import services.analysis.serializers.analysis  # noqa: F401  (links serializer modules)
+from services.analysis.serializers.quality import (
     _clean_data_source_message,
     _complete_risk_engine_data_quality,
     _freshness_status_from_date,

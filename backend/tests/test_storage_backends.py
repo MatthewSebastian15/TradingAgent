@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from storage_backends import SQLiteRuntimeStorage, build_runtime_storage
+from core.cache.storage_backends import SQLiteRuntimeStorage, build_runtime_storage
 
 
 def test_build_sqlite_backend():

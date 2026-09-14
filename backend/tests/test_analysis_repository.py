@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.analysis_repository import AnalysisRepository
+from services.analysis.repository import AnalysisRepository
 
 _TEST_OWNER = "owner:test"
 

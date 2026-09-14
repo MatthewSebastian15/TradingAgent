@@ -144,9 +144,9 @@ def test_company_profile_routes_to_yfinance(monkeypatch):
 
 
 def test_build_config_preserves_environment_vendor_order_for_every_category(monkeypatch):
-    from tradingagents import default_config
+    from tradingagents.config import defaults as default_config
 
-    import config
+    from config import settings as config
 
     expected = {
         category: f"primary_{category},fallback_{category}"
@@ -167,9 +167,9 @@ def test_build_config_preserves_environment_vendor_order_for_every_category(monk
 
 
 def test_news_relevance_thresholds_use_separate_environment_keys(monkeypatch):
-    from tradingagents import default_config
+    from tradingagents.config import defaults as default_config
 
-    import config
+    from config import settings as config
 
     try:
         with monkeypatch.context() as env:

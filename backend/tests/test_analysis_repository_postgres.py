@@ -5,8 +5,8 @@ import os
 import psycopg
 import pytest
 
-from config import ANALYSIS_DATABASE_URL
-from services.analysis_repository_postgres import PostgresAnalysisRepository
+from config.settings import ANALYSIS_DATABASE_URL
+from services.analysis.repository_postgres import PostgresAnalysisRepository
 
 pytestmark = [
     pytest.mark.postgres,

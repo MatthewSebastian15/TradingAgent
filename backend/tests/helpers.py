@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from analysis_cache import AnalysisJobStore, AnalysisResultCache, InFlightRegistry
+from core.cache.analysis_cache import AnalysisJobStore, AnalysisResultCache, InFlightRegistry
 
 
 def install_analysis_runtime(monkeypatch, job_store: AnalysisJobStore | None = None):
@@ -13,7 +13,7 @@ def install_analysis_runtime(monkeypatch, job_store: AnalysisJobStore | None = N
     and result cache.
     """
     from main import app
-    from routes import jobs
+    from services.analysis import jobs
 
     runtime = jobs.AnalysisRuntimeState(
         result_cache=AnalysisResultCache(ttl_seconds=60, max_entries=16),

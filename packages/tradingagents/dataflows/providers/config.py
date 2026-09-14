@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-import tradingagents.default_config as default_config
+import tradingagents.config.defaults as default_config
 
 _DEFAULT_CONFIG: dict = copy.deepcopy(default_config.DEFAULT_CONFIG)
 _thread_config = threading.local()

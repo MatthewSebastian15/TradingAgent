@@ -12,9 +12,8 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request
 
-from errors import BadRequestError
-from rate_limiter import RateLimitPolicy, limit_request
-from schemas import (
+from core.errors import BadRequestError
+from core.schemas import (
     MarketMoversResponse,
     MarketOverviewRequest,
     MarketOverviewResponse,
@@ -23,13 +22,14 @@ from schemas import (
     StockOverviewResponse,
     SymbolValidationResponse,
 )
-from services.market_ohlcv_service import (
+from core.security.rate_limiter import RateLimitPolicy, limit_request
+from services.market.ohlcv_service import (
     OHLCV_RANGE_OPTIONS,
     fetch_ohlcv_range,
     parse_ohlcv_trade_date,
 )
-from services.market_search_index import get_popular_tickers, search_local_tickers
-from services.market_yfinance_service import (
+from services.market.search_index import get_popular_tickers, search_local_tickers
+from services.market.yfinance_service import (
     build_stock_overview,
     dedupe_symbols,
     get_market_movers,
@@ -303,7 +303,7 @@ def _fast_info_value(info: Any, *names: str) -> Any:
 def _fetch_quote(symbol: str) -> dict:
     """Return a minimal quote dict for *symbol* using yfinance fast_info."""
     try:
-        from tradingagents.yfinance_runtime import yf  # noqa: PLC0415
+        from tradingagents.dataflows.providers.yfinance_runtime import yf  # noqa: PLC0415
 
         ticker = yf.Ticker(symbol)
         info = ticker.fast_info
@@ -484,7 +484,7 @@ def _clean_search_result(raw: dict[str, Any]) -> dict[str, Any] | None:
 
 def _search_tickers(query: str, limit: int) -> list[dict[str, Any]]:
     try:
-        from tradingagents.yfinance_runtime import yf  # noqa: PLC0415
+        from tradingagents.dataflows.providers.yfinance_runtime import yf  # noqa: PLC0415
 
         search = _search_instance(yf, query, limit)
         raw_quotes = _extract_search_quotes(search)

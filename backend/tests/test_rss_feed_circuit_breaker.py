@@ -4,7 +4,7 @@ import requests
 from tradingagents.dataflows.providers.rss_news import RSSContextProvider
 from tradingagents.dataflows.providers.rss_news_config import RSSFeedConfig
 
-from services.news_provider_budget import clear_provider_budget_for_tests
+from services.news.provider_budget import clear_provider_budget_for_tests
 
 _FEED = RSSFeedConfig(
     id="breaker-test-feed",

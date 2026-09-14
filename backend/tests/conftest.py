@@ -73,7 +73,7 @@ _DEFAULT_ENV = {
 for key, value in _DEFAULT_ENV.items():
     os.environ.setdefault(key, value)
 
-from owner_session import issue_owner_session  # noqa: E402
+from core.security.owner_session import issue_owner_session  # noqa: E402
 
 _TEST_OWNER_ID = "0" * 32
 _TEST_OWNER_TOKEN = issue_owner_session(owner_id=_TEST_OWNER_ID)["owner_token"]
@@ -81,7 +81,7 @@ _TEST_OWNER_TOKEN = issue_owner_session(owner_id=_TEST_OWNER_ID)["owner_token"]
 
 @pytest.fixture(autouse=True)
 def clear_rate_limiter_state():
-    from rate_limiter import reset_rate_limiter_for_tests
+    from core.security.rate_limiter import reset_rate_limiter_for_tests
 
     reset_rate_limiter_for_tests()
     yield
@@ -90,7 +90,7 @@ def clear_rate_limiter_state():
 
 @pytest.fixture(autouse=True)
 def analysis_repository(tmp_path):
-    from services.analysis_repository import AnalysisRepository, install_analysis_repository
+    from services.analysis.repository import AnalysisRepository, install_analysis_repository
 
     repository = AnalysisRepository(str(tmp_path / "analysis_history.sqlite3"), max_rows=1000)
     install_analysis_repository(repository)

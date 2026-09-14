@@ -4,7 +4,7 @@ from dataclasses import asdict
 
 from tradingagents.dataflows.news.news_context_builder import build_news_context
 from tradingagents.graph.prompt_context_builder import PromptContext, build_prompt_context
-from tradingagents.llm.llm_router import apply_guardrail
+from tradingagents.llm_clients.router import apply_guardrail
 
 
 def _state(**overrides):

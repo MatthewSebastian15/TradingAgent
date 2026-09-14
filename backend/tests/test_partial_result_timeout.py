@@ -5,9 +5,9 @@ import concurrent.futures
 import threading
 import time
 
-from routes import pipeline_runner
-from routes.serializers_analysis import build_partial_result
-from routes.validation import AnalysisRequest
+from services.analysis import pipeline_runner
+from services.analysis.serializers.analysis import build_partial_result
+from services.analysis.validation import AnalysisRequest
 
 
 def _request() -> AnalysisRequest:

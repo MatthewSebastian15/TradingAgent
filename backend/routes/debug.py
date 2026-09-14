@@ -14,9 +14,9 @@ from tradingagents.dataflows.providers.vendor_symbol import resolve_symbol
 from tradingagents.observability.health_aggregator import get_vendor_stats
 from tradingagents.observability.metrics_collector import get_metrics_collector
 
-import config as app_config
-from routes.validation import normalize_ticker_symbol
-from services.news_background_worker import get_worker_health
+from config import settings as app_config
+from services.analysis.validation import normalize_ticker_symbol
+from services.news.background_worker import get_worker_health
 
 router = APIRouter(tags=["debug"])
 

@@ -82,7 +82,11 @@ def test_fetch_quote_reads_volume_from_fast_info(monkeypatch):
             )
         )
     )
-    monkeypatch.setitem(sys.modules, "tradingagents.yfinance_runtime", SimpleNamespace(yf=fake_yf))
+    monkeypatch.setitem(
+        sys.modules,
+        "tradingagents.dataflows.providers.yfinance_runtime",
+        SimpleNamespace(yf=fake_yf),
+    )
 
     quote = market_routes._fetch_quote("AAPL")
 

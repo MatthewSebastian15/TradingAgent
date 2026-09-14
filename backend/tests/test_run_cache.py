@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tradingagents.dataflows.quality.data_quality import DataQualityReport
 from tradingagents.graph.run_cache import RunCache, ShortLivedTickerCache
-from tradingagents.pipeline_balanced_types import CollectedData, LLMBudget
+from tradingagents.pipeline_balanced.types import CollectedData, LLMBudget
 
 
 def _collected_data(price_data: str = "price") -> CollectedData:
@@ -125,8 +125,8 @@ def test_short_lived_ticker_cache_expires(monkeypatch):
 
 
 def test_collect_market_data_uses_cached_data_without_collection(monkeypatch):
-    from tradingagents import pipeline_balanced_orchestrator as orchestrator
-    from tradingagents.pipeline_balanced_orchestrator import PipelineContext
+    from tradingagents.pipeline_balanced import orchestrator
+    from tradingagents.pipeline_balanced.orchestrator import PipelineContext
 
     cached = _collected_data()
 
@@ -165,8 +165,8 @@ def test_collect_market_data_uses_cached_data_without_collection(monkeypatch):
 
 
 def test_collect_market_data_miss_uses_collection(monkeypatch):
-    from tradingagents import pipeline_balanced_orchestrator as orchestrator
-    from tradingagents.pipeline_balanced_orchestrator import PipelineContext
+    from tradingagents.pipeline_balanced import orchestrator
+    from tradingagents.pipeline_balanced.orchestrator import PipelineContext
 
     collected = _collected_data("fresh")
     calls = {"count": 0}

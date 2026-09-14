@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.market_search_index import build_search_index, search_local_tickers
+from services.market.search_index import build_search_index, search_local_tickers
 
 
 def test_builds_prefix_index_from_symbols_and_names():

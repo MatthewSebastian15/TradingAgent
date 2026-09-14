@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from errors import ApiError
-from services.report_service import (
+from core.errors import ApiError
+from services.report.service import (
     build_report_context,
     render_analysis_report_html,
     validate_report_scope,
@@ -1017,7 +1017,7 @@ def test_pdf_render_blocks_all_external_resources(monkeypatch):
     import sys
     import types
 
-    from services import report_service
+    from services.report import service as report_service
 
     captured = {}
 

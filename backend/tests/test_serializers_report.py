@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import routes.serializers_analysis  # noqa: F401  (links serializer modules)
-from routes.serializers_report import (
+import services.analysis.serializers.analysis  # noqa: F401  (links serializer modules)
+from services.analysis.serializers.report import (
     cache_key,
     request_warnings,
     response_payload,
     with_data_fetched_at,
 )
-from routes.validation import AnalysisRequest
-from services.report_disclaimer import REPORT_DISCLAIMER
+from services.analysis.validation import AnalysisRequest
+from services.report.disclaimer import REPORT_DISCLAIMER
 
 
 def _request(**overrides) -> AnalysisRequest:

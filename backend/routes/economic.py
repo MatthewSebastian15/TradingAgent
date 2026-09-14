@@ -11,7 +11,7 @@ import logging
 
 from fastapi import APIRouter, Request
 
-from rate_limiter import RateLimitPolicy, limit_request
+from core.security.rate_limiter import RateLimitPolicy, limit_request
 from services.economic_service import get_economic_data
 
 router = APIRouter(tags=["economic"])

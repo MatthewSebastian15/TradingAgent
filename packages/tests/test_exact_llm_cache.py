@@ -1,8 +1,8 @@
 from tradingagents.dataflows.providers.config import set_config
 from tradingagents.llm_cache.exact_cache import ExactLLMCache
 from tradingagents.llm_cache.keys import build_exact_cache_key
-from tradingagents.pipeline_balanced_llm import _invoke_once
-from tradingagents.pipeline_balanced_types import AnalystReport, LLMBudget
+from tradingagents.pipeline_balanced.llm import _invoke_once
+from tradingagents.pipeline_balanced.types import AnalystReport, LLMBudget
 
 
 def test_exact_cache_key_changes_when_prompt_changes():

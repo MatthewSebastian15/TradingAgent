@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from services.news_article_store import NewsArticleStore, build_content_hash, normalize_title
+from services.news.article_store import NewsArticleStore, build_content_hash, normalize_title
 
 
 def _article(title: str, *, url: str, published_at: str | None = None) -> dict:

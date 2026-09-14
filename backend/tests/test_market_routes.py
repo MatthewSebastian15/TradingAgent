@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pandas as pd
 
 import routes.market as market_routes
-import services.market_ohlcv_service as ohlcv_service
+import services.market.ohlcv_service as ohlcv_service
 
 
 def test_market_quotes_returns_valid_symbols(client, monkeypatch):
@@ -105,7 +105,11 @@ def test_fetch_quote_handles_missing_last_price(monkeypatch):
             )
         )
     )
-    monkeypatch.setitem(sys.modules, "tradingagents.yfinance_runtime", SimpleNamespace(yf=fake_yf))
+    monkeypatch.setitem(
+        sys.modules,
+        "tradingagents.dataflows.providers.yfinance_runtime",
+        SimpleNamespace(yf=fake_yf),
+    )
 
     quote = market_routes._fetch_quote("AAPL")
 
@@ -125,7 +129,11 @@ def test_fetch_quote_handles_previous_close_zero(monkeypatch):
             fast_info=SimpleNamespace(previous_close=0, regularMarketPreviousClose=0, last_price=10)
         )
     )
-    monkeypatch.setitem(sys.modules, "tradingagents.yfinance_runtime", SimpleNamespace(yf=fake_yf))
+    monkeypatch.setitem(
+        sys.modules,
+        "tradingagents.dataflows.providers.yfinance_runtime",
+        SimpleNamespace(yf=fake_yf),
+    )
 
     quote = market_routes._fetch_quote("AAPL")
 
@@ -145,7 +153,7 @@ def test_fetch_quote_returns_error_payload_on_vendor_failure(monkeypatch):
 
     monkeypatch.setitem(
         sys.modules,
-        "tradingagents.yfinance_runtime",
+        "tradingagents.dataflows.providers.yfinance_runtime",
         SimpleNamespace(yf=SimpleNamespace(Ticker=raise_timeout)),
     )
 

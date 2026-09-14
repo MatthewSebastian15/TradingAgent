@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from owner_session import issue_owner_session
+from core.security.owner_session import issue_owner_session
 from routes.news import include_news_routes
 
 

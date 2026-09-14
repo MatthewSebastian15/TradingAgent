@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from logging_config import RequestIdFilter, configure_logging, new_request_id, request_id_ctx
+from core.logging_config import RequestIdFilter, configure_logging, new_request_id, request_id_ctx
 
 
 def _filter_count(handler: logging.Handler) -> int:

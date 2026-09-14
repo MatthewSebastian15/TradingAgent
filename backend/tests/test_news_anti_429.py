@@ -5,10 +5,10 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from owner_session import issue_owner_session
+from core.security.owner_session import issue_owner_session
 from routes.news import include_news_routes
-from services.news_article_store import NewsArticleStore
-from services.news_background_worker import reset_news_worker_state_for_tests
+from services.news.article_store import NewsArticleStore
+from services.news.background_worker import reset_news_worker_state_for_tests
 
 
 def _config(tmp_path):
@@ -36,7 +36,7 @@ def _client(tmp_path, monkeypatch) -> TestClient:
     config = _config(tmp_path)
     monkeypatch.setattr("routes.news.build_tradingagents_config", lambda: config)
     monkeypatch.setattr(
-        "services.news_background_worker.build_tradingagents_config", lambda: config
+        "services.news.background_worker.build_tradingagents_config", lambda: config
     )
     app = FastAPI()
     include_news_routes(app, prefix="/api", is_development=True)

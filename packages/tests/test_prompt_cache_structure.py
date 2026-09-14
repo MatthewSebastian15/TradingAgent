@@ -1,4 +1,4 @@
-from tradingagents.pipeline_balanced_prompts import (
+from tradingagents.pipeline_balanced.prompts import (
     fundamentals_prompt,
     market_analyst_prompt,
     news_social_prompt,
@@ -39,7 +39,7 @@ def test_initial_analyst_prompts_use_compact_context(sample_collected_data):
 
 
 def test_prompt_json_names_omitted_keys_on_truncation():
-    from tradingagents.pipeline_balanced_prompts import _prompt_json
+    from tradingagents.pipeline_balanced.prompts import _prompt_json
 
     value = {"a": "x" * 200, "b": "y" * 200, "c": "z" * 200}
     text, truncated = _prompt_json(value, max_chars=220)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.market_symbol_universe import (
+from services.market.symbol_universe import (
     MARKET_SYMBOL_UNIVERSE,
     get_exchange_preset,
     get_symbol_universe,

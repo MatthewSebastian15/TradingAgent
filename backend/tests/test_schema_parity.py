@@ -12,7 +12,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-from services.analysis_repository import AnalysisRepository
+from services.analysis.repository import AnalysisRepository
 
 POSTGRES_SCHEMA = Path(__file__).parents[1] / "scripts" / "postgres_schema.sql"
 

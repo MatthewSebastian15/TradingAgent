@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-from tradingagents import env
+from tradingagents.config import env
 from tradingagents.dataflows.fundamentals.idx_official import (
     get_idx_company_profile,
     get_idx_corporate_actions,
@@ -31,7 +31,7 @@ from tradingagents.dataflows.quality.data_quality import (
     validate_quote,
     validate_sentiment,
 )
-from tradingagents.utils_resilience import TTLCache, call_with_retry, call_with_timeout
+from tradingagents.utils.resilience import TTLCache, call_with_retry, call_with_timeout
 
 from .alpha_vantage import (
     get_balance_sheet as get_alpha_vantage_balance_sheet,

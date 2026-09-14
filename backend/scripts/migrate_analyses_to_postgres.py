@@ -10,7 +10,7 @@ import sqlite3
 
 import psycopg
 
-from config import ANALYSIS_DATABASE_URL, ANALYSIS_DB_PATH
+from config.settings import ANALYSIS_DATABASE_URL, ANALYSIS_DB_PATH
 
 COLUMNS = [
     "request_id",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services import market_yfinance_service as service
+from services.market import yfinance_service as service
 
 
 def test_get_overview_data_uses_cache_without_force_refresh(monkeypatch):

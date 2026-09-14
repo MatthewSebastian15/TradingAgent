@@ -3,7 +3,7 @@ from typing import Any
 from langchain_anthropic import ChatAnthropic
 
 from tradingagents.dataflows.providers.config import get_config
-from tradingagents.utils_resilience import call_with_retry
+from tradingagents.utils.resilience import call_with_retry
 
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model

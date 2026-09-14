@@ -26,7 +26,7 @@ from typing import Any
 from urllib.parse import urlsplit
 from xml.etree import ElementTree as ET
 
-from tradingagents import env
+from tradingagents.config import env
 from tradingagents.utils.normalization import as_dict as _as_dict
 
 from .normalizers import normalize_financial_value

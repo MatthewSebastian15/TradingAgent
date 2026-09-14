@@ -11,8 +11,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from tradingagents.llm_cache.exact_cache import get_exact_llm_cache
 
-from body_limit import RequestBodyLimitMiddleware
-from config import (
+from config.llm import build_tradingagents_config
+from config.settings import (
     APP_ENV,
     APP_NAME,
     CORS_ORIGINS,
@@ -24,28 +24,28 @@ from config import (
     llm,
     validate_startup_config,
 )
-from config_llm import build_tradingagents_config
-from errors import (
+from core.body_limit import RequestBodyLimitMiddleware
+from core.errors import (
     ApiError,
     api_error_handler,
     http_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
-from logging_config import RequestIdMiddleware, configure_logging
-from rate_limiter import create_rate_limiter_state
+from core.logging_config import RequestIdMiddleware, configure_logging
+from core.security.rate_limiter import create_rate_limiter_state
 from routes.analysis import router as analysis_router
 from routes.analysis import shutdown_executor
 from routes.analysis_history import router as analysis_history_router
 from routes.debug import router as debug_router
 from routes.economic import router as economic_router
-from routes.jobs import create_analysis_runtime, install_analysis_runtime
 from routes.market import router as market_router
 from routes.news import include_news_routes
 from routes.rag_chat import router as rag_router
 from routes.reports import router as reports_router
 from routes.session import router as session_router
-from services.report_service import report_asset_health
+from services.analysis.jobs import create_analysis_runtime, install_analysis_runtime
+from services.report.service import report_asset_health
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ async def shutdown_resources() -> None:
 
 
 async def general_news_background_worker() -> None:
-    from services.news_background_worker import news_worker_loop
+    from services.news.background_worker import news_worker_loop
 
     await news_worker_loop()
 
@@ -141,7 +141,7 @@ async def start_general_news_worker(app: FastAPI) -> None:
 
 
 async def stop_general_news_worker(app: FastAPI) -> None:
-    from services.news_background_worker import stop_queued_refresh_task
+    from services.news.background_worker import stop_queued_refresh_task
 
     task = getattr(app.state, "general_news_worker_task", None)
     if task is not None:
@@ -159,7 +159,7 @@ async def lifespan(app: FastAPI):
     await start_general_news_worker(app)
     # Fire-and-forget: warm market overview/movers caches so the first market-tab
     # visit hits cache instead of a cold yfinance fetch. Never blocks startup.
-    from services.market_yfinance_service import warmup_market_caches
+    from services.market.yfinance_service import warmup_market_caches
 
     app.state.market_warmup_task = asyncio.create_task(asyncio.to_thread(warmup_market_caches))
     try:

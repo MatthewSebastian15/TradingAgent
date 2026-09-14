@@ -3,9 +3,14 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-from analysis_cache import AnalysisCacheKey, AnalysisJobStore, AnalysisResultCache, InFlightRegistry
-from owner_session import issue_owner_session, owner_identifier
-from routes.jobs import AnalysisRuntimeState
+from core.cache.analysis_cache import (
+    AnalysisCacheKey,
+    AnalysisJobStore,
+    AnalysisResultCache,
+    InFlightRegistry,
+)
+from core.security.owner_session import issue_owner_session, owner_identifier
+from services.analysis.jobs import AnalysisRuntimeState
 
 _TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
@@ -225,7 +230,7 @@ def test_post_pdf_report_succeeds_without_profile_or_financial_highlights(client
 
 
 def test_post_report_does_not_mark_other_owners_history(client, analysis_repository):
-    from owner_session import owner_identifier
+    from core.security.owner_session import owner_identifier
 
     other_owner = owner_identifier("f" * 32)
     result = _result(request_id="rid-other-owner")
@@ -385,7 +390,7 @@ def test_html_report_supports_indonesian_utf8_content(client, monkeypatch):
 def test_pdf_report_returns_clear_error_when_weasyprint_unavailable(monkeypatch):
     import builtins
 
-    from services.report_service import (
+    from services.report.service import (
         ReportGenerationError,
         build_report_context,
         render_analysis_report_pdf,

@@ -19,8 +19,8 @@ from tradingagents.dataflows.providers.rss_news import RSSContextProvider
 from tradingagents.dataflows.providers.vendor_budget import get_budget
 from tradingagents.dataflows.providers.vendor_router import get_attempt_recorder
 from tradingagents.dataflows.providers.yfinance_news import _extract_article_data
-from tradingagents.utils_resilience import TTLCache
-from tradingagents.yfinance_runtime import yf
+from tradingagents.dataflows.providers.yfinance_runtime import yf
+from tradingagents.utils.resilience import TTLCache
 
 from .news_decision_filter import split_ai_analysis_news
 from .news_dedup_normalized import deduplicate_news_articles

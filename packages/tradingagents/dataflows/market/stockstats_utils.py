@@ -24,9 +24,9 @@ except ImportError:  # pragma: no cover - dependency may be absent before instal
         pass
 
 
-from tradingagents import env
-from tradingagents.utils_resilience import call_with_timeout
-from tradingagents.yfinance_runtime import yf
+from tradingagents.config import env
+from tradingagents.dataflows.providers.yfinance_runtime import yf
+from tradingagents.utils.resilience import call_with_timeout
 
 logger = logging.getLogger(__name__)
 

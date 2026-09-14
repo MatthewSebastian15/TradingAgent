@@ -7,9 +7,9 @@ from datetime import date
 import pytest
 from helpers import install_analysis_runtime
 
-from analysis_cache import AnalysisJobStore
-from errors import RateLimitError
-from rate_limiter import RateLimitLease, RateLimitPolicy, SQLiteRateLimiterBackend
+from core.cache.analysis_cache import AnalysisJobStore
+from core.errors import RateLimitError
+from core.security.rate_limiter import RateLimitLease, RateLimitPolicy, SQLiteRateLimiterBackend
 
 
 def test_ticker_validate_is_rate_limited(client, monkeypatch):
@@ -82,7 +82,7 @@ def test_configured_api_key_must_match(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     install_analysis_runtime(monkeypatch, store)
     monkeypatch.setattr("routes.analysis._run_stream_pipeline", fake_run_stream_pipeline)
-    monkeypatch.setattr("rate_limiter.API_KEY", "expected-key")
+    monkeypatch.setattr("core.security.rate_limiter.API_KEY", "expected-key")
 
     payload = {"ticker": "BBCA.JK", "trade_date": "2026-05-14", "max_debate_rounds": 1}
 
@@ -100,7 +100,7 @@ def test_configured_api_key_must_match(client, monkeypatch):
 def test_job_create_rejects_invalid_api_key_before_storing_job(client, monkeypatch):
     store = AnalysisJobStore(ttl_seconds=60, max_entries=10, max_active_jobs=10)
     install_analysis_runtime(monkeypatch, store)
-    monkeypatch.setattr("rate_limiter.API_KEY", "expected-key")
+    monkeypatch.setattr("core.security.rate_limiter.API_KEY", "expected-key")
 
     response = client.post(
         "/api/analysis/jobs",
@@ -185,7 +185,7 @@ def test_status_endpoint_uses_separate_request_bucket(client, monkeypatch):
 
 
 def test_shared_proxy_key_uses_separate_owner_session_quotas(client, monkeypatch):
-    monkeypatch.setattr("rate_limiter.API_KEY", "shared-proxy-key")
+    monkeypatch.setattr("core.security.rate_limiter.API_KEY", "shared-proxy-key")
     monkeypatch.setattr(
         "routes.analysis.status_policy",
         lambda: RateLimitPolicy(

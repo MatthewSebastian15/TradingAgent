@@ -6,13 +6,13 @@ from typing import Any
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 
-from config import build_tradingagents_config
-from errors import BadRequestError
-from rate_limiter import limit_request, request_policy, stream_policy
+from config.settings import build_tradingagents_config
+from core.errors import BadRequestError
+from core.schemas import NewsResponse
+from core.security.rate_limiter import limit_request, request_policy, stream_policy
 from routes.sse import EventSourceResponse
-from routes.validation import normalize_ticker_symbol
-from schemas import NewsResponse
-from services.news_inflight_dedupe import run_once
+from services.analysis.validation import normalize_ticker_symbol
+from services.news.inflight_dedupe import run_once
 
 router = APIRouter(tags=["news"])
 debug_router = APIRouter(tags=["news"])
@@ -42,8 +42,8 @@ def _fetch_general_news(
     )
     from tradingagents.dataflows.news.general_news_service import GENERAL_NEWS_PROVIDER_ORDER
 
-    from services.news_article_store import NewsArticleStore
-    from services.news_provider_budget import provider_status_snapshot
+    from services.news.article_store import NewsArticleStore
+    from services.news.provider_budget import provider_status_snapshot
 
     config = build_tradingagents_config()
     general_config = dict(config.get("general_news", {}) or {})
@@ -161,7 +161,7 @@ async def get_general_news(
         force_refresh=force_refresh,
     )
     if _should_queue_read_refresh(result, force_refresh=force_refresh):
-        from services.news_background_worker import queue_general_news_refresh
+        from services.news.background_worker import queue_general_news_refresh
 
         refresh_status = await queue_general_news_refresh(
             "legacy_force_refresh" if force_refresh else "cache_stale"
@@ -188,7 +188,7 @@ async def refresh_general_news(
             },
         )
 
-    from services.news_background_worker import (
+    from services.news.background_worker import (
         manual_refresh_cooldown_remaining,
         mark_manual_refresh_requested,
         queue_general_news_refresh,

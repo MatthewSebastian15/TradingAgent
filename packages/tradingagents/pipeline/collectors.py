@@ -77,7 +77,7 @@ from tradingagents.fundamentals.builder import build_fundamental_analysis
 from tradingagents.graph.prompt_context_builder import (
     build_prompt_context as build_safety_prompt_context,
 )
-from tradingagents.pipeline_balanced_types import AnalysisCancelledError, CollectedData
+from tradingagents.pipeline_balanced.types import AnalysisCancelledError, CollectedData
 from tradingagents.prompt_context import build_prompt_context as build_legacy_prompt_context
 from tradingagents.technical.entry_quality import apply_earnings_proximity, build_technical_entry
 

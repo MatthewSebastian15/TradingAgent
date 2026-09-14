@@ -4,7 +4,7 @@ import asyncio
 import json
 from collections import deque
 
-from body_limit import RequestBodyLimitMiddleware
+from core.body_limit import RequestBodyLimitMiddleware
 
 
 async def _call_body_limit(

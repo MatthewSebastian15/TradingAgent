@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-from tradingagents import env
+from tradingagents.config import env
 from tradingagents.dataflows.market.stockstats_utils import (
     StockstatsUtils,
     filter_financials_by_date,
@@ -18,7 +18,7 @@ from tradingagents.dataflows.market.stockstats_utils import (
     yf_deadline,
     yf_retry,
 )
-from tradingagents.yfinance_runtime import yf
+from tradingagents.dataflows.providers.yfinance_runtime import yf
 
 logger = logging.getLogger(__name__)
 

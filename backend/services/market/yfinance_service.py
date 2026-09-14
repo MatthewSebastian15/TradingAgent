@@ -1,0 +1,625 @@
+from __future__ import annotations
+
+import math
+import threading
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime
+from hashlib import sha256
+from typing import Any
+
+import pandas as pd
+
+from services.market.cache import market_cache
+from services.market.symbol_universe import (
+    MARKET_EXCHANGE_PRESETS,
+    MARKET_LABELS,
+    MARKET_PRESETS,
+    get_symbol_universe,
+    normalize_country,
+)
+
+OVERVIEW_TTL_SECONDS = 120
+MOVERS_TTL_SECONDS = 180
+VALIDATION_TTL_SECONDS = 3600
+YFINANCE_WORKERS = 8
+
+
+# ponytail: per-key locks grow with distinct cache keys (symbol sets, country/
+# exchange combos) — bounded by user config in practice, so no eviction. Add a
+# bounded LRU here only if key cardinality ever becomes unbounded.
+_refresh_locks: dict[str, threading.Lock] = {}
+_fetch_seq: dict[str, int] = {}  # bumped (under the key lock) each completed fetch
+_locks_guard = threading.Lock()
+
+
+def _get_lock(key: str) -> threading.Lock:
+    with _locks_guard:
+        return _refresh_locks.setdefault(key, threading.Lock())
+
+
+def _store(cache_key: str, fetch: Callable[[], Any], ttl: float) -> Any:
+    """Fetch, cache, and bump the fetch generation. Caller must hold the key lock."""
+    result = fetch()
+    market_cache.set(cache_key, result, ttl)
+    _fetch_seq[cache_key] = _fetch_seq.get(cache_key, 0) + 1
+    return result
+
+
+def _fetch_and_store(
+    cache_key: str, fetch: Callable[[], Any], ttl: float, *, force: bool = False
+) -> Any:
+    """Run *fetch* under the per-key lock so concurrent callers dedupe to one
+    yfinance round trip; late arrivals get the freshly cached result.
+
+    A forced fetch ignores an existing fresh entry (so manual refresh actually
+    refetches) but still dedupes against a *concurrent* fetch that completed
+    while this caller waited for the lock — detected via the fetch generation
+    counter, which is robust to coarse monotonic-clock resolution."""
+    lock = _get_lock(cache_key)
+    seq_before = _fetch_seq.get(cache_key, 0)
+    with lock:
+        value, age = market_cache.get_with_age(cache_key)
+        if value is not None and age is not None:
+            if force:
+                if _fetch_seq.get(cache_key, 0) != seq_before:  # concurrent fetch refreshed it
+                    return value
+            elif age <= ttl:  # someone refreshed while we waited; it's fresh
+                return value
+        return _store(cache_key, fetch, ttl)
+
+
+def _schedule_refresh(cache_key: str, fetch: Callable[[], Any], ttl: float) -> None:
+    """Refresh *cache_key* in a background thread, deduped via the same per-key
+    lock. No-op if a fetch/refresh for this key is already running."""
+    lock = _get_lock(cache_key)
+    if not lock.acquire(blocking=False):
+        return
+
+    def _run() -> None:
+        try:
+            _store(cache_key, fetch, ttl)
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            lock.release()
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _swr_cached(
+    cache_key: str, fetch: Callable[[], Any], ttl: float, *, force_refresh: bool
+) -> tuple[Any, bool]:
+    """Stale-while-revalidate read. Returns (value, served_from_cache).
+
+    - fresh hit: serve cache.
+    - stale hit: serve stale immediately, refresh in background.
+    - cold / force_refresh: fetch synchronously (deduped)."""
+    if not force_refresh:
+        value, is_stale = market_cache.get_with_state(cache_key)
+        if value is not None:
+            if is_stale:
+                _schedule_refresh(cache_key, fetch, ttl)
+            return value, True
+    return _fetch_and_store(cache_key, fetch, ttl, force=force_refresh), False
+
+
+def normalize_market_symbol(symbol: str) -> str:
+    return str(symbol or "").strip().upper()
+
+
+def dedupe_symbols(symbols: list[str]) -> list[str]:
+    seen: set[str] = set()
+    normalized_symbols: list[str] = []
+    for symbol in symbols:
+        normalized = normalize_market_symbol(symbol)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        normalized_symbols.append(normalized)
+    return normalized_symbols
+
+
+def get_market_presets() -> dict[str, Any]:
+    return {"categories": MARKET_PRESETS, "exchanges": MARKET_EXCHANGE_PRESETS}
+
+
+# Defaults the frontend shows first (EQUITIES preset + US/NASDAQ movers). Warming
+# these at startup turns the first visit's cold yfinance fetch into a cache hit.
+_WARMUP_OVERVIEW_SYMBOLS = ["^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "DX-Y.NYB"]
+
+
+def warmup_market_caches() -> None:
+    """Prime overview + movers caches. Best-effort; swallow yfinance errors."""
+    try:
+        get_overview_data(_WARMUP_OVERVIEW_SYMBOLS)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        get_market_movers("United States", "NASDAQ", 5)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _finite_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _as_float(value: Any) -> float | None:
+    # ponytail: NaN-only filter (keeps inf), distinct from _finite_float; preserves the
+    # original route-side behavior of build_stock_overview verbatim. (deliberate)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None
+
+
+def build_stock_overview(symbol: str) -> dict[str, Any]:
+    """Fetch yfinance .info and map to StockOverviewResponse shape."""
+    from tradingagents.dataflows.providers.y_finance import _get_ticker_info  # noqa: PLC0415
+
+    info: dict[str, Any] = _get_ticker_info(symbol) or {}
+
+    def f(key: str) -> float | None:
+        return _as_float(info.get(key))
+
+    def upside(price: float | None, target: float | None) -> float | None:
+        if price and target and price > 0:
+            return round((target - price) / price * 100, 2)
+        return None
+
+    price = f("currentPrice") or f("regularMarketPrice") or f("previousClose")
+    target_mean = f("targetMeanPrice")
+
+    raw_rec = info.get("recommendationKey") or info.get("recommendation")
+    recommendation = str(raw_rec).upper().replace("_", " ") if raw_rec else None
+
+    ex_div = info.get("exDividendDate")
+    ex_div_str: str | None = None
+    if ex_div:
+        try:
+            from datetime import timezone  # noqa: PLC0415
+
+            ex_div_str = datetime.fromtimestamp(int(ex_div), tz=timezone.utc).strftime("%b %d, %Y")
+        except Exception:  # noqa: BLE001
+            ex_div_str = str(ex_div)
+
+    total_cash = f("totalCash")
+    total_debt = f("totalDebt")
+    net_cash_debt = (
+        round(total_cash - total_debt, 2)
+        if total_cash is not None and total_debt is not None
+        else None
+    )
+
+    return {
+        "ticker": symbol,
+        "name": info.get("longName") or info.get("shortName"),
+        "sector": info.get("sector"),
+        "industry": info.get("industry"),
+        "exchange": info.get("exchange") or info.get("fullExchangeName"),
+        "currency": info.get("currency"),
+        "description": info.get("longBusinessSummary"),
+        "price": price,
+        "prev_close": f("previousClose") or f("regularMarketPreviousClose"),
+        "open": f("open") or f("regularMarketOpen"),
+        "day_high": f("dayHigh") or f("regularMarketDayHigh"),
+        "day_low": f("dayLow") or f("regularMarketDayLow"),
+        "bid": f("bid"),
+        "ask": f("ask"),
+        "volume": f("volume") or f("regularMarketVolume"),
+        "avg_volume": f("averageVolume"),
+        "avg_volume_10d": f("averageVolume10days") or f("averageDailyVolume10Day"),
+        "week_52_high": f("fiftyTwoWeekHigh"),
+        "week_52_low": f("fiftyTwoWeekLow"),
+        "ma_50d": f("fiftyDayAverage"),
+        "ma_200d": f("twoHundredDayAverage"),
+        "market_cap": f("marketCap"),
+        "enterprise_value": f("enterpriseValue"),
+        "pe_ttm": f("trailingPE"),
+        "forward_pe": f("forwardPE"),
+        "pb": f("priceToBook"),
+        "ps_ttm": f("priceToSalesTrailing12Months"),
+        "ev_revenue": f("enterpriseToRevenue"),
+        "ev_ebitda": f("enterpriseToEbitda"),
+        "eps_ttm": f("trailingEps"),
+        "eps_fwd": f("forwardEps"),
+        "book_value": f("bookValue"),
+        "gross_margin": f("grossMargins"),
+        "operating_margin": f("operatingMargins"),
+        "ebitda_margin": f("ebitdaMargins"),
+        "net_margin": f("profitMargins"),
+        "roa": f("returnOnAssets"),
+        "roe": f("returnOnEquity"),
+        "revenue_growth": f("revenueGrowth"),
+        "earnings_growth": f("earningsGrowth"),
+        "quarterly_earnings_growth": f("earningsQuarterlyGrowth"),
+        "revenue": f("totalRevenue"),
+        "gross_profits": f("grossProfits"),
+        "ebitda": f("ebitda"),
+        "operating_cashflow": f("operatingCashflow"),
+        "free_cashflow": f("freeCashflow"),
+        "total_cash": total_cash,
+        "total_debt": total_debt,
+        "net_cash_debt": net_cash_debt,
+        "debt_equity": f("debtToEquity"),
+        "current_ratio": f("currentRatio"),
+        "quick_ratio": f("quickRatio"),
+        "shares_outstanding": f("sharesOutstanding") or f("impliedSharesOutstanding"),
+        "insider_pct": f("heldPercentInsiders"),
+        "institution_pct": f("heldPercentInstitutions"),
+        "short_ratio": f("shortRatio"),
+        "dividend_yield": f("dividendYield"),
+        "div_rate": f("dividendRate"),
+        "payout_ratio": f("payoutRatio"),
+        "ex_div_date": ex_div_str,
+        "beta": f("beta"),
+        "recommendation": recommendation,
+        "consensus_score": f("recommendationMean"),
+        "analyst_count": info.get("numberOfAnalystOpinions"),
+        "target_low": f("targetLowPrice"),
+        "target_mean": target_mean,
+        "target_median": f("targetMedianPrice"),
+        "target_high": f("targetHighPrice"),
+        "upside_downside_pct": upside(price, target_mean),
+    }
+
+
+def _series_values(frame: Any, column_name: str) -> list[float]:
+    if frame is None or getattr(frame, "empty", True) or column_name not in frame:
+        return []
+    values: list[float] = []
+    for value in frame[column_name].dropna().tolist():
+        number = _finite_float(value)
+        if number is not None:
+            values.append(number)
+    return values
+
+
+def _fast_info_value(info: Any, *names: str) -> Any:
+    for name in names:
+        if isinstance(info, dict) and name in info:
+            return info.get(name)
+        value = getattr(info, name, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _ticker_name(ticker: Any, symbol: str) -> str:
+    try:
+        info = getattr(ticker, "fast_info", None)
+        value = _fast_info_value(info, "shortName", "longName")
+        if value:
+            return str(value)
+    except Exception:
+        # ponytail: best-effort name lookup; falls back to the static label below (deliberate)
+        pass
+    return MARKET_LABELS.get(symbol, symbol)
+
+
+def _ticker_currency(ticker: Any) -> str | None:
+    try:
+        info = getattr(ticker, "fast_info", None)
+        value = _fast_info_value(info, "currency")
+        return str(value).upper() if value else None
+    except Exception:
+        return None
+
+
+def _history_for_symbol(symbol: str, *, period: str, interval: str) -> Any:
+    from tradingagents.dataflows.providers.yfinance_runtime import yf
+
+    return yf.Ticker(symbol).history(period=period, interval=interval)
+
+
+def _download_history(symbols: list[str], *, period: str, interval: str) -> dict[str, Any]:
+    from tradingagents.dataflows.providers.yfinance_runtime import yf
+
+    data = yf.download(
+        tickers=symbols,
+        period=period,
+        interval=interval,
+        group_by="ticker",
+        auto_adjust=False,
+        threads=True,
+        progress=False,
+    )
+    return _normalize_download_frame(data, symbols)
+
+
+def _overview_item_from_history(symbol: str, history: Any) -> dict[str, Any]:
+    try:
+        close_values = _series_values(history, "Close")
+        if len(close_values) < 2:
+            return {
+                "symbol": symbol,
+                "label": MARKET_LABELS.get(symbol, symbol),
+                "status": "error",
+                "reason": "No yfinance data found",
+            }
+
+        previous_close = close_values[-2]
+        last_close = close_values[-1]
+        if previous_close == 0:
+            return {
+                "symbol": symbol,
+                "label": MARKET_LABELS.get(symbol, symbol),
+                "status": "error",
+                "reason": "Previous close unavailable",
+            }
+
+        change = last_close - previous_close
+        return {
+            "symbol": symbol,
+            "label": MARKET_LABELS.get(symbol, symbol),
+            "last": last_close,
+            "change": change,
+            "change_percent": (change / previous_close) * 100,
+            "sparkline": close_values,
+            "status": "ok",
+            "updated_at": _now_iso(),
+        }
+    except Exception as exc:
+        return {
+            "symbol": symbol,
+            "label": MARKET_LABELS.get(symbol, symbol),
+            "status": "error",
+            "reason": str(exc) or "No yfinance data found",
+        }
+
+
+def _build_overview_item(symbol: str) -> dict[str, Any]:
+    try:
+        return _overview_item_from_history(
+            symbol, _history_for_symbol(symbol, period="1mo", interval="1d")
+        )
+    except Exception as exc:
+        return {
+            "symbol": symbol,
+            "label": MARKET_LABELS.get(symbol, symbol),
+            "status": "error",
+            "reason": str(exc) or "No yfinance data found",
+        }
+
+
+def _build_overview_items(symbols: list[str]) -> list[dict[str, Any]]:
+    if not symbols:
+        return []
+
+    try:
+        frames = _download_history(symbols, period="1mo", interval="1d")
+    except Exception:
+        frames = {}
+
+    items: list[dict[str, Any]] = []
+    missing_symbols: list[str] = []
+    for symbol in symbols:
+        history = frames.get(symbol)
+        if history is None or getattr(history, "empty", True):
+            missing_symbols.append(symbol)
+            continue
+        items.append(_overview_item_from_history(symbol, history))
+
+    if not missing_symbols:
+        return items
+
+    fallback_items: dict[str, dict[str, Any]] = {}
+    max_workers = min(YFINANCE_WORKERS, len(missing_symbols))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_build_overview_item, symbol): symbol for symbol in missing_symbols
+        }
+        for future in as_completed(futures):
+            fallback_items[futures[future]] = future.result()
+
+    by_symbol = {item["symbol"]: item for item in items}
+    by_symbol.update(fallback_items)
+    return [by_symbol.get(symbol) or _build_overview_item(symbol) for symbol in symbols]
+
+
+def _overview_cache_metadata(*, hit: bool, force_refresh: bool) -> dict[str, Any]:
+    return {
+        "hit": hit,
+        "ttl_seconds": OVERVIEW_TTL_SECONDS,
+        "force_refresh": force_refresh,
+    }
+
+
+def _with_overview_cache_metadata(
+    payload: dict[str, Any], *, hit: bool, force_refresh: bool
+) -> dict[str, Any]:
+    return {
+        **payload,
+        "source": payload.get("source") or "yfinance",
+        "last_updated": payload.get("last_updated") or _now_iso(),
+        "cache": _overview_cache_metadata(hit=hit, force_refresh=force_refresh),
+    }
+
+
+def get_overview_data(symbols: list[str], *, force_refresh: bool = False) -> dict[str, Any]:
+    normalized_symbols = dedupe_symbols(symbols)
+    symbols_hash = sha256("|".join(normalized_symbols).encode("utf-8")).hexdigest()[:16]
+    cache_key = f"market:overview:{symbols_hash}"
+
+    def fetch() -> dict[str, Any]:
+        items = _build_overview_items(normalized_symbols)
+        ok_items = [item for item in items if item.get("status") == "ok"]
+        payload: dict[str, Any] = {
+            "items": items,
+            "source": "yfinance",
+            "last_updated": _now_iso(),
+        }
+        if not ok_items:
+            payload["message"] = "No market data available from yfinance"
+        return payload
+
+    value, hit = _swr_cached(cache_key, fetch, OVERVIEW_TTL_SECONDS, force_refresh=force_refresh)
+    return _with_overview_cache_metadata(value, hit=hit, force_refresh=force_refresh)
+
+
+def validate_symbol(symbol: str) -> dict[str, Any]:
+    normalized = normalize_market_symbol(symbol)
+    cache_key = f"market:validate:{normalized}"
+    cached = market_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        history = _history_for_symbol(normalized, period="5d", interval="1d")
+        closes = _series_values(history, "Close")
+        if not closes:
+            payload = {"symbol": normalized, "valid": False, "reason": "No yfinance data found"}
+        else:
+            from tradingagents.dataflows.providers.yfinance_runtime import yf
+
+            ticker = yf.Ticker(normalized)
+            payload = {
+                "symbol": normalized,
+                "valid": True,
+                "label": _ticker_name(ticker, normalized),
+                "source": "yfinance",
+            }
+    except Exception:
+        payload = {"symbol": normalized, "valid": False, "reason": "No yfinance data found"}
+
+    return market_cache.set(cache_key, payload, VALIDATION_TTL_SECONDS)
+
+
+def _normalize_download_frame(data: Any, symbols: list[str]) -> dict[str, Any]:
+    if data is None or getattr(data, "empty", True):
+        return {}
+    if isinstance(data.columns, pd.MultiIndex):
+        by_symbol: dict[str, Any] = {}
+        for symbol in symbols:
+            if symbol in data.columns.get_level_values(0):
+                by_symbol[symbol] = data[symbol]
+        return by_symbol
+    return {symbols[0]: data} if len(symbols) == 1 else {}
+
+
+def _mover_from_history(
+    symbol: str, history: Any, *, require_volume: bool
+) -> dict[str, Any] | None:
+    if history is None or getattr(history, "empty", True):
+        return None
+    close_values = _series_values(history, "Close")
+    if len(close_values) < 2:
+        return None
+
+    last = close_values[-1]
+    previous = close_values[-2]
+    if previous == 0:
+        return None
+
+    volume_values = _series_values(history, "Volume")
+    volume = int(volume_values[-1]) if volume_values else None
+    if require_volume and volume is None:
+        return None
+
+    change = last - previous
+    return {
+        "symbol": symbol,
+        "name": MARKET_LABELS.get(symbol, symbol),
+        "last": last,
+        "change": change,
+        "change_percent": (change / previous) * 100,
+        "volume": volume,
+        "trend": close_values,
+    }
+
+
+def _download_movers(symbols: list[str]) -> dict[str, Any]:
+    from tradingagents.dataflows.providers.yfinance_runtime import yf
+
+    data = yf.download(
+        tickers=symbols,
+        period="5d",
+        interval="1d",
+        group_by="ticker",
+        auto_adjust=False,
+        threads=True,
+        progress=False,
+    )
+    return _normalize_download_frame(data, symbols)
+
+
+def _download_symbol(symbol: str) -> Any:
+    from tradingagents.dataflows.providers.yfinance_runtime import yf
+
+    return yf.download(
+        tickers=symbol,
+        period="5d",
+        interval="1d",
+        group_by="ticker",
+        auto_adjust=False,
+        threads=False,
+        progress=False,
+    )
+
+
+def get_market_movers(country: str, exchange: str, limit: int) -> dict[str, Any]:
+    normalized_country = normalize_country(country)
+    normalized_exchange = str(exchange or "").strip()
+    normalized_limit = int(limit)
+    cache_key = (
+        f"market:movers:{normalized_country}:{normalized_exchange.upper()}:{normalized_limit}"
+    )
+
+    def fetch() -> dict[str, Any]:
+        symbols = get_symbol_universe(normalized_country, normalized_exchange)
+        require_volume = True
+        frames: dict[str, Any] = {}
+
+        try:
+            frames = _download_movers(symbols)
+        except Exception:
+            frames = {}
+
+        missing_symbols = [symbol for symbol in symbols if frames.get(symbol) is None]
+        if missing_symbols:
+            max_workers = min(YFINANCE_WORKERS, len(missing_symbols))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(_download_symbol, symbol): symbol for symbol in missing_symbols
+                }
+                for future in as_completed(futures):
+                    try:
+                        frames[futures[future]] = future.result()
+                    except Exception:
+                        frames[futures[future]] = None
+
+        items: list[dict[str, Any]] = []
+        for symbol in symbols:
+            item = _mover_from_history(symbol, frames.get(symbol), require_volume=require_volume)
+            if item is not None:
+                items.append(item)
+
+        gainers = sorted(items, key=lambda item: item["change_percent"], reverse=True)[
+            :normalized_limit
+        ]
+        losers = sorted(items, key=lambda item: item["change_percent"])[:normalized_limit]
+        payload = {
+            "country": normalized_country,
+            "exchange": normalized_exchange,
+            "limit": normalized_limit,
+            "updated_at": _now_iso(),
+            "gainers": gainers,
+            "losers": losers,
+            "source": "yfinance",
+        }
+        if not gainers and not losers:
+            payload["message"] = "No valid market movers found for selected country/exchange."
+        return payload
+
+    value, _hit = _swr_cached(cache_key, fetch, MOVERS_TTL_SECONDS, force_refresh=False)
+    return value

@@ -8,13 +8,13 @@ from typing import Any, Literal
 from fastapi import APIRouter, Request
 from pydantic import Field
 
-from config import RAG_CHATBOT_CHAT_TIMEOUT_SECONDS, RAG_CHATBOT_ENABLED
-from errors import BadRequestError
-from rate_limiter import limit_request, request_policy
-from schemas import ApiSchema
-from services.rag_llm import call_rag_llm, translate_message
-from services.rag_pool import get_pool_status
-from services.rag_service import build_context, check_scope, detect_intent
+from config.settings import RAG_CHATBOT_CHAT_TIMEOUT_SECONDS, RAG_CHATBOT_ENABLED
+from core.errors import BadRequestError
+from core.schemas import ApiSchema
+from core.security.rate_limiter import limit_request, request_policy
+from services.rag.llm import call_rag_llm, translate_message
+from services.rag.pool import get_pool_status
+from services.rag.service import build_context, check_scope, detect_intent
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["rag-chatbot"])

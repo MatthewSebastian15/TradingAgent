@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from errors import BadRequestError, PipelineExecutionError
+from core.errors import BadRequestError, PipelineExecutionError
 
 
 def test_economic_route_happy_path(client, monkeypatch):
@@ -27,7 +27,7 @@ def test_economic_route_happy_path(client, monkeypatch):
 
 
 def test_economic_route_enforces_rate_limit(client, monkeypatch):
-    from rate_limiter import MemoryRateLimiterBackend, RateLimitPolicy
+    from core.security.rate_limiter import MemoryRateLimiterBackend, RateLimitPolicy
 
     monkeypatch.setattr(
         "routes.economic._ECONOMIC_POLICY",

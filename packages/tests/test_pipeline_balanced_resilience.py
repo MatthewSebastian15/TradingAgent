@@ -19,13 +19,13 @@ from tradingagents.pipeline.orchestrator import (
     _resolve_current_price_anchor,
 )
 from tradingagents.pipeline_balanced import AnalystReport, LLMBudget
-from tradingagents.pipeline_balanced_llm import _invoke_once
+from tradingagents.pipeline_balanced.llm import _invoke_once
 from tradingagents.technical.entry_quality import (
     _volume_trend,
     apply_earnings_proximity,
     build_technical_entry,
 )
-from tradingagents.utils_resilience import (
+from tradingagents.utils.resilience import (
     CircuitBreaker,
     CircuitOpenError,
     call_with_timeout,
@@ -1040,7 +1040,7 @@ def test_router_falls_back_and_caches_usable_price_ohlcv(monkeypatch):
 def test_llm_for_routes_listed_agents_to_deep_llm():
     from types import SimpleNamespace
 
-    from tradingagents.pipeline_balanced_orchestrator import PipelineContext
+    from tradingagents.pipeline_balanced.orchestrator import PipelineContext
 
     ctx = SimpleNamespace(
         quick_llm="QUICK", deep_llm="DEEP", deep_think_agents=frozenset({"bull_researcher"})
@@ -1050,7 +1050,7 @@ def test_llm_for_routes_listed_agents_to_deep_llm():
 
 
 def test_reconcile_confidence_clamps_high_pm_on_poor_data():
-    from tradingagents.pipeline_balanced_orchestrator import reconcile_confidence
+    from tradingagents.pipeline_balanced.orchestrator import reconcile_confidence
 
     final, reconciled, reason = reconcile_confidence(
         0.9,
@@ -1066,7 +1066,7 @@ def test_reconcile_confidence_clamps_high_pm_on_poor_data():
 
 
 def test_reconcile_confidence_keeps_confidence_on_clean_run():
-    from tradingagents.pipeline_balanced_orchestrator import reconcile_confidence
+    from tradingagents.pipeline_balanced.orchestrator import reconcile_confidence
 
     final, reconciled, reason = reconcile_confidence(
         0.8,
@@ -1088,7 +1088,7 @@ def test_balanced_debate_runs_bull_rebuttal_round():
 
     from tradingagents.agents.schemas import DebateArgument
     from tradingagents.dataflows.providers.config import set_config
-    from tradingagents.pipeline_balanced_debate import _run_debate_phase
+    from tradingagents.pipeline_balanced.debate import _run_debate_phase
 
     class DebateLLM:
         provider = "google"

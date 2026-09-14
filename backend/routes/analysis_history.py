@@ -6,10 +6,10 @@ import asyncio
 
 from fastapi import APIRouter, Query, Request
 
-from config import ANALYSIS_HISTORY_DEFAULT_LIMIT
-from errors import NotFoundError
-from rate_limiter import analysis_read_policy, limit_request, request_policy
-from services.analysis_repository import get_analysis_repository
+from config.settings import ANALYSIS_HISTORY_DEFAULT_LIMIT
+from core.errors import NotFoundError
+from core.security.rate_limiter import analysis_read_policy, limit_request, request_policy
+from services.analysis.repository import get_analysis_repository
 
 router = APIRouter(tags=["analysis-history"])
 

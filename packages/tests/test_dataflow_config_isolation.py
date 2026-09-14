@@ -24,8 +24,8 @@ def test_parallel_async_configs_do_not_overwrite_each_other():
 
 
 def test_set_config_does_not_leak_into_unscoped_threads():
+    from tradingagents.config.defaults import DEFAULT_CONFIG
     from tradingagents.dataflows.providers.config import get_config, initialize_config, set_config
-    from tradingagents.default_config import DEFAULT_CONFIG
 
     initialize_config()
     set_config({"timeout": 99, "llm_provider": "scoped-provider"})

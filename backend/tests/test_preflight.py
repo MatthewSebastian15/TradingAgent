@@ -7,9 +7,9 @@ from datetime import datetime
 import pytest
 from dateutil.relativedelta import relativedelta
 
-from errors import BadRequestError
+from core.errors import BadRequestError
 from routes.analysis import _preflight_market_data
-from routes.validation import AnalysisRequest
+from services.analysis.validation import AnalysisRequest
 
 
 def _analysis_request(ticker: str = "BBCA.JK", trade_date: str = "2026-05-14") -> AnalysisRequest:

@@ -1,11 +1,11 @@
-from routes.event_contract import (
+from services.analysis.event_contract import (
     UI_AGENT_IDS,
     UI_EVENT_TYPES,
     UI_PIPELINE_STATUSES,
     PipelineAgent,
     SseEvent,
 )
-from routes.serializers_analysis import AGENT_SEQUENCE
+from services.analysis.serializers.analysis import AGENT_SEQUENCE
 
 
 def test_backend_event_contract_exports_ui_known_values():

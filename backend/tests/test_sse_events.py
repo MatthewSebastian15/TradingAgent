@@ -6,8 +6,8 @@ import os
 
 from helpers import install_analysis_runtime
 
-from analysis_cache import AnalysisCacheKey, AnalysisJobStore
-from owner_session import owner_identifier
+from core.cache.analysis_cache import AnalysisCacheKey, AnalysisJobStore
+from core.security.owner_session import owner_identifier
 
 _TEST_OWNER_IDENTIFIER = owner_identifier("0" * 32)
 
@@ -200,7 +200,7 @@ def test_job_stream_forwards_pipeline_error_event(client, monkeypatch):
 
 
 def test_completed_job_event_stream_replays_result():
-    from analysis_cache import AnalysisJob
+    from core.cache.analysis_cache import AnalysisJob
     from routes.analysis import _stream_job_events
 
     class ConnectedRequest:
@@ -228,7 +228,7 @@ def test_completed_job_event_stream_replays_result():
 
 
 def test_running_job_event_stream_replays_history_to_multiple_subscribers():
-    from analysis_cache import AnalysisJob
+    from core.cache.analysis_cache import AnalysisJob
     from routes.analysis import _stream_job_events
 
     class ConnectedRequest:
@@ -269,7 +269,7 @@ def test_running_job_event_stream_replays_history_to_multiple_subscribers():
 
 
 def test_running_job_event_stream_yields_result_after_wait_notification():
-    from analysis_cache import AnalysisJob
+    from core.cache.analysis_cache import AnalysisJob
     from routes.analysis import _stream_job_events
 
     class ConnectedRequest:

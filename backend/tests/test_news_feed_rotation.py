@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
-from services.news_feed_rotation import clear_feed_rotation_for_tests, rotate_feed_ids
+from services.news.feed_rotation import clear_feed_rotation_for_tests, rotate_feed_ids
 
 
 def setup_function():

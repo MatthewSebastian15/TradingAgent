@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-import config
+from config import settings as config
 
 
 def test_debug_endpoint_disabled_by_default(client, monkeypatch):

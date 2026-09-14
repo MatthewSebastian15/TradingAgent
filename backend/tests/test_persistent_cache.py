@@ -4,7 +4,7 @@ import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from persistent_cache import SQLiteTTLCache
+from core.cache.persistent_cache import SQLiteTTLCache
 
 
 def test_sqlite_ttl_cache_round_trips_json_values(tmp_path):

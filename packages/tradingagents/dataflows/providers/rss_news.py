@@ -36,9 +36,9 @@ from .rss_news_config import (
 logger = logging.getLogger(__name__)
 
 try:
-    from services.news_provider_budget import is_provider_available as _is_feed_available
-    from services.news_provider_budget import mark_provider_failure as _mark_feed_failure
-    from services.news_provider_budget import mark_provider_success as _mark_feed_success
+    from services.news.provider_budget import is_provider_available as _is_feed_available
+    from services.news.provider_budget import mark_provider_failure as _mark_feed_failure
+    from services.news.provider_budget import mark_provider_success as _mark_feed_success
 except Exception:  # pragma: no cover - package can run without backend service path
 
     def _is_feed_available(_feed_id: str) -> bool:

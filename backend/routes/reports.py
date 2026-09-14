@@ -9,11 +9,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from rate_limiter import limit_request, request_policy
-from routes import jobs
-from services.analysis_repository import get_analysis_repository
-from services.report_disclaimer import REPORT_DISCLAIMER
-from services.report_service import (
+from core.security.rate_limiter import limit_request, request_policy
+from services.analysis import jobs
+from services.analysis.repository import get_analysis_repository
+from services.report.disclaimer import REPORT_DISCLAIMER
+from services.report.service import (
     ReportGenerationError,
     analysis_report_filename,
     build_report_context,

@@ -7,7 +7,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def clear_pool_cache():
-    import services.rag_pool as pool
+    import services.rag.pool as pool
 
     pool._news_cache = {}
     pool._market_cache = None
@@ -18,13 +18,13 @@ def clear_pool_cache():
 
 @pytest.mark.asyncio
 async def test_get_news_pool_returns_articles():
-    from services.rag_pool import get_news_pool
+    from services.rag.pool import get_news_pool
 
     mock_result = MagicMock()
     mock_result.articles = [{"id": "1", "title": "Test"}]
     mock_result.last_updated = "2026-06-23T10:00:00Z"
 
-    with patch("services.rag_pool.NewsArticleStore") as mock_store:
+    with patch("services.rag.pool.NewsArticleStore") as mock_store:
         mock_store.return_value.list_articles.return_value = mock_result
         articles = await get_news_pool()
 
@@ -33,13 +33,13 @@ async def test_get_news_pool_returns_articles():
 
 @pytest.mark.asyncio
 async def test_get_news_pool_caches_result():
-    from services.rag_pool import get_news_pool
+    from services.rag.pool import get_news_pool
 
     mock_result = MagicMock()
     mock_result.articles = [{"id": "1"}]
     mock_result.last_updated = "2026-06-23T10:00:00Z"
 
-    with patch("services.rag_pool.NewsArticleStore") as mock_store:
+    with patch("services.rag.pool.NewsArticleStore") as mock_store:
         mock_store.return_value.list_articles.return_value = mock_result
         await get_news_pool()
         await get_news_pool()
@@ -48,12 +48,12 @@ async def test_get_news_pool_caches_result():
 
 @pytest.mark.asyncio
 async def test_get_analysis_pool_returns_list():
-    from services.rag_pool import get_analysis_pool
+    from services.rag.pool import get_analysis_pool
 
     mock_repo = MagicMock()
     mock_repo.list_analyses.return_value = [{"ticker": "META", "decision": "HOLD"}]
 
-    with patch("services.rag_pool.get_analysis_repository", return_value=mock_repo):
+    with patch("services.rag.pool.get_analysis_repository", return_value=mock_repo):
         result = await get_analysis_pool()
 
     assert result == [{"ticker": "META", "decision": "HOLD"}]
@@ -61,12 +61,12 @@ async def test_get_analysis_pool_returns_list():
 
 @pytest.mark.asyncio
 async def test_get_pool_status_empty():
-    from services.rag_pool import get_pool_status
+    from services.rag.pool import get_pool_status
 
     with (
-        patch("services.rag_pool.get_news_pool", return_value=[]),
-        patch("services.rag_pool.get_market_pool", return_value=None),
-        patch("services.rag_pool.get_analysis_pool", return_value=[]),
+        patch("services.rag.pool.get_news_pool", return_value=[]),
+        patch("services.rag.pool.get_market_pool", return_value=None),
+        patch("services.rag.pool.get_analysis_pool", return_value=[]),
     ):
         status = await get_pool_status()
 

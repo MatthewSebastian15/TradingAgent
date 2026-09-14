@@ -33,8 +33,8 @@ from .news_scoring import content_hash
 logger = logging.getLogger(__name__)
 
 try:
-    from services.news_feed_rotation import rotate_feed_ids
-    from services.news_provider_budget import (
+    from services.news.feed_rotation import rotate_feed_ids
+    from services.news.provider_budget import (
         is_provider_available,
         mark_provider_429,
         mark_provider_failure,

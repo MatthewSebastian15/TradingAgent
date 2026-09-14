@@ -7,8 +7,8 @@ import inspect
 import pydantic
 import pytest
 
-import schemas
-from schemas import AnalysisResponse, ApiSchema, MarketQuote
+from core import schemas
+from core.schemas import AnalysisResponse, ApiSchema, MarketQuote
 
 
 def _api_schema_subclasses() -> list[type[ApiSchema]]:

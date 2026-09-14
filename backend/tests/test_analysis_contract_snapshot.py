@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def test_analysis_summary_contract_includes_risk_engine_fields():
-    from routes.serializers_analysis import SUMMARY_FIELDS
+    from services.analysis.serializers.analysis import SUMMARY_FIELDS
 
     expected_fields = {
         "current_price",
