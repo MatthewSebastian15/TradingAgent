@@ -60,10 +60,16 @@ export function rollingVol(closes, window = 21) {
 }
 
 // Daily EWMA sigma (decimal, not annualized) — input for VaR/MC, not display.
-export function ewmaSigmaDaily(returns, lambda = 0.94) {
-  if (returns.length === 0) return 0;
-  let variance = returns[0] ** 2;
-  for (let i = 1; i < returns.length; i += 1) {
+// Seeded with the mean square of the first `seedWindow` returns so one extreme
+// first day cannot dominate the recursion.
+export function ewmaSigmaDaily(returns, lambda = 0.94, seedWindow = 20) {
+  const n = returns.length;
+  if (n === 0) return 0;
+  const k = Math.min(seedWindow, n);
+  let variance = 0;
+  for (let i = 0; i < k; i += 1) variance += returns[i] ** 2;
+  variance /= k;
+  for (let i = k; i < n; i += 1) {
     variance = lambda * variance + (1 - lambda) * returns[i] ** 2;
   }
   return Math.sqrt(variance);
