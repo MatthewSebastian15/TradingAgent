@@ -108,6 +108,8 @@ export default function Quant() {
     if (!id) return;
     const entry = history.find((it) => (it.request_id || it.job_id) === id);
     setTicker(entry?.ticker || entry?.normalized_ticker || '');
+    // A past analysis carries its 1Y analysis chart; keep the range control truthful.
+    setRange('1Y');
     run(async (signal) => {
       const res = await fetchAnalysisHistoryResult(id, { signal });
       return { points: pointsFromResult(res), currency: currencyFromResult(res) };
@@ -159,6 +161,7 @@ export default function Quant() {
                     key={r}
                     type="button"
                     onClick={() => handleRange(r)}
+                    aria-pressed={range === r}
                     className={`h-7 rounded-none border px-2 font-mono text-[11px] tracking-wider ${
                       range === r
                         ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
@@ -267,6 +270,7 @@ export default function Quant() {
               currency={currency}
               symbol={ticker}
               sections={selected}
+              range={range}
             />
           )}
         </main>

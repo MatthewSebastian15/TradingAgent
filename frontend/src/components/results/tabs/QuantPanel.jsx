@@ -74,7 +74,10 @@ import {
   volTargetWeight,
 } from './quantUtils';
 
-function QuantPanel({ points, currency, symbol, sections }) {
+function QuantPanel({ points, currency, symbol, sections, range }) {
+  // `range` (Quant page) pins every fetch to the user's window. Without it (AI-agent
+  // result tab) the panel extends the 1Y analysis chart to QUANT_RANGE for stabler stats.
+  const fetchRange = range || QUANT_RANGE;
   // sections: array of visible tab ids from the page sidebar. Undefined = show all
   // (keeps QuantPanel usable standalone without importing the tab list).
   const visible = useMemo(() => (sections ? new Set(sections) : null), [sections]);
@@ -101,13 +104,19 @@ function QuantPanel({ points, currency, symbol, sections }) {
   const [peers, setPeers] = useState([]); // [{ symbol, points }]
   const [peerLoading, setPeerLoading] = useState(false);
 
+  // Peers fetched for another window would misalign with the base series.
+  useEffect(() => {
+    setPeers([]);
+  }, [fetchRange]);
+
   // Fetch a longer history than the 1Y analysis chart; fall back to the prop on failure.
+  // Skipped when `range` is set (Quant page) — the caller already fetched that window.
   const [longPoints, setLongPoints] = useState(null);
   useEffect(() => {
-    if (!symbol) return undefined;
+    setLongPoints(null);
+    if (!symbol || range) return undefined;
     let alive = true;
     const controller = new AbortController();
-    setLongPoints(null);
     getMarketOhlcv(symbol, { range: QUANT_RANGE, signal: controller.signal })
       .then((res) => {
         if (alive && Array.isArray(res?.points) && res.points.length > 0) {
@@ -119,7 +128,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       alive = false;
       controller.abort();
     };
-  }, [symbol]);
+  }, [symbol, range]);
 
   const history = longPoints && longPoints.length > points.length ? longPoints : points;
   const closes = useMemo(() => history.map((p) => p.adjusted_close ?? p.close), [history]);
@@ -144,7 +153,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
     let alive = true;
     const controller = new AbortController();
     setBenchPoints(null);
-    getMarketOhlcv(benchmarkInfo.symbol, { range: QUANT_RANGE, signal: controller.signal })
+    getMarketOhlcv(benchmarkInfo.symbol, { range: fetchRange, signal: controller.signal })
       .then((p) => {
         if (alive) setBenchPoints(Array.isArray(p?.points) ? p.points : []);
       })
@@ -155,7 +164,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
       alive = false;
       controller.abort();
     };
-  }, [benchmarkInfo.symbol]);
+  }, [benchmarkInfo.symbol, fetchRange]);
 
   const returns = useMemo(() => simpleReturns(closes), [closes]);
   const logRet = useMemo(() => logReturns(closes), [closes]);
@@ -291,7 +300,7 @@ function QuantPanel({ points, currency, symbol, sections }) {
     setPeerLoading(true);
     Promise.allSettled(
       wanted.map((sym) =>
-        getMarketOhlcv(sym, { range: QUANT_RANGE }).then((res) => ({
+        getMarketOhlcv(sym, { range: fetchRange }).then((res) => ({
           symbol: sym,
           points: Array.isArray(res?.points) ? res.points : [],
         }))
@@ -573,6 +582,7 @@ QuantPanel.propTypes = {
   currency: PropTypes.string,
   symbol: PropTypes.string,
   sections: PropTypes.arrayOf(PropTypes.string),
+  range: PropTypes.string,
 };
 
 export default memo(QuantPanel);

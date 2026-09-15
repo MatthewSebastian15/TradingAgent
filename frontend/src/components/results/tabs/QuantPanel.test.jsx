@@ -77,6 +77,16 @@ describe('QuantPanel', () => {
     expect(screen.getByRole('heading', { name: 'Volatility' })).toBeTruthy();
   });
 
+  it('does not extend history and fetches the benchmark with the explicit range', async () => {
+    const { getMarketOhlcv } = await import('../../../api/market');
+    getMarketOhlcv.mockClear();
+    await renderPanel({ points: buildPoints(40), range: '3M', sections: ['volatility'] });
+
+    const tickerCalls = getMarketOhlcv.mock.calls.filter(([sym]) => sym === 'AAPL');
+    expect(tickerCalls).toHaveLength(0);
+    expect(getMarketOhlcv).toHaveBeenCalledWith('^GSPC', expect.objectContaining({ range: '3M' }));
+  });
+
   it('renders every tab when sections is undefined', async () => {
     await renderPanel({ points: buildPoints(40) });
 

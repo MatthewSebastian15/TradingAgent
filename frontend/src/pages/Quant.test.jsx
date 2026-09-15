@@ -33,10 +33,10 @@ vi.mock('../components/TickerSearchBar', () => {
   return { default: TickerSearchBarStub };
 });
 vi.mock('../components/results/tabs/QuantPanel', () => {
-  function QuantPanelStub({ points, currency, symbol, sections }) {
+  function QuantPanelStub({ points, currency, symbol, sections, range }) {
     return (
       <div data-testid="quant-panel">
-        {symbol}|{currency}|{points.length}|{sections.join(',')}
+        {symbol}|{currency}|{points.length}|{sections.join(',')}|{range}
       </div>
     );
   }
@@ -45,6 +45,7 @@ vi.mock('../components/results/tabs/QuantPanel', () => {
     currency: PropTypes.string,
     symbol: PropTypes.string,
     sections: PropTypes.array,
+    range: PropTypes.string,
   };
   return { default: QuantPanelStub };
 });
@@ -97,6 +98,19 @@ describe('Quant page', () => {
       expect(screen.getByTestId('quant-panel').textContent).toContain('BBCA.JK|IDR|1')
     );
     expect(fetchAnalysisHistoryResult).toHaveBeenCalledWith('r1', expect.anything());
+  });
+
+  it('passes the range to the panel and marks 1Y after loading a past analysis', async () => {
+    render(<Quant />);
+    fireEvent.click(screen.getByText('search-submit'));
+    await screen.findByTestId('quant-panel');
+    fireEvent.click(screen.getByRole('button', { name: '3M' }));
+    await waitFor(() => expect(screen.getByTestId('quant-panel').textContent).toContain('|3M'));
+    expect(screen.getByRole('button', { name: '3M' }).getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(await screen.findByText('BBCA.JK'));
+    await waitFor(() => expect(screen.getByTestId('quant-panel').textContent).toContain('|1Y'));
+    expect(screen.getByRole('button', { name: '1Y' }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('toggles section visibility including the All switch', async () => {
