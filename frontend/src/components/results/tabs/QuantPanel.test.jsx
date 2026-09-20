@@ -87,6 +87,28 @@ describe('QuantPanel', () => {
     expect(getMarketOhlcv).toHaveBeenCalledWith('^GSPC', expect.objectContaining({ range: '3M' }));
   });
 
+  it('does not leak valuation inputs from the previous ticker after a symbol change', async () => {
+    const { getStockOverview } = await import('../../../api/market');
+    getStockOverview.mockResolvedValueOnce({
+      free_cashflow: 2e9,
+      shares_outstanding: 1e8,
+      total_debt: 5e8,
+      total_cash: 1e8,
+      earnings_growth: 0.12,
+    });
+    getStockOverview.mockReturnValueOnce(new Promise(() => {})); // next ticker never resolves
+    const props = { points: buildPoints(40), sections: ['valuation'] };
+    const { rerender } = render(<QuantPanel currency="USD" symbol="AAPL" {...props} />);
+    await act(async () => {});
+    expect(screen.getByLabelText(/Base FCF/).value).toBe('2000');
+
+    rerender(<QuantPanel currency="USD" symbol="MSFT" {...props} />);
+    await act(async () => {});
+
+    expect(screen.getByLabelText(/Base FCF/).value).toBe('');
+    expect(screen.queryByText('Fair Value / Share')).toBeNull();
+  });
+
   it('renders every tab when sections is undefined', async () => {
     await renderPanel({ points: buildPoints(40) });
 

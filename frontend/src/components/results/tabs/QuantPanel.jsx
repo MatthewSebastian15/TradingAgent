@@ -569,7 +569,13 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
       {show('valuation') && (
         <SectionBlock title="Valuation" hidden={activeId !== 'valuation'}>
-          <ValuationSection spot={closes.at(-1)} defaultRate={rf} ccy={ccy} symbol={baseSymbol} />
+          <ValuationSection
+            key={baseSymbol}
+            spot={closes.at(-1)}
+            defaultRate={rf}
+            ccy={ccy}
+            symbol={baseSymbol}
+          />
         </SectionBlock>
       )}
 
