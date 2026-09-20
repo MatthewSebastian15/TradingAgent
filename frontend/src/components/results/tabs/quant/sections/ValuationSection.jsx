@@ -1,33 +1,54 @@
 import PropTypes from 'prop-types';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { getStockOverview } from '../../../../../api/market';
 import NoticeBox from '../../../NoticeBox';
-import { dcf, dcfMonteCarlo, returnHistogram } from '../../quantUtils';
+import {
+  dcf,
+  dcfInputsReady,
+  dcfMonteCarlo,
+  overviewToDcfInputs,
+  returnHistogram,
+} from '../../quantUtils';
 import { Histogram, MetricCard, NumberField } from '../charts';
 import { finite, DASH, fmtNum2, fmtSignedPct, signedTone } from '../format';
 
 export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
-  const [fcf, setFcf] = useState(1000); // base free cash flow (millions)
+  const [fcf, setFcf] = useState(''); // base free cash flow (millions); empty until known
   const [growth, setGrowth] = useState(8); // % near-term FCF growth
   const [years, setYears] = useState(5);
   const [wacc, setWacc] = useState(Number(Math.max(8, defaultRate * 100 + 5).toFixed(1)));
   const [terminalGrowth, setTerminalGrowth] = useState(2.5);
-  const [shares, setShares] = useState(100); // millions
+  const [shares, setShares] = useState(''); // millions; empty until known
   const [netDebt, setNetDebt] = useState(0); // millions
   const [overview, setOverview] = useState(null); // null=idle/loading, {} = fundamentals
   const [ovError, setOvError] = useState(false);
   const [showMC, setShowMC] = useState(false); // DCF Monte Carlo toggle
+  const editedRef = useRef(false); // user typed → never overwrite with auto-fill
+
+  const applyInputs = (next) => {
+    if (next.fcf !== undefined) setFcf(next.fcf);
+    if (next.shares !== undefined) setShares(next.shares);
+    if (next.netDebt !== undefined) setNetDebt(next.netDebt);
+    if (next.growth !== undefined) setGrowth(next.growth);
+  };
+  const edit = (setter) => (value) => {
+    editedRef.current = true;
+    setter(value);
+  };
 
   // Pull fundamentals once when the section mounts. Powers the comparables table
-  // and the one-click DCF auto-fill. Fails soft — manual inputs still work.
+  // and the DCF auto-fill. Fails soft — manual inputs still work.
   useEffect(() => {
     if (!symbol) return undefined;
     const controller = new AbortController();
     let alive = true;
     getStockOverview(symbol, { signal: controller.signal })
       .then((d) => {
-        if (alive) setOverview(d && typeof d === 'object' ? d : {});
+        if (!alive) return;
+        const data = d && typeof d === 'object' ? d : {};
+        setOverview(data);
+        if (!editedRef.current) applyInputs(overviewToDcfInputs(data));
       })
       .catch(() => {
         if (alive) setOvError(true);
@@ -38,36 +59,25 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
     };
   }, [symbol]);
 
-  // yfinance reports FCF/debt/cash/shares in absolute currency; DCF inputs are in
-  // millions, so scale by 1e6. Net debt = total debt − cash.
   const autoFill = () => {
-    if (!overview) return;
-    const M = 1e6;
-    if (Number.isFinite(overview.free_cashflow))
-      setFcf(Number((overview.free_cashflow / M).toFixed(1)));
-    if (Number.isFinite(overview.shares_outstanding))
-      setShares(Number((overview.shares_outstanding / M).toFixed(1)));
-    const debt = Number.isFinite(overview.total_debt) ? overview.total_debt : 0;
-    const cash = Number.isFinite(overview.total_cash) ? overview.total_cash : 0;
-    setNetDebt(Number(((debt - cash) / M).toFixed(1)));
-    if (Number.isFinite(overview.earnings_growth)) {
-      // Clamp a noisy single-year growth read to a sane DCF stage-1 range.
-      setGrowth(Number(Math.max(0, Math.min(25, overview.earnings_growth * 100)).toFixed(1)));
-    }
+    if (overview) applyInputs(overviewToDcfInputs(overview));
   };
 
+  const ready = dcfInputsReady({ fcf, shares });
   const result = useMemo(
     () =>
-      dcf({
-        fcf: Number(fcf),
-        growth: Number(growth) / 100,
-        years: Number(years),
-        wacc: Number(wacc) / 100,
-        terminalGrowth: Number(terminalGrowth) / 100,
-        shares: Number(shares),
-        netDebt: Number(netDebt),
-      }),
-    [fcf, growth, years, wacc, terminalGrowth, shares, netDebt]
+      ready
+        ? dcf({
+            fcf: Number(fcf),
+            growth: Number(growth) / 100,
+            years: Number(years),
+            wacc: Number(wacc) / 100,
+            terminalGrowth: Number(terminalGrowth) / 100,
+            shares: Number(shares),
+            netDebt: Number(netDebt),
+          })
+        : null,
+    [ready, fcf, growth, years, wacc, terminalGrowth, shares, netDebt]
   );
   const money = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
   const upside = result && spot > 0 ? (result.fairValuePerShare / spot - 1) * 100 : null;
@@ -76,7 +86,7 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
   // collect the fair-value distribution. Reuses the seeded MC engine. ponytail:
   // fixed spreads, not per-input range fields — add those only if anyone asks.
   const mc = useMemo(() => {
-    if (!showMC) return null;
+    if (!showMC || !ready) return null;
     return dcfMonteCarlo(
       { fcf: Number(fcf), years: Number(years), shares: Number(shares), netDebt: Number(netDebt) },
       {
@@ -90,7 +100,7 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
       2000,
       42
     );
-  }, [showMC, fcf, growth, years, wacc, terminalGrowth, shares, netDebt]);
+  }, [showMC, ready, fcf, growth, years, wacc, terminalGrowth, shares, netDebt]);
 
   // Sensitivity grid: WACC (rows, ±2%) × terminal growth (cols, ±1%). DCF is very
   // sensitive to both, so the single point above is misleading on its own.
@@ -136,18 +146,18 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
         </span>
       </div>
       <div className="flex flex-wrap items-end gap-4">
-        <NumberField label="Base FCF" value={fcf} onChange={setFcf} suffix="M" />
-        <NumberField label="FCF Growth" value={growth} onChange={setGrowth} suffix="%" />
-        <NumberField label="Years" value={years} onChange={setYears} step="1" />
-        <NumberField label="WACC" value={wacc} onChange={setWacc} suffix="%" />
+        <NumberField label="Base FCF" value={fcf} onChange={edit(setFcf)} suffix="M" />
+        <NumberField label="FCF Growth" value={growth} onChange={edit(setGrowth)} suffix="%" />
+        <NumberField label="Years" value={years} onChange={edit(setYears)} step="1" />
+        <NumberField label="WACC" value={wacc} onChange={edit(setWacc)} suffix="%" />
         <NumberField
           label="Terminal Growth"
           value={terminalGrowth}
-          onChange={setTerminalGrowth}
+          onChange={edit(setTerminalGrowth)}
           suffix="%"
         />
-        <NumberField label="Shares Out" value={shares} onChange={setShares} suffix="M" />
-        <NumberField label="Net Debt" value={netDebt} onChange={setNetDebt} suffix="M" />
+        <NumberField label="Shares Out" value={shares} onChange={edit(setShares)} suffix="M" />
+        <NumberField label="Net Debt" value={netDebt} onChange={edit(setNetDebt)} suffix="M" />
       </div>
       {result ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -166,6 +176,10 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
           <MetricCard label="Equity Value" value={`${money(result.equityValue)}M`} />
           <MetricCard label="Enterprise Value" value={`${money(result.enterpriseValue)}M`} />
         </div>
+      ) : !ready ? (
+        <NoticeBox title="Inputs needed">
+          Enter base FCF and shares outstanding, or wait for fundamentals to auto-fill.
+        </NoticeBox>
       ) : (
         <NoticeBox title="Check inputs">
           WACC must exceed terminal growth (else the terminal value diverges) and shares must be

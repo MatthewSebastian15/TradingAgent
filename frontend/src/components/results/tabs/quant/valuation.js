@@ -131,3 +131,30 @@ export function regimeShifts(rollingVols) {
     shifts: shifts.slice(-5),
   };
 }
+
+const round1 = (x) => Number(x.toFixed(1));
+
+// A DCF needs a real base FCF and share count; never value dummy defaults.
+export function dcfInputsReady({ fcf, shares }) {
+  return fcf !== '' && fcf !== null && Number.isFinite(Number(fcf)) && Number(shares) > 0;
+}
+
+// yfinance reports FCF/debt/cash/shares in absolute units; DCF inputs are millions.
+export function overviewToDcfInputs(overview) {
+  if (!overview || typeof overview !== 'object') return {};
+  const M = 1e6;
+  const out = {};
+  if (Number.isFinite(overview.free_cashflow)) out.fcf = round1(overview.free_cashflow / M);
+  if (Number.isFinite(overview.shares_outstanding)) {
+    out.shares = round1(overview.shares_outstanding / M);
+  }
+  if (Number.isFinite(overview.total_debt) || Number.isFinite(overview.total_cash)) {
+    const debt = Number.isFinite(overview.total_debt) ? overview.total_debt : 0;
+    const cash = Number.isFinite(overview.total_cash) ? overview.total_cash : 0;
+    out.netDebt = round1((debt - cash) / M);
+  }
+  if (Number.isFinite(overview.earnings_growth)) {
+    out.growth = round1(Math.max(0, Math.min(25, overview.earnings_growth * 100)));
+  }
+  return out;
+}
