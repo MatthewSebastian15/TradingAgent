@@ -12,6 +12,9 @@ export function ScenarioSection({ spot, vol, ccy, regime, beta, benchLabel, benc
     () => stressScenarios(spot, finite(vol) ? vol : 0, beta),
     [spot, vol, beta]
   );
+  // `!` beats .terminal-table's own th/td color (higher specificity than a bare utility).
+  const signTone = (v) =>
+    v < 0 ? '!text-bloomberg-red' : v > 0 ? '!text-bloomberg-green' : '!text-bloomberg-white';
   const regimeTone = (label) =>
     label === 'Stressed' ? 'bad' : label === 'Calm' ? 'good' : 'neutral';
   return (
@@ -24,34 +27,37 @@ export function ScenarioSection({ spot, vol, ccy, regime, beta, benchLabel, benc
       </p>
       {!benchIsSp500 && (
         <NoticeBox title="Approximation">
-          β is measured against {benchLabel}, so S&amp;P 500 crash days scaled by it are only a
-          rough proxy for this market.
+          {finite(beta)
+            ? `β is measured against ${benchLabel}, so S&P 500 crash days scaled by it are only a rough proxy for this market.`
+            : 'β is unavailable, so rows use β = 1 and S&P 500 crash days are only a rough proxy for this market.'}
         </NoticeBox>
       )}
 
       <div className="overflow-x-auto border border-bloomberg-border">
-        <table className="w-full font-mono text-xs tabular-nums">
+        <table className="terminal-table w-full font-mono text-xs tabular-nums">
           <thead>
             <tr>
-              <th className="px-2 py-1 text-left text-bloomberg-white/80">Scenario</th>
-              <th className="px-2 py-1 text-right text-bloomberg-white/80">Index move</th>
-              <th className="px-2 py-1 text-right text-bloomberg-white/80">Shock</th>
-              <th className="px-2 py-1 text-right text-bloomberg-white/80">Price after</th>
-              <th className="px-2 py-1 text-right text-bloomberg-white/80">P&amp;L / share</th>
+              <th className="px-2 py-1 text-left !text-bloomberg-white/80">Scenario</th>
+              <th className="px-2 py-1 text-right !text-bloomberg-white/80">Index move</th>
+              <th className="px-2 py-1 text-right !text-bloomberg-white/80">Shock</th>
+              <th className="px-2 py-1 text-right !text-bloomberg-white/80">Price after</th>
+              <th className="px-2 py-1 text-right !text-bloomberg-white/80">P&amp;L / share</th>
             </tr>
           </thead>
           <tbody>
             {stress.map((s) => (
               <tr key={s.label}>
-                <td className="px-2 py-1 whitespace-nowrap text-bloomberg-white">{s.label}</td>
-                <td className="px-2 py-1 text-right text-bloomberg-white">
+                <td className="px-2 py-1 whitespace-nowrap !text-bloomberg-white">{s.label}</td>
+                <td className="px-2 py-1 text-right !text-bloomberg-white">
                   {s.indexShock === null ? DASH : fmtSignedPct(s.indexShock * 100)}
                 </td>
-                <td className="px-2 py-1 text-right text-bloomberg-red">
+                <td className={`px-2 py-1 text-right ${signTone(s.shock)}`}>
                   {fmtSignedPct(s.lossPct)}
                 </td>
-                <td className="px-2 py-1 text-right text-bloomberg-white">{money(s.price)}</td>
-                <td className="px-2 py-1 text-right text-bloomberg-red">{money(s.price - spot)}</td>
+                <td className="px-2 py-1 text-right !text-bloomberg-white">{money(s.price)}</td>
+                <td className={`px-2 py-1 text-right ${signTone(s.shock)}`}>
+                  {money(s.price - spot)}
+                </td>
               </tr>
             ))}
           </tbody>

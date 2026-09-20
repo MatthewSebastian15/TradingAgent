@@ -220,7 +220,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     [closes, history]
   );
 
-  // Rolling Sharpe zipped to dates (window offset + 1 for the returns→price shift).
+  // Rolling Sharpe zipped to dates.
   const rsPoints = useMemo(
     () =>
       zipRollingToDates(
