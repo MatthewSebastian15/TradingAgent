@@ -72,6 +72,7 @@ import {
   tangencyWeights,
   volPercentile,
   volTargetWeight,
+  zipRollingToDates,
 } from './quantUtils';
 
 function QuantPanel({ points, currency, symbol, sections, range }) {
@@ -132,6 +133,10 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
   const history = longPoints && longPoints.length > points.length ? longPoints : points;
   const closes = useMemo(() => history.map((p) => p.adjusted_close ?? p.close), [history]);
+  const historyDates = useMemo(
+    () => history.map((p) => String(p.date || '').slice(0, 10)),
+    [history]
+  );
   const ccy = currency || '';
   const rfDaily = rf / TRADING_DAYS;
   const benchmarkInfo = useMemo(() => benchmarkForSymbol(symbol), [symbol]);
@@ -171,11 +176,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const rollingVols = useMemo(() => rollingVol(closes, ROLLING_WINDOW), [closes]);
 
   const rollingPoints = useMemo(
-    () =>
-      rollingVols
-        .map((value, m) => ({ date: String(history[ROLLING_WINDOW + m]?.date || ''), value }))
-        .filter((p) => p.date),
-    [rollingVols, history]
+    () => zipRollingToDates(rollingVols, historyDates, ROLLING_WINDOW),
+    [rollingVols, historyDates]
   );
 
   const metrics = useMemo(
@@ -220,36 +222,33 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   // Rolling Sharpe zipped to dates (window offset + 1 for the returns→price shift).
   const rsPoints = useMemo(
     () =>
-      rollingSharpe(returns, ROLLING_RATIO_WINDOW, rfDaily)
-        .map((value, m) => ({ date: String(history[ROLLING_RATIO_WINDOW + m]?.date || ''), value }))
-        .filter((p) => p.date && Number.isFinite(p.value)),
-    [returns, history, rfDaily]
+      zipRollingToDates(
+        rollingSharpe(returns, ROLLING_RATIO_WINDOW, rfDaily),
+        historyDates,
+        ROLLING_RATIO_WINDOW
+      ),
+    [returns, historyDates, rfDaily]
   );
 
   // Benchmark-relative metrics + rolling beta from the aligned benchmark series.
   const benchmark = useMemo(() => {
-    if (!benchPoints || benchPoints.length === 0)
-      return { beta: null, alpha: null, available: false, rollBeta: [] };
-    const { stock, market } = alignByDate(history, benchPoints);
-    if (stock.length < 3) return { beta: null, alpha: null, available: false, rollBeta: [] };
+    const none = { beta: null, alpha: null, available: false, rollBetaPoints: [] };
+    if (!benchPoints || benchPoints.length === 0) return none;
+    const { dates, stock, market } = alignByDate(history, benchPoints);
+    if (stock.length < 3) return none;
     const sr = simpleReturns(stock);
     const mr = simpleReturns(market);
     return {
       beta: beta(sr, mr),
       alpha: alpha(sr, mr, rfDaily),
       available: true,
-      rollBeta: rollingBeta(sr, mr, ROLLING_RATIO_WINDOW),
+      rollBetaPoints: zipRollingToDates(
+        rollingBeta(sr, mr, ROLLING_RATIO_WINDOW),
+        dates,
+        ROLLING_RATIO_WINDOW
+      ),
     };
   }, [history, benchPoints, rfDaily]);
-
-  // Rolling beta has no clean date axis (aligned days differ), so index it.
-  const rbPoints = useMemo(
-    () =>
-      benchmark.rollBeta
-        .map((value, i) => ({ date: String(i + 1), value }))
-        .filter((p) => Number.isFinite(p.value)),
-    [benchmark.rollBeta]
-  );
 
   // Only run the simulation when the section is open and there's enough data;
   // keyed so unrelated re-renders (e.g. streaming updates) don't re-roll it.
@@ -360,10 +359,11 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     };
     // Rolling correlation: base vs the first peer.
     const peerSym = symbols[1];
-    const roll = rollingCorrelation(retBySym[baseSymbol], retBySym[peerSym], ROLLING_RATIO_WINDOW);
-    const rollPoints = roll
-      .map((value, i) => ({ date: String(dates[ROLLING_RATIO_WINDOW + 1 + i] || ''), value }))
-      .filter((p) => p.date && Number.isFinite(p.value));
+    const rollPoints = zipRollingToDates(
+      rollingCorrelation(retBySym[baseSymbol], retBySym[peerSym], ROLLING_RATIO_WINDOW),
+      dates,
+      ROLLING_RATIO_WINDOW
+    );
     return {
       symbols,
       matrix,
@@ -463,7 +463,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             benchLabel={benchmarkInfo.label}
             ddPoints={ddPoints}
             rsPoints={rsPoints}
-            rbPoints={rbPoints}
+            rbPoints={benchmark.rollBetaPoints}
             ddStats={ddStats}
           />
         </SectionBlock>

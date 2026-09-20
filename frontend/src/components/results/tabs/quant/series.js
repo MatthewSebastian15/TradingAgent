@@ -32,6 +32,17 @@ export function rollingBeta(stockReturns, marketReturns, window = 63) {
   return out;
 }
 
+// Rolling stats over returns: output i covers returns [i, i+window), whose last
+// return ends on close index window + i.
+export function zipRollingToDates(values, dates, window) {
+  const out = [];
+  values.forEach((value, i) => {
+    const date = dates[window + i];
+    if (date && Number.isFinite(value)) out.push({ date: String(date), value });
+  });
+  return out;
+}
+
 // Calmar: CAGR ÷ |max drawdown|. null if no history or no drawdown.
 export function calmar(closes) {
   const n = closes.length;

@@ -33,7 +33,8 @@ export function benchmarkForSymbol(symbol) {
 }
 
 // Pair two date->close series on their common trading days, in stock order.
-// -> { stock:number[], market:number[] } of equal length.
+// Returns across consecutive common dates span the same interval for both series.
+// -> { dates:string[], stock:number[], market:number[] } of equal length.
 export function alignByDate(stockPoints, marketPoints) {
   const byDate = new Map();
   for (const p of marketPoints || []) {
@@ -41,17 +42,19 @@ export function alignByDate(stockPoints, marketPoints) {
     const close = p?.adjusted_close ?? p?.close;
     if (date && close != null) byDate.set(date, close);
   }
+  const dates = [];
   const stock = [];
   const market = [];
   for (const p of stockPoints || []) {
     const date = String(p?.date || '').slice(0, 10);
     const close = p?.adjusted_close ?? p?.close;
     if (date && close != null && byDate.has(date)) {
+      dates.push(date);
       stock.push(close);
       market.push(byDate.get(date));
     }
   }
-  return { stock, market };
+  return { dates, stock, market };
 }
 
 // Sample covariance (n-1) of two equal-length series.

@@ -233,7 +233,8 @@ describe('beta / alpha — benchmark-relative', () => {
       { date: '2024-01-05', close: 52 },
       { date: '2024-01-09', close: 99 }, // not in stock -> dropped
     ];
-    const { stock, market: m } = alignByDate(stockPts, market);
+    const { dates, stock, market: m } = alignByDate(stockPts, market);
+    expect(dates).toEqual(['2024-01-03', '2024-01-05']);
     expect(stock).toEqual([102, 104]);
     expect(m).toEqual([50, 52]);
   });
