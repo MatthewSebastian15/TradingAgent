@@ -9,3 +9,4 @@ export * from './quant/backtestLite';
 export * from './quant/portfolio';
 export * from './quant/options';
 export * from './quant/valuation';
+export * from './quant/dataQuality';
