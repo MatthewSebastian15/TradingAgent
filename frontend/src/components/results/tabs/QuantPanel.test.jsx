@@ -127,4 +127,12 @@ describe('QuantPanel', () => {
       expect(screen.getByRole('tab', { name: title })).toBeTruthy();
     }
   });
+
+  it('uses the market risk-free rate from /api/status', async () => {
+    const { getApiStatus } = await import('../../../api/market');
+    getApiStatus.mockResolvedValueOnce({ quant_risk_free_rates: { US: 0.05 } });
+    await renderPanel({ points: buildPoints(40), sections: ['risk'] });
+
+    expect(screen.getAllByText(/excess over 5\.0%/).length).toBeGreaterThan(0);
+  });
 });

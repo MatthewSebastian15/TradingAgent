@@ -59,6 +59,7 @@ import {
   periodsPerYearFromDates,
   portfolioStats,
   regimeShifts,
+  resolveRiskFreeRate,
   returnHistogram,
   rollingBeta,
   rollingCorrelation,
@@ -89,7 +90,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   // Fall back to the first available tab when the active one gets deselected.
   const activeId = tabs.some((t) => t.id === active) ? active : tabs[0]?.id;
   const [seed, setSeed] = useState(42);
-  const [rf, setRf] = useState(0); // annual risk-free rate as a fraction
+  const [status, setStatus] = useState(null);
+  const [rfOverride] = useState(null); // { symbol, rate } typed in the headline (setter lands with the input)
   const [benchPoints, setBenchPoints] = useState(null); // null = loading, [] = unavailable
   const [mcHorizon, setMcHorizon] = useState(MC_DAYS);
   const [mcMethod, setMcMethod] = useState('gbm'); // 'gbm' | 'bootstrap'
@@ -140,19 +142,23 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   );
   const ppy = useMemo(() => periodsPerYearFromDates(historyDates), [historyDates]);
   const ccy = currency || '';
-  const rfDaily = rf / ppy;
   const benchmarkInfo = useMemo(() => benchmarkForSymbol(symbol), [symbol]);
 
-  // Pull the risk-free rate (config) once on mount. Fails soft → rf stays 0.
+  // Pull the risk-free rate config once on mount. Fails soft → status stays null → rf 0.
   useEffect(() => {
     const controller = new AbortController();
     getApiStatus({ signal: controller.signal })
-      .then((s) => {
-        if (Number.isFinite(s?.quant_risk_free_rate)) setRf(s.quant_risk_free_rate);
-      })
+      .then((s) => setStatus(s && typeof s === 'object' ? s : null))
       .catch(() => {});
     return () => controller.abort();
   }, []);
+
+  // Annual risk-free rate as a fraction: manual override for this symbol, else the
+  // market rate from config, else the global rate, else 0.
+  const rfInfo = useMemo(() => resolveRiskFreeRate(symbol, status), [symbol, status]);
+  const manualRf = rfOverride && rfOverride.symbol === symbol ? rfOverride.rate : null;
+  const rf = manualRf ?? rfInfo.rate;
+  const rfDaily = rf / ppy;
 
   // Fetch the market-matched benchmark series; refetch when the ticker's market
   // changes. Fails soft → benchPoints = [] and beta/alpha render as —.

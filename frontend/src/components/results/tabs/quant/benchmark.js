@@ -25,11 +25,27 @@ const MARKET_BENCHMARKS = {
   SW: { symbol: '^SSMI', label: 'SMI' },
 };
 
-export function benchmarkForSymbol(symbol) {
+export function marketKeyForSymbol(symbol) {
   const s = String(symbol || '').toUpperCase();
   const dot = s.lastIndexOf('.');
-  if (dot === -1) return US_BENCHMARK;
-  return MARKET_BENCHMARKS[s.slice(dot + 1)] || US_BENCHMARK;
+  const suffix = dot === -1 ? '' : s.slice(dot + 1);
+  return MARKET_BENCHMARKS[suffix] ? suffix : 'US';
+}
+
+export function benchmarkForSymbol(symbol) {
+  const key = marketKeyForSymbol(symbol);
+  return key === 'US' ? US_BENCHMARK : MARKET_BENCHMARKS[key];
+}
+
+// Market-specific rate from /api/status, then the global rate, then 0.
+export function resolveRiskFreeRate(symbol, status) {
+  const market = marketKeyForSymbol(symbol);
+  const byMarket = status?.quant_risk_free_rates?.[market];
+  if (Number.isFinite(byMarket)) return { rate: byMarket, source: 'market', market };
+  if (Number.isFinite(status?.quant_risk_free_rate)) {
+    return { rate: status.quant_risk_free_rate, source: 'global', market };
+  }
+  return { rate: 0, source: 'none', market };
 }
 
 // Pair two date->close series on their common trading days, in stock order.
