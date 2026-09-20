@@ -419,7 +419,7 @@ describe('backtest', () => {
 
   it('produces an equity curve aligned to the price series', () => {
     const res = backtest(rising, 'sma', { fast: 10, slow: 30 });
-    expect(res.equity.length).toBe(rising.length);
+    expect(res.equity.length).toBe(rising.length - res.startIndex);
     expect(res.finalReturn).toBeGreaterThan(0);
   });
 

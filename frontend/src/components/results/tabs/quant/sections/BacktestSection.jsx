@@ -8,10 +8,11 @@ import { fmtLoss, fmtPercent, fmtRatio, fmtSignedPct, ratioTone, signedTone } fr
 export function BacktestSection({ strategy, onStrategyChange, params, onParamChange, result }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-bloomberg-subtle">
-        Canned long/flat strategies on this price series, compared to buy &amp; hold. Transaction
-        cost is modeled per position flip; the optional out-of-sample split flags in-sample overfit.
-        Still a sanity check, not a trading system.
+      <p className="text-sm text-bloomberg-white/80">
+        Canned long/flat strategies compared to buy &amp; hold over the same window (after the
+        indicator warm-up). Costs are charged on every position change; flat days earn the risk-free
+        rate. The optional out-of-sample split flags in-sample overfit. A sanity check, not a
+        trading system.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1">
@@ -49,13 +50,13 @@ export function BacktestSection({ strategy, onStrategyChange, params, onParamCha
               label="Fast SMA"
               value={params.fast}
               min={5}
-              max={50}
+              max={Math.min(50, params.slow - 1)}
               onChange={(v) => onParamChange('fast', v)}
             />
             <SliderField
               label="Slow SMA"
               value={params.slow}
-              min={20}
+              min={Math.max(20, params.fast + 1)}
               max={200}
               onChange={(v) => onParamChange('slow', v)}
             />
@@ -96,7 +97,7 @@ export function BacktestSection({ strategy, onStrategyChange, params, onParamCha
             b={result.buyhold}
             label="Strategy equity (orange) vs buy & hold (grey)"
           />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <MetricCard
               label="Strategy Return"
               value={fmtSignedPct(result.finalReturn)}
@@ -118,15 +119,25 @@ export function BacktestSection({ strategy, onStrategyChange, params, onParamCha
               tone={ratioTone(result.sharpe)}
             />
             <MetricCard label="Max Drawdown" value={fmtLoss(result.maxDD)} tone="bad" />
-            <MetricCard label="Win Rate" value={fmtPercent(result.winRate)} />
+            <MetricCard
+              label="Win Rate (per trade)"
+              value={fmtPercent(result.winRate)}
+              gloss="Share of round-trip trades that closed with a gain, costs included."
+            />
+            <MetricCard
+              label="Daily Hit Rate"
+              value={fmtPercent(result.hitRate)}
+              gloss="Share of in-position days where the price rose."
+            />
+            <MetricCard label="Trades" value={String(result.trades)} />
           </div>
           {result.outSampleReturn != null && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3">
               <MetricCard
                 label="In-sample Return"
                 value={fmtSignedPct(result.inSampleReturn)}
                 tone={signedTone(result.inSampleReturn)}
-                gloss="First 70% of history — the part a tuned strategy can overfit."
+                gloss="First 70% of the evaluated window — the part a tuned strategy can overfit."
               />
               <MetricCard
                 label="Out-of-sample Return"
@@ -134,12 +145,11 @@ export function BacktestSection({ strategy, onStrategyChange, params, onParamCha
                 tone={signedTone(result.outSampleReturn)}
                 gloss="Trailing 30% the parameters never saw. A big drop here = overfit."
               />
-              <MetricCard label="Trades" value={String(result.trades)} />
             </div>
           )}
-          <p className="text-[11px] text-bloomberg-subtle">
-            Time in market: {fmtPercent(result.exposure)}
-            {result.outSampleReturn == null ? ` · ${result.trades} trades` : ''}.
+          <p className="text-[11px] text-bloomberg-white/80">
+            Time in market: {fmtPercent(result.exposure)} · evaluation starts at bar{' '}
+            {result.startIndex + 1} (indicator warm-up).
           </p>
         </>
       )}
