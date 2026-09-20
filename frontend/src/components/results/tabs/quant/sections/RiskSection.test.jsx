@@ -1,0 +1,42 @@
+import { cleanup, render, screen } from '@testing-library/react';
+import React from 'react';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { RiskSection } from './RiskSection';
+
+const baseProps = {
+  dd: -20,
+  cal: 0.5,
+  histVaR: -2,
+  paramVaR: -2.1,
+  cfVaR: -2.4,
+  cv: -3,
+  downDev: 12,
+  shp: 0.8,
+  srt: 1.1,
+  bta: 1.1,
+  alf: 2,
+  rfPct: 4,
+  benchAvailable: true,
+  benchLabel: 'S&P 500',
+  ddPoints: [],
+  rsPoints: [],
+  rbPoints: [],
+  ddStats: {
+    maxDD: -20,
+    maxDDDuration: 40,
+    maxDDRecovered: true,
+    recoveryDays: 12,
+    currentUnderwaterDays: 0,
+    episodes: 2,
+  },
+};
+
+describe('RiskSection', () => {
+  afterEach(() => cleanup());
+
+  it('renders the Max Drawdown card exactly once', () => {
+    render(<RiskSection {...baseProps} />);
+    expect(screen.getAllByText('Max Drawdown')).toHaveLength(1);
+  });
+});

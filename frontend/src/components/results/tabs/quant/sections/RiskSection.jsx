@@ -128,7 +128,7 @@ export function RiskSection({
           <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
             Drawdown recovery
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <MetricCard
               label="Max DD Duration"
               value={`${ddStats.maxDDDuration}d`}
@@ -151,7 +151,6 @@ export function RiskSection({
               value={String(ddStats.episodes)}
               gloss="Count of distinct peak-to-recovery episodes deeper than 5%."
             />
-            <MetricCard label="Max Drawdown" value={fmtLoss(ddStats.maxDD)} tone="bad" />
           </div>
         </div>
       )}
