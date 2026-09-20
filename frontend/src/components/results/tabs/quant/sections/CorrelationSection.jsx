@@ -221,8 +221,8 @@ export function CorrelationSection({
           {optimizerStatus === 'no_tangency' && (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
               <NoticeBox title="No max-Sharpe portfolio">
-                Every fully invested mix of this basket has a negative expected excess return over
-                the risk-free rate, so a max-Sharpe portfolio does not exist. Showing
+                The minimum-variance mix has no positive expected excess return over the risk-free
+                rate, so a max-Sharpe portfolio does not exist for this basket. Showing
                 minimum-variance weights only.
               </NoticeBox>
               <WeightsTable title="Min-Variance" symbols={symbols} weights={gmvW} color="#3b82f6" />

@@ -33,6 +33,15 @@ describe('CorrelationSection optimizer status', () => {
     expect(screen.getByText('No max-Sharpe portfolio')).toBeTruthy();
     expect(screen.getByText('Min-Variance')).toBeTruthy();
     expect(screen.queryByText(/Covariance is singular/)).toBeNull();
+    expect(
+      screen.getByText(/minimum-variance mix has no positive expected excess return/)
+    ).toBeTruthy();
+  });
+
+  it('shows no optimizer notice when the status is ok', () => {
+    render(<CorrelationSection {...base} optimizerStatus="ok" />);
+    expect(screen.queryByText('No max-Sharpe portfolio')).toBeNull();
+    expect(screen.queryByText(/Covariance is singular/)).toBeNull();
   });
 
   it('keeps the singular-covariance message for singular baskets', () => {
