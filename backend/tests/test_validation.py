@@ -58,6 +58,40 @@ def test_out_of_range_float_environment_value_is_rejected(monkeypatch):
         env_float("TEST_FLOAT_VALUE", 0.35, min_value=0, max_value=1)
 
 
+def test_rate_map_environment_value_is_parsed(monkeypatch):
+    from config.env import env_rate_map
+
+    monkeypatch.setenv("TEST_RATE_MAP", " us=0.043, JK=0.0575 ,")
+
+    assert env_rate_map("TEST_RATE_MAP") == {"US": 0.043, "JK": 0.0575}
+
+
+def test_rate_map_blank_environment_value_is_empty(monkeypatch):
+    from config.env import env_rate_map
+
+    monkeypatch.setenv("TEST_RATE_MAP", "  ")
+
+    assert env_rate_map("TEST_RATE_MAP") == {}
+
+
+def test_rate_map_rejects_malformed_entries(monkeypatch):
+    from config.env import env_rate_map
+
+    monkeypatch.setenv("TEST_RATE_MAP", "US:0.04")
+
+    with pytest.raises(ValueError, match="TEST_RATE_MAP"):
+        env_rate_map("TEST_RATE_MAP")
+
+
+def test_rate_map_rejects_out_of_range_rates(monkeypatch):
+    from config.env import env_rate_map
+
+    monkeypatch.setenv("TEST_RATE_MAP", "US=4.3")
+
+    with pytest.raises(ValueError, match="TEST_RATE_MAP"):
+        env_rate_map("TEST_RATE_MAP")
+
+
 def test_startup_rejects_invalid_data_vendor_news_relevance_score(monkeypatch):
     from config import settings as config
 

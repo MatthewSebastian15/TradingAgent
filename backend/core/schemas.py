@@ -620,6 +620,7 @@ class ApiStatusResponse(ApiSchema):
     analysis_mode: str
     default_analysis_depth: str
     quant_risk_free_rate: float = 0.0
+    quant_risk_free_rates: dict[str, float] = Field(default_factory=dict)
     limits: dict[str, Any] = Field(default_factory=dict)
     result_cache: dict[str, Any] = Field(default_factory=dict)
     in_flight: dict[str, Any] = Field(default_factory=dict)

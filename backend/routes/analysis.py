@@ -8,7 +8,13 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from config.settings import ANALYSIS_MODE, DEFAULT_ANALYSIS_DEPTH, QUANT_RISK_FREE_RATE, llm
+from config.settings import (
+    ANALYSIS_MODE,
+    DEFAULT_ANALYSIS_DEPTH,
+    QUANT_RISK_FREE_RATE,
+    QUANT_RISK_FREE_RATES,
+    llm,
+)
 from core.cache.analysis_cache import AnalysisJobLimitError
 from core.errors import RateLimitError, sanitize_message
 from core.logging_config import request_id_ctx
@@ -420,6 +426,7 @@ async def _api_status_payload(runtime: jobs.AnalysisRuntimeState | None = None):
         "analysis_mode": ANALYSIS_MODE,
         "default_analysis_depth": DEFAULT_ANALYSIS_DEPTH,
         "quant_risk_free_rate": QUANT_RISK_FREE_RATE,
+        "quant_risk_free_rates": dict(QUANT_RISK_FREE_RATES),
         "limits": {
             "pipeline_timeout_seconds": pipeline_runner.PIPELINE_TIMEOUT_SECONDS,
         },

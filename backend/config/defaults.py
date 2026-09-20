@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from config.env import env, env_bool, env_float, env_int, env_list
+from config.env import env, env_bool, env_float, env_int, env_list, env_rate_map
 
 # App
 APP_NAME = "TradingAgents API"
@@ -63,6 +63,9 @@ PRICE_MAX_FALLBACK_DAYS = env_int("PRICE_MAX_FALLBACK_DAYS", 7, min_value=0)
 # Sharpe/Sortino. Exposed to the browser via GET /api/status. Default 0 keeps the
 # v1 "excess over 0%" behavior.
 QUANT_RISK_FREE_RATE = env_float("QUANT_RISK_FREE_RATE", 0.0, min_value=0.0, max_value=1.0)
+# Optional per-market overrides keyed by yfinance suffix (US = no suffix), e.g.
+# "US=0.043,JK=0.0575". The Quant tab prefers these over QUANT_RISK_FREE_RATE.
+QUANT_RISK_FREE_RATES = env_rate_map("QUANT_RISK_FREE_RATES")
 ANALYST_PARALLEL_WORKERS = env_int("ANALYST_PARALLEL_WORKERS", 3, min_value=1)
 DEFAULT_MAX_DEBATE_ROUNDS = env_int("DEFAULT_MAX_DEBATE_ROUNDS", 3, min_value=1)
 MAX_RISK_DISCUSS_ROUNDS = 1

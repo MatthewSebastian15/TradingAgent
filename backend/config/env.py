@@ -91,3 +91,28 @@ def env_list(name: str, default: list[str]) -> list[str]:
     if raw is None:
         return list(default)
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def env_rate_map(name: str) -> dict[str, float]:
+    """Parse `MARKET=rate` pairs (fractions in [0, 1]) separated by commas."""
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return {}
+
+    rates: dict[str, float] = {}
+    for item in raw.split(","):
+        entry = item.strip()
+        if not entry:
+            continue
+        key, sep, value = entry.partition("=")
+        market = key.strip().upper()
+        if not sep or not market:
+            raise ValueError(f"{name} entry {entry!r} must look like MARKET=rate.")
+        try:
+            rate = float(value.strip())
+        except ValueError as exc:
+            raise ValueError(f"Invalid rate for {market} in {name}={raw!r}.") from exc
+        if not 0.0 <= rate <= 1.0:
+            raise ValueError(f"{name} rate for {market} must be between 0 and 1.")
+        rates[market] = rate
+    return rates
