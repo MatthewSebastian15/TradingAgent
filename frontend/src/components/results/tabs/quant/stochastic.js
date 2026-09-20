@@ -1,3 +1,5 @@
+import { mean } from './stats';
+
 // --- stochastic -----------------------------------------------------------
 
 // Seeded PRNG (mulberry32) -> deterministic () => float in [0,1).
@@ -19,6 +21,15 @@ export function randNormal(rng) {
   while (u === 0) u = rng();
   while (v === 0) v = rng();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+// Arithmetic daily drift for monteCarloGBM, which applies the −σ²/2 Itô term itself.
+// Historical: mean log return already contains −σ²/2, so add it back once.
+// Risk-neutral: the daily risk-free rate is already arithmetic.
+export function simulationDrift({ mode, logReturns, sigma, rfDaily = 0 }) {
+  if (mode === 'riskneutral') return rfDaily;
+  if (!logReturns || logReturns.length === 0) return 0;
+  return mean(logReturns) + 0.5 * sigma * sigma;
 }
 
 export const QUANTILE = (sorted, p) =>

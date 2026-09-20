@@ -66,6 +66,7 @@ import {
   rollingVol,
   sharpe,
   simpleReturns,
+  simulationDrift,
   skewness,
   sortino,
   stdDev,
@@ -260,8 +261,9 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     }
     // Risk-neutral drift uses the risk-free rate instead of the historical mean,
     // removing the optimistic bias when the sample window was a bull run.
-    const drift = mcDrift === 'riskneutral' ? rfDaily : mean(logRet);
-    return monteCarloGBM(spot, drift, ewmaSigmaDaily(logRet), mcHorizon, MC_PATHS, seed);
+    const sigma = ewmaSigmaDaily(logRet);
+    const drift = simulationDrift({ mode: mcDrift, logReturns: logRet, sigma, rfDaily });
+    return monteCarloGBM(spot, drift, sigma, mcHorizon, MC_PATHS, seed);
   }, [visible, closes, logRet, returns, seed, mcHorizon, mcMethod, mcDrift, rfDaily]);
 
   const horizonLabel = useMemo(() => {
