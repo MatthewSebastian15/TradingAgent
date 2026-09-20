@@ -581,7 +581,15 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
       {show('scenario') && (
         <SectionBlock title="Scenario" hidden={activeId !== 'scenario'}>
-          <ScenarioSection spot={closes.at(-1)} vol={metrics.vol} ccy={ccy} regime={regimeShift} />
+          <ScenarioSection
+            spot={closes.at(-1)}
+            vol={metrics.vol}
+            ccy={ccy}
+            regime={regimeShift}
+            beta={benchmark.beta}
+            benchLabel={benchmarkInfo.label}
+            benchIsSp500={benchmarkInfo.symbol === '^GSPC'}
+          />
         </SectionBlock>
       )}
     </div>

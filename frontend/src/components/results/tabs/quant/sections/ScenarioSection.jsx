@@ -4,35 +4,49 @@ import { useMemo } from 'react';
 import NoticeBox from '../../../NoticeBox';
 import { stressScenarios } from '../../quantUtils';
 import { MetricCard } from '../charts';
-import { finite, fmtPercent, fmtSignedPct } from '../format';
+import { DASH, finite, fmtPercent, fmtSignedPct } from '../format';
 
-export function ScenarioSection({ spot, vol, ccy, regime }) {
+export function ScenarioSection({ spot, vol, ccy, regime, beta, benchLabel, benchIsSp500 }) {
   const money = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
-  const stress = useMemo(() => stressScenarios(spot, finite(vol) ? vol : 0), [spot, vol]);
+  const stress = useMemo(
+    () => stressScenarios(spot, finite(vol) ? vol : 0, beta),
+    [spot, vol, beta]
+  );
   const regimeTone = (label) =>
     label === 'Stressed' ? 'bad' : label === 'Calm' ? 'good' : 'neutral';
   return (
     <div className="space-y-4">
-      <p className="text-sm text-bloomberg-subtle">
-        How today&apos;s price ({money(spot)}) would move under a one-day shock — σ-based moves from
-        this name&apos;s own volatility ({fmtPercent(vol)} annual) plus famous crash days. Research
-        only.
+      <p className="text-sm text-bloomberg-white/80">
+        How today&apos;s price ({money(spot)}) would move under a one-day shock — σ moves from this
+        name&apos;s own volatility ({fmtPercent(vol)} annual) and S&amp;P 500 crash days scaled by β
+        ({finite(beta) ? `β = ${beta.toFixed(2)} vs ${benchLabel}` : 'β unavailable, using 1'}).
+        Research only.
       </p>
+      {!benchIsSp500 && (
+        <NoticeBox title="Approximation">
+          β is measured against {benchLabel}, so S&amp;P 500 crash days scaled by it are only a
+          rough proxy for this market.
+        </NoticeBox>
+      )}
 
       <div className="overflow-x-auto border border-bloomberg-border">
-        <table className="terminal-table w-full font-mono text-xs">
+        <table className="w-full font-mono text-xs tabular-nums">
           <thead>
             <tr>
-              <th className="px-2 py-1 text-left text-bloomberg-muted">Scenario</th>
-              <th className="px-2 py-1 text-right text-bloomberg-muted">Shock</th>
-              <th className="px-2 py-1 text-right text-bloomberg-muted">Price after</th>
-              <th className="px-2 py-1 text-right text-bloomberg-muted">P&amp;L</th>
+              <th className="px-2 py-1 text-left text-bloomberg-white/80">Scenario</th>
+              <th className="px-2 py-1 text-right text-bloomberg-white/80">Index move</th>
+              <th className="px-2 py-1 text-right text-bloomberg-white/80">Shock</th>
+              <th className="px-2 py-1 text-right text-bloomberg-white/80">Price after</th>
+              <th className="px-2 py-1 text-right text-bloomberg-white/80">P&amp;L / share</th>
             </tr>
           </thead>
           <tbody>
             {stress.map((s) => (
               <tr key={s.label}>
-                <td className="px-2 py-1 text-bloomberg-white">{s.label}</td>
+                <td className="px-2 py-1 whitespace-nowrap text-bloomberg-white">{s.label}</td>
+                <td className="px-2 py-1 text-right text-bloomberg-white">
+                  {s.indexShock === null ? DASH : fmtSignedPct(s.indexShock * 100)}
+                </td>
                 <td className="px-2 py-1 text-right text-bloomberg-red">
                   {fmtSignedPct(s.lossPct)}
                 </td>
@@ -90,4 +104,7 @@ ScenarioSection.propTypes = {
   vol: PropTypes.number,
   ccy: PropTypes.string,
   regime: PropTypes.object,
+  beta: PropTypes.number,
+  benchLabel: PropTypes.string.isRequired,
+  benchIsSp500: PropTypes.bool.isRequired,
 };

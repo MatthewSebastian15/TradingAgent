@@ -662,9 +662,10 @@ describe('stressScenarios', () => {
     expect(oneSig.price).toBeCloseTo(100 * (1 + oneSig.shock), 10);
   });
 
-  it('historical crash days are fixed regardless of vol', () => {
-    const rows = stressScenarios(50, 5);
-    expect(rows.find((r) => r.label === 'Black Monday (1987)').shock).toBeCloseTo(-0.2261, 6);
+  it('historical crash days do not depend on vol', () => {
+    const lowVol = stressScenarios(50, 5, 1).filter((r) => r.indexShock !== null);
+    const highVol = stressScenarios(50, 80, 1).filter((r) => r.indexShock !== null);
+    expect(lowVol.map((r) => r.shock)).toEqual(highVol.map((r) => r.shock));
   });
 });
 

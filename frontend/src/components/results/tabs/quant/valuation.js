@@ -43,18 +43,29 @@ export function dcfMonteCarlo(base, ranges, paths = 2000, seed = 42) {
   };
 }
 
-// Stress test: apply both σ-based daily shocks and canned historical crash days to
-// a spot price. annualVolPct is this name's annualized vol (%); shocks are decimals.
-// -> [{ label, shock, price, lossPct }] sorted worst-last.
-export function stressScenarios(spot, annualVolPct) {
+// One-day S&P 500 index moves. The stock's beta in this app is measured against its
+// home-market index, so these rows are exact only for S&P 500 benchmarked names.
+const SP500_CRASH_DAYS = [
+  { label: 'GFC — S&P 500, 2008-10-15', indexShock: -0.0903 },
+  { label: 'COVID — S&P 500, 2020-03-16', indexShock: -0.1198 },
+  { label: 'Black Monday — S&P 500, 1987-10-19', indexShock: -0.2047 },
+];
+
+// Stress test: σ-based daily shocks from this name's annualized vol (%), plus index
+// crash days scaled by beta (1 when unknown). Losses clamp at -100%.
+// -> [{ label, shock, indexShock, price, lossPct }].
+export function stressScenarios(spot, annualVolPct, beta = null) {
   const sigma = annualVolPct > 0 ? annualVolPct / 100 / Math.sqrt(TRADING_DAYS) : 0;
+  const b = Number.isFinite(beta) ? beta : 1;
   const rows = [
-    { label: '−1σ day', shock: -sigma },
-    { label: '−2σ day', shock: -2 * sigma },
-    { label: '−3σ day', shock: -3 * sigma },
-    { label: 'GFC worst day (2008)', shock: -0.0903 },
-    { label: 'COVID crash (Mar 2020)', shock: -0.12 },
-    { label: 'Black Monday (1987)', shock: -0.2261 },
+    { label: '−1σ day', shock: -sigma, indexShock: null },
+    { label: '−2σ day', shock: -2 * sigma, indexShock: null },
+    { label: '−3σ day', shock: -3 * sigma, indexShock: null },
+    ...SP500_CRASH_DAYS.map((e) => ({
+      label: e.label,
+      indexShock: e.indexShock,
+      shock: Math.max(-1, b * e.indexShock),
+    })),
   ];
   return rows.map((r) => ({ ...r, price: spot * (1 + r.shock), lossPct: r.shock * 100 }));
 }
