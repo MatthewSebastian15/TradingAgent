@@ -4,10 +4,9 @@ import { monteCarloGBM, simulationDrift } from './stochastic';
 
 describe('simulationDrift', () => {
   it('historical mode converts mean log return to arithmetic drift', () => {
-    expect(simulationDrift({ mode: 'historical', logReturns: [0.001, 0.003], sigma: 0.02 })).toBeCloseTo(
-      0.002 + 0.5 * 0.02 * 0.02,
-      12
-    );
+    expect(
+      simulationDrift({ mode: 'historical', logReturns: [0.001, 0.003], sigma: 0.02 })
+    ).toBeCloseTo(0.002 + 0.5 * 0.02 * 0.02, 12);
   });
 
   it('risk-neutral mode returns the daily risk-free rate', () => {
