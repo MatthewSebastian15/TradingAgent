@@ -39,4 +39,10 @@ describe('RiskSection', () => {
     render(<RiskSection {...baseProps} />);
     expect(screen.getAllByText('Max Drawdown')).toHaveLength(1);
   });
+
+  it('shows the real annualization factor in the formulas', () => {
+    render(<RiskSection {...baseProps} ppy={365} />);
+    expect(screen.getAllByText(/√365/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/√252/)).toBeNull();
+  });
 });

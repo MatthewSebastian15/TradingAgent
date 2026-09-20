@@ -4,7 +4,7 @@ import PriceMetricLineChart from '../../PriceMetricLineChart';
 import { MetricCard } from '../charts';
 import { fmtPercent, volBucket } from '../format';
 
-export function VolatilitySection({ vol, ewma, rollingVols, rollingPoints }) {
+export function VolatilitySection({ vol, ewma, rollingVols, rollingPoints, ppy = 252 }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-subtle">
@@ -18,7 +18,7 @@ export function VolatilitySection({ vol, ewma, rollingVols, rollingPoints }) {
           label="Annualized Volatility"
           value={fmtPercent(vol)}
           gloss={`${volBucket(vol)} — how much daily returns spread out, scaled to a year.`}
-          formula="Standard deviation of daily simple returns × √252 × 100%. Matches the server-side risk summary."
+          formula={`Standard deviation of daily simple returns × √${ppy} × 100%. Matches the server-side risk summary.`}
           spark={rollingVols}
         />
         <MetricCard
@@ -45,4 +45,5 @@ VolatilitySection.propTypes = {
   ewma: PropTypes.number,
   rollingVols: PropTypes.arrayOf(PropTypes.number).isRequired,
   rollingPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
+  ppy: PropTypes.number,
 };

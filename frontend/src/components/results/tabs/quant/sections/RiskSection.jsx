@@ -32,6 +32,7 @@ export function RiskSection({
   rsPoints,
   rbPoints,
   ddStats,
+  ppy = 252,
 }) {
   const excessLabel = `excess over ${rfPct.toFixed(1)}%`;
   const benchNote = benchAvailable
@@ -85,21 +86,21 @@ export function RiskSection({
           label="Downside Deviation"
           value={fmtPercent(downDev)}
           gloss="Volatility of only the losing days — the swings that actually scare you."
-          formula="√(mean of min(0, return)²) × √252 × 100%."
+          formula={`√(mean of min(0, return)²) × √${ppy} × 100%.`}
         />
         <MetricCard
           label={`Sharpe (${excessLabel})`}
           value={fmtRatio(shp)}
           tone={ratioTone(shp)}
           gloss="Return per unit of total risk. Higher is a better deal."
-          formula={`(mean(returns) − rf) / stddev(returns) × √252. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
+          formula={`(mean(returns) − rf) / stddev(returns) × √${ppy}. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
         />
         <MetricCard
           label={`Sortino (${excessLabel})`}
           value={fmtRatio(srt)}
           tone={ratioTone(srt)}
           gloss="Like Sharpe but only penalizes downside risk — fairer to big upside moves."
-          formula={`(mean(returns) − rf) / downside-deviation × √252. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
+          formula={`(mean(returns) − rf) / downside-deviation × √${ppy}. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
         />
         <MetricCard
           label={`Beta (vs ${benchLabel})`}
@@ -201,4 +202,5 @@ RiskSection.propTypes = {
   rsPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
   rbPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
   ddStats: PropTypes.object,
+  ppy: PropTypes.number,
 };

@@ -445,6 +445,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             ewma={metrics.ewma}
             rollingVols={rollingVols}
             rollingPoints={rollingPoints}
+            ppy={ppy}
           />
         </SectionBlock>
       )}
@@ -470,6 +471,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             rsPoints={rsPoints}
             rbPoints={benchmark.rollBetaPoints}
             ddStats={ddStats}
+            ppy={ppy}
           />
         </SectionBlock>
       )}
