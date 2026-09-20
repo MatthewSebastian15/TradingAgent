@@ -125,3 +125,10 @@ export function volTargetWeight(annualVol, target = 15) {
   if (!annualVol) return null;
   return target / annualVol;
 }
+
+// Half-Kelly (clamped to [0, 1] first) capped by the vol-target weight. Fraction of capital.
+export function suggestedPosition(kelly, volWeight) {
+  if (!Number.isFinite(kelly)) return null;
+  const halfKelly = Math.max(0, Math.min(1, kelly)) / 2;
+  return Number.isFinite(volWeight) ? Math.min(halfKelly, volWeight) : halfKelly;
+}

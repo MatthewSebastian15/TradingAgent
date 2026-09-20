@@ -1,11 +1,11 @@
 import PropTypes from 'prop-types';
 
+import { suggestedPosition } from '../../quantUtils';
 import { MetricCard } from '../charts';
 import { VOL_TARGET } from '../config';
 import { finite, DASH, fmtNum2, fmtPercent, hurstLabel } from '../format';
 
 export function SizingSection({ kelly, volWeight, vol, regime, hurstVal, ouHL }) {
-  const kellyClamped = finite(kelly) ? Math.max(0, Math.min(1, kelly)) : null;
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-subtle">
@@ -45,12 +45,14 @@ export function SizingSection({ kelly, volWeight, vol, regime, hurstVal, ouHL })
           formula={`${VOL_TARGET}% ÷ realized annual vol (${fmtPercent(vol)}).`}
         />
       </div>
-      <div className="border border-bloomberg-border bg-bloomberg-card p-3 font-mono text-xs text-bloomberg-subtle">
-        Suggested starting point: half-Kelly ≈{' '}
-        <span className="text-white">
-          {kellyClamped != null ? `${((kellyClamped / 2) * 100).toFixed(0)}%` : DASH}
+      <div className="border border-bloomberg-border bg-bloomberg-card p-3 font-mono text-xs text-bloomberg-white/80">
+        Suggested starting point:{' '}
+        <span data-testid="suggested-position" className="text-white">
+          {finite(suggestedPosition(kelly, volWeight))
+            ? `${(suggestedPosition(kelly, volWeight) * 100).toFixed(0)}%`
+            : DASH}
         </span>{' '}
-        of capital, capped by the vol-target weight. Research only — not advice.
+        of capital — half-Kelly, capped by the vol-target weight. Research only — not advice.
       </div>
     </div>
   );
