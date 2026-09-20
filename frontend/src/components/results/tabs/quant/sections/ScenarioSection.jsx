@@ -6,11 +6,11 @@ import { stressScenarios } from '../../quantUtils';
 import { MetricCard } from '../charts';
 import { DASH, finite, fmtPercent, fmtSignedPct } from '../format';
 
-export function ScenarioSection({ spot, vol, ccy, regime, beta, benchLabel, benchIsSp500 }) {
+export function ScenarioSection({ spot, vol, ccy, regime, beta, benchLabel, benchIsSp500, ppy }) {
   const money = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
   const stress = useMemo(
-    () => stressScenarios(spot, finite(vol) ? vol : 0, beta),
-    [spot, vol, beta]
+    () => stressScenarios(spot, finite(vol) ? vol : 0, beta, ppy),
+    [spot, vol, beta, ppy]
   );
   // `!` beats .terminal-table's own th/td color (higher specificity than a bare utility).
   const signTone = (v) =>
@@ -113,4 +113,5 @@ ScenarioSection.propTypes = {
   beta: PropTypes.number,
   benchLabel: PropTypes.string.isRequired,
   benchIsSp500: PropTypes.bool.isRequired,
+  ppy: PropTypes.number.isRequired,
 };

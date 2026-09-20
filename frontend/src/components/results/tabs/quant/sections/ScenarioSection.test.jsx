@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { ScenarioSection } from './ScenarioSection';
 
-const base = { spot: 100, vol: 30, ccy: 'USD', regime: null, benchLabel: 'Nikkei 225' };
+const base = { spot: 100, vol: 30, ccy: 'USD', regime: null, benchLabel: 'Nikkei 225', ppy: 252 };
 
 describe('ScenarioSection', () => {
   afterEach(() => cleanup());

@@ -77,12 +77,12 @@ export function beta(stockReturns, marketReturns) {
 }
 
 // Jensen's alpha, annualized %. rf is the per-period (daily) risk-free rate.
-export function alpha(stockReturns, marketReturns, rf = 0) {
+export function alpha(stockReturns, marketReturns, rf = 0, ppy = TRADING_DAYS) {
   const b = beta(stockReturns, marketReturns);
   if (b === null || stockReturns.length < 2) return null;
   const excessStock = mean(stockReturns) - rf;
   const excessMarket = mean(marketReturns) - rf;
-  return (excessStock - b * excessMarket) * TRADING_DAYS * 100;
+  return (excessStock - b * excessMarket) * ppy * 100;
 }
 
 // Bin any number array into a histogram. Works for returns or terminal prices.

@@ -11,7 +11,6 @@ import {
   ROLLING_RATIO_WINDOW,
   ROLLING_WINDOW,
   TABS,
-  TRADING_DAYS,
   VOL_TARGET,
 } from './quant/config';
 import { regimeLabel } from './quant/format';
@@ -57,6 +56,7 @@ import {
   monteCarloGBM,
   ouHalfLife,
   parametricVaR,
+  periodsPerYearFromDates,
   portfolioStats,
   regimeShifts,
   returnHistogram,
@@ -138,8 +138,9 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     () => history.map((p) => String(p.date || '').slice(0, 10)),
     [history]
   );
+  const ppy = useMemo(() => periodsPerYearFromDates(historyDates), [historyDates]);
   const ccy = currency || '';
-  const rfDaily = rf / TRADING_DAYS;
+  const rfDaily = rf / ppy;
   const benchmarkInfo = useMemo(() => benchmarkForSymbol(symbol), [symbol]);
 
   // Pull the risk-free rate (config) once on mount. Fails soft → rf stays 0.
@@ -174,7 +175,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
   const returns = useMemo(() => simpleReturns(closes), [closes]);
   const logRet = useMemo(() => logReturns(closes), [closes]);
-  const rollingVols = useMemo(() => rollingVol(closes, ROLLING_WINDOW), [closes]);
+  const rollingVols = useMemo(() => rollingVol(closes, ROLLING_WINDOW, ppy), [closes, ppy]);
 
   const rollingPoints = useMemo(
     () => zipRollingToDates(rollingVols, historyDates, ROLLING_WINDOW),
@@ -183,25 +184,25 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
   const metrics = useMemo(
     () => ({
-      vol: annualizedVol(closes),
-      ewma: ewmaVol(closes),
+      vol: annualizedVol(closes, ppy),
+      ewma: ewmaVol(closes, 0.94, ppy),
       dd: maxDrawdown(closes),
-      cal: calmar(closes),
+      cal: calmar(closes, ppy),
       histVaR: historicalVaR(returns),
       // ponytail: one card — EWMA VaR replaces the flat-stdev number outright.
       paramVaR: parametricVaR(returns, 0.95, ewmaSigmaDaily(returns)),
       cfVaR: cornishFisherVaR(returns),
       cv: cvar(returns),
-      downDev: downsideDeviation(returns),
-      shp: sharpe(returns, rfDaily),
-      srt: sortino(returns, rfDaily),
+      downDev: downsideDeviation(returns, 0, ppy),
+      shp: sharpe(returns, rfDaily, ppy),
+      srt: sortino(returns, rfDaily, ppy),
       skew: skewness(returns),
       kurt: kurtosis(returns),
       var95: historicalVaR(returns, 0.95),
       var99: historicalVaR(returns, 0.99),
       kelly: kellyFraction(returns),
     }),
-    [closes, returns, rfDaily]
+    [closes, returns, rfDaily, ppy]
   );
 
   // Regime (vol percentile) + Hurst (trend vs mean-revert) for the headline + sizing.
@@ -224,11 +225,11 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const rsPoints = useMemo(
     () =>
       zipRollingToDates(
-        rollingSharpe(returns, ROLLING_RATIO_WINDOW, rfDaily),
+        rollingSharpe(returns, ROLLING_RATIO_WINDOW, rfDaily, ppy),
         historyDates,
         ROLLING_RATIO_WINDOW
       ),
-    [returns, historyDates, rfDaily]
+    [returns, historyDates, rfDaily, ppy]
   );
 
   // Benchmark-relative metrics + rolling beta from the aligned benchmark series.
@@ -241,7 +242,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     const mr = simpleReturns(market);
     return {
       beta: beta(sr, mr),
-      alpha: alpha(sr, mr, rfDaily),
+      alpha: alpha(sr, mr, rfDaily, ppy),
       available: true,
       rollBetaPoints: zipRollingToDates(
         rollingBeta(sr, mr, ROLLING_RATIO_WINDOW),
@@ -249,7 +250,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         ROLLING_RATIO_WINDOW
       ),
     };
-  }, [history, benchPoints, rfDaily]);
+  }, [history, benchPoints, rfDaily, ppy]);
 
   // Only run the simulation when the section is open and there's enough data;
   // keyed so unrelated re-renders (e.g. streaming updates) don't re-roll it.
@@ -267,9 +268,9 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   }, [visible, closes, logRet, returns, seed, mcHorizon, mcMethod, mcDrift, rfDaily]);
 
   const horizonLabel = useMemo(() => {
-    const months = Math.round((mcHorizon / TRADING_DAYS) * 12);
+    const months = Math.round((mcHorizon / ppy) * 12);
     return months >= 12 ? `~${Math.round(months / 12)}y` : `~${months}mo`;
-  }, [mcHorizon]);
+  }, [mcHorizon, ppy]);
 
   // meanrev SMA window defaults to the OU half-life; the slider (mrLookback) overrides.
   const btEffective = useMemo(() => {
@@ -280,8 +281,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
   const backtestResult = useMemo(() => {
     if (visible && !visible.has('backtest')) return null;
-    return backtest(closes, strategy, btEffective, rfDaily);
-  }, [visible, closes, strategy, btEffective, rfDaily]);
+    return backtest(closes, strategy, btEffective, rfDaily, ppy);
+  }, [visible, closes, strategy, btEffective, rfDaily, ppy]);
 
   const returnBins = useMemo(() => returnHistogram(returns, 30), [returns]);
   const volWeight = useMemo(() => volTargetWeight(metrics.vol, VOL_TARGET), [metrics.vol]);
@@ -354,11 +355,11 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     const mu = retList.map(mean);
     const gmvW = gmvWeights(cov);
     const tanW = tangencyWeights(cov, mu, rfDaily);
-    const frontier = efficientFrontier(cov, mu, rfDaily);
+    const frontier = efficientFrontier(cov, mu, rfDaily, 25, ppy);
     const annualize = (w) => {
       if (!w) return null;
       const { ret, vol } = portfolioStats(w, mu, cov);
-      return { ret: ret * TRADING_DAYS * 100, vol: vol * Math.sqrt(TRADING_DAYS) * 100 };
+      return { ret: ret * ppy * 100, vol: vol * Math.sqrt(ppy) * 100 };
     };
     // Rolling correlation: base vs the first peer.
     const peerSym = symbols[1];
@@ -379,7 +380,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       rollPoints,
       rollLabel: `${baseSymbol} vs ${peerSym}`,
     };
-  }, [peers, visible, baseSymbol, history, rfDaily]);
+  }, [peers, visible, baseSymbol, history, rfDaily, ppy]);
 
   // Loading: result is here but price history hasn't streamed in yet.
   // ponytail: 0 points = still loading; 1–29 = genuinely too short (NoticeBox).
@@ -589,6 +590,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             beta={benchmark.beta}
             benchLabel={benchmarkInfo.label}
             benchIsSp500={benchmarkInfo.symbol === '^GSPC'}
+            ppy={ppy}
           />
         </SectionBlock>
       )}

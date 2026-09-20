@@ -25,3 +25,13 @@ describe('tangencyWeights sign guard', () => {
     expect(w[1]).toBeCloseTo(0.8, 10);
   });
 });
+
+describe('efficientFrontier ppy', () => {
+  it('annualizes vol with sqrt(ppy) and return with ppy', () => {
+    const mu = [0.001, 0.0005];
+    const a = efficientFrontier(cov, mu, 0, 25);
+    const b = efficientFrontier(cov, mu, 0, 25, 365);
+    expect(b[3].vol / a[3].vol).toBeCloseTo(Math.sqrt(365 / 252), 10);
+    expect(b[3].ret / a[3].ret).toBeCloseTo(365 / 252, 10);
+  });
+});

@@ -14,10 +14,10 @@ export function drawdownSeries(closes) {
 }
 
 // Annualized Sharpe over a sliding window; entries can be null (flat window).
-export function rollingSharpe(returns, window = 63, rf = 0) {
+export function rollingSharpe(returns, window = 63, rf = 0, ppy = TRADING_DAYS) {
   const out = [];
   for (let end = window; end <= returns.length; end += 1) {
-    out.push(sharpe(returns.slice(end - window, end), rf));
+    out.push(sharpe(returns.slice(end - window, end), rf, ppy));
   }
   return out;
 }
@@ -44,10 +44,10 @@ export function zipRollingToDates(values, dates, window) {
 }
 
 // Calmar: CAGR ÷ |max drawdown|. null if no history or no drawdown.
-export function calmar(closes) {
+export function calmar(closes, ppy = TRADING_DAYS) {
   const n = closes.length;
   if (n < 2 || !closes[0]) return null;
-  const years = (n - 1) / TRADING_DAYS;
+  const years = (n - 1) / ppy;
   if (years <= 0) return null;
   const cagr = (closes.at(-1) / closes[0]) ** (1 / years) - 1;
   const dd = maxDrawdown(closes) / 100;

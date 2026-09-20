@@ -55,3 +55,10 @@ describe('stressScenarios beta scaling', () => {
     expect(rows[0].shock).toBeCloseTo(rows[0].indexShock, 12);
   });
 });
+
+describe('stressScenarios ppy', () => {
+  it('sigma rows use the daily sigma for the given ppy', () => {
+    const row = stressScenarios(100, 30, 1, 365)[0];
+    expect(row.shock).toBeCloseTo(-0.3 / Math.sqrt(365), 12);
+  });
+});

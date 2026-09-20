@@ -57,20 +57,20 @@ function downsideDeviationPeriodic(returns, mar = 0) {
 }
 
 // Annualized downside deviation in % — volatility of only the bad days.
-export function downsideDeviation(returns, mar = 0) {
-  return downsideDeviationPeriodic(returns, mar) * Math.sqrt(TRADING_DAYS) * 100;
+export function downsideDeviation(returns, mar = 0, ppy = TRADING_DAYS) {
+  return downsideDeviationPeriodic(returns, mar) * Math.sqrt(ppy) * 100;
 }
 
 // Sharpe: excess return per unit of total risk, annualized. v1 uses rf=0.
-export function sharpe(returns, rf = 0) {
+export function sharpe(returns, rf = 0, ppy = TRADING_DAYS) {
   const sd = stdDev(returns);
   if (returns.length < 2 || !sd) return null;
-  return ((mean(returns) - rf) / sd) * Math.sqrt(TRADING_DAYS);
+  return ((mean(returns) - rf) / sd) * Math.sqrt(ppy);
 }
 
 // Sortino: like Sharpe but penalizes only downside risk. v1 uses rf=0.
-export function sortino(returns, rf = 0) {
+export function sortino(returns, rf = 0, ppy = TRADING_DAYS) {
   const dd = downsideDeviationPeriodic(returns, rf);
   if (returns.length < 2 || !dd) return null;
-  return ((mean(returns) - rf) / dd) * Math.sqrt(TRADING_DAYS);
+  return ((mean(returns) - rf) / dd) * Math.sqrt(ppy);
 }

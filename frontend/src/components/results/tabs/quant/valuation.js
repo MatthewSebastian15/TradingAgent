@@ -54,8 +54,8 @@ const SP500_CRASH_DAYS = [
 // Stress test: σ-based daily shocks from this name's annualized vol (%), plus index
 // crash days scaled by beta (1 when unknown). Losses clamp at -100%.
 // -> [{ label, shock, indexShock, price, lossPct }].
-export function stressScenarios(spot, annualVolPct, beta = null) {
-  const sigma = annualVolPct > 0 ? annualVolPct / 100 / Math.sqrt(TRADING_DAYS) : 0;
+export function stressScenarios(spot, annualVolPct, beta = null, ppy = TRADING_DAYS) {
+  const sigma = annualVolPct > 0 ? annualVolPct / 100 / Math.sqrt(ppy) : 0;
   const b = Number.isFinite(beta) ? beta : 1;
   const rows = [
     { label: '−1σ day', shock: -sigma, indexShock: null },

@@ -43,7 +43,7 @@ function signalsFor(closes, strategy, params) {
 // inside the per-step return, so equity, Sharpe, the in/out-of-sample split and
 // per-trade returns all agree. Flat days earn the daily risk-free rate `rf`.
 // ponytail: three hard-coded strategies, long/flat only. Not a general engine. (deliberate)
-export function backtest(closes, strategy, params = {}, rf = 0) {
+export function backtest(closes, strategy, params = {}, rf = 0, ppy = TRADING_DAYS) {
   const n = closes.length;
   if (strategy === 'sma' && (params.fast || 20) >= (params.slow || 50)) return null;
   const start = warmupBars(strategy, params);
@@ -111,7 +111,7 @@ export function backtest(closes, strategy, params = {}, rf = 0) {
   }
 
   const steps = n - 1 - start;
-  const years = steps / TRADING_DAYS;
+  const years = steps / ppy;
   const wins = tradeList.filter((t) => t.ret > 0).length;
   return {
     startIndex: start,
@@ -119,7 +119,7 @@ export function backtest(closes, strategy, params = {}, rf = 0) {
     buyhold,
     returns,
     cagr: years > 0 ? (eq ** (1 / years) - 1) * 100 : null,
-    sharpe: sharpe(returns, rf),
+    sharpe: sharpe(returns, rf, ppy),
     maxDD: maxDrawdown(equity),
     winRate: tradeList.length ? (wins / tradeList.length) * 100 : null,
     hitRate: inDays ? (upDays / inDays) * 100 : null,

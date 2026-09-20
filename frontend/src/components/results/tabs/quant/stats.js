@@ -49,12 +49,12 @@ export function annualizedVol(closes, periodsPerYear = TRADING_DAYS) {
 
 // -> number[] of annualized vol, one per window position (no dates; the
 // component zips these against its own date axis).
-export function rollingVol(closes, window = 21) {
+export function rollingVol(closes, window = 21, ppy = TRADING_DAYS) {
   const returns = simpleReturns(closes);
   const out = [];
   for (let end = window; end <= returns.length; end += 1) {
     const slice = returns.slice(end - window, end);
-    out.push(stdDev(slice) * Math.sqrt(TRADING_DAYS) * 100);
+    out.push(stdDev(slice) * Math.sqrt(ppy) * 100);
   }
   return out;
 }
@@ -77,8 +77,18 @@ export function ewmaSigmaDaily(returns, lambda = 0.94, seedWindow = 20) {
 
 // Exponentially weighted volatility (RiskMetrics), recent days weighted more.
 // -> annualized %, or 0 for a flat series.
-export function ewmaVol(closes, lambda = 0.94) {
-  return ewmaSigmaDaily(simpleReturns(closes), lambda) * Math.sqrt(TRADING_DAYS) * 100;
+export function ewmaVol(closes, lambda = 0.94, ppy = TRADING_DAYS) {
+  return ewmaSigmaDaily(simpleReturns(closes), lambda) * Math.sqrt(ppy) * 100;
+}
+
+// 7-day markets (crypto) trade on weekends; annualize them over 365 periods.
+export function periodsPerYearFromDates(dates) {
+  const days = (dates || [])
+    .map((d) => new Date(`${String(d).slice(0, 10)}T00:00:00Z`).getUTCDay())
+    .filter(Number.isFinite);
+  if (days.length < 10) return TRADING_DAYS;
+  const weekend = days.filter((d) => d === 0 || d === 6).length;
+  return weekend / days.length >= 0.1 ? 365 : TRADING_DAYS;
 }
 
 // --- distribution shape ----------------------------------------------------

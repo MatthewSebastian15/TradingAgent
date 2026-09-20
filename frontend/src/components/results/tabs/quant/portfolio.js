@@ -136,7 +136,7 @@ export function portfolioStats(w, mu, cov) {
 
 // Efficient frontier via two-fund separation: blend GMV and tangency portfolios.
 // -> [{ vol, ret }] with vol/ret annualized to %. Empty if either fund is singular.
-export function efficientFrontier(cov, mu, rf = 0, steps = 25) {
+export function efficientFrontier(cov, mu, rf = 0, steps = 25, ppy = TRADING_DAYS) {
   const gmv = gmvWeights(cov);
   const tan = tangencyWeights(cov, mu, rf);
   if (!gmv || !tan) return [];
@@ -145,7 +145,7 @@ export function efficientFrontier(cov, mu, rf = 0, steps = 25) {
     const a = -0.5 + (2 * i) / steps; // -0.5 .. 1.5 mix
     const w = gmv.map((g, k) => (1 - a) * g + a * tan[k]);
     const { ret, vol } = portfolioStats(w, mu, cov);
-    out.push({ vol: vol * Math.sqrt(TRADING_DAYS) * 100, ret: ret * TRADING_DAYS * 100 });
+    out.push({ vol: vol * Math.sqrt(ppy) * 100, ret: ret * ppy * 100 });
   }
   return out;
 }

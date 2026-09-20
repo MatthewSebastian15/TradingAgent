@@ -65,3 +65,11 @@ describe('backtest accounting', () => {
     expect(backtest(rising.slice(0, 60), 'sma', { fast: 10, slow: 50 })).toBeNull();
   });
 });
+
+describe('backtest ppy', () => {
+  it('CAGR uses ppy', () => {
+    const res = backtest(rising, 'sma', { fast: 10, slow: 30 }, 0, 365);
+    const steps = rising.length - 1 - res.startIndex;
+    expect(res.cagr).toBeCloseTo(((1 + res.finalReturn / 100) ** (365 / steps) - 1) * 100, 10);
+  });
+});
