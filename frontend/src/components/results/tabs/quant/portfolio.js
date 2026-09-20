@@ -112,16 +112,19 @@ export function gmvWeights(cov) {
 }
 
 // Tangency (max-Sharpe) weights: w ∝ Σ⁻¹·(μ − rf), normalized to sum 1.
+// If 1ᵀΣ⁻¹(μ − rf) <= 0 the normalization flips every sign and yields the
+// minimum-Sharpe portfolio, so no fully invested tangency portfolio exists -> null.
 // May be negative (short) — unconstrained two-fund solution.
 export function tangencyWeights(cov, mu, rf = 0) {
   const inv = invertMatrix(cov);
   if (!inv) return null;
-  return normalizeWeights(
-    matVec(
-      inv,
-      mu.map((m) => m - rf)
-    )
+  const raw = matVec(
+    inv,
+    mu.map((m) => m - rf)
   );
+  const sum = raw.reduce((a, b) => a + b, 0);
+  if (!(sum > 1e-12)) return null;
+  return raw.map((x) => x / sum);
 }
 
 // Portfolio mean/vol for weights w (per-period mu/cov).

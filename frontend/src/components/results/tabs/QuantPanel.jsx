@@ -335,6 +335,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       tangency: null,
       gmvW: null,
       tanW: null,
+      optimizerStatus: 'ok',
       rollPoints: [],
       rollLabel: '',
     };
@@ -374,6 +375,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       tangency: annualize(tanW),
       gmvW,
       tanW,
+      optimizerStatus: !gmvW ? 'singular' : !tanW ? 'no_tangency' : 'ok',
       rollPoints,
       rollLabel: `${baseSymbol} vs ${peerSym}`,
     };
@@ -549,6 +551,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             tangency={corr.tangency}
             gmvWeights={corr.gmvW}
             tangencyWeights={corr.tanW}
+            optimizerStatus={corr.optimizerStatus}
           />
         </SectionBlock>
       )}

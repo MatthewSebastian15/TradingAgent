@@ -145,6 +145,7 @@ export function CorrelationSection({
   tangency,
   gmvWeights: gmvW,
   tangencyWeights: tanW,
+  optimizerStatus,
 }) {
   return (
     <div className="space-y-4">
@@ -212,11 +213,22 @@ export function CorrelationSection({
           <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
             Mean-variance optimizer
           </div>
-          {frontier.length === 0 ? (
+          {optimizerStatus === 'singular' && (
             <NoticeBox title="Optimizer">
               Covariance is singular for this basket — try different or fewer peers.
             </NoticeBox>
-          ) : (
+          )}
+          {optimizerStatus === 'no_tangency' && (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
+              <NoticeBox title="No max-Sharpe portfolio">
+                Every fully invested mix of this basket has a negative expected excess return over
+                the risk-free rate, so a max-Sharpe portfolio does not exist. Showing
+                minimum-variance weights only.
+              </NoticeBox>
+              <WeightsTable title="Min-Variance" symbols={symbols} weights={gmvW} color="#3b82f6" />
+            </div>
+          )}
+          {optimizerStatus === 'ok' && frontier.length > 0 && (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
               <FrontierChart frontier={frontier} gmv={gmv} tangency={tangency} />
               <div className="space-y-3">
@@ -252,6 +264,7 @@ CorrelationSection.propTypes = {
   tangency: PropTypes.object,
   gmvWeights: PropTypes.arrayOf(PropTypes.number),
   tangencyWeights: PropTypes.arrayOf(PropTypes.number),
+  optimizerStatus: PropTypes.oneOf(['ok', 'singular', 'no_tangency']).isRequired,
 };
 
 // Tab panel wrapper. Inactive panels stay mounted but hidden (native `hidden`
