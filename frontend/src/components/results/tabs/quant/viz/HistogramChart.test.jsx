@@ -42,7 +42,13 @@ describe('HistogramChart', () => {
       clientX: 420,
       clientY: 100,
     });
-    expect(screen.getByTestId('chart-tooltip').textContent).toContain('Count');
+    const tip = screen.getByTestId('chart-tooltip').textContent;
+    // x = 420 falls in the [0, 0.01] bin: count 12 of 30
+    expect(tip).toContain('0.0% to 1.0%');
+    expect(tip).toContain('Count');
+    expect(tip).toContain('12');
+    expect(tip).toContain('Share');
+    expect(tip).toContain('40.0%');
   });
 
   it('empty bins -> empty message', () => {
@@ -93,6 +99,57 @@ describe('HistogramChart', () => {
     expect(rects).toHaveLength(2000);
     rects.forEach((r) => expect(Number(r.getAttribute('width'))).toBeGreaterThanOrEqual(1));
     expect(container.outerHTML).not.toMatch(BAD);
+  });
+
+  it('draws proportional bars and a normal overlay that peaks at or below the tallest bar', () => {
+    const { container } = render(
+      <HistogramChart title="R" bins={bins} overlay={{ mu: 0, sigma: 0.01 }} />
+    );
+    const bars = [...container.querySelectorAll('svg rect')].filter((r) =>
+      r.getAttribute('opacity')
+    );
+    const heights = bars.map((r) => Number(r.getAttribute('height')));
+    // counts 3, 10, 12, 5 share one scale
+    expect(heights[1] / heights[0]).toBeCloseTo(10 / 3, 5);
+    expect(heights[2] / heights[0]).toBeCloseTo(12 / 3, 5);
+    expect(heights[3] / heights[0]).toBeCloseTo(5 / 3, 5);
+    const curve = container.querySelector('path[stroke="#a3a3a3"]');
+    expect(curve).toBeTruthy();
+    const peakY = Math.min(
+      ...[...curve.getAttribute('d').matchAll(/,([\d.]+)/g)].map((m) => Number(m[1]))
+    );
+    const tallestTop = Math.min(...bars.map((r) => Number(r.getAttribute('y'))));
+    // SVG y grows downward: the peak sits at or below the tallest bar's top edge
+    expect(peakY).toBeGreaterThanOrEqual(tallestTop - 0.1);
+    expect(peakY).toBeLessThan(tallestTop + 8);
+  });
+
+  it('never lets the last bar run past the right edge of the plot', () => {
+    const many = Array.from({ length: 2000 }, (_, i) => ({ binStart: i, binEnd: i + 1, count: 4 }));
+    const { container } = render(<HistogramChart title="Eq" bins={many} />);
+    const bars = [...container.querySelectorAll('svg rect')].filter((r) =>
+      r.getAttribute('opacity')
+    );
+    // width 720 - right padding 16 = plot.right 704
+    bars.forEach((r) =>
+      expect(Number(r.getAttribute('x')) + Number(r.getAttribute('width'))).toBeLessThanOrEqual(704)
+    );
+  });
+
+  it('keeps stacked marker labels apart at the bottom edge', () => {
+    const labels = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    const { container } = render(
+      <HistogramChart
+        title="R"
+        bins={bins}
+        height={120}
+        markers={labels.map((label, i) => ({ x: -0.005 + i * 0.0001, label, color: '#fff' }))}
+      />
+    );
+    const ys = labels.map((l) => textY(container, l)).sort((x, y) => x - y);
+    for (let i = 1; i < ys.length; i += 1) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(12);
+    // plot.bottom = 120 - 26 = 94
+    expect(ys.at(-1)).toBeLessThanOrEqual(92);
   });
 
   it('never emits NaN/undefined/Infinity for degenerate input', () => {

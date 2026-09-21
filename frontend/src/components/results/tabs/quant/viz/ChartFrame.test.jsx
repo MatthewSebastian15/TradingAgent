@@ -25,6 +25,7 @@ describe('ChartFrame', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('renders ticks, legend and marks at real pixel width', () => {
@@ -158,5 +159,168 @@ describe('ChartFrame', () => {
     // the observed container must survive the empty -> data switch
     expect(observed.length).toBe(1);
     expect(observed[0].isConnected).toBe(true);
+  });
+
+  const stubObserver = () => {
+    const ctl = {};
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb) {
+          ctl.notify = (width) => act(() => cb([{ contentRect: { width } }]));
+        }
+        observe() {}
+        disconnect() {}
+      }
+    );
+    return ctl;
+  };
+  const stubTooltipWidth = (px) =>
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(px);
+  const tip = (over = {}) => ({ x: 5, title: 't', rows: [{ label: 'A', value: '1' }], ...over });
+
+  it('keeps the tooltip inside a narrow container (left side)', () => {
+    const ctl = stubObserver();
+    stubTooltipWidth(200);
+    render(<ChartFrame {...baseProps} getTooltip={() => tip()} />);
+    ctl.notify(320);
+    // px 190 is <= 0.6 * 320 so it is placed to the right: 198 + 200 would overflow 320.
+    fireEvent.mouseMove(screen.getByRole('img', { name: 'test chart' }), {
+      clientX: 190,
+      clientY: 100,
+    });
+    const el = screen.getByTestId('chart-tooltip');
+    expect(Number.parseFloat(el.style.left)).toBeLessThanOrEqual(320 - 200 - 8);
+    expect(Number.parseFloat(el.style.left)).toBeGreaterThanOrEqual(8);
+    expect(el.style.maxWidth).toBe('304px');
+  });
+
+  it('keeps the tooltip inside a narrow container (right side)', () => {
+    const ctl = stubObserver();
+    stubTooltipWidth(200);
+    render(<ChartFrame {...baseProps} getTooltip={() => tip({ x: 6 })} />);
+    ctl.notify(320);
+    // x(6) = 208 is > 0.6 * 320 so it flips left: right = 120 -> left edge at 0 (overflow).
+    fireEvent.mouseMove(screen.getByRole('img', { name: 'test chart' }), {
+      clientX: 200,
+      clientY: 100,
+    });
+    const el = screen.getByTestId('chart-tooltip');
+    expect(Number.parseFloat(el.style.right)).toBeLessThanOrEqual(320 - 200 - 8);
+    expect(Number.parseFloat(el.style.right)).toBeGreaterThanOrEqual(8);
+  });
+
+  it('clears a stale tooltip when the domain, width or empty state changes', () => {
+    const ctl = stubObserver();
+    const getTooltip = () => tip();
+    const { rerender } = render(<ChartFrame {...baseProps} getTooltip={getTooltip} />);
+    const svg = () => screen.getByRole('img', { name: 'test chart' });
+    fireEvent.mouseMove(svg(), { clientX: 380, clientY: 100 });
+    expect(screen.getByTestId('chart-tooltip')).toBeTruthy();
+    rerender(<ChartFrame {...baseProps} yDomain={[0, 200]} getTooltip={getTooltip} />);
+    expect(screen.queryByTestId('chart-tooltip')).toBeNull();
+    fireEvent.mouseMove(svg(), { clientX: 380, clientY: 100 });
+    ctl.notify(500);
+    expect(screen.queryByTestId('chart-tooltip')).toBeNull();
+    fireEvent.mouseMove(svg(), { clientX: 380, clientY: 100 });
+    rerender(<ChartFrame {...baseProps} isEmpty getTooltip={getTooltip} />);
+    rerender(<ChartFrame {...baseProps} getTooltip={getTooltip} />);
+    expect(screen.queryByTestId('chart-tooltip')).toBeNull();
+  });
+
+  it('ignores hover above or below the plot (tick label strip)', () => {
+    render(<ChartFrame {...baseProps} getTooltip={() => tip()} />);
+    const svg = screen.getByRole('img', { name: 'test chart' });
+    fireEvent.mouseMove(svg, { clientX: 380, clientY: 100 });
+    expect(screen.getByTestId('chart-tooltip')).toBeTruthy();
+    fireEvent.mouseMove(svg, { clientX: 380, clientY: 225 }); // below plot.bottom (214)
+    expect(screen.queryByTestId('chart-tooltip')).toBeNull();
+    fireEvent.mouseMove(svg, { clientX: 380, clientY: 100 });
+    fireEvent.mouseMove(svg, { clientX: 380, clientY: 4 }); // above plot.top (12)
+    expect(screen.queryByTestId('chart-tooltip')).toBeNull();
+  });
+
+  it('tolerates a tooltip without rows and duplicate labels', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <ChartFrame
+        {...baseProps}
+        legend={[
+          { label: 'Same', color: '#fff' },
+          { label: 'Same', color: '#000' },
+        ]}
+        getTooltip={() =>
+          tip({
+            rows: [
+              { label: 'Dup', value: '1' },
+              { label: 'Dup', value: '2' },
+            ],
+          })
+        }
+      />
+    );
+    fireEvent.mouseMove(screen.getByRole('img', { name: 'test chart' }), {
+      clientX: 380,
+      clientY: 100,
+    });
+    expect(screen.getAllByText('Dup')).toHaveLength(2);
+    expect(errors).not.toHaveBeenCalled();
+    cleanup();
+    render(<ChartFrame {...baseProps} getTooltip={() => ({ title: 'no rows' })} />);
+    fireEvent.mouseMove(screen.getByRole('img', { name: 'test chart' }), {
+      clientX: 380,
+      clientY: 100,
+    });
+    expect(screen.getByTestId('chart-tooltip').textContent).toContain('no rows');
+    errors.mockRestore();
+  });
+
+  it('lets the root shrink inside flex/grid parents', () => {
+    const { container } = render(<ChartFrame {...baseProps} />);
+    expect(container.querySelector('figure').className).toContain('min-w-0');
+  });
+
+  it('keeps the fallback width at 0 (hidden tab) and recovers once measured', () => {
+    const ctl = stubObserver();
+    render(<ChartFrame {...baseProps} />);
+    const viewBox = () => screen.getByRole('img', { name: 'test chart' }).getAttribute('viewBox');
+    ctl.notify(0);
+    expect(viewBox()).toBe('0 0 720 240');
+    ctl.notify(360);
+    expect(viewBox()).toBe('0 0 360 240');
+  });
+
+  it('draws box and dashed legend swatches', () => {
+    const { container } = render(
+      <ChartFrame
+        {...baseProps}
+        legend={[
+          { label: 'Area', color: '#111111', swatch: 'box' },
+          { label: 'Dashed', color: '#222222', dashed: true },
+          { label: 'Solid', color: '#333333' },
+        ]}
+      />
+    );
+    const items = container.querySelectorAll('ul li');
+    expect(items[0].querySelector('rect').getAttribute('fill')).toBe('#111111');
+    expect(items[1].querySelector('line').getAttribute('stroke-dasharray')).toBe('3 2');
+    expect(items[2].querySelector('line').getAttribute('stroke-dasharray')).toBeNull();
+  });
+
+  it('renders note and axis titles', () => {
+    render(<ChartFrame {...baseProps} xLabel="Days" yLabel="Value" note="Simulated." />);
+    expect(screen.getByText('Simulated.')).toBeTruthy();
+    expect(screen.getByText('Days')).toBeTruthy();
+    expect(screen.getByText('Value').getAttribute('transform')).toContain('rotate(-90');
+  });
+
+  it('does not rebuild the plot on hover-only re-renders', () => {
+    const renderPlot = vi.fn(baseProps.renderPlot);
+    render(<ChartFrame {...baseProps} renderPlot={renderPlot} getTooltip={() => tip()} />);
+    const svg = screen.getByRole('img', { name: 'test chart' });
+    const before = renderPlot.mock.calls.length;
+    fireEvent.mouseMove(svg, { clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(svg, { clientX: 400, clientY: 100 });
+    expect(renderPlot.mock.calls.length).toBe(before);
   });
 });

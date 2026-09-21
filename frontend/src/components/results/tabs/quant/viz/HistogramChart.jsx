@@ -44,6 +44,7 @@ export function HistogramChart({
     const lo = Math.min(valid[0].binStart, ...marks.map((m) => m.x));
     const hi = Math.max(valid.at(-1).binEnd, ...marks.map((m) => m.x));
     xDomain = [lo, hi];
+    // Assumes uniform bins: the normal overlay is scaled by the first bin's width.
     const binWidth = valid[0].binEnd - valid[0].binStart;
     const barMax = Math.max(...valid.map((b) => b.count));
     if (overlay && Number.isFinite(overlay.mu) && overlay.sigma > 0) {
@@ -91,19 +92,20 @@ export function HistogramChart({
     // Stagger marker labels vertically so close markers never overprint each other.
     const labeled = layoutLabels(
       marks.map((m) => ({ ...m, x: x(m.x), y: plot.top + 10 })),
-      { minDx: 80 }
+      { minDx: 80, maxY: plot.bottom - 2 }
     );
     return (
       <g>
         {valid.map((b, i) => {
           const x0 = x(b.binStart);
           const x1 = x(b.binEnd);
+          const w = Math.max(1, x1 - x0 - 1);
           return (
             <rect
               key={`bar-${i}`}
-              x={x0 + 0.5}
+              x={Math.min(x0 + 0.5, plot.right - w)}
               y={y(b.count)}
-              width={Math.max(1, x1 - x0 - 1)}
+              width={w}
               height={Math.max(0, plot.bottom - y(b.count))}
               fill={barColor}
               opacity={0.65}
@@ -137,7 +139,7 @@ export function HistogramChart({
               {m.label && (
                 <text
                   x={nearRight ? m.x - 4 : m.x + 4}
-                  y={Math.min(plot.bottom - 2, m.labelY)}
+                  y={m.labelY}
                   fill={color}
                   fontSize="10"
                   textAnchor={nearRight ? 'end' : 'start'}

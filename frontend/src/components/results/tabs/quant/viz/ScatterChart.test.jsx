@@ -101,12 +101,41 @@ describe('ScatterChart', () => {
       />
     );
     const svg = screen.getByRole('img', { name: 'sc' });
-    // Middle of the plot, far from both corner points -> no tooltip.
-    fireEvent.mouseMove(svg, { clientX: 400, clientY: 120 });
+    // jsdom has no layout, so client coordinates equal viewBox coordinates: use the
+    // rendered circle centres instead of hard-coded pixels.
+    const centre = (title) => {
+      const c = [...svg.querySelectorAll('circle')].find((el) =>
+        el.querySelector('title').textContent.startsWith(title)
+      );
+      return { x: Number(c.getAttribute('cx')), y: Number(c.getAttribute('cy')) };
+    };
+    const a = centre('A:');
+    const b = centre('B:');
+    // Midway between the two points, far from both -> no tooltip.
+    fireEvent.mouseMove(svg, { clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
     expect(screen.queryByTestId('chart-tooltip')).toBeNull();
-    // On point B (x max, y max).
-    fireEvent.mouseMove(svg, { clientX: 555, clientY: 64 });
+    // On point B.
+    fireEvent.mouseMove(svg, { clientX: b.x, clientY: b.y });
     expect(screen.getByTestId('chart-tooltip').textContent).toContain('B');
+  });
+
+  it('keeps labels of points at the minimum y apart and inside the plot', () => {
+    const labels = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
+    const { container } = render(
+      <ScatterChart
+        title="S"
+        points={[
+          { x: 1, y: 10, color: '#fff' },
+          ...labels.map((label, i) => ({ x: i * 0.001, y: 0, label, color: '#fff' })),
+        ]}
+      />
+    );
+    const bottom = Number(
+      container.querySelector('line[stroke="rgba(255,255,255,0.22)"]').getAttribute('y1')
+    );
+    const ys = labels.map((l) => textY(container, l)).sort((a, b) => a - b);
+    for (let i = 1; i < ys.length; i += 1) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(12);
+    expect(ys.at(-1)).toBeLessThanOrEqual(bottom - 2);
   });
 
   it('never emits NaN/undefined/Infinity for degenerate input', () => {

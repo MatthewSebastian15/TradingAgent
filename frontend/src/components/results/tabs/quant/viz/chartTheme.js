@@ -20,7 +20,8 @@ const LIGHT_TEXT = '#e5e5e5';
 
 function diverging(value, max) {
   const t = Math.min(1, Math.abs(value) / (max || 1));
-  const [r, g, b] = value >= 0 ? [249, 115, 22] : [59, 130, 246];
+  // Exactly zero is neutral grey so it carries no orange (positive) tint.
+  const [r, g, b] = value === 0 ? [163, 163, 163] : value > 0 ? [249, 115, 22] : [59, 130, 246];
   return { r, g, b, alpha: Number((0.08 + 0.72 * t).toFixed(2)) };
 }
 

@@ -267,6 +267,145 @@ describe('LineChart', () => {
     expect(screen.getByTestId('chart-tooltip').textContent).toContain('D:2026-01-07');
   });
 
+  it('splits bands into runs at gaps instead of bridging them', () => {
+    const { container } = render(
+      <LineChart
+        title="Band gaps"
+        xType="number"
+        series={[
+          {
+            id: 's',
+            color: '#f97316',
+            points: [
+              { x: 0, y: 1 },
+              { x: 4, y: 2 },
+            ],
+          },
+        ]}
+        bands={[
+          {
+            id: 'b',
+            label: 'Range',
+            color: 'rgba(1,2,3,0.2)',
+            points: [
+              { x: 0, lo: 0.5, hi: 1.5 },
+              { x: 1, lo: 0.6, hi: 1.6 },
+              { x: 2, lo: null, hi: 1.7 },
+              { x: 3, lo: 0.8, hi: 1.8 },
+              { x: 4, lo: 0.9, hi: Number.NaN },
+              { x: 5, lo: 0.9, hi: 1.9 },
+              { x: 6, lo: 1, hi: 2 },
+            ],
+          },
+        ]}
+      />
+    );
+    const d = container.querySelector('path[fill="rgba(1,2,3,0.2)"]').getAttribute('d');
+    // runs: [0,1] and [5,6]; the lone point at x=3 draws nothing
+    expect(d.match(/M/g)).toHaveLength(2);
+    expect(d.match(/Z/g)).toHaveLength(2);
+    expect(d).not.toMatch(BAD);
+  });
+
+  it('shows an em dash for a series or band with no valid point at the snapped x', () => {
+    render(
+      <LineChart
+        title="Sparse"
+        ariaLabel="sparse"
+        xType="number"
+        formatY={(v) => `v${v}`}
+        series={[
+          {
+            id: 'p',
+            label: 'Dense',
+            color: '#f97316',
+            points: [0, 1, 2, 3].map((x) => ({ x, y: x + 1 })),
+          },
+          {
+            id: 'q',
+            label: 'Sparse',
+            color: '#a3a3a3',
+            points: [
+              { x: 0, y: 10 },
+              { x: 1, y: null },
+              { x: 3, y: 30 },
+            ],
+          },
+        ]}
+        bands={[
+          {
+            id: 'b',
+            label: 'Band',
+            color: 'rgba(1,2,3,0.2)',
+            points: [
+              { x: 0, lo: 1, hi: 2 },
+              { x: 3, lo: 3, hi: 4 },
+            ],
+          },
+        ]}
+      />
+    );
+    // plot spans 64..704 for x in 0..3: x = 1 sits at px ~277
+    fireEvent.mouseMove(screen.getByRole('img', { name: 'sparse' }), { clientX: 277, clientY: 50 });
+    const rows = [...screen.getByTestId('chart-tooltip').querySelectorAll('div > span:last-child')];
+    expect(rows.map((r) => r.textContent)).toEqual(['v2', '—', '—']);
+  });
+
+  it('includes marker values in the y extent so they are not dropped', () => {
+    const { container } = render(
+      <LineChart
+        title="Marker extent"
+        xType="number"
+        series={[
+          {
+            id: 's',
+            color: '#f97316',
+            points: [
+              { x: 0, y: 1 },
+              { x: 10, y: 2 },
+            ],
+          },
+        ]}
+        markers={[{ x: 5, y: 9, shape: 'dot', color: '#eab308', label: 'High' }]}
+      />
+    );
+    expect(container.querySelectorAll('circle[fill="#eab308"]')).toHaveLength(1);
+    expect(screen.getByText('High', { selector: 'text' })).toBeTruthy();
+  });
+
+  it('keeps stacked marker labels apart at the bottom edge', () => {
+    render(
+      <LineChart
+        title="Bottom"
+        xType="number"
+        height={120}
+        series={[
+          {
+            id: 's',
+            color: '#f97316',
+            points: [
+              { x: 0, y: 1 },
+              { x: 10, y: 5 },
+            ],
+          },
+        ]}
+        markers={['A', 'B', 'C', 'D'].map((label) => ({
+          x: 5,
+          y: 1,
+          shape: 'up',
+          color: '#22c55e',
+          label,
+        }))}
+      />
+    );
+    const ys = ['A', 'B', 'C', 'D']
+      .map((t) => Number(screen.getByText(t, { selector: 'text' }).getAttribute('y')))
+      .sort((a, b) => a - b);
+    for (let i = 1; i < ys.length; i += 1) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(12);
+    // plot.bottom = 120 - 26 = 94
+    expect(ys.at(-1)).toBeLessThanOrEqual(92);
+  });
+
   it('never emits NaN/undefined/Infinity for degenerate input', () => {
     const cases = [
       { series: [] },

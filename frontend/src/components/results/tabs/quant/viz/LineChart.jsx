@@ -16,12 +16,12 @@ import {
 const fmt1 = (n) => n.toFixed(1);
 const pt = (x, y) => `${fmt1(x)},${fmt1(y)}`;
 
-// Splits points (y === null marks a gap) into runs of consecutive valid points.
-function segments(pts) {
+// Splits points into runs of consecutive points that satisfy isValid (others are gaps).
+function segments(pts, isValid) {
   const out = [];
   let cur = [];
   pts.forEach((p) => {
-    if (p.y === null) {
+    if (!isValid(p)) {
       if (cur.length) out.push(cur);
       cur = [];
     } else {
@@ -39,13 +39,19 @@ function linePath(runs, x, y) {
     .join('');
 }
 
-function bandPath(pts, x, y) {
-  const upper = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${pt(x(p.x), y(p.hi))}`).join('');
-  const lower = [...pts]
-    .reverse()
-    .map((p) => `L${pt(x(p.x), y(p.lo))}`)
+// One closed polygon per run so a gap in the band is not bridged.
+function bandPath(runs, x, y) {
+  return runs
+    .filter((run) => run.length > 1)
+    .map((run) => {
+      const upper = run.map((p, i) => `${i === 0 ? 'M' : 'L'}${pt(x(p.x), y(p.hi))}`).join('');
+      const lower = [...run]
+        .reverse()
+        .map((p) => `L${pt(x(p.x), y(p.lo))}`)
+        .join('');
+      return `${upper}${lower}Z`;
+    })
     .join('');
-  return `${upper}${lower}Z`;
 }
 
 function markerShape(m, px, py) {
@@ -92,24 +98,33 @@ export function LineChart({
         .filter((p) => p.x !== null)
         .sort((a, b) => a.x - b.x);
       const valid = pts.filter((p) => p.y !== null);
-      return { ...s, pts, runs: segments(pts), valid, xs: valid.map((p) => p.x) };
+      return {
+        ...s,
+        pts,
+        runs: segments(pts, (p) => p.y !== null),
+        valid,
+        xs: valid.map((p) => p.x),
+      };
     })
     .filter((s) => s.valid.length > 0);
   const areas = bands
     .map((b) => {
       const pts = (b.points || [])
-        .map((p) => ({ x: toX(p.x), lo: p.lo, hi: p.hi }))
-        .filter((p) => p.x !== null && positive(p.lo) && positive(p.hi))
+        .map((p) => ({ x: toX(p.x), lo: p.lo, hi: p.hi, ok: positive(p.lo) && positive(p.hi) }))
+        .filter((p) => p.x !== null)
         .sort((a, b2) => a.x - b2.x);
-      return { ...b, pts, xs: pts.map((p) => p.x) };
+      const valid = pts.filter((p) => p.ok);
+      return { ...b, runs: segments(pts, (p) => p.ok), valid, xs: valid.map((p) => p.x) };
     })
-    .filter((b) => b.pts.length > 1);
+    .filter((b) => b.runs.some((run) => run.length > 1));
 
   const xExt = extent([...lines.flatMap((s) => s.xs), ...areas.flatMap((b) => b.xs)]);
   const yExt = extent([
     ...lines.flatMap((s) => s.valid.map((p) => p.y)),
-    ...areas.flatMap((b) => b.pts.flatMap((p) => [p.lo, p.hi])),
+    ...areas.flatMap((b) => b.valid.flatMap((p) => [p.lo, p.hi])),
     ...referenceLines.map((r) => r.y).filter(positive),
+    // Markers count too, otherwise one outside the padded domain is silently dropped.
+    ...markers.filter((m) => toX(m.x) !== null && positive(m.y)).map((m) => m.y),
   ]);
   const isEmpty =
     !xExt ||
@@ -161,6 +176,12 @@ export function LineChart({
   regions.forEach((r) => addLegend({ label: r.label, color: r.color, swatch: 'box' }));
 
   const primary = lines.find((s) => !s.hideInLegend) || lines[0] || areas[0];
+  const DASH = '—';
+  // The point of a series exactly at the snapped x, or undefined when it has none.
+  const pointAt = (s, snapped) => {
+    const p = s.valid[nearestIndex(s.xs, snapped)];
+    return p && p.x === snapped ? p : undefined;
+  };
   const getTooltip = (xValue) => {
     if (!primary) return null;
     const idx = nearestIndex(primary.xs, xValue);
@@ -169,14 +190,16 @@ export function LineChart({
     const rows = [
       ...lines
         .filter((s) => !s.hideInLegend)
-        .map((s) => ({
-          label: s.label || s.id,
-          value: formatY(s.valid[nearestIndex(s.xs, snapped)].y),
-          color: s.color,
-        })),
+        .map((s) => {
+          const p = pointAt(s, snapped);
+          return { label: s.label || s.id, value: p ? formatY(p.y) : DASH, color: s.color };
+        }),
       ...areas.map((b) => {
-        const p = b.pts[nearestIndex(b.xs, snapped)];
-        return { label: b.label || b.id, value: `${formatY(p.lo)} – ${formatY(p.hi)}` };
+        const p = pointAt(b, snapped);
+        return {
+          label: b.label || b.id,
+          value: p ? `${formatY(p.lo)} – ${formatY(p.hi)}` : DASH,
+        };
       }),
     ];
     return { x: snapped, title: fmtX(snapped), rows };
@@ -197,7 +220,8 @@ export function LineChart({
       .filter(Boolean);
     // Labels sit below 'up' markers and above the rest, then get staggered apart.
     const laidOut = layoutLabels(
-      placed.map((p) => ({ ...p, x: p.px, y: p.m.shape === 'up' ? p.py + 20 : p.py - 12 }))
+      placed.map((p) => ({ ...p, x: p.px, y: p.m.shape === 'up' ? p.py + 20 : p.py - 12 })),
+      { maxY: plot.bottom - 2 }
     );
 
     return (
@@ -221,7 +245,7 @@ export function LineChart({
           ) : null;
         })}
         {areas.map((b) => (
-          <path key={b.id} d={bandPath(b.pts, x, y)} fill={b.color} stroke="none" />
+          <path key={b.id} d={bandPath(b.runs, x, y)} fill={b.color} stroke="none" />
         ))}
         {referenceLines.map((r, i) => {
           if (!positive(r.y) || !inY(y(r.y))) return null;
@@ -297,7 +321,7 @@ export function LineChart({
               {m.label && (
                 <text
                   x={px}
-                  y={Math.min(plot.bottom - 2, Math.max(plot.top + 8, labelY))}
+                  y={Math.max(plot.top + 8, labelY)}
                   fill={m.color}
                   fontSize="9"
                   textAnchor={anchor}

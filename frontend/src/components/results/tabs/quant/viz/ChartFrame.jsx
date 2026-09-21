@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { linearScale, logScale } from './chartScale';
 import { CHART_COLORS } from './chartTheme';
@@ -11,8 +11,8 @@ function Legend({ items }) {
   if (items.length === 0) return null;
   return (
     <ul className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-bloomberg-white/80">
-      {items.map((item) => (
-        <li key={item.label} className="flex items-center gap-1.5 whitespace-nowrap">
+      {items.map((item, i) => (
+        <li key={`${i}-${item.label}`} className="flex items-center gap-1.5 whitespace-nowrap">
           <svg width="14" height="8" aria-hidden="true">
             {item.swatch === 'box' ? (
               <rect width="14" height="8" fill={item.color} />
@@ -58,6 +58,43 @@ export function ChartFrame({
 }) {
   const [containerRef, width] = useElementWidth();
   const [hover, setHover] = useState(null);
+  const [tipWidth, setTipWidth] = useState(0);
+  const tipRef = useRef(null);
+
+  // A non-finite domain would put NaN in every SVG attribute, so treat it as empty.
+  const ok = !isEmpty && isDomain(xDomain) && isDomain(yDomain);
+  const [xd0, xd1] = ok ? xDomain : [0, 1];
+  const [yd0, yd1] = ok ? yDomain : [0, 1];
+
+  // Rebuilt only when geometry changes, not on every hover mousemove.
+  const geo = useMemo(() => {
+    if (!ok) return null;
+    const padding = { top: 12, right: 16, bottom: xLabel ? 40 : 26, left: yLabel ? 78 : 64 };
+    const plot = {
+      left: padding.left,
+      right: Math.max(padding.left + 1, width - padding.right),
+      top: padding.top,
+      bottom: height - padding.bottom,
+    };
+    plot.width = plot.right - plot.left;
+    plot.height = plot.bottom - plot.top;
+    const x = linearScale([xd0, xd1], [plot.left, plot.right]);
+    // Log is undefined for non-positive values; fall back to linear rather than emit NaN.
+    const y =
+      yScaleType === 'log' && yd0 > 0 && yd1 > 0
+        ? logScale([yd0, yd1], [plot.bottom, plot.top])
+        : linearScale([yd0, yd1], [plot.bottom, plot.top]);
+    return { plot, x, y, content: renderPlot({ x, y, plot }) };
+  }, [ok, width, height, xd0, xd1, yd0, yd1, yScaleType, xLabel, yLabel, renderPlot]);
+
+  // No stale tooltip after a resize, data/domain change or empty-state switch.
+  useLayoutEffect(() => {
+    setHover(null);
+  }, [ok, width, xd0, xd1, yd0, yd1]);
+  // Measured after render so the tooltip can be clamped inside the container.
+  useLayoutEffect(() => {
+    setTipWidth(tipRef.current?.offsetWidth ?? 0);
+  }, [hover]);
 
   const header = (title || subtitle || legend.length > 0) && (
     <div className="mb-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
@@ -71,10 +108,9 @@ export function ChartFrame({
     </div>
   );
 
-  // A non-finite domain would put NaN in every SVG attribute, so treat it as empty.
-  if (isEmpty || !isDomain(xDomain) || !isDomain(yDomain)) {
+  if (!geo) {
     return (
-      <figure className="m-0 border border-bloomberg-border bg-black p-3 font-mono">
+      <figure className="m-0 min-w-0 border border-bloomberg-border bg-black p-3 font-mono">
         {header}
         <div ref={containerRef} className="py-6 text-center text-[11px] text-bloomberg-white/80">
           {emptyMessage}
@@ -83,21 +119,7 @@ export function ChartFrame({
     );
   }
 
-  const padding = { top: 12, right: 16, bottom: xLabel ? 40 : 26, left: yLabel ? 78 : 64 };
-  const plot = {
-    left: padding.left,
-    right: Math.max(padding.left + 1, width - padding.right),
-    top: padding.top,
-    bottom: height - padding.bottom,
-  };
-  plot.width = plot.right - plot.left;
-  plot.height = plot.bottom - plot.top;
-  const x = linearScale(xDomain, [plot.left, plot.right]);
-  // Log is undefined for non-positive values; fall back to linear rather than emit NaN.
-  const y =
-    yScaleType === 'log' && yDomain[0] > 0 && yDomain[1] > 0
-      ? logScale(yDomain, [plot.bottom, plot.top])
-      : linearScale(yDomain, [plot.bottom, plot.top]);
+  const { plot, x, y, content } = geo;
   const xTickList = xTicks.filter((tick) => Number.isFinite(tick.value));
   const yTickList = yTicks.filter((tick) => Number.isFinite(tick.value));
 
@@ -108,7 +130,7 @@ export function ChartFrame({
     const scale = rect.width > 0 ? width / rect.width : 1;
     const px = (event.clientX - rect.left) * scale;
     const py = (event.clientY - rect.top) * scale;
-    if (px < plot.left || px > plot.right) {
+    if (px < plot.left || px > plot.right || py < plot.top || py > plot.bottom) {
       setHover(null);
       return;
     }
@@ -116,8 +138,15 @@ export function ChartFrame({
     setHover(tip ? { ...tip, px: Number.isFinite(tip.x) ? x(tip.x) : px } : null);
   };
 
+  // Flip to the left of the pointer past 60% width, then clamp inside the container.
+  const edgeMax = Math.max(8, width - tipWidth - 8);
+  const tipStyle =
+    hover && hover.px > width * 0.6
+      ? { right: Math.min(Math.max(8, width - hover.px + 8), edgeMax) }
+      : hover && { left: Math.min(Math.max(8, hover.px + 8), edgeMax) };
+
   return (
-    <figure className="m-0 border border-bloomberg-border bg-black p-3 font-mono">
+    <figure className="m-0 min-w-0 border border-bloomberg-border bg-black p-3 font-mono">
       {header}
       <div ref={containerRef} className="relative w-full">
         <svg
@@ -196,7 +225,7 @@ export function ChartFrame({
               {yLabel}
             </text>
           )}
-          {renderPlot({ x, y, plot })}
+          {content}
           {hover && (
             <line
               x1={hover.px}
@@ -211,15 +240,14 @@ export function ChartFrame({
         </svg>
         {hover && (
           <div
+            ref={tipRef}
             data-testid="chart-tooltip"
             className="pointer-events-none absolute top-2 z-10 min-w-[128px] border border-bloomberg-border bg-black/95 px-2 py-1 text-[10px] leading-4"
-            style={
-              hover.px > width * 0.6 ? { right: width - hover.px + 8 } : { left: hover.px + 8 }
-            }
+            style={{ ...tipStyle, maxWidth: Math.max(0, width - 16) }}
           >
             <div className="text-bloomberg-orange">{hover.title}</div>
-            {hover.rows.map((row) => (
-              <div key={row.label} className="flex justify-between gap-3 tabular-nums">
+            {(hover.rows ?? []).map((row, i) => (
+              <div key={`${i}-${row.label}`} className="flex justify-between gap-3 tabular-nums">
                 <span style={{ color: row.color || CHART_COLORS.text }}>{row.label}</span>
                 <span className="text-bloomberg-white">{row.value}</span>
               </div>

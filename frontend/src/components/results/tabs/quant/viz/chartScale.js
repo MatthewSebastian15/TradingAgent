@@ -9,7 +9,9 @@ export function linearScale([d0, d1], [r0, r1]) {
   return scale;
 }
 
+// Log is undefined for a non-positive bound; fall back to a linear scale instead of NaN.
 export function logScale([d0, d1], [r0, r1]) {
+  if (!(d0 > 0) || !(d1 > 0)) return linearScale([d0, d1], [r0, r1]);
   const inner = linearScale([Math.log(d0), Math.log(d1)], [r0, r1]);
   const scale = (v) => inner(Math.log(Math.max(v, Number.MIN_VALUE)));
   scale.invert = (px) => Math.exp(inner.invert(px));
@@ -72,11 +74,16 @@ export function toTime(iso) {
   return Number.isFinite(t) ? t : null;
 }
 
+// '' for anything that is not a valid time (null/NaN would otherwise become 1970 or throw).
 export function timeToIso(t) {
-  return new Date(t).toISOString().slice(0, 10);
+  if (!Number.isFinite(t)) return '';
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
 }
 
-export function dateTicks([t0, t1], count = 6) {
+export function dateTicks(domain, count = 6) {
+  if (!Array.isArray(domain) || !domain.every(Number.isFinite)) return [];
+  const [t0, t1] = domain;
   const long = (t1 - t0) / DAY_MS > 300;
   const label = (t) =>
     long
@@ -104,14 +111,26 @@ export function nearestIndex(sortedXs, x) {
 }
 
 // Greedy vertical de-collision for point labels in pixel space.
-export function layoutLabels(items, { minDx = 70, minDy = 12 } = {}) {
+// With maxY, a stack that would overflow the bottom is shifted upward instead
+// (input order and the minDy gap are kept; nothing is clamped onto one line).
+export function layoutLabels(items, { minDx = 70, minDy = 12, maxY = Infinity } = {}) {
+  const collides = (placed, x, y) =>
+    placed.some((p) => Math.abs(p.x - x) < minDx && Math.abs(p.y - y) < minDy);
   const placed = [];
-  return items.map((item) => {
+  const out = items.map((item) => {
     let labelY = item.y;
-    while (placed.some((p) => Math.abs(p.x - item.x) < minDx && Math.abs(p.y - labelY) < minDy)) {
-      labelY += minDy;
-    }
+    while (collides(placed, item.x, labelY)) labelY += minDy;
     placed.push({ x: item.x, y: labelY });
     return { ...item, labelY };
   });
+  if (out.every((o) => o.labelY <= maxY)) return out;
+  // Overflow: re-place from the last item up so earlier labels end up above later ones.
+  const fixed = [];
+  for (let i = out.length - 1; i >= 0; i -= 1) {
+    let labelY = Math.min(out[i].labelY, maxY);
+    while (collides(fixed, out[i].x, labelY)) labelY -= minDy;
+    fixed.push({ x: out[i].x, y: labelY });
+    out[i] = { ...out[i], labelY };
+  }
+  return out;
 }

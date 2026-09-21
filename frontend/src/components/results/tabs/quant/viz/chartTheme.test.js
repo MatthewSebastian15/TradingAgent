@@ -9,6 +9,14 @@ describe('chartTheme', () => {
     expect(divergingColor(Number.NaN)).toBe('transparent');
   });
 
+  it('renders zero as a neutral tone and keeps the ends unchanged', () => {
+    expect(divergingColor(0)).toBe('rgba(163,163,163,0.08)');
+    expect(divergingColor(-0)).toBe('rgba(163,163,163,0.08)');
+    expect(divergingColor(1)).toBe('rgba(249,115,22,0.80)');
+    expect(divergingColor(-1)).toBe('rgba(59,130,246,0.80)');
+    expect(textOnDiverging(0)).toBe('#e5e5e5');
+  });
+
   it('switches to dark text on strong cells', () => {
     expect(textOnDiverging(0.9)).toBe('#0a0a0a');
     expect(textOnDiverging(0.2)).toBe('#e5e5e5');

@@ -107,4 +107,41 @@ describe('chartScale', () => {
     expect(out[1].labelY).toBe(64);
     expect(out[2].labelY).toBe(50);
   });
+
+  it('layoutLabels with maxY shifts an overflowing stack upward keeping order and gap', () => {
+    const items = Array.from({ length: 5 }, () => ({ x: 100, y: 190 }));
+    const out = layoutLabels(items, { maxY: 200 });
+    const ys = out.map((o) => o.labelY);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(200);
+    for (let i = 1; i < ys.length; i += 1) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(12);
+    // no overflow -> identical to the unbounded layout
+    const near = [
+      { x: 100, y: 50 },
+      { x: 110, y: 52 },
+    ];
+    expect(layoutLabels(near, { maxY: 500 })).toEqual(layoutLabels(near));
+  });
+
+  it('logScale falls back to linear when a domain bound is not positive', () => {
+    const s = logScale([0, 100], [0, 200]);
+    expect(s(50)).toBe(100);
+    expect(s.invert(100)).toBe(50);
+    expect(logScale([-5, 5], [0, 10])(0)).toBe(5);
+  });
+
+  it('date helpers tolerate invalid input', () => {
+    expect(dateTicks([Number.NaN, 5])).toEqual([]);
+    expect(dateTicks(null)).toEqual([]);
+    expect(dateTicks([1, Infinity])).toEqual([]);
+    expect(timeToIso(null)).toBe('');
+    expect(timeToIso(Number.NaN)).toBe('');
+    expect(timeToIso(undefined)).toBe('');
+    expect(timeToIso(1e20)).toBe('');
+  });
+
+  it('dateTicks switches to month labels just above 300 days', () => {
+    const t0 = toTime('2026-01-01');
+    expect(dateTicks([t0, t0 + 300 * 86_400_000], 2)[0].label).toBe('01-01');
+    expect(dateTicks([t0, t0 + 301 * 86_400_000], 2)[0].label).toBe('Jan 26');
+  });
 });
