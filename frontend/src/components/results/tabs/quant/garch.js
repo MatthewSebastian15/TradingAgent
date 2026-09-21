@@ -2,7 +2,7 @@ import { mean, TRADING_DAYS } from './stats';
 
 // GARCH(1,1) with variance targeting, fitted by Gaussian log-likelihood on a grid.
 // Non-finite returns are dropped before fitting (observations counts what was used).
-// ponytail: 580-point grid instead of an optimizer; ~0.3M ops for 500 returns. Swap for
+// ponytail: ~390-point grid (alpha+beta < 0.999 trims the 580 combos) instead of an optimizer; ~0.2M ops for 500 returns. Swap for
 // Nelder-Mead only if parameter precision beyond 0.01 ever matters.
 export function fitGarch(returns) {
   if (!Array.isArray(returns)) return null;
@@ -60,5 +60,9 @@ export function garchForecast(fit, days, ppy = TRADING_DAYS) {
 
 export function garchTermStructure(fit, horizons = [5, 21, 63, 126, 252], ppy = TRADING_DAYS) {
   if (!fit) return [];
-  return horizons.map((days) => ({ days, annualVol: garchForecast(fit, days, ppy).annualVol }));
+  // Horizons below one day have no forecast; skip them instead of throwing.
+  return horizons
+    .map((days) => ({ days, forecast: garchForecast(fit, days, ppy) }))
+    .filter((row) => row.forecast)
+    .map(({ days, forecast }) => ({ days, annualVol: forecast.annualVol }));
 }

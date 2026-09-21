@@ -86,6 +86,11 @@ describe('fitGarch', () => {
 });
 
 describe('garchForecast', () => {
+  it('term structure skips horizons below one day instead of throwing', () => {
+    const fit = { persistence: 0.95, longRunVariance: 1e-4, nextVariance: 4e-4 };
+    expect(garchTermStructure(fit, [0, 5, 0.5]).map((r) => r.days)).toEqual([5]);
+  });
+
   it('is flat when the next variance equals the long-run variance', () => {
     const fit = { persistence: 0.9, longRunVariance: 1e-4, nextVariance: 1e-4 };
     const f = garchForecast(fit, 21);
