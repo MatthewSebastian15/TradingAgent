@@ -66,10 +66,20 @@ export function ChartFrame({
   const [xd0, xd1] = ok ? xDomain : [0, 1];
   const [yd0, yd1] = ok ? yDomain : [0, 1];
 
+  // Widest y tick label in characters, so the left margin can grow for labels like 'USD 600.00'.
+  const maxYTickChars = yTicks.reduce((m, t) => Math.max(m, String(t?.label ?? '').length), 0);
+
   // Rebuilt only when geometry changes, not on every hover mousemove.
   const geo = useMemo(() => {
     if (!ok) return null;
-    const padding = { top: 12, right: 16, bottom: xLabel ? 40 : 26, left: yLabel ? 78 : 64 };
+    // 10px mono is ~6.2px per char; tick text ends 8px left of the plot, plus an edge gap.
+    const tickRoom = Math.ceil(maxYTickChars * 6.2) + (yLabel ? 32 : 14);
+    const padding = {
+      top: 12,
+      right: 16,
+      bottom: xLabel ? 40 : 26,
+      left: Math.max(yLabel ? 78 : 64, tickRoom),
+    };
     const plot = {
       left: padding.left,
       right: Math.max(padding.left + 1, width - padding.right),
@@ -85,7 +95,20 @@ export function ChartFrame({
         ? logScale([yd0, yd1], [plot.bottom, plot.top])
         : linearScale([yd0, yd1], [plot.bottom, plot.top]);
     return { plot, x, y, content: renderPlot({ x, y, plot }) };
-  }, [ok, width, height, xd0, xd1, yd0, yd1, yScaleType, xLabel, yLabel, renderPlot]);
+  }, [
+    ok,
+    width,
+    height,
+    xd0,
+    xd1,
+    yd0,
+    yd1,
+    yScaleType,
+    xLabel,
+    yLabel,
+    maxYTickChars,
+    renderPlot,
+  ]);
 
   // No stale tooltip after a resize, data/domain change or empty-state switch.
   useLayoutEffect(() => {

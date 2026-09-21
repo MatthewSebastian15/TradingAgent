@@ -27,6 +27,21 @@ describe('ChartFrame', () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
+  it('widens the left margin so long y tick labels are not clipped', () => {
+    const label = 'USD 600.00';
+    render(
+      <ChartFrame
+        {...baseProps}
+        yTicks={[
+          { value: 0, label },
+          { value: 100, label: 'USD 200.00' },
+        ]}
+      />
+    );
+    const text = screen.getByText(label);
+    // Tick text is end-anchored at x, so x must leave room for the whole label (~6.2px per char).
+    expect(Number(text.getAttribute('x'))).toBeGreaterThanOrEqual(label.length * 6.2);
+  });
 
   it('renders ticks, legend and marks at real pixel width', () => {
     render(<ChartFrame {...baseProps} />);
