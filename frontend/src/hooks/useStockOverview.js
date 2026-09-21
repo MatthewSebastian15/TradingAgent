@@ -4,6 +4,7 @@ import { getStockOverview } from '../api/market';
 
 export function useStockOverview(ticker) {
   const [data, setData] = useState(null);
+  const [loadedFor, setLoadedFor] = useState(null); // ticker `data` belongs to
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -22,6 +23,7 @@ export function useStockOverview(ticker) {
     getStockOverview(ticker, { signal: controller.signal })
       .then((result) => {
         setData(result);
+        setLoadedFor(ticker);
         setLoading(false);
       })
       .catch((err) => {
@@ -33,5 +35,6 @@ export function useStockOverview(ticker) {
     return () => controller.abort();
   }, [ticker]);
 
-  return { data, loading, error };
+  // Between a ticker change and the reset effect, `data` is still the previous ticker's.
+  return { data: loadedFor === ticker ? data : null, loading, error };
 }

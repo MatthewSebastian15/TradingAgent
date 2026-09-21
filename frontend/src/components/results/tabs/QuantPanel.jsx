@@ -2,6 +2,7 @@ import PropTypes from 'prop-types';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getApiStatus, getMarketOhlcv } from '../../../api/market';
+import { useStockOverview } from '../../../hooks/useStockOverview';
 import NoticeBox from '../NoticeBox';
 import { SectionBlock, SkeletonGrid } from './quant/charts';
 import {
@@ -141,7 +142,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     [history]
   );
   const ppy = useMemo(() => periodsPerYearFromDates(historyDates), [historyDates]);
-  const ccy = currency || '';
+  const { data: overview, error: overviewError } = useStockOverview(symbol);
+  const ccy = currency || overview?.currency || '';
   const benchmarkInfo = useMemo(() => benchmarkForSymbol(symbol), [symbol]);
 
   // Pull the risk-free rate config once on mount. Fails soft → status stays null → rf 0.
@@ -584,6 +586,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             defaultRate={rf}
             ccy={ccy}
             symbol={baseSymbol}
+            overview={overview}
+            overviewError={overviewError}
           />
         </SectionBlock>
       )}

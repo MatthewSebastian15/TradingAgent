@@ -1,7 +1,6 @@
 import PropTypes from 'prop-types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { getStockOverview } from '../../../../../api/market';
 import NoticeBox from '../../../NoticeBox';
 import {
   dcf,
@@ -14,7 +13,7 @@ import { Histogram, MetricCard, NumberField } from '../charts';
 import { finite, DASH, fmtNum2, fmtSignedPct, signedTone } from '../format';
 import { fmtMoney as formatMoney, fmtMoneyCompact } from '../numberFormat';
 
-export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
+export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, overviewError }) {
   const [fcf, setFcf] = useState(''); // base free cash flow (millions); empty until known
   const [growth, setGrowth] = useState(8); // % near-term FCF growth
   const [years, setYears] = useState(5);
@@ -22,8 +21,6 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
   const [terminalGrowth, setTerminalGrowth] = useState(2.5);
   const [shares, setShares] = useState(''); // millions; empty until known
   const [netDebt, setNetDebt] = useState(0); // millions
-  const [overview, setOverview] = useState(null); // null=idle/loading, {} = fundamentals
-  const [ovError, setOvError] = useState(false);
   const [showMC, setShowMC] = useState(false); // DCF Monte Carlo toggle
   const editedRef = useRef(false); // user typed → never overwrite with auto-fill
 
@@ -38,27 +35,11 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
     setter(value);
   };
 
-  // Pull fundamentals once when the section mounts. Powers the comparables table
-  // and the DCF auto-fill. Fails soft — manual inputs still work.
+  // Auto-fill the DCF inputs when fundamentals arrive, unless the user already typed.
   useEffect(() => {
-    if (!symbol) return undefined;
-    const controller = new AbortController();
-    let alive = true;
-    getStockOverview(symbol, { signal: controller.signal })
-      .then((d) => {
-        if (!alive) return;
-        const data = d && typeof d === 'object' ? d : {};
-        setOverview(data);
-        if (!editedRef.current) applyInputs(overviewToDcfInputs(data));
-      })
-      .catch(() => {
-        if (alive) setOvError(true);
-      });
-    return () => {
-      alive = false;
-      controller.abort();
-    };
-  }, [symbol]);
+    if (!overview || editedRef.current) return;
+    applyInputs(overviewToDcfInputs(overview));
+  }, [overview]);
 
   const autoFill = () => {
     if (overview) applyInputs(overviewToDcfInputs(overview));
@@ -139,7 +120,7 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
           ⤓ Auto-fill from fundamentals
         </button>
         <span className="text-[11px] text-bloomberg-subtle">
-          {ovError
+          {overviewError
             ? 'Fundamentals unavailable — enter inputs manually.'
             : !overview
               ? 'Loading fundamentals…'
@@ -331,6 +312,8 @@ ValuationSection.propTypes = {
   defaultRate: PropTypes.number.isRequired,
   ccy: PropTypes.string,
   symbol: PropTypes.string,
+  overview: PropTypes.object,
+  overviewError: PropTypes.string,
 };
 
 // #4 stress test + #6 regime-shift detection. Both are derived from figures the tab
