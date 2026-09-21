@@ -44,4 +44,12 @@ describe('ScenarioSection', () => {
     expect(container.textContent).toContain('β is unavailable, so rows use β = 1');
     expect(container.textContent).not.toContain('β is measured against');
   });
+
+  it('defaults ppy to 252 when omitted', () => {
+    const { container } = render(
+      <ScenarioSection {...base} ppy={undefined} beta={1} benchIsSp500 />
+    );
+    const { container: withPpy } = render(<ScenarioSection {...base} beta={1} benchIsSp500 />);
+    expect(container.textContent).toBe(withPpy.textContent);
+  });
 });

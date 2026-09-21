@@ -18,6 +18,14 @@ describe('marketKeyForSymbol', () => {
     expect(marketKeyForSymbol('BTC-USD')).toBe('US');
     expect(benchmarkForSymbol('0700.HK').symbol).toBe('^HSI');
   });
+
+  it.each(['X.CONSTRUCTOR', 'X.TOSTRING', 'X.__PROTO__', 'X.HASOWNPROPERTY'])(
+    'does not treat inherited Object keys as a market (%s)',
+    (sym) => {
+      expect(marketKeyForSymbol(sym)).toBe('US');
+      expect(benchmarkForSymbol(sym).symbol).toBe('^GSPC');
+    }
+  );
 });
 
 describe('resolveRiskFreeRate', () => {

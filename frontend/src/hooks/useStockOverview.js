@@ -2,39 +2,34 @@ import { useEffect, useState } from 'react';
 
 import { getStockOverview } from '../api/market';
 
+const IDLE = { ticker: null, data: null, error: null };
+
 export function useStockOverview(ticker) {
-  const [data, setData] = useState(null);
-  const [loadedFor, setLoadedFor] = useState(null); // ticker `data` belongs to
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  // One settled result tagged with the ticker it belongs to; anything tagged for another
+  // ticker is masked below, so nothing leaks for the render between a ticker change and
+  // the reset effect.
+  const [state, setState] = useState(IDLE);
 
   useEffect(() => {
-    if (!ticker) {
-      setData(null);
-      setError(null);
-      return;
-    }
+    setState(IDLE);
+    if (!ticker) return undefined;
 
     const controller = new AbortController();
-    setLoading(true);
-    setData(null);
-    setError(null);
 
     getStockOverview(ticker, { signal: controller.signal })
-      .then((result) => {
-        setData(result);
-        setLoadedFor(ticker);
-        setLoading(false);
-      })
+      .then((result) => setState({ ticker, data: result, error: null }))
       .catch((err) => {
         if (err.name === 'AbortError') return;
-        setError(err.message || 'Failed to load stock overview.');
-        setLoading(false);
+        setState({ ticker, data: null, error: err.message || 'Failed to load stock overview.' });
       });
 
     return () => controller.abort();
   }, [ticker]);
 
-  // Between a ticker change and the reset effect, `data` is still the previous ticker's.
-  return { data: loadedFor === ticker ? data : null, loading, error };
+  const settled = Boolean(ticker) && state.ticker === ticker;
+  return {
+    data: settled ? state.data : null,
+    loading: Boolean(ticker) && !settled,
+    error: settled ? state.error : null,
+  };
 }

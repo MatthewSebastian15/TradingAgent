@@ -7,7 +7,16 @@ import { MetricCard } from '../charts';
 import { DASH, finite, fmtPercent, fmtSignedPct } from '../format';
 import { fmtMoney as formatMoney } from '../numberFormat';
 
-export function ScenarioSection({ spot, vol, ccy, regime, beta, benchLabel, benchIsSp500, ppy }) {
+export function ScenarioSection({
+  spot,
+  vol,
+  ccy,
+  regime,
+  beta,
+  benchLabel,
+  benchIsSp500,
+  ppy = 252,
+}) {
   const money = (v) => formatMoney(v, ccy);
   const stress = useMemo(
     () => stressScenarios(spot, finite(vol) ? vol : 0, beta, ppy),
@@ -114,5 +123,5 @@ ScenarioSection.propTypes = {
   beta: PropTypes.number,
   benchLabel: PropTypes.string.isRequired,
   benchIsSp500: PropTypes.bool.isRequired,
-  ppy: PropTypes.number.isRequired,
+  ppy: PropTypes.number,
 };

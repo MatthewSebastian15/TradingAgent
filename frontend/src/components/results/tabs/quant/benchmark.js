@@ -29,7 +29,7 @@ export function marketKeyForSymbol(symbol) {
   const s = String(symbol || '').toUpperCase();
   const dot = s.lastIndexOf('.');
   const suffix = dot === -1 ? '' : s.slice(dot + 1);
-  return MARKET_BENCHMARKS[suffix] ? suffix : 'US';
+  return Object.hasOwn(MARKET_BENCHMARKS, suffix) ? suffix : 'US';
 }
 
 export function benchmarkForSymbol(symbol) {

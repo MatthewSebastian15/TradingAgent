@@ -414,20 +414,24 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     );
   }
 
+  // Same finite-positive filter as assessSeries, so a bad first/last row can't null the change.
+  const validCloses = closes.filter((c) => Number.isFinite(c) && c > 0);
+  const changePct = validCloses.length > 1 ? (validCloses.at(-1) / validCloses[0] - 1) * 100 : null;
+
   return (
     <div className="space-y-4 p-4 font-mono">
       <HeadlineStrip
         symbol={baseSymbol}
         ccy={ccy}
         last={closes.at(-1)}
-        changePct={closes[0] > 0 ? (closes.at(-1) / closes[0] - 1) * 100 : null}
+        changePct={changePct}
         startDate={quality.startDate}
         endDate={quality.endDate}
         observations={quality.observations}
         benchLabel={benchmarkInfo.label}
         rfPct={rf * 100}
         rfSource={rfSource}
-        onRfChange={(rate) => setRfOverride({ symbol, rate })}
+        onRfChange={(rate) => setRfOverride(rate == null ? null : { symbol, rate })}
         issues={quality.issues}
         vol={metrics.vol}
         shp={metrics.shp}

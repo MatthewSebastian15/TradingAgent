@@ -61,3 +61,67 @@ describe('assessSeries', () => {
     expect(codes(assessSeries(pts))).toContain('calendar_gap');
   });
 });
+
+describe('assessSeries hardening', () => {
+  it('treats non-array input as empty without throwing', () => {
+    for (const bad of [{}, 'abc', 42, true]) {
+      const report = assessSeries(bad);
+      expect(report.observations).toBe(0);
+      expect(codes(report)).toEqual(['short_history']);
+    }
+    expect(assessSeries(null).observations).toBe(0);
+  });
+
+  it('handles empty input', () => {
+    const report = assessSeries([]);
+    expect(report).toMatchObject({ observations: 0, startDate: null, endDate: null });
+    expect(codes(report)).toEqual(['short_history']);
+  });
+
+  it('counts a second stale run separately', () => {
+    const closes = [...clean];
+    for (let i = 20; i < 26; i += 1) closes[i] = 120;
+    for (let i = 100; i < 106; i += 1) closes[i] = 150;
+    const issue = assessSeries(series(closes)).issues.find((i) => i.code === 'stale_prices');
+    expect(issue.count).toBe(2);
+  });
+
+  it('honours option overrides', () => {
+    const closes = clean.map((c, i) => (i >= 120 ? c * 1.5 : c));
+    const pts = series(closes);
+    expect(codes(assessSeries(pts))).toEqual(['extreme_move']);
+    expect(codes(assessSeries(pts, { extremeMove: 0.6 }))).toEqual([]);
+    expect(codes(assessSeries(pts, { minObservations: 500, extremeMove: 0.6 }))).toEqual([
+      'short_history',
+    ]);
+    const gapped = series(clean);
+    gapped.splice(50, 3);
+    expect(codes(assessSeries(gapped))).toEqual([]);
+    expect(codes(assessSeries(gapped, { gapDays: 3 }))).toContain('calendar_gap');
+    const flat = [...clean];
+    for (let i = 100; i < 103; i += 1) flat[i] = 150;
+    expect(codes(assessSeries(series(flat), { staleRun: 3 }))).toContain('stale_prices');
+  });
+
+  it('shows the extreme-move threshold without float noise', () => {
+    const closes = clean.map((c, i) => (i >= 120 ? c * 2 : c));
+    const issue = assessSeries(series(closes), { extremeMove: 0.4 }).issues.find(
+      (i) => i.code === 'extreme_move'
+    );
+    expect(issue.message).toContain('±40%');
+    const odd = assessSeries(series(closes), { extremeMove: 0.29 }).issues.find(
+      (i) => i.code === 'extreme_move'
+    );
+    expect(odd.message).toContain('±29%');
+    expect(odd.message).not.toMatch(/\d{4,}/);
+  });
+
+  it('falls back to close when adjusted_close is NaN or missing', () => {
+    const pts = series(clean).map((p, i) =>
+      i % 2 ? { ...p, adjusted_close: NaN } : { ...p, adjusted_close: null }
+    );
+    const report = assessSeries(pts);
+    expect(report.observations).toBe(200);
+    expect(report.issues).toEqual([]);
+  });
+});

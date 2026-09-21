@@ -5,10 +5,10 @@ import NoticeBox from '../../../NoticeBox';
 import { blackScholes, impliedVol } from '../../quantUtils';
 import { MetricCard, NumberField } from '../charts';
 import { finite, DASH, fmtNum2 } from '../format';
-import { fmtMoney as formatMoney } from '../numberFormat';
+import { currencyDecimals, fmtMoney as formatMoney } from '../numberFormat';
 
 export function OptionsSection({ spot, defaultVol, defaultRate, ccy }) {
-  const [strike, setStrike] = useState(Number(spot.toFixed(2)));
+  const [strike, setStrike] = useState(Number(spot.toFixed(currencyDecimals(ccy))));
   const [days, setDays] = useState(30);
   const [vol, setVol] = useState(finite(defaultVol) ? Number(defaultVol.toFixed(1)) : 25);
   const [rate, setRate] = useState(Number((defaultRate * 100).toFixed(2)));

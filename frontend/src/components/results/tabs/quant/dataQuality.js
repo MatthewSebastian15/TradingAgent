@@ -7,11 +7,13 @@ export function assessSeries(
   points,
   { minObservations = 126, staleRun = 5, extremeMove = 0.4, gapDays = 7 } = {}
 ) {
-  const rows = (points || []).filter(
-    (p) => p && p.date && Number.isFinite(p.adjusted_close ?? p.close)
+  // adjusted_close may be null/NaN on some rows; fall back to close instead of dropping them.
+  const price = (p) => (Number.isFinite(p.adjusted_close) ? p.adjusted_close : p.close);
+  const rows = (Array.isArray(points) ? points : []).filter(
+    (p) => p && p.date && Number.isFinite(price(p))
   );
   const dates = rows.map((p) => String(p.date).slice(0, 10));
-  const closes = rows.map((p) => p.adjusted_close ?? p.close);
+  const closes = rows.map(price);
   const issues = [];
 
   if (rows.length < minObservations) {
@@ -60,7 +62,7 @@ export function assessSeries(
       code: 'extreme_move',
       count: extreme.length,
       dates: extreme,
-      message: `${extreme.length} daily move(s) beyond ±${extremeMove * 100}% (possible unadjusted split).`,
+      message: `${extreme.length} daily move(s) beyond ±${Number((extremeMove * 100).toFixed(2))}% (possible unadjusted split).`,
     });
   }
   if (gaps.length > 0) {

@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { useState } from 'react';
 
 import {
   fmtLoss,
@@ -25,11 +26,15 @@ function valueClass(tone) {
   return 'text-white';
 }
 
-function Item({ label, value, tone }) {
+const fmtRfDraft = (pct) => (Number.isFinite(pct) ? String(Number(pct.toFixed(2))) : '');
+
+function Item({ label, value, tone, title }) {
   return (
     <div className="flex min-w-0 flex-col">
       <span className="text-[10px] tracking-wider text-bloomberg-white/80 uppercase">{label}</span>
-      <span className={`truncate text-sm tabular-nums ${valueClass(tone)}`}>{value}</span>
+      <span className={`truncate text-sm tabular-nums ${valueClass(tone)}`} title={title}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -38,6 +43,7 @@ Item.propTypes = {
   label: PropTypes.string.isRequired,
   value: PropTypes.string.isRequired,
   tone: PropTypes.oneOf(['good', 'bad', 'neutral']),
+  title: PropTypes.string,
 };
 
 export function HeadlineStrip({
@@ -60,11 +66,26 @@ export function HeadlineStrip({
   regime,
   hurstVal,
 }) {
+  // The field keeps its own draft so it can be emptied. An empty/non-numeric draft means
+  // "back to the market/global default" (onRfChange(null)); out-of-range values are ignored.
+  const [draft, setDraft] = useState(() => fmtRfDraft(rfPct));
+  const [prev, setPrev] = useState({ symbol, rfPct });
+  if (prev.symbol !== symbol || !Object.is(prev.rfPct, rfPct)) {
+    setPrev({ symbol, rfPct });
+    // Resync on symbol change, or when the parent rate moved away from a non-empty draft
+    // (an empty draft is the user's "use default" state and shows the default as placeholder).
+    if (prev.symbol !== symbol || (draft !== '' && Number(draft) !== Number(fmtRfDraft(rfPct)))) {
+      setDraft(fmtRfDraft(rfPct));
+    }
+  }
   const handleRf = (event) => {
     const raw = event.target.value;
+    setDraft(raw);
     const value = Number(raw);
-    if (raw !== '' && Number.isFinite(value) && value >= 0 && value <= 100) onRfChange(value / 100);
+    if (raw.trim() === '' || !Number.isFinite(value)) onRfChange(null);
+    else if (value >= 0 && value <= 100) onRfChange(value / 100);
   };
+  const windowText = startDate && endDate ? `${startDate} → ${endDate} · ${observations} obs` : '—';
   return (
     <section
       aria-label="Quant summary"
@@ -74,11 +95,8 @@ export function HeadlineStrip({
         <Item label="Ticker" value={symbol || '—'} />
         <Item label="Last" value={fmtMoney(last, ccy)} />
         <Item label="Period Δ" value={fmtSignedPct(changePct)} tone={signedTone(changePct)} />
-        <Item
-          label="Window"
-          value={startDate && endDate ? `${startDate} → ${endDate} · ${observations} obs` : '—'}
-        />
-        <Item label="Benchmark" value={benchLabel} />
+        <Item label="Window" value={windowText} title={windowText} />
+        <Item label="Benchmark" value={benchLabel} title={benchLabel} />
         <div className="flex flex-col">
           <label
             htmlFor="quant-rf-input"
@@ -94,11 +112,23 @@ export function HeadlineStrip({
               min="0"
               max="100"
               aria-label="Risk-free rate, annual percent"
-              value={Number(rfPct.toFixed(2))}
+              value={draft}
+              placeholder={fmtRfDraft(rfPct)}
               onChange={handleRf}
+              onBlur={() => draft !== '' && setDraft(fmtRfDraft(rfPct))}
               className="w-20 rounded-none border border-bloomberg-border bg-black px-1 py-0.5 text-sm text-white tabular-nums"
             />
             <span className="text-[10px] text-bloomberg-white/80">{RF_SOURCE_LABEL[rfSource]}</span>
+            {rfSource === 'manual' && (
+              <button
+                type="button"
+                aria-label="Reset risk-free rate to default"
+                onClick={() => onRfChange(null)}
+                className="text-[10px] tracking-wider text-bloomberg-orange uppercase hover:text-white"
+              >
+                reset
+              </button>
+            )}
           </span>
         </div>
       </div>

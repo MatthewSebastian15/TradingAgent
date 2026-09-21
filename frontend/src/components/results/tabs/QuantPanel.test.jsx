@@ -135,4 +135,58 @@ describe('QuantPanel', () => {
 
     expect(screen.getAllByText(/excess over 5\.0%/).length).toBeGreaterThan(0);
   });
+
+  it('falls back to the global risk-free rate when the market has none', async () => {
+    const { getApiStatus } = await import('../../../api/market');
+    getApiStatus.mockResolvedValueOnce({
+      quant_risk_free_rate: 0.03,
+      quant_risk_free_rates: { JK: 0.06 },
+    });
+    await renderPanel({ points: buildPoints(40), sections: ['risk'] });
+
+    expect(screen.getAllByText(/excess over 3\.0%/).length).toBeGreaterThan(0);
+    expect(screen.getByText('global default')).toBeTruthy();
+  });
+
+  it('lets a market rate of 0 beat the global default', async () => {
+    const { getApiStatus } = await import('../../../api/market');
+    getApiStatus.mockResolvedValueOnce({
+      quant_risk_free_rate: 0.03,
+      quant_risk_free_rates: { US: 0 },
+    });
+    await renderPanel({ points: buildPoints(40), sections: ['risk'] });
+
+    expect(screen.getAllByText(/excess over 0\.0%/).length).toBeGreaterThan(0);
+    expect(screen.getByText('market default')).toBeTruthy();
+  });
+
+  it('clearing the manual risk-free rate returns to the market default', async () => {
+    const { getApiStatus } = await import('../../../api/market');
+    getApiStatus.mockResolvedValueOnce({ quant_risk_free_rates: { US: 0.05 } });
+    await renderPanel({ points: buildPoints(40), sections: ['risk'] });
+    const input = screen.getByLabelText('Risk-free rate, annual percent');
+
+    fireEvent.change(input, { target: { value: '2' } });
+    expect(screen.getByText('manual')).toBeTruthy();
+    expect(screen.getAllByText(/excess over 2\.0%/).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: /reset risk-free/i }));
+    expect(screen.getByText('market default')).toBeTruthy();
+    expect(input.value).toBe('5');
+
+    fireEvent.change(input, { target: { value: '2' } });
+    fireEvent.change(input, { target: { value: '' } });
+    expect(screen.getByText('market default')).toBeTruthy();
+    expect(input.value).toBe('');
+  });
+
+  it('computes the period change from the first and last finite positive closes', async () => {
+    const good = buildPoints(40);
+    const bad = [{ date: '2025-12-31', close: 0 }, ...good];
+    await renderPanel({ points: bad, sections: ['volatility'] });
+
+    const expected = (good.at(-1).close / good[0].close - 1) * 100;
+    const text = screen.getByText('Period Δ').nextSibling.textContent;
+    expect(text).toBe(`+${expected.toFixed(1)}%`);
+  });
 });
