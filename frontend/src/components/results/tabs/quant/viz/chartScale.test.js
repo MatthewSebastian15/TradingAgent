@@ -48,6 +48,37 @@ describe('chartScale', () => {
     expect(logTicks(1, 100)).toEqual([1, 2, 5, 10, 20, 50, 100]);
   });
 
+  it('logTicks falls back to denser ticks on narrow ranges', () => {
+    expect(logTicks(3, 4)).toEqual([3, 3.5, 4]);
+    expect(logTicks(1, 1.5).length).toBeGreaterThanOrEqual(3);
+    const price = logTicks(120, 180);
+    expect(price.length).toBeGreaterThanOrEqual(3);
+    expect(price.every((v) => v > 0)).toBe(true);
+    expect(logTicks(3, 9)).toEqual([3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it('logTicks returns [] for non-positive or inverted ranges', () => {
+    expect(logTicks(0, 10)).toEqual([]);
+    expect(logTicks(-5, 10)).toEqual([]);
+    expect(logTicks(10, 5)).toEqual([]);
+  });
+
+  it('niceTicks has no float accumulation noise', () => {
+    expect(niceTicks(0, 0.5, 6)).toEqual([0, 0.1, 0.2, 0.3, 0.4, 0.5]);
+    expect(niceTicks(0, 1, 11)).toEqual([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]);
+  });
+
+  it('paddedDomain guards null and scales the flat-series pad', () => {
+    expect(paddedDomain(null)).toBeNull();
+    expect(paddedDomain([0.01, 0.01])).toEqual([0.0098, 0.0102]);
+    expect(paddedDomain([0, 0])).toEqual([-1, 1]);
+  });
+
+  it('nearestIndex returns -1 for a non-finite x', () => {
+    expect(nearestIndex([0, 10], Number.NaN)).toBe(-1);
+    expect(nearestIndex([0, 10], Infinity)).toBe(-1);
+  });
+
   it('date helpers round-trip and label by span', () => {
     const t0 = toTime('2026-01-02');
     expect(timeToIso(t0)).toBe('2026-01-02');

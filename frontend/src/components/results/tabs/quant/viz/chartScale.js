@@ -27,29 +27,43 @@ export function extent(values) {
   return min === Infinity ? null : [min, max];
 }
 
-export function paddedDomain([min, max], { padRatio = 0.06, includeZero = false } = {}) {
+// Returns null when the domain is missing (e.g. extent() of an empty series).
+export function paddedDomain(domain, { padRatio = 0.06, includeZero = false } = {}) {
+  if (!domain) return null;
+  const [min, max] = domain;
   const lo = includeZero ? Math.min(min, 0) : min;
   const hi = includeZero ? Math.max(max, 0) : max;
   const span = hi - lo;
-  const pad = span > 0 ? span * padRatio : Math.max(Math.abs(hi) * 0.02, 1);
+  const pad = span > 0 ? span * padRatio : Math.abs(hi) * 0.02 || 1;
   return [lo - pad, hi + pad];
 }
 
 export function niceTicks(min, max, count = 5) {
   return buildYAxisTicks(min, max, count)
-    .slice()
+    .map((v) => Number(v.toPrecision(12)))
     .sort((a, b) => a - b);
 }
 
+// Ticks for a log axis. Returns [] when min <= 0 (log undefined) or max <= min.
+// Tries 1-2-5 per decade, then 1..9 per decade, then linear nice ticks (> 0)
+// so narrow ranges still get at least 3 ticks.
 export function logTicks(min, max) {
   if (!(min > 0) || !(max > min)) return [];
-  const ticks = [];
-  for (let e = Math.floor(Math.log10(min)); e <= Math.ceil(Math.log10(max)); e += 1) {
-    for (const m of [1, 2, 5]) {
-      const v = Number((m * 10 ** e).toPrecision(12));
-      if (v >= min && v <= max) ticks.push(v);
+  const lo = Math.floor(Math.log10(min));
+  const hi = Math.ceil(Math.log10(max));
+  const collect = (mults) => {
+    const ticks = [];
+    for (let e = lo; e <= hi; e += 1) {
+      for (const m of mults) {
+        const v = Number((m * 10 ** e).toPrecision(12));
+        if (v >= min && v <= max) ticks.push(v);
+      }
     }
-  }
+    return ticks;
+  };
+  let ticks = collect([1, 2, 5]);
+  if (ticks.length < 3) ticks = collect([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  if (ticks.length < 3) ticks = niceTicks(min, max, 5).filter((v) => v > 0);
   return ticks;
 }
 
@@ -78,7 +92,7 @@ export function dateTicks([t0, t1], count = 6) {
 }
 
 export function nearestIndex(sortedXs, x) {
-  if (sortedXs.length === 0) return -1;
+  if (sortedXs.length === 0 || !Number.isFinite(x)) return -1;
   let lo = 0;
   let hi = sortedXs.length - 1;
   while (hi - lo > 1) {
