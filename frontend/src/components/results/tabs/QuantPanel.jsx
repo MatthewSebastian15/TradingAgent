@@ -31,6 +31,7 @@ import {
   alignManyByDate,
   alpha,
   annualizedVol,
+  assessSeries,
   backtest,
   benchmarkForSymbol,
   beta,
@@ -92,7 +93,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const activeId = tabs.some((t) => t.id === active) ? active : tabs[0]?.id;
   const [seed, setSeed] = useState(42);
   const [status, setStatus] = useState(null);
-  const [rfOverride] = useState(null); // { symbol, rate } typed in the headline (setter lands with the input)
+  const [rfOverride, setRfOverride] = useState(null); // { symbol, rate } typed in the headline
   const [benchPoints, setBenchPoints] = useState(null); // null = loading, [] = unavailable
   const [mcHorizon, setMcHorizon] = useState(MC_DAYS);
   const [mcMethod, setMcMethod] = useState('gbm'); // 'gbm' | 'bootstrap'
@@ -136,6 +137,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   }, [symbol, range]);
 
   const history = longPoints && longPoints.length > points.length ? longPoints : points;
+  const quality = useMemo(() => assessSeries(history), [history]);
   const closes = useMemo(() => history.map((p) => p.adjusted_close ?? p.close), [history]);
   const historyDates = useMemo(
     () => history.map((p) => String(p.date || '').slice(0, 10)),
@@ -160,6 +162,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const rfInfo = useMemo(() => resolveRiskFreeRate(symbol, status), [symbol, status]);
   const manualRf = rfOverride && rfOverride.symbol === symbol ? rfOverride.rate : null;
   const rf = manualRf ?? rfInfo.rate;
+  const rfSource = manualRf != null ? 'manual' : rfInfo.source;
   const rfDaily = rf / ppy;
 
   // Fetch the market-matched benchmark series; refetch when the ticker's market
@@ -242,7 +245,13 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
   // Benchmark-relative metrics + rolling beta from the aligned benchmark series.
   const benchmark = useMemo(() => {
-    const none = { beta: null, alpha: null, available: false, rollBetaPoints: [] };
+    const none = {
+      beta: null,
+      alpha: null,
+      available: false,
+      observations: null,
+      rollBetaPoints: [],
+    };
     if (!benchPoints || benchPoints.length === 0) return none;
     const { dates, stock, market } = alignByDate(history, benchPoints);
     if (stock.length < 3) return none;
@@ -252,6 +261,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       beta: beta(sr, mr),
       alpha: alpha(sr, mr, rfDaily, ppy),
       available: true,
+      observations: sr.length,
       rollBetaPoints: zipRollingToDates(
         rollingBeta(sr, mr, ROLLING_RATIO_WINDOW),
         dates,
@@ -407,6 +417,18 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   return (
     <div className="space-y-4 p-4 font-mono">
       <HeadlineStrip
+        symbol={baseSymbol}
+        ccy={ccy}
+        last={closes.at(-1)}
+        changePct={closes[0] > 0 ? (closes.at(-1) / closes[0] - 1) * 100 : null}
+        startDate={quality.startDate}
+        endDate={quality.endDate}
+        observations={quality.observations}
+        benchLabel={benchmarkInfo.label}
+        rfPct={rf * 100}
+        rfSource={rfSource}
+        onRfChange={(rate) => setRfOverride({ symbol, rate })}
+        issues={quality.issues}
         vol={metrics.vol}
         shp={metrics.shp}
         dd={metrics.dd}
@@ -473,6 +495,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             bta={benchmark.beta}
             alf={benchmark.alpha}
             rfPct={rf * 100}
+            obs={returns.length}
+            benchObs={benchmark.observations}
             benchAvailable={benchmark.available}
             benchLabel={benchmarkInfo.label}
             ddPoints={ddPoints}

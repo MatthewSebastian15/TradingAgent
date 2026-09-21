@@ -38,7 +38,7 @@ Sparkline.propTypes = { values: PropTypes.arrayOf(PropTypes.number) };
 
 // The shared KPI card (Section 4B.3). tone drives value color by *meaning*.
 // ⓘ tooltip is a keyboard-reachable <details> (4B.6), not a hover-only title.
-export function MetricCard({ label, value, gloss, tone = 'neutral', formula, spark }) {
+export function MetricCard({ label, value, gloss, tone = 'neutral', formula, spark, sample }) {
   const neutral = value === DASH || tone === 'neutral';
   const valueColor = neutral
     ? 'text-white'
@@ -61,6 +61,7 @@ export function MetricCard({ label, value, gloss, tone = 'neutral', formula, spa
         )}
       </div>
       <div className={`mt-1 text-2xl tabular-nums ${valueColor}`}>{value}</div>
+      {sample && <div className="mt-0.5 text-[10px] text-bloomberg-white/80">{sample}</div>}
       {spark && <Sparkline values={spark} />}
       {gloss && (
         <div className="mt-1 text-[11px] leading-relaxed text-bloomberg-subtle">{gloss}</div>
@@ -76,6 +77,7 @@ MetricCard.propTypes = {
   tone: PropTypes.oneOf(['neutral', 'good', 'bad']),
   formula: PropTypes.string,
   spark: PropTypes.arrayOf(PropTypes.number),
+  sample: PropTypes.string,
 };
 
 export function SkeletonGrid() {

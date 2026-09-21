@@ -7,17 +7,17 @@ import { fmtPercent, volBucket } from '../format';
 export function VolatilitySection({ vol, ewma, rollingVols, rollingPoints, ppy = 252 }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-bloomberg-subtle">
-        This stock&apos;s price swings are{' '}
-        <span className="text-white">{volBucket(vol).toLowerCase()}</span> — annualized volatility
-        is {fmtPercent(vol)}.
+      <p className="text-sm text-bloomberg-white/80">
+        Vol level (absolute scale): <span className="text-white">{volBucket(vol)}</span> —
+        annualized volatility is {fmtPercent(vol)}. The headline &quot;Vol Regime&quot; compares
+        today with this name&apos;s own history instead.
       </p>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <MetricCard
           label="Annualized Volatility"
           value={fmtPercent(vol)}
-          gloss={`${volBucket(vol)} — how much daily returns spread out, scaled to a year.`}
+          gloss={`Vol level ${volBucket(vol)} — how much daily returns spread out, scaled to a year.`}
           formula={`Standard deviation of daily simple returns × √${ppy} × 100%. Matches the server-side risk summary.`}
           spark={rollingVols}
         />

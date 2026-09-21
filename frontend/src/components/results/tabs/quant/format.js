@@ -61,3 +61,9 @@ export function signedTone(v) {
   if (v < 0) return 'bad';
   return 'neutral';
 }
+
+// Sample-size footnote for a metric card; below ~6 months of data the number is noisy.
+export function sampleNote(n, minReliable = 126) {
+  if (!finite(n)) return null;
+  return n < minReliable ? `n=${n} · low confidence` : `n=${n}`;
+}

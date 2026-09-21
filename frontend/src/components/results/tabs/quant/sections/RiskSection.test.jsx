@@ -17,6 +17,8 @@ const baseProps = {
   bta: 1.1,
   alf: 2,
   rfPct: 4,
+  obs: 500,
+  benchObs: 500,
   benchAvailable: true,
   benchLabel: 'S&P 500',
   ddPoints: [],
@@ -44,5 +46,10 @@ describe('RiskSection', () => {
     render(<RiskSection {...baseProps} ppy={365} />);
     expect(screen.getAllByText(/√365/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/√252/)).toBeNull();
+  });
+
+  it('labels beta with its aligned sample size', () => {
+    render(<RiskSection {...baseProps} obs={500} benchObs={60} />);
+    expect(screen.getAllByText('n=60 · low confidence').length).toBeGreaterThan(0);
   });
 });

@@ -10,6 +10,7 @@ import {
   fmtRatio,
   fmtSignedPct,
   ratioTone,
+  sampleNote,
   signedTone,
 } from '../format';
 
@@ -26,6 +27,8 @@ export function RiskSection({
   bta,
   alf,
   rfPct,
+  obs,
+  benchObs,
   benchAvailable,
   benchLabel,
   ddPoints,
@@ -92,6 +95,7 @@ export function RiskSection({
           label={`Sharpe (${excessLabel})`}
           value={fmtRatio(shp)}
           tone={ratioTone(shp)}
+          sample={sampleNote(obs)}
           gloss="Return per unit of total risk. Higher is a better deal."
           formula={`(mean(returns) − rf) / stddev(returns) × √${ppy}. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
         />
@@ -99,12 +103,14 @@ export function RiskSection({
           label={`Sortino (${excessLabel})`}
           value={fmtRatio(srt)}
           tone={ratioTone(srt)}
+          sample={sampleNote(obs)}
           gloss="Like Sharpe but only penalizes downside risk — fairer to big upside moves."
           formula={`(mean(returns) − rf) / downside-deviation × √${ppy}. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
         />
         <MetricCard
           label={`Beta (vs ${benchLabel})`}
           value={fmtNum2(bta)}
+          sample={sampleNote(benchObs)}
           gloss="1.0 moves with the market; above 1 is jumpier, below 1 is calmer."
           formula={`cov(stock, ${benchLabel}) / var(${benchLabel}), on overlapping trading days. ${benchNote}`}
         />
@@ -112,6 +118,7 @@ export function RiskSection({
           label="Alpha (annualized)"
           value={fmtSignedPct(alf)}
           tone={signedTone(alf)}
+          sample={sampleNote(benchObs)}
           gloss="Return beyond what beta alone would predict — the 'skill' return vs the market."
           formula={`Jensen's alpha: (stock − rf) − β·(market − rf), annualized. ${benchNote}`}
         />
@@ -196,6 +203,8 @@ RiskSection.propTypes = {
   bta: PropTypes.number,
   alf: PropTypes.number,
   rfPct: PropTypes.number.isRequired,
+  obs: PropTypes.number.isRequired,
+  benchObs: PropTypes.number,
   benchAvailable: PropTypes.bool.isRequired,
   benchLabel: PropTypes.string.isRequired,
   ddPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
