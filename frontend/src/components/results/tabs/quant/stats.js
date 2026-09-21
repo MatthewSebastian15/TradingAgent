@@ -78,20 +78,28 @@ export function rollingVol(closes, window = 21, ppy = TRADING_DAYS) {
   return out;
 }
 
-// Daily EWMA sigma (decimal, not annualized) — input for VaR/MC, not display.
-// Seeded with the mean square of the first `seedWindow` returns so one extreme
-// first day cannot dominate the recursion.
-export function ewmaSigmaDaily(returns, lambda = 0.94, seedWindow = 20) {
+// EWMA daily variance path (decimal, not annualized). Seeded with the mean square
+// of the first `seedWindow` returns so one extreme first day cannot dominate the
+// recursion. out[i] covers returns up to index k - 1 + i (k = min(seedWindow, n)).
+export function ewmaVarianceSeries(returns, lambda = 0.94, seedWindow = 20) {
   const n = returns.length;
-  if (n === 0) return 0;
+  if (n === 0) return [];
   const k = Math.min(seedWindow, n);
   let variance = 0;
   for (let i = 0; i < k; i += 1) variance += returns[i] ** 2;
   variance /= k;
+  const out = [variance];
   for (let i = k; i < n; i += 1) {
     variance = lambda * variance + (1 - lambda) * returns[i] ** 2;
+    out.push(variance);
   }
-  return Math.sqrt(variance);
+  return out;
+}
+
+// Daily EWMA sigma (decimal, not annualized) — input for VaR/MC, not display.
+export function ewmaSigmaDaily(returns, lambda = 0.94, seedWindow = 20) {
+  const series = ewmaVarianceSeries(returns, lambda, seedWindow);
+  return series.length ? Math.sqrt(series.at(-1)) : 0;
 }
 
 // Exponentially weighted volatility (RiskMetrics), recent days weighted more.

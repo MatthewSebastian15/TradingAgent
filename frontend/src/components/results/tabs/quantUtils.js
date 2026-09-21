@@ -10,3 +10,4 @@ export * from './quant/portfolio';
 export * from './quant/options';
 export * from './quant/valuation';
 export * from './quant/dataQuality';
+export * from './quant/rangeVol';
