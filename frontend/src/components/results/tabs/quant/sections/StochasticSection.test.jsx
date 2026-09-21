@@ -30,7 +30,7 @@ describe('StochasticSection', () => {
     );
     const fan = screen.getByRole('img', { name: 'Monte Carlo price fan chart' });
     // The dashed 'Today' reference line at spot lives inside the plot.
-    expect(fan.querySelector('line[stroke-dasharray]')).toBeTruthy();
+    expect(fan.querySelector('line[stroke-dasharray="5 4"]')).toBeTruthy();
     expect(screen.getAllByText('Today').length).toBeGreaterThan(0);
     expect(screen.getByText('P10–P90')).toBeTruthy();
     expect(screen.getByText('Median')).toBeTruthy();
