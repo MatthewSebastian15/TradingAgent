@@ -218,6 +218,66 @@ describe('LineChart', () => {
     expect(container.outerHTML).not.toMatch(BAD);
   });
 
+  it('draws a custom dash pattern on the path and the legend swatch, over dashed', () => {
+    const pts = [
+      { x: 0, y: 1 },
+      { x: 10, y: 2 },
+    ];
+    const { container } = render(
+      <LineChart
+        title="Dash"
+        xType="number"
+        series={[
+          { id: 'a', label: 'Dotted', color: '#111111', dash: '2 3', dashed: true, points: pts },
+          { id: 'b', label: 'Plain dashed', color: '#222222', dashed: true, points: pts },
+          { id: 'c', label: 'Solid', color: '#333333', points: pts },
+        ]}
+      />
+    );
+    expect(container.querySelector('path[stroke="#111111"]').getAttribute('stroke-dasharray')).toBe(
+      '2 3'
+    );
+    expect(container.querySelector('path[stroke="#222222"]').getAttribute('stroke-dasharray')).toBe(
+      '5 4'
+    );
+    expect(container.querySelector('path[stroke="#333333"]').getAttribute('stroke-dasharray')).toBe(
+      null
+    );
+    const swatch = (label) =>
+      screen.getByText(label).querySelector('line').getAttribute('stroke-dasharray');
+    expect(swatch('Dotted')).toBe('2 3');
+    expect(swatch('Plain dashed')).toBe('3 2');
+    expect(swatch('Solid')).toBeNull();
+  });
+
+  it('draws marker labels with a dark halo so they stay readable over lines', () => {
+    const { container } = render(
+      <LineChart
+        title="Halo"
+        xType="number"
+        series={[
+          {
+            id: 's',
+            color: '#f97316',
+            points: [
+              { x: 0, y: 1 },
+              { x: 10, y: 2 },
+            ],
+          },
+        ]}
+        markers={[{ x: 5, y: 1.5, shape: 'dot', color: '#eab308', label: 'Halo me' }]}
+      />
+    );
+    const text = [...container.querySelectorAll('svg[role="img"] text')].find(
+      (t) => t.textContent === 'Halo me'
+    );
+    expect(text.getAttribute('fill')).toBe('#eab308');
+    expect(text.getAttribute('paint-order')).toBe('stroke');
+    expect(text.getAttribute('stroke')).toBe('#000');
+    expect(text.getAttribute('stroke-width')).toBe('3');
+    expect(text.getAttribute('stroke-linejoin')).toBe('round');
+  });
+
   it('staggers overlapping marker labels', () => {
     const { container } = render(
       <LineChart

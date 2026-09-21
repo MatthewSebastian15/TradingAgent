@@ -3,7 +3,6 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import QuantPanel from './QuantPanel';
-import { ewmaVolSeries, rollingVol, simpleReturns, zipRollingToDates } from './quantUtils';
 
 vi.mock('../../../api/market', () => ({
   getApiStatus: vi.fn(async () => ({})),
@@ -316,15 +315,19 @@ describe('QuantPanel volatility detail', () => {
     expect(screen.getByText('Parkinson').closest('tr').textContent).toContain('—');
   });
 
-  it('keeps every rolling series ending on the last history date', () => {
-    const closes = Array.from({ length: 300 }, (_, i) => 100 + Math.sin(i / 5) * 5 + i * 0.05);
-    const dates = closes.map((_, i) => `d${String(i).padStart(3, '0')}`);
-    const returns = simpleReturns(closes);
-    const last = dates.at(-1);
-    expect(zipRollingToDates(rollingVol(closes, 21, 252), dates, 21).at(-1).date).toBe(last);
-    expect(zipRollingToDates(rollingVol(closes, 63, 252), dates, 63).at(-1).date).toBe(last);
-    expect(zipRollingToDates(ewmaVolSeries(returns, 0.94, 20, 252), dates, 20).at(-1).date).toBe(
-      last
-    );
+  it('keeps every rolling series ending on the last history date', async () => {
+    const pts = buildOhlcPoints(300);
+    await renderPanel({ points: pts, sections: ['volatility'] });
+
+    // Hover the right edge: the tooltip snaps to the 21-day series' last point, and the
+    // 63-day and EWMA series only show a value there if they end on that same date.
+    fireEvent.mouseMove(screen.getByRole('img', { name: 'Rolling volatility' }), {
+      clientX: 703,
+      clientY: 50,
+    });
+    const tip = screen.getByTestId('chart-tooltip');
+    expect(tip.textContent).toContain(pts.at(-1).date);
+    expect(tip.textContent).not.toContain('—');
+    for (const label of ['21-day', '63-day', 'EWMA']) expect(tip.textContent).toContain(label);
   });
 });

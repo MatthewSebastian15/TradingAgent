@@ -173,7 +173,7 @@ export function LineChart({
   };
   lines
     .filter((s) => !s.hideInLegend)
-    .forEach((s) => addLegend({ label: s.label, color: s.color, dashed: s.dashed }));
+    .forEach((s) => addLegend({ label: s.label, color: s.color, dashed: s.dashed, dash: s.dash }));
   areas.forEach((b) => addLegend({ label: b.label, color: b.color, swatch: 'box' }));
   referenceLines
     .filter((r) => positive(r.y))
@@ -292,7 +292,7 @@ export function LineChart({
                   fill="none"
                   stroke={s.color}
                   strokeWidth={s.width || 1.75}
-                  strokeDasharray={s.dashed ? '5 4' : undefined}
+                  strokeDasharray={s.dash || (s.dashed ? '5 4' : undefined)}
                   strokeLinejoin="round"
                 />
               )}
@@ -325,7 +325,17 @@ export function LineChart({
                 </circle>
               )}
               {m.label && (
-                <text x={px} y={labelY} fill={m.color} fontSize="9" textAnchor={anchor}>
+                <text
+                  x={px}
+                  y={labelY}
+                  fill={m.color}
+                  fontSize="9"
+                  textAnchor={anchor}
+                  stroke="#000"
+                  strokeWidth={3}
+                  strokeLinejoin="round"
+                  paintOrder="stroke"
+                >
                   {m.label}
                 </text>
               )}
@@ -370,6 +380,7 @@ LineChart.propTypes = {
       color: PropTypes.string.isRequired,
       width: PropTypes.number,
       dashed: PropTypes.bool,
+      dash: PropTypes.string,
       hideInLegend: PropTypes.bool,
       points: PropTypes.arrayOf(PropTypes.shape({ x: xValue, y: PropTypes.number })).isRequired,
     })

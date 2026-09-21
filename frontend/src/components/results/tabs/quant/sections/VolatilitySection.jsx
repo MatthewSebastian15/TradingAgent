@@ -9,11 +9,11 @@ import { LineChart } from '../viz/LineChart';
 const fmtPts = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)} pts`;
 const pctAxis = (v) => `${v.toFixed(0)}%`;
 const CONE_LINES = [
-  { key: 'max', label: 'Max', color: CHART_COLORS.secondary, dashed: true },
-  { key: 'p75', label: 'P75', color: CHART_COLORS.tertiary, dashed: false },
-  { key: 'median', label: 'Median', color: CHART_COLORS.primary, dashed: false },
-  { key: 'p25', label: 'P25', color: CHART_COLORS.quaternary, dashed: false },
-  { key: 'min', label: 'Min', color: CHART_COLORS.secondary, dashed: true },
+  { key: 'max', label: 'Max', color: CHART_COLORS.secondary, dash: '5 4' },
+  { key: 'p75', label: 'P75', color: CHART_COLORS.tertiary },
+  { key: 'median', label: 'Median', color: CHART_COLORS.primary },
+  { key: 'p25', label: 'P25', color: CHART_COLORS.quaternary },
+  { key: 'min', label: 'Min', color: CHART_COLORS.secondary, dash: '2 3' },
 ];
 const toXY = (pts) => pts.map((p) => ({ x: p.date, y: p.value }));
 const contentText = () => 'text-bloomberg-white/80';
@@ -145,7 +145,7 @@ export function VolatilitySection({
             id: line.key,
             label: line.label,
             color: line.color,
-            dashed: line.dashed,
+            dash: line.dash,
             points: cone.map((c) => ({ x: c.window, y: c[line.key] })),
           }))}
           markers={cone.map((c) => ({
@@ -153,7 +153,7 @@ export function VolatilitySection({
             y: c.current,
             shape: 'dot',
             color: CHART_COLORS.warning,
-            label: `Current ${c.window}d: ${fmtPercent(c.current)}`,
+            label: `${c.window}d ${fmtPercent(c.current)}`,
           }))}
           includeZero
           emptyMessage="Need at least two windows of history for a vol cone."

@@ -70,6 +70,19 @@ describe('VolatilitySection', () => {
     expect(screen.getByText('Volatility cone · realized vol by window')).toBeTruthy();
   });
 
+  it('gives the cone Max and Min lines different dash patterns and short marker labels', () => {
+    const { container } = render(<VolatilitySection {...props} />);
+    const cone = screen.getByRole('img', { name: 'Volatility cone' });
+    const dashes = [...cone.querySelectorAll('path[stroke-dasharray]')].map((p) =>
+      p.getAttribute('stroke-dasharray')
+    );
+    expect(new Set(dashes)).toEqual(new Set(['5 4', '2 3']));
+    const labels = [...cone.querySelectorAll('text')].map((t) => t.textContent);
+    expect(labels).toContain('10d 30.0%');
+    expect(labels).toContain('21d 28.0%');
+    expect(container.textContent).not.toContain('Current 10d');
+  });
+
   it('shows the term-structure gap to the long-run vol with an explicit sign', () => {
     render(<VolatilitySection {...props} />);
     // long run = sqrt(0.0002 * 252) * 100 = 22.4%: 29% is +6.6 pts, 27% is +4.6 pts.

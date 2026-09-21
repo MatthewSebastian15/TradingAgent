@@ -24,7 +24,7 @@ function Legend({ items }) {
                 y2="4"
                 stroke={item.color}
                 strokeWidth="2"
-                strokeDasharray={item.dashed ? '3 2' : undefined}
+                strokeDasharray={item.dash || (item.dashed ? '3 2' : undefined)}
               />
             )}
           </svg>
