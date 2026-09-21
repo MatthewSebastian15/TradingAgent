@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getApiStatus, getMarketOhlcv } from '../../../api/market';
 import { useStockOverview } from '../../../hooks/useStockOverview';
@@ -114,9 +114,15 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
   // Peers fetched for another window or another base ticker would misalign with (or
   // duplicate) the base series.
+  // The controller also lets an in-flight peer fetch see that its window/symbol went stale.
+  const peerController = useRef(null);
   useEffect(() => {
+    const controller = new AbortController();
+    peerController.current = controller;
     setPeers([]);
     setPeerInput('');
+    setPeerLoading(false);
+    return () => controller.abort();
   }, [fetchRange, symbol]);
 
   // Fetch a longer history than the 1Y analysis chart; fall back to the prop on failure.
@@ -320,16 +326,18 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       .filter(Boolean)
       .filter((s) => s !== baseSymbol);
     if (wanted.length === 0) return;
+    const { signal } = peerController.current;
     setPeerLoading(true);
     Promise.allSettled(
       wanted.map((sym) =>
-        getMarketOhlcv(sym, { range: fetchRange }).then((res) => ({
+        getMarketOhlcv(sym, { range: fetchRange, signal }).then((res) => ({
           symbol: sym,
           points: Array.isArray(res?.points) ? res.points : [],
         }))
       )
     )
       .then((results) => {
+        if (signal.aborted) return;
         const fetched = results
           .filter((r) => r.status === 'fulfilled' && r.value.points.length > 0)
           .map((r) => r.value);
@@ -339,7 +347,9 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         });
         setPeerInput('');
       })
-      .finally(() => setPeerLoading(false));
+      .finally(() => {
+        if (!signal.aborted) setPeerLoading(false);
+      });
   };
 
   const removePeer = useCallback(
@@ -417,9 +427,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     );
   }
 
-  // Same finite-positive filter as assessSeries, so a bad first/last row can't null the change.
-  const validCloses = closes.filter((c) => Number.isFinite(c) && c > 0);
-  const changePct = validCloses.length > 1 ? (validCloses.at(-1) / validCloses[0] - 1) * 100 : null;
+  // `closes` already holds only valid (finite, positive) prices — same rows as Last/Window.
+  const changePct = closes.length > 1 ? (closes.at(-1) / closes[0] - 1) * 100 : null;
 
   return (
     <div className="space-y-4 p-4 font-mono">

@@ -147,4 +147,19 @@ describe('pointPrice / priceRows', () => {
     expect(rows.map(pointPrice)).toEqual([10, 12]);
     expect(assessSeries(pts, { minObservations: 0 }).observations).toBe(rows.length);
   });
+
+  it('drops zero and negative prices, falling back to close, and flags them', () => {
+    expect(pointPrice({ adjusted_close: 0, close: 10 })).toBe(10);
+    expect(pointPrice({ adjusted_close: -1, close: 0 })).toBeNull();
+    expect(pointPrice({ close: -3 })).toBeNull();
+    const pts = series(clean);
+    pts[199] = { ...pts[199], close: 0 };
+    pts[198] = { ...pts[198], close: -2 };
+    const report = assessSeries(pts);
+    expect(report.observations).toBe(198);
+    expect(report.endDate).toBe(pts[197].date);
+    const issue = report.issues.find((i) => i.code === 'non_positive_price');
+    expect(issue.count).toBe(2);
+    expect(issue.dates).toEqual([pts[198].date, pts[199].date]);
+  });
 });

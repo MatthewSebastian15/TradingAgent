@@ -156,6 +156,48 @@ describe('QuantPanel', () => {
     getMarketOhlcv.mockImplementation(async () => ({ points: [] }));
   });
 
+  it('ignores a peer response that lands after the base symbol changed', async () => {
+    const { getMarketOhlcv } = await import('../../../api/market');
+    let resolvePeer;
+    getMarketOhlcv.mockImplementation((sym) =>
+      sym === 'MSFT'
+        ? new Promise((resolve) => {
+            resolvePeer = resolve;
+          })
+        : Promise.resolve({ points: [] })
+    );
+    const props = { points: buildPoints(40), sections: ['correlation'], currency: 'USD' };
+    const { rerender } = render(<QuantPanel symbol="AAPL" range="1Y" {...props} />);
+    await act(async () => {});
+    fireEvent.change(screen.getByPlaceholderText(/Add peers/), { target: { value: 'MSFT' } });
+    fireEvent.click(screen.getByRole('button', { name: /add/i }));
+
+    rerender(<QuantPanel symbol="GOOG" range="1Y" {...props} />);
+    await act(async () => {});
+    await act(async () => {
+      resolvePeer({ points: buildPoints(40) });
+    });
+
+    expect(screen.queryAllByText('MSFT')).toHaveLength(0);
+    getMarketOhlcv.mockImplementation(async () => ({ points: [] }));
+  });
+
+  it('keeps Last, Window and Period change on the last valid row when edge closes are non-positive', async () => {
+    const good = buildPoints(40);
+    const pts = [
+      ...good,
+      { date: '2026-02-14', close: 0, adjusted_close: 0 },
+      { date: '2026-02-15', close: -5, adjusted_close: -5 },
+    ];
+    await renderPanel({ points: pts, sections: ['volatility'] });
+
+    const last = good.at(-1);
+    expect(screen.getByText(`USD ${last.close.toFixed(2)}`)).toBeTruthy();
+    expect(screen.getByText(`2026-01-01 → ${last.date} · 40 obs`)).toBeTruthy();
+    const expected = (last.close / good[0].close - 1) * 100;
+    expect(screen.getByText('Period Δ').nextSibling.textContent).toBe(`+${expected.toFixed(1)}%`);
+  });
+
   it('renders every tab when sections is undefined', async () => {
     await renderPanel({ points: buildPoints(40) });
 

@@ -1,11 +1,13 @@
 // Data-quality report for a daily OHLCV series. Pure; the headline renders `issues`.
 const MS_PER_DAY = 86_400_000;
 
-// Single source of truth for a row's price: finite adjusted_close, else finite close, else null.
-// The quality report and the panel's derived series both use it so they cannot disagree.
+// Single source of truth for a row's price: finite positive adjusted_close, else finite positive
+// close, else null (zero/negative prices are bad data and drop the row). The quality report and
+// the panel's derived series both use it so they cannot disagree.
+const usable = (v) => Number.isFinite(v) && v > 0;
 export const pointPrice = (p) => {
-  if (Number.isFinite(p?.adjusted_close)) return p.adjusted_close;
-  return Number.isFinite(p?.close) ? p.close : null;
+  if (usable(p?.adjusted_close)) return p.adjusted_close;
+  return usable(p?.close) ? p.close : null;
 };
 
 // Dated rows with a usable price; closes/dates derived from these stay aligned.
@@ -29,6 +31,24 @@ export function assessSeries(
       count: rows.length,
       dates: [],
       message: `Only ${rows.length} observations; estimates below ${minObservations} are noisy.`,
+    });
+  }
+
+  const nonPositive = (Array.isArray(points) ? points : [])
+    .filter(
+      (p) =>
+        p &&
+        p.date &&
+        pointPrice(p) === null &&
+        [p.adjusted_close, p.close].some((v) => Number.isFinite(v) && v <= 0)
+    )
+    .map((p) => String(p.date).slice(0, 10));
+  if (nonPositive.length > 0) {
+    issues.push({
+      code: 'non_positive_price',
+      count: nonPositive.length,
+      dates: nonPositive,
+      message: `${nonPositive.length} row(s) with a zero or negative price were ignored.`,
     });
   }
 
