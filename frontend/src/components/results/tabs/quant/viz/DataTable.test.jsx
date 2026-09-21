@@ -117,4 +117,17 @@ describe('DataTable', () => {
     const cell = screen.getByText('No rows.');
     expect(cell.getAttribute('colspan')).toBe('2');
   });
+
+  it('falls back to the default text colour when className returns nothing', () => {
+    render(
+      <DataTable
+        columns={[{ key: 'a', label: 'A', className: () => undefined }]}
+        rows={[{ a: 'x' }]}
+        rowKey={(r) => r.a}
+      />
+    );
+    const cell = screen.getByText('x');
+    expect(cell.className).toContain('text-bloomberg-white');
+    expect(cell.className).not.toContain('undefined');
+  });
 });

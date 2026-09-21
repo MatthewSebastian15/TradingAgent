@@ -53,7 +53,7 @@ export function DataTable({
                   <td
                     key={col.key}
                     className={`px-2 py-1.5 whitespace-nowrap ${align(col)} ${
-                      col.className ? col.className(row) : 'text-bloomberg-white'
+                      (col.className && col.className(row)) || 'text-bloomberg-white'
                     } ${stickyFirstColumn && i === 0 ? 'sticky left-0 z-10 bg-black' : ''}`}
                   >
                     {col.render ? col.render(row) : row[col.key]}
