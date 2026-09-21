@@ -75,6 +75,12 @@ describe('adjusted sample moments', () => {
   const m = xs.reduce((a, b) => a + b, 0) / n;
   const central = (k) => xs.reduce((a, x) => a + (x - m) ** k, 0) / n;
 
+  it('matches pandas skew()/kurt() reference values', () => {
+    // Independent reference: pandas Series([1, 2, 3, 4, 10]).skew() / .kurt().
+    expect(skewness([1, 2, 3, 4, 10])).toBeCloseTo(1.6970562748, 9);
+    expect(kurtosis([1, 2, 3, 4, 10])).toBeCloseTo(3.152, 9);
+  });
+
   it('skewness applies the Fisher-Pearson small-sample adjustment', () => {
     const g1 = central(3) / central(2) ** 1.5;
     expect(skewness(xs)).toBeCloseTo((g1 * Math.sqrt(n * (n - 1))) / (n - 2), 12);
