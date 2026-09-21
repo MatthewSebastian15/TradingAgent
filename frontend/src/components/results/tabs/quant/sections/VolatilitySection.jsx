@@ -5,6 +5,8 @@ import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { LineChart } from '../viz/LineChart';
 
+// Signed gap in percentage points, e.g. +2.1 pts / -3.1 pts.
+const fmtPts = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)} pts`;
 const pctAxis = (v) => `${v.toFixed(0)}%`;
 const CONE_LINES = [
   { key: 'max', label: 'Max', color: CHART_COLORS.secondary, dashed: true },
@@ -31,7 +33,9 @@ export function VolatilitySection({
   const garch21 = garchTerm.find((t) => t.days === 21);
   const longRunVol = garch ? Math.sqrt(garch.longRunVariance * ppy) * 100 : null;
   const shockHalfLife =
-    garch && garch.persistence < 1 ? Math.log(0.5) / Math.log(garch.persistence) : null;
+    garch && garch.persistence > 0 && garch.persistence < 1
+      ? Math.log(0.5) / Math.log(garch.persistence)
+      : null;
 
   const estimatorRows = [
     {
@@ -196,8 +200,7 @@ export function VolatilitySection({
             key: 'vsLong',
             label: 'vs long run',
             align: 'right',
-            render: (r) =>
-              finite(longRunVol) ? `${(r.annualVol - longRunVol).toFixed(1)} pts` : DASH,
+            render: (r) => (finite(longRunVol) ? fmtPts(r.annualVol - longRunVol) : DASH),
           },
         ]}
       />

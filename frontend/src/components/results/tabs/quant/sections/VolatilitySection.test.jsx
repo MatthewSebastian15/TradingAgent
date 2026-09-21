@@ -70,6 +70,13 @@ describe('VolatilitySection', () => {
     expect(screen.getByText('Volatility cone · realized vol by window')).toBeTruthy();
   });
 
+  it('shows the term-structure gap to the long-run vol with an explicit sign', () => {
+    render(<VolatilitySection {...props} />);
+    // long run = sqrt(0.0002 * 252) * 100 = 22.4%: 29% is +6.6 pts, 27% is +4.6 pts.
+    expect(screen.getByText('+6.6 pts')).toBeTruthy();
+    expect(screen.getByText('+4.6 pts')).toBeTruthy();
+  });
+
   it('explains when GARCH is unavailable', () => {
     render(<VolatilitySection {...props} garch={null} garchTerm={[]} />);
     expect(screen.getByText(/needs at least 100 daily returns/)).toBeTruthy();
