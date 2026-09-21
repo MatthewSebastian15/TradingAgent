@@ -92,6 +92,24 @@ def test_rate_map_rejects_out_of_range_rates(monkeypatch):
         env_rate_map("TEST_RATE_MAP")
 
 
+@pytest.mark.parametrize("raw", ["US=nan", "US=inf", "US=-inf", "US=", "=0.04", "US=abc"])
+def test_rate_map_rejects_non_finite_empty_and_unkeyed_entries(monkeypatch, raw):
+    from config.env import env_rate_map
+
+    monkeypatch.setenv("TEST_RATE_MAP", raw)
+
+    with pytest.raises(ValueError, match="TEST_RATE_MAP"):
+        env_rate_map("TEST_RATE_MAP")
+
+
+def test_rate_map_duplicate_keys_last_wins(monkeypatch):
+    from config.env import env_rate_map
+
+    monkeypatch.setenv("TEST_RATE_MAP", "US=0.04, us=0.05")
+
+    assert env_rate_map("TEST_RATE_MAP") == {"US": 0.05}
+
+
 def test_startup_rejects_invalid_data_vendor_news_relevance_score(monkeypatch):
     from config import settings as config
 

@@ -94,7 +94,11 @@ def env_list(name: str, default: list[str]) -> list[str]:
 
 
 def env_rate_map(name: str) -> dict[str, float]:
-    """Parse `MARKET=rate` pairs (fractions in [0, 1]) separated by commas."""
+    """Parse `MARKET=rate` pairs (fractions in [0, 1]) separated by commas.
+
+    Keys are upper-cased; a duplicate key keeps the last value. Malformed entries, empty
+    keys/values, and non-finite or out-of-range rates raise ValueError (fail fast).
+    """
     raw = os.getenv(name)
     if raw is None or not raw.strip():
         return {}
