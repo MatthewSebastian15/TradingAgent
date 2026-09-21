@@ -29,9 +29,9 @@ describe('ScenarioSection', () => {
     expect(cells[4].className).toContain('text-bloomberg-white');
   });
 
-  it('keeps the terminal-table surface with readable header text', () => {
+  it('renders the stress table with readable header text', () => {
     const { container } = render(<ScenarioSection {...base} beta={1} benchIsSp500 />);
-    expect(container.querySelector('table').className).toContain('terminal-table');
+    expect(container.querySelector('table caption').textContent).toBe('One-day stress scenarios');
     expect(container.querySelector('th').className).toContain('text-bloomberg-white');
   });
 
@@ -91,5 +91,12 @@ describe('ScenarioSection', () => {
     );
     const { container: withPpy } = render(<ScenarioSection {...base} beta={1} benchIsSp500 />);
     expect(container.textContent).toBe(withPpy.textContent);
+  });
+
+  it('renders the stress table with a signed, right-aligned shock column', () => {
+    render(<ScenarioSection {...base} vol={25} beta={1.2} benchLabel="S&P 500" benchIsSp500 />);
+    expect(screen.getByText('One-day stress scenarios')).toBeTruthy();
+    expect(screen.getByText('Black Monday — S&P 500, 1987-10-19')).toBeTruthy();
+    expect(screen.getByText('-24.6%').className).toContain('text-right');
   });
 });

@@ -567,6 +567,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             params={btEffective}
             onParamChange={(k, v) => setBtParams((prev) => ({ ...prev, [k]: v }))}
             result={backtestResult}
+            dates={historyDates}
           />
         </SectionBlock>
       )}

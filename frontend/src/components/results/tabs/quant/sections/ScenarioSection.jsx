@@ -6,6 +6,7 @@ import { stressScenarios } from '../../quantUtils';
 import { MetricCard } from '../charts';
 import { DASH, finite, fmtPercent, fmtSignedPct } from '../format';
 import { fmtMoney as formatMoney } from '../numberFormat';
+import { DataTable } from '../viz/DataTable';
 
 export function ScenarioSection({
   spot,
@@ -23,9 +24,10 @@ export function ScenarioSection({
     () => stressScenarios(spot, finite(vol) ? vol : 0, beta, ppy),
     [spot, vol, beta, ppy]
   );
-  // `!` beats .terminal-table's own th/td color (higher specificity than a bare utility).
+  // Sign of the shown value decides the color, never the scenario type: a negative beta
+  // turns crash days into gains, and gains are never red.
   const signTone = (v) =>
-    v < 0 ? '!text-bloomberg-red' : v > 0 ? '!text-bloomberg-green' : '!text-bloomberg-white';
+    v < 0 ? 'text-bloomberg-red' : v > 0 ? 'text-bloomberg-green' : 'text-bloomberg-white';
   const regimeTone = (label) =>
     label === 'Stressed' ? 'bad' : label === 'Calm' ? 'good' : 'neutral';
   return (
@@ -49,36 +51,35 @@ export function ScenarioSection({
         </NoticeBox>
       )}
 
-      <div className="overflow-x-auto border border-bloomberg-border">
-        <table className="terminal-table w-full font-mono text-xs tabular-nums">
-          <thead>
-            <tr>
-              <th className="px-2 py-1 text-left !text-bloomberg-white/80">Scenario</th>
-              <th className="px-2 py-1 text-right !text-bloomberg-white/80">Index move</th>
-              <th className="px-2 py-1 text-right !text-bloomberg-white/80">Shock</th>
-              <th className="px-2 py-1 text-right !text-bloomberg-white/80">Price after</th>
-              <th className="px-2 py-1 text-right !text-bloomberg-white/80">P&amp;L / share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stress.map((s) => (
-              <tr key={s.label}>
-                <td className="px-2 py-1 whitespace-nowrap !text-bloomberg-white">{s.label}</td>
-                <td className="px-2 py-1 text-right !text-bloomberg-white">
-                  {s.indexShock === null ? DASH : fmtSignedPct(s.indexShock * 100)}
-                </td>
-                <td className={`px-2 py-1 text-right ${signTone(s.shock)}`}>
-                  {fmtSignedPct(s.lossPct)}
-                </td>
-                <td className="px-2 py-1 text-right !text-bloomberg-white">{money(s.price)}</td>
-                <td className={`px-2 py-1 text-right ${signTone(s.shock)}`}>
-                  {money(s.price - spot)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        caption="One-day stress scenarios"
+        rows={stress}
+        rowKey={(r) => r.label}
+        columns={[
+          { key: 'label', label: 'Scenario' },
+          {
+            key: 'index',
+            label: 'Index move',
+            align: 'right',
+            render: (r) => (r.indexShock === null ? DASH : fmtSignedPct(r.indexShock * 100)),
+          },
+          {
+            key: 'shock',
+            label: 'Shock',
+            align: 'right',
+            render: (r) => fmtSignedPct(r.lossPct),
+            className: (r) => signTone(r.shock),
+          },
+          { key: 'price', label: 'Price after', align: 'right', render: (r) => money(r.price) },
+          {
+            key: 'pnl',
+            label: 'P&L / share',
+            align: 'right',
+            render: (r) => money(r.price - spot),
+            className: (r) => signTone(r.shock),
+          },
+        ]}
+      />
 
       <div className="space-y-1">
         <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
@@ -107,7 +108,7 @@ export function ScenarioSection({
           <NoticeBox title="Regime">Not enough history to detect regime shifts.</NoticeBox>
         )}
         {regime && regime.shifts.length > 0 && (
-          <p className="text-[11px] text-bloomberg-subtle">
+          <p className="text-[11px] text-bloomberg-white/80">
             Latest:{' '}
             {regime.shifts
               .slice(-3)

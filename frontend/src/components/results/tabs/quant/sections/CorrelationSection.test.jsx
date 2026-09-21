@@ -51,8 +51,8 @@ describe('CorrelationSection optimizer status', () => {
         optimizerStatus="ok"
       />
     );
-    expect(screen.getByText('Min-Variance')).toBeTruthy();
-    expect(screen.getByText('Max-Sharpe')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Min-Variance' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Max-Sharpe' })).toBeTruthy();
     expect(screen.queryByText('No max-Sharpe portfolio')).toBeNull();
     expect(screen.queryByText(/Covariance is singular/)).toBeNull();
   });
@@ -60,5 +60,24 @@ describe('CorrelationSection optimizer status', () => {
   it('keeps the singular-covariance message for singular baskets', () => {
     render(<CorrelationSection {...base} gmvWeights={null} optimizerStatus="singular" />);
     expect(screen.getByText(/Covariance is singular/)).toBeTruthy();
+  });
+
+  it('renders the matrix with the diverging scale and a frontier chart when ok', () => {
+    render(
+      <CorrelationSection
+        {...base}
+        optimizerStatus="ok"
+        frontier={[
+          { vol: 18, ret: 6 },
+          { vol: 20, ret: 9 },
+        ]}
+        tangency={{ vol: 20, ret: 9 }}
+        tangencyWeights={[0.3, 0.7]}
+      />
+    );
+    const cell = screen.getAllByText('0.40')[0].closest('td');
+    expect(cell.style.backgroundColor).toContain('249, 115, 22');
+    expect(screen.getByRole('img', { name: 'Efficient frontier' })).toBeTruthy();
+    expect(screen.getByText('Portfolio weights')).toBeTruthy();
   });
 });

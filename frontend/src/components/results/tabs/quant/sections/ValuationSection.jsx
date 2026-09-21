@@ -9,9 +9,12 @@ import {
   overviewToDcfInputs,
   returnHistogram,
 } from '../../quantUtils';
-import { Histogram, MetricCard, NumberField } from '../charts';
+import { MetricCard, NumberField } from '../charts';
 import { finite, DASH, fmtNum2, fmtSignedPct, signedTone } from '../format';
 import { fmtMoney as formatMoney, fmtMoneyCompact } from '../numberFormat';
+import { CHART_COLORS } from '../viz/chartTheme';
+import { Heatmap } from '../viz/Heatmap';
+import { HistogramChart } from '../viz/HistogramChart';
 
 export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, overviewError }) {
   const [fcf, setFcf] = useState(''); // base free cash flow (millions); empty until known
@@ -109,7 +112,7 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-bloomberg-subtle">
+      <p className="text-sm text-bloomberg-white/80">
         Two-stage discounted cash flow: {years} years of FCF grown at {growth}%, then a Gordon
         terminal value. FCF, shares, and net debt are in millions. Research only — not advice.
       </p>
@@ -120,9 +123,9 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
           disabled={!overview}
           className="rounded-none border border-bloomberg-orange bg-bloomberg-orange-dim px-3 py-1 text-[11px] tracking-wide text-bloomberg-orange uppercase hover:bg-bloomberg-orange hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
         >
-          ⤓ Auto-fill from fundamentals
+          Auto-fill from fundamentals
         </button>
-        <span className="text-[11px] text-bloomberg-subtle">
+        <span className="text-[11px] text-bloomberg-white/80">
           {overviewError
             ? 'Fundamentals unavailable — enter inputs manually.'
             : !overview
@@ -207,52 +210,29 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
 
       {result && (
         <div className="space-y-1">
-          <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
-            Sensitivity: fair value / share (WACC × terminal growth)
-          </div>
-          <div className="overflow-x-auto border border-bloomberg-border">
-            <table className="terminal-table w-full font-mono text-xs">
-              <thead>
-                <tr>
-                  <th className="px-2 py-1 text-bloomberg-muted">WACC ＼ g</th>
-                  {tgAxis.map((tg) => (
-                    <th key={tg} className="px-2 py-1 text-right text-bloomberg-muted">
-                      {tg.toFixed(1)}%
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {grid.map((row, ri) => (
-                  <tr key={waccAxis[ri]}>
-                    <td className="px-2 py-1 text-bloomberg-muted">{waccAxis[ri].toFixed(1)}%</td>
-                    {row.map((cell, ci) => {
-                      const base =
-                        waccAxis[ri] === Number(wacc) && tgAxis[ci] === Number(terminalGrowth);
-                      const tone =
-                        cell == null || !(spot > 0)
-                          ? 'text-bloomberg-muted'
-                          : cell >= spot
-                            ? 'text-bloomberg-green'
-                            : 'text-bloomberg-red';
-                      return (
-                        <td
-                          key={ci}
-                          className={`px-2 py-1 text-right ${tone} ${base ? 'bg-bloomberg-orange-dim font-bold' : ''}`}
-                        >
-                          {cell == null ? DASH : money(cell)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[11px] text-bloomberg-subtle">
-            Green = fair value above today&apos;s close ({money(spot)}); highlighted cell = your
-            inputs. Small WACC/growth shifts move the valuation a lot — treat any single number with
-            caution.
+          <Heatmap
+            caption="Sensitivity · fair value per share"
+            rowHeader="WACC / g"
+            rowLabels={waccAxis.map((w) => `${w.toFixed(1)}%`)}
+            colLabels={tgAxis.map((g) => `${g.toFixed(1)}%`)}
+            values={grid}
+            formatValue={(v) =>
+              v == null ? DASH : `${money(v)}${spot > 0 ? (v >= spot ? ' ▲' : ' ▼') : ''}`
+            }
+            colorFor={(v) =>
+              !(spot > 0)
+                ? 'transparent'
+                : v >= spot
+                  ? 'rgba(34,197,94,0.16)'
+                  : 'rgba(239,68,68,0.16)'
+            }
+            textColorFor={() => '#e5e5e5'}
+            highlight={{ row: 2, col: 2 }}
+          />
+          <p className="text-[11px] text-bloomberg-white/80">
+            Green ▲ = fair value above today&apos;s close ({money(spot)}), red ▼ = below; outlined
+            cell = your inputs. Small WACC/growth shifts move the valuation a lot — treat any single
+            number with caution.
           </p>
         </div>
       )}
@@ -268,7 +248,7 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
                 : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
             }`}
           >
-            🎲 Monte Carlo (growth ±3% · WACC ±1.5% · terminal ±0.5%)
+            Monte Carlo (growth ±3% · WACC ±1.5% · terminal ±0.5%)
           </button>
           {showMC &&
             (mc ? (
@@ -288,11 +268,15 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
                     gloss="90th percentile — the optimistic tail."
                   />
                 </div>
-                <Histogram
+                <HistogramChart
+                  title="DCF fair value across sampled assumptions"
+                  ariaLabel="Distribution of DCF fair value across sampled assumptions"
                   bins={returnHistogram(mc.values, 30)}
-                  label="Distribution of DCF fair value across sampled assumptions"
+                  formatX={money}
+                  barLabel="Draws"
+                  markers={[{ x: spot, label: 'Today', color: CHART_COLORS.secondary }]}
                 />
-                <p className="text-[11px] text-bloomberg-subtle">
+                <p className="text-[11px] text-bloomberg-white/80">
                   A wide P10–P90 band means the valuation is assumption-driven, not robust. Spot
                   today: {money(spot)}.
                 </p>
@@ -330,7 +314,7 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
             />
             <MetricCard label="Market Cap" value={fmtMoneyCompact(overview.market_cap, ccy)} />
           </div>
-          <p className="text-[11px] text-bloomberg-subtle">
+          <p className="text-[11px] text-bloomberg-white/80">
             Cross-check the DCF fair value above against these multiples — a DCF that disagrees
             wildly with how the market prices peers deserves a second look at the assumptions.
           </p>

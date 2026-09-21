@@ -1,11 +1,24 @@
 import PropTypes from 'prop-types';
 
 import NoticeBox from '../../../NoticeBox';
-import { DualLineChart, MetricCard, SliderField } from '../charts';
+import { MetricCard, SliderField } from '../charts';
 import { STRATEGIES } from '../config';
 import { fmtLoss, fmtPercent, fmtRatio, fmtSignedPct, ratioTone, signedTone } from '../format';
+import { CHART_COLORS } from '../viz/chartTheme';
+import { LineChart } from '../viz/LineChart';
 
-export function BacktestSection({ strategy, onStrategyChange, params, onParamChange, result }) {
+// equity[k] / buyhold[k] belong to bar (result.startIndex + k) of the closes passed to backtest.
+const datedPoints = (values, dates, startIndex) =>
+  values.map((y, k) => ({ x: dates[startIndex + k], y }));
+
+export function BacktestSection({
+  strategy,
+  onStrategyChange,
+  params,
+  onParamChange,
+  result,
+  dates,
+}) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-white/80">
@@ -92,10 +105,27 @@ export function BacktestSection({ strategy, onStrategyChange, params, onParamCha
         <NoticeBox title="Backtest">Not enough price history to backtest.</NoticeBox>
       ) : (
         <>
-          <DualLineChart
-            a={result.equity}
-            b={result.buyhold}
-            label="Strategy equity (orange) vs buy & hold (grey)"
+          <LineChart
+            title="Equity curve"
+            subtitle="Growth of 1 unit over the evaluated window"
+            ariaLabel="Strategy equity versus buy and hold"
+            formatY={(v) => `${v.toFixed(2)}x`}
+            series={[
+              {
+                id: 'buyhold',
+                label: 'Buy & hold',
+                color: CHART_COLORS.secondary,
+                points: datedPoints(result.buyhold, dates, result.startIndex),
+              },
+              {
+                id: 'strategy',
+                label: 'Strategy',
+                color: CHART_COLORS.primary,
+                width: 2,
+                points: datedPoints(result.equity, dates, result.startIndex),
+              },
+            ]}
+            referenceLines={[{ y: 1, color: CHART_COLORS.axis }]}
           />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <MetricCard
@@ -163,4 +193,5 @@ BacktestSection.propTypes = {
   params: PropTypes.object.isRequired,
   onParamChange: PropTypes.func.isRequired,
   result: PropTypes.object,
+  dates: PropTypes.arrayOf(PropTypes.string).isRequired,
 };

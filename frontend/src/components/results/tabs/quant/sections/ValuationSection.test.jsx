@@ -68,4 +68,28 @@ describe('ValuationSection inputs', () => {
     expect(screen.getByLabelText(/Net Debt/).value).toBe('400');
     expect(screen.getByLabelText(/FCF Growth/).value).toBe('12');
   });
+
+  it('marks every sensitivity cell with a direction glyph and outlines the base case', () => {
+    const { container } = render(<ValuationSection {...props} overview={fundamentals} />);
+    expect(screen.getByText('Sensitivity · fair value per share')).toBeTruthy();
+    const cells = [...container.querySelectorAll('tbody td')].filter((td) =>
+      td.textContent.match(/[▲▼]/)
+    );
+    expect(cells).toHaveLength(25);
+    cells.forEach((td) => {
+      const up = td.textContent.endsWith('▲');
+      expect(td.style.backgroundColor).toContain(up ? '34, 197, 94' : '239, 68, 68');
+    });
+    const base = container.querySelector('td[aria-current="true"]');
+    expect(base.closest('tr').querySelectorAll('td')[2]).toBe(base);
+  });
+
+  it('draws the Monte Carlo histogram with plain-text labels', () => {
+    render(<ValuationSection {...props} overview={fundamentals} />);
+    expect(screen.getByRole('button', { name: 'Auto-fill from fundamentals' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Monte Carlo/ }));
+    expect(
+      screen.getByRole('img', { name: 'Distribution of DCF fair value across sampled assumptions' })
+    ).toBeTruthy();
+  });
 });

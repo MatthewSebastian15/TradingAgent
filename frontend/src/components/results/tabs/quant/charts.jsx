@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-import { GRID_COLOR, LAST_PRICE_COLOR } from '../priceChartUtils';
+import { LAST_PRICE_COLOR } from '../priceChartUtils';
 import { DASH } from './format';
 
 // --- tiny presentational pieces (no new deps, reuse chart color tokens) ----
@@ -93,205 +93,6 @@ export function SkeletonGrid() {
   );
 }
 
-// Fan chart: shaded p10–p90 band + median line + a few faint sample paths (4B.4).
-export function FanChart({ band, samplePaths }) {
-  const W = 720;
-  const H = 240;
-  const P = { t: 16, r: 16, b: 8, l: 16 };
-  const steps = band.length - 1;
-  const min = Math.min(...band.map((b) => b.p10));
-  const max = Math.max(...band.map((b) => b.p90));
-  const x = (i) => P.l + (i / (steps || 1)) * (W - P.l - P.r);
-  const y = (v) => P.t + ((max - v) / (max - min || 1)) * (H - P.t - P.b);
-  const line = (vals) =>
-    vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
-  const bandPath = `${band.map((b, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(b.p90).toFixed(1)}`).join(' ')} ${[
-    ...band,
-  ]
-    .map((b, i) => ({ b, i }))
-    .reverse()
-    .map(({ b, i }) => `L ${x(i).toFixed(1)} ${y(b.p10).toFixed(1)}`)
-    .join(' ')} Z`;
-  return (
-    <svg
-      role="img"
-      aria-label="Monte Carlo price fan: shaded 10th–90th percentile band with median"
-      className="h-[240px] w-full border border-bloomberg-border bg-black"
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-    >
-      <path d={bandPath} fill={LAST_PRICE_COLOR} fillOpacity="0.15" stroke="none" />
-      {samplePaths.map((p, idx) => (
-        <path
-          key={idx}
-          d={line(p)}
-          fill="none"
-          stroke={GRID_COLOR}
-          strokeWidth="1"
-          vectorEffect="non-scaling-stroke"
-        />
-      ))}
-      <path
-        d={line(band.map((b) => b.p50))}
-        fill="none"
-        stroke={LAST_PRICE_COLOR}
-        strokeWidth="2"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
-
-FanChart.propTypes = {
-  band: PropTypes.arrayOf(PropTypes.object).isRequired,
-  samplePaths: PropTypes.arrayOf(PropTypes.arrayOf(PropTypes.number)).isRequired,
-};
-
-export function Histogram({ bins, label }) {
-  const W = 720;
-  const H = 160;
-  const P = { t: 8, r: 8, b: 8, l: 8 };
-  const maxCount = Math.max(...bins.map((b) => b.count), 1);
-  const bw = (W - P.l - P.r) / (bins.length || 1);
-  return (
-    <svg
-      role="img"
-      aria-label={label}
-      className="h-[160px] w-full border border-bloomberg-border bg-black"
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-    >
-      {bins.map((b, i) => {
-        const h = (b.count / maxCount) * (H - P.t - P.b);
-        return (
-          <rect
-            key={i}
-            x={P.l + i * bw}
-            y={H - P.b - h}
-            width={Math.max(1, bw - 1)}
-            height={h}
-            fill={LAST_PRICE_COLOR}
-            fillOpacity="0.7"
-          />
-        );
-      })}
-    </svg>
-  );
-}
-
-Histogram.propTypes = {
-  bins: PropTypes.arrayOf(PropTypes.object).isRequired,
-  label: PropTypes.string.isRequired,
-};
-
-// Histogram of returns with a fitted normal curve overlaid (4.2 distribution).
-export function NormalOverlayHistogram({ bins, mu, sigma, label }) {
-  const W = 720;
-  const H = 180;
-  const P = { t: 8, r: 8, b: 8, l: 8 };
-  const maxCount = Math.max(...bins.map((b) => b.count), 1);
-  const total = bins.reduce((a, b) => a + b.count, 0);
-  const binW = bins.length ? bins[0].binEnd - bins[0].binStart : 0;
-  const bw = (W - P.l - P.r) / (bins.length || 1);
-  // Normal pdf scaled to counts: pdf(x) * total * binWidth, then to maxCount px.
-  const pdf = (x) =>
-    sigma > 0
-      ? Math.exp(-((x - mu) ** 2) / (2 * sigma * sigma)) / (sigma * Math.sqrt(2 * Math.PI))
-      : 0;
-  const curve = bins
-    .map((b, i) => {
-      const mid = (b.binStart + b.binEnd) / 2;
-      const count = pdf(mid) * total * binW;
-      const h = (count / maxCount) * (H - P.t - P.b);
-      return `${i === 0 ? 'M' : 'L'} ${(P.l + i * bw + bw / 2).toFixed(1)} ${(H - P.b - h).toFixed(1)}`;
-    })
-    .join(' ');
-  return (
-    <svg
-      role="img"
-      aria-label={label}
-      className="h-[180px] w-full border border-bloomberg-border bg-black"
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-    >
-      {bins.map((b, i) => {
-        const h = (b.count / maxCount) * (H - P.t - P.b);
-        return (
-          <rect
-            key={i}
-            x={P.l + i * bw}
-            y={H - P.b - h}
-            width={Math.max(1, bw - 1)}
-            height={h}
-            fill={LAST_PRICE_COLOR}
-            fillOpacity="0.6"
-          />
-        );
-      })}
-      <path
-        d={curve}
-        fill="none"
-        stroke={GRID_COLOR}
-        strokeWidth="1.5"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
-
-NormalOverlayHistogram.propTypes = {
-  bins: PropTypes.arrayOf(PropTypes.object).isRequired,
-  mu: PropTypes.number.isRequired,
-  sigma: PropTypes.number.isRequired,
-  label: PropTypes.string.isRequired,
-};
-
-// Strategy equity vs buy & hold (two lines on a shared y-axis).
-export function DualLineChart({ a, b, label }) {
-  const W = 720;
-  const H = 240;
-  const P = { t: 12, r: 12, b: 8, l: 12 };
-  const all = [...a, ...b];
-  const min = Math.min(...all);
-  const max = Math.max(...all);
-  const x = (i, len) => P.l + (i / (len - 1 || 1)) * (W - P.l - P.r);
-  const y = (v) => P.t + ((max - v) / (max - min || 1)) * (H - P.t - P.b);
-  const line = (vals) =>
-    vals
-      .map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i, vals.length).toFixed(1)} ${y(v).toFixed(1)}`)
-      .join(' ');
-  return (
-    <svg
-      role="img"
-      aria-label={label}
-      className="h-[240px] w-full border border-bloomberg-border bg-black"
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-    >
-      <path
-        d={line(b)}
-        fill="none"
-        stroke={GRID_COLOR}
-        strokeWidth="1.5"
-        vectorEffect="non-scaling-stroke"
-      />
-      <path
-        d={line(a)}
-        fill="none"
-        stroke={LAST_PRICE_COLOR}
-        strokeWidth="2"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
-
-DualLineChart.propTypes = {
-  a: PropTypes.arrayOf(PropTypes.number).isRequired,
-  b: PropTypes.arrayOf(PropTypes.number).isRequired,
-  label: PropTypes.string.isRequired,
-};
-
 export function SliderField({ label, value, min, max, onChange }) {
   return (
     <label className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-muted">
@@ -344,8 +145,6 @@ NumberField.propTypes = {
   suffix: PropTypes.string,
 };
 
-// Black-Scholes-Merton option pricer + Greeks. Spot is the last close; vol/rate
-
 export function SectionBlock({ title, hidden, children }) {
   return (
     <section role="tabpanel" hidden={hidden} className="space-y-3">
@@ -362,5 +161,3 @@ SectionBlock.propTypes = {
   hidden: PropTypes.bool,
   children: PropTypes.node.isRequired,
 };
-
-// --- main -----------------------------------------------------------------
