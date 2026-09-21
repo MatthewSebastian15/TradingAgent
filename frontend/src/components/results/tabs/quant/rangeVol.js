@@ -1,6 +1,7 @@
 import { ewmaVarianceSeries, mean, quantile, rollingVol, stdDev, TRADING_DAYS } from './stats';
 
 // Raw (unadjusted) OHLC rows; any missing / non-finite / non-positive value drops the row.
+// Survivors are treated as consecutive, so a run of dropped days counts as one overnight gap.
 const validBars = (points) =>
   (points || []).filter((p) =>
     [p?.open, p?.high, p?.low, p?.close].every((v) => Number.isFinite(v) && v > 0)
@@ -80,6 +81,6 @@ export function volCone(closes, windows = [10, 21, 63, 126, 252], ppy = TRADING_
 // ewmaVarianceSeries, so out.at(-1) always equals ewmaVol. out[i] covers returns up
 // to index seedWindow - 1 + i; zip with zipRollingToDates(out, dates, seedWindow).
 export function ewmaVolSeries(returns, lambda = 0.94, seedWindow = 20, ppy = TRADING_DAYS) {
-  if (returns.length < seedWindow) return [];
+  if (!returns || returns.length < seedWindow) return [];
   return ewmaVarianceSeries(returns, lambda, seedWindow).map((v) => Math.sqrt(v * ppy) * 100);
 }

@@ -120,6 +120,11 @@ describe('volCone', () => {
 describe('ewmaVolSeries', () => {
   const closes = Array.from({ length: 80 }, (_, i) => 100 + 5 * Math.sin(i));
 
+  it('returns [] for missing or too-short returns', () => {
+    expect(ewmaVolSeries(undefined)).toEqual([]);
+    expect(ewmaVolSeries([0.01, 0.02])).toEqual([]);
+  });
+
   it('ends at the same value as ewmaVol (same seeding as ewmaSigmaDaily)', () => {
     const series = ewmaVolSeries(simpleReturns(closes));
     expect(series).toHaveLength(79 - 20 + 1);
