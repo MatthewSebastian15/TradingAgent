@@ -192,5 +192,3 @@ CorrelationSection.propTypes = {
   tangencyWeights: PropTypes.arrayOf(PropTypes.number),
   optimizerStatus: PropTypes.oneOf(['ok', 'singular', 'no_tangency']).isRequired,
 };
-
-// Tab panel wrapper. Inactive panels stay mounted but hidden (native `hidden`
