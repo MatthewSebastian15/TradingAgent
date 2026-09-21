@@ -50,7 +50,8 @@ describe('chartScale', () => {
 
   it('logTicks falls back to denser ticks on narrow ranges', () => {
     expect(logTicks(3, 4)).toEqual([3, 3.5, 4]);
-    expect(logTicks(1, 1.5).length).toBeGreaterThanOrEqual(3);
+    expect(logTicks(1, 1.5)).toEqual([1, 1.2, 1.4]);
+    expect(logTicks(5, 5.5)).toEqual([5, 5.2, 5.4]);
     const price = logTicks(120, 180);
     expect(price.length).toBeGreaterThanOrEqual(3);
     expect(price.every((v) => v > 0)).toBe(true);

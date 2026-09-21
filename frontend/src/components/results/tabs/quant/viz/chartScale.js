@@ -63,7 +63,7 @@ export function logTicks(min, max) {
   };
   let ticks = collect([1, 2, 5]);
   if (ticks.length < 3) ticks = collect([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-  if (ticks.length < 3) ticks = niceTicks(min, max, 5).filter((v) => v > 0);
+  if (ticks.length < 3) ticks = niceTicks(min, max, 5).filter((v) => v >= min && v <= max);
   return ticks;
 }
 
