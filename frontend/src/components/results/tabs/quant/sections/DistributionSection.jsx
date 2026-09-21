@@ -1,12 +1,14 @@
 import PropTypes from 'prop-types';
 
-import { MetricCard, NormalOverlayHistogram } from '../charts';
+import { MetricCard } from '../charts';
 import { finite, fmtLoss, fmtNum2, signedTone } from '../format';
+import { CHART_COLORS } from '../viz/chartTheme';
+import { HistogramChart } from '../viz/HistogramChart';
 
 export function DistributionSection({ skew, kurt, var95, var99, bins, mu, sigma }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-bloomberg-subtle">
+      <p className="text-sm text-bloomberg-white/80">
         Daily returns are{' '}
         {finite(skew) && skew < -0.1
           ? 'left-skewed (crash-prone)'
@@ -47,17 +49,18 @@ export function DistributionSection({ skew, kurt, var95, var99, bins, mu, sigma 
           formula="1st-percentile daily return."
         />
       </div>
-      <div className="space-y-1">
-        <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
-          Daily returns vs fitted normal
-        </div>
-        <NormalOverlayHistogram
-          bins={bins}
-          mu={mu}
-          sigma={sigma}
-          label="Histogram of daily returns with a fitted normal overlay"
-        />
-      </div>
+      <HistogramChart
+        title="Daily returns vs fitted normal"
+        subtitle="Bars = observed frequency · line = normal with the same mean and stdev"
+        ariaLabel="Histogram of daily returns with a fitted normal overlay"
+        bins={bins}
+        formatX={(v) => `${(v * 100).toFixed(1)}%`}
+        overlay={{ mu, sigma }}
+        markers={[
+          finite(var95) && { x: var95 / 100, label: 'VaR 95%', color: CHART_COLORS.warning },
+          finite(var99) && { x: var99 / 100, label: 'VaR 99%', color: CHART_COLORS.down },
+        ].filter(Boolean)}
+      />
     </div>
   );
 }

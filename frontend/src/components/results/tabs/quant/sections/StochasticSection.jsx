@@ -2,9 +2,12 @@ import PropTypes from 'prop-types';
 
 import NoticeBox from '../../../NoticeBox';
 import { returnHistogram } from '../../quantUtils';
-import { FanChart, Histogram, MetricCard } from '../charts';
+import { MetricCard } from '../charts';
 import { MC_HORIZONS, MC_PATHS } from '../config';
 import { fmtMoney as formatMoney } from '../numberFormat';
+import { CHART_COLORS } from '../viz/chartTheme';
+import { HistogramChart } from '../viz/HistogramChart';
+import { LineChart } from '../viz/LineChart';
 
 export function StochasticSection({
   sim,
@@ -95,7 +98,7 @@ export function StochasticSection({
   return (
     <div className="space-y-4">
       {controls}
-      <p className="text-sm text-bloomberg-subtle">
+      <p className="text-sm text-bloomberg-white/80">
         In 80% of {MC_PATHS.toLocaleString()} {method === 'bootstrap' ? 'block bootstrap' : 'GBM'}{' '}
         simulations, the price in {horizonLabel} landed between{' '}
         <span className="text-white">{fmtMoney(percentiles.p10)}</span> and{' '}
@@ -107,9 +110,9 @@ export function StochasticSection({
         <button
           type="button"
           onClick={onReroll}
-          className="rounded-full border border-bloomberg-border px-3 py-1 text-xs tracking-wide text-bloomberg-muted hover:text-white"
+          className="rounded-none border border-bloomberg-border px-3 py-1 text-xs tracking-wide text-bloomberg-muted hover:text-white"
         >
-          🎲 Re-roll
+          Re-roll
         </button>
         <label className="text-[11px] text-bloomberg-muted">
           seed{' '}
@@ -120,12 +123,44 @@ export function StochasticSection({
             className="w-20 border border-bloomberg-border bg-black px-1 py-0.5 font-mono text-xs text-white"
           />
         </label>
-        <span className="text-[11px] text-bloomberg-subtle">
+        <span className="text-[11px] text-bloomberg-white/80">
           Same seed → same simulation. One possible future, not a prediction.
         </span>
       </div>
 
-      <FanChart band={band} samplePaths={samplePaths} />
+      <LineChart
+        title={`Simulated price paths · ${horizonLabel}`}
+        subtitle="Shaded band = 10th–90th percentile across all paths; faint lines = sample paths"
+        ariaLabel="Monte Carlo price fan chart"
+        xType="number"
+        formatX={(d) => `+${Math.round(d)}d`}
+        formatY={fmtMoney}
+        series={[
+          ...samplePaths.map((path, i) => ({
+            id: `path-${i}`,
+            color: 'rgba(229,229,229,0.18)',
+            width: 1,
+            hideInLegend: true,
+            points: path.map((v, d) => ({ x: d, y: v })),
+          })),
+          {
+            id: 'median',
+            label: 'Median',
+            color: CHART_COLORS.primary,
+            width: 2,
+            points: band.map((b) => ({ x: b.step, y: b.p50 })),
+          },
+        ]}
+        bands={[
+          {
+            id: 'p10p90',
+            label: 'P10–P90',
+            color: CHART_COLORS.band,
+            points: band.map((b) => ({ x: b.step, lo: b.p10, hi: b.p90 })),
+          },
+        ]}
+        referenceLines={[{ y: spot, label: 'Today', color: CHART_COLORS.secondary }]}
+      />
 
       <div className="grid grid-cols-3 gap-3">
         <MetricCard label="10th pct (downside)" value={fmtMoney(percentiles.p10)} tone="bad" />
@@ -133,22 +168,20 @@ export function StochasticSection({
         <MetricCard label="90th pct (upside)" value={fmtMoney(percentiles.p90)} tone="good" />
       </div>
 
-      <div className="space-y-1">
-        <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
-          Simulated price distribution
-        </div>
-        <Histogram
-          bins={returnHistogram(terminal, 30)}
-          label={`Histogram of simulated ${horizonLabel} prices`}
-        />
-      </div>
-
-      <div className="space-y-1">
-        <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
-          Historical daily return distribution
-        </div>
-        <Histogram bins={returnBins} label="Histogram of historical daily returns" />
-      </div>
+      <HistogramChart
+        title={`Simulated price distribution · ${horizonLabel}`}
+        ariaLabel={`Histogram of simulated ${horizonLabel} prices`}
+        bins={returnHistogram(terminal, 30)}
+        formatX={fmtMoney}
+        barLabel="Paths"
+        markers={[{ x: spot, label: 'Today', color: CHART_COLORS.secondary }]}
+      />
+      <HistogramChart
+        title="Historical daily returns"
+        ariaLabel="Histogram of historical daily returns"
+        bins={returnBins}
+        formatX={(v) => `${(v * 100).toFixed(1)}%`}
+      />
     </div>
   );
 }
