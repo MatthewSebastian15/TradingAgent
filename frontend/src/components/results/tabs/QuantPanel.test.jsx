@@ -3,6 +3,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import QuantPanel from './QuantPanel';
+import { ewmaVolSeries, rollingVol, simpleReturns, zipRollingToDates } from './quantUtils';
 
 vi.mock('../../../api/market', () => ({
   getApiStatus: vi.fn(async () => ({})),
@@ -282,5 +283,48 @@ describe('QuantPanel', () => {
     const expected = (good.at(-1).close / good[0].close - 1) * 100;
     const text = screen.getByText('Period Δ').nextSibling.textContent;
     expect(text).toBe(`+${expected.toFixed(1)}%`);
+  });
+});
+
+function buildOhlcPoints(count) {
+  return buildPoints(count).map((p, i) => ({
+    ...p,
+    open: p.close - 0.4 + (i % 3) * 0.2,
+    high: p.close + 1 + (i % 4) * 0.1,
+    low: p.close - 1 - (i % 5) * 0.1,
+  }));
+}
+
+describe('QuantPanel volatility detail', () => {
+  afterEach(() => cleanup());
+
+  it('shows range estimators and the GARCH term structure for a long OHLC history', async () => {
+    await renderPanel({ points: buildOhlcPoints(300), sections: ['volatility'] });
+
+    expect(screen.getByText('Volatility estimators · annualized')).toBeTruthy();
+    expect(screen.getByText('GARCH(1,1) term structure')).toBeTruthy();
+    expect(screen.getByText('Volatility cone · realized vol by window')).toBeTruthy();
+    expect(screen.queryByText(/needs at least 100 daily returns/)).toBeNull();
+    // Range estimators computed from the raw OHLC rows, so no dash in the Parkinson row.
+    expect(screen.getByText('Parkinson').closest('tr').textContent).not.toContain('—');
+  });
+
+  it('explains GARCH is unavailable and dashes range vols for a short close-only history', async () => {
+    await renderPanel({ points: buildPoints(40), sections: ['volatility'] });
+
+    expect(screen.getByText(/needs at least 100 daily returns/)).toBeTruthy();
+    expect(screen.getByText('Parkinson').closest('tr').textContent).toContain('—');
+  });
+
+  it('keeps every rolling series ending on the last history date', () => {
+    const closes = Array.from({ length: 300 }, (_, i) => 100 + Math.sin(i / 5) * 5 + i * 0.05);
+    const dates = closes.map((_, i) => `d${String(i).padStart(3, '0')}`);
+    const returns = simpleReturns(closes);
+    const last = dates.at(-1);
+    expect(zipRollingToDates(rollingVol(closes, 21, 252), dates, 21).at(-1).date).toBe(last);
+    expect(zipRollingToDates(rollingVol(closes, 63, 252), dates, 63).at(-1).date).toBe(last);
+    expect(zipRollingToDates(ewmaVolSeries(returns, 0.94, 20, 252), dates, 20).at(-1).date).toBe(
+      last
+    );
   });
 });

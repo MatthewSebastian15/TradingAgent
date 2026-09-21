@@ -47,6 +47,10 @@ import {
   efficientFrontier,
   ewmaSigmaDaily,
   ewmaVol,
+  ewmaVolSeries,
+  fitGarch,
+  garchTermStructure,
+  garmanKlassVol,
   gmvWeights,
   historicalVaR,
   hurst,
@@ -58,6 +62,7 @@ import {
   monteCarloGBM,
   ouHalfLife,
   parametricVaR,
+  parkinsonVol,
   periodsPerYearFromDates,
   pointPrice,
   portfolioStats,
@@ -76,8 +81,10 @@ import {
   sortino,
   stdDev,
   tangencyWeights,
+  volCone,
   volPercentile,
   volTargetWeight,
+  yangZhangVol,
   zipRollingToDates,
 } from './quantUtils';
 
@@ -201,6 +208,31 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     () => zipRollingToDates(rollingVols, historyDates, ROLLING_WINDOW),
     [rollingVols, historyDates]
   );
+
+  // GARCH is shared with the Stochastic and Sizing tabs, so fit it once for any of them.
+  const needsGarch =
+    !visible || ['volatility', 'stochastic', 'sizing'].some((id) => visible.has(id));
+  const garch = useMemo(() => (needsGarch ? fitGarch(returns) : null), [needsGarch, returns]);
+  const garchTerm = useMemo(
+    () => (garch ? garchTermStructure(garch, [5, 21, 63, 126, 252], ppy) : []),
+    [garch, ppy]
+  );
+  // Range estimators need the raw OHLC of `rows`; they return null when it is absent.
+  const volDetail = useMemo(() => {
+    if (visible && !visible.has('volatility')) {
+      return { estimators: {}, cone: [], rolling63Points: [], ewmaPoints: [] };
+    }
+    return {
+      estimators: {
+        parkinson: parkinsonVol(rows, ppy),
+        garmanKlass: garmanKlassVol(rows, ppy),
+        yangZhang: yangZhangVol(rows, ppy),
+      },
+      cone: volCone(closes, [10, 21, 63, 126, 252], ppy),
+      rolling63Points: zipRollingToDates(rollingVol(closes, 63, ppy), historyDates, 63),
+      ewmaPoints: zipRollingToDates(ewmaVolSeries(returns, 0.94, 20, ppy), historyDates, 20),
+    };
+  }, [visible, rows, closes, returns, historyDates, ppy]);
 
   const metrics = useMemo(
     () => ({
@@ -489,9 +521,14 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
           <VolatilitySection
             vol={metrics.vol}
             ewma={metrics.ewma}
-            rollingVols={rollingVols}
-            rollingPoints={rollingPoints}
             ppy={ppy}
+            estimators={volDetail.estimators}
+            cone={volDetail.cone}
+            garch={garch}
+            garchTerm={garchTerm}
+            rollingPoints={rollingPoints}
+            rolling63Points={volDetail.rolling63Points}
+            ewmaPoints={volDetail.ewmaPoints}
           />
         </SectionBlock>
       )}
