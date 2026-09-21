@@ -139,18 +139,20 @@ describe('chartScale', () => {
     for (let i = 1; i < fit.length; i += 1) expect(fit[i] - fit[i - 1]).toBeGreaterThanOrEqual(12);
   });
 
-  it('layoutLabels does not shift the stack for a NaN y', () => {
+  it('layoutLabels keeps finite labels stable when one y is NaN', () => {
     const items = [
       { x: 100, y: 50 },
-      { x: 100, y: 58 },
+      { x: 100, y: 56 },
+      { x: 100, y: 62 },
       { x: 100, y: Number.NaN },
     ];
-    // NaN is never > maxY, so the normal top-down layout must be kept (50, 70).
+    // NaN is never an overflow, so the plain top-down layout is kept; the reverse
+    // (overflow) pass would place these three differently.
     expect(
       layoutLabels(items, { maxY: 200 })
         .map((o) => o.labelY)
-        .slice(0, 2)
-    ).toEqual([50, 70]);
+        .slice(0, 3)
+    ).toEqual(layoutLabels(items.slice(0, 3)).map((o) => o.labelY));
   });
 
   it('logScale falls back to linear when a domain bound is not positive', () => {

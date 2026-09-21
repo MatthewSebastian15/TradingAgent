@@ -232,7 +232,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const ddStats = useMemo(() => drawdownStats(closes), [closes]);
   const regimeShift = useMemo(() => regimeShifts(rollingVols), [rollingVols]);
 
-  // Underwater curve, zipped to dates (drops the first point — no prior peak).
+  // Underwater curve (one value per close), zipped to dates.
   const ddPoints = useMemo(
     () =>
       drawdownSeries(closes)

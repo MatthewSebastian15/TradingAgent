@@ -27,7 +27,12 @@ async function renderPanel(props) {
 }
 
 describe('QuantPanel', () => {
-  afterEach(() => cleanup());
+  afterEach(async () => {
+    cleanup();
+    // Tests below swap the OHLCV mock; restore the default so a failure cannot leak it.
+    const { getMarketOhlcv } = await import('../../../api/market');
+    getMarketOhlcv.mockImplementation(async () => ({ points: [] }));
+  });
 
   it('shows the loading skeleton when no points have streamed in yet', async () => {
     await renderPanel({ points: [] });

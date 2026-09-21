@@ -112,7 +112,7 @@ export function nearestIndex(sortedXs, x) {
 
 // Greedy vertical de-collision for point labels in pixel space.
 // With maxY, a stack that would overflow the bottom is shifted upward instead
-// (input order and the minDy gap are kept; nothing is clamped onto one line).
+// (input order and the minDy gap are kept while the stack fits in [minY, maxY]).
 // minY is the ceiling (top of the plot): no label is ever placed above it.
 // ponytail: a stack too tall for [minY, maxY] piles the excess labels onto minY
 // (they overlap) instead of dropping labels; add label thinning if that matters.
