@@ -60,7 +60,7 @@ export function MetricCard({ label, value, gloss, tone = 'neutral', formula, spa
           </details>
         )}
       </div>
-      <div className={`mt-1 text-2xl ${valueColor}`}>{value}</div>
+      <div className={`mt-1 text-2xl tabular-nums ${valueColor}`}>{value}</div>
       {spark && <Sparkline values={spark} />}
       {gloss && (
         <div className="mt-1 text-[11px] leading-relaxed text-bloomberg-subtle">{gloss}</div>

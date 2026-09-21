@@ -5,9 +5,10 @@ import NoticeBox from '../../../NoticeBox';
 import { stressScenarios } from '../../quantUtils';
 import { MetricCard } from '../charts';
 import { DASH, finite, fmtPercent, fmtSignedPct } from '../format';
+import { fmtMoney as formatMoney } from '../numberFormat';
 
 export function ScenarioSection({ spot, vol, ccy, regime, beta, benchLabel, benchIsSp500, ppy }) {
-  const money = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
+  const money = (v) => formatMoney(v, ccy);
   const stress = useMemo(
     () => stressScenarios(spot, finite(vol) ? vol : 0, beta, ppy),
     [spot, vol, beta, ppy]

@@ -4,6 +4,7 @@ import NoticeBox from '../../../NoticeBox';
 import { returnHistogram } from '../../quantUtils';
 import { FanChart, Histogram, MetricCard } from '../charts';
 import { MC_HORIZONS, MC_PATHS } from '../config';
+import { fmtMoney as formatMoney } from '../numberFormat';
 
 export function StochasticSection({
   sim,
@@ -21,7 +22,7 @@ export function StochasticSection({
   drift,
   onDriftChange,
 }) {
-  const fmtMoney = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
+  const fmtMoney = (v) => formatMoney(v, ccy);
   const controls = (
     <div className="flex flex-wrap items-center gap-3">
       <div className="flex gap-1">

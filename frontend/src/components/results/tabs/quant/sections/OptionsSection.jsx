@@ -5,6 +5,7 @@ import NoticeBox from '../../../NoticeBox';
 import { blackScholes, impliedVol } from '../../quantUtils';
 import { MetricCard, NumberField } from '../charts';
 import { finite, DASH, fmtNum2 } from '../format';
+import { fmtMoney as formatMoney } from '../numberFormat';
 
 export function OptionsSection({ spot, defaultVol, defaultRate, ccy }) {
   const [strike, setStrike] = useState(Number(spot.toFixed(2)));
@@ -38,7 +39,7 @@ export function OptionsSection({ spot, defaultVol, defaultRate, ccy }) {
       type
     );
   }, [marketPrice, spot, strike, days, rate, type]);
-  const money = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
+  const money = (v) => formatMoney(v, ccy);
 
   return (
     <div className="space-y-4">

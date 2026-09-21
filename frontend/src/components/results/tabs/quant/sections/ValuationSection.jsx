@@ -12,6 +12,7 @@ import {
 } from '../../quantUtils';
 import { Histogram, MetricCard, NumberField } from '../charts';
 import { finite, DASH, fmtNum2, fmtSignedPct, signedTone } from '../format';
+import { fmtMoney as formatMoney, fmtMoneyCompact } from '../numberFormat';
 
 export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
   const [fcf, setFcf] = useState(''); // base free cash flow (millions); empty until known
@@ -79,7 +80,7 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
         : null,
     [ready, fcf, growth, years, wacc, terminalGrowth, shares, netDebt]
   );
-  const money = (v) => `${ccy ? `${ccy} ` : '$'}${Number(v).toFixed(2)}`;
+  const money = (v) => formatMoney(v, ccy);
   const upside = result && spot > 0 ? (result.fairValuePerShare / spot - 1) * 100 : null;
 
   // #3 Monte Carlo: vary the three soft assumptions ±a spread around the inputs and
@@ -173,8 +174,11 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
             tone={signedTone(upside)}
             gloss={`Fair value vs today's close (${money(spot)}).`}
           />
-          <MetricCard label="Equity Value" value={`${money(result.equityValue)}M`} />
-          <MetricCard label="Enterprise Value" value={`${money(result.enterpriseValue)}M`} />
+          <MetricCard label="Equity Value" value={fmtMoneyCompact(result.equityValue * 1e6, ccy)} />
+          <MetricCard
+            label="Enterprise Value"
+            value={fmtMoneyCompact(result.enterpriseValue * 1e6, ccy)}
+          />
         </div>
       ) : !ready ? (
         <NoticeBox title="Inputs needed">
@@ -310,10 +314,7 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol }) {
               value={fmtNum2(overview.ev_ebitda)}
               gloss="Enterprise value ÷ EBITDA. Capital-structure neutral."
             />
-            <MetricCard
-              label="Market Cap"
-              value={finite(overview.market_cap) ? `${money(overview.market_cap / 1e6)}M` : DASH}
-            />
+            <MetricCard label="Market Cap" value={fmtMoneyCompact(overview.market_cap, ccy)} />
           </div>
           <p className="text-[11px] text-bloomberg-subtle">
             Cross-check the DCF fair value above against these multiples — a DCF that disagrees
