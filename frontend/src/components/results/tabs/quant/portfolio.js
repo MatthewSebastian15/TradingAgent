@@ -1,4 +1,5 @@
 import { covariance } from './benchmark';
+import { pointPrice } from './dataQuality';
 import { stdDev, TRADING_DAYS } from './stats';
 
 // --- correlation + optimizer (Phase 5) ------------------------------------
@@ -30,7 +31,7 @@ export function alignManyByDate(series) {
     const m = new Map();
     for (const p of s.points || []) {
       const d = String(p?.date || '').slice(0, 10);
-      const c = p?.adjusted_close ?? p?.close;
+      const c = pointPrice(p);
       if (d && c != null) m.set(d, c);
     }
     return m;

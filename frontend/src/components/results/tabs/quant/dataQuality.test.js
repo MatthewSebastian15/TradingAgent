@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { assessSeries } from './dataQuality';
+import { assessSeries, pointPrice, priceRows } from './dataQuality';
 
 function weekdays(n, start = '2026-01-05') {
   const out = [];
@@ -123,5 +123,28 @@ describe('assessSeries hardening', () => {
     const report = assessSeries(pts);
     expect(report.observations).toBe(200);
     expect(report.issues).toEqual([]);
+  });
+});
+
+describe('pointPrice / priceRows', () => {
+  it('prefers a finite adjusted_close, then a finite close, else null', () => {
+    expect(pointPrice({ adjusted_close: 9, close: 10 })).toBe(9);
+    expect(pointPrice({ adjusted_close: NaN, close: 10 })).toBe(10);
+    expect(pointPrice({ adjusted_close: null, close: 10 })).toBe(10);
+    expect(pointPrice({ adjusted_close: NaN, close: null })).toBeNull();
+    expect(pointPrice(null)).toBeNull();
+  });
+
+  it('keeps only dated rows with a usable price, matching assessSeries', () => {
+    const pts = [
+      { date: '2026-01-05', adjusted_close: NaN, close: 10 },
+      { date: '2026-01-06', adjusted_close: NaN, close: null },
+      { close: 11 },
+      { date: '2026-01-07', close: 12 },
+    ];
+    const rows = priceRows(pts);
+    expect(rows.map((r) => r.date)).toEqual(['2026-01-05', '2026-01-07']);
+    expect(rows.map(pointPrice)).toEqual([10, 12]);
+    expect(assessSeries(pts, { minObservations: 0 }).observations).toBe(rows.length);
   });
 });

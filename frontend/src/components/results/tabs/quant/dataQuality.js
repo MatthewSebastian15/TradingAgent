@@ -1,19 +1,26 @@
 // Data-quality report for a daily OHLCV series. Pure; the headline renders `issues`.
 const MS_PER_DAY = 86_400_000;
 
+// Single source of truth for a row's price: finite adjusted_close, else finite close, else null.
+// The quality report and the panel's derived series both use it so they cannot disagree.
+export const pointPrice = (p) => {
+  if (Number.isFinite(p?.adjusted_close)) return p.adjusted_close;
+  return Number.isFinite(p?.close) ? p.close : null;
+};
+
+// Dated rows with a usable price; closes/dates derived from these stay aligned.
+export const priceRows = (points) =>
+  (Array.isArray(points) ? points : []).filter((p) => p && p.date && pointPrice(p) !== null);
+
 const isoTime = (iso) => Date.parse(`${iso}T00:00:00Z`);
 
 export function assessSeries(
   points,
   { minObservations = 126, staleRun = 5, extremeMove = 0.4, gapDays = 7 } = {}
 ) {
-  // adjusted_close may be null/NaN on some rows; fall back to close instead of dropping them.
-  const price = (p) => (Number.isFinite(p.adjusted_close) ? p.adjusted_close : p.close);
-  const rows = (Array.isArray(points) ? points : []).filter(
-    (p) => p && p.date && Number.isFinite(price(p))
-  );
+  const rows = priceRows(points);
   const dates = rows.map((p) => String(p.date).slice(0, 10));
-  const closes = rows.map(price);
+  const closes = rows.map(pointPrice);
   const issues = [];
 
   if (rows.length < minObservations) {

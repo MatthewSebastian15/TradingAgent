@@ -59,7 +59,9 @@ import {
   ouHalfLife,
   parametricVaR,
   periodsPerYearFromDates,
+  pointPrice,
   portfolioStats,
+  priceRows,
   regimeShifts,
   resolveRiskFreeRate,
   returnHistogram,
@@ -110,11 +112,12 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const [peers, setPeers] = useState([]); // [{ symbol, points }]
   const [peerLoading, setPeerLoading] = useState(false);
 
-  // Peers fetched for another window would misalign with the base series.
+  // Peers fetched for another window or another base ticker would misalign with (or
+  // duplicate) the base series.
   useEffect(() => {
     setPeers([]);
     setPeerInput('');
-  }, [fetchRange]);
+  }, [fetchRange, symbol]);
 
   // Fetch a longer history than the 1Y analysis chart; fall back to the prop on failure.
   // Skipped when `range` is set (Quant page) — the caller already fetched that window.
@@ -139,11 +142,10 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
   const history = longPoints && longPoints.length > points.length ? longPoints : points;
   const quality = useMemo(() => assessSeries(history), [history]);
-  const closes = useMemo(() => history.map((p) => p.adjusted_close ?? p.close), [history]);
-  const historyDates = useMemo(
-    () => history.map((p) => String(p.date || '').slice(0, 10)),
-    [history]
-  );
+  // Same rows as assessSeries (shared helper), so dates/closes stay aligned with the report.
+  const rows = useMemo(() => priceRows(history), [history]);
+  const closes = useMemo(() => rows.map(pointPrice), [rows]);
+  const historyDates = useMemo(() => rows.map((p) => String(p.date).slice(0, 10)), [rows]);
   const ppy = useMemo(() => periodsPerYearFromDates(historyDates), [historyDates]);
   const { data: overview, error: overviewError } = useStockOverview(symbol);
   const ccy = currency || overview?.currency || '';
@@ -228,9 +230,9 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const ddPoints = useMemo(
     () =>
       drawdownSeries(closes)
-        .map((value, i) => ({ date: String(history[i]?.date || ''), value }))
+        .map((value, i) => ({ date: historyDates[i], value }))
         .filter((p) => p.date),
-    [closes, history]
+    [closes, historyDates]
   );
 
   // Rolling Sharpe zipped to dates.
@@ -254,7 +256,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       rollBetaPoints: [],
     };
     if (!benchPoints || benchPoints.length === 0) return none;
-    const { dates, stock, market } = alignByDate(history, benchPoints);
+    const { dates, stock, market } = alignByDate(rows, benchPoints);
     if (stock.length < 3) return none;
     const sr = simpleReturns(stock);
     const mr = simpleReturns(market);
@@ -269,7 +271,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         ROLLING_RATIO_WINDOW
       ),
     };
-  }, [history, benchPoints, rfDaily, ppy]);
+  }, [rows, benchPoints, rfDaily, ppy]);
 
   // Only run the simulation when the section is open and there's enough data;
   // keyed so unrelated re-renders (e.g. streaming updates) don't re-roll it.
@@ -360,7 +362,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       rollLabel: '',
     };
     if (peers.length === 0 || (visible && !visible.has('correlation'))) return empty;
-    const series = [{ symbol: baseSymbol, points: history }, ...peers];
+    const series = [{ symbol: baseSymbol, points: rows }, ...peers];
     const { dates, closes } = alignManyByDate(series);
     if (dates.length < 30) return empty;
     const symbols = series.map((s) => s.symbol);
@@ -399,7 +401,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       rollPoints,
       rollLabel: `${baseSymbol} vs ${peerSym}`,
     };
-  }, [peers, visible, baseSymbol, history, rfDaily, ppy]);
+  }, [peers, visible, baseSymbol, rows, rfDaily, ppy]);
 
   // Loading: result is here but price history hasn't streamed in yet.
   // ponytail: 0 points = still loading; 1–29 = genuinely too short (NoticeBox).

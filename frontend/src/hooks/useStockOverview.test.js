@@ -101,6 +101,22 @@ describe('useStockOverview', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('ignores a stale non-abortable response for the previous ticker', async () => {
+    let resolveA;
+    getStockOverview.mockReturnValueOnce(new Promise((res) => (resolveA = res)));
+    getStockOverview.mockResolvedValueOnce({ ticker: 'MSFT' });
+
+    const { result, rerender } = renderHook(({ t }) => useStockOverview(t), {
+      initialProps: { t: 'AAPL' },
+    });
+    rerender({ t: 'MSFT' });
+    await waitFor(() => expect(result.current.data).toEqual({ ticker: 'MSFT' }));
+
+    await act(async () => resolveA({ ticker: 'AAPL' }));
+    expect(result.current.data).toEqual({ ticker: 'MSFT' });
+    expect(result.current.loading).toBe(false);
+  });
+
   it('returns to idle when the ticker is cleared', async () => {
     getStockOverview.mockResolvedValueOnce({ ticker: 'AAPL' });
 

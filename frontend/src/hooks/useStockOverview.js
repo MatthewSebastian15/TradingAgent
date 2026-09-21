@@ -17,9 +17,12 @@ export function useStockOverview(ticker) {
     const controller = new AbortController();
 
     getStockOverview(ticker, { signal: controller.signal })
-      .then((result) => setState({ ticker, data: result, error: null }))
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setState({ ticker, data: result, error: null });
+      })
       .catch((err) => {
-        if (err.name === 'AbortError') return;
+        if (controller.signal.aborted || err.name === 'AbortError') return;
         setState({ ticker, data: null, error: err.message || 'Failed to load stock overview.' });
       });
 

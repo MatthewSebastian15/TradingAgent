@@ -122,6 +122,40 @@ describe('QuantPanel', () => {
     expect(screen.getByPlaceholderText(/Add peers/).value).toBe('');
   });
 
+  it('derives Last and Window from rows with a usable price, falling back to close', async () => {
+    const pts = [
+      ...buildPoints(40),
+      { date: '2026-02-14', close: 111.5, adjusted_close: NaN },
+      { date: '2026-02-15', close: null, adjusted_close: NaN },
+    ];
+    await renderPanel({ points: pts, sections: ['volatility'] });
+
+    expect(screen.getByText('USD 111.50')).toBeTruthy();
+    expect(screen.getByText('2026-01-01 → 2026-02-14 · 41 obs')).toBeTruthy();
+  });
+
+  it('clears peers and the typed peer text when the base symbol changes', async () => {
+    const { getMarketOhlcv } = await import('../../../api/market');
+    getMarketOhlcv.mockImplementation(async (sym) =>
+      sym === 'MSFT' ? { points: buildPoints(40) } : { points: [] }
+    );
+    const props = { points: buildPoints(40), sections: ['correlation'], currency: 'USD' };
+    const { rerender } = render(<QuantPanel symbol="AAPL" range="1Y" {...props} />);
+    await act(async () => {});
+    const input = screen.getByPlaceholderText(/Add peers/);
+    fireEvent.change(input, { target: { value: 'MSFT' } });
+    fireEvent.click(screen.getByRole('button', { name: /add/i }));
+    await act(async () => {});
+    expect(screen.getAllByText('MSFT').length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByPlaceholderText(/Add peers/), { target: { value: 'NVDA' } });
+
+    rerender(<QuantPanel symbol="GOOG" range="1Y" {...props} />);
+    await act(async () => {});
+    expect(screen.queryAllByText('MSFT')).toHaveLength(0);
+    expect(screen.getByPlaceholderText(/Add peers/).value).toBe('');
+    getMarketOhlcv.mockImplementation(async () => ({ points: [] }));
+  });
+
   it('renders every tab when sections is undefined', async () => {
     await renderPanel({ points: buildPoints(40) });
 

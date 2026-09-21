@@ -77,6 +77,14 @@ describe('ScenarioSection', () => {
     expect(container.textContent).toContain('β is unavailable');
   });
 
+  it('says beta is loading (not unavailable) while the benchmark is fetching', () => {
+    const { container } = render(
+      <ScenarioSection {...base} beta={null} betaLoading benchIsSp500={false} />
+    );
+    expect(container.textContent).toContain('β loading, using 1');
+    expect(container.textContent).not.toContain('β unavailable, using 1');
+  });
+
   it('defaults ppy to 252 when omitted', () => {
     const { container } = render(
       <ScenarioSection {...base} ppy={undefined} beta={1} benchIsSp500 />

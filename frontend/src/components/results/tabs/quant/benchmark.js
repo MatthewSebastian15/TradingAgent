@@ -1,3 +1,4 @@
+import { pointPrice } from './dataQuality';
 import { mean, stdDev, TRADING_DAYS } from './stats';
 
 // --- benchmark-relative (v2) ----------------------------------------------
@@ -55,7 +56,7 @@ export function alignByDate(stockPoints, marketPoints) {
   const byDate = new Map();
   for (const p of marketPoints || []) {
     const date = String(p?.date || '').slice(0, 10);
-    const close = p?.adjusted_close ?? p?.close;
+    const close = pointPrice(p);
     if (date && close != null) byDate.set(date, close);
   }
   const dates = [];
@@ -63,7 +64,7 @@ export function alignByDate(stockPoints, marketPoints) {
   const market = [];
   for (const p of stockPoints || []) {
     const date = String(p?.date || '').slice(0, 10);
-    const close = p?.adjusted_close ?? p?.close;
+    const close = pointPrice(p);
     if (date && close != null && byDate.has(date)) {
       dates.push(date);
       stock.push(close);

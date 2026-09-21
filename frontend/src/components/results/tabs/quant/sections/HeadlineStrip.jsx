@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   fmtLoss,
@@ -70,17 +70,26 @@ export function HeadlineStrip({
   // "back to the market/global default" (onRfChange(null)); out-of-range values are ignored.
   const [draft, setDraft] = useState(() => fmtRfDraft(rfPct));
   const [prev, setPrev] = useState({ symbol, rfPct });
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef(null);
   if (prev.symbol !== symbol || !Object.is(prev.rfPct, rfPct)) {
     setPrev({ symbol, rfPct });
+    if (prev.symbol !== symbol) setEditing(false);
     // Resync on symbol change, or when the parent rate moved away from a non-empty draft
-    // (an empty draft is the user's "use default" state and shows the default as placeholder).
-    if (prev.symbol !== symbol || (draft !== '' && Number(draft) !== Number(fmtRfDraft(rfPct)))) {
+    // while the user is not mid-edit (an empty draft is the user's "use default" state
+    // and shows the default as placeholder; the parent echoes typed values at full precision,
+    // so resyncing mid-typing would round "4.567" to "4.57").
+    if (
+      prev.symbol !== symbol ||
+      (!editing && draft !== '' && Number(draft) !== Number(fmtRfDraft(rfPct)))
+    ) {
       setDraft(fmtRfDraft(rfPct));
     }
   }
   const handleRf = (event) => {
     const raw = event.target.value;
     setDraft(raw);
+    setEditing(true);
     const value = Number(raw);
     if (raw.trim() === '' || !Number.isFinite(value)) onRfChange(null);
     else if (value >= 0 && value <= 100) onRfChange(value / 100);
@@ -112,10 +121,14 @@ export function HeadlineStrip({
               min="0"
               max="100"
               aria-label="Risk-free rate, annual percent"
+              ref={inputRef}
               value={draft}
               placeholder={fmtRfDraft(rfPct)}
               onChange={handleRf}
-              onBlur={() => draft !== '' && setDraft(fmtRfDraft(rfPct))}
+              onBlur={() => {
+                setEditing(false);
+                if (draft !== '') setDraft(fmtRfDraft(rfPct));
+              }}
               className="w-20 rounded-none border border-bloomberg-border bg-black px-1 py-0.5 text-sm text-white tabular-nums"
             />
             <span className="text-[10px] text-bloomberg-white/80">{RF_SOURCE_LABEL[rfSource]}</span>
@@ -123,7 +136,12 @@ export function HeadlineStrip({
               <button
                 type="button"
                 aria-label="Reset risk-free rate to default"
-                onClick={() => onRfChange(null)}
+                onClick={() => {
+                  // The button unmounts once the rate is back to default; keep focus in the field.
+                  setEditing(false);
+                  onRfChange(null);
+                  inputRef.current?.focus();
+                }}
                 className="text-[10px] tracking-wider text-bloomberg-orange uppercase hover:text-white"
               >
                 reset

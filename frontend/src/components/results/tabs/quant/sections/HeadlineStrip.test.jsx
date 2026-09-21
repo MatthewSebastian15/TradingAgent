@@ -97,6 +97,37 @@ describe('HeadlineStrip', () => {
     expect(input.value).toBe('6');
   });
 
+  it('keeps a draft typed past two decimals while the parent echoes the value', () => {
+    const onRfChange = vi.fn();
+    const { rerender } = render(<HeadlineStrip {...props} onRfChange={onRfChange} />);
+    const input = screen.getByLabelText('Risk-free rate, annual percent');
+    input.focus();
+    fireEvent.change(input, { target: { value: '4.5' } });
+    expect(input.value).toBe('4.5');
+    fireEvent.change(input, { target: { value: '4.567' } });
+    rerender(<HeadlineStrip {...props} rfPct={4.567} rfSource="manual" onRfChange={onRfChange} />);
+    expect(input.value).toBe('4.567');
+  });
+
+  it('resyncs the draft to a parent rate change without a symbol change when not focused', () => {
+    const { rerender } = render(<HeadlineStrip {...props} rfPct={0} onRfChange={vi.fn()} />);
+    const input = screen.getByLabelText('Risk-free rate, annual percent');
+    expect(input.value).toBe('0');
+    rerender(<HeadlineStrip {...props} rfPct={4.25} onRfChange={vi.fn()} />);
+    expect(input.value).toBe('4.25');
+  });
+
+  it('moves focus back to the input when the reset button unmounts', () => {
+    const { rerender } = render(
+      <HeadlineStrip {...props} rfSource="manual" onRfChange={vi.fn()} />
+    );
+    const reset = screen.getByRole('button', { name: /reset risk-free/i });
+    reset.focus();
+    fireEvent.click(reset);
+    rerender(<HeadlineStrip {...props} rfSource="market" onRfChange={vi.fn()} />);
+    expect(document.activeElement).toBe(screen.getByLabelText('Risk-free rate, annual percent'));
+  });
+
   it('does not throw on a non-finite rfPct', () => {
     render(<HeadlineStrip {...props} rfPct={NaN} onRfChange={vi.fn()} />);
     expect(screen.getByLabelText('Risk-free rate, annual percent').value).toBe('');
