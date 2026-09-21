@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { ewmaSigmaDaily, ewmaVol, periodsPerYearFromDates, rollingVol } from './stats';
+import {
+  ewmaSigmaDaily,
+  ewmaVol,
+  kurtosis,
+  median,
+  periodsPerYearFromDates,
+  quantile,
+  rollingVol,
+  skewness,
+} from './stats';
 
 describe('ewmaSigmaDaily seeding', () => {
   it('an extreme first return does not dominate 100 later calm days', () => {
@@ -35,5 +44,53 @@ describe('ppy scaling in stats', () => {
     const ratio = Math.sqrt(365 / 252);
     expect(rollingVol(closes, 3, 365)[0] / rollingVol(closes, 3)[0]).toBeCloseTo(ratio, 10);
     expect(ewmaVol(closes, 0.94, 365) / ewmaVol(closes)).toBeCloseTo(ratio, 10);
+  });
+});
+
+describe('quantile / median', () => {
+  it('interpolates linearly', () => {
+    expect(quantile([1, 2, 3, 4], 0.5)).toBe(2.5);
+    expect(quantile([1, 2, 3, 4], 0)).toBe(1);
+    expect(quantile([10], 0.9)).toBe(10);
+    expect(quantile([], 0.5)).toBeNull();
+  });
+
+  it('clamps p outside [0, 1]', () => {
+    expect(quantile([1, 2, 3], -1)).toBe(1);
+    expect(quantile([1, 2, 3], 2)).toBe(3);
+  });
+
+  it('median ignores non-finite values, is null when empty, and does not mutate', () => {
+    expect(median([3, 1, Number.NaN, 2])).toBe(2);
+    expect(median([])).toBeNull();
+    const input = [3, 1, 2];
+    median(input);
+    expect(input).toEqual([3, 1, 2]);
+  });
+});
+
+describe('adjusted sample moments', () => {
+  const xs = [1, 2, 3, 4, 10];
+  const n = xs.length;
+  const m = xs.reduce((a, b) => a + b, 0) / n;
+  const central = (k) => xs.reduce((a, x) => a + (x - m) ** k, 0) / n;
+
+  it('skewness applies the Fisher-Pearson small-sample adjustment', () => {
+    const g1 = central(3) / central(2) ** 1.5;
+    expect(skewness(xs)).toBeCloseTo((g1 * Math.sqrt(n * (n - 1))) / (n - 2), 12);
+  });
+
+  it('kurtosis applies the unbiased excess-kurtosis adjustment', () => {
+    const g2 = central(4) / central(2) ** 2 - 3;
+    expect(kurtosis(xs)).toBeCloseTo((((n + 1) * g2 + 6) * (n - 1)) / ((n - 2) * (n - 3)), 12);
+  });
+
+  it('flat input is 0; too few points is null', () => {
+    expect(skewness([2, 2, 2, 2])).toBe(0);
+    expect(kurtosis([2, 2, 2, 2])).toBe(0);
+    expect(skewness([1, 2])).toBeNull();
+    expect(skewness([1, 2, 3])).not.toBeNull();
+    expect(kurtosis([1, 2, 3])).toBeNull();
+    expect(kurtosis([1, 2, 3, 5])).not.toBeNull();
   });
 });

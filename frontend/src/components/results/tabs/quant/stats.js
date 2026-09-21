@@ -40,6 +40,25 @@ export function stdDev(xs) {
   return Math.sqrt(variance);
 }
 
+// Linear-interpolated quantile of an ascending array (Hyndman-Fan type 7).
+// p is clamped to [0, 1]; the caller must pass finite, sorted values.
+export function quantile(sorted, p) {
+  const n = sorted.length;
+  if (n === 0) return null;
+  const h = (n - 1) * Math.min(1, Math.max(0, p));
+  const lo = Math.floor(h);
+  const hi = Math.min(n - 1, lo + 1);
+  return sorted[lo] + (h - lo) * (sorted[hi] - sorted[lo]);
+}
+
+// Median of the finite values; filter() copies, so the input is not mutated.
+export function median(xs) {
+  return quantile(
+    xs.filter(Number.isFinite).sort((a, b) => a - b),
+    0.5
+  );
+}
+
 // -> annualized volatility in %, or null if there aren't enough returns.
 export function annualizedVol(closes, periodsPerYear = TRADING_DAYS) {
   const returns = simpleReturns(closes);
@@ -92,28 +111,41 @@ export function periodsPerYearFromDates(dates) {
 }
 
 // --- distribution shape ----------------------------------------------------
-// Population moments (÷n) — standard for sample skew/kurtosis descriptors.
+// Small-sample adjusted estimators (Excel SKEW / KURT, pandas default).
 // Live here (not series.js) so risk.js can import them without an import cycle.
 
-export function skewness(xs) {
+function centralMoments(xs) {
   const n = xs.length;
-  if (n < 3) return null;
   const m = mean(xs);
-  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
-  if (!s) return 0;
-  const m3 = xs.reduce((a, x) => a + (x - m) ** 3, 0) / n;
-  return m3 / s ** 3;
+  let m2 = 0;
+  let m3 = 0;
+  let m4 = 0;
+  for (const x of xs) {
+    const d = x - m;
+    m2 += d * d;
+    m3 += d * d * d;
+    m4 += d * d * d * d;
+  }
+  return { n, m2: m2 / n, m3: m3 / n, m4: m4 / n };
 }
 
-// Excess kurtosis: 0 for a normal distribution, >0 for fat tails.
+// Adjusted Fisher-Pearson skewness G1; null below 3 points, 0 for flat input.
+export function skewness(xs) {
+  if (xs.length < 3) return null;
+  const { n, m2, m3 } = centralMoments(xs);
+  if (!m2) return 0;
+  const g1 = m3 / m2 ** 1.5;
+  return (g1 * Math.sqrt(n * (n - 1))) / (n - 2);
+}
+
+// Adjusted excess kurtosis G2: ~0 for a normal distribution, >0 for fat tails.
+// null below 4 points, 0 for flat input.
 export function kurtosis(xs) {
-  const n = xs.length;
-  if (n < 4) return null;
-  const m = mean(xs);
-  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
-  if (!s) return 0;
-  const m4 = xs.reduce((a, x) => a + (x - m) ** 4, 0) / n;
-  return m4 / s ** 4 - 3;
+  if (xs.length < 4) return null;
+  const { n, m2, m4 } = centralMoments(xs);
+  if (!m2) return 0;
+  const g2 = m4 / (m2 * m2) - 3;
+  return (((n + 1) * g2 + 6) * (n - 1)) / ((n - 2) * (n - 3));
 }
 
 // Worst peak-to-trough decline in %, 0 if the series never drops.
