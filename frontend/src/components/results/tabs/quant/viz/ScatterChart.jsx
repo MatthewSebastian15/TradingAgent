@@ -89,7 +89,7 @@ export function ScatterChart({
     const labeledIdx = placed.map((p, i) => (p.label ? i : -1)).filter((i) => i >= 0);
     const laidOut = layoutLabels(
       labeledIdx.map((i) => ({ i, x: placed[i].px, y: placed[i].py - 6 })),
-      { minDx: 110, maxY: plot.bottom - 2 }
+      { minDx: 110, minY: plot.top + 8, maxY: plot.bottom - 2 }
     );
     const labelY = new Map(laidOut.map((l) => [l.i, l.labelY]));
 
@@ -128,7 +128,7 @@ export function ScatterChart({
               {p.label && (
                 <text
                   x={nearRight ? p.px - 7 : p.px + 7}
-                  y={Math.max(plot.top + 8, labelY.get(i))}
+                  y={labelY.get(i)}
                   fill={color}
                   fontSize="10"
                   textAnchor={nearRight ? 'end' : 'start'}

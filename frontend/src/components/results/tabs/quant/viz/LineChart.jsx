@@ -124,7 +124,13 @@ export function LineChart({
     ...areas.flatMap((b) => b.valid.flatMap((p) => [p.lo, p.hi])),
     ...referenceLines.map((r) => r.y).filter(positive),
     // Markers count too, otherwise one outside the padded domain is silently dropped.
-    ...markers.filter((m) => toX(m.x) !== null && positive(m.y)).map((m) => m.y),
+    // Only markers inside the x extent are drawn, so only those count.
+    ...markers
+      .filter((m) => {
+        const mx = toX(m.x);
+        return xExt && mx !== null && mx >= xExt[0] && mx <= xExt[1] && positive(m.y);
+      })
+      .map((m) => m.y),
   ]);
   const isEmpty =
     !xExt ||
@@ -221,7 +227,7 @@ export function LineChart({
     // Labels sit below 'up' markers and above the rest, then get staggered apart.
     const laidOut = layoutLabels(
       placed.map((p) => ({ ...p, x: p.px, y: p.m.shape === 'up' ? p.py + 20 : p.py - 12 })),
-      { maxY: plot.bottom - 2 }
+      { minY: plot.top + 8, maxY: plot.bottom - 2 }
     );
 
     return (
@@ -319,13 +325,7 @@ export function LineChart({
                 </circle>
               )}
               {m.label && (
-                <text
-                  x={px}
-                  y={Math.max(plot.top + 8, labelY)}
-                  fill={m.color}
-                  fontSize="9"
-                  textAnchor={anchor}
-                >
+                <text x={px} y={labelY} fill={m.color} fontSize="9" textAnchor={anchor}>
                   {m.label}
                 </text>
               )}

@@ -119,6 +119,25 @@ describe('ScatterChart', () => {
     expect(screen.getByTestId('chart-tooltip').textContent).toContain('B');
   });
 
+  it('keeps a crowded label stack inside the plot in a short chart', () => {
+    const labels = Array.from({ length: 14 }, (_, i) => `p${i}`);
+    const { container } = render(
+      <ScatterChart
+        title="S"
+        height={120}
+        points={[
+          { x: 1, y: 10, color: '#fff' },
+          ...labels.map((label, i) => ({ x: i * 0.001, y: 0, label, color: '#fff' })),
+        ]}
+      />
+    );
+    // plot.top = 12, plot.bottom = 94 -> labels stay within [20, 92].
+    for (const l of labels) {
+      expect(textY(container, l)).toBeGreaterThanOrEqual(20);
+      expect(textY(container, l)).toBeLessThanOrEqual(92);
+    }
+  });
+
   it('keeps labels of points at the minimum y apart and inside the plot', () => {
     const labels = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
     const { container } = render(

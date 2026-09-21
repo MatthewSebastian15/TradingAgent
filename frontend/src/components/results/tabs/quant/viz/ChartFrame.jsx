@@ -91,10 +91,12 @@ export function ChartFrame({
   useLayoutEffect(() => {
     setHover(null);
   }, [ok, width, xd0, xd1, yd0, yd1]);
-  // Measured after render so the tooltip can be clamped inside the container.
+  // Measured after render so the tooltip can be clamped inside the container. The box is
+  // w-max, so this is its natural width, not one squeezed by the container edge. `hover`
+  // is a new object per move, so content changes re-measure too.
   useLayoutEffect(() => {
     setTipWidth(tipRef.current?.offsetWidth ?? 0);
-  }, [hover]);
+  }, [hover, width]);
 
   const header = (title || subtitle || legend.length > 0) && (
     <div className="mb-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
@@ -242,7 +244,7 @@ export function ChartFrame({
           <div
             ref={tipRef}
             data-testid="chart-tooltip"
-            className="pointer-events-none absolute top-2 z-10 min-w-[128px] border border-bloomberg-border bg-black/95 px-2 py-1 text-[10px] leading-4"
+            className="pointer-events-none absolute top-2 z-10 w-max min-w-[128px] border border-bloomberg-border bg-black/95 px-2 py-1 text-[10px] leading-4"
             style={{ ...tipStyle, maxWidth: Math.max(0, width - 16) }}
           >
             <div className="text-bloomberg-orange">{hover.title}</div>

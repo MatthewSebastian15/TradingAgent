@@ -122,6 +122,37 @@ describe('chartScale', () => {
     expect(layoutLabels(near, { maxY: 500 })).toEqual(layoutLabels(near));
   });
 
+  it('layoutLabels with minY keeps a crowded stack inside [minY, maxY]', () => {
+    // 12 labels at 12px gap need 132px but only 60px are available.
+    const items = Array.from({ length: 12 }, () => ({ x: 100, y: 90 }));
+    const out = layoutLabels(items, { minY: 20, maxY: 80 });
+    for (const o of out) {
+      expect(o.labelY).toBeGreaterThanOrEqual(20);
+      expect(o.labelY).toBeLessThanOrEqual(80);
+    }
+    // a stack that fits keeps the minimum gap and stays ordered
+    const fit = layoutLabels(
+      Array.from({ length: 4 }, () => ({ x: 100, y: 90 })),
+      { minY: 20, maxY: 80 }
+    ).map((o) => o.labelY);
+    expect(Math.min(...fit)).toBeGreaterThanOrEqual(20);
+    for (let i = 1; i < fit.length; i += 1) expect(fit[i] - fit[i - 1]).toBeGreaterThanOrEqual(12);
+  });
+
+  it('layoutLabels does not shift the stack for a NaN y', () => {
+    const items = [
+      { x: 100, y: 50 },
+      { x: 100, y: 58 },
+      { x: 100, y: Number.NaN },
+    ];
+    // NaN is never > maxY, so the normal top-down layout must be kept (50, 70).
+    expect(
+      layoutLabels(items, { maxY: 200 })
+        .map((o) => o.labelY)
+        .slice(0, 2)
+    ).toEqual([50, 70]);
+  });
+
   it('logScale falls back to linear when a domain bound is not positive', () => {
     const s = logScale([0, 100], [0, 200]);
     expect(s(50)).toBe(100);

@@ -406,6 +406,57 @@ describe('LineChart', () => {
     expect(ys.at(-1)).toBeLessThanOrEqual(92);
   });
 
+  it('keeps a crowded marker stack inside the plot', () => {
+    const labels = Array.from({ length: 14 }, (_, i) => `m${i}`);
+    render(
+      <LineChart
+        title="Crowded"
+        xType="number"
+        height={120}
+        series={[
+          {
+            id: 's',
+            color: '#f97316',
+            points: [
+              { x: 0, y: 1 },
+              { x: 10, y: 5 },
+            ],
+          },
+        ]}
+        markers={labels.map((label) => ({ x: 5, y: 1, shape: 'up', color: '#22c55e', label }))}
+      />
+    );
+    for (const l of labels) {
+      const y = Number(screen.getByText(l, { selector: 'text' }).getAttribute('y'));
+      expect(y).toBeGreaterThanOrEqual(20);
+      expect(y).toBeLessThanOrEqual(92);
+    }
+  });
+
+  it('ignores the y of a marker outside the x extent', () => {
+    const { container } = render(
+      <LineChart
+        title="Off-range marker"
+        xType="number"
+        series={[
+          {
+            id: 's',
+            color: '#f97316',
+            points: [
+              { x: 0, y: 1 },
+              { x: 10, y: 2 },
+            ],
+          },
+        ]}
+        markers={[{ x: 99, y: 1000, shape: 'dot', color: '#eab308', label: 'Far' }]}
+      />
+    );
+    // The marker is never drawn, so it must not stretch the y axis to 1000.
+    const tickLabels = [...container.querySelectorAll('svg text')].map((t) => t.textContent);
+    expect(tickLabels.some((t) => Number.parseFloat(t) > 100)).toBe(false);
+    expect(container.querySelectorAll('circle[fill="#eab308"]')).toHaveLength(0);
+  });
+
   it('never emits NaN/undefined/Infinity for degenerate input', () => {
     const cases = [
       { series: [] },

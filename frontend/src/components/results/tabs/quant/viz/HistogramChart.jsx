@@ -92,7 +92,7 @@ export function HistogramChart({
     // Stagger marker labels vertically so close markers never overprint each other.
     const labeled = layoutLabels(
       marks.map((m) => ({ ...m, x: x(m.x), y: plot.top + 10 })),
-      { minDx: 80, maxY: plot.bottom - 2 }
+      { minDx: 80, minY: plot.top + 8, maxY: plot.bottom - 2 }
     );
     return (
       <g>

@@ -152,6 +152,23 @@ describe('HistogramChart', () => {
     expect(ys.at(-1)).toBeLessThanOrEqual(92);
   });
 
+  it('never places marker labels above the top of the plot', () => {
+    const labels = Array.from({ length: 14 }, (_, i) => `m${i}`);
+    const { container } = render(
+      <HistogramChart
+        title="R"
+        bins={bins}
+        height={120}
+        markers={labels.map((label, i) => ({ x: -0.005 + i * 0.0001, label, color: '#fff' }))}
+      />
+    );
+    // plot.top = 12, so labels are bounded by [20, 92] even though 14 * 12px does not fit.
+    for (const l of labels) {
+      expect(textY(container, l)).toBeGreaterThanOrEqual(20);
+      expect(textY(container, l)).toBeLessThanOrEqual(92);
+    }
+  });
+
   it('never emits NaN/undefined/Infinity for degenerate input', () => {
     const cases = [
       { bins: [] },

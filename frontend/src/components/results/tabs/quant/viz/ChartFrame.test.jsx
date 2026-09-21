@@ -197,17 +197,32 @@ describe('ChartFrame', () => {
 
   it('keeps the tooltip inside a narrow container (right side)', () => {
     const ctl = stubObserver();
-    stubTooltipWidth(200);
-    render(<ChartFrame {...baseProps} getTooltip={() => tip({ x: 6 })} />);
+    stubTooltipWidth(300);
+    // x(5.7) = 64 + 5.7 * 24 = 200.8 is > 0.6 * 320, so it flips to the left of the pointer.
+    render(<ChartFrame {...baseProps} getTooltip={() => tip({ x: 5.7 })} />);
     ctl.notify(320);
-    // x(6) = 208 is > 0.6 * 320 so it flips left: right = 120 -> left edge at 0 (overflow).
     fireEvent.mouseMove(screen.getByRole('img', { name: 'test chart' }), {
       clientX: 200,
       clientY: 100,
     });
     const el = screen.getByTestId('chart-tooltip');
-    expect(Number.parseFloat(el.style.right)).toBeLessThanOrEqual(320 - 200 - 8);
-    expect(Number.parseFloat(el.style.right)).toBeGreaterThanOrEqual(8);
+    expect(el.style.left).toBe('');
+    const right = Number.parseFloat(el.style.right);
+    // Unclamped, right would be 320 - 200.8 + 8 = 127.2 and the 300px box would start at -107.
+    expect(320 - right - 300).toBeGreaterThanOrEqual(8); // left edge
+    expect(320 - right).toBeLessThanOrEqual(320 - 8); // right edge
+  });
+
+  it('measures the tooltip at its natural width, capped by max-width', () => {
+    render(<ChartFrame {...baseProps} getTooltip={() => tip()} />);
+    fireEvent.mouseMove(screen.getByRole('img', { name: 'test chart' }), {
+      clientX: 380,
+      clientY: 100,
+    });
+    const el = screen.getByTestId('chart-tooltip');
+    // w-max stops the absolutely positioned box shrinking (and wrapping) near an edge.
+    expect(el.className).toContain('w-max');
+    expect(el.style.maxWidth).toBe('704px');
   });
 
   it('clears a stale tooltip when the domain, width or empty state changes', () => {

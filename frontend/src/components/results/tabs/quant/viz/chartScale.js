@@ -113,9 +113,15 @@ export function nearestIndex(sortedXs, x) {
 // Greedy vertical de-collision for point labels in pixel space.
 // With maxY, a stack that would overflow the bottom is shifted upward instead
 // (input order and the minDy gap are kept; nothing is clamped onto one line).
-export function layoutLabels(items, { minDx = 70, minDy = 12, maxY = Infinity } = {}) {
-  const collides = (placed, x, y) =>
-    placed.some((p) => Math.abs(p.x - x) < minDx && Math.abs(p.y - y) < minDy);
+// minY is the ceiling (top of the plot): no label is ever placed above it.
+// ponytail: a stack too tall for [minY, maxY] piles the excess labels onto minY
+// (they overlap) instead of dropping labels; add label thinning if that matters.
+export function layoutLabels(
+  items,
+  { minDx = 70, minDy = 12, minY = -Infinity, maxY = Infinity } = {}
+) {
+  const hits = (p, x, y) => Math.abs(p.x - x) < minDx && Math.abs(p.y - y) < minDy;
+  const collides = (placed, x, y) => placed.some((p) => hits(p, x, y));
   const placed = [];
   const out = items.map((item) => {
     let labelY = item.y;
@@ -123,14 +129,20 @@ export function layoutLabels(items, { minDx = 70, minDy = 12, maxY = Infinity } 
     placed.push({ x: item.x, y: labelY });
     return { ...item, labelY };
   });
-  if (out.every((o) => o.labelY <= maxY)) return out;
-  // Overflow: re-place from the last item up so earlier labels end up above later ones.
-  const fixed = [];
-  for (let i = out.length - 1; i >= 0; i -= 1) {
-    let labelY = Math.min(out[i].labelY, maxY);
-    while (collides(fixed, out[i].x, labelY)) labelY -= minDy;
-    fixed.push({ x: out[i].x, y: labelY });
-    out[i] = { ...out[i], labelY };
+  // Number.isFinite keeps a NaN y from being mistaken for an overflow.
+  if (out.some((o) => Number.isFinite(o.labelY) && o.labelY > maxY)) {
+    // Overflow: re-place from the last item up so earlier labels end up above later ones.
+    const fixed = [];
+    for (let i = out.length - 1; i >= 0; i -= 1) {
+      let labelY = Math.min(out[i].labelY, maxY);
+      // Hop to just above the label in the way (not a whole minDy), so the stack stays tight.
+      for (let hit = fixed.find((p) => hits(p, out[i].x, labelY)); hit && labelY > minY; ) {
+        labelY = hit.y - minDy;
+        hit = fixed.find((p) => hits(p, out[i].x, labelY));
+      }
+      fixed.push({ x: out[i].x, y: labelY });
+      out[i] = { ...out[i], labelY };
+    }
   }
-  return out;
+  return out.map((o) => (o.labelY < minY ? { ...o, labelY: minY } : o));
 }
