@@ -69,6 +69,13 @@ describe('chartScale', () => {
     expect(niceTicks(0, 1, 11)).toEqual([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]);
   });
 
+  it('paddedDomain with includeZero does not pad below a zero baseline for non-negative data', () => {
+    expect(paddedDomain([5, 10], { includeZero: true })).toEqual([0, 10.6]);
+    expect(paddedDomain([-10, -5], { includeZero: true })).toEqual([-10.6, 0]);
+    // Data straddling zero keeps padding on both sides.
+    expect(paddedDomain([-5, 5], { includeZero: true })).toEqual([-5.6, 5.6]);
+  });
+
   it('paddedDomain guards null and scales the flat-series pad', () => {
     expect(paddedDomain(null)).toBeNull();
     expect(paddedDomain([0.01, 0.01])).toEqual([0.0098, 0.0102]);

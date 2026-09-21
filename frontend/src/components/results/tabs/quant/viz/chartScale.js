@@ -37,7 +37,10 @@ export function paddedDomain(domain, { padRatio = 0.06, includeZero = false } = 
   const hi = includeZero ? Math.max(max, 0) : max;
   const span = hi - lo;
   const pad = span > 0 ? span * padRatio : Math.abs(hi) * 0.02 || 1;
-  return [lo - pad, hi + pad];
+  // A zero baseline is a floor/ceiling for one-signed data (e.g. volatility): no padding past it.
+  const padLo = includeZero && min >= 0 ? 0 : pad;
+  const padHi = includeZero && max <= 0 ? 0 : pad;
+  return [lo - padLo, hi + padHi];
 }
 
 export function niceTicks(min, max, count = 5) {
