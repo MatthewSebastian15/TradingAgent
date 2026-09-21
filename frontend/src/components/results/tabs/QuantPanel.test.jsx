@@ -322,7 +322,7 @@ describe('QuantPanel volatility detail', () => {
     // Hover the right edge: the tooltip snaps to the 21-day series' last point, and the
     // 63-day and EWMA series only show a value there if they end on that same date.
     fireEvent.mouseMove(screen.getByRole('img', { name: 'Rolling volatility' }), {
-      clientX: 703,
+      clientX: 704, // plot.right in jsdom (width falls back to 720, right padding 16)
       clientY: 50,
     });
     const tip = screen.getByTestId('chart-tooltip');
