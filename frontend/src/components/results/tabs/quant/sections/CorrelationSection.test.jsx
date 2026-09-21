@@ -39,7 +39,20 @@ describe('CorrelationSection optimizer status', () => {
   });
 
   it('shows no optimizer notice when the status is ok', () => {
-    render(<CorrelationSection {...base} optimizerStatus="ok" />);
+    render(
+      <CorrelationSection
+        {...base}
+        frontier={[
+          { ret: 4, vol: 18 },
+          { ret: 6, vol: 22 },
+        ]}
+        tangency={{ ret: 6, vol: 22 }}
+        tangencyWeights={[0.3, 0.7]}
+        optimizerStatus="ok"
+      />
+    );
+    expect(screen.getByText('Min-Variance')).toBeTruthy();
+    expect(screen.getByText('Max-Sharpe')).toBeTruthy();
     expect(screen.queryByText('No max-Sharpe portfolio')).toBeNull();
     expect(screen.queryByText(/Covariance is singular/)).toBeNull();
   });

@@ -13,6 +13,7 @@ export function ScenarioSection({
   ccy,
   regime,
   beta,
+  betaLoading = false,
   benchLabel,
   benchIsSp500,
   ppy = 252,
@@ -32,10 +33,15 @@ export function ScenarioSection({
       <p className="text-sm text-bloomberg-white/80">
         How today&apos;s price ({money(spot)}) would move under a one-day shock — σ moves from this
         name&apos;s own volatility ({fmtPercent(vol)} annual) and S&amp;P 500 crash days scaled by β
-        ({finite(beta) ? `β = ${beta.toFixed(2)} vs ${benchLabel}` : 'β unavailable, using 1'}).
-        Research only.
+        (
+        {finite(beta)
+          ? `β = ${beta.toFixed(2)} vs ${benchLabel}`
+          : betaLoading
+            ? 'β loading, using 1'
+            : 'β unavailable, using 1'}
+        ). Research only.
       </p>
-      {!benchIsSp500 && (
+      {!benchIsSp500 && !(betaLoading && !finite(beta)) && (
         <NoticeBox title="Approximation">
           {finite(beta)
             ? `β is measured against ${benchLabel}, so S&P 500 crash days scaled by it are only a rough proxy for this market.`
@@ -121,6 +127,7 @@ ScenarioSection.propTypes = {
   ccy: PropTypes.string,
   regime: PropTypes.object,
   beta: PropTypes.number,
+  betaLoading: PropTypes.bool,
   benchLabel: PropTypes.string.isRequired,
   benchIsSp500: PropTypes.bool.isRequired,
   ppy: PropTypes.number,

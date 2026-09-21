@@ -109,6 +109,19 @@ describe('QuantPanel', () => {
     expect(screen.queryByText('Fair Value / Share')).toBeNull();
   });
 
+  it('clears the typed peer text when the range changes', async () => {
+    const props = { points: buildPoints(40), sections: ['correlation'], currency: 'USD' };
+    const { rerender } = render(<QuantPanel symbol="AAPL" range="1Y" {...props} />);
+    await act(async () => {});
+    const input = screen.getByPlaceholderText(/Add peers/);
+    fireEvent.change(input, { target: { value: 'MSFT' } });
+    expect(input.value).toBe('MSFT');
+
+    rerender(<QuantPanel symbol="AAPL" range="3M" {...props} />);
+    await act(async () => {});
+    expect(screen.getByPlaceholderText(/Add peers/).value).toBe('');
+  });
+
   it('renders every tab when sections is undefined', async () => {
     await renderPanel({ points: buildPoints(40) });
 

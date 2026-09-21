@@ -38,4 +38,34 @@ describe('ValuationSection inputs', () => {
     rerender(<ValuationSection {...props} overview={fundamentals} />);
     expect(screen.getByLabelText(/Base FCF/).value).toBe('500');
   });
+
+  it('still auto-fills fundamentals after the user edited only WACC', () => {
+    const { rerender } = render(<ValuationSection {...props} overview={null} />);
+    fireEvent.change(screen.getByLabelText(/WACC/), { target: { value: '10' } });
+    rerender(<ValuationSection {...props} overview={fundamentals} />);
+    expect(screen.getByLabelText(/Base FCF/).value).toBe('2000');
+    expect(screen.getByLabelText(/Shares Out/).value).toBe('100');
+    expect(screen.getByLabelText(/Net Debt/).value).toBe('400');
+    expect(screen.getByLabelText(/FCF Growth/).value).toBe('12');
+    expect(screen.getByLabelText(/WACC/).value).toBe('10');
+  });
+
+  it('fills only the fields present in a partial overview', () => {
+    const { rerender } = render(<ValuationSection {...props} overview={null} />);
+    rerender(<ValuationSection {...props} overview={{ free_cashflow: 3e9 }} />);
+    expect(screen.getByLabelText(/Base FCF/).value).toBe('3000');
+    expect(screen.getByLabelText(/Shares Out/).value).toBe('');
+    expect(screen.getByLabelText(/Net Debt/).value).toBe('0');
+    expect(screen.getByLabelText(/FCF Growth/).value).toBe('8');
+  });
+
+  it('protects a typed FCF while the other fields still auto-fill', () => {
+    const { rerender } = render(<ValuationSection {...props} overview={null} />);
+    fireEvent.change(screen.getByLabelText(/Base FCF/), { target: { value: '500' } });
+    rerender(<ValuationSection {...props} overview={fundamentals} />);
+    expect(screen.getByLabelText(/Base FCF/).value).toBe('500');
+    expect(screen.getByLabelText(/Shares Out/).value).toBe('100');
+    expect(screen.getByLabelText(/Net Debt/).value).toBe('400');
+    expect(screen.getByLabelText(/FCF Growth/).value).toBe('12');
+  });
 });

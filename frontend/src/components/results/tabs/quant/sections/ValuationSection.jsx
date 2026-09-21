@@ -22,7 +22,7 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
   const [shares, setShares] = useState(''); // millions; empty until known
   const [netDebt, setNetDebt] = useState(0); // millions
   const [showMC, setShowMC] = useState(false); // DCF Monte Carlo toggle
-  const editedRef = useRef(false); // user typed → never overwrite with auto-fill
+  const editedRef = useRef(new Set()); // fields the user typed in → never overwritten by auto-fill
 
   const applyInputs = (next) => {
     if (next.fcf !== undefined) setFcf(next.fcf);
@@ -30,15 +30,18 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
     if (next.netDebt !== undefined) setNetDebt(next.netDebt);
     if (next.growth !== undefined) setGrowth(next.growth);
   };
-  const edit = (setter) => (value) => {
-    editedRef.current = true;
+  const change = (field, setter, value) => {
+    editedRef.current.add(field);
     setter(value);
   };
 
-  // Auto-fill the DCF inputs when fundamentals arrive, unless the user already typed.
+  // Auto-fill the DCF inputs when fundamentals arrive; fields the user typed in are kept.
   useEffect(() => {
-    if (!overview || editedRef.current) return;
-    applyInputs(overviewToDcfInputs(overview));
+    if (!overview) return;
+    const fresh = Object.entries(overviewToDcfInputs(overview)).filter(
+      ([field]) => !editedRef.current.has(field)
+    );
+    applyInputs(Object.fromEntries(fresh));
   }, [overview]);
 
   const autoFill = () => {
@@ -128,18 +131,48 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
         </span>
       </div>
       <div className="flex flex-wrap items-end gap-4">
-        <NumberField label="Base FCF" value={fcf} onChange={edit(setFcf)} suffix="M" />
-        <NumberField label="FCF Growth" value={growth} onChange={edit(setGrowth)} suffix="%" />
-        <NumberField label="Years" value={years} onChange={edit(setYears)} step="1" />
-        <NumberField label="WACC" value={wacc} onChange={edit(setWacc)} suffix="%" />
+        <NumberField
+          label="Base FCF"
+          value={fcf}
+          onChange={(v) => change('fcf', setFcf, v)}
+          suffix="M"
+        />
+        <NumberField
+          label="FCF Growth"
+          value={growth}
+          onChange={(v) => change('growth', setGrowth, v)}
+          suffix="%"
+        />
+        <NumberField
+          label="Years"
+          value={years}
+          onChange={(v) => change('years', setYears, v)}
+          step="1"
+        />
+        <NumberField
+          label="WACC"
+          value={wacc}
+          onChange={(v) => change('wacc', setWacc, v)}
+          suffix="%"
+        />
         <NumberField
           label="Terminal Growth"
           value={terminalGrowth}
-          onChange={edit(setTerminalGrowth)}
+          onChange={(v) => change('terminalGrowth', setTerminalGrowth, v)}
           suffix="%"
         />
-        <NumberField label="Shares Out" value={shares} onChange={edit(setShares)} suffix="M" />
-        <NumberField label="Net Debt" value={netDebt} onChange={edit(setNetDebt)} suffix="M" />
+        <NumberField
+          label="Shares Out"
+          value={shares}
+          onChange={(v) => change('shares', setShares, v)}
+          suffix="M"
+        />
+        <NumberField
+          label="Net Debt"
+          value={netDebt}
+          onChange={(v) => change('netDebt', setNetDebt, v)}
+          suffix="M"
+        />
       </div>
       {result ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

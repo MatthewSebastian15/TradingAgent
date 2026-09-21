@@ -45,6 +45,38 @@ describe('ScenarioSection', () => {
     expect(container.textContent).not.toContain('β is measured against');
   });
 
+  it('treats beta = 0 as available and shows zero crash moves', () => {
+    const { container } = render(<ScenarioSection {...base} beta={0} benchIsSp500 />);
+    expect(container.textContent).toContain('β = 0.00 vs Nikkei 225');
+    expect(container.textContent).not.toContain('β unavailable');
+    const cells = screen
+      .getByText('GFC — S&P 500, 2008-10-15')
+      .closest('tr')
+      .querySelectorAll('td');
+    expect(cells[2].textContent).toBe('+0.0%');
+    expect(cells[2].className).toContain('text-bloomberg-white');
+  });
+
+  it('shows a dash in the index-move column for sigma rows only', () => {
+    render(<ScenarioSection {...base} beta={1} benchIsSp500 />);
+    expect(screen.getByText('−1σ day').closest('tr').querySelectorAll('td')[1].textContent).toBe(
+      '—'
+    );
+    const gfc = screen.getByText('GFC — S&P 500, 2008-10-15').closest('tr');
+    expect(gfc.querySelectorAll('td')[1].textContent).not.toBe('—');
+  });
+
+  it('hides the beta-unavailable notices while beta is still loading', () => {
+    const { rerender, container } = render(
+      <ScenarioSection {...base} beta={null} betaLoading benchIsSp500={false} />
+    );
+    expect(container.textContent).not.toContain('β unavailable');
+    expect(container.textContent).not.toContain('β is unavailable');
+    rerender(<ScenarioSection {...base} beta={null} benchIsSp500={false} />);
+    expect(container.textContent).toContain('β unavailable, using 1');
+    expect(container.textContent).toContain('β is unavailable');
+  });
+
   it('defaults ppy to 252 when omitted', () => {
     const { container } = render(
       <ScenarioSection {...base} ppy={undefined} beta={1} benchIsSp500 />

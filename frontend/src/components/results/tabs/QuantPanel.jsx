@@ -113,6 +113,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   // Peers fetched for another window would misalign with the base series.
   useEffect(() => {
     setPeers([]);
+    setPeerInput('');
   }, [fetchRange]);
 
   // Fetch a longer history than the 1Y analysis chart; fall back to the prop on failure.
@@ -628,6 +629,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             ccy={ccy}
             regime={regimeShift}
             beta={benchmark.beta}
+            betaLoading={benchPoints === null}
             benchLabel={benchmarkInfo.label}
             benchIsSp500={benchmarkInfo.symbol === '^GSPC'}
             ppy={ppy}
