@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   blendSigma,
   bootstrapMC,
+  futureTradingDates,
   horizonSigma,
   monteCarloGBM,
+  runMonteCarlo,
   simulationDrift,
 } from './stochastic';
 
@@ -92,5 +94,20 @@ describe('path summaries', () => {
     expect(Math.abs(flat.expectedReturnPct)).toBeLessThan(2);
     expect(withDrift.expectedReturnPct).toBeGreaterThan(4);
     expect(withDrift.expectedReturnPct).toBeLessThan(6.5);
+  });
+});
+
+describe('futureTradingDates / runMonteCarlo', () => {
+  it('skips weekends for 252-period markets only', () => {
+    expect(futureTradingDates('2026-09-11', 3)).toEqual(['2026-09-14', '2026-09-15', '2026-09-16']);
+    expect(futureTradingDates('2026-09-11', 3, 365)).toEqual(['2026-09-12', '2026-09-13', '2026-09-14']);
+    expect(futureTradingDates('bad', 3)).toEqual([]);
+  });
+
+  it('dispatches to the requested engine', () => {
+    const gbm = runMonteCarlo({ method: 'gbm', args: [100, 0, 0, 5, 10, 1] });
+    expect(gbm.percentiles.p50).toBeCloseTo(100, 10);
+    const boot = runMonteCarlo({ method: 'bootstrap', args: [100, [0, 0], 5, 10, 1] });
+    expect(boot.percentiles.p50).toBeCloseTo(100, 10);
   });
 });

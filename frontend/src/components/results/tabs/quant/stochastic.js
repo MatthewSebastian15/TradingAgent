@@ -130,6 +130,25 @@ export function monteCarloGBM(spot, mu, sigma, days, paths, seed, options = {}) 
   return summarizePaths(all, days, paths, spot, options);
 }
 
+const DAY_MS = 86_400_000;
+
+export function futureTradingDates(lastIso, days, ppy = TRADING_DAYS) {
+  let t = Date.parse(`${String(lastIso).slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(t)) return [];
+  const out = [];
+  while (out.length < days) {
+    t += DAY_MS;
+    const day = new Date(t).getUTCDay();
+    if (ppy === 365 || (day !== 0 && day !== 6)) out.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+// Single entry point shared by the worker and the synchronous fallback.
+export function runMonteCarlo({ method, args }) {
+  return method === 'bootstrap' ? bootstrapMC(...args) : monteCarloGBM(...args);
+}
+
 // Bootstrap Monte Carlo: resample actual historical daily simple returns with
 // replacement (fat tails preserved) instead of drawing from a normal. Block bootstrap
 // samples contiguous blocks of returns to preserve volatility clustering.
