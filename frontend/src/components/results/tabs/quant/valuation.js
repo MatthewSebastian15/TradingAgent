@@ -70,15 +70,12 @@ export function stressScenarios(spot, annualVolPct, beta = null, ppy = TRADING_D
   return rows.map((r) => ({ ...r, price: spot * (1 + r.shock), lossPct: r.shock * 100 }));
 }
 
-// Drawdown recovery stats: walks the close series, grouping each peak-to-recovery
-// underwater episode. threshold is the % depth (positive) that counts as a "real"
-// drawdown episode. -> { maxDD, maxDDDuration, maxDDRecovered, recoveryDays,
-// currentUnderwaterDays, episodes } or null.
-export function drawdownStats(closes, threshold = 5) {
-  if (closes.length < 2) return null;
+// Peak-to-recovery underwater episodes, in time order.
+export function drawdownEpisodes(closes) {
+  if (closes.length < 2) return [];
   let peak = closes[0];
   let peakIdx = 0;
-  let cur = null; // active underwater episode
+  let cur = null;
   const episodes = [];
   for (let i = 1; i < closes.length; i += 1) {
     const c = closes[i];
@@ -97,8 +94,19 @@ export function drawdownStats(closes, threshold = 5) {
       cur.depth = ((c - peak) / peak) * 100;
     }
   }
-  const currentUnderwaterDays = cur ? closes.length - 1 - cur.start : 0;
   if (cur) episodes.push({ ...cur, recoveredIdx: null, end: closes.length - 1 });
+  return episodes;
+}
+
+// Drawdown recovery stats: summarizes drawdownEpisodes() into the single deepest
+// episode. threshold is the % depth (positive) that counts as a "real" drawdown
+// episode. -> { maxDD, maxDDDuration, maxDDRecovered, recoveryDays,
+// currentUnderwaterDays, episodes } or null.
+export function drawdownStats(closes, threshold = 5) {
+  if (closes.length < 2) return null;
+  const episodes = drawdownEpisodes(closes);
+  const open = episodes.find((e) => e.recoveredIdx === null);
+  const currentUnderwaterDays = open ? closes.length - 1 - open.start : 0;
   if (episodes.length === 0) {
     return {
       maxDD: 0,
@@ -118,6 +126,21 @@ export function drawdownStats(closes, threshold = 5) {
     currentUnderwaterDays,
     episodes: episodes.filter((e) => e.depth <= -threshold).length,
   };
+}
+
+// Top drawdown episodes, deepest first, with dates instead of indices.
+export function topDrawdowns(closes, dates, count = 5) {
+  return drawdownEpisodes(closes)
+    .sort((a, b) => a.depth - b.depth)
+    .slice(0, count)
+    .map((e) => ({
+      peakDate: dates[e.start],
+      troughDate: dates[e.troughIdx],
+      recoveryDate: e.recoveredIdx === null ? null : dates[e.recoveredIdx],
+      depth: e.depth,
+      lengthDays: (e.recoveredIdx ?? e.end) - e.start,
+      recoveryDays: e.recoveredIdx === null ? null : e.recoveredIdx - e.troughIdx,
+    }));
 }
 
 // Regime-shift detection: bucket each rolling-vol reading into Calm/Normal/Stressed

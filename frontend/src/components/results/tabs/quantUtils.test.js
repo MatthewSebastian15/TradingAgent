@@ -151,9 +151,16 @@ describe('VaR / CVaR', () => {
     expect(v).toBeLessThan(0);
   });
 
-  it('parametricVaR with explicit sigma = (mean − 1.645σ)·100', () => {
+  it('parametricVaR with explicit sigma defaults to a zero mean', () => {
+    expect(parametricVaR(returns, 0.95, 0.02)).toBeCloseTo(-1.645 * 0.02 * 100, 10);
+  });
+
+  it('parametricVaR zeroMean:false keeps the sample mean', () => {
     const m = returns.reduce((a, b) => a + b, 0) / returns.length;
-    expect(parametricVaR(returns, 0.95, 0.02)).toBeCloseTo((m - 1.645 * 0.02) * 100, 10);
+    expect(parametricVaR(returns, 0.95, 0.02, { zeroMean: false })).toBeCloseTo(
+      (m - 1.645 * 0.02) * 100,
+      10
+    );
   });
 
   it('too-few returns -> null', () => {

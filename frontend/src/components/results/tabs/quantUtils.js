@@ -12,3 +12,4 @@ export * from './quant/valuation';
 export * from './quant/dataQuality';
 export * from './quant/rangeVol';
 export * from './quant/garch';
+export * from './quant/riskStats';

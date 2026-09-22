@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { dcfInputsReady, overviewToDcfInputs, stressScenarios } from './valuation';
+import {
+  dcfInputsReady,
+  drawdownEpisodes,
+  overviewToDcfInputs,
+  stressScenarios,
+  topDrawdowns,
+} from './valuation';
 
 describe('dcfInputsReady', () => {
   it('requires a numeric FCF and positive shares', () => {
@@ -60,5 +66,39 @@ describe('stressScenarios ppy', () => {
   it('sigma rows use the daily sigma for the given ppy', () => {
     const row = stressScenarios(100, 30, 1, 365)[0];
     expect(row.shock).toBeCloseTo(-0.3 / Math.sqrt(365), 12);
+  });
+});
+
+describe('topDrawdowns', () => {
+  const closes = [100, 90, 80, 90, 101, 95, 101.5, 70];
+  const dates = closes.map((_, i) => `d${i}`);
+
+  it('lists episodes deepest first with dates and durations', () => {
+    expect(drawdownEpisodes(closes)).toHaveLength(3);
+    const [first, second] = topDrawdowns(closes, dates);
+    expect(first).toMatchObject({
+      peakDate: 'd6',
+      troughDate: 'd7',
+      recoveryDate: null,
+      lengthDays: 1,
+      recoveryDays: null,
+    });
+    expect(first.depth).toBeCloseTo((70 / 101.5 - 1) * 100, 10);
+    expect(second).toMatchObject({
+      peakDate: 'd0',
+      troughDate: 'd2',
+      recoveryDate: 'd4',
+      lengthDays: 4,
+      recoveryDays: 2,
+    });
+  });
+
+  it('breaks ties on equal depth by keeping original time order (stable sort)', () => {
+    const tiedCloses = [100, 90, 100, 90, 100];
+    const tiedDates = tiedCloses.map((_, i) => `t${i}`);
+    const [first, second] = topDrawdowns(tiedCloses, tiedDates);
+    expect(first.depth).toBeCloseTo(second.depth, 10);
+    expect(first.peakDate).toBe('t0');
+    expect(second.peakDate).toBe('t2');
   });
 });
