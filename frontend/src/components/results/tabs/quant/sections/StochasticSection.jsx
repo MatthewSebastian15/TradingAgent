@@ -1,22 +1,62 @@
 import PropTypes from 'prop-types';
+import { useMemo } from 'react';
 
 import NoticeBox from '../../../NoticeBox';
-import { returnHistogram } from '../../quantUtils';
-import { MetricCard } from '../charts';
+import { futureTradingDates, returnHistogram } from '../../quantUtils';
+import { MetricCard, NumberField } from '../charts';
 import { MC_HORIZONS, MC_PATHS } from '../config';
+import { finite, fmtLoss, fmtPercent, fmtSignedPct, signedTone } from '../format';
 import { fmtMoney as formatMoney } from '../numberFormat';
 import { CHART_COLORS } from '../viz/chartTheme';
+import { DataTable } from '../viz/DataTable';
 import { HistogramChart } from '../viz/HistogramChart';
 import { LineChart } from '../viz/LineChart';
 
+const OUTCOMES = ['p5', 'p10', 'p25', 'p50', 'p75', 'p90', 'p95'];
+
+function Toggle({ options, value, onChange }) {
+  return (
+    <div className="flex gap-1">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          aria-pressed={value === o.id}
+          onClick={() => onChange(o.id)}
+          className={`rounded-none border px-2.5 py-1 text-[11px] tracking-wide ${
+            value === o.id
+              ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
+              : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+Toggle.propTypes = {
+  options: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      label: PropTypes.string,
+    })
+  ).isRequired,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.bool]).isRequired,
+  onChange: PropTypes.func.isRequired,
+};
+
 export function StochasticSection({
   sim,
+  running,
   spot,
   ccy,
+  lastDate,
+  ppy,
   seed,
   onReroll,
   onSeedChange,
-  returnBins,
   horizon,
   onHorizonChange,
   horizonLabel,
@@ -24,176 +64,265 @@ export function StochasticSection({
   onMethodChange,
   drift,
   onDriftChange,
+  bootDemean,
+  onBootDemeanChange,
+  target,
+  onTargetChange,
+  stop,
+  onStopChange,
+  sigmaInfo,
+  returnBins,
 }) {
   const fmtMoney = (v) => formatMoney(v, ccy);
+  const dates = useMemo(
+    () => [lastDate, ...futureTradingDates(lastDate, horizon, ppy)],
+    [lastDate, horizon, ppy]
+  );
+
   const controls = (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="flex gap-1">
-        {[
-          { id: 'gbm', label: 'GBM (normal)' },
-          { id: 'bootstrap', label: 'Bootstrap (fat tails)' },
-        ].map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => onMethodChange(m.id)}
-            className={`rounded-none border px-2.5 py-1 text-[11px] tracking-wide ${
-              method === m.id
-                ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
-            }`}
-          >
-            {m.label}
-          </button>
-        ))}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Toggle
+          options={[
+            { id: 'gbm', label: 'GBM (normal)' },
+            { id: 'bootstrap', label: 'Bootstrap (fat tails)' },
+          ]}
+          value={method}
+          onChange={onMethodChange}
+        />
+        {method === 'gbm' ? (
+          <Toggle
+            options={[
+              { id: 'historical', label: 'Historical drift' },
+              { id: 'riskneutral', label: 'Risk-neutral (rf)' },
+            ]}
+            value={drift}
+            onChange={onDriftChange}
+          />
+        ) : (
+          <Toggle
+            options={[
+              { id: 'historical', label: 'Historical drift' },
+              { id: 'demeaned', label: 'Demeaned' },
+            ]}
+            value={bootDemean ? 'demeaned' : 'historical'}
+            onChange={(id) => onBootDemeanChange(id === 'demeaned')}
+          />
+        )}
+        <Toggle
+          options={MC_HORIZONS.map((h) => ({ id: h, label: `${h}d` }))}
+          value={horizon}
+          onChange={onHorizonChange}
+        />
       </div>
-      {method === 'gbm' && (
-        <div className="flex gap-1">
-          {[
-            { id: 'historical', label: 'Historical drift' },
-            { id: 'riskneutral', label: 'Risk-neutral (rf)' },
-          ].map((d) => (
+      <div className="flex flex-wrap items-end gap-4">
+        <NumberField
+          label="Target price"
+          value={target}
+          onChange={onTargetChange}
+          suffix={ccy || 'ccy'}
+        />
+        <NumberField
+          label="Stop price"
+          value={stop}
+          onChange={onStopChange}
+          suffix={ccy || 'ccy'}
+        />
+        <details className="font-mono text-[11px] text-bloomberg-white/80">
+          <summary className="cursor-pointer tracking-wider uppercase">Advanced</summary>
+          <div className="mt-2 flex items-center gap-3">
+            <label className="flex items-center gap-2">
+              Seed
+              <input
+                type="number"
+                value={seed}
+                onChange={(e) => onSeedChange(Number(e.target.value))}
+                className="w-20 rounded-none border border-bloomberg-border bg-black px-1 py-0.5 text-xs text-white"
+              />
+            </label>
             <button
-              key={d.id}
               type="button"
-              onClick={() => onDriftChange(d.id)}
-              className={`rounded-none border px-2.5 py-1 text-[11px] tracking-wide ${
-                drift === d.id
-                  ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                  : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
-              }`}
+              onClick={onReroll}
+              className="rounded-none border border-bloomberg-border px-3 py-1 text-xs text-bloomberg-white/80 hover:text-white"
             >
-              {d.label}
+              Re-roll
             </button>
-          ))}
-        </div>
-      )}
-      <div className="flex gap-1">
-        {MC_HORIZONS.map((h) => (
-          <button
-            key={h}
-            type="button"
-            onClick={() => onHorizonChange(h)}
-            className={`rounded-none border px-2 py-1 text-[11px] tracking-wide ${
-              horizon === h
-                ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
-            }`}
-          >
-            {h}d
-          </button>
-        ))}
+            <span>Same seed → same simulation.</span>
+          </div>
+        </details>
+      </div>
+      <div role="status" aria-live="polite" className="h-4 text-[11px] text-bloomberg-amber">
+        {running ? 'Simulating…' : ''}
       </div>
     </div>
   );
+
   if (!sim) {
     return (
       <div className="space-y-4">
         {controls}
-        <NoticeBox title="Stochastic">Not enough price history to simulate.</NoticeBox>
+        {!running && (
+          <NoticeBox title="Stochastic">Not enough price history to simulate.</NoticeBox>
+        )}
       </div>
     );
   }
-  const { percentiles, band, samplePaths, terminal } = sim;
+
+  const { percentiles: p, band, samplePaths, terminal } = sim;
+  const dateAt = (step) => dates[step] || dates.at(-1);
+  const annualSigma = finite(sigmaInfo?.sigma) ? sigmaInfo.sigma * Math.sqrt(ppy) * 100 : null;
+  const referenceLines = [
+    { y: spot, label: 'Today', color: CHART_COLORS.secondary },
+    finite(Number(target)) &&
+      target !== '' && { y: Number(target), label: 'Target', color: CHART_COLORS.up },
+    finite(Number(stop)) &&
+      stop !== '' && { y: Number(stop), label: 'Stop', color: CHART_COLORS.down },
+  ].filter(Boolean);
+
   return (
     <div className="space-y-4">
       {controls}
       <p className="text-sm text-bloomberg-white/80">
-        In 80% of {MC_PATHS.toLocaleString()} {method === 'bootstrap' ? 'block bootstrap' : 'GBM'}{' '}
-        simulations, the price in {horizonLabel} landed between{' '}
-        <span className="text-white">{fmtMoney(percentiles.p10)}</span> and{' '}
-        <span className="text-white">{fmtMoney(percentiles.p90)}</span> (median{' '}
-        <span className="text-white">{fmtMoney(percentiles.p50)}</span>). Today: {fmtMoney(spot)}.
+        In 90% of {MC_PATHS.toLocaleString()} {method === 'bootstrap' ? 'bootstrap' : 'GBM'} paths
+        the price in {horizonLabel} ends between{' '}
+        <span className="text-white">{fmtMoney(p.p5)}</span> and{' '}
+        <span className="text-white">{fmtMoney(p.p95)}</span> (median{' '}
+        <span className="text-white">{fmtMoney(p.p50)}</span>). Today: {fmtMoney(spot)}. One set of
+        possible futures, not a prediction.
       </p>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={onReroll}
-          className="rounded-none border border-bloomberg-border px-3 py-1 text-xs tracking-wide text-bloomberg-muted hover:text-white"
-        >
-          Re-roll
-        </button>
-        <label className="text-[11px] text-bloomberg-muted">
-          seed{' '}
-          <input
-            type="number"
-            value={seed}
-            onChange={(e) => onSeedChange(Number(e.target.value))}
-            className="w-20 border border-bloomberg-border bg-black px-1 py-0.5 font-mono text-xs text-white"
-          />
-        </label>
-        <span className="text-[11px] text-bloomberg-white/80">
-          Same seed → same simulation. One possible future, not a prediction.
-        </span>
-      </div>
+      {method === 'gbm' && finite(annualSigma) && (
+        <p className="text-[11px] text-bloomberg-white/80">
+          σ used: {fmtPercent(annualSigma)} annualized (
+          {sigmaInfo.source === 'garch'
+            ? 'GARCH forecast averaged over the horizon'
+            : 'EWMA blended toward long-run vol'}
+          ).
+        </p>
+      )}
 
       <LineChart
         title={`Simulated price paths · ${horizonLabel}`}
-        subtitle="Shaded band = 10th–90th percentile across all paths; faint lines = sample paths"
+        subtitle="Outer band P5–P95, inner band P25–P75; faint lines are sample paths"
         ariaLabel="Monte Carlo price fan chart"
-        xType="number"
-        formatX={(d) => `+${Math.round(d)}d`}
         formatY={fmtMoney}
         series={[
           ...samplePaths.map((path, i) => ({
             id: `path-${i}`,
-            color: 'rgba(229,229,229,0.18)',
+            color: 'rgba(229,229,229,0.16)',
             width: 1,
             hideInLegend: true,
-            points: path.map((v, d) => ({ x: d, y: v })),
+            points: path.map((v, d) => ({ x: dateAt(d), y: v })),
           })),
           {
             id: 'median',
             label: 'Median',
             color: CHART_COLORS.primary,
             width: 2,
-            points: band.map((b) => ({ x: b.step, y: b.p50 })),
+            points: band.map((b) => ({ x: dateAt(b.step), y: b.p50 })),
           },
         ]}
         bands={[
           {
-            id: 'p10p90',
-            label: 'P10–P90',
+            id: 'outer',
+            label: 'P5–P95',
             color: CHART_COLORS.band,
-            points: band.map((b) => ({ x: b.step, lo: b.p10, hi: b.p90 })),
+            points: band.map((b) => ({ x: dateAt(b.step), lo: b.p5, hi: b.p95 })),
+          },
+          {
+            id: 'inner',
+            label: 'P25–P75',
+            color: CHART_COLORS.bandInner,
+            points: band.map((b) => ({ x: dateAt(b.step), lo: b.p25, hi: b.p75 })),
           },
         ]}
-        referenceLines={[{ y: spot, label: 'Today', color: CHART_COLORS.secondary }]}
+        referenceLines={referenceLines}
       />
 
-      <div className="grid grid-cols-3 gap-3">
-        <MetricCard label="10th pct (downside)" value={fmtMoney(percentiles.p10)} tone="bad" />
-        <MetricCard label="Median outcome" value={fmtMoney(percentiles.p50)} />
-        <MetricCard label="90th pct (upside)" value={fmtMoney(percentiles.p90)} tone="good" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <MetricCard
+          label="P(below today)"
+          value={fmtPercent(sim.probBelowSpot * 100)}
+          gloss="Share of paths ending under today's price."
+        />
+        <MetricCard
+          label="P(touch target)"
+          value={sim.probTarget == null ? '—' : fmtPercent(sim.probTarget * 100)}
+          gloss="Paths that reach the target at any point."
+        />
+        <MetricCard
+          label="P(touch stop)"
+          value={sim.probStop == null ? '—' : fmtPercent(sim.probStop * 100)}
+          gloss="Paths that hit the stop at any point."
+        />
+        <MetricCard
+          label="Expected return"
+          value={fmtSignedPct(sim.expectedReturnPct)}
+          tone={signedTone(sim.expectedReturnPct)}
+          gloss="Mean terminal price vs today."
+        />
+        <MetricCard
+          label="Median max drawdown"
+          value={fmtLoss(sim.maxDrawdownMedian)}
+          tone="bad"
+          gloss="Typical worst dip along a path."
+        />
+        <MetricCard
+          label="Worst-10% drawdown"
+          value={fmtLoss(sim.maxDrawdownWorst10)}
+          tone="bad"
+          gloss="1 path in 10 dips at least this far."
+        />
       </div>
 
-      <HistogramChart
-        title={`Simulated price distribution · ${horizonLabel}`}
-        ariaLabel={`Histogram of simulated ${horizonLabel} prices`}
-        bins={returnHistogram(terminal, 30)}
-        formatX={fmtMoney}
-        barLabel="Paths"
-        markers={[{ x: spot, label: 'Today', color: CHART_COLORS.secondary }]}
+      <DataTable
+        caption={`Outcome distribution · ${horizonLabel}`}
+        rowKey={(r) => r.key}
+        rows={OUTCOMES.map((key) => ({ key, price: p[key], ret: (p[key] / spot - 1) * 100 }))}
+        columns={[
+          { key: 'key', label: 'Percentile', render: (r) => r.key.toUpperCase() },
+          { key: 'price', label: 'Price', align: 'right', render: (r) => fmtMoney(r.price) },
+          {
+            key: 'ret',
+            label: 'vs today',
+            align: 'right',
+            render: (r) => fmtSignedPct(r.ret),
+            className: (r) => (r.ret < 0 ? 'text-bloomberg-red' : 'text-bloomberg-green'),
+          },
+        ]}
       />
-      <HistogramChart
-        title="Historical daily returns"
-        ariaLabel="Histogram of historical daily returns"
-        bins={returnBins}
-        formatX={(v) => `${(v * 100).toFixed(1)}%`}
-      />
+
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <HistogramChart
+          title={`Simulated price distribution · ${horizonLabel}`}
+          ariaLabel={`Histogram of simulated ${horizonLabel} prices`}
+          bins={returnHistogram(terminal, 30)}
+          formatX={fmtMoney}
+          barLabel="Paths"
+          markers={[{ x: spot, label: 'Today', color: CHART_COLORS.secondary }]}
+        />
+        <HistogramChart
+          title="Historical daily returns"
+          ariaLabel="Histogram of historical daily returns"
+          bins={returnBins}
+          formatX={(v) => `${(v * 100).toFixed(1)}%`}
+        />
+      </div>
     </div>
   );
 }
 
+const numOrEmpty = PropTypes.oneOfType([PropTypes.number, PropTypes.string]);
+
 StochasticSection.propTypes = {
   sim: PropTypes.object,
+  running: PropTypes.bool.isRequired,
   spot: PropTypes.number,
   ccy: PropTypes.string,
+  lastDate: PropTypes.string.isRequired,
+  ppy: PropTypes.number.isRequired,
   seed: PropTypes.number.isRequired,
   onReroll: PropTypes.func.isRequired,
   onSeedChange: PropTypes.func.isRequired,
-  returnBins: PropTypes.arrayOf(PropTypes.object).isRequired,
   horizon: PropTypes.number.isRequired,
   onHorizonChange: PropTypes.func.isRequired,
   horizonLabel: PropTypes.string.isRequired,
@@ -201,6 +330,12 @@ StochasticSection.propTypes = {
   onMethodChange: PropTypes.func.isRequired,
   drift: PropTypes.oneOf(['historical', 'riskneutral']).isRequired,
   onDriftChange: PropTypes.func.isRequired,
+  bootDemean: PropTypes.bool.isRequired,
+  onBootDemeanChange: PropTypes.func.isRequired,
+  target: numOrEmpty.isRequired,
+  onTargetChange: PropTypes.func.isRequired,
+  stop: numOrEmpty.isRequired,
+  onStopChange: PropTypes.func.isRequired,
+  sigmaInfo: PropTypes.shape({ sigma: PropTypes.number, source: PropTypes.string }),
+  returnBins: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
-
-// --- new sections (Phase 4) -----------------------------------------------

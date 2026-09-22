@@ -26,6 +26,7 @@ import { SizingSection } from './quant/sections/SizingSection';
 import { StochasticSection } from './quant/sections/StochasticSection';
 import { ValuationSection } from './quant/sections/ValuationSection';
 import { VolatilitySection } from './quant/sections/VolatilitySection';
+import { useMonteCarlo } from './quant/useMonteCarlo';
 import {
   alignByDate,
   alignManyByDate,
@@ -36,7 +37,6 @@ import {
   benchmarkForSymbol,
   benchmarkStats,
   beta,
-  bootstrapMC,
   calmar,
   correlationMatrix,
   covarianceMatrix,
@@ -54,6 +54,7 @@ import {
   gmvWeights,
   histogramBins,
   historicalVaR,
+  horizonSigma,
   hurst,
   jarqueBera,
   kellyFraction,
@@ -61,7 +62,6 @@ import {
   logReturns,
   maxDrawdown,
   mean,
-  monteCarloGBM,
   ouHalfLife,
   parkinsonVol,
   periodsPerYearFromDates,
@@ -113,6 +113,9 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const [mcHorizon, setMcHorizon] = useState(MC_DAYS);
   const [mcMethod, setMcMethod] = useState('gbm'); // 'gbm' | 'bootstrap'
   const [mcDrift, setMcDrift] = useState('historical'); // 'historical' | 'riskneutral'
+  const [bootDemean, setBootDemean] = useState(false);
+  const [mcTarget, setMcTarget] = useState('');
+  const [mcStop, setMcStop] = useState('');
   const [strategy, setStrategy] = useState('sma');
   const [btParams, setBtParams] = useState({
     fast: 20,
@@ -321,18 +324,59 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
   // Only run the simulation when the section is open and there's enough data;
   // keyed so unrelated re-renders (e.g. streaming updates) don't re-roll it.
-  const sim = useMemo(() => {
+  const sigmaInfo = useMemo(
+    () =>
+      horizonSigma({
+        garchFit: garch,
+        ewmaSigma: ewmaSigmaDaily(logRet),
+        longRunSigma: stdDev(logRet),
+        days: mcHorizon,
+      }),
+    [garch, logRet, mcHorizon]
+  );
+
+  const mcRequest = useMemo(() => {
     if ((visible && !visible.has('stochastic')) || closes.length < 30) return null;
     const spot = closes.at(-1);
+    const options = {
+      target: mcTarget === '' ? null : Number(mcTarget),
+      stop: mcStop === '' ? null : Number(mcStop),
+    };
     if (mcMethod === 'bootstrap') {
-      return bootstrapMC(spot, returns, mcHorizon, MC_PATHS, seed);
+      return {
+        method: 'bootstrap',
+        args: [spot, returns, mcHorizon, MC_PATHS, seed, 5, { ...options, demean: bootDemean }],
+      };
     }
     // Risk-neutral drift uses the risk-free rate instead of the historical mean,
     // removing the optimistic bias when the sample window was a bull run.
-    const sigma = ewmaSigmaDaily(logRet);
-    const drift = simulationDrift({ mode: mcDrift, logReturns: logRet, sigma, rfDaily });
-    return monteCarloGBM(spot, drift, sigma, mcHorizon, MC_PATHS, seed);
-  }, [visible, closes, logRet, returns, seed, mcHorizon, mcMethod, mcDrift, rfDaily]);
+    const drift = simulationDrift({
+      mode: mcDrift,
+      logReturns: logRet,
+      sigma: sigmaInfo.sigma,
+      rfDaily,
+    });
+    return {
+      method: 'gbm',
+      args: [spot, drift, sigmaInfo.sigma, mcHorizon, MC_PATHS, seed, options],
+    };
+  }, [
+    visible,
+    closes,
+    returns,
+    logRet,
+    mcHorizon,
+    mcMethod,
+    mcDrift,
+    bootDemean,
+    mcTarget,
+    mcStop,
+    seed,
+    rfDaily,
+    sigmaInfo,
+  ]);
+
+  const { result: sim, running: simRunning } = useMonteCarlo(mcRequest);
 
   const horizonLabel = useMemo(() => {
     const months = Math.round((mcHorizon / ppy) * 12);
@@ -609,12 +653,14 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         <SectionBlock title="Stochastic" hidden={activeId !== 'stochastic'}>
           <StochasticSection
             sim={sim}
+            running={simRunning}
             spot={closes.at(-1)}
             ccy={ccy}
+            lastDate={historyDates.at(-1)}
+            ppy={ppy}
             seed={seed}
             onReroll={() => setSeed((s) => (s + 1) >>> 0)}
             onSeedChange={(v) => setSeed(Number.isFinite(v) ? v : 0)}
-            returnBins={returnBins}
             horizon={mcHorizon}
             onHorizonChange={setMcHorizon}
             horizonLabel={horizonLabel}
@@ -622,6 +668,14 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             onMethodChange={setMcMethod}
             drift={mcDrift}
             onDriftChange={setMcDrift}
+            bootDemean={bootDemean}
+            onBootDemeanChange={setBootDemean}
+            target={mcTarget}
+            onTargetChange={setMcTarget}
+            stop={mcStop}
+            onStopChange={setMcStop}
+            sigmaInfo={sigmaInfo}
+            returnBins={returnBins}
           />
         </SectionBlock>
       )}
