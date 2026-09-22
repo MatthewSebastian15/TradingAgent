@@ -34,13 +34,12 @@ import {
   assessSeries,
   backtest,
   benchmarkForSymbol,
+  benchmarkStats,
   beta,
   bootstrapMC,
   calmar,
-  cornishFisherVaR,
   correlationMatrix,
   covarianceMatrix,
-  cvar,
   downsideDeviation,
   drawdownSeries,
   drawdownStats,
@@ -61,7 +60,6 @@ import {
   mean,
   monteCarloGBM,
   ouHalfLife,
-  parametricVaR,
   parkinsonVol,
   periodsPerYearFromDates,
   pointPrice,
@@ -75,12 +73,14 @@ import {
   rollingSharpe,
   rollingVol,
   sharpe,
+  sharpeStats,
   simpleReturns,
   simulationDrift,
   skewness,
   sortino,
   stdDev,
   tangencyWeights,
+  topDrawdowns,
   volCone,
   volPercentile,
   volTargetWeight,
@@ -240,11 +240,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       ewma: ewmaVol(closes, 0.94, ppy),
       dd: maxDrawdown(closes),
       cal: calmar(closes, ppy),
-      histVaR: historicalVaR(returns),
-      // ponytail: one card — EWMA VaR replaces the flat-stdev number outright.
-      paramVaR: parametricVaR(returns, 0.95, ewmaSigmaDaily(returns)),
-      cfVaR: cornishFisherVaR(returns),
-      cv: cvar(returns),
+      ewmaSigma: ewmaSigmaDaily(returns),
       downDev: downsideDeviation(returns, 0, ppy),
       shp: sharpe(returns, rfDaily, ppy),
       srt: sortino(returns, rfDaily, ppy),
@@ -263,6 +259,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const ouHL = useMemo(() => ouHalfLife(closes), [closes]);
   const ddStats = useMemo(() => drawdownStats(closes), [closes]);
   const regimeShift = useMemo(() => regimeShifts(rollingVols), [rollingVols]);
+  const sharpeInfo = useMemo(() => sharpeStats(returns, rfDaily, ppy), [returns, rfDaily, ppy]);
+  const topDD = useMemo(() => topDrawdowns(closes, historyDates), [closes, historyDates]);
 
   // Underwater curve (one value per close), zipped to dates.
   const ddPoints = useMemo(
@@ -287,6 +285,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   // Benchmark-relative metrics + rolling beta from the aligned benchmark series.
   const benchmark = useMemo(() => {
     const none = {
+      stats: null,
       beta: null,
       alpha: null,
       available: false,
@@ -298,9 +297,11 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     if (stock.length < 3) return none;
     const sr = simpleReturns(stock);
     const mr = simpleReturns(market);
+    const stats = benchmarkStats(sr, mr, rfDaily, ppy);
     return {
-      beta: beta(sr, mr),
-      alpha: alpha(sr, mr, rfDaily, ppy),
+      stats,
+      beta: stats ? stats.beta : beta(sr, mr),
+      alpha: stats ? stats.alpha : alpha(sr, mr, rfDaily, ppy),
       available: true,
       observations: sr.length,
       rollBetaPoints: zipRollingToDates(
@@ -536,27 +537,25 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       {show('risk') && (
         <SectionBlock title="Risk" hidden={activeId !== 'risk'}>
           <RiskSection
+            ccy={ccy}
+            rfPct={rf * 100}
+            benchLabel={benchmarkInfo.label}
+            benchAvailable={benchmark.available}
+            returns={returns}
+            closes={closes}
+            ewmaSigma={metrics.ewmaSigma}
             dd={metrics.dd}
             cal={metrics.cal}
-            histVaR={metrics.histVaR}
-            paramVaR={metrics.paramVaR}
-            cfVaR={metrics.cfVaR}
-            cv={metrics.cv}
-            downDev={metrics.downDev}
-            shp={metrics.shp}
             srt={metrics.srt}
-            bta={benchmark.beta}
-            alf={benchmark.alpha}
-            rfPct={rf * 100}
+            downDev={metrics.downDev}
+            sharpeInfo={sharpeInfo}
             obs={returns.length}
-            benchObs={benchmark.observations}
-            benchAvailable={benchmark.available}
-            benchLabel={benchmarkInfo.label}
+            benchStats={benchmark.stats}
+            ddStats={ddStats}
+            topDD={topDD}
             ddPoints={ddPoints}
             rsPoints={rsPoints}
             rbPoints={benchmark.rollBetaPoints}
-            ddStats={ddStats}
-            ppy={ppy}
           />
         </SectionBlock>
       )}

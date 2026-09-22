@@ -1,8 +1,19 @@
 import PropTypes from 'prop-types';
+import { useMemo, useState } from 'react';
 
-import PriceMetricLineChart from '../../PriceMetricLineChart';
-import { MetricCard } from '../charts';
 import {
+  bootstrapCI,
+  cornishFisherVaR,
+  cvar,
+  historicalVaR,
+  horizonReturns,
+  parametricVaR,
+  scaleVaR,
+} from '../../quantUtils';
+import { MetricCard, NumberField } from '../charts';
+import {
+  DASH,
+  finite,
   fmtAbs,
   fmtLoss,
   fmtNum2,
@@ -11,205 +22,371 @@ import {
   fmtSignedPct,
   ratioTone,
   sampleNote,
-  signedTone,
 } from '../format';
+import { fmtMoney } from '../numberFormat';
+import { CHART_COLORS } from '../viz/chartTheme';
+import { DataTable } from '../viz/DataTable';
+import { LineChart } from '../viz/LineChart';
+
+const HORIZONS = [1, 10];
+const toSeries = (pts) => pts.map((p) => ({ x: p.date, y: p.value }));
 
 export function RiskSection({
+  ccy,
+  rfPct,
+  benchLabel,
+  benchAvailable,
+  returns,
+  closes,
+  ewmaSigma,
   dd,
   cal,
-  histVaR,
-  paramVaR,
-  cfVaR,
-  cv,
-  downDev,
-  shp,
   srt,
-  bta,
-  alf,
-  rfPct,
+  downDev,
+  sharpeInfo,
   obs,
-  benchObs,
-  benchAvailable,
-  benchLabel,
+  benchStats,
+  ddStats,
+  topDD,
   ddPoints,
   rsPoints,
   rbPoints,
-  ddStats,
-  ppy = 252,
 }) {
+  const [horizon, setHorizon] = useState(1);
+  const [position, setPosition] = useState('');
   const excessLabel = `excess over ${rfPct.toFixed(1)}%`;
-  const benchNote = benchAvailable
-    ? `Benchmark: ${benchLabel}, matched to the ticker's home market.`
-    : `${benchLabel} benchmark data is unavailable.`;
+
+  const varRows = useMemo(() => {
+    const sample = horizon === 1 ? returns : horizonReturns(closes, horizon);
+    const enough = sample.length >= 20;
+    const ci = (stat) =>
+      enough ? bootstrapCI(sample, stat, { samples: 400, level: 0.9, seed: 7 }) : null;
+    const param = parametricVaR(returns, 0.95, ewmaSigma);
+    const cf = cornishFisherVaR(returns);
+    const scaled = horizon === 1 ? '' : ` × √${horizon}`;
+    return [
+      {
+        method: 'Historical',
+        value: enough ? historicalVaR(sample) : null,
+        ci: ci((s) => historicalVaR(s)),
+        note:
+          horizon === 1
+            ? '5th percentile of daily returns'
+            : `5th percentile of overlapping ${horizon}-day returns`,
+      },
+      {
+        method: 'Parametric (EWMA)',
+        value: horizon === 1 ? param : scaleVaR(param, horizon),
+        ci: null,
+        note: `Zero mean, −1.645 × EWMA σ${scaled}`,
+      },
+      {
+        method: 'Cornish-Fisher',
+        value: horizon === 1 ? cf : scaleVaR(cf, horizon),
+        ci: null,
+        note: `Skew/kurtosis-adjusted quantile${scaled}${horizon === 1 ? '' : ' (approx.)'}`,
+      },
+      {
+        method: 'Expected shortfall (CVaR)',
+        value: enough ? cvar(sample) : null,
+        ci: ci((s) => cvar(s)),
+        note: 'Average loss beyond the historical VaR',
+      },
+    ];
+  }, [horizon, returns, closes, ewmaSigma]);
+
+  const positionValue = Number(position);
+  const amount = (v) =>
+    position !== '' && positionValue > 0 && finite(v)
+      ? fmtMoney((Math.abs(v) / 100) * positionValue, ccy)
+      : DASH;
+
+  const s = benchStats;
+  const benchRows = s
+    ? [
+        {
+          metric: `Beta vs ${benchLabel}`,
+          value: fmtNum2(s.beta),
+          note: '1.0 moves with the market',
+        },
+        {
+          metric: 'R²',
+          value: finite(s.rSquared) ? fmtPercent(s.rSquared * 100) : DASH,
+          note: 'Variance explained by the benchmark; low R² makes beta unreliable',
+        },
+        { metric: 'Correlation', value: fmtNum2(s.correlation), note: 'Daily co-movement' },
+        {
+          metric: 'Alpha (annualized)',
+          value: `${fmtSignedPct(s.alpha)}${finite(s.alphaTStat) ? ` · t = ${fmtNum2(s.alphaTStat)}` : ''}`,
+          note: '|t| below 2 means not distinguishable from zero',
+        },
+        {
+          metric: 'Tracking error',
+          value: fmtPercent(s.trackingError),
+          note: 'Annualized volatility of return minus benchmark',
+        },
+        {
+          metric: 'Information ratio',
+          value: fmtRatio(s.informationRatio),
+          note: 'Active return per unit of tracking error',
+        },
+        {
+          metric: 'Up capture',
+          value: fmtPercent(s.upCapture),
+          note: 'Share of benchmark up-day gains captured',
+        },
+        {
+          metric: 'Down capture',
+          value: fmtPercent(s.downCapture),
+          note: 'Below 100% = falls less than the market',
+        },
+      ]
+    : [];
+
   return (
     <div className="space-y-4">
-      <p className="text-sm text-bloomberg-subtle">
+      <p className="text-sm text-bloomberg-white/80">
         On a typical bad day you might lose about{' '}
-        <span className="text-bloomberg-red">{fmtAbs(histVaR)}</span> (95% historical VaR); on the
-        very worst days, around <span className="text-bloomberg-red">{fmtAbs(cv)}</span> on average.
+        <span className="text-bloomberg-red">{fmtAbs(historicalVaR(returns))}</span> (95% historical
+        VaR); on the very worst days, around{' '}
+        <span className="text-bloomberg-red">{fmtAbs(cvar(returns))}</span> on average.
       </p>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         <MetricCard
           label="Max Drawdown"
           value={fmtLoss(dd)}
           tone="bad"
-          gloss="Worst peak-to-trough drop over the whole history."
-          formula="Largest (price − running peak) / peak across the series. Matches the existing drawdown chart."
-        />
-        <MetricCard
-          label="Historical VaR (95%)"
-          value={fmtLoss(histVaR)}
-          tone="bad"
-          gloss="On 95% of days you lose less than this; only the worst 5% are deeper."
-          formula="5th-percentile of actual daily returns. No distribution assumed."
-        />
-        <MetricCard
-          label="Parametric VaR (95%)"
-          value={fmtLoss(paramVaR)}
-          tone="bad"
-          gloss="Same idea, read off a normal bell curve tuned to recent volatility."
-          formula="mean − 1.645 × EWMA vol (λ=0.94, recent days weighted more). Trusts the bell-curve shape (understates rare crashes)."
-        />
-        <MetricCard
-          label="Cornish-Fisher VaR (95%)"
-          value={fmtLoss(cfVaR)}
-          tone="bad"
-          gloss="Parametric VaR adjusted for this stock's actual skew and fat tails."
-          formula="Normal z-quantile expanded with sample skewness and excess kurtosis (Cornish-Fisher), × stddev. Blank when the moments are too extreme for the expansion."
-        />
-        <MetricCard
-          label="Conditional VaR (95%)"
-          value={fmtLoss(cv)}
-          tone="bad"
-          gloss="The average loss inside that worst-5% tail."
-          formula="Mean of all returns beyond the historical VaR threshold. Always ≥ VaR."
-        />
-        <MetricCard
-          label="Downside Deviation"
-          value={fmtPercent(downDev)}
-          gloss="Volatility of only the losing days — the swings that actually scare you."
-          formula={`√(mean of min(0, return)²) × √${ppy} × 100%.`}
+          gloss="Worst peak-to-trough drop."
         />
         <MetricCard
           label={`Sharpe (${excessLabel})`}
-          value={fmtRatio(shp)}
-          tone={ratioTone(shp)}
-          sample={sampleNote(obs)}
-          gloss="Return per unit of total risk. Higher is a better deal."
-          formula={`(mean(returns) − rf) / stddev(returns) × √${ppy}. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
+          value={fmtRatio(sharpeInfo?.sharpe)}
+          tone={ratioTone(sharpeInfo?.sharpe)}
+          sample={
+            sharpeInfo
+              ? `SE ${fmtNum2(sharpeInfo.standardError)} · P(SR>0) ${fmtPercent(sharpeInfo.probabilisticSharpe * 100)} · n=${sharpeInfo.observations}`
+              : sampleNote(obs)
+          }
+          formula="(mean − rf) / stdev × √periods. SE per Mertens (skew/kurtosis adjusted); P(SR>0) is the Probabilistic Sharpe Ratio."
         />
         <MetricCard
           label={`Sortino (${excessLabel})`}
           value={fmtRatio(srt)}
           tone={ratioTone(srt)}
           sample={sampleNote(obs)}
-          gloss="Like Sharpe but only penalizes downside risk — fairer to big upside moves."
-          formula={`(mean(returns) − rf) / downside-deviation × √${ppy}. Risk-free rate = ${rfPct.toFixed(1)}% annual.`}
-        />
-        <MetricCard
-          label={`Beta (vs ${benchLabel})`}
-          value={fmtNum2(bta)}
-          sample={sampleNote(benchObs)}
-          gloss="1.0 moves with the market; above 1 is jumpier, below 1 is calmer."
-          formula={`cov(stock, ${benchLabel}) / var(${benchLabel}), on overlapping trading days. ${benchNote}`}
-        />
-        <MetricCard
-          label="Alpha (annualized)"
-          value={fmtSignedPct(alf)}
-          tone={signedTone(alf)}
-          sample={sampleNote(benchObs)}
-          gloss="Return beyond what beta alone would predict — the 'skill' return vs the market."
-          formula={`Jensen's alpha: (stock − rf) − β·(market − rf), annualized. ${benchNote}`}
+          formula="(mean − rf) / downside deviation × √periods."
         />
         <MetricCard
           label="Calmar Ratio"
           value={fmtRatio(cal)}
           tone={ratioTone(cal)}
-          gloss="Annual growth per unit of worst drawdown — reward vs the deepest pain."
-          formula="CAGR ÷ |max drawdown|. Higher means smoother growth."
+          formula="CAGR ÷ |max drawdown|."
+        />
+        <MetricCard
+          label="Downside Deviation"
+          value={fmtPercent(downDev)}
+          formula="√mean(min(0, r)²) × √periods."
         />
       </div>
 
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80">
+          <span className="tracking-wider uppercase">Horizon</span>
+          <div className="flex gap-1">
+            {HORIZONS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                aria-pressed={horizon === h}
+                onClick={() => setHorizon(h)}
+                className={`rounded-none border px-2.5 py-1 text-[11px] ${
+                  horizon === h
+                    ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
+                    : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
+                }`}
+              >
+                {h}D
+              </button>
+            ))}
+          </div>
+        </div>
+        <NumberField
+          label="Position value"
+          value={position}
+          onChange={setPosition}
+          suffix={ccy || 'ccy'}
+        />
+      </div>
+
+      <DataTable
+        caption="Value at Risk"
+        rowKey={(r) => r.method}
+        rows={varRows}
+        columns={[
+          { key: 'method', label: 'Method' },
+          {
+            key: 'value',
+            label: `VaR 95% (${horizon}D)`,
+            align: 'right',
+            render: (r) => fmtLoss(r.value),
+            className: () => 'text-bloomberg-red',
+          },
+          {
+            key: 'amount',
+            label: 'Amount at risk',
+            align: 'right',
+            render: (r) => amount(r.value),
+          },
+          {
+            key: 'ci',
+            label: '90% bootstrap CI',
+            align: 'right',
+            render: (r) => (r.ci ? `${fmtLoss(r.ci.lo)} … ${fmtLoss(r.ci.hi)}` : DASH),
+          },
+          { key: 'note', label: 'Basis', className: () => 'text-bloomberg-white/80' },
+        ]}
+      />
+      {horizon > 1 && (
+        <p className="text-[11px] text-bloomberg-white/80">
+          Overlapping {horizon}-day returns are autocorrelated, so their bootstrap interval is
+          narrower than the true uncertainty.
+        </p>
+      )}
+
+      <DataTable
+        caption={
+          benchAvailable
+            ? `Relative to ${benchLabel} · n=${s?.observations ?? 0}`
+            : `${benchLabel} data unavailable`
+        }
+        rowKey={(r) => r.metric}
+        rows={benchRows}
+        emptyMessage="Not enough overlapping benchmark history (need 20 days)."
+        columns={[
+          { key: 'metric', label: 'Metric' },
+          { key: 'value', label: 'Value', align: 'right' },
+          { key: 'note', label: 'Reading', className: () => 'text-bloomberg-white/80' },
+        ]}
+      />
+
       {ddStats && (
-        <div className="space-y-1">
-          <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
-            Drawdown recovery
-          </div>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricCard
-              label="Max DD Duration"
-              value={`${ddStats.maxDDDuration}d`}
-              gloss="Trading days from the peak to full recovery (or to today if still underwater)."
-            />
-            <MetricCard
-              label="Recovery Time"
-              value={ddStats.recoveryDays != null ? `${ddStats.recoveryDays}d` : 'Not recovered'}
-              tone={ddStats.maxDDRecovered ? 'neutral' : 'bad'}
-              gloss="Trading days from the deepest trough back to the prior peak."
-            />
-            <MetricCard
-              label="Currently Underwater"
-              value={ddStats.currentUnderwaterDays > 0 ? `${ddStats.currentUnderwaterDays}d` : 'No'}
-              tone={ddStats.currentUnderwaterDays > 0 ? 'bad' : 'good'}
-              gloss="Trading days below the last all-time high, as of today."
-            />
-            <MetricCard
-              label="Drawdowns > 5%"
-              value={String(ddStats.episodes)}
-              gloss="Count of distinct peak-to-recovery episodes deeper than 5%."
-            />
-          </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard
+            label="Max DD Duration"
+            value={`${ddStats.maxDDDuration}d`}
+            gloss="Peak to full recovery (or today)."
+          />
+          <MetricCard
+            label="Recovery Time"
+            value={ddStats.recoveryDays != null ? `${ddStats.recoveryDays}d` : 'Not recovered'}
+            tone={ddStats.maxDDRecovered ? 'neutral' : 'bad'}
+            gloss="Deepest trough back to the prior peak."
+          />
+          <MetricCard
+            label="Currently Underwater"
+            value={ddStats.currentUnderwaterDays > 0 ? `${ddStats.currentUnderwaterDays}d` : 'No'}
+            tone={ddStats.currentUnderwaterDays > 0 ? 'bad' : 'good'}
+            gloss="Periods below the last all-time high."
+          />
+          <MetricCard
+            label="Drawdowns > 5%"
+            value={String(ddStats.episodes)}
+            gloss="Distinct episodes deeper than 5%."
+          />
         </div>
       )}
 
-      <PriceMetricLineChart
-        title="Underwater (drawdown) curve"
-        subtitle="Percent below the running peak — depth and duration of every dip"
-        points={ddPoints}
-        valueType="percent"
+      <DataTable
+        caption="Top drawdowns"
+        rowKey={(r) => r.peakDate}
+        rows={topDD}
+        emptyMessage="No drawdowns in this window."
+        columns={[
+          { key: 'peakDate', label: 'Peak' },
+          { key: 'troughDate', label: 'Trough' },
+          { key: 'recoveryDate', label: 'Recovered', render: (r) => r.recoveryDate || 'Not yet' },
+          {
+            key: 'depth',
+            label: 'Depth',
+            align: 'right',
+            render: (r) => fmtLoss(r.depth),
+            className: () => 'text-bloomberg-red',
+          },
+          { key: 'lengthDays', label: 'Length', align: 'right', render: (r) => `${r.lengthDays}d` },
+          {
+            key: 'recoveryDays',
+            label: 'Trough → recovery',
+            align: 'right',
+            render: (r) => (r.recoveryDays == null ? DASH : `${r.recoveryDays}d`),
+          },
+        ]}
+      />
+
+      <LineChart
+        title="Underwater curve"
+        subtitle="Percent below the running peak"
+        ariaLabel="Underwater drawdown curve"
+        formatY={(v) => `${v.toFixed(0)}%`}
+        includeZero
+        series={[
+          { id: 'dd', label: 'Drawdown', color: CHART_COLORS.down, points: toSeries(ddPoints) },
+        ]}
         emptyMessage="Not enough history for a drawdown chart."
       />
-
-      <PriceMetricLineChart
-        title="Rolling Sharpe (63-day)"
-        subtitle="Risk-adjusted return over a sliding quarter"
-        points={rsPoints}
-        valueType="number"
-        emptyMessage="Not enough history for a rolling-Sharpe chart."
-      />
-
-      <PriceMetricLineChart
-        title={`Rolling Beta vs ${benchLabel} (63-day)`}
-        subtitle={benchAvailable ? 'Market sensitivity over time' : 'Benchmark data unavailable'}
-        points={rbPoints}
-        valueType="number"
-        emptyMessage="Not enough overlapping history for a rolling-beta chart."
-      />
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <LineChart
+          title="Rolling Sharpe (63 periods)"
+          ariaLabel="Rolling Sharpe ratio"
+          series={[
+            { id: 'rs', label: 'Sharpe', color: CHART_COLORS.primary, points: toSeries(rsPoints) },
+          ]}
+          referenceLines={[
+            { y: 0, color: CHART_COLORS.axis },
+            { y: 1, label: 'Sharpe 1', color: CHART_COLORS.secondary },
+          ]}
+          emptyMessage="Not enough history for a rolling Sharpe chart."
+        />
+        <LineChart
+          title={`Rolling beta vs ${benchLabel} (63 periods)`}
+          ariaLabel="Rolling beta"
+          series={[
+            { id: 'rb', label: 'Beta', color: CHART_COLORS.tertiary, points: toSeries(rbPoints) },
+          ]}
+          referenceLines={[{ y: 1, label: 'Beta 1', color: CHART_COLORS.secondary }]}
+          emptyMessage={
+            benchAvailable
+              ? 'Not enough overlapping history for rolling beta.'
+              : 'Benchmark data unavailable.'
+          }
+        />
+      </div>
     </div>
   );
 }
 
+const datedPoints = PropTypes.arrayOf(
+  PropTypes.shape({ date: PropTypes.string, value: PropTypes.number })
+);
+
 RiskSection.propTypes = {
+  ccy: PropTypes.string,
+  rfPct: PropTypes.number.isRequired,
+  benchLabel: PropTypes.string.isRequired,
+  benchAvailable: PropTypes.bool.isRequired,
+  returns: PropTypes.arrayOf(PropTypes.number).isRequired,
+  closes: PropTypes.arrayOf(PropTypes.number).isRequired,
+  ewmaSigma: PropTypes.number,
   dd: PropTypes.number,
   cal: PropTypes.number,
-  histVaR: PropTypes.number,
-  paramVaR: PropTypes.number,
-  cfVaR: PropTypes.number,
-  cv: PropTypes.number,
-  downDev: PropTypes.number,
-  shp: PropTypes.number,
   srt: PropTypes.number,
-  bta: PropTypes.number,
-  alf: PropTypes.number,
-  rfPct: PropTypes.number.isRequired,
+  downDev: PropTypes.number,
+  sharpeInfo: PropTypes.object,
   obs: PropTypes.number.isRequired,
-  benchObs: PropTypes.number,
-  benchAvailable: PropTypes.bool.isRequired,
-  benchLabel: PropTypes.string.isRequired,
-  ddPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
-  rsPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
-  rbPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
+  benchStats: PropTypes.object,
   ddStats: PropTypes.object,
-  ppy: PropTypes.number,
+  topDD: PropTypes.arrayOf(PropTypes.object).isRequired,
+  ddPoints: datedPoints.isRequired,
+  rsPoints: datedPoints.isRequired,
+  rbPoints: datedPoints.isRequired,
 };
