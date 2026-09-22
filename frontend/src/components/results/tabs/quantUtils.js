@@ -13,3 +13,5 @@ export * from './quant/dataQuality';
 export * from './quant/rangeVol';
 export * from './quant/garch';
 export * from './quant/riskStats';
+export * from './quant/distribution';
+export * from './quant/seasonality';
