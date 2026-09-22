@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { blendSigma, horizonSigma, monteCarloGBM, simulationDrift } from './stochastic';
+import {
+  blendSigma,
+  bootstrapMC,
+  horizonSigma,
+  monteCarloGBM,
+  simulationDrift,
+} from './stochastic';
 
 describe('simulationDrift', () => {
   it('historical mode converts mean log return to arithmetic drift', () => {
@@ -53,5 +59,38 @@ describe('blendSigma / horizonSigma', () => {
     expect(
       horizonSigma({ garchFit: null, ewmaSigma: 0.02, longRunSigma: 0.02, days: 21 }).source
     ).toBe('blend');
+  });
+});
+
+describe('path summaries', () => {
+  it('deterministic rising paths: touch probabilities, no drawdown, ordered percentiles', () => {
+    const sim = monteCarloGBM(100, 0.001, 0, 50, 100, 1, { target: 104, stop: 99 });
+    expect(sim.probTarget).toBe(1);
+    expect(sim.probStop).toBe(0);
+    expect(sim.probBelowSpot).toBe(0);
+    expect(sim.maxDrawdownMedian).toBe(0);
+    expect(sim.expectedReturnPct).toBeCloseTo((Math.exp(0.05) - 1) * 100, 8);
+  });
+
+  it('noisy paths keep p5 <= p25 <= p50 <= p75 <= p95 and expose band p5/p95', () => {
+    const { percentiles: p, band, maxDrawdownWorst10, maxDrawdownMedian } = monteCarloGBM(100, 0.0003, 0.02, 60, 800, 3);
+    expect(p.p5).toBeLessThanOrEqual(p.p25);
+    expect(p.p25).toBeLessThanOrEqual(p.p50);
+    expect(p.p50).toBeLessThanOrEqual(p.p75);
+    expect(p.p75).toBeLessThanOrEqual(p.p95);
+    expect(band[60].p5).toBeLessThan(band[60].p95);
+    expect(maxDrawdownWorst10).toBeLessThanOrEqual(maxDrawdownMedian);
+    expect(monteCarloGBM(100, 0, 0.02, 10, 50, 3).probTarget).toBeNull();
+  });
+
+  it('demeaned bootstrap removes the historical drift; drift re-adds a chosen one', () => {
+    const returns = [0.01, 0.02, 0.03];
+    const raw = bootstrapMC(100, returns, 50, 2000, 9, 1);
+    const flat = bootstrapMC(100, returns, 50, 2000, 9, 1, { demean: true });
+    const withDrift = bootstrapMC(100, returns, 50, 2000, 9, 1, { demean: true, drift: 0.001 });
+    expect(raw.expectedReturnPct).toBeGreaterThan(100);
+    expect(Math.abs(flat.expectedReturnPct)).toBeLessThan(2);
+    expect(withDrift.expectedReturnPct).toBeGreaterThan(4);
+    expect(withDrift.expectedReturnPct).toBeLessThan(6.5);
   });
 });
