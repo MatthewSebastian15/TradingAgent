@@ -3,38 +3,100 @@ import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { DistributionSection } from './DistributionSection';
-import { returnHistogram } from '../../quantUtils';
+import {
+  histogramBins,
+  jarqueBera,
+  normInv,
+  qqPoints,
+  returnsByMonth,
+  returnsByWeekday,
+} from '../../quantUtils';
+
+const returns = Array.from({ length: 400 }, (_, i) => 0.01 * normInv((i + 0.5) / 400));
+const points = returns.reduce(
+  (acc, r, i) => [
+    ...acc,
+    {
+      date: new Date(Date.UTC(2025, 0, 2 + i)).toISOString().slice(0, 10),
+      close: acc.at(-1).close * (1 + r),
+    },
+  ],
+  [{ date: '2025-01-01', close: 100 }]
+);
 
 describe('DistributionSection', () => {
   afterEach(() => cleanup());
 
-  it('marks VaR levels on an axis-labeled histogram', () => {
-    const returns = Array.from({ length: 200 }, (_, i) => Math.sin(i) * 0.02);
-    const { container } = render(
+  it('shows markers, Jarque-Bera, a QQ plot and seasonality tables', () => {
+    render(
       <DistributionSection
-        skew={-0.2}
-        kurt={1.5}
-        var95={-1.8}
-        var99={-1.95}
-        bins={returnHistogram(returns, 30)}
+        skew={0}
+        kurt={0}
+        var95={-1.6}
+        var99={-2.3}
+        cvar95={-2.0}
+        histogram={histogramBins(returns)}
         mu={0}
-        sigma={0.014}
+        sigma={0.01}
+        jb={jarqueBera(returns)}
+        qq={qqPoints(returns)}
+        weekday={returnsByWeekday(points)}
+        month={returnsByMonth(points)}
       />
     );
-    const chart = screen.getByRole('img', {
-      name: 'Histogram of daily returns with a fitted normal overlay',
-    });
-    expect(chart).toBeTruthy();
-    // Marker labels render as SVG text inside the chart.
-    expect(chart.querySelectorAll('text').length).toBeGreaterThan(0);
     expect(screen.getByText('VaR 95%')).toBeTruthy();
-    expect(screen.getByText('VaR 99%')).toBeTruthy();
-    // VaR 99% is a worse (more negative) return, so its marker sits left of VaR 95%.
-    const x = (label) => Number(screen.getByText(label).getAttribute('x'));
-    expect(x('VaR 99%')).toBeLessThan(x('VaR 95%'));
-    expect(screen.getByText('Normal fit')).toBeTruthy();
-    expect(screen.getAllByText(/%$/).length).toBeGreaterThan(2);
-    // The fitted-normal overlay is the only stroked, unfilled path in the plot.
-    expect(container.querySelector('path[fill="none"][stroke]')).toBeTruthy();
+    expect(screen.getByText('CVaR 95%')).toBeTruthy();
+    expect(screen.getByText('Jarque-Bera p-value')).toBeTruthy();
+    expect(
+      screen.getByRole('img', { name: 'QQ plot against the normal distribution' })
+    ).toBeTruthy();
+    expect(screen.getByText('Returns by weekday')).toBeTruthy();
+    expect(screen.getByText('Mon')).toBeTruthy();
+  });
+
+  it('keeps every QQ point when the sample is smaller than the downsample cap', () => {
+    const smallReturns = [0.01, -0.02, 0.015, -0.005, 0.02, -0.01, 0.008, -0.003, 0.012, -0.018];
+    const qq = qqPoints(smallReturns);
+    const { container } = render(
+      <DistributionSection
+        skew={0}
+        kurt={0}
+        var95={-1.6}
+        var99={-2.3}
+        cvar95={-2.0}
+        histogram={histogramBins(smallReturns)}
+        mu={0}
+        sigma={0.01}
+        jb={jarqueBera(smallReturns)}
+        qq={qq}
+        weekday={[]}
+        month={[]}
+      />
+    );
+    const chart = screen.getByRole('img', { name: 'QQ plot against the normal distribution' });
+    expect(chart.querySelectorAll('circle').length).toBe(qq.length);
+    expect(container).toBeTruthy();
+  });
+
+  it('shows a dash for skew/kurt/JB when history is too short for Jarque-Bera', () => {
+    const shortReturns = [0.01, -0.005, 0.008, -0.002, 0.003];
+    render(
+      <DistributionSection
+        skew={0}
+        kurt={0}
+        var95={-1.6}
+        var99={-2.3}
+        cvar95={-2.0}
+        histogram={histogramBins(shortReturns)}
+        mu={0}
+        sigma={0.01}
+        jb={jarqueBera(shortReturns)}
+        qq={qqPoints(shortReturns)}
+        weekday={[]}
+        month={[]}
+      />
+    );
+    expect(screen.getByText('Jarque-Bera p-value')).toBeTruthy();
+    expect(screen.getByText('—')).toBeTruthy();
   });
 });

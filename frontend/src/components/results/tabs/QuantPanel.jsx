@@ -40,6 +40,7 @@ import {
   calmar,
   correlationMatrix,
   covarianceMatrix,
+  cvar,
   downsideDeviation,
   drawdownSeries,
   drawdownStats,
@@ -51,8 +52,10 @@ import {
   garchTermStructure,
   garmanKlassVol,
   gmvWeights,
+  histogramBins,
   historicalVaR,
   hurst,
+  jarqueBera,
   kellyFraction,
   kurtosis,
   logReturns,
@@ -65,9 +68,12 @@ import {
   pointPrice,
   portfolioStats,
   priceRows,
+  qqPoints,
   regimeShifts,
   resolveRiskFreeRate,
   returnHistogram,
+  returnsByMonth,
+  returnsByWeekday,
   rollingBeta,
   rollingCorrelation,
   rollingSharpe,
@@ -248,6 +254,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       kurt: kurtosis(returns),
       var95: historicalVaR(returns, 0.95),
       var99: historicalVaR(returns, 0.99),
+      cv: cvar(returns),
       kelly: kellyFraction(returns),
     }),
     [closes, returns, rfDaily, ppy]
@@ -346,6 +353,25 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
 
   const returnBins = useMemo(() => returnHistogram(returns, 30), [returns]);
   const volWeight = useMemo(() => volTargetWeight(metrics.vol, VOL_TARGET), [metrics.vol]);
+
+  const distDetail = useMemo(() => {
+    if (visible && !visible.has('distribution')) {
+      return {
+        histogram: { bins: [], clippedLow: 0, clippedHigh: 0 },
+        jb: null,
+        qq: [],
+        weekday: [],
+        month: [],
+      };
+    }
+    return {
+      histogram: histogramBins(returns),
+      jb: jarqueBera(returns),
+      qq: qqPoints(returns),
+      weekday: returnsByWeekday(history),
+      month: returnsByMonth(history),
+    };
+  }, [visible, returns, history]);
 
   // --- correlation + optimizer (Phase 5) ----------------------------------
   const baseSymbol = (symbol || 'BASE').toUpperCase();
@@ -567,9 +593,14 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             kurt={metrics.kurt}
             var95={metrics.var95}
             var99={metrics.var99}
-            bins={returnBins}
+            cvar95={metrics.cv}
+            histogram={distDetail.histogram}
             mu={mean(returns)}
             sigma={stdDev(returns)}
+            jb={distDetail.jb}
+            qq={distDetail.qq}
+            weekday={distDetail.weekday}
+            month={distDetail.month}
           />
         </SectionBlock>
       )}
