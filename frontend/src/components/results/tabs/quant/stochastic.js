@@ -1,4 +1,5 @@
-import { mean } from './stats';
+import { garchForecast } from './garch';
+import { mean, TRADING_DAYS } from './stats';
 
 // --- stochastic -----------------------------------------------------------
 
@@ -30,6 +31,20 @@ export function simulationDrift({ mode, logReturns, sigma, rfDaily = 0 }) {
   if (mode === 'riskneutral') return rfDaily;
   if (!logReturns || logReturns.length === 0) return 0;
   return mean(logReturns) + 0.5 * sigma * sigma;
+}
+
+// Average EWMA weight over the horizon: today's vol dominates short horizons and
+// fades toward the long-run level as the horizon grows.
+export function blendSigma(ewmaSigma, longRunSigma, days, lambda = 0.94) {
+  if (!Number.isFinite(ewmaSigma)) return longRunSigma;
+  if (!Number.isFinite(longRunSigma) || days <= 1) return ewmaSigma;
+  const w = (1 - lambda ** days) / (days * (1 - lambda));
+  return Math.sqrt(w * ewmaSigma ** 2 + (1 - w) * longRunSigma ** 2);
+}
+
+export function horizonSigma({ garchFit = null, ewmaSigma, longRunSigma, days }) {
+  if (garchFit) return { sigma: garchForecast(garchFit, days).dailySigma, source: 'garch' };
+  return { sigma: blendSigma(ewmaSigma, longRunSigma, days), source: 'blend' };
 }
 
 export const QUANTILE = (sorted, p) =>
