@@ -1,27 +1,111 @@
-import { mean, percentileRank } from './stats';
+import { mean, median, percentileRank, TRADING_DAYS } from './stats';
 import { mulberry32, QUANTILE } from './stochastic';
 
-export function dcf({ fcf, growth, years = 5, wacc, terminalGrowth, shares, netDebt = 0 }) {
-  if (!(wacc > terminalGrowth) || !(shares > 0) || !(wacc > 0)) return null;
-  let pv = 0;
+// Up to 3 stages: `years` at `growth`, `fadeYears` fading linearly toward `terminalGrowth`,
+// then a Gordon terminal value. Rates are decimals. Mid-year discounting treats cash as
+// arriving mid-period (terminal value still discounted at the end of the last year).
+export function dcf({
+  fcf,
+  growth,
+  years = 5,
+  fadeYears = 0,
+  wacc,
+  terminalGrowth,
+  shares,
+  netDebt = 0,
+  midYear = false,
+}) {
+  if (!(wacc > terminalGrowth) || !(shares > 0) || !(wacc > 0) || !Number.isFinite(fcf))
+    return null;
+  const total = years + fadeYears;
+  const flows = [];
   let cf = fcf;
-  for (let t = 1; t <= years; t += 1) {
-    cf *= 1 + growth;
-    pv += cf / (1 + wacc) ** t;
+  let pv = 0;
+  for (let t = 1; t <= total; t += 1) {
+    const g =
+      t <= years ? growth : growth + ((terminalGrowth - growth) * (t - years)) / (fadeYears + 1);
+    cf *= 1 + g;
+    const flowPv = cf / (1 + wacc) ** (midYear ? t - 0.5 : t);
+    pv += flowPv;
+    flows.push({ year: t, growth: g, fcf: cf, pv: flowPv });
   }
-  const terminal = (cf * (1 + terminalGrowth)) / (wacc - terminalGrowth);
-  pv += terminal / (1 + wacc) ** years;
-  const equityValue = pv - netDebt;
-  return { enterpriseValue: pv, equityValue, fairValuePerShare: equityValue / shares };
+  const terminalValuePv =
+    (cf * (1 + terminalGrowth)) / (wacc - terminalGrowth) / (1 + wacc) ** total;
+  const enterpriseValue = pv + terminalValuePv;
+  const equityValue = enterpriseValue - netDebt;
+  return {
+    enterpriseValue,
+    equityValue,
+    fairValuePerShare: equityValue / shares,
+    terminalValuePv,
+    terminalShare: enterpriseValue > 0 ? terminalValuePv / enterpriseValue : null,
+    flows,
+  };
 }
 
-// DCF Monte Carlo: sample growth / wacc / terminalGrowth uniformly inside their
-// [lo, hi] ranges (decimals) and collect the fair-value-per-share distribution.
-// Seeded for reproducibility; draws that violate wacc > terminalGrowth are dropped.
-// -> { p10, p50, p90, mean, values } or null if nothing was valid.
-export function dcfMonteCarlo(base, ranges, paths = 2000, seed = 42) {
+export function capmWacc({ rf, beta, erp, costOfDebt, taxRate, marketCap, totalDebt }) {
+  if (![rf, beta, erp].every(Number.isFinite)) return null;
+  const costOfEquity = rf + beta * erp;
+  const equity = Number.isFinite(marketCap) && marketCap > 0 ? marketCap : null;
+  const debt = Number.isFinite(totalDebt) && totalDebt > 0 ? totalDebt : 0;
+  const afterTaxCostOfDebt = Number.isFinite(costOfDebt)
+    ? costOfDebt * (1 - (Number.isFinite(taxRate) ? taxRate : 0))
+    : null;
+  if (!equity || afterTaxCostOfDebt === null) {
+    return { wacc: costOfEquity, costOfEquity, afterTaxCostOfDebt, equityWeight: 1, debtWeight: 0 };
+  }
+  const equityWeight = equity / (equity + debt);
+  const debtWeight = debt / (equity + debt);
+  return {
+    wacc: equityWeight * costOfEquity + debtWeight * afterTaxCostOfDebt,
+    costOfEquity,
+    afterTaxCostOfDebt,
+    equityWeight,
+    debtWeight,
+  };
+}
+
+// Reverse DCF: the stage-1 growth that makes fair value equal today's price.
+export function impliedGrowth(base, spot) {
+  if (!(spot > 0) || !(base.fcf > 0)) return null;
+  const gap = (g) => {
+    const r = dcf({ ...base, growth: g });
+    return r ? r.fairValuePerShare - spot : null;
+  };
+  let lo = -0.5;
+  let hi = 1;
+  const fLo = gap(lo);
+  const fHi = gap(hi);
+  if (fLo === null || fHi === null || fLo > 0 || fHi < 0) return null;
+  for (let i = 0; i < 100; i += 1) {
+    const mid = (lo + hi) / 2;
+    const fMid = gap(mid);
+    if (Math.abs(fMid) < 1e-9) return mid;
+    if (fMid < 0) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function triangular(u, lo, mode, hi) {
+  const c = (mode - lo) / (hi - lo || 1);
+  return u < c
+    ? lo + Math.sqrt(u * (hi - lo) * (mode - lo))
+    : hi - Math.sqrt((1 - u) * (hi - lo) * (hi - mode));
+}
+
+// DCF Monte Carlo over growth / WACC / terminal growth. Symmetric triangular draws by
+// default: most mass near the base case, unlike uniform. Invalid draws are dropped.
+export function dcfMonteCarlo(
+  base,
+  ranges,
+  paths = 2000,
+  seed = 42,
+  { distribution = 'triangular' } = {}
+) {
   const rng = mulberry32(seed);
-  const pick = ([lo, hi]) => lo + rng() * (hi - lo);
+  const pick = ([lo, hi]) =>
+    distribution === 'uniform' ? lo + rng() * (hi - lo) : triangular(rng(), lo, (lo + hi) / 2, hi);
   const values = [];
   for (let i = 0; i < paths; i += 1) {
     const r = dcf({
@@ -41,6 +125,12 @@ export function dcfMonteCarlo(base, ranges, paths = 2000, seed = 42) {
     mean: mean(values),
     values,
   };
+}
+
+export function reportingCurrencyMismatch(overview, tradingCurrency) {
+  const reporting = String(overview?.financial_currency || '').toUpperCase();
+  const trading = String(tradingCurrency || '').toUpperCase();
+  return Boolean(reporting && trading && reporting !== trading);
 }
 
 // One-day S&P 500 index moves; exact only when the benchmark is the S&P 500.
@@ -291,29 +381,61 @@ export function regimeShifts(rollingVols, { minDuration = 5 } = {}) {
   };
 }
 
-const round1 = (x) => Number(x.toFixed(1));
-
 // A DCF needs a real base FCF and share count; never value dummy defaults.
 export function dcfInputsReady({ fcf, shares }) {
   return fcf !== '' && fcf !== null && Number.isFinite(Number(fcf)) && Number(shares) > 0;
 }
 
+const round1 = (x) => Number(x.toFixed(1));
+
 // yfinance reports FCF/debt/cash/shares in absolute units; DCF inputs are millions.
-export function overviewToDcfInputs(overview) {
+export function overviewToDcfInputs(
+  overview,
+  { growthSource = 'revenue', fxRate = null, tradingCurrency = null } = {}
+) {
   if (!overview || typeof overview !== 'object') return {};
   const M = 1e6;
   const out = {};
-  if (Number.isFinite(overview.free_cashflow)) out.fcf = round1(overview.free_cashflow / M);
-  if (Number.isFinite(overview.shares_outstanding)) {
+  const mismatch = reportingCurrencyMismatch(overview, tradingCurrency);
+  const fx = mismatch ? (Number(fxRate) > 0 ? Number(fxRate) : null) : 1;
+  if (fx !== null && Number.isFinite(overview.free_cashflow))
+    out.fcf = round1((overview.free_cashflow * fx) / M);
+  if (Number.isFinite(overview.shares_outstanding))
     out.shares = round1(overview.shares_outstanding / M);
-  }
-  if (Number.isFinite(overview.total_debt) || Number.isFinite(overview.total_cash)) {
+  if (
+    fx !== null &&
+    (Number.isFinite(overview.total_debt) || Number.isFinite(overview.total_cash))
+  ) {
     const debt = Number.isFinite(overview.total_debt) ? overview.total_debt : 0;
     const cash = Number.isFinite(overview.total_cash) ? overview.total_cash : 0;
-    out.netDebt = round1((debt - cash) / M);
+    out.netDebt = round1(((debt - cash) * fx) / M);
   }
-  if (Number.isFinite(overview.earnings_growth)) {
-    out.growth = round1(Math.max(0, Math.min(25, overview.earnings_growth * 100)));
-  }
+  const g = growthSource === 'earnings' ? overview.earnings_growth : overview.revenue_growth;
+  if (Number.isFinite(g)) out.growth = round1(Math.max(-10, Math.min(25, g * 100)));
   return out;
+}
+
+const MULTIPLES = [
+  { key: 'pe_ttm', label: 'P/E (TTM)' },
+  { key: 'forward_pe', label: 'Forward P/E' },
+  { key: 'pb', label: 'P/B' },
+  { key: 'ps_ttm', label: 'P/S (TTM)' },
+  { key: 'ev_ebitda', label: 'EV/EBITDA' },
+];
+
+export function peerMultiples(company, peers) {
+  return MULTIPLES.map(({ key, label }) => {
+    const values = (peers || []).map((p) => p?.[key]).filter((v) => Number.isFinite(v) && v > 0);
+    const peerMedian = values.length ? median(values) : null;
+    const own = company?.[key];
+    return {
+      key,
+      label,
+      company: Number.isFinite(own) ? own : null,
+      peerMedian,
+      peerCount: values.length,
+      premiumPct:
+        Number.isFinite(own) && own > 0 && peerMedian ? (own / peerMedian - 1) * 100 : null,
+    };
+  });
 }
