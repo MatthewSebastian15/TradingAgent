@@ -58,26 +58,6 @@ export function calmar(closes, ppy = TRADING_DAYS) {
 
 // --- regime / persistence (Phase 4) ---------------------------------------
 
-// Hurst exponent via single-window rescaled-range (R/S). >0.5 trending,
-// <0.5 mean-reverting, ~0.5 random walk.
-// ponytail: crude one-window R/S. Upgrade to multi-window log-log regression
-// if a tighter estimate is ever needed.
-export function hurst(xs) {
-  const n = xs.length;
-  if (n < 20) return null;
-  const m = mean(xs);
-  let cum = 0;
-  const dev = [];
-  for (const x of xs) {
-    cum += x - m;
-    dev.push(cum);
-  }
-  const range = Math.max(...dev) - Math.min(...dev);
-  const s = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / n);
-  if (!s || range <= 0) return null;
-  return Math.log(range / s) / Math.log(n);
-}
-
 // Ornstein-Uhlenbeck half-life from AR(1) on log prices: OLS of dlogP on lagged
 // logP, theta = -slope, halfLife = ln(2)/theta. -> days, or null if not
 // mean-reverting or outside [1, 252] (the estimate is noise out there).

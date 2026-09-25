@@ -16,3 +16,5 @@ export * from './quant/garch';
 export * from './quant/riskStats';
 export * from './quant/distribution';
 export * from './quant/seasonality';
+export * from './quant/persistence';
+export * from './quant/sizing';

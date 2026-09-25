@@ -28,6 +28,7 @@ import { ValuationSection } from './quant/sections/ValuationSection';
 import { VolatilitySection } from './quant/sections/VolatilitySection';
 import { useMonteCarlo } from './quant/useMonteCarlo';
 import {
+  adfTest,
   alignByDate,
   alignManyByDate,
   alpha,
@@ -55,9 +56,9 @@ import {
   histogramBins,
   historicalVaR,
   horizonSigma,
-  hurst,
+  hurstExponent,
   jarqueBera,
-  kellyFraction,
+  kellyEstimate,
   kurtosis,
   logReturns,
   maxDrawdown,
@@ -89,7 +90,6 @@ import {
   tangencyWeights,
   topDrawdowns,
   volCone,
-  volTargetWeight,
   worstWindows,
   yangZhangVol,
   zipRollingToDates,
@@ -125,6 +125,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     costBps: 0,
     oosFrac: 0,
   });
+  const [volTarget, setVolTarget] = useState(VOL_TARGET);
   const [peerInput, setPeerInput] = useState('');
   const [peers, setPeers] = useState([]); // [{ symbol, points }]
   const [peerLoading, setPeerLoading] = useState(false);
@@ -259,7 +260,6 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       var95: historicalVaR(returns, 0.95),
       var99: historicalVaR(returns, 0.99),
       cv: cvar(returns),
-      kelly: kellyFraction(returns),
     }),
     [closes, returns, rfDaily, ppy]
   );
@@ -282,7 +282,10 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         : regimeLabel(null),
     [regimeShift]
   );
-  const hurstVal = useMemo(() => hurst(returns), [returns]);
+  const hurstInfo = useMemo(() => hurstExponent(returns), [returns]);
+  const adf = useMemo(() => adfTest(closes.filter((c) => c > 0).map(Math.log)), [closes]);
+  const kellyInfo = useMemo(() => kellyEstimate(returns, rfDaily), [returns, rfDaily]);
+  const forecast21 = garchTerm.find((t) => t.days === 21);
   const ouHL = useMemo(() => ouHalfLife(closes), [closes]);
   const ddStats = useMemo(() => drawdownStats(closes), [closes]);
   const sharpeInfo = useMemo(() => sharpeStats(returns, rfDaily, ppy), [returns, rfDaily, ppy]);
@@ -420,9 +423,10 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   // meanrev SMA window defaults to the OU half-life; the slider (mrLookback) overrides.
   const btEffective = useMemo(() => {
     if (strategy !== 'meanrev') return btParams;
-    const auto = ouHL ? Math.min(100, Math.max(5, Math.round(ouHL))) : btParams.lookback;
+    const auto =
+      ouHL && adf?.stationaryAt5 ? Math.min(100, Math.max(5, Math.round(ouHL))) : btParams.lookback;
     return { ...btParams, lookback: btParams.mrLookback ?? auto };
-  }, [btParams, strategy, ouHL]);
+  }, [btParams, strategy, ouHL, adf]);
 
   const backtestResult = useMemo(() => {
     if (visible && !visible.has('backtest')) return null;
@@ -430,7 +434,6 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   }, [visible, closes, strategy, btEffective, rfDaily, ppy]);
 
   const returnBins = useMemo(() => returnHistogram(returns, 30), [returns]);
-  const volWeight = useMemo(() => volTargetWeight(metrics.vol, VOL_TARGET), [metrics.vol]);
 
   const distDetail = useMemo(() => {
     if (visible && !visible.has('distribution')) {
@@ -587,7 +590,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         dd={metrics.dd}
         var95={metrics.var95}
         regime={regime}
-        hurstVal={hurstVal}
+        hurstVal={hurstInfo?.hurst}
+        hurstSignificant={hurstInfo?.significant}
       />
 
       {visible && visible.size === 0 && (
@@ -740,12 +744,20 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       {show('sizing') && (
         <SectionBlock title="Sizing" hidden={activeId !== 'sizing'}>
           <SizingSection
-            kelly={metrics.kelly}
-            volWeight={volWeight}
-            vol={metrics.vol}
+            key={baseSymbol}
+            kelly={kellyInfo}
+            forecastVol={forecast21 ? forecast21.annualVol : metrics.ewma}
+            forecastSource={forecast21 ? 'GARCH 21d' : 'EWMA'}
+            volTarget={volTarget}
+            onVolTargetChange={setVolTarget}
             regime={regime}
-            hurstVal={hurstVal}
+            hurstInfo={hurstInfo}
+            adf={adf}
             ouHL={ouHL}
+            spot={closes.at(-1)}
+            ccy={ccy}
+            symbol={baseSymbol}
+            dailySigma={metrics.ewmaSigma}
           />
         </SectionBlock>
       )}

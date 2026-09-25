@@ -5,8 +5,9 @@ export function regimeLabel(pct) {
   return { label: 'Stressed', tone: 'bad' };
 }
 
-export function hurstLabel(h) {
+export function hurstLabel(h, significant = true) {
   if (!finite(h)) return 'Unknown';
+  if (significant === false) return 'No clear persistence';
   if (h > 0.55) return 'Trending';
   if (h < 0.45) return 'Mean-reverting';
   return 'Random walk';

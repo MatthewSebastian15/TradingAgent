@@ -24,7 +24,6 @@ import {
   ewmaVol,
   gmvWeights,
   historicalVaR,
-  hurst,
   impliedVol,
   invertMatrix,
   kellyFraction,
@@ -323,11 +322,6 @@ describe('rolling series', () => {
 });
 
 describe('hurst / regime', () => {
-  it('hurst of a strong trend exceeds 0.5', () => {
-    const trend = Array.from({ length: 200 }, (_, i) => i * 0.01);
-    expect(hurst(trend)).toBeGreaterThan(0.5);
-  });
-
   it('volPercentile of a rising series puts the last value at the top', () => {
     expect(volPercentile([1, 2, 3, 4, 5])).toBeCloseTo(90, 12);
   });

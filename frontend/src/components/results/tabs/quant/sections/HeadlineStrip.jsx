@@ -65,6 +65,7 @@ export function HeadlineStrip({
   var95,
   regime,
   hurstVal,
+  hurstSignificant,
 }) {
   // The field keeps its own draft so it can be emptied. An empty/non-numeric draft means
   // "back to the market/global default" (onRfChange(null)); out-of-range values are ignored.
@@ -157,7 +158,10 @@ export function HeadlineStrip({
         <Item label="Max DD" value={fmtLoss(dd)} tone="bad" />
         <Item label="VaR 95% (1D)" value={fmtLoss(var95)} tone="bad" />
         <Item label="Vol Regime" value={regime.label} tone={regime.tone} />
-        <Item label="Hurst" value={`${fmtNum2(hurstVal)} ${hurstLabel(hurstVal)}`} />
+        <Item
+          label="Hurst"
+          value={`${fmtNum2(hurstVal)} ${hurstLabel(hurstVal, hurstSignificant ?? true)}`}
+        />
       </div>
 
       {issues.length > 0 && (
@@ -195,4 +199,5 @@ HeadlineStrip.propTypes = {
   var95: PropTypes.number,
   regime: PropTypes.shape({ label: PropTypes.string, tone: PropTypes.string }).isRequired,
   hurstVal: PropTypes.number,
+  hurstSignificant: PropTypes.bool,
 };
