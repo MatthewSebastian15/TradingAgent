@@ -1,4 +1,5 @@
 import { beta } from './benchmark';
+import { normInv } from './distribution';
 import { sharpe } from './risk';
 import { maxDrawdown, mean, percentileRank, stdDev, TRADING_DAYS } from './stats';
 
@@ -130,4 +131,22 @@ export function suggestedPosition(kelly, volWeight) {
   if (!Number.isFinite(kelly)) return null;
   const halfKelly = Math.max(0, Math.min(1, kelly)) / 2;
   return Number.isFinite(volWeight) ? Math.min(halfKelly, volWeight) : halfKelly;
+}
+
+// Excess-return Kelly with a one-sided confidence bound on the mean. The point
+// estimate of daily mean return is so noisy that full Kelly routinely says 300%+;
+// sizing off the lower bound is the defensible default.
+export function kellyEstimate(returns, rfDaily = 0, level = 0.95) {
+  const n = returns.length;
+  if (n < 20) return null;
+  const excess = returns.map((r) => r - rfDaily);
+  const m = mean(excess);
+  const v = stdDev(excess) ** 2;
+  if (!v) return null;
+  const standardError = Math.sqrt(v / n);
+  return {
+    full: m / v,
+    lowerBound: (m - normInv(level) * standardError) / v,
+    standardError,
+  };
 }

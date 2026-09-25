@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { calmar, rollingSharpe, suggestedPosition, zipRollingToDates } from './series';
+import { normInv } from './distribution';
+import {
+  calmar,
+  kellyEstimate,
+  rollingSharpe,
+  suggestedPosition,
+  zipRollingToDates,
+} from './series';
+import { mean, stdDev } from './stats';
 
 describe('zipRollingToDates', () => {
   it('maps rolling index i to dates[window + i] and drops non-finite values', () => {
@@ -49,5 +57,28 @@ describe('ppy in series helpers', () => {
       Math.sqrt(365 / 252),
       10
     );
+  });
+});
+
+describe('kellyEstimate', () => {
+  const returns = Array.from({ length: 40 }, (_, i) => (i % 2 ? -0.008 : 0.012));
+
+  it('uses excess returns and a one-sided lower bound on the mean', () => {
+    const k = kellyEstimate(returns, 0.0005);
+    const ex = returns.map((r) => r - 0.0005);
+    const v = stdDev(ex) ** 2;
+    const se = Math.sqrt(v / ex.length);
+    expect(k.full).toBeCloseTo(mean(ex) / v, 10);
+    expect(k.lowerBound).toBeCloseTo((mean(ex) - normInv(0.95) * se) / v, 8);
+    expect(k.lowerBound).toBeLessThan(k.full);
+  });
+
+  it('a noisy small sample yields a non-positive suggestion', () => {
+    const k = kellyEstimate(returns, 0);
+    expect(suggestedPosition(k.lowerBound, 0.5)).toBe(0);
+  });
+
+  it('needs 20 returns', () => {
+    expect(kellyEstimate(returns.slice(0, 10))).toBeNull();
   });
 });
