@@ -21,7 +21,9 @@ export function useMonteCarlo(request) {
       return undefined;
     }
     if (!workerRef.current) {
-      workerRef.current = new Worker(new URL('./mc.worker.js', import.meta.url), { type: 'module' });
+      workerRef.current = new Worker(new URL('./mc.worker.js', import.meta.url), {
+        type: 'module',
+      });
     }
     const worker = workerRef.current;
     idRef.current += 1;

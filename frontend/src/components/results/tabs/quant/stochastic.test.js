@@ -75,7 +75,12 @@ describe('path summaries', () => {
   });
 
   it('noisy paths keep p5 <= p25 <= p50 <= p75 <= p95 and expose band p5/p95', () => {
-    const { percentiles: p, band, maxDrawdownWorst10, maxDrawdownMedian } = monteCarloGBM(100, 0.0003, 0.02, 60, 800, 3);
+    const {
+      percentiles: p,
+      band,
+      maxDrawdownWorst10,
+      maxDrawdownMedian,
+    } = monteCarloGBM(100, 0.0003, 0.02, 60, 800, 3);
     expect(p.p5).toBeLessThanOrEqual(p.p25);
     expect(p.p25).toBeLessThanOrEqual(p.p50);
     expect(p.p50).toBeLessThanOrEqual(p.p75);
@@ -100,7 +105,11 @@ describe('path summaries', () => {
 describe('futureTradingDates / runMonteCarlo', () => {
   it('skips weekends for 252-period markets only', () => {
     expect(futureTradingDates('2026-09-11', 3)).toEqual(['2026-09-14', '2026-09-15', '2026-09-16']);
-    expect(futureTradingDates('2026-09-11', 3, 365)).toEqual(['2026-09-12', '2026-09-13', '2026-09-14']);
+    expect(futureTradingDates('2026-09-11', 3, 365)).toEqual([
+      '2026-09-12',
+      '2026-09-13',
+      '2026-09-14',
+    ]);
     expect(futureTradingDates('bad', 3)).toEqual([]);
   });
 
