@@ -43,12 +43,11 @@ export function dcfMonteCarlo(base, ranges, paths = 2000, seed = 42) {
   };
 }
 
-// One-day S&P 500 index moves. The stock's beta in this app is measured against its
-// home-market index, so these rows are exact only for S&P 500 benchmarked names.
+// One-day S&P 500 index moves; exact only when the benchmark is the S&P 500.
 const SP500_CRASH_DAYS = [
-  { label: 'GFC — S&P 500, 2008-10-15', indexShock: -0.0903 },
-  { label: 'COVID — S&P 500, 2020-03-16', indexShock: -0.1198 },
-  { label: 'Black Monday — S&P 500, 1987-10-19', indexShock: -0.2047 },
+  { label: 'GFC — S&P 500, 2008-10-15', date: '2008-10-15', indexShock: -0.0903 },
+  { label: 'COVID — S&P 500, 2020-03-16', date: '2020-03-16', indexShock: -0.1198 },
+  { label: 'Black Monday — S&P 500, 1987-10-19', date: '1987-10-19', indexShock: -0.2047 },
 ];
 
 // Stress test: σ-based daily shocks from this name's annualized vol (%), plus index
@@ -68,6 +67,111 @@ export function stressScenarios(spot, annualVolPct, beta = null, ppy = TRADING_D
     })),
   ];
   return rows.map((r) => ({ ...r, price: spot * (1 + r.shock), lossPct: r.shock * 100 }));
+}
+
+// Worst non-overlapping `days`-period returns, sorted worst-first, up to `count`.
+// -> [{ days, startDate, endDate, returnPct }].
+export function worstWindows(closes, dates, days, count = 1) {
+  const candidates = [];
+  for (let i = days; i < closes.length; i += 1) {
+    if (closes[i - days] > 0) {
+      candidates.push({ start: i - days, end: i, ret: closes[i] / closes[i - days] - 1 });
+    }
+  }
+  candidates.sort((a, b) => a.ret - b.ret);
+  const picked = [];
+  for (const c of candidates) {
+    if (picked.length >= count) break;
+    if (picked.every((p) => c.end <= p.start || c.start >= p.end)) picked.push(c);
+  }
+  return picked.map((p) => ({
+    days,
+    startDate: dates[p.start],
+    endDate: dates[p.end],
+    returnPct: p.ret * 100,
+  }));
+}
+
+const sigmaLabel = (k, days) => `${k > 0 ? '+' : '−'}${Math.abs(k)}σ · ${days}D`;
+
+// Market-aware stress table: σ shocks scaled by sqrt-time, S&P 500 crash days (only
+// when benchmarked to the S&P 500), benchmark/own empirical worst windows, and a
+// custom shock. Losses clamp at -100%.
+// -> [{ group, label, shock, indexShock, dates, price, lossPct }].
+export function stressTable({
+  spot,
+  beta = null,
+  dailySigma = 0,
+  benchmarkIsSp500 = false,
+  benchmarkWorst = [],
+  stockWorst = [],
+  customShockPct = null,
+}) {
+  const b = Number.isFinite(beta) ? beta : 1;
+  const s = Number.isFinite(dailySigma) ? dailySigma : 0;
+  const rows = [];
+  for (const k of [-3, -2, -1, 1, 2, 3]) {
+    rows.push({
+      group: 'σ move (EWMA)',
+      label: sigmaLabel(k, 1),
+      shock: k * s,
+      indexShock: null,
+      dates: null,
+    });
+  }
+  for (const days of [5, 20]) {
+    for (const k of [-2, 2]) {
+      rows.push({
+        group: 'σ move (EWMA)',
+        label: sigmaLabel(k, days),
+        shock: k * s * Math.sqrt(days),
+        indexShock: null,
+        dates: null,
+      });
+    }
+  }
+  if (benchmarkIsSp500) {
+    for (const e of SP500_CRASH_DAYS) {
+      rows.push({
+        group: 'Historical S&P 500 day',
+        label: e.label,
+        shock: b * e.indexShock,
+        indexShock: e.indexShock,
+        dates: e.date,
+      });
+    }
+  }
+  for (const w of benchmarkWorst) {
+    rows.push({
+      group: 'Benchmark worst (window)',
+      label: `Benchmark worst ${w.days}D`,
+      shock: (b * w.returnPct) / 100,
+      indexShock: w.returnPct / 100,
+      dates: `${w.startDate} → ${w.endDate}`,
+    });
+  }
+  for (const w of stockWorst) {
+    rows.push({
+      group: 'This stock worst (window)',
+      label: `Own worst ${w.days}D`,
+      shock: w.returnPct / 100,
+      indexShock: null,
+      dates: `${w.startDate} → ${w.endDate}`,
+    });
+  }
+  if (Number.isFinite(customShockPct)) {
+    rows.push({
+      group: 'Custom',
+      label: 'Custom shock',
+      shock: customShockPct / 100,
+      indexShock: null,
+      dates: null,
+    });
+  }
+  return rows.map((r) => {
+    const shock = Math.max(-1, r.shock);
+    return { ...r, shock, price: spot * (1 + shock), lossPct: shock * 100 };
+  });
 }
 
 // Peak-to-recovery underwater episodes, in time order.

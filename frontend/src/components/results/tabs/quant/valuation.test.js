@@ -5,7 +5,9 @@ import {
   drawdownEpisodes,
   overviewToDcfInputs,
   stressScenarios,
+  stressTable,
   topDrawdowns,
+  worstWindows,
 } from './valuation';
 
 describe('dcfInputsReady', () => {
@@ -66,6 +68,54 @@ describe('stressScenarios ppy', () => {
   it('sigma rows use the daily sigma for the given ppy', () => {
     const row = stressScenarios(100, 30, 1, 365)[0];
     expect(row.shock).toBeCloseTo(-0.3 / Math.sqrt(365), 12);
+  });
+});
+
+describe('worstWindows', () => {
+  const closes = [100, 90, 95, 70, 80, 85];
+  const dates = closes.map((_, i) => `d${i}`);
+
+  it('returns the worst non-overlapping windows', () => {
+    const rows = worstWindows(closes, dates, 1, 2);
+    expect(rows.map((r) => [r.startDate, r.endDate])).toEqual([
+      ['d2', 'd3'],
+      ['d0', 'd1'],
+    ]);
+    expect(rows[0].returnPct).toBeCloseTo((70 / 95 - 1) * 100, 10);
+  });
+});
+
+describe('stressTable', () => {
+  const base = { spot: 100, beta: 1.5, dailySigma: 0.02 };
+  const labels = (rows) => rows.map((r) => r.label);
+
+  it('builds symmetric sigma rows with sqrt-time scaling', () => {
+    const rows = stressTable(base);
+    expect(rows.find((r) => r.label === '−3σ · 1D').shock).toBeCloseTo(-0.06, 12);
+    expect(rows.find((r) => r.label === '+2σ · 20D').shock).toBeCloseTo(0.04 * Math.sqrt(20), 12);
+  });
+
+  it('adds S&P 500 crash days only for S&P benchmarked names, scaled by beta', () => {
+    expect(labels(stressTable(base)).some((l) => l.startsWith('Black Monday'))).toBe(false);
+    const row = stressTable({ ...base, benchmarkIsSp500: true }).find((r) =>
+      r.label.startsWith('Black Monday')
+    );
+    expect(row.shock).toBeCloseTo(1.5 * -0.2047, 12);
+  });
+
+  it('adds empirical and custom rows and clamps at -100%', () => {
+    const rows = stressTable({
+      ...base,
+      beta: 4,
+      benchmarkWorst: [{ days: 1, startDate: 'a', endDate: 'b', returnPct: -30 }],
+      stockWorst: [{ days: 5, startDate: 'c', endDate: 'd', returnPct: -18 }],
+      customShockPct: -7,
+    });
+    const bench = rows.find((r) => r.label === 'Benchmark worst 1D');
+    expect(bench.shock).toBe(-1);
+    expect(bench.price).toBe(0);
+    expect(rows.find((r) => r.label === 'Own worst 5D').shock).toBeCloseTo(-0.18, 12);
+    expect(rows.find((r) => r.label === 'Custom shock').price).toBeCloseTo(93, 10);
   });
 });
 
