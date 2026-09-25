@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { backtest, warmupBars } from './backtestLite';
+import { backtest, seriesStats, tradeStats, warmupBars } from './backtestLite';
+import { sharpe } from './risk';
+import { simpleReturns } from './stats';
 
 const zigzag = Array.from({ length: 160 }, (_, i) => 100 + 10 * Math.sin(i / 3) + i * 0.05);
 const rising = Array.from({ length: 120 }, (_, i) => 100 + i);
@@ -71,5 +73,52 @@ describe('backtest ppy', () => {
     const res = backtest(rising, 'sma', { fast: 10, slow: 30 }, 0, 365);
     const steps = rising.length - 1 - res.startIndex;
     expect(res.cagr).toBeCloseTo(((1 + res.finalReturn / 100) ** (365 / steps) - 1) * 100, 10);
+  });
+});
+
+describe('seriesStats', () => {
+  it('summarizes an equity curve', () => {
+    const equity = [1, 1.1, 0.99, 1.2];
+    const returns = simpleReturns(equity);
+    const s = seriesStats(equity, returns, 0);
+    expect(s.totalReturn).toBeCloseTo(20, 10);
+    expect(s.maxDD).toBeCloseTo(-10, 10);
+    expect(s.sharpe).toBeCloseTo(sharpe(returns, 0), 10);
+    expect(seriesStats([1], [], 0)).toBeNull();
+  });
+});
+
+describe('tradeStats', () => {
+  it('computes win rate, payoff and turnover', () => {
+    const t = tradeStats(
+      [
+        { ret: 10, days: 5 },
+        { ret: -5, days: 3 },
+        { ret: 4, days: 2 },
+      ],
+      2
+    );
+    expect(t.winRate).toBeCloseTo(66.6667, 3);
+    expect(t.avgWin).toBeCloseTo(7, 10);
+    expect(t.avgLoss).toBeCloseTo(-5, 10);
+    expect(t.profitFactor).toBeCloseTo(2.8, 10);
+    expect(t.avgHoldDays).toBeCloseTo(10 / 3, 10);
+    expect(t.turnoverPerYear).toBeCloseTo(3, 10);
+    expect(tradeStats([], 1).winRate).toBeNull();
+  });
+});
+
+describe('prefix-sum SMA signals', () => {
+  it('keeps the same trades on a long zigzag series', () => {
+    const series = Array.from(
+      { length: 900 },
+      (_, i) => 100 + 15 * Math.sin(i / 11) + 4 * Math.sin(i / 3)
+    );
+    const res = backtest(series, 'sma', { fast: 10, slow: 60 });
+    expect(res.trades).toBeGreaterThan(5);
+    expect(compound(res.tradeList.map((t) => t.ret / 100))).toBeCloseTo(
+      1 + res.finalReturn / 100,
+      10
+    );
   });
 });
