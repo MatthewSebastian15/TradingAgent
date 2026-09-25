@@ -6,6 +6,7 @@ export * from './quant/stochastic';
 export * from './quant/benchmark';
 export * from './quant/series';
 export * from './quant/backtestLite';
+export * from './quant/backtestResearch';
 export * from './quant/portfolio';
 export * from './quant/options';
 export * from './quant/valuation';
