@@ -868,10 +868,14 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       {show('options') && (
         <SectionBlock title="Options" hidden={activeId !== 'options'}>
           <OptionsSection
+            key={baseSymbol}
             spot={closes.at(-1)}
-            defaultVol={metrics.vol}
+            closes={closes}
+            ppy={ppy}
             defaultRate={rf}
             ccy={ccy}
+            overview={overview}
+            fallbackVol={metrics.vol}
           />
         </SectionBlock>
       )}
