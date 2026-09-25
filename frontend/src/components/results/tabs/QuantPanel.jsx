@@ -721,8 +721,18 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             onStrategyChange={setStrategy}
             params={btEffective}
             onParamChange={(k, v) => setBtParams((prev) => ({ ...prev, [k]: v }))}
+            onApplyParams={(p) =>
+              setBtParams((prev) =>
+                strategy === 'meanrev'
+                  ? { ...prev, mrLookback: p.lookback }
+                  : { ...prev, ...p, oosFrac: prev.oosFrac }
+              )
+            }
             result={backtestResult}
             dates={historyDates}
+            closes={closes}
+            rf={rfDaily}
+            ppy={ppy}
           />
         </SectionBlock>
       )}
