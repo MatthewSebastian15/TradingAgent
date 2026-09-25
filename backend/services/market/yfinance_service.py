@@ -208,6 +208,7 @@ def build_stock_overview(symbol: str) -> dict[str, Any]:
         "industry": info.get("industry"),
         "exchange": info.get("exchange") or info.get("fullExchangeName"),
         "currency": info.get("currency"),
+        "financial_currency": info.get("financialCurrency"),
         "description": info.get("longBusinessSummary"),
         "price": price,
         "prev_close": f("previousClose") or f("regularMarketPreviousClose"),

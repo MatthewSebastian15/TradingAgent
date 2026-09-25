@@ -548,6 +548,7 @@ class StockOverviewResponse(ApiSchema):
     industry: str | None = None
     exchange: str | None = None
     currency: str | None = None
+    financial_currency: str | None = None
     description: str | None = None
     price: float | None = None
     prev_close: float | None = None

@@ -53,3 +53,18 @@ def test_get_overview_data_returns_metadata_when_no_items(monkeypatch):
     assert payload["last_updated"]
     assert payload["cache"]["hit"] is False
     assert payload["message"] == "No market data available from yfinance"
+
+
+def test_build_stock_overview_exposes_financial_currency(monkeypatch):
+    import tradingagents.dataflows.providers.y_finance as y_finance
+
+    monkeypatch.setattr(
+        y_finance,
+        "_get_ticker_info",
+        lambda _symbol: {"currency": "IDR", "financialCurrency": "USD", "currentPrice": 2500},
+    )
+
+    payload = service.build_stock_overview("ADRO.JK")
+
+    assert payload["currency"] == "IDR"
+    assert payload["financial_currency"] == "USD"
