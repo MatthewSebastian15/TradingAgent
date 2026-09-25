@@ -330,7 +330,7 @@ describe('hurst / regime', () => {
   });
 
   it('volPercentile of a rising series puts the last value at the top', () => {
-    expect(volPercentile([1, 2, 3, 4, 5])).toBe(100);
+    expect(volPercentile([1, 2, 3, 4, 5])).toBeCloseTo(90, 12);
   });
 });
 
@@ -704,7 +704,7 @@ describe('regimeShifts', () => {
   it('flags the transition from calm to stressed and counts days since', () => {
     // low vol then a jump to high vol at the end
     const vols = [10, 10, 11, 10, 40, 42, 45];
-    const r = regimeShifts(vols);
+    const r = regimeShifts(vols, { minDuration: 1 });
     expect(r.current).toBe('Stressed');
     expect(r.shifts.length).toBeGreaterThan(0);
     expect(r.shifts.at(-1).to).toBe('Stressed');

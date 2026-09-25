@@ -1,4 +1,4 @@
-import { mean, TRADING_DAYS } from './stats';
+import { mean, percentileRank, TRADING_DAYS } from './stats';
 import { mulberry32, QUANTILE } from './stochastic';
 
 export function dcf({ fcf, growth, years = 5, wacc, terminalGrowth, shares, netDebt = 0 }) {
@@ -247,26 +247,66 @@ export function topDrawdowns(closes, dates, count = 5) {
     }));
 }
 
-// Regime-shift detection: bucket each rolling-vol reading into Calm/Normal/Stressed
-// by its percentile rank over the whole window, then find the transitions.
-// -> { current, daysSince, shifts: [{ index, from, to }] (last 5) } or null.
-export function regimeShifts(rollingVols) {
+const regimeFor = (pct) => (pct < 33 ? 'Calm' : pct < 66 ? 'Normal' : 'Stressed');
+
+// Buckets each reading into Calm/Normal/Stressed by its mid-rank percentile
+// within the whole series.
+export function labelRegimes(vols) {
+  return vols.map((v) => regimeFor(percentileRank(vols, v)));
+}
+
+// A new regime counts only after `minDuration` consecutive readings; once confirmed it
+// is back-dated to the start of that run so the timeline shows when it really began.
+export function confirmRegimes(labels, minDuration = 5) {
+  if (labels.length === 0) return [];
+  const out = new Array(labels.length);
+  let current = labels[0];
+  let runStart = 0;
+  out[0] = current;
+  for (let i = 1; i < labels.length; i += 1) {
+    if (labels[i] !== labels[i - 1]) runStart = i;
+    if (labels[i] !== current && i - runStart + 1 >= minDuration) {
+      for (let k = runStart; k <= i; k += 1) out[k] = labels[i];
+      current = labels[i];
+    } else {
+      out[i] = current;
+    }
+  }
+  return out;
+}
+
+// Groups contiguous confirmed labels into date ranges; `to` is the next segment's `from`
+// so segments tile the timeline with no gaps.
+export function regimeSegments(labels, dates) {
+  const segments = [];
+  labels.forEach((label, i) => {
+    const date = dates[i];
+    if (!date) return;
+    const last = segments.at(-1);
+    if (last && last.label === label) last.to = date;
+    else segments.push({ label, from: date, to: date });
+  });
+  for (let i = 0; i < segments.length - 1; i += 1) segments[i].to = segments[i + 1].from;
+  return segments;
+}
+
+// Regime-shift detection: label each rolling-vol reading, confirm it with hysteresis
+// (see confirmRegimes) so a single noisy day doesn't flip the regime, then find the
+// transitions in the confirmed labels.
+// -> { current, daysSince, shifts: [{ index, from, to }] (last 5), labels } or null.
+export function regimeShifts(rollingVols, { minDuration = 5 } = {}) {
   if (rollingVols.length < 5) return null;
-  const sorted = [...rollingVols].sort((a, b) => a - b);
-  const bucket = (v) => {
-    const pct = (sorted.filter((x) => x <= v).length / sorted.length) * 100;
-    return pct < 33 ? 'Calm' : pct < 66 ? 'Normal' : 'Stressed';
-  };
-  const labels = rollingVols.map(bucket);
+  const labels = confirmRegimes(labelRegimes(rollingVols), minDuration);
   const shifts = [];
   for (let i = 1; i < labels.length; i += 1) {
     if (labels[i] !== labels[i - 1]) shifts.push({ index: i, from: labels[i - 1], to: labels[i] });
   }
-  const lastShiftIdx = shifts.length ? shifts[shifts.length - 1].index : 0;
+  const lastShiftIdx = shifts.length ? shifts.at(-1).index : 0;
   return {
-    current: labels[labels.length - 1],
+    current: labels.at(-1),
     daysSince: labels.length - 1 - lastShiftIdx,
     shifts: shifts.slice(-5),
+    labels,
   };
 }
 

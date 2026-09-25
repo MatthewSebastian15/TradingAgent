@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  confirmRegimes,
   dcfInputsReady,
   drawdownEpisodes,
+  labelRegimes,
   overviewToDcfInputs,
+  regimeSegments,
+  regimeShifts,
   stressScenarios,
   stressTable,
   topDrawdowns,
@@ -150,5 +154,40 @@ describe('topDrawdowns', () => {
     expect(first.depth).toBeCloseTo(second.depth, 10);
     expect(first.peakDate).toBe('t0');
     expect(second.peakDate).toBe('t2');
+  });
+});
+
+describe('regime hysteresis', () => {
+  const raw = [
+    ...Array(10).fill('Calm'),
+    'Stressed',
+    'Stressed',
+    ...Array(5).fill('Calm'),
+    ...Array(6).fill('Stressed'),
+  ];
+
+  it('ignores short blips and back-dates confirmed switches', () => {
+    const out = confirmRegimes(raw, 5);
+    expect(out.slice(0, 17).every((l) => l === 'Calm')).toBe(true);
+    expect(out.slice(17).every((l) => l === 'Stressed')).toBe(true);
+  });
+
+  it('labels by mid-rank percentile', () => {
+    expect(labelRegimes([10, 10, 10, 11, 40, 42, 45]).at(-1)).toBe('Stressed');
+    expect(labelRegimes([10, 10, 10, 11, 40, 42, 45])[0]).toBe('Calm');
+  });
+
+  it('segments contiguous labels and joins them end to start', () => {
+    expect(regimeSegments(['Calm', 'Calm', 'Stressed'], ['a', 'b', 'c'])).toEqual([
+      { label: 'Calm', from: 'a', to: 'c' },
+      { label: 'Stressed', from: 'c', to: 'c' },
+    ]);
+  });
+
+  it('regimeShifts exposes confirmed labels', () => {
+    const r = regimeShifts([...Array(20).fill(10), ...Array(8).fill(40)]);
+    expect(r.labels).toHaveLength(28);
+    expect(r.current).toBe('Stressed');
+    expect(r.daysSince).toBe(7);
   });
 });

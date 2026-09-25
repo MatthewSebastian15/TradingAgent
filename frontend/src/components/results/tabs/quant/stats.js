@@ -156,6 +156,17 @@ export function kurtosis(xs) {
   return (((n + 1) * g2 + 6) * (n - 1)) / ((n - 2) * (n - 3));
 }
 
+// Percentile rank with ties counted half below, so a flat stretch sits mid-range.
+export function percentileRank(values, v) {
+  let below = 0;
+  let equal = 0;
+  for (const x of values) {
+    if (x < v) below += 1;
+    else if (x === v) equal += 1;
+  }
+  return values.length ? ((below + 0.5 * equal) / values.length) * 100 : null;
+}
+
 // Worst peak-to-trough decline in %, 0 if the series never drops.
 // Mirrors Python _max_drawdown exactly.
 export function maxDrawdown(closes) {

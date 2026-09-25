@@ -1,6 +1,6 @@
 import { beta } from './benchmark';
 import { sharpe } from './risk';
-import { maxDrawdown, mean, stdDev, TRADING_DAYS } from './stats';
+import { maxDrawdown, mean, percentileRank, stdDev, TRADING_DAYS } from './stats';
 
 // --- drawdown / rolling series (Phase 4) ----------------------------------
 
@@ -106,8 +106,7 @@ export function ouHalfLife(closes) {
 export function volPercentile(vols) {
   const v = vols.filter(Number.isFinite);
   if (v.length < 2) return null;
-  const last = v.at(-1);
-  return (v.filter((x) => x <= last).length / v.length) * 100;
+  return percentileRank(v, v.at(-1));
 }
 
 // --- position sizing (Phase 4) --------------------------------------------

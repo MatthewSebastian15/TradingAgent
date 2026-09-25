@@ -5,6 +5,7 @@ import {
   ewmaVol,
   kurtosis,
   median,
+  percentileRank,
   periodsPerYearFromDates,
   quantile,
   rollingVol,
@@ -98,5 +99,12 @@ describe('adjusted sample moments', () => {
     expect(skewness([1, 2, 3])).not.toBeNull();
     expect(kurtosis([1, 2, 3])).toBeNull();
     expect(kurtosis([1, 2, 3, 5])).not.toBeNull();
+  });
+});
+
+describe('percentileRank', () => {
+  it('uses mid-rank for ties', () => {
+    expect(percentileRank([10, 10, 10, 20], 10)).toBeCloseTo(37.5, 12);
+    expect(percentileRank([1, 2, 3, 4, 5], 5)).toBeCloseTo(90, 12);
   });
 });
