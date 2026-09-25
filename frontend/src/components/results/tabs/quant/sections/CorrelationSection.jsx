@@ -1,35 +1,54 @@
 import PropTypes from 'prop-types';
 
 import NoticeBox from '../../../NoticeBox';
-import PriceMetricLineChart from '../../PriceMetricLineChart';
-import { finite, DASH } from '../format';
+import { NumberField } from '../charts';
+import { DASH, finite, fmtPercent, fmtRatio } from '../format';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { Heatmap } from '../viz/Heatmap';
+import { LineChart } from '../viz/LineChart';
 import { ScatterChart } from '../viz/ScatterChart';
 
-const pct = (w) => (finite(w) ? `${(w * 100).toFixed(1)}%` : DASH);
+const PORTFOLIO_COLORS = {
+  gmv: CHART_COLORS.tertiary,
+  tangency: CHART_COLORS.quaternary,
+  lo_minvar: '#60a5fa',
+  lo_sharpe: CHART_COLORS.primary,
+  riskparity: CHART_COLORS.warning,
+  equal: CHART_COLORS.secondary,
+};
 
-function WeightsTable({ symbols, gmvWeights, tangencyWeights }) {
-  const columns = [
-    { key: 'symbol', label: 'Symbol' },
-    { key: 'gmv', label: 'Min-Variance', align: 'right' },
-    ...(tangencyWeights ? [{ key: 'tan', label: 'Max-Sharpe', align: 'right' }] : []),
-  ];
-  const rows = symbols.map((symbol, i) => ({
-    symbol,
-    gmv: pct(gmvWeights?.[i]),
-    tan: pct(tangencyWeights?.[i]),
-  }));
+function Toggle({ options, value, onChange }) {
   return (
-    <DataTable caption="Portfolio weights" columns={columns} rows={rows} rowKey={(r) => r.symbol} />
+    <div className="flex gap-1">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          aria-pressed={value === o.id}
+          onClick={() => onChange(o.id)}
+          className={`rounded-none border px-2.5 py-1 text-[11px] ${
+            value === o.id
+              ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
+              : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
-WeightsTable.propTypes = {
-  symbols: PropTypes.arrayOf(PropTypes.string).isRequired,
-  gmvWeights: PropTypes.arrayOf(PropTypes.number),
-  tangencyWeights: PropTypes.arrayOf(PropTypes.number),
+Toggle.propTypes = {
+  options: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
+      label: PropTypes.string,
+    })
+  ).isRequired,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]).isRequired,
+  onChange: PropTypes.func.isRequired,
 };
 
 export function CorrelationSection({
@@ -39,23 +58,25 @@ export function CorrelationSection({
   peers,
   onRemovePeer,
   loading,
-  symbols,
-  matrix,
-  rollPoints,
-  rollLabel,
-  frontier,
-  gmv,
-  tangency,
-  gmvWeights: gmvW,
-  tangencyWeights: tanW,
-  optimizerStatus,
+  peerErrors,
+  frequency,
+  onFrequencyChange,
+  shrink,
+  onShrinkChange,
+  cap,
+  onCapChange,
+  onPairChange,
+  corr,
 }) {
+  const { symbols, portfolios } = corr;
+  const unit = frequency === 'weekly' ? 'weekly' : 'daily';
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-white/80">
-        Add peer tickers to see how this name co-moves with them, and a quick mean-variance
-        optimization over the basket. Each peer is one extra price fetch (2Y daily). Weights are
-        unconstrained — they can go short (negative).
+        Add peers to see co-movement and compare portfolio constructions. Unconstrained
+        mean-variance can short and lever; long-only, capped and risk-parity mixes are far more
+        stable. Research only.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -65,109 +86,222 @@ export function CorrelationSection({
           onChange={(e) => onPeerInputChange(e.target.value.toUpperCase())}
           onKeyDown={(e) => e.key === 'Enter' && onAddPeers()}
           placeholder="Add peers e.g. MSFT, NVDA"
-          className="h-8 w-56 border border-bloomberg-border bg-black px-2 font-mono text-xs tracking-wider text-white placeholder:text-bloomberg-muted"
+          aria-label="Peer tickers"
+          className="h-8 w-56 rounded-none border border-bloomberg-border bg-black px-2 font-mono text-xs tracking-wider text-white placeholder:text-bloomberg-white/50"
         />
         <button
           type="button"
           onClick={onAddPeers}
-          className="h-8 rounded-none border border-bloomberg-border px-3 font-mono text-[11px] tracking-wider text-bloomberg-muted hover:text-white"
+          className="h-8 rounded-none border border-bloomberg-border px-3 font-mono text-[11px] tracking-wider text-bloomberg-white/80 hover:text-white"
         >
           Add
         </button>
         {loading && <span className="font-mono text-[11px] text-bloomberg-amber">FETCHING…</span>}
+        {peers.map((p) => (
+          <button
+            key={p.symbol}
+            type="button"
+            onClick={() => onRemovePeer(p.symbol)}
+            aria-label={`Remove ${p.symbol}`}
+            className="rounded-none border border-bloomberg-border px-2 py-0.5 font-mono text-[11px] text-bloomberg-white/80 hover:text-bloomberg-red"
+          >
+            {p.symbol} ✕
+          </button>
+        ))}
       </div>
-
-      {peers.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {peers.map((p) => (
-            <button
-              key={p.symbol}
-              type="button"
-              onClick={() => onRemovePeer(p.symbol)}
-              className="rounded-none border border-bloomberg-border px-2 py-0.5 font-mono text-[11px] text-bloomberg-muted hover:text-bloomberg-red"
-            >
-              {p.symbol} ✕
-            </button>
-          ))}
-        </div>
+      {peerErrors.length > 0 && (
+        <NoticeBox title="Some peers were not added">
+          <ul>
+            {peerErrors.map((e) => (
+              <li key={e.symbol}>{`${e.symbol}: ${e.message}`}</li>
+            ))}
+          </ul>
+        </NoticeBox>
       )}
+
+      <div className="flex flex-wrap items-end gap-4">
+        <Toggle
+          options={[
+            { id: 'daily', label: 'Daily' },
+            { id: 'weekly', label: 'Weekly' },
+          ]}
+          value={frequency}
+          onChange={onFrequencyChange}
+        />
+        <Toggle
+          options={[
+            { id: false, label: 'Sample covariance' },
+            { id: true, label: 'Ledoit-Wolf' },
+          ]}
+          value={shrink}
+          onChange={onShrinkChange}
+        />
+        <NumberField label="Long-only weight cap" value={cap} onChange={onCapChange} suffix="%" />
+      </div>
 
       {symbols.length < 2 ? (
         <NoticeBox title="Correlation">
           Add at least one peer ticker to compute correlations.
         </NoticeBox>
+      ) : corr.tooShort ? (
+        <NoticeBox title="Correlation">
+          Not enough overlapping history ({corr.observations} {unit} points).
+        </NoticeBox>
       ) : (
         <>
           <Heatmap
-            caption="Correlation matrix · daily returns on common days"
+            caption={`Correlation · ${unit} returns · n=${corr.observations}`}
             rowLabels={symbols}
             colLabels={symbols}
-            values={matrix}
+            values={corr.matrix}
             formatValue={(v) => (finite(v) ? v.toFixed(2) : DASH)}
           />
 
-          <PriceMetricLineChart
-            title={`Rolling correlation (63-day) — ${rollLabel}`}
-            subtitle="How the pair's co-movement drifts over time"
-            points={rollPoints}
-            valueType="number"
-            emptyMessage="Not enough overlapping history for a rolling-correlation chart."
+          <div className="flex flex-wrap items-end gap-3">
+            {[0, 1].map((slot) => (
+              <label
+                key={slot}
+                className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80"
+              >
+                <span className="tracking-wider uppercase">
+                  {slot === 0 ? 'First symbol' : 'Second symbol'}
+                </span>
+                <select
+                  value={corr.pair[slot]}
+                  onChange={(e) => onPairChange(slot, e.target.value)}
+                  className="h-8 rounded-none border border-bloomberg-border bg-black px-2 text-xs text-white"
+                >
+                  {symbols.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+          <LineChart
+            title={`Rolling correlation · ${corr.pair[0]} vs ${corr.pair[1]}`}
+            subtitle={`Window: ${frequency === 'weekly' ? '26 weeks' : '63 days'}`}
+            ariaLabel="Rolling correlation"
+            formatY={(v) => v.toFixed(1)}
+            series={[
+              {
+                id: 'rc',
+                label: 'Correlation',
+                color: CHART_COLORS.primary,
+                points: corr.rollPoints.map((p) => ({ x: p.date, y: p.value })),
+              },
+            ]}
+            referenceLines={[{ y: 0, color: CHART_COLORS.axis }]}
+            emptyMessage="Not enough overlapping history for a rolling correlation."
           />
 
-          <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
-            Mean-variance optimizer
-          </div>
-          {optimizerStatus === 'singular' && (
-            <NoticeBox title="Optimizer">
-              Covariance is singular for this basket — try different or fewer peers.
+          {corr.optimizerStatus === 'singular' && (
+            <NoticeBox title="Unconstrained optimizer">
+              Covariance is singular for this basket — switch on Ledoit-Wolf or remove
+              near-duplicate peers.
             </NoticeBox>
           )}
-          {optimizerStatus === 'no_tangency' && (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
-              <NoticeBox title="No max-Sharpe portfolio">
-                The minimum-variance mix has no positive expected excess return over the risk-free
-                rate, so a max-Sharpe portfolio does not exist for this basket. Showing
-                minimum-variance weights only.
-              </NoticeBox>
-              <WeightsTable symbols={symbols} gmvWeights={gmvW} tangencyWeights={null} />
-            </div>
+          {corr.optimizerStatus === 'no_tangency' && (
+            <NoticeBox title="No unconstrained max-Sharpe portfolio">
+              Every fully invested unconstrained mix has a negative expected excess return, so a
+              tangency portfolio does not exist. Long-only and risk-parity mixes below are still
+              valid.
+            </NoticeBox>
           )}
-          {optimizerStatus === 'ok' && frontier.length > 0 && (
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_320px]">
-              <ScatterChart
-                title="Efficient frontier"
-                subtitle="Annualized return vs volatility (unconstrained)"
-                ariaLabel="Efficient frontier"
-                xLabel="Volatility, ann. %"
-                yLabel="Return, ann. %"
-                formatX={(v) => `${v.toFixed(0)}%`}
-                formatY={(v) => `${v.toFixed(0)}%`}
-                lines={[
+
+          {corr.optimizerStatus === 'ok' && corr.frontier.length > 0 && (
+            <ScatterChart
+              title="Efficient frontier"
+              subtitle={`Annualized · efficient branch only${corr.shrinkage !== null ? ` · Ledoit-Wolf shrinkage δ = ${corr.shrinkage.toFixed(2)}` : ''}`}
+              ariaLabel="Efficient frontier"
+              xLabel="Volatility, ann. %"
+              yLabel="Return, ann. %"
+              formatX={(v) => `${v.toFixed(0)}%`}
+              formatY={(v) => `${v.toFixed(0)}%`}
+              lines={[
+                {
+                  id: 'frontier',
+                  label: 'Efficient frontier',
+                  color: CHART_COLORS.primary,
+                  points: corr.frontier.map((p) => ({ x: p.vol, y: p.ret })),
+                },
+                ...(corr.cml.length
+                  ? [
+                      {
+                        id: 'cml',
+                        label: 'Capital market line',
+                        color: CHART_COLORS.secondary,
+                        dashed: true,
+                        points: corr.cml,
+                      },
+                    ]
+                  : []),
+              ]}
+              points={[
+                ...corr.assets.map((a) => ({
+                  x: a.vol,
+                  y: a.ret,
+                  label: a.label,
+                  color: '#e5e5e5',
+                  radius: 3,
+                })),
+                ...portfolios.map((p) => ({
+                  x: p.vol,
+                  y: p.ret,
+                  label: p.label,
+                  color: PORTFOLIO_COLORS[p.id] || CHART_COLORS.primary,
+                })),
+              ]}
+            />
+          )}
+
+          {portfolios.length > 0 && (
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              <DataTable
+                caption="Portfolio comparison"
+                rowKey={(r) => r.id}
+                rows={portfolios}
+                columns={[
+                  { key: 'label', label: 'Portfolio' },
+                  { key: 'ret', label: 'Return', align: 'right', render: (r) => fmtPercent(r.ret) },
+                  { key: 'vol', label: 'Vol', align: 'right', render: (r) => fmtPercent(r.vol) },
                   {
-                    id: 'frontier',
-                    label: 'Frontier',
-                    color: CHART_COLORS.primary,
-                    points: frontier.map((p) => ({ x: p.vol, y: p.ret })),
+                    key: 'sharpe',
+                    label: 'Sharpe',
+                    align: 'right',
+                    render: (r) => fmtRatio(r.sharpe),
                   },
                 ]}
-                points={[
-                  gmv && {
-                    x: gmv.vol,
-                    y: gmv.ret,
-                    label: 'Min-Variance',
-                    color: CHART_COLORS.tertiary,
-                  },
-                  tangency && {
-                    x: tangency.vol,
-                    y: tangency.ret,
-                    label: 'Max-Sharpe',
-                    color: CHART_COLORS.quaternary,
-                  },
-                ].filter(Boolean)}
               />
-              <WeightsTable symbols={symbols} gmvWeights={gmvW} tangencyWeights={tanW} />
+              <DataTable
+                caption="Weights"
+                stickyFirstColumn
+                rowKey={(r) => r.symbol}
+                rows={symbols.map((symbol, i) => ({ symbol, i }))}
+                columns={[
+                  { key: 'symbol', label: 'Symbol' },
+                  ...portfolios.map((p) => ({
+                    key: p.id,
+                    label: p.label,
+                    align: 'right',
+                    render: (r) => `${(p.weights[r.i] * 100).toFixed(1)}%`,
+                    className: (r) =>
+                      p.weights[r.i] < 0 ? 'text-bloomberg-red' : 'text-bloomberg-white',
+                  })),
+                ]}
+              />
             </div>
           )}
+          <p className="text-[11px] text-bloomberg-white/80">
+            Covariance:{' '}
+            {shrink
+              ? `Ledoit-Wolf shrinkage δ = ${finite(corr.shrinkage) ? corr.shrinkage.toFixed(2) : DASH}`
+              : 'sample'}{' '}
+            · expected returns are historical means, the least reliable input — favor min-variance
+            or risk parity.
+          </p>
         </>
       )}
     </div>
@@ -181,14 +315,15 @@ CorrelationSection.propTypes = {
   peers: PropTypes.arrayOf(PropTypes.object).isRequired,
   onRemovePeer: PropTypes.func.isRequired,
   loading: PropTypes.bool.isRequired,
-  symbols: PropTypes.arrayOf(PropTypes.string).isRequired,
-  matrix: PropTypes.arrayOf(PropTypes.array).isRequired,
-  rollPoints: PropTypes.arrayOf(PropTypes.object).isRequired,
-  rollLabel: PropTypes.string.isRequired,
-  frontier: PropTypes.arrayOf(PropTypes.object).isRequired,
-  gmv: PropTypes.object,
-  tangency: PropTypes.object,
-  gmvWeights: PropTypes.arrayOf(PropTypes.number),
-  tangencyWeights: PropTypes.arrayOf(PropTypes.number),
-  optimizerStatus: PropTypes.oneOf(['ok', 'singular', 'no_tangency']).isRequired,
+  peerErrors: PropTypes.arrayOf(
+    PropTypes.shape({ symbol: PropTypes.string, message: PropTypes.string })
+  ).isRequired,
+  frequency: PropTypes.oneOf(['daily', 'weekly']).isRequired,
+  onFrequencyChange: PropTypes.func.isRequired,
+  shrink: PropTypes.bool.isRequired,
+  onShrinkChange: PropTypes.func.isRequired,
+  cap: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+  onCapChange: PropTypes.func.isRequired,
+  onPairChange: PropTypes.func.isRequired,
+  corr: PropTypes.object.isRequired,
 };

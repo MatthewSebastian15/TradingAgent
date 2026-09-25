@@ -1,83 +1,118 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CorrelationSection } from './CorrelationSection';
 
-const base = {
-  peerInput: '',
-  onPeerInputChange: vi.fn(),
-  onAddPeers: vi.fn(),
-  peers: [{ symbol: 'MSFT', points: [] }],
-  onRemovePeer: vi.fn(),
-  loading: false,
+const portfolios = [
+  { id: 'gmv', label: 'Min-variance', weights: [0.7, 0.3], ret: 8, vol: 18, sharpe: 0.3 },
+  {
+    id: 'lo_sharpe',
+    label: 'Max-Sharpe (long-only)',
+    weights: [0.4, 0.6],
+    ret: 11,
+    vol: 22,
+    sharpe: 0.4,
+  },
+  { id: 'riskparity', label: 'Risk parity', weights: [0.55, 0.45], ret: 9, vol: 19, sharpe: 0.33 },
+  { id: 'equal', label: 'Equal weight', weights: [0.5, 0.5], ret: 9.5, vol: 20, sharpe: 0.32 },
+];
+
+const corr = {
   symbols: ['AAPL', 'MSFT'],
   matrix: [
     [1, 0.4],
     [0.4, 1],
   ],
-  rollPoints: [],
-  rollLabel: 'AAPL vs MSFT',
+  observations: 250,
+  frequency: 'daily',
+  shrinkage: 0.12,
+  tooShort: false,
+  optimizerStatus: 'no_tangency',
   frontier: [],
-  gmv: { ret: 5, vol: 20 },
-  tangency: null,
-  gmvWeights: [0.6, 0.4],
-  tangencyWeights: null,
+  cml: [],
+  assets: [
+    { label: 'AAPL', ret: 12, vol: 28 },
+    { label: 'MSFT', ret: 10, vol: 24 },
+  ],
+  portfolios,
+  rollPoints: [],
+  pair: ['AAPL', 'MSFT'],
 };
 
-describe('CorrelationSection optimizer status', () => {
+function renderSection(overrides = {}) {
+  const props = {
+    peerInput: '',
+    onPeerInputChange: vi.fn(),
+    onAddPeers: vi.fn(),
+    peers: [{ symbol: 'MSFT', points: [] }],
+    onRemovePeer: vi.fn(),
+    loading: false,
+    peerErrors: [{ symbol: 'ZZZZ', message: 'Unknown symbol' }],
+    frequency: 'daily',
+    onFrequencyChange: vi.fn(),
+    shrink: true,
+    onShrinkChange: vi.fn(),
+    cap: 60,
+    onCapChange: vi.fn(),
+    onPairChange: vi.fn(),
+    corr,
+    ...overrides,
+  };
+  render(<CorrelationSection {...props} />);
+  return props;
+}
+
+describe('CorrelationSection', () => {
   afterEach(() => cleanup());
 
-  it('explains a missing tangency portfolio and still shows min-variance weights', () => {
-    render(<CorrelationSection {...base} optimizerStatus="no_tangency" />);
-    expect(screen.getByText('No max-Sharpe portfolio')).toBeTruthy();
-    expect(screen.getByText('Min-Variance')).toBeTruthy();
-    expect(screen.queryByText(/Covariance is singular/)).toBeNull();
-    expect(
-      screen.getByText(/minimum-variance mix has no positive expected excess return/)
-    ).toBeTruthy();
+  it('lists failed peers and the frequency/shrinkage controls', () => {
+    const props = renderSection();
+    expect(screen.getByText('ZZZZ: Unknown symbol')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    expect(props.onFrequencyChange).toHaveBeenCalledWith('weekly');
+    expect(screen.getByText(/shrinkage δ = 0.12/)).toBeTruthy();
   });
 
-  it('shows no optimizer notice when the status is ok', () => {
-    render(
-      <CorrelationSection
-        {...base}
-        frontier={[
-          { ret: 4, vol: 18 },
-          { ret: 6, vol: 22 },
-        ]}
-        tangency={{ ret: 6, vol: 22 }}
-        tangencyWeights={[0.3, 0.7]}
-        optimizerStatus="ok"
-      />
-    );
-    expect(screen.getByRole('columnheader', { name: 'Min-Variance' })).toBeTruthy();
-    expect(screen.getByRole('columnheader', { name: 'Max-Sharpe' })).toBeTruthy();
-    expect(screen.queryByText('No max-Sharpe portfolio')).toBeNull();
-    expect(screen.queryByText(/Covariance is singular/)).toBeNull();
+  it('keeps long-only and risk-parity portfolios when no tangency exists', () => {
+    renderSection();
+    expect(screen.getByText('No unconstrained max-Sharpe portfolio')).toBeTruthy();
+    expect(screen.getAllByText('Risk parity').length).toBeGreaterThan(0);
+    expect(screen.getByText('Portfolio comparison')).toBeTruthy();
   });
 
-  it('keeps the singular-covariance message for singular baskets', () => {
-    render(<CorrelationSection {...base} gmvWeights={null} optimizerStatus="singular" />);
-    expect(screen.getByText(/Covariance is singular/)).toBeTruthy();
+  it('changes the rolling-correlation pair', () => {
+    const props = renderSection({
+      corr: {
+        ...corr,
+        symbols: ['AAPL', 'MSFT', 'NVDA'],
+        matrix: [
+          [1, 0.4, 0.5],
+          [0.4, 1, 0.6],
+          [0.5, 0.6, 1],
+        ],
+      },
+    });
+    fireEvent.change(screen.getByLabelText('Second symbol'), { target: { value: 'NVDA' } });
+    expect(props.onPairChange).toHaveBeenCalledWith(1, 'NVDA');
   });
 
-  it('renders the matrix with the diverging scale and a frontier chart when ok', () => {
-    render(
-      <CorrelationSection
-        {...base}
-        optimizerStatus="ok"
-        frontier={[
-          { vol: 18, ret: 6 },
-          { vol: 20, ret: 9 },
-        ]}
-        tangency={{ vol: 20, ret: 9 }}
-        tangencyWeights={[0.3, 0.7]}
-      />
-    );
-    const cell = screen.getAllByText('0.40')[0].closest('td');
-    expect(cell.style.backgroundColor).toContain('249, 115, 22');
+  it('draws the frontier with a capital market line when a tangency exists', () => {
+    renderSection({
+      corr: {
+        ...corr,
+        optimizerStatus: 'ok',
+        frontier: [
+          { vol: 18, ret: 8 },
+          { vol: 22, ret: 12 },
+        ],
+        cml: [
+          { x: 0, y: 4 },
+          { x: 30, y: 16 },
+        ],
+      },
+    });
     expect(screen.getByRole('img', { name: 'Efficient frontier' })).toBeTruthy();
-    expect(screen.getByText('Portfolio weights')).toBeTruthy();
+    expect(screen.getByText('Capital market line')).toBeTruthy();
   });
 });

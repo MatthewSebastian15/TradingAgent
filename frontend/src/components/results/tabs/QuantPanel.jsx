@@ -60,9 +60,12 @@ import {
   jarqueBera,
   kellyEstimate,
   kurtosis,
+  ledoitWolf,
   logReturns,
   maxDrawdown,
+  maxSharpeLongOnly,
   mean,
+  minVarianceLongOnly,
   ouHalfLife,
   parkinsonVol,
   periodsPerYearFromDates,
@@ -72,10 +75,12 @@ import {
   qqPoints,
   regimeSegments,
   regimeShifts,
+  resampleWeekly,
   resolveRiskFreeRate,
   returnHistogram,
   returnsByMonth,
   returnsByWeekday,
+  riskParity,
   rollingBeta,
   rollingCorrelation,
   rollingSharpe,
@@ -129,6 +134,11 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const [peerInput, setPeerInput] = useState('');
   const [peers, setPeers] = useState([]); // [{ symbol, points }]
   const [peerLoading, setPeerLoading] = useState(false);
+  const [peerErrors, setPeerErrors] = useState([]);
+  const [corrFreq, setCorrFreq] = useState('daily');
+  const [corrShrink, setCorrShrink] = useState(true);
+  const [corrCap, setCorrCap] = useState(60);
+  const [corrPair, setCorrPair] = useState([null, null]);
 
   // Peers fetched for another window or another base ticker would misalign with (or
   // duplicate) the base series.
@@ -140,6 +150,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     setPeers([]);
     setPeerInput('');
     setPeerLoading(false);
+    setPeerErrors([]);
     return () => controller.abort();
   }, [fetchRange, symbol]);
 
@@ -478,13 +489,25 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     )
       .then((results) => {
         if (signal.aborted) return;
-        const fetched = results
-          .filter((r) => r.status === 'fulfilled' && r.value.points.length > 0)
-          .map((r) => r.value);
+        const fetched = [];
+        const errors = [];
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled' && r.value.points.length > 1) fetched.push(r.value);
+          else {
+            errors.push({
+              symbol: wanted[i],
+              message:
+                r.status === 'rejected'
+                  ? r.reason?.message || 'Request failed'
+                  : 'No price data for this range',
+            });
+          }
+        });
         setPeers((prev) => {
           const have = new Set(prev.map((p) => p.symbol));
           return [...prev, ...fetched.filter((p) => !have.has(p.symbol))];
         });
+        setPeerErrors(errors);
         setPeerInput('');
       })
       .finally(() => {
@@ -502,56 +525,112 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     const empty = {
       symbols: [],
       matrix: [],
-      frontier: [],
-      gmv: null,
-      tangency: null,
-      gmvW: null,
-      tanW: null,
+      observations: 0,
+      frequency: corrFreq,
+      shrinkage: null,
+      tooShort: false,
       optimizerStatus: 'ok',
+      frontier: [],
+      cml: [],
+      assets: [],
+      portfolios: [],
       rollPoints: [],
-      rollLabel: '',
+      pair: ['', ''],
     };
     if (peers.length === 0 || (visible && !visible.has('correlation'))) return empty;
-    const series = [{ symbol: baseSymbol, points: rows }, ...peers];
-    const { dates, closes } = alignManyByDate(series);
-    if (dates.length < 30) return empty;
+    const series = [{ symbol: baseSymbol, points: history }, ...peers];
     const symbols = series.map((s) => s.symbol);
-    const retBySym = {};
-    symbols.forEach((s) => {
-      retBySym[s] = simpleReturns(closes[s]);
-    });
-    const matrix = correlationMatrix(symbols, retBySym);
+    const aligned = alignManyByDate(series);
+    const weekly = corrFreq === 'weekly';
+    const { dates, closes: closeMap } = weekly
+      ? resampleWeekly(aligned.dates, aligned.closes)
+      : aligned;
+    const rollWindow = weekly ? 26 : ROLLING_RATIO_WINDOW;
+    if (dates.length < (weekly ? 27 : 31)) {
+      return { ...empty, symbols, observations: Math.max(0, dates.length - 1), tooShort: true };
+    }
+    const periods = weekly ? 52 : ppy;
+    const rfPeriod = rf / periods;
+    const retBySym = Object.fromEntries(symbols.map((s) => [s, simpleReturns(closeMap[s])]));
     const retList = symbols.map((s) => retBySym[s]);
-    const cov = covarianceMatrix(retList);
+    const lw = corrShrink ? ledoitWolf(retList) : null;
+    const cov = lw ? lw.matrix : covarianceMatrix(retList);
     const mu = retList.map(mean);
-    const gmvW = gmvWeights(cov);
-    const tanW = tangencyWeights(cov, mu, rfDaily);
-    const frontier = efficientFrontier(cov, mu, rfDaily, 25, ppy);
-    const annualize = (w) => {
+    const cap = Math.max(1 / symbols.length, (Number(corrCap) || 100) / 100);
+    const annual = (id, label, w) => {
       if (!w) return null;
       const { ret, vol } = portfolioStats(w, mu, cov);
-      return { ret: ret * ppy * 100, vol: vol * Math.sqrt(ppy) * 100 };
+      const r = ret * periods * 100;
+      const v = vol * Math.sqrt(periods) * 100;
+      return { id, label, weights: w, ret: r, vol: v, sharpe: v > 0 ? (r - rf * 100) / v : null };
     };
-    // Rolling correlation: base vs the first peer.
-    const peerSym = symbols[1];
-    const rollPoints = zipRollingToDates(
-      rollingCorrelation(retBySym[baseSymbol], retBySym[peerSym], ROLLING_RATIO_WINDOW),
-      dates,
-      ROLLING_RATIO_WINDOW
+    const gmvW = gmvWeights(cov);
+    const tanW = tangencyWeights(cov, mu, rfPeriod);
+    const portfolios = [
+      annual('gmv', 'Min-variance', gmvW),
+      annual('tangency', 'Max-Sharpe (unconstrained)', tanW),
+      annual(
+        'lo_minvar',
+        `Min-variance (long-only ≤${Math.round(cap * 100)}%)`,
+        minVarianceLongOnly(cov, cap)
+      ),
+      annual(
+        'lo_sharpe',
+        `Max-Sharpe (long-only ≤${Math.round(cap * 100)}%)`,
+        maxSharpeLongOnly(cov, mu, rfPeriod, cap)?.weights
+      ),
+      annual('riskparity', 'Risk parity', riskParity(cov)),
+      annual(
+        'equal',
+        'Equal weight',
+        symbols.map(() => 1 / symbols.length)
+      ),
+    ].filter(Boolean);
+    const gmv = portfolios.find((p) => p.id === 'gmv');
+    const tangency = portfolios.find((p) => p.id === 'tangency');
+    const frontier = gmv
+      ? efficientFrontier(cov, mu, rfPeriod, 40, periods).filter((p) => p.ret >= gmv.ret)
+      : [];
+    const maxVol = Math.max(
+      ...frontier.map((p) => p.vol),
+      ...symbols.map((_, i) => Math.sqrt(cov[i][i] * periods) * 100)
     );
+    const cmlSlope = tangency && tangency.vol > 0 ? (tangency.ret - rf * 100) / tangency.vol : null;
+    const pairA = symbols.includes(corrPair[0]) ? corrPair[0] : symbols[0];
+    const pairB =
+      symbols.includes(corrPair[1]) && corrPair[1] !== pairA
+        ? corrPair[1]
+        : symbols.find((s) => s !== pairA);
     return {
       symbols,
-      matrix,
-      frontier,
-      gmv: annualize(gmvW),
-      tangency: annualize(tanW),
-      gmvW,
-      tanW,
+      matrix: correlationMatrix(symbols, retBySym),
+      observations: dates.length - 1,
+      frequency: corrFreq,
+      shrinkage: lw ? lw.shrinkage : null,
+      tooShort: false,
       optimizerStatus: !gmvW ? 'singular' : !tanW ? 'no_tangency' : 'ok',
-      rollPoints,
-      rollLabel: `${baseSymbol} vs ${peerSym}`,
+      frontier,
+      cml:
+        cmlSlope > 0
+          ? [
+              { x: 0, y: rf * 100 },
+              { x: maxVol * 1.1, y: rf * 100 + cmlSlope * maxVol * 1.1 },
+            ]
+          : [],
+      assets: symbols.map((s, i) => ({
+        label: s,
+        ret: mu[i] * periods * 100,
+        vol: Math.sqrt(cov[i][i] * periods) * 100,
+      })),
+      portfolios,
+      rollPoints: zipRollingToDates(
+        rollingCorrelation(retBySym[pairA], retBySym[pairB], rollWindow),
+        dates,
+        rollWindow
+      ),
+      pair: [pairA, pairB],
     };
-  }, [peers, visible, baseSymbol, rows, rfDaily, ppy]);
+  }, [peers, visible, baseSymbol, history, corrFreq, corrShrink, corrCap, corrPair, rf, ppy]);
 
   // Loading: result is here but price history hasn't streamed in yet.
   // ponytail: 0 points = still loading; 1–29 = genuinely too short (NoticeBox).
@@ -771,16 +850,17 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             peers={peers}
             onRemovePeer={removePeer}
             loading={peerLoading}
-            symbols={corr.symbols}
-            matrix={corr.matrix}
-            rollPoints={corr.rollPoints}
-            rollLabel={corr.rollLabel}
-            frontier={corr.frontier}
-            gmv={corr.gmv}
-            tangency={corr.tangency}
-            gmvWeights={corr.gmvW}
-            tangencyWeights={corr.tanW}
-            optimizerStatus={corr.optimizerStatus}
+            peerErrors={peerErrors}
+            frequency={corrFreq}
+            onFrequencyChange={setCorrFreq}
+            shrink={corrShrink}
+            onShrinkChange={setCorrShrink}
+            cap={corrCap}
+            onCapChange={setCorrCap}
+            onPairChange={(slot, sym) =>
+              setCorrPair((prev) => (slot === 0 ? [sym, prev[1]] : [prev[0], sym]))
+            }
+            corr={corr}
           />
         </SectionBlock>
       )}

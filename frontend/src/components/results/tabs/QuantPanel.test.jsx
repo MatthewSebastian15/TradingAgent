@@ -187,6 +187,19 @@ describe('QuantPanel', () => {
     getMarketOhlcv.mockImplementation(async () => ({ points: [] }));
   });
 
+  it('reports peers that failed to load', async () => {
+    const { getMarketOhlcv } = await import('../../../api/market');
+    getMarketOhlcv.mockImplementation(async (sym) => {
+      if (sym === 'ZZZZ') throw new Error('Unknown symbol');
+      return { points: [] };
+    });
+    await renderPanel({ points: buildPoints(40), sections: ['correlation'] });
+    fireEvent.change(screen.getByPlaceholderText(/Add peers/), { target: { value: 'ZZZZ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('ZZZZ: Unknown symbol')).toBeTruthy();
+    getMarketOhlcv.mockImplementation(async () => ({ points: [] }));
+  });
+
   it('keeps Last, Window and Period change on the last valid row when edge closes are non-positive', async () => {
     const good = buildPoints(40);
     const pts = [
