@@ -46,7 +46,6 @@ import {
   simpleReturns,
   skewness,
   sortino,
-  stressScenarios,
   stdDev,
   tangencyWeights,
   volPercentile,
@@ -657,22 +656,6 @@ describe('dcfMonteCarlo', () => {
     const a = dcfMonteCarlo(base, ranges, 500, 3);
     const b = dcfMonteCarlo(base, ranges, 500, 3);
     expect(a.values).toEqual(b.values);
-  });
-});
-
-describe('stressScenarios', () => {
-  it('σ shocks scale with vol; price = spot·(1+shock)', () => {
-    const rows = stressScenarios(100, 32); // 32% annual vol ~ 2%/day sigma
-    const oneSig = rows.find((r) => r.label === '−1σ day');
-    const twoSig = rows.find((r) => r.label === '−2σ day');
-    expect(twoSig.shock).toBeCloseTo(2 * oneSig.shock, 10);
-    expect(oneSig.price).toBeCloseTo(100 * (1 + oneSig.shock), 10);
-  });
-
-  it('historical crash days do not depend on vol', () => {
-    const lowVol = stressScenarios(50, 5, 1).filter((r) => r.indexShock !== null);
-    const highVol = stressScenarios(50, 80, 1).filter((r) => r.indexShock !== null);
-    expect(lowVol.map((r) => r.shock)).toEqual(highVol.map((r) => r.shock));
   });
 });
 

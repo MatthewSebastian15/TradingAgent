@@ -1,4 +1,4 @@
-import { mean, percentileRank, TRADING_DAYS } from './stats';
+import { mean, percentileRank } from './stats';
 import { mulberry32, QUANTILE } from './stochastic';
 
 export function dcf({ fcf, growth, years = 5, wacc, terminalGrowth, shares, netDebt = 0 }) {
@@ -49,25 +49,6 @@ const SP500_CRASH_DAYS = [
   { label: 'COVID — S&P 500, 2020-03-16', date: '2020-03-16', indexShock: -0.1198 },
   { label: 'Black Monday — S&P 500, 1987-10-19', date: '1987-10-19', indexShock: -0.2047 },
 ];
-
-// Stress test: σ-based daily shocks from this name's annualized vol (%), plus index
-// crash days scaled by beta (1 when unknown). Losses clamp at -100%.
-// -> [{ label, shock, indexShock, price, lossPct }].
-export function stressScenarios(spot, annualVolPct, beta = null, ppy = TRADING_DAYS) {
-  const sigma = annualVolPct > 0 ? annualVolPct / 100 / Math.sqrt(ppy) : 0;
-  const b = Number.isFinite(beta) ? beta : 1;
-  const rows = [
-    { label: '−1σ day', shock: -sigma, indexShock: null },
-    { label: '−2σ day', shock: -2 * sigma, indexShock: null },
-    { label: '−3σ day', shock: -3 * sigma, indexShock: null },
-    ...SP500_CRASH_DAYS.map((e) => ({
-      label: e.label,
-      indexShock: e.indexShock,
-      shock: Math.max(-1, b * e.indexShock),
-    })),
-  ];
-  return rows.map((r) => ({ ...r, price: spot * (1 + r.shock), lossPct: r.shock * 100 }));
-}
 
 // Worst non-overlapping `days`-period returns, sorted worst-first, up to `count`.
 // -> [{ days, startDate, endDate, returnPct }].

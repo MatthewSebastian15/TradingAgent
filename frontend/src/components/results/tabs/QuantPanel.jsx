@@ -69,6 +69,7 @@ import {
   portfolioStats,
   priceRows,
   qqPoints,
+  regimeSegments,
   regimeShifts,
   resolveRiskFreeRate,
   returnHistogram,
@@ -88,8 +89,8 @@ import {
   tangencyWeights,
   topDrawdowns,
   volCone,
-  volPercentile,
   volTargetWeight,
+  worstWindows,
   yangZhangVol,
   zipRollingToDates,
 } from './quantUtils';
@@ -263,12 +264,27 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     [closes, returns, rfDaily, ppy]
   );
 
-  // Regime (vol percentile) + Hurst (trend vs mean-revert) for the headline + sizing.
-  const regime = useMemo(() => regimeLabel(volPercentile(rollingVols)), [rollingVols]);
+  // Regime (confirmed vol-percentile bucket) + Hurst (trend vs mean-revert) for the
+  // headline + sizing + scenario, so all three always agree.
+  const regimeShift = useMemo(() => regimeShifts(rollingVols), [rollingVols]);
+  const regime = useMemo(
+    () =>
+      regimeShift
+        ? {
+            label: regimeShift.current,
+            tone:
+              regimeShift.current === 'Stressed'
+                ? 'bad'
+                : regimeShift.current === 'Calm'
+                  ? 'good'
+                  : 'neutral',
+          }
+        : regimeLabel(null),
+    [regimeShift]
+  );
   const hurstVal = useMemo(() => hurst(returns), [returns]);
   const ouHL = useMemo(() => ouHalfLife(closes), [closes]);
   const ddStats = useMemo(() => drawdownStats(closes), [closes]);
-  const regimeShift = useMemo(() => regimeShifts(rollingVols), [rollingVols]);
   const sharpeInfo = useMemo(() => sharpeStats(returns, rfDaily, ppy), [returns, rfDaily, ppy]);
   const topDD = useMemo(() => topDrawdowns(closes, historyDates), [closes, historyDates]);
 
@@ -321,6 +337,24 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       ),
     };
   }, [rows, benchPoints, rfDaily, ppy]);
+
+  // Empirical worst windows + regime timeline for the Scenario tab; skipped while the
+  // tab is hidden or the benchmark hasn't loaded yet.
+  const scenarioDetail = useMemo(() => {
+    if (visible && !visible.has('scenario'))
+      return { benchWorst: [], stockWorst: [], segments: [], pricePoints: [] };
+    const aligned = benchPoints?.length
+      ? alignByDate(history, benchPoints)
+      : { dates: [], market: [] };
+    return {
+      benchWorst: [1, 5, 20].flatMap((d) => worstWindows(aligned.market, aligned.dates, d, 1)),
+      stockWorst: [1, 5, 20].flatMap((d) => worstWindows(closes, historyDates, d, 1)),
+      segments: regimeShift
+        ? regimeSegments(regimeShift.labels, historyDates.slice(ROLLING_WINDOW))
+        : [],
+      pricePoints: closes.map((value, i) => ({ date: historyDates[i], value })),
+    };
+  }, [visible, benchPoints, history, closes, historyDates, regimeShift]);
 
   // Only run the simulation when the section is open and there's enough data;
   // keyed so unrelated re-renders (e.g. streaming updates) don't re-roll it.
@@ -758,14 +792,17 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         <SectionBlock title="Scenario" hidden={activeId !== 'scenario'}>
           <ScenarioSection
             spot={closes.at(-1)}
-            vol={metrics.vol}
             ccy={ccy}
-            regime={regimeShift}
+            symbol={baseSymbol}
+            ewmaSigma={metrics.ewmaSigma}
             beta={benchmark.beta}
-            betaLoading={benchPoints === null}
             benchLabel={benchmarkInfo.label}
             benchIsSp500={benchmarkInfo.symbol === '^GSPC'}
-            ppy={ppy}
+            benchWorst={scenarioDetail.benchWorst}
+            stockWorst={scenarioDetail.stockWorst}
+            regime={regimeShift}
+            pricePoints={scenarioDetail.pricePoints}
+            segments={scenarioDetail.segments}
           />
         </SectionBlock>
       )}
