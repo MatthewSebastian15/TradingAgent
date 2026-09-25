@@ -61,11 +61,10 @@ export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, 
   const selected = type === 'call' ? call : put;
   const premium = selected?.price;
 
-  // Plain function: the React Compiler memoizes it; a manual dep list here made
-  // the compiler bail (react-hooks/preserve-manual-memoization).
-  const curves = finite(premium)
-    ? optionCurves({ type, strike: K, T, r, sigma, q, premium, spot })
-    : null;
+  const curves = useMemo(() => {
+    const p = blackScholes(spot, K, T, r, sigma, type, q)?.price;
+    return finite(p) ? optionCurves({ type, strike: K, T, r, sigma, q, premium: p, spot }) : null;
+  }, [type, K, T, r, sigma, q, spot]);
   const iv =
     marketPrice === '' ? null : solveImpliedVol(Number(marketPrice), spot, K, T, r, type, q);
   const money = (v) => fmtMoney(v, ccy);
