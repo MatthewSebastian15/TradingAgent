@@ -2,6 +2,7 @@ import PropTypes from 'prop-types';
 
 import { LAST_PRICE_COLOR } from '../priceChartUtils';
 import { DASH } from './format';
+import { InfoTip } from './InfoTip';
 
 // --- tiny presentational pieces (no new deps, reuse chart color tokens) ----
 
@@ -36,48 +37,116 @@ export function Sparkline({ values }) {
 
 Sparkline.propTypes = { values: PropTypes.arrayOf(PropTypes.number) };
 
-// The shared KPI card (Section 4B.3). tone drives value color by *meaning*.
-// ⓘ tooltip is a keyboard-reachable <details> (4B.6), not a hover-only title.
-export function MetricCard({ label, value, gloss, tone = 'neutral', formula, spark, sample }) {
-  const neutral = value === DASH || tone === 'neutral';
-  const valueColor = neutral
-    ? 'text-white'
-    : tone === 'bad'
-      ? 'text-bloomberg-red'
-      : 'text-bloomberg-green';
+const TONE_CLASS = {
+  good: 'text-bloomberg-green',
+  bad: 'text-bloomberg-red',
+  neutral: 'text-white',
+};
+
+const LOW_QUALITY = /low confidence|not significant/i;
+
+// KPI card: label row (with info tooltip), one value line, optional category,
+// comparison, sparkline and sample footnote. Explanations live in the tooltip so every
+// card in a grid row has the same height; `gloss` stays in the DOM for screen readers.
+export function MetricCard({
+  label,
+  value,
+  category,
+  tone = 'neutral',
+  gloss,
+  formula,
+  info,
+  sample,
+  compare,
+  spark,
+  status = 'ready',
+}) {
+  const neutral = value === DASH || status !== 'ready';
+  const valueColor = neutral ? TONE_CLASS.neutral : TONE_CLASS[tone] || TONE_CLASS.neutral;
+  const tip =
+    info ??
+    (gloss || formula ? (
+      <>
+        {gloss && <p>{gloss}</p>}
+        {formula && <p className={gloss ? 'mt-1 text-bloomberg-white/80' : ''}>{formula}</p>}
+      </>
+    ) : null);
+
   return (
-    <div className="border border-bloomberg-border bg-bloomberg-card p-3 font-mono">
+    <div
+      aria-busy={status === 'loading' || undefined}
+      className="flex h-full min-w-0 flex-col border border-bloomberg-border bg-bloomberg-card p-3 font-mono"
+    >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-[11px] tracking-wider text-bloomberg-white/80 uppercase">{label}</div>
-        {formula && (
-          <details className="group relative">
-            <summary className="cursor-pointer list-none text-bloomberg-white/80 hover:text-white [&::-webkit-details-marker]:hidden">
-              ⓘ
-            </summary>
-            <div className="absolute right-0 z-10 mt-1 w-56 border border-bloomberg-border bg-black/95 p-2 text-[10px] leading-relaxed text-bloomberg-white/80 shadow-lg">
-              {formula}
-            </div>
-          </details>
-        )}
+        <div className="min-w-0 truncate text-[11px] tracking-wider text-bloomberg-white/80 uppercase">
+          {label}
+        </div>
+        {tip && <InfoTip label={label}>{tip}</InfoTip>}
       </div>
-      <div className={`mt-1 text-2xl tabular-nums ${valueColor}`}>{value}</div>
-      {sample && <div className="mt-0.5 text-[10px] text-bloomberg-white/80">{sample}</div>}
-      {spark && <Sparkline values={spark} />}
-      {gloss && (
-        <div className="mt-1 text-[11px] leading-relaxed text-bloomberg-white/80">{gloss}</div>
+
+      {status === 'loading' ? (
+        <div className="mt-1 h-7">
+          <span aria-hidden="true" className="block h-6 w-24 animate-pulse bg-bloomberg-surface" />
+          <span className="sr-only">{`Loading ${label}`}</span>
+        </div>
+      ) : (
+        <div
+          title={typeof value === 'string' ? value : undefined}
+          className={`mt-1 truncate text-xl leading-7 tabular-nums 2xl:text-2xl ${valueColor}`}
+        >
+          {status === 'unavailable' ? DASH : value}
+        </div>
+      )}
+
+      {status === 'unavailable' && (
+        <span className="mt-1 w-fit border border-bloomberg-amber px-1 text-[9px] tracking-wider text-bloomberg-amber uppercase">
+          Unavailable
+        </span>
+      )}
+      {category && status === 'ready' && (
+        <div className="truncate text-[11px] text-bloomberg-white/80">{category}</div>
+      )}
+      {compare && status === 'ready' && (
+        <div className="mt-0.5 flex min-w-0 items-baseline gap-1 text-[10px]">
+          <span className="truncate text-bloomberg-white/80">{compare.label}</span>
+          <span className={`tabular-nums ${TONE_CLASS[compare.tone] || TONE_CLASS.neutral}`}>
+            {compare.value}
+          </span>
+        </div>
+      )}
+      {spark && status === 'ready' && <Sparkline values={spark} />}
+      {gloss && <span className="sr-only">{gloss}</span>}
+      {sample && (
+        <div
+          className={`mt-auto pt-1 text-[10px] ${
+            LOW_QUALITY.test(sample) ? 'text-bloomberg-amber' : 'text-bloomberg-white/80'
+          }`}
+        >
+          {sample}
+        </div>
       )}
     </div>
   );
 }
 
+const toneProp = PropTypes.oneOf(['neutral', 'good', 'bad']);
+
 MetricCard.propTypes = {
   label: PropTypes.string.isRequired,
   value: PropTypes.node.isRequired,
+  category: PropTypes.string,
+  tone: toneProp,
   gloss: PropTypes.string,
-  tone: PropTypes.oneOf(['neutral', 'good', 'bad']),
   formula: PropTypes.string,
-  spark: PropTypes.arrayOf(PropTypes.number),
+  info: PropTypes.node,
   sample: PropTypes.string,
+  compare: PropTypes.shape({
+    label: PropTypes.string.isRequired,
+    value: PropTypes.string.isRequired,
+    tone: toneProp,
+  }),
+  spark: PropTypes.arrayOf(PropTypes.number),
+  status: PropTypes.oneOf(['ready', 'loading', 'unavailable']),
 };
 
 export function SkeletonGrid() {
