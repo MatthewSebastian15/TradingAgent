@@ -890,6 +890,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
             symbol={baseSymbol}
             overview={overview}
             overviewError={overviewError}
+            beta={benchmark.beta}
+            peerSymbols={peers.map((p) => p.symbol)}
           />
         </SectionBlock>
       )}

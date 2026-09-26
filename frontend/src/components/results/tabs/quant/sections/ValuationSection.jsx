@@ -1,121 +1,164 @@
 import PropTypes from 'prop-types';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import NoticeBox from '../../../NoticeBox';
 import {
+  capmWacc,
   dcf,
   dcfInputsReady,
   dcfMonteCarlo,
+  impliedGrowth,
   overviewToDcfInputs,
+  peerMultiples,
+  reportingCurrencyMismatch,
   returnHistogram,
 } from '../../quantUtils';
 import { MetricCard, NumberField } from '../charts';
-import { finite, DASH, fmtNum2, fmtSignedPct, signedTone } from '../format';
-import { fmtMoney as formatMoney, fmtMoneyCompact } from '../numberFormat';
+import { DASH, finite, fmtNum2, fmtPercent, fmtSignedPct, signedTone } from '../format';
+import { fmtMoney, fmtMoneyCompact } from '../numberFormat';
+import { usePeerOverviews } from '../usePeerOverviews';
 import { CHART_COLORS } from '../viz/chartTheme';
+import { DataTable } from '../viz/DataTable';
 import { Heatmap } from '../viz/Heatmap';
 import { HistogramChart } from '../viz/HistogramChart';
 
-export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, overviewError }) {
-  const [fcf, setFcf] = useState(''); // base free cash flow (millions); empty until known
-  const [growth, setGrowth] = useState(8); // % near-term FCF growth
-  const [years, setYears] = useState(5);
-  const [wacc, setWacc] = useState(Number(Math.max(8, defaultRate * 100 + 5).toFixed(1)));
-  const [terminalGrowth, setTerminalGrowth] = useState(2.5);
-  const [shares, setShares] = useState(''); // millions; empty until known
-  const [netDebt, setNetDebt] = useState(0); // millions
-  const [showMC, setShowMC] = useState(false); // DCF Monte Carlo toggle
-  const editedRef = useRef(new Set()); // fields the user typed in → never overwritten by auto-fill
+const TERMINAL_WARN = 0.75;
 
+export function ValuationSection({
+  spot,
+  defaultRate,
+  ccy,
+  symbol,
+  overview,
+  overviewError,
+  beta,
+  peerSymbols,
+}) {
+  const [growthSource, setGrowthSource] = useState('revenue');
+  const [fcf, setFcf] = useState('');
+  const [growth, setGrowth] = useState(8);
+  const [years, setYears] = useState(5);
+  const [fadeYears, setFadeYears] = useState(3);
+  const [midYear, setMidYear] = useState(true);
+  const [terminalGrowth, setTerminalGrowth] = useState(2.5);
+  const [shares, setShares] = useState('');
+  const [netDebt, setNetDebt] = useState(0);
+  const [fxRate, setFxRate] = useState('');
+  const [useCapm, setUseCapm] = useState(true);
+  const [waccManual, setWaccManual] = useState(
+    Number(Math.max(8, defaultRate * 100 + 5).toFixed(1))
+  );
+  const [erp, setErp] = useState(5);
+  const [costOfDebt, setCostOfDebt] = useState(Number((defaultRate * 100 + 2).toFixed(1)));
+  const [taxRate, setTaxRate] = useState(22);
+  const [showMC, setShowMC] = useState(false);
+  const editedRef = useRef(false);
+
+  const mismatch = reportingCurrencyMismatch(overview, ccy);
+  const edit = (setter) => (value) => {
+    editedRef.current = true;
+    setter(value);
+  };
   const applyInputs = (next) => {
     if (next.fcf !== undefined) setFcf(next.fcf);
     if (next.shares !== undefined) setShares(next.shares);
     if (next.netDebt !== undefined) setNetDebt(next.netDebt);
     if (next.growth !== undefined) setGrowth(next.growth);
   };
-  const change = (field, setter, value) => {
-    editedRef.current.add(field);
-    setter(value);
-  };
-
-  // Auto-fill the DCF inputs when fundamentals arrive; fields the user typed in are kept.
-  useEffect(() => {
-    if (!overview) return;
-    const fresh = Object.entries(overviewToDcfInputs(overview)).filter(
-      ([field]) => !editedRef.current.has(field)
-    );
-    applyInputs(Object.fromEntries(fresh));
-  }, [overview]);
-
   const autoFill = () => {
-    if (overview) applyInputs(overviewToDcfInputs(overview));
+    if (overview)
+      applyInputs(overviewToDcfInputs(overview, { growthSource, fxRate, tradingCurrency: ccy }));
   };
+
+  useEffect(() => {
+    if (!overview || editedRef.current) return;
+    const next = overviewToDcfInputs(overview, { growthSource: 'revenue', tradingCurrency: ccy });
+    if (next.fcf !== undefined) setFcf(next.fcf);
+    if (next.shares !== undefined) setShares(next.shares);
+    if (next.netDebt !== undefined) setNetDebt(next.netDebt);
+    if (next.growth !== undefined) setGrowth(next.growth);
+  }, [overview, ccy]);
+
+  const betaUsed = finite(beta) ? beta : finite(overview?.beta) ? overview.beta : null;
+  const fx = mismatch ? Number(fxRate) : 1;
+  const capm =
+    betaUsed === null
+      ? null
+      : capmWacc({
+          rf: defaultRate,
+          beta: betaUsed,
+          erp: Number(erp) / 100,
+          costOfDebt: Number(costOfDebt) / 100,
+          taxRate: Number(taxRate) / 100,
+          marketCap: overview?.market_cap,
+          totalDebt: fx > 0 && finite(overview?.total_debt) ? overview.total_debt * fx : undefined,
+        });
+  const waccPct = useCapm && capm ? capm.wacc * 100 : Number(waccManual);
 
   const ready = dcfInputsReady({ fcf, shares });
-  const result = useMemo(
-    () =>
-      ready
-        ? dcf({
-            fcf: Number(fcf),
-            growth: Number(growth) / 100,
-            years: Number(years),
-            wacc: Number(wacc) / 100,
-            terminalGrowth: Number(terminalGrowth) / 100,
-            shares: Number(shares),
-            netDebt: Number(netDebt),
-          })
-        : null,
-    [ready, fcf, growth, years, wacc, terminalGrowth, shares, netDebt]
-  );
-  const money = (v) => formatMoney(v, ccy);
+  const base = {
+    fcf: Number(fcf),
+    growth: Number(growth) / 100,
+    years: Number(years),
+    fadeYears: Number(fadeYears),
+    wacc: waccPct / 100,
+    terminalGrowth: Number(terminalGrowth) / 100,
+    shares: Number(shares),
+    netDebt: Number(netDebt),
+    midYear,
+  };
+  // Plain consts, not useMemo: dcf()/dcfMonteCarlo() are cheap and a manual dep list
+  // here made the React Compiler bail (react-hooks/preserve-manual-memoization), same
+  // as the addPeers note in QuantPanel.jsx. The compiler auto-memoizes instead.
+  const result = ready ? dcf(base) : null;
+  const implied = result ? impliedGrowth(base, spot) : null;
   const upside = result && spot > 0 ? (result.fairValuePerShare / spot - 1) * 100 : null;
 
-  // #3 Monte Carlo: vary the three soft assumptions ±a spread around the inputs and
-  // collect the fair-value distribution. Reuses the seeded MC engine. ponytail:
-  // fixed spreads, not per-input range fields — add those only if anyone asks.
-  const mc = useMemo(() => {
-    if (!showMC || !ready) return null;
-    return dcfMonteCarlo(
-      { fcf: Number(fcf), years: Number(years), shares: Number(shares), netDebt: Number(netDebt) },
-      {
-        growth: [Number(growth) / 100 - 0.03, Number(growth) / 100 + 0.03],
-        wacc: [Number(wacc) / 100 - 0.015, Number(wacc) / 100 + 0.015],
-        terminalGrowth: [
-          Number(terminalGrowth) / 100 - 0.005,
-          Number(terminalGrowth) / 100 + 0.005,
-        ],
-      },
-      2000,
-      42
-    );
-  }, [showMC, ready, fcf, growth, years, wacc, terminalGrowth, shares, netDebt]);
+  const mc =
+    showMC && ready
+      ? dcfMonteCarlo(
+          {
+            fcf: base.fcf,
+            years: base.years,
+            fadeYears: base.fadeYears,
+            shares: base.shares,
+            netDebt: base.netDebt,
+            midYear: base.midYear,
+          },
+          {
+            growth: [base.growth - 0.03, base.growth + 0.03],
+            wacc: [base.wacc - 0.015, base.wacc + 0.015],
+            terminalGrowth: [base.terminalGrowth - 0.005, base.terminalGrowth + 0.005],
+          },
+          2000,
+          42
+        )
+      : null;
 
-  // Sensitivity grid: WACC (rows, ±2%) × terminal growth (cols, ±1%). DCF is very
-  // sensitive to both, so the single point above is misleading on its own.
-  // ponytail: 25 trivial dcf() calls per render — no memo needed.
-  const waccAxis = [-2, -1, 0, 1, 2].map((d) => Number(wacc) + d);
+  const waccAxis = [-2, -1, 0, 1, 2].map((d) => waccPct + d);
   const tgAxis = [-1, -0.5, 0, 0.5, 1].map((d) => Number(terminalGrowth) + d);
-  const grid = waccAxis.map((w) =>
-    tgAxis.map((tg) => {
-      const r = dcf({
-        fcf: Number(fcf),
-        growth: Number(growth) / 100,
-        years: Number(years),
-        wacc: w / 100,
-        terminalGrowth: tg / 100,
-        shares: Number(shares),
-        netDebt: Number(netDebt),
-      });
-      return r ? r.fairValuePerShare : null;
-    })
-  );
+  const grid = result
+    ? waccAxis.map((w) =>
+        tgAxis.map(
+          (tg) =>
+            dcf({ ...base, wacc: w / 100, terminalGrowth: tg / 100 })?.fairValuePerShare ?? null
+        )
+      )
+    : [];
+
+  const peerOverviews = usePeerOverviews(peerSymbols);
+  const multiples = overview ? peerMultiples(overview, peerOverviews) : [];
+  const peerCount = peerOverviews.length;
+  const money = (v) => fmtMoney(v, ccy);
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-white/80">
-        Two-stage discounted cash flow: {years} years of FCF grown at {growth}%, then a Gordon
-        terminal value. FCF, shares, and net debt are in millions. Research only — not advice.
+        Discounted cash flow: {years} years at {growth}% growth, {fadeYears} fade years toward{' '}
+        {terminalGrowth}%, then a Gordon terminal value. FCF, shares and net debt are in millions.
+        Research only — not advice.
       </p>
+
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -125,6 +168,17 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
         >
           Auto-fill from fundamentals
         </button>
+        <label className="flex items-center gap-2 font-mono text-[11px] text-bloomberg-white/80">
+          Growth source
+          <select
+            value={growthSource}
+            onChange={(e) => setGrowthSource(e.target.value)}
+            className="h-7 rounded-none border border-bloomberg-border bg-black px-2 text-xs text-white"
+          >
+            <option value="revenue">Revenue growth</option>
+            <option value="earnings">Earnings growth</option>
+          </select>
+        </label>
         <span className="text-[11px] text-bloomberg-white/80">
           {overviewError
             ? 'Fundamentals unavailable — enter inputs manually.'
@@ -133,94 +187,214 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
               : `From ${symbol} fundamentals (yfinance). Every field stays editable.`}
         </span>
       </div>
-      <div className="flex flex-wrap items-end gap-4">
-        <NumberField
-          label="Base FCF"
-          value={fcf}
-          onChange={(v) => change('fcf', setFcf, v)}
-          suffix="M"
-        />
-        <NumberField
-          label="FCF Growth"
-          value={growth}
-          onChange={(v) => change('growth', setGrowth, v)}
-          suffix="%"
-        />
-        <NumberField
-          label="Years"
-          value={years}
-          onChange={(v) => change('years', setYears, v)}
-          step="1"
-        />
-        <NumberField
-          label="WACC"
-          value={wacc}
-          onChange={(v) => change('wacc', setWacc, v)}
-          suffix="%"
-        />
-        <NumberField
-          label="Terminal Growth"
-          value={terminalGrowth}
-          onChange={(v) => change('terminalGrowth', setTerminalGrowth, v)}
-          suffix="%"
-        />
-        <NumberField
-          label="Shares Out"
-          value={shares}
-          onChange={(v) => change('shares', setShares, v)}
-          suffix="M"
-        />
-        <NumberField
-          label="Net Debt"
-          value={netDebt}
-          onChange={(v) => change('netDebt', setNetDebt, v)}
-          suffix="M"
-        />
-      </div>
-      {result ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard
-            label="Fair Value / Share"
-            value={money(result.fairValuePerShare)}
-            tone="neutral"
-            formula="(Σ discounted FCF + discounted terminal value − net debt) ÷ shares."
-          />
-          <MetricCard
-            label="Upside vs Spot"
-            value={finite(upside) ? fmtSignedPct(upside) : DASH}
-            tone={signedTone(upside)}
-            gloss={`Fair value vs today's close (${money(spot)}).`}
-          />
-          <MetricCard label="Equity Value" value={fmtMoneyCompact(result.equityValue * 1e6, ccy)} />
-          <MetricCard
-            label="Enterprise Value"
-            value={fmtMoneyCompact(result.enterpriseValue * 1e6, ccy)}
-          />
-        </div>
-      ) : !ready ? (
-        <NoticeBox title="Inputs needed">
-          Enter base FCF and shares outstanding, or wait for fundamentals to auto-fill.
-        </NoticeBox>
-      ) : (
-        <NoticeBox title="Check inputs">
-          WACC must exceed terminal growth (else the terminal value diverges) and shares must be
-          positive.
+
+      {mismatch && (
+        <NoticeBox title="Reporting currency differs">
+          {symbol} reports fundamentals in {overview.financial_currency} but trades in {ccy}. Enter
+          how many {ccy} one {overview.financial_currency} buys, then auto-fill; FCF and net debt
+          are not filled until then.
+          <div className="mt-2">
+            <NumberField
+              label="FX rate"
+              value={fxRate}
+              onChange={setFxRate}
+              suffix={`${ccy} per ${overview.financial_currency}`}
+            />
+          </div>
         </NoticeBox>
       )}
 
-      {result && (
-        <div className="space-y-1">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+        <fieldset className="space-y-2 border border-bloomberg-border p-3">
+          <legend className="px-1 text-[11px] tracking-wider text-bloomberg-orange uppercase">
+            Cash flows
+          </legend>
+          <div className="flex flex-wrap gap-3">
+            <NumberField label="Base FCF" value={fcf} onChange={edit(setFcf)} suffix="M" />
+            <NumberField label="FCF growth" value={growth} onChange={edit(setGrowth)} suffix="%" />
+            <NumberField label="Years" value={years} onChange={edit(setYears)} step="1" />
+            <NumberField
+              label="Fade years"
+              value={fadeYears}
+              onChange={edit(setFadeYears)}
+              step="1"
+            />
+            <NumberField
+              label="Terminal growth"
+              value={terminalGrowth}
+              onChange={edit(setTerminalGrowth)}
+              suffix="%"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-[11px] text-bloomberg-white/80">
+            <input
+              type="checkbox"
+              checked={midYear}
+              onChange={(e) => setMidYear(e.target.checked)}
+              className="accent-bloomberg-orange"
+            />
+            Mid-year discounting
+          </label>
+        </fieldset>
+
+        <fieldset className="space-y-2 border border-bloomberg-border p-3">
+          <legend className="px-1 text-[11px] tracking-wider text-bloomberg-orange uppercase">
+            Discount rate
+          </legend>
+          <label className="flex items-center gap-2 text-[11px] text-bloomberg-white/80">
+            <input
+              type="checkbox"
+              checked={useCapm && !!capm}
+              disabled={!capm}
+              onChange={(e) => setUseCapm(e.target.checked)}
+              className="accent-bloomberg-orange"
+            />
+            CAPM WACC {capm ? `(β = ${fmtNum2(betaUsed)})` : '(needs beta)'}
+          </label>
+          <div className="flex flex-wrap gap-3">
+            {useCapm && capm ? (
+              <>
+                <NumberField label="Equity risk premium" value={erp} onChange={setErp} suffix="%" />
+                <NumberField
+                  label="Pre-tax cost of debt"
+                  value={costOfDebt}
+                  onChange={setCostOfDebt}
+                  suffix="%"
+                />
+                <NumberField label="Tax rate" value={taxRate} onChange={setTaxRate} suffix="%" />
+              </>
+            ) : (
+              <NumberField
+                label="WACC"
+                value={waccManual}
+                onChange={edit(setWaccManual)}
+                suffix="%"
+              />
+            )}
+          </div>
+          {useCapm && capm && (
+            <DataTable
+              rowKey={(r) => r.label}
+              rows={[
+                { label: 'Cost of equity (CAPM)', value: fmtPercent(capm.costOfEquity * 100) },
+                {
+                  label: 'After-tax cost of debt',
+                  value: finite(capm.afterTaxCostOfDebt)
+                    ? fmtPercent(capm.afterTaxCostOfDebt * 100)
+                    : DASH,
+                },
+                {
+                  label: 'Equity / debt weight',
+                  value: `${fmtPercent(capm.equityWeight * 100)} / ${fmtPercent(capm.debtWeight * 100)}`,
+                },
+                { label: 'WACC', value: fmtPercent(capm.wacc * 100) },
+              ]}
+              columns={[
+                { key: 'label', label: 'Component' },
+                { key: 'value', label: 'Value', align: 'right' },
+              ]}
+            />
+          )}
+        </fieldset>
+
+        <fieldset className="space-y-2 border border-bloomberg-border p-3">
+          <legend className="px-1 text-[11px] tracking-wider text-bloomberg-orange uppercase">
+            Balance sheet
+          </legend>
+          <div className="flex flex-wrap gap-3">
+            <NumberField label="Shares out" value={shares} onChange={edit(setShares)} suffix="M" />
+            <NumberField label="Net debt" value={netDebt} onChange={edit(setNetDebt)} suffix="M" />
+          </div>
+        </fieldset>
+      </div>
+
+      {!ready ? (
+        <NoticeBox title="Inputs needed">
+          Enter base FCF and shares outstanding, or wait for fundamentals to auto-fill.
+        </NoticeBox>
+      ) : !result ? (
+        <NoticeBox title="Check inputs">
+          WACC must exceed terminal growth and shares must be positive.
+        </NoticeBox>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <MetricCard
+              label="Fair Value / Share"
+              value={money(result.fairValuePerShare)}
+              formula="(Σ PV of FCF + PV of terminal value − net debt) ÷ shares."
+            />
+            <MetricCard
+              label="Upside vs Spot"
+              value={finite(upside) ? fmtSignedPct(upside) : DASH}
+              tone={signedTone(upside)}
+              gloss={`Today: ${money(spot)}.`}
+            />
+            <MetricCard
+              label="Equity Value"
+              value={fmtMoneyCompact(result.equityValue * 1e6, ccy)}
+            />
+            <MetricCard
+              label="Enterprise Value"
+              value={fmtMoneyCompact(result.enterpriseValue * 1e6, ccy)}
+            />
+            <MetricCard
+              label="Terminal value share"
+              value={fmtPercent(result.terminalShare * 100)}
+              tone={result.terminalShare > TERMINAL_WARN ? 'bad' : 'neutral'}
+              gloss="Share of enterprise value from beyond the forecast."
+            />
+            <MetricCard
+              label="Implied growth (reverse DCF)"
+              value={finite(implied) ? fmtPercent(implied * 100) : DASH}
+              gloss="Stage-1 growth today's price already assumes."
+            />
+          </div>
+          {result.terminalShare > TERMINAL_WARN && (
+            <NoticeBox title="Terminal value dominates">
+              {fmtPercent(result.terminalShare * 100)} of the value comes after the forecast
+              horizon, so the result mostly reflects the terminal growth and WACC guesses. Lengthen
+              the forecast or stress those inputs.
+            </NoticeBox>
+          )}
+
+          <DataTable
+            caption="Projected cash flows"
+            rowKey={(r) => String(r.year)}
+            rows={result.flows}
+            maxHeightClass="max-h-72"
+            columns={[
+              { key: 'year', label: 'Year', align: 'right' },
+              {
+                key: 'growth',
+                label: 'Growth',
+                align: 'right',
+                render: (r) => fmtPercent(r.growth * 100),
+              },
+              {
+                key: 'fcf',
+                label: 'FCF',
+                align: 'right',
+                render: (r) => fmtMoneyCompact(r.fcf * 1e6, ccy),
+              },
+              {
+                key: 'pv',
+                label: 'Present value',
+                align: 'right',
+                render: (r) => fmtMoneyCompact(r.pv * 1e6, ccy),
+              },
+            ]}
+          />
+
           <Heatmap
             caption="Sensitivity · fair value per share"
             rowHeader="WACC / g"
             rowLabels={waccAxis.map((w) => `${w.toFixed(1)}%`)}
             colLabels={tgAxis.map((g) => `${g.toFixed(1)}%`)}
             values={grid}
-            formatValue={(v) =>
-              v == null ? DASH : `${money(v)}${spot > 0 ? (v >= spot ? ' ▲' : ' ▼') : ''}`
-            }
+            formatValue={(v) => (v == null ? DASH : `${money(v)} ${v >= spot ? '▲' : '▼'}`)}
             colorFor={(v) =>
-              !(spot > 0)
+              v == null
                 ? 'transparent'
                 : v >= spot
                   ? 'rgba(34,197,94,0.16)'
@@ -229,43 +403,31 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
             textColorFor={() => '#e5e5e5'}
             highlight={{ row: 2, col: 2 }}
           />
-          <p className="text-[11px] text-bloomberg-white/80">
-            Green ▲ = fair value above today&apos;s close ({money(spot)}), red ▼ = below; outlined
-            cell = your inputs. Small WACC/growth shifts move the valuation a lot — treat any single
-            number with caution.
-          </p>
-        </div>
-      )}
 
-      {result && (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setShowMC((v) => !v)}
-            className={`rounded-none border px-3 py-1 text-[11px] tracking-wide uppercase ${
-              showMC
-                ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
-            }`}
-          >
-            Monte Carlo (growth ±3% · WACC ±1.5% · terminal ±0.5%)
-          </button>
-          {showMC &&
-            (mc ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              aria-pressed={showMC}
+              onClick={() => setShowMC((v) => !v)}
+              className={`rounded-none border px-3 py-1 text-[11px] tracking-wide uppercase ${
+                showMC
+                  ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
+                  : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
+              }`}
+            >
+              Monte Carlo (growth ±3% · WACC ±1.5% · terminal ±0.5%)
+            </button>
+            {showMC && mc && (
               <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <MetricCard label="Fair Value P10" value={money(mc.p10)} tone="bad" />
+                  <MetricCard label="Fair Value P50" value={money(mc.p50)} />
+                  <MetricCard label="Fair Value P90" value={money(mc.p90)} tone="good" />
                   <MetricCard
-                    label="Fair Value P10"
-                    value={money(mc.p10)}
-                    tone="bad"
-                    gloss="10th percentile across 2,000 assumption draws."
-                  />
-                  <MetricCard label="Fair Value P50 (median)" value={money(mc.p50)} />
-                  <MetricCard
-                    label="Fair Value P90"
-                    value={money(mc.p90)}
-                    tone="good"
-                    gloss="90th percentile — the optimistic tail."
+                    label="P(fair value > spot)"
+                    value={fmtPercent(
+                      (mc.values.filter((v) => v > spot).length / mc.values.length) * 100
+                    )}
                   />
                 </div>
                 <HistogramChart
@@ -276,49 +438,50 @@ export function ValuationSection({ spot, defaultRate, ccy, symbol, overview, ove
                   barLabel="Draws"
                   markers={[{ x: spot, label: 'Today', color: CHART_COLORS.secondary }]}
                 />
-                <p className="text-[11px] text-bloomberg-white/80">
-                  A wide P10–P90 band means the valuation is assumption-driven, not robust. Spot
-                  today: {money(spot)}.
-                </p>
               </>
-            ) : (
+            )}
+            {showMC && !mc && (
               <NoticeBox title="Monte Carlo">
-                No valid draws — widen WACC above terminal growth.
+                No valid draws — keep WACC above terminal growth.
               </NoticeBox>
-            ))}
-        </div>
+            )}
+          </div>
+        </>
       )}
 
       {overview && (
-        <div className="space-y-1">
-          <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
-            Market multiples ({symbol})
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <MetricCard
-              label="P/E (TTM)"
-              value={fmtNum2(overview.pe_ttm)}
-              gloss="Price ÷ trailing earnings."
-            />
-            <MetricCard
-              label="Forward P/E"
-              value={fmtNum2(overview.forward_pe)}
-              gloss="Price ÷ next-year estimated earnings."
-            />
-            <MetricCard label="P/B" value={fmtNum2(overview.pb)} gloss="Price ÷ book value." />
-            <MetricCard label="P/S (TTM)" value={fmtNum2(overview.ps_ttm)} gloss="Price ÷ sales." />
-            <MetricCard
-              label="EV/EBITDA"
-              value={fmtNum2(overview.ev_ebitda)}
-              gloss="Enterprise value ÷ EBITDA. Capital-structure neutral."
-            />
-            <MetricCard label="Market Cap" value={fmtMoneyCompact(overview.market_cap, ccy)} />
-          </div>
-          <p className="text-[11px] text-bloomberg-white/80">
-            Cross-check the DCF fair value above against these multiples — a DCF that disagrees
-            wildly with how the market prices peers deserves a second look at the assumptions.
-          </p>
-        </div>
+        <DataTable
+          caption={`Market multiples · ${symbol}`}
+          rowKey={(r) => r.key}
+          rows={multiples}
+          emptyMessage="No multiples available."
+          columns={[
+            { key: 'label', label: 'Multiple' },
+            {
+              key: 'company',
+              label: symbol || 'Company',
+              align: 'right',
+              render: (r) => fmtNum2(r.company),
+            },
+            {
+              key: 'peerMedian',
+              label: `Peer median (n=${peerCount})`,
+              align: 'right',
+              render: (r) => fmtNum2(r.peerMedian),
+            },
+            {
+              key: 'premiumPct',
+              label: 'Premium / discount',
+              align: 'right',
+              render: (r) => (finite(r.premiumPct) ? fmtSignedPct(r.premiumPct) : DASH),
+            },
+          ]}
+        />
+      )}
+      {overview && peerSymbols.length === 0 && (
+        <p className="text-[11px] text-bloomberg-white/80">
+          Add peers in the Correlation tab to compare multiples with peer medians.
+        </p>
       )}
     </div>
   );
@@ -331,6 +494,6 @@ ValuationSection.propTypes = {
   symbol: PropTypes.string,
   overview: PropTypes.object,
   overviewError: PropTypes.string,
+  beta: PropTypes.number,
+  peerSymbols: PropTypes.arrayOf(PropTypes.string).isRequired,
 };
-
-// #4 stress test + #6 regime-shift detection. Both are derived from figures the tab
