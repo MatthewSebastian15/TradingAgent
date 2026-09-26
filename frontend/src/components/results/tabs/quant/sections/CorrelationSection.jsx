@@ -210,52 +210,59 @@ export function CorrelationSection({
               valid.
             </NoticeBox>
           )}
-
-          {corr.optimizerStatus === 'ok' && corr.frontier.length > 0 && (
-            <ScatterChart
-              title="Efficient frontier"
-              subtitle={`Annualized · efficient branch only${corr.shrinkage !== null ? ` · Ledoit-Wolf shrinkage δ = ${corr.shrinkage.toFixed(2)}` : ''}`}
-              ariaLabel="Efficient frontier"
-              xLabel="Volatility, ann. %"
-              yLabel="Return, ann. %"
-              formatX={(v) => `${v.toFixed(0)}%`}
-              formatY={(v) => `${v.toFixed(0)}%`}
-              lines={[
-                {
-                  id: 'frontier',
-                  label: 'Efficient frontier',
-                  color: CHART_COLORS.primary,
-                  points: corr.frontier.map((p) => ({ x: p.vol, y: p.ret })),
-                },
-                ...(corr.cml.length
-                  ? [
-                      {
-                        id: 'cml',
-                        label: 'Capital market line',
-                        color: CHART_COLORS.secondary,
-                        dashed: true,
-                        points: corr.cml,
-                      },
-                    ]
-                  : []),
-              ]}
-              points={[
-                ...corr.assets.map((a) => ({
-                  x: a.vol,
-                  y: a.ret,
-                  label: a.label,
-                  color: '#e5e5e5',
-                  radius: 3,
-                })),
-                ...portfolios.map((p) => ({
-                  x: p.vol,
-                  y: p.ret,
-                  label: p.label,
-                  color: PORTFOLIO_COLORS[p.id] || CHART_COLORS.primary,
-                })),
-              ]}
-            />
+          {corr.optimizerStatus === 'lo_negative_excess' && (
+            <NoticeBox title="No long-only max-Sharpe portfolio either">
+              The long-only max-Sharpe portfolio has no basket with positive expected excess return
+              either — the long-only mixes above may not be meaningful either.
+            </NoticeBox>
           )}
+
+          {(corr.optimizerStatus === 'ok' || corr.optimizerStatus === 'lo_negative_excess') &&
+            corr.frontier.length > 0 && (
+              <ScatterChart
+                title="Efficient frontier"
+                subtitle={`Annualized · efficient branch only${corr.shrinkage !== null ? ` · Ledoit-Wolf shrinkage δ = ${corr.shrinkage.toFixed(2)}` : ''}`}
+                ariaLabel="Efficient frontier"
+                xLabel="Volatility, ann. %"
+                yLabel="Return, ann. %"
+                formatX={(v) => `${v.toFixed(0)}%`}
+                formatY={(v) => `${v.toFixed(0)}%`}
+                lines={[
+                  {
+                    id: 'frontier',
+                    label: 'Efficient frontier',
+                    color: CHART_COLORS.primary,
+                    points: corr.frontier.map((p) => ({ x: p.vol, y: p.ret })),
+                  },
+                  ...(corr.cml.length
+                    ? [
+                        {
+                          id: 'cml',
+                          label: 'Capital market line',
+                          color: CHART_COLORS.secondary,
+                          dashed: true,
+                          points: corr.cml,
+                        },
+                      ]
+                    : []),
+                ]}
+                points={[
+                  ...corr.assets.map((a) => ({
+                    x: a.vol,
+                    y: a.ret,
+                    label: a.label,
+                    color: '#e5e5e5',
+                    radius: 3,
+                  })),
+                  ...portfolios.map((p) => ({
+                    x: p.vol,
+                    y: p.ret,
+                    label: p.label,
+                    color: PORTFOLIO_COLORS[p.id] || CHART_COLORS.primary,
+                  })),
+                ]}
+              />
+            )}
 
           {portfolios.length > 0 && (
             <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">

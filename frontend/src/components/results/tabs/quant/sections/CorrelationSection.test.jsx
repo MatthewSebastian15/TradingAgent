@@ -115,4 +115,19 @@ describe('CorrelationSection', () => {
     expect(screen.getByRole('img', { name: 'Efficient frontier' })).toBeTruthy();
     expect(screen.getByText('Capital market line')).toBeTruthy();
   });
+
+  it('warns when the long-only max-Sharpe portfolio has no positive excess return either', () => {
+    renderSection({
+      corr: {
+        ...corr,
+        optimizerStatus: 'lo_negative_excess',
+        frontier: [
+          { vol: 18, ret: 8 },
+          { vol: 22, ret: 12 },
+        ],
+      },
+    });
+    expect(screen.getByText('No long-only max-Sharpe portfolio either')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Efficient frontier' })).toBeTruthy();
+  });
 });

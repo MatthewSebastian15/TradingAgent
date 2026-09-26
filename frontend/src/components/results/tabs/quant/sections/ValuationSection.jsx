@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import NoticeBox from '../../../NoticeBox';
 import {
@@ -52,11 +52,11 @@ export function ValuationSection({
   const [costOfDebt, setCostOfDebt] = useState(Number((defaultRate * 100 + 2).toFixed(1)));
   const [taxRate, setTaxRate] = useState(22);
   const [showMC, setShowMC] = useState(false);
-  const editedRef = useRef(false);
+  const [editedFields, setEditedFields] = useState(() => new Set());
 
   const mismatch = reportingCurrencyMismatch(overview, ccy);
-  const edit = (setter) => (value) => {
-    editedRef.current = true;
+  const edit = (field, setter) => (value) => {
+    setEditedFields((prev) => (prev.has(field) ? prev : new Set(prev).add(field)));
     setter(value);
   };
   const applyInputs = (next) => {
@@ -71,13 +71,13 @@ export function ValuationSection({
   };
 
   useEffect(() => {
-    if (!overview || editedRef.current) return;
-    const next = overviewToDcfInputs(overview, { growthSource: 'revenue', tradingCurrency: ccy });
-    if (next.fcf !== undefined) setFcf(next.fcf);
-    if (next.shares !== undefined) setShares(next.shares);
-    if (next.netDebt !== undefined) setNetDebt(next.netDebt);
-    if (next.growth !== undefined) setGrowth(next.growth);
-  }, [overview, ccy]);
+    if (!overview) return;
+    const next = overviewToDcfInputs(overview, { growthSource, tradingCurrency: ccy });
+    if (next.fcf !== undefined && !editedFields.has('fcf')) setFcf(next.fcf);
+    if (next.shares !== undefined && !editedFields.has('shares')) setShares(next.shares);
+    if (next.netDebt !== undefined && !editedFields.has('netDebt')) setNetDebt(next.netDebt);
+    if (next.growth !== undefined && !editedFields.has('growth')) setGrowth(next.growth);
+  }, [overview, ccy, growthSource, editedFields]);
 
   const betaUsed = finite(beta) ? beta : finite(overview?.beta) ? overview.beta : null;
   const fx = mismatch ? Number(fxRate) : 1;
@@ -153,10 +153,18 @@ export function ValuationSection({
   ]);
   const upside = result && spot > 0 ? (result.fairValuePerShare / spot - 1) * 100 : null;
 
+  // CAPM inputs (erp/costOfDebt/taxRate) feed waccPct on every keystroke; debounce before
+  // it reaches the 2000-path Monte Carlo below so typing stays instant.
+  const [debouncedWaccPct, setDebouncedWaccPct] = useState(waccPct);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedWaccPct(waccPct), 300);
+    return () => clearTimeout(timer);
+  }, [waccPct]);
+
   const mc = useMemo(() => {
     if (!showMC || !ready) return null;
     const g = Number(growth) / 100;
-    const w = waccPct / 100;
+    const w = debouncedWaccPct / 100;
     const tg = Number(terminalGrowth) / 100;
     return dcfMonteCarlo(
       {
@@ -185,7 +193,7 @@ export function ValuationSection({
     netDebt,
     midYear,
     growth,
-    waccPct,
+    debouncedWaccPct,
     terminalGrowth,
   ]);
 
@@ -264,19 +272,24 @@ export function ValuationSection({
             Cash flows
           </legend>
           <div className="flex flex-wrap gap-3">
-            <NumberField label="Base FCF" value={fcf} onChange={edit(setFcf)} suffix="M" />
-            <NumberField label="FCF growth" value={growth} onChange={edit(setGrowth)} suffix="%" />
-            <NumberField label="Years" value={years} onChange={edit(setYears)} step="1" />
+            <NumberField label="Base FCF" value={fcf} onChange={edit('fcf', setFcf)} suffix="M" />
+            <NumberField
+              label="FCF growth"
+              value={growth}
+              onChange={edit('growth', setGrowth)}
+              suffix="%"
+            />
+            <NumberField label="Years" value={years} onChange={edit('years', setYears)} step="1" />
             <NumberField
               label="Fade years"
               value={fadeYears}
-              onChange={edit(setFadeYears)}
+              onChange={edit('fadeYears', setFadeYears)}
               step="1"
             />
             <NumberField
               label="Terminal growth"
               value={terminalGrowth}
-              onChange={edit(setTerminalGrowth)}
+              onChange={edit('terminalGrowth', setTerminalGrowth)}
               suffix="%"
             />
           </div>
@@ -321,7 +334,7 @@ export function ValuationSection({
               <NumberField
                 label="WACC"
                 value={waccManual}
-                onChange={edit(setWaccManual)}
+                onChange={edit('waccManual', setWaccManual)}
                 suffix="%"
               />
             )}
@@ -356,8 +369,18 @@ export function ValuationSection({
             Balance sheet
           </legend>
           <div className="flex flex-wrap gap-3">
-            <NumberField label="Shares out" value={shares} onChange={edit(setShares)} suffix="M" />
-            <NumberField label="Net debt" value={netDebt} onChange={edit(setNetDebt)} suffix="M" />
+            <NumberField
+              label="Shares out"
+              value={shares}
+              onChange={edit('shares', setShares)}
+              suffix="M"
+            />
+            <NumberField
+              label="Net debt"
+              value={netDebt}
+              onChange={edit('netDebt', setNetDebt)}
+              suffix="M"
+            />
           </div>
         </fieldset>
       </div>
@@ -519,9 +542,10 @@ export function ValuationSection({
             },
             {
               key: 'peerMedian',
-              label: `Peer median (n=${peerCount})`,
+              label: 'Peer median',
               align: 'right',
-              render: (r) => fmtNum2(r.peerMedian),
+              render: (r) =>
+                `${fmtNum2(r.peerMedian)}${r.peerCount !== peerCount ? ` (n=${r.peerCount})` : ''}`,
             },
             {
               key: 'premiumPct',

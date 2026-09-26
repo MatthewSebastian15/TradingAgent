@@ -139,6 +139,13 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
   const [corrShrink, setCorrShrink] = useState(true);
   const [corrCap, setCorrCap] = useState(60);
   const [corrPair, setCorrPair] = useState([null, null]);
+  // The cap retriggers Ledoit-Wolf + frontier + 3 iterative optimizers on every keystroke;
+  // debounce before it reaches the `corr` memo so typing stays instant.
+  const [debouncedCorrCap, setDebouncedCorrCap] = useState(corrCap);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedCorrCap(corrCap), 300);
+    return () => clearTimeout(timer);
+  }, [corrCap]);
 
   // Peers fetched for another window or another base ticker would misalign with (or
   // duplicate) the base series.
@@ -553,10 +560,19 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     const rfPeriod = rf / periods;
     const retBySym = Object.fromEntries(symbols.map((s) => [s, simpleReturns(closeMap[s])]));
     const retList = symbols.map((s) => retBySym[s]);
+    const T = dates.length - 1;
     const lw = corrShrink ? ledoitWolf(retList) : null;
-    const cov = lw ? lw.matrix : covarianceMatrix(retList);
+    // ledoitWolf's internal sample covariance is population-scaled (T divisor, matching the
+    // paper); rescale to sample covariance (T-1) so it's on the same scale as covarianceMatrix.
+    const cov = lw
+      ? lw.matrix.map((row) => row.map((v) => v * (T / (T - 1))))
+      : covarianceMatrix(retList);
     const mu = retList.map(mean);
-    const cap = Math.max(1 / symbols.length, (Number(corrCap) || 100) / 100);
+    // Only a genuinely empty/invalid cap (NaN) falls back to 100; 0 or a negative value is a
+    // real number and is left to Math.max's 1/symbols.length floor below, not silently swapped
+    // for 100 the way `Number(corrCap) || 100` treated 0 as falsy.
+    const capInput = Number(debouncedCorrCap);
+    const cap = Math.max(1 / symbols.length, (Number.isFinite(capInput) ? capInput : 100) / 100);
     const annual = (id, label, w) => {
       if (!w) return null;
       const { ret, vol } = portfolioStats(w, mu, cov);
@@ -566,6 +582,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
     };
     const gmvW = gmvWeights(cov);
     const tanW = tangencyWeights(cov, mu, rfPeriod);
+    const loSharpe = maxSharpeLongOnly(cov, mu, rfPeriod, cap);
     const portfolios = [
       annual('gmv', 'Min-variance', gmvW),
       annual('tangency', 'Max-Sharpe (unconstrained)', tanW),
@@ -574,11 +591,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         `Min-variance (long-only ≤${Math.round(cap * 100)}%)`,
         minVarianceLongOnly(cov, cap)
       ),
-      annual(
-        'lo_sharpe',
-        `Max-Sharpe (long-only ≤${Math.round(cap * 100)}%)`,
-        maxSharpeLongOnly(cov, mu, rfPeriod, cap)?.weights
-      ),
+      annual('lo_sharpe', `Max-Sharpe (long-only ≤${Math.round(cap * 100)}%)`, loSharpe?.weights),
       annual('riskparity', 'Risk parity', riskParity(cov)),
       annual(
         'equal',
@@ -608,7 +621,13 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       frequency: corrFreq,
       shrinkage: lw ? lw.shrinkage : null,
       tooShort: false,
-      optimizerStatus: !gmvW ? 'singular' : !tanW ? 'no_tangency' : 'ok',
+      optimizerStatus: !gmvW
+        ? 'singular'
+        : !tanW
+          ? 'no_tangency'
+          : loSharpe?.negativeExcess
+            ? 'lo_negative_excess'
+            : 'ok',
       frontier,
       cml:
         cmlSlope > 0
@@ -630,7 +649,18 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       ),
       pair: [pairA, pairB],
     };
-  }, [peers, visible, baseSymbol, history, corrFreq, corrShrink, corrCap, corrPair, rf, ppy]);
+  }, [
+    peers,
+    visible,
+    baseSymbol,
+    history,
+    corrFreq,
+    corrShrink,
+    debouncedCorrCap,
+    corrPair,
+    rf,
+    ppy,
+  ]);
 
   // Loading: result is here but price history hasn't streamed in yet.
   // ponytail: 0 points = still loading; 1–29 = genuinely too short (NoticeBox).
