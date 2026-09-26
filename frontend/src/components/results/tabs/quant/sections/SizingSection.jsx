@@ -9,6 +9,7 @@ import {
 } from '../../quantUtils';
 import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtNum2, fmtPercent, hurstLabel } from '../format';
+import { CARD_GRID, FIELD_GRID } from '../layout';
 import { currencyDecimals, fmtInt, fmtMoney } from '../numberFormat';
 import { DataTable } from '../viz/DataTable';
 
@@ -139,7 +140,7 @@ export function SizingSection({
         <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
           Position calculator
         </div>
-        <div className="flex flex-wrap items-end gap-4">
+        <div className={FIELD_GRID}>
           <NumberField
             label="Capital"
             value={capital}
@@ -154,7 +155,7 @@ export function SizingSection({
           </span>
         </div>
         {plan ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <div className={CARD_GRID}>
             <MetricCard label="Shares" value={fmtInt(plan.shares)} />
             <MetricCard label="Lots" value={fmtInt(plan.lots)} />
             <MetricCard label="Position value" value={fmtMoney(plan.positionValue, ccy)} />

@@ -13,7 +13,9 @@ import {
 } from '../../quantUtils';
 import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtNum2, fmtPercent } from '../format';
+import { FIELD_GRID } from '../layout';
 import { currencyDecimals, fmtMoney } from '../numberFormat';
+import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { LineChart } from '../viz/LineChart';
@@ -102,70 +104,48 @@ export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, 
         today&apos;s close ({money(spot)}). Research only.
       </p>
 
-      <div className="flex flex-wrap items-end gap-4">
+      <div className={FIELD_GRID}>
         <div className="flex flex-col gap-1">
-          <NumberField label="Strike" value={strike} onChange={setStrike} />
-          <div className="flex gap-1">
-            {PRESETS.map((p) => (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => setStrike(Number((spot * (1 + p.move)).toFixed(decimals)))}
-                className="rounded-none border border-bloomberg-border px-1.5 py-0.5 text-[10px] text-bloomberg-white/80 hover:text-white"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <NumberField label="Days to expiry" value={days} onChange={setDays} step="1" />
-        <div className="flex flex-col gap-1">
-          <NumberField
-            label="Volatility"
-            value={volInput === '' ? Number(volPct.toFixed(1)) : volInput}
-            onChange={setVolInput}
-            suffix="%"
+          <NumberField label="Strike" value={strike} onChange={setStrike} suffix={ccy || undefined} />
+          <SegmentedControl
+            size="sm"
+            ariaLabel="Strike preset"
+            options={PRESETS.map((p) => ({ id: p.label, label: p.label }))}
+            value={null}
+            onChange={(id) => {
+              const preset = PRESETS.find((p) => p.label === id);
+              setStrike(Number((spot * (1 + preset.move)).toFixed(decimals)));
+            }}
           />
-          <span className="text-[10px] text-bloomberg-white/80">
-            {volInput === '' ? (
-              `Auto: ${fmtPercent(autoVol)} (${volWindow}-period realized)`
-            ) : (
-              <button type="button" className="underline" onClick={() => setVolInput('')}>
-                Reset to auto
-              </button>
-            )}
-          </span>
         </div>
+        <NumberField label="Days to expiry" value={days} onChange={setDays} step="1" suffix="d" />
+        <NumberField
+          label="Volatility"
+          value={volInput === '' ? Number(volPct.toFixed(1)) : volInput}
+          onChange={setVolInput}
+          suffix="%"
+          hint={volInput === '' ? `Auto: ${fmtPercent(autoVol)} (${volWindow}-period realized)` : undefined}
+          onReset={volInput === '' ? undefined : () => setVolInput('')}
+        />
         <NumberField label="Risk-free rate" value={rate} onChange={setRate} suffix="%" />
-        <div className="flex flex-col gap-1">
-          <NumberField
-            label="Dividend yield"
-            value={yieldInput === '' ? Number(yieldPct.toFixed(2)) : yieldInput}
-            onChange={setYieldInput}
-            suffix="%"
-          />
-          <span className="text-[10px] text-bloomberg-white/80">{`Auto: ${autoYield.toFixed(2)}%`}</span>
-        </div>
-        <div className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80">
-          <span className="tracking-wider uppercase">Chart type</span>
-          <div className="flex gap-1">
-            {['call', 'put'].map((t) => (
-              <button
-                key={t}
-                type="button"
-                aria-pressed={type === t}
-                onClick={() => setType(t)}
-                className={`rounded-none border border-bloomberg-border px-3 py-1 text-xs uppercase ${
-                  type === t
-                    ? 'bg-bloomberg-orange text-black'
-                    : 'text-bloomberg-white/80 hover:text-white'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
+        <NumberField
+          label="Dividend yield"
+          value={yieldInput === '' ? Number(yieldPct.toFixed(2)) : yieldInput}
+          onChange={setYieldInput}
+          suffix="%"
+          hint={yieldInput === '' ? `Auto: ${autoYield.toFixed(2)}%` : undefined}
+          onReset={yieldInput === '' ? undefined : () => setYieldInput('')}
+        />
+        <SegmentedControl
+          label="Chart type"
+          ariaLabel="Option type"
+          options={[
+            { id: 'call', label: 'Call' },
+            { id: 'put', label: 'Put' },
+          ]}
+          value={type}
+          onChange={setType}
+        />
       </div>
 
       {!call || !put ? (

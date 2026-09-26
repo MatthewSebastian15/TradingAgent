@@ -1,3 +1,4 @@
+import { Dices } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { useMemo } from 'react';
 
@@ -6,46 +7,15 @@ import { futureTradingDates, returnHistogram } from '../../quantUtils';
 import { MetricCard, NumberField } from '../charts';
 import { MC_HORIZONS, MC_PATHS } from '../config';
 import { finite, fmtLoss, fmtPercent, fmtSignedPct, signedTone } from '../format';
+import { CARD_GRID, FIELD_GRID } from '../layout';
 import { fmtMoney as formatMoney } from '../numberFormat';
+import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { HistogramChart } from '../viz/HistogramChart';
 import { LineChart } from '../viz/LineChart';
 
 const OUTCOMES = ['p5', 'p10', 'p25', 'p50', 'p75', 'p90', 'p95'];
-
-function Toggle({ options, value, onChange }) {
-  return (
-    <div className="flex gap-1">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          aria-pressed={value === o.id}
-          onClick={() => onChange(o.id)}
-          className={`rounded-none border px-2.5 py-1 text-[11px] tracking-wide ${
-            value === o.id
-              ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-              : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-Toggle.propTypes = {
-  options: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-      label: PropTypes.string,
-    })
-  ).isRequired,
-  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.bool]).isRequired,
-  onChange: PropTypes.func.isRequired,
-};
 
 export function StochasticSection({
   sim,
@@ -82,7 +52,8 @@ export function StochasticSection({
   const controls = (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <Toggle
+        <SegmentedControl
+          ariaLabel="Simulation method"
           options={[
             { id: 'gbm', label: 'GBM (normal)' },
             { id: 'bootstrap', label: 'Bootstrap (fat tails)' },
@@ -91,7 +62,8 @@ export function StochasticSection({
           onChange={onMethodChange}
         />
         {method === 'gbm' ? (
-          <Toggle
+          <SegmentedControl
+            ariaLabel="Drift"
             options={[
               { id: 'historical', label: 'Historical drift' },
               { id: 'riskneutral', label: 'Risk-neutral (rf)' },
@@ -100,7 +72,8 @@ export function StochasticSection({
             onChange={onDriftChange}
           />
         ) : (
-          <Toggle
+          <SegmentedControl
+            ariaLabel="Bootstrap drift"
             options={[
               { id: 'historical', label: 'Historical drift' },
               { id: 'demeaned', label: 'Demeaned' },
@@ -109,13 +82,14 @@ export function StochasticSection({
             onChange={(id) => onBootDemeanChange(id === 'demeaned')}
           />
         )}
-        <Toggle
+        <SegmentedControl
+          ariaLabel="Horizon"
           options={MC_HORIZONS.map((h) => ({ id: h, label: `${h}d` }))}
           value={horizon}
           onChange={onHorizonChange}
         />
       </div>
-      <div className="flex flex-wrap items-end gap-4">
+      <div className={FIELD_GRID}>
         <NumberField
           label="Target price"
           value={target}
@@ -145,7 +119,10 @@ export function StochasticSection({
               onClick={onReroll}
               className="rounded-none border border-bloomberg-border px-3 py-1 text-xs text-bloomberg-white/80 hover:text-white"
             >
-              Re-roll
+              <span className="inline-flex items-center gap-1.5">
+                <Dices className="h-3.5 w-3.5" aria-hidden="true" />
+                Re-roll
+              </span>
             </button>
             <span>Same seed → same simulation.</span>
           </div>
@@ -238,7 +215,7 @@ export function StochasticSection({
         referenceLines={referenceLines}
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className={CARD_GRID}>
         <MetricCard
           label="P(below today)"
           value={fmtPercent(sim.probBelowSpot * 100)}

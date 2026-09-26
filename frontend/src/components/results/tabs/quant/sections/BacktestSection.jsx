@@ -23,6 +23,8 @@ import {
   ratioTone,
   signedTone,
 } from '../format';
+import { CARD_GRID, FIELD_GRID } from '../layout';
+import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS, divergingColor, textOnDiverging } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { Heatmap } from '../viz/Heatmap';
@@ -129,23 +131,7 @@ export function BacktestSection({
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1">
-          {STRATEGIES.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              aria-pressed={strategy === s.id}
-              onClick={() => onStrategyChange(s.id)}
-              className={`rounded-none border px-2.5 py-1 text-[11px] tracking-wide ${
-                strategy === s.id
-                  ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                  : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl ariaLabel="Strategy" options={STRATEGIES} value={strategy} onChange={onStrategyChange} />
         <button
           type="button"
           aria-pressed={params.oosFrac > 0}
@@ -160,7 +146,7 @@ export function BacktestSection({
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-4">
+      <div className={FIELD_GRID}>
         {strategy === 'sma' && (
           <>
             <SliderField
@@ -282,7 +268,7 @@ export function BacktestSection({
                 },
               ]}
             />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className={CARD_GRID}>
               <MetricCard
                 label="Win Rate (per trade)"
                 value={fmtPercent(detail.trades.winRate)}
@@ -324,7 +310,7 @@ export function BacktestSection({
           </div>
 
           {result.outSampleReturn != null && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className={CARD_GRID}>
               <MetricCard
                 label="In-sample Return"
                 value={fmtSignedPct(result.inSampleReturn)}

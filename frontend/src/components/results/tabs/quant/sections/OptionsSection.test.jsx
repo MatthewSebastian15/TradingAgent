@@ -29,7 +29,7 @@ describe('OptionsSection', () => {
   it('applies moneyness presets', () => {
     render(<OptionsSection {...props} />);
     fireEvent.click(screen.getByRole('button', { name: '+5%' }));
-    expect(screen.getByLabelText(/Strike/).value).toBe('105');
+    expect(screen.getByRole('spinbutton', { name: /Strike/ }).value).toBe('105');
   });
 
   it('explains an implied-vol price below intrinsic value', () => {

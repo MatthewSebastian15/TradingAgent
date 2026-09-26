@@ -1,8 +1,11 @@
+import { X } from 'lucide-react';
 import PropTypes from 'prop-types';
 
 import NoticeBox from '../../../NoticeBox';
 import { NumberField } from '../charts';
 import { DASH, finite, fmtPercent, fmtRatio } from '../format';
+import { FIELD_GRID } from '../layout';
+import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { Heatmap } from '../viz/Heatmap';
@@ -16,39 +19,6 @@ const PORTFOLIO_COLORS = {
   lo_sharpe: CHART_COLORS.primary,
   riskparity: CHART_COLORS.warning,
   equal: CHART_COLORS.secondary,
-};
-
-function Toggle({ options, value, onChange }) {
-  return (
-    <div className="flex gap-1">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          aria-pressed={value === o.id}
-          onClick={() => onChange(o.id)}
-          className={`rounded-none border px-2.5 py-1 text-[11px] ${
-            value === o.id
-              ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-              : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-Toggle.propTypes = {
-  options: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
-      label: PropTypes.string,
-    })
-  ).isRequired,
-  value: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]).isRequired,
-  onChange: PropTypes.func.isRequired,
 };
 
 export function CorrelationSection({
@@ -105,7 +75,10 @@ export function CorrelationSection({
             aria-label={`Remove ${p.symbol}`}
             className="rounded-none border border-bloomberg-border px-2 py-0.5 font-mono text-[11px] text-bloomberg-white/80 hover:text-bloomberg-red"
           >
-            {p.symbol} ✕
+            <span className="inline-flex items-center gap-1">
+              {p.symbol}
+              <X className="h-3 w-3" aria-hidden="true" />
+            </span>
           </button>
         ))}
       </div>
@@ -119,8 +92,9 @@ export function CorrelationSection({
         </NoticeBox>
       )}
 
-      <div className="flex flex-wrap items-end gap-4">
-        <Toggle
+      <div className={FIELD_GRID}>
+        <SegmentedControl
+          ariaLabel="Return frequency"
           options={[
             { id: 'daily', label: 'Daily' },
             { id: 'weekly', label: 'Weekly' },
@@ -128,7 +102,8 @@ export function CorrelationSection({
           value={frequency}
           onChange={onFrequencyChange}
         />
-        <Toggle
+        <SegmentedControl
+          ariaLabel="Covariance estimator"
           options={[
             { id: false, label: 'Sample covariance' },
             { id: true, label: 'Ledoit-Wolf' },

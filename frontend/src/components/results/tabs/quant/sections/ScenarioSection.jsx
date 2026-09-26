@@ -5,6 +5,7 @@ import NoticeBox from '../../../NoticeBox';
 import { marketKeyForSymbol, stressTable } from '../../quantUtils';
 import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtSignedPct } from '../format';
+import { CARD_GRID, FIELD_GRID } from '../layout';
 import { fmtMoney } from '../numberFormat';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
@@ -71,7 +72,7 @@ export function ScenarioSection({
         </NoticeBox>
       )}
 
-      <div className="flex flex-wrap items-end gap-4">
+      <div className={FIELD_GRID}>
         <NumberField
           label="Position value"
           value={position}
@@ -131,7 +132,7 @@ export function ScenarioSection({
 
       <div className="space-y-2">
         {regime ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className={CARD_GRID}>
             <MetricCard
               label="Current Regime"
               value={regime.current}

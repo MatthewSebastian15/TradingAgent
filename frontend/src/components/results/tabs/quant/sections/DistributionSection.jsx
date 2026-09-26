@@ -2,6 +2,7 @@ import PropTypes from 'prop-types';
 
 import { MetricCard } from '../charts';
 import { finite, fmtLoss, fmtNum2, fmtPercent, fmtSignedPct, signedTone } from '../format';
+import { CARD_GRID } from '../layout';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { HistogramChart } from '../viz/HistogramChart';
@@ -72,7 +73,7 @@ export function DistributionSection({
           : '.'}
       </p>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <div className={CARD_GRID}>
         <MetricCard
           label="Skewness"
           value={fmtNum2(skew)}

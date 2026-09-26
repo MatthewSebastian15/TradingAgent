@@ -1,3 +1,4 @@
+import { Download } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -15,6 +16,7 @@ import {
 } from '../../quantUtils';
 import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtNum2, fmtPercent, fmtSignedPct, signedTone } from '../format';
+import { CARD_GRID, FIELD_GRID } from '../layout';
 import { fmtMoney, fmtMoneyCompact } from '../numberFormat';
 import { usePeerOverviews } from '../usePeerOverviews';
 import { CHART_COLORS } from '../viz/chartTheme';
@@ -228,7 +230,10 @@ export function ValuationSection({
           disabled={!overview}
           className="rounded-none border border-bloomberg-orange bg-bloomberg-orange-dim px-3 py-1 text-[11px] tracking-wide text-bloomberg-orange uppercase hover:bg-bloomberg-orange hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Auto-fill from fundamentals
+          <span className="inline-flex items-center gap-1.5">
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
+            Auto-fill from fundamentals
+          </span>
         </button>
         <label className="flex items-center gap-2 font-mono text-[11px] text-bloomberg-white/80">
           Growth source
@@ -271,7 +276,7 @@ export function ValuationSection({
           <legend className="px-1 text-[11px] tracking-wider text-bloomberg-orange uppercase">
             Cash flows
           </legend>
-          <div className="flex flex-wrap gap-3">
+          <div className={FIELD_GRID}>
             <NumberField label="Base FCF" value={fcf} onChange={edit('fcf', setFcf)} suffix="M" />
             <NumberField
               label="FCF growth"
@@ -318,7 +323,7 @@ export function ValuationSection({
             />
             CAPM WACC {capm ? `(β = ${fmtNum2(betaUsed)})` : '(needs beta)'}
           </label>
-          <div className="flex flex-wrap gap-3">
+          <div className={FIELD_GRID}>
             {useCapm && capm ? (
               <>
                 <NumberField label="Equity risk premium" value={erp} onChange={setErp} suffix="%" />
@@ -368,7 +373,7 @@ export function ValuationSection({
           <legend className="px-1 text-[11px] tracking-wider text-bloomberg-orange uppercase">
             Balance sheet
           </legend>
-          <div className="flex flex-wrap gap-3">
+          <div className={FIELD_GRID}>
             <NumberField
               label="Shares out"
               value={shares}
@@ -395,7 +400,7 @@ export function ValuationSection({
         </NoticeBox>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          <div className={CARD_GRID}>
             <MetricCard
               label="Fair Value / Share"
               value={money(result.fairValuePerShare)}
@@ -496,7 +501,7 @@ export function ValuationSection({
             </button>
             {showMC && mc && (
               <>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className={CARD_GRID}>
                   <MetricCard label="Fair Value P10" value={money(mc.p10)} tone="bad" />
                   <MetricCard label="Fair Value P50" value={money(mc.p50)} />
                   <MetricCard label="Fair Value P90" value={money(mc.p90)} tone="good" />

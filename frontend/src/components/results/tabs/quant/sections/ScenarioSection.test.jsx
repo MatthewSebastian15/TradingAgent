@@ -45,7 +45,7 @@ describe('ScenarioSection', () => {
     render(<ScenarioSection {...baseProps} />);
     fireEvent.change(screen.getByLabelText(/Position value/), { target: { value: '10000' } });
     fireEvent.change(screen.getByLabelText(/Custom shock/), { target: { value: '-7' } });
-    expect(screen.getByText('Custom shock')).toBeTruthy();
+    expect(screen.getAllByText('Custom shock').length).toBeGreaterThan(0);
     expect(screen.getAllByText('-USD 700.00').length).toBeGreaterThan(0);
   });
 

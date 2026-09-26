@@ -23,7 +23,9 @@ import {
   ratioTone,
   sampleNote,
 } from '../format';
+import { CARD_GRID, FIELD_GRID } from '../layout';
 import { fmtMoney } from '../numberFormat';
+import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { LineChart } from '../viz/LineChart';
@@ -152,7 +154,7 @@ export function RiskSection({
         <span className="text-bloomberg-red">{fmtAbs(cvar(returns))}</span> on average.
       </p>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <div className={CARD_GRID}>
         <MetricCard
           label="Max Drawdown"
           value={fmtLoss(dd)}
@@ -190,27 +192,14 @@ export function RiskSection({
         />
       </div>
 
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80">
-          <span className="tracking-wider uppercase">Horizon</span>
-          <div className="flex gap-1">
-            {HORIZONS.map((h) => (
-              <button
-                key={h}
-                type="button"
-                aria-pressed={horizon === h}
-                onClick={() => setHorizon(h)}
-                className={`rounded-none border px-2.5 py-1 text-[11px] ${
-                  horizon === h
-                    ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                    : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
-                }`}
-              >
-                {h}D
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className={FIELD_GRID}>
+        <SegmentedControl
+          label="Horizon"
+          ariaLabel="VaR horizon"
+          options={HORIZONS.map((h) => ({ id: h, label: `${h}D` }))}
+          value={horizon}
+          onChange={setHorizon}
+        />
         <NumberField
           label="Position value"
           value={position}
@@ -271,7 +260,7 @@ export function RiskSection({
       />
 
       {ddStats && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className={CARD_GRID}>
           <MetricCard
             label="Max DD Duration"
             value={`${ddStats.maxDDDuration}d`}

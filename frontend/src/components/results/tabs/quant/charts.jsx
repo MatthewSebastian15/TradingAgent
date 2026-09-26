@@ -1,4 +1,6 @@
+import { RotateCcw } from 'lucide-react';
 import PropTypes from 'prop-types';
+import { useId, useState } from 'react';
 
 import { LAST_PRICE_COLOR } from '../priceChartUtils';
 import { DASH } from './format';
@@ -162,21 +164,62 @@ export function SkeletonGrid() {
   );
 }
 
-export function SliderField({ label, value, min, max, onChange }) {
+const FOCUS_RING =
+  'focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange';
+
+// Slider for quick exploration plus a number box for exact values (keyboard, precision).
+// The box commits on blur/Enter so typing "1" on the way to "150" is not clamped early.
+export function SliderField({ label, value, min, max, step = 1, onChange, suffix }) {
+  const id = useId();
+  const [draft, setDraft] = useState(null);
+  const commit = () => {
+    const n = Number(draft);
+    if (draft !== null && draft !== '' && Number.isFinite(n)) {
+      const snapped = Number((Math.round(n / step) * step).toFixed(6));
+      onChange(Math.min(max, Math.max(min, snapped)));
+    }
+    setDraft(null);
+  };
   return (
-    <label className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80">
-      <span className="tracking-wider uppercase">
-        {label}: <span className="text-white">{value}</span>
-      </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-44 accent-bloomberg-orange"
-      />
-    </label>
+    <div className="flex min-w-0 flex-col gap-1 font-mono text-[11px]">
+      <label htmlFor={id} className="truncate tracking-wider text-bloomberg-white/80 uppercase">
+        {label}
+      </label>
+      <div className="flex items-center gap-2">
+        <input
+          type="range"
+          aria-label={`${label} (slider)`}
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className={`min-w-0 flex-1 accent-bloomberg-orange ${FOCUS_RING}`}
+        />
+        <div className="flex w-20 shrink-0 items-center border border-bloomberg-border bg-black focus-within:border-bloomberg-orange">
+          <input
+            id={id}
+            type="number"
+            inputMode="decimal"
+            min={min}
+            max={max}
+            step={step}
+            value={draft ?? value}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit();
+            }}
+            className="h-7 w-full min-w-0 rounded-none bg-transparent px-1.5 text-xs text-white tabular-nums outline-none"
+          />
+          {suffix && (
+            <span aria-hidden="true" className="shrink-0 pr-1.5 text-[10px] text-bloomberg-white/80">
+              {suffix}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -185,24 +228,92 @@ SliderField.propTypes = {
   value: PropTypes.number.isRequired,
   min: PropTypes.number.isRequired,
   max: PropTypes.number.isRequired,
+  step: PropTypes.number,
   onChange: PropTypes.func.isRequired,
+  suffix: PropTypes.string,
 };
 
-export function NumberField({ label, value, onChange, step = 'any', suffix }) {
+// Labeled number input: unit inside the box, optional source badge, reset and an inline
+// error tied to the input with aria-describedby.
+export function NumberField({
+  label,
+  value,
+  onChange,
+  step = 'any',
+  suffix,
+  error,
+  hint,
+  badge,
+  onReset,
+  min,
+  max,
+  id,
+}) {
+  const autoId = useId();
+  const inputId = id || autoId;
+  const messageId = `${inputId}-message`;
+  const message = error || hint;
   return (
-    <label className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80">
-      <span className="tracking-wider uppercase">
-        {label}
-        {suffix ? ` (${suffix})` : ''}
-      </span>
-      <input
-        type="number"
-        step={step}
-        value={value}
-        onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
-        className="w-32 border border-bloomberg-border bg-black px-2 py-1 text-white accent-bloomberg-orange"
-      />
-    </label>
+    <div className="flex min-w-0 flex-col gap-1 font-mono text-[11px]">
+      <div className="flex min-h-4 items-center justify-between gap-2">
+        <label htmlFor={inputId} className="min-w-0 truncate tracking-wider text-bloomberg-white/80 uppercase">
+          {label}
+          {suffix && <span className="sr-only">{` (${suffix})`}</span>}
+        </label>
+        {(badge || onReset) && (
+          <span className="flex shrink-0 items-center gap-1">
+            {badge && (
+              <span className="border border-bloomberg-border px-1 text-[9px] tracking-wider text-bloomberg-white/80 uppercase">
+                {badge}
+              </span>
+            )}
+            {onReset && (
+              <button
+                type="button"
+                onClick={onReset}
+                aria-label={`Reset ${label}`}
+                className={`inline-flex h-4 w-4 items-center justify-center text-bloomberg-white/80 hover:text-bloomberg-orange ${FOCUS_RING}`}
+              >
+                <RotateCcw className="h-3 w-3" aria-hidden="true" />
+              </button>
+            )}
+          </span>
+        )}
+      </div>
+      <div
+        className={`flex items-center border bg-black focus-within:border-bloomberg-orange ${
+          error ? 'border-bloomberg-red' : 'border-bloomberg-border'
+        }`}
+      >
+        <input
+          id={inputId}
+          type="number"
+          inputMode="decimal"
+          step={step}
+          min={min}
+          max={max}
+          value={value}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={message ? messageId : undefined}
+          onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+          className="h-8 w-full min-w-0 rounded-none bg-transparent px-2 text-xs text-white tabular-nums outline-none"
+        />
+        {suffix && (
+          <span aria-hidden="true" className="max-w-[45%] shrink-0 truncate pr-2 text-[10px] text-bloomberg-white/80">
+            {suffix}
+          </span>
+        )}
+      </div>
+      {message && (
+        <p
+          id={messageId}
+          aria-live="polite"
+          className={`text-[10px] leading-snug ${error ? 'text-bloomberg-red' : 'text-bloomberg-white/80'}`}
+        >
+          {message}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -212,6 +323,13 @@ NumberField.propTypes = {
   onChange: PropTypes.func.isRequired,
   step: PropTypes.string,
   suffix: PropTypes.string,
+  error: PropTypes.string,
+  hint: PropTypes.string,
+  badge: PropTypes.string,
+  onReset: PropTypes.func,
+  min: PropTypes.number,
+  max: PropTypes.number,
+  id: PropTypes.string,
 };
 
 export function SectionBlock({ title, hidden, children }) {
