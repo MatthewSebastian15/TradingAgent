@@ -18,7 +18,10 @@ const RULES = [
     name: 'low-contrast text color (use text-bloomberg-white or /80)',
     pattern: /text-bloomberg-(subtle|muted)\b/,
   },
-  { name: 'rounded shape (terminal surfaces are rounded-none)', pattern: /\brounded-(full|sm|md|lg|xl)\b/ },
+  {
+    name: 'rounded shape (terminal surfaces are rounded-none)',
+    pattern: /\brounded-(full|sm|md|lg|xl)\b/,
+  },
   {
     name: 'emoji or dingbat glyph (use a lucide-react icon)',
     pattern: /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{24D8}]/u,

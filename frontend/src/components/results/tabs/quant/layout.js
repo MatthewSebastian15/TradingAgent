@@ -4,4 +4,5 @@ export const CARD_GRID =
   'grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(max(11rem,calc((100%_-_2.25rem)/4)),1fr))]';
 
 // Form fields: min 10rem, no column cap (inputs are narrow).
-export const FIELD_GRID = 'grid items-start gap-3 [grid-template-columns:repeat(auto-fill,minmax(10rem,1fr))]';
+export const FIELD_GRID =
+  'grid items-start gap-3 [grid-template-columns:repeat(auto-fill,minmax(10rem,1fr))]';

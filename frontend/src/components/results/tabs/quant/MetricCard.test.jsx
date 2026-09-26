@@ -10,7 +10,12 @@ describe('MetricCard v2', () => {
 
   it('moves the explanation into a tooltip trigger and keeps it for screen readers', () => {
     const { container } = render(
-      <MetricCard label="Sharpe" value="1.20" gloss="Return per unit of risk." formula="(mean − rf) / σ" />
+      <MetricCard
+        label="Sharpe"
+        value="1.20"
+        gloss="Return per unit of risk."
+        formula="(mean − rf) / σ"
+      />
     );
     expect(container.querySelector('details')).toBeNull();
     expect(screen.getByRole('button', { name: 'About Sharpe' })).toBeTruthy();

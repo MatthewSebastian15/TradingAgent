@@ -131,7 +131,12 @@ export function BacktestSection({
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
-        <SegmentedControl ariaLabel="Strategy" options={STRATEGIES} value={strategy} onChange={onStrategyChange} />
+        <SegmentedControl
+          ariaLabel="Strategy"
+          options={STRATEGIES}
+          value={strategy}
+          onChange={onStrategyChange}
+        />
         <button
           type="button"
           aria-pressed={params.oosFrac > 0}

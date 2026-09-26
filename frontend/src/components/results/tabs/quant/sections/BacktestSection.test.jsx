@@ -35,8 +35,10 @@ describe('BacktestSection', () => {
 
   it('keeps fast < slow via slider bounds and labels win rates', () => {
     renderSection();
-    for (const el of screen.getAllByLabelText(/Fast SMA/)) expect(el.getAttribute('max')).toBe('49');
-    for (const el of screen.getAllByLabelText(/Slow SMA/)) expect(el.getAttribute('min')).toBe('21');
+    for (const el of screen.getAllByLabelText(/Fast SMA/))
+      expect(el.getAttribute('max')).toBe('49');
+    for (const el of screen.getAllByLabelText(/Slow SMA/))
+      expect(el.getAttribute('min')).toBe('21');
     expect(screen.getByText('Win Rate (per trade)')).toBeTruthy();
     expect(screen.getByText('Daily Hit Rate')).toBeTruthy();
   });

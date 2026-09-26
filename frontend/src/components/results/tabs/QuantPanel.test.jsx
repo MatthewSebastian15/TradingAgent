@@ -216,6 +216,8 @@ describe('QuantPanel', () => {
     expect(screen.getByText('Period Δ').nextSibling.textContent).toBe(`+${expected.toFixed(1)}%`);
   });
 
+  // Mounts all 10 tabs (each with its own MetricCard/InfoTip tooltip providers) at once;
+  // slower than the default 5s test timeout even though nothing here is hanging.
   it('renders every tab when sections is undefined', async () => {
     await renderPanel({ points: buildPoints(40) });
 
@@ -233,7 +235,7 @@ describe('QuantPanel', () => {
     ]) {
       expect(screen.getByRole('tab', { name: title })).toBeTruthy();
     }
-  });
+  }, 15000);
 
   it('uses the market risk-free rate from /api/status', async () => {
     const { getApiStatus } = await import('../../../api/market');

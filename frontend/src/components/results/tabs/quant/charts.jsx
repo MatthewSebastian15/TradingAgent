@@ -213,7 +213,10 @@ export function SliderField({ label, value, min, max, step = 1, onChange, suffix
             className="h-7 w-full min-w-0 rounded-none bg-transparent px-1.5 text-xs text-white tabular-nums outline-none"
           />
           {suffix && (
-            <span aria-hidden="true" className="shrink-0 pr-1.5 text-[10px] text-bloomberg-white/80">
+            <span
+              aria-hidden="true"
+              className="shrink-0 pr-1.5 text-[10px] text-bloomberg-white/80"
+            >
               {suffix}
             </span>
           )}
@@ -256,7 +259,10 @@ export function NumberField({
   return (
     <div className="flex min-w-0 flex-col gap-1 font-mono text-[11px]">
       <div className="flex min-h-4 items-center justify-between gap-2">
-        <label htmlFor={inputId} className="min-w-0 truncate tracking-wider text-bloomberg-white/80 uppercase">
+        <label
+          htmlFor={inputId}
+          className="min-w-0 truncate tracking-wider text-bloomberg-white/80 uppercase"
+        >
           {label}
           {suffix && <span className="sr-only">{` (${suffix})`}</span>}
         </label>
@@ -299,7 +305,10 @@ export function NumberField({
           className="h-8 w-full min-w-0 rounded-none bg-transparent px-2 text-xs text-white tabular-nums outline-none"
         />
         {suffix && (
-          <span aria-hidden="true" className="max-w-[45%] shrink-0 truncate pr-2 text-[10px] text-bloomberg-white/80">
+          <span
+            aria-hidden="true"
+            className="max-w-[45%] shrink-0 truncate pr-2 text-[10px] text-bloomberg-white/80"
+          >
             {suffix}
           </span>
         )}

@@ -106,7 +106,12 @@ export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, 
 
       <div className={FIELD_GRID}>
         <div className="flex flex-col gap-1">
-          <NumberField label="Strike" value={strike} onChange={setStrike} suffix={ccy || undefined} />
+          <NumberField
+            label="Strike"
+            value={strike}
+            onChange={setStrike}
+            suffix={ccy || undefined}
+          />
           <SegmentedControl
             size="sm"
             ariaLabel="Strike preset"
@@ -124,7 +129,11 @@ export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, 
           value={volInput === '' ? Number(volPct.toFixed(1)) : volInput}
           onChange={setVolInput}
           suffix="%"
-          hint={volInput === '' ? `Auto: ${fmtPercent(autoVol)} (${volWindow}-period realized)` : undefined}
+          hint={
+            volInput === ''
+              ? `Auto: ${fmtPercent(autoVol)} (${volWindow}-period realized)`
+              : undefined
+          }
           onReset={volInput === '' ? undefined : () => setVolInput('')}
         />
         <NumberField label="Risk-free rate" value={rate} onChange={setRate} suffix="%" />
