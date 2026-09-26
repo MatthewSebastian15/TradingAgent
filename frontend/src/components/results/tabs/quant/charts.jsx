@@ -48,13 +48,13 @@ export function MetricCard({ label, value, gloss, tone = 'neutral', formula, spa
   return (
     <div className="border border-bloomberg-border bg-bloomberg-card p-3 font-mono">
       <div className="flex items-start justify-between gap-2">
-        <div className="text-[11px] tracking-wider text-bloomberg-muted uppercase">{label}</div>
+        <div className="text-[11px] tracking-wider text-bloomberg-white/80 uppercase">{label}</div>
         {formula && (
           <details className="group relative">
-            <summary className="cursor-pointer list-none text-bloomberg-muted hover:text-white [&::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none text-bloomberg-white/80 hover:text-white [&::-webkit-details-marker]:hidden">
               ⓘ
             </summary>
-            <div className="absolute right-0 z-10 mt-1 w-56 border border-bloomberg-border bg-black/95 p-2 text-[10px] leading-relaxed text-bloomberg-subtle shadow-lg">
+            <div className="absolute right-0 z-10 mt-1 w-56 border border-bloomberg-border bg-black/95 p-2 text-[10px] leading-relaxed text-bloomberg-white/80 shadow-lg">
               {formula}
             </div>
           </details>
@@ -64,7 +64,7 @@ export function MetricCard({ label, value, gloss, tone = 'neutral', formula, spa
       {sample && <div className="mt-0.5 text-[10px] text-bloomberg-white/80">{sample}</div>}
       {spark && <Sparkline values={spark} />}
       {gloss && (
-        <div className="mt-1 text-[11px] leading-relaxed text-bloomberg-subtle">{gloss}</div>
+        <div className="mt-1 text-[11px] leading-relaxed text-bloomberg-white/80">{gloss}</div>
       )}
     </div>
   );
@@ -95,7 +95,7 @@ export function SkeletonGrid() {
 
 export function SliderField({ label, value, min, max, onChange }) {
   return (
-    <label className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-muted">
+    <label className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80">
       <span className="tracking-wider uppercase">
         {label}: <span className="text-white">{value}</span>
       </span>
@@ -121,7 +121,7 @@ SliderField.propTypes = {
 
 export function NumberField({ label, value, onChange, step = 'any', suffix }) {
   return (
-    <label className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-muted">
+    <label className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80">
       <span className="tracking-wider uppercase">
         {label}
         {suffix ? ` (${suffix})` : ''}

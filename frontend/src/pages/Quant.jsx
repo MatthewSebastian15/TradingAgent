@@ -165,7 +165,7 @@ export default function Quant() {
                     className={`h-7 rounded-none border px-2 font-mono text-[11px] tracking-wider ${
                       range === r
                         ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                        : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
+                        : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
                     }`}
                   >
                     {r}
@@ -175,7 +175,7 @@ export default function Quant() {
 
               {history.length > 0 && (
                 <div className="space-y-1">
-                  <div className="font-mono text-[10px] tracking-wider text-bloomberg-muted uppercase">
+                  <div className="font-mono text-[10px] tracking-wider text-bloomberg-white/80 uppercase">
                     History
                   </div>
                   <div className="max-h-52 overflow-y-auto border border-bloomberg-border [&::-webkit-scrollbar]:hidden">
@@ -190,7 +190,7 @@ export default function Quant() {
                         >
                           <span>{it.ticker || it.normalized_ticker || '—'}</span>
                           {it.trade_date && (
-                            <span className="text-[10px] text-bloomberg-muted">
+                            <span className="text-[10px] text-bloomberg-white/80">
                               {it.trade_date}
                             </span>
                           )}
@@ -203,7 +203,7 @@ export default function Quant() {
 
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-[10px] tracking-wider text-bloomberg-muted uppercase">
+                  <span className="font-mono text-[10px] tracking-wider text-bloomberg-white/80 uppercase">
                     Tabs
                   </span>
                   <button
@@ -212,7 +212,7 @@ export default function Quant() {
                     className={`rounded-none border px-2 py-0.5 font-mono text-[10px] tracking-wider uppercase ${
                       allOn
                         ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                        : 'border-bloomberg-border text-bloomberg-muted hover:text-white'
+                        : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
                     }`}
                   >
                     All
@@ -229,7 +229,7 @@ export default function Quant() {
                         className={`flex items-center gap-2 border-l-2 px-2 py-1.5 text-left font-mono text-[11px] uppercase ${
                           on
                             ? 'border-l-bloomberg-orange text-bloomberg-orange'
-                            : 'border-l-transparent text-bloomberg-muted hover:text-white'
+                            : 'border-l-transparent text-bloomberg-white/80 hover:text-white'
                         }`}
                       >
                         <span
@@ -258,7 +258,7 @@ export default function Quant() {
           )}
 
           {points === null && !loading && !error && (
-            <div className="border border-bloomberg-border bg-bloomberg-card p-8 text-center font-mono text-xs tracking-wider text-bloomberg-muted uppercase">
+            <div className="border border-bloomberg-border bg-bloomberg-card p-8 text-center font-mono text-xs tracking-wider text-bloomberg-white/80 uppercase">
               Search a ticker or load a past analysis to run quant analytics.
             </div>
           )}

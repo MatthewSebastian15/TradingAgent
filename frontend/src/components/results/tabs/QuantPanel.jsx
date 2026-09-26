@@ -725,7 +725,7 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
               className={`px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase ${
                 t.id === activeId
                   ? 'bg-bloomberg-orange text-black'
-                  : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-white'
+                  : 'text-bloomberg-white/80 hover:bg-bloomberg-surface hover:text-white'
               }`}
             >
               {t.label}
