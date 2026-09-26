@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import NoticeBox from '../../../NoticeBox';
 import {
@@ -107,33 +107,87 @@ export function ValuationSection({
     netDebt: Number(netDebt),
     midYear,
   };
-  // Plain consts, not useMemo: dcf()/dcfMonteCarlo() are cheap and a manual dep list
-  // here made the React Compiler bail (react-hooks/preserve-manual-memoization), same
-  // as the addPeers note in QuantPanel.jsx. The compiler auto-memoizes instead.
-  const result = ready ? dcf(base) : null;
-  const implied = result ? impliedGrowth(base, spot) : null;
+  const result = useMemo(() => {
+    if (!ready) return null;
+    return dcf({
+      fcf: Number(fcf),
+      growth: Number(growth) / 100,
+      years: Number(years),
+      fadeYears: Number(fadeYears),
+      wacc: waccPct / 100,
+      terminalGrowth: Number(terminalGrowth) / 100,
+      shares: Number(shares),
+      netDebt: Number(netDebt),
+      midYear,
+    });
+  }, [ready, fcf, growth, years, fadeYears, waccPct, terminalGrowth, shares, netDebt, midYear]);
+
+  const implied = useMemo(() => {
+    if (!result) return null;
+    return impliedGrowth(
+      {
+        fcf: Number(fcf),
+        growth: Number(growth) / 100,
+        years: Number(years),
+        fadeYears: Number(fadeYears),
+        wacc: waccPct / 100,
+        terminalGrowth: Number(terminalGrowth) / 100,
+        shares: Number(shares),
+        netDebt: Number(netDebt),
+        midYear,
+      },
+      spot
+    );
+  }, [
+    result,
+    fcf,
+    growth,
+    years,
+    fadeYears,
+    waccPct,
+    terminalGrowth,
+    shares,
+    netDebt,
+    midYear,
+    spot,
+  ]);
   const upside = result && spot > 0 ? (result.fairValuePerShare / spot - 1) * 100 : null;
 
-  const mc =
-    showMC && ready
-      ? dcfMonteCarlo(
-          {
-            fcf: base.fcf,
-            years: base.years,
-            fadeYears: base.fadeYears,
-            shares: base.shares,
-            netDebt: base.netDebt,
-            midYear: base.midYear,
-          },
-          {
-            growth: [base.growth - 0.03, base.growth + 0.03],
-            wacc: [base.wacc - 0.015, base.wacc + 0.015],
-            terminalGrowth: [base.terminalGrowth - 0.005, base.terminalGrowth + 0.005],
-          },
-          2000,
-          42
-        )
-      : null;
+  const mc = useMemo(() => {
+    if (!showMC || !ready) return null;
+    const g = Number(growth) / 100;
+    const w = waccPct / 100;
+    const tg = Number(terminalGrowth) / 100;
+    return dcfMonteCarlo(
+      {
+        fcf: Number(fcf),
+        years: Number(years),
+        fadeYears: Number(fadeYears),
+        shares: Number(shares),
+        netDebt: Number(netDebt),
+        midYear,
+      },
+      {
+        growth: [g - 0.03, g + 0.03],
+        wacc: [w - 0.015, w + 0.015],
+        terminalGrowth: [tg - 0.005, tg + 0.005],
+      },
+      2000,
+      42
+    );
+  }, [
+    showMC,
+    ready,
+    fcf,
+    years,
+    fadeYears,
+    shares,
+    netDebt,
+    midYear,
+    growth,
+    waccPct,
+    terminalGrowth,
+  ]);
 
   const waccAxis = [-2, -1, 0, 1, 2].map((d) => waccPct + d);
   const tgAxis = [-1, -0.5, 0, 0.5, 1].map((d) => Number(terminalGrowth) + d);
