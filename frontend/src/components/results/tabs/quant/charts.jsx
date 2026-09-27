@@ -152,19 +152,6 @@ MetricCard.propTypes = {
   status: PropTypes.oneOf(['ready', 'loading', 'unavailable']),
 };
 
-export function SkeletonGrid() {
-  return (
-    <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="h-24 animate-pulse border border-bloomberg-border bg-bloomberg-surface"
-        />
-      ))}
-    </div>
-  );
-}
-
 const FOCUS_RING =
   'focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange';
 

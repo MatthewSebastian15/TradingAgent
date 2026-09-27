@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from '
 import { getApiStatus, getMarketOhlcv } from '../../../api/market';
 import { useStockOverview } from '../../../hooks/useStockOverview';
 import NoticeBox from '../NoticeBox';
-import { SectionBlock, SkeletonGrid } from './quant/charts';
+import { SectionBlock } from './quant/charts';
 import {
   DEFAULT_SECTION,
   MC_DAYS,
@@ -30,6 +30,7 @@ import { SizingSection } from './quant/sections/SizingSection';
 import { StochasticSection } from './quant/sections/StochasticSection';
 import { ValuationSection } from './quant/sections/ValuationSection';
 import { VolatilitySection } from './quant/sections/VolatilitySection';
+import { SectionSkeleton } from './quant/SectionSkeleton';
 import { SectionTabs } from './quant/SectionTabs';
 import { useMonteCarlo } from './quant/useMonteCarlo';
 import {
@@ -692,7 +693,7 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
 
   // Loading: result is here but price history hasn't streamed in yet.
   // ponytail: 0 points = still loading; 1–29 = genuinely too short (NoticeBox).
-  if (closes.length === 0) return <SkeletonGrid />;
+  if (closes.length === 0) return <SectionSkeleton section={activeId} />;
 
   if (closes.length < 30) {
     return (
