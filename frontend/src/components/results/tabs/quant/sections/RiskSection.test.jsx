@@ -18,6 +18,7 @@ const baseProps = {
   rfPct: 4,
   benchLabel: 'S&P 500',
   benchAvailable: true,
+  benchStatus: 'ready',
   returns,
   closes,
   ewmaSigma: 0.012,
@@ -92,5 +93,24 @@ describe('RiskSection', () => {
     expect(screen.getByText('VaR 95% (10D)')).toBeTruthy();
     const table = screen.getByText('Value at Risk').closest('table');
     expect(within(table).getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('shows a skeleton while benchmark data loads', () => {
+    render(<RiskSection {...baseProps} benchStats={null} benchStatus="loading" />);
+    expect(screen.getByRole('status', { name: 'Loading benchmark statistics' })).toBeTruthy();
+    expect(screen.queryByText(/data unavailable/)).toBeNull();
+  });
+
+  it('flags an unavailable benchmark in amber instead of an empty table', () => {
+    render(
+      <RiskSection
+        {...baseProps}
+        benchStats={null}
+        benchAvailable={false}
+        benchStatus="unavailable"
+      />
+    );
+    expect(screen.getByText('Benchmark unavailable')).toBeTruthy();
+    expect(screen.queryByRole('status', { name: 'Loading benchmark statistics' })).toBeNull();
   });
 });

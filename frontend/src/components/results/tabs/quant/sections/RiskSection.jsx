@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import { useMemo, useState } from 'react';
 
+import NoticeBox from '../../../NoticeBox';
 import {
   bootstrapCI,
   cornishFisherVaR,
@@ -38,6 +39,7 @@ export function RiskSection({
   rfPct,
   benchLabel,
   benchAvailable,
+  benchStatus,
   returns,
   closes,
   ewmaSigma,
@@ -243,21 +245,38 @@ export function RiskSection({
         </p>
       )}
 
-      <DataTable
-        caption={
-          benchAvailable
-            ? `Relative to ${benchLabel} · n=${s?.observations ?? 0}`
-            : `${benchLabel} data unavailable`
-        }
-        rowKey={(r) => r.metric}
-        rows={benchRows}
-        emptyMessage="Not enough overlapping benchmark history (need 20 days)."
-        columns={[
-          { key: 'metric', label: 'Metric' },
-          { key: 'value', label: 'Value', align: 'right' },
-          { key: 'note', label: 'Reading', className: () => 'text-bloomberg-white/80' },
-        ]}
-      />
+      {benchStatus === 'loading' ? (
+        <div
+          role="status"
+          aria-label="Loading benchmark statistics"
+          className="border border-bloomberg-border"
+        >
+          <div className="bg-black px-2 py-1.5 text-xs tracking-wider text-bloomberg-orange uppercase">
+            {`Relative to ${benchLabel}`}
+          </div>
+          <div className="space-y-1 p-2">
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} aria-hidden="true" className="h-5 animate-pulse bg-bloomberg-surface" />
+            ))}
+          </div>
+        </div>
+      ) : benchStatus === 'unavailable' ? (
+        <NoticeBox title="Benchmark unavailable">
+          {`${benchLabel} prices could not be loaded, so beta, alpha and capture ratios are not shown. Pick another benchmark in the context bar or try again later.`}
+        </NoticeBox>
+      ) : (
+        <DataTable
+          caption={`Relative to ${benchLabel} · n=${s?.observations ?? 0}`}
+          rowKey={(r) => r.metric}
+          rows={benchRows}
+          emptyMessage="Not enough overlapping benchmark history (need 20 days)."
+          columns={[
+            { key: 'metric', label: 'Metric' },
+            { key: 'value', label: 'Value', align: 'right' },
+            { key: 'note', label: 'Reading', className: () => 'text-bloomberg-white/80' },
+          ]}
+        />
+      )}
 
       {ddStats && (
         <div className={CARD_GRID}>
@@ -363,6 +382,7 @@ RiskSection.propTypes = {
   rfPct: PropTypes.number.isRequired,
   benchLabel: PropTypes.string.isRequired,
   benchAvailable: PropTypes.bool.isRequired,
+  benchStatus: PropTypes.oneOf(['loading', 'ready', 'unavailable']).isRequired,
   returns: PropTypes.arrayOf(PropTypes.number).isRequired,
   closes: PropTypes.arrayOf(PropTypes.number).isRequired,
   ewmaSigma: PropTypes.number,

@@ -800,6 +800,7 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
             rfPct={rf * 100}
             benchLabel={benchmarkInfo.label}
             benchAvailable={benchmark.available}
+            benchStatus={benchStatus}
             returns={returns}
             closes={closes}
             ewmaSigma={metrics.ewmaSigma}
