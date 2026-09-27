@@ -38,6 +38,13 @@ export function benchmarkForSymbol(symbol) {
   return key === 'US' ? US_BENCHMARK : MARKET_BENCHMARKS[key];
 }
 
+// Choices for the context-bar benchmark override (home index is the default).
+export const BENCHMARK_OPTIONS = [US_BENCHMARK, ...Object.values(MARKET_BENCHMARKS)];
+
+export function benchmarkBySymbol(symbol) {
+  return BENCHMARK_OPTIONS.find((b) => b.symbol === symbol) || null;
+}
+
 // Market-specific rate from /api/status, then the global rate, then 0.
 export function resolveRiskFreeRate(symbol, status) {
   const market = marketKeyForSymbol(symbol);

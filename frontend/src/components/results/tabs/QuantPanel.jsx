@@ -16,7 +16,9 @@ import {
   VOL_TARGET,
 } from './quant/config';
 import { regimeLabel } from './quant/format';
+import { dataStatus } from './quant/interpret';
 import { BacktestSection } from './quant/sections/BacktestSection';
+import { ContextBar } from './quant/sections/ContextBar';
 import { CorrelationSection } from './quant/sections/CorrelationSection';
 import { DistributionSection } from './quant/sections/DistributionSection';
 import { HeadlineStrip } from './quant/sections/HeadlineStrip';
@@ -38,6 +40,7 @@ import {
   annualizedVol,
   assessSeries,
   backtest,
+  benchmarkBySymbol,
   benchmarkForSymbol,
   benchmarkStats,
   beta,
@@ -201,7 +204,14 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
   const ppy = useMemo(() => periodsPerYearFromDates(historyDates), [historyDates]);
   const { data: overview, error: overviewError } = useStockOverview(symbol);
   const ccy = currency || overview?.currency || '';
-  const benchmarkInfo = useMemo(() => benchmarkForSymbol(symbol), [symbol]);
+  // Home-market index by default; the context bar can override it per ticker.
+  const [benchOverride, setBenchOverride] = useState(null); // { forSymbol, symbol }
+  const benchmarkInfo = useMemo(
+    () =>
+      (benchOverride?.forSymbol === symbol && benchmarkBySymbol(benchOverride.symbol)) ||
+      benchmarkForSymbol(symbol),
+    [symbol, benchOverride]
+  );
 
   // Pull the risk-free rate config once on mount. Fails soft → status stays null → rf 0.
   useEffect(() => {
@@ -375,6 +385,7 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
 
   const benchStatus =
     benchPoints === null ? 'loading' : benchmark.available ? 'ready' : 'unavailable';
+  const contextStatus = dataStatus({ issues: quality.issues, benchStatus, overviewError });
 
   // Empirical worst windows + regime timeline for the Scenario tab; skipped while the
   // tab is hidden or the benchmark hasn't loaded yet.
@@ -698,7 +709,7 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
 
   return (
     <div className="space-y-4 p-4 font-mono">
-      <HeadlineStrip
+      <ContextBar
         symbol={baseSymbol}
         ccy={ccy}
         last={closes.at(-1)}
@@ -706,16 +717,22 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
         startDate={quality.startDate}
         endDate={quality.endDate}
         observations={quality.observations}
-        benchLabel={benchmarkInfo.label}
+        benchSymbol={benchmarkInfo.symbol}
+        onBenchChange={(sym) => setBenchOverride({ forSymbol: symbol, symbol: sym })}
         rfPct={rf * 100}
         rfSource={rfSource}
         onRfChange={(rate) => setRfOverride(rate == null ? null : { symbol, rate })}
+        status={contextStatus}
+        sticky={controlled}
+      />
+      <HeadlineStrip
         issues={quality.issues}
         vol={metrics.vol}
         shp={metrics.shp}
         dd={metrics.dd}
         var95={metrics.var95}
         regime={regime}
+        regimeDays={regimeShift?.daysSince}
         hurstVal={hurstInfo?.hurst}
         hurstSignificant={hurstInfo?.significant}
       />

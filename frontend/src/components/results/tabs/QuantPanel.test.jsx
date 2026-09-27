@@ -224,6 +224,14 @@ describe('QuantPanel', () => {
     expect(onSectionChange).toHaveBeenCalledWith('volatility');
   });
 
+  it('refetches the benchmark when the context bar overrides it', async () => {
+    const { getMarketOhlcv } = await import('../../../api/market');
+    await renderPanel({ points: buildPoints(40), section: 'overview', range: '1Y' });
+    fireEvent.change(screen.getByLabelText('Benchmark'), { target: { value: '^N225' } });
+    await act(async () => {});
+    expect(getMarketOhlcv).toHaveBeenCalledWith('^N225', expect.objectContaining({ range: '1Y' }));
+  });
+
   it('uses the market risk-free rate from /api/status', async () => {
     const { getApiStatus } = await import('../../../api/market');
     getApiStatus.mockResolvedValueOnce({ quant_risk_free_rates: { US: 0.05 } });
