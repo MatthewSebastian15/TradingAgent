@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { useId, useState } from 'react';
 
 import { LAST_PRICE_COLOR } from '../priceChartUtils';
+import { sectionById } from './config';
 import { DASH } from './format';
 import { InfoTip } from './InfoTip';
 
@@ -341,19 +342,37 @@ NumberField.propTypes = {
   id: PropTypes.string,
 };
 
-export function SectionBlock({ title, hidden, children }) {
+// Section wrapper. The name is already visible in the sidebar/tab, so the header shows
+// the description and section actions; the heading stays for screen readers.
+export function SectionBlock({ section, hidden, tabsId, actions, children }) {
+  const meta = sectionById(section);
+  const headingId = `${tabsId || 'quant'}-heading-${section}`;
   return (
-    <section role="tabpanel" hidden={hidden} className="space-y-3">
-      <h2 className="border-b border-bloomberg-border pb-1 text-xs font-bold tracking-[0.2em] text-bloomberg-orange uppercase">
-        {title}
-      </h2>
+    <section
+      id={tabsId ? `${tabsId}-panel-${section}` : undefined}
+      role={tabsId ? 'tabpanel' : undefined}
+      aria-labelledby={tabsId ? `${tabsId}-tab-${section}` : headingId}
+      hidden={hidden}
+      className="space-y-3"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-bloomberg-border pb-2">
+        <div className="min-w-0">
+          <h2 id={headingId} className="sr-only">
+            {meta?.label || section}
+          </h2>
+          <p className="text-[11px] leading-relaxed text-bloomberg-white/80">{meta?.description}</p>
+        </div>
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-1">{actions}</div>}
+      </div>
       {children}
     </section>
   );
 }
 
 SectionBlock.propTypes = {
-  title: PropTypes.string.isRequired,
+  section: PropTypes.string.isRequired,
   hidden: PropTypes.bool,
+  tabsId: PropTypes.string,
+  actions: PropTypes.node,
   children: PropTypes.node.isRequired,
 };

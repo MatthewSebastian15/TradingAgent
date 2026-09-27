@@ -1,17 +1,18 @@
 import PropTypes from 'prop-types';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { getApiStatus, getMarketOhlcv } from '../../../api/market';
 import { useStockOverview } from '../../../hooks/useStockOverview';
 import NoticeBox from '../NoticeBox';
 import { SectionBlock, SkeletonGrid } from './quant/charts';
 import {
+  DEFAULT_SECTION,
   MC_DAYS,
   MC_PATHS,
   QUANT_RANGE,
   ROLLING_RATIO_WINDOW,
   ROLLING_WINDOW,
-  TABS,
+  sectionById,
   VOL_TARGET,
 } from './quant/config';
 import { regimeLabel } from './quant/format';
@@ -20,12 +21,14 @@ import { CorrelationSection } from './quant/sections/CorrelationSection';
 import { DistributionSection } from './quant/sections/DistributionSection';
 import { HeadlineStrip } from './quant/sections/HeadlineStrip';
 import { OptionsSection } from './quant/sections/OptionsSection';
+import { OverviewSection } from './quant/sections/OverviewSection';
 import { RiskSection } from './quant/sections/RiskSection';
 import { ScenarioSection } from './quant/sections/ScenarioSection';
 import { SizingSection } from './quant/sections/SizingSection';
 import { StochasticSection } from './quant/sections/StochasticSection';
 import { ValuationSection } from './quant/sections/ValuationSection';
 import { VolatilitySection } from './quant/sections/VolatilitySection';
+import { SectionTabs } from './quant/SectionTabs';
 import { useMonteCarlo } from './quant/useMonteCarlo';
 import {
   adfTest,
@@ -100,18 +103,25 @@ import {
   zipRollingToDates,
 } from './quantUtils';
 
-function QuantPanel({ points, currency, symbol, sections, range }) {
+function QuantPanel({ points, currency, symbol, range, section, onSectionChange }) {
   // `range` (Quant page) pins every fetch to the user's window. Without it (AI-agent
   // result tab) the panel extends the 1Y analysis chart to QUANT_RANGE for stabler stats.
   const fetchRange = range || QUANT_RANGE;
-  // sections: array of visible tab ids from the page sidebar. Undefined = show all
-  // (keeps QuantPanel usable standalone without importing the tab list).
-  const visible = useMemo(() => (sections ? new Set(sections) : null), [sections]);
-  const show = (id) => !visible || visible.has(id);
-  const tabs = TABS.filter((t) => show(t.id));
-  const [active, setActive] = useState(TABS[0].id);
-  // Fall back to the first available tab when the active one gets deselected.
-  const activeId = tabs.some((t) => t.id === active) ? active : tabs[0]?.id;
+  // Controlled by the Quant page sidebar (`section`), uncontrolled inside the AI-agent
+  // result tab. Hidden sections stay mounted so their inputs keep state.
+  const tabsId = useId();
+  const controlled = section !== undefined;
+  const [innerSection, setInnerSection] = useState(DEFAULT_SECTION);
+  const requested = controlled ? section : innerSection;
+  const activeId = sectionById(requested) ? requested : DEFAULT_SECTION;
+  const selectSection = (id) => {
+    if (controlled) onSectionChange?.(id);
+    else setInnerSection(id);
+  };
+  // Heavy memos compute only for sections opened at least once (`visible.has(id)`).
+  const [visited, setVisited] = useState(() => new Set([activeId]));
+  if (!visited.has(activeId)) setVisited(new Set(visited).add(activeId));
+  const visible = visited;
   const [seed, setSeed] = useState(42);
   const [status, setStatus] = useState(null);
   const [rfOverride, setRfOverride] = useState(null); // { symbol, rate } typed in the headline
@@ -338,6 +348,8 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
       available: false,
       observations: null,
       rollBetaPoints: [],
+      marketVol: null,
+      marketMaxDD: null,
     };
     if (!benchPoints || benchPoints.length === 0) return none;
     const { dates, stock, market } = alignByDate(rows, benchPoints);
@@ -356,8 +368,13 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         dates,
         ROLLING_RATIO_WINDOW
       ),
+      marketVol: stdDev(mr) * Math.sqrt(ppy) * 100,
+      marketMaxDD: maxDrawdown(market),
     };
   }, [rows, benchPoints, rfDaily, ppy]);
+
+  const benchStatus =
+    benchPoints === null ? 'loading' : benchmark.available ? 'ready' : 'unavailable';
 
   // Empirical worst windows + regime timeline for the Scenario tab; skipped while the
   // tab is hidden or the benchmark hasn't loaded yet.
@@ -703,247 +720,265 @@ function QuantPanel({ points, currency, symbol, sections, range }) {
         hurstSignificant={hurstInfo?.significant}
       />
 
-      {visible && visible.size === 0 && (
-        <NoticeBox title="No tabs selected">
-          Pick one or more tabs in the sidebar to display.
-        </NoticeBox>
+      {!controlled && (
+        <SectionTabs activeId={activeId} onSelect={selectSection} idPrefix={tabsId} />
       )}
 
-      {tabs.length > 0 && (
-        <div
-          role="tablist"
-          aria-label="Quant sections"
-          className="flex flex-wrap border-b border-bloomberg-border"
-        >
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={t.id === activeId}
-              onClick={() => setActive(t.id)}
-              className={`px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase ${
-                t.id === activeId
-                  ? 'bg-bloomberg-orange text-black'
-                  : 'text-bloomberg-white/80 hover:bg-bloomberg-surface hover:text-white'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <SectionBlock
+        section="overview"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'overview'}
+      >
+        <OverviewSection
+          symbol={baseSymbol}
+          vol={metrics.vol}
+          benchVol={benchmark.marketVol}
+          regimeLabel={regime.label}
+          dd={metrics.dd}
+          benchMaxDD={benchmark.marketMaxDD}
+          currentDrawdown={ddPoints.at(-1)?.value}
+          underwaterDays={ddStats?.currentUnderwaterDays}
+          var95={metrics.var95}
+          sharpeInfo={sharpeInfo}
+          benchStats={benchmark.stats}
+          benchLabel={benchmarkInfo.label}
+          benchStatus={benchStatus}
+          hurstInfo={hurstInfo}
+          observations={quality.observations}
+          onNavigate={selectSection}
+        />
+      </SectionBlock>
 
-      {show('volatility') && (
-        <SectionBlock title="Volatility" hidden={activeId !== 'volatility'}>
-          <VolatilitySection
-            vol={metrics.vol}
-            ewma={metrics.ewma}
-            ppy={ppy}
-            estimators={volDetail.estimators}
-            cone={volDetail.cone}
-            garch={garch}
-            garchTerm={garchTerm}
-            rollingPoints={rollingPoints}
-            rolling63Points={volDetail.rolling63Points}
-            ewmaPoints={volDetail.ewmaPoints}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="volatility"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'volatility'}
+      >
+        <VolatilitySection
+          vol={metrics.vol}
+          ewma={metrics.ewma}
+          ppy={ppy}
+          estimators={volDetail.estimators}
+          cone={volDetail.cone}
+          garch={garch}
+          garchTerm={garchTerm}
+          rollingPoints={rollingPoints}
+          rolling63Points={volDetail.rolling63Points}
+          ewmaPoints={volDetail.ewmaPoints}
+        />
+      </SectionBlock>
 
-      {show('risk') && (
-        <SectionBlock title="Risk" hidden={activeId !== 'risk'}>
-          <RiskSection
-            ccy={ccy}
-            rfPct={rf * 100}
-            benchLabel={benchmarkInfo.label}
-            benchAvailable={benchmark.available}
-            returns={returns}
-            closes={closes}
-            ewmaSigma={metrics.ewmaSigma}
-            dd={metrics.dd}
-            cal={metrics.cal}
-            srt={metrics.srt}
-            downDev={metrics.downDev}
-            sharpeInfo={sharpeInfo}
-            obs={returns.length}
-            benchStats={benchmark.stats}
-            ddStats={ddStats}
-            topDD={topDD}
-            ddPoints={ddPoints}
-            rsPoints={rsPoints}
-            rbPoints={benchmark.rollBetaPoints}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="risk"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'risk'}
+      >
+        <RiskSection
+          ccy={ccy}
+          rfPct={rf * 100}
+          benchLabel={benchmarkInfo.label}
+          benchAvailable={benchmark.available}
+          returns={returns}
+          closes={closes}
+          ewmaSigma={metrics.ewmaSigma}
+          dd={metrics.dd}
+          cal={metrics.cal}
+          srt={metrics.srt}
+          downDev={metrics.downDev}
+          sharpeInfo={sharpeInfo}
+          obs={returns.length}
+          benchStats={benchmark.stats}
+          ddStats={ddStats}
+          topDD={topDD}
+          ddPoints={ddPoints}
+          rsPoints={rsPoints}
+          rbPoints={benchmark.rollBetaPoints}
+        />
+      </SectionBlock>
 
-      {show('distribution') && (
-        <SectionBlock title="Distribution" hidden={activeId !== 'distribution'}>
-          <DistributionSection
-            skew={metrics.skew}
-            kurt={metrics.kurt}
-            var95={metrics.var95}
-            var99={metrics.var99}
-            cvar95={metrics.cv}
-            histogram={distDetail.histogram}
-            mu={mean(returns)}
-            sigma={stdDev(returns)}
-            jb={distDetail.jb}
-            qq={distDetail.qq}
-            weekday={distDetail.weekday}
-            month={distDetail.month}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="distribution"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'distribution'}
+      >
+        <DistributionSection
+          skew={metrics.skew}
+          kurt={metrics.kurt}
+          var95={metrics.var95}
+          var99={metrics.var99}
+          cvar95={metrics.cv}
+          histogram={distDetail.histogram}
+          mu={mean(returns)}
+          sigma={stdDev(returns)}
+          jb={distDetail.jb}
+          qq={distDetail.qq}
+          weekday={distDetail.weekday}
+          month={distDetail.month}
+        />
+      </SectionBlock>
 
-      {show('stochastic') && (
-        <SectionBlock title="Stochastic" hidden={activeId !== 'stochastic'}>
-          <StochasticSection
-            sim={sim}
-            running={simRunning}
-            spot={closes.at(-1)}
-            ccy={ccy}
-            lastDate={historyDates.at(-1)}
-            ppy={ppy}
-            seed={seed}
-            onReroll={() => setSeed((s) => (s + 1) >>> 0)}
-            onSeedChange={(v) => setSeed(Number.isFinite(v) ? v : 0)}
-            horizon={mcHorizon}
-            onHorizonChange={setMcHorizon}
-            horizonLabel={horizonLabel}
-            method={mcMethod}
-            onMethodChange={setMcMethod}
-            drift={mcDrift}
-            onDriftChange={setMcDrift}
-            bootDemean={bootDemean}
-            onBootDemeanChange={setBootDemean}
-            target={mcTarget}
-            onTargetChange={setMcTarget}
-            stop={mcStop}
-            onStopChange={setMcStop}
-            sigmaInfo={sigmaInfo}
-            returnBins={returnBins}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="stochastic"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'stochastic'}
+      >
+        <StochasticSection
+          sim={sim}
+          running={simRunning}
+          spot={closes.at(-1)}
+          ccy={ccy}
+          lastDate={historyDates.at(-1)}
+          ppy={ppy}
+          seed={seed}
+          onReroll={() => setSeed((s) => (s + 1) >>> 0)}
+          onSeedChange={(v) => setSeed(Number.isFinite(v) ? v : 0)}
+          horizon={mcHorizon}
+          onHorizonChange={setMcHorizon}
+          horizonLabel={horizonLabel}
+          method={mcMethod}
+          onMethodChange={setMcMethod}
+          drift={mcDrift}
+          onDriftChange={setMcDrift}
+          bootDemean={bootDemean}
+          onBootDemeanChange={setBootDemean}
+          target={mcTarget}
+          onTargetChange={setMcTarget}
+          stop={mcStop}
+          onStopChange={setMcStop}
+          sigmaInfo={sigmaInfo}
+          returnBins={returnBins}
+        />
+      </SectionBlock>
 
-      {show('backtest') && (
-        <SectionBlock title="Backtest" hidden={activeId !== 'backtest'}>
-          <BacktestSection
-            strategy={strategy}
-            onStrategyChange={setStrategy}
-            params={btEffective}
-            onParamChange={(k, v) => setBtParams((prev) => ({ ...prev, [k]: v }))}
-            onApplyParams={(p) =>
-              setBtParams((prev) =>
-                strategy === 'meanrev'
-                  ? { ...prev, mrLookback: p.lookback }
-                  : { ...prev, ...p, oosFrac: prev.oosFrac }
-              )
-            }
-            result={backtestResult}
-            dates={historyDates}
-            closes={closes}
-            rf={rfDaily}
-            ppy={ppy}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="backtest"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'backtest'}
+      >
+        <BacktestSection
+          strategy={strategy}
+          onStrategyChange={setStrategy}
+          params={btEffective}
+          onParamChange={(k, v) => setBtParams((prev) => ({ ...prev, [k]: v }))}
+          onApplyParams={(p) =>
+            setBtParams((prev) =>
+              strategy === 'meanrev'
+                ? { ...prev, mrLookback: p.lookback }
+                : { ...prev, ...p, oosFrac: prev.oosFrac }
+            )
+          }
+          result={backtestResult}
+          dates={historyDates}
+          closes={closes}
+          rf={rfDaily}
+          ppy={ppy}
+        />
+      </SectionBlock>
 
-      {show('sizing') && (
-        <SectionBlock title="Sizing" hidden={activeId !== 'sizing'}>
-          <SizingSection
-            key={baseSymbol}
-            kelly={kellyInfo}
-            forecastVol={forecast21 ? forecast21.annualVol : metrics.ewma}
-            forecastSource={forecast21 ? 'GARCH 21d' : 'EWMA'}
-            volTarget={volTarget}
-            onVolTargetChange={setVolTarget}
-            regime={regime}
-            hurstInfo={hurstInfo}
-            adf={adf}
-            ouHL={ouHL}
-            spot={closes.at(-1)}
-            ccy={ccy}
-            symbol={baseSymbol}
-            dailySigma={metrics.ewmaSigma}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="sizing"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'sizing'}
+      >
+        <SizingSection
+          key={baseSymbol}
+          kelly={kellyInfo}
+          forecastVol={forecast21 ? forecast21.annualVol : metrics.ewma}
+          forecastSource={forecast21 ? 'GARCH 21d' : 'EWMA'}
+          volTarget={volTarget}
+          onVolTargetChange={setVolTarget}
+          regime={regime}
+          hurstInfo={hurstInfo}
+          adf={adf}
+          ouHL={ouHL}
+          spot={closes.at(-1)}
+          ccy={ccy}
+          symbol={baseSymbol}
+          dailySigma={metrics.ewmaSigma}
+        />
+      </SectionBlock>
 
-      {show('correlation') && (
-        <SectionBlock title="Correlation" hidden={activeId !== 'correlation'}>
-          <CorrelationSection
-            peerInput={peerInput}
-            onPeerInputChange={setPeerInput}
-            onAddPeers={addPeers}
-            peers={peers}
-            onRemovePeer={removePeer}
-            loading={peerLoading}
-            peerErrors={peerErrors}
-            frequency={corrFreq}
-            onFrequencyChange={setCorrFreq}
-            shrink={corrShrink}
-            onShrinkChange={setCorrShrink}
-            cap={corrCap}
-            onCapChange={setCorrCap}
-            onPairChange={(slot, sym) =>
-              setCorrPair((prev) => (slot === 0 ? [sym, prev[1]] : [prev[0], sym]))
-            }
-            corr={corr}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="correlation"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'correlation'}
+      >
+        <CorrelationSection
+          peerInput={peerInput}
+          onPeerInputChange={setPeerInput}
+          onAddPeers={addPeers}
+          peers={peers}
+          onRemovePeer={removePeer}
+          loading={peerLoading}
+          peerErrors={peerErrors}
+          frequency={corrFreq}
+          onFrequencyChange={setCorrFreq}
+          shrink={corrShrink}
+          onShrinkChange={setCorrShrink}
+          cap={corrCap}
+          onCapChange={setCorrCap}
+          onPairChange={(slot, sym) =>
+            setCorrPair((prev) => (slot === 0 ? [sym, prev[1]] : [prev[0], sym]))
+          }
+          corr={corr}
+        />
+      </SectionBlock>
 
-      {show('options') && (
-        <SectionBlock title="Options" hidden={activeId !== 'options'}>
-          <OptionsSection
-            key={baseSymbol}
-            spot={closes.at(-1)}
-            closes={closes}
-            ppy={ppy}
-            defaultRate={rf}
-            ccy={ccy}
-            overview={overview}
-            fallbackVol={metrics.vol}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="options"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'options'}
+      >
+        <OptionsSection
+          key={baseSymbol}
+          spot={closes.at(-1)}
+          closes={closes}
+          ppy={ppy}
+          defaultRate={rf}
+          ccy={ccy}
+          overview={overview}
+          fallbackVol={metrics.vol}
+        />
+      </SectionBlock>
 
-      {show('valuation') && (
-        <SectionBlock title="Valuation" hidden={activeId !== 'valuation'}>
-          <ValuationSection
-            key={baseSymbol}
-            spot={closes.at(-1)}
-            defaultRate={rf}
-            ccy={ccy}
-            symbol={baseSymbol}
-            overview={overview}
-            overviewError={overviewError}
-            beta={benchmark.beta}
-            peerSymbols={peers.map((p) => p.symbol)}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="valuation"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'valuation'}
+      >
+        <ValuationSection
+          key={baseSymbol}
+          spot={closes.at(-1)}
+          defaultRate={rf}
+          ccy={ccy}
+          symbol={baseSymbol}
+          overview={overview}
+          overviewError={overviewError}
+          beta={benchmark.beta}
+          peerSymbols={peers.map((p) => p.symbol)}
+        />
+      </SectionBlock>
 
-      {show('scenario') && (
-        <SectionBlock title="Scenario" hidden={activeId !== 'scenario'}>
-          <ScenarioSection
-            spot={closes.at(-1)}
-            ccy={ccy}
-            symbol={baseSymbol}
-            ewmaSigma={metrics.ewmaSigma}
-            beta={benchmark.beta}
-            benchLabel={benchmarkInfo.label}
-            benchIsSp500={benchmarkInfo.symbol === '^GSPC'}
-            benchWorst={scenarioDetail.benchWorst}
-            stockWorst={scenarioDetail.stockWorst}
-            regime={regimeShift}
-            pricePoints={scenarioDetail.pricePoints}
-            segments={scenarioDetail.segments}
-          />
-        </SectionBlock>
-      )}
+      <SectionBlock
+        section="scenario"
+        tabsId={controlled ? undefined : tabsId}
+        hidden={activeId !== 'scenario'}
+      >
+        <ScenarioSection
+          spot={closes.at(-1)}
+          ccy={ccy}
+          symbol={baseSymbol}
+          ewmaSigma={metrics.ewmaSigma}
+          beta={benchmark.beta}
+          benchLabel={benchmarkInfo.label}
+          benchIsSp500={benchmarkInfo.symbol === '^GSPC'}
+          benchWorst={scenarioDetail.benchWorst}
+          stockWorst={scenarioDetail.stockWorst}
+          regime={regimeShift}
+          pricePoints={scenarioDetail.pricePoints}
+          segments={scenarioDetail.segments}
+        />
+      </SectionBlock>
     </div>
   );
 }
@@ -952,8 +987,9 @@ QuantPanel.propTypes = {
   points: PropTypes.arrayOf(PropTypes.object).isRequired,
   currency: PropTypes.string,
   symbol: PropTypes.string,
-  sections: PropTypes.arrayOf(PropTypes.string),
   range: PropTypes.string,
+  section: PropTypes.string,
+  onSectionChange: PropTypes.func,
 };
 
 export default memo(QuantPanel);
