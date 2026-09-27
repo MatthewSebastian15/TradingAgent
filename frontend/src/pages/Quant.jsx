@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getMarketOhlcv } from '../api/market';
 import { DEFAULT_SECTION } from '../components/results/tabs/quant/config';
+import { QuantEmptyState } from '../components/results/tabs/quant/QuantEmptyState';
 import { QuantSidebar } from '../components/results/tabs/quant/QuantSidebar';
 import QuantPanel from '../components/results/tabs/QuantPanel';
 import TickerSearchBar from '../components/TickerSearchBar';
 import { fetchAnalysisHistory, fetchAnalysisHistoryResult } from '../utils/analysisHistoryApi';
+import { readRecentTickers } from '../utils/recentTickers';
 
 // Backend /market/ohlcv range keys. Longer ranges (2Y/5Y) give MC, backtest, Hurst
 // and regime detection enough history. 1M (~21 trading days) trips the <30-day notice.
@@ -200,9 +202,10 @@ export default function Quant() {
           )}
 
           {points === null && !loading && !error && (
-            <div className="border border-bloomberg-border bg-bloomberg-card p-8 text-center font-mono text-xs tracking-wider text-bloomberg-white/80 uppercase">
-              Search a ticker or load a past analysis to run quant analytics.
-            </div>
+            <QuantEmptyState
+              onPick={(symbol) => loadTicker(symbol, range)}
+              recent={readRecentTickers({ limit: 6 }).map((item) => item.symbol)}
+            />
           )}
 
           {/* QuantPanel renders its own skeleton (0 points) and <30-day notice. */}

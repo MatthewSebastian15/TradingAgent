@@ -127,4 +127,16 @@ describe('Quant page', () => {
     expect(screen.getByTestId('quant-panel').textContent).toContain('|valuation|');
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeTruthy();
   });
+
+  it('starts from a quick ticker in the empty state', async () => {
+    render(<Quant />);
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Try a ticker' })).getByRole('button', {
+        name: 'MSFT',
+      })
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('quant-panel').textContent).toContain('MSFT|USD|1')
+    );
+  });
 });
