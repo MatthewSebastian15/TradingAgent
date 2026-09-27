@@ -139,4 +139,13 @@ describe('Quant page', () => {
       expect(screen.getByTestId('quant-panel').textContent).toContain('MSFT|USD|1')
     );
   });
+
+  it('shows the recommendation next to each past analysis', async () => {
+    render(<Quant />);
+    const row = (await screen.findByText('BBCA.JK')).closest('button');
+    expect(within(row).getByText('BUY')).toBeTruthy();
+    expect(row.getAttribute('aria-label')).toBe(
+      'Load BBCA.JK analysis from 2026-05-01, signal BUY'
+    );
+  });
 });

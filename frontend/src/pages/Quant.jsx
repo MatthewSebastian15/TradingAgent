@@ -32,6 +32,22 @@ function currencyFromResult(result) {
   return result?.price_chart?.currency || result?.currency || '';
 }
 
+// Recommendation colors follow meaning: up/down for BUY/SELL, amber for wait/reduce.
+const SIGNAL_CLASS = {
+  BUY: 'border-bloomberg-green text-bloomberg-green',
+  SELL: 'border-bloomberg-red text-bloomberg-red',
+  REDUCE: 'border-bloomberg-amber text-bloomberg-amber',
+  WAIT: 'border-bloomberg-amber text-bloomberg-amber',
+  HOLD: 'border-bloomberg-border text-bloomberg-white/80',
+};
+
+function historySignal(item) {
+  const signal = String(item?.display_signal || '')
+    .trim()
+    .toUpperCase();
+  return SIGNAL_CLASS[signal] ? signal : null;
+}
+
 export default function Quant() {
   const [ticker, setTicker] = useState('');
   const [range, setRange] = useState(DEFAULT_RANGE);
@@ -166,16 +182,34 @@ export default function Quant() {
               <div className="max-h-52 overflow-y-auto border border-bloomberg-border [&::-webkit-scrollbar]:hidden">
                 {history.map((it) => {
                   const id = it.request_id || it.job_id;
+                  const signal = historySignal(it);
+                  const name = it.ticker || it.normalized_ticker || '—';
                   return (
                     <button
                       key={id}
                       type="button"
                       onClick={() => loadHistory(id)}
-                      className="flex w-full items-center justify-between border-b border-[#1a1a1a] px-2 py-1.5 text-left font-mono text-[11px] text-bloomberg-white last:border-b-0 hover:text-bloomberg-orange focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-bloomberg-orange"
+                      aria-label={`Load ${name} analysis${it.trade_date ? ` from ${it.trade_date}` : ''}${signal ? `, signal ${signal}` : ''}`}
+                      className="flex w-full items-center justify-between gap-2 border-b border-[#1a1a1a] px-2 py-1.5 text-left font-mono text-[11px] text-bloomberg-white last:border-b-0 hover:text-bloomberg-orange focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-bloomberg-orange"
                     >
-                      <span>{it.ticker || it.normalized_ticker || '—'}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate">{name}</span>
+                        {signal && (
+                          <span
+                            aria-hidden="true"
+                            className={`shrink-0 border px-1 text-[9px] tracking-wider ${SIGNAL_CLASS[signal]}`}
+                          >
+                            {signal}
+                          </span>
+                        )}
+                      </span>
                       {it.trade_date && (
-                        <span className="text-[10px] text-bloomberg-white/80">{it.trade_date}</span>
+                        <span
+                          aria-hidden="true"
+                          className="shrink-0 text-[10px] text-bloomberg-white/80"
+                        >
+                          {it.trade_date}
+                        </span>
                       )}
                     </button>
                   );
