@@ -14,7 +14,13 @@ const props = {
   currentDrawdown: -6,
   underwaterDays: 20,
   var95: -2.1,
-  sharpeInfo: { sharpe: 1.1, standardError: 0.4, tStat: 2.6, probabilisticSharpe: 0.99, observations: 250 },
+  sharpeInfo: {
+    sharpe: 1.1,
+    standardError: 0.4,
+    tStat: 2.6,
+    probabilisticSharpe: 0.99,
+    observations: 250,
+  },
   benchStats: { beta: 1.2, alpha: 3.1, alphaTStat: 0.8, observations: 250 },
   benchLabel: 'S&P 500',
   benchStatus: 'ready',
@@ -48,7 +54,9 @@ describe('OverviewSection', () => {
   });
 
   it('separates loading from unavailable benchmark cards', () => {
-    const { rerender } = render(<OverviewSection {...props} benchStats={null} benchStatus="loading" />);
+    const { rerender } = render(
+      <OverviewSection {...props} benchStats={null} benchStatus="loading" />
+    );
     expect(screen.getByText('Loading Beta vs S&P 500')).toBeTruthy();
     rerender(<OverviewSection {...props} benchStats={null} benchStatus="unavailable" />);
     expect(screen.getAllByText('Unavailable')).toHaveLength(2);
