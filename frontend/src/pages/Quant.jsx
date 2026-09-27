@@ -1,31 +1,26 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getMarketOhlcv } from '../api/market';
+import { DEFAULT_SECTION } from '../components/results/tabs/quant/config';
+import { QuantSidebar } from '../components/results/tabs/quant/QuantSidebar';
 import QuantPanel from '../components/results/tabs/QuantPanel';
 import TickerSearchBar from '../components/TickerSearchBar';
-import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from '../constants/sidebar';
 import { fetchAnalysisHistory, fetchAnalysisHistoryResult } from '../utils/analysisHistoryApi';
 
 // Backend /market/ohlcv range keys. Longer ranges (2Y/5Y) give MC, backtest, Hurst
 // and regime detection enough history. 1M (~21 trading days) trips the <30-day notice.
 const RANGES = ['1M', '3M', '6M', 'YTD', '1Y', '2Y', '5Y'];
 const DEFAULT_RANGE = '1Y';
+const SMALL_SCREEN = '(max-width: 1023px)';
 
-// Quant tab sections shown in the sidebar picker; ids drive QuantPanel's `sections`.
-const SECTIONS = [
-  { id: 'volatility', label: 'Volatility' },
-  { id: 'risk', label: 'Risk' },
-  { id: 'distribution', label: 'Distribution' },
-  { id: 'stochastic', label: 'Stochastic' },
-  { id: 'backtest', label: 'Backtest' },
-  { id: 'sizing', label: 'Sizing' },
-  { id: 'correlation', label: 'Correlation' },
-  { id: 'options', label: 'Options' },
-  { id: 'valuation', label: 'Valuation' },
-  { id: 'scenario', label: 'Scenario' },
-];
-const ALL_SECTION_IDS = SECTIONS.map((s) => s.id);
+// Below Tailwind `lg` the sidebar starts collapsed and closes after navigation.
+function isSmallScreen() {
+  try {
+    return window.matchMedia?.(SMALL_SCREEN).matches ?? false;
+  } catch {
+    return false;
+  }
+}
 
 function pointsFromResult(result) {
   return result?.price_chart?.points ?? [];
@@ -43,14 +38,9 @@ export default function Quant() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [history, setHistory] = useState([]);
-  const [selected, setSelected] = useState(ALL_SECTION_IDS); // visible quant tabs
-  const [collapsed, setCollapsed] = useState(false);
+  const [section, setSection] = useState(DEFAULT_SECTION);
+  const [collapsed, setCollapsed] = useState(isSmallScreen);
   const abortRef = useRef(null);
-
-  const allOn = selected.length === ALL_SECTION_IDS.length;
-  const toggleAll = () => setSelected(allOn ? [] : ALL_SECTION_IDS);
-  const toggleSection = (id) =>
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   // Load the analysis-history list once for the "Load from history" list.
   useEffect(() => {
@@ -60,6 +50,16 @@ export default function Quant() {
       .catch(() => {});
     return () => controller.abort();
   }, []);
+
+  // Esc closes the floating sidebar on small screens.
+  useEffect(() => {
+    if (collapsed) return undefined;
+    const onKey = (event) => {
+      if (event.key === 'Escape' && isSmallScreen()) setCollapsed(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [collapsed]);
 
   // Single in-flight fetch; abort the previous one on a new request.
   const run = useCallback((work) => {
@@ -116,141 +116,83 @@ export default function Quant() {
     });
   }
 
+  function selectSection(id) {
+    setSection(id);
+    if (isSmallScreen()) setCollapsed(true);
+  }
+
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10">
       <div className="flex min-h-[calc(100vh-60px)]">
-        {collapsed ? (
+        <QuantSidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((v) => !v)}
+          activeSection={section}
+          onSelectSection={selectSection}
+        >
+          <TickerSearchBar
+            value={ticker}
+            onSelect={(item) => loadTicker(item.symbol, range)}
+            onClear={() => {}}
+            onSubmit={(raw) => loadTicker(raw, range)}
+            placeholder="Search ticker symbol"
+          />
+
+          <div role="group" aria-label="Date range" className="flex flex-wrap gap-1">
+            {RANGES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={range === r}
+                onClick={() => handleRange(r)}
+                className={`h-7 rounded-none border px-2 font-mono text-[11px] tracking-wider focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange ${
+                  range === r
+                    ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
+                    : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+
+          {history.length > 0 && (
+            <div className="space-y-1">
+              <div className="font-mono text-[10px] tracking-wider text-bloomberg-white/80 uppercase">
+                History
+              </div>
+              <div className="max-h-52 overflow-y-auto border border-bloomberg-border [&::-webkit-scrollbar]:hidden">
+                {history.map((it) => {
+                  const id = it.request_id || it.job_id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => loadHistory(id)}
+                      className="flex w-full items-center justify-between border-b border-[#1a1a1a] px-2 py-1.5 text-left font-mono text-[11px] text-bloomberg-white last:border-b-0 hover:text-bloomberg-orange focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-bloomberg-orange"
+                    >
+                      <span>{it.ticker || it.normalized_ticker || '—'}</span>
+                      {it.trade_date && (
+                        <span className="text-[10px] text-bloomberg-white/80">{it.trade_date}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </QuantSidebar>
+
+        {!collapsed && (
           <button
             type="button"
-            onClick={() => setCollapsed(false)}
-            aria-label="Expand sidebar"
-            className={`sticky top-[60px] flex h-[calc(100vh-60px)] ${SIDEBAR_COLLAPSED_WIDTH} shrink-0 items-center justify-center border-r border-bloomberg-border bg-bloomberg-surface text-bloomberg-orange transition-all duration-200`}
-          >
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </button>
-        ) : (
-          <aside
-            className={`sticky top-[60px] flex h-[calc(100vh-60px)] ${SIDEBAR_EXPANDED_WIDTH} shrink-0 flex-col overflow-y-auto border-r border-bloomberg-border bg-bloomberg-surface transition-all duration-200 [&::-webkit-scrollbar]:hidden`}
-          >
-            <div className="flex h-10 shrink-0 items-center justify-between border-b border-bloomberg-border px-3">
-              <span className="font-mono text-[11px] font-bold tracking-[0.2em] text-bloomberg-orange uppercase">
-                Quant
-              </span>
-              <button
-                type="button"
-                onClick={() => setCollapsed(true)}
-                aria-label="Collapse sidebar"
-                className="text-bloomberg-orange"
-              >
-                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="space-y-4 p-3">
-              <TickerSearchBar
-                value={ticker}
-                onSelect={(item) => loadTicker(item.symbol, range)}
-                onClear={() => {}}
-                onSubmit={(raw) => loadTicker(raw, range)}
-                placeholder="Search ticker symbol"
-              />
-
-              <div className="flex flex-wrap gap-1">
-                {RANGES.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => handleRange(r)}
-                    aria-pressed={range === r}
-                    className={`h-7 rounded-none border px-2 font-mono text-[11px] tracking-wider ${
-                      range === r
-                        ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                        : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-
-              {history.length > 0 && (
-                <div className="space-y-1">
-                  <div className="font-mono text-[10px] tracking-wider text-bloomberg-white/80 uppercase">
-                    History
-                  </div>
-                  <div className="max-h-52 overflow-y-auto border border-bloomberg-border [&::-webkit-scrollbar]:hidden">
-                    {history.map((it) => {
-                      const id = it.request_id || it.job_id;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => loadHistory(id)}
-                          className="flex w-full items-center justify-between border-b border-[#1a1a1a] px-2 py-1.5 text-left font-mono text-[11px] text-bloomberg-white last:border-b-0 hover:text-bloomberg-orange"
-                        >
-                          <span>{it.ticker || it.normalized_ticker || '—'}</span>
-                          {it.trade_date && (
-                            <span className="text-[10px] text-bloomberg-white/80">
-                              {it.trade_date}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[10px] tracking-wider text-bloomberg-white/80 uppercase">
-                    Tabs
-                  </span>
-                  <button
-                    type="button"
-                    onClick={toggleAll}
-                    className={`rounded-none border px-2 py-0.5 font-mono text-[10px] tracking-wider uppercase ${
-                      allOn
-                        ? 'border-bloomberg-orange bg-bloomberg-orange text-black'
-                        : 'border-bloomberg-border text-bloomberg-white/80 hover:text-white'
-                    }`}
-                  >
-                    All
-                  </button>
-                </div>
-                <div className="flex flex-col">
-                  {SECTIONS.map((s) => {
-                    const on = selected.includes(s.id);
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => toggleSection(s.id)}
-                        className={`flex items-center gap-2 border-l-2 px-2 py-1.5 text-left font-mono text-[11px] uppercase ${
-                          on
-                            ? 'border-l-bloomberg-orange text-bloomberg-orange'
-                            : 'border-l-transparent text-bloomberg-white/80 hover:text-white'
-                        }`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`inline-block h-2.5 w-2.5 border ${
-                            on
-                              ? 'border-bloomberg-orange bg-bloomberg-orange'
-                              : 'border-bloomberg-border'
-                          }`}
-                        />
-                        {s.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </aside>
+            aria-label="Close sidebar"
+            onClick={() => setCollapsed(true)}
+            className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+          />
         )}
 
-        <main className="flex-1 space-y-4 px-4 py-4">
+        <main className="min-w-0 flex-1 space-y-4 px-4 py-4">
           {error && (
             <div className="border border-bloomberg-red/50 bg-bloomberg-card p-3 font-mono text-xs text-bloomberg-red">
               {error}
@@ -269,8 +211,9 @@ export default function Quant() {
               points={loading ? [] : points}
               currency={currency}
               symbol={ticker}
-              sections={selected}
               range={range}
+              section={section}
+              onSectionChange={selectSection}
             />
           )}
         </main>

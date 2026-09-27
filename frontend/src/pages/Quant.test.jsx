@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PropTypes from 'prop-types';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +15,7 @@ vi.mock('../api/market', () => ({
 }));
 vi.mock('../utils/analysisHistoryApi', () => ({
   fetchAnalysisHistory: vi.fn(async () => [
-    { request_id: 'r1', ticker: 'BBCA.JK', trade_date: '2026-05-01' },
+    { request_id: 'r1', ticker: 'BBCA.JK', trade_date: '2026-05-01', display_signal: 'BUY' },
   ]),
   fetchAnalysisHistoryResult: vi.fn(async () => ({
     price_chart: { points: [{ date: '2026-01-01', close: 2 }], currency: 'IDR' },
@@ -33,10 +33,10 @@ vi.mock('../components/TickerSearchBar', () => {
   return { default: TickerSearchBarStub };
 });
 vi.mock('../components/results/tabs/QuantPanel', () => {
-  function QuantPanelStub({ points, currency, symbol, sections, range }) {
+  function QuantPanelStub({ points, currency, symbol, section, range }) {
     return (
       <div data-testid="quant-panel">
-        {symbol}|{currency}|{points.length}|{sections.join(',')}|{range}
+        {symbol}|{currency}|{points.length}|{section}|{range}
       </div>
     );
   }
@@ -44,7 +44,7 @@ vi.mock('../components/results/tabs/QuantPanel', () => {
     points: PropTypes.array,
     currency: PropTypes.string,
     symbol: PropTypes.string,
-    sections: PropTypes.array,
+    section: PropTypes.string,
     range: PropTypes.string,
   };
   return { default: QuantPanelStub };
@@ -56,7 +56,7 @@ describe('Quant page', () => {
     vi.clearAllMocks();
   });
 
-  it('shows the idle prompt and range/tab controls', async () => {
+  it('shows the idle prompt, range buttons and history', async () => {
     render(<Quant />);
 
     expect(screen.getByText(/Search a ticker or load a past analysis/)).toBeTruthy();
@@ -66,18 +66,17 @@ describe('Quant page', () => {
     expect(await screen.findByText('BBCA.JK')).toBeTruthy();
   });
 
-  it('loads a searched ticker into the quant panel', async () => {
+  it('loads a searched ticker on the Overview section', async () => {
     render(<Quant />);
-
     fireEvent.click(screen.getByText('search-submit'));
 
     await waitFor(() =>
-      expect(screen.getByTestId('quant-panel').textContent).toContain('NVDA|USD|1')
+      expect(screen.getByTestId('quant-panel').textContent).toBe('NVDA|USD|1|overview|1Y')
     );
     expect(getMarketOhlcv).toHaveBeenCalledWith('NVDA', expect.objectContaining({ range: '1Y' }));
   });
 
-  it('refetches when the range changes', async () => {
+  it('refetches when the range changes and marks it pressed', async () => {
     render(<Quant />);
     fireEvent.click(screen.getByText('search-submit'));
     await screen.findByTestId('quant-panel');
@@ -87,43 +86,45 @@ describe('Quant page', () => {
     await waitFor(() =>
       expect(getMarketOhlcv).toHaveBeenCalledWith('NVDA', expect.objectContaining({ range: '5Y' }))
     );
+    expect(screen.getByRole('button', { name: '5Y' }).getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('loads a past analysis from the history list', async () => {
+  it('loads a past analysis from the history list and resets the range to 1Y', async () => {
     render(<Quant />);
-
+    fireEvent.click(screen.getByRole('button', { name: '3M' }));
     fireEvent.click(await screen.findByText('BBCA.JK'));
 
     await waitFor(() =>
       expect(screen.getByTestId('quant-panel').textContent).toContain('BBCA.JK|IDR|1')
     );
     expect(fetchAnalysisHistoryResult).toHaveBeenCalledWith('r1', expect.anything());
+    expect(screen.getByTestId('quant-panel').textContent).toContain('|1Y');
   });
 
-  it('passes the range to the panel and marks 1Y after loading a past analysis', async () => {
+  it('navigates sections from the grouped sidebar', async () => {
     render(<Quant />);
     fireEvent.click(screen.getByText('search-submit'));
     await screen.findByTestId('quant-panel');
-    fireEvent.click(screen.getByRole('button', { name: '3M' }));
-    await waitFor(() => expect(screen.getByTestId('quant-panel').textContent).toContain('|3M'));
-    expect(screen.getByRole('button', { name: '3M' }).getAttribute('aria-pressed')).toBe('true');
 
-    fireEvent.click(await screen.findByText('BBCA.JK'));
-    await waitFor(() => expect(screen.getByTestId('quant-panel').textContent).toContain('|1Y'));
-    expect(screen.getByRole('button', { name: '1Y' }).getAttribute('aria-pressed')).toBe('true');
+    const nav = screen.getByRole('navigation', { name: 'Quant sections' });
+    expect(within(nav).getByText('Risk Analytics')).toBeTruthy();
+    fireEvent.click(within(nav).getByRole('button', { name: 'Risk' }));
+
+    expect(screen.getByTestId('quant-panel').textContent).toContain('|risk|');
+    expect(within(nav).getByRole('button', { name: 'Risk' }).getAttribute('aria-current')).toBe(
+      'page'
+    );
+    expect(screen.queryByRole('button', { name: 'All' })).toBeNull();
   });
 
-  it('toggles section visibility including the All switch', async () => {
+  it('collapses the sidebar into an icon rail', async () => {
     render(<Quant />);
     fireEvent.click(screen.getByText('search-submit'));
-    const panel = await screen.findByTestId('quant-panel');
-    expect(panel.textContent).toContain('volatility');
+    await screen.findByTestId('quant-panel');
 
-    fireEvent.click(screen.getByRole('button', { name: /Volatility/ }));
-    expect(screen.getByTestId('quant-panel').textContent).not.toContain('volatility');
-
-    // "All" turns everything off when everything minus one is a mixed state → toggles to all-on.
-    fireEvent.click(screen.getByRole('button', { name: 'All' }));
-    expect(screen.getByTestId('quant-panel').textContent).toContain('volatility');
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Valuation' }));
+    expect(screen.getByTestId('quant-panel').textContent).toContain('|valuation|');
+    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeTruthy();
   });
 });
