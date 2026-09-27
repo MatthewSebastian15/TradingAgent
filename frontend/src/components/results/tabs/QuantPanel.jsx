@@ -741,260 +741,282 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
         <SectionTabs activeId={activeId} onSelect={selectSection} idPrefix={tabsId} />
       )}
 
-      <SectionBlock
-        section="overview"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'overview'}
-      >
-        <OverviewSection
-          symbol={baseSymbol}
-          vol={metrics.vol}
-          benchVol={benchmark.marketVol}
-          regimeLabel={regime.label}
-          dd={metrics.dd}
-          benchMaxDD={benchmark.marketMaxDD}
-          currentDrawdown={ddPoints.at(-1)?.value}
-          underwaterDays={ddStats?.currentUnderwaterDays}
-          var95={metrics.var95}
-          sharpeInfo={sharpeInfo}
-          benchStats={benchmark.stats}
-          benchLabel={benchmarkInfo.label}
-          benchStatus={benchStatus}
-          hurstInfo={hurstInfo}
-          observations={quality.observations}
-          onNavigate={selectSection}
-        />
-      </SectionBlock>
+      {visited.has('overview') && (
+        <SectionBlock
+          section="overview"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'overview'}
+        >
+          <OverviewSection
+            symbol={baseSymbol}
+            vol={metrics.vol}
+            benchVol={benchmark.marketVol}
+            regimeLabel={regime.label}
+            dd={metrics.dd}
+            benchMaxDD={benchmark.marketMaxDD}
+            currentDrawdown={ddPoints.at(-1)?.value}
+            underwaterDays={ddStats?.currentUnderwaterDays}
+            var95={metrics.var95}
+            sharpeInfo={sharpeInfo}
+            benchStats={benchmark.stats}
+            benchLabel={benchmarkInfo.label}
+            benchStatus={benchStatus}
+            hurstInfo={hurstInfo}
+            observations={quality.observations}
+            onNavigate={selectSection}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="volatility"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'volatility'}
-      >
-        <VolatilitySection
-          vol={metrics.vol}
-          ewma={metrics.ewma}
-          ppy={ppy}
-          estimators={volDetail.estimators}
-          cone={volDetail.cone}
-          garch={garch}
-          garchTerm={garchTerm}
-          rollingPoints={rollingPoints}
-          rolling63Points={volDetail.rolling63Points}
-          ewmaPoints={volDetail.ewmaPoints}
-        />
-      </SectionBlock>
+      {visited.has('volatility') && (
+        <SectionBlock
+          section="volatility"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'volatility'}
+        >
+          <VolatilitySection
+            vol={metrics.vol}
+            ewma={metrics.ewma}
+            ppy={ppy}
+            estimators={volDetail.estimators}
+            cone={volDetail.cone}
+            garch={garch}
+            garchTerm={garchTerm}
+            rollingPoints={rollingPoints}
+            rolling63Points={volDetail.rolling63Points}
+            ewmaPoints={volDetail.ewmaPoints}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="risk"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'risk'}
-      >
-        <RiskSection
-          ccy={ccy}
-          rfPct={rf * 100}
-          benchLabel={benchmarkInfo.label}
-          benchAvailable={benchmark.available}
-          returns={returns}
-          closes={closes}
-          ewmaSigma={metrics.ewmaSigma}
-          dd={metrics.dd}
-          cal={metrics.cal}
-          srt={metrics.srt}
-          downDev={metrics.downDev}
-          sharpeInfo={sharpeInfo}
-          obs={returns.length}
-          benchStats={benchmark.stats}
-          ddStats={ddStats}
-          topDD={topDD}
-          ddPoints={ddPoints}
-          rsPoints={rsPoints}
-          rbPoints={benchmark.rollBetaPoints}
-        />
-      </SectionBlock>
+      {visited.has('risk') && (
+        <SectionBlock
+          section="risk"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'risk'}
+        >
+          <RiskSection
+            ccy={ccy}
+            rfPct={rf * 100}
+            benchLabel={benchmarkInfo.label}
+            benchAvailable={benchmark.available}
+            returns={returns}
+            closes={closes}
+            ewmaSigma={metrics.ewmaSigma}
+            dd={metrics.dd}
+            cal={metrics.cal}
+            srt={metrics.srt}
+            downDev={metrics.downDev}
+            sharpeInfo={sharpeInfo}
+            obs={returns.length}
+            benchStats={benchmark.stats}
+            ddStats={ddStats}
+            topDD={topDD}
+            ddPoints={ddPoints}
+            rsPoints={rsPoints}
+            rbPoints={benchmark.rollBetaPoints}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="distribution"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'distribution'}
-      >
-        <DistributionSection
-          skew={metrics.skew}
-          kurt={metrics.kurt}
-          var95={metrics.var95}
-          var99={metrics.var99}
-          cvar95={metrics.cv}
-          histogram={distDetail.histogram}
-          mu={mean(returns)}
-          sigma={stdDev(returns)}
-          jb={distDetail.jb}
-          qq={distDetail.qq}
-          weekday={distDetail.weekday}
-          month={distDetail.month}
-        />
-      </SectionBlock>
+      {visited.has('distribution') && (
+        <SectionBlock
+          section="distribution"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'distribution'}
+        >
+          <DistributionSection
+            skew={metrics.skew}
+            kurt={metrics.kurt}
+            var95={metrics.var95}
+            var99={metrics.var99}
+            cvar95={metrics.cv}
+            histogram={distDetail.histogram}
+            mu={mean(returns)}
+            sigma={stdDev(returns)}
+            jb={distDetail.jb}
+            qq={distDetail.qq}
+            weekday={distDetail.weekday}
+            month={distDetail.month}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="stochastic"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'stochastic'}
-      >
-        <StochasticSection
-          sim={sim}
-          running={simRunning}
-          spot={closes.at(-1)}
-          ccy={ccy}
-          lastDate={historyDates.at(-1)}
-          ppy={ppy}
-          seed={seed}
-          onReroll={() => setSeed((s) => (s + 1) >>> 0)}
-          onSeedChange={(v) => setSeed(Number.isFinite(v) ? v : 0)}
-          horizon={mcHorizon}
-          onHorizonChange={setMcHorizon}
-          horizonLabel={horizonLabel}
-          method={mcMethod}
-          onMethodChange={setMcMethod}
-          drift={mcDrift}
-          onDriftChange={setMcDrift}
-          bootDemean={bootDemean}
-          onBootDemeanChange={setBootDemean}
-          target={mcTarget}
-          onTargetChange={setMcTarget}
-          stop={mcStop}
-          onStopChange={setMcStop}
-          sigmaInfo={sigmaInfo}
-          returnBins={returnBins}
-        />
-      </SectionBlock>
+      {visited.has('stochastic') && (
+        <SectionBlock
+          section="stochastic"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'stochastic'}
+        >
+          <StochasticSection
+            sim={sim}
+            running={simRunning}
+            spot={closes.at(-1)}
+            ccy={ccy}
+            lastDate={historyDates.at(-1)}
+            ppy={ppy}
+            seed={seed}
+            onReroll={() => setSeed((s) => (s + 1) >>> 0)}
+            onSeedChange={(v) => setSeed(Number.isFinite(v) ? v : 0)}
+            horizon={mcHorizon}
+            onHorizonChange={setMcHorizon}
+            horizonLabel={horizonLabel}
+            method={mcMethod}
+            onMethodChange={setMcMethod}
+            drift={mcDrift}
+            onDriftChange={setMcDrift}
+            bootDemean={bootDemean}
+            onBootDemeanChange={setBootDemean}
+            target={mcTarget}
+            onTargetChange={setMcTarget}
+            stop={mcStop}
+            onStopChange={setMcStop}
+            sigmaInfo={sigmaInfo}
+            returnBins={returnBins}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="backtest"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'backtest'}
-      >
-        <BacktestSection
-          strategy={strategy}
-          onStrategyChange={setStrategy}
-          params={btEffective}
-          onParamChange={(k, v) => setBtParams((prev) => ({ ...prev, [k]: v }))}
-          onApplyParams={(p) =>
-            setBtParams((prev) =>
-              strategy === 'meanrev'
-                ? { ...prev, mrLookback: p.lookback }
-                : { ...prev, ...p, oosFrac: prev.oosFrac }
-            )
-          }
-          result={backtestResult}
-          dates={historyDates}
-          closes={closes}
-          rf={rfDaily}
-          ppy={ppy}
-        />
-      </SectionBlock>
+      {visited.has('backtest') && (
+        <SectionBlock
+          section="backtest"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'backtest'}
+        >
+          <BacktestSection
+            strategy={strategy}
+            onStrategyChange={setStrategy}
+            params={btEffective}
+            onParamChange={(k, v) => setBtParams((prev) => ({ ...prev, [k]: v }))}
+            onApplyParams={(p) =>
+              setBtParams((prev) =>
+                strategy === 'meanrev'
+                  ? { ...prev, mrLookback: p.lookback }
+                  : { ...prev, ...p, oosFrac: prev.oosFrac }
+              )
+            }
+            result={backtestResult}
+            dates={historyDates}
+            closes={closes}
+            rf={rfDaily}
+            ppy={ppy}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="sizing"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'sizing'}
-      >
-        <SizingSection
-          key={baseSymbol}
-          kelly={kellyInfo}
-          forecastVol={forecast21 ? forecast21.annualVol : metrics.ewma}
-          forecastSource={forecast21 ? 'GARCH 21d' : 'EWMA'}
-          volTarget={volTarget}
-          onVolTargetChange={setVolTarget}
-          hurstInfo={hurstInfo}
-          adf={adf}
-          ouHL={ouHL}
-          spot={closes.at(-1)}
-          ccy={ccy}
-          symbol={baseSymbol}
-          dailySigma={metrics.ewmaSigma}
-        />
-      </SectionBlock>
+      {visited.has('sizing') && (
+        <SectionBlock
+          section="sizing"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'sizing'}
+        >
+          <SizingSection
+            key={baseSymbol}
+            kelly={kellyInfo}
+            forecastVol={forecast21 ? forecast21.annualVol : metrics.ewma}
+            forecastSource={forecast21 ? 'GARCH 21d' : 'EWMA'}
+            volTarget={volTarget}
+            onVolTargetChange={setVolTarget}
+            hurstInfo={hurstInfo}
+            adf={adf}
+            ouHL={ouHL}
+            spot={closes.at(-1)}
+            ccy={ccy}
+            symbol={baseSymbol}
+            dailySigma={metrics.ewmaSigma}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="correlation"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'correlation'}
-      >
-        <CorrelationSection
-          peerInput={peerInput}
-          onPeerInputChange={setPeerInput}
-          onAddPeers={addPeers}
-          peers={peers}
-          onRemovePeer={removePeer}
-          loading={peerLoading}
-          peerErrors={peerErrors}
-          frequency={corrFreq}
-          onFrequencyChange={setCorrFreq}
-          shrink={corrShrink}
-          onShrinkChange={setCorrShrink}
-          cap={corrCap}
-          onCapChange={setCorrCap}
-          onPairChange={(slot, sym) =>
-            setCorrPair((prev) => (slot === 0 ? [sym, prev[1]] : [prev[0], sym]))
-          }
-          corr={corr}
-        />
-      </SectionBlock>
+      {visited.has('correlation') && (
+        <SectionBlock
+          section="correlation"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'correlation'}
+        >
+          <CorrelationSection
+            peerInput={peerInput}
+            onPeerInputChange={setPeerInput}
+            onAddPeers={addPeers}
+            peers={peers}
+            onRemovePeer={removePeer}
+            loading={peerLoading}
+            peerErrors={peerErrors}
+            frequency={corrFreq}
+            onFrequencyChange={setCorrFreq}
+            shrink={corrShrink}
+            onShrinkChange={setCorrShrink}
+            cap={corrCap}
+            onCapChange={setCorrCap}
+            onPairChange={(slot, sym) =>
+              setCorrPair((prev) => (slot === 0 ? [sym, prev[1]] : [prev[0], sym]))
+            }
+            corr={corr}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="options"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'options'}
-      >
-        <OptionsSection
-          key={baseSymbol}
-          spot={closes.at(-1)}
-          closes={closes}
-          ppy={ppy}
-          defaultRate={rf}
-          ccy={ccy}
-          overview={overview}
-          fallbackVol={metrics.vol}
-        />
-      </SectionBlock>
+      {visited.has('options') && (
+        <SectionBlock
+          section="options"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'options'}
+        >
+          <OptionsSection
+            key={baseSymbol}
+            spot={closes.at(-1)}
+            closes={closes}
+            ppy={ppy}
+            defaultRate={rf}
+            ccy={ccy}
+            overview={overview}
+            fallbackVol={metrics.vol}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="valuation"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'valuation'}
-      >
-        <ValuationSection
-          key={baseSymbol}
-          spot={closes.at(-1)}
-          defaultRate={rf}
-          ccy={ccy}
-          symbol={baseSymbol}
-          overview={overview}
-          overviewError={overviewError}
-          beta={benchmark.beta}
-          peerSymbols={peers.map((p) => p.symbol)}
-        />
-      </SectionBlock>
+      {visited.has('valuation') && (
+        <SectionBlock
+          section="valuation"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'valuation'}
+        >
+          <ValuationSection
+            key={baseSymbol}
+            spot={closes.at(-1)}
+            defaultRate={rf}
+            ccy={ccy}
+            symbol={baseSymbol}
+            overview={overview}
+            overviewError={overviewError}
+            beta={benchmark.beta}
+            peerSymbols={peers.map((p) => p.symbol)}
+          />
+        </SectionBlock>
+      )}
 
-      <SectionBlock
-        section="scenario"
-        tabsId={controlled ? undefined : tabsId}
-        hidden={activeId !== 'scenario'}
-      >
-        <ScenarioSection
-          spot={closes.at(-1)}
-          ccy={ccy}
-          symbol={baseSymbol}
-          ewmaSigma={metrics.ewmaSigma}
-          beta={benchmark.beta}
-          benchLabel={benchmarkInfo.label}
-          benchIsSp500={benchmarkInfo.symbol === '^GSPC'}
-          benchWorst={scenarioDetail.benchWorst}
-          stockWorst={scenarioDetail.stockWorst}
-          regime={regimeShift}
-          pricePoints={scenarioDetail.pricePoints}
-          segments={scenarioDetail.segments}
-        />
-      </SectionBlock>
+      {visited.has('scenario') && (
+        <SectionBlock
+          section="scenario"
+          tabsId={controlled ? undefined : tabsId}
+          hidden={activeId !== 'scenario'}
+        >
+          <ScenarioSection
+            spot={closes.at(-1)}
+            ccy={ccy}
+            symbol={baseSymbol}
+            ewmaSigma={metrics.ewmaSigma}
+            beta={benchmark.beta}
+            benchLabel={benchmarkInfo.label}
+            benchIsSp500={benchmarkInfo.symbol === '^GSPC'}
+            benchWorst={scenarioDetail.benchWorst}
+            stockWorst={scenarioDetail.stockWorst}
+            regime={regimeShift}
+            pricePoints={scenarioDetail.pricePoints}
+            segments={scenarioDetail.segments}
+          />
+        </SectionBlock>
+      )}
     </div>
   );
 }
