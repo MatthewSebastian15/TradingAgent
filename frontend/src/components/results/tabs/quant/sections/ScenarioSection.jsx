@@ -3,9 +3,9 @@ import { useMemo, useState } from 'react';
 
 import NoticeBox from '../../../NoticeBox';
 import { marketKeyForSymbol, stressTable } from '../../quantUtils';
-import { MetricCard, NumberField } from '../charts';
+import { NumberField } from '../charts';
 import { DASH, finite, fmtSignedPct } from '../format';
-import { CARD_GRID, FIELD_GRID } from '../layout';
+import { FIELD_GRID } from '../layout';
 import { fmtMoney } from '../numberFormat';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
@@ -16,8 +16,6 @@ const REGIME_COLORS = {
   Normal: '#525252',
   Stressed: CHART_COLORS.warning,
 };
-const regimeTone = (label) =>
-  label === 'Stressed' ? 'bad' : label === 'Calm' ? 'good' : 'neutral';
 
 export function ScenarioSection({
   spot,
@@ -132,31 +130,17 @@ export function ScenarioSection({
 
       <div className="space-y-2">
         {regime ? (
-          <div className={CARD_GRID}>
-            <MetricCard
-              label="Current Regime"
-              value={regime.current}
-              tone={regimeTone(regime.current)}
-              gloss="Rolling-vol bucket vs this series' own history, confirmed after 5 readings."
-            />
-            <MetricCard
-              label="Days in Regime"
-              value={`${regime.daysSince}d`}
-              gloss="Periods since the last confirmed change."
-            />
-            <MetricCard
-              label="Recent Shifts"
-              value={String(regime.shifts.length)}
-              gloss={
-                regime.shifts.length
-                  ? `Latest: ${regime.shifts
-                      .slice(-3)
-                      .map((s) => `${s.from}→${s.to}`)
-                      .join(', ')}`
-                  : 'No confirmed shifts.'
-              }
-            />
-          </div>
+          <p className="text-[11px] text-bloomberg-white/80">
+            Today&apos;s regime is the <span className="text-white">Vol Regime</span> reading in the
+            headline. Confirmed shifts in this window: {regime.shifts.length}
+            {regime.shifts.length > 0
+              ? ` (latest: ${regime.shifts
+                  .slice(-3)
+                  .map((s) => `${s.from} → ${s.to}`)
+                  .join(', ')})`
+              : ''}
+            .
+          </p>
         ) : (
           <NoticeBox title="Regime">Not enough history to detect regime shifts.</NoticeBox>
         )}

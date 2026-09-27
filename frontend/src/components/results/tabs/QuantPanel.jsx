@@ -904,7 +904,6 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
           forecastSource={forecast21 ? 'GARCH 21d' : 'EWMA'}
           volTarget={volTarget}
           onVolTargetChange={setVolTarget}
-          regime={regime}
           hurstInfo={hurstInfo}
           adf={adf}
           ouHL={ouHL}

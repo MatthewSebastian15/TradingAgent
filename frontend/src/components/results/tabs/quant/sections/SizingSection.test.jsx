@@ -10,7 +10,6 @@ const baseProps = {
   forecastSource: 'GARCH 21d',
   volTarget: 15,
   onVolTargetChange: vi.fn(),
-  regime: { label: 'Normal', tone: 'neutral' },
   hurstInfo: { hurst: 0.52, standardError: 0.04, significant: false, windows: 6 },
   adf: { tStat: -1.2, stationaryAt5: false, critical: { '5%': -2.86 } },
   ouHL: 12,
@@ -40,5 +39,10 @@ describe('SizingSection', () => {
     fireEvent.change(screen.getByLabelText(/Stop/), { target: { value: '8550' } });
     expect(screen.getByText('22')).toBeTruthy();
     expect(screen.getByText('Lot size: 100 shares')).toBeTruthy();
+  });
+
+  it('does not repeat the volatility regime', () => {
+    render(<SizingSection {...baseProps} />);
+    expect(screen.queryByText('Vol regime')).toBeNull();
   });
 });

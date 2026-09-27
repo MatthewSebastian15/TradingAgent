@@ -21,7 +21,6 @@ export function SizingSection({
   forecastSource,
   volTarget,
   onVolTargetChange,
-  regime,
   hurstInfo,
   adf,
   ouHL,
@@ -51,11 +50,6 @@ export function SizingSection({
   });
 
   const diagnostics = [
-    {
-      metric: 'Vol regime',
-      value: regime.label,
-      reading: 'Current rolling vol vs this series’ own history.',
-    },
     {
       metric: 'Hurst exponent',
       value: hurstInfo ? `${fmtNum2(hurstInfo.hurst)} ± ${fmtNum2(hurstInfo.standardError)}` : DASH,
@@ -186,7 +180,6 @@ SizingSection.propTypes = {
   forecastSource: PropTypes.string.isRequired,
   volTarget: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
   onVolTargetChange: PropTypes.func.isRequired,
-  regime: PropTypes.shape({ label: PropTypes.string, tone: PropTypes.string }).isRequired,
   hurstInfo: PropTypes.object,
   adf: PropTypes.object,
   ouHL: PropTypes.number,

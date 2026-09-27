@@ -65,6 +65,7 @@ describe('ScenarioSection', () => {
   it('draws the regime timeline over price', () => {
     render(<ScenarioSection {...baseProps} />);
     expect(screen.getByRole('img', { name: 'Price with volatility regime timeline' })).toBeTruthy();
-    expect(screen.getAllByText('Stressed').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Calm → Stressed/)).toBeTruthy();
+    expect(screen.queryByText('Current Regime')).toBeNull();
   });
 });
