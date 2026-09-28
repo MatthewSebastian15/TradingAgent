@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import PropTypes from 'prop-types';
+import { useState } from 'react';
 
 import TickerSearchBar from '../../../../TickerSearchBar';
 import NoticeBox from '../../../NoticeBox';
@@ -46,6 +47,12 @@ export function CorrelationSection({
 }) {
   const { symbols, portfolios } = corr;
   const unit = frequency === 'weekly' ? 'weekly' : 'daily';
+  // Remount after every add so the search box clears instead of keeping the picked symbol.
+  const [inputKey, setInputKey] = useState(0);
+  const addAndClear = (list) => {
+    onAddPeers(list);
+    setInputKey((k) => k + 1);
+  };
 
   return (
     <div className="space-y-4">
@@ -58,10 +65,11 @@ export function CorrelationSection({
       <div className="flex flex-wrap items-center gap-2">
         <div className="w-full max-w-xs">
           <TickerSearchBar
+            key={inputKey}
             value=""
-            onSelect={(item) => onAddPeers([String(item.symbol).toUpperCase()])}
+            onSelect={(item) => addAndClear([String(item.symbol).toUpperCase()])}
             onClear={() => {}}
-            onSubmit={(raw) => onAddPeers(parseSymbols(raw))}
+            onSubmit={(raw) => addAndClear(parseSymbols(raw))}
             placeholder="Add peer ticker"
           />
         </div>
