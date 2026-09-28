@@ -30,7 +30,10 @@ const props = {
 };
 
 describe('ValuationSection', () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+  });
 
   it('values the company with CAPM WACC, reverse DCF and cash-flow table once fundamentals arrive', async () => {
     const { rerender } = render(<ValuationSection {...props} overview={null} />);
@@ -134,5 +137,25 @@ describe('ValuationSection', () => {
     fireEvent.change(fcfField(), { target: { value: '1500' } });
     fireEvent.click(screen.getByRole('button', { name: 'Reset Base FCF' }));
     expect(fcfField().value).toBe('2000');
+  });
+
+  it('restores and saves DCF assumptions for the ticker', async () => {
+    window.localStorage.setItem(
+      'ta:quant:preset:v1:dcf:AAPL',
+      JSON.stringify({ years: 7, fadeYears: 2, terminalGrowth: 2, midYear: false })
+    );
+    render(<ValuationSection {...props} overview={fundamentals} />);
+    expect(screen.getByRole('spinbutton', { name: /^Years/ }).value).toBe('7');
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Terminal growth/ }), {
+      target: { value: '3' },
+    });
+    expect(JSON.parse(window.localStorage.getItem('ta:quant:preset:v1:dcf:AAPL')).terminalGrowth).toBe(
+      3
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear saved inputs', hidden: true }));
+    expect(window.localStorage.getItem('ta:quant:preset:v1:dcf:AAPL')).not.toContain('"years":7');
+    expect(screen.getByRole('spinbutton', { name: /^Years/ }).value).toBe('5');
   });
 });

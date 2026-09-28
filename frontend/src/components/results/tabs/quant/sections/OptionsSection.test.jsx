@@ -13,10 +13,14 @@ const props = {
   ccy: 'USD',
   overview: { div_rate: 2 },
   fallbackVol: 25,
+  symbol: 'AAPL',
 };
 
 describe('OptionsSection', () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+  });
 
   it('shows call and put side by side with probability of finishing in the money', () => {
     render(<OptionsSection {...props} />);
@@ -48,5 +52,16 @@ describe('OptionsSection', () => {
     );
     expect(screen.getByText('Strike must be greater than 0.')).toBeTruthy();
     expect(screen.queryByText('Call vs put')).toBeNull();
+  });
+
+  it('remembers expiry and option type per ticker', () => {
+    window.localStorage.setItem(
+      'ta:quant:preset:v1:options:AAPL',
+      JSON.stringify({ days: 90, type: 'put' })
+    );
+    render(<OptionsSection {...props} />);
+    expect(screen.getByRole('spinbutton', { name: /Days to expiry/ }).value).toBe('90');
+    expect(screen.getByRole('button', { name: 'Put' }).getAttribute('aria-pressed')).toBe('true');
+    window.localStorage.clear();
   });
 });

@@ -34,6 +34,7 @@ describe('QuantPanel', () => {
     // Tests below swap the OHLCV mock; restore the default so a failure cannot leak it.
     const { getMarketOhlcv } = await import('../../../api/market');
     getMarketOhlcv.mockImplementation(async () => ({ points: [] }));
+    window.localStorage.clear();
   });
 
   it('shows the loading skeleton when no points have streamed in yet', async () => {
@@ -303,6 +304,14 @@ describe('QuantPanel', () => {
       'true'
     );
     window.history.replaceState(null, '', '/');
+  });
+
+  it('restores and saves the peer list per ticker', async () => {
+    const { getMarketOhlcv } = await import('../../../api/market');
+    window.localStorage.setItem('ta:quant:preset:v1:peers:AAPL', '["MSFT"]');
+    getMarketOhlcv.mockClear();
+    await renderPanel({ points: buildPoints(40), section: 'correlation', range: '1Y' });
+    expect(getMarketOhlcv).toHaveBeenCalledWith('MSFT', expect.objectContaining({ range: '1Y' }));
   });
 });
 

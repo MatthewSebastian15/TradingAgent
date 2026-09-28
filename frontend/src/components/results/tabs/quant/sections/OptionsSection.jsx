@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import NoticeBox from '../../../NoticeBox';
 import {
@@ -15,6 +15,7 @@ import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtNum2, fmtPercent } from '../format';
 import { FIELD_GRID } from '../layout';
 import { currencyDecimals, fmtMoney } from '../numberFormat';
+import { loadPreset, savePreset } from '../presets';
 import { SegmentedControl } from '../SegmentedControl';
 import { validateOptions } from '../validation';
 import { CHART_COLORS } from '../viz/chartTheme';
@@ -36,15 +37,29 @@ const IV_REASONS = {
   invalid_input: 'Check strike, days to expiry and price.',
 };
 
-export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, fallbackVol }) {
+export function OptionsSection({
+  spot,
+  closes,
+  ppy,
+  defaultRate,
+  ccy,
+  overview,
+  fallbackVol,
+  symbol,
+}) {
   const decimals = currencyDecimals(ccy);
+  const [preset] = useState(() => loadPreset('options', symbol) || {});
   const [strike, setStrike] = useState(Number(spot.toFixed(decimals)));
-  const [days, setDays] = useState(30);
-  const [volInput, setVolInput] = useState('');
-  const [rate, setRate] = useState(Number((defaultRate * 100).toFixed(2)));
-  const [yieldInput, setYieldInput] = useState('');
-  const [type, setType] = useState('call');
+  const [days, setDays] = useState(preset.days ?? 30);
+  const [volInput, setVolInput] = useState(preset.volInput ?? '');
+  const [rate, setRate] = useState(preset.rate ?? Number((defaultRate * 100).toFixed(2)));
+  const [yieldInput, setYieldInput] = useState(preset.yieldInput ?? '');
+  const [type, setType] = useState(preset.type === 'put' ? 'put' : 'call');
   const [marketPrice, setMarketPrice] = useState('');
+
+  useEffect(() => {
+    savePreset('options', symbol, { days, volInput, rate, yieldInput, type });
+  }, [symbol, days, volInput, rate, yieldInput, type]);
 
   const autoVol = useMemo(() => {
     const v = trailingVol(closes, Number(days) || 30, ppy);
@@ -306,4 +321,5 @@ OptionsSection.propTypes = {
   ccy: PropTypes.string,
   overview: PropTypes.object,
   fallbackVol: PropTypes.number,
+  symbol: PropTypes.string.isRequired,
 };

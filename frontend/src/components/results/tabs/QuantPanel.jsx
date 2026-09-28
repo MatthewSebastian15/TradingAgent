@@ -19,6 +19,7 @@ import {
 } from './quant/config';
 import { regimeLabel } from './quant/format';
 import { dataStatus } from './quant/interpret';
+import { loadPreset, savePreset } from './quant/presets';
 import { BacktestSection } from './quant/sections/BacktestSection';
 import { ContextBar } from './quant/sections/ContextBar';
 import { CorrelationSection } from './quant/sections/CorrelationSection';
@@ -178,14 +179,6 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange,
   // duplicate) the base series.
   // The controller also lets an in-flight peer fetch see that its window/symbol went stale.
   const peerController = useRef(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    peerController.current = controller;
-    setPeers([]);
-    setPeerLoading(false);
-    setPeerErrors([]);
-    return () => controller.abort();
-  }, [fetchRange, symbol]);
 
   // Fetch a longer history than the 1Y analysis chart; fall back to the prop on failure.
   // Skipped when `range` is set (Quant page) — the caller already fetched that window.
@@ -554,6 +547,11 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange,
           const have = new Set(prev.map((p) => p.symbol));
           return [...prev, ...fetched.filter((p) => !have.has(p.symbol))];
         });
+        const have = new Set(peers.map((p) => p.symbol));
+        savePreset('peers', baseSymbol, [
+          ...peers.map((p) => p.symbol),
+          ...fetched.map((p) => p.symbol).filter((s) => !have.has(s)),
+        ]);
         setPeerErrors(errors);
       })
       .finally(() => {
@@ -561,9 +559,29 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange,
       });
   };
 
+  // Peers belong to one ticker and one window: reset, then restore this ticker's saved list.
+  useEffect(() => {
+    const controller = new AbortController();
+    peerController.current = controller;
+    setPeers([]);
+    setPeerLoading(false);
+    setPeerErrors([]);
+    const saved = loadPreset('peers', baseSymbol);
+    if (Array.isArray(saved) && saved.length > 0) addPeers(saved);
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per ticker/window, not per addPeers identity
+  }, [baseSymbol, fetchRange]);
+
   const removePeer = useCallback(
-    (sym) => setPeers((prev) => prev.filter((p) => p.symbol !== sym)),
-    []
+    (sym) => {
+      setPeers((prev) => prev.filter((p) => p.symbol !== sym));
+      savePreset(
+        'peers',
+        baseSymbol,
+        peers.map((p) => p.symbol).filter((s) => s !== sym)
+      );
+    },
+    [peers, baseSymbol]
   );
 
   // Align base + peers on common days; compute correlation matrix + optimizer.
@@ -974,6 +992,7 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange,
         >
           <OptionsSection
             key={baseSymbol}
+            symbol={baseSymbol}
             spot={closes.at(-1)}
             closes={closes}
             ppy={ppy}

@@ -19,6 +19,7 @@ import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtNum2, fmtPercent, fmtSignedPct, signedTone } from '../format';
 import { CARD_GRID, FIELD_GRID } from '../layout';
 import { fmtMoney, fmtMoneyCompact } from '../numberFormat';
+import { clearPreset, loadPreset, savePreset } from '../presets';
 import { useDebouncedValue } from '../useDebouncedValue';
 import { usePeerOverviews } from '../usePeerOverviews';
 import { validateDcf } from '../validation';
@@ -39,26 +40,70 @@ export function ValuationSection({
   beta,
   peerSymbols,
 }) {
-  const [growthSource, setGrowthSource] = useState('revenue');
+  const [preset] = useState(() => loadPreset('dcf', symbol) || {});
+  const [growthSource, setGrowthSource] = useState(preset.growthSource ?? 'revenue');
   const [fcf, setFcf] = useState('');
   const [growth, setGrowth] = useState(8);
-  const [years, setYears] = useState(5);
-  const [fadeYears, setFadeYears] = useState(3);
-  const [midYear, setMidYear] = useState(true);
-  const [terminalGrowth, setTerminalGrowth] = useState(2.5);
+  const [years, setYears] = useState(preset.years ?? 5);
+  const [fadeYears, setFadeYears] = useState(preset.fadeYears ?? 3);
+  const [midYear, setMidYear] = useState(preset.midYear ?? true);
+  const [terminalGrowth, setTerminalGrowth] = useState(preset.terminalGrowth ?? 2.5);
   const [shares, setShares] = useState('');
   const [netDebt, setNetDebt] = useState(0);
   const [fxRate, setFxRate] = useState('');
-  const [useCapm, setUseCapm] = useState(true);
+  const [useCapm, setUseCapm] = useState(preset.useCapm ?? true);
   const [waccManual, setWaccManual] = useState(
-    Number(Math.max(8, defaultRate * 100 + 5).toFixed(1))
+    preset.waccManual ?? Number(Math.max(8, defaultRate * 100 + 5).toFixed(1))
   );
-  const [erp, setErp] = useState(5);
-  const [costOfDebt, setCostOfDebt] = useState(Number((defaultRate * 100 + 2).toFixed(1)));
-  const [taxRate, setTaxRate] = useState(22);
+  const [erp, setErp] = useState(preset.erp ?? 5);
+  const [costOfDebt, setCostOfDebt] = useState(
+    preset.costOfDebt ?? Number((defaultRate * 100 + 2).toFixed(1))
+  );
+  const [taxRate, setTaxRate] = useState(preset.taxRate ?? 22);
   const [showMC, setShowMC] = useState(false);
   const [editedFields, setEditedFields] = useState(() => new Set());
   const [auto, setAuto] = useState({});
+
+  useEffect(() => {
+    savePreset('dcf', symbol, {
+      growthSource,
+      years,
+      fadeYears,
+      terminalGrowth,
+      midYear,
+      useCapm,
+      waccManual,
+      erp,
+      costOfDebt,
+      taxRate,
+    });
+  }, [
+    symbol,
+    growthSource,
+    years,
+    fadeYears,
+    terminalGrowth,
+    midYear,
+    useCapm,
+    waccManual,
+    erp,
+    costOfDebt,
+    taxRate,
+  ]);
+
+  const clearSaved = () => {
+    clearPreset('dcf', symbol);
+    setGrowthSource('revenue');
+    setYears(5);
+    setFadeYears(3);
+    setMidYear(true);
+    setTerminalGrowth(2.5);
+    setUseCapm(true);
+    setWaccManual(Number(Math.max(8, defaultRate * 100 + 5).toFixed(1)));
+    setErp(5);
+    setCostOfDebt(Number((defaultRate * 100 + 2).toFixed(1)));
+    setTaxRate(22);
+  };
 
   const mismatch = reportingCurrencyMismatch(overview, ccy);
   const edit = (field, setter) => (value) => {
@@ -396,6 +441,13 @@ export function ValuationSection({
             />
             Mid-year discounting
           </label>
+          <button
+            type="button"
+            onClick={clearSaved}
+            className="rounded-none border border-bloomberg-border px-2 py-1 text-[11px] text-bloomberg-white/80 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
+          >
+            Clear saved inputs
+          </button>
         </div>
       </AdvancedPanel>
 
