@@ -145,7 +145,6 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
     oosFrac: 0,
   });
   const [volTarget, setVolTarget] = useState(VOL_TARGET);
-  const [peerInput, setPeerInput] = useState('');
   const [peers, setPeers] = useState([]); // [{ symbol, points }]
   const [peerLoading, setPeerLoading] = useState(false);
   const [peerErrors, setPeerErrors] = useState([]);
@@ -169,7 +168,6 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
     const controller = new AbortController();
     peerController.current = controller;
     setPeers([]);
-    setPeerInput('');
     setPeerLoading(false);
     setPeerErrors([]);
     return () => controller.abort();
@@ -506,10 +504,8 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
 
   // Plain function: the React Compiler memoizes it; a manual dep list here made
   // the compiler bail (react-hooks/preserve-manual-memoization).
-  const addPeers = () => {
-    const wanted = peerInput
-      .split(/[,\s]+/)
-      .map((s) => s.trim().toUpperCase())
+  const addPeers = (list) => {
+    const wanted = [...new Set(list.map((s) => s.trim().toUpperCase()))]
       .filter(Boolean)
       .filter((s) => s !== baseSymbol);
     if (wanted.length === 0) return;
@@ -544,7 +540,6 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
           return [...prev, ...fetched.filter((p) => !have.has(p.symbol))];
         });
         setPeerErrors(errors);
-        setPeerInput('');
       })
       .finally(() => {
         if (!signal.aborted) setPeerLoading(false);
@@ -937,8 +932,6 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
           hidden={activeId !== 'correlation'}
         >
           <CorrelationSection
-            peerInput={peerInput}
-            onPeerInputChange={setPeerInput}
             onAddPeers={addPeers}
             peers={peers}
             onRemovePeer={removePeer}

@@ -8,6 +8,8 @@ vi.mock('../../../api/market', () => ({
   getApiStatus: vi.fn(async () => ({})),
   getMarketOhlcv: vi.fn(async () => ({ points: [] })),
   getStockOverview: vi.fn(async () => ({})),
+  searchMarketTickers: vi.fn(async () => []),
+  getMarketSearchWarmup: vi.fn(async () => ({})),
 }));
 
 function buildPoints(count) {
@@ -90,19 +92,6 @@ describe('QuantPanel', () => {
     expect(screen.queryByText('Fair Value / Share')).toBeNull();
   });
 
-  it('clears the typed peer text when the range changes', async () => {
-    const props = { points: buildPoints(40), section: 'correlation', currency: 'USD' };
-    const { rerender } = render(<QuantPanel symbol="AAPL" range="1Y" {...props} />);
-    await act(async () => {});
-    const input = screen.getByPlaceholderText(/Add peers/);
-    fireEvent.change(input, { target: { value: 'MSFT' } });
-    expect(input.value).toBe('MSFT');
-
-    rerender(<QuantPanel symbol="AAPL" range="3M" {...props} />);
-    await act(async () => {});
-    expect(screen.getByPlaceholderText(/Add peers/).value).toBe('');
-  });
-
   it('derives Last and Window from rows with a usable price, falling back to close', async () => {
     const pts = [
       ...buildPoints(40),
@@ -115,7 +104,7 @@ describe('QuantPanel', () => {
     expect(screen.getByText('2026-01-01 → 2026-02-14 · 41 obs')).toBeTruthy();
   });
 
-  it('clears peers and the typed peer text when the base symbol changes', async () => {
+  it('clears peers when the base symbol changes', async () => {
     const { getMarketOhlcv } = await import('../../../api/market');
     getMarketOhlcv.mockImplementation(async (sym) =>
       sym === 'MSFT' ? { points: buildPoints(40) } : { points: [] }
@@ -123,17 +112,15 @@ describe('QuantPanel', () => {
     const props = { points: buildPoints(40), section: 'correlation', currency: 'USD' };
     const { rerender } = render(<QuantPanel symbol="AAPL" range="1Y" {...props} />);
     await act(async () => {});
-    const input = screen.getByPlaceholderText(/Add peers/);
+    const input = screen.getByPlaceholderText('Add peer ticker');
     fireEvent.change(input, { target: { value: 'MSFT' } });
-    fireEvent.click(screen.getByRole('button', { name: /add/i }));
+    fireEvent.keyDown(input, { key: 'Enter' });
     await act(async () => {});
     expect(screen.getAllByText('MSFT').length).toBeGreaterThan(0);
-    fireEvent.change(screen.getByPlaceholderText(/Add peers/), { target: { value: 'NVDA' } });
 
     rerender(<QuantPanel symbol="GOOG" range="1Y" {...props} />);
     await act(async () => {});
     expect(screen.queryAllByText('MSFT')).toHaveLength(0);
-    expect(screen.getByPlaceholderText(/Add peers/).value).toBe('');
     getMarketOhlcv.mockImplementation(async () => ({ points: [] }));
   });
 
@@ -150,8 +137,9 @@ describe('QuantPanel', () => {
     const props = { points: buildPoints(40), section: 'correlation', currency: 'USD' };
     const { rerender } = render(<QuantPanel symbol="AAPL" range="1Y" {...props} />);
     await act(async () => {});
-    fireEvent.change(screen.getByPlaceholderText(/Add peers/), { target: { value: 'MSFT' } });
-    fireEvent.click(screen.getByRole('button', { name: /add/i }));
+    const input = screen.getByPlaceholderText('Add peer ticker');
+    fireEvent.change(input, { target: { value: 'MSFT' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
 
     rerender(<QuantPanel symbol="GOOG" range="1Y" {...props} />);
     await act(async () => {});
@@ -170,8 +158,9 @@ describe('QuantPanel', () => {
       return { points: [] };
     });
     await renderPanel({ points: buildPoints(40), section: 'correlation' });
-    fireEvent.change(screen.getByPlaceholderText(/Add peers/), { target: { value: 'ZZZZ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const input = screen.getByPlaceholderText('Add peer ticker');
+    fireEvent.change(input, { target: { value: 'ZZZZ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     expect(await screen.findByText('ZZZZ: Unknown symbol')).toBeTruthy();
     getMarketOhlcv.mockImplementation(async () => ({ points: [] }));
   });

@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import PropTypes from 'prop-types';
 
+import TickerSearchBar from '../../../../TickerSearchBar';
 import NoticeBox from '../../../NoticeBox';
 import { AdvancedPanel } from '../AdvancedPanel';
 import { NumberField } from '../charts';
@@ -22,9 +23,13 @@ const PORTFOLIO_COLORS = {
   equal: CHART_COLORS.secondary,
 };
 
+const parseSymbols = (raw) =>
+  String(raw || '')
+    .split(/[,\s]+/)
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+
 export function CorrelationSection({
-  peerInput,
-  onPeerInputChange,
   onAddPeers,
   peers,
   onRemovePeer,
@@ -51,22 +56,15 @@ export function CorrelationSection({
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="text"
-          value={peerInput}
-          onChange={(e) => onPeerInputChange(e.target.value.toUpperCase())}
-          onKeyDown={(e) => e.key === 'Enter' && onAddPeers()}
-          placeholder="Add peers e.g. MSFT, NVDA"
-          aria-label="Peer tickers"
-          className="h-8 w-56 rounded-none border border-bloomberg-border bg-black px-2 font-mono text-xs tracking-wider text-white placeholder:text-bloomberg-white/50"
-        />
-        <button
-          type="button"
-          onClick={onAddPeers}
-          className="h-8 rounded-none border border-bloomberg-border px-3 font-mono text-[11px] tracking-wider text-bloomberg-white/80 hover:text-white"
-        >
-          Add
-        </button>
+        <div className="w-full max-w-xs">
+          <TickerSearchBar
+            value=""
+            onSelect={(item) => onAddPeers([String(item.symbol).toUpperCase()])}
+            onClear={() => {}}
+            onSubmit={(raw) => onAddPeers(parseSymbols(raw))}
+            placeholder="Add peer ticker"
+          />
+        </div>
         {loading && <span className="font-mono text-[11px] text-bloomberg-amber">FETCHING…</span>}
         {peers.map((p) => (
           <button
@@ -302,8 +300,6 @@ export function CorrelationSection({
 }
 
 CorrelationSection.propTypes = {
-  peerInput: PropTypes.string.isRequired,
-  onPeerInputChange: PropTypes.func.isRequired,
   onAddPeers: PropTypes.func.isRequired,
   peers: PropTypes.arrayOf(PropTypes.object).isRequired,
   onRemovePeer: PropTypes.func.isRequired,

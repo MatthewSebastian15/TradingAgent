@@ -4,6 +4,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CorrelationSection } from './CorrelationSection';
 
+vi.mock('../../../../TickerSearchBar', () => ({
+  // eslint-disable-next-line react/prop-types
+  default: function TickerSearchBarStub({ onSelect, onSubmit, placeholder }) {
+    return (
+      <div>
+        <span>{placeholder}</span>
+        <button type="button" onClick={() => onSelect({ symbol: 'NVDA' })}>
+          pick-nvda
+        </button>
+        <button type="button" onClick={() => onSubmit('amd, intc')}>
+          submit-raw
+        </button>
+      </div>
+    );
+  },
+}));
+
 const portfolios = [
   { id: 'gmv', label: 'Min-variance', weights: [0.7, 0.3], ret: 8, vol: 18, sharpe: 0.3 },
   {
@@ -42,8 +59,6 @@ const corr = {
 
 function renderSection(overrides = {}) {
   const props = {
-    peerInput: '',
-    onPeerInputChange: vi.fn(),
     onAddPeers: vi.fn(),
     peers: [{ symbol: 'MSFT', points: [] }],
     onRemovePeer: vi.fn(),
@@ -129,5 +144,14 @@ describe('CorrelationSection', () => {
     });
     expect(screen.getByText('No long-only max-Sharpe portfolio either')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Efficient frontier' })).toBeTruthy();
+  });
+
+  it('adds peers from autocomplete picks and typed lists', () => {
+    const props = renderSection();
+    fireEvent.click(screen.getByText('pick-nvda'));
+    expect(props.onAddPeers).toHaveBeenCalledWith(['NVDA']);
+    fireEvent.click(screen.getByText('submit-raw'));
+    expect(props.onAddPeers).toHaveBeenLastCalledWith(['AMD', 'INTC']);
+    expect(screen.getByText('Add peer ticker')).toBeTruthy();
   });
 });
