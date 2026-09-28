@@ -77,7 +77,10 @@ export function OverviewSection({
       { label: 'From Peak', value: finite(currentDrawdown) ? fmtLoss(currentDrawdown) : DASH },
       { label: 'VaR 95% (1D)', value: fmtLoss(var95) },
       { label: `Beta vs ${benchLabel}`, value: fmtNum2(benchStats?.beta) },
-      { label: 'Alpha (ann.)', value: finite(benchStats?.alpha) ? fmtSignedPct(benchStats.alpha) : DASH },
+      {
+        label: 'Alpha (ann.)',
+        value: finite(benchStats?.alpha) ? fmtSignedPct(benchStats.alpha) : DASH,
+      },
       { label: 'Hurst', value: fmtNum2(hurstInfo?.hurst) },
       { label: 'Observations', value: finite(observations) ? String(observations) : DASH },
     ],

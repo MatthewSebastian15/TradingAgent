@@ -160,14 +160,21 @@ export function ChartFrame({
         <button
           type="button"
           aria-label={`Download ${name} as CSV`}
-          onClick={() => downloadText(`${exportFilename(name)}.csv`, toCsv(table.columns, table.rows))}
+          onClick={() =>
+            downloadText(`${exportFilename(name)}.csv`, toCsv(table.columns, table.rows))
+          }
           className={TOOL}
         >
           <Download className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       )}
       {!tableView && !isEmpty && (
-        <button type="button" aria-label={`Download ${name} as PNG`} onClick={exportPng} className={TOOL}>
+        <button
+          type="button"
+          aria-label={`Download ${name} as PNG`}
+          onClick={exportPng}
+          className={TOOL}
+        >
           <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       )}
@@ -218,7 +225,9 @@ export function ChartFrame({
             {exportError}
           </p>
         )}
-        {note && <figcaption className="mt-2 text-[11px] text-bloomberg-white/80">{note}</figcaption>}
+        {note && (
+          <figcaption className="mt-2 text-[11px] text-bloomberg-white/80">{note}</figcaption>
+        )}
       </figure>
     );
   }

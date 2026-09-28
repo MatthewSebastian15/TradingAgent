@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildQuantSnapshot, chatbotPrompt, dataStatus, interpretSummary, snapshotText } from './interpret';
+import {
+  buildQuantSnapshot,
+  chatbotPrompt,
+  dataStatus,
+  interpretSummary,
+  snapshotText,
+} from './interpret';
 
 describe('interpretSummary', () => {
   it('reads volatility, drawdown, beta and Sharpe in plain language', () => {

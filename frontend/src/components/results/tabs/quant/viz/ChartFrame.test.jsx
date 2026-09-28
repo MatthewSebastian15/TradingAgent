@@ -390,7 +390,9 @@ describe('ChartFrame toolbar', () => {
     const { downloadBlob, svgToPngBlob } = await import('../exporters');
     render(<ChartFrame {...baseProps} />);
     fireEvent.click(screen.getByRole('button', { name: 'Download Test chart as PNG' }));
-    await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith('Test-chart.png', expect.any(Blob)));
+    await waitFor(() =>
+      expect(downloadBlob).toHaveBeenCalledWith('Test-chart.png', expect.any(Blob))
+    );
     expect(svgToPngBlob.mock.calls[0][0].tagName.toLowerCase()).toBe('svg');
   });
 });
