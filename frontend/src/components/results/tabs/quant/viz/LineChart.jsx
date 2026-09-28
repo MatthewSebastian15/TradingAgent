@@ -12,6 +12,7 @@ import {
   timeToIso,
   toTime,
 } from './chartScale';
+import { seriesTable } from './chartTable';
 
 const fmt1 = (n) => n.toFixed(1);
 const pt = (x, y) => `${fmt1(x)},${fmt1(y)}`;
@@ -107,6 +108,7 @@ export function LineChart({
       };
     })
     .filter((s) => s.valid.length > 0);
+  const table = seriesTable(lines, { formatX: fmtX, formatY, xLabel: isDate ? 'Date' : 'Value' });
   const areas = bands
     .map((b) => {
       const pts = (b.points || [])
@@ -363,6 +365,7 @@ export function LineChart({
       isEmpty={isEmpty}
       emptyMessage={emptyMessage}
       note={note}
+      table={table}
     />
   );
 }

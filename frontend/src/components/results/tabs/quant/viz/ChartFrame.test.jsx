@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -352,5 +352,45 @@ describe('ChartFrame', () => {
     fireEvent.mouseMove(svg, { clientX: 300, clientY: 100 });
     fireEvent.mouseMove(svg, { clientX: 400, clientY: 100 });
     expect(renderPlot.mock.calls.length).toBe(before);
+  });
+});
+
+vi.mock('../exporters', async (importOriginal) => ({
+  ...(await importOriginal()),
+  downloadText: vi.fn(),
+  downloadBlob: vi.fn(),
+  svgToPngBlob: vi.fn(async () => new Blob(['png'])),
+}));
+
+describe('ChartFrame toolbar', () => {
+  afterEach(() => cleanup());
+
+  const table = {
+    columns: [
+      { key: 'x', label: 'Date', render: (r) => r.x },
+      { key: 'y', label: 'Value', align: 'right', render: (r) => String(r.y) },
+    ],
+    rows: [{ x: '2026-01-02', y: 5 }],
+  };
+
+  it('switches to a data table and exports CSV', async () => {
+    const { downloadText } = await import('../exporters');
+    render(<ChartFrame {...baseProps} table={table} />);
+    const toggle = screen.getByRole('button', { name: 'View Test chart as table' });
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.queryByRole('img', { name: 'test chart' })).toBeNull();
+    expect(screen.getByText('2026-01-02')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Download Test chart as CSV' }));
+    expect(downloadText).toHaveBeenCalledWith('Test-chart.csv', 'Date,Value\r\n2026-01-02,5');
+    expect(screen.queryByRole('button', { name: 'Download Test chart as PNG' })).toBeNull();
+  });
+
+  it('exports the chart as PNG', async () => {
+    const { downloadBlob, svgToPngBlob } = await import('../exporters');
+    render(<ChartFrame {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Download Test chart as PNG' }));
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith('Test-chart.png', expect.any(Blob)));
+    expect(svgToPngBlob.mock.calls[0][0].tagName.toLowerCase()).toBe('svg');
   });
 });

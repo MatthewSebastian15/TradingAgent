@@ -2,6 +2,7 @@ import PropTypes from 'prop-types';
 
 import { ChartFrame } from './ChartFrame';
 import { extent, layoutLabels, niceTicks, paddedDomain } from './chartScale';
+import { pointsTable } from './chartTable';
 import { CHART_COLORS } from './chartTheme';
 
 const finitePoint = (p) => Number.isFinite(p.x) && Number.isFinite(p.y);
@@ -38,6 +39,7 @@ export function ScatterChart({
   emptyMessage,
 }) {
   const pts = points.filter(finitePoint);
+  const table = pointsTable(pts, { formatX, formatY, xLabel, yLabel });
   const segs = lines.map((l) => ({ ...l, runs: runsOf(l.points) })).filter((l) => l.runs.length);
   const linePts = segs.flatMap((l) => l.runs.flat());
   const xExt = extent([...pts.map((p) => p.x), ...linePts.map((p) => p.x)]);
@@ -161,6 +163,7 @@ export function ScatterChart({
       isEmpty={isEmpty}
       emptyMessage={emptyMessage}
       note={note}
+      table={table}
     />
   );
 }

@@ -119,8 +119,8 @@ describe('LineChart', () => {
     const d = container.querySelector('path[stroke="#f97316"]').getAttribute('d');
     expect(d).not.toMatch(BAD);
     expect(d.match(/M/g)).toHaveLength(2);
-    // the trailing single point is drawn as a dot
-    expect(container.querySelectorAll('circle')).toHaveLength(1);
+    // the trailing single point is drawn as a dot (scoped past the toolbar's own icon circles)
+    expect(container.querySelector('svg[role="img"]').querySelectorAll('circle')).toHaveLength(1);
     expect(container.outerHTML).not.toMatch(BAD);
   });
 
@@ -307,7 +307,8 @@ describe('LineChart', () => {
       .sort((a, b) => a - b);
     expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(12);
     expect(ys[2] - ys[1]).toBeGreaterThanOrEqual(12);
-    expect(container.querySelectorAll('circle')).toHaveLength(1);
+    // scoped past the toolbar's own icon circles
+    expect(container.querySelector('svg[role="img"]').querySelectorAll('circle')).toHaveLength(1);
     expect(screen.queryByText('Bad', { selector: 'text' })).toBeNull();
     expect(container.outerHTML).not.toMatch(BAD);
   });

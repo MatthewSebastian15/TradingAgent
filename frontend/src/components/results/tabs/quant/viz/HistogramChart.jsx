@@ -2,6 +2,7 @@ import PropTypes from 'prop-types';
 
 import { ChartFrame } from './ChartFrame';
 import { layoutLabels, niceTicks } from './chartScale';
+import { binsTable } from './chartTable';
 import { CHART_COLORS } from './chartTheme';
 
 const countLabel = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
@@ -34,6 +35,7 @@ export function HistogramChart({
   const total = valid.reduce((a, b) => a + b.count, 0);
   const marks = (markers || []).filter((m) => Number.isFinite(m.x));
   const isEmpty = valid.length === 0 || total === 0;
+  const table = binsTable(valid, { formatX, countLabel: barLabel });
 
   let xDomain = [0, 1];
   let yDomain = [0, 1];
@@ -170,6 +172,7 @@ export function HistogramChart({
       isEmpty={isEmpty}
       emptyMessage={emptyMessage}
       note={note}
+      table={table}
     />
   );
 }

@@ -1,11 +1,17 @@
+import { Download, Image as ImageIcon, Table2 } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { downloadBlob, downloadText, exportFilename, svgToPngBlob, toCsv } from '../exporters';
 import { linearScale, logScale } from './chartScale';
 import { CHART_COLORS } from './chartTheme';
+import { DataTable } from './DataTable';
 import { useElementWidth } from './useElementWidth';
 
 const isDomain = (d) => Array.isArray(d) && d.length === 2 && d.every(Number.isFinite);
+
+const TOOL =
+  'inline-flex h-6 w-6 items-center justify-center border border-bloomberg-border text-bloomberg-white/80 hover:text-bloomberg-orange focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange';
 
 function Legend({ items }) {
   if (items.length === 0) return null;
@@ -55,11 +61,27 @@ export function ChartFrame({
   isEmpty = false,
   emptyMessage = 'Not enough data for this chart.',
   note,
+  table = null,
 }) {
   const [containerRef, width] = useElementWidth();
   const [hover, setHover] = useState(null);
   const [tipWidth, setTipWidth] = useState(0);
+  const [showTable, setShowTable] = useState(false);
+  const [exportError, setExportError] = useState('');
   const tipRef = useRef(null);
+  const svgRef = useRef(null);
+  const name = title || ariaLabel || 'chart';
+  const tableView = showTable && Boolean(table);
+
+  const exportPng = async () => {
+    setExportError('');
+    if (!svgRef.current) return;
+    try {
+      downloadBlob(`${exportFilename(name)}.png`, await svgToPngBlob(svgRef.current));
+    } catch {
+      setExportError('PNG export is not available in this browser.');
+    }
+  };
 
   // A non-finite domain would put NaN in every SVG attribute, so treat it as empty.
   const ok = !isEmpty && isDomain(xDomain) && isDomain(yDomain);
@@ -121,7 +143,38 @@ export function ChartFrame({
     setTipWidth(tipRef.current?.offsetWidth ?? 0);
   }, [hover, width]);
 
-  const header = (title || subtitle || legend.length > 0) && (
+  const tools = (
+    <div className="flex shrink-0 items-center gap-1">
+      {table && (
+        <button
+          type="button"
+          aria-label={`View ${name} as table`}
+          aria-pressed={tableView}
+          onClick={() => setShowTable((v) => !v)}
+          className={`${TOOL} ${tableView ? 'border-bloomberg-orange text-bloomberg-orange' : ''}`}
+        >
+          <Table2 className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      )}
+      {table && (
+        <button
+          type="button"
+          aria-label={`Download ${name} as CSV`}
+          onClick={() => downloadText(`${exportFilename(name)}.csv`, toCsv(table.columns, table.rows))}
+          className={TOOL}
+        >
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      )}
+      {!tableView && !isEmpty && (
+        <button type="button" aria-label={`Download ${name} as PNG`} onClick={exportPng} className={TOOL}>
+          <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+
+  const header = (title || subtitle || legend.length > 0 || table || !isEmpty) && (
     <div className="mb-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
       <div className="min-w-0">
         {title && (
@@ -129,7 +182,10 @@ export function ChartFrame({
         )}
         {subtitle && <div className="mt-0.5 text-[11px] text-bloomberg-white/80">{subtitle}</div>}
       </div>
-      <Legend items={legend} />
+      <div className="flex flex-wrap items-center gap-3">
+        {!tableView && <Legend items={legend} />}
+        {tools}
+      </div>
     </div>
   );
 
@@ -140,6 +196,29 @@ export function ChartFrame({
         <div ref={containerRef} className="py-6 text-center text-[11px] text-bloomberg-white/80">
           {emptyMessage}
         </div>
+      </figure>
+    );
+  }
+
+  if (tableView) {
+    return (
+      <figure className="m-0 min-w-0 border border-bloomberg-border bg-black p-3 font-mono">
+        {header}
+        <div ref={containerRef}>
+          <DataTable
+            columns={table.columns}
+            rows={table.rows}
+            exportName={null}
+            stickyFirstColumn
+            maxHeightClass="max-h-72"
+          />
+        </div>
+        {exportError && (
+          <p role="status" className="mt-1 text-[11px] text-bloomberg-amber">
+            {exportError}
+          </p>
+        )}
+        {note && <figcaption className="mt-2 text-[11px] text-bloomberg-white/80">{note}</figcaption>}
       </figure>
     );
   }
@@ -175,6 +254,7 @@ export function ChartFrame({
       {header}
       <div ref={containerRef} className="relative w-full">
         <svg
+          ref={svgRef}
           role="img"
           aria-label={ariaLabel || title}
           width={width}
@@ -280,6 +360,11 @@ export function ChartFrame({
           </div>
         )}
       </div>
+      {exportError && (
+        <p role="status" className="mt-1 text-[11px] text-bloomberg-amber">
+          {exportError}
+        </p>
+      )}
       {note && <figcaption className="mt-2 text-[11px] text-bloomberg-white/80">{note}</figcaption>}
     </figure>
   );
@@ -303,4 +388,5 @@ ChartFrame.propTypes = {
   isEmpty: PropTypes.bool,
   emptyMessage: PropTypes.string,
   note: PropTypes.node,
+  table: PropTypes.shape({ columns: PropTypes.array.isRequired, rows: PropTypes.array.isRequired }),
 };
