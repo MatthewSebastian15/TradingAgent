@@ -150,9 +150,9 @@ describe('ValuationSection', () => {
     fireEvent.change(screen.getByRole('spinbutton', { name: /Terminal growth/ }), {
       target: { value: '3' },
     });
-    expect(JSON.parse(window.localStorage.getItem('ta:quant:preset:v1:dcf:AAPL')).terminalGrowth).toBe(
-      3
-    );
+    expect(
+      JSON.parse(window.localStorage.getItem('ta:quant:preset:v1:dcf:AAPL')).terminalGrowth
+    ).toBe(3);
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear saved inputs', hidden: true }));
     expect(window.localStorage.getItem('ta:quant:preset:v1:dcf:AAPL')).not.toContain('"years":7');

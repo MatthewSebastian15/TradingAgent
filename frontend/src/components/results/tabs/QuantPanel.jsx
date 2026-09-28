@@ -112,7 +112,15 @@ import {
   zipRollingToDates,
 } from './quantUtils';
 
-function QuantPanel({ points, currency, symbol, range, section, onSectionChange, syncUrl = false }) {
+function QuantPanel({
+  points,
+  currency,
+  symbol,
+  range,
+  section,
+  onSectionChange,
+  syncUrl = false,
+}) {
   // `range` (Quant page) pins every fetch to the user's window. Without it (AI-agent
   // result tab) the panel extends the 1Y analysis chart to QUANT_RANGE for stabler stats.
   const fetchRange = range || QUANT_RANGE;
