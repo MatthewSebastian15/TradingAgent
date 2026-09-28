@@ -36,7 +36,8 @@ export function validateDcf({
     if (manualWacc) errors.wacc = message;
     else errors.terminalGrowth = message;
   }
-  if (manualWacc && (w === null || w <= 0 || w > 50)) errors.wacc = 'WACC must be between 0% and 50%.';
+  if (manualWacc && (w === null || w <= 0 || w > 50))
+    errors.wacc = 'WACC must be between 0% and 50%.';
   return errors;
 }
 

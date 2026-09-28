@@ -58,9 +58,7 @@ describe('validateOptions', () => {
     expect(validateOptions({ strike: 100, days: 30, volPct: 25, rate: 4, yieldPct: 1 })).toEqual(
       {}
     );
-    expect(
-      validateOptions({ strike: 0, days: 0.5, volPct: 0, rate: 150, yieldPct: -1 })
-    ).toEqual({
+    expect(validateOptions({ strike: 0, days: 0.5, volPct: 0, rate: 150, yieldPct: -1 })).toEqual({
       strike: 'Strike must be greater than 0.',
       days: 'Days to expiry must be a whole number from 1 to 3650.',
       vol: 'Volatility must be above 0% and at most 500%.',

@@ -114,12 +114,7 @@ export function CorrelationSection({
             value={shrink}
             onChange={onShrinkChange}
           />
-          <NumberField
-            label="Long-only weight cap"
-            value={cap}
-            onChange={onCapChange}
-            suffix="%"
-          />
+          <NumberField label="Long-only weight cap" value={cap} onChange={onCapChange} suffix="%" />
         </div>
       </AdvancedPanel>
 

@@ -81,7 +81,9 @@ describe('ValuationSection', () => {
 
   it('protects a typed FCF while the other fields still auto-fill', () => {
     const { rerender } = render(<ValuationSection {...props} overview={null} />);
-    fireEvent.change(screen.getByRole('spinbutton', { name: /Base FCF/ }), { target: { value: '500' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Base FCF/ }), {
+      target: { value: '500' },
+    });
     rerender(<ValuationSection {...props} overview={fundamentals} />);
     expect(screen.getByRole('spinbutton', { name: /Base FCF/ }).value).toBe('500');
     expect(screen.getByLabelText(/Shares out/).value).toBe('100');
