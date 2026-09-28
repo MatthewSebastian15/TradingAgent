@@ -1,5 +1,7 @@
+import { Download } from 'lucide-react';
 import PropTypes from 'prop-types';
 
+import { downloadText, exportFilename, toCsv } from '../exporters';
 import { divergingColor, textOnDiverging } from './chartTheme';
 
 export function Heatmap({
@@ -13,9 +15,37 @@ export function Heatmap({
   textColorFor = textOnDiverging,
   highlight,
   onCellClick,
+  exportName,
 }) {
+  const csvName = exportName === null ? null : exportName || caption;
+  const handleCsv = () => {
+    const columns = [
+      { key: 'label', label: rowHeader || '' },
+      ...colLabels.map((label, j) => ({
+        key: `c${j}`,
+        label,
+        csv: (row) => formatValue(row.values[j] ?? null),
+      })),
+    ];
+    const rows = rowLabels.map((label, i) => ({ label, values: values[i] || [] }));
+    downloadText(`${exportFilename(csvName)}.csv`, toCsv(columns, rows));
+  };
   return (
-    <div className="overflow-auto rounded-none border border-bloomberg-border">
+    <div className="min-w-0">
+      {csvName && rowLabels.length > 0 && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            aria-label={`Download ${csvName} as CSV`}
+            onClick={handleCsv}
+            className="-mb-px inline-flex h-6 items-center gap-1 border border-b-0 border-bloomberg-border px-2 font-mono text-[10px] tracking-wider text-bloomberg-white/80 uppercase hover:text-bloomberg-orange focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
+          >
+            <Download className="h-3 w-3" aria-hidden="true" />
+            CSV
+          </button>
+        </div>
+      )}
+      <div className="overflow-auto rounded-none border border-bloomberg-border">
       <table className="w-full border-collapse font-mono text-[11px] tabular-nums">
         {caption && (
           <caption className="bg-black px-2 py-1.5 text-left text-xs tracking-wider text-bloomberg-orange uppercase">
@@ -86,12 +116,14 @@ export function Heatmap({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
 
 Heatmap.propTypes = {
   caption: PropTypes.string,
+  exportName: PropTypes.string,
   rowHeader: PropTypes.string,
   rowLabels: PropTypes.arrayOf(PropTypes.string).isRequired,
   colLabels: PropTypes.arrayOf(PropTypes.string).isRequired,

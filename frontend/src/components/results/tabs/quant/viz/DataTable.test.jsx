@@ -1,6 +1,6 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DataTable } from './DataTable';
 
@@ -51,7 +51,7 @@ describe('DataTable', () => {
       />
     );
     expect(screen.getByText('Stress').tagName).toBe('CAPTION');
-    const wrapper = container.firstChild;
+    const wrapper = container.querySelector('.overflow-auto');
     expect(wrapper.className).toContain('overflow-auto');
     expect(wrapper.className).toContain('max-h-64');
     expect(wrapper.className).toContain('border-bloomberg-border');
@@ -129,5 +129,37 @@ describe('DataTable', () => {
     const cell = screen.getByText('x');
     expect(cell.className).toContain('text-bloomberg-white');
     expect(cell.className).not.toContain('undefined');
+  });
+});
+
+vi.mock('../exporters', async (importOriginal) => ({
+  ...(await importOriginal()),
+  downloadText: vi.fn(),
+}));
+
+describe('DataTable CSV export', () => {
+  afterEach(() => cleanup());
+
+  it('downloads the rendered rows and can be disabled', async () => {
+    const { downloadText } = await import('../exporters');
+    const columns = [
+      { key: 'name', label: 'Scenario' },
+      { key: 'shock', label: 'Shock', render: (r) => `${r.shock}%` },
+    ];
+    const { rerender } = render(
+      <DataTable caption="Stress" columns={columns} rows={[{ name: 'Crash', shock: -9 }]} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Download Stress as CSV' }));
+    expect(downloadText).toHaveBeenCalledWith('Stress.csv', 'Scenario,Shock\r\nCrash,-9%');
+
+    rerender(
+      <DataTable
+        caption="Stress"
+        exportName={null}
+        columns={columns}
+        rows={[{ name: 'Crash', shock: -9 }]}
+      />
+    );
+    expect(screen.queryByRole('button', { name: /as CSV/ })).toBeNull();
   });
 });

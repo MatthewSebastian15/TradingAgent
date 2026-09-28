@@ -1,4 +1,7 @@
+import { Download } from 'lucide-react';
 import PropTypes from 'prop-types';
+
+import { downloadText, exportFilename, toCsv } from '../exporters';
 
 export function DataTable({
   caption,
@@ -8,10 +11,26 @@ export function DataTable({
   stickyFirstColumn = false,
   emptyMessage = 'No rows.',
   maxHeightClass = '',
+  exportName,
 }) {
   const align = (col) => (col.align === 'right' ? 'text-right' : 'text-left');
+  const csvName = exportName === null ? null : exportName || caption;
   return (
-    <div className={`overflow-auto rounded-none border border-bloomberg-border ${maxHeightClass}`}>
+    <div className="min-w-0">
+      {csvName && rows.length > 0 && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            aria-label={`Download ${csvName} as CSV`}
+            onClick={() => downloadText(`${exportFilename(csvName)}.csv`, toCsv(columns, rows))}
+            className="-mb-px inline-flex h-6 items-center gap-1 border border-b-0 border-bloomberg-border px-2 font-mono text-[10px] tracking-wider text-bloomberg-white/80 uppercase hover:text-bloomberg-orange focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
+          >
+            <Download className="h-3 w-3" aria-hidden="true" />
+            CSV
+          </button>
+        </div>
+      )}
+      <div className={`overflow-auto rounded-none border border-bloomberg-border ${maxHeightClass}`}>
       <table className="w-full border-collapse font-mono text-xs tabular-nums">
         {caption && (
           <caption className="bg-black px-2 py-1.5 text-left text-xs tracking-wider text-bloomberg-orange uppercase">
@@ -64,12 +83,14 @@ export function DataTable({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
 
 DataTable.propTypes = {
   caption: PropTypes.string,
+  exportName: PropTypes.string,
   columns: PropTypes.arrayOf(
     PropTypes.shape({
       key: PropTypes.string.isRequired,

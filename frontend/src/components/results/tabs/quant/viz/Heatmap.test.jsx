@@ -41,18 +41,18 @@ describe('Heatmap', () => {
 
   it('renders clickable cells as focusable buttons with a visible focus ring', () => {
     const onCellClick = vi.fn();
-    render(<Heatmap {...baseProps} onCellClick={onCellClick} />);
-    const buttons = screen.getAllByRole('button');
-    // Three finite cells; the null cell is not interactive.
+    const { container } = render(<Heatmap {...baseProps} onCellClick={onCellClick} />);
+    // Three finite cells; the null cell is not interactive. The CSV export button is separate.
+    const buttons = container.querySelectorAll('td button');
     expect(buttons).toHaveLength(3);
     expect(buttons[0].className).toContain('focus-visible:outline');
     fireEvent.click(screen.getByText('1.00'));
     expect(onCellClick).toHaveBeenCalledWith(0, 0);
   });
 
-  it('renders no buttons when onCellClick is absent', () => {
-    render(<Heatmap {...baseProps} />);
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  it('renders no cell buttons when onCellClick is absent', () => {
+    const { container } = render(<Heatmap {...baseProps} />);
+    expect(container.querySelectorAll('td button')).toHaveLength(0);
   });
 
   it('does not call colorFor or textColorFor for null or non-finite cells', () => {
@@ -89,5 +89,36 @@ describe('Heatmap', () => {
     render(<Heatmap {...baseProps} rowLabels={['A', 'A']} colLabels={['A', 'A']} values={[[1]]} />);
     expect(screen.getAllByRole('rowheader')).toHaveLength(2);
     expect(screen.getAllByText('—')).toHaveLength(3);
+  });
+});
+
+vi.mock('../exporters', async (importOriginal) => ({
+  ...(await importOriginal()),
+  downloadText: vi.fn(),
+}));
+
+describe('Heatmap CSV export', () => {
+  afterEach(() => cleanup());
+
+  it('exports the formatted matrix', async () => {
+    const { downloadText } = await import('../exporters');
+    render(
+      <Heatmap
+        caption="Correlation"
+        rowHeader="Sym"
+        rowLabels={['A', 'B']}
+        colLabels={['A', 'B']}
+        values={[
+          [1, 0.5],
+          [0.5, 1],
+        ]}
+        formatValue={(v) => v.toFixed(2)}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Download Correlation as CSV' }));
+    expect(downloadText).toHaveBeenCalledWith(
+      'Correlation.csv',
+      'Sym,A,B\r\nA,1.00,0.50\r\nB,0.50,1.00'
+    );
   });
 });
