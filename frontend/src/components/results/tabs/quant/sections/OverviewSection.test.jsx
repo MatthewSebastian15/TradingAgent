@@ -1,11 +1,13 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { OverviewSection } from './OverviewSection';
 
 const props = {
   symbol: 'AAPL',
+  windowLabel: '2025-09-12 → 2026-09-11 · 250 obs',
   vol: 25,
   benchVol: 17,
   regimeLabel: 'Normal',
@@ -66,5 +68,54 @@ describe('OverviewSection', () => {
     render(<OverviewSection {...props} />);
     fireEvent.click(screen.getByRole('button', { name: 'Risk detail' }));
     expect(props.onNavigate).toHaveBeenCalledWith('risk');
+  });
+});
+
+describe('OverviewSection actions', () => {
+  afterEach(() => cleanup());
+
+  it('copies the summary to the clipboard', async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<OverviewSection {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy summary' }));
+    await waitFor(() => expect(screen.getByText('Summary copied.')).toBeTruthy());
+    expect(writeText.mock.calls[0][0]).toContain('AAPL · 2025-09-12 → 2026-09-11 · 250 obs');
+    expect(writeText.mock.calls[0][0]).toContain('Sharpe: ▲ 1.10');
+  });
+
+  it('hides the chatbot button outside a router and navigates inside one', () => {
+    render(<OverviewSection {...props} />);
+    expect(screen.queryByRole('button', { name: 'Ask Chatbot' })).toBeNull();
+    cleanup();
+
+    function ChatProbe() {
+      const location = useLocation();
+      return <div data-testid="chat-prompt">{location.state?.prompt}</div>;
+    }
+    render(
+      <MemoryRouter initialEntries={['/quant']}>
+        <Routes>
+          <Route path="/quant" element={<OverviewSection {...props} />} />
+          <Route path="/chatbot" element={<ChatProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Chatbot' }));
+    expect(screen.getByTestId('chat-prompt').textContent).toContain(
+      'Explain these quant readings for AAPL'
+    );
+  });
+
+  it('offers the report only when a past analysis is loaded', async () => {
+    const onOpenReport = vi.fn(async () => {});
+    render(<OverviewSection {...props} />);
+    expect(screen.queryByRole('button', { name: 'Report with quant' })).toBeNull();
+    cleanup();
+
+    render(<OverviewSection {...props} onOpenReport={onOpenReport} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Report with quant' }));
+    await waitFor(() => expect(onOpenReport).toHaveBeenCalled());
+    expect(onOpenReport.mock.calls[0][0].rows.length).toBeGreaterThan(4);
   });
 });

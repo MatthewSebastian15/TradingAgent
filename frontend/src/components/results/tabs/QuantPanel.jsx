@@ -801,6 +801,11 @@ function QuantPanel({
             hurstInfo={hurstInfo}
             observations={quality.observations}
             onNavigate={selectSection}
+            windowLabel={
+              quality.startDate && quality.endDate
+                ? `${quality.startDate} → ${quality.endDate} · ${quality.observations} obs`
+                : ''
+            }
           />
         </SectionBlock>
       )}

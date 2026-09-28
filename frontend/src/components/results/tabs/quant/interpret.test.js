@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { dataStatus, interpretSummary } from './interpret';
+import { buildQuantSnapshot, chatbotPrompt, dataStatus, interpretSummary, snapshotText } from './interpret';
 
 describe('interpretSummary', () => {
   it('reads volatility, drawdown, beta and Sharpe in plain language', () => {
@@ -55,5 +55,31 @@ describe('dataStatus', () => {
       reasons: ['2 data warnings', 'benchmark unavailable', 'fundamentals unavailable'],
     });
     expect(dataStatus({ benchStatus: 'loading' }).label).toBe('OK');
+  });
+});
+
+describe('quant snapshot', () => {
+  const snapshot = buildQuantSnapshot({
+    symbol: 'AAPL',
+    windowLabel: '2025-09-12 → 2026-09-11 · 251 obs',
+    summary: 'AAPL has moved about 25.0% a year.',
+    rows: [
+      { label: 'Sharpe', value: '1.20' },
+      { label: 'Beta vs S&P 500', value: '—' },
+    ],
+  });
+
+  it('drops empty rows and formats plain text', () => {
+    expect(snapshot.rows).toEqual([{ label: 'Sharpe', value: '1.20' }]);
+    expect(snapshotText(snapshot)).toBe(
+      'AAPL · 2025-09-12 → 2026-09-11 · 251 obs\nAAPL has moved about 25.0% a year.\nSharpe: 1.20\nResearch only — not advice.'
+    );
+  });
+
+  it('asks the chatbot to explain, not to recommend', () => {
+    const prompt = chatbotPrompt(snapshot);
+    expect(prompt).toContain('Explain these quant readings for AAPL');
+    expect(prompt).toContain('Sharpe: 1.20');
+    expect(prompt).toContain('Do not give buy or sell advice.');
   });
 });

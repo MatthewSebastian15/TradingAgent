@@ -65,3 +65,32 @@ export function dataStatus({ issues = [], benchStatus, overviewError }) {
   if (overviewError) reasons.push('fundamentals unavailable');
   return { label: reasons.length > 0 ? 'LIMITED' : 'OK', reasons };
 }
+
+const EMPTY_VALUES = new Set(['', '—', null, undefined]);
+
+export function buildQuantSnapshot({ symbol, windowLabel, summary, rows }) {
+  return {
+    symbol,
+    window: windowLabel,
+    summary,
+    rows: rows.filter((row) => !EMPTY_VALUES.has(row.value)),
+  };
+}
+
+export function snapshotText(snapshot) {
+  return [
+    `${snapshot.symbol} · ${snapshot.window}`,
+    snapshot.summary,
+    ...snapshot.rows.map((row) => `${row.label}: ${row.value}`),
+    'Research only — not advice.',
+  ].join('\n');
+}
+
+// The chatbot only sees what we send (ADR-029), so the prompt carries the numbers.
+export function chatbotPrompt(snapshot) {
+  return [
+    `Explain these quant readings for ${snapshot.symbol} in plain language: what each number means and what could be driving it. Do not give buy or sell advice.`,
+    '',
+    snapshotText(snapshot),
+  ].join('\n');
+}

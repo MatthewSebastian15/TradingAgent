@@ -1,5 +1,9 @@
+import { Copy, FileText } from 'lucide-react';
 import PropTypes from 'prop-types';
+import { useState } from 'react';
+import { useInRouterContext } from 'react-router-dom';
 
+import { AskChatbotButton } from '../AskChatbotButton';
 import { MetricCard } from '../charts';
 import {
   DASH,
@@ -13,7 +17,7 @@ import {
   ratioTone,
   sampleNote,
 } from '../format';
-import { interpretSummary } from '../interpret';
+import { buildQuantSnapshot, chatbotPrompt, interpretSummary, snapshotText } from '../interpret';
 import { CARD_GRID } from '../layout';
 
 const JUMPS = [
@@ -25,6 +29,7 @@ const JUMPS = [
 
 export function OverviewSection({
   symbol,
+  windowLabel,
   vol,
   benchVol,
   regimeLabel,
@@ -40,6 +45,7 @@ export function OverviewSection({
   hurstInfo,
   observations,
   onNavigate,
+  onOpenReport,
 }) {
   const summary = interpretSummary({
     symbol,
@@ -57,6 +63,48 @@ export function OverviewSection({
   const vsBench = (value, fmt) =>
     finite(value) ? { label: `vs ${benchLabel}`, value: fmt(value) } : undefined;
 
+  const inRouter = useInRouterContext();
+  const [actionStatus, setActionStatus] = useState('');
+  const snapshot = buildQuantSnapshot({
+    symbol,
+    windowLabel,
+    summary,
+    rows: [
+      { label: 'Ann. Volatility', value: fmtPercent(vol) },
+      { label: `${benchLabel} volatility`, value: finite(benchVol) ? fmtPercent(benchVol) : DASH },
+      { label: 'Sharpe', value: fmtRatio(sharpeInfo?.sharpe) },
+      { label: 'Max Drawdown', value: fmtLoss(dd) },
+      { label: 'From Peak', value: finite(currentDrawdown) ? fmtLoss(currentDrawdown) : DASH },
+      { label: 'VaR 95% (1D)', value: fmtLoss(var95) },
+      { label: `Beta vs ${benchLabel}`, value: fmtNum2(benchStats?.beta) },
+      { label: 'Alpha (ann.)', value: finite(benchStats?.alpha) ? fmtSignedPct(benchStats.alpha) : DASH },
+      { label: 'Hurst', value: fmtNum2(hurstInfo?.hurst) },
+      { label: 'Observations', value: finite(observations) ? String(observations) : DASH },
+    ],
+  });
+
+  const copySummary = async () => {
+    try {
+      await navigator.clipboard.writeText(snapshotText(snapshot));
+      setActionStatus('Summary copied.');
+    } catch {
+      setActionStatus('Copy is blocked in this browser — select the paragraph above instead.');
+    }
+  };
+
+  const openReport = async () => {
+    setActionStatus('Opening report…');
+    try {
+      await onOpenReport(snapshot);
+      setActionStatus('');
+    } catch (error) {
+      setActionStatus(error?.message || 'The report could not be opened.');
+    }
+  };
+
+  const ACTION =
+    'inline-flex h-7 items-center gap-1.5 rounded-none border border-bloomberg-border px-2.5 font-mono text-[11px] tracking-wider text-bloomberg-white/80 uppercase hover:border-bloomberg-orange hover:text-bloomberg-orange focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange';
+
   return (
     <div className="space-y-4">
       <p
@@ -65,6 +113,22 @@ export function OverviewSection({
       >
         {summary}
       </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={copySummary} className={ACTION}>
+          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          Copy summary
+        </button>
+        {inRouter && <AskChatbotButton prompt={chatbotPrompt(snapshot)} className={ACTION} />}
+        {onOpenReport && (
+          <button type="button" onClick={openReport} className={ACTION}>
+            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+            Report with quant
+          </button>
+        )}
+        <span role="status" aria-live="polite" className="text-[11px] text-bloomberg-white/80">
+          {actionStatus}
+        </span>
+      </div>
 
       <div className={CARD_GRID}>
         <MetricCard
@@ -142,6 +206,7 @@ export function OverviewSection({
 
 OverviewSection.propTypes = {
   symbol: PropTypes.string,
+  windowLabel: PropTypes.string.isRequired,
   vol: PropTypes.number,
   benchVol: PropTypes.number,
   regimeLabel: PropTypes.string,
@@ -157,4 +222,5 @@ OverviewSection.propTypes = {
   hurstInfo: PropTypes.object,
   observations: PropTypes.number,
   onNavigate: PropTypes.func.isRequired,
+  onOpenReport: PropTypes.func,
 };
