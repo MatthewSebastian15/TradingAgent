@@ -56,6 +56,7 @@ export function ValuationSection({
   const [taxRate, setTaxRate] = useState(22);
   const [showMC, setShowMC] = useState(false);
   const [editedFields, setEditedFields] = useState(() => new Set());
+  const [auto, setAuto] = useState({});
 
   const mismatch = reportingCurrencyMismatch(overview, ccy);
   const edit = (field, setter) => (value) => {
@@ -67,6 +68,15 @@ export function ValuationSection({
     if (next.shares !== undefined) setShares(next.shares);
     if (next.netDebt !== undefined) setNetDebt(next.netDebt);
     if (next.growth !== undefined) setGrowth(next.growth);
+    setAuto(next);
+  };
+  const setters = { fcf: setFcf, shares: setShares, netDebt: setNetDebt, growth: setGrowth };
+  // Badge while the value still equals the fundamentals value; reset once edited.
+  const source = (key, value) => {
+    if (auto[key] === undefined) return {};
+    return value !== '' && Number(value) === auto[key]
+      ? { badge: 'Fundamentals' }
+      : { onReset: () => setters[key](auto[key]) };
   };
   const autoFill = () => {
     if (overview)
@@ -80,6 +90,7 @@ export function ValuationSection({
     if (next.shares !== undefined && !editedFields.has('shares')) setShares(next.shares);
     if (next.netDebt !== undefined && !editedFields.has('netDebt')) setNetDebt(next.netDebt);
     if (next.growth !== undefined && !editedFields.has('growth')) setGrowth(next.growth);
+    setAuto(next);
   }, [overview, ccy, growthSource, editedFields]);
 
   const betaUsed = finite(beta) ? beta : finite(overview?.beta) ? overview.beta : null;
@@ -297,6 +308,7 @@ export function ValuationSection({
               onChange={edit('fcf', setFcf)}
               suffix="M"
               error={errors.fcf}
+              {...source('fcf', fcf)}
             />
             <NumberField
               label="FCF growth"
@@ -304,6 +316,7 @@ export function ValuationSection({
               onChange={edit('growth', setGrowth)}
               suffix="%"
               error={errors.growth}
+              {...source('growth', growth)}
             />
             <NumberField
               label="Years"
@@ -410,12 +423,14 @@ export function ValuationSection({
               onChange={edit('shares', setShares)}
               suffix="M"
               error={errors.shares}
+              {...source('shares', shares)}
             />
             <NumberField
               label="Net debt"
               value={netDebt}
               onChange={edit('netDebt', setNetDebt)}
               suffix="M"
+              {...source('netDebt', netDebt)}
             />
           </div>
         </fieldset>

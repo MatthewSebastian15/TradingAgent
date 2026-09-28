@@ -47,10 +47,10 @@ describe('ValuationSection', () => {
       <ValuationSection {...props} ccy="IDR" overview={{ ...fundamentals, currency: 'IDR' }} />
     );
     expect(screen.getByText('Reporting currency differs')).toBeTruthy();
-    expect(screen.getByLabelText(/Base FCF/).value).toBe('');
+    expect(screen.getByRole('spinbutton', { name: /Base FCF/ }).value).toBe('');
     fireEvent.change(screen.getByLabelText(/FX rate/), { target: { value: '16000' } });
     fireEvent.click(screen.getByRole('button', { name: 'Auto-fill from fundamentals' }));
-    expect(screen.getByLabelText(/Base FCF/).value).toBe('32000000');
+    expect(screen.getByRole('spinbutton', { name: /Base FCF/ }).value).toBe('32000000');
   });
 
   it('warns when the terminal value dominates', () => {
@@ -71,7 +71,7 @@ describe('ValuationSection', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /CAPM WACC/ }));
     fireEvent.change(screen.getByLabelText(/^WACC/), { target: { value: '10' } });
     rerender(<ValuationSection {...props} overview={fundamentals} />);
-    expect(screen.getByLabelText(/Base FCF/).value).toBe('2000');
+    expect(screen.getByRole('spinbutton', { name: /Base FCF/ }).value).toBe('2000');
     expect(screen.getByLabelText(/Shares out/).value).toBe('100');
     expect(screen.getByLabelText(/Net debt/).value).toBe('400');
     expect(screen.getByLabelText(/FCF growth/).value).toBe('10');
@@ -80,9 +80,9 @@ describe('ValuationSection', () => {
 
   it('protects a typed FCF while the other fields still auto-fill', () => {
     const { rerender } = render(<ValuationSection {...props} overview={null} />);
-    fireEvent.change(screen.getByLabelText(/Base FCF/), { target: { value: '500' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Base FCF/ }), { target: { value: '500' } });
     rerender(<ValuationSection {...props} overview={fundamentals} />);
-    expect(screen.getByLabelText(/Base FCF/).value).toBe('500');
+    expect(screen.getByRole('spinbutton', { name: /Base FCF/ }).value).toBe('500');
     expect(screen.getByLabelText(/Shares out/).value).toBe('100');
     expect(screen.getByLabelText(/Net debt/).value).toBe('400');
     expect(screen.getByLabelText(/FCF growth/).value).toBe('10');
@@ -91,7 +91,7 @@ describe('ValuationSection', () => {
   it('fills only the fields present in a partial overview', () => {
     const { rerender } = render(<ValuationSection {...props} overview={null} />);
     rerender(<ValuationSection {...props} overview={{ free_cashflow: 3e9, currency: 'USD' }} />);
-    expect(screen.getByLabelText(/Base FCF/).value).toBe('3000');
+    expect(screen.getByRole('spinbutton', { name: /Base FCF/ }).value).toBe('3000');
     expect(screen.getByLabelText(/Shares out/).value).toBe('');
     expect(screen.getByLabelText(/Net debt/).value).toBe('0');
     expect(screen.getByLabelText(/FCF growth/).value).toBe('8');
@@ -120,5 +120,16 @@ describe('ValuationSection', () => {
   it('does not show required-field errors before fundamentals load', () => {
     render(<ValuationSection {...props} overview={null} />);
     expect(screen.queryByText('Enter base free cash flow.')).toBeNull();
+  });
+
+  it('marks auto-filled fields and restores them after an edit', () => {
+    render(<ValuationSection {...props} overview={fundamentals} />);
+    const fcfField = () => screen.getByRole('spinbutton', { name: /Base FCF/ });
+    expect(fcfField().value).toBe('2000');
+    expect(screen.getAllByText('Fundamentals').length).toBeGreaterThanOrEqual(3);
+
+    fireEvent.change(fcfField(), { target: { value: '1500' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Base FCF' }));
+    expect(fcfField().value).toBe('2000');
   });
 });
