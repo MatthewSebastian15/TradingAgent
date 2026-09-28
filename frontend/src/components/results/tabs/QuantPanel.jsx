@@ -8,11 +8,13 @@ import { SectionBlock } from './quant/charts';
 import {
   DEFAULT_SECTION,
   MC_DAYS,
+  MC_HORIZONS,
   MC_PATHS,
   QUANT_RANGE,
   ROLLING_RATIO_WINDOW,
   ROLLING_WINDOW,
   sectionById,
+  STRATEGIES,
   VOL_TARGET,
 } from './quant/config';
 import { regimeLabel } from './quant/format';
@@ -32,6 +34,7 @@ import { ValuationSection } from './quant/sections/ValuationSection';
 import { VolatilitySection } from './quant/sections/VolatilitySection';
 import { SectionSkeleton } from './quant/SectionSkeleton';
 import { SectionTabs } from './quant/SectionTabs';
+import { useUrlState } from './quant/urlState';
 import { useDebouncedValue } from './quant/useDebouncedValue';
 import { useMonteCarlo } from './quant/useMonteCarlo';
 import {
@@ -108,7 +111,7 @@ import {
   zipRollingToDates,
 } from './quantUtils';
 
-function QuantPanel({ points, currency, symbol, range, section, onSectionChange }) {
+function QuantPanel({ points, currency, symbol, range, section, onSectionChange, syncUrl = false }) {
   // `range` (Quant page) pins every fetch to the user's window. Without it (AI-agent
   // result tab) the panel extends the 1Y analysis chart to QUANT_RANGE for stabler stats.
   const fetchRange = range || QUANT_RANGE;
@@ -131,13 +134,23 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
   const [status, setStatus] = useState(null);
   const [rfOverride, setRfOverride] = useState(null); // { symbol, rate } typed in the headline
   const [benchPoints, setBenchPoints] = useState(null); // null = loading, [] = unavailable
-  const [mcHorizon, setMcHorizon] = useState(MC_DAYS);
-  const [mcMethod, setMcMethod] = useState('gbm'); // 'gbm' | 'bootstrap'
+  const [mcHorizon, setMcHorizon] = useUrlState('h', MC_DAYS, {
+    enabled: syncUrl,
+    parse: Number,
+    isValid: (d) => MC_HORIZONS.includes(d),
+  });
+  const [mcMethod, setMcMethod] = useUrlState('m', 'gbm', {
+    enabled: syncUrl,
+    isValid: (m) => m === 'gbm' || m === 'bootstrap',
+  }); // 'gbm' | 'bootstrap'
   const [mcDrift, setMcDrift] = useState('historical'); // 'historical' | 'riskneutral'
   const [bootDemean, setBootDemean] = useState(false);
   const [mcTarget, setMcTarget] = useState('');
   const [mcStop, setMcStop] = useState('');
-  const [strategy, setStrategy] = useState('sma');
+  const [strategy, setStrategy] = useUrlState('st', 'sma', {
+    enabled: syncUrl,
+    isValid: (id) => STRATEGIES.some((s) => s.id === id),
+  });
   const [btParams, setBtParams] = useState({
     fast: 20,
     slow: 50,
@@ -1025,6 +1038,7 @@ QuantPanel.propTypes = {
   range: PropTypes.string,
   section: PropTypes.string,
   onSectionChange: PropTypes.func,
+  syncUrl: PropTypes.bool,
 };
 
 export default memo(QuantPanel);

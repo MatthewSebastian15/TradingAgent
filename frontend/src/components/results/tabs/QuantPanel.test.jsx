@@ -282,6 +282,28 @@ describe('QuantPanel', () => {
     const text = screen.getByText('Period Δ').nextSibling.textContent;
     expect(text).toBe(`+${expected.toFixed(1)}%`);
   });
+
+  it('reads and writes strategy and simulation settings when syncUrl is set', async () => {
+    window.history.replaceState(null, '', '/quant?st=momentum&h=63&m=bootstrap');
+    await renderPanel({ points: buildPoints(40), section: 'backtest', syncUrl: true });
+    expect(screen.getByRole('button', { name: 'Momentum' }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SMA Crossover' }));
+    expect(new URLSearchParams(window.location.search).get('st')).toBeNull();
+    expect(new URLSearchParams(window.location.search).get('h')).toBe('63');
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('ignores the URL without syncUrl', async () => {
+    window.history.replaceState(null, '', '/quant?st=momentum');
+    await renderPanel({ points: buildPoints(40), section: 'backtest' });
+    expect(screen.getByRole('button', { name: 'SMA Crossover' }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
+    window.history.replaceState(null, '', '/');
+  });
 });
 
 function buildOhlcPoints(count) {

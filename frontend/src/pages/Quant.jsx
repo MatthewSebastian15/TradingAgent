@@ -269,6 +269,7 @@ export default function Quant() {
               range={range}
               section={section}
               onSectionChange={selectSection}
+              syncUrl
             />
           )}
         </main>
