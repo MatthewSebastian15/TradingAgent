@@ -10,6 +10,7 @@ import {
   tradeStats,
   walkForward,
 } from '../../quantUtils';
+import { AdvancedPanel } from '../AdvancedPanel';
 import { MetricCard, SliderField } from '../charts';
 import { STRATEGIES } from '../config';
 import {
@@ -188,14 +189,19 @@ export function BacktestSection({
             onChange={(v) => onParamChange('mrLookback', v)}
           />
         )}
-        <SliderField
-          label="Cost / trade (bps)"
-          value={params.costBps}
-          min={0}
-          max={50}
-          onChange={(v) => onParamChange('costBps', v)}
-        />
       </div>
+
+      <AdvancedPanel>
+        <div className={FIELD_GRID}>
+          <SliderField
+            label="Cost / trade (bps)"
+            value={params.costBps}
+            min={0}
+            max={50}
+            onChange={(v) => onParamChange('costBps', v)}
+          />
+        </div>
+      </AdvancedPanel>
 
       {!result || !detail ? (
         <NoticeBox title="Backtest">

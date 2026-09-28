@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 
 import NoticeBox from '../../../NoticeBox';
 import { futureTradingDates, returnHistogram } from '../../quantUtils';
+import { AdvancedPanel } from '../AdvancedPanel';
 import { MetricCard, NumberField } from '../charts';
 import { MC_HORIZONS, MC_PATHS } from '../config';
 import { finite, fmtLoss, fmtPercent, fmtSignedPct, signedTone } from '../format';
@@ -102,22 +103,21 @@ export function StochasticSection({
           onChange={onStopChange}
           suffix={ccy || 'ccy'}
         />
-        <details className="font-mono text-[11px] text-bloomberg-white/80">
-          <summary className="cursor-pointer tracking-wider uppercase">Advanced</summary>
-          <div className="mt-2 flex items-center gap-3">
+        <AdvancedPanel>
+          <div className="flex flex-wrap items-center gap-3 text-bloomberg-white/80">
             <label className="flex items-center gap-2">
               Seed
               <input
                 type="number"
                 value={seed}
                 onChange={(e) => onSeedChange(Number(e.target.value))}
-                className="w-20 rounded-none border border-bloomberg-border bg-black px-1 py-0.5 text-xs text-white"
+                className="h-7 w-20 rounded-none border border-bloomberg-border bg-black px-1 text-xs text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
               />
             </label>
             <button
               type="button"
               onClick={onReroll}
-              className="rounded-none border border-bloomberg-border px-3 py-1 text-xs text-bloomberg-white/80 hover:text-white"
+              className="rounded-none border border-bloomberg-border px-3 py-1 text-xs text-bloomberg-white/80 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
             >
               <span className="inline-flex items-center gap-1.5">
                 <Dices className="h-3.5 w-3.5" aria-hidden="true" />
@@ -126,7 +126,7 @@ export function StochasticSection({
             </button>
             <span>Same seed → same simulation.</span>
           </div>
-        </details>
+        </AdvancedPanel>
       </div>
       <div role="status" aria-live="polite" className="h-4 text-[11px] text-bloomberg-amber">
         {running ? 'Simulating…' : ''}

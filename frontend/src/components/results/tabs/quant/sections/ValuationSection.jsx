@@ -14,6 +14,7 @@ import {
   reportingCurrencyMismatch,
   returnHistogram,
 } from '../../quantUtils';
+import { AdvancedPanel } from '../AdvancedPanel';
 import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtNum2, fmtPercent, fmtSignedPct, signedTone } from '../format';
 import { CARD_GRID, FIELD_GRID } from '../layout';
@@ -260,17 +261,6 @@ export function ValuationSection({
             Auto-fill from fundamentals
           </span>
         </button>
-        <label className="flex items-center gap-2 font-mono text-[11px] text-bloomberg-white/80">
-          Growth source
-          <select
-            value={growthSource}
-            onChange={(e) => setGrowthSource(e.target.value)}
-            className="h-7 rounded-none border border-bloomberg-border bg-black px-2 text-xs text-white"
-          >
-            <option value="revenue">Revenue growth</option>
-            <option value="earnings">Earnings growth</option>
-          </select>
-        </label>
         <span className="text-[11px] text-bloomberg-white/80">
           {overviewError
             ? 'Fundamentals unavailable — enter inputs manually.'
@@ -340,15 +330,6 @@ export function ValuationSection({
               error={errors.terminalGrowth}
             />
           </div>
-          <label className="flex items-center gap-2 text-[11px] text-bloomberg-white/80">
-            <input
-              type="checkbox"
-              checked={midYear}
-              onChange={(e) => setMidYear(e.target.checked)}
-              className="accent-bloomberg-orange"
-            />
-            Mid-year discounting
-          </label>
         </fieldset>
 
         <fieldset className="space-y-2 border border-bloomberg-border p-3">
@@ -435,6 +416,31 @@ export function ValuationSection({
           </div>
         </fieldset>
       </div>
+
+      <AdvancedPanel>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 font-mono text-[11px] text-bloomberg-white/80">
+            Growth source
+            <select
+              value={growthSource}
+              onChange={(e) => setGrowthSource(e.target.value)}
+              className="h-7 rounded-none border border-bloomberg-border bg-black px-2 text-xs text-white"
+            >
+              <option value="revenue">Revenue growth</option>
+              <option value="earnings">Earnings growth</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-[11px] text-bloomberg-white/80">
+            <input
+              type="checkbox"
+              checked={midYear}
+              onChange={(e) => setMidYear(e.target.checked)}
+              className="accent-bloomberg-orange"
+            />
+            Mid-year discounting
+          </label>
+        </div>
+      </AdvancedPanel>
 
       {!ready || hasErrors ? (
         <p role="status" className="text-[11px] text-bloomberg-white/80">
