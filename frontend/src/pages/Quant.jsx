@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getMarketOhlcv } from '../api/market';
-import { DEFAULT_SECTION } from '../components/results/tabs/quant/config';
+import { DEFAULT_SECTION, SECTIONS } from '../components/results/tabs/quant/config';
 import { QuantEmptyState } from '../components/results/tabs/quant/QuantEmptyState';
 import { QuantSidebar } from '../components/results/tabs/quant/QuantSidebar';
+import { useUrlState } from '../components/results/tabs/quant/urlState';
 import QuantPanel from '../components/results/tabs/QuantPanel';
 import TickerSearchBar from '../components/TickerSearchBar';
 import { fetchAnalysisHistory, fetchAnalysisHistoryResult } from '../utils/analysisHistoryApi';
@@ -14,6 +15,8 @@ import { readRecentTickers } from '../utils/recentTickers';
 const RANGES = ['1M', '3M', '6M', 'YTD', '1Y', '2Y', '5Y'];
 const DEFAULT_RANGE = '1Y';
 const SMALL_SCREEN = '(max-width: 1023px)';
+const TICKER_PATTERN = /^[A-Z0-9.^=-]{1,20}$/;
+const SECTION_IDS = SECTIONS.map((s) => s.id);
 
 // Below Tailwind `lg` the sidebar starts collapsed and closes after navigation.
 function isSmallScreen() {
@@ -49,14 +52,21 @@ function historySignal(item) {
 }
 
 export default function Quant() {
-  const [ticker, setTicker] = useState('');
-  const [range, setRange] = useState(DEFAULT_RANGE);
+  const [ticker, setTicker] = useUrlState('t', '', {
+    parse: (s) => s.trim().toUpperCase(),
+    isValid: (s) => TICKER_PATTERN.test(s),
+  });
+  const [range, setRange] = useUrlState('r', DEFAULT_RANGE, {
+    isValid: (r) => RANGES.includes(r),
+  });
   const [points, setPoints] = useState(null); // null = nothing loaded yet
   const [currency, setCurrency] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [history, setHistory] = useState([]);
-  const [section, setSection] = useState(DEFAULT_SECTION);
+  const [section, setSection] = useUrlState('s', DEFAULT_SECTION, {
+    isValid: (s) => SECTION_IDS.includes(s),
+  });
   const [collapsed, setCollapsed] = useState(isSmallScreen);
   const abortRef = useRef(null);
 
@@ -114,8 +124,16 @@ export default function Quant() {
         return { points: res?.points ?? [], currency: res?.currency || '' };
       });
     },
-    [run]
+    [run, setTicker]
   );
+
+  // Shared link / refresh: load the ticker from the URL once.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (ticker) loadTicker(ticker, range);
+  }, [ticker, range, loadTicker]);
 
   function handleRange(rng) {
     setRange(rng);

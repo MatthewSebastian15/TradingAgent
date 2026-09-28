@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PropTypes from 'prop-types';
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Quant from './Quant';
 import { getMarketOhlcv } from '../api/market';
@@ -51,9 +51,11 @@ vi.mock('../components/results/tabs/QuantPanel', () => {
 });
 
 describe('Quant page', () => {
+  beforeEach(() => window.history.replaceState(null, '', '/quant'));
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    window.history.replaceState(null, '', '/quant');
   });
 
   it('shows the idle prompt, range buttons and history', async () => {
@@ -147,5 +149,43 @@ describe('Quant page', () => {
     expect(row.getAttribute('aria-label')).toBe(
       'Load BBCA.JK analysis from 2026-05-01, signal BUY'
     );
+  });
+});
+
+describe('Quant page URL state', () => {
+  beforeEach(() => window.history.replaceState(null, '', '/quant'));
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    window.history.replaceState(null, '', '/quant');
+  });
+
+  it('restores ticker, range and section from the URL', async () => {
+    window.history.replaceState(null, '', '/quant?t=MSFT&r=3M&s=risk');
+    render(<Quant />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('quant-panel').textContent).toBe('MSFT|USD|1|risk|3M')
+    );
+    expect(getMarketOhlcv).toHaveBeenCalledWith('MSFT', expect.objectContaining({ range: '3M' }));
+  });
+
+  it('writes the current view back to the URL and ignores invalid values', async () => {
+    window.history.replaceState(null, '', '/quant?r=10Y&s=nope&t=%3Cscript%3E');
+    render(<Quant />);
+    expect(getMarketOhlcv).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('search-submit'));
+    await screen.findByTestId('quant-panel');
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Quant sections' })).getByRole('button', {
+        name: 'Backtest',
+      })
+    );
+
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get('t')).toBe('NVDA');
+    expect(params.get('s')).toBe('backtest');
+    expect(params.get('r')).toBeNull();
   });
 });
