@@ -19,6 +19,7 @@ import { DASH, finite, fmtNum2, fmtPercent, fmtSignedPct, signedTone } from '../
 import { CARD_GRID, FIELD_GRID } from '../layout';
 import { fmtMoney, fmtMoneyCompact } from '../numberFormat';
 import { usePeerOverviews } from '../usePeerOverviews';
+import { validateDcf } from '../validation';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { Heatmap } from '../viz/Heatmap';
@@ -96,6 +97,19 @@ export function ValuationSection({
           totalDebt: fx > 0 && finite(overview?.total_debt) ? overview.total_debt * fx : undefined,
         });
   const waccPct = useCapm && capm ? capm.wacc * 100 : Number(waccManual);
+  const manualWacc = !(useCapm && capm);
+  const errors = validateDcf({
+    fcf,
+    growth,
+    years,
+    fadeYears,
+    terminalGrowth,
+    shares,
+    waccPct,
+    manualWacc,
+    requireInputs: Boolean(overview || overviewError),
+  });
+  const hasErrors = Object.keys(errors).length > 0;
 
   const ready = dcfInputsReady({ fcf, shares });
   const base = {
@@ -277,25 +291,40 @@ export function ValuationSection({
             Cash flows
           </legend>
           <div className={FIELD_GRID}>
-            <NumberField label="Base FCF" value={fcf} onChange={edit('fcf', setFcf)} suffix="M" />
+            <NumberField
+              label="Base FCF"
+              value={fcf}
+              onChange={edit('fcf', setFcf)}
+              suffix="M"
+              error={errors.fcf}
+            />
             <NumberField
               label="FCF growth"
               value={growth}
               onChange={edit('growth', setGrowth)}
               suffix="%"
+              error={errors.growth}
             />
-            <NumberField label="Years" value={years} onChange={edit('years', setYears)} step="1" />
+            <NumberField
+              label="Years"
+              value={years}
+              onChange={edit('years', setYears)}
+              step="1"
+              error={errors.years}
+            />
             <NumberField
               label="Fade years"
               value={fadeYears}
               onChange={edit('fadeYears', setFadeYears)}
               step="1"
+              error={errors.fadeYears}
             />
             <NumberField
               label="Terminal growth"
               value={terminalGrowth}
               onChange={edit('terminalGrowth', setTerminalGrowth)}
               suffix="%"
+              error={errors.terminalGrowth}
             />
           </div>
           <label className="flex items-center gap-2 text-[11px] text-bloomberg-white/80">
@@ -341,6 +370,7 @@ export function ValuationSection({
                 value={waccManual}
                 onChange={edit('waccManual', setWaccManual)}
                 suffix="%"
+                error={errors.wacc}
               />
             )}
           </div>
@@ -379,6 +409,7 @@ export function ValuationSection({
               value={shares}
               onChange={edit('shares', setShares)}
               suffix="M"
+              error={errors.shares}
             />
             <NumberField
               label="Net debt"
@@ -390,10 +421,12 @@ export function ValuationSection({
         </fieldset>
       </div>
 
-      {!ready ? (
-        <NoticeBox title="Inputs needed">
-          Enter base FCF and shares outstanding, or wait for fundamentals to auto-fill.
-        </NoticeBox>
+      {!ready || hasErrors ? (
+        <p role="status" className="text-[11px] text-bloomberg-white/80">
+          {overview || overviewError
+            ? 'Fix the highlighted fields to see a valuation.'
+            : 'Waiting for fundamentals — or enter base FCF and shares outstanding manually.'}
+        </p>
       ) : !result ? (
         <NoticeBox title="Check inputs">
           WACC must exceed terminal growth and shares must be positive.

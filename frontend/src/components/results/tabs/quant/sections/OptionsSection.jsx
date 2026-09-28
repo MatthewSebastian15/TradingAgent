@@ -16,6 +16,7 @@ import { DASH, finite, fmtNum2, fmtPercent } from '../format';
 import { FIELD_GRID } from '../layout';
 import { currencyDecimals, fmtMoney } from '../numberFormat';
 import { SegmentedControl } from '../SegmentedControl';
+import { validateOptions } from '../validation';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { LineChart } from '../viz/LineChart';
@@ -58,6 +59,8 @@ export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, 
   const r = Number(rate) / 100;
   const sigma = Number(volPct) / 100;
   const q = Number(yieldPct) / 100;
+  const errors = validateOptions({ strike, days, volPct, rate, yieldPct });
+  const hasErrors = Object.keys(errors).length > 0;
   const call = blackScholes(spot, K, T, r, sigma, 'call', q);
   const put = blackScholes(spot, K, T, r, sigma, 'put', q);
   const selected = type === 'call' ? call : put;
@@ -111,6 +114,7 @@ export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, 
             value={strike}
             onChange={setStrike}
             suffix={ccy || undefined}
+            error={errors.strike}
           />
           <SegmentedControl
             size="sm"
@@ -123,12 +127,20 @@ export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, 
             }}
           />
         </div>
-        <NumberField label="Days to expiry" value={days} onChange={setDays} step="1" suffix="d" />
+        <NumberField
+          label="Days to expiry"
+          value={days}
+          onChange={setDays}
+          step="1"
+          suffix="d"
+          error={errors.days}
+        />
         <NumberField
           label="Volatility"
           value={volInput === '' ? Number(volPct.toFixed(1)) : volInput}
           onChange={setVolInput}
           suffix="%"
+          error={errors.vol}
           hint={
             volInput === ''
               ? `Auto: ${fmtPercent(autoVol)} (${volWindow}-period realized)`
@@ -136,12 +148,19 @@ export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, 
           }
           onReset={volInput === '' ? undefined : () => setVolInput('')}
         />
-        <NumberField label="Risk-free rate" value={rate} onChange={setRate} suffix="%" />
+        <NumberField
+          label="Risk-free rate"
+          value={rate}
+          onChange={setRate}
+          suffix="%"
+          error={errors.rate}
+        />
         <NumberField
           label="Dividend yield"
           value={yieldInput === '' ? Number(yieldPct.toFixed(2)) : yieldInput}
           onChange={setYieldInput}
           suffix="%"
+          error={errors.yield}
           hint={yieldInput === '' ? `Auto: ${autoYield.toFixed(2)}%` : undefined}
           onReset={yieldInput === '' ? undefined : () => setYieldInput('')}
         />
@@ -157,7 +176,11 @@ export function OptionsSection({ spot, closes, ppy, defaultRate, ccy, overview, 
         />
       </div>
 
-      {!call || !put ? (
+      {hasErrors ? (
+        <p role="status" className="text-[11px] text-bloomberg-white/80">
+          Fix the highlighted fields.
+        </p>
+      ) : !call || !put ? (
         <NoticeBox title="Check inputs">
           Strike, days and volatility must all be positive.
         </NoticeBox>

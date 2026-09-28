@@ -104,4 +104,21 @@ describe('ValuationSection', () => {
     rerender(<ValuationSection {...props} overview={overviewBoth} />);
     expect(screen.getByLabelText(/FCF growth/).value).toBe('20');
   });
+
+  it('shows the WACC vs terminal growth error on the field', () => {
+    render(<ValuationSection {...props} overview={fundamentals} />);
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Terminal growth/ }), {
+      target: { value: '9.9' },
+    });
+    const field = screen.getByRole('spinbutton', { name: /Terminal growth/ });
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText(/must be greater than terminal growth/)).toBeTruthy();
+    expect(screen.queryByText('Check inputs')).toBeNull();
+    expect(screen.getByText('Fix the highlighted fields to see a valuation.')).toBeTruthy();
+  });
+
+  it('does not show required-field errors before fundamentals load', () => {
+    render(<ValuationSection {...props} overview={null} />);
+    expect(screen.queryByText('Enter base free cash flow.')).toBeNull();
+  });
 });

@@ -19,3 +19,4 @@ export * from './quant/seasonality';
 export * from './quant/persistence';
 export * from './quant/sizing';
 export * from './quant/optimizer';
+export * from './quant/validation';

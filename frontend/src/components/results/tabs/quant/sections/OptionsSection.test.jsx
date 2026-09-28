@@ -37,4 +37,16 @@ describe('OptionsSection', () => {
     fireEvent.change(screen.getByLabelText(/Market price/), { target: { value: '0.1' } });
     expect(screen.getByText(/at or below intrinsic value/)).toBeTruthy();
   });
+
+  it('marks an invalid strike on the field', () => {
+    render(<OptionsSection {...props} />);
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Strike/ }), {
+      target: { value: '0' },
+    });
+    expect(screen.getByRole('spinbutton', { name: /Strike/ }).getAttribute('aria-invalid')).toBe(
+      'true'
+    );
+    expect(screen.getByText('Strike must be greater than 0.')).toBeTruthy();
+    expect(screen.queryByText('Call vs put')).toBeNull();
+  });
 });
