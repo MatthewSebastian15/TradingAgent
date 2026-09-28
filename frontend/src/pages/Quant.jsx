@@ -68,6 +68,7 @@ export default function Quant() {
     isValid: (s) => SECTION_IDS.includes(s),
   });
   const [collapsed, setCollapsed] = useState(isSmallScreen);
+  const [reportResult, setReportResult] = useState(null);
   const abortRef = useRef(null);
 
   // Load the analysis-history list once for the "Load from history" list.
@@ -119,6 +120,7 @@ export default function Quant() {
         .toUpperCase();
       if (!symbol) return;
       setTicker(symbol);
+      setReportResult(null);
       run(async (signal) => {
         const res = await getMarketOhlcv(symbol, { range: rng, signal });
         return { points: res?.points ?? [], currency: res?.currency || '' };
@@ -148,6 +150,7 @@ export default function Quant() {
     setRange('1Y');
     run(async (signal) => {
       const res = await fetchAnalysisHistoryResult(id, { signal });
+      if (!signal.aborted) setReportResult(res);
       return { points: pointsFromResult(res), currency: currencyFromResult(res) };
     });
   }
@@ -270,6 +273,7 @@ export default function Quant() {
               section={section}
               onSectionChange={selectSection}
               syncUrl
+              reportResult={reportResult}
             />
           )}
         </main>

@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from '
 
 import { getApiStatus, getMarketOhlcv } from '../../../api/market';
 import { useStockOverview } from '../../../hooks/useStockOverview';
+import { openQuantReport } from '../../../utils/reportApi';
 import NoticeBox from '../NoticeBox';
 import { SectionBlock } from './quant/charts';
 import {
@@ -120,6 +121,7 @@ function QuantPanel({
   section,
   onSectionChange,
   syncUrl = false,
+  reportResult,
 }) {
   // `range` (Quant page) pins every fetch to the user's window. Without it (AI-agent
   // result tab) the panel extends the 1Y analysis chart to QUANT_RANGE for stabler stats.
@@ -806,6 +808,11 @@ function QuantPanel({
                 ? `${quality.startDate} → ${quality.endDate} · ${quality.observations} obs`
                 : ''
             }
+            onOpenReport={
+              reportResult
+                ? (snapshot) => openQuantReport({ result: reportResult, quantSnapshot: snapshot })
+                : undefined
+            }
           />
         </SectionBlock>
       )}
@@ -1071,6 +1078,7 @@ QuantPanel.propTypes = {
   section: PropTypes.string,
   onSectionChange: PropTypes.func,
   syncUrl: PropTypes.bool,
+  reportResult: PropTypes.object,
 };
 
 export default memo(QuantPanel);

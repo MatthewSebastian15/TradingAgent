@@ -10,6 +10,7 @@ vi.mock('./api', () => ({
 import {
   downloadAnalysisPdf,
   openAnalysisHtmlReport,
+  openQuantReport,
   reportHtmlRequestUrl,
   reportHtmlUrl,
   reportPdfRequestUrl,
@@ -107,5 +108,32 @@ describe('downloadAnalysisPdf', () => {
       _errorMessage: 'report_not_found',
     });
     await expect(downloadAnalysisPdf('job1')).rejects.toThrow(/payload is unavailable/);
+  });
+});
+
+describe('openQuantReport', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:report');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    window.open = vi.fn(() => ({}));
+  });
+
+  it('posts the stored result with the quant snapshot', async () => {
+    globalThis.fetch.mockResolvedValueOnce({ ok: true, text: async () => '<html>q</html>' });
+    const quantSnapshot = { window: 'w', summary: 's', rows: [{ label: 'Sharpe', value: '1.2' }] };
+
+    await openQuantReport({
+      result: { request_id: 'r1', ticker: 'BBCA.JK', secret_field: 'x' },
+      quantSnapshot,
+    });
+
+    expect(globalThis.fetch.mock.calls[0][0]).toBe('/api/analysis/report.html');
+    expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body)).toEqual({
+      request_id: 'r1',
+      ticker: 'BBCA.JK',
+      quant_snapshot: quantSnapshot,
+    });
+    expect(window.open).toHaveBeenCalled();
   });
 });

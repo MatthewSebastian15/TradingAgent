@@ -144,6 +144,7 @@ function compactReportPayload(result) {
     'investment_plan',
     'trader_investment_plan',
     'final_trade_decision',
+    'quant_snapshot',
   ];
 
   return allowedKeys.reduce((payload, key) => {
@@ -239,6 +240,14 @@ export async function openAnalysisHtmlReport({ resourceId, result }) {
   }
 
   const html = await fetchReportHtmlByPayload(result);
+  openHtmlBlob(html);
+}
+
+// Quant page: the stored analysis snapshot plus the browser-computed quant snapshot,
+// rendered through the bounded payload endpoint (ADR-020) so nothing is recomputed.
+export async function openQuantReport({ result, quantSnapshot }) {
+  if (!result) throw new Error('Load a past analysis to include quant numbers in its report.');
+  const html = await fetchReportHtmlByPayload({ ...result, quant_snapshot: quantSnapshot });
   openHtmlBlob(html);
 }
 

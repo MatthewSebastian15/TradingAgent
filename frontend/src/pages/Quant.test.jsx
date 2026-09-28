@@ -33,10 +33,11 @@ vi.mock('../components/TickerSearchBar', () => {
   return { default: TickerSearchBarStub };
 });
 vi.mock('../components/results/tabs/QuantPanel', () => {
-  function QuantPanelStub({ points, currency, symbol, section, range }) {
+  function QuantPanelStub({ points, currency, symbol, section, range, reportResult }) {
     return (
       <div data-testid="quant-panel">
         {symbol}|{currency}|{points.length}|{section}|{range}
+        {reportResult ? '|report' : ''}
       </div>
     );
   }
@@ -46,6 +47,7 @@ vi.mock('../components/results/tabs/QuantPanel', () => {
     symbol: PropTypes.string,
     section: PropTypes.string,
     range: PropTypes.string,
+    reportResult: PropTypes.object,
   };
   return { default: QuantPanelStub };
 });
@@ -101,6 +103,17 @@ describe('Quant page', () => {
     );
     expect(fetchAnalysisHistoryResult).toHaveBeenCalledWith('r1', expect.anything());
     expect(screen.getByTestId('quant-panel').textContent).toContain('|1Y');
+  });
+
+  it('passes the loaded history result for the quant report', async () => {
+    render(<Quant />);
+    fireEvent.click(await screen.findByText('BBCA.JK'));
+    await waitFor(() => expect(screen.getByTestId('quant-panel').textContent).toContain('|report'));
+
+    fireEvent.click(screen.getByText('search-submit'));
+    await waitFor(() =>
+      expect(screen.getByTestId('quant-panel').textContent).not.toContain('|report')
+    );
   });
 
   it('navigates sections from the grouped sidebar', async () => {
