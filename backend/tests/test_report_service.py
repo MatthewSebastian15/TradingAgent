@@ -475,6 +475,43 @@ def test_html_report_renders_disclaimer():
     assert html.rfind("Disclaimer") > html.find("Executive Summary")
 
 
+def test_html_report_renders_bounded_quant_snapshot_before_disclaimer():
+    rows = [{"label": f"Metric {i}", "value": f"{i}.0%"} for i in range(40)]
+    rows[0] = {"label": "Sharpe <b>", "value": "1.20"}
+    snapshot = {
+        "window": "2025-09-12 → 2026-09-11 · 251 obs",
+        "summary": "NVDA has moved about 40.0% a year.",
+        "rows": rows,
+    }
+
+    html = render_analysis_report_html(build_report_context(_base_result(quant_snapshot=snapshot)))
+
+    assert "Quant Snapshot" in html
+    assert "Sharpe &lt;b&gt;" in html
+    assert "Metric 23" in html
+    assert "Metric 24" not in html
+    assert "NVDA has moved about 40.0% a year." in html
+    assert html.find("Quant Snapshot") < html.rfind("Disclaimer")
+
+
+def test_report_context_ignores_missing_or_malformed_quant_snapshot():
+    assert build_report_context(_base_result())["quant_snapshot"] is None
+    assert (
+        build_report_context(_base_result(quant_snapshot={"rows": "x"}))["quant_snapshot"] is None
+    )
+    malformed = {"rows": [None, {"label": "", "value": "1"}, {"label": "Beta", "value": None}]}
+    assert build_report_context(_base_result(quant_snapshot=malformed))["quant_snapshot"] is None
+    long_row = {"rows": [{"label": "L" * 500, "value": "V"}]}
+    assert (
+        len(
+            build_report_context(_base_result(quant_snapshot=long_row))["quant_snapshot"]["rows"][
+                0
+            ]["label"]
+        )
+        == 160
+    )
+
+
 def test_report_context_contains_key_reasons_paragraph():
     report = build_report_context(_base_result())
 

@@ -471,6 +471,39 @@ def _snapshot_rows(report: dict[str, Any]) -> list[dict[str, str]]:
     return rows
 
 
+_QUANT_MAX_ROWS = 24
+_QUANT_MAX_TEXT = 160
+_QUANT_MAX_SUMMARY = 1200
+
+
+def _bounded_text(value: Any, limit: int) -> str:
+    return (_clean_text(value) or "")[:limit]
+
+
+def _quant_snapshot(result: dict[str, Any]) -> dict[str, Any] | None:
+    """Client-computed Quant tab snapshot, sanitized and bounded for the report."""
+
+    raw = _as_dict(result.get("quant_snapshot"))
+    items = raw.get("rows") if isinstance(raw.get("rows"), list) else []
+    rows: list[dict[str, str]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        label = _bounded_text(item.get("label"), _QUANT_MAX_TEXT)
+        value = _bounded_text(item.get("value"), _QUANT_MAX_TEXT)
+        if label and value:
+            rows.append({"label": label, "value": value})
+        if len(rows) >= _QUANT_MAX_ROWS:
+            break
+    if not rows:
+        return None
+    return {
+        "window": _bounded_text(raw.get("window"), _QUANT_MAX_TEXT),
+        "summary": _bounded_text(raw.get("summary"), _QUANT_MAX_SUMMARY),
+        "rows": rows,
+    }
+
+
 def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize backend analysis payload into a template-friendly report dict."""
     validate_report_scope(result)
@@ -481,6 +514,7 @@ def build_report_context(result: dict[str, Any]) -> dict[str, Any]:
     _attach_core_report_rows(report, result)
     _attach_risk_report_sections(report)
     report["snapshot_rows"] = _snapshot_rows(report)
+    report["quant_snapshot"] = _quant_snapshot(result)
     return report
 
 
