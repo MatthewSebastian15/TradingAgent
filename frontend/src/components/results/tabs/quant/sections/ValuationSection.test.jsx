@@ -32,11 +32,11 @@ const props = {
 describe('ValuationSection', () => {
   afterEach(() => cleanup());
 
-  it('values the company with CAPM WACC, reverse DCF and cash-flow table once fundamentals arrive', () => {
+  it('values the company with CAPM WACC, reverse DCF and cash-flow table once fundamentals arrive', async () => {
     const { rerender } = render(<ValuationSection {...props} overview={null} />);
     expect(screen.queryByText('Fair Value / Share')).toBeNull();
     rerender(<ValuationSection {...props} overview={fundamentals} />);
-    expect(screen.getByText('Fair Value / Share')).toBeTruthy();
+    expect(await screen.findByText('Fair Value / Share')).toBeTruthy();
     expect(screen.getByText('Implied growth (reverse DCF)')).toBeTruthy();
     expect(screen.getByText('Cost of equity (CAPM)')).toBeTruthy();
     expect(screen.getByText('Projected cash flows')).toBeTruthy();
@@ -53,11 +53,12 @@ describe('ValuationSection', () => {
     expect(screen.getByRole('spinbutton', { name: /Base FCF/ }).value).toBe('32000000');
   });
 
-  it('warns when the terminal value dominates', () => {
+  it('warns when the terminal value dominates', async () => {
     render(<ValuationSection {...props} overview={fundamentals} />);
+    await screen.findByText('Fair Value / Share');
     fireEvent.change(screen.getByLabelText(/^Years/), { target: { value: '1' } });
     fireEvent.change(screen.getByLabelText(/Fade years/), { target: { value: '0' } });
-    expect(screen.getByText('Terminal value dominates')).toBeTruthy();
+    expect(await screen.findByText('Terminal value dominates')).toBeTruthy();
   });
 
   it('compares multiples with peer medians', async () => {

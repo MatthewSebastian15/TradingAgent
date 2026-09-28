@@ -32,6 +32,7 @@ import { ValuationSection } from './quant/sections/ValuationSection';
 import { VolatilitySection } from './quant/sections/VolatilitySection';
 import { SectionSkeleton } from './quant/SectionSkeleton';
 import { SectionTabs } from './quant/SectionTabs';
+import { useDebouncedValue } from './quant/useDebouncedValue';
 import { useMonteCarlo } from './quant/useMonteCarlo';
 import {
   adfTest,
@@ -473,10 +474,11 @@ function QuantPanel({ points, currency, symbol, range, section, onSectionChange 
     return { ...btParams, lookback: btParams.mrLookback ?? auto };
   }, [btParams, strategy, ouHL, adf]);
 
+  const btInput = useDebouncedValue(btEffective);
   const backtestResult = useMemo(() => {
     if (visible && !visible.has('backtest')) return null;
-    return backtest(closes, strategy, btEffective, rfDaily, ppy);
-  }, [visible, closes, strategy, btEffective, rfDaily, ppy]);
+    return backtest(closes, strategy, btInput, rfDaily, ppy);
+  }, [visible, closes, strategy, btInput, rfDaily, ppy]);
 
   const returnBins = useMemo(() => returnHistogram(returns, 30), [returns]);
 

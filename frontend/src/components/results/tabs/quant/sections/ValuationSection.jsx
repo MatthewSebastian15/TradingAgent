@@ -19,6 +19,7 @@ import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtNum2, fmtPercent, fmtSignedPct, signedTone } from '../format';
 import { CARD_GRID, FIELD_GRID } from '../layout';
 import { fmtMoney, fmtMoneyCompact } from '../numberFormat';
+import { useDebouncedValue } from '../useDebouncedValue';
 import { usePeerOverviews } from '../usePeerOverviews';
 import { validateDcf } from '../validation';
 import { CHART_COLORS } from '../viz/chartTheme';
@@ -135,73 +136,36 @@ export function ValuationSection({
     netDebt: Number(netDebt),
     midYear,
   };
+  // Debounce the heavy DCF/Monte Carlo math so typing stays instant; base's fields
+  // (incl. CAPM-derived waccPct) settle 150ms after the user stops changing them.
+  const baseKey = JSON.stringify(base);
+  const settledKey = useDebouncedValue(baseKey);
+
   const result = useMemo(() => {
     if (!ready) return null;
-    return dcf({
-      fcf: Number(fcf),
-      growth: Number(growth) / 100,
-      years: Number(years),
-      fadeYears: Number(fadeYears),
-      wacc: waccPct / 100,
-      terminalGrowth: Number(terminalGrowth) / 100,
-      shares: Number(shares),
-      netDebt: Number(netDebt),
-      midYear,
-    });
-  }, [ready, fcf, growth, years, fadeYears, waccPct, terminalGrowth, shares, netDebt, midYear]);
+    return dcf(JSON.parse(settledKey));
+  }, [ready, settledKey]);
 
   const implied = useMemo(() => {
     if (!result) return null;
-    return impliedGrowth(
-      {
-        fcf: Number(fcf),
-        growth: Number(growth) / 100,
-        years: Number(years),
-        fadeYears: Number(fadeYears),
-        wacc: waccPct / 100,
-        terminalGrowth: Number(terminalGrowth) / 100,
-        shares: Number(shares),
-        netDebt: Number(netDebt),
-        midYear,
-      },
-      spot
-    );
-  }, [
-    result,
-    fcf,
-    growth,
-    years,
-    fadeYears,
-    waccPct,
-    terminalGrowth,
-    shares,
-    netDebt,
-    midYear,
-    spot,
-  ]);
+    return impliedGrowth(JSON.parse(settledKey), spot);
+  }, [result, settledKey, spot]);
   const upside = result && spot > 0 ? (result.fairValuePerShare / spot - 1) * 100 : null;
-
-  // CAPM inputs (erp/costOfDebt/taxRate) feed waccPct on every keystroke; debounce before
-  // it reaches the 2000-path Monte Carlo below so typing stays instant.
-  const [debouncedWaccPct, setDebouncedWaccPct] = useState(waccPct);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedWaccPct(waccPct), 300);
-    return () => clearTimeout(timer);
-  }, [waccPct]);
 
   const mc = useMemo(() => {
     if (!showMC || !ready) return null;
-    const g = Number(growth) / 100;
-    const w = debouncedWaccPct / 100;
-    const tg = Number(terminalGrowth) / 100;
+    const settled = JSON.parse(settledKey);
+    const g = settled.growth;
+    const w = settled.wacc;
+    const tg = settled.terminalGrowth;
     return dcfMonteCarlo(
       {
-        fcf: Number(fcf),
-        years: Number(years),
-        fadeYears: Number(fadeYears),
-        shares: Number(shares),
-        netDebt: Number(netDebt),
-        midYear,
+        fcf: settled.fcf,
+        years: settled.years,
+        fadeYears: settled.fadeYears,
+        shares: settled.shares,
+        netDebt: settled.netDebt,
+        midYear: settled.midYear,
       },
       {
         growth: [g - 0.03, g + 0.03],
@@ -211,30 +175,23 @@ export function ValuationSection({
       2000,
       42
     );
-  }, [
-    showMC,
-    ready,
-    fcf,
-    years,
-    fadeYears,
-    shares,
-    netDebt,
-    midYear,
-    growth,
-    debouncedWaccPct,
-    terminalGrowth,
-  ]);
+  }, [showMC, ready, settledKey]);
 
   const waccAxis = [-2, -1, 0, 1, 2].map((d) => waccPct + d);
   const tgAxis = [-1, -0.5, 0, 0.5, 1].map((d) => Number(terminalGrowth) + d);
-  const grid = result
-    ? waccAxis.map((w) =>
-        tgAxis.map(
-          (tg) =>
-            dcf({ ...base, wacc: w / 100, terminalGrowth: tg / 100 })?.fairValuePerShare ?? null
-        )
-      )
-    : [];
+  const grid = useMemo(
+    () =>
+      result
+        ? waccAxis.map((w) =>
+            tgAxis.map(
+              (tg) =>
+                dcf({ ...JSON.parse(settledKey), wacc: w / 100, terminalGrowth: tg / 100 })
+                  ?.fairValuePerShare ?? null
+            )
+          )
+        : [],
+    [result, settledKey, waccAxis, tgAxis]
+  );
 
   const peerOverviews = usePeerOverviews(peerSymbols);
   const multiples = overview ? peerMultiples(overview, peerOverviews) : [];
