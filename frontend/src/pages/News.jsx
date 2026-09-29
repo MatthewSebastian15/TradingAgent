@@ -135,6 +135,15 @@ export default function News() {
       <main className="terminal-news px-3 py-3">
         <Card className="terminal-news-panel overflow-hidden rounded-lg border-white/[0.08] bg-[#050505] text-bloomberg-white shadow-lg shadow-black/20">
           <CardContent className="p-3">
+            {status === 'refreshing' && displayedArticles.length > 0 && (
+              <div
+                data-testid="news-refresh-bar"
+                aria-hidden
+                className="mb-2 h-0.5 w-full overflow-hidden rounded-full bg-bloomberg-border/40"
+              >
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-bloomberg-orange" />
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               {justUpdated && (
                 <span

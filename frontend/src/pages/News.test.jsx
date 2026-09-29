@@ -253,6 +253,33 @@ describe('News page', () => {
     expect(screen.queryByText(/Refresh is cooling down/i)).not.toBeInTheDocument();
   });
 
+  it('shows a thin loading bar when refreshing with articles already visible', () => {
+    useGeneralNews.mockReturnValue({
+      data: { articles },
+      status: 'refreshing',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.getByTestId('news-refresh-bar')).toBeInTheDocument();
+    expect(screen.getAllByText('Stocks gain after earnings').length).toBeGreaterThan(0);
+  });
+
+  it('does not show the loading bar once the refresh completes', () => {
+    useGeneralNews.mockReturnValue({
+      data: { articles },
+      status: 'success',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.queryByTestId('news-refresh-bar')).not.toBeInTheDocument();
+  });
+
   it('hides frontend status metadata that should not be shown', () => {
     useGeneralNews.mockReturnValue({
       data: {
