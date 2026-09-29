@@ -23,7 +23,18 @@ describe('NewsFilterBar', () => {
     const onChange = vi.fn();
     render(<NewsFilterBar selectedCategory="all" onChange={onChange} />);
 
-    ['ALL', 'MARKETS', 'WORLD', 'MACRO', 'FOREX', 'CRYPTO'].forEach((label) => {
+    [
+      'ALL',
+      'MARKETS',
+      'WORLD',
+      'FINANCE',
+      'TECH',
+      'MACRO',
+      'CENTRAL BANK',
+      'REGULATORY',
+      'FOREX',
+      'CRYPTO',
+    ].forEach((label) => {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'INDONESIA' })).not.toBeInTheDocument();

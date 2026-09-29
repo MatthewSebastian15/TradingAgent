@@ -127,7 +127,7 @@ describe('News page', () => {
     expect(reload).toHaveBeenCalledWith({ force: false, silent: true });
   });
 
-  it('hides category buttons and frontend status metadata that should not be shown', () => {
+  it('hides frontend status metadata that should not be shown', () => {
     useGeneralNews.mockReturnValue({
       data: {
         articles,
@@ -142,10 +142,10 @@ describe('News page', () => {
 
     render(<News />);
 
-    expect(screen.queryByRole('button', { name: 'FINANCE' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'TECH' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'CENTRAL BANK' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'REGULATORY' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'FINANCE' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'TECH' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'CENTRAL BANK' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'REGULATORY' })).toBeInTheDocument();
     expect(screen.queryByText(/stories/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Updated/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Cache fresh/i)).not.toBeInTheDocument();

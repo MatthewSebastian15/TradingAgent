@@ -6,11 +6,21 @@ import { Button } from '@/components/ui/button';
 import { getCategoryColor } from '@/lib/news/categoryColors';
 import { prefetchCategory } from '@/lib/news/categoryPrefetch';
 
+// Keep this list in sync with the backend's category set: both
+// packages/tradingagents/dataflows/news/general_news_categories.py's
+// GENERAL_NEWS_CATEGORIES and backend/config/defaults.py's
+// GENERAL_NEWS_ALLOWED_CATEGORIES. Colors for every key already exist in
+// frontend/src/lib/news/categoryColors.js and labels in NewsRow.jsx's
+// CATEGORY_LABELS — this is the one remaining place that was missing them.
 const NEWS_CATEGORIES = [
   { key: 'all', label: 'ALL' },
   { key: 'markets', label: 'MARKETS' },
   { key: 'world', label: 'WORLD' },
+  { key: 'finance', label: 'FINANCE' },
+  { key: 'tech', label: 'TECH' },
   { key: 'macro', label: 'MACRO' },
+  { key: 'central_bank', label: 'CENTRAL BANK' },
+  { key: 'regulatory', label: 'REGULATORY' },
   { key: 'forex', label: 'FOREX' },
   { key: 'crypto', label: 'CRYPTO' },
 ];
