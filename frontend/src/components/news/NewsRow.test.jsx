@@ -89,6 +89,29 @@ describe('NewsRow', () => {
 
     expect(screen.getByText('2w')).toBeInTheDocument();
   });
+
+  it('makes the entire card the click target, not just the headline text', () => {
+    const { container } = render(
+      <NewsRow
+        article={{
+          title: 'Bitcoin slips as traders await macro data',
+          summary: 'Bitcoin slipped as traders waited for macro data.',
+          url: 'https://example.com/news',
+          source: 'Bloomberg',
+          category: 'crypto',
+          published_at: '2026-06-15T01:00:00Z',
+        }}
+      />
+    );
+
+    const link = screen.getByRole('link', { name: 'Bitcoin slips as traders await macro data' });
+    expect(link).toHaveAttribute('href', 'https://example.com/news');
+
+    const card = container.querySelector('.terminal-news-row');
+    expect(card.firstElementChild).toBe(link);
+    expect(link.className).toEqual(expect.stringContaining('absolute'));
+    expect(link.className).toEqual(expect.stringContaining('inset-0'));
+  });
 });
 
 describe('NewsRow final category labels', () => {

@@ -81,21 +81,23 @@ export default function NewsRow({ article }) {
   const description = limitDescriptionWords(article.description || article.summary, title);
   const categoryColor = getCategoryColor(categoryKey);
 
-  const titleNode = url ? (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="terminal-news-headline font-bold text-neutral-100 transition-colors hover:text-bloomberg-orange"
-    >
+  const titleNode = (
+    <span className="terminal-news-headline font-bold text-neutral-100 transition-colors group-hover:text-bloomberg-orange">
       {title}
-    </a>
-  ) : (
-    <span className="terminal-news-headline font-bold text-neutral-100">{title}</span>
+    </span>
   );
 
   return (
-    <article className="terminal-news-row rounded-lg border border-white/[0.08] bg-[#050505] px-3.5 py-2.5 transition-colors hover:bg-bloomberg-orange/5">
+    <article className="terminal-news-row group relative rounded-lg border border-white/[0.08] bg-[#050505] px-3.5 py-2.5 transition-colors hover:bg-bloomberg-orange/5">
+      {url && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={title}
+          className="absolute inset-0 z-10 rounded-lg"
+        />
+      )}
       <div className="min-w-0 space-y-0.5">
         <div className="terminal-news-meta flex min-w-0 items-center gap-1.5 uppercase leading-4 tracking-wide">
           <span className="terminal-news-time shrink-0 text-[11px] text-gray-500">{date}</span>
