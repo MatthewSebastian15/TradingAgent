@@ -192,10 +192,9 @@ class RSSContextProvider(BaseNewsProvider):
                 attempt["status"] = "success"
                 return _done("success", parsed)
             except requests.Timeout:
+                # A timeout already means the feed is slow or dead right now; a retry would
+                # spend a second full timeout before the failure cooldown starts.
                 attempt["status"] = "timeout"
-                if retry < max_retries:
-                    time.sleep(retry_delays[min(retry, len(retry_delays) - 1)])
-                    continue
                 return _done("timeout", None)
             except Exception as exc:
                 logger.info("rss_context feed failed feed=%s error=%s", feed.id, exc)
