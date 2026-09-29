@@ -192,19 +192,17 @@ export function BacktestSection({
         )}
       </div>
 
-      <ProOnly>
-        <AdvancedPanel>
-          <div className={FIELD_GRID}>
-            <SliderField
-              label="Cost / trade (bps)"
-              value={params.costBps}
-              min={0}
-              max={50}
-              onChange={(v) => onParamChange('costBps', v)}
-            />
-          </div>
-        </AdvancedPanel>
-      </ProOnly>
+      <AdvancedPanel>
+        <div className={FIELD_GRID}>
+          <SliderField
+            label="Cost / trade (bps)"
+            value={params.costBps}
+            min={0}
+            max={50}
+            onChange={(v) => onParamChange('costBps', v)}
+          />
+        </div>
+      </AdvancedPanel>
 
       {!result || !detail ? (
         <NoticeBox title="Backtest">

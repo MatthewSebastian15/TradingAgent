@@ -79,12 +79,14 @@ export function DistributionSection({
           label="Skewness"
           value={fmtNum2(skew)}
           tone={signedTone(skew)}
+          gloss="Negative means occasional large losses; positive means occasional large gains."
           formula="Adjusted Fisher-Pearson G1."
         />
         <MetricCard
           label="Excess Kurtosis"
           value={fmtNum2(kurt)}
           tone={finite(kurt) && kurt > 1 ? 'bad' : 'neutral'}
+          gloss="How fat the tails are: above 0 means extreme days happen more often than a bell curve predicts."
           formula="Unbiased G2; 0 = normal tails."
         />
         <ProOnly>

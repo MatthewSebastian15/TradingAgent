@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { RiskSection } from './RiskSection';
 import { benchmarkStats, sharpeStats } from '../../quantUtils';
+import { QuantModeProvider } from '../mode';
 
 const market = Array.from(
   { length: 300 },
@@ -139,5 +140,16 @@ describe('RiskSection', () => {
     );
     expect(screen.queryByText(/Significant at roughly 95%/)).toBeNull();
     expect(screen.getByText(/t-stat unavailable/)).toBeTruthy();
+  });
+
+  it('keeps a plain explanation on every ratio card in Basic mode', () => {
+    render(
+      <QuantModeProvider mode="basic" onModeChange={() => {}}>
+        <RiskSection {...baseProps} />
+      </QuantModeProvider>
+    );
+    for (const name of [/About Sharpe/, /About Sortino/, /About Calmar Ratio/, /About Downside/]) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
   });
 });

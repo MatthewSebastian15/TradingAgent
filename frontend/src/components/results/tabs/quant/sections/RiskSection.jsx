@@ -207,6 +207,7 @@ export function RiskSection({
               ? `SE ${fmtNum2(sharpeInfo.standardError)} · P(SR>0) ${fmtPercent(sharpeInfo.probabilisticSharpe * 100)} · ${significanceNote({ n: sharpeInfo.observations, tStat: sharpeInfo.tStat })}`
               : sampleNote(obs)
           }
+          gloss="Return above the risk-free rate for each unit of volatility. Higher is better; below 0 means it did worse than cash."
           formula="(mean − rf) / stdev × √periods. SE per Mertens (skew/kurtosis adjusted); P(SR>0) is the Probabilistic Sharpe Ratio."
         />
         <MetricCard
@@ -214,17 +215,20 @@ export function RiskSection({
           value={fmtRatio(srt)}
           tone={ratioTone(srt)}
           sample={sampleNote(obs)}
+          gloss="Like Sharpe, but only downside swings count as risk."
           formula="(mean − rf) / downside deviation × √periods."
         />
         <MetricCard
           label="Calmar Ratio"
           value={fmtRatio(cal)}
           tone={ratioTone(cal)}
+          gloss="Yearly return divided by the worst fall from a peak."
           formula="CAGR ÷ |max drawdown|."
         />
         <MetricCard
           label="Downside Deviation"
           value={fmtPercent(downDev)}
+          gloss="How large the losing days are, ignoring gains (annualized)."
           formula="√mean(min(0, r)²) × √periods."
         />
       </div>

@@ -112,27 +112,20 @@ export function CorrelationSection({
         />
       </div>
 
-      <ProOnly>
-        <AdvancedPanel>
-          <div className={FIELD_GRID}>
-            <SegmentedControl
-              ariaLabel="Covariance estimator"
-              options={[
-                { id: false, label: 'Sample covariance' },
-                { id: true, label: 'Ledoit-Wolf' },
-              ]}
-              value={shrink}
-              onChange={onShrinkChange}
-            />
-            <NumberField
-              label="Long-only weight cap"
-              value={cap}
-              onChange={onCapChange}
-              suffix="%"
-            />
-          </div>
-        </AdvancedPanel>
-      </ProOnly>
+      <AdvancedPanel>
+        <div className={FIELD_GRID}>
+          <SegmentedControl
+            ariaLabel="Covariance estimator"
+            options={[
+              { id: false, label: 'Sample covariance' },
+              { id: true, label: 'Ledoit-Wolf' },
+            ]}
+            value={shrink}
+            onChange={onShrinkChange}
+          />
+          <NumberField label="Long-only weight cap" value={cap} onChange={onCapChange} suffix="%" />
+        </div>
+      </AdvancedPanel>
 
       {symbols.length < 2 ? (
         <NoticeBox title="Correlation">

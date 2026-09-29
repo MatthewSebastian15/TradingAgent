@@ -104,32 +104,30 @@ export function StochasticSection({
           onChange={onStopChange}
           suffix={ccy || 'ccy'}
         />
-        <ProOnly>
-          <AdvancedPanel>
-            <div className="flex flex-wrap items-center gap-3 text-bloomberg-white/80">
-              <label className="flex items-center gap-2">
-                Seed
-                <input
-                  type="number"
-                  value={seed}
-                  onChange={(e) => onSeedChange(Number(e.target.value))}
-                  className="h-7 w-20 rounded-none border border-bloomberg-border bg-black px-1 text-xs text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={onReroll}
-                className="rounded-none border border-bloomberg-border px-3 py-1 text-xs text-bloomberg-white/80 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <Dices className="h-3.5 w-3.5" aria-hidden="true" />
-                  Re-roll
-                </span>
-              </button>
-              <span>Same seed → same simulation.</span>
-            </div>
-          </AdvancedPanel>
-        </ProOnly>
+        <AdvancedPanel>
+          <div className="flex flex-wrap items-center gap-3 text-bloomberg-white/80">
+            <label className="flex items-center gap-2">
+              Seed
+              <input
+                type="number"
+                value={seed}
+                onChange={(e) => onSeedChange(Number(e.target.value))}
+                className="h-7 w-20 rounded-none border border-bloomberg-border bg-black px-1 text-xs text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={onReroll}
+              className="rounded-none border border-bloomberg-border px-3 py-1 text-xs text-bloomberg-white/80 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Dices className="h-3.5 w-3.5" aria-hidden="true" />
+                Re-roll
+              </span>
+            </button>
+            <span>Same seed → same simulation.</span>
+          </div>
+        </AdvancedPanel>
       </div>
       <div role="status" aria-live="polite" className="h-4 text-[11px] text-bloomberg-amber">
         {running ? 'Simulating…' : ''}

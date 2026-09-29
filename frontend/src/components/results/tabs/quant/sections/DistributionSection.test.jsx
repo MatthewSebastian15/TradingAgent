@@ -11,6 +11,7 @@ import {
   returnsByMonth,
   returnsByWeekday,
 } from '../../quantUtils';
+import { QuantModeProvider } from '../mode';
 
 const returns = Array.from({ length: 400 }, (_, i) => 0.01 * normInv((i + 0.5) / 400));
 const points = returns.reduce(
@@ -98,5 +99,28 @@ describe('DistributionSection', () => {
     );
     expect(screen.getByText('Jarque-Bera p-value')).toBeTruthy();
     expect(screen.getByText('—')).toBeTruthy();
+  });
+
+  it('keeps a plain explanation on skewness and kurtosis in Basic mode', () => {
+    render(
+      <QuantModeProvider mode="basic" onModeChange={() => {}}>
+        <DistributionSection
+          skew={0}
+          kurt={0}
+          var95={-1.6}
+          var99={-2.3}
+          cvar95={-2.0}
+          histogram={histogramBins(returns)}
+          mu={0}
+          sigma={0.01}
+          jb={jarqueBera(returns)}
+          qq={qqPoints(returns)}
+          weekday={returnsByWeekday(points)}
+          month={returnsByMonth(points)}
+        />
+      </QuantModeProvider>
+    );
+    expect(screen.getByRole('button', { name: 'About Skewness' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'About Excess Kurtosis' })).toBeTruthy();
   });
 });

@@ -422,39 +422,37 @@ export function ValuationSection({
         </fieldset>
       </div>
 
-      <ProOnly>
-        <AdvancedPanel>
-          <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 font-mono text-[11px] text-bloomberg-white/80">
-              Growth source
-              <select
-                value={growthSource}
-                onChange={(e) => setGrowthSource(e.target.value)}
-                className="h-7 rounded-none border border-bloomberg-border bg-black px-2 text-xs text-white"
-              >
-                <option value="revenue">Revenue growth</option>
-                <option value="earnings">Earnings growth</option>
-              </select>
-            </label>
-            <label className="flex items-center gap-2 text-[11px] text-bloomberg-white/80">
-              <input
-                type="checkbox"
-                checked={midYear}
-                onChange={(e) => setMidYear(e.target.checked)}
-                className="accent-bloomberg-orange"
-              />
-              Mid-year discounting
-            </label>
-            <button
-              type="button"
-              onClick={clearSaved}
-              className="rounded-none border border-bloomberg-border px-2 py-1 text-[11px] text-bloomberg-white/80 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
+      <AdvancedPanel>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 font-mono text-[11px] text-bloomberg-white/80">
+            Growth source
+            <select
+              value={growthSource}
+              onChange={(e) => setGrowthSource(e.target.value)}
+              className="h-7 rounded-none border border-bloomberg-border bg-black px-2 text-xs text-white"
             >
-              Clear saved inputs
-            </button>
-          </div>
-        </AdvancedPanel>
-      </ProOnly>
+              <option value="revenue">Revenue growth</option>
+              <option value="earnings">Earnings growth</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-[11px] text-bloomberg-white/80">
+            <input
+              type="checkbox"
+              checked={midYear}
+              onChange={(e) => setMidYear(e.target.checked)}
+              className="accent-bloomberg-orange"
+            />
+            Mid-year discounting
+          </label>
+          <button
+            type="button"
+            onClick={clearSaved}
+            className="rounded-none border border-bloomberg-border px-2 py-1 text-[11px] text-bloomberg-white/80 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
+          >
+            Clear saved inputs
+          </button>
+        </div>
+      </AdvancedPanel>
 
       {!ready || hasErrors ? (
         <p role="status" className="text-[11px] text-bloomberg-white/80">
@@ -472,6 +470,7 @@ export function ValuationSection({
             <MetricCard
               label="Fair Value / Share"
               value={money(result.fairValuePerShare)}
+              gloss="What the cash-flow model says one share is worth under these assumptions."
               formula="(Σ PV of FCF + PV of terminal value − net debt) ÷ shares."
             />
             <MetricCard

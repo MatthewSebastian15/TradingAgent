@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BacktestSection } from './BacktestSection';
 import { backtest } from '../../quantUtils';
+import { QuantModeProvider } from '../mode';
 
 const closes = Array.from(
   { length: 700 },
@@ -69,5 +70,27 @@ describe('BacktestSection', () => {
     expect(props.onApplyParams).toHaveBeenCalledWith(
       expect.objectContaining({ fast: expect.any(Number) })
     );
+  });
+
+  it('keeps the advanced cost input reachable in Basic mode', () => {
+    render(
+      <QuantModeProvider mode="basic" onModeChange={() => {}}>
+        <BacktestSection
+          strategy="sma"
+          onStrategyChange={vi.fn()}
+          params={{ ...params, costBps: 25 }}
+          onParamChange={vi.fn()}
+          onApplyParams={vi.fn()}
+          result={backtest(closes, 'sma', { ...params, costBps: 25 })}
+          dates={dates}
+          closes={closes}
+          rf={0}
+          ppy={252}
+        />
+      </QuantModeProvider>
+    );
+    expect(screen.queryByText('Recent trades')).toBeNull();
+    expect(screen.getByText('Advanced')).toBeTruthy();
+    expect(screen.getAllByLabelText(/Cost \/ trade/).length).toBeGreaterThan(0);
   });
 });

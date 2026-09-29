@@ -3,6 +3,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ValuationSection } from './ValuationSection';
+import { QuantModeProvider } from '../mode';
 
 vi.mock('../../../../../api/market', () => ({
   getStockOverview: vi.fn(async (sym) => ({ ticker: sym, pe_ttm: sym === 'MSFT' ? 30 : 20 })),
@@ -157,5 +158,17 @@ describe('ValuationSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear saved inputs', hidden: true }));
     expect(window.localStorage.getItem('ta:quant:preset:v1:dcf:AAPL')).not.toContain('"years":7');
     expect(screen.getByRole('spinbutton', { name: /^Years/ }).value).toBe('5');
+  });
+
+  it('keeps the fair value explanation and the advanced inputs visible in Basic mode', async () => {
+    render(
+      <QuantModeProvider mode="basic" onModeChange={() => {}}>
+        <ValuationSection {...props} overview={fundamentals} />
+      </QuantModeProvider>
+    );
+    await screen.findByText('Fair Value / Share');
+    expect(screen.getByRole('button', { name: 'About Fair Value / Share' })).toBeTruthy();
+    expect(screen.getByText('Advanced')).toBeTruthy();
+    expect(screen.getByLabelText(/Growth source/)).toBeTruthy();
   });
 });
