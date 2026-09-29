@@ -137,19 +137,19 @@ function LeftNavSidebar() {
             key={item.path}
             to={item.path}
             title={item.label}
-            aria-label={item.label}
             aria-current={active ? 'page' : undefined}
             className={`relative flex h-14 w-full flex-col items-center justify-center gap-0.5 font-mono transition-colors duration-150 ${
               active
                 ? 'bg-bloomberg-orange/10 text-bloomberg-orange'
-                : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
+                : 'text-bloomberg-white/60 hover:bg-bloomberg-surface hover:text-bloomberg-white'
             }`}
           >
             {active && (
               <span className="absolute bottom-0 left-0 top-0 w-0.5 bg-bloomberg-orange" />
             )}
-            <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.8} />
+            <Icon aria-hidden="true" className="h-4 w-4 flex-shrink-0" strokeWidth={1.8} />
             <span className="text-[8px] leading-none tracking-[0.12em]">{item.shortLabel}</span>
+            <span className="sr-only">{item.label}</span>
           </Link>
         );
       })}
@@ -334,7 +334,7 @@ function NavButton({ item, active }) {
       ? 'cursor-not-allowed text-bloomberg-border opacity-55'
       : active
         ? 'bg-bloomberg-orange text-black'
-        : 'text-bloomberg-muted hover:bg-bloomberg-surface hover:text-bloomberg-white'
+        : 'text-bloomberg-white/60 hover:bg-bloomberg-surface hover:text-bloomberg-white'
   }`;
   const content = (
     <>

@@ -53,4 +53,23 @@ describe('Navbar', () => {
     expect(tickerContainer).not.toHaveClass('fixed');
     expect(screen.getByText('S&P')).toBeInTheDocument();
   });
+
+  it('keeps inactive nav labels readable and starts the rail link name with its visible text', () => {
+    render(
+      <MemoryRouter initialEntries={['/home']}>
+        <Navbar />
+      </MemoryRouter>
+    );
+
+    const rail = screen.getByRole('navigation', { name: 'Main navigation sidebar' });
+    const quantRail = rail.querySelector('a[href="/quant"]');
+    expect(quantRail).not.toHaveAttribute('aria-label');
+    expect(quantRail.textContent).toBe('QTQuant');
+
+    const inactive = [...document.querySelectorAll('a[href]')].filter(
+      (a) => !a.hasAttribute('aria-current') && a.closest('nav')
+    );
+    expect(inactive.length).toBeGreaterThan(0);
+    inactive.forEach((a) => expect(a.className).not.toContain('text-bloomberg-muted'));
+  });
 });
