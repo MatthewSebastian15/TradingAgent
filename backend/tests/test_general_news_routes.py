@@ -171,3 +171,46 @@ def test_get_general_news_returns_null_next_offset_on_last_page(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["next_offset"] is None
+
+
+def test_get_general_news_sets_etag_header(monkeypatch):
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
+
+    response = _client().get("/api/news/general")
+
+    assert response.status_code == 200
+    assert response.headers.get("etag")
+
+
+def test_get_general_news_returns_304_when_if_none_match_matches(monkeypatch):
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
+    client = _client()
+
+    first = client.get("/api/news/general")
+    etag = first.headers["etag"]
+
+    second = client.get("/api/news/general", headers={"if-none-match": etag})
+
+    assert second.status_code == 304
+    assert second.content == b""
+    assert second.headers["etag"] == etag
+
+
+def test_get_general_news_etag_differs_per_request_shape(monkeypatch):
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
+    client = _client()
+
+    page_one = client.get("/api/news/general?limit=50").headers["etag"]
+    page_two = client.get("/api/news/general?limit=50&offset=50").headers["etag"]
+    other_category = client.get("/api/news/general?limit=50&category=crypto").headers["etag"]
+
+    assert len({page_one, page_two, other_category}) == 3

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 
 from config.settings import build_tradingagents_config
 from core.errors import BadRequestError
@@ -145,6 +146,7 @@ async def _stream_general_news_events(request: Request):
 @router.get("/news/general")
 async def get_general_news(
     request: Request,
+    response: Response,
     category: str = Query(default="all"),
     window_days: int = Query(default=14, ge=1, le=365),
     limit: int = Query(default=2000, ge=1, le=2000),
@@ -177,6 +179,18 @@ async def get_general_news(
             "legacy_force_refresh" if force_refresh else "cache_stale"
         )
         result["refresh"] = {**dict(result.get("refresh") or {}), **refresh_status}
+
+    etag = _general_news_etag(
+        result,
+        category=category,
+        window_days=window_days,
+        limit=limit,
+        offset=offset,
+        provider=normalized_provider,
+    )
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    response.headers["ETag"] = etag
     return result
 
 
@@ -235,6 +249,19 @@ async def refresh_general_news(
     )
     result["refresh"] = {**dict(result.get("refresh") or {}), **refresh_status}
     return result
+
+
+def _general_news_etag(
+    result: dict[str, Any],
+    *,
+    category: str,
+    window_days: int,
+    limit: int,
+    offset: int,
+    provider: str | None,
+) -> str:
+    raw = f"{result.get('last_updated')}|{category}|{window_days}|{limit}|{offset}|{provider}"
+    return 'W/"' + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32] + '"'
 
 
 def _should_queue_read_refresh(result: dict[str, Any], *, force_refresh: bool) -> bool:
