@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 
 from tradingagents.dataflows.news.general_news_stream import GeneralNewsEventBus
 
@@ -97,3 +98,51 @@ def test_full_subscriber_queue_dropped():
         return full_queue in bus._subscribers
 
     assert asyncio.run(scenario()) is False
+
+
+class _FakeStore:
+    max_articles = 5
+
+    def __init__(self, articles=None, error=None):
+        self._articles = articles or []
+        self._error = error
+        self.calls = 0
+
+    def list_articles(self, **_kwargs):
+        self.calls += 1
+        if self._error:
+            raise self._error
+        return SimpleNamespace(articles=self._articles)
+
+
+def test_seed_from_store_primes_bus_so_first_snapshot_can_publish():
+    async def scenario():
+        bus = GeneralNewsEventBus()
+        bus.seed_from_store(_FakeStore([{"id": "a"}, {"url": "https://b"}, "junk", {}]))
+        subscription = bus.subscribe()
+        first_event = asyncio.ensure_future(anext(subscription))
+        await asyncio.sleep(0)
+        await bus.publish_if_changed({"articles": [{"id": "a"}, {"id": "c"}], "last_updated": "t"})
+        return bus, await asyncio.wait_for(first_event, 1)
+
+    bus, event = asyncio.run(scenario())
+    assert event["new_count"] == 1
+    assert bus._last_article_ids == {"a", "c"}
+
+
+def test_seed_from_store_keeps_an_existing_baseline_and_skips_the_store():
+    bus = GeneralNewsEventBus(seed_article_ids={"x"})
+    store = _FakeStore([{"id": "a"}])
+
+    bus.seed_from_store(store)
+
+    assert bus._last_article_ids == {"x"}
+    assert store.calls == 0
+
+
+def test_seed_from_store_failure_leaves_the_bus_unprimed_without_raising():
+    bus = GeneralNewsEventBus()
+
+    bus.seed_from_store(_FakeStore(error=RuntimeError("db locked")))
+
+    assert bus._last_article_ids == set()

@@ -70,11 +70,12 @@ async def refresh_general_news_background(reason: str = "scheduled") -> dict[str
             )
 
         articles = result.get("articles") if isinstance(result, dict) else []
+        store = _article_store(general_config)
+        # Must run before upsert_many: the baseline is what was on disk beforehand.
+        await asyncio.to_thread(general_news_event_bus.seed_from_store, store)
         inserted_count = 0
         if isinstance(articles, list):
-            inserted_count = await asyncio.to_thread(
-                _article_store(general_config).upsert_many, articles
-            )
+            inserted_count = await asyncio.to_thread(store.upsert_many, articles)
 
         result = dict(result or {})
         result["refresh"] = {

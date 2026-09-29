@@ -84,6 +84,68 @@ async def test_background_refresh_stores_articles(tmp_path, monkeypatch):
     assert stored.articles[0]["title"] == "Stocks gain after earnings"
 
 
+async def _refresh_after_restart(tmp_path, monkeypatch, *, on_disk, fetched):
+    """Simulate a fresh process: empty event bus, store already holding `on_disk`."""
+    from tradingagents.dataflows.news import general_news_stream
+
+    config = _config(tmp_path)
+    NewsArticleStore(db_path=config["general_news"]["cache_db_path"]).upsert_many(on_disk)
+    bus = general_news_stream.GeneralNewsEventBus()
+    monkeypatch.setattr(general_news_stream, "general_news_event_bus", bus)
+    monkeypatch.setattr(
+        "services.news.background_worker.build_tradingagents_config", lambda: config
+    )
+    monkeypatch.setattr(
+        GeneralNewsService,
+        "fetch_general_news",
+        lambda self, **kwargs: {"articles": fetched, "last_updated": "2026-06-20T10:00:00Z"},
+    )
+    subscription = bus.subscribe()
+    first_event = asyncio.ensure_future(anext(subscription))
+    await asyncio.sleep(0)  # let the subscriber register its queue
+
+    await refresh_general_news_background(reason="scheduled")
+    await asyncio.sleep(0)
+
+    published = await asyncio.wait_for(first_event, 1) if first_event.done() else None
+    first_event.cancel()
+    await asyncio.gather(first_event, return_exceptions=True)
+    await subscription.aclose()
+    return published
+
+
+@pytest.mark.asyncio
+async def test_first_refresh_after_restart_publishes_new_articles(tmp_path, monkeypatch):
+    existing = {**_article(), "id": "existing-1"}
+    added = {
+        **_article(),
+        "id": "new-2",
+        "title": "Bitcoin rises",
+        "url": "https://example.com/btc",
+    }
+
+    event = await _refresh_after_restart(
+        tmp_path, monkeypatch, on_disk=[existing], fetched=[existing, added]
+    )
+
+    assert event == {
+        "event": "general_news_updated",
+        "last_updated": "2026-06-20T10:00:00Z",
+        "new_count": 1,
+    }
+
+
+@pytest.mark.asyncio
+async def test_first_refresh_after_restart_is_quiet_when_nothing_is_new(tmp_path, monkeypatch):
+    existing = {**_article(), "id": "existing-1"}
+
+    event = await _refresh_after_restart(
+        tmp_path, monkeypatch, on_disk=[existing], fetched=[existing]
+    )
+
+    assert event is None
+
+
 def test_manual_refresh_cooldown_tracks_recent_refresh(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "services.news.background_worker.build_tradingagents_config",
