@@ -151,11 +151,11 @@ class NewsArticleStore:
                 """,
                 [*params, limit],
             ).fetchall()
-            last_updated_row = conn.execute("SELECT MAX(updated_at) FROM news_articles").fetchone()
+            last_updated_row = conn.execute(
+                "SELECT value FROM store_meta WHERE key = 'last_updated'"
+            ).fetchone()
 
-        last_updated = (
-            str(last_updated_row[0]) if last_updated_row and last_updated_row[0] else None
-        )
+        last_updated = str(last_updated_row[0]) if last_updated_row else None
         age_seconds = _age_seconds(last_updated) if last_updated else None
         articles = []
         for row in rows:
