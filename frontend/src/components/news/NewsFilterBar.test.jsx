@@ -96,6 +96,12 @@ describe('NewsFilterBar', () => {
     expect(refreshButton.className).toEqual(expect.stringContaining('h-8'));
   });
 
+  it('shows a scroll-affordance fade over the category tab row', () => {
+    const { container } = render(<NewsFilterBar selectedCategory="all" onChange={vi.fn()} />);
+
+    expect(container.querySelector('.terminal-news-filter-fade')).toBeInTheDocument();
+  });
+
   it('spaces adjacent category tabs with at least gap-2', () => {
     const { container } = render(<NewsFilterBar selectedCategory="all" onChange={vi.fn()} />);
 

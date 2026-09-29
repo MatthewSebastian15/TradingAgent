@@ -68,15 +68,21 @@ CategoryTab.propTypes = {
 export default function NewsFilterBar({ selectedCategory, onChange, onRefresh }) {
   return (
     <div className="terminal-news-toolbar flex items-center justify-end gap-3">
-      <div className="terminal-news-filter flex gap-2 overflow-x-auto">
-        {NEWS_CATEGORIES.map((item) => (
-          <CategoryTab
-            key={item.key}
-            item={item}
-            isActive={selectedCategory === item.key}
-            onChange={onChange}
-          />
-        ))}
+      <div className="terminal-news-filter-wrap relative min-w-0 flex-1">
+        <div className="terminal-news-filter flex gap-2 overflow-x-auto">
+          {NEWS_CATEGORIES.map((item) => (
+            <CategoryTab
+              key={item.key}
+              item={item}
+              isActive={selectedCategory === item.key}
+              onChange={onChange}
+            />
+          ))}
+        </div>
+        <div
+          aria-hidden
+          className="terminal-news-filter-fade pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/70 to-transparent"
+        />
       </div>
 
       {onRefresh && (
