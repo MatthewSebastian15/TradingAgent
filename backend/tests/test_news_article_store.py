@@ -178,6 +178,19 @@ def test_list_articles_query_plan_uses_category_published_index(tmp_path):
     assert "idx_news_articles_category_published" in plan_text
 
 
+def test_store_reuses_a_single_connection_across_calls(tmp_path):
+    store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"))
+
+    store.upsert_many([_article("First", url="https://example.com/1")])
+    conn_after_write = store._conn
+
+    store.list_articles(category="all", window_days=7, limit=10)
+    conn_after_read = store._conn
+
+    assert conn_after_write is not None
+    assert conn_after_write is conn_after_read
+
+
 def test_store_max_articles_guard_keeps_newest(tmp_path):
     store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"), max_articles=1)
     older = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat().replace("+00:00", "Z")

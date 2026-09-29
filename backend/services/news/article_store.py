@@ -57,6 +57,7 @@ class NewsArticleStore:
         self.retention_days = max(1, int(retention_days))
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = _write_lock_for_path(self.db_path)
+        self._conn: sqlite3.Connection | None = None
         self._ensure_schema()
 
     def upsert_many(self, articles: Iterable[dict[str, Any]]) -> int:
@@ -268,9 +269,10 @@ class NewsArticleStore:
         }
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=30)
-        conn.execute("PRAGMA busy_timeout = 30000")
-        return conn
+        if self._conn is None:
+            self._conn = sqlite3.connect(self.db_path, timeout=30, check_same_thread=False)
+            self._conn.execute("PRAGMA busy_timeout = 30000")
+        return self._conn
 
     def _ensure_schema(self) -> None:
         with self._lock, self._connect() as conn:
