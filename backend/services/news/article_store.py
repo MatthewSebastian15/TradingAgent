@@ -126,7 +126,7 @@ class NewsArticleStore:
         cutoff_text = cutoff.isoformat().replace("+00:00", "Z")
         limit = max(1, int(limit))
 
-        clauses = ["(published_at IS NULL OR published_at >= ?)"]
+        clauses = ["published_at >= ?"]
         params: list[Any] = [cutoff_text]
         if category != "all":
             clauses.append("category = ?")
@@ -146,7 +146,7 @@ class NewsArticleStore:
                 SELECT article_json, updated_at
                 FROM news_articles
                 WHERE {where}
-                ORDER BY COALESCE(published_at, created_at) DESC, updated_at DESC
+                ORDER BY published_at DESC, updated_at DESC
                 LIMIT ?
                 """,
                 [*params, limit],

@@ -162,7 +162,8 @@ def test_list_articles_query_plan_uses_category_published_index(tmp_path):
     assert [a["title"] for a in result.articles] == ["Newer", "Older"]
 
     with store._connect() as conn:
-        cutoff_text = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat().replace("+00:00", "Z")
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(days=7)
+        cutoff_text = cutoff_dt.isoformat().replace("+00:00", "Z")
         plan_rows = conn.execute(
             """
             EXPLAIN QUERY PLAN
