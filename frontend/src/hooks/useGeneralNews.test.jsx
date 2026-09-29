@@ -297,4 +297,42 @@ describe('useGeneralNews', () => {
 
     expect(screen.getByTestId('ids-count')).toHaveTextContent('new');
   });
+
+  it('appends the next page to data.articles via loadMore without re-fetching page one', async () => {
+    fetchGeneralNews
+      .mockResolvedValueOnce({ articles: [{ id: '1' }, { id: '2' }], next_offset: 2 })
+      .mockResolvedValueOnce({ articles: [{ id: '3' }], next_offset: null });
+
+    function PaginatedHarness({ category = 'all' }) {
+      const { data, loadMore, hasMore } = useGeneralNews({ category, windowDays: 7, limit: 2 });
+      const articles = data?.articles || [];
+
+      return (
+        <div>
+          <span data-testid="count">{articles.length}</span>
+          <span data-testid="has-more">{String(hasMore)}</span>
+          <button type="button" onClick={loadMore}>
+            load more
+          </button>
+        </div>
+      );
+    }
+
+    render(<PaginatedHarness />);
+    await act(async () => {});
+
+    expect(screen.getByTestId('count').textContent).toBe('2');
+    expect(screen.getByTestId('has-more').textContent).toBe('true');
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('load more'));
+    });
+
+    expect(fetchGeneralNews).toHaveBeenCalledTimes(2);
+    expect(fetchGeneralNews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 2, limit: 2 })
+    );
+    expect(screen.getByTestId('count').textContent).toBe('3');
+    expect(screen.getByTestId('has-more').textContent).toBe('false');
+  });
 });

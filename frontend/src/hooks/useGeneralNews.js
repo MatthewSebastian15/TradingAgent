@@ -1,5 +1,5 @@
 // ponytail: sessionStorage cache of public vendor news; dies on tab close. Intentionally not encrypted.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchGeneralNews } from '../services/generalNewsApi';
 
@@ -264,6 +264,10 @@ export function useGeneralNews({ category = 'all', windowDays = 14, limit = 2000
   const requestIdRef = useRef(0);
   const dataRef = useRef(initialData);
   const lastRefreshAtRef = useRef(initialData ? nowMs() : 0);
+  const [morePages, setMorePages] = useState([]);
+  const nextOffsetRef = useRef(initialData?.next_offset ?? null);
+  const [hasMore, setHasMore] = useState((initialData?.next_offset ?? null) != null);
+  const loadingMoreRef = useRef(false);
 
   const load = useCallback(
     async ({ force = false, silent = false, signal } = {}) => {
@@ -294,6 +298,9 @@ export function useGeneralNews({ category = 'all', windowDays = 14, limit = 2000
         }
         dataRef.current = result;
         setData(result);
+        setMorePages([]);
+        nextOffsetRef.current = result?.next_offset ?? null;
+        setHasMore(nextOffsetRef.current != null);
         setStatus('success');
         setError(null);
         lastRefreshAtRef.current = nowMs();
@@ -326,6 +333,27 @@ export function useGeneralNews({ category = 'all', windowDays = 14, limit = 2000
     [load]
   );
 
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || nextOffsetRef.current == null) return;
+    loadingMoreRef.current = true;
+    try {
+      const page = await fetchGeneralNews({
+        category,
+        windowDays,
+        limit,
+        offset: nextOffsetRef.current,
+      });
+      nextOffsetRef.current = page?.next_offset ?? null;
+      setHasMore(nextOffsetRef.current != null);
+      setMorePages((prev) => [...prev, ...(page?.articles || [])]);
+    } catch {
+      // A failed "load more" leaves nextOffsetRef untouched — the next
+      // scroll-into-view retries the same page instead of skipping it.
+    } finally {
+      loadingMoreRef.current = false;
+    }
+  }, [category, limit, windowDays]);
+
   useEffect(() => {
     mountedRef.current = true;
 
@@ -336,15 +364,19 @@ export function useGeneralNews({ category = 'all', windowDays = 14, limit = 2000
 
   useEffect(() => {
     const cachedData = cachedDataForParams({ category, windowDays, limit });
+    setMorePages([]);
     if (cachedData) {
       dataRef.current = cachedData;
       setData(cachedData);
       setStatus('success');
+      nextOffsetRef.current = cachedData?.next_offset ?? null;
     } else {
       dataRef.current = null;
       setData(null);
       setStatus('idle');
+      nextOffsetRef.current = null;
     }
+    setHasMore(nextOffsetRef.current != null);
 
     const controller = new AbortController();
     load({ force: false, silent: false, signal: controller.signal }).catch(() => {});
@@ -383,10 +415,18 @@ export function useGeneralNews({ category = 'all', windowDays = 14, limit = 2000
     };
   }, [load]);
 
+  const mergedData = useMemo(() => {
+    if (!data) return data;
+    if (!morePages.length) return data;
+    return { ...data, articles: [...(data.articles || []), ...morePages] };
+  }, [data, morePages]);
+
   return {
-    data,
+    data: mergedData,
     status,
     error,
     reload,
+    loadMore,
+    hasMore,
   };
 }
