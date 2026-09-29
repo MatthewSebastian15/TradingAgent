@@ -54,11 +54,22 @@ function emptyMessageFor({ category, data, error }) {
 
 export default function News() {
   const [category, setCategory] = useState('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { data, status, error, reload, loadMore, hasMore } = useGeneralNews({
     category,
     windowDays: 14,
     limit: 50,
   });
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await reload();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useGeneralNewsStream({
     enabled: true,
@@ -80,7 +91,9 @@ export default function News() {
             <NewsFilterBar
               selectedCategory={category}
               onChange={setCategory}
-              onRefresh={() => reload()}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
+              refreshDisabled={showRefreshCooldown}
             />
 
             <CategoryTransition key={category} categoryKey={category}>

@@ -65,7 +65,13 @@ CategoryTab.propTypes = {
   onChange: PropTypes.func.isRequired,
 };
 
-export default function NewsFilterBar({ selectedCategory, onChange, onRefresh }) {
+export default function NewsFilterBar({
+  selectedCategory,
+  onChange,
+  onRefresh,
+  isRefreshing = false,
+  refreshDisabled = false,
+}) {
   return (
     <div className="terminal-news-toolbar flex items-center justify-end gap-3">
       <div className="terminal-news-filter-wrap relative min-w-0 flex-1">
@@ -91,9 +97,10 @@ export default function NewsFilterBar({ selectedCategory, onChange, onRefresh })
           variant="outline"
           size="sm"
           onClick={onRefresh}
-          className="terminal-news-filter-tab terminal-news-refresh-button ml-auto h-8 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange"
+          disabled={isRefreshing || refreshDisabled}
+          className="terminal-news-filter-tab terminal-news-refresh-button ml-auto h-8 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-bloomberg-border disabled:hover:bg-black/50 disabled:hover:text-bloomberg-muted"
         >
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           REFRESH
         </Button>
       )}
@@ -105,4 +112,6 @@ NewsFilterBar.propTypes = {
   selectedCategory: PropTypes.string.isRequired,
   onChange: PropTypes.func.isRequired,
   onRefresh: PropTypes.func,
+  isRefreshing: PropTypes.bool,
+  refreshDisabled: PropTypes.bool,
 };

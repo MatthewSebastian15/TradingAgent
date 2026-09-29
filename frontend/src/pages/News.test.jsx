@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -125,6 +125,32 @@ describe('News page', () => {
 
     useGeneralNewsStream.mock.calls[0][0].onUpdate();
     expect(reload).toHaveBeenCalledWith({ force: false, silent: true });
+  });
+
+  it('disables the refresh button while a manual refresh is in flight', async () => {
+    const user = userEvent.setup();
+    let resolveReload;
+    const reload = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveReload = resolve;
+        })
+    );
+    useGeneralNews.mockReturnValue({ data: { articles }, status: 'success', error: null, reload });
+
+    render(<News />);
+
+    const refreshButton = screen.getByRole('button', { name: /REFRESH/ });
+    expect(refreshButton).not.toBeDisabled();
+
+    await user.click(refreshButton);
+    expect(refreshButton).toBeDisabled();
+
+    await act(async () => {
+      resolveReload();
+      await Promise.resolve();
+    });
+    expect(refreshButton).not.toBeDisabled();
   });
 
   it('hides frontend status metadata that should not be shown', () => {

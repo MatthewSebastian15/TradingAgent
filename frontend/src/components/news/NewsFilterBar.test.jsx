@@ -102,6 +102,30 @@ describe('NewsFilterBar', () => {
     expect(container.querySelector('.terminal-news-filter-fade')).toBeInTheDocument();
   });
 
+  it('disables the refresh button and spins its icon while refreshing', () => {
+    const { container } = render(
+      <NewsFilterBar selectedCategory="all" onChange={vi.fn()} onRefresh={vi.fn()} isRefreshing />
+    );
+
+    const refreshButton = screen.getByRole('button', { name: /REFRESH/ });
+    expect(refreshButton).toBeDisabled();
+    const icon = container.querySelector('.terminal-news-refresh-button svg');
+    expect(icon.getAttribute('class')).toEqual(expect.stringContaining('animate-spin'));
+  });
+
+  it('disables the refresh button during the manual-refresh cooldown', () => {
+    render(
+      <NewsFilterBar
+        selectedCategory="all"
+        onChange={vi.fn()}
+        onRefresh={vi.fn()}
+        refreshDisabled
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /REFRESH/ })).toBeDisabled();
+  });
+
   it('spaces adjacent category tabs with at least gap-2', () => {
     const { container } = render(<NewsFilterBar selectedCategory="all" onChange={vi.fn()} />);
 
