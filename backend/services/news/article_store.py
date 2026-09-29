@@ -120,12 +120,14 @@ class NewsArticleStore:
         window_days: int = 7,
         limit: int = 100,
         provider: str | None = None,
+        offset: int = 0,
     ) -> ArticleQueryResult:
         category = str(category or "all").strip().lower() or "all"
         provider = str(provider or "").strip().lower() or None
         cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(window_days)))
         cutoff_text = cutoff.isoformat().replace("+00:00", "Z")
         limit = max(1, int(limit))
+        offset = max(0, int(offset))
 
         clauses = ["published_at >= ?"]
         params: list[Any] = [cutoff_text]
@@ -148,9 +150,9 @@ class NewsArticleStore:
                 FROM news_articles
                 WHERE {where}
                 ORDER BY published_at DESC, updated_at DESC
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """,
-                [*params, limit],
+                [*params, limit, offset],
             ).fetchall()
             last_updated_row = conn.execute(
                 "SELECT value FROM store_meta WHERE key = 'last_updated'"

@@ -191,6 +191,29 @@ def test_store_reuses_a_single_connection_across_calls(tmp_path):
     assert conn_after_write is conn_after_read
 
 
+def test_list_articles_supports_offset_for_pagination(tmp_path):
+    store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"))
+    now = datetime.now(timezone.utc)
+    day3 = (now - timedelta(days=1)).isoformat().replace("+00:00", "Z")
+    day2 = (now - timedelta(days=2)).isoformat().replace("+00:00", "Z")
+    day1 = (now - timedelta(days=3)).isoformat().replace("+00:00", "Z")
+    store.upsert_many(
+        [
+            _article("Third", url="https://example.com/3", published_at=day3),
+            _article("Second", url="https://example.com/2", published_at=day2),
+            _article("First", url="https://example.com/1", published_at=day1),
+        ]
+    )
+
+    page1 = store.list_articles(category="markets", window_days=365, limit=2, offset=0)
+    page2 = store.list_articles(category="markets", window_days=365, limit=2, offset=2)
+
+    assert [a["title"] for a in page1.articles] == ["Third", "Second"]
+    assert [a["title"] for a in page2.articles] == ["First"]
+    assert page1.total_available == 3
+    assert page2.total_available == 3
+
+
 def test_store_max_articles_guard_keeps_newest(tmp_path):
     store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"), max_articles=1)
     older = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat().replace("+00:00", "Z")
