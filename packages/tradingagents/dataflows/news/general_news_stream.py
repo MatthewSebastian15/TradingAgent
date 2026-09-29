@@ -6,9 +6,9 @@ from typing import Any
 
 
 class GeneralNewsEventBus:
-    def __init__(self) -> None:
+    def __init__(self, seed_article_ids: set[str] | None = None) -> None:
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
-        self._last_article_ids: set[str] = set()
+        self._last_article_ids: set[str] = set(seed_article_ids or ())
 
     async def subscribe(self) -> AsyncIterator[dict[str, Any]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=16)

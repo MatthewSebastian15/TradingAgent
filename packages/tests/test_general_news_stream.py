@@ -3,8 +3,8 @@ import asyncio
 from tradingagents.dataflows.news.general_news_stream import GeneralNewsEventBus
 
 
-async def _subscribed_bus():
-    bus = GeneralNewsEventBus()
+async def _subscribed_bus(seed_article_ids=None):
+    bus = GeneralNewsEventBus(seed_article_ids=seed_article_ids)
     subscription = bus.subscribe()
     first_event = asyncio.ensure_future(anext(subscription))
     await asyncio.sleep(0)  # let the subscriber register its queue
@@ -14,6 +14,26 @@ async def _subscribed_bus():
 def test_first_snapshot_primes_without_event():
     async def scenario():
         bus, _sub, first_event = await _subscribed_bus()
+        await bus.publish_if_changed({"articles": [{"id": "a"}], "last_updated": "t1"})
+        await asyncio.sleep(0)
+        return first_event.done()
+
+    assert asyncio.run(scenario()) is False
+
+
+def test_seeded_bus_publishes_on_first_snapshot_when_ids_differ():
+    async def scenario():
+        bus, _sub, first_event = await _subscribed_bus(seed_article_ids={"a"})
+        await bus.publish_if_changed({"articles": [{"id": "a"}, {"id": "b"}], "last_updated": "t2"})
+        return await asyncio.wait_for(first_event, 1)
+
+    event = asyncio.run(scenario())
+    assert event == {"event": "general_news_updated", "last_updated": "t2", "new_count": 1}
+
+
+def test_seeded_bus_stays_quiet_when_first_snapshot_matches_seed():
+    async def scenario():
+        bus, _sub, first_event = await _subscribed_bus(seed_article_ids={"a"})
         await bus.publish_if_changed({"articles": [{"id": "a"}], "last_updated": "t1"})
         await asyncio.sleep(0)
         return first_event.done()
