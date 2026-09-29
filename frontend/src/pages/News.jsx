@@ -40,8 +40,7 @@ function providerDegradation(providerStatus) {
   };
 }
 
-function emptyMessageFor({ category, data, error }) {
-  const degradation = providerDegradation(data?.provider_status);
+function emptyMessageFor({ category, data, error, degradation }) {
   const errorText = String(error?.message || '').toLowerCase();
 
   if (data?.message) return data.message;
@@ -102,20 +101,24 @@ export default function News() {
   });
 
   const [justUpdated, setJustUpdated] = useState(false);
-  const lastSeenUpdateRef = useRef(undefined);
+  const lastSeenRef = useRef(null);
 
   useEffect(() => {
     const currentUpdate = data?.last_updated;
-    if (!currentUpdate) return;
-    const isFirstObservation = lastSeenUpdateRef.current === undefined;
-    const changed = currentUpdate !== lastSeenUpdateRef.current;
-    lastSeenUpdateRef.current = currentUpdate;
-    if (isFirstObservation || !changed) return;
+    if (!currentUpdate) return undefined;
+    const seen = lastSeenRef.current;
+    lastSeenRef.current = { category: data?.category, updatedAt: currentUpdate };
+    const isSilentUpdate =
+      seen !== null && seen.category === data?.category && seen.updatedAt !== currentUpdate;
+    if (!isSilentUpdate) return undefined;
 
     setJustUpdated(true);
     const timeoutId = window.setTimeout(() => setJustUpdated(false), 2000);
-    return () => window.clearTimeout(timeoutId);
-  }, [data?.last_updated]);
+    return () => {
+      window.clearTimeout(timeoutId);
+      setJustUpdated(false);
+    };
+  }, [data?.last_updated, data?.category]);
 
   const displayedArticles = useMemo(() => dedupeNewsItems(data?.articles || []), [data]);
   const showSkeleton =
@@ -127,8 +130,8 @@ export default function News() {
     status,
     hasArticles: displayedArticles.length > 0,
   });
-  const emptyMessage = emptyMessageFor({ category, data, error });
   const degradation = providerDegradation(data?.provider_status);
+  const emptyMessage = emptyMessageFor({ category, data, error, degradation });
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10 text-bloomberg-white">
@@ -144,12 +147,15 @@ export default function News() {
                 <div className="h-full w-1/3 animate-pulse rounded-full bg-bloomberg-orange" />
               </div>
             )}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="relative flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span aria-live="polite" className="sr-only">
+                {justUpdated ? 'News updated' : ''}
+              </span>
               {justUpdated && (
                 <span
                   data-testid="news-live-pulse"
-                  className="flex shrink-0 items-center gap-1"
-                  aria-live="polite"
+                  aria-hidden
+                  className="absolute -top-2.5 right-0 flex items-center gap-1"
                 >
                   <span className="h-1.5 w-1.5 rounded-full bg-bloomberg-green animate-pulse-dot" />
                   <span className="font-mono text-[10px] leading-none text-bloomberg-green">

@@ -108,7 +108,7 @@ describe('NewsFilterBar', () => {
     );
 
     const refreshButton = screen.getByRole('button', { name: /REFRESH/ });
-    expect(refreshButton).toBeDisabled();
+    expect(refreshButton).toHaveAttribute('aria-disabled', 'true');
     const icon = container.querySelector('.terminal-news-refresh-button svg');
     expect(icon.getAttribute('class')).toEqual(expect.stringContaining('animate-spin'));
   });
@@ -123,7 +123,24 @@ describe('NewsFilterBar', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: /REFRESH/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /REFRESH/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+  });
+
+  it('keeps keyboard focus on the refresh button and ignores clicks while busy', async () => {
+    const onRefresh = vi.fn();
+    render(
+      <NewsFilterBar selectedCategory="all" onChange={vi.fn()} onRefresh={onRefresh} isRefreshing />
+    );
+
+    const refreshButton = screen.getByRole('button', { name: /REFRESH/ });
+    refreshButton.focus();
+    await userEvent.click(refreshButton);
+
+    expect(refreshButton).toHaveFocus();
+    expect(onRefresh).not.toHaveBeenCalled();
   });
 
   it('gives every filter-bar button a visible focus ring class', () => {

@@ -51,6 +51,7 @@ describe('News page', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it('renders compact skeleton while loading news', () => {
@@ -141,16 +142,16 @@ describe('News page', () => {
     render(<News />);
 
     const refreshButton = screen.getByRole('button', { name: /REFRESH/ });
-    expect(refreshButton).not.toBeDisabled();
+    expect(refreshButton).toHaveAttribute('aria-disabled', 'false');
 
     await user.click(refreshButton);
-    expect(refreshButton).toBeDisabled();
+    expect(refreshButton).toHaveAttribute('aria-disabled', 'true');
 
     await act(async () => {
       resolveReload();
       await Promise.resolve();
     });
-    expect(refreshButton).not.toBeDisabled();
+    expect(refreshButton).toHaveAttribute('aria-disabled', 'false');
   });
 
   it('shows a brief update pulse when a silent refresh brings new data, not on first load', () => {
@@ -175,7 +176,6 @@ describe('News page', () => {
       vi.advanceTimersByTime(2000);
     });
     expect(screen.queryByTestId('news-live-pulse')).not.toBeInTheDocument();
-    vi.useRealTimers();
   });
 
   it('shows a degraded-sources badge when some providers are failing, even with articles present', () => {
@@ -278,6 +278,44 @@ describe('News page', () => {
     render(<News />);
 
     expect(screen.queryByTestId('news-refresh-bar')).not.toBeInTheDocument();
+  });
+
+  it('does not pulse when the data switches to another category with its own last_updated', () => {
+    const mockNews = (category, lastUpdated) =>
+      useGeneralNews.mockReturnValue({
+        data: { articles, category, last_updated: lastUpdated },
+        status: 'success',
+        error: null,
+        reload: vi.fn(),
+      });
+
+    mockNews('markets', '2026-06-17T12:00:00Z');
+    const { rerender } = render(<News />);
+    mockNews('tech', '2026-06-17T12:05:00Z');
+    rerender(<News />);
+
+    expect(screen.queryByTestId('news-live-pulse')).not.toBeInTheDocument();
+  });
+
+  it('clears the pulse when data disappears before its timer fires', () => {
+    vi.useFakeTimers();
+    const base = { status: 'success', error: null, reload: vi.fn() };
+
+    useGeneralNews.mockReturnValue({
+      ...base,
+      data: { articles, last_updated: '2026-06-17T12:00:00Z' },
+    });
+    const { rerender } = render(<News />);
+    useGeneralNews.mockReturnValue({
+      ...base,
+      data: { articles, last_updated: '2026-06-17T12:01:00Z' },
+    });
+    rerender(<News />);
+    expect(screen.getByTestId('news-live-pulse')).toBeInTheDocument();
+
+    useGeneralNews.mockReturnValue({ ...base, data: null });
+    rerender(<News />);
+    expect(screen.queryByTestId('news-live-pulse')).not.toBeInTheDocument();
   });
 
   it('hides frontend status metadata that should not be shown', () => {

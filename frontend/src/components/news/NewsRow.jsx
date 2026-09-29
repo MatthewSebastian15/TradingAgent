@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 import { getCategoryColor } from '@/lib/news/categoryColors';
 import { formatNewsTime } from '@/lib/news/formatNewsTime';
@@ -73,15 +73,32 @@ function limitDescriptionWords(value, fallback) {
   return words.slice(0, MAX_DESCRIPTION_WORDS).join(' ');
 }
 
+// One shared interval for all mounted rows, so labels advance together.
+const tickListeners = new Set();
+let tickCount = 0;
+let tickIntervalId = null;
+
+function subscribeToTick(listener) {
+  tickListeners.add(listener);
+  if (tickIntervalId === null) {
+    tickIntervalId = window.setInterval(() => {
+      tickCount += 1;
+      tickListeners.forEach((notify) => notify());
+    }, RELATIVE_TIME_TICK_MS);
+  }
+  return () => {
+    tickListeners.delete(listener);
+    if (tickListeners.size === 0) {
+      window.clearInterval(tickIntervalId);
+      tickIntervalId = null;
+    }
+  };
+}
+
+const getTickCount = () => tickCount;
+
 function useRelativeTimeTick() {
-  const [, forceTick] = useState(0);
-  useEffect(() => {
-    const intervalId = window.setInterval(
-      () => forceTick((count) => count + 1),
-      RELATIVE_TIME_TICK_MS
-    );
-    return () => window.clearInterval(intervalId);
-  }, []);
+  useSyncExternalStore(subscribeToTick, getTickCount);
 }
 
 export default function NewsRow({ article }) {

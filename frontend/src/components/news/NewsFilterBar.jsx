@@ -1,6 +1,6 @@
 import { RefreshCw } from 'lucide-react';
 import PropTypes from 'prop-types';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { getCategoryColor } from '@/lib/news/categoryColors';
@@ -72,10 +72,27 @@ export default function NewsFilterBar({
   isRefreshing = false,
   refreshDisabled = false,
 }) {
+  const rowRef = useRef(null);
+  const [canScrollMore, setCanScrollMore] = useState(false);
+  const refreshBusy = isRefreshing || refreshDisabled;
+
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row) return undefined;
+    const update = () => setCanScrollMore(row.scrollWidth - row.clientWidth - row.scrollLeft > 1);
+    update();
+    row.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      row.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
   return (
     <div className="terminal-news-toolbar flex items-center justify-end gap-3">
       <div className="terminal-news-filter-wrap relative min-w-0 flex-1">
-        <div className="terminal-news-filter flex gap-2 overflow-x-auto">
+        <div ref={rowRef} className="terminal-news-filter -m-1 flex gap-2 overflow-x-auto p-1">
           {NEWS_CATEGORIES.map((item) => (
             <CategoryTab
               key={item.key}
@@ -87,7 +104,9 @@ export default function NewsFilterBar({
         </div>
         <div
           aria-hidden
-          className="terminal-news-filter-fade pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/70 to-transparent"
+          className={`terminal-news-filter-fade pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/70 to-transparent transition-opacity ${
+            canScrollMore ? 'opacity-100' : 'opacity-0'
+          }`}
         />
       </div>
 
@@ -96,9 +115,9 @@ export default function NewsFilterBar({
           type="button"
           variant="outline"
           size="sm"
-          onClick={onRefresh}
-          disabled={isRefreshing || refreshDisabled}
-          className="terminal-news-filter-tab terminal-news-refresh-button ml-auto h-8 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-bloomberg-border disabled:hover:bg-black/50 disabled:hover:text-bloomberg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+          onClick={refreshBusy ? undefined : onRefresh}
+          aria-disabled={refreshBusy}
+          className="terminal-news-filter-tab terminal-news-refresh-button ml-auto h-8 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:border-bloomberg-border aria-disabled:hover:bg-black/50 aria-disabled:hover:text-bloomberg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-2 focus-visible:ring-offset-black"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           REFRESH
