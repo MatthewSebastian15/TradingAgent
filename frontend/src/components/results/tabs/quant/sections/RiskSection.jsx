@@ -125,8 +125,9 @@ export function RiskSection({
         {
           metric: 'Alpha (annualized)',
           value: `${fmtSignedPct(s.alpha)}${finite(s.alphaTStat) ? ` · t = ${fmtNum2(s.alphaTStat)}` : ''}`,
-          note:
-            finite(s.alphaTStat) && Math.abs(s.alphaTStat) < 2
+          note: !finite(s.alphaTStat)
+            ? 'Significance unknown: t-stat unavailable (no residual variance)'
+            : Math.abs(s.alphaTStat) < 2
               ? 'Not significant: |t| below 2'
               : 'Significant at roughly 95%: |t| of 2 or more',
         },

@@ -129,4 +129,15 @@ describe('RiskSection', () => {
     );
     expect(screen.getByText(/· not significant$/)).toBeTruthy();
   });
+
+  it('does not claim significance when the alpha t-stat is unavailable', () => {
+    render(
+      <RiskSection
+        {...baseProps}
+        benchStats={{ ...baseProps.benchStats, alpha: 1.2, alphaTStat: null }}
+      />
+    );
+    expect(screen.queryByText(/Significant at roughly 95%/)).toBeNull();
+    expect(screen.getByText(/t-stat unavailable/)).toBeTruthy();
+  });
 });
