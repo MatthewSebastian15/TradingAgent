@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { cleanup, render, screen } from '@testing-library/react';
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import NewsList from './NewsList';
 
@@ -44,5 +44,29 @@ describe('NewsList', () => {
     const text = container.textContent;
     expect(text.indexOf('Newest crypto story')).toBeLessThan(text.indexOf('Middle macro story'));
     expect(text.indexOf('Middle macro story')).toBeLessThan(text.indexOf('Older market story'));
+  });
+
+  it('calls onLoadMore when the sentinel intersects and hasMore is true', () => {
+    let intersectionCallback;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    window.IntersectionObserver = vi.fn(function (cb) {
+      intersectionCallback = cb;
+      return { observe, disconnect };
+    });
+    const onLoadMore = vi.fn();
+
+    render(
+      <NewsList
+        articles={[{ id: '1', title: 'Story', published_at: '2026-06-17T00:00:00Z' }]}
+        hasMore
+        onLoadMore={onLoadMore}
+      />
+    );
+
+    expect(observe).toHaveBeenCalled();
+    intersectionCallback([{ isIntersecting: true }]);
+
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
   });
 });
