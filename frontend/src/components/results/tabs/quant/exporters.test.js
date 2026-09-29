@@ -9,7 +9,7 @@ describe('exporters', () => {
     expect(csvCell('plain')).toBe('plain');
     expect(csvCell('a,b')).toBe('"a,b"');
     expect(csvCell('say "hi"')).toBe('"say ""hi"""');
-    expect(csvCell('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
+    expect(csvCell('=HYPERLINK("x")')).toBe('"\'=HYPERLINK(""x"")"');
     expect(csvCell('-2.1%')).toBe('-2.1%');
     expect(csvCell('-cmd')).toBe("'-cmd");
     expect(csvCell(null)).toBe('');
