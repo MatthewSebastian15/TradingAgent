@@ -49,7 +49,7 @@ function CategoryTab({ item, isActive, onChange }) {
       onClick={() => {
         if (!isActive) onChange(item.key);
       }}
-      className="terminal-news-filter-tab h-8 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted"
+      className="terminal-news-filter-tab h-8 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-2 focus-visible:ring-offset-black"
     >
       {item.label}
     </Button>
@@ -98,7 +98,7 @@ export default function NewsFilterBar({
           size="sm"
           onClick={onRefresh}
           disabled={isRefreshing || refreshDisabled}
-          className="terminal-news-filter-tab terminal-news-refresh-button ml-auto h-8 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-bloomberg-border disabled:hover:bg-black/50 disabled:hover:text-bloomberg-muted"
+          className="terminal-news-filter-tab terminal-news-refresh-button ml-auto h-8 shrink-0 rounded-md border border-bloomberg-border bg-black/50 px-2.5 text-[10px] font-bold uppercase text-bloomberg-muted hover:border-bloomberg-orange hover:bg-bloomberg-orange/10 hover:text-bloomberg-orange disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-bloomberg-border disabled:hover:bg-black/50 disabled:hover:text-bloomberg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bloomberg-orange focus-visible:ring-offset-2 focus-visible:ring-offset-black"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           REFRESH

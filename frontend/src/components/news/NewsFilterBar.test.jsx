@@ -126,6 +126,20 @@ describe('NewsFilterBar', () => {
     expect(screen.getByRole('button', { name: /REFRESH/ })).toBeDisabled();
   });
 
+  it('gives every filter-bar button a visible focus ring class', () => {
+    render(<NewsFilterBar selectedCategory="all" onChange={vi.fn()} onRefresh={vi.fn()} />);
+
+    const allTab = screen.getByRole('button', { name: 'ALL' });
+    const refreshButton = screen.getByRole('button', { name: /REFRESH/ });
+
+    [allTab, refreshButton].forEach((button) => {
+      expect(button.className).toEqual(expect.stringContaining('focus-visible:ring-2'));
+      expect(button.className).toEqual(
+        expect.stringContaining('focus-visible:ring-bloomberg-orange')
+      );
+    });
+  });
+
   it('spaces adjacent category tabs with at least gap-2', () => {
     const { container } = render(<NewsFilterBar selectedCategory="all" onChange={vi.fn()} />);
 
