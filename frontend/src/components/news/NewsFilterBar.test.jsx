@@ -73,4 +73,22 @@ describe('NewsFilterBar', () => {
     const btn = screen.getByRole('button', { name: 'CRYPTO' });
     expect(btn.style.color).toBe('rgb(6, 182, 212)');
   });
+
+  it('renders category tabs and the refresh button at the navbar-consistent h-8 height', () => {
+    render(<NewsFilterBar selectedCategory="all" onChange={vi.fn()} onRefresh={vi.fn()} />);
+
+    const marketsTab = screen.getByRole('button', { name: 'MARKETS' });
+    const refreshButton = screen.getByRole('button', { name: /REFRESH/ });
+
+    expect(marketsTab.className).toEqual(expect.stringContaining('h-8'));
+    expect(marketsTab.className).not.toEqual(expect.stringContaining('h-7'));
+    expect(refreshButton.className).toEqual(expect.stringContaining('h-8'));
+  });
+
+  it('spaces adjacent category tabs with at least gap-2', () => {
+    const { container } = render(<NewsFilterBar selectedCategory="all" onChange={vi.fn()} />);
+
+    const tabRow = container.querySelector('.terminal-news-filter');
+    expect(tabRow.className).toEqual(expect.stringContaining('gap-2'));
+  });
 });
