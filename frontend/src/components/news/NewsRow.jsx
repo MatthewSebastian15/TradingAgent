@@ -121,7 +121,7 @@ export default function NewsRow({ article }) {
           {titleNode}
         </div>
 
-        <div className="terminal-news-summary truncate text-xs leading-[1.4] text-[#8a8f98]">
+        <div className="terminal-news-summary line-clamp-2 text-xs leading-[1.4] text-[#8a8f98]">
           {description}
         </div>
       </div>

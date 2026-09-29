@@ -112,6 +112,26 @@ describe('NewsRow', () => {
     expect(link.className).toEqual(expect.stringContaining('absolute'));
     expect(link.className).toEqual(expect.stringContaining('inset-0'));
   });
+
+  it('clamps the description to two lines instead of one', () => {
+    const { container } = render(
+      <NewsRow
+        article={{
+          title: 'Bitcoin slips as traders await macro data',
+          summary:
+            'Bitcoin slipped as traders waited for macro data, policy signals, liquidity updates, ETF flows, bond market moves, dollar strength, derivatives positioning, and broader risk appetite across global markets before adding exposure again today.',
+          url: 'https://example.com/news',
+          source: 'Bloomberg',
+          category: 'crypto',
+          published_at: '2026-06-15T01:00:00Z',
+        }}
+      />
+    );
+
+    const description = container.querySelector('.terminal-news-summary');
+    expect(description.className).toEqual(expect.stringContaining('line-clamp-2'));
+    expect(description.className).not.toEqual(expect.stringContaining('truncate'));
+  });
 });
 
 describe('NewsRow final category labels', () => {
