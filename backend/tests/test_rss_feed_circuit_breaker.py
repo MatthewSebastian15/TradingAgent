@@ -25,7 +25,7 @@ def teardown_function():
     clear_provider_budget_for_tests()
 
 
-def test_feed_trips_breaker_after_exhausted_retries_and_is_skipped_next_call(monkeypatch):
+def test_feed_trips_breaker_after_a_timeout_and_is_skipped_next_call(monkeypatch):
     call_count = {"n": 0}
 
     def always_timeout(*_args, **_kwargs):
@@ -40,14 +40,14 @@ def test_feed_trips_breaker_after_exhausted_retries_and_is_skipped_next_call(mon
     status, parsed, _attempt = provider._fetch_feed(_FEED, _CONFIG)
     assert status == "timeout"
     assert parsed is None
-    assert call_count["n"] == 2  # initial attempt + 1 retry, both exhausted
+    assert call_count["n"] == 1  # a timeout is not retried, even with retries configured
 
     # Breaker tripped: the next call must skip the network entirely.
     status2, parsed2, attempt2 = provider._fetch_feed(_FEED, _CONFIG)
     assert status2 == "skipped_cooldown"
     assert parsed2 is None
     assert attempt2["status"] == "skipped_cooldown"
-    assert call_count["n"] == 2  # unchanged - no new HTTP attempt
+    assert call_count["n"] == 1  # unchanged - no new HTTP attempt
 
 
 def test_feed_recovers_after_success(monkeypatch):
