@@ -178,6 +178,37 @@ describe('News page', () => {
     vi.useRealTimers();
   });
 
+  it('shows a degraded-sources badge when some providers are failing, even with articles present', () => {
+    useGeneralNews.mockReturnValue({
+      data: {
+        articles,
+        provider_status: { rss_context: 'success', marketaux: 'error', newsdata: 'timeout' },
+      },
+      status: 'success',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.getByText('2/3 sources unavailable')).toBeInTheDocument();
+    expect(screen.getAllByText('Stocks gain after earnings').length).toBeGreaterThan(0);
+  });
+
+  it('does not show any provider badge when every provider is healthy', () => {
+    useGeneralNews.mockReturnValue({
+      data: { articles, provider_status: { rss_context: 'success' } },
+      status: 'success',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.queryByText(/sources unavailable/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Providers OK/i)).not.toBeInTheDocument();
+  });
+
   it('hides frontend status metadata that should not be shown', () => {
     useGeneralNews.mockReturnValue({
       data: {

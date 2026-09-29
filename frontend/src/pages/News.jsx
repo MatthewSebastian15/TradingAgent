@@ -21,21 +21,27 @@ const FAILURE_PROVIDER_STATUSES = new Set([
   'disabled',
 ]);
 
-function providerStatusSummary(providerStatus) {
+function providerDegradation(providerStatus) {
   const entries = Object.entries(providerStatus || {});
-  if (!entries.length) return '';
+  if (!entries.length) return { show: false, label: '', tone: 'amber' };
 
   const failedCount = entries.filter(([, status]) =>
     FAILURE_PROVIDER_STATUSES.has(String(status || '').toLowerCase())
   ).length;
 
-  if (!failedCount) return 'Providers OK';
-  if (failedCount === entries.length) return 'Providers unavailable';
-  return `${failedCount} providers unavailable`;
+  if (!failedCount) return { show: false, label: '', tone: 'amber' };
+  if (failedCount === entries.length) {
+    return { show: true, label: 'All sources unavailable', tone: 'red' };
+  }
+  return {
+    show: true,
+    label: `${failedCount}/${entries.length} sources unavailable`,
+    tone: 'amber',
+  };
 }
 
 function emptyMessageFor({ category, data, error }) {
-  const providerSummary = providerStatusSummary(data?.provider_status);
+  const degradation = providerDegradation(data?.provider_status);
   const errorText = String(error?.message || '').toLowerCase();
 
   if (data?.message) return data.message;
@@ -44,7 +50,7 @@ function emptyMessageFor({ category, data, error }) {
     return 'News refresh is cooling down after rate limit. Showing cached data.';
   }
 
-  if (providerSummary === 'Providers unavailable') {
+  if (degradation.tone === 'red') {
     return 'News providers are unavailable. Showing cached data if available.';
   }
 
@@ -98,6 +104,7 @@ export default function News() {
   const showStaleWarning = status === 'stale' && displayedArticles.length > 0;
   const showRefreshCooldown = data?.refresh?.reason === 'manual_refresh_cooldown';
   const emptyMessage = emptyMessageFor({ category, data, error });
+  const degradation = providerDegradation(data?.provider_status);
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10 text-bloomberg-white">
@@ -115,6 +122,15 @@ export default function News() {
                   <span className="font-mono text-[10px] leading-none text-bloomberg-green">
                     UPDATED
                   </span>
+                </span>
+              )}
+              {degradation.show && (
+                <span
+                  className={`shrink-0 font-mono text-[10px] leading-none ${
+                    degradation.tone === 'red' ? 'text-bloomberg-red' : 'text-bloomberg-amber'
+                  }`}
+                >
+                  {degradation.label}
                 </span>
               )}
               <div className="min-w-0 flex-1">
