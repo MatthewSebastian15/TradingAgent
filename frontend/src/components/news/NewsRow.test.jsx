@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -131,6 +131,30 @@ describe('NewsRow', () => {
     const description = container.querySelector('.terminal-news-summary');
     expect(description.className).toEqual(expect.stringContaining('line-clamp-2'));
     expect(description.className).not.toEqual(expect.stringContaining('truncate'));
+  });
+
+  it('updates the relative time label after a minute passes, without remounting', () => {
+    render(
+      <NewsRow
+        article={{
+          title: 'Ticking story',
+          summary: 'Ticking story summary.',
+          url: 'https://example.com/ticking',
+          source: 'Reuters',
+          category: 'markets',
+          published_at: '2026-06-15T11:59:00Z',
+        }}
+      />
+    );
+
+    expect(screen.getByText('1m')).toBeInTheDocument();
+
+    act(() => {
+      vi.setSystemTime(new Date('2026-06-15T13:00:00Z'));
+      vi.advanceTimersByTime(60000);
+    });
+
+    expect(screen.getByText('1h')).toBeInTheDocument();
   });
 });
 

@@ -1,8 +1,10 @@
 import PropTypes from 'prop-types';
+import { useEffect, useState } from 'react';
 
 import { getCategoryColor } from '@/lib/news/categoryColors';
 import { formatNewsTime } from '@/lib/news/formatNewsTime';
 
+const RELATIVE_TIME_TICK_MS = 60000;
 const PROVIDER_NAMES = new Set(['marketaux', 'newsdata', 'google_news_light', 'rss_context']);
 const CATEGORY_LABELS = {
   markets: 'MARKETS',
@@ -71,7 +73,19 @@ function limitDescriptionWords(value, fallback) {
   return words.slice(0, MAX_DESCRIPTION_WORDS).join(' ');
 }
 
+function useRelativeTimeTick() {
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const intervalId = window.setInterval(
+      () => forceTick((count) => count + 1),
+      RELATIVE_TIME_TICK_MS
+    );
+    return () => window.clearInterval(intervalId);
+  }, []);
+}
+
 export default function NewsRow({ article }) {
+  useRelativeTimeTick();
   const title = normalizeText(article.title) || 'Untitled news';
   const url = normalizeText(article.url);
   const source = getDataSource(article);
