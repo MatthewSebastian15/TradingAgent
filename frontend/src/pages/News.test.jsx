@@ -153,6 +153,31 @@ describe('News page', () => {
     expect(refreshButton).not.toBeDisabled();
   });
 
+  it('shows a brief update pulse when a silent refresh brings new data, not on first load', () => {
+    vi.useFakeTimers();
+    const mockNews = (lastUpdated) =>
+      useGeneralNews.mockReturnValue({
+        data: { articles, last_updated: lastUpdated },
+        status: 'success',
+        error: null,
+        reload: vi.fn(),
+      });
+
+    mockNews('2026-06-17T12:00:00Z');
+    const { rerender } = render(<News />);
+    expect(screen.queryByTestId('news-live-pulse')).not.toBeInTheDocument();
+
+    mockNews('2026-06-17T12:01:00Z');
+    rerender(<News />);
+    expect(screen.getByTestId('news-live-pulse')).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.queryByTestId('news-live-pulse')).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
   it('hides frontend status metadata that should not be shown', () => {
     useGeneralNews.mockReturnValue({
       data: {

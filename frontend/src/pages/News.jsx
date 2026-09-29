@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import CategoryTransition from '@/components/news/CategoryTransition';
 import { Card, CardContent } from '@/components/ui/card';
@@ -76,6 +76,22 @@ export default function News() {
     onUpdate: () => reload({ force: false, silent: true }),
   });
 
+  const [justUpdated, setJustUpdated] = useState(false);
+  const lastSeenUpdateRef = useRef(undefined);
+
+  useEffect(() => {
+    const currentUpdate = data?.last_updated;
+    if (!currentUpdate) return;
+    const isFirstObservation = lastSeenUpdateRef.current === undefined;
+    const changed = currentUpdate !== lastSeenUpdateRef.current;
+    lastSeenUpdateRef.current = currentUpdate;
+    if (isFirstObservation || !changed) return;
+
+    setJustUpdated(true);
+    const timeoutId = window.setTimeout(() => setJustUpdated(false), 2000);
+    return () => window.clearTimeout(timeoutId);
+  }, [data?.last_updated]);
+
   const displayedArticles = useMemo(() => dedupeNewsItems(data?.articles || []), [data]);
   const showSkeleton =
     (status === 'loading' || status === 'refreshing') && !displayedArticles.length;
@@ -88,13 +104,29 @@ export default function News() {
       <main className="terminal-news px-3 py-3">
         <Card className="terminal-news-panel overflow-hidden rounded-lg border-white/[0.08] bg-[#050505] text-bloomberg-white shadow-lg shadow-black/20">
           <CardContent className="p-3">
-            <NewsFilterBar
-              selectedCategory={category}
-              onChange={setCategory}
-              onRefresh={handleRefresh}
-              isRefreshing={isRefreshing}
-              refreshDisabled={showRefreshCooldown}
-            />
+            <div className="flex items-center gap-3">
+              {justUpdated && (
+                <span
+                  data-testid="news-live-pulse"
+                  className="flex shrink-0 items-center gap-1"
+                  aria-live="polite"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-bloomberg-green animate-pulse-dot" />
+                  <span className="font-mono text-[10px] leading-none text-bloomberg-green">
+                    UPDATED
+                  </span>
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <NewsFilterBar
+                  selectedCategory={category}
+                  onChange={setCategory}
+                  onRefresh={handleRefresh}
+                  isRefreshing={isRefreshing}
+                  refreshDisabled={showRefreshCooldown}
+                />
+              </div>
+            </div>
 
             <CategoryTransition key={category} categoryKey={category}>
               {showSkeleton ? (
