@@ -102,6 +102,81 @@ def test_last_updated_is_global_even_when_category_filter_matches_nothing(tmp_pa
     assert result.last_updated == meta_value
 
 
+def test_row_without_published_at_backfills_from_created_at(tmp_path):
+    store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"))
+    article = _article("No date supplied", url="https://example.com/no-date")
+    article["published_at"] = None
+
+    store.upsert_many([article])
+
+    with store._connect() as conn:
+        row = conn.execute(
+            "SELECT published_at, created_at FROM news_articles WHERE title = 'No date supplied'"
+        ).fetchone()
+    assert row[0] is not None
+    assert row[0] == row[1]
+
+
+def test_ensure_schema_backfills_legacy_null_published_at_rows(tmp_path):
+    db_path = tmp_path / "news.sqlite3"
+    store = NewsArticleStore(db_path=str(db_path))
+    with store._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO news_articles (
+                id, title, description, url, canonical_url, source, source_domain,
+                provider, category, published_at, tickers_json, sentiment, impact,
+                content_hash, article_json, created_at, updated_at
+            ) VALUES (
+                'legacy:1', 'Legacy row', 'desc', 'https://example.com/legacy',
+                'https://example.com/legacy', 'Example', 'example.com', 'rss_context',
+                'markets', NULL, '[]', NULL, NULL,
+                'legacyhash', '{"title": "Legacy row"}',
+                '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
+            )
+            """
+        )
+        conn.commit()
+
+    NewsArticleStore(db_path=str(db_path))
+
+    with store._connect() as conn:
+        row = conn.execute(
+            "SELECT published_at, created_at FROM news_articles WHERE content_hash = 'legacyhash'"
+        ).fetchone()
+    assert row[0] == row[1] == "2026-01-01T00:00:00Z"
+
+
+def test_list_articles_query_plan_uses_category_published_index(tmp_path):
+    store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"))
+    older_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat().replace("+00:00", "Z")
+    newer_date = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat().replace("+00:00", "Z")
+    store.upsert_many(
+        [
+            _article("Older", url="https://example.com/older", published_at=older_date),
+            _article("Newer", url="https://example.com/newer", published_at=newer_date),
+        ]
+    )
+
+    result = store.list_articles(category="markets", window_days=7, limit=10)
+    assert [a["title"] for a in result.articles] == ["Newer", "Older"]
+
+    with store._connect() as conn:
+        cutoff_text = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat().replace("+00:00", "Z")
+        plan_rows = conn.execute(
+            """
+            EXPLAIN QUERY PLAN
+            SELECT article_json, updated_at FROM news_articles
+            WHERE published_at >= ? AND category = ?
+            ORDER BY published_at DESC, updated_at DESC
+            LIMIT ?
+            """,
+            (cutoff_text, "markets", 10),
+        ).fetchall()
+    plan_text = " ".join(str(step) for step in plan_rows)
+    assert "idx_news_articles_category_published" in plan_text
+
+
 def test_store_max_articles_guard_keeps_newest(tmp_path):
     store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"), max_articles=1)
     older = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat().replace("+00:00", "Z")

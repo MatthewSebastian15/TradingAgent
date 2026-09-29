@@ -223,7 +223,7 @@ class NewsArticleStore:
         category = str(article.get("category") or "all").strip().lower() or "all"
         source_domain = str(article.get("source_domain") or _domain(url) or "").strip() or None
         article_id = str(article.get("id") or f"{provider}:{content_hash[:16]}")
-        published_at = _normalize_datetime_text(article.get("published_at"))
+        published_at = _normalize_datetime_text(article.get("published_at")) or now_text
         payload = dict(article)
         payload.update(
             {
@@ -323,6 +323,9 @@ class NewsArticleStore:
                     value TEXT NOT NULL
                 )
                 """
+            )
+            conn.execute(
+                "UPDATE news_articles SET published_at = created_at WHERE published_at IS NULL"
             )
 
 
