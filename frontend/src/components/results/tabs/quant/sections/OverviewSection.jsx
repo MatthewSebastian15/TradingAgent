@@ -16,6 +16,7 @@ import {
   hurstLabel,
   ratioTone,
   sampleNote,
+  significanceNote,
 } from '../format';
 import { buildQuantSnapshot, chatbotPrompt, interpretSummary, snapshotText } from '../interpret';
 import { CARD_GRID } from '../layout';
@@ -146,7 +147,10 @@ export function OverviewSection({
             label="Sharpe"
             value={fmtRatio(sharpeInfo?.sharpe)}
             tone={ratioTone(sharpeInfo?.sharpe)}
-            sample={sampleNote(sharpeInfo?.observations ?? observations)}
+            sample={significanceNote({
+              n: sharpeInfo?.observations ?? observations,
+              tStat: sharpeInfo?.tStat,
+            })}
             gloss="Return above the risk-free rate per unit of volatility."
           />
         </ProOnly>
@@ -184,6 +188,11 @@ export function OverviewSection({
             label="Alpha (ann.)"
             value={finite(benchStats?.alpha) ? fmtSignedPct(benchStats.alpha) : DASH}
             status={benchCard}
+            sample={
+              benchStats
+                ? significanceNote({ n: benchStats.observations, tStat: benchStats.alphaTStat })
+                : undefined
+            }
             category={
               finite(benchStats?.alphaTStat) ? `t = ${fmtNum2(benchStats.alphaTStat)}` : undefined
             }
@@ -195,6 +204,9 @@ export function OverviewSection({
             label="Hurst"
             value={fmtNum2(hurstInfo?.hurst)}
             category={hurstInfo ? hurstLabel(hurstInfo.hurst, hurstInfo.significant) : undefined}
+            sample={
+              hurstInfo ? significanceNote({ significant: hurstInfo.significant }) : undefined
+            }
             gloss="Above 0.5 trends, below 0.5 mean-reverts, near 0.5 behaves like a random walk."
           />
         </ProOnly>

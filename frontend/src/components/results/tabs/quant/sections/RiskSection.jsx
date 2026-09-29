@@ -23,6 +23,7 @@ import {
   fmtSignedPct,
   ratioTone,
   sampleNote,
+  significanceNote,
 } from '../format';
 import { CARD_GRID, FIELD_GRID } from '../layout';
 import { ProOnly, useQuantMode } from '../mode';
@@ -124,7 +125,10 @@ export function RiskSection({
         {
           metric: 'Alpha (annualized)',
           value: `${fmtSignedPct(s.alpha)}${finite(s.alphaTStat) ? ` · t = ${fmtNum2(s.alphaTStat)}` : ''}`,
-          note: '|t| below 2 means not distinguishable from zero',
+          note:
+            finite(s.alphaTStat) && Math.abs(s.alphaTStat) < 2
+              ? 'Not significant: |t| below 2'
+              : 'Significant at roughly 95%: |t| of 2 or more',
         },
         {
           metric: 'Tracking error',
@@ -199,7 +203,7 @@ export function RiskSection({
           tone={ratioTone(sharpeInfo?.sharpe)}
           sample={
             sharpeInfo
-              ? `SE ${fmtNum2(sharpeInfo.standardError)} · P(SR>0) ${fmtPercent(sharpeInfo.probabilisticSharpe * 100)} · n=${sharpeInfo.observations}`
+              ? `SE ${fmtNum2(sharpeInfo.standardError)} · P(SR>0) ${fmtPercent(sharpeInfo.probabilisticSharpe * 100)} · ${significanceNote({ n: sharpeInfo.observations, tStat: sharpeInfo.tStat })}`
               : sampleNote(obs)
           }
           formula="(mean − rf) / stdev × √periods. SE per Mertens (skew/kurtosis adjusted); P(SR>0) is the Probabilistic Sharpe Ratio."

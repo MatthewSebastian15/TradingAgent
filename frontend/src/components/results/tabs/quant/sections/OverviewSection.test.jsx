@@ -64,6 +64,12 @@ describe('OverviewSection', () => {
     expect(screen.getAllByText('Unavailable')).toHaveLength(2);
   });
 
+  it('labels weak statistics', () => {
+    render(<OverviewSection {...props} />);
+    expect(screen.getByText('n=250 · not significant')).toBeTruthy();
+    expect(screen.getAllByText('not significant').length).toBeGreaterThan(0);
+  });
+
   it('jumps to detail sections', () => {
     render(<OverviewSection {...props} />);
     fireEvent.click(screen.getByRole('button', { name: 'Risk detail' }));

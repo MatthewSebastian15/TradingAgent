@@ -68,3 +68,15 @@ export function sampleNote(n, minReliable = 126) {
   if (!finite(n)) return null;
   return n < minReliable ? `n=${n} · low confidence` : `n=${n}`;
 }
+
+// Footnote that keeps weak numbers from looking as solid as strong ones.
+export function significanceNote({ n, tStat, significant } = {}, minReliable = 126) {
+  const parts = [];
+  if (finite(n)) {
+    parts.push(`n=${n}`);
+    if (n < minReliable) parts.push('low confidence');
+  }
+  if (significant === false || (finite(tStat) && Math.abs(tStat) < 2))
+    parts.push('not significant');
+  return parts.length > 0 ? parts.join(' · ') : null;
+}

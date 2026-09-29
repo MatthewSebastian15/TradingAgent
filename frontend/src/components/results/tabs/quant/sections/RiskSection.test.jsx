@@ -113,4 +113,20 @@ describe('RiskSection', () => {
     expect(screen.getByText('Benchmark unavailable')).toBeTruthy();
     expect(screen.queryByRole('status', { name: 'Loading benchmark statistics' })).toBeNull();
   });
+
+  it('flags an insignificant Sharpe ratio', () => {
+    render(
+      <RiskSection
+        {...baseProps}
+        sharpeInfo={{
+          sharpe: 0.3,
+          standardError: 0.4,
+          tStat: 0.75,
+          probabilisticSharpe: 0.77,
+          observations: 300,
+        }}
+      />
+    );
+    expect(screen.getByText(/· not significant$/)).toBeTruthy();
+  });
 });
