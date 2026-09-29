@@ -314,6 +314,15 @@ describe('QuantPanel', () => {
     expect(getMarketOhlcv).toHaveBeenCalledWith('MSFT', expect.objectContaining({ range: '1Y' }));
   });
 
+  it('does not overwrite the remembered mode with a mode that only came from a shared link', async () => {
+    window.localStorage.setItem('ta:quant:mode', 'pro');
+    window.history.replaceState(null, '', '/quant?mode=basic');
+    await renderPanel({ points: buildPoints(40), section: 'risk', syncUrl: true });
+    expect(screen.getByRole('button', { name: 'Basic' }).getAttribute('aria-pressed')).toBe('true');
+    expect(window.localStorage.getItem('ta:quant:mode')).toBe('pro');
+    window.history.replaceState(null, '', '/');
+  });
+
   it('toggles Basic mode, hides pro-only blocks and remembers the choice', async () => {
     await renderPanel({ points: buildPoints(40), section: 'risk' });
     expect(screen.getByText('Top drawdowns')).toBeTruthy();

@@ -179,13 +179,18 @@ function QuantPanel({
     enabled: syncUrl,
     isValid: (m) => QUANT_MODES.includes(m),
   });
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(MODE_KEY, mode);
-    } catch {
-      // Remembering the mode is a convenience only.
-    }
-  }, [mode]);
+  // Only a deliberate toggle is remembered; a mode that arrived via a shared link is not.
+  const changeMode = useCallback(
+    (next) => {
+      setMode(next);
+      try {
+        window.localStorage.setItem(MODE_KEY, next);
+      } catch {
+        // Remembering the mode is a convenience only.
+      }
+    },
+    [setMode]
+  );
   const [btParams, setBtParams] = useState({
     fast: 20,
     slow: 50,
@@ -771,7 +776,7 @@ function QuantPanel({
   const changePct = closes.length > 1 ? (closes.at(-1) / closes[0] - 1) * 100 : null;
 
   return (
-    <QuantModeProvider mode={mode} onModeChange={setMode}>
+    <QuantModeProvider mode={mode} onModeChange={changeMode}>
       <div className="space-y-4 p-4 font-mono">
         <ContextBar
           symbol={baseSymbol}
