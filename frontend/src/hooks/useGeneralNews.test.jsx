@@ -298,6 +298,38 @@ describe('useGeneralNews', () => {
     expect(screen.getByTestId('ids-count')).toHaveTextContent('new');
   });
 
+  it('refetches a stale storage entry under StrictMode instead of reusing the aborted request', async () => {
+    sessionStorage.setItem(
+      'tradingagents:general-news:v2:all:7:50',
+      JSON.stringify({
+        data: { articles: [{ id: 'stale' }] },
+        fetchedAt: Date.now() - 200000,
+      })
+    );
+    // Mimic real fetch: reject with AbortError if the signal aborts before the response lands.
+    fetchGeneralNews.mockImplementation(
+      ({ signal }) =>
+        new Promise((resolve, reject) => {
+          signal.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+          );
+          queueMicrotask(() => resolve({ articles: [{ id: 'fresh' }] }));
+        })
+    );
+
+    render(
+      <React.StrictMode>
+        <Harness />
+      </React.StrictMode>
+    );
+    await act(async () => {});
+
+    expect(screen.getByTestId('ids-count')).toHaveTextContent('fresh');
+    expect(
+      JSON.parse(sessionStorage.getItem('tradingagents:general-news:v2:all:7:50')).data
+    ).toEqual({ articles: [{ id: 'fresh' }] });
+  });
+
   it('appends the next page to data.articles via loadMore without re-fetching page one', async () => {
     fetchGeneralNews
       .mockResolvedValueOnce({ articles: [{ id: '1' }, { id: '2' }], next_offset: 2 })

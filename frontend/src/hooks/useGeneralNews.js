@@ -225,10 +225,19 @@ export async function loadGeneralNews({ category, windowDays, limit, force = fal
       throw error;
     })
     .finally(() => {
-      inflightRequests.delete(requestKey);
+      if (inflightRequests.get(requestKey) === request) inflightRequests.delete(requestKey);
     });
 
   inflightRequests.set(requestKey, request);
+  // An aborted request rejects asynchronously; a caller arriving before then (StrictMode's
+  // second effect run) must not join it and inherit its stale-cache fallback.
+  signal?.addEventListener(
+    'abort',
+    () => {
+      if (inflightRequests.get(requestKey) === request) inflightRequests.delete(requestKey);
+    },
+    { once: true }
+  );
   return request;
 }
 
