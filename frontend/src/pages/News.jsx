@@ -111,7 +111,7 @@ export default function News() {
       <main className="terminal-news px-3 py-3">
         <Card className="terminal-news-panel overflow-hidden rounded-lg border-white/[0.08] bg-[#050505] text-bloomberg-white shadow-lg shadow-black/20">
           <CardContent className="p-3">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               {justUpdated && (
                 <span
                   data-testid="news-live-pulse"
@@ -133,7 +133,7 @@ export default function News() {
                   {degradation.label}
                 </span>
               )}
-              <div className="min-w-0 flex-1">
+              <div className="min-w-[10rem] flex-1">
                 <NewsFilterBar
                   selectedCategory={category}
                   onChange={setCategory}
