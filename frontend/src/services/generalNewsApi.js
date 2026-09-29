@@ -2,6 +2,10 @@ import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 
 const GENERAL_NEWS_REQUEST_TIMEOUT_MS = 15000;
 
+// Keyed by the request querystring; bounded by the few category/page combos a user visits.
+const etagByKey = new Map();
+const lastPayloadByKey = new Map();
+
 function buildGeneralNewsParams({
   category = 'all',
   windowDays = 7,
@@ -76,13 +80,22 @@ async function readGeneralNews({
   signal,
 } = {}) {
   const params = buildGeneralNewsParams({ category, windowDays, limit, offset });
+  const cacheKey = params.toString();
+  const knownEtag = etagByKey.get(cacheKey);
+  const headers = { ...(await buildAuthHeaders()) };
+  if (knownEtag && lastPayloadByKey.has(cacheKey)) headers['If-None-Match'] = knownEtag;
+
   const response = await fetchWithTimeout(buildApiUrl(`/news/general?${params.toString()}`), {
     method: 'GET',
-    headers: await buildAuthHeaders(),
+    headers,
     credentials: 'include',
     signal,
     cache: 'default',
   });
+
+  if (response.status === 304 && lastPayloadByKey.has(cacheKey)) {
+    return lastPayloadByKey.get(cacheKey);
+  }
 
   if (!response.ok) {
     const error = new Error(`Failed to fetch general news: ${await readHttpError(response)}`);
@@ -90,7 +103,13 @@ async function readGeneralNews({
     throw error;
   }
 
-  return normalizeGeneralNewsResponse(await response.json());
+  const normalized = normalizeGeneralNewsResponse(await response.json());
+  const etag = response.headers?.get?.('etag');
+  if (etag) {
+    etagByKey.set(cacheKey, etag);
+    lastPayloadByKey.set(cacheKey, normalized);
+  }
+  return normalized;
 }
 
 export async function requestGeneralNewsRefresh({

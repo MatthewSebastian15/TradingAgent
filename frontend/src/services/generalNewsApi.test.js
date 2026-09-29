@@ -92,3 +92,32 @@ describe('fetchGeneralNews pagination', () => {
     );
   });
 });
+
+describe('fetchGeneralNews conditional requests', () => {
+  it('sends If-None-Match on a repeat request and reuses the cached payload on 304', async () => {
+    globalThis.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: (name) => (name.toLowerCase() === 'etag' ? 'W/"abc123"' : null) },
+        json: async () => ({ articles: [{ id: '1' }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 304,
+        headers: { get: () => null },
+        json: async () => {
+          throw new Error('304 has no body');
+        },
+      });
+
+    const first = await fetchGeneralNews({ category: 'etag-test', windowDays: 14, limit: 50 });
+    expect(first.articles).toEqual([{ id: '1' }]);
+    expect(globalThis.fetch.mock.calls[0][1].headers['If-None-Match']).toBeUndefined();
+
+    const second = await fetchGeneralNews({ category: 'etag-test', windowDays: 14, limit: 50 });
+
+    expect(globalThis.fetch.mock.calls[1][1].headers['If-None-Match']).toBe('W/"abc123"');
+    expect(second.articles).toEqual([{ id: '1' }]);
+  });
+});
