@@ -67,6 +67,41 @@ def test_store_retention_cleanup_removes_old_articles(tmp_path):
     assert result.articles == []
 
 
+def test_upsert_writes_last_updated_into_store_meta(tmp_path):
+    store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"))
+
+    store.upsert_many([_article("First", url="https://example.com/1")])
+    with store._connect() as conn:
+        first_value = conn.execute(
+            "SELECT value FROM store_meta WHERE key = 'last_updated'"
+        ).fetchone()[0]
+    assert first_value is not None
+
+    store.upsert_many([_article("Second", url="https://example.com/2")])
+    with store._connect() as conn:
+        second_value = conn.execute(
+            "SELECT value FROM store_meta WHERE key = 'last_updated'"
+        ).fetchone()[0]
+    assert second_value >= first_value
+
+
+def test_last_updated_is_global_even_when_category_filter_matches_nothing(tmp_path):
+    store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"))
+    store.upsert_many([_article("Only markets story", url="https://example.com/1")])
+
+    result = store.list_articles(category="crypto", window_days=7, limit=10)
+
+    assert result.articles == []
+    assert result.total_available == 0
+    assert result.last_updated is not None
+
+    with store._connect() as conn:
+        meta_value = conn.execute(
+            "SELECT value FROM store_meta WHERE key = 'last_updated'"
+        ).fetchone()[0]
+    assert result.last_updated == meta_value
+
+
 def test_store_max_articles_guard_keeps_newest(tmp_path):
     store = NewsArticleStore(db_path=str(tmp_path / "news.sqlite3"), max_articles=1)
     older = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat().replace("+00:00", "Z")

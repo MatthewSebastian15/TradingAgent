@@ -103,6 +103,13 @@ class NewsArticleStore:
                 rows,
             )
             self.cleanup(conn=conn, now=datetime.now(timezone.utc))
+            conn.execute(
+                """
+                INSERT INTO store_meta (key, value) VALUES ('last_updated', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (now_text,),
+            )
         return len(rows)
 
     def list_articles(
@@ -307,6 +314,14 @@ class NewsArticleStore:
                 """
                 CREATE INDEX IF NOT EXISTS idx_news_articles_updated_at
                 ON news_articles (updated_at)
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS store_meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
                 """
             )
 
