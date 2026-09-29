@@ -58,6 +58,25 @@ function emptyMessageFor({ category, data, error }) {
   return 'No news available yet.';
 }
 
+function primaryStatusBanner({ error, data, status, hasArticles }) {
+  if (error && !hasArticles) {
+    return { tone: 'red', message: 'Failed to load general news.' };
+  }
+  if (data?.worker_health?.degraded) {
+    return {
+      tone: 'amber',
+      message: `Background news refresh has failed ${data.worker_health.consecutive_failures} times in a row. Showing the last successful data.`,
+    };
+  }
+  if (status === 'stale' && hasArticles) {
+    return { tone: 'amber', message: 'Showing cached news because the latest refresh failed.' };
+  }
+  if (data?.refresh?.reason === 'manual_refresh_cooldown') {
+    return { tone: 'amber', message: 'Refresh is cooling down. Showing latest cached news.' };
+  }
+  return null;
+}
+
 export default function News() {
   const [category, setCategory] = useState('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -101,8 +120,13 @@ export default function News() {
   const displayedArticles = useMemo(() => dedupeNewsItems(data?.articles || []), [data]);
   const showSkeleton =
     (status === 'loading' || status === 'refreshing') && !displayedArticles.length;
-  const showStaleWarning = status === 'stale' && displayedArticles.length > 0;
   const showRefreshCooldown = data?.refresh?.reason === 'manual_refresh_cooldown';
+  const statusBanner = primaryStatusBanner({
+    error,
+    data,
+    status,
+    hasArticles: displayedArticles.length > 0,
+  });
   const emptyMessage = emptyMessageFor({ category, data, error });
   const degradation = providerDegradation(data?.provider_status);
 
@@ -149,28 +173,15 @@ export default function News() {
                 <NewsListSkeleton count={5} />
               ) : (
                 <>
-                  {showStaleWarning && (
-                    <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-amber/40 bg-bloomberg-amber/10 px-3 py-2 text-xs text-bloomberg-amber">
-                      Showing cached news because the latest refresh failed.
-                    </div>
-                  )}
-
-                  {showRefreshCooldown && (
-                    <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-amber/40 bg-bloomberg-amber/10 px-3 py-2 text-xs text-bloomberg-amber">
-                      Refresh is cooling down. Showing latest cached news.
-                    </div>
-                  )}
-
-                  {data?.worker_health?.degraded && (
-                    <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-amber/40 bg-bloomberg-amber/10 px-3 py-2 text-xs text-bloomberg-amber">
-                      Background news refresh has failed {data.worker_health.consecutive_failures}{' '}
-                      times in a row. Showing the last successful data.
-                    </div>
-                  )}
-
-                  {error && !displayedArticles.length && (
-                    <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-red/40 bg-bloomberg-red/10 px-3 py-2 text-xs text-bloomberg-red">
-                      Failed to load general news.
+                  {statusBanner && (
+                    <div
+                      className={`terminal-news-state mt-2 rounded-md border px-3 py-2 text-xs ${
+                        statusBanner.tone === 'red'
+                          ? 'border-bloomberg-red/40 bg-bloomberg-red/10 text-bloomberg-red'
+                          : 'border-bloomberg-amber/40 bg-bloomberg-amber/10 text-bloomberg-amber'
+                      }`}
+                    >
+                      {statusBanner.message}
                     </div>
                   )}
 

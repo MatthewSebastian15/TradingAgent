@@ -209,6 +209,50 @@ describe('News page', () => {
     expect(screen.queryByText(/Providers OK/i)).not.toBeInTheDocument();
   });
 
+  it('shows only the stale banner, not both stale and cooldown, when both conditions are true', () => {
+    useGeneralNews.mockReturnValue({
+      data: {
+        articles,
+        cache: { hit: true },
+        refresh: { queued: false, skipped: true, reason: 'manual_refresh_cooldown' },
+      },
+      status: 'stale',
+      error: new Error('Network failed'),
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    const banners = screen.getAllByText(
+      /Showing cached news because the latest refresh failed|Refresh is cooling down/i
+    );
+    expect(banners).toHaveLength(1);
+    expect(
+      screen.getByText(/Showing cached news because the latest refresh failed/i)
+    ).toBeInTheDocument();
+  });
+
+  it('shows only the degraded-worker banner when worker, stale, and cooldown all apply', () => {
+    useGeneralNews.mockReturnValue({
+      data: {
+        articles,
+        worker_health: { degraded: true, consecutive_failures: 3 },
+        refresh: { queued: false, skipped: true, reason: 'manual_refresh_cooldown' },
+      },
+      status: 'stale',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(
+      screen.getByText(/Background news refresh has failed 3 times in a row/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Showing cached news because/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Refresh is cooling down/i)).not.toBeInTheDocument();
+  });
+
   it('hides frontend status metadata that should not be shown', () => {
     useGeneralNews.mockReturnValue({
       data: {
