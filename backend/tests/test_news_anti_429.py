@@ -66,6 +66,9 @@ def _seed_article(tmp_path, *, updated_at: str | None = None):
 
         with sqlite3.connect(config["general_news"]["cache_db_path"]) as conn:
             conn.execute("UPDATE news_articles SET updated_at = ?", (updated_at,))
+            conn.execute(
+                "UPDATE store_meta SET value = ? WHERE key = 'last_updated'", (updated_at,)
+            )
 
 
 def test_get_general_news_reads_article_store_without_force_refresh(tmp_path, monkeypatch):
