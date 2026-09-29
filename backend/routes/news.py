@@ -35,6 +35,7 @@ def _fetch_general_news(
     limit: int,
     provider: str | None = None,
     force_refresh: bool = False,
+    offset: int = 0,
 ) -> dict[str, Any]:
     from tradingagents.dataflows.news.general_news_categories import (
         is_allowed_category,
@@ -78,6 +79,7 @@ def _fetch_general_news(
         window_days=max(1, int(window_days)),
         limit=limit,
         provider=provider,
+        offset=max(0, int(offset)),
     )
     age_seconds = int(query.age_seconds or 0)
     stale = bool(query.articles) and age_seconds > ttl_seconds
@@ -89,6 +91,12 @@ def _fetch_general_news(
         "category": normalized_category,
         "window_days": max(1, int(window_days)),
         "limit": limit,
+        "offset": max(0, int(offset)),
+        "next_offset": (
+            max(0, int(offset)) + len(query.articles)
+            if max(0, int(offset)) + len(query.articles) < query.total_available
+            else None
+        ),
         "last_updated": query.last_updated,
         "refresh_interval_seconds": int(
             general_config.get("background_refresh_seconds")
@@ -142,6 +150,7 @@ async def get_general_news(
     limit: int = Query(default=2000, ge=1, le=2000),
     provider: str | None = Query(default=None),
     force_refresh: bool = Query(default=False),
+    offset: int = Query(default=0, ge=0),
 ):
     normalized_provider = provider.strip().lower() if provider else None
     if normalized_provider is not None and normalized_provider not in _SUPPORTED_GENERAL_PROVIDERS:
@@ -159,6 +168,7 @@ async def get_general_news(
         limit=limit,
         provider=normalized_provider,
         force_refresh=force_refresh,
+        offset=offset,
     )
     if _should_queue_read_refresh(result, force_refresh=force_refresh):
         from services.news.background_worker import queue_general_news_refresh

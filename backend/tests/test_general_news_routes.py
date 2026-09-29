@@ -131,3 +131,43 @@ def test_response_does_not_include_decision_company_news(monkeypatch):
     response = _client().get("/api/news/general")
 
     assert "decision_company_news" not in response.json()
+
+
+def test_get_general_news_returns_next_offset_when_more_pages_exist(monkeypatch):
+    from services.news.article_store import ArticleQueryResult
+
+    monkeypatch.setattr(
+        "services.news.article_store.NewsArticleStore.list_articles",
+        lambda self, **kwargs: ArticleQueryResult(
+            articles=[{"id": "1"}, {"id": "2"}],
+            total_available=5,
+            last_updated="2026-06-14T10:30:00Z",
+            age_seconds=10,
+        ),
+    )
+
+    response = _client().get("/api/news/general?limit=2&offset=0")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["offset"] == 0
+    assert body["next_offset"] == 2
+
+
+def test_get_general_news_returns_null_next_offset_on_last_page(monkeypatch):
+    from services.news.article_store import ArticleQueryResult
+
+    monkeypatch.setattr(
+        "services.news.article_store.NewsArticleStore.list_articles",
+        lambda self, **kwargs: ArticleQueryResult(
+            articles=[{"id": "5"}],
+            total_available=5,
+            last_updated="2026-06-14T10:30:00Z",
+            age_seconds=10,
+        ),
+    )
+
+    response = _client().get("/api/news/general?limit=2&offset=4")
+
+    assert response.status_code == 200
+    assert response.json()["next_offset"] is None
