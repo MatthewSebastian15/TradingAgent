@@ -25,6 +25,7 @@ import {
   signedTone,
 } from '../format';
 import { CARD_GRID, FIELD_GRID } from '../layout';
+import { ProOnly } from '../mode';
 import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS, divergingColor, textOnDiverging } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
@@ -191,17 +192,19 @@ export function BacktestSection({
         )}
       </div>
 
-      <AdvancedPanel>
-        <div className={FIELD_GRID}>
-          <SliderField
-            label="Cost / trade (bps)"
-            value={params.costBps}
-            min={0}
-            max={50}
-            onChange={(v) => onParamChange('costBps', v)}
-          />
-        </div>
-      </AdvancedPanel>
+      <ProOnly>
+        <AdvancedPanel>
+          <div className={FIELD_GRID}>
+            <SliderField
+              label="Cost / trade (bps)"
+              value={params.costBps}
+              min={0}
+              max={50}
+              onChange={(v) => onParamChange('costBps', v)}
+            />
+          </div>
+        </AdvancedPanel>
+      </ProOnly>
 
       {!result || !detail ? (
         <NoticeBox title="Backtest">
@@ -279,184 +282,196 @@ export function BacktestSection({
                 },
               ]}
             />
-            <div className={CARD_GRID}>
-              <MetricCard
-                label="Win Rate (per trade)"
-                value={fmtPercent(detail.trades.winRate)}
-                gloss="Round trips closed with a gain, costs included."
-              />
-              <MetricCard
-                label="Daily Hit Rate"
-                value={fmtPercent(result.hitRate)}
-                gloss="In-position days where the price rose."
-              />
-              <MetricCard
-                label="Profit Factor"
-                value={fmtNum2(detail.trades.profitFactor)}
-                tone={ratioTone(detail.trades.profitFactor)}
-                gloss="Sum of winning % ÷ sum of losing %."
-              />
-              <MetricCard
-                label="Avg Win / Loss"
-                value={`${fmtSignedPct(detail.trades.avgWin)} / ${fmtSignedPct(detail.trades.avgLoss)}`}
-              />
-              <MetricCard
-                label="Avg Hold"
-                value={
-                  finite(detail.trades.avgHoldDays)
-                    ? `${detail.trades.avgHoldDays.toFixed(0)}d`
-                    : DASH
-                }
-              />
-              <MetricCard
-                label="Turnover"
-                value={
-                  finite(detail.trades.turnoverPerYear)
-                    ? `${detail.trades.turnoverPerYear.toFixed(1)}/yr`
-                    : DASH
-                }
-                gloss={`${detail.trades.trades} trades · time in market ${fmtPercent(result.exposure)}`}
-              />
-            </div>
-          </div>
-
-          {result.outSampleReturn != null && (
-            <div className={CARD_GRID}>
-              <MetricCard
-                label="In-sample Return"
-                value={fmtSignedPct(result.inSampleReturn)}
-                tone={signedTone(result.inSampleReturn)}
-                gloss="First 70% of the evaluated window."
-              />
-              <MetricCard
-                label="Out-of-sample Return"
-                value={fmtSignedPct(result.outSampleReturn)}
-                tone={signedTone(result.outSampleReturn)}
-                gloss="Trailing 30%. A big drop here = overfit."
-              />
-            </div>
-          )}
-
-          <DataTable
-            caption="Recent trades"
-            rowKey={(r) => `${r.entryIndex}`}
-            rows={detail.recent}
-            maxHeightClass="max-h-72"
-            emptyMessage="No trades in this window."
-            columns={[
-              { key: 'entry', label: 'Entry', render: (r) => dates[r.entryIndex] },
-              { key: 'exit', label: 'Exit', render: (r) => (r.open ? 'Open' : dates[r.exitIndex]) },
-              { key: 'days', label: 'Days', align: 'right' },
-              {
-                key: 'ret',
-                label: 'Return',
-                align: 'right',
-                render: (r) => fmtSignedPct(r.ret),
-                className: (r) => signedClass(r.ret),
-              },
-            ]}
-          />
-
-          <div className="space-y-3 border border-bloomberg-border p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
-                Robustness
+            <ProOnly>
+              <div className={CARD_GRID}>
+                <MetricCard
+                  label="Win Rate (per trade)"
+                  value={fmtPercent(detail.trades.winRate)}
+                  gloss="Round trips closed with a gain, costs included."
+                />
+                <MetricCard
+                  label="Daily Hit Rate"
+                  value={fmtPercent(result.hitRate)}
+                  gloss="In-position days where the price rose."
+                />
+                <MetricCard
+                  label="Profit Factor"
+                  value={fmtNum2(detail.trades.profitFactor)}
+                  tone={ratioTone(detail.trades.profitFactor)}
+                  gloss="Sum of winning % ÷ sum of losing %."
+                />
+                <MetricCard
+                  label="Avg Win / Loss"
+                  value={`${fmtSignedPct(detail.trades.avgWin)} / ${fmtSignedPct(detail.trades.avgLoss)}`}
+                />
+                <MetricCard
+                  label="Avg Hold"
+                  value={
+                    finite(detail.trades.avgHoldDays)
+                      ? `${detail.trades.avgHoldDays.toFixed(0)}d`
+                      : DASH
+                  }
+                />
+                <MetricCard
+                  label="Turnover"
+                  value={
+                    finite(detail.trades.turnoverPerYear)
+                      ? `${detail.trades.turnoverPerYear.toFixed(1)}/yr`
+                      : DASH
+                  }
+                  gloss={`${detail.trades.trades} trades · time in market ${fmtPercent(result.exposure)}`}
+                />
               </div>
-              <button
-                type="button"
-                onClick={runRobustness}
-                disabled={robust.status === 'running'}
-                className="rounded-none border border-bloomberg-orange px-3 py-1 text-[11px] text-bloomberg-orange hover:bg-bloomberg-orange hover:text-black disabled:opacity-50"
-              >
-                Run robustness check
-              </button>
-            </div>
-            {robust.status === 'idle' && (
-              <p className="text-[11px] text-bloomberg-white/80">
-                Sweeps the parameter grid and runs an anchored walk-forward. If only one narrow
-                parameter pocket works, the edge is probably luck.
-              </p>
-            )}
-            {robust.status === 'running' && (
-              <p role="status" className="text-[11px] text-bloomberg-amber">
-                Running…
-              </p>
-            )}
-            {robust.status === 'done' && sweep && (
-              <Heatmap
-                caption="Parameter sweep · Sharpe"
-                rowHeader={sweep.colKey ? `${sweep.rowKey} / ${sweep.colKey}` : sweep.rowKey}
-                rowLabels={sweep.rowValues.map(String)}
-                colLabels={sweep.colKey ? sweep.colValues.map(String) : ['Sharpe']}
-                values={sweepValues}
-                formatValue={(v) => (finite(v) ? v.toFixed(2) : DASH)}
-                colorFor={(v) => divergingColor(v, sweepMax)}
-                textColorFor={(v) => textOnDiverging(v, sweepMax)}
-                highlight={
-                  currentRow >= 0 && currentCol >= 0
-                    ? { row: currentRow, col: currentCol }
-                    : undefined
-                }
-                onCellClick={(i, j) => onApplyParams(sweep.cells[i][j].params)}
-              />
-            )}
-            {robust.status === 'done' &&
-              (robust.wf ? (
-                <>
-                  <DataTable
-                    caption="Walk-forward (anchored, 4 folds)"
-                    rowKey={(r) => String(r.fold)}
-                    rows={robust.wf.folds}
-                    columns={[
-                      { key: 'fold', label: 'Fold', align: 'right' },
-                      {
-                        key: 'train',
-                        label: 'Trained until',
-                        render: (r) => dates[r.trainEnd - 1],
-                      },
-                      {
-                        key: 'test',
-                        label: 'Test window',
-                        render: (r) => `${dates[r.testStart]} → ${dates[r.testEnd - 1]}`,
-                      },
-                      {
-                        key: 'params',
-                        label: 'Chosen',
-                        render: (r) => paramsLabel(strategy, r.params),
-                      },
-                      {
-                        key: 'trainSharpe',
-                        label: 'Train Sharpe',
-                        align: 'right',
-                        render: (r) => fmtRatio(r.trainSharpe),
-                      },
-                      {
-                        key: 'testReturn',
-                        label: 'Test return',
-                        align: 'right',
-                        render: (r) => fmtSignedPct(r.testReturn),
-                        className: (r) => signedClass(r.testReturn),
-                      },
-                      {
-                        key: 'testSharpe',
-                        label: 'Test Sharpe',
-                        align: 'right',
-                        render: (r) => fmtRatio(r.testSharpe),
-                      },
-                    ]}
-                  />
-                  <p className="text-[11px] text-bloomberg-white/80">
-                    Stitched out-of-sample: {fmtSignedPct(robust.wf.oosReturn)} return, Sharpe{' '}
-                    {fmtRatio(robust.wf.oosSharpe)}. Compare with the in-sample Sharpe of the chosen
-                    parameters — a large gap means overfitting.
-                  </p>
-                </>
-              ) : (
-                <NoticeBox title="Walk-forward">
-                  Not enough history for four test windows of at least 30 periods.
-                </NoticeBox>
-              ))}
+            </ProOnly>
           </div>
+
+          <ProOnly>
+            {result.outSampleReturn != null && (
+              <div className={CARD_GRID}>
+                <MetricCard
+                  label="In-sample Return"
+                  value={fmtSignedPct(result.inSampleReturn)}
+                  tone={signedTone(result.inSampleReturn)}
+                  gloss="First 70% of the evaluated window."
+                />
+                <MetricCard
+                  label="Out-of-sample Return"
+                  value={fmtSignedPct(result.outSampleReturn)}
+                  tone={signedTone(result.outSampleReturn)}
+                  gloss="Trailing 30%. A big drop here = overfit."
+                />
+              </div>
+            )}
+          </ProOnly>
+
+          <ProOnly>
+            <DataTable
+              caption="Recent trades"
+              rowKey={(r) => `${r.entryIndex}`}
+              rows={detail.recent}
+              maxHeightClass="max-h-72"
+              emptyMessage="No trades in this window."
+              columns={[
+                { key: 'entry', label: 'Entry', render: (r) => dates[r.entryIndex] },
+                {
+                  key: 'exit',
+                  label: 'Exit',
+                  render: (r) => (r.open ? 'Open' : dates[r.exitIndex]),
+                },
+                { key: 'days', label: 'Days', align: 'right' },
+                {
+                  key: 'ret',
+                  label: 'Return',
+                  align: 'right',
+                  render: (r) => fmtSignedPct(r.ret),
+                  className: (r) => signedClass(r.ret),
+                },
+              ]}
+            />
+          </ProOnly>
+
+          <ProOnly>
+            <div className="space-y-3 border border-bloomberg-border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs tracking-wider text-bloomberg-orange uppercase">
+                  Robustness
+                </div>
+                <button
+                  type="button"
+                  onClick={runRobustness}
+                  disabled={robust.status === 'running'}
+                  className="rounded-none border border-bloomberg-orange px-3 py-1 text-[11px] text-bloomberg-orange hover:bg-bloomberg-orange hover:text-black disabled:opacity-50"
+                >
+                  Run robustness check
+                </button>
+              </div>
+              {robust.status === 'idle' && (
+                <p className="text-[11px] text-bloomberg-white/80">
+                  Sweeps the parameter grid and runs an anchored walk-forward. If only one narrow
+                  parameter pocket works, the edge is probably luck.
+                </p>
+              )}
+              {robust.status === 'running' && (
+                <p role="status" className="text-[11px] text-bloomberg-amber">
+                  Running…
+                </p>
+              )}
+              {robust.status === 'done' && sweep && (
+                <Heatmap
+                  caption="Parameter sweep · Sharpe"
+                  rowHeader={sweep.colKey ? `${sweep.rowKey} / ${sweep.colKey}` : sweep.rowKey}
+                  rowLabels={sweep.rowValues.map(String)}
+                  colLabels={sweep.colKey ? sweep.colValues.map(String) : ['Sharpe']}
+                  values={sweepValues}
+                  formatValue={(v) => (finite(v) ? v.toFixed(2) : DASH)}
+                  colorFor={(v) => divergingColor(v, sweepMax)}
+                  textColorFor={(v) => textOnDiverging(v, sweepMax)}
+                  highlight={
+                    currentRow >= 0 && currentCol >= 0
+                      ? { row: currentRow, col: currentCol }
+                      : undefined
+                  }
+                  onCellClick={(i, j) => onApplyParams(sweep.cells[i][j].params)}
+                />
+              )}
+              {robust.status === 'done' &&
+                (robust.wf ? (
+                  <>
+                    <DataTable
+                      caption="Walk-forward (anchored, 4 folds)"
+                      rowKey={(r) => String(r.fold)}
+                      rows={robust.wf.folds}
+                      columns={[
+                        { key: 'fold', label: 'Fold', align: 'right' },
+                        {
+                          key: 'train',
+                          label: 'Trained until',
+                          render: (r) => dates[r.trainEnd - 1],
+                        },
+                        {
+                          key: 'test',
+                          label: 'Test window',
+                          render: (r) => `${dates[r.testStart]} → ${dates[r.testEnd - 1]}`,
+                        },
+                        {
+                          key: 'params',
+                          label: 'Chosen',
+                          render: (r) => paramsLabel(strategy, r.params),
+                        },
+                        {
+                          key: 'trainSharpe',
+                          label: 'Train Sharpe',
+                          align: 'right',
+                          render: (r) => fmtRatio(r.trainSharpe),
+                        },
+                        {
+                          key: 'testReturn',
+                          label: 'Test return',
+                          align: 'right',
+                          render: (r) => fmtSignedPct(r.testReturn),
+                          className: (r) => signedClass(r.testReturn),
+                        },
+                        {
+                          key: 'testSharpe',
+                          label: 'Test Sharpe',
+                          align: 'right',
+                          render: (r) => fmtRatio(r.testSharpe),
+                        },
+                      ]}
+                    />
+                    <p className="text-[11px] text-bloomberg-white/80">
+                      Stitched out-of-sample: {fmtSignedPct(robust.wf.oosReturn)} return, Sharpe{' '}
+                      {fmtRatio(robust.wf.oosSharpe)}. Compare with the in-sample Sharpe of the
+                      chosen parameters — a large gap means overfitting.
+                    </p>
+                  </>
+                ) : (
+                  <NoticeBox title="Walk-forward">
+                    Not enough history for four test windows of at least 30 periods.
+                  </NoticeBox>
+                ))}
+            </div>
+          </ProOnly>
         </>
       )}
     </div>

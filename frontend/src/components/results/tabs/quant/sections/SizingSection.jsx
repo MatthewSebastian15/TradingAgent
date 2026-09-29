@@ -10,6 +10,7 @@ import {
 import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtNum2, fmtPercent, hurstLabel } from '../format';
 import { CARD_GRID, FIELD_GRID } from '../layout';
+import { ProOnly } from '../mode';
 import { currencyDecimals, fmtInt, fmtMoney } from '../numberFormat';
 import { DataTable } from '../viz/DataTable';
 
@@ -98,16 +99,18 @@ export function SizingSection({
       </p>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_320px]">
-        <DataTable
-          caption="Sizing diagnostics"
-          rowKey={(r) => r.metric}
-          rows={diagnostics}
-          columns={[
-            { key: 'metric', label: 'Metric' },
-            { key: 'value', label: 'Value', align: 'right' },
-            { key: 'reading', label: 'Reading', className: () => 'text-bloomberg-white/80' },
-          ]}
-        />
+        <ProOnly>
+          <DataTable
+            caption="Sizing diagnostics"
+            rowKey={(r) => r.metric}
+            rows={diagnostics}
+            columns={[
+              { key: 'metric', label: 'Metric' },
+              { key: 'value', label: 'Value', align: 'right' },
+              { key: 'reading', label: 'Reading', className: () => 'text-bloomberg-white/80' },
+            ]}
+          />
+        </ProOnly>
         <div className="space-y-3">
           <NumberField
             label="Vol target"

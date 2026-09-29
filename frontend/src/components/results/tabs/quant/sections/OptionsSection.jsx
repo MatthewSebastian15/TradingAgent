@@ -14,6 +14,7 @@ import {
 import { MetricCard, NumberField } from '../charts';
 import { DASH, finite, fmtNum2, fmtPercent } from '../format';
 import { FIELD_GRID } from '../layout';
+import { ProOnly } from '../mode';
 import { currencyDecimals, fmtMoney } from '../numberFormat';
 import { loadPreset, savePreset } from '../presets';
 import { SegmentedControl } from '../SegmentedControl';
@@ -222,11 +223,13 @@ export function OptionsSection({
                     : undefined
                 }
               />
-              <MetricCard
-                label="Put-call parity gap"
-                value={finite(parityGap) ? parityGap.toExponential(1) : DASH}
-                gloss="C − P − (S·e^(−qT) − K·e^(−rT)); ~0 confirms the pricer."
-              />
+              <ProOnly>
+                <MetricCard
+                  label="Put-call parity gap"
+                  value={finite(parityGap) ? parityGap.toExponential(1) : DASH}
+                  gloss="C − P − (S·e^(−qT) − K·e^(−rT)); ~0 confirms the pricer."
+                />
+              </ProOnly>
             </div>
           </div>
 
@@ -265,31 +268,33 @@ export function OptionsSection({
                   },
                 ]}
               />
-              <LineChart
-                title={`${type} delta and gamma vs spot`}
-                ariaLabel="Delta and gamma versus spot"
-                xType="number"
-                formatX={money}
-                formatY={(v) => v.toFixed(2)}
-                series={[
-                  {
-                    id: 'delta',
-                    label: 'Delta',
-                    color: CHART_COLORS.primary,
-                    points: curves.delta,
-                  },
-                  {
-                    id: 'gamma',
-                    label: 'Gamma × 100',
-                    color: CHART_COLORS.tertiary,
-                    points: curves.gamma.map((p) => ({
-                      x: p.x,
-                      y: finite(p.y) ? p.y * 100 : null,
-                    })),
-                  },
-                ]}
-                verticalLines={[{ x: spot, label: 'Spot', color: CHART_COLORS.quaternary }]}
-              />
+              <ProOnly>
+                <LineChart
+                  title={`${type} delta and gamma vs spot`}
+                  ariaLabel="Delta and gamma versus spot"
+                  xType="number"
+                  formatX={money}
+                  formatY={(v) => v.toFixed(2)}
+                  series={[
+                    {
+                      id: 'delta',
+                      label: 'Delta',
+                      color: CHART_COLORS.primary,
+                      points: curves.delta,
+                    },
+                    {
+                      id: 'gamma',
+                      label: 'Gamma × 100',
+                      color: CHART_COLORS.tertiary,
+                      points: curves.gamma.map((p) => ({
+                        x: p.x,
+                        y: finite(p.y) ? p.y * 100 : null,
+                      })),
+                    },
+                  ]}
+                  verticalLines={[{ x: spot, label: 'Spot', color: CHART_COLORS.quaternary }]}
+                />
+              </ProOnly>
             </div>
           )}
         </>

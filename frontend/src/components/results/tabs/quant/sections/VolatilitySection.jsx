@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 
 import { DASH, finite, fmtNum2, fmtPercent, volBucket } from '../format';
+import { ProOnly } from '../mode';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
 import { LineChart } from '../viz/LineChart';
@@ -88,17 +89,24 @@ export function VolatilitySection({
         own history instead.
       </p>
 
-      <DataTable
-        caption="Volatility estimators · annualized"
-        rowKey={(r) => r.name}
-        rows={estimatorRows}
-        columns={[
-          { key: 'name', label: 'Estimator' },
-          { key: 'value', label: 'Annualized', align: 'right', render: (r) => fmtPercent(r.value) },
-          { key: 'uses', label: 'Uses' },
-          { key: 'note', label: 'Note', className: contentText },
-        ]}
-      />
+      <ProOnly>
+        <DataTable
+          caption="Volatility estimators · annualized"
+          rowKey={(r) => r.name}
+          rows={estimatorRows}
+          columns={[
+            { key: 'name', label: 'Estimator' },
+            {
+              key: 'value',
+              label: 'Annualized',
+              align: 'right',
+              render: (r) => fmtPercent(r.value),
+            },
+            { key: 'uses', label: 'Uses' },
+            { key: 'note', label: 'Note', className: contentText },
+          ]}
+        />
+      </ProOnly>
 
       <LineChart
         title="Rolling volatility"
@@ -133,88 +141,97 @@ export function VolatilitySection({
         emptyMessage="Not enough history for rolling volatility."
       />
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        <LineChart
-          title="Volatility cone · realized vol by window"
-          subtitle="Lines = historical distribution; amber dots = today"
-          ariaLabel="Volatility cone"
-          xType="number"
-          formatX={(v) => `${Math.round(v)}d`}
-          formatY={pctAxis}
-          series={CONE_LINES.map((line) => ({
-            id: line.key,
-            label: line.label,
-            color: line.color,
-            dash: line.dash,
-            points: cone.map((c) => ({ x: c.window, y: c[line.key] })),
-          }))}
-          markers={cone.map((c) => ({
-            x: c.window,
-            y: c.current,
-            shape: 'dot',
-            color: CHART_COLORS.warning,
-            label: `${c.window}d ${fmtPercent(c.current)}`,
-          }))}
-          includeZero
-          emptyMessage="Need at least two windows of history for a vol cone."
-        />
+      <ProOnly>
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <LineChart
+            title="Volatility cone · realized vol by window"
+            subtitle="Lines = historical distribution; amber dots = today"
+            ariaLabel="Volatility cone"
+            xType="number"
+            formatX={(v) => `${Math.round(v)}d`}
+            formatY={pctAxis}
+            series={CONE_LINES.map((line) => ({
+              id: line.key,
+              label: line.label,
+              color: line.color,
+              dash: line.dash,
+              points: cone.map((c) => ({ x: c.window, y: c[line.key] })),
+            }))}
+            markers={cone.map((c) => ({
+              x: c.window,
+              y: c.current,
+              shape: 'dot',
+              color: CHART_COLORS.warning,
+              label: `${c.window}d ${fmtPercent(c.current)}`,
+            }))}
+            includeZero
+            emptyMessage="Need at least two windows of history for a vol cone."
+          />
+          <DataTable
+            caption="Cone detail"
+            rowKey={(r) => String(r.window)}
+            rows={cone}
+            columns={[
+              { key: 'window', label: 'Window', render: (r) => `${r.window}d` },
+              { key: 'min', label: 'Min', align: 'right', render: (r) => fmtPercent(r.min) },
+              {
+                key: 'median',
+                label: 'Median',
+                align: 'right',
+                render: (r) => fmtPercent(r.median),
+              },
+              { key: 'max', label: 'Max', align: 'right', render: (r) => fmtPercent(r.max) },
+              {
+                key: 'current',
+                label: 'Current',
+                align: 'right',
+                render: (r) => fmtPercent(r.current),
+              },
+              {
+                key: 'percentile',
+                label: 'Pctile',
+                align: 'right',
+                render: (r) => r.percentile.toFixed(0),
+              },
+            ]}
+          />
+        </div>
+      </ProOnly>
+
+      <ProOnly>
         <DataTable
-          caption="Cone detail"
-          rowKey={(r) => String(r.window)}
-          rows={cone}
+          caption="GARCH(1,1) term structure"
+          rowKey={(r) => String(r.days)}
+          rows={garchTerm}
+          emptyMessage="GARCH needs at least 100 daily returns."
           columns={[
-            { key: 'window', label: 'Window', render: (r) => `${r.window}d` },
-            { key: 'min', label: 'Min', align: 'right', render: (r) => fmtPercent(r.min) },
-            { key: 'median', label: 'Median', align: 'right', render: (r) => fmtPercent(r.median) },
-            { key: 'max', label: 'Max', align: 'right', render: (r) => fmtPercent(r.max) },
+            { key: 'days', label: 'Horizon', render: (r) => `${r.days}d` },
             {
-              key: 'current',
-              label: 'Current',
+              key: 'annualVol',
+              label: 'Avg forecast vol',
               align: 'right',
-              render: (r) => fmtPercent(r.current),
+              render: (r) => fmtPercent(r.annualVol),
             },
             {
-              key: 'percentile',
-              label: 'Pctile',
+              key: 'vsLong',
+              label: 'vs long run',
               align: 'right',
-              render: (r) => r.percentile.toFixed(0),
+              render: (r) => (finite(longRunVol) ? fmtPts(r.annualVol - longRunVol) : DASH),
             },
           ]}
         />
-      </div>
-
-      <DataTable
-        caption="GARCH(1,1) term structure"
-        rowKey={(r) => String(r.days)}
-        rows={garchTerm}
-        emptyMessage="GARCH needs at least 100 daily returns."
-        columns={[
-          { key: 'days', label: 'Horizon', render: (r) => `${r.days}d` },
-          {
-            key: 'annualVol',
-            label: 'Avg forecast vol',
-            align: 'right',
-            render: (r) => fmtPercent(r.annualVol),
-          },
-          {
-            key: 'vsLong',
-            label: 'vs long run',
-            align: 'right',
-            render: (r) => (finite(longRunVol) ? fmtPts(r.annualVol - longRunVol) : DASH),
-          },
-        ]}
-      />
-      {garch && (
-        <p className="text-[11px] text-bloomberg-white/80">
-          α = {fmtNum2(garch.alpha)}, β = {fmtNum2(garch.beta)}, persistence{' '}
-          {fmtNum2(garch.persistence)}
-          {finite(shockHalfLife)
-            ? ` · a volatility shock halves in ~${shockHalfLife.toFixed(0)} days`
-            : ''}
-          . Grid-search fit on {garch.observations} returns; treat as a guide, not a precise
-          forecast.
-        </p>
-      )}
+        {garch && (
+          <p className="text-[11px] text-bloomberg-white/80">
+            α = {fmtNum2(garch.alpha)}, β = {fmtNum2(garch.beta)}, persistence{' '}
+            {fmtNum2(garch.persistence)}
+            {finite(shockHalfLife)
+              ? ` · a volatility shock halves in ~${shockHalfLife.toFixed(0)} days`
+              : ''}
+            . Grid-search fit on {garch.observations} returns; treat as a guide, not a precise
+            forecast.
+          </p>
+        )}
+      </ProOnly>
     </div>
   );
 }

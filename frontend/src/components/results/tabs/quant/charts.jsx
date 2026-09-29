@@ -6,6 +6,7 @@ import { LAST_PRICE_COLOR } from '../priceChartUtils';
 import { sectionById } from './config';
 import { DASH } from './format';
 import { InfoTip } from './InfoTip';
+import { useQuantMode } from './mode';
 
 // --- tiny presentational pieces (no new deps, reuse chart color tokens) ----
 
@@ -64,14 +65,18 @@ export function MetricCard({
   spark,
   status = 'ready',
 }) {
+  const { mode } = useQuantMode();
+  const shownFormula = mode === 'basic' ? null : formula;
   const neutral = value === DASH || status !== 'ready';
   const valueColor = neutral ? TONE_CLASS.neutral : TONE_CLASS[tone] || TONE_CLASS.neutral;
   const tip =
     info ??
-    (gloss || formula ? (
+    (gloss || shownFormula ? (
       <>
         {gloss && <p>{gloss}</p>}
-        {formula && <p className={gloss ? 'mt-1 text-bloomberg-white/80' : ''}>{formula}</p>}
+        {shownFormula && (
+          <p className={gloss ? 'mt-1 text-bloomberg-white/80' : ''}>{shownFormula}</p>
+        )}
       </>
     ) : null);
 

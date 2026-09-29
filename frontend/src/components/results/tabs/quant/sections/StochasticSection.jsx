@@ -9,6 +9,7 @@ import { MetricCard, NumberField } from '../charts';
 import { MC_HORIZONS, MC_PATHS } from '../config';
 import { finite, fmtLoss, fmtPercent, fmtSignedPct, signedTone } from '../format';
 import { CARD_GRID, FIELD_GRID } from '../layout';
+import { ProOnly } from '../mode';
 import { fmtMoney as formatMoney } from '../numberFormat';
 import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS } from '../viz/chartTheme';
@@ -103,30 +104,32 @@ export function StochasticSection({
           onChange={onStopChange}
           suffix={ccy || 'ccy'}
         />
-        <AdvancedPanel>
-          <div className="flex flex-wrap items-center gap-3 text-bloomberg-white/80">
-            <label className="flex items-center gap-2">
-              Seed
-              <input
-                type="number"
-                value={seed}
-                onChange={(e) => onSeedChange(Number(e.target.value))}
-                className="h-7 w-20 rounded-none border border-bloomberg-border bg-black px-1 text-xs text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={onReroll}
-              className="rounded-none border border-bloomberg-border px-3 py-1 text-xs text-bloomberg-white/80 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <Dices className="h-3.5 w-3.5" aria-hidden="true" />
-                Re-roll
-              </span>
-            </button>
-            <span>Same seed → same simulation.</span>
-          </div>
-        </AdvancedPanel>
+        <ProOnly>
+          <AdvancedPanel>
+            <div className="flex flex-wrap items-center gap-3 text-bloomberg-white/80">
+              <label className="flex items-center gap-2">
+                Seed
+                <input
+                  type="number"
+                  value={seed}
+                  onChange={(e) => onSeedChange(Number(e.target.value))}
+                  className="h-7 w-20 rounded-none border border-bloomberg-border bg-black px-1 text-xs text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={onReroll}
+                className="rounded-none border border-bloomberg-border px-3 py-1 text-xs text-bloomberg-white/80 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Dices className="h-3.5 w-3.5" aria-hidden="true" />
+                  Re-roll
+                </span>
+              </button>
+              <span>Same seed → same simulation.</span>
+            </div>
+          </AdvancedPanel>
+        </ProOnly>
       </div>
       <div role="status" aria-live="polite" className="h-4 text-[11px] text-bloomberg-amber">
         {running ? 'Simulating…' : ''}
@@ -167,15 +170,17 @@ export function StochasticSection({
         <span className="text-white">{fmtMoney(p.p50)}</span>). Today: {fmtMoney(spot)}. One set of
         possible futures, not a prediction.
       </p>
-      {method === 'gbm' && finite(annualSigma) && (
-        <p className="text-[11px] text-bloomberg-white/80">
-          σ used: {fmtPercent(annualSigma)} annualized (
-          {sigmaInfo.source === 'garch'
-            ? 'GARCH forecast averaged over the horizon'
-            : 'EWMA blended toward long-run vol'}
-          ).
-        </p>
-      )}
+      <ProOnly>
+        {method === 'gbm' && finite(annualSigma) && (
+          <p className="text-[11px] text-bloomberg-white/80">
+            σ used: {fmtPercent(annualSigma)} annualized (
+            {sigmaInfo.source === 'garch'
+              ? 'GARCH forecast averaged over the horizon'
+              : 'EWMA blended toward long-run vol'}
+            ).
+          </p>
+        )}
+      </ProOnly>
 
       <LineChart
         title={`Simulated price paths · ${horizonLabel}`}
@@ -251,32 +256,36 @@ export function StochasticSection({
         />
       </div>
 
-      <DataTable
-        caption={`Outcome distribution · ${horizonLabel}`}
-        rowKey={(r) => r.key}
-        rows={OUTCOMES.map((key) => ({ key, price: p[key], ret: (p[key] / spot - 1) * 100 }))}
-        columns={[
-          { key: 'key', label: 'Percentile', render: (r) => r.key.toUpperCase() },
-          { key: 'price', label: 'Price', align: 'right', render: (r) => fmtMoney(r.price) },
-          {
-            key: 'ret',
-            label: 'vs today',
-            align: 'right',
-            render: (r) => fmtSignedPct(r.ret),
-            className: (r) => (r.ret < 0 ? 'text-bloomberg-red' : 'text-bloomberg-green'),
-          },
-        ]}
-      />
+      <ProOnly>
+        <DataTable
+          caption={`Outcome distribution · ${horizonLabel}`}
+          rowKey={(r) => r.key}
+          rows={OUTCOMES.map((key) => ({ key, price: p[key], ret: (p[key] / spot - 1) * 100 }))}
+          columns={[
+            { key: 'key', label: 'Percentile', render: (r) => r.key.toUpperCase() },
+            { key: 'price', label: 'Price', align: 'right', render: (r) => fmtMoney(r.price) },
+            {
+              key: 'ret',
+              label: 'vs today',
+              align: 'right',
+              render: (r) => fmtSignedPct(r.ret),
+              className: (r) => (r.ret < 0 ? 'text-bloomberg-red' : 'text-bloomberg-green'),
+            },
+          ]}
+        />
+      </ProOnly>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        <HistogramChart
-          title={`Simulated price distribution · ${horizonLabel}`}
-          ariaLabel={`Histogram of simulated ${horizonLabel} prices`}
-          bins={returnHistogram(terminal, 30)}
-          formatX={fmtMoney}
-          barLabel="Paths"
-          markers={[{ x: spot, label: 'Today', color: CHART_COLORS.secondary }]}
-        />
+        <ProOnly>
+          <HistogramChart
+            title={`Simulated price distribution · ${horizonLabel}`}
+            ariaLabel={`Histogram of simulated ${horizonLabel} prices`}
+            bins={returnHistogram(terminal, 30)}
+            formatX={fmtMoney}
+            barLabel="Paths"
+            markers={[{ x: spot, label: 'Today', color: CHART_COLORS.secondary }]}
+          />
+        </ProOnly>
         <HistogramChart
           title="Historical daily returns"
           ariaLabel="Histogram of historical daily returns"

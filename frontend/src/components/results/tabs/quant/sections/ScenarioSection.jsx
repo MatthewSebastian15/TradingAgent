@@ -6,6 +6,7 @@ import { marketKeyForSymbol, stressTable } from '../../quantUtils';
 import { NumberField } from '../charts';
 import { DASH, finite, fmtSignedPct } from '../format';
 import { FIELD_GRID } from '../layout';
+import { ProOnly } from '../mode';
 import { fmtMoney } from '../numberFormat';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
@@ -128,44 +129,46 @@ export function ScenarioSection({
         ]}
       />
 
-      <div className="space-y-2">
-        {regime ? (
-          <p className="text-[11px] text-bloomberg-white/80">
-            Today&apos;s regime is the <span className="text-white">Vol Regime</span> reading in the
-            headline. Confirmed shifts in this window: {regime.shifts.length}
-            {regime.shifts.length > 0
-              ? ` (latest: ${regime.shifts
-                  .slice(-3)
-                  .map((s) => `${s.from} → ${s.to}`)
-                  .join(', ')})`
-              : ''}
-            .
-          </p>
-        ) : (
-          <NoticeBox title="Regime">Not enough history to detect regime shifts.</NoticeBox>
-        )}
-        <LineChart
-          title="Price and volatility regime"
-          subtitle="Background = confirmed regime (cyan calm, grey normal, amber stressed)"
-          ariaLabel="Price with volatility regime timeline"
-          formatY={(v) => fmtMoney(v, ccy)}
-          series={[
-            {
-              id: 'price',
-              label: 'Price',
-              color: CHART_COLORS.primary,
-              points: pricePoints.map((p) => ({ x: p.date, y: p.value })),
-            },
-          ]}
-          regions={segments.map((s) => ({
-            from: s.from,
-            to: s.to,
-            color: REGIME_COLORS[s.label],
-            label: s.label,
-          }))}
-          emptyMessage="Not enough history for a regime timeline."
-        />
-      </div>
+      <ProOnly>
+        <div className="space-y-2">
+          {regime ? (
+            <p className="text-[11px] text-bloomberg-white/80">
+              Today&apos;s regime is the <span className="text-white">Vol Regime</span> reading in
+              the headline. Confirmed shifts in this window: {regime.shifts.length}
+              {regime.shifts.length > 0
+                ? ` (latest: ${regime.shifts
+                    .slice(-3)
+                    .map((s) => `${s.from} → ${s.to}`)
+                    .join(', ')})`
+                : ''}
+              .
+            </p>
+          ) : (
+            <NoticeBox title="Regime">Not enough history to detect regime shifts.</NoticeBox>
+          )}
+          <LineChart
+            title="Price and volatility regime"
+            subtitle="Background = confirmed regime (cyan calm, grey normal, amber stressed)"
+            ariaLabel="Price with volatility regime timeline"
+            formatY={(v) => fmtMoney(v, ccy)}
+            series={[
+              {
+                id: 'price',
+                label: 'Price',
+                color: CHART_COLORS.primary,
+                points: pricePoints.map((p) => ({ x: p.date, y: p.value })),
+              },
+            ]}
+            regions={segments.map((s) => ({
+              from: s.from,
+              to: s.to,
+              color: REGIME_COLORS[s.label],
+              label: s.label,
+            }))}
+            emptyMessage="Not enough history for a regime timeline."
+          />
+        </div>
+      </ProOnly>
     </div>
   );
 }

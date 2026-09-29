@@ -8,6 +8,7 @@ import { AdvancedPanel } from '../AdvancedPanel';
 import { NumberField } from '../charts';
 import { DASH, finite, fmtPercent, fmtRatio } from '../format';
 import { FIELD_GRID } from '../layout';
+import { ProOnly } from '../mode';
 import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS } from '../viz/chartTheme';
 import { DataTable } from '../viz/DataTable';
@@ -111,20 +112,27 @@ export function CorrelationSection({
         />
       </div>
 
-      <AdvancedPanel>
-        <div className={FIELD_GRID}>
-          <SegmentedControl
-            ariaLabel="Covariance estimator"
-            options={[
-              { id: false, label: 'Sample covariance' },
-              { id: true, label: 'Ledoit-Wolf' },
-            ]}
-            value={shrink}
-            onChange={onShrinkChange}
-          />
-          <NumberField label="Long-only weight cap" value={cap} onChange={onCapChange} suffix="%" />
-        </div>
-      </AdvancedPanel>
+      <ProOnly>
+        <AdvancedPanel>
+          <div className={FIELD_GRID}>
+            <SegmentedControl
+              ariaLabel="Covariance estimator"
+              options={[
+                { id: false, label: 'Sample covariance' },
+                { id: true, label: 'Ledoit-Wolf' },
+              ]}
+              value={shrink}
+              onChange={onShrinkChange}
+            />
+            <NumberField
+              label="Long-only weight cap"
+              value={cap}
+              onChange={onCapChange}
+              suffix="%"
+            />
+          </div>
+        </AdvancedPanel>
+      </ProOnly>
 
       {symbols.length < 2 ? (
         <NoticeBox title="Correlation">
@@ -144,158 +152,167 @@ export function CorrelationSection({
             formatValue={(v) => (finite(v) ? v.toFixed(2) : DASH)}
           />
 
-          <div className="flex flex-wrap items-end gap-3">
-            {[0, 1].map((slot) => (
-              <label
-                key={slot}
-                className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80"
-              >
-                <span className="tracking-wider uppercase">
-                  {slot === 0 ? 'First symbol' : 'Second symbol'}
-                </span>
-                <select
-                  value={corr.pair[slot]}
-                  onChange={(e) => onPairChange(slot, e.target.value)}
-                  className="h-8 rounded-none border border-bloomberg-border bg-black px-2 text-xs text-white"
+          <ProOnly>
+            <div className="flex flex-wrap items-end gap-3">
+              {[0, 1].map((slot) => (
+                <label
+                  key={slot}
+                  className="flex flex-col gap-1 font-mono text-[11px] text-bloomberg-white/80"
                 >
-                  {symbols.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-          <LineChart
-            title={`Rolling correlation · ${corr.pair[0]} vs ${corr.pair[1]}`}
-            subtitle={`Window: ${frequency === 'weekly' ? '26 weeks' : '63 days'}`}
-            ariaLabel="Rolling correlation"
-            formatY={(v) => v.toFixed(1)}
-            series={[
-              {
-                id: 'rc',
-                label: 'Correlation',
-                color: CHART_COLORS.primary,
-                points: corr.rollPoints.map((p) => ({ x: p.date, y: p.value })),
-              },
-            ]}
-            referenceLines={[{ y: 0, color: CHART_COLORS.axis }]}
-            emptyMessage="Not enough overlapping history for a rolling correlation."
-          />
+                  <span className="tracking-wider uppercase">
+                    {slot === 0 ? 'First symbol' : 'Second symbol'}
+                  </span>
+                  <select
+                    value={corr.pair[slot]}
+                    onChange={(e) => onPairChange(slot, e.target.value)}
+                    className="h-8 rounded-none border border-bloomberg-border bg-black px-2 text-xs text-white"
+                  >
+                    {symbols.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+            <LineChart
+              title={`Rolling correlation · ${corr.pair[0]} vs ${corr.pair[1]}`}
+              subtitle={`Window: ${frequency === 'weekly' ? '26 weeks' : '63 days'}`}
+              ariaLabel="Rolling correlation"
+              formatY={(v) => v.toFixed(1)}
+              series={[
+                {
+                  id: 'rc',
+                  label: 'Correlation',
+                  color: CHART_COLORS.primary,
+                  points: corr.rollPoints.map((p) => ({ x: p.date, y: p.value })),
+                },
+              ]}
+              referenceLines={[{ y: 0, color: CHART_COLORS.axis }]}
+              emptyMessage="Not enough overlapping history for a rolling correlation."
+            />
+          </ProOnly>
 
-          {corr.optimizerStatus === 'singular' && (
-            <NoticeBox title="Unconstrained optimizer">
-              Covariance is singular for this basket — switch on Ledoit-Wolf or remove
-              near-duplicate peers.
-            </NoticeBox>
-          )}
-          {corr.optimizerStatus === 'no_tangency' && (
-            <NoticeBox title="No unconstrained max-Sharpe portfolio">
-              Every fully invested unconstrained mix has a negative expected excess return, so a
-              tangency portfolio does not exist. Long-only and risk-parity mixes below are still
-              valid.
-            </NoticeBox>
-          )}
-          {corr.optimizerStatus === 'lo_negative_excess' && (
-            <NoticeBox title="No long-only max-Sharpe portfolio either">
-              The long-only max-Sharpe portfolio has no basket with positive expected excess return
-              either — the long-only mixes above may not be meaningful either.
-            </NoticeBox>
-          )}
-
-          {(corr.optimizerStatus === 'ok' || corr.optimizerStatus === 'lo_negative_excess') &&
-            corr.frontier.length > 0 && (
-              <ScatterChart
-                title="Efficient frontier"
-                subtitle={`Annualized · efficient branch only${corr.shrinkage !== null ? ` · Ledoit-Wolf shrinkage δ = ${corr.shrinkage.toFixed(2)}` : ''}`}
-                ariaLabel="Efficient frontier"
-                xLabel="Volatility, ann. %"
-                yLabel="Return, ann. %"
-                formatX={(v) => `${v.toFixed(0)}%`}
-                formatY={(v) => `${v.toFixed(0)}%`}
-                lines={[
-                  {
-                    id: 'frontier',
-                    label: 'Efficient frontier',
-                    color: CHART_COLORS.primary,
-                    points: corr.frontier.map((p) => ({ x: p.vol, y: p.ret })),
-                  },
-                  ...(corr.cml.length
-                    ? [
-                        {
-                          id: 'cml',
-                          label: 'Capital market line',
-                          color: CHART_COLORS.secondary,
-                          dashed: true,
-                          points: corr.cml,
-                        },
-                      ]
-                    : []),
-                ]}
-                points={[
-                  ...corr.assets.map((a) => ({
-                    x: a.vol,
-                    y: a.ret,
-                    label: a.label,
-                    color: '#e5e5e5',
-                    radius: 3,
-                  })),
-                  ...portfolios.map((p) => ({
-                    x: p.vol,
-                    y: p.ret,
-                    label: p.label,
-                    color: PORTFOLIO_COLORS[p.id] || CHART_COLORS.primary,
-                  })),
-                ]}
-              />
+          <ProOnly>
+            {corr.optimizerStatus === 'singular' && (
+              <NoticeBox title="Unconstrained optimizer">
+                Covariance is singular for this basket — switch on Ledoit-Wolf or remove
+                near-duplicate peers.
+              </NoticeBox>
+            )}
+            {corr.optimizerStatus === 'no_tangency' && (
+              <NoticeBox title="No unconstrained max-Sharpe portfolio">
+                Every fully invested unconstrained mix has a negative expected excess return, so a
+                tangency portfolio does not exist. Long-only and risk-parity mixes below are still
+                valid.
+              </NoticeBox>
+            )}
+            {corr.optimizerStatus === 'lo_negative_excess' && (
+              <NoticeBox title="No long-only max-Sharpe portfolio either">
+                The long-only max-Sharpe portfolio has no basket with positive expected excess
+                return either — the long-only mixes above may not be meaningful either.
+              </NoticeBox>
             )}
 
-          {portfolios.length > 0 && (
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-              <DataTable
-                caption="Portfolio comparison"
-                rowKey={(r) => r.id}
-                rows={portfolios}
-                columns={[
-                  { key: 'label', label: 'Portfolio' },
-                  { key: 'ret', label: 'Return', align: 'right', render: (r) => fmtPercent(r.ret) },
-                  { key: 'vol', label: 'Vol', align: 'right', render: (r) => fmtPercent(r.vol) },
-                  {
-                    key: 'sharpe',
-                    label: 'Sharpe',
-                    align: 'right',
-                    render: (r) => fmtRatio(r.sharpe),
-                  },
-                ]}
-              />
-              <DataTable
-                caption="Weights"
-                stickyFirstColumn
-                rowKey={(r) => r.symbol}
-                rows={symbols.map((symbol, i) => ({ symbol, i }))}
-                columns={[
-                  { key: 'symbol', label: 'Symbol' },
-                  ...portfolios.map((p) => ({
-                    key: p.id,
-                    label: p.label,
-                    align: 'right',
-                    render: (r) => `${(p.weights[r.i] * 100).toFixed(1)}%`,
-                    className: (r) =>
-                      p.weights[r.i] < 0 ? 'text-bloomberg-red' : 'text-bloomberg-white',
-                  })),
-                ]}
-              />
-            </div>
-          )}
-          <p className="text-[11px] text-bloomberg-white/80">
-            Covariance:{' '}
-            {shrink
-              ? `Ledoit-Wolf shrinkage δ = ${finite(corr.shrinkage) ? corr.shrinkage.toFixed(2) : DASH}`
-              : 'sample'}{' '}
-            · expected returns are historical means, the least reliable input — favor min-variance
-            or risk parity.
-          </p>
+            {(corr.optimizerStatus === 'ok' || corr.optimizerStatus === 'lo_negative_excess') &&
+              corr.frontier.length > 0 && (
+                <ScatterChart
+                  title="Efficient frontier"
+                  subtitle={`Annualized · efficient branch only${corr.shrinkage !== null ? ` · Ledoit-Wolf shrinkage δ = ${corr.shrinkage.toFixed(2)}` : ''}`}
+                  ariaLabel="Efficient frontier"
+                  xLabel="Volatility, ann. %"
+                  yLabel="Return, ann. %"
+                  formatX={(v) => `${v.toFixed(0)}%`}
+                  formatY={(v) => `${v.toFixed(0)}%`}
+                  lines={[
+                    {
+                      id: 'frontier',
+                      label: 'Efficient frontier',
+                      color: CHART_COLORS.primary,
+                      points: corr.frontier.map((p) => ({ x: p.vol, y: p.ret })),
+                    },
+                    ...(corr.cml.length
+                      ? [
+                          {
+                            id: 'cml',
+                            label: 'Capital market line',
+                            color: CHART_COLORS.secondary,
+                            dashed: true,
+                            points: corr.cml,
+                          },
+                        ]
+                      : []),
+                  ]}
+                  points={[
+                    ...corr.assets.map((a) => ({
+                      x: a.vol,
+                      y: a.ret,
+                      label: a.label,
+                      color: '#e5e5e5',
+                      radius: 3,
+                    })),
+                    ...portfolios.map((p) => ({
+                      x: p.vol,
+                      y: p.ret,
+                      label: p.label,
+                      color: PORTFOLIO_COLORS[p.id] || CHART_COLORS.primary,
+                    })),
+                  ]}
+                />
+              )}
+
+            {portfolios.length > 0 && (
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                <DataTable
+                  caption="Portfolio comparison"
+                  rowKey={(r) => r.id}
+                  rows={portfolios}
+                  columns={[
+                    { key: 'label', label: 'Portfolio' },
+                    {
+                      key: 'ret',
+                      label: 'Return',
+                      align: 'right',
+                      render: (r) => fmtPercent(r.ret),
+                    },
+                    { key: 'vol', label: 'Vol', align: 'right', render: (r) => fmtPercent(r.vol) },
+                    {
+                      key: 'sharpe',
+                      label: 'Sharpe',
+                      align: 'right',
+                      render: (r) => fmtRatio(r.sharpe),
+                    },
+                  ]}
+                />
+                <DataTable
+                  caption="Weights"
+                  stickyFirstColumn
+                  rowKey={(r) => r.symbol}
+                  rows={symbols.map((symbol, i) => ({ symbol, i }))}
+                  columns={[
+                    { key: 'symbol', label: 'Symbol' },
+                    ...portfolios.map((p) => ({
+                      key: p.id,
+                      label: p.label,
+                      align: 'right',
+                      render: (r) => `${(p.weights[r.i] * 100).toFixed(1)}%`,
+                      className: (r) =>
+                        p.weights[r.i] < 0 ? 'text-bloomberg-red' : 'text-bloomberg-white',
+                    })),
+                  ]}
+                />
+              </div>
+            )}
+            <p className="text-[11px] text-bloomberg-white/80">
+              Covariance:{' '}
+              {shrink
+                ? `Ledoit-Wolf shrinkage δ = ${finite(corr.shrinkage) ? corr.shrinkage.toFixed(2) : DASH}`
+                : 'sample'}{' '}
+              · expected returns are historical means, the least reliable input — favor min-variance
+              or risk parity.
+            </p>
+          </ProOnly>
         </>
       )}
     </div>

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { MetricCard } from './charts';
 import { CARD_GRID, FIELD_GRID } from './layout';
+import { QuantModeProvider } from './mode';
 
 describe('MetricCard v2', () => {
   afterEach(() => cleanup());
@@ -52,6 +53,17 @@ describe('MetricCard v2', () => {
     rerender(<MetricCard label="Beta" value="—" status="unavailable" />);
     expect(screen.getByText('Unavailable')).toBeTruthy();
     expect(screen.queryByText('Loading Beta')).toBeNull();
+  });
+
+  it('hides formulas in Basic mode but keeps the plain explanation', () => {
+    render(
+      <QuantModeProvider mode="basic" onModeChange={() => {}}>
+        <MetricCard label="Sharpe" value="1.20" formula="(mean − rf) / σ" />
+        <MetricCard label="Vol" value="20%" gloss="Yearly swing." formula="σ × √252" />
+      </QuantModeProvider>
+    );
+    expect(screen.queryByRole('button', { name: 'About Sharpe' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'About Vol' })).toBeTruthy();
   });
 
   it('exports auto-fit grids capped at four card columns', () => {

@@ -57,6 +57,7 @@ export function ContextBar({
   onRfChange,
   status,
   sticky = false,
+  children,
 }) {
   // The field keeps its own draft so it can be emptied. An empty/non-numeric draft means
   // "back to the market/global default" (onRfChange(null)); out-of-range values are ignored.
@@ -162,6 +163,8 @@ export function ContextBar({
       </div>
 
       <div className="ml-auto flex items-center gap-1 self-center">
+        {children}
+        {children && <span className="mx-1 h-4 w-px bg-bloomberg-border" aria-hidden="true" />}
         <span
           className={`border px-1.5 py-0.5 text-[10px] tracking-wider uppercase ${
             limited
@@ -197,4 +200,5 @@ ContextBar.propTypes = {
   status: PropTypes.shape({ label: PropTypes.string, reasons: PropTypes.arrayOf(PropTypes.string) })
     .isRequired,
   sticky: PropTypes.bool,
+  children: PropTypes.node,
 };

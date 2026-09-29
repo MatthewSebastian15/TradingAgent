@@ -313,6 +313,21 @@ describe('QuantPanel', () => {
     await renderPanel({ points: buildPoints(40), section: 'correlation', range: '1Y' });
     expect(getMarketOhlcv).toHaveBeenCalledWith('MSFT', expect.objectContaining({ range: '1Y' }));
   });
+
+  it('toggles Basic mode, hides pro-only blocks and remembers the choice', async () => {
+    await renderPanel({ points: buildPoints(40), section: 'risk' });
+    expect(screen.getByText('Top drawdowns')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Basic' }));
+    expect(screen.queryByText('Top drawdowns')).toBeNull();
+    expect(window.localStorage.getItem('ta:quant:mode')).toBe('basic');
+
+    cleanup();
+    await renderPanel({ points: buildPoints(40), section: 'risk' });
+    expect(screen.getByRole('button', { name: 'Basic' }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
+  });
 });
 
 function buildOhlcPoints(count) {

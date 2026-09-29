@@ -25,6 +25,7 @@ import {
   sampleNote,
 } from '../format';
 import { CARD_GRID, FIELD_GRID } from '../layout';
+import { ProOnly, useQuantMode } from '../mode';
 import { fmtMoney } from '../numberFormat';
 import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS } from '../viz/chartTheme';
@@ -56,6 +57,7 @@ export function RiskSection({
   rsPoints,
   rbPoints,
 }) {
+  const { mode } = useQuantMode();
   const [horizon, setHorizon] = useState(1);
   const [position, setPosition] = useState('');
   const excessLabel = `excess over ${rfPct.toFixed(1)}%`;
@@ -147,6 +149,34 @@ export function RiskSection({
       ]
     : [];
 
+  const allVarColumns = [
+    { key: 'method', label: 'Method' },
+    {
+      key: 'value',
+      label: `VaR 95% (${horizon}D)`,
+      align: 'right',
+      render: (r) => fmtLoss(r.value),
+      className: () => 'text-bloomberg-red',
+    },
+    {
+      key: 'amount',
+      label: 'Amount at risk',
+      align: 'right',
+      render: (r) => amount(r.value),
+    },
+    {
+      key: 'ci',
+      label: '90% bootstrap CI',
+      align: 'right',
+      render: (r) => (r.ci ? `${fmtLoss(r.ci.lo)} … ${fmtLoss(r.ci.hi)}` : DASH),
+    },
+    { key: 'note', label: 'Basis', className: () => 'text-bloomberg-white/80' },
+  ];
+  const varColumns =
+    mode === 'basic'
+      ? allVarColumns.filter((c) => c.key !== 'ci' && c.key !== 'note')
+      : allVarColumns;
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-bloomberg-white/80">
@@ -214,122 +244,117 @@ export function RiskSection({
         caption="Value at Risk"
         rowKey={(r) => r.method}
         rows={varRows}
-        columns={[
-          { key: 'method', label: 'Method' },
-          {
-            key: 'value',
-            label: `VaR 95% (${horizon}D)`,
-            align: 'right',
-            render: (r) => fmtLoss(r.value),
-            className: () => 'text-bloomberg-red',
-          },
-          {
-            key: 'amount',
-            label: 'Amount at risk',
-            align: 'right',
-            render: (r) => amount(r.value),
-          },
-          {
-            key: 'ci',
-            label: '90% bootstrap CI',
-            align: 'right',
-            render: (r) => (r.ci ? `${fmtLoss(r.ci.lo)} … ${fmtLoss(r.ci.hi)}` : DASH),
-          },
-          { key: 'note', label: 'Basis', className: () => 'text-bloomberg-white/80' },
-        ]}
+        columns={varColumns}
       />
-      {horizon > 1 && (
-        <p className="text-[11px] text-bloomberg-white/80">
-          Overlapping {horizon}-day returns are autocorrelated, so their bootstrap interval is
-          narrower than the true uncertainty.
-        </p>
-      )}
+      <ProOnly>
+        {horizon > 1 && (
+          <p className="text-[11px] text-bloomberg-white/80">
+            Overlapping {horizon}-day returns are autocorrelated, so their bootstrap interval is
+            narrower than the true uncertainty.
+          </p>
+        )}
+      </ProOnly>
 
-      {benchStatus === 'loading' ? (
-        <div
-          role="status"
-          aria-label="Loading benchmark statistics"
-          className="border border-bloomberg-border"
-        >
-          <div className="bg-black px-2 py-1.5 text-xs tracking-wider text-bloomberg-orange uppercase">
-            {`Relative to ${benchLabel}`}
+      <ProOnly>
+        {benchStatus === 'loading' ? (
+          <div
+            role="status"
+            aria-label="Loading benchmark statistics"
+            className="border border-bloomberg-border"
+          >
+            <div className="bg-black px-2 py-1.5 text-xs tracking-wider text-bloomberg-orange uppercase">
+              {`Relative to ${benchLabel}`}
+            </div>
+            <div className="space-y-1 p-2">
+              {Array.from({ length: 8 }, (_, i) => (
+                <div
+                  key={i}
+                  aria-hidden="true"
+                  className="h-5 animate-pulse bg-bloomberg-surface"
+                />
+              ))}
+            </div>
           </div>
-          <div className="space-y-1 p-2">
-            {Array.from({ length: 8 }, (_, i) => (
-              <div key={i} aria-hidden="true" className="h-5 animate-pulse bg-bloomberg-surface" />
-            ))}
+        ) : benchStatus === 'unavailable' ? (
+          <NoticeBox title="Benchmark unavailable">
+            {`${benchLabel} prices could not be loaded, so beta, alpha and capture ratios are not shown. Pick another benchmark in the context bar or try again later.`}
+          </NoticeBox>
+        ) : (
+          <DataTable
+            caption={`Relative to ${benchLabel} · n=${s?.observations ?? 0}`}
+            rowKey={(r) => r.metric}
+            rows={benchRows}
+            emptyMessage="Not enough overlapping benchmark history (need 20 days)."
+            columns={[
+              { key: 'metric', label: 'Metric' },
+              { key: 'value', label: 'Value', align: 'right' },
+              { key: 'note', label: 'Reading', className: () => 'text-bloomberg-white/80' },
+            ]}
+          />
+        )}
+      </ProOnly>
+
+      <ProOnly>
+        {ddStats && (
+          <div className={CARD_GRID}>
+            <MetricCard
+              label="Max DD Duration"
+              value={`${ddStats.maxDDDuration}d`}
+              gloss="Peak to full recovery (or today)."
+            />
+            <MetricCard
+              label="Recovery Time"
+              value={ddStats.recoveryDays != null ? `${ddStats.recoveryDays}d` : 'Not recovered'}
+              tone={ddStats.maxDDRecovered ? 'neutral' : 'bad'}
+              gloss="Deepest trough back to the prior peak."
+            />
+            <MetricCard
+              label="Currently Underwater"
+              value={ddStats.currentUnderwaterDays > 0 ? `${ddStats.currentUnderwaterDays}d` : 'No'}
+              tone={ddStats.currentUnderwaterDays > 0 ? 'bad' : 'good'}
+              gloss="Periods below the last all-time high."
+            />
+            <MetricCard
+              label="Drawdowns > 5%"
+              value={String(ddStats.episodes)}
+              gloss="Distinct episodes deeper than 5%."
+            />
           </div>
-        </div>
-      ) : benchStatus === 'unavailable' ? (
-        <NoticeBox title="Benchmark unavailable">
-          {`${benchLabel} prices could not be loaded, so beta, alpha and capture ratios are not shown. Pick another benchmark in the context bar or try again later.`}
-        </NoticeBox>
-      ) : (
+        )}
+      </ProOnly>
+
+      <ProOnly>
         <DataTable
-          caption={`Relative to ${benchLabel} · n=${s?.observations ?? 0}`}
-          rowKey={(r) => r.metric}
-          rows={benchRows}
-          emptyMessage="Not enough overlapping benchmark history (need 20 days)."
+          caption="Top drawdowns"
+          rowKey={(r) => r.peakDate}
+          rows={topDD}
+          emptyMessage="No drawdowns in this window."
           columns={[
-            { key: 'metric', label: 'Metric' },
-            { key: 'value', label: 'Value', align: 'right' },
-            { key: 'note', label: 'Reading', className: () => 'text-bloomberg-white/80' },
+            { key: 'peakDate', label: 'Peak' },
+            { key: 'troughDate', label: 'Trough' },
+            { key: 'recoveryDate', label: 'Recovered', render: (r) => r.recoveryDate || 'Not yet' },
+            {
+              key: 'depth',
+              label: 'Depth',
+              align: 'right',
+              render: (r) => fmtLoss(r.depth),
+              className: () => 'text-bloomberg-red',
+            },
+            {
+              key: 'lengthDays',
+              label: 'Length',
+              align: 'right',
+              render: (r) => `${r.lengthDays}d`,
+            },
+            {
+              key: 'recoveryDays',
+              label: 'Trough → recovery',
+              align: 'right',
+              render: (r) => (r.recoveryDays == null ? DASH : `${r.recoveryDays}d`),
+            },
           ]}
         />
-      )}
-
-      {ddStats && (
-        <div className={CARD_GRID}>
-          <MetricCard
-            label="Max DD Duration"
-            value={`${ddStats.maxDDDuration}d`}
-            gloss="Peak to full recovery (or today)."
-          />
-          <MetricCard
-            label="Recovery Time"
-            value={ddStats.recoveryDays != null ? `${ddStats.recoveryDays}d` : 'Not recovered'}
-            tone={ddStats.maxDDRecovered ? 'neutral' : 'bad'}
-            gloss="Deepest trough back to the prior peak."
-          />
-          <MetricCard
-            label="Currently Underwater"
-            value={ddStats.currentUnderwaterDays > 0 ? `${ddStats.currentUnderwaterDays}d` : 'No'}
-            tone={ddStats.currentUnderwaterDays > 0 ? 'bad' : 'good'}
-            gloss="Periods below the last all-time high."
-          />
-          <MetricCard
-            label="Drawdowns > 5%"
-            value={String(ddStats.episodes)}
-            gloss="Distinct episodes deeper than 5%."
-          />
-        </div>
-      )}
-
-      <DataTable
-        caption="Top drawdowns"
-        rowKey={(r) => r.peakDate}
-        rows={topDD}
-        emptyMessage="No drawdowns in this window."
-        columns={[
-          { key: 'peakDate', label: 'Peak' },
-          { key: 'troughDate', label: 'Trough' },
-          { key: 'recoveryDate', label: 'Recovered', render: (r) => r.recoveryDate || 'Not yet' },
-          {
-            key: 'depth',
-            label: 'Depth',
-            align: 'right',
-            render: (r) => fmtLoss(r.depth),
-            className: () => 'text-bloomberg-red',
-          },
-          { key: 'lengthDays', label: 'Length', align: 'right', render: (r) => `${r.lengthDays}d` },
-          {
-            key: 'recoveryDays',
-            label: 'Trough → recovery',
-            align: 'right',
-            render: (r) => (r.recoveryDays == null ? DASH : `${r.recoveryDays}d`),
-          },
-        ]}
-      />
+      </ProOnly>
 
       <LineChart
         title="Underwater curve"
@@ -342,33 +367,40 @@ export function RiskSection({
         ]}
         emptyMessage="Not enough history for a drawdown chart."
       />
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        <LineChart
-          title="Rolling Sharpe (63 periods)"
-          ariaLabel="Rolling Sharpe ratio"
-          series={[
-            { id: 'rs', label: 'Sharpe', color: CHART_COLORS.primary, points: toSeries(rsPoints) },
-          ]}
-          referenceLines={[
-            { y: 0, color: CHART_COLORS.axis },
-            { y: 1, label: 'Sharpe 1', color: CHART_COLORS.secondary },
-          ]}
-          emptyMessage="Not enough history for a rolling Sharpe chart."
-        />
-        <LineChart
-          title={`Rolling beta vs ${benchLabel} (63 periods)`}
-          ariaLabel="Rolling beta"
-          series={[
-            { id: 'rb', label: 'Beta', color: CHART_COLORS.tertiary, points: toSeries(rbPoints) },
-          ]}
-          referenceLines={[{ y: 1, label: 'Beta 1', color: CHART_COLORS.secondary }]}
-          emptyMessage={
-            benchAvailable
-              ? 'Not enough overlapping history for rolling beta.'
-              : 'Benchmark data unavailable.'
-          }
-        />
-      </div>
+      <ProOnly>
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <LineChart
+            title="Rolling Sharpe (63 periods)"
+            ariaLabel="Rolling Sharpe ratio"
+            series={[
+              {
+                id: 'rs',
+                label: 'Sharpe',
+                color: CHART_COLORS.primary,
+                points: toSeries(rsPoints),
+              },
+            ]}
+            referenceLines={[
+              { y: 0, color: CHART_COLORS.axis },
+              { y: 1, label: 'Sharpe 1', color: CHART_COLORS.secondary },
+            ]}
+            emptyMessage="Not enough history for a rolling Sharpe chart."
+          />
+          <LineChart
+            title={`Rolling beta vs ${benchLabel} (63 periods)`}
+            ariaLabel="Rolling beta"
+            series={[
+              { id: 'rb', label: 'Beta', color: CHART_COLORS.tertiary, points: toSeries(rbPoints) },
+            ]}
+            referenceLines={[{ y: 1, label: 'Beta 1', color: CHART_COLORS.secondary }]}
+            emptyMessage={
+              benchAvailable
+                ? 'Not enough overlapping history for rolling beta.'
+                : 'Benchmark data unavailable.'
+            }
+          />
+        </div>
+      </ProOnly>
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
 } from '../format';
 import { buildQuantSnapshot, chatbotPrompt, interpretSummary, snapshotText } from '../interpret';
 import { CARD_GRID } from '../layout';
+import { ProOnly } from '../mode';
 
 const JUMPS = [
   { id: 'risk', label: 'Risk detail' },
@@ -140,13 +141,15 @@ export function OverviewSection({
           compare={vsBench(benchVol, fmtPercent)}
           gloss="Standard deviation of daily returns, scaled to a year."
         />
-        <MetricCard
-          label="Sharpe"
-          value={fmtRatio(sharpeInfo?.sharpe)}
-          tone={ratioTone(sharpeInfo?.sharpe)}
-          sample={sampleNote(sharpeInfo?.observations ?? observations)}
-          gloss="Return above the risk-free rate per unit of volatility."
-        />
+        <ProOnly>
+          <MetricCard
+            label="Sharpe"
+            value={fmtRatio(sharpeInfo?.sharpe)}
+            tone={ratioTone(sharpeInfo?.sharpe)}
+            sample={sampleNote(sharpeInfo?.observations ?? observations)}
+            gloss="Return above the risk-free rate per unit of volatility."
+          />
+        </ProOnly>
         <MetricCard
           label="Max Drawdown"
           value={fmtLoss(dd)}
@@ -154,13 +157,15 @@ export function OverviewSection({
           compare={vsBench(benchMaxDD, fmtLoss)}
           gloss="Worst peak-to-trough fall in the window."
         />
-        <MetricCard
-          label="From Peak"
-          value={finite(currentDrawdown) ? fmtLoss(currentDrawdown) : DASH}
-          tone={currentDrawdown <= -1 ? 'bad' : 'neutral'}
-          category={underwaterDays > 0 ? `${underwaterDays}d underwater` : 'At peak'}
-          gloss="Distance of today's price below the highest close in the window."
-        />
+        <ProOnly>
+          <MetricCard
+            label="From Peak"
+            value={finite(currentDrawdown) ? fmtLoss(currentDrawdown) : DASH}
+            tone={currentDrawdown <= -1 ? 'bad' : 'neutral'}
+            category={underwaterDays > 0 ? `${underwaterDays}d underwater` : 'At peak'}
+            gloss="Distance of today's price below the highest close in the window."
+          />
+        </ProOnly>
         <MetricCard
           label="VaR 95% (1D)"
           value={fmtLoss(var95)}
@@ -174,21 +179,25 @@ export function OverviewSection({
           sample={benchStats ? sampleNote(benchStats.observations) : undefined}
           gloss="How much the stock moved per 1% move of the benchmark."
         />
-        <MetricCard
-          label="Alpha (ann.)"
-          value={finite(benchStats?.alpha) ? fmtSignedPct(benchStats.alpha) : DASH}
-          status={benchCard}
-          category={
-            finite(benchStats?.alphaTStat) ? `t = ${fmtNum2(benchStats.alphaTStat)}` : undefined
-          }
-          gloss="Return not explained by beta. |t| below 2 means not distinguishable from zero."
-        />
-        <MetricCard
-          label="Hurst"
-          value={fmtNum2(hurstInfo?.hurst)}
-          category={hurstInfo ? hurstLabel(hurstInfo.hurst, hurstInfo.significant) : undefined}
-          gloss="Above 0.5 trends, below 0.5 mean-reverts, near 0.5 behaves like a random walk."
-        />
+        <ProOnly>
+          <MetricCard
+            label="Alpha (ann.)"
+            value={finite(benchStats?.alpha) ? fmtSignedPct(benchStats.alpha) : DASH}
+            status={benchCard}
+            category={
+              finite(benchStats?.alphaTStat) ? `t = ${fmtNum2(benchStats.alphaTStat)}` : undefined
+            }
+            gloss="Return not explained by beta. |t| below 2 means not distinguishable from zero."
+          />
+        </ProOnly>
+        <ProOnly>
+          <MetricCard
+            label="Hurst"
+            value={fmtNum2(hurstInfo?.hurst)}
+            category={hurstInfo ? hurstLabel(hurstInfo.hurst, hurstInfo.significant) : undefined}
+            gloss="Above 0.5 trends, below 0.5 mean-reverts, near 0.5 behaves like a random walk."
+          />
+        </ProOnly>
       </div>
 
       <nav aria-label="Go to section" className="flex flex-wrap gap-2">
