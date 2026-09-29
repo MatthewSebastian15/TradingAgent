@@ -34,6 +34,12 @@ def _config(tmp_path):
 def _client(tmp_path, monkeypatch) -> TestClient:
     reset_news_worker_state_for_tests()
     config = _config(tmp_path)
+    # Queued refreshes must not reach real RSS/vendors: that made these tests take
+    # ~35 s each and let the 90 s manual-refresh cooldown lapse between two POSTs.
+    monkeypatch.setattr(
+        "tradingagents.dataflows.news.general_news_service.GeneralNewsService.fetch_general_news",
+        lambda self, **kwargs: {"articles": [], "last_updated": None},
+    )
     monkeypatch.setattr("routes.news.build_tradingagents_config", lambda: config)
     monkeypatch.setattr(
         "services.news.background_worker.build_tradingagents_config", lambda: config
