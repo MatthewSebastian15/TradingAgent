@@ -180,6 +180,9 @@ async def get_general_news(
         )
         result["refresh"] = {**dict(result.get("refresh") or {}), **refresh_status}
 
+    from services.news.background_worker import get_worker_health
+
+    result["worker_health"] = get_worker_health()
     etag = _general_news_etag(
         result,
         category=category,
@@ -213,6 +216,7 @@ async def refresh_general_news(
         )
 
     from services.news.background_worker import (
+        get_worker_health,
         manual_refresh_cooldown_remaining,
         mark_manual_refresh_requested,
         queue_general_news_refresh,
@@ -226,6 +230,7 @@ async def refresh_general_news(
         provider=normalized_provider,
         force_refresh=False,
     )
+    result["worker_health"] = get_worker_health()
     remaining = manual_refresh_cooldown_remaining()
     if remaining > 0:
         result["status"] = "skipped"
@@ -260,7 +265,13 @@ def _general_news_etag(
     offset: int,
     provider: str | None,
 ) -> str:
-    raw = f"{result.get('last_updated')}|{category}|{window_days}|{limit}|{offset}|{provider}"
+    # A failing worker stops writing the store, so last_updated alone would freeze the tag
+    # and hide the degraded state behind 304s.
+    failures = (result.get("worker_health") or {}).get("consecutive_failures")
+    raw = (
+        f"{result.get('last_updated')}|{category}|{window_days}|{limit}|{offset}|{provider}"
+        f"|{failures}"
+    )
     return 'W/"' + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32] + '"'
 
 

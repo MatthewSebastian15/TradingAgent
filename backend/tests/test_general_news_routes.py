@@ -214,3 +214,75 @@ def test_get_general_news_etag_differs_per_request_shape(monkeypatch):
     other_category = client.get("/api/news/general?limit=50&category=crypto").headers["etag"]
 
     assert len({page_one, page_two, other_category}) == 3
+
+
+def _worker_health(consecutive_failures: int = 0) -> dict:
+    return {
+        "consecutive_failures": consecutive_failures,
+        "degraded": consecutive_failures >= 3,
+        "last_success_at": 1000.0,
+        "last_failure_at": 2000.0 if consecutive_failures else None,
+        "last_failure_error": "vendor_timeout" if consecutive_failures else None,
+    }
+
+
+def test_get_general_news_includes_worker_health(monkeypatch):
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
+    monkeypatch.setattr(
+        "services.news.background_worker.get_worker_health", lambda: _worker_health(4)
+    )
+
+    response = _client().get("/api/news/general")
+
+    assert response.status_code == 200
+    assert response.json()["worker_health"] == _worker_health(4)
+
+
+def test_worker_health_change_invalidates_the_etag(monkeypatch):
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
+    health = {"value": _worker_health(0)}
+    monkeypatch.setattr(
+        "services.news.background_worker.get_worker_health", lambda: health["value"]
+    )
+    client = _client()
+
+    healthy = client.get("/api/news/general")
+    health["value"] = _worker_health(3)
+    degraded = client.get("/api/news/general", headers={"if-none-match": healthy.headers["etag"]})
+
+    # A frozen store (last_updated unchanged) must not hide a worker that started failing.
+    assert degraded.status_code == 200
+    assert degraded.json()["worker_health"]["degraded"] is True
+    assert degraded.headers["etag"] != healthy.headers["etag"]
+
+
+def test_post_refresh_includes_worker_health(monkeypatch):
+    monkeypatch.setattr(
+        "routes.news._fetch_general_news",
+        lambda **kwargs: _general_news_response(kwargs["category"]),
+    )
+    monkeypatch.setattr(
+        "services.news.background_worker.get_worker_health", lambda: _worker_health(5)
+    )
+    monkeypatch.setattr(
+        "services.news.background_worker.manual_refresh_cooldown_remaining", lambda: 0
+    )
+    monkeypatch.setattr(
+        "services.news.background_worker.mark_manual_refresh_requested", lambda: None
+    )
+
+    async def fake_queue(reason):
+        return {"queued": True, "skipped": False, "reason": reason}
+
+    monkeypatch.setattr("services.news.background_worker.queue_general_news_refresh", fake_queue)
+
+    response = _client().post("/api/news/general/refresh")
+
+    assert response.status_code == 200
+    assert response.json()["worker_health"]["degraded"] is True
