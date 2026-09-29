@@ -347,6 +347,12 @@ NEWS_MANUAL_REFRESH_COOLDOWN_SECONDS = env_int(
 NEWS_PROVIDER_429_COOLDOWN_SECONDS = env_int(
     "NEWS_PROVIDER_429_COOLDOWN_SECONDS", 1800, min_value=1
 )
+# Adaptive circuit breaker: the first 429 in a streak cools a provider down for this
+# long; each consecutive 429 (no success in between) doubles it, capped at
+# NEWS_PROVIDER_429_COOLDOWN_SECONDS.
+NEWS_PROVIDER_429_BASE_COOLDOWN_SECONDS = env_int(
+    "NEWS_PROVIDER_429_BASE_COOLDOWN_SECONDS", 120, min_value=1
+)
 # Per-feed circuit breaker: a feed that fails a fetch (after its own internal
 # retry) is skipped for this long, instead of eating a full timeout every cycle.
 NEWS_RSS_FEED_FAILURE_COOLDOWN_SECONDS = env_int(

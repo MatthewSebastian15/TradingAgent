@@ -12,6 +12,7 @@ from services.news.provider_budget import (
     mark_provider_failure,
     mark_provider_success,
     provider_cooldown_remaining,
+    provider_state_snapshot,
     provider_status,
     result_has_429,
 )
@@ -59,6 +60,50 @@ def test_provider_cooldown_expires(monkeypatch):
     monkeypatch.setattr(time, "time", lambda: current + 11)
 
     assert is_provider_available("rss_context") is True
+
+
+def test_repeated_429s_grow_the_cooldown_up_to_the_cap():
+    mark_provider_429("marketaux", cooldown_seconds=1000)
+    first_remaining = provider_cooldown_remaining("marketaux")
+
+    mark_provider_429("marketaux", cooldown_seconds=1000)
+    second_remaining = provider_cooldown_remaining("marketaux")
+
+    mark_provider_429("marketaux", cooldown_seconds=1000)
+    third_remaining = provider_cooldown_remaining("marketaux")
+
+    assert first_remaining < second_remaining < third_remaining
+    assert third_remaining <= 1000
+
+
+def test_cooldown_never_exceeds_the_cap_however_many_429s_repeat():
+    for _ in range(20):
+        mark_provider_429("marketaux", cooldown_seconds=300)
+
+    assert provider_cooldown_remaining("marketaux") <= 300
+
+
+def test_a_single_429_gets_the_short_base_cooldown_not_the_cap():
+    mark_provider_429("newsdata", cooldown_seconds=1800)
+
+    assert 0 < provider_cooldown_remaining("newsdata") <= 130
+
+
+def test_success_resets_the_consecutive_429_counter():
+    mark_provider_429("google_news_light", cooldown_seconds=1800)
+    mark_provider_429("google_news_light", cooldown_seconds=1800)
+    mark_provider_success("google_news_light")
+
+    mark_provider_429("google_news_light", cooldown_seconds=1800)
+
+    assert provider_cooldown_remaining("google_news_light") <= 130
+
+
+def test_state_snapshot_exposes_consecutive_429_count():
+    mark_provider_429("rss_context", cooldown_seconds=1800)
+    mark_provider_429("rss_context", cooldown_seconds=1800)
+
+    assert provider_state_snapshot()["rss_context"]["consecutive_429"] == 2
 
 
 def test_concurrent_mark_and_read_never_raises_or_corrupts_state():

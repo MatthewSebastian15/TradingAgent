@@ -5,7 +5,10 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from config.settings import NEWS_PROVIDER_429_COOLDOWN_SECONDS
+from config.settings import (
+    NEWS_PROVIDER_429_BASE_COOLDOWN_SECONDS,
+    NEWS_PROVIDER_429_COOLDOWN_SECONDS,
+)
 
 
 @dataclass
@@ -14,6 +17,7 @@ class ProviderState:
     last_error: str | None = None
     last_success_at: str | None = None
     last_failure_at: str | None = None
+    consecutive_429: int = 0
 
 
 _PROVIDER_STATE: dict[str, ProviderState] = {}
@@ -43,9 +47,10 @@ def provider_cooldown_remaining(provider: str) -> int:
 def mark_provider_429(provider: str, *, cooldown_seconds: int | None = None) -> None:
     with _LOCK:
         state = _PROVIDER_STATE.setdefault(provider, ProviderState())
-        state.cooldown_until = time.time() + int(
-            cooldown_seconds or NEWS_PROVIDER_429_COOLDOWN_SECONDS
-        )
+        state.consecutive_429 += 1
+        cap = int(cooldown_seconds or NEWS_PROVIDER_429_COOLDOWN_SECONDS)
+        adaptive = NEWS_PROVIDER_429_BASE_COOLDOWN_SECONDS * 2 ** (state.consecutive_429 - 1)
+        state.cooldown_until = time.time() + min(adaptive, cap)
         state.last_error = "429"
         state.last_failure_at = _utc_now_text()
 
@@ -67,6 +72,7 @@ def mark_provider_success(provider: str) -> None:
         state.cooldown_until = 0
         state.last_error = None
         state.last_success_at = _utc_now_text()
+        state.consecutive_429 = 0
 
 
 def provider_status(provider: str) -> str:
