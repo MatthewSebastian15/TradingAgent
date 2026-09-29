@@ -70,3 +70,25 @@ describe('requestGeneralNewsRefresh', () => {
     await expect(requestGeneralNewsRefresh()).rejects.toMatchObject({ status: 429 });
   });
 });
+
+describe('fetchGeneralNews pagination', () => {
+  it('includes offset in the query string when paginating past page one', async () => {
+    globalThis.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ articles: [] }) });
+
+    await fetchGeneralNews({ category: 'all', windowDays: 14, limit: 50, offset: 50 });
+
+    expect(globalThis.fetch.mock.calls[0][0]).toBe(
+      '/api/news/general?category=all&window_days=14&limit=50&offset=50'
+    );
+  });
+
+  it('omits offset from the query string on the first page', async () => {
+    globalThis.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ articles: [] }) });
+
+    await fetchGeneralNews({ category: 'all', windowDays: 14, limit: 50 });
+
+    expect(globalThis.fetch.mock.calls[0][0]).toBe(
+      '/api/news/general?category=all&window_days=14&limit=50'
+    );
+  });
+});

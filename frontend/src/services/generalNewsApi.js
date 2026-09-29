@@ -2,12 +2,14 @@ import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 
 const GENERAL_NEWS_REQUEST_TIMEOUT_MS = 15000;
 
-function buildGeneralNewsParams({ category = 'all', windowDays = 7, limit = 100 } = {}) {
-  return new URLSearchParams({
+function buildGeneralNewsParams({ category = 'all', windowDays = 7, limit = 100, offset = 0 } = {}) {
+  const params = new URLSearchParams({
     category,
     window_days: String(windowDays),
     limit: String(limit),
   });
+  if (offset > 0) params.set('offset', String(offset));
+  return params;
 }
 
 function normalizeGeneralNewsResponse(payload) {
@@ -61,8 +63,14 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
-async function readGeneralNews({ category = 'all', windowDays = 7, limit = 100, signal } = {}) {
-  const params = buildGeneralNewsParams({ category, windowDays, limit });
+async function readGeneralNews({
+  category = 'all',
+  windowDays = 7,
+  limit = 100,
+  offset = 0,
+  signal,
+} = {}) {
+  const params = buildGeneralNewsParams({ category, windowDays, limit, offset });
   const response = await fetchWithTimeout(buildApiUrl(`/news/general?${params.toString()}`), {
     method: 'GET',
     headers: await buildAuthHeaders(),
@@ -113,11 +121,12 @@ export async function fetchGeneralNews({
   category = 'all',
   windowDays = 7,
   limit = 100,
+  offset = 0,
   signal,
   forceRefresh = false,
 } = {}) {
   if (!forceRefresh) {
-    return readGeneralNews({ category, windowDays, limit, signal });
+    return readGeneralNews({ category, windowDays, limit, offset, signal });
   }
 
   const refreshResult = await requestGeneralNewsRefresh({ category, windowDays, limit, signal });
