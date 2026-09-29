@@ -2,7 +2,12 @@ import { buildApiUrl, buildAuthHeaders, readHttpError } from '../utils/api';
 
 const GENERAL_NEWS_REQUEST_TIMEOUT_MS = 15000;
 
-function buildGeneralNewsParams({ category = 'all', windowDays = 7, limit = 100, offset = 0 } = {}) {
+function buildGeneralNewsParams({
+  category = 'all',
+  windowDays = 7,
+  limit = 100,
+  offset = 0,
+} = {}) {
   const params = new URLSearchParams({
     category,
     window_days: String(windowDays),
