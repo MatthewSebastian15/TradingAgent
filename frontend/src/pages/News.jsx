@@ -100,6 +100,13 @@ export default function News() {
                     </div>
                   )}
 
+                  {data?.worker_health?.degraded && (
+                    <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-amber/40 bg-bloomberg-amber/10 px-3 py-2 text-xs text-bloomberg-amber">
+                      Background news refresh has failed {data.worker_health.consecutive_failures}{' '}
+                      times in a row. Showing the last successful data.
+                    </div>
+                  )}
+
                   {error && !displayedArticles.length && (
                     <div className="terminal-news-state mt-2 rounded-md border border-bloomberg-red/40 bg-bloomberg-red/10 px-3 py-2 text-xs text-bloomberg-red">
                       Failed to load general news.

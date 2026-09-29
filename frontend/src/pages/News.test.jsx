@@ -171,6 +171,35 @@ describe('News page', () => {
     ).toBeInTheDocument();
   });
 
+  it('warns when the background news refresh is degraded', () => {
+    useGeneralNews.mockReturnValue({
+      data: { articles, worker_health: { degraded: true, consecutive_failures: 4 } },
+      status: 'success',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(
+      screen.getByText(/Background news refresh has failed 4 times in a row/i)
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Stocks gain after earnings').length).toBeGreaterThan(0);
+  });
+
+  it('stays quiet while the background news refresh is healthy', () => {
+    useGeneralNews.mockReturnValue({
+      data: { articles, worker_health: { degraded: false, consecutive_failures: 0 } },
+      status: 'success',
+      error: null,
+      reload: vi.fn(),
+    });
+
+    render(<News />);
+
+    expect(screen.queryByText(/Background news refresh has failed/i)).not.toBeInTheDocument();
+  });
+
   it('keeps stale news visible when refresh fails', () => {
     useGeneralNews.mockReturnValue({
       data: { articles, cache: { hit: true } },
