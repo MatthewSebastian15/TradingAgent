@@ -45,8 +45,6 @@ describe('quant mode', () => {
     expect(screen.getByTestId('mode').textContent).toBe('basic');
     expect(screen.queryByText('pro table')).toBeNull();
     expect(screen.getByText('basic view')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Basic' }).getAttribute('aria-pressed')).toBe(
-      'true'
-    );
+    expect(screen.getByRole('button', { name: 'Basic' }).getAttribute('aria-pressed')).toBe('true');
   });
 });

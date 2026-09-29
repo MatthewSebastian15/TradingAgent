@@ -324,9 +324,7 @@ describe('QuantPanel', () => {
 
     cleanup();
     await renderPanel({ points: buildPoints(40), section: 'risk' });
-    expect(screen.getByRole('button', { name: 'Basic' }).getAttribute('aria-pressed')).toBe(
-      'true'
-    );
+    expect(screen.getByRole('button', { name: 'Basic' }).getAttribute('aria-pressed')).toBe('true');
   });
 });
 
