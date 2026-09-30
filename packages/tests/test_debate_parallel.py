@@ -48,7 +48,7 @@ def _ctx(depth: str, extra_rounds: int, llm) -> SimpleNamespace:
         pipeline_timings={},
         progress_callback=None,
         cancel_check=None,
-        config={},
+        config={"llm_exact_cache_enabled": False},
         llm_for=lambda name: llm,
     )
 
@@ -68,7 +68,7 @@ def _run(ctx):
 
 
 def test_balanced_openings_run_concurrently_and_independently():
-    set_config({})
+    set_config({"llm_exact_cache_enabled": False})
     llm = _RecordingLLM(threading.Barrier(2))
     bull, bear, history = _run(_ctx("balanced", 0, llm))
     assert len(history) == 2
@@ -78,7 +78,7 @@ def test_balanced_openings_run_concurrently_and_independently():
 
 
 def test_deep_rebuttals_are_symmetric_and_parallel():
-    set_config({})
+    set_config({"llm_exact_cache_enabled": False})
     llm = _RecordingLLM(threading.Barrier(2))
     bull, bear, history = _run(_ctx("deep", 1, llm))
     assert len(history) == 4
