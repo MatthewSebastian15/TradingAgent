@@ -24,6 +24,19 @@ def _parse_date(value: Any) -> date | None:
         return None
 
 
+def live_quote_applies(
+    trade_date: str,
+    *,
+    today: date | None = None,
+    max_business_days: int = DEFAULT_MAX_STALE_BUSINESS_DAYS,
+) -> bool:
+    """A live quote is only meaningful for a current analysis, never for a past trade_date."""
+    day = _parse_date(trade_date)
+    if day is None:
+        return False
+    return business_days_between(day, today or date.today()) <= max_business_days
+
+
 def _positive(value: Any) -> float | None:
     try:
         number = float(value)

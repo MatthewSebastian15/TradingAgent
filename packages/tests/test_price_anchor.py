@@ -91,8 +91,22 @@ def test_old_price_is_stale():
 
 def test_no_price_at_all_is_unavailable():
     anchor = resolve_price_anchor(
-        live_quote=None, ohlcv_price=None, ohlcv_as_of=None, ohlcv_source=None,
+        live_quote=None,
+        ohlcv_price=None,
+        ohlcv_as_of=None,
+        ohlcv_source=None,
         trade_date="2026-09-14",
     )
     assert anchor["price"] is None
     assert anchor["quote_check"]["status"] == "unavailable"
+
+
+def test_live_quote_applies_only_near_today():
+    from tradingagents.pipeline.price_anchor import live_quote_applies
+
+    today = date(2026, 9, 30)
+    assert live_quote_applies("2026-09-30", today=today) is True
+    assert live_quote_applies("2026-10-01", today=today) is True  # +1 day is allowed upstream
+    assert live_quote_applies("2026-09-28", today=today) is True
+    assert live_quote_applies("2026-06-01", today=today) is False
+    assert live_quote_applies("garbage", today=today) is False

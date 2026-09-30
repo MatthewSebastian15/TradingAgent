@@ -89,7 +89,7 @@ YEAR_ON_YEAR_PRICE_WINDOW_DAYS = 365
 PRICE_CHART_FALLBACK_BUFFER_DAYS = 14
 DEFAULT_PRICE_MAX_FALLBACK_DAYS = 7
 
-from tradingagents.pipeline.price_anchor import resolve_price_anchor
+from tradingagents.pipeline.price_anchor import live_quote_applies, resolve_price_anchor
 from tradingagents.pipeline.types import FieldQualityContext
 
 
@@ -627,14 +627,19 @@ def _resolve_price_runtime(
     )
     ohlcv_price_source = _price_source_label(price.value, ohlcv_last_close_price)
     config = get_config()
-    live_quote = _safe_payload(
-        "live_quote",
-        lambda: route_to_vendor(
-            "get_live_quote",
-            ticker,
-            vendor_order=get_field_vendor_order("quote", ticker),
-            field_name="quote",
-        ),
+    max_stale_days = int(config.get("price_max_stale_business_days", 2))
+    live_quote = (
+        _safe_payload(
+            "live_quote",
+            lambda: route_to_vendor(
+                "get_live_quote",
+                ticker,
+                vendor_order=get_field_vendor_order("quote", ticker),
+                field_name="quote",
+            ),
+        )
+        if live_quote_applies(trade_date, max_business_days=max_stale_days)
+        else None
     )
     anchor = resolve_price_anchor(
         live_quote=live_quote,
@@ -642,7 +647,7 @@ def _resolve_price_runtime(
         ohlcv_as_of=ohlcv_last_close_price_as_of,
         ohlcv_source=ohlcv_price_source,
         trade_date=trade_date,
-        max_stale_business_days=int(config.get("price_max_stale_business_days", 2)),
+        max_stale_business_days=max_stale_days,
         max_deviation_pct=float(config.get("price_quote_max_deviation_pct", 5.0)),
     )
     if anchor["price"] is None:
