@@ -174,9 +174,8 @@ LLM_SEMANTIC_CACHE_SIMILARITY_THRESHOLD = env_float(
     max_value=1.0,
 )
 LLM_SEMANTIC_CACHE_TARGETS = env("LLM_SEMANTIC_CACHE_TARGETS", "news_summary,company_profile")
-ANALYSIS_RESULT_CACHE_TTL_SECONDS = env_int(
-    "ANALYSIS_RESULT_CACHE_TTL_SECONDS", 60 * 60 * 8, min_value=60
-)
+# Completed results are reused only to absorb double-clicks; every later click re-fetches data.
+ANALYSIS_RESULT_CACHE_TTL_SECONDS = env_int("ANALYSIS_RESULT_CACHE_TTL_SECONDS", 60, min_value=60)
 ANALYSIS_RESULT_CACHE_MAX_ENTRIES = env_int("ANALYSIS_RESULT_CACHE_MAX_ENTRIES", 256, min_value=1)
 ANALYSIS_JOB_TTL_SECONDS = env_int("ANALYSIS_JOB_TTL_SECONDS", 60 * 60 * 8, min_value=60)
 ANALYSIS_JOB_MAX_ENTRIES = env_int("ANALYSIS_JOB_MAX_ENTRIES", 256, min_value=1)
