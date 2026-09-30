@@ -205,6 +205,10 @@ Separate company-specific catalysts from broad market and macroeconomic pressure
 - If news coverage is partial or missing, state that sentiment assessment is limited.
 - Do not assert market sentiment with confidence when news data is incomplete.
 - Separate article evidence, insider activity, social sentiment, and analyst consensus.
+- insider_activity counts only open-market buys (code P) and sells (code S) from filings in the \
+lookback window; report the counts and do not infer intent beyond them.
+- vendor_sentiment holds aggregate vendor scores; treat them as secondary to article evidence \
+and say explicitly when they disagree with the articles.
 
 {NEWS_AGENT_RULES}
 

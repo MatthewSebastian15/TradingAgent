@@ -395,7 +395,7 @@ def _build_collection_tasks(
                 vendor_order=get_field_vendor_order("insider_transactions", ticker),
                 field_name="insider_transactions",
             ),
-            limit=6_000,
+            limit=20_000,
         ),
         "news_sentiment": lambda: _safe_data_field(
             "news_sentiment",
@@ -405,12 +405,12 @@ def _build_collection_tasks(
                 vendor_order=get_field_vendor_order("news_sentiment", ticker),
                 field_name="news_sentiment",
             ),
-            limit=4_000,
+            limit=8_000,
         ),
         "social_sentiment": lambda: _safe_data_field(
             "social_sentiment",
             lambda: route_to_vendor("get_social_sentiment", ticker, start_news, end),
-            limit=5_000,
+            limit=40_000,
         ),
         "event_risk": lambda: _safe_data_field(
             "event_risk",

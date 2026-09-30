@@ -7,6 +7,11 @@ from io import StringIO
 from statistics import mean
 from typing import Any
 
+from tradingagents.dataflows.news.vendor_signal_summary import (
+    summarize_insider_transactions,
+    summarize_vendor_sentiment,
+)
+
 
 def safe_json_dumps(value: Any, *, max_chars: int | None = None) -> str:
     text = json.dumps(value, ensure_ascii=False, indent=2, default=str)
@@ -129,6 +134,12 @@ def build_news_context(
         "news_impact": _compact_mapping(data.news_impact, max_items=12),
         "catalyst_tracker": _compact_mapping(data.catalyst_tracker, max_items=12),
         "analyst_consensus": _compact_mapping(data.analyst_consensus, max_items=12),
+        "insider_activity": summarize_insider_transactions(
+            getattr(data, "insider_transactions", ""), as_of=data.trade_date
+        ),
+        "vendor_sentiment": summarize_vendor_sentiment(
+            getattr(data, "news_sentiment", ""), getattr(data, "social_sentiment", "")
+        ),
         "top_articles": news_context.get("top_articles")
         or news_context.get("prompt_articles")
         or news_context.get("decision_company_news")
