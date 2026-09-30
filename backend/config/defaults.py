@@ -58,6 +58,8 @@ PROCESS_POOL_WORKERS = env_int("PROCESS_POOL_WORKERS", 2, min_value=1)
 PROCESS_POOL_MAX_TASKS_PER_CHILD = env_int("PROCESS_POOL_MAX_TASKS_PER_CHILD", 1, min_value=1)
 DATA_COLLECTION_WORKERS = env_int("DATA_COLLECTION_WORKERS", 12, min_value=1)
 PRICE_MAX_FALLBACK_DAYS = env_int("PRICE_MAX_FALLBACK_DAYS", 7, min_value=0)
+PRICE_MAX_STALE_BUSINESS_DAYS = env_int("PRICE_MAX_STALE_BUSINESS_DAYS", 2, min_value=0)
+PRICE_QUOTE_MAX_DEVIATION_PCT = env_float("PRICE_QUOTE_MAX_DEVIATION_PCT", 5.0, min_value=0.1)
 
 # Annual risk-free rate (as a fraction, e.g. 0.04 = 4%) used by the Quant tab's
 # Sharpe/Sortino. Exposed to the browser via GET /api/status. Default 0 keeps the

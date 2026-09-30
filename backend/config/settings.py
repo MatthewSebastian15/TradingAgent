@@ -66,6 +66,8 @@ from config.defaults import (
     DATA_COLLECTION_WORKERS,
     PRICE_CACHE_TTL_SECONDS,
     PRICE_MAX_FALLBACK_DAYS,
+    PRICE_MAX_STALE_BUSINESS_DAYS,
+    PRICE_QUOTE_MAX_DEVIATION_PCT,
     QUANT_RISK_FREE_RATE,
     QUANT_RISK_FREE_RATES,
     DATA_VENDOR_ANALYST_RATING,
@@ -250,6 +252,8 @@ class _BackendSettingsShim:
     process_pool_workers = PROCESS_POOL_WORKERS
     data_collection_workers = DATA_COLLECTION_WORKERS
     price_max_fallback_days = PRICE_MAX_FALLBACK_DAYS
+    price_max_stale_business_days = PRICE_MAX_STALE_BUSINESS_DAYS
+    price_quote_max_deviation_pct = PRICE_QUOTE_MAX_DEVIATION_PCT
     analyst_parallel_workers = ANALYST_PARALLEL_WORKERS
     default_max_debate_rounds = DEFAULT_MAX_DEBATE_ROUNDS
     max_risk_discuss_rounds = MAX_RISK_DISCUSS_ROUNDS

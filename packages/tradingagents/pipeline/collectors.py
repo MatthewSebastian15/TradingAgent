@@ -89,6 +89,7 @@ YEAR_ON_YEAR_PRICE_WINDOW_DAYS = 365
 PRICE_CHART_FALLBACK_BUFFER_DAYS = 14
 DEFAULT_PRICE_MAX_FALLBACK_DAYS = 7
 
+from tradingagents.pipeline.price_anchor import resolve_price_anchor
 from tradingagents.pipeline.types import FieldQualityContext
 
 
@@ -625,26 +626,43 @@ def _resolve_price_runtime(
         max_fallback_days=_price_max_fallback_days(),
     )
     ohlcv_price_source = _price_source_label(price.value, ohlcv_last_close_price)
-    quote_payload: dict[str, Any] = {}
-    if ohlcv_last_close_price is None:
-        quote_payload = _safe_payload(
-            "quote",
-            lambda: route_to_vendor(
-                "get_quote",
-                ticker,
-                trade_date,
-                vendor_order=get_field_vendor_order("quote", ticker),
-                field_name="quote",
-            ),
-        )
-    price_anchor = _resolve_current_price_anchor(
+    config = get_config()
+    live_quote = _safe_payload(
+        "live_quote",
+        lambda: route_to_vendor(
+            "get_live_quote",
+            ticker,
+            vendor_order=get_field_vendor_order("quote", ticker),
+            field_name="quote",
+        ),
+    )
+    anchor = resolve_price_anchor(
+        live_quote=live_quote,
         ohlcv_price=ohlcv_last_close_price,
         ohlcv_as_of=ohlcv_last_close_price_as_of,
         ohlcv_source=ohlcv_price_source,
-        quote=quote_payload,
-        profile=company_profile,
         trade_date=trade_date,
+        max_stale_business_days=int(config.get("price_max_stale_business_days", 2)),
+        max_deviation_pct=float(config.get("price_quote_max_deviation_pct", 5.0)),
     )
+    if anchor["price"] is None:
+        profile_anchor = _resolve_current_price_anchor(
+            ohlcv_price=None,
+            ohlcv_as_of=None,
+            ohlcv_source=None,
+            quote={},
+            profile=company_profile,
+            trade_date=trade_date,
+        )
+        if profile_anchor["price"] is not None:
+            anchor = {
+                **anchor,
+                "price": profile_anchor["price"],
+                "as_of": profile_anchor["actual_price_as_of"],
+                "source": profile_anchor["source"],
+                "is_fallback": True,
+            }
+            anchor["quote_check"] = {**anchor["quote_check"], "status": "fallback"}
     price_chart = _build_price_chart(
         ticker=ticker,
         trade_date=trade_date,
@@ -678,15 +696,17 @@ def _resolve_price_runtime(
     technical_history = price_chart.get("data") or price_chart.get("points") or price.value
     technical_entry = build_technical_entry(
         technical_history,
-        current_price=price_anchor["price"],
+        current_price=anchor["price"],
         config={"time_horizon_months": time_horizon_months},
     )
     technical_entry = _apply_technical_fallback(technical_entry, technical_history)
     return {
-        "last_close_price": price_anchor["price"],
-        "last_close_price_as_of": price_anchor["as_of"],
-        "last_close_price_source": price_anchor["source"],
-        "last_close_price_is_fallback": bool(price_anchor["is_fallback"]),
+        "last_close_price": anchor["price"],
+        "last_close_price_as_of": anchor["as_of"],
+        "last_close_price_source": anchor["source"],
+        "last_close_price_is_fallback": bool(anchor["is_fallback"]),
+        "price_quote_check": anchor["quote_check"],
+        "price_anchor_warnings": anchor["warnings"],
         "ohlcv_price_source": ohlcv_price_source,
         "price_chart": price_chart,
         "corporate_actions_result": corporate_actions_result,
@@ -755,6 +775,7 @@ def _build_collected_market_data(ctx: dict[str, Any]) -> CollectedData:
         price_chart=ctx["price_chart"],
         price_performance=ctx["price_performance"],
         technical_entry=ctx["technical_entry"],
+        price_quote_check=ctx["price_quote_check"],
         news_context=ctx["news_context"],
         related_news=ctx["related_news"],
         news_impact=ctx["news_impact"],
@@ -780,7 +801,11 @@ def _build_collected_market_data(ctx: dict[str, Any]) -> CollectedData:
             "symbol": collected.ticker,
             "market": "ID" if collected.ticker.upper().endswith(".JK") else "US",
             "field_sources": collected.field_sources or {},
-            "data_quality": collected.data_quality.model_dump(),
+            "data_quality": {
+                **collected.data_quality.model_dump(),
+                "price_stale": bool((collected.price_quote_check or {}).get("price_stale")),
+                "price_conflict": bool((collected.price_quote_check or {}).get("price_conflict")),
+            },
             "field_quality": collected.data_quality.field_quality,
             "limitations": collected.data_limitations or [],
             "sector": (collected.company_profile or {}).get("sector")
@@ -891,6 +916,11 @@ def collect_market_data(
     price_performance = price_runtime["price_performance"]
     technical_history = price_runtime["technical_history"]
     technical_entry = price_runtime["technical_entry"]
+    price_quote_check = price_runtime["price_quote_check"]
+    if price_runtime["price_anchor_warnings"]:
+        data_quality.warnings = list(
+            dict.fromkeys([*(data_quality.warnings or []), *price_runtime["price_anchor_warnings"]])
+        )[:20]
 
     financial_currency = _currency_for_ticker(ticker)
     normalized_period_rows = build_normalized_period_rows(

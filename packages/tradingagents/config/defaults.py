@@ -64,6 +64,8 @@ DEFAULT_CONFIG = {
     "max_gemini_calls": int(_env("LLM_BUDGET_BALANCED") or "9"),
     "data_collection_workers": int(_env("DATA_COLLECTION_WORKERS") or "12"),
     "price_max_fallback_days": int(_env("PRICE_MAX_FALLBACK_DAYS") or "7"),
+    "price_max_stale_business_days": int(_env("PRICE_MAX_STALE_BUSINESS_DAYS") or "2"),
+    "price_quote_max_deviation_pct": float(_env("PRICE_QUOTE_MAX_DEVIATION_PCT") or "5.0"),
     # Reasoning effort (provider-specific, None = default)
     "google_thinking_level": None,
     "openai_reasoning_effort": None,
