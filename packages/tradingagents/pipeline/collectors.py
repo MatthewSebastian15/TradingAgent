@@ -49,7 +49,10 @@ from tradingagents.dataflows.providers.interface import (
     route_to_all_vendors,
     route_to_vendor,
 )
-from tradingagents.dataflows.providers.source_priority import get_field_vendor_order
+from tradingagents.dataflows.providers.source_priority import (
+    get_field_vendor_order,
+    market_from_symbol,
+)
 from tradingagents.dataflows.providers.vendor_budget import (
     create_budget_from_config,
     release_budget,
@@ -68,6 +71,7 @@ from tradingagents.dataflows.quality.data_quality import (
     looks_missing,
 )
 from tradingagents.dataflows.quality.freshness_policy import get_freshness_status, parse_datetime
+from tradingagents.dataflows.quality.fundamental_crosscheck import crosscheck_latest_fundamentals
 from tradingagents.dataflows.quality.validators import (
     validate_fundamental_consistency,
     validate_price_consistency,
@@ -176,6 +180,39 @@ def _collect_quote_validation(ticker: str, trade_date: str) -> dict[str, Any]:
         }
     vendor_values = collect_vendor_values(vendor_results, "last_price")
     return run_cross_vendor_validation("last_price", vendor_values)
+
+
+def _collect_fundamentals_crosscheck(
+    ticker: str,
+    trade_date: str,
+    normalized_period_rows: list[dict[str, Any]],
+    currency: str,
+) -> dict[str, Any]:
+    if market_from_symbol(ticker) != "US" or not normalized_period_rows:
+        return {
+            "status": "skipped",
+            "reason": "no_second_structured_source_for_market",
+            "checks": [],
+            "warnings": [],
+        }
+    try:
+        sec_raw = route_to_vendor(
+            "get_income_statement",
+            ticker,
+            "annual",
+            trade_date,
+            vendor_order=["sec_companyfacts"],
+            field_name="financial_statement",
+        )
+        sec_rows = build_normalized_period_rows(
+            income_statement={"annual": sec_raw}, default_currency=currency
+        )
+    except Exception as exc:
+        logger.warning("SEC fundamentals cross-check unavailable for %s: %s", ticker, exc)
+        return {"status": "skipped", "reason": "sec_unavailable", "checks": [], "warnings": []}
+    return crosscheck_latest_fundamentals(
+        normalized_period_rows, sec_rows, secondary_source="sec_companyfacts"
+    )
 
 
 def _fetch_news_field(
@@ -810,6 +847,10 @@ def _build_collected_market_data(ctx: dict[str, Any]) -> CollectedData:
                 **collected.data_quality.model_dump(),
                 "price_stale": bool((collected.price_quote_check or {}).get("price_stale")),
                 "price_conflict": bool((collected.price_quote_check or {}).get("price_conflict")),
+                "fundamentals_conflict": (
+                    (collected.validation_summary or {}).get("fundamentals") or {}
+                ).get("status")
+                == "conflict",
             },
             "field_quality": collected.data_quality.field_quality,
             "limitations": collected.data_limitations or [],
@@ -976,8 +1017,16 @@ def collect_market_data(
         corporate_actions_result, corporate_actions_rows
     )
 
-    validation_summary = {"last_price": _collect_quote_validation(ticker, trade_date)}
-    validation_warnings = list(validation_summary["last_price"].get("warnings") or [])
+    validation_summary = {
+        "last_price": _collect_quote_validation(ticker, trade_date),
+        "fundamentals": _collect_fundamentals_crosscheck(
+            ticker, trade_date, normalized_period_rows, financial_currency
+        ),
+    }
+    validation_warnings = [
+        *(validation_summary["last_price"].get("warnings") or []),
+        *(validation_summary["fundamentals"].get("warnings") or []),
+    ]
 
     vendor_attempts = attempt_recorder.get_detailed_summary()
     request_budget = budget.get_summary()

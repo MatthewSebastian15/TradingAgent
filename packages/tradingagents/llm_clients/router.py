@@ -94,6 +94,13 @@ def apply_guardrail(
         warnings.append("Confidence capped at 55%: fundamental data unavailable")
         context.data_quality["max_confidence"] = 0.55
 
+    if context.data_quality.get("fundamentals_conflict"):
+        warnings.append("Confidence capped at 55%: fundamental sources disagree")
+        existing_cap = context.data_quality.get("max_confidence")
+        context.data_quality["max_confidence"] = (
+            min(0.55, existing_cap) if existing_cap is not None else 0.55
+        )
+
     if _numeric_score(context.data_quality.get("source_confidence_score", 100), default=100) < 50:
         if action in {"BUY", "SELL"}:
             action = "WAIT"
