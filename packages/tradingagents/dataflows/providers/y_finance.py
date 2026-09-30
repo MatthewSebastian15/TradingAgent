@@ -360,6 +360,69 @@ def fetch_current_price(symbol: str, trade_date: str | None = None) -> dict[str,
             }
 
 
+_MARKET_STATE_MAP = {
+    "REGULAR": "open",
+    "PRE": "pre",
+    "PREPRE": "pre",
+    "POST": "post",
+    "POSTPOST": "post",
+    "CLOSED": "closed",
+}
+
+
+def get_live_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
+    """Return the newest quote Yahoo exposes at call time. Callers must never cache this."""
+    del curr_date
+    normalized = normalize_ticker(symbol)
+    ticker = yf.Ticker(normalized)
+    fetched_at = datetime.now(ZoneInfo("UTC")).isoformat()
+
+    info: dict[str, Any] = {}
+    try:
+        info = yf_retry(ticker.get_info, max_retries=1, timeout_seconds=8) or {}
+    except Exception as exc:
+        logger.warning("yfinance quote info unavailable for %s: %s", normalized, exc)
+
+    price = _coerce_positive_float(info.get("regularMarketPrice"))
+    previous_close = _coerce_positive_float(
+        info.get("regularMarketPreviousClose") or info.get("previousClose")
+    )
+    market_time = info.get("regularMarketTime")
+    if price is None:
+        fast_info = yf_retry(lambda: ticker.fast_info, max_retries=1, timeout_seconds=8)
+        price = _coerce_positive_float(_fast_info_value(fast_info, "last_price", "lastPrice"))
+        previous_close = _coerce_positive_float(
+            _fast_info_value(fast_info, "previous_close", "previousClose")
+        )
+        market_time = None
+    if price is None:
+        return {
+            "available": False,
+            "source": "yfinance:live_quote",
+            "reason": "Yahoo returned no live price.",
+        }
+
+    has_market_time = isinstance(market_time, (int, float)) and market_time > 0
+    timestamp = (
+        datetime.fromtimestamp(int(market_time), tz=ZoneInfo("UTC")).isoformat()
+        if has_market_time
+        else fetched_at
+    )
+    delay = info.get("exchangeDataDelayedBy")
+    return {
+        "symbol": normalized,
+        "source": "yfinance:live_quote",
+        "current_price": price,
+        "previous_close": previous_close,
+        "timestamp": timestamp,
+        "timestamp_is_fetch_time": not has_market_time,
+        "fetched_at": fetched_at,
+        "market_state": _MARKET_STATE_MAP.get(str(info.get("marketState") or "").upper()),
+        "delay_minutes": int(delay) if isinstance(delay, (int, float)) else None,
+        "currency": info.get("currency") or _currency_for_symbol(normalized),
+    }
+
+
 def _volatility_classification(score: float | None) -> str | None:
     if score is None:
         return None

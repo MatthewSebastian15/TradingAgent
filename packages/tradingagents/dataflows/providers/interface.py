@@ -1,7 +1,7 @@
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from io import StringIO
 from typing import Any
 
@@ -152,6 +152,9 @@ from .y_finance import (
 from .y_finance import (
     get_insider_transactions as get_yfinance_insider_transactions,
 )
+from .y_finance import (
+    get_live_quote as get_yfinance_live_quote,
+)
 
 # Import from vendor-specific modules
 from .y_finance import (
@@ -276,10 +279,29 @@ def get_alpha_vantage_quote(symbol: str, curr_date: str | None = None) -> dict[s
     return _parse_last_quote_from_csv(raw, symbol, "alpha_vantage")
 
 
+def get_finnhub_live_quote(symbol: str, curr_date: str | None = None) -> dict[str, Any]:
+    quote = dict(get_finnhub_quote(symbol, curr_date))
+    epoch = quote.get("timestamp")
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    has_epoch = isinstance(epoch, (int, float)) and epoch > 0
+    quote["timestamp"] = (
+        datetime.fromtimestamp(int(epoch), tz=timezone.utc).isoformat() if has_epoch else fetched_at
+    )
+    quote["timestamp_is_fetch_time"] = not has_epoch
+    quote["fetched_at"] = fetched_at
+    quote["source"] = "finnhub:quote"
+    quote.setdefault("market_state", None)
+    quote.setdefault("delay_minutes", None)
+    return quote
+
+
 # Tools organized by category
 TOOLS_CATEGORIES = {
     "core_stock_apis": {"description": "OHLCV stock price data", "tools": ["get_stock_data"]},
-    "quote_data": {"description": "Current quote data", "tools": ["get_quote"]},
+    "quote_data": {
+        "description": "Current quote data",
+        "tools": ["get_quote", "get_live_quote"],
+    },
     "technical_indicators": {
         "description": "Technical analysis indicators",
         "tools": ["get_indicators"],
@@ -361,6 +383,10 @@ VENDOR_METHODS = {
         "yfinance": get_yfinance_quote,
         "finnhub": get_finnhub_quote,
         "alpha_vantage": get_alpha_vantage_quote,
+    },
+    "get_live_quote": {
+        "yfinance": get_yfinance_live_quote,
+        "finnhub": get_finnhub_live_quote,
     },
     # technical_indicators
     "get_indicators": {
@@ -452,6 +478,7 @@ VENDOR_METHODS = {
 TICKER_FIRST_ARG_METHODS = {
     "get_stock_data",
     "get_quote",
+    "get_live_quote",
     "get_indicators",
     "get_fundamentals",
     "get_company_profile",
@@ -473,6 +500,9 @@ TICKER_FIRST_ARG_METHODS = {
 # Price-sensitive calls use a short TTL. The cache key still includes the full
 # call args, including trade_date/end_date, so data cannot cross date anchors.
 PRICE_CACHE_SHORT_TTL_METHODS = {"get_stock_data", "get_quote", "get_indicators"}
+
+# The analysis price anchor must reflect the click moment, so it bypasses every cache layer.
+NO_CACHE_METHODS = {"get_live_quote"}
 
 
 def _is_price_short_ttl_method(method: str) -> bool:
@@ -636,6 +666,7 @@ def _quality_for_result(
 
     validators = {
         "get_quote": validate_quote,
+        "get_live_quote": validate_quote,
         "get_fundamentals": validate_fundamentals,
         "get_news": validate_news,
         "get_global_news": validate_news,
@@ -714,7 +745,7 @@ def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, st
         return False, "Alpha Vantage disabled: ALPHA_VANTAGE_API_KEY is not configured."
     if vendor != "finnhub":
         return True, None
-    fallback_methods = {"get_stock_data", "get_quote", "get_indicators"}
+    fallback_methods = {"get_stock_data", "get_quote", "get_live_quote", "get_indicators"}
     if method in fallback_methods and not bool(
         config.get("data_vendor_enable_finnhub_fallback", True)
     ):
@@ -732,7 +763,8 @@ def _is_vendor_enabled(method: str, vendor: str, config: dict) -> tuple[bool, st
 def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: dict) -> Any:
     """Call one concrete vendor with timeout, retry, cache, and budget control."""
     vendor_args = _normalize_args_for_vendor(method, vendor, args)
-    run_cache = config.get("_run_cache")
+    cacheable = method not in NO_CACHE_METHODS
+    run_cache = config.get("_run_cache") if cacheable else None
     run_cache_key = _run_cache_key(run_cache, method, vendor, vendor_args, kwargs)
     if run_cache is not None and run_cache_key and run_cache.has(run_cache_key):
         cached = run_cache.get(run_cache_key)
@@ -742,7 +774,7 @@ def _call_vendor(method: str, vendor: str, args: tuple, kwargs: dict, config: di
         _record_attempt(config, method, vendor, "cache_hit")
         return cached
 
-    cache = _cache_for_method(method, config)
+    cache = _cache_for_method(method, config) if cacheable else None
     cache_key = _cache_key(method, vendor, vendor_args, kwargs)
     if cache is not None:
         cached = cache.get(cache_key)

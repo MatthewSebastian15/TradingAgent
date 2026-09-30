@@ -32,6 +32,7 @@ class FinnhubUnavailableError(FinnhubError):
 
 FEATURE_BY_METHOD = {
     "get_quote": "enable_stock_data",
+    "get_live_quote": "enable_stock_data",
     "get_stock_data": "enable_stock_data",
     "get_indicators": "enable_stock_data",
     "get_fundamentals": "enable_fundamentals",

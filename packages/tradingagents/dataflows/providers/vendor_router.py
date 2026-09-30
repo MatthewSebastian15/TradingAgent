@@ -109,6 +109,7 @@ def release_attempt_recorder(recorder_id: str | None) -> None:
 def method_to_metadata_key(method: str) -> str:
     mapping = {
         "get_quote": "quote",
+        "get_live_quote": "quote",
         "get_stock_data": "ohlcv",
         "get_indicators": "technical",
         "get_fundamentals": "fundamentals",
