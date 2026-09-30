@@ -62,6 +62,7 @@ def build_market_context(data: Any, *, recent_candle_limit: int = 10) -> dict[st
     last = rows[-1] if rows else {}
     last_close = last.get("close") or data.last_close_price
 
+    # Key order is truncation priority: _prompt_json keeps leading keys when over budget.
     return {
         "ticker": data.ticker,
         "trade_date": data.trade_date,
@@ -69,6 +70,7 @@ def build_market_context(data: Any, *, recent_candle_limit: int = 10) -> dict[st
         "last_close": last_close,
         "last_close_as_of": data.last_close_price_as_of,
         "price_source": data.last_close_price_source,
+        "data_quality": _model_dump(data.data_quality),
         "rows_available": len(rows),
         "window_start": rows[0]["date"] if rows else None,
         "window_end": rows[-1]["date"] if rows else None,
@@ -80,12 +82,11 @@ def build_market_context(data: Any, *, recent_candle_limit: int = 10) -> dict[st
         "window_high": max(high_values) if high_values else None,
         "window_low": min(low_values) if low_values else None,
         "average_volume_20d": round(mean(volumes[-20:]), 2) if volumes else None,
-        "recent_candles": rows[-recent_candle_limit:],
-        "price_chart_summary": _compact_price_chart(data.price_chart),
-        "price_performance": _compact_mapping(data.price_performance, max_items=12),
         "technical_entry": _compact_mapping(data.technical_entry, max_items=20),
+        "price_performance": _compact_mapping(data.price_performance, max_items=12),
+        "price_chart_summary": _compact_price_chart(data.price_chart),
+        "recent_candles": rows[-recent_candle_limit:],
         "technical_indicators": _compact_text_block(data.technical_indicators, max_chars=3500),
-        "data_quality": _model_dump(data.data_quality),
     }
 
 
@@ -116,17 +117,23 @@ def build_news_context(
         )
 
     news_context = data.news_context if isinstance(data.news_context, dict) else {}
+    # Key order is truncation priority: _prompt_json keeps leading keys when over budget.
     return {
         "ticker": data.ticker,
         "trade_date": data.trade_date,
         "time_horizon_months": data.time_horizon_months,
+        "data_quality": _model_dump(data.data_quality),
         "provider_status": news_context.get("provider_status"),
         "providers_used": news_context.get("providers_used"),
         "articles_found": news_context.get("articles_found"),
         "articles_used_in_prompt": news_context.get("articles_used_in_prompt"),
         "strict_news_filter": news_context.get("strict_news_filter"),
-        "market_context_news_count": len(news_context.get("market_context_news") or []),
+        "limitations": news_context.get("limitations") or [],
         "average_sentiment": news_context.get("average_sentiment"),
+        "top_articles": news_context.get("top_articles")
+        or news_context.get("prompt_articles")
+        or news_context.get("decision_company_news")
+        or [],
         "related_news_summary": (data.related_news or {}).get("summary")
         if isinstance(data.related_news, dict)
         else None,
@@ -140,21 +147,24 @@ def build_news_context(
         "vendor_sentiment": summarize_vendor_sentiment(
             getattr(data, "news_sentiment", ""), getattr(data, "social_sentiment", "")
         ),
-        "top_articles": news_context.get("top_articles")
-        or news_context.get("prompt_articles")
-        or news_context.get("decision_company_news")
-        or [],
-        "limitations": news_context.get("limitations") or [],
-        "data_quality": _model_dump(data.data_quality),
+        "market_context_news_count": len(news_context.get("market_context_news") or []),
     }
 
 
 def build_fundamentals_context(data: Any) -> dict[str, Any]:
     profile = data.company_profile if isinstance(data.company_profile, dict) else {}
+    # Key order is truncation priority: _prompt_json keeps leading keys when over budget.
     return {
         "ticker": data.ticker,
         "trade_date": data.trade_date,
         "time_horizon_months": data.time_horizon_months,
+        "data_quality": _model_dump(data.data_quality),
+        "fundamental_score": (data.fundamental_analysis or {}).get("fundamental_score")
+        if isinstance(data.fundamental_analysis, dict)
+        else None,
+        "fundamental_signal": (data.fundamental_analysis or {}).get("fundamental_signal")
+        if isinstance(data.fundamental_analysis, dict)
+        else None,
         "company_profile": {
             "available": profile.get("available"),
             "company_name": profile.get("company_name"),
@@ -172,34 +182,27 @@ def build_fundamentals_context(data: Any) -> dict[str, Any]:
             "data_quality": profile.get("data_quality"),
         },
         "financial_highlights": _compact_financial_highlights(data.financial_highlights),
-        "normalized_period_rows": _compact_list(
-            getattr(data, "normalized_period_rows", None), max_items=8
-        ),
         "derived_fundamentals": _compact_list(
             getattr(data, "derived_fundamentals", None), max_items=8
         ),
-        "fundamental_analysis": _compact_mapping(data.fundamental_analysis, max_items=16),
         "fundamental_context": _compact_mapping(
             (data.fundamental_analysis or {}).get("fundamental_context")
             if isinstance(data.fundamental_analysis, dict)
             else None,
             max_items=16,
         ),
-        "fundamental_score": (data.fundamental_analysis or {}).get("fundamental_score")
-        if isinstance(data.fundamental_analysis, dict)
-        else None,
-        "fundamental_signal": (data.fundamental_analysis or {}).get("fundamental_signal")
-        if isinstance(data.fundamental_analysis, dict)
-        else None,
+        "event_risk": _compact_text_block(data.event_risk, max_chars=1200),
+        "recommendation_trends": _compact_text_block(data.recommendation_trends, max_chars=1200),
         "chart_based_reasoning": _compact_list(
             (data.fundamental_analysis or {}).get("chart_based_reasoning")
             if isinstance(data.fundamental_analysis, dict)
             else None,
             max_items=24,
         ),
-        "event_risk": _compact_text_block(data.event_risk, max_chars=1200),
-        "recommendation_trends": _compact_text_block(data.recommendation_trends, max_chars=1200),
-        "data_quality": _model_dump(data.data_quality),
+        "normalized_period_rows": _compact_list(
+            getattr(data, "normalized_period_rows", None), max_items=8
+        ),
+        "fundamental_analysis": _compact_mapping(data.fundamental_analysis, max_items=16),
     }
 
 
