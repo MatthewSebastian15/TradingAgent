@@ -81,14 +81,15 @@ RESPONSE_DETAILS: tuple[str, ...] = ("summary", "full", "debug")
 # has enough budget for extra debate/risk passes when the pipeline supports them.
 LLM_BUDGET_BY_ANALYSIS_DEPTH: dict[str, dict[str, int]] = {
     "fast": {
+        # 3 analysts + research manager + trader + PM decision; narrative is a code template.
         "max_total_llm_calls": env_int("LLM_BUDGET_FAST", 6, min_value=0),
     },
     "balanced": {
-        # 9 core agents + 1 for the balanced bull rebuttal round (7A).
+        # 3 analysts + bull + bear + RM + trader + risk + PM decision + PM narrative.
         "max_total_llm_calls": env_int("LLM_BUDGET_BALANCED", 10, min_value=0),
     },
     "deep": {
-        # 12 prior agents + 1 for the deep-only final self-critique pass (9A).
+        # balanced + bull/bear rebuttal round + deep self-critique (risk round 2 removed).
         "max_total_llm_calls": env_int("LLM_BUDGET_DEEP", 13, min_value=0),
     },
 }

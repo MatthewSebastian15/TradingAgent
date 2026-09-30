@@ -27,6 +27,7 @@ AGENT_LABELS = {
     "trader": "Trader",
     "risk_analysts": "Risk Analysts",
     "portfolio_manager": "Portfolio Manager",
+    "portfolio_narrative": "Portfolio Narrative",
 }
 
 

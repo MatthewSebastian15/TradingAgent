@@ -59,16 +59,16 @@ def _collected_data(trade_date: str = "2026-05-18") -> pipeline.CollectedData:
                 "Fundamentals Analyst",
                 "Bull Researcher",
                 "Bear Researcher",
-                "Bull Researcher R2",
                 "Research Manager",
                 "Trader",
                 "Risk Committee",
                 "Portfolio Manager",
+                "Portfolio Narrative",
             ],
         ),
         (
             "deep",
-            # 12 agents + 1 deep-only self-critique pass (see config_defaults LLM_BUDGET_DEEP)
+            # 12 agents incl. PM narrative + 1 deep-only self-critique pass (see LLM_BUDGET_DEEP)
             13,
             [
                 "Market Analyst",
@@ -81,8 +81,8 @@ def _collected_data(trade_date: str = "2026-05-18") -> pipeline.CollectedData:
                 "Research Manager",
                 "Trader",
                 "Risk Committee",
-                "Risk Committee R2",
                 "Portfolio Manager",
+                "Portfolio Narrative",
             ],
         ),
     ],

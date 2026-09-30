@@ -111,7 +111,6 @@ def test_collect_market_data_miss_uses_collection(monkeypatch):
         depth_debate_rounds=1,
         depth_risk_rounds=1,
         extra_debate_rounds=0,
-        extra_risk_rounds=0,
         time_horizon_months=1,
         time_horizon_text="1 month",
         llm_budget=LLMBudget(1),

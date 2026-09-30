@@ -1114,9 +1114,8 @@ def test_reconcile_confidence_keeps_buy_when_bull_clearly_won():
     assert final == 0.85
 
 
-def test_balanced_debate_runs_bull_rebuttal_round():
-    # 7A: balanced debate is Bull -> Bear -> Bull-rebuttal, so the manager judges a
-    # reply to the bear rather than only the opening statements.
+def test_balanced_debate_has_symmetric_openings_only():
+    # balanced debate is Bull + Bear openings only; the rebuttal slot now funds the narrative call
     from types import SimpleNamespace
 
     from tradingagents.agents.schemas import DebateArgument
@@ -1168,4 +1167,4 @@ def test_balanced_debate_runs_bull_rebuttal_round():
         data_quality_json="{}",
     )
 
-    assert len(history) == 3
+    assert len(history) == 2

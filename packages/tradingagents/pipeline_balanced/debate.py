@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 from tradingagents.agents.schemas import DebateArgument, render_debate_argument
 from tradingagents.pipeline_balanced import orchestrator as _orch
 from tradingagents.pipeline_balanced.fallbacks import _limit_unique_text_items
-from tradingagents.pipeline_balanced.llm import _risk_to_markdown
 from tradingagents.pipeline_balanced.progress import _emit_progress, _run_tracked
 from tradingagents.pipeline_balanced.prompts import (
     bear_prompt,
@@ -253,13 +252,6 @@ def _run_debate_phase(
                 timings=pipeline_timings,
             )
 
-        # 7A: one bull rebuttal in balanced so the manager judges a reply to the bear,
-        # not just the opening statements. Budget-gated inside _invoke_once. Deep mode
-        # runs its own multi-round refinement loop below instead.
-        if analysis_depth == "balanced":
-            bull = _bull_rebuttal(2)
-            debate_history.append(render_debate_argument(bull, "Bull Researcher R2"))
-
         for round_number in range(2, extra_debate_rounds + 2):
             bull = _bull_rebuttal(round_number)
             debate_history.append(render_debate_argument(bull, f"Bull Researcher R{round_number}"))
@@ -328,7 +320,6 @@ def _run_risk_phase(
     trade_date = context.trade_date
     risk_llm = context.llm_for("risk_analysts")
     analysis_depth = context.analysis_depth
-    extra_risk_rounds = context.extra_risk_rounds
     time_horizon_text = context.time_horizon_text
     llm_budget = context.llm_budget
     pipeline_timings = context.pipeline_timings
@@ -418,49 +409,4 @@ def _run_risk_phase(
             ),
             timings=pipeline_timings,
         )
-        for round_number in range(2, extra_risk_rounds + 2):
-            prior_risk_md = _risk_to_markdown(risk_report)
-            risk_report = _run_tracked(
-                progress_callback,
-                "risk_analysts",
-                f"Deep mode risk review round {round_number} is stress-testing the trade plan...",
-                lambda prior_risk_md=prior_risk_md, round_number=round_number: _orch._invoke_once(
-                    risk_llm,
-                    RiskCommitteeReport,
-                    risk_committee_prompt(
-                        ticker,
-                        trade_date,
-                        time_horizon_text,
-                        market_md,
-                        news_social_md,
-                        fundamentals_md,
-                        debate_md + f"\n\nPrior risk review:\n{prior_risk_md}",
-                        investment_plan,
-                        trader_plan,
-                        data_quality_json,
-                    ),
-                    RiskCommitteeReport(
-                        overall_risk_level="High",
-                        aggressive_view=(
-                            "Deep mode could not generate an extra aggressive risk review."
-                        ),
-                        neutral_view=(
-                            "Use the previous risk committee output until this deep review is "
-                            + "verified."
-                        ),
-                        conservative_view=(
-                            "Avoid increasing exposure when the deep risk review falls back."
-                        ),
-                        key_risks=["Deep risk review fallback used."],
-                        mitigation_plan=(
-                            "Keep the previous risk controls and manually verify sizing."
-                        ),
-                        confidence=0.0,
-                    ),
-                    f"Risk Committee R{round_number}",
-                    llm_budget,
-                    cancel_check,
-                ),
-                timings=pipeline_timings,
-            )
     return risk_report

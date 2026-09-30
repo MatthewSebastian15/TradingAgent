@@ -15,6 +15,7 @@ from typing import Any
 from tradingagents.agents.schemas import (
     DebateArgument,
     PortfolioDecision,
+    PortfolioNarrative,
     PortfolioRating,
     SelfCritiqueResult,
     TraderAction,
@@ -52,6 +53,11 @@ from tradingagents.pipeline_balanced.llm import (
     _research_plan_to_markdown,
     _risk_to_markdown,
 )
+from tradingagents.pipeline_balanced.narrative_facts import (
+    build_template_narrative,
+    build_verified_facts,
+)
+from tradingagents.pipeline_balanced.numeric_claims import unverified_numbers
 from tradingagents.pipeline_balanced.progress import (
     _emit_data_quality,
     _emit_progress,
@@ -63,6 +69,7 @@ from tradingagents.pipeline_balanced.prompts import (
     market_analyst_prompt,
     news_social_prompt,
     portfolio_manager_prompt,
+    portfolio_narrative_prompt,
     research_manager_prompt,
     self_critique_prompt,
     trader_prompt,
@@ -96,6 +103,7 @@ PIPELINE_TIMING_ORDER = [
     "risk_analysts",
     "portfolio_manager",
     "self_critique",
+    "portfolio_narrative",
 ]
 
 
@@ -298,7 +306,6 @@ class PipelineContext:
     depth_debate_rounds: int
     depth_risk_rounds: int
     extra_debate_rounds: int
-    extra_risk_rounds: int
     time_horizon_months: int
     time_horizon_text: str
     llm_budget: LLMBudget
@@ -369,7 +376,6 @@ def prepare_context(
         1, int(depth_config.get("risk_rounds") or config.get("analysis_depth_risk_rounds") or 1)
     )
     extra_debate_rounds = max(0, depth_debate_rounds - 2) if analysis_depth == "deep" else 0
-    extra_risk_rounds = max(0, depth_risk_rounds - 2) if analysis_depth == "deep" else 0
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
     time_horizon_text = _time_horizon_label(time_horizon_months)
     llm_budget = LLMBudget(
@@ -388,7 +394,6 @@ def prepare_context(
         depth_debate_rounds=depth_debate_rounds,
         depth_risk_rounds=depth_risk_rounds,
         extra_debate_rounds=extra_debate_rounds,
-        extra_risk_rounds=extra_risk_rounds,
         time_horizon_months=time_horizon_months,
         time_horizon_text=time_horizon_text,
         llm_budget=llm_budget,
@@ -830,6 +835,74 @@ def run_self_critique(
     return decision
 
 
+_EMPTY_NARRATIVE = PortfolioNarrative.model_construct(
+    executive_summary="", investment_thesis="", key_reasons_paragraph=""
+)
+
+
+def run_portfolio_narrative(
+    context: PipelineContext,
+    data_stage: MarketDataStageResult,
+    agent_stage: AgentStageResult,
+    decision: PortfolioDecision,
+) -> PortfolioDecision:
+    """Write prose only from final, validated numbers; flag any number the prose invents."""
+    data = data_stage.data
+    facts = build_verified_facts(decision, data, context.time_horizon_text)
+    narrative: Any = None
+    source = "template"
+    if context.analysis_depth != "fast":
+        result = _run_tracked(
+            context.progress_callback,
+            "portfolio_narrative",
+            "Portfolio Manager is writing the narrative from validated numbers...",
+            lambda: _invoke_once(
+                context.deep_llm,
+                PortfolioNarrative,
+                portfolio_narrative_prompt(
+                    context.ticker,
+                    context.trade_date,
+                    context.time_horizon_text,
+                    render_pm_decision(decision),
+                    json.dumps(facts, separators=(",", ":"), default=str),
+                    agent_stage.market_md,
+                    agent_stage.news_social_md,
+                    agent_stage.fundamentals_md,
+                    agent_stage.risk_md,
+                    data_stage.data_quality_json,
+                ),
+                _EMPTY_NARRATIVE,
+                "Portfolio Narrative",
+                context.llm_budget,
+                context.cancel_check,
+            ),
+            timings=context.pipeline_timings,
+        )
+        if result.executive_summary and result.investment_thesis:
+            narrative, source = result, "llm"
+    if narrative is None:
+        narrative = build_template_narrative(decision, facts)
+
+    decision.executive_summary = narrative.executive_summary
+    decision.investment_thesis = narrative.investment_thesis
+    decision.key_reasons_paragraph = narrative.key_reasons_paragraph
+    decision.narrative_source = source
+    text = " ".join(
+        [narrative.executive_summary, narrative.investment_thesis, narrative.key_reasons_paragraph]
+    )
+    decision.narrative_unverified_numbers = unverified_numbers(text, facts)[:20]
+    if decision.narrative_unverified_numbers:
+        _append_guardrail_warnings(
+            data,
+            decision,
+            [
+                "NARRATIVE_UNVERIFIED_NUMBERS: "
+                + ", ".join(decision.narrative_unverified_numbers[:10])
+            ],
+        )
+    return decision
+
+
 def persist_metrics(context: PipelineContext) -> PipelineMetrics:
     llm_budget = context.llm_budget
     pipeline_started_at = context.pipeline_started_at
@@ -909,7 +982,6 @@ def build_response(
     depth_config = context.depth_config
     depth_debate_rounds = context.depth_debate_rounds
     depth_risk_rounds = context.depth_risk_rounds
-    extra_risk_rounds = context.extra_risk_rounds
     llm_budget = context.llm_budget
     pipeline_timings = context.pipeline_timings
     data = data_stage.data
@@ -1027,7 +1099,7 @@ def build_response(
             "conservative_history": risk_report.conservative_view,
             "history": risk_md,
             "judge_decision": risk_md,
-            "count": 3 + (3 * extra_risk_rounds),
+            "count": 3,
         },
         "portfolio_decision": portfolio_decision,
         "data_quality": data.data_quality.model_dump(),
@@ -1134,6 +1206,9 @@ def run_balanced_pipeline(
         portfolio_decision = aggregate_decision(context, data_stage, agent_stage)
         portfolio_decision = apply_decision_consistency(context, data_stage, portfolio_decision)
         portfolio_decision = run_self_critique(context, data_stage, portfolio_decision)
+        portfolio_decision = run_portfolio_narrative(
+            context, data_stage, agent_stage, portfolio_decision
+        )
         metrics = persist_metrics(context)
         return build_response(context, data_stage, agent_stage, portfolio_decision, metrics)
     finally:

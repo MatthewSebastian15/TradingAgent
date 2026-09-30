@@ -18,6 +18,9 @@ def test_every_pipeline_run_collects_market_data_fresh(monkeypatch):
     monkeypatch.setattr(orch, "aggregate_decision", lambda *args: object())
     monkeypatch.setattr(orch, "apply_decision_consistency", lambda context, data_stage, d: d)
     monkeypatch.setattr(orch, "run_self_critique", lambda context, data_stage, decision: decision)
+    monkeypatch.setattr(
+        orch, "run_portfolio_narrative", lambda context, data_stage, agent_stage, d: d
+    )
     monkeypatch.setattr(orch, "persist_metrics", lambda context: None)
     monkeypatch.setattr(orch, "build_response", lambda *args: {"ok": True})
 
