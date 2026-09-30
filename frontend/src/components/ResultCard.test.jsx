@@ -53,6 +53,20 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.queryByRole('button', { name: /hide disclaimer/i })).toBeNull();
   });
 
+  it('renders the live quote freshness line with problem flags', () => {
+    render(
+      <ResultCard
+        result={{
+          ...TEST_RESPONSE,
+          price_timestamp: '2026-09-14T03:30:00+00:00',
+          price_quote_check: { status: 'conflict', market_state: 'open' },
+        }}
+      />
+    );
+
+    expect(screen.getByText(/SOURCE CONFLICT/)).toBeTruthy();
+  });
+
   it('keeps the full disclaimer visible across all result tabs', async () => {
     render(<ResultCard result={TEST_RESPONSE} />);
 

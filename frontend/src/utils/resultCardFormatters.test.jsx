@@ -7,7 +7,9 @@ import {
   formatAnalysisHorizon,
   formatConfidenceDisplay,
   formatDevicePriceTimestamp,
+  formatNewsFreshness,
   formatPercent,
+  formatQuoteFreshness,
   formatRiskReward,
   formatVolatilityValue,
   formatWarningDetail,
@@ -230,5 +232,46 @@ describe('timestamps and volatility', () => {
     ).toBe('High · 30-day lookback');
     expect(volatilitySubValue({ volatility_classification: 'Low' })).toBe('Low');
     expect(volatilitySubValue({})).toBeNull();
+  });
+});
+
+describe('freshness labels', () => {
+  it('describes quote time, delay, market state and problems', () => {
+    const label = formatQuoteFreshness({
+      price_timestamp: '2026-09-14T03:30:00+00:00',
+      price_quote_check: {
+        status: 'stale',
+        delay_minutes: 15,
+        market_state: 'open',
+        timestamp_is_fetch_time: false,
+      },
+    });
+    expect(label).toContain('Quote');
+    expect(label).toContain('~15 min delayed');
+    expect(label).toContain('Market OPEN');
+    expect(label).toContain('STALE PRICE');
+  });
+
+  it('marks fetch-time timestamps and returns null without a check', () => {
+    expect(formatQuoteFreshness({})).toBeNull();
+    const label = formatQuoteFreshness({
+      price_timestamp: '2026-09-14T03:30:00+00:00',
+      price_quote_check: { status: 'ok', timestamp_is_fetch_time: true },
+    });
+    expect(label).toContain('Fetched');
+  });
+
+  it('describes news fetch time and cached fallback', () => {
+    const label = formatNewsFreshness({
+      news_context: {
+        last_updated: '2026-09-14T03:31:00+00:00',
+        latest_article_date: '2026-09-14T01:00:00+00:00',
+        cache: { stale_fallback: true },
+      },
+    });
+    expect(label).toContain('News fetched');
+    expect(label).toContain('latest article');
+    expect(label).toContain('CACHED FALLBACK');
+    expect(formatNewsFreshness({})).toBeNull();
   });
 });

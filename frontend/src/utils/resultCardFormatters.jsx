@@ -326,3 +326,36 @@ export function volatilitySubValue(result) {
   if (lookback) return `${lookback}-day lookback`;
   return null;
 }
+
+const QUOTE_STATUS_LABELS = {
+  stale: 'STALE PRICE',
+  conflict: 'SOURCE CONFLICT',
+  fallback: 'LAST CLOSE FALLBACK',
+  unavailable: 'PRICE UNAVAILABLE',
+};
+
+export function formatQuoteFreshness(result) {
+  const check = result?.price_quote_check;
+  if (!check || typeof check !== 'object' || !check.status) return null;
+  const parts = [];
+  const time = formatDevicePriceTimestamp(result.price_timestamp);
+  if (time) parts.push(`${check.timestamp_is_fetch_time ? 'Fetched' : 'Quote'} ${time}`);
+  if (Number.isFinite(check.delay_minutes) && check.delay_minutes > 0) {
+    parts.push(`~${check.delay_minutes} min delayed`);
+  }
+  if (check.market_state) parts.push(`Market ${String(check.market_state).toUpperCase()}`);
+  if (QUOTE_STATUS_LABELS[check.status]) parts.push(QUOTE_STATUS_LABELS[check.status]);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+export function formatNewsFreshness(result) {
+  const news = result?.news_context;
+  if (!news || typeof news !== 'object') return null;
+  const parts = [];
+  const fetched = formatDevicePriceTimestamp(news.last_updated);
+  const latest = formatDevicePriceTimestamp(news.latest_article_date);
+  if (fetched) parts.push(`News fetched ${fetched}`);
+  if (latest) parts.push(`latest article ${latest}`);
+  if (news.cache?.stale_fallback) parts.push('CACHED FALLBACK');
+  return parts.length ? parts.join(' · ') : null;
+}

@@ -24,8 +24,10 @@ import {
   formatConfidenceDisplay,
   formatDataSourcePriceLabel,
   formatDevicePriceTimestamp,
+  formatNewsFreshness,
   formatPercent,
   formatPriceAsOf,
+  formatQuoteFreshness,
   formatRiskReward,
   getCurrentPrice,
   getError,
@@ -167,6 +169,9 @@ function buildResultViewModel(result) {
     priceAsOfLabel: formatPriceAsOf(result, currentPriceAsOf),
     priceTimestampLabel: formatDevicePriceTimestamp(currentPriceAsOf),
     currentPriceSource: formatDataSourcePriceLabel(result),
+    quoteFreshness: formatQuoteFreshness(result),
+    quoteFreshnessOk: result.price_quote_check?.status === 'ok',
+    newsFreshness: formatNewsFreshness(result),
     timeHorizon: formatAnalysisHorizon(result.time_horizon_months, result.time_horizon),
     confidenceDisplay: formatConfidenceDisplay(
       result.confidence_score ?? null,
@@ -290,6 +295,20 @@ function DecisionHero({ result, vm }) {
         {vm.currentPriceSource && (
           <div className="mt-0.5 break-all font-mono text-[10px] tracking-wider text-bloomberg-muted">
             <span className="text-bloomberg-white">{vm.currentPriceSource}</span>
+          </div>
+        )}
+        {vm.quoteFreshness && (
+          <div
+            className={`mt-0.5 font-mono text-[10px] tracking-wider tabular-nums ${
+              vm.quoteFreshnessOk ? 'text-bloomberg-white' : 'text-bloomberg-amber'
+            }`}
+          >
+            {vm.quoteFreshness}
+          </div>
+        )}
+        {vm.newsFreshness && (
+          <div className="mt-0.5 font-mono text-[10px] tracking-wider tabular-nums text-bloomberg-white">
+            {vm.newsFreshness}
           </div>
         )}
         {vm.rawAiSignal && vm.rawAiSignal !== vm.finalDecision && (
