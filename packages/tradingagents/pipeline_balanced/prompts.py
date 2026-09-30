@@ -424,6 +424,7 @@ def trader_prompt(
     market_md: str,
     investment_plan: str,
     data_quality_json: str,
+    catalysts_json: str = "{}",
 ) -> str:
     return f"""
 [STATIC ROLE]
@@ -434,6 +435,11 @@ Use the market report for entry and stop context.
 {STATIC_DATA_QUALITY_RULES}
 
 {STATIC_TRADING_RULES}
+
+[STATIC CATALYST RULES]
+- If an earnings or scheduled event falls inside the horizon, reduce sizing or recommend waiting, \
+and name the event date.
+- Treat catalyst_bias as context, not as a trade trigger.
 
 [STATIC TRADE VALIDATION RULES]
 - Return suggested_allocation_percent, max_drawdown_estimate, volatility_level, \
@@ -469,6 +475,9 @@ Trim position, Exit position, Avoid new entry, or No position to rebalance.
 
 [DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
+
+[DYNAMIC CATALYSTS JSON]
+{catalysts_json}
 """.strip()
 
 
@@ -483,6 +492,7 @@ def risk_committee_prompt(
     investment_plan: str,
     trader_plan: str,
     data_quality_json: str,
+    risk_metrics_json: str = "{}",
 ) -> str:
     return f"""
 [STATIC ROLE]
@@ -499,6 +509,10 @@ logic, liquidity, volatility, and headline risk.
 - Stress-test the trade plan against downside, volatility, liquidity, and headline risk.
 - Flag unsupported sizing, unsupported trade levels, and weak invalidation logic.
 - Keep mitigation practical and tied to the selected horizon.
+- overall_risk_level must not be lower than risk_metrics.risk_bucket; cite the metric when you \
+explain the level.
+- Use volatility_percent, max_drawdown_percent, and atr as the numeric basis for downside; do not \
+invent other risk statistics.
 
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
@@ -522,6 +536,9 @@ logic, liquidity, volatility, and headline risk.
 
 [DYNAMIC DATA QUALITY JSON]
 {data_quality_json}
+
+[DYNAMIC DETERMINISTIC RISK METRICS JSON]
+{risk_metrics_json}
 """.strip()
 
 

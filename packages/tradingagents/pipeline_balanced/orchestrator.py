@@ -549,7 +549,26 @@ def run_agents(context: PipelineContext, data_stage: MarketDataStageResult) -> A
             quick_llm,
             TraderProposal,
             trader_prompt(
-                ticker, trade_date, time_horizon_text, market_md, investment_plan, data_quality_json
+                ticker,
+                trade_date,
+                time_horizon_text,
+                market_md,
+                investment_plan,
+                data_quality_json,
+                catalysts_json=json.dumps(
+                    {
+                        "upcoming_events": (data.catalyst_tracker or {}).get("upcoming_events")
+                        or [],
+                        "catalyst_bias": ((data.catalyst_tracker or {}).get("summary") or {}).get(
+                            "overall_catalyst_bias"
+                        ),
+                        "earnings_within_days": (data.technical_entry or {}).get(
+                            "earnings_within_days"
+                        ),
+                    },
+                    separators=(",", ":"),
+                    default=str,
+                ),
             ),
             TraderProposal(
                 confidence=0.35,

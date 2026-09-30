@@ -6,10 +6,11 @@ orchestrator module at call time: use _orch._invoke_once, never a direct import.
 
 from __future__ import annotations
 
+import json
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from tradingagents.agents.schemas import DebateArgument, render_debate_argument
 from tradingagents.pipeline_balanced import orchestrator as _orch
@@ -25,6 +26,7 @@ from tradingagents.pipeline_balanced.types import (
     CollectedData,
     RiskCommitteeReport,
 )
+from tradingagents.risk.market_risk_builder import build_market_risk
 
 if TYPE_CHECKING:
     from tradingagents.pipeline_balanced.orchestrator import PipelineContext
@@ -276,6 +278,31 @@ def _run_debate_phase(
     return bull, bear, debate_history
 
 
+_RISK_ORDER = {"low": 0, "medium": 1, "high": 2, "very high": 3}
+_RISK_LABELS = {"low": "Low", "medium": "Medium", "high": "High"}
+
+
+def _risk_metrics(data: CollectedData) -> dict[str, Any]:
+    metrics = build_market_risk(data.price_chart, data.price_performance, data.technical_entry)
+    metrics["earnings_within_days"] = (data.technical_entry or {}).get("earnings_within_days")
+    metrics["price_quote_check"] = getattr(data, "price_quote_check", None) or {}
+    return metrics
+
+
+def _enforce_risk_floor(report: RiskCommitteeReport, risk_bucket: str) -> RiskCommitteeReport:
+    floor = _RISK_ORDER.get(str(risk_bucket).lower())
+    current = _RISK_ORDER.get(str(report.overall_risk_level).lower())
+    if floor is None or (current is not None and current >= floor):
+        return report
+    report.overall_risk_level = _RISK_LABELS[str(risk_bucket).lower()]
+    report.key_risks = [
+        *report.key_risks,
+        f"Risk level raised to {report.overall_risk_level} by deterministic volatility, "
+        "drawdown, and ATR metrics.",
+    ][:8]
+    return report
+
+
 def _run_risk_phase(
     context: PipelineContext,
     *,
@@ -302,6 +329,9 @@ def _run_risk_phase(
     progress_callback = context.progress_callback
     cancel_check = context.cancel_check
 
+    metrics = _risk_metrics(data)
+    bucket = str(metrics.get("risk_bucket") or "unknown")
+
     if analysis_depth == "fast":
         _emit_progress(
             progress_callback,
@@ -316,7 +346,9 @@ def _run_risk_phase(
             "Skipped in fast mode; conservative risk fallback applied.",
         )
         risk_report = RiskCommitteeReport(
-            overall_risk_level="Medium" if data.data_quality.price_data == "ok" else "High",
+            overall_risk_level=_RISK_LABELS.get(
+                bucket, "Medium" if data.data_quality.price_data == "ok" else "High"
+            ),
             aggressive_view="Fast mode skips a separate aggressive risk debate to save LLM calls.",
             neutral_view=(
                 "Use the trader proposal with conservative sizing and verify manually before "
@@ -358,6 +390,7 @@ def _run_risk_phase(
                     investment_plan,
                     trader_plan,
                     data_quality_json,
+                    risk_metrics_json=json.dumps(metrics, separators=(",", ":"), default=str),
                 ),
                 RiskCommitteeReport(
                     overall_risk_level="High",
@@ -385,4 +418,5 @@ def _run_risk_phase(
             ),
             timings=pipeline_timings,
         )
+        risk_report = _enforce_risk_floor(risk_report, bucket)
     return risk_report
