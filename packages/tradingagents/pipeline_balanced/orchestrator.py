@@ -24,6 +24,11 @@ from tradingagents.agents.schemas import (
     render_trader_proposal,
 )
 from tradingagents.dataflows.providers.config import set_config
+from tradingagents.decision_consistency import (
+    contradiction_reason,
+    earnings_block_reason,
+    trade_plan_violations,
+)
 from tradingagents.graph.run_cache import RunCache
 from tradingagents.llm_clients.router import apply_guardrail, llm_metadata
 from tradingagents.llm_optimization.usage import get_usage_summary, reset_usage
@@ -687,6 +692,36 @@ def aggregate_decision(
     return portfolio_decision
 
 
+def apply_decision_consistency(
+    context: PipelineContext, data_stage: MarketDataStageResult, decision: PortfolioDecision
+) -> PortfolioDecision:
+    data = data_stage.data
+    action = _decision_action(decision)
+    reason = earnings_block_reason(
+        action,
+        earnings_within_days=(data.technical_entry or {}).get("earnings_within_days"),
+        has_existing_position=bool(context.has_existing_position),
+    ) or contradiction_reason(
+        action,
+        technical_entry=data.technical_entry,
+        fundamental_signal=(data.fundamental_analysis or {}).get("fundamental_signal"),
+        analyst_consensus=data.analyst_consensus,
+    )
+    if reason:
+        warnings = [f"Action downgraded to WAIT: {reason}"]
+        _append_guardrail_warnings(data, decision, warnings)
+        _downgrade_decision_to_wait(decision, warnings, bool(context.has_existing_position))
+
+    violations = trade_plan_violations(decision)
+    if "CONSISTENCY_ALLOCATION_WITHOUT_PLAN" in violations:
+        decision.suggested_allocation_percent = 0.0
+    if any(code != "CONSISTENCY_ALLOCATION_WITHOUT_PLAN" for code in violations):
+        _downgrade_decision_to_wait(decision, violations, bool(context.has_existing_position))
+    if violations:
+        _append_guardrail_warnings(data, decision, violations)
+    return decision
+
+
 def _decision_action(decision: PortfolioDecision) -> str:
     raw = (
         getattr(decision, "final_decision", None)
@@ -1097,6 +1132,7 @@ def run_balanced_pipeline(
         data_stage = collect_market_data(context)
         agent_stage = run_agents(context, data_stage)
         portfolio_decision = aggregate_decision(context, data_stage, agent_stage)
+        portfolio_decision = apply_decision_consistency(context, data_stage, portfolio_decision)
         portfolio_decision = run_self_critique(context, data_stage, portfolio_decision)
         metrics = persist_metrics(context)
         return build_response(context, data_stage, agent_stage, portfolio_decision, metrics)
