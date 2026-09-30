@@ -589,6 +589,9 @@ class PortfolioDecision(BaseModel):
 
     max_drawdown_min_pct: float | None = Field(default=None)
     max_drawdown_max_pct: float | None = Field(default=None)
+    entry_zone_low: float | None = Field(default=None)
+    entry_zone_high: float | None = Field(default=None)
+    allocation_cap_percent: float | None = Field(default=None)
 
     data_quality: dict[str, str] = Field(default_factory=dict)
     validation_warnings: list[str] = Field(default_factory=list)

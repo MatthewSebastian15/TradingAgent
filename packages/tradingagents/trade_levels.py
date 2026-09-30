@@ -35,6 +35,9 @@ DECISION_ALIASES = {
     "Sell": "Sell",
     "Underweight": "Sell",
 }
+ENTRY_WAIT_SCORE = 5.0
+ALLOCATION_CAP_BY_VOLATILITY = {"Low": 10.0, "Medium": 7.0, "High": 5.0, "Very High": 3.0}
+EARNINGS_ALLOCATION_WINDOW_DAYS = 7
 ACTIONABLE_DECISIONS = {"Buy", "Sell"}
 LONG_DECISIONS = {"Buy"}
 SHORT_DECISIONS = {"Sell"}
@@ -530,18 +533,79 @@ def _parse_drawdown_range(value: str | None) -> tuple[float | None, float | None
     return (min(low, high), max(low, high))
 
 
-def _ensure_drawdown(
-    decision: PortfolioDecision, volatility_level: str, warnings: list[str]
+def _entry_wait_reason(
+    final_decision: str,
+    technical_entry: dict[str, Any] | None,
+    has_existing_position: bool,
+    realism: dict[str, Any] | None,
+) -> str | None:
+    if final_decision not in LONG_DECISIONS or has_existing_position or not realism:
+        return None
+    score = _number_or_none((technical_entry or {}).get("entry_quality_score"))
+    if score is None or score >= ENTRY_WAIT_SCORE:
+        return None
+    return f"Entry quality {score:.1f}/10 is too weak; wait for a pullback into the entry zone"
+
+
+def _apply_entry_zone(
+    decision: PortfolioDecision,
+    current_price: float,
+    realism: dict[str, Any],
+    ticker: str | None,
+    warnings: list[str],
 ) -> None:
-    low = getattr(decision, "max_drawdown_min_pct", None)
-    high = getattr(decision, "max_drawdown_max_pct", None)
-    if low is None or high is None:
-        low, high = _parse_drawdown_range(getattr(decision, "max_drawdown_estimate", None))
-    if low is None or high is None or low <= 0 or high <= 0:
-        low, high = DRAWDOWN_BY_VOLATILITY[volatility_level]
-        _append_warning(warnings, "MAX_DRAWDOWN_RECOMPUTED")
-    if low > high:
-        low, high = high, low
+    atr = realism["atr"]
+    floor = current_price - atr
+    support = realism["support"]
+    low = max(support, floor) if support is not None and support < current_price else floor
+    decision.entry_zone_low = _round_price(low, ticker, warnings)
+    decision.entry_zone_high = _round_price(current_price - 0.25 * atr, ticker, warnings)
+
+
+def _apply_allocation_cap(
+    decision: PortfolioDecision,
+    volatility_level: str,
+    earnings_within_days: float | None,
+    warnings: list[str],
+) -> None:
+    cap = ALLOCATION_CAP_BY_VOLATILITY.get(volatility_level, 5.0) * float(
+        decision.confidence_score or 0.0
+    )
+    if earnings_within_days is not None and earnings_within_days <= EARNINGS_ALLOCATION_WINDOW_DAYS:
+        cap /= 2
+        _append_warning(warnings, "ALLOCATION_HALVED_FOR_EARNINGS")
+    cap = math.floor(cap * 2) / 2
+    decision.allocation_cap_percent = cap
+    current = decision.suggested_allocation_percent
+    if current is None or current > cap:
+        decision.suggested_allocation_percent = cap
+        _append_warning(warnings, "ALLOCATION_CAPPED")
+
+
+def _ensure_drawdown(
+    decision: PortfolioDecision,
+    volatility_level: str,
+    warnings: list[str],
+    historical_max_drawdown_pct: float | None = None,
+) -> None:
+    entry = _number_or_none(decision.entry_price)
+    risk = _number_or_none(decision.risk_per_share)
+    if entry and risk and historical_max_drawdown_pct is not None:
+        risk_pct = risk / entry * 100
+        low = round(risk_pct, 1)
+        high = round(max(risk_pct, abs(float(historical_max_drawdown_pct))), 1)
+        if (decision.max_drawdown_min_pct, decision.max_drawdown_max_pct) != (low, high):
+            _append_warning(warnings, "MAX_DRAWDOWN_RECOMPUTED")
+    else:
+        low = getattr(decision, "max_drawdown_min_pct", None)
+        high = getattr(decision, "max_drawdown_max_pct", None)
+        if low is None or high is None:
+            low, high = _parse_drawdown_range(getattr(decision, "max_drawdown_estimate", None))
+        if low is None or high is None or low <= 0 or high <= 0:
+            low, high = DRAWDOWN_BY_VOLATILITY[volatility_level]
+            _append_warning(warnings, "MAX_DRAWDOWN_RECOMPUTED")
+        if low > high:
+            low, high = high, low
     decision.max_drawdown_min_pct = float(low)
     decision.max_drawdown_max_pct = float(high)
     decision.max_drawdown_estimate = f"{_format_number(float(low))}-{_format_number(float(high))}%"
@@ -966,7 +1030,13 @@ def normalize_trade_levels(
         return decision
 
     realism = _realism_inputs(technical_entry, adjusted_price_rows, time_horizon_months)
-    if final_decision in LONG_DECISIONS:
+    entry_wait_reason = _entry_wait_reason(
+        final_decision, technical_entry, resolved_has_existing_position, realism
+    )
+    if entry_wait_reason:
+        _append_warning(warnings, "ENTRY_QUALITY_WAIT")
+        valid = False
+    elif final_decision in LONG_DECISIONS:
         valid = _normalize_long(
             decision,
             float(current_price),
@@ -1002,12 +1072,20 @@ def normalize_trade_levels(
     decision.rebalancing_action = normalized_action
 
     if final_decision in ACTIONABLE_DECISIONS and valid:
-        _ensure_drawdown(decision, normalized_volatility, warnings)
+        _ensure_drawdown(decision, normalized_volatility, warnings, historical_max_drawdown_pct)
+        _apply_allocation_cap(
+            decision,
+            normalized_volatility,
+            _number_or_none((technical_entry or {}).get("earnings_within_days")),
+            warnings,
+        )
         decision.trade_plan_valid = True
         trade_quality = "recomputed"
         llm_output_quality = "repaired" if _has_llm_repair_warning(warnings) else "ok"
     elif final_decision in ACTIONABLE_DECISIONS:
-        _downgrade_to_hold(decision, _invalid_plan_reason(warnings), warnings)
+        _downgrade_to_hold(decision, entry_wait_reason or _invalid_plan_reason(warnings), warnings)
+        if entry_wait_reason and realism:
+            _apply_entry_zone(decision, float(current_price), realism, ticker, warnings)
         decision.rebalancing_action = normalize_rebalancing_action(
             "Hold",
             resolved_has_existing_position,
