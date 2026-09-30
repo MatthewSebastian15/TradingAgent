@@ -1081,6 +1081,39 @@ def test_reconcile_confidence_keeps_confidence_on_clean_run():
     assert reason is None
 
 
+def test_reconcile_confidence_clamps_buy_when_bear_won_the_debate():
+    from tradingagents.pipeline_balanced.orchestrator import reconcile_confidence
+
+    final, reconciled, reason = reconcile_confidence(
+        0.85,
+        analyst_confidences=[0.8, 0.8, 0.8],
+        data_status=("ok", "ok", "ok"),
+        bull_confidence=0.3,
+        bear_confidence=0.9,
+        budget_partial=False,
+        decision_action="BUY",
+    )
+    assert reconciled is True
+    assert final < 0.85
+    assert "unresolved bull/bear debate" in reason
+
+
+def test_reconcile_confidence_keeps_buy_when_bull_clearly_won():
+    from tradingagents.pipeline_balanced.orchestrator import reconcile_confidence
+
+    final, reconciled, _ = reconcile_confidence(
+        0.85,
+        analyst_confidences=[0.8, 0.8, 0.8],
+        data_status=("ok", "ok", "ok"),
+        bull_confidence=0.9,
+        bear_confidence=0.2,
+        budget_partial=False,
+        decision_action="BUY",
+    )
+    assert reconciled is False
+    assert final == 0.85
+
+
 def test_balanced_debate_runs_bull_rebuttal_round():
     # 7A: balanced debate is Bull -> Bear -> Bull-rebuttal, so the manager judges a
     # reply to the bear rather than only the opening statements.

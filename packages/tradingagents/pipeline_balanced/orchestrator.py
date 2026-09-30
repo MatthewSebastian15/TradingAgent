@@ -808,6 +808,7 @@ def reconcile_confidence(
     bull_confidence: float,
     bear_confidence: float,
     budget_partial: bool,
+    decision_action: str = "WAIT",
     threshold: float = CONFIDENCE_DIVERGENCE_THRESHOLD,
 ) -> tuple[float, bool, str | None]:
     """Down-clamp an over-confident PM score against data quality + debate spread.
@@ -820,8 +821,14 @@ def reconcile_confidence(
         if analyst_confidences
         else pm_confidence
     )
-    # High when bull and bear land near the same conviction; a wide spread = unresolved debate.
-    agreement = 1.0 - min(1.0, abs(bull_confidence - bear_confidence))
+    action = str(decision_action or "").upper()
+    if action == "BUY":
+        agreement = max(0.0, min(1.0, 0.5 + (bull_confidence - bear_confidence)))
+    elif action == "SELL":
+        agreement = max(0.0, min(1.0, 0.5 + (bear_confidence - bull_confidence)))
+    else:
+        # A close debate is the consistent outcome for Hold/Wait.
+        agreement = 1.0 - min(1.0, abs(bull_confidence - bear_confidence))
     derived = (completeness + analyst + agreement) / 3
     if budget_partial:
         # ponytail: a budget-truncated run can't earn high confidence; hard cap.
@@ -914,6 +921,7 @@ def build_response(
             bull_confidence=bull.confidence,
             bear_confidence=bear.confidence,
             budget_partial=budget_partial,
+            decision_action=_decision_action(portfolio_decision),
         )
     )
     if confidence_reconciled:
