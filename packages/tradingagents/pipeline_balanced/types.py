@@ -70,6 +70,7 @@ class CollectedData:
     price_performance: dict[str, Any] | None = None
     technical_entry: dict[str, Any] | None = None
     price_quote_check: dict[str, Any] | None = None
+    benchmark_context: dict[str, Any] | None = None
     news_context: dict[str, Any] | None = None
     related_news: dict[str, Any] | None = None
     news_impact: dict[str, Any] | None = None

@@ -93,6 +93,7 @@ YEAR_ON_YEAR_PRICE_WINDOW_DAYS = 365
 PRICE_CHART_FALLBACK_BUFFER_DAYS = 14
 DEFAULT_PRICE_MAX_FALLBACK_DAYS = 7
 
+from tradingagents.pipeline.benchmark_context import build_benchmark_context
 from tradingagents.pipeline.price_anchor import live_quote_applies, resolve_price_anchor
 from tradingagents.pipeline.types import FieldQualityContext
 
@@ -818,6 +819,7 @@ def _build_collected_market_data(ctx: dict[str, Any]) -> CollectedData:
         price_performance=ctx["price_performance"],
         technical_entry=ctx["technical_entry"],
         price_quote_check=ctx["price_quote_check"],
+        benchmark_context=ctx["benchmark_context"],
         news_context=ctx["news_context"],
         related_news=ctx["related_news"],
         news_impact=ctx["news_impact"],
@@ -963,6 +965,20 @@ def collect_market_data(
     technical_history = price_runtime["technical_history"]
     technical_entry = price_runtime["technical_entry"]
     price_quote_check = price_runtime["price_quote_check"]
+    # ponytail: two sequential index fetches (~1-2s); fold into parallel batch if slow.
+    benchmark_context = build_benchmark_context(
+        ticker=ticker,
+        sector=(company_profile or {}).get("sector") if isinstance(company_profile, dict) else None,
+        stock_price_csv=price.value,
+        fetch_price_csv=lambda symbol: route_to_vendor(
+            "get_stock_data",
+            symbol,
+            start_price,
+            end,
+            vendor_order=["yfinance"],
+            field_name="historical_price",
+        ),
+    )
     if price_runtime["price_anchor_warnings"]:
         data_quality.warnings = list(
             dict.fromkeys([*(data_quality.warnings or []), *price_runtime["price_anchor_warnings"]])

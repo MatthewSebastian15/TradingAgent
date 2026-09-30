@@ -83,6 +83,7 @@ def build_market_context(data: Any, *, recent_candle_limit: int = 10) -> dict[st
         "window_low": min(low_values) if low_values else None,
         "average_volume_20d": round(mean(volumes[-20:]), 2) if volumes else None,
         "technical_entry": _compact_mapping(data.technical_entry, max_items=20),
+        "benchmark": getattr(data, "benchmark_context", None) or {"available": False},
         "price_performance": _compact_mapping(data.price_performance, max_items=12),
         "price_chart_summary": _compact_price_chart(data.price_chart),
         "recent_candles": rows[-recent_candle_limit:],

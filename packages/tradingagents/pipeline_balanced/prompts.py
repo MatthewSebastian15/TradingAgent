@@ -165,6 +165,10 @@ Focus on trend, momentum, volatility, volume, support, resistance, and what the 
 
 {STATIC_TRADING_RULES}
 
+[STATIC RELATIVE STRENGTH RULES]
+- Use benchmark.relative_strength_pts (stock return minus benchmark return, in percentage points) to state whether the stock outperformed or underperformed its index and sector.
+- If benchmark data is unavailable, say relative strength is unknown; never estimate it.
+
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
 {_language_block()}
