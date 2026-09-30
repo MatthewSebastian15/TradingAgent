@@ -545,13 +545,8 @@ supports it, and time horizon.
 volatility_level, position_sizing_reason, rebalancing_action, key_reasons, key_catalysts, and \
 invalidation_conditions.
 - Use key_reasons for the primary reasons supporting the recommendation.
-- Write key_reasons so they can be combined into one coherent dashboard paragraph.
-- The final Key Reasons paragraph must be 75-125 words, practical, non-repetitive, and directly \
-tied to the recommendation.
 - Do not output vague reasons such as "market conditions" unless the specific condition is \
 explained.
-- Do not make key_reasons a short bullet-only checklist. Each item should read like a sentence \
-fragment that can be merged into a paragraph.
 - Backend validation is the final source of entry_price, stop_loss, take_profit, \
 risk_reward_ratio, \
 risk_reward_display, and actionability.
@@ -589,34 +584,10 @@ context.
 - Backend validation remains the final source of truth for position action fields.
 - When using news input, prioritize News Analyst conclusions only if they were based on company-specific news that passed the strict news filter. If the news report says coverage is limited, do not upgrade confidence based on news.
 - Use Hold when no safe actionable setup exists.
-- executive_summary must be 250-300 words in exactly 5 parts, written as continuous paragraphs \
-without headers, section numbers, or bullet points.
-  Part 1 — Recommendation (1-2 sentences): State the signal and the single most important reason \
-behind it.
-  Part 2 — Price Action (2-3 sentences): Describe recent price movement and distinguish \
-fundamental-driven movement from speculative movement.
-  Part 3 — Fundamental Context (2-3 sentences): Briefly state revenue trend, profitability, and \
-financial health.
-  Part 4 — Risk View (2-3 sentences): State the overall risk level and name the top 2 risk factors.
-  Part 5 — Final Action (1-2 sentences): State clearly and concisely what the user should do right \
-now.
-- investment_thesis must be 400-450 words in exactly 6 parts, written as continuous paragraphs \
-without headers, section numbers, or bullet points.
-  Part 1 — Business Overview (2-3 sentences): Describe what the company does, main segments, and \
-market position.
-  Part 2 — Recent Price Movement (3-4 sentences): Explain recent price action and whether the \
-movement is fundamentally supported or speculative.
-  Part 3 — Fundamental View (4-5 sentences): Cover revenue growth, profit margins, cashflow \
-quality, and balance sheet strength with numbers where available.
-  Part 4 — Technical View (3-4 sentences): Identify support, resistance, moving average \
-conditions, \
-and trend direction.
-  Part 5 — Risk Assessment (3-4 sentences): Explain the top 3 risks: one macro risk, one sector \
-risk, and one company-specific risk.
-  Part 6 — Final Positioning (2-3 sentences): State the recommended action and the conditions that \
-would upgrade or downgrade the recommendation.
-- Do not return short placeholder text. These fields are displayed directly in the analysis \
-dashboard and report.
+- Leave executive_summary and investment_thesis empty. They are written in a later step from the \
+validated trade levels, so any prose you write here is discarded.
+- key_reasons must be short evidence-backed sentences taken from the reports; do not introduce \
+numbers that are not in the reports.
 
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 Set the structured time_horizon field exactly to "{time_horizon_text}".
@@ -677,6 +648,59 @@ Be adversarial. Your job is to catch decisions that are wrong or overconfident, 
 
 [DYNAMIC FINAL DECISION UNDER REVIEW]
 {decision_md}
+
+[DYNAMIC DATA QUALITY JSON]
+{data_quality_json}
+""".strip()
+
+
+def portfolio_narrative_prompt(
+    ticker: str,
+    trade_date: str,
+    time_horizon_text: str,
+    decision_md: str,
+    facts_json: str,
+    market_md: str,
+    news_social_md: str,
+    fundamentals_md: str,
+    risk_md: str,
+    data_quality_json: str,
+) -> str:
+    return f"""
+[STATIC ROLE]
+You are the Portfolio Manager writing the dashboard narrative for a decision that is already final.
+Do not change the decision, the confidence, or any trade level.
+
+{STATIC_DATA_QUALITY_RULES}
+
+[STATIC NUMBER RULES]
+- Every price, percentage, ratio, or amount you write must appear in VERIFIED FACTS JSON, rounded \
+no further than one decimal place.
+- If a number you want is not in VERIFIED FACTS JSON, describe it qualitatively instead.
+- Use the reports only for qualitative reasoning, never as a source of numbers.
+- If the decision is Hold, explain what must change before acting; do not describe entry levels.
+
+{_dynamic_request_block(ticker, trade_date, time_horizon_text)}
+
+{_language_block()}
+
+[DYNAMIC FINAL DECISION]
+{decision_md}
+
+[DYNAMIC VERIFIED FACTS JSON]
+{facts_json}
+
+[DYNAMIC MARKET REPORT]
+{market_md}
+
+[DYNAMIC NEWS AND SOCIAL REPORT]
+{news_social_md}
+
+[DYNAMIC FUNDAMENTALS REPORT]
+{fundamentals_md}
+
+[DYNAMIC RISK COMMITTEE REPORT]
+{risk_md}
 
 [DYNAMIC DATA QUALITY JSON]
 {data_quality_json}

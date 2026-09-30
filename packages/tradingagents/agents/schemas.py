@@ -389,48 +389,13 @@ class PortfolioDecision(BaseModel):
         ),
     )
     executive_summary: str = Field(
-        description=(
-            (
-                "Write 250-300 words in exactly 5 continuous paragraphs without headers, "
-                + "numbering, or bullets. "
-            )
-            + "Part 1 states the recommendation and the single most important reason. "
-            + (
-                "Part 2 explains recent price action and separates fundamental movement from "
-                + "speculation. "
-            )
-            + "Part 3 summarizes revenue trend, profitability, and financial health. "
-            + "Part 4 states overall risk level and the top two risk factors. "
-            + "Part 5 gives the immediate action the user should take."
-        ),
+        default="",
+        description="Filled by the narrative step after validation. Leave empty.",
     )
-
-    @field_validator("executive_summary")
-    @classmethod
-    def executive_summary_word_range(cls, v: str) -> str:
-        return _validate_word_range("executive_summary", v, 150, 300)
-
     investment_thesis: str = Field(
-        description=(
-            (
-                "Write 400-450 words in exactly 6 continuous paragraphs without headers, "
-                + "numbering, or bullets. "
-            )
-            + (
-                "Cover business overview, recent price movement, fundamental view, technical "
-                + "view, risk assessment, "
-            )
-            + (
-                "and final positioning. Include specific numbers where available and clearly "
-                + "state upgrade or downgrade conditions."
-            )
-        ),
+        default="",
+        description="Filled by the narrative step after validation. Leave empty.",
     )
-
-    @field_validator("investment_thesis")
-    @classmethod
-    def investment_thesis_word_range(cls, v: str) -> str:
-        return _validate_word_range("investment_thesis", v, 250, 450)
 
     suggested_allocation_percent: float | None = Field(
         default=None,
@@ -595,6 +560,8 @@ class PortfolioDecision(BaseModel):
 
     data_quality: dict[str, str] = Field(default_factory=dict)
     validation_warnings: list[str] = Field(default_factory=list)
+    narrative_source: str | None = Field(default=None)
+    narrative_unverified_numbers: list[str] = Field(default_factory=list)
 
 
 class SelfCritiqueResult(BaseModel):
@@ -616,15 +583,52 @@ class SelfCritiqueResult(BaseModel):
     )
 
 
+class PortfolioNarrative(BaseModel):
+    """Dashboard prose written only after trade levels and guardrails are final."""
+
+    executive_summary: str = Field(
+        description=(
+            "250-300 words in 5 continuous paragraphs without headers or bullets: recommendation "
+            "and main reason; recent price action; fundamentals; risk level and top two risks; "
+            "immediate action. Use only numbers from VERIFIED FACTS."
+        )
+    )
+    investment_thesis: str = Field(
+        description=(
+            "400-450 words in 6 continuous paragraphs: business overview, price movement, "
+            "fundamental view, technical view, top three risks (macro, sector, company), final "
+            "positioning with upgrade/downgrade conditions. Use only numbers from VERIFIED FACTS."
+        )
+    )
+    key_reasons_paragraph: str = Field(
+        description="One 75-125 word paragraph combining the key reasons for the decision."
+    )
+
+    @field_validator("executive_summary")
+    @classmethod
+    def _summary_words(cls, v: str) -> str:
+        return _validate_word_range("executive_summary", v, 150, 300)
+
+    @field_validator("investment_thesis")
+    @classmethod
+    def _thesis_words(cls, v: str) -> str:
+        return _validate_word_range("investment_thesis", v, 250, 450)
+
+    @field_validator("key_reasons_paragraph")
+    @classmethod
+    def _reasons_words(cls, v: str) -> str:
+        return _validate_word_range("key_reasons_paragraph", v, 60, 140)
+
+
 def render_pm_decision(decision: PortfolioDecision) -> str:
     parts = [
         f"**Rating**: {decision.rating.value}",
         f"**Confidence Score**: {decision.confidence_score:.2f}",
-        "",
-        f"**Executive Summary**: {decision.executive_summary}",
-        "",
-        f"**Investment Thesis**: {decision.investment_thesis}",
     ]
+    if decision.executive_summary:
+        parts.extend(["", f"**Executive Summary**: {decision.executive_summary}"])
+    if decision.investment_thesis:
+        parts.extend(["", f"**Investment Thesis**: {decision.investment_thesis}"])
     if decision.confidence_breakdown is not None:
         breakdown = decision.confidence_breakdown
         parts.extend(
