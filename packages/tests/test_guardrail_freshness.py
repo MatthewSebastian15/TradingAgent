@@ -10,8 +10,15 @@ from tradingagents.llm_clients.router import apply_guardrail
 
 def _context(**quality) -> PromptContext:
     return PromptContext(
-        symbol="AAPL", market="US", field_sources={}, data_quality=dict(quality),
-        limitations=[], sector=None, normalized_financials=[], top_news=[], budget_remaining={},
+        symbol="AAPL",
+        market="US",
+        field_sources={},
+        data_quality=dict(quality),
+        limitations=[],
+        sector=None,
+        normalized_financials=[],
+        top_news=[],
+        budget_remaining={},
     )
 
 
@@ -36,15 +43,21 @@ def test_aggregate_decision_applies_max_confidence_cap(monkeypatch):
     )
     safety = _context(news_missing=True)
     data = SimpleNamespace(
-        last_close_price=100.0, last_close_price_as_of="2026-09-14",
-        last_close_price_source="yfinance:live_quote", price_data="",
+        last_close_price=100.0,
+        last_close_price_as_of="2026-09-14",
+        last_close_price_source="yfinance:live_quote",
+        price_data="",
         data_quality=SimpleNamespace(model_dump=lambda: {}, warnings=[]),
-        safety_prompt_context=safety, warnings=[],
+        safety_prompt_context=safety,
+        warnings=[],
     )
     monkeypatch.setattr(orch, "normalize_trade_levels", lambda decision, **kwargs: decision)
     context = SimpleNamespace(
-        ticker="AAPL", has_existing_position=False, position_quantity=None,
-        average_entry_price=None, config={},
+        ticker="AAPL",
+        has_existing_position=False,
+        position_quantity=None,
+        average_entry_price=None,
+        config={},
     )
 
     result = orch.aggregate_decision(
