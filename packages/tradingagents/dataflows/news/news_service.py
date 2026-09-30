@@ -74,6 +74,7 @@ class NewsService:
         include_raw: bool = False,
         bypass_cache: bool = False,
         force_refresh: bool = False,
+        prefer_fresh: bool = False,
     ) -> dict[str, Any]:
         profile = resolve_news_ticker(ticker)
         window_days = max(1, int(window_days or self.config.get("default_window_days", 30)))
@@ -100,15 +101,12 @@ class NewsService:
             str(self.config.get("rss_disabled_feed_ids") or ""),
         )
         cache = _active_cache(self.config)
+        cache_enabled = bool(self.config.get("cache_enabled", True)) and not debug
+        cached_before = cache.get(cache_key) if cache_enabled else None
 
-        if (
-            self.config.get("cache_enabled", True)
-            and not (bypass_cache or force_refresh)
-            and not debug
-        ):
-            cached = cache.get(cache_key)
-            if isinstance(cached, dict):
-                result = copy.deepcopy(cached)
+        if cache_enabled and not (bypass_cache or force_refresh or prefer_fresh):
+            if isinstance(cached_before, dict):
+                result = copy.deepcopy(cached_before)
                 result["cache"] = {**dict(result.get("cache") or {}), "enabled": True, "hit": True}
                 return result
 
@@ -504,7 +502,26 @@ class NewsService:
                     article_to_dict(article, include_raw=True) for article in ui_articles
                 ]
 
-        if self.config.get("cache_enabled", True) and not debug:
+        if (
+            prefer_fresh
+            and not result.get("articles_found")
+            and isinstance(cached_before, dict)
+            and cached_before.get("articles_found")
+        ):
+            stale = copy.deepcopy(cached_before)
+            stale["cache"] = {
+                **dict(stale.get("cache") or {}),
+                "enabled": True,
+                "hit": True,
+                "stale_fallback": True,
+                "fresh_provider_status": result.get("provider_status"),
+            }
+            stale["limitations"] = [
+                *(stale.get("limitations") or []),
+                "Fresh news fetch returned no articles; showing the last cached news set.",
+            ]
+            return stale
+        if cache_enabled:
             cache.set(cache_key, result)
         return result
 

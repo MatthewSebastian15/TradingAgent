@@ -216,7 +216,7 @@ def _safe_structured_company_news(
                 news_config["provider_priority"] = provider_priority
             news_config["enable_yfinance_fallback"] = "yfinance" in vendor_order
         context = NewsService(config=news_config).fetch_news(
-            ticker, as_of_date=trade_date, window_days=window_days
+            ticker, as_of_date=trade_date, window_days=window_days, prefer_fresh=True
         )
         holder.update(context)
         compact_context = build_news_context(
