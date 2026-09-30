@@ -9,6 +9,13 @@ from typing import Any
 
 from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 from tradingagents.dataflows.providers.errors import ErrorCode
+from tradingagents.trade_realism import (
+    adjusted_atr,
+    cap_price_target,
+    horizon_trading_days,
+    structure_risk_distance,
+    target_realism,
+)
 
 DEFAULT_TARGET_RR = 3.0
 
@@ -114,6 +121,46 @@ def _blocking_quality_reason(data_quality: dict[str, Any] | None) -> str | None:
         ):
             return f"Blocking data quality field unavailable: {field_name}"
     return None
+
+
+_REALISM_REASONS = {
+    "STOP_TOO_WIDE_FOR_STRUCTURE": "Structure-based stop would risk more than 15% of entry",
+    "TAKE_PROFIT_BEYOND_EXPECTED_MOVE": (
+        "1:3 target is beyond the expected move for the selected horizon"
+    ),
+}
+
+
+def _number_or_none(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _realism_inputs(
+    technical_entry: dict[str, Any] | None,
+    adjusted_price_rows: list[dict[str, Any]] | None,
+    time_horizon_months: float | None,
+) -> dict[str, Any] | None:
+    technical = technical_entry if isinstance(technical_entry, dict) else {}
+    atr = adjusted_atr(adjusted_price_rows) or _number_or_none(technical.get("atr"))
+    if not atr:
+        return None
+    return {
+        "atr": atr,
+        "support": _number_or_none(technical.get("support")),
+        "resistance": _number_or_none(technical.get("resistance")),
+        "trading_days": horizon_trading_days(time_horizon_months),
+    }
+
+
+def _invalid_plan_reason(warnings: list[str]) -> str:
+    for code, reason in _REALISM_REASONS.items():
+        if code in warnings:
+            return reason
+    return "Invalid or incomplete trade plan"
 
 
 def _apply_target_rr(decision: PortfolioDecision, target_rr: float, warnings: list[str]) -> None:
@@ -543,6 +590,7 @@ def _normalize_long(
     price_data: str | None,
     volatility_level: str,
     target_rr: float,
+    realism: dict[str, Any] | None = None,
 ) -> bool:
     entry = _round_price(float(current_price), ticker, warnings)
     if entry is None:
@@ -550,7 +598,15 @@ def _normalize_long(
     if _values_differ(getattr(decision, "entry_price", None), entry):
         _append_warning(warnings, "ENTRY_PRICE_RECOMPUTED")
 
-    risk_distance = calculate_risk_distance(float(entry), volatility_level, price_data)
+    if realism:
+        risk_distance = structure_risk_distance(
+            float(entry), realism["support"], realism["atr"], direction="long"
+        )
+        if risk_distance is None:
+            _append_warning(warnings, "STOP_TOO_WIDE_FOR_STRUCTURE")
+            return False
+    else:
+        risk_distance = calculate_risk_distance(float(entry), volatility_level, price_data)
     stop = _round_price(float(entry) - risk_distance, ticker, warnings)
     if stop is None or float(stop) >= float(entry):
         tick = (
@@ -571,6 +627,19 @@ def _normalize_long(
     take_profit = _round_price(float(entry) + risk * target_rr, ticker, warnings)
     if take_profit is None or float(take_profit) <= float(entry):
         return False
+    if realism:
+        realistic, realism_warnings = target_realism(
+            entry=float(entry),
+            take_profit=float(take_profit),
+            atr=realism["atr"],
+            trading_days=realism["trading_days"],
+            blocking_level=realism["resistance"],
+            direction="long",
+        )
+        for code in realism_warnings:
+            _append_warning(warnings, code)
+        if not realistic:
+            return False
     if _values_differ(getattr(decision, "take_profit", None), take_profit):
         _append_warning(warnings, "TAKE_PROFIT_RECOMPUTED")
 
@@ -587,6 +656,18 @@ def _normalize_long(
         if price_target is None or float(price_target) <= float(entry):
             price_target = take_profit
             _append_warning(warnings, "PRICE_TARGET_RECOMPUTED")
+
+    if realism and price_target is not None:
+        capped, was_capped = cap_price_target(
+            float(price_target),
+            entry=float(entry),
+            atr=realism["atr"],
+            trading_days=realism["trading_days"],
+            direction="long",
+        )
+        if was_capped:
+            price_target = _round_price(capped, ticker, warnings)
+            _append_warning(warnings, "PRICE_TARGET_CAPPED")
 
     decision.entry_price = entry
     decision.stop_loss = stop
@@ -606,6 +687,7 @@ def _normalize_short(
     price_data: str | None,
     volatility_level: str,
     target_rr: float,
+    realism: dict[str, Any] | None = None,
 ) -> bool:
     entry = _round_price(float(current_price), ticker, warnings)
     if entry is None:
@@ -613,7 +695,15 @@ def _normalize_short(
     if _values_differ(getattr(decision, "entry_price", None), entry):
         _append_warning(warnings, "ENTRY_PRICE_RECOMPUTED")
 
-    risk_distance = calculate_risk_distance(float(entry), volatility_level, price_data)
+    if realism:
+        risk_distance = structure_risk_distance(
+            float(entry), realism["resistance"], realism["atr"], direction="short"
+        )
+        if risk_distance is None:
+            _append_warning(warnings, "STOP_TOO_WIDE_FOR_STRUCTURE")
+            return False
+    else:
+        risk_distance = calculate_risk_distance(float(entry), volatility_level, price_data)
     stop = _round_price(float(entry) + risk_distance, ticker, warnings)
     if stop is None or float(stop) <= float(entry):
         tick = (
@@ -634,6 +724,19 @@ def _normalize_short(
     take_profit = _round_price(float(entry) - risk * target_rr, ticker, warnings)
     if take_profit is None or float(take_profit) >= float(entry) or float(take_profit) <= 0:
         return False
+    if realism:
+        realistic, realism_warnings = target_realism(
+            entry=float(entry),
+            take_profit=float(take_profit),
+            atr=realism["atr"],
+            trading_days=realism["trading_days"],
+            blocking_level=realism["support"],
+            direction="short",
+        )
+        for code in realism_warnings:
+            _append_warning(warnings, code)
+        if not realistic:
+            return False
     if _values_differ(getattr(decision, "take_profit", None), take_profit):
         _append_warning(warnings, "TAKE_PROFIT_RECOMPUTED")
 
@@ -650,6 +753,18 @@ def _normalize_short(
         if price_target is None or float(price_target) >= float(entry):
             price_target = take_profit
             _append_warning(warnings, "PRICE_TARGET_RECOMPUTED")
+
+    if realism and price_target is not None:
+        capped, was_capped = cap_price_target(
+            float(price_target),
+            entry=float(entry),
+            atr=realism["atr"],
+            trading_days=realism["trading_days"],
+            direction="short",
+        )
+        if was_capped:
+            price_target = _round_price(capped, ticker, warnings)
+            _append_warning(warnings, "PRICE_TARGET_CAPPED")
 
     decision.entry_price = entry
     decision.stop_loss = stop
@@ -704,6 +819,10 @@ def normalize_trade_levels(
     price_data: str | None = None,
     data_quality: dict[str, Any] | None = None,
     target_risk_reward: float = DEFAULT_TARGET_RR,
+    technical_entry: dict[str, Any] | None = None,
+    adjusted_price_rows: list[dict[str, Any]] | None = None,
+    time_horizon_months: float | None = None,
+    historical_max_drawdown_pct: float | None = None,
 ) -> PortfolioDecision:
     warnings = list(getattr(decision, "validation_warnings", None) or [])
     try:
@@ -846,6 +965,7 @@ def normalize_trade_levels(
         decision.validation_warnings = list(dict.fromkeys(warnings))
         return decision
 
+    realism = _realism_inputs(technical_entry, adjusted_price_rows, time_horizon_months)
     if final_decision in LONG_DECISIONS:
         valid = _normalize_long(
             decision,
@@ -855,6 +975,7 @@ def normalize_trade_levels(
             price_data,
             normalized_volatility,
             target_rr,
+            realism,
         )
     elif final_decision in SHORT_DECISIONS:
         valid = _normalize_short(
@@ -865,6 +986,7 @@ def normalize_trade_levels(
             price_data,
             normalized_volatility,
             target_rr,
+            realism,
         )
     else:
         valid = False
@@ -885,7 +1007,7 @@ def normalize_trade_levels(
         trade_quality = "recomputed"
         llm_output_quality = "repaired" if _has_llm_repair_warning(warnings) else "ok"
     elif final_decision in ACTIONABLE_DECISIONS:
-        _downgrade_to_hold(decision, "Invalid or incomplete trade plan", warnings)
+        _downgrade_to_hold(decision, _invalid_plan_reason(warnings), warnings)
         decision.rebalancing_action = normalize_rebalancing_action(
             "Hold",
             resolved_has_existing_position,

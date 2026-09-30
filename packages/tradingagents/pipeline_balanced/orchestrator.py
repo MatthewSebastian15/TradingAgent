@@ -69,6 +69,7 @@ from tradingagents.pipeline_balanced.types import (
     ResearchPlanLite,
     RiskCommitteeReport,
 )
+from tradingagents.risk.market_risk_builder import build_market_risk
 from tradingagents.trade_levels import DEFAULT_TARGET_RR, normalize_trade_levels
 
 logger = logging.getLogger(__name__)
@@ -657,6 +658,16 @@ def aggregate_decision(
         price_data=data.price_data,
         data_quality=data.data_quality.model_dump(),
         target_risk_reward=context.config.get("target_risk_reward", DEFAULT_TARGET_RR),
+        technical_entry=getattr(data, "technical_entry", None),
+        adjusted_price_rows=(getattr(data, "price_performance", None) or {}).get(
+            "adjusted_price_history"
+        ),
+        time_horizon_months=getattr(context, "time_horizon_months", None),
+        historical_max_drawdown_pct=build_market_risk(
+            getattr(data, "price_chart", None),
+            getattr(data, "price_performance", None),
+            getattr(data, "technical_entry", None),
+        ).get("max_drawdown_percent"),
     )
     safety_context = getattr(data, "safety_prompt_context", None)
     if safety_context is not None:
