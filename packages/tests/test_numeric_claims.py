@@ -22,3 +22,11 @@ def test_matching_numbers_in_both_locales_and_scales_pass():
 def test_invented_numbers_are_reported_once():
     text = "Target 12,000 soon; analysts see 12,000 and a 38% upside."
     assert unverified_numbers(text, FACTS) == ["12,000", "38%"]
+
+
+def test_indicator_periods_are_not_flagged():
+    text = (
+        "Price is above the 50-day and 200-day averages, near the 52-week high, "
+        "and up over the past 90 days and 6 months."
+    )
+    assert unverified_numbers(text, FACTS) == []

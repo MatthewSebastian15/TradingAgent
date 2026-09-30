@@ -6,6 +6,7 @@ from typing import Any
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}(?:[T ][\d:.+\-Z]*)?\b")
 _TIME_RE = re.compile(r"\b\d{1,2}:\d{2}(?::\d{2})?\b")
 _RATIO_RE = re.compile(r"\b\d+\s?:\s?\d+\b")
+_PERIOD_RE = re.compile(r"\b\d+[- ]?(?:trading[- ])?(?:day|week|month|year)s?\b", re.IGNORECASE)
 _SCALES = {
     "k": 1e3,
     "thousand": 1e3,
@@ -51,7 +52,9 @@ def unverified_numbers(text: str, facts: dict[str, Any]) -> list[str]:
         for value in facts.values()
         if isinstance(value, (int, float)) and not isinstance(value, bool)
     ]
-    cleaned = _RATIO_RE.sub(" ", _TIME_RE.sub(" ", _DATE_RE.sub(" ", text or "")))
+    cleaned = _PERIOD_RE.sub(
+        " ", _RATIO_RE.sub(" ", _TIME_RE.sub(" ", _DATE_RE.sub(" ", text or "")))
+    )
     unmatched: list[str] = []
     for match in _TOKEN_RE.finditer(cleaned):
         raw, suffix = match.group(1).rstrip(".,"), (match.group(2) or "").strip().lower()

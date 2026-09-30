@@ -82,7 +82,11 @@ from tradingagents.pipeline_balanced.types import (
     RiskCommitteeReport,
 )
 from tradingagents.risk.market_risk_builder import build_market_risk
-from tradingagents.trade_levels import DEFAULT_TARGET_RR, normalize_trade_levels
+from tradingagents.trade_levels import (
+    DEFAULT_TARGET_RR,
+    apply_allocation_cap,
+    normalize_trade_levels,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -693,8 +697,20 @@ def aggregate_decision(
         confidence_cap = safety_context.data_quality.get("max_confidence")
         if confidence_cap is not None and portfolio_decision.confidence_score > confidence_cap:
             portfolio_decision.confidence_score = float(confidence_cap)
+            _recap_allocation(portfolio_decision, data)
 
     return portfolio_decision
+
+
+def _recap_allocation(decision: PortfolioDecision, data: Any) -> None:
+    """Re-size the allocation cap after a later step lowered the confidence score."""
+    if decision.allocation_cap_percent is None:
+        return
+    warnings = list(decision.validation_warnings or [])
+    volatility = getattr(decision.volatility_level, "value", decision.volatility_level)
+    earnings_days = (getattr(data, "technical_entry", None) or {}).get("earnings_within_days")
+    apply_allocation_cap(decision, str(volatility), earnings_days, warnings)
+    decision.validation_warnings = list(dict.fromkeys(warnings))
 
 
 def apply_decision_consistency(
@@ -1044,6 +1060,7 @@ def build_response(
     )
     if confidence_reconciled:
         portfolio_decision.confidence_score = reconciled_confidence
+        _recap_allocation(portfolio_decision, data)
     limitations = list(data.data_limitations or [])
     partial_fields = (
         {

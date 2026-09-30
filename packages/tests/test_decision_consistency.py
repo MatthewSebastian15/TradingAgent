@@ -82,3 +82,19 @@ def test_stage_downgrades_contradicted_buy():
     assert out.final_decision == "Hold"
     assert out.decision_adjusted is True
     assert any("contradicts" in w for w in out.validation_warnings)
+
+
+def test_allocation_is_recapped_when_confidence_drops_after_normalization():
+    decision = _decision(
+        final_decision="Buy",
+        volatility_level="Medium",
+        confidence_score=0.55,
+        suggested_allocation_percent=5.5,
+        allocation_cap_percent=5.5,
+    )
+    data = SimpleNamespace(technical_entry={})
+
+    orch._recap_allocation(decision, data)
+
+    assert decision.allocation_cap_percent == 3.5
+    assert decision.suggested_allocation_percent == 3.5

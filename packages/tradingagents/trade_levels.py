@@ -562,7 +562,7 @@ def _apply_entry_zone(
     decision.entry_zone_high = _round_price(current_price - 0.25 * atr, ticker, warnings)
 
 
-def _apply_allocation_cap(
+def apply_allocation_cap(
     decision: PortfolioDecision,
     volatility_level: str,
     earnings_within_days: float | None,
@@ -1073,7 +1073,7 @@ def normalize_trade_levels(
 
     if final_decision in ACTIONABLE_DECISIONS and valid:
         _ensure_drawdown(decision, normalized_volatility, warnings, historical_max_drawdown_pct)
-        _apply_allocation_cap(
+        apply_allocation_cap(
             decision,
             normalized_volatility,
             _number_or_none((technical_entry or {}).get("earnings_within_days")),
