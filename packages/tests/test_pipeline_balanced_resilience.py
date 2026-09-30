@@ -1152,6 +1152,7 @@ def test_balanced_debate_has_symmetric_openings_only():
         pipeline_timings={},
         progress_callback=None,
         cancel_check=None,
+        config={},
         llm_for=lambda name: llm,
     )
     report = AnalystReport(title="t", summary="s", key_points=["p"], risks=["r"], confidence=0.5)

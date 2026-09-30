@@ -332,8 +332,13 @@ def bear_prompt(
     market_md: str,
     news_social_md: str,
     fundamentals_md: str,
-    bull: DebateArgument,
+    bull: DebateArgument | None,
 ) -> str:
+    bull_section = (
+        f"\n\n[DYNAMIC BULL CASE TO CHALLENGE]\n{render_debate_argument(bull, 'Bull Researcher')}"
+        if bull is not None
+        else ""
+    )
     return f"""
 [STATIC ROLE]
 You are the Bear Researcher.
@@ -348,6 +353,7 @@ data, valuation risk, execution risk, and market risk.
 - Use incomplete data as a direct risk factor.
 - Challenge the bull case with evidence, not generic caution.
 - Explain where the bull case depends on weak or missing evidence.
+- When no bull case is supplied, build an independent opening case from the reports.
 
 {_dynamic_request_block(ticker, trade_date, time_horizon_text)}
 
@@ -363,10 +369,7 @@ data, valuation risk, execution risk, and market risk.
 {news_social_md}
 
 [DYNAMIC FUNDAMENTALS REPORT]
-{fundamentals_md}
-
-[DYNAMIC BULL CASE TO CHALLENGE]
-{render_debate_argument(bull, "Bull Researcher")}
+{fundamentals_md}{bull_section}
 """.strip()
 
 

@@ -6,7 +6,10 @@ orchestrator module at call time: use _orch._invoke_once, never a direct import.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import threading
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING, TypeVar
 
 from tradingagents.agents.schemas import DebateArgument, render_debate_argument
 from tradingagents.pipeline_balanced import orchestrator as _orch
@@ -25,6 +28,28 @@ from tradingagents.pipeline_balanced.types import (
 
 if TYPE_CHECKING:
     from tradingagents.pipeline_balanced.orchestrator import PipelineContext
+
+T = TypeVar("T")
+U = TypeVar("U")
+
+
+def _locked_callback(callback):
+    if callback is None:
+        return None
+    lock = threading.Lock()
+
+    def locked(event):
+        with lock:
+            callback(event)
+
+    return locked
+
+
+def _run_pair(config: dict, first: Callable[[], T], second: Callable[[], U]) -> tuple[T, U]:
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="balanced-debate") as pool:
+        first_future = pool.submit(_orch._run_with_config, config, first)
+        second_future = pool.submit(_orch._run_with_config, config, second)
+        return first_future.result(), second_future.result()
 
 
 def _run_debate_phase(
@@ -124,100 +149,53 @@ def _run_debate_phase(
             ]
         )
     else:
-        bull = _run_tracked(
-            progress_callback,
-            "bull_researcher",
-            "Bull Researcher is building the upside case...",
-            lambda: _orch._invoke_once(
-                bull_llm,
-                DebateArgument,
-                bull_prompt(
-                    ticker,
-                    trade_date,
-                    time_horizon_text,
-                    data_quality_json,
-                    market_md,
-                    news_social_md,
-                    fundamentals_md,
-                ),
-                DebateArgument(
-                    stance="bull",
-                    thesis=(
-                        f"The bullish case for {ticker} is not strong enough to rate confidently "
-                        "because model output failed."
-                    ),
-                    evidence=[
-                        "Market, news, and fundamental reports were collected.",
-                        "A complete bullish argument was not generated.",
-                    ],
-                    counterargument=(
-                        "The absence of a reliable bullish argument weakens any aggressive buy "
-                        + "decision."
-                    ),
-                    risk_flags=["Model output fallback used."],
-                    confidence=0.0,
-                    consensus_signal=False,
-                ),
-                "Bull Researcher",
-                llm_budget,
-                cancel_check,
-            ),
-            timings=pipeline_timings,
-        )
+        callback = _locked_callback(progress_callback)
 
-        bear = _run_tracked(
-            progress_callback,
-            "bear_researcher",
-            "Bear Researcher is challenging the thesis...",
-            lambda: _orch._invoke_once(
-                bear_llm,
-                DebateArgument,
-                bear_prompt(
-                    ticker,
-                    trade_date,
-                    time_horizon_text,
-                    data_quality_json,
-                    market_md,
-                    news_social_md,
-                    fundamentals_md,
-                    bull,
+        def bull_fallback(label: str) -> DebateArgument:
+            return DebateArgument(
+                stance="bull",
+                thesis=(
+                    f"The bullish case for {ticker} is not strong enough to rate confidently "
+                    "because model output failed."
                 ),
-                DebateArgument(
-                    stance="bear",
-                    thesis=(
-                        f"The bearish case for {ticker} is incomplete because model output "
-                        "failed, so risk should be treated cautiously."
-                    ),
-                    evidence=[
-                        "Market, news, and fundamental reports were collected.",
-                        "A complete bearish argument was not generated.",
-                    ],
-                    counterargument=(
-                        "Without a reliable bear case, the final decision should avoid "
-                        + "overconfidence."
-                    ),
-                    risk_flags=["Model output fallback used."],
-                    confidence=0.0,
-                    consensus_signal=False,
+                evidence=[
+                    "Market, news, and fundamental reports were collected.",
+                    f"A complete bullish argument was not generated ({label}).",
+                ],
+                counterargument=(
+                    "The absence of a reliable bullish argument weakens any aggressive buy "
+                    + "decision."
                 ),
-                "Bear Researcher",
-                llm_budget,
-                cancel_check,
-            ),
-            timings=pipeline_timings,
-        )
-        debate_history.extend(
-            [
-                render_debate_argument(bull, "Bull Researcher"),
-                render_debate_argument(bear, "Bear Researcher"),
-            ]
-        )
+                risk_flags=["Model output fallback used."],
+                confidence=0.0,
+                consensus_signal=False,
+            )
 
-        def _bull_rebuttal(round_number: int) -> DebateArgument:
+        def bear_fallback(label: str) -> DebateArgument:
+            return DebateArgument(
+                stance="bear",
+                thesis=(
+                    f"The bearish case for {ticker} is incomplete because model output "
+                    "failed, so risk should be treated cautiously."
+                ),
+                evidence=[
+                    "Market, news, and fundamental reports were collected.",
+                    f"A complete bearish argument was not generated ({label}).",
+                ],
+                counterargument=(
+                    "Without a reliable bear case, the final decision should avoid "
+                    + "overconfidence."
+                ),
+                risk_flags=["Model output fallback used."],
+                confidence=0.0,
+                consensus_signal=False,
+            )
+
+        def bull_call(label: str, suffix: str) -> DebateArgument:
             return _run_tracked(
-                progress_callback,
+                callback,
                 "bull_researcher",
-                f"Bull review round {round_number} is refining the upside case against the bear...",
+                f"{label} is building the upside case...",
                 lambda: _orch._invoke_once(
                     bull_llm,
                     DebateArgument,
@@ -230,37 +208,21 @@ def _run_debate_phase(
                         news_social_md,
                         fundamentals_md,
                     )
-                    + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
-                    DebateArgument(
-                        stance="bull",
-                        thesis=(
-                            f"Could not generate an additional bullish refinement for {ticker}."
-                        ),
-                        evidence=[
-                            "Prior analyst reports remain available.",
-                            "The prior debate remains available for review.",
-                        ],
-                        counterargument="No extra bullish refinement was generated.",
-                        risk_flags=["Debate rebuttal fallback used."],
-                        confidence=0.0,
-                        consensus_signal=False,
-                    ),
-                    f"Bull Researcher R{round_number}",
+                    + suffix,
+                    bull_fallback(label),
+                    label,
                     llm_budget,
                     cancel_check,
                 ),
                 timings=pipeline_timings,
             )
 
-        for round_number in range(2, extra_debate_rounds + 2):
-            bull = _bull_rebuttal(round_number)
-            debate_history.append(render_debate_argument(bull, f"Bull Researcher R{round_number}"))
-
-            bear = _run_tracked(
-                progress_callback,
+        def bear_call(label: str, suffix: str, bull_case: DebateArgument | None) -> DebateArgument:
+            return _run_tracked(
+                callback,
                 "bear_researcher",
-                f"Deep mode bear review round {round_number} is challenging the refined thesis...",
-                lambda bull=bull, round_number=round_number: _orch._invoke_once(
+                f"{label} is challenging the thesis...",
+                lambda: _orch._invoke_once(
                     bear_llm,
                     DebateArgument,
                     bear_prompt(
@@ -271,31 +233,45 @@ def _run_debate_phase(
                         market_md,
                         news_social_md,
                         fundamentals_md,
-                        bull,
+                        bull_case,
                     )
-                    + f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}",
-                    DebateArgument(
-                        stance="bear",
-                        thesis=(
-                            "Deep mode could not generate an additional bearish refinement "
-                            f"for {ticker}."
-                        ),
-                        evidence=[
-                            "Prior analyst reports remain available.",
-                            "The prior debate remains available for review.",
-                        ],
-                        counterargument="No extra bearish refinement was generated.",
-                        risk_flags=["Deep debate fallback used."],
-                        confidence=0.0,
-                        consensus_signal=False,
-                    ),
-                    f"Bear Researcher R{round_number}",
+                    + suffix,
+                    bear_fallback(label),
+                    label,
                     llm_budget,
                     cancel_check,
                 ),
                 timings=pipeline_timings,
             )
-            debate_history.append(render_debate_argument(bear, f"Bear Researcher R{round_number}"))
+
+        bull, bear = _run_pair(
+            context.config,
+            lambda: bull_call("Bull Researcher", ""),
+            lambda: bear_call("Bear Researcher", "", None),
+        )
+        debate_history.extend(
+            [
+                render_debate_argument(bull, "Bull Researcher"),
+                render_debate_argument(bear, "Bear Researcher"),
+            ]
+        )
+
+        for round_number in range(2, extra_debate_rounds + 2):
+            suffix = f"\n\nPrior debate to refine:\n{chr(10).join(debate_history)}"
+            previous_bull = bull
+            bull, bear = _run_pair(
+                context.config,
+                lambda n=round_number, s=suffix: bull_call(f"Bull Researcher R{n}", s),
+                lambda n=round_number, s=suffix, b=previous_bull: bear_call(
+                    f"Bear Researcher R{n}", s, b
+                ),
+            )
+            debate_history.extend(
+                [
+                    render_debate_argument(bull, f"Bull Researcher R{round_number}"),
+                    render_debate_argument(bear, f"Bear Researcher R{round_number}"),
+                ]
+            )
 
     return bull, bear, debate_history
 
