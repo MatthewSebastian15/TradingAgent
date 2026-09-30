@@ -69,6 +69,14 @@ def apply_guardrail(
             warnings.append("Action downgraded to WAIT: price data unavailable")
         return action, warnings
 
+    if context.data_quality.get("price_stale") and action in {"BUY", "SELL"}:
+        action = "WAIT"
+        warnings.append("Action downgraded to WAIT: price is stale for the analysis date")
+
+    if context.data_quality.get("price_conflict") and action in {"BUY", "SELL"}:
+        action = "WAIT"
+        warnings.append("Action downgraded to WAIT: live quote and OHLCV price conflict")
+
     if context.data_quality.get("historical_missing"):
         warnings.append("Technical confidence downgraded: historical data unavailable")
 

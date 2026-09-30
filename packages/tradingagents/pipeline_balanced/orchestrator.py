@@ -669,6 +669,9 @@ def aggregate_decision(
             _downgrade_decision_to_wait(
                 portfolio_decision, guardrail_warnings, has_existing_position
             )
+        confidence_cap = safety_context.data_quality.get("max_confidence")
+        if confidence_cap is not None and portfolio_decision.confidence_score > confidence_cap:
+            portfolio_decision.confidence_score = float(confidence_cap)
 
     return portfolio_decision
 
