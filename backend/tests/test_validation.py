@@ -31,6 +31,12 @@ def test_env_example_does_not_define_duplicate_keys():
     assert duplicates == []
 
 
+def test_dotenv_is_loaded_from_backend_root():
+    from config.env import BASE_DIR
+
+    assert BASE_DIR == Path(__file__).resolve().parents[1]
+
+
 def test_invalid_boolean_environment_value_is_rejected(monkeypatch):
     from config.env import env_bool
 
