@@ -308,7 +308,6 @@ class PipelineContext:
     analysis_depth: str
     depth_config: dict[str, Any]
     depth_debate_rounds: int
-    depth_risk_rounds: int
     extra_debate_rounds: int
     time_horizon_months: int
     time_horizon_text: str
@@ -376,9 +375,6 @@ def prepare_context(
     depth_debate_rounds = max(
         1, int(depth_config.get("debate_rounds") or config.get("analysis_depth_debate_rounds") or 1)
     )
-    depth_risk_rounds = max(
-        1, int(depth_config.get("risk_rounds") or config.get("analysis_depth_risk_rounds") or 1)
-    )
     extra_debate_rounds = max(0, depth_debate_rounds - 2) if analysis_depth == "deep" else 0
     time_horizon_months = _normalize_time_horizon_months(config.get("time_horizon_months", 1))
     time_horizon_text = _time_horizon_label(time_horizon_months)
@@ -396,7 +392,6 @@ def prepare_context(
         analysis_depth=analysis_depth,
         depth_config=depth_config,
         depth_debate_rounds=depth_debate_rounds,
-        depth_risk_rounds=depth_risk_rounds,
         extra_debate_rounds=extra_debate_rounds,
         time_horizon_months=time_horizon_months,
         time_horizon_text=time_horizon_text,
@@ -1016,7 +1011,6 @@ def build_response(
     analysis_depth = context.analysis_depth
     depth_config = context.depth_config
     depth_debate_rounds = context.depth_debate_rounds
-    depth_risk_rounds = context.depth_risk_rounds
     llm_budget = context.llm_budget
     pipeline_timings = context.pipeline_timings
     data = data_stage.data
@@ -1187,7 +1181,6 @@ def build_response(
         "analysis_depth": analysis_depth,
         "analysis_depth_config": depth_config,
         "analysis_depth_debate_rounds": depth_debate_rounds,
-        "analysis_depth_risk_rounds": depth_risk_rounds,
         "balanced_gemini_request_budget": llm_budget.limit,
         "balanced_gemini_calls_used": budget_snapshot["used"],
         "llm_call_budget": llm_budget.limit,

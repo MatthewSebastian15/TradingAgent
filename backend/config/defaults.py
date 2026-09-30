@@ -98,19 +98,16 @@ ANALYSIS_DEPTH_CONFIG: dict[str, dict[str, int]] = {
         "llm_budget": LLM_BUDGET_BY_ANALYSIS_DEPTH["fast"]["max_total_llm_calls"],
         "llm_retries": 1,
         "debate_rounds": 1,
-        "risk_rounds": 1,
     },
     "balanced": {
         "llm_budget": LLM_BUDGET_BY_ANALYSIS_DEPTH["balanced"]["max_total_llm_calls"],
         "llm_retries": 2,
         "debate_rounds": 2,
-        "risk_rounds": 2,
     },
     "deep": {
         "llm_budget": LLM_BUDGET_BY_ANALYSIS_DEPTH["deep"]["max_total_llm_calls"],
         "llm_retries": 3,
         "debate_rounds": 3,
-        "risk_rounds": 3,
     },
 }
 ANALYSIS_DEPTH_LLM_BUDGETS: dict[str, int] = {

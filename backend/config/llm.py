@@ -365,7 +365,6 @@ class LLMSettings:
             "analysis_depth": analysis_depth,
             "analysis_depth_config": dict(depth_config),
             "analysis_depth_debate_rounds": depth_config["debate_rounds"],
-            "analysis_depth_risk_rounds": depth_config["risk_rounds"],
             "response_detail": response_detail,
             "max_total_llm_calls": budget,
             "max_gemini_calls": budget,
@@ -399,7 +398,6 @@ def build_tradingagents_config(
     config["data_vendors"] = data_vendors
     depth_config = config.get("analysis_depth_config", {})
     depth_debate_rounds = int(depth_config.get("debate_rounds") or 1)
-    depth_risk_rounds = int(depth_config.get("risk_rounds") or 1)
     requested_rounds = (
         int(max_debate_rounds) if max_debate_rounds is not None else DEFAULT_MAX_DEBATE_ROUNDS
     )
@@ -407,8 +405,6 @@ def build_tradingagents_config(
         max(requested_rounds, depth_debate_rounds) if depth == "deep" else requested_rounds
     )
     config["max_debate_rounds"] = effective_rounds
-    config["max_risk_discuss_rounds"] = (
-        max(effective_rounds, depth_risk_rounds) if depth == "deep" else effective_rounds
-    )
+    config["max_risk_discuss_rounds"] = effective_rounds
     config["requested_max_debate_rounds"] = requested_rounds
     return config
