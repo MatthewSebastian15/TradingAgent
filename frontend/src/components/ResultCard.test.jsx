@@ -67,6 +67,23 @@ describe('ResultCard risk-engine contract', () => {
     expect(screen.getByText(/SOURCE CONFLICT/)).toBeTruthy();
   });
 
+  it('renders the entry zone and flags narrative numbers that could not be verified', () => {
+    render(
+      <ResultCard
+        result={{
+          ...TEST_HOLD_RESPONSE,
+          entry_zone_low: 98,
+          entry_zone_high: 99.5,
+          narrative_unverified_numbers: ['999'],
+          executive_summary: 'Summary text',
+        }}
+      />
+    );
+
+    expect(screen.getByText('ENTRY ZONE')).toBeTruthy();
+    expect(screen.getByText(/1 number in the narrative could not be matched/)).toBeTruthy();
+  });
+
   it('keeps the full disclaimer visible across all result tabs', async () => {
     render(<ResultCard result={TEST_RESPONSE} />);
 

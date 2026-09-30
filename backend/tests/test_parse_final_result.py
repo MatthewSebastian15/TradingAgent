@@ -602,3 +602,24 @@ def test_common_market_fields_pass_quote_freshness_through():
 
     assert fields["price_quote_check"] == check
     assert fields["price_delay_minutes"] == 15
+
+
+def test_portfolio_summary_fields_include_entry_zone_and_verification():
+    from types import SimpleNamespace
+
+    from services.analysis.serializers.trade_plan import _portfolio_summary_fields
+
+    pd_obj = SimpleNamespace(
+        entry_zone_low=98.0,
+        entry_zone_high=99.5,
+        allocation_cap_percent=2.5,
+        narrative_source="llm",
+        narrative_unverified_numbers=["999"],
+    )
+    fields = _portfolio_summary_fields("Hold", pd_obj, {})
+
+    assert fields["entry_zone_low"] == 98.0
+    assert fields["entry_zone_high"] == 99.5
+    assert fields["allocation_cap_percent"] == 2.5
+    assert fields["narrative_source"] == "llm"
+    assert fields["narrative_unverified_numbers"] == ["999"]

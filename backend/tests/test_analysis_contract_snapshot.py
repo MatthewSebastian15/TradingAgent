@@ -52,6 +52,11 @@ def test_analysis_summary_contract_includes_risk_engine_fields():
         "tab_status",
         "data_freshness",
         "confidence_breakdown",
+        "entry_zone_low",
+        "entry_zone_high",
+        "allocation_cap_percent",
+        "narrative_source",
+        "narrative_unverified_numbers",
     }
 
     assert expected_fields.issubset(SUMMARY_FIELDS)

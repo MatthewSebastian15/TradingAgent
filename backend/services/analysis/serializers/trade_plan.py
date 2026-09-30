@@ -221,6 +221,11 @@ def _portfolio_summary_fields(
         "key_reasons_paragraph": getattr(pd_obj, "key_reasons_paragraph", None),
         "key_catalysts": getattr(pd_obj, "key_catalysts", []) or [],
         "invalidation_conditions": getattr(pd_obj, "invalidation_conditions", []) or [],
+        "entry_zone_low": getattr(pd_obj, "entry_zone_low", None),
+        "entry_zone_high": getattr(pd_obj, "entry_zone_high", None),
+        "allocation_cap_percent": getattr(pd_obj, "allocation_cap_percent", None),
+        "narrative_source": getattr(pd_obj, "narrative_source", None),
+        "narrative_unverified_numbers": getattr(pd_obj, "narrative_unverified_numbers", []) or [],
     }
 
 

@@ -173,6 +173,13 @@ function buildResultViewModel(result) {
     quoteFreshnessOk: result.price_quote_check?.status === 'ok',
     newsFreshness: formatNewsFreshness(result),
     timeHorizon: formatAnalysisHorizon(result.time_horizon_months, result.time_horizon),
+    entryZone:
+      hasDisplayValue(result.entry_zone_low) && hasDisplayValue(result.entry_zone_high)
+        ? `${formatPrice(result.entry_zone_low, displayTicker, result.price_currency || result.currency)} – ${formatPrice(result.entry_zone_high, displayTicker, result.price_currency || result.currency)}`
+        : null,
+    unverifiedNumbers: Array.isArray(result.narrative_unverified_numbers)
+      ? result.narrative_unverified_numbers
+      : [],
     confidenceDisplay: formatConfidenceDisplay(
       result.confidence_score ?? null,
       result.confidence_label
@@ -338,6 +345,7 @@ function DecisionHero({ result, vm }) {
           )}
           {vm.priceAsOfLabel && <MetricBox label="PRICE AS OF" value={vm.priceAsOfLabel} />}
           {vm.timeHorizon && <MetricBox label="HORIZON" value={vm.timeHorizon} />}
+          {vm.entryZone && <MetricBox label="ENTRY ZONE" value={vm.entryZone} />}
           {vm.confidenceDisplay && (
             <MetricBox
               label="CONFIDENCE"
@@ -535,6 +543,14 @@ function AnalysisTab({
       {vm.budgetExhausted && <PipelineLimitNotice agentsSkipped={vm.agentsSkipped} />}
 
       <CatalystInvalidationGrid catalysts={vm.catalysts} invalidations={vm.invalidations} />
+
+      {vm.unverifiedNumbers.length > 0 && (
+        <NoticeBox title="NARRATIVE CHECK">
+          {`${vm.unverifiedNumbers.length} ${
+            vm.unverifiedNumbers.length === 1 ? 'number' : 'numbers'
+          } in the narrative could not be matched to source data: ${vm.unverifiedNumbers.join(', ')}. Rely on the metric boxes for exact values.`}
+        </NoticeBox>
+      )}
 
       <ExpandableTextSection
         label="EXECUTIVE SUMMARY"
