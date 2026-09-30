@@ -42,6 +42,14 @@ def test_news_rank_by_recency():
     assert rank_news(rows)[0]["title"] == "new"
 
 
+def test_news_rank_mixes_naive_and_aware_timestamps():
+    rows = [
+        {"title": "naive", "published_at": "2026-09-29T09:00:00"},
+        {"title": "aware", "published_at": "2026-09-29T10:00:00Z"},
+    ]
+    assert [row["title"] for row in rank_news(rows)] == ["aware", "naive"]
+
+
 def test_get_news_success_normalizes_items(monkeypatch):
     monkeypatch.setattr(
         "tradingagents.dataflows.providers.finnhub_news.make_api_request",

@@ -57,7 +57,8 @@ def _parse_dt(value: Any) -> datetime:
     if not text:
         return datetime.min.replace(tzinfo=timezone.utc)
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
     except ValueError:
         try:
             return datetime.strptime(text[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
