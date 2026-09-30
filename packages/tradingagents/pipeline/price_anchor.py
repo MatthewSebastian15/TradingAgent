@@ -76,6 +76,9 @@ def resolve_price_anchor(
         warnings.append("PRICE_UNAVAILABLE")
 
     anchor_date = _parse_date(as_of)
+    if quote_price is not None and quote.get("timestamp_is_fetch_time"):
+        # A fetch-time stamp says nothing about how old the price is; trust the OHLCV bar date.
+        anchor_date = _parse_date(ohlcv_as_of) or anchor_date
     deviation = None
     if quote_price is not None and ohlcv_price:
         if _parse_date(ohlcv_as_of) == anchor_date:

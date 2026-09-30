@@ -110,3 +110,20 @@ def test_live_quote_applies_only_near_today():
     assert live_quote_applies("2026-09-28", today=today) is True
     assert live_quote_applies("2026-06-01", today=today) is False
     assert live_quote_applies("garbage", today=today) is False
+
+
+def test_fetch_time_quote_uses_ohlcv_date_for_staleness():
+    quote = {
+        **QUOTE,
+        "timestamp": "2026-09-14T14:31:00+00:00",
+        "timestamp_is_fetch_time": True,
+    }
+    anchor = resolve_price_anchor(
+        live_quote=quote,
+        ohlcv_price=102.0,
+        ohlcv_as_of="2026-09-01",
+        ohlcv_source="yfinance:last_close",
+        trade_date="2026-09-14",
+    )
+    assert anchor["quote_check"]["price_stale"] is True
+    assert "PRICE_STALE" in anchor["warnings"]
