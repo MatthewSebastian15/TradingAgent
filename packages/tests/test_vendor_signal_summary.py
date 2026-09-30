@@ -68,3 +68,42 @@ def test_news_context_exposes_new_keys():
     context = build_news_context(data)
     assert context["insider_activity"]["open_market_buys"] == 1
     assert "vendor_sentiment" in context
+
+
+def test_fit_json_payload_keeps_valid_json_and_newest_rows():
+    from tradingagents.dataflows.news.vendor_signal_summary import fit_json_payload
+
+    rows = [
+        {"transactionCode": "S", "change": -1, "transactionDate": f"2026-{m:02d}-{d:02d}"}
+        for m in range(1, 9)
+        for d in range(1, 29)
+    ]
+    raw = json.dumps({"symbol": "AAPL", "insider_transactions": rows})
+    fitted = fit_json_payload(raw, 3_000)
+
+    payload = json.loads(fitted)
+    assert len(fitted) <= 3_000
+    assert payload["insider_transactions"][0]["transactionDate"] == "2026-08-28"
+    assert fit_json_payload("not json " * 1000, 100) == "not json " * 1000
+    assert fit_json_payload("{}", 100) == "{}"
+
+
+def test_news_context_puts_compact_signals_before_top_articles():
+    data = SimpleNamespace(
+        ticker="AAPL",
+        trade_date="2026-09-14",
+        time_horizon_months=1,
+        related_news={},
+        news_context={"top_articles": [{"title": "x" * 500}] * 8},
+        news_impact={},
+        catalyst_tracker={},
+        analyst_consensus={},
+        insider_transactions=INSIDER,
+        news_sentiment="",
+        social_sentiment="",
+        data_quality=SimpleNamespace(model_dump=lambda: {}),
+    )
+    keys = list(build_news_context(data))
+    assert keys.index("insider_activity") < keys.index("top_articles")
+    assert keys.index("vendor_sentiment") < keys.index("top_articles")
+    assert keys.index("analyst_consensus") < keys.index("top_articles")

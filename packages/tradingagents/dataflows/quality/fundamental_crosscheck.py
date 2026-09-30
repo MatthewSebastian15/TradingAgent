@@ -5,6 +5,7 @@ from typing import Any
 from tradingagents.dataflows.fundamentals.normalizers import unwrap_normalized_value
 
 SCALE_FACTORS = (1e3, 1e6, 1e9)
+_NO_PERIOD = {"", "unknown"}
 
 
 def _period_key(row: dict[str, Any]) -> tuple[str, str]:
@@ -28,10 +29,12 @@ def crosscheck_latest_fundamentals(
     tolerance_pct: float = 5.0,
 ) -> dict[str, Any]:
     secondary_by_period = {
-        _period_key(row): row for row in secondary_rows or [] if isinstance(row, dict)
+        _period_key(row): row
+        for row in secondary_rows or []
+        if isinstance(row, dict) and _period_key(row)[0] not in _NO_PERIOD
     }
     for row in reversed(primary_rows or []):
-        if not isinstance(row, dict) or not _period_key(row)[0]:
+        if not isinstance(row, dict) or _period_key(row)[0] in _NO_PERIOD:
             continue
         other = secondary_by_period.get(_period_key(row))
         if other is None:

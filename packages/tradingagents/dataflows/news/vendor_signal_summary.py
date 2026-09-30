@@ -15,6 +15,31 @@ def _load(raw: Any) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def fit_json_payload(raw: Any, limit: int) -> Any:
+    """Trim the largest list (newest first) so an oversized JSON payload stays valid JSON."""
+    if not isinstance(raw, str) or len(raw) <= limit:
+        return raw
+    payload = _load(raw)
+    if payload is None:
+        return raw
+    lists = [value for value in payload.values() if isinstance(value, list) and value]
+    if not lists:
+        return raw
+    rows = max(lists, key=lambda value: len(json.dumps(value, default=str)))
+    if all(isinstance(row, dict) for row in rows):
+        rows.sort(
+            key=lambda row: str(
+                row.get("transactionDate") or row.get("filingDate") or row.get("atTime") or ""
+            ),
+            reverse=True,
+        )
+    text = json.dumps(payload, default=str)
+    while len(text) > limit and rows:
+        rows[:] = rows[: int(len(rows) * limit / len(text) * 0.95)]
+        text = json.dumps(payload, default=str)
+    return text
+
+
 def summarize_insider_transactions(
     raw: Any, *, as_of: str, lookback_days: int = 90
 ) -> dict[str, Any]:

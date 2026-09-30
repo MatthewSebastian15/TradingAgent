@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import threading
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from tradingagents.agents.schemas import DebateArgument, render_debate_argument
@@ -48,10 +48,17 @@ def _locked_callback(callback):
 
 
 def _run_pair(config: dict, first: Callable[[], T], second: Callable[[], U]) -> tuple[T, U]:
-    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="balanced-debate") as pool:
+    pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="balanced-debate")
+    try:
         first_future = pool.submit(_orch._run_with_config, config, first)
         second_future = pool.submit(_orch._run_with_config, config, second)
+        wait([first_future, second_future], return_when=FIRST_EXCEPTION)
+        for future in (first_future, second_future):
+            if future.done() and future.exception() is not None:
+                raise future.exception()
         return first_future.result(), second_future.result()
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def _run_debate_phase(
@@ -289,6 +296,14 @@ def _risk_metrics(data: CollectedData) -> dict[str, Any]:
     return metrics
 
 
+def _fast_risk_level(bucket: str, price_data_status: str) -> str:
+    """Fast mode has no committee review, so the level never drops below the old default."""
+    default = "Medium" if price_data_status == "ok" else "High"
+    if _RISK_ORDER.get(bucket, -1) > _RISK_ORDER[default.lower()]:
+        return _RISK_LABELS[bucket]
+    return default
+
+
 def _enforce_risk_floor(report: RiskCommitteeReport, risk_bucket: str) -> RiskCommitteeReport:
     floor = _RISK_ORDER.get(str(risk_bucket).lower())
     current = _RISK_ORDER.get(str(report.overall_risk_level).lower())
@@ -346,9 +361,7 @@ def _run_risk_phase(
             "Skipped in fast mode; conservative risk fallback applied.",
         )
         risk_report = RiskCommitteeReport(
-            overall_risk_level=_RISK_LABELS.get(
-                bucket, "Medium" if data.data_quality.price_data == "ok" else "High"
-            ),
+            overall_risk_level=_fast_risk_level(bucket, data.data_quality.price_data),
             aggressive_view="Fast mode skips a separate aggressive risk debate to save LLM calls.",
             neutral_view=(
                 "Use the trader proposal with conservative sizing and verify manually before "

@@ -22,7 +22,7 @@ def test_us_ticker_gets_index_and_sector_relative_strength():
     context = build_benchmark_context(
         ticker="AAPL", sector="Technology", stock_price_csv=_csv(100.0, 1.0), fetch_price_csv=fetch
     )
-    assert fetched == ["^GSPC", "XLK"]
+    assert sorted(fetched) == ["XLK", "^GSPC"]
     assert context["benchmark"]["returns_percent"]["5d"] == 0.0
     assert context["benchmark"]["relative_strength_pts"]["5d"] > 0
     assert context["sector"]["sector"] == "Technology"
@@ -48,3 +48,21 @@ def test_unsupported_market_is_explicit():
         ticker="BTC-USD", sector=None, stock_price_csv="", fetch_price_csv=lambda s: ""
     )
     assert context["available"] is False
+
+
+def test_benchmark_and_sector_are_fetched_concurrently():
+    import threading
+
+    barrier = threading.Barrier(2)
+
+    def fetch(symbol: str) -> str:
+        barrier.wait(
+            timeout=5
+        )  # a sequential fetch breaks the barrier and marks the block unavailable
+        return _csv(100.0, 0.0)
+
+    context = build_benchmark_context(
+        ticker="AAPL", sector="Technology", stock_price_csv=_csv(100.0, 1.0), fetch_price_csv=fetch
+    )
+    assert context["benchmark"]["available"] is True
+    assert context["sector"]["available"] is True

@@ -131,6 +131,14 @@ def build_news_context(
         "strict_news_filter": news_context.get("strict_news_filter"),
         "limitations": news_context.get("limitations") or [],
         "average_sentiment": news_context.get("average_sentiment"),
+        "catalyst_tracker": _compact_mapping(data.catalyst_tracker, max_items=12),
+        "analyst_consensus": _compact_mapping(data.analyst_consensus, max_items=12),
+        "insider_activity": summarize_insider_transactions(
+            getattr(data, "insider_transactions", ""), as_of=data.trade_date
+        ),
+        "vendor_sentiment": summarize_vendor_sentiment(
+            getattr(data, "news_sentiment", ""), getattr(data, "social_sentiment", "")
+        ),
         "top_articles": news_context.get("top_articles")
         or news_context.get("prompt_articles")
         or news_context.get("decision_company_news")
@@ -140,14 +148,6 @@ def build_news_context(
         else None,
         "top_related_news": normalized_items,
         "news_impact": _compact_mapping(data.news_impact, max_items=12),
-        "catalyst_tracker": _compact_mapping(data.catalyst_tracker, max_items=12),
-        "analyst_consensus": _compact_mapping(data.analyst_consensus, max_items=12),
-        "insider_activity": summarize_insider_transactions(
-            getattr(data, "insider_transactions", ""), as_of=data.trade_date
-        ),
-        "vendor_sentiment": summarize_vendor_sentiment(
-            getattr(data, "news_sentiment", ""), getattr(data, "social_sentiment", "")
-        ),
         "market_context_news_count": len(news_context.get("market_context_news") or []),
     }
 

@@ -94,3 +94,41 @@ def test_fast_mode_uses_deterministic_bucket():
         data_quality_json="{}",
     )
     assert report.overall_risk_level == "High"
+
+
+def test_fast_mode_never_reports_low_risk_without_committee_review():
+    data = SimpleNamespace(
+        price_chart={},
+        price_performance={"max_drawdown_percent": -5.0},
+        technical_entry={},
+        price_quote_check={},
+        data_quality=SimpleNamespace(price_data="ok", warnings=[]),
+    )
+    assert _risk_metrics(data)["risk_bucket"] == "low"
+    context = SimpleNamespace(
+        ticker="AAPL",
+        trade_date="2026-09-14",
+        analysis_depth="fast",
+        time_horizon_text="1 month",
+        llm_budget=LLMBudget(limit=5),
+        pipeline_timings={},
+        progress_callback=None,
+        cancel_check=None,
+        llm_for=lambda name: None,
+    )
+    empty = AnalystReport(title="t", summary="s", key_points=[], risks=[], confidence=0.5)
+    report = _run_risk_phase(
+        context,
+        data=data,
+        market_report=empty,
+        news_social_report=empty,
+        fundamentals_report=empty,
+        market_md="",
+        news_social_md="",
+        fundamentals_md="",
+        debate_md="",
+        investment_plan="",
+        trader_plan="",
+        data_quality_json="{}",
+    )
+    assert report.overall_risk_level == "Medium"

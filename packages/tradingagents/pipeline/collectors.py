@@ -43,6 +43,7 @@ from tradingagents.dataflows.news.news_ticker_aliases import (
     register_news_ticker_metadata,
     reset_news_ticker_metadata,
 )
+from tradingagents.dataflows.news.vendor_signal_summary import fit_json_payload
 from tradingagents.dataflows.providers.config import get_config, set_config, use_config
 from tradingagents.dataflows.providers.interface import (
     collect_vendor_values,
@@ -427,27 +428,35 @@ def _build_collection_tasks(
         ),
         "insider_transactions": lambda: _safe_data_field(
             "insider_transactions",
-            lambda: route_to_vendor(
-                "get_insider_transactions",
-                ticker,
-                vendor_order=get_field_vendor_order("insider_transactions", ticker),
-                field_name="insider_transactions",
+            lambda: fit_json_payload(
+                route_to_vendor(
+                    "get_insider_transactions",
+                    ticker,
+                    vendor_order=get_field_vendor_order("insider_transactions", ticker),
+                    field_name="insider_transactions",
+                ),
+                20_000,
             ),
             limit=20_000,
         ),
         "news_sentiment": lambda: _safe_data_field(
             "news_sentiment",
-            lambda: route_to_vendor(
-                "get_news_sentiment",
-                ticker,
-                vendor_order=get_field_vendor_order("news_sentiment", ticker),
-                field_name="news_sentiment",
+            lambda: fit_json_payload(
+                route_to_vendor(
+                    "get_news_sentiment",
+                    ticker,
+                    vendor_order=get_field_vendor_order("news_sentiment", ticker),
+                    field_name="news_sentiment",
+                ),
+                8_000,
             ),
             limit=8_000,
         ),
         "social_sentiment": lambda: _safe_data_field(
             "social_sentiment",
-            lambda: route_to_vendor("get_social_sentiment", ticker, start_news, end),
+            lambda: fit_json_payload(
+                route_to_vendor("get_social_sentiment", ticker, start_news, end), 40_000
+            ),
             limit=40_000,
         ),
         "event_risk": lambda: _safe_data_field(
@@ -965,18 +974,21 @@ def collect_market_data(
     technical_history = price_runtime["technical_history"]
     technical_entry = price_runtime["technical_entry"]
     price_quote_check = price_runtime["price_quote_check"]
-    # ponytail: two sequential index fetches (~1-2s); fold into parallel batch if slow.
+    _check_cancel(cancel_check)
     benchmark_context = build_benchmark_context(
         ticker=ticker,
         sector=(company_profile or {}).get("sector") if isinstance(company_profile, dict) else None,
         stock_price_csv=price.value,
-        fetch_price_csv=lambda symbol: route_to_vendor(
-            "get_stock_data",
-            symbol,
-            start_price,
-            end,
-            vendor_order=["yfinance"],
-            field_name="historical_price",
+        fetch_price_csv=lambda symbol: _run_with_config(
+            config,
+            lambda: route_to_vendor(
+                "get_stock_data",
+                symbol,
+                start_price,
+                end,
+                vendor_order=["yfinance"],
+                field_name="historical_price",
+            ),
         ),
     )
     if price_runtime["price_anchor_warnings"]:

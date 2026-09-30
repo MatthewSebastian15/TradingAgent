@@ -88,3 +88,27 @@ def test_deep_rebuttals_are_symmetric_and_parallel():
     assert any(
         "You are the Bear Researcher" in p and "BULL CASE TO CHALLENGE" in p for p in rebuttals
     )
+
+
+def test_run_pair_raises_without_waiting_for_the_other_side():
+    import time
+
+    import pytest
+
+    from tradingagents.pipeline_balanced.debate import _run_pair
+
+    release = threading.Event()
+
+    def boom():
+        raise RuntimeError("cancelled")
+
+    def slow():
+        release.wait(5)
+        return 1
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError):
+        _run_pair({"llm_exact_cache_enabled": False}, boom, slow)
+    elapsed = time.monotonic() - started
+    release.set()
+    assert elapsed < 2

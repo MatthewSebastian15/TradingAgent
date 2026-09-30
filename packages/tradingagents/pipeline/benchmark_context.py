@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from tradingagents.dataflows.providers.source_priority import market_from_symbol
@@ -71,11 +72,11 @@ def build_benchmark_context(
     if benchmark is None:
         return {"available": False, "reason": f"No benchmark configured for market {market}."}
     stock_returns = _returns(_closes(stock_price_csv))
-    context: dict[str, Any] = {
-        "available": True,
-        "benchmark": _block(benchmark, fetch_price_csv, stock_returns),
-    }
     etf = US_SECTOR_ETFS.get(str(sector or "")) if market == "US" else None
+    symbols = [benchmark, *([etf] if etf else [])]
+    with ThreadPoolExecutor(max_workers=len(symbols)) as pool:
+        blocks = list(pool.map(lambda s: _block(s, fetch_price_csv, stock_returns), symbols))
+    context: dict[str, Any] = {"available": True, "benchmark": blocks[0]}
     if etf:
-        context["sector"] = {"sector": sector, **_block(etf, fetch_price_csv, stock_returns)}
+        context["sector"] = {"sector": sector, **blocks[1]}
     return context

@@ -60,3 +60,12 @@ def test_fundamentals_conflict_caps_confidence():
     assert action == "BUY"
     assert context.data_quality["max_confidence"] == 0.55
     assert any("fundamental sources disagree" in w for w in warnings)
+
+
+def test_unknown_period_labels_are_never_compared():
+    result = crosscheck_latest_fundamentals(
+        [_row("unknown", 1, 1)],
+        [_row("unknown", 1_000_000, 1_000_000)],
+        secondary_source="sec_companyfacts",
+    )
+    assert result["status"] == "skipped"
