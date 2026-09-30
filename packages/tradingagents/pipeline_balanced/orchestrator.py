@@ -1027,6 +1027,9 @@ def build_response(
         if data.last_close_price is not None
         else None,
         "price_is_fallback": bool(data.last_close_price_is_fallback),
+        "price_quote_check": data.price_quote_check or {},
+        "price_delay_minutes": (data.price_quote_check or {}).get("delay_minutes"),
+        "market_status": (data.price_quote_check or {}).get("market_state"),
         "analysis_depth": analysis_depth,
         "analysis_depth_config": depth_config,
         "analysis_depth_debate_rounds": depth_debate_rounds,

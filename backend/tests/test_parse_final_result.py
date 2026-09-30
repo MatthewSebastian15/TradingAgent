@@ -592,3 +592,13 @@ def test_parse_final_result_warns_when_portfolio_payload_falls_back(caplog):
         in parsed["warnings"]
     )
     assert "Portfolio decision payload could not be parsed" in caplog.text
+
+
+def test_common_market_fields_pass_quote_freshness_through():
+    from services.analysis.serializers.analysis import _build_common_market_fields
+
+    check = {"status": "ok", "delay_minutes": 15, "market_state": "open"}
+    fields = _build_common_market_fields({"price_quote_check": check, "price_delay_minutes": 15})
+
+    assert fields["price_quote_check"] == check
+    assert fields["price_delay_minutes"] == 15

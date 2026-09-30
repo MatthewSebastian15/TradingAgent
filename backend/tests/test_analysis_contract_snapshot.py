@@ -8,6 +8,8 @@ def test_analysis_summary_contract_includes_risk_engine_fields():
         "current_price",
         "current_price_as_of",
         "current_price_source",
+        "price_quote_check",
+        "price_delay_minutes",
         "llm_decision",
         "final_decision",
         "decision_adjusted",

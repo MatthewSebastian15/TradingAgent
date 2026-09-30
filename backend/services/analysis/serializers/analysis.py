@@ -44,6 +44,8 @@ SUMMARY_FIELDS = {
     "price_source",
     "price_timestamp",
     "price_is_fallback",
+    "price_quote_check",
+    "price_delay_minutes",
     "currency",
     "exchange",
     "normalized_ticker",
@@ -865,6 +867,8 @@ def _build_common_fundamental_fields(final_state: dict[str, Any]) -> dict[str, A
 
 def _build_common_market_fields(final_state: dict[str, Any]) -> dict[str, Any]:
     return {
+        "price_quote_check": final_state.get("price_quote_check") or {},
+        "price_delay_minutes": final_state.get("price_delay_minutes"),
         "price_chart": final_state.get("price_chart") or {},
         "price_performance": final_state.get("price_performance") or {},
         "technical_entry": final_state.get("technical_entry") or {},
