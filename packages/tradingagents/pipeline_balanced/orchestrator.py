@@ -24,8 +24,7 @@ from tradingagents.agents.schemas import (
     render_trader_proposal,
 )
 from tradingagents.dataflows.providers.config import set_config
-from tradingagents.dataflows.providers.y_finance import normalize_ticker
-from tradingagents.graph.run_cache import SHORT_LIVED_TICKER_CACHE, RunCache
+from tradingagents.graph.run_cache import RunCache
 from tradingagents.llm_clients.router import apply_guardrail, llm_metadata
 from tradingagents.llm_optimization.usage import get_usage_summary, reset_usage
 from tradingagents.pipeline.orchestrator import (
@@ -65,7 +64,6 @@ from tradingagents.pipeline_balanced.prompts import (
 )
 from tradingagents.pipeline_balanced.types import (
     AnalystReport,
-    CollectedData,
     LLMBudget,
     ProgressCallback,
     ResearchPlanLite,
@@ -401,9 +399,7 @@ def prepare_context(
     )
 
 
-def collect_market_data(
-    context: PipelineContext, cached_data: CollectedData | None = None
-) -> MarketDataStageResult:
+def collect_market_data(context: PipelineContext) -> MarketDataStageResult:
     ticker = context.ticker
     trade_date = context.trade_date
     config = context.config
@@ -420,11 +416,7 @@ def collect_market_data(
         progress_callback,
         "data_collection",
         "Collecting yfinance prices, indicators, fundamentals, news, and insider data...",
-        lambda: (
-            cached_data
-            if cached_data is not None
-            else _collect_raw_market_data(ticker, trade_date, config, cancel_check=cancel_check)
-        ),
+        lambda: _collect_raw_market_data(ticker, trade_date, config, cancel_check=cancel_check),
         cancel_check=cancel_check,
         timings=pipeline_timings,
     )
@@ -1057,8 +1049,6 @@ def run_balanced_pipeline(
 ) -> dict[str, Any]:
     """Run the balanced pipeline through explicit maintainable stages."""
     reset_usage()
-    normalized_ticker = normalize_ticker(ticker)
-    cached_data = SHORT_LIVED_TICKER_CACHE.get(normalized_ticker, trade_date)
     run_cache = RunCache(
         str(
             config.get("job_id")
@@ -1079,9 +1069,7 @@ def run_balanced_pipeline(
             position_quantity=position_quantity,
             average_entry_price=average_entry_price,
         )
-        data_stage = collect_market_data(context, cached_data=cached_data)
-        if cached_data is None:
-            SHORT_LIVED_TICKER_CACHE.set(normalized_ticker, trade_date, data_stage.data)
+        data_stage = collect_market_data(context)
         agent_stage = run_agents(context, data_stage)
         portfolio_decision = aggregate_decision(context, data_stage, agent_stage)
         portfolio_decision = run_self_critique(context, data_stage, portfolio_decision)
