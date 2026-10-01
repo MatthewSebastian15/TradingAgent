@@ -51,6 +51,8 @@ export default defineConfig(({ mode }) => {
       host: viteHost,
       port: vitePort,
       strictPort: true,
+      // Bind-mounted sources on Docker Desktop (Windows) don't emit inotify events.
+      watch: env.VITE_USE_POLLING === 'true' ? { usePolling: true } : undefined,
       proxy: {
         '/api': {
           target: backendProxyTarget,

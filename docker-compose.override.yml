@@ -1,0 +1,22 @@
+# Auto-merged by a plain `docker compose up`: live-reload dev setup, no --build needed
+# for source edits. For the production-like nginx image use:
+#   docker compose -f docker-compose.yml up --build
+services:
+  backend:
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+
+  frontend:
+    build:
+      target: dev
+    command: npm run dev
+    environment:
+      VITE_DEV_HOST: 0.0.0.0
+      VITE_USE_POLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
