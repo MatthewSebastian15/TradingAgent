@@ -41,7 +41,7 @@ describe('App', () => {
     // 1000ms findBy default for heavy pages, so wait longer. The page has no
     // heading element; its empty state renders the RESEARCH marker text.
     expect(await screen.findByText(/■ RESEARCH/, {}, { timeout: 5000 })).toBeTruthy();
-    expect(screen.getByText(/Enter a ticker to load stock overview/i)).toBeTruthy();
+    expect(screen.getByText(/Enter a ticker above to load its overview/i)).toBeTruthy();
   }, 10000);
 
   it('registers the Watchlist route', async () => {
