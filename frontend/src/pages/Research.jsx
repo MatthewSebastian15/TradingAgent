@@ -330,11 +330,12 @@ function PriceChartCard({
 }) {
   const points = useMemo(() => ohlcvData?.points || [], [ohlcvData]);
   // Last range that had a drawable chart; kept on screen (faded) while the next range loads.
-  const [last, setLast] = useState({ points: [], range: activeRange });
+  const pointsRange = ohlcvData?.range ?? activeRange;
+  const [last, setLast] = useState({ points: [], range: pointsRange });
   useEffect(() => {
-    if (points.length >= 2) setLast({ points, range: activeRange });
-  }, [points, activeRange]);
-  const shown = ohlcvLoading ? last : { points, range: activeRange };
+    if (points.length >= 2) setLast({ points, range: pointsRange });
+  }, [points, pointsRange]);
+  const shown = ohlcvLoading ? last : { points, range: pointsRange };
   const referenceLines = [
     { value: ma50, label: 'MA50', color: '#3b82f6', testId: 'research-ma50-line' },
     { value: ma200, label: 'MA200', color: '#06b6d4', testId: 'research-ma200-line' },
@@ -360,6 +361,7 @@ function PriceChartCard({
       <div className="relative">
         <div
           data-testid="price-chart-body"
+          data-range={shown.range}
           className={`transition-opacity duration-200 motion-reduce:transition-none ${
             ohlcvLoading ? 'opacity-40' : 'opacity-100'
           }`}
@@ -422,7 +424,7 @@ function Range52WCard({ data, loading }) {
   const vsMa200 = price && ma200 ? ((price - ma200) / ma200) * 100 : null;
 
   return (
-    <SectionCard title="52W RANGE" busy={loading || !data}>
+    <SectionCard title="52W RANGE" busy={loading}>
       {loading || !data ? (
         Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
@@ -471,7 +473,7 @@ function TradingDataCard({ data, loading }) {
       : null;
 
   return (
-    <SectionCard title="TRADING DATA" busy={loading || !data}>
+    <SectionCard title="TRADING DATA" busy={loading}>
       {loading || !data
         ? Array.from({ length: 9 }).map((_, i) => <SkeletonRow key={i} />)
         : [
@@ -507,7 +509,7 @@ TradingDataCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
 
 function QuickStatsCard({ data, loading }) {
   return (
-    <SectionCard title="QUICK STATS" busy={loading || !data}>
+    <SectionCard title="QUICK STATS" busy={loading}>
       {loading || !data
         ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)
         : [
@@ -529,7 +531,7 @@ QuickStatsCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
 
 function ValuationCard({ data, loading }) {
   return (
-    <SectionCard title="VALUATION MULTIPLES" busy={loading || !data}>
+    <SectionCard title="VALUATION MULTIPLES" busy={loading}>
       {loading || !data
         ? Array.from({ length: 9 }).map((_, i) => <SkeletonRow key={i} />)
         : [
@@ -579,7 +581,7 @@ function AnalystConsensusCard({ data, loading }) {
       : null;
 
   return (
-    <SectionCard title="ANALYST CONSENSUS" busy={loading || !data}>
+    <SectionCard title="ANALYST CONSENSUS" busy={loading}>
       {loading || !data ? (
         <>
           <StatBlockSkeleton />
@@ -638,7 +640,7 @@ AnalystConsensusCard.propTypes = { data: PropTypes.object, loading: PropTypes.bo
 function DividendsCard({ data, loading }) {
   const yield_ = data?.dividend_yield;
   return (
-    <SectionCard title="DIVIDENDS & YIELD" busy={loading || !data}>
+    <SectionCard title="DIVIDENDS & YIELD" busy={loading}>
       {loading || !data ? (
         <>
           <StatBlockSkeleton />
@@ -680,7 +682,7 @@ function ProfitabilityCard({ data, loading }) {
     ['ROE', data?.roe],
   ];
   return (
-    <SectionCard title="PROFITABILITY" busy={loading || !data}>
+    <SectionCard title="PROFITABILITY" busy={loading}>
       {loading || !data
         ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
         : metrics.map(([label, val]) => {
@@ -705,7 +707,7 @@ ProfitabilityCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool 
 
 function GrowthIncomeCard({ data, loading }) {
   return (
-    <SectionCard title="GROWTH & INCOME" busy={loading || !data}>
+    <SectionCard title="GROWTH & INCOME" busy={loading}>
       {loading || !data ? (
         Array.from({ length: 12 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
@@ -756,7 +758,7 @@ GrowthIncomeCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool }
 
 function BalanceSheetCard({ data, loading }) {
   return (
-    <SectionCard title="BALANCE SHEET" busy={loading || !data}>
+    <SectionCard title="BALANCE SHEET" busy={loading}>
       {loading || !data
         ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
         : [
@@ -785,7 +787,7 @@ function SharesOwnershipCard({ data, loading }) {
   const publicPct = Math.max(0, 100 - insider - institution);
 
   return (
-    <SectionCard title="SHARES & OWNERSHIP" busy={loading || !data}>
+    <SectionCard title="SHARES & OWNERSHIP" busy={loading}>
       {loading || !data ? (
         Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
@@ -834,7 +836,7 @@ SharesOwnershipCard.propTypes = { data: PropTypes.object, loading: PropTypes.boo
 
 function RiskAssessmentCard({ data, loading }) {
   return (
-    <SectionCard title="RISK ASSESSMENT" busy={loading || !data}>
+    <SectionCard title="RISK ASSESSMENT" busy={loading}>
       {loading || !data
         ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
         : [
@@ -1060,7 +1062,8 @@ export default function Research() {
       signal,
     });
     if (r.ok === false) throw new Error(`OHLCV request failed (${r.status})`);
-    const d = await r.json();
+    // Tag the payload with its own range so the chart never mislabels data mid-switch.
+    const d = { ...(await r.json()), range };
     ohlcvCacheRef.current.set(cacheKey, d);
     return d;
   }, []);

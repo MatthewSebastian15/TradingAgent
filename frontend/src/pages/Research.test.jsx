@@ -508,6 +508,26 @@ describe('Research page', () => {
     });
   });
 
+  describe('failed overview load', () => {
+    const original = useStockOverview.getMockImplementation();
+    afterEach(() => useStockOverview.mockImplementation(original));
+
+    it('does not leave the cards aria-busy after the load failed', async () => {
+      useStockOverview.mockImplementation(() => ({
+        loading: false,
+        error: 'boom',
+        retry: vi.fn(),
+        data: null,
+      }));
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      const { container } = render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      await screen.findByText('NO CHART DATA'); // OHLCV fetch settled
+      expect(container.querySelectorAll('[aria-busy="true"]').length).toBe(0);
+    });
+  });
+
   describe('price chart range transition', () => {
     const original = useStockOverview.getMockImplementation();
     afterEach(() => useStockOverview.mockImplementation(original));
@@ -534,6 +554,22 @@ describe('Research page', () => {
       const body = screen.getByTestId('price-chart-body');
       expect(body.className).toMatch(/opacity-40/);
       expect(body.className).toMatch(/motion-reduce:transition-none/);
+    });
+
+    it('keeps labelling the faded chart with the range its data belongs to', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation((url) =>
+        String(url).includes('range=1M')
+          ? new Promise(() => {})
+          : Promise.resolve({ ok: true, json: async () => ({ points: candles }) })
+      );
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+      await screen.findAllByText('VOLUME');
+      expect(screen.getByTestId('price-chart-body').getAttribute('data-range')).toBe('1Y');
+
+      fireEvent.click(screen.getByRole('button', { name: '1M' }));
+
+      expect(screen.getByTestId('price-chart-body').getAttribute('data-range')).toBe('1Y');
     });
   });
 
