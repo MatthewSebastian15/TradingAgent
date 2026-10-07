@@ -424,7 +424,7 @@ function Range52WCard({ data, loading }) {
   return (
     <SectionCard title="52W RANGE" busy={loading || !data}>
       {loading || !data ? (
-        Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
+        Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
         <>
           {posPct !== null && (
@@ -583,7 +583,7 @@ function AnalystConsensusCard({ data, loading }) {
       {loading || !data ? (
         <>
           <StatBlockSkeleton />
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: 9 }).map((_, i) => (
             <SkeletonRow key={i} />
           ))}
         </>
@@ -642,7 +642,7 @@ function DividendsCard({ data, loading }) {
       {loading || !data ? (
         <>
           <StatBlockSkeleton />
-          {Array.from({ length: 3 }).map((_, i) => (
+          {Array.from({ length: 9 }).map((_, i) => (
             <SkeletonRow key={i} />
           ))}
         </>
@@ -707,7 +707,7 @@ function GrowthIncomeCard({ data, loading }) {
   return (
     <SectionCard title="GROWTH & INCOME" busy={loading || !data}>
       {loading || !data ? (
-        Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
+        Array.from({ length: 12 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
         <>
           <GrowthSparkline ticker={data.ticker} />
@@ -787,7 +787,7 @@ function SharesOwnershipCard({ data, loading }) {
   return (
     <SectionCard title="SHARES & OWNERSHIP" busy={loading || !data}>
       {loading || !data ? (
-        Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
+        Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
         <>
           <DataRow label="SHARES OUT" value={fmtLarge(data.shares_outstanding)} />

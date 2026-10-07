@@ -53,7 +53,7 @@ export function SkeletonRow() {
   return (
     <div className="flex justify-between items-center px-3 py-[5px] border-b border-bloomberg-border last:border-0">
       <Skeleton className="h-3 w-20" />
-      <Skeleton className="h-3 w-16" />
+      <Skeleton className="h-4 w-16" />
     </div>
   );
 }

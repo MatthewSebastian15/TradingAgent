@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { MarginBar, RangeDot, SectionCard, Skeleton } from './primitives';
+import { MarginBar, RangeDot, SectionCard, Skeleton, SkeletonRow } from './primitives';
 
 describe('research primitives', () => {
   afterEach(cleanup);
@@ -39,5 +39,13 @@ describe('research primitives', () => {
   it('hides the decorative MarginBar from assistive tech', () => {
     const { container } = render(<MarginBar pct={20} />);
     expect(container.firstChild.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('sizes a SkeletonRow to the same box as a DataRow (py-5 + 16px line)', () => {
+    const { container } = render(<SkeletonRow />);
+    const [label, value] = container.firstChild.children;
+    expect(container.firstChild.className).toMatch(/py-\[5px\]/);
+    expect(label.className).toMatch(/h-3/);
+    expect(value.className).toMatch(/h-4/);
   });
 });
