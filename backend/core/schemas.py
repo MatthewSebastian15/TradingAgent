@@ -543,6 +543,7 @@ class SymbolValidationResponse(ApiSchema):
 
 class StockOverviewResponse(ApiSchema):
     ticker: str
+    data_quality: Literal["complete", "partial", "unavailable"] | None = None
     name: str | None = None
     sector: str | None = None
     industry: str | None = None

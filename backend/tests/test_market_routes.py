@@ -406,3 +406,31 @@ def test_stock_overview_forwards_force_refresh_query(client, monkeypatch):
 
 def test_stock_overview_route_has_no_local_cache_dict():
     assert not hasattr(market_routes, "_OVERVIEW_CACHE")
+
+
+def test_stock_overview_rejects_malformed_ticker_before_vendor_call(client, monkeypatch):
+    def must_not_run(*_args, **_kwargs):
+        raise AssertionError("vendor path must not run for an invalid ticker")
+
+    monkeypatch.setattr(market_routes, "get_stock_overview", must_not_run)
+
+    too_long = client.get("/api/market/stock-overview?ticker=" + "x" * 25)
+    bad_chars = client.get("/api/market/stock-overview?ticker=AAPL;DROP")
+
+    assert too_long.status_code == 400
+    assert bad_chars.status_code == 400
+    assert too_long.json()["error"]["code"] == "BAD_REQUEST"
+    assert "ticker" in too_long.json()["error"]["details"]["fields"]
+
+
+def test_stock_overview_accepts_common_symbol_shapes(client, monkeypatch):
+    monkeypatch.setattr(
+        market_routes,
+        "get_stock_overview",
+        lambda symbol, *, force_refresh=False: {"ticker": symbol},
+    )
+
+    for symbol in ("AAPL", "BBCA.JK", "^GSPC", "BRK-B", "BTC-USD"):
+        response = client.get(f"/api/market/stock-overview?ticker={symbol}")
+        assert response.status_code == 200, symbol
+        assert response.json()["ticker"] == symbol

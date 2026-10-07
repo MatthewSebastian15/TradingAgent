@@ -398,12 +398,25 @@ def _build_stock_overview_from_alpha_vantage(symbol: str) -> dict[str, Any]:
     return {key: value for key, value in fields.items() if value is not None}
 
 
+def _with_data_quality(overview: dict[str, Any]) -> dict[str, Any]:
+    """complete: required fields present; unavailable: no price and no name at all;
+    partial: anything in between (some vendor answered but gaps remain)."""
+    if _has_required_fields(overview):
+        overview["data_quality"] = "complete"
+    elif overview.get("price") is None and overview.get("name") is None:
+        overview["data_quality"] = "unavailable"
+    else:
+        overview["data_quality"] = "partial"
+    return overview
+
+
 def build_stock_overview_with_fallback(symbol: str) -> dict[str, Any]:
     """yfinance first; when it is circuit-broken or leaves required fields empty, fill
-    the gaps from Finnhub then Alpha Vantage. Best effort: never raises."""
+    the gaps from Finnhub then Alpha Vantage. Best effort: never raises. The result
+    carries `data_quality` ("complete" | "partial" | "unavailable")."""
     overview = _try_vendor("yfinance", lambda: build_stock_overview(symbol))
     if overview and _has_required_fields(overview):
-        return overview
+        return _with_data_quality(overview)
 
     for vendor, fetch in (
         ("finnhub", lambda: _build_stock_overview_from_finnhub(symbol)),
@@ -413,8 +426,8 @@ def build_stock_overview_with_fallback(symbol: str) -> dict[str, Any]:
         if fallback:
             overview = _merge_overview(overview or {"ticker": symbol}, fallback)
             if _has_required_fields(overview):
-                return overview
-    return overview or {"ticker": symbol}
+                break
+    return _with_data_quality(overview or {"ticker": symbol})
 
 
 def get_stock_overview(symbol: str, *, force_refresh: bool = False) -> dict[str, Any]:

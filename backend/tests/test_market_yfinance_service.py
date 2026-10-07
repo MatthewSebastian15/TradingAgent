@@ -295,3 +295,36 @@ def test_alpha_vantage_adapter_maps_overview_and_quote(monkeypatch):
     assert result["price"] == 101.5
     assert result["name"] == "Apple Inc"
     assert result["market_cap"] == 3e12
+
+
+def test_fallback_marks_complete_when_required_fields_present(monkeypatch, fresh_breakers):
+    monkeypatch.setattr(service, "build_stock_overview", lambda s: {"ticker": s, **_COMPLETE})
+
+    assert service.build_stock_overview_with_fallback("AAPL")["data_quality"] == "complete"
+
+
+def test_fallback_marks_unavailable_when_nothing_usable(monkeypatch, fresh_breakers):
+    monkeypatch.setattr(service, "build_stock_overview", lambda s: {"ticker": s, "price": None})
+    monkeypatch.setattr(service, "_build_stock_overview_from_finnhub", lambda s: None)
+    monkeypatch.setattr(service, "_build_stock_overview_from_alpha_vantage", lambda s: None)
+
+    assert service.build_stock_overview_with_fallback("AAPL")["data_quality"] == "unavailable"
+
+
+def test_fallback_marks_unavailable_when_every_vendor_raises(monkeypatch, fresh_breakers):
+    def boom(_symbol):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(service, "build_stock_overview", boom)
+    monkeypatch.setattr(service, "_build_stock_overview_from_finnhub", boom)
+    monkeypatch.setattr(service, "_build_stock_overview_from_alpha_vantage", boom)
+
+    assert service.build_stock_overview_with_fallback("AAPL")["data_quality"] == "unavailable"
+
+
+def test_fallback_marks_partial_when_only_price_found(monkeypatch, fresh_breakers):
+    monkeypatch.setattr(service, "build_stock_overview", lambda s: None)
+    monkeypatch.setattr(service, "_build_stock_overview_from_finnhub", lambda s: {"price": 100.0})
+    monkeypatch.setattr(service, "_build_stock_overview_from_alpha_vantage", lambda s: None)
+
+    assert service.build_stock_overview_with_fallback("AAPL")["data_quality"] == "partial"
