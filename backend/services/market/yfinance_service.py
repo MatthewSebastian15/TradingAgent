@@ -434,19 +434,34 @@ def build_stock_overview_with_fallback(symbol: str) -> dict[str, Any]:
     return _with_data_quality(overview or {"ticker": symbol})
 
 
+def swr_cached_with_degraded_ttl(
+    cache_key: str,
+    fetch: Callable[[], Any],
+    ttl: float,
+    *,
+    degraded_ttl: float,
+    is_degraded: Callable[[Any], bool],
+    force_refresh: bool = False,
+) -> Any:
+    """SWR read that re-caches a freshly fetched *degraded* result (partial/unavailable)
+    with a short TTL, so a vendor hiccup is retried soon instead of pinned for *ttl*."""
+    value, from_cache = _swr_cached(cache_key, fetch, ttl, force_refresh=force_refresh)
+    if not from_cache and is_degraded(value):
+        market_cache.set(cache_key, value, degraded_ttl)
+    return value
+
+
 def get_stock_overview(symbol: str, *, force_refresh: bool = False) -> dict[str, Any]:
     """SWR-cached wrapper around build_stock_overview_with_fallback. Concurrent
     requests for the same symbol coalesce into one vendor round trip via the per-key lock."""
-    cache_key = f"fundamentals:{symbol}"
-    value, from_cache = _swr_cached(
-        cache_key,
+    return swr_cached_with_degraded_ttl(
+        f"fundamentals:{symbol}",
         lambda: build_stock_overview_with_fallback(symbol),
         FUNDAMENTALS_TTL_SECONDS,
+        degraded_ttl=DEGRADED_FUNDAMENTALS_TTL_SECONDS,
+        is_degraded=lambda value: value.get("data_quality") != "complete",
         force_refresh=force_refresh,
     )
-    if not from_cache and value.get("data_quality") != "complete":
-        market_cache.set(cache_key, value, DEGRADED_FUNDAMENTALS_TTL_SECONDS)
-    return value
 
 
 def get_quote_lite_cached(symbol: str) -> dict[str, Any]:

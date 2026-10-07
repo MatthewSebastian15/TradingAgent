@@ -8,7 +8,7 @@ import re
 from collections import OrderedDict
 from datetime import datetime
 from time import monotonic
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request
 
@@ -24,12 +24,14 @@ from core.schemas import (
     SymbolValidationResponse,
 )
 from core.security.rate_limiter import RateLimitPolicy, limit_request
+from services.market.financials_service import get_financials_cached
 from services.market.ohlcv_service import (
     OHLCV_RANGE_OPTIONS,
     fetch_ohlcv_range,
     parse_ohlcv_trade_date,
 )
 from services.market.search_index import get_popular_tickers, search_local_tickers
+from services.market.technicals_service import get_technicals_cached
 from services.market.yfinance_service import (
     _fetch_quote,
     dedupe_symbols,
@@ -291,6 +293,29 @@ async def get_quote_lite(
     async with _market_data_limit(request):
         normalized = _normalize_quote_symbol(ticker)
         return await asyncio.to_thread(get_quote_lite_cached, normalized)
+
+
+@router.get("/market/financials", tags=["market"])
+async def get_financials_data(
+    request: Request,
+    ticker: str = Query(..., min_length=1, description="Ticker symbol, e.g. BBCA.JK"),
+    statement: Literal["income", "balance"] = Query(default="income"),
+) -> dict[str, Any]:
+    """Income or balance-sheet key figures per period (FY23 onwards)."""
+    async with _market_data_limit(request):
+        normalized = _normalize_quote_symbol(ticker)
+        return await asyncio.to_thread(get_financials_cached, normalized, statement)
+
+
+@router.get("/market/technicals", tags=["market"])
+async def get_technicals_data(
+    request: Request,
+    ticker: str = Query(..., min_length=1, description="Ticker symbol, e.g. BBCA.JK"),
+) -> dict[str, Any]:
+    """RSI/MACD/trend/SMA/support-resistance/entry-quality from daily OHLCV."""
+    async with _market_data_limit(request):
+        normalized = _normalize_quote_symbol(ticker)
+        return await asyncio.to_thread(get_technicals_cached, normalized)
 
 
 _QUOTE_FETCH_TIMEOUT_SECONDS = 12.0
