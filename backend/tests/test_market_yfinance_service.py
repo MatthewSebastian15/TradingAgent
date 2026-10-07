@@ -78,7 +78,7 @@ def test_get_stock_overview_uses_cache_within_ttl(monkeypatch):
         calls["n"] += 1
         return {"ticker": symbol, "price": 100.0 + calls["n"]}
 
-    monkeypatch.setattr(service, "build_stock_overview", fake_build)
+    monkeypatch.setattr(service, "build_stock_overview_with_fallback", fake_build)
 
     first = service.get_stock_overview("AAPL")
     second = service.get_stock_overview("AAPL")
@@ -95,7 +95,7 @@ def test_get_stock_overview_force_refresh_bypasses_cache(monkeypatch):
         calls["n"] += 1
         return {"ticker": symbol, "price": 100.0 + calls["n"]}
 
-    monkeypatch.setattr(service, "build_stock_overview", fake_build)
+    monkeypatch.setattr(service, "build_stock_overview_with_fallback", fake_build)
 
     service.get_stock_overview("AAPL")
     refreshed = service.get_stock_overview("AAPL", force_refresh=True)
@@ -116,7 +116,7 @@ def test_get_stock_overview_coalesces_concurrent_requests(monkeypatch):
         release.wait(timeout=2)
         return {"ticker": symbol, "price": 100.0}
 
-    monkeypatch.setattr(service, "build_stock_overview", fake_build)
+    monkeypatch.setattr(service, "build_stock_overview_with_fallback", fake_build)
 
     results: list[dict] = []
     threads = [
@@ -132,3 +132,166 @@ def test_get_stock_overview_coalesces_concurrent_requests(monkeypatch):
     assert calls["n"] == 1
     assert len(results) == 5
     assert all(r == {"ticker": "AAPL", "price": 100.0} for r in results)
+
+
+# ── Phase 3: vendor fallback + circuit breaker ────────────────────────────────
+
+import pytest  # noqa: E402
+
+_COMPLETE = {"price": 100.0, "name": "Apple Inc."}
+
+
+@pytest.fixture()
+def fresh_breakers():
+    from tradingagents.utils.resilience import get_circuit
+
+    def reset():
+        for vendor in ("yfinance", "finnhub", "alpha_vantage"):
+            get_circuit(f"stock_overview:{vendor}").record_success()
+
+    reset()
+    yield
+    reset()
+
+
+def _trip(vendor: str) -> None:
+    from tradingagents.utils.resilience import get_circuit
+
+    breaker = get_circuit(f"stock_overview:{vendor}")
+    for _ in range(breaker.failure_threshold):
+        breaker.record_failure(RuntimeError("down"))
+
+
+def test_fallback_uses_yfinance_alone_when_complete(monkeypatch, fresh_breakers):
+    monkeypatch.setattr(service, "build_stock_overview", lambda s: {"ticker": s, **_COMPLETE})
+    called = []
+    monkeypatch.setattr(service, "_build_stock_overview_from_finnhub", lambda s: called.append(s))
+
+    result = service.build_stock_overview_with_fallback("AAPL")
+
+    assert result["price"] == 100.0
+    assert called == []
+
+
+def test_fallback_fills_gaps_from_finnhub_without_overwriting(monkeypatch, fresh_breakers):
+    monkeypatch.setattr(
+        service,
+        "build_stock_overview",
+        lambda s: {"ticker": s, "price": 99.0, "name": None, "sector": "Tech"},
+    )
+    monkeypatch.setattr(
+        service,
+        "_build_stock_overview_from_finnhub",
+        lambda s: {"price": 101.5, "name": "Apple Inc.", "sector": "Other"},
+    )
+
+    result = service.build_stock_overview_with_fallback("AAPL")
+
+    assert result["price"] == 99.0  # yfinance wins when it has a value
+    assert result["name"] == "Apple Inc."  # gap filled
+    assert result["sector"] == "Tech"
+
+
+def test_fallback_continues_to_alpha_vantage(monkeypatch, fresh_breakers):
+    monkeypatch.setattr(service, "build_stock_overview", lambda s: {"ticker": s, "price": None})
+    monkeypatch.setattr(service, "_build_stock_overview_from_finnhub", lambda s: {})
+    monkeypatch.setattr(service, "_build_stock_overview_from_alpha_vantage", lambda s: _COMPLETE)
+
+    assert service.build_stock_overview_with_fallback("AAPL")["name"] == "Apple Inc."
+
+
+def test_fallback_skips_open_circuit_without_calling_vendor(monkeypatch, fresh_breakers):
+    yf_calls = []
+
+    def yf_build(symbol):
+        yf_calls.append(symbol)
+        raise RuntimeError("yfinance down")
+
+    monkeypatch.setattr(service, "build_stock_overview", yf_build)
+    monkeypatch.setattr(service, "_build_stock_overview_from_finnhub", lambda s: _COMPLETE)
+    _trip("yfinance")
+
+    result = service.build_stock_overview_with_fallback("AAPL")
+
+    assert yf_calls == []  # breaker open: yfinance never attempted
+    assert result["price"] == 100.0
+
+
+def test_try_vendor_opens_breaker_after_threshold_failures(monkeypatch, fresh_breakers):
+    from tradingagents.utils.resilience import get_circuit
+
+    attempts = []
+
+    def boom():
+        attempts.append(1)
+        raise RuntimeError("down")
+
+    for _ in range(8):
+        assert service._try_vendor("finnhub", boom) is None
+
+    assert len(attempts) == get_circuit("stock_overview:finnhub").failure_threshold
+
+
+def test_fallback_never_raises_when_every_vendor_fails(monkeypatch, fresh_breakers):
+    def boom(_symbol):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(service, "build_stock_overview", boom)
+    monkeypatch.setattr(service, "_build_stock_overview_from_finnhub", boom)
+    monkeypatch.setattr(service, "_build_stock_overview_from_alpha_vantage", boom)
+
+    assert service.build_stock_overview_with_fallback("AAPL")["ticker"] == "AAPL"
+
+
+def test_get_stock_overview_uses_fallback_builder(monkeypatch, fresh_breakers):
+    service.market_cache.clear()
+    monkeypatch.setattr(
+        service, "build_stock_overview_with_fallback", lambda s: {"ticker": s, "price": 1.0}
+    )
+
+    assert service.get_stock_overview("ZZZ")["price"] == 1.0
+
+
+def test_finnhub_adapter_maps_profile_and_quote(monkeypatch):
+    import tradingagents.dataflows.providers.finnhub_common as fc
+
+    def fake_request(endpoint, params=None, **_kw):
+        if endpoint == "/quote":
+            return {"c": 101.5, "pc": 100.0, "o": 100.5, "h": 102.0, "l": 99.0}
+        return {
+            "name": "Apple Inc",
+            "finnhubIndustry": "Technology",
+            "exchange": "NASDAQ",
+            "currency": "USD",
+            "marketCapitalization": 3_000_000.0,  # Finnhub reports millions
+        }
+
+    monkeypatch.setattr(fc, "make_api_request", fake_request)
+
+    result = service._build_stock_overview_from_finnhub("AAPL")
+
+    assert result["price"] == 101.5
+    assert result["prev_close"] == 100.0
+    assert result["name"] == "Apple Inc"
+    assert result["market_cap"] == 3_000_000_000_000.0
+
+
+def test_alpha_vantage_adapter_maps_overview_and_quote(monkeypatch):
+    import tradingagents.dataflows.providers.alpha_vantage_common as av
+
+    def fake_request(function_name, params):
+        if function_name == "GLOBAL_QUOTE":
+            return {"Global Quote": {"05. price": "101.50", "08. previous close": "100.00"}}
+        return {
+            "Name": "Apple Inc",
+            "Sector": "TECHNOLOGY",
+            "MarketCapitalization": "3000000000000",
+        }
+
+    monkeypatch.setattr(av, "_make_api_request", fake_request)
+
+    result = service._build_stock_overview_from_alpha_vantage("AAPL")
+
+    assert result["price"] == 101.5
+    assert result["name"] == "Apple Inc"
+    assert result["market_cap"] == 3e12

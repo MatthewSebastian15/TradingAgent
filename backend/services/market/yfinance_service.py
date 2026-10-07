@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import logging
 import math
 import threading
 from collections.abc import Callable
@@ -9,6 +11,7 @@ from hashlib import sha256
 from typing import Any
 
 import pandas as pd
+from tradingagents.utils.resilience import CircuitOpenError, get_circuit
 
 from services.market.cache import market_cache
 from services.market.symbol_universe import (
@@ -18,6 +21,8 @@ from services.market.symbol_universe import (
     get_symbol_universe,
     normalize_country,
 )
+
+logger = logging.getLogger(__name__)
 
 OVERVIEW_TTL_SECONDS = 120
 STOCK_OVERVIEW_TTL_SECONDS = 120
@@ -276,12 +281,148 @@ def build_stock_overview(symbol: str) -> dict[str, Any]:
     }
 
 
+# Minimum for a usable card. market_cap is deliberately not required: ETFs, indices and
+# crypto have none, and requiring it would fall back to rate-limited vendors on every call.
+_STOCK_OVERVIEW_REQUIRED_FIELDS = ("price", "name")
+_VENDOR_FAILURE_THRESHOLD = 5
+_VENDOR_RECOVERY_SECONDS = 60
+
+
+def _try_vendor(vendor: str, fetch: Callable[[], dict[str, Any]]) -> dict[str, Any] | None:
+    """Best-effort vendor call behind a per-vendor circuit breaker. Never raises:
+    an open circuit or a failing fetch both return None."""
+    breaker = get_circuit(
+        f"stock_overview:{vendor}", _VENDOR_FAILURE_THRESHOLD, _VENDOR_RECOVERY_SECONDS
+    )
+    try:
+        breaker.before_call()
+    except CircuitOpenError:
+        return None
+    try:
+        result = fetch()
+    except Exception as exc:  # noqa: BLE001
+        breaker.record_failure(exc)
+        logger.warning("Vendor %s failed for stock overview: %s", vendor, type(exc).__name__)
+        return None
+    breaker.record_success()
+    return result
+
+
+def _has_required_fields(overview: dict[str, Any]) -> bool:
+    return all(overview.get(field) is not None for field in _STOCK_OVERVIEW_REQUIRED_FIELDS)
+
+
+def _merge_overview(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
+    """Fill missing/None fields of *base* from *extra*; never overwrite a value that
+    is already present (earlier vendors in the priority order win)."""
+    merged = dict(base)
+    for key, value in extra.items():
+        if merged.get(key) is None and value is not None:
+            merged[key] = value
+    return merged
+
+
+def _build_stock_overview_from_finnhub(symbol: str) -> dict[str, Any]:
+    from tradingagents.dataflows.providers import finnhub_common  # noqa: PLC0415
+
+    def request(endpoint: str) -> dict[str, Any]:
+        payload = finnhub_common.make_api_request(
+            endpoint, {"symbol": symbol}, feature_key="enable_fundamentals"
+        )
+        return payload if isinstance(payload, dict) else {}
+
+    results: dict[str, dict[str, Any]] = {}
+    errors: list[Exception] = []
+    for endpoint in ("/quote", "/stock/profile2"):
+        try:
+            results[endpoint] = request(endpoint)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+    if len(errors) == 2:
+        raise errors[0]
+
+    quote, profile = results.get("/quote", {}), results.get("/stock/profile2", {})
+    market_cap_millions = _as_float(profile.get("marketCapitalization"))
+    fields = {
+        "price": _as_float(quote.get("c")) or None,  # Finnhub returns 0 for unknown symbols
+        "prev_close": _as_float(quote.get("pc")) or None,
+        "open": _as_float(quote.get("o")) or None,
+        "day_high": _as_float(quote.get("h")) or None,
+        "day_low": _as_float(quote.get("l")) or None,
+        "name": profile.get("name"),
+        "industry": profile.get("finnhubIndustry"),
+        "exchange": profile.get("exchange"),
+        "currency": profile.get("currency"),
+        "market_cap": market_cap_millions * 1_000_000 if market_cap_millions else None,
+    }
+    return {key: value for key, value in fields.items() if value is not None}
+
+
+def _build_stock_overview_from_alpha_vantage(symbol: str) -> dict[str, Any]:
+    from tradingagents.dataflows.providers import alpha_vantage_common  # noqa: PLC0415
+
+    def request(function: str) -> dict[str, Any]:
+        raw = alpha_vantage_common._make_api_request(function, {"symbol": symbol})
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError:
+                return {}
+        return raw if isinstance(raw, dict) else {}
+
+    overview = request("OVERVIEW")
+    quote = request("GLOBAL_QUOTE").get("Global Quote") or {}
+    fields = {
+        "price": _as_float(quote.get("05. price")),
+        "prev_close": _as_float(quote.get("08. previous close")),
+        "open": _as_float(quote.get("02. open")),
+        "day_high": _as_float(quote.get("03. high")),
+        "day_low": _as_float(quote.get("04. low")),
+        "volume": _as_float(quote.get("06. volume")),
+        "name": overview.get("Name"),
+        "sector": overview.get("Sector"),
+        "industry": overview.get("Industry"),
+        "exchange": overview.get("Exchange"),
+        "currency": overview.get("Currency"),
+        "description": overview.get("Description"),
+        "market_cap": _as_float(overview.get("MarketCapitalization")),
+        "pe_ttm": _as_float(overview.get("PERatio")),
+        "forward_pe": _as_float(overview.get("ForwardPE")),
+        "eps_ttm": _as_float(overview.get("EPS")),
+        "beta": _as_float(overview.get("Beta")),
+        "week_52_high": _as_float(overview.get("52WeekHigh")),
+        "week_52_low": _as_float(overview.get("52WeekLow")),
+        "ma_50d": _as_float(overview.get("50DayMovingAverage")),
+        "ma_200d": _as_float(overview.get("200DayMovingAverage")),
+    }
+    return {key: value for key, value in fields.items() if value is not None}
+
+
+def build_stock_overview_with_fallback(symbol: str) -> dict[str, Any]:
+    """yfinance first; when it is circuit-broken or leaves required fields empty, fill
+    the gaps from Finnhub then Alpha Vantage. Best effort: never raises."""
+    overview = _try_vendor("yfinance", lambda: build_stock_overview(symbol))
+    if overview and _has_required_fields(overview):
+        return overview
+
+    for vendor, fetch in (
+        ("finnhub", lambda: _build_stock_overview_from_finnhub(symbol)),
+        ("alpha_vantage", lambda: _build_stock_overview_from_alpha_vantage(symbol)),
+    ):
+        fallback = _try_vendor(vendor, fetch)
+        if fallback:
+            overview = _merge_overview(overview or {"ticker": symbol}, fallback)
+            if _has_required_fields(overview):
+                return overview
+    return overview or {"ticker": symbol}
+
+
 def get_stock_overview(symbol: str, *, force_refresh: bool = False) -> dict[str, Any]:
-    """SWR-cached wrapper around build_stock_overview. Concurrent requests for
-    the same symbol coalesce into one yfinance call via the per-key lock."""
+    """SWR-cached wrapper around build_stock_overview_with_fallback. Concurrent
+    requests for the same symbol coalesce into one vendor round trip via the per-key lock."""
     value, _ = _swr_cached(
         f"stock_overview:{symbol}",
-        lambda: build_stock_overview(symbol),
+        lambda: build_stock_overview_with_fallback(symbol),
         STOCK_OVERVIEW_TTL_SECONDS,
         force_refresh=force_refresh,
     )
