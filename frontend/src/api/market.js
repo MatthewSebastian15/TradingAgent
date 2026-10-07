@@ -144,6 +144,32 @@ export async function getQuoteLite(ticker, { signal } = {}) {
   return parseMarketResponse(response);
 }
 
+export async function getFinancials(ticker, statement = 'income', { signal } = {}) {
+  const response = await fetch(
+    buildApiUrl(
+      `/market/financials?ticker=${encodeURIComponent(ticker)}&statement=${encodeURIComponent(statement)}`
+    ),
+    {
+      headers: await buildAuthHeaders(),
+      credentials: 'include',
+      signal,
+    }
+  );
+  return parseMarketResponse(response);
+}
+
+export async function getTechnicals(ticker, { signal } = {}) {
+  const response = await fetch(
+    buildApiUrl(`/market/technicals?ticker=${encodeURIComponent(ticker)}`),
+    {
+      headers: await buildAuthHeaders(),
+      credentials: 'include',
+      signal,
+    }
+  );
+  return parseMarketResponse(response);
+}
+
 export async function getMarketMovers({ country, exchange, limit }, { signal } = {}) {
   const params = new URLSearchParams({
     country,

@@ -1,8 +1,18 @@
 import PropTypes from 'prop-types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import FinancialsTab from '../components/research/FinancialsTab';
+import NewsTab from '../components/research/NewsTab';
+import {
+  DataRow,
+  MarginBar,
+  RangeDot,
+  SectionCard,
+  SkeletonRow,
+} from '../components/research/primitives';
 import ResearchCommandBar from '../components/research/ResearchCommandBar';
 import ResearchSidebar from '../components/research/ResearchSidebar';
+import TechnicalsTab from '../components/research/TechnicalsTab';
 import CandlestickPriceChart from '../components/results/tabs/CandlestickPriceChart';
 import {
   AXIS_COLOR,
@@ -60,80 +70,11 @@ function recommendationColor(rec) {
   return 'text-bloomberg-muted';
 }
 
-// ── Primitives ────────────────────────────────────────────────────────────────
-
-function SectionCard({ title, children, className = '' }) {
-  return (
-    <div
-      className={`border border-bloomberg-border bg-bloomberg-card rounded-sm overflow-hidden ${className}`}
-    >
-      {title && (
-        <div className="border-b border-bloomberg-border px-3 py-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
-            {title}
-          </span>
-        </div>
-      )}
-      {children}
-    </div>
-  );
-}
-SectionCard.propTypes = {
-  title: PropTypes.string,
-  children: PropTypes.node,
-  className: PropTypes.string,
-};
-
-function DataRow({ label, value, valueClass = 'text-bloomberg-white' }) {
-  return (
-    <div className="flex justify-between items-center px-3 py-[5px] border-b border-bloomberg-border last:border-0">
-      <span className="font-mono text-[10px] text-bloomberg-muted">{label}</span>
-      <span className={`font-mono text-xs ${valueClass}`}>{value}</span>
-    </div>
-  );
-}
-DataRow.propTypes = {
-  label: PropTypes.string,
-  value: PropTypes.node,
-  valueClass: PropTypes.string,
-};
-
-function SkeletonRow() {
-  return (
-    <div className="flex justify-between items-center px-3 py-[5px] border-b border-bloomberg-border last:border-0">
-      <div className="animate-pulse bg-bloomberg-border rounded h-3 w-20" />
-      <div className="animate-pulse bg-bloomberg-border rounded h-3 w-16" />
-    </div>
-  );
-}
-
-function MarginBar({ pct }) {
-  return (
-    <div className="h-[2px] bg-bloomberg-border rounded-full mt-1">
-      <div
-        className={`h-full rounded-full ${pct >= 0 ? 'bg-bloomberg-green' : 'bg-bloomberg-red'}`}
-        style={{ width: `${Math.min(100, Math.abs(pct))}%` }}
-      />
-    </div>
-  );
-}
-MarginBar.propTypes = { pct: PropTypes.number };
-
-function RangeDot({ pct }) {
-  return (
-    <div className="relative h-[3px] bg-bloomberg-border rounded-full">
-      <div
-        className="absolute top-1/2 w-2.5 h-2.5 bg-bloomberg-orange rounded-full"
-        style={{ left: `${pct}%`, transform: 'translateX(-50%) translateY(-50%)' }}
-      />
-    </div>
-  );
-}
-RangeDot.propTypes = { pct: PropTypes.number };
-
 // ── Section cards ─────────────────────────────────────────────────────────────
 
-function StockHeader({ data, loading }) {
+const DETAIL_TABS = ['OVERVIEW', 'FINANCIALS', 'TECHNICALS', 'NEWS'];
+
+function StockHeader({ data, loading, activeTab, onTabChange }) {
   const [descExpanded, setDescExpanded] = useState(false);
   const price = data?.price;
   const prevClose = data?.prev_close;
@@ -215,25 +156,31 @@ function StockHeader({ data, loading }) {
         )}
       </div>
       <div className="flex px-4 gap-6">
-        {['OVERVIEW', 'FINANCIALS', 'TECHNICALS', 'NEWS'].map((tab) => (
+        {DETAIL_TABS.map((tab) => (
           <button
             key={tab}
             type="button"
-            disabled={tab !== 'OVERVIEW'}
+            onClick={() => onTabChange(tab)}
+            aria-current={activeTab === tab ? 'true' : undefined}
             className={`py-2 font-mono text-[11px] border-b-2 transition-colors ${
-              tab === 'OVERVIEW'
+              activeTab === tab
                 ? 'border-bloomberg-orange text-bloomberg-orange'
-                : 'border-transparent text-bloomberg-muted opacity-40 cursor-not-allowed'
+                : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white'
             }`}
           >
-            {tab === 'OVERVIEW' ? `${tab} ●` : tab}
+            {activeTab === tab ? `${tab} ●` : tab}
           </button>
         ))}
       </div>
     </div>
   );
 }
-StockHeader.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
+StockHeader.propTypes = {
+  data: PropTypes.object,
+  loading: PropTypes.bool,
+  activeTab: PropTypes.string.isRequired,
+  onTabChange: PropTypes.func.isRequired,
+};
 
 const VOL_WIDTH = 1000;
 const VOL_HEIGHT = 150;
@@ -843,6 +790,7 @@ export default function Research() {
   const [collapsed, setCollapsed] = useState(false);
   const [autoCollapsed, setAutoCollapsed] = useState(false);
   const [activeRange, setActiveRange] = useState('1Y');
+  const [activeTab, setActiveTab] = useState('OVERVIEW');
   const [ohlcvData, setOhlcvData] = useState(null);
   const [ohlcvLoading, setOhlcvLoading] = useState(false);
 
@@ -965,7 +913,12 @@ export default function Research() {
 
           {activeTicker && (
             <>
-              <StockHeader data={displayData} loading={loading} />
+              <StockHeader
+                data={displayData}
+                loading={loading}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+              />
 
               {error && <LoadFailure message={`FAILED TO LOAD: ${error}`} onRetry={retry} />}
               {!error && data?.data_quality === 'unavailable' && (
@@ -977,39 +930,46 @@ export default function Research() {
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <PriceChartCard
-                    ticker={activeTicker}
-                    ohlcvData={ohlcvData}
-                    ohlcvLoading={ohlcvLoading}
-                    activeRange={activeRange}
-                    setActiveRange={setActiveRange}
-                  />
-                </div>
-                <div className="space-y-3">
-                  <TradingDataCard data={displayData} loading={loading} />
-                  <QuickStatsCard data={data} loading={loading} />
-                  <Range52WCard data={data} loading={loading} />
-                </div>
-              </div>
+              {activeTab === 'OVERVIEW' && (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <PriceChartCard
+                        ticker={activeTicker}
+                        ohlcvData={ohlcvData}
+                        ohlcvLoading={ohlcvLoading}
+                        activeRange={activeRange}
+                        setActiveRange={setActiveRange}
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <TradingDataCard data={displayData} loading={loading} />
+                      <QuickStatsCard data={data} loading={loading} />
+                      <Range52WCard data={data} loading={loading} />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <ValuationCard data={data} loading={loading} />
-                <AnalystConsensusCard data={data} loading={loading} />
-                <DividendsCard data={data} loading={loading} />
-              </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <ValuationCard data={data} loading={loading} />
+                    <AnalystConsensusCard data={data} loading={loading} />
+                    <DividendsCard data={data} loading={loading} />
+                  </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <ProfitabilityCard data={data} loading={loading} />
-                <GrowthIncomeCard data={data} loading={loading} />
-                <BalanceSheetCard data={data} loading={loading} />
-              </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <ProfitabilityCard data={data} loading={loading} />
+                    <GrowthIncomeCard data={data} loading={loading} />
+                    <BalanceSheetCard data={data} loading={loading} />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <SharesOwnershipCard data={data} loading={loading} />
-                <RiskAssessmentCard data={data} loading={loading} />
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <SharesOwnershipCard data={data} loading={loading} />
+                    <RiskAssessmentCard data={data} loading={loading} />
+                  </div>
+                </>
+              )}
+              {activeTab === 'FINANCIALS' && <FinancialsTab ticker={activeTicker} />}
+              {activeTab === 'TECHNICALS' && <TechnicalsTab ticker={activeTicker} />}
+              {activeTab === 'NEWS' && <NewsTab ticker={activeTicker} />}
             </>
           )}
         </main>

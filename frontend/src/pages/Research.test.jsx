@@ -41,6 +41,11 @@ vi.mock('../hooks/useStockOverview', () => ({
       : { loading: false, error: null, data: null }
   ),
 }));
+vi.mock('../components/research/NewsTab', () => ({
+  default: function NewsTabStub({ ticker }) {
+    return <div data-testid="news-tab">{ticker}</div>;
+  },
+}));
 vi.mock('../hooks/useQuoteLite', () => ({
   useQuoteLite: vi.fn(() => ({ quote: null, updatedAt: null })),
 }));
@@ -230,6 +235,80 @@ describe('Research page', () => {
       fireEvent.click(screen.getByText('submit-ticker'));
 
       expect(screen.getByText(/\+10\.50 \(\+5\.25%\)/)).toBeTruthy();
+    });
+  });
+
+  describe('detail tabs', () => {
+    const apiOk = (payload) => ({ ok: true, json: async () => payload });
+    const callsTo = (spy, path) => spy.mock.calls.filter((c) => String(c[0]).includes(path)).length;
+
+    function stubFetch() {
+      return vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+        const u = String(url);
+        if (u.includes('/market/financials')) {
+          return Promise.resolve(
+            apiOk({
+              statement: 'income',
+              periods: [{ key: 'FY24', label: 'FY24' }],
+              rows: [{ key: 'revenue', label: 'Revenue', values: { FY24: '100' } }],
+              data_quality: { status: 'complete' },
+            })
+          );
+        }
+        if (u.includes('/market/technicals')) {
+          return Promise.resolve(
+            apiOk({ available: true, entry_quality: 'Acceptable Entry', trend: 'uptrend' })
+          );
+        }
+        return Promise.resolve(apiOk({ points: [] }));
+      });
+    }
+
+    it('lazily loads FINANCIALS only when its tab is opened', async () => {
+      const fetchSpy = stubFetch();
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+      await screen.findByText('NO CHART DATA');
+      expect(callsTo(fetchSpy, '/market/financials')).toBe(0);
+
+      fireEvent.click(screen.getByRole('button', { name: 'FINANCIALS' }));
+
+      expect(await screen.findByText('Revenue')).toBeTruthy();
+      expect(callsTo(fetchSpy, '/market/financials')).toBe(1);
+      expect(screen.queryByText('PRICE CHART')).toBeNull();
+    });
+
+    it('switches between OVERVIEW, TECHNICALS and NEWS without losing the overview', async () => {
+      const fetchSpy = stubFetch();
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+      await screen.findByText('NO CHART DATA');
+
+      fireEvent.click(screen.getByRole('button', { name: 'TECHNICALS' }));
+      expect(await screen.findByText('Acceptable Entry')).toBeTruthy();
+      expect(callsTo(fetchSpy, '/market/technicals')).toBe(1);
+
+      fireEvent.click(screen.getByRole('button', { name: 'NEWS' }));
+      expect(screen.getByTestId('news-tab').textContent).toBe('AAPL');
+
+      fireEvent.click(screen.getByRole('button', { name: /OVERVIEW/ }));
+      expect(screen.getByText('PRICE CHART')).toBeTruthy();
+      expect(screen.getByText('Apple Inc.')).toBeTruthy();
+    });
+
+    it('marks the active tab and enables all four', () => {
+      stubFetch();
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      for (const name of ['OVERVIEW', 'FINANCIALS', 'TECHNICALS', 'NEWS']) {
+        const tab = screen.getByRole('button', { name: new RegExp(name) });
+        expect(tab.disabled).toBe(false);
+      }
+      expect(screen.getByRole('button', { name: /OVERVIEW/ }).getAttribute('aria-current')).toBe(
+        'true'
+      );
     });
   });
 });

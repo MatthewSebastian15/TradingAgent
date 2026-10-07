@@ -13,8 +13,10 @@ import {
   getMarketOverview,
   getMarketPresets,
   getMarketQuotes,
+  getFinancials,
   getMarketSparklines,
   getQuoteLite,
+  getTechnicals,
   getStockOverview,
   searchMarketTickers,
   validateMarketSymbol,
@@ -81,6 +83,22 @@ describe('market API getters', () => {
 
     globalThis.fetch.mockResolvedValueOnce({ ok: false, status: 502 });
     await expect(getQuoteLite('AAPL')).rejects.toThrow('HTTP 502');
+  });
+
+  it('getFinancials encodes the ticker and statement', async () => {
+    await getFinancials('BBCA.JK', 'balance');
+    expect(globalThis.fetch.mock.calls[0][0]).toBe(
+      '/api/market/financials?ticker=BBCA.JK&statement=balance'
+    );
+    await getFinancials('AAPL');
+    expect(globalThis.fetch.mock.calls[1][0]).toBe(
+      '/api/market/financials?ticker=AAPL&statement=income'
+    );
+  });
+
+  it('getTechnicals encodes the ticker', async () => {
+    await getTechnicals('^GSPC');
+    expect(globalThis.fetch.mock.calls[0][0]).toBe('/api/market/technicals?ticker=%5EGSPC');
   });
 
   it('getMarketMovers builds country/exchange/limit params', async () => {
