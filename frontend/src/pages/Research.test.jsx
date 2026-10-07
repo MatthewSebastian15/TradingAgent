@@ -249,6 +249,28 @@ describe('Research page', () => {
       expect(screen.queryByText(/\+10\.50 \(\+5\.25%\)/)).toBeNull();
     });
 
+    it('shows a freshness badge next to the price once a quote has arrived', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      useQuoteLite.mockImplementation(() => ({
+        quote: { sym: 'AAPL', price: 220, volume: 5, error: false },
+        updatedAt: Date.now(),
+      }));
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(screen.getByText(/live just now/i)).toBeTruthy();
+    });
+
+    it('shows no freshness badge before the first quote', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(screen.queryByText(/just now|ago/i)).toBeNull();
+    });
+
     it('falls back to the snapshot price when the quote has no price', () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
       useQuoteLite.mockImplementation(() => ({

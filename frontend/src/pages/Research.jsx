@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import AnalystHistoryStrip from '../components/research/AnalystHistoryStrip';
 import DividendHistoryList from '../components/research/DividendHistoryList';
 import FinancialsTab from '../components/research/FinancialsTab';
+import FreshnessBadge from '../components/research/FreshnessBadge';
 import GrowthSparkline from '../components/research/GrowthSparkline';
 import NewsTab from '../components/research/NewsTab';
 import {
@@ -82,7 +83,7 @@ function recommendationColor(rec) {
 
 const DETAIL_TABS = ['OVERVIEW', 'FINANCIALS', 'TECHNICALS', 'NEWS'];
 
-function StockHeader({ data, loading, activeTab, onTabChange, actions = null }) {
+function StockHeader({ data, loading, updatedAt = null, activeTab, onTabChange, actions = null }) {
   const [descExpanded, setDescExpanded] = useState(false);
   const price = data?.price;
   const prevClose = data?.prev_close;
@@ -129,6 +130,7 @@ function StockHeader({ data, loading, activeTab, onTabChange, actions = null }) 
                       : ''}
                   </span>
                 )}
+                <FreshnessBadge updatedAt={updatedAt} />
               </div>
               <div className="text-right ml-4">
                 <div className="font-mono text-[10px] text-bloomberg-muted">MARKET CAP</div>
@@ -189,6 +191,7 @@ function StockHeader({ data, loading, activeTab, onTabChange, actions = null }) 
 StockHeader.propTypes = {
   data: PropTypes.object,
   loading: PropTypes.bool,
+  updatedAt: PropTypes.number,
   activeTab: PropTypes.string.isRequired,
   onTabChange: PropTypes.func.isRequired,
   actions: PropTypes.node,
@@ -899,7 +902,7 @@ export default function Research() {
   const [ohlcvLoading, setOhlcvLoading] = useState(false);
 
   const { data, loading, error, retry } = useStockOverview(activeTicker);
-  const { quote } = useQuoteLite(activeTicker);
+  const { quote, updatedAt } = useQuoteLite(activeTicker);
   const [comparing, setComparing] = useState(false);
   const [compareTicker, setCompareTicker] = useState(null);
   const compareOverview = useStockOverview(compareTicker);
@@ -1047,6 +1050,7 @@ export default function Research() {
               <StockHeader
                 data={displayData}
                 loading={loading}
+                updatedAt={updatedAt}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
                 actions={
