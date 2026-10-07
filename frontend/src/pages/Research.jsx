@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import ResearchCommandBar from '../components/research/ResearchCommandBar';
 import ResearchSidebar from '../components/research/ResearchSidebar';
@@ -815,6 +815,8 @@ RiskAssessmentCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+const RANGE_ORDER = ['1W', '1M', '3M', '6M', '1Y'];
+
 export default function Research() {
   const [activeTicker, setActiveTicker] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -842,36 +844,62 @@ export default function Research() {
     }
   }, [activeTicker, autoCollapsed]);
 
+  const ohlcvCacheRef = useRef(new Map());
+
+  const fetchOhlcvRange = useCallback(async (ticker, range, { signal } = {}) => {
+    const cacheKey = `${ticker}:${range}`;
+    if (ohlcvCacheRef.current.has(cacheKey)) return ohlcvCacheRef.current.get(cacheKey);
+    const params = new URLSearchParams({
+      ticker,
+      range,
+      trade_date: new Date().toISOString().slice(0, 10),
+    });
+    const headers = await buildAuthHeaders();
+    const r = await fetch(buildApiUrl(`/market/ohlcv?${params}`), {
+      headers,
+      credentials: 'include',
+      signal,
+    });
+    if (r.ok === false) throw new Error(`OHLCV request failed (${r.status})`);
+    const d = await r.json();
+    ohlcvCacheRef.current.set(cacheKey, d);
+    return d;
+  }, []);
+
+  // New ticker: cached ranges belong to the old one.
+  useEffect(() => {
+    ohlcvCacheRef.current = new Map();
+  }, [activeTicker]);
+
   useEffect(() => {
     if (!activeTicker) return;
     const controller = new AbortController();
-    setOhlcvLoading(true);
-    setOhlcvData(null);
+    const cached = ohlcvCacheRef.current.get(`${activeTicker}:${activeRange}`);
 
-    const doFetch = async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const params = new URLSearchParams({
-        ticker: activeTicker,
-        range: activeRange,
-        trade_date: today,
-      });
-      const headers = await buildAuthHeaders();
-      const r = await fetch(buildApiUrl(`/market/ohlcv?${params}`), {
-        headers,
-        credentials: 'include',
-        signal: controller.signal,
-      });
-      const d = await r.json();
-      setOhlcvData(d);
+    if (cached) {
+      setOhlcvData(cached);
       setOhlcvLoading(false);
-    };
+    } else {
+      setOhlcvLoading(true);
+      setOhlcvData(null);
+      fetchOhlcvRange(activeTicker, activeRange, { signal: controller.signal })
+        .then((d) => {
+          setOhlcvData(d);
+          setOhlcvLoading(false);
+        })
+        .catch((e) => {
+          if (e.name !== 'AbortError') setOhlcvLoading(false);
+        });
+    }
 
-    doFetch().catch((e) => {
-      if (e.name !== 'AbortError') setOhlcvLoading(false);
+    // Warm the two neighbouring ranges; failures are dropped, a real fetch retries on demand.
+    const idx = RANGE_ORDER.indexOf(activeRange);
+    [RANGE_ORDER[idx - 1], RANGE_ORDER[idx + 1]].filter(Boolean).forEach((range) => {
+      fetchOhlcvRange(activeTicker, range).catch(() => {});
     });
 
     return () => controller.abort();
-  }, [activeTicker, activeRange]);
+  }, [activeTicker, activeRange, fetchOhlcvRange]);
 
   return (
     <div className="min-h-screen bg-bloomberg-bg pt-[60px] pl-10">

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PropTypes from 'prop-types';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -76,5 +76,27 @@ describe('Research page', () => {
       expect(screen.getByText(title)).toBeTruthy();
     }
     expect(await screen.findByText('NO CHART DATA')).toBeTruthy();
+  });
+
+  it('serves already-loaded and prefetched OHLCV ranges from cache', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      json: async () => ({ points: [] }),
+    });
+    const rangeCalls = (range) =>
+      fetchSpy.mock.calls.filter((c) => String(c[0]).includes(`range=${range}`)).length;
+    render(<Research />);
+
+    fireEvent.click(screen.getByText('submit-ticker'));
+    await waitFor(() => expect(rangeCalls('1Y')).toBe(1));
+    await waitFor(() => expect(rangeCalls('6M')).toBe(1)); // prefetched neighbour
+
+    fireEvent.click(screen.getByRole('button', { name: '1M' }));
+    await waitFor(() => expect(rangeCalls('1M')).toBe(1));
+    fireEvent.click(screen.getByRole('button', { name: '1Y' }));
+    fireEvent.click(screen.getByRole('button', { name: '6M' }));
+    await screen.findByText('NO CHART DATA');
+
+    expect(rangeCalls('1Y')).toBe(1);
+    expect(rangeCalls('6M')).toBe(1);
   });
 });
