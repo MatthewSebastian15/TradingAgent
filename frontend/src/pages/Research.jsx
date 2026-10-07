@@ -919,6 +919,7 @@ export default function Research() {
   // Canonical symbol from the backend (e.g. BBCA -> BBCA.JK) so the watchlist and the AI
   // Agent form get the same symbol the quote/analysis endpoints expect.
   const researchSymbol = data?.ticker || activeTicker;
+  const compareActive = comparing && Boolean(compareTicker) && activeTab === 'OVERVIEW';
 
   // Live price/volume over the slow, long-cached fundamentals snapshot. prev_close stays
   // from the snapshot (constant intraday) so the change is always computed consistently.
@@ -1084,7 +1085,7 @@ export default function Research() {
               )}
 
               {comparing && <CompareBar ticker={compareTicker} onPick={setCompareTicker} />}
-              {comparing && compareTicker && activeTab === 'OVERVIEW' && (
+              {compareActive && (
                 <CompareSection
                   primary={{ ticker: activeTicker, data, loading }}
                   compare={{
@@ -1118,22 +1119,35 @@ export default function Research() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <ValuationCard data={data} loading={loading} />
-                    <AnalystConsensusCard data={data} loading={loading} />
-                    <DividendsCard data={data} loading={loading} />
-                  </div>
+                  {compareActive ? (
+                    // Valuation/profitability/growth/consensus already sit in the compare
+                    // section above; only the cards it does not repeat remain here.
+                    <div className="grid grid-cols-2 gap-3">
+                      <DividendsCard data={data} loading={loading} />
+                      <BalanceSheetCard data={data} loading={loading} />
+                      <SharesOwnershipCard data={data} loading={loading} />
+                      <RiskAssessmentCard data={data} loading={loading} />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-3 gap-3">
+                        <ValuationCard data={data} loading={loading} />
+                        <AnalystConsensusCard data={data} loading={loading} />
+                        <DividendsCard data={data} loading={loading} />
+                      </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <ProfitabilityCard data={data} loading={loading} />
-                    <GrowthIncomeCard data={data} loading={loading} />
-                    <BalanceSheetCard data={data} loading={loading} />
-                  </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <ProfitabilityCard data={data} loading={loading} />
+                        <GrowthIncomeCard data={data} loading={loading} />
+                        <BalanceSheetCard data={data} loading={loading} />
+                      </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <SharesOwnershipCard data={data} loading={loading} />
-                    <RiskAssessmentCard data={data} loading={loading} />
-                  </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <SharesOwnershipCard data={data} loading={loading} />
+                        <RiskAssessmentCard data={data} loading={loading} />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
               {/* Visited tabs stay mounted (hidden) so switching back keeps their state. */}

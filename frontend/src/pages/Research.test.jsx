@@ -596,8 +596,12 @@ describe('Research page', () => {
         expect(section.getAllByText(title)).toHaveLength(2);
       }
       expect(useStockOverview).toHaveBeenCalledWith('MSFT');
+      // The primary's own copies of those cards are not rendered a second time below.
+      expect(screen.getAllByText('VALUATION MULTIPLES')).toHaveLength(2);
+      expect(screen.getByText('DIVIDENDS & YIELD')).toBeTruthy();
 
       fireEvent.click(screen.getByRole('button', { name: /CLOSE COMPARE/ }));
+      expect(screen.getAllByText('VALUATION MULTIPLES')).toHaveLength(1);
       expect(screen.queryByTestId('compare-section')).toBeNull();
     });
 
