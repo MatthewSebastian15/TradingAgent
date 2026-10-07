@@ -56,7 +56,7 @@ export function SkeletonRow() {
 
 export function MarginBar({ pct }) {
   return (
-    <div className="h-[2px] bg-bloomberg-border rounded-full mt-1">
+    <div className="h-[2px] bg-bloomberg-border rounded-full mt-1" aria-hidden="true">
       <div
         className={`h-full rounded-full ${pct >= 0 ? 'bg-bloomberg-green' : 'bg-bloomberg-red'}`}
         style={{ width: `${Math.min(100, Math.abs(pct))}%` }}
@@ -66,14 +66,16 @@ export function MarginBar({ pct }) {
 }
 MarginBar.propTypes = { pct: PropTypes.number };
 
-export function RangeDot({ pct }) {
+export function RangeDot({ pct, label }) {
   return (
     <div className="relative h-[3px] bg-bloomberg-border rounded-full">
+      <span className="sr-only">{label}</span>
       <div
+        aria-hidden="true"
         className="absolute top-1/2 w-2.5 h-2.5 bg-bloomberg-orange rounded-full"
         style={{ left: `${pct}%`, transform: 'translateX(-50%) translateY(-50%)' }}
       />
     </div>
   );
 }
-RangeDot.propTypes = { pct: PropTypes.number };
+RangeDot.propTypes = { pct: PropTypes.number, label: PropTypes.string.isRequired };

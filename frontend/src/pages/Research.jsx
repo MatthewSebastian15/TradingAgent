@@ -163,6 +163,7 @@ function StockHeader({ data, loading, updatedAt = null, activeTab, onTabChange, 
             {data?.description && (
               <div className="mt-2">
                 <p
+                  id="research-company-description"
                   className={`font-mono text-[11px] text-bloomberg-muted leading-relaxed ${descExpanded ? '' : 'line-clamp-3'}`}
                 >
                   {data.description}
@@ -171,6 +172,8 @@ function StockHeader({ data, loading, updatedAt = null, activeTab, onTabChange, 
                   <button
                     type="button"
                     onClick={() => setDescExpanded(!descExpanded)}
+                    aria-expanded={descExpanded}
+                    aria-controls="research-company-description"
                     className="font-mono text-[10px] text-bloomberg-orange mt-1"
                   >
                     {descExpanded ? 'Show less' : 'Show more...'}
@@ -429,7 +432,10 @@ function Range52WCard({ data, loading }) {
                 <span>{fmtNum(low)}</span>
                 <span>{fmtNum(high)}</span>
               </div>
-              <RangeDot pct={posPct} />
+              <RangeDot
+                pct={posPct}
+                label={`Current price is ${posPct.toFixed(0)}% of the way from the 52-week low to high`}
+              />
             </div>
           )}
           <DataRow label="52W LOW" value={fmtNum(low)} />
@@ -614,7 +620,10 @@ function AnalystConsensusCard({ data, loading }) {
                 <span>{fmtNum(tLow)}</span>
                 <span>{fmtNum(tHigh)}</span>
               </div>
-              <RangeDot pct={targetPosPct} />
+              <RangeDot
+                pct={targetPosPct}
+                label={`Current price is ${targetPosPct.toFixed(0)}% of the way from the low to high analyst target`}
+              />
             </div>
           )}
           <AnalystHistoryStrip ticker={data.ticker} />

@@ -32,6 +32,7 @@ export default function TickerSearchBar({
   placeholder = 'Search ticker symbol',
   bare = false,
   onSubmit = null,
+  ariaLabel = undefined,
 }) {
   const [inputValue, setInputValue] = useState(value || '');
   const [userEdited, setUserEdited] = useState(false);
@@ -249,6 +250,7 @@ export default function TickerSearchBar({
           role="combobox"
           aria-expanded={showDropdown}
           aria-autocomplete="list"
+          aria-label={ariaLabel}
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
@@ -277,4 +279,5 @@ TickerSearchBar.propTypes = {
   placeholder: PropTypes.string,
   bare: PropTypes.bool,
   onSubmit: PropTypes.func,
+  ariaLabel: PropTypes.string,
 };

@@ -41,6 +41,11 @@ describe('TickerSearchBar', () => {
     localStorage.clear();
   });
 
+  it('forwards an accessible name to the input', () => {
+    renderSearch({ ariaLabel: 'Search ticker symbol' });
+    expect(screen.getByRole('combobox', { name: 'Search ticker symbol' })).toBeInTheDocument();
+  });
+
   it('opens dropdown on focus with recent or popular items', async () => {
     renderSearch();
 

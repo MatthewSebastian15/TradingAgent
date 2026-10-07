@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { SectionCard, Skeleton } from './primitives';
+import { MarginBar, RangeDot, SectionCard, Skeleton } from './primitives';
 
 describe('research primitives', () => {
   afterEach(cleanup);
@@ -28,5 +28,16 @@ describe('research primitives', () => {
     expect(el.className).toMatch(/animate-pulse/);
     expect(el.className).toMatch(/h-8 w-24/);
     expect(el.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('gives RangeDot a screen-reader label and hides the dot itself', () => {
+    const { container } = render(<RangeDot pct={40} label="40% of the way" />);
+    expect(screen.getByText('40% of the way').className).toMatch(/sr-only/);
+    expect(container.querySelector('[style]').getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('hides the decorative MarginBar from assistive tech', () => {
+    const { container } = render(<MarginBar pct={20} />);
+    expect(container.firstChild.getAttribute('aria-hidden')).toBe('true');
   });
 });

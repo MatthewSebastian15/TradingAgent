@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PropTypes from 'prop-types';
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Research from './Research';
 import { AI_AGENT_PATH } from '../constants/routes';
@@ -515,6 +515,52 @@ describe('Research page', () => {
       const body = screen.getByTestId('price-chart-body');
       expect(body.className).toMatch(/opacity-40/);
       expect(body.className).toMatch(/motion-reduce:transition-none/);
+    });
+  });
+
+  describe('screen-reader semantics', () => {
+    const original = useStockOverview.getMockImplementation();
+    afterEach(() => useStockOverview.mockImplementation(original));
+
+    beforeEach(() => {
+      useStockOverview.mockImplementation((ticker) => ({
+        loading: false,
+        error: null,
+        retry: vi.fn(),
+        data: ticker
+          ? {
+              name: 'Apple Inc.',
+              price: 150,
+              prev_close: 140,
+              week_52_low: 100,
+              week_52_high: 200,
+              target_low: 100,
+              target_high: 200,
+              description: 'x'.repeat(250),
+            }
+          : null,
+      }));
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+    });
+
+    it('describes both range positions in words', async () => {
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(await screen.findByText(/50% of the way from the 52-week low to high/)).toBeTruthy();
+      expect(screen.getByText(/50% of the way from the low to high analyst target/)).toBeTruthy();
+    });
+
+    it('announces the description expand/collapse state', async () => {
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      const toggle = await screen.findByRole('button', { name: /show more/i });
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      fireEvent.click(toggle);
+      expect(screen.getByRole('button', { name: /show less/i }).getAttribute('aria-expanded')).toBe(
+        'true'
+      );
     });
   });
 

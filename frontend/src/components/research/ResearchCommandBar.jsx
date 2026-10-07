@@ -30,7 +30,10 @@ export default function ResearchCommandBar({
 
   return (
     <div className="flex h-10 items-stretch border-b border-bloomberg-border bg-[#0d0d0d] focus-within:border-b-bloomberg-orange transition-colors duration-150">
-      <span className="flex shrink-0 items-center border-r border-bloomberg-border px-3 font-mono text-[13px] uppercase tracking-wider text-bloomberg-orange">
+      <span
+        aria-hidden="true"
+        className="flex shrink-0 items-center border-r border-bloomberg-border px-3 font-mono text-[13px] uppercase tracking-wider text-bloomberg-orange"
+      >
         [ 1 &lt;HELP&gt; SEARCH ]
       </span>
 
@@ -39,6 +42,7 @@ export default function ResearchCommandBar({
           bare
           value={text}
           placeholder="(Enter search term or function)"
+          ariaLabel="Search ticker symbol"
           onSelect={(item) => {
             setText(item.symbol);
             onSelect(item);

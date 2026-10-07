@@ -6,9 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import ResearchCommandBar from './ResearchCommandBar';
 
 vi.mock('../TickerSearchBar', () => {
-  function TickerSearchBarStub({ value, onSelect, onSubmit }) {
+  function TickerSearchBarStub({ value, onSelect, onSubmit, ariaLabel }) {
     return (
       <div>
+        <input aria-label={ariaLabel} />
         <span data-testid="search-value">{value}</span>
         <button type="button" onClick={() => onSelect({ symbol: 'NVDA' })}>
           pick
@@ -23,6 +24,7 @@ vi.mock('../TickerSearchBar', () => {
     value: PropTypes.string,
     onSelect: PropTypes.func,
     onSubmit: PropTypes.func,
+    ariaLabel: PropTypes.string,
   };
   return { default: TickerSearchBarStub };
 });
@@ -69,5 +71,12 @@ describe('ResearchCommandBar', () => {
     );
 
     expect(container.querySelector('.animate-pulse')).toBeTruthy();
+  });
+
+  it('hides the decorative bracket label and names the search input', () => {
+    render(<ResearchCommandBar value="" onSelect={vi.fn()} onSubmit={vi.fn()} />);
+
+    expect(screen.getByText('[ 1 <HELP> SEARCH ]').getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByLabelText('Search ticker symbol')).toBeTruthy();
   });
 });
