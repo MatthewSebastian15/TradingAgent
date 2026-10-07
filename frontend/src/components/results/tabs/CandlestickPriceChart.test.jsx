@@ -240,6 +240,36 @@ describe('CandlestickPriceChart', () => {
       expect(screen.getByTestId('ref-in')).toBeTruthy();
     });
 
+    it('notes lines that sit off the chart scale instead of dropping them silently', () => {
+      render(
+        <CandlestickPriceChart
+          points={POINTS}
+          referenceLines={[
+            { value: 500, label: 'FAR', color: '#fff' },
+            { value: 0.01, label: 'LOW', color: '#fff' },
+            { value: Number.NaN, label: 'NAN', color: '#fff' },
+            { value: 11, label: 'IN', color: '#fff' },
+          ]}
+        />
+      );
+
+      const note = screen.getByTestId('reference-offscale-note');
+      expect(note.textContent).toMatch(/FAR.*above/i);
+      expect(note.textContent).toMatch(/LOW.*below/i);
+      expect(note.textContent).not.toMatch(/NAN|IN/);
+    });
+
+    it('shows no off-scale note when every line is on the chart', () => {
+      render(
+        <CandlestickPriceChart
+          points={POINTS}
+          referenceLines={[{ value: 11, label: 'IN', color: '#fff' }]}
+        />
+      );
+
+      expect(screen.queryByTestId('reference-offscale-note')).toBeNull();
+    });
+
     it('renders nothing extra without referenceLines', () => {
       const { container } = render(<CandlestickPriceChart points={POINTS} />);
 

@@ -212,6 +212,12 @@ export default function CandlestickPriceChart({
     setHover(null);
   };
 
+  const finiteLines = referenceLines.filter((line) => Number.isFinite(line.value));
+  const visibleLines = finiteLines.filter(
+    (line) => line.value >= chart.minPrice && line.value <= chart.maxPrice
+  );
+  const offScaleLines = finiteLines.filter((line) => !visibleLines.includes(line));
+
   const handleWheel = (event) => {
     if (!onZoom) return;
     event.preventDefault();
@@ -223,6 +229,21 @@ export default function CandlestickPriceChart({
       className={`relative ${heightClass} overflow-hidden border border-bloomberg-border bg-black`}
     >
       <div className="relative h-full w-full">
+        {offScaleLines.length > 0 && (
+          <div
+            data-testid="reference-offscale-note"
+            className="absolute left-2 top-1 z-10 font-mono text-[9px] uppercase tracking-wider text-bloomberg-white/60"
+          >
+            {offScaleLines
+              .map(
+                (line) =>
+                  `${line.label} ${displayPrice(line.value, ticker)} ${
+                    line.value > chart.maxPrice ? 'above' : 'below'
+                  } view`
+              )
+              .join(' · ')}
+          </div>
+        )}
         {hoverPoint && hover && (
           <CandlestickTooltip
             point={hoverPoint}
@@ -377,39 +398,32 @@ export default function CandlestickPriceChart({
             {displayPrice(lastPoint.close, ticker)}
           </text>
 
-          {referenceLines
-            .filter(
-              (line) =>
-                Number.isFinite(line.value) &&
-                line.value >= chart.minPrice &&
-                line.value <= chart.maxPrice
-            )
-            .map((line) => {
-              const y = priceToY(line.value);
-              return (
-                <g key={line.label}>
-                  <line
-                    data-testid={line.testId}
-                    x1={PADDING.left}
-                    x2={WIDTH - PADDING.right}
-                    y1={y}
-                    y2={y}
-                    stroke={line.color}
-                    strokeDasharray="6 4"
-                  />
-                  <text
-                    x={PADDING.left + 6}
-                    y={y - 4}
-                    fill={line.color}
-                    fontFamily="monospace"
-                    fontSize="10"
-                    textAnchor="start"
-                  >
-                    {line.label}
-                  </text>
-                </g>
-              );
-            })}
+          {visibleLines.map((line) => {
+            const y = priceToY(line.value);
+            return (
+              <g key={line.label}>
+                <line
+                  data-testid={line.testId}
+                  x1={PADDING.left}
+                  x2={WIDTH - PADDING.right}
+                  y1={y}
+                  y2={y}
+                  stroke={line.color}
+                  strokeDasharray="6 4"
+                />
+                <text
+                  x={PADDING.left + 6}
+                  y={y - 4}
+                  fill={line.color}
+                  fontFamily="monospace"
+                  fontSize="10"
+                  textAnchor="start"
+                >
+                  {line.label}
+                </text>
+              </g>
+            );
+          })}
 
           {showVolume &&
             chart.volumeTicks.map((tick) => {
