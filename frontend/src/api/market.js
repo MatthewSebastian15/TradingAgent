@@ -119,9 +119,10 @@ export async function getMarketOverview(symbols, { signal, forceRefresh = false 
   return parseMarketResponse(response);
 }
 
-export async function getStockOverview(ticker, { signal } = {}) {
+export async function getStockOverview(ticker, { signal, forceRefresh = false } = {}) {
+  const refresh = forceRefresh ? '&force_refresh=true' : '';
   const response = await fetch(
-    buildApiUrl(`/market/stock-overview?ticker=${encodeURIComponent(ticker)}`),
+    buildApiUrl(`/market/stock-overview?ticker=${encodeURIComponent(ticker)}${refresh}`),
     {
       headers: await buildAuthHeaders(),
       credentials: 'include',

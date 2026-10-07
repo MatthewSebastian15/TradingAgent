@@ -4,6 +4,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import Research from './Research';
+import { useStockOverview } from '../hooks/useStockOverview';
 
 vi.mock('../components/research/ResearchCommandBar', () => {
   function ResearchCommandBarStub({ onSubmit }) {
@@ -98,5 +99,100 @@ describe('Research page', () => {
 
     expect(rangeCalls('1Y')).toBe(1);
     expect(rangeCalls('6M')).toBe(1);
+  });
+
+  describe('overview data-quality states', () => {
+    const original = useStockOverview.getMockImplementation();
+    afterEach(() => useStockOverview.mockImplementation(original));
+
+    function withOverview(state) {
+      useStockOverview.mockImplementation((ticker) =>
+        ticker
+          ? { loading: false, error: null, data: null, retry: vi.fn(), ...state }
+          : { loading: false, error: null, data: null, retry: vi.fn() }
+      );
+    }
+
+    it('shows the error with a RETRY button wired to retry()', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      const retry = vi.fn();
+      withOverview({ error: 'boom', retry });
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+      expect(screen.getByText(/FAILED TO LOAD: boom/)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'RETRY' }));
+
+      expect(retry).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats data_quality "unavailable" as a retryable failure', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      const retry = vi.fn();
+      withOverview({
+        data: { ticker: 'AAPL', price: null, name: null, data_quality: 'unavailable' },
+        retry,
+      });
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+      expect(screen.getByText(/VENDOR DATA UNAVAILABLE/)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'RETRY' }));
+
+      expect(retry).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows a non-blocking notice for data_quality "partial"', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      withOverview({ data: { ticker: 'AAPL', price: 10, name: null, data_quality: 'partial' } });
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(screen.getByText(/Some fields unavailable/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'RETRY' })).toBeNull();
+    });
+
+    it('shows nothing extra for complete data', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      withOverview({
+        data: { ticker: 'AAPL', price: 10, name: 'Apple', data_quality: 'complete' },
+      });
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(screen.queryByText(/Some fields unavailable/)).toBeNull();
+      expect(screen.queryByText(/VENDOR DATA UNAVAILABLE/)).toBeNull();
+    });
+  });
+
+  it('ignores a late OHLCV response for a range that is no longer active', async () => {
+    let resolveLate;
+    const twoPoints = [
+      { date: '2026-01-01', open: 1, high: 2, low: 1, close: 2, volume: 1 },
+      { date: '2026-01-02', open: 2, high: 3, low: 2, close: 3, volume: 1 },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (String(url).includes('range=1M')) {
+        return new Promise((resolve) => {
+          resolveLate = () => resolve({ ok: true, json: async () => ({ points: twoPoints }) });
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ points: [] }) });
+    });
+    render(<Research />);
+
+    fireEvent.click(screen.getByText('submit-ticker'));
+    await screen.findByText('NO CHART DATA');
+    fireEvent.click(screen.getByRole('button', { name: '1M' }));
+    await waitFor(() => expect(resolveLate).toBeTypeOf('function'));
+    fireEvent.click(screen.getByRole('button', { name: '1Y' }));
+    await screen.findByText('NO CHART DATA');
+
+    resolveLate();
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(screen.getByText('NO CHART DATA')).toBeTruthy();
   });
 });

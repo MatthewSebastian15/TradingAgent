@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useStockOverview } from './useStockOverview';
 import { getStockOverview } from '../api/market';
@@ -9,6 +9,10 @@ vi.mock('../api/market', () => ({
 }));
 
 describe('useStockOverview', () => {
+  beforeEach(() => {
+    getStockOverview.mockReset();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -16,7 +20,12 @@ describe('useStockOverview', () => {
   it('stays idle without a ticker', () => {
     const { result } = renderHook(() => useStockOverview(''));
 
-    expect(result.current).toEqual({ data: null, loading: false, error: null });
+    expect(result.current).toEqual({
+      data: null,
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
     expect(getStockOverview).not.toHaveBeenCalled();
   });
 
@@ -126,6 +135,45 @@ describe('useStockOverview', () => {
     await waitFor(() => expect(result.current.data).not.toBeNull());
 
     rerender({ t: '' });
-    expect(result.current).toEqual({ data: null, loading: false, error: null });
+    expect(result.current).toEqual({
+      data: null,
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
+  });
+
+  it('retry() refetches the same ticker with forceRefresh and recovers from an error', async () => {
+    getStockOverview.mockRejectedValueOnce(new Error('boom'));
+    getStockOverview.mockResolvedValueOnce({ ticker: 'AAPL', price: 190 });
+
+    const { result } = renderHook(() => useStockOverview('AAPL'));
+    await waitFor(() => expect(result.current.error).toBe('boom'));
+
+    act(() => result.current.retry());
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.data).toEqual({ ticker: 'AAPL', price: 190 }));
+    expect(getStockOverview).toHaveBeenCalledTimes(2);
+    expect(getStockOverview).toHaveBeenLastCalledWith('AAPL', {
+      signal: expect.any(AbortSignal),
+      forceRefresh: true,
+    });
+  });
+
+  it('a ticker change after retry goes back to normal (non-forced) fetches', async () => {
+    getStockOverview.mockResolvedValue({ ticker: 'X' });
+
+    const { result, rerender } = renderHook(({ t }) => useStockOverview(t), {
+      initialProps: { t: 'AAPL' },
+    });
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    act(() => result.current.retry());
+    await waitFor(() => expect(getStockOverview).toHaveBeenCalledTimes(2));
+
+    rerender({ t: 'MSFT' });
+    await waitFor(() => expect(getStockOverview).toHaveBeenCalledTimes(3));
+    expect(getStockOverview).toHaveBeenLastCalledWith('MSFT', { signal: expect.any(AbortSignal) });
   });
 });

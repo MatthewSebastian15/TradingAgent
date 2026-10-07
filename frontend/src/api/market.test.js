@@ -67,6 +67,13 @@ describe('market API getters', () => {
     expect(globalThis.fetch.mock.calls[0][0]).toBe('/api/market/stock-overview?ticker=BBCA.JK');
   });
 
+  it('getStockOverview appends force_refresh only when requested', async () => {
+    await getStockOverview('AAPL', { forceRefresh: true });
+    expect(globalThis.fetch.mock.calls[0][0]).toBe(
+      '/api/market/stock-overview?ticker=AAPL&force_refresh=true'
+    );
+  });
+
   it('getMarketMovers builds country/exchange/limit params', async () => {
     await getMarketMovers({ country: 'US', exchange: 'NASDAQ', limit: 5 });
     expect(globalThis.fetch.mock.calls[0][0]).toBe(

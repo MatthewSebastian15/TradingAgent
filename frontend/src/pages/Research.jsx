@@ -813,6 +813,26 @@ function RiskAssessmentCard({ data, loading }) {
 }
 RiskAssessmentCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
 
+function LoadFailure({ message, onRetry }) {
+  return (
+    <div className="px-4 py-6 font-mono text-xs text-bloomberg-red flex items-center gap-3">
+      <span>■ {message}</span>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="border border-bloomberg-red px-2 py-1 text-bloomberg-red hover:bg-bloomberg-red hover:text-black transition-colors"
+      >
+        RETRY
+      </button>
+    </div>
+  );
+}
+
+LoadFailure.propTypes = {
+  message: PropTypes.string.isRequired,
+  onRetry: PropTypes.func.isRequired,
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const RANGE_ORDER = ['1W', '1M', '3M', '6M', '1Y'];
@@ -825,7 +845,7 @@ export default function Research() {
   const [ohlcvData, setOhlcvData] = useState(null);
   const [ohlcvLoading, setOhlcvLoading] = useState(false);
 
-  const { data, loading, error } = useStockOverview(activeTicker);
+  const { data, loading, error, retry } = useStockOverview(activeTicker);
 
   const handleSelect = useCallback((selection) => {
     const item = typeof selection === 'string' ? { symbol: selection } : selection || {};
@@ -884,11 +904,13 @@ export default function Research() {
       setOhlcvData(null);
       fetchOhlcvRange(activeTicker, activeRange, { signal: controller.signal })
         .then((d) => {
+          if (controller.signal.aborted) return; // range/ticker changed while in flight
           setOhlcvData(d);
           setOhlcvLoading(false);
         })
         .catch((e) => {
-          if (e.name !== 'AbortError') setOhlcvLoading(false);
+          if (controller.signal.aborted || e.name === 'AbortError') return;
+          setOhlcvLoading(false);
         });
     }
 
@@ -936,9 +958,13 @@ export default function Research() {
             <>
               <StockHeader data={data} loading={loading} />
 
-              {error && (
-                <div className="px-4 py-6 font-mono text-xs text-bloomberg-red">
-                  ■ FAILED TO LOAD: {error}
+              {error && <LoadFailure message={`FAILED TO LOAD: ${error}`} onRetry={retry} />}
+              {!error && data?.data_quality === 'unavailable' && (
+                <LoadFailure message="VENDOR DATA UNAVAILABLE — try again" onRetry={retry} />
+              )}
+              {data?.data_quality === 'partial' && (
+                <div className="px-4 py-2 font-mono text-[10px] text-bloomberg-amber">
+                  ■ Some fields unavailable — one or more data vendors did not respond.
                 </div>
               )}
 
