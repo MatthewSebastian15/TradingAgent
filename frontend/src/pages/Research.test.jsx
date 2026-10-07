@@ -20,11 +20,13 @@ vi.mock('../components/research/ResearchCommandBar', () => {
   ResearchCommandBarStub.propTypes = { onSubmit: PropTypes.func };
   return { default: ResearchCommandBarStub };
 });
-vi.mock('../components/research/ResearchSidebar', () => ({
-  default: function ResearchSidebarStub() {
-    return <div data-testid="research-sidebar" />;
-  },
-}));
+vi.mock('../components/research/ResearchSidebar', () => {
+  function ResearchSidebarStub({ collapsed }) {
+    return <div data-testid="research-sidebar" data-collapsed={String(collapsed)} />;
+  }
+  ResearchSidebarStub.propTypes = { collapsed: PropTypes.bool };
+  return { default: ResearchSidebarStub };
+});
 vi.mock('../hooks/useStockOverview', () => ({
   useStockOverview: vi.fn((ticker) =>
     ticker
@@ -371,6 +373,56 @@ describe('Research page', () => {
       expect(screen.getByRole('button', { name: /OVERVIEW/ }).getAttribute('aria-current')).toBe(
         'true'
       );
+    });
+  });
+
+  describe('responsive layout', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('stacks every overview grid to one column on mobile', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      const expectations = {
+        'research-chart-row': [/grid-cols-1/, /lg:grid-cols-3/],
+        'research-overview-grid-1': [/grid-cols-1/, /md:grid-cols-2/, /lg:grid-cols-3/],
+        'research-overview-grid-2': [/grid-cols-1/, /md:grid-cols-2/, /lg:grid-cols-3/],
+        'research-side-by-side-grid': [/grid-cols-1/, /md:grid-cols-2/],
+      };
+      for (const [testId, patterns] of Object.entries(expectations)) {
+        const grid = await screen.findByTestId(testId);
+        for (const pattern of patterns) expect(grid.className).toMatch(pattern);
+      }
+      expect((await screen.findByTestId('research-chart-col')).className).toMatch(
+        /col-span-1.*lg:col-span-2/
+      );
+    });
+
+    it('force-collapses the sidebar on a mobile-width viewport', () => {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn((query) => ({
+          matches: query === '(max-width: 767px)',
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        }))
+      );
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      render(<Research />);
+
+      expect(screen.getByTestId('research-sidebar').dataset.collapsed).toBe('true');
+    });
+
+    it('leaves the sidebar expanded on a desktop-width viewport', () => {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+      );
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      render(<Research />);
+
+      expect(screen.getByTestId('research-sidebar').dataset.collapsed).toBe('false');
     });
   });
 

@@ -957,6 +957,18 @@ export default function Research() {
     setVisitedTabs([]); // hidden tabs belong to the previous ticker
   }, []);
 
+  // Phones get the rail only; the user can still expand it (it then overlays content).
+  useEffect(() => {
+    const mql = window.matchMedia?.('(max-width: 767px)');
+    if (!mql) return undefined;
+    const collapseOnMobile = () => {
+      if (mql.matches) setCollapsed(true);
+    };
+    collapseOnMobile();
+    mql.addEventListener('change', collapseOnMobile);
+    return () => mql.removeEventListener('change', collapseOnMobile);
+  }, []);
+
   // Auto-collapse sidebar once, the first time research content loads.
   useEffect(() => {
     if (activeTicker && !autoCollapsed) {
@@ -1100,8 +1112,11 @@ export default function Research() {
 
               {activeTab === 'OVERVIEW' && (
                 <>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2">
+                  <div
+                    data-testid="research-chart-row"
+                    className="grid grid-cols-1 lg:grid-cols-3 gap-3"
+                  >
+                    <div data-testid="research-chart-col" className="col-span-1 lg:col-span-2">
                       <PriceChartCard
                         ticker={activeTicker}
                         ohlcvData={ohlcvData}
@@ -1122,7 +1137,7 @@ export default function Research() {
                   {compareActive ? (
                     // Valuation/profitability/growth/consensus already sit in the compare
                     // section above; only the cards it does not repeat remain here.
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <DividendsCard data={data} loading={loading} />
                       <BalanceSheetCard data={data} loading={loading} />
                       <SharesOwnershipCard data={data} loading={loading} />
@@ -1130,19 +1145,28 @@ export default function Research() {
                     </div>
                   ) : (
                     <>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div
+                        data-testid="research-overview-grid-1"
+                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+                      >
                         <ValuationCard data={data} loading={loading} />
                         <AnalystConsensusCard data={data} loading={loading} />
                         <DividendsCard data={data} loading={loading} />
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3">
+                      <div
+                        data-testid="research-overview-grid-2"
+                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+                      >
                         <ProfitabilityCard data={data} loading={loading} />
                         <GrowthIncomeCard data={data} loading={loading} />
                         <BalanceSheetCard data={data} loading={loading} />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div
+                        data-testid="research-side-by-side-grid"
+                        className="grid grid-cols-1 md:grid-cols-2 gap-3"
+                      >
                         <SharesOwnershipCard data={data} loading={loading} />
                         <RiskAssessmentCard data={data} loading={loading} />
                       </div>
