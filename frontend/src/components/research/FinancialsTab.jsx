@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 
 import { SectionCard, SkeletonRow } from './primitives';
 import { getFinancials } from '../../api/market';
-import { useResearchTabData } from '../../hooks/useResearchTabData';
+import { useResearchData } from '../../hooks/useResearchData';
 
 const STATEMENTS = ['income', 'balance'];
 
@@ -13,7 +13,7 @@ export default function FinancialsTab({ ticker }) {
     ({ signal }) => getFinancials(ticker, statement, { signal }),
     [ticker, statement]
   );
-  const { data, loading, error } = useResearchTabData(load);
+  const { data, loading, error } = useResearchData(load);
   const periods = data?.periods || [];
   const rows = data?.rows || [];
 

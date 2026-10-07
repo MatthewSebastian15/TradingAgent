@@ -13,7 +13,10 @@ import {
   getMarketOverview,
   getMarketPresets,
   getMarketQuotes,
+  getAnalystHistory,
+  getDividendHistory,
   getFinancials,
+  getGrowthTrend,
   getMarketSparklines,
   getQuoteLite,
   getTechnicals,
@@ -99,6 +102,15 @@ describe('market API getters', () => {
   it('getTechnicals encodes the ticker', async () => {
     await getTechnicals('^GSPC');
     expect(globalThis.fetch.mock.calls[0][0]).toBe('/api/market/technicals?ticker=%5EGSPC');
+  });
+
+  it.each([
+    ['getAnalystHistory', getAnalystHistory, 'analyst-history'],
+    ['getGrowthTrend', getGrowthTrend, 'growth-trend'],
+    ['getDividendHistory', getDividendHistory, 'dividend-history'],
+  ])('%s encodes the ticker', async (_name, fn, path) => {
+    await fn('BBCA.JK');
+    expect(globalThis.fetch.mock.calls[0][0]).toBe(`/api/market/${path}?ticker=BBCA.JK`);
   });
 
   it('getMarketMovers builds country/exchange/limit params', async () => {

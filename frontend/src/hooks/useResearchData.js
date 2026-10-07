@@ -5,7 +5,7 @@ const IDLE = { load: null, data: null, error: null };
 // Runs `load({ signal })` whenever the `load` function identity changes (wrap it in
 // useCallback keyed on its inputs). The settled result is tagged with the `load` that
 // produced it, so data for a previous ticker/statement is never shown for the current one.
-export function useResearchTabData(load) {
+export function useResearchData(load) {
   const [state, setState] = useState(IDLE);
 
   useEffect(() => {

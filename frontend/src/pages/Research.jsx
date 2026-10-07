@@ -1,7 +1,10 @@
 import PropTypes from 'prop-types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import AnalystHistoryStrip from '../components/research/AnalystHistoryStrip';
+import DividendHistoryList from '../components/research/DividendHistoryList';
 import FinancialsTab from '../components/research/FinancialsTab';
+import GrowthSparkline from '../components/research/GrowthSparkline';
 import NewsTab from '../components/research/NewsTab';
 import {
   DataRow,
@@ -549,6 +552,7 @@ function AnalystConsensusCard({ data, loading }) {
               <RangeDot pct={targetPosPct} />
             </div>
           )}
+          <AnalystHistoryStrip ticker={data.ticker} />
         </>
       )}
     </SectionCard>
@@ -575,6 +579,7 @@ function DividendsCard({ data, loading }) {
           <DataRow label="DIV RATE" value={fmtNum(data.div_rate)} />
           <DataRow label="PAYOUT RATIO" value={fmtPct(data.payout_ratio)} />
           <DataRow label="EX-DIV DATE" value={data.ex_div_date || 'N/A'} />
+          <DividendHistoryList ticker={data.ticker} />
         </>
       )}
     </SectionCard>
@@ -622,6 +627,7 @@ function GrowthIncomeCard({ data, loading }) {
         Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
         <>
+          <GrowthSparkline ticker={data.ticker} />
           <DataRow
             label="REVENUE GROWTH"
             value={fmtPct(data.revenue_growth, { sign: true })}

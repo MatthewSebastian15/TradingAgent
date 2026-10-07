@@ -170,6 +170,25 @@ export async function getTechnicals(ticker, { signal } = {}) {
   return parseMarketResponse(response);
 }
 
+async function getTickerSeries(path, ticker, signal) {
+  const response = await fetch(
+    buildApiUrl(`/market/${path}?ticker=${encodeURIComponent(ticker)}`),
+    {
+      headers: await buildAuthHeaders(),
+      credentials: 'include',
+      signal,
+    }
+  );
+  return parseMarketResponse(response);
+}
+
+export const getAnalystHistory = (ticker, { signal } = {}) =>
+  getTickerSeries('analyst-history', ticker, signal);
+export const getGrowthTrend = (ticker, { signal } = {}) =>
+  getTickerSeries('growth-trend', ticker, signal);
+export const getDividendHistory = (ticker, { signal } = {}) =>
+  getTickerSeries('dividend-history', ticker, signal);
+
 export async function getMarketMovers({ country, exchange, limit }, { signal } = {}) {
   const params = new URLSearchParams({
     country,

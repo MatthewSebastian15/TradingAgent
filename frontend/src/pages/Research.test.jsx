@@ -356,4 +356,74 @@ describe('Research page', () => {
       expect(screen.queryByTestId('research-ma200-line')).toBeNull();
     });
   });
+
+  describe('trend widgets inside the cards', () => {
+    const original = useStockOverview.getMockImplementation();
+    afterEach(() => useStockOverview.mockImplementation(original));
+
+    const ok = (payload) => Promise.resolve({ ok: true, json: async () => payload });
+
+    function stub(overrides = {}) {
+      useStockOverview.mockImplementation((ticker) => ({
+        loading: false,
+        error: null,
+        retry: vi.fn(),
+        data: ticker ? { ticker, name: 'Apple Inc.', price: 110, prev_close: 100 } : null,
+      }));
+      return vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+        const u = String(url);
+        if (u.includes('/market/analyst-history')) {
+          return ok(
+            overrides.analyst ?? {
+              history: [
+                { period: '0m', strong_buy: 6, buy: 19, hold: 13, sell: 3, strong_sell: 3 },
+              ],
+            }
+          );
+        }
+        if (u.includes('/market/growth-trend')) {
+          return ok({
+            quarters: [
+              { period: '2025-12-31', revenue: 100, earnings: 10 },
+              { period: '2026-03-31', revenue: 120, earnings: 12 },
+            ],
+          });
+        }
+        if (u.includes('/market/dividend-history')) {
+          return ok({ payments: [{ date: '2026-05-11', amount: 0.27 }] });
+        }
+        return ok({ points: [] });
+      });
+    }
+
+    it('shows rating history, growth sparkline and dividend history for the active ticker', async () => {
+      const fetchSpy = stub();
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(await screen.findByTestId('analyst-history-strip')).toBeTruthy();
+      expect(await screen.findByTestId('growth-sparkline')).toBeTruthy();
+      expect(await screen.findByTestId('dividend-history')).toBeTruthy();
+      const urls = fetchSpy.mock.calls.map((c) => String(c[0]));
+      expect(urls.some((u) => u.includes('/market/analyst-history?ticker=AAPL'))).toBe(true);
+      expect(urls.some((u) => u.includes('/market/growth-trend?ticker=AAPL'))).toBe(true);
+      expect(urls.some((u) => u.includes('/market/dividend-history?ticker=AAPL'))).toBe(true);
+    });
+
+    it('keeps the rest of the card when a history request fails', async () => {
+      stub({ analyst: null });
+      vi.spyOn(globalThis, 'fetch').mockImplementation((url) =>
+        String(url).includes('/market/analyst-history')
+          ? Promise.reject(new Error('boom'))
+          : ok({ points: [] })
+      );
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(await screen.findByText('ANALYST CONSENSUS')).toBeTruthy();
+      expect(screen.queryByTestId('analyst-history-strip')).toBeNull();
+    });
+  });
 });

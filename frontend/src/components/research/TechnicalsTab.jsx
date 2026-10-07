@@ -3,7 +3,7 @@ import { useCallback } from 'react';
 
 import { DataRow, SectionCard, SkeletonRow } from './primitives';
 import { getTechnicals } from '../../api/market';
-import { useResearchTabData } from '../../hooks/useResearchTabData';
+import { useResearchData } from '../../hooks/useResearchData';
 
 const show = (value) => (value === null || value === undefined || value === '' ? 'N/A' : value);
 
@@ -25,7 +25,7 @@ const ROWS = [
 
 export default function TechnicalsTab({ ticker }) {
   const load = useCallback(({ signal }) => getTechnicals(ticker, { signal }), [ticker]);
-  const { data, loading, error } = useResearchTabData(load);
+  const { data, loading, error } = useResearchData(load);
   const reasons = Array.isArray(data?.reasons) ? data.reasons : [];
 
   return (
