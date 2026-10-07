@@ -9,7 +9,7 @@ function setup(props = {}) {
     onRunAnalysis: vi.fn(),
     onToggleCompare: vi.fn(),
   };
-  render(<ResearchActions canAdd inWatchlist={false} comparing={false} {...handlers} {...props} />);
+  render(<ResearchActions inWatchlist={false} comparing={false} {...handlers} {...props} />);
   return handlers;
 }
 
@@ -26,16 +26,6 @@ describe('ResearchActions', () => {
     expect(handlers.onAddToWatchlist).toHaveBeenCalledTimes(1);
     expect(handlers.onRunAnalysis).toHaveBeenCalledTimes(1);
     expect(handlers.onToggleCompare).toHaveBeenCalledTimes(1);
-  });
-
-  it('disables the watchlist button when there is no watchlist group yet', () => {
-    const handlers = setup({ canAdd: false });
-
-    const button = screen.getByRole('button', { name: '+ WATCHLIST' });
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute('title')).toMatch(/create a watchlist group/i);
-    fireEvent.click(button);
-    expect(handlers.onAddToWatchlist).not.toHaveBeenCalled();
   });
 
   it('shows a disabled confirmation when the ticker is already in the watchlist', () => {

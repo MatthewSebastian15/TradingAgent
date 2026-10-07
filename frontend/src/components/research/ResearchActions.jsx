@@ -6,7 +6,6 @@ const BUTTON =
 // Hub actions shown next to the detail tabs: feed the Watchlist, hand off to the AI Agent,
 // or open the two-ticker comparison.
 export default function ResearchActions({
-  canAdd,
   inWatchlist,
   comparing,
   onAddToWatchlist,
@@ -20,13 +19,7 @@ export default function ResearchActions({
           ✓ IN WATCHLIST
         </button>
       ) : (
-        <button
-          type="button"
-          onClick={onAddToWatchlist}
-          disabled={!canAdd}
-          title={canAdd ? undefined : 'Create a watchlist group first'}
-          className={BUTTON}
-        >
+        <button type="button" onClick={onAddToWatchlist} className={BUTTON}>
           + WATCHLIST
         </button>
       )}
@@ -41,7 +34,6 @@ export default function ResearchActions({
 }
 
 ResearchActions.propTypes = {
-  canAdd: PropTypes.bool.isRequired,
   inWatchlist: PropTypes.bool.isRequired,
   comparing: PropTypes.bool.isRequired,
   onAddToWatchlist: PropTypes.func.isRequired,

@@ -29,7 +29,7 @@ import {
   TEXT_COLOR,
 } from '../components/results/tabs/priceChartUtils';
 import TickerSearchBar from '../components/TickerSearchBar';
-import { AI_AGENT_PATH } from '../constants/routes';
+import { AI_AGENT_PATH, WATCHLIST_PATH } from '../constants/routes';
 import { useQuoteLite } from '../hooks/useQuoteLite';
 import { useStockOverview } from '../hooks/useStockOverview';
 import { useWatchlistStore } from '../hooks/useWatchlistStore';
@@ -918,8 +918,13 @@ export default function Research() {
 
   const handleAddToWatchlist = useCallback(() => {
     if (!researchSymbol) return;
+    // A fresh profile has no group; never create one silently, let the user do it.
+    if (!activeGroup) {
+      navigate(WATCHLIST_PATH);
+      return;
+    }
     addTicker({ symbol: researchSymbol, name: data?.name, exchange: data?.exchange });
-  }, [addTicker, data?.exchange, data?.name, researchSymbol]);
+  }, [activeGroup, addTicker, data?.exchange, data?.name, navigate, researchSymbol]);
 
   const handleRunAnalysis = useCallback(() => {
     if (researchSymbol) navigate(AI_AGENT_PATH, { state: { prefillTicker: researchSymbol } });
@@ -1046,7 +1051,6 @@ export default function Research() {
                 onTabChange={setActiveTab}
                 actions={
                   <ResearchActions
-                    canAdd={Boolean(activeGroup)}
                     inWatchlist={Boolean(researchSymbol) && hasTicker(researchSymbol)}
                     comparing={comparing}
                     onAddToWatchlist={handleAddToWatchlist}

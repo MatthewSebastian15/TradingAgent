@@ -504,6 +504,19 @@ describe('Research page', () => {
       );
     });
 
+    it('sends a fresh profile (no group) to the watchlist page instead of adding', () => {
+      const addTicker = vi.fn();
+      navigateMock.mockClear();
+      setup({ watchlist: { activeGroup: null, hasTicker: () => false, addTicker } });
+
+      const button = screen.getByRole('button', { name: '+ WATCHLIST' });
+      expect(button.disabled).toBe(false);
+      fireEvent.click(button);
+
+      expect(addTicker).not.toHaveBeenCalled();
+      expect(navigateMock).toHaveBeenCalledWith('/watchlist');
+    });
+
     it('shows the ticker as already in the watchlist and does not add it twice', () => {
       setup({
         watchlist: {
@@ -515,12 +528,6 @@ describe('Research page', () => {
 
       const button = screen.getByRole('button', { name: /IN WATCHLIST/ });
       expect(button.disabled).toBe(true);
-    });
-
-    it('disables adding when the user has no watchlist group', () => {
-      setup({ watchlist: { activeGroup: null, hasTicker: () => false, addTicker: vi.fn() } });
-
-      expect(screen.getByRole('button', { name: '+ WATCHLIST' }).disabled).toBe(true);
     });
 
     it('hands the ticker to the AI Agent page via router state', () => {
