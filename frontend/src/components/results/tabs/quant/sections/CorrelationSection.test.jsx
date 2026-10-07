@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CorrelationSection } from './CorrelationSection';
 
 vi.mock('../../../../TickerSearchBar', () => ({
-  // eslint-disable-next-line react/prop-types
   default: function TickerSearchBarStub({ onSelect, onSubmit, placeholder }) {
     return (
       <div>

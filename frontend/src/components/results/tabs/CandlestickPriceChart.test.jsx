@@ -256,7 +256,8 @@ describe('CandlestickPriceChart', () => {
       const note = screen.getByTestId('reference-offscale-note');
       expect(note.textContent).toMatch(/FAR.*above/i);
       expect(note.textContent).toMatch(/LOW.*below/i);
-      expect(note.textContent).not.toMatch(/NAN|IN/);
+      expect(note.textContent).not.toContain('NAN');
+      expect(note.textContent).not.toContain('IN ');
     });
 
     it('shows no off-scale note when every line is on the chart', () => {

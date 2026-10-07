@@ -1,4 +1,4 @@
-import { mean, median, percentileRank, TRADING_DAYS } from './stats';
+import { mean, median, percentileRank } from './stats';
 import { mulberry32, QUANTILE } from './stochastic';
 
 // Up to 3 stages: `years` at `growth`, `fadeYears` fading linearly toward `terminalGrowth`,
