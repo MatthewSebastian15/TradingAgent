@@ -324,13 +324,19 @@ function PriceChartCard({
   ma50,
   ma200,
 }) {
-  const points = ohlcvData?.points || [];
+  const points = useMemo(() => ohlcvData?.points || [], [ohlcvData]);
+  // Last range that had a drawable chart; kept on screen (faded) while the next range loads.
+  const [last, setLast] = useState({ points: [], range: activeRange });
+  useEffect(() => {
+    if (points.length >= 2) setLast({ points, range: activeRange });
+  }, [points, activeRange]);
+  const shown = ohlcvLoading ? last : { points, range: activeRange };
   const referenceLines = [
     { value: ma50, label: 'MA50', color: '#3b82f6', testId: 'research-ma50-line' },
     { value: ma200, label: 'MA200', color: '#06b6d4', testId: 'research-ma200-line' },
   ];
   return (
-    <SectionCard title="PRICE CHART" className="h-full">
+    <SectionCard title="PRICE CHART" className="h-full" busy={ohlcvLoading}>
       <div className="flex gap-2 px-3 py-2 border-b border-bloomberg-border">
         {['1W', '1M', '3M', '6M', '1Y'].map((r) => (
           <button
@@ -347,34 +353,44 @@ function PriceChartCard({
           </button>
         ))}
       </div>
-      {ohlcvLoading ? (
-        <div className="h-[490px] flex items-center justify-center">
-          <div className="animate-pulse bg-bloomberg-border rounded h-4 w-32" />
+      <div className="relative">
+        <div
+          data-testid="price-chart-body"
+          className={`transition-opacity duration-200 motion-reduce:transition-none ${
+            ohlcvLoading ? 'opacity-40' : 'opacity-100'
+          }`}
+        >
+          {shown.points.length >= 2 ? (
+            <>
+              <CandlestickPriceChart
+                points={shown.points}
+                allPoints={shown.points}
+                ticker={ticker}
+                rangeKey={shown.range}
+                onZoom={() => {}}
+                heightClass="h-[324px]"
+                showVolume={false}
+                referenceLines={referenceLines}
+              />
+              <div className="border-y border-bloomberg-border px-3 py-1.5">
+                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
+                  VOLUME
+                </span>
+              </div>
+              <VolumeBarChart points={shown.points} rangeKey={shown.range} />
+            </>
+          ) : (
+            <div className="h-[490px] flex items-center justify-center font-mono text-[10px] text-bloomberg-muted">
+              {ohlcvLoading ? '' : 'NO CHART DATA'}
+            </div>
+          )}
         </div>
-      ) : points.length >= 2 ? (
-        <>
-          <CandlestickPriceChart
-            points={points}
-            allPoints={points}
-            ticker={ticker}
-            rangeKey={activeRange}
-            onZoom={() => {}}
-            heightClass="h-[324px]"
-            showVolume={false}
-            referenceLines={referenceLines}
-          />
-          <div className="border-y border-bloomberg-border px-3 py-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
-              VOLUME
-            </span>
+        {ohlcvLoading && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <Skeleton className="h-4 w-32" />
           </div>
-          <VolumeBarChart points={points} rangeKey={activeRange} />
-        </>
-      ) : (
-        <div className="h-[490px] flex items-center justify-center font-mono text-[10px] text-bloomberg-muted">
-          NO CHART DATA
-        </div>
-      )}
+        )}
+      </div>
     </SectionCard>
   );
 }
@@ -1157,6 +1173,7 @@ export default function Research() {
                   >
                     <div data-testid="research-chart-col" className="col-span-1 lg:col-span-2">
                       <PriceChartCard
+                        key={activeTicker}
                         ticker={activeTicker}
                         ohlcvData={ohlcvData}
                         ohlcvLoading={ohlcvLoading}

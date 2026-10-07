@@ -479,6 +479,35 @@ describe('Research page', () => {
     });
   });
 
+  describe('price chart range transition', () => {
+    const original = useStockOverview.getMockImplementation();
+    afterEach(() => useStockOverview.mockImplementation(original));
+
+    const candles = [
+      { date: '2026-01-01', open: 100, high: 130, low: 90, close: 120, volume: 1 },
+      { date: '2026-01-02', open: 120, high: 140, low: 95, close: 110, volume: 1 },
+    ];
+
+    it('keeps the previous range visible, faded, while a new range loads', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation((url) =>
+        String(url).includes('range=1M')
+          ? new Promise(() => {})
+          : Promise.resolve({ ok: true, json: async () => ({ points: candles }) })
+      );
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+      await screen.findAllByText('VOLUME');
+
+      fireEvent.click(screen.getByRole('button', { name: '1M' }));
+
+      expect(screen.getAllByText('VOLUME').length).toBeGreaterThan(0);
+      expect(screen.queryByText('NO CHART DATA')).toBeNull();
+      const body = screen.getByTestId('price-chart-body');
+      expect(body.className).toMatch(/opacity-40/);
+      expect(body.className).toMatch(/motion-reduce:transition-none/);
+    });
+  });
+
   describe('MA overlay', () => {
     const original = useStockOverview.getMockImplementation();
     afterEach(() => useStockOverview.mockImplementation(original));
