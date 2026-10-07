@@ -44,6 +44,22 @@ describe('ResearchSidebar', () => {
     expect(screen.queryByText('RECENT')).toBeNull();
   });
 
+  it('gives ticker rows a touch-friendly floor and every button a focus ring', () => {
+    renderSidebar();
+
+    const row = screen.getByRole('button', { name: 'NVDA' });
+    expect(row.className).toMatch(/min-h-\[44px\]/);
+    expect(row.className).toMatch(/md:min-h-0/);
+    for (const name of ['RECENT', 'WATCHLIST', 'Collapse sidebar', 'NVDA']) {
+      expect(screen.getByRole('button', { name }).className).toMatch(/focus-visible:outline/);
+    }
+  });
+
+  it('gives the expand button a focus ring', () => {
+    renderSidebar({ collapsed: true });
+    expect(screen.getByLabelText('Expand sidebar').className).toMatch(/focus-visible:outline/);
+  });
+
   it('lists recent tickers with the active one highlighted', () => {
     const { onSelect } = renderSidebar();
 

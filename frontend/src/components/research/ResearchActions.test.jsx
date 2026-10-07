@@ -16,6 +16,13 @@ function setup(props = {}) {
 describe('ResearchActions', () => {
   afterEach(cleanup);
 
+  it('gives every action a visible focus ring', () => {
+    setup();
+    for (const name of ['+ WATCHLIST', 'RUN FULL ANALYSIS', '+ COMPARE']) {
+      expect(screen.getByRole('button', { name }).className).toMatch(/focus-visible:outline/);
+    }
+  });
+
   it('wires the three actions to their handlers', () => {
     const handlers = setup();
 

@@ -107,6 +107,16 @@ describe('Research page', () => {
     expect(message.className).toMatch(/text-bloomberg-white/);
   });
 
+  it('gives range, description, retry and example buttons a visible focus ring', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+    render(<Research />);
+    expect(screen.getByRole('button', { name: 'AAPL' }).className).toMatch(/focus-visible:outline/);
+
+    fireEvent.click(screen.getByText('submit-ticker'));
+    const range = await screen.findByRole('button', { name: '1M' });
+    expect(range.className).toMatch(/focus-visible:outline/);
+  });
+
   it('lets the user load an example ticker from the empty state', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
     render(<Research />);

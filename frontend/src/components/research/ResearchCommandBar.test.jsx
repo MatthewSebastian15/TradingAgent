@@ -65,6 +65,11 @@ describe('ResearchCommandBar', () => {
     expect(screen.getByTestId('search-value').textContent).toBe('');
   });
 
+  it('gives the clear button a visible focus ring', () => {
+    render(<ResearchCommandBar value="AAPL" onSelect={vi.fn()} onSubmit={vi.fn()} />);
+    expect(screen.getByLabelText('Clear search').className).toMatch(/focus-visible:outline/);
+  });
+
   it('pulses the status dot while loading', () => {
     const { container } = render(
       <ResearchCommandBar value="AAPL" onSelect={vi.fn()} onSubmit={vi.fn()} loading />

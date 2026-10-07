@@ -1,7 +1,8 @@
 import PropTypes from 'prop-types';
 
-const BUTTON =
-  'font-mono text-[10px] uppercase tracking-wider border border-bloomberg-border px-2 py-1 text-bloomberg-white/80 hover:text-bloomberg-orange hover:border-bloomberg-orange transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-bloomberg-border disabled:hover:text-bloomberg-white/80';
+import { FOCUS_RING } from './primitives';
+
+const BUTTON = `${FOCUS_RING} font-mono text-[10px] uppercase tracking-wider border border-bloomberg-border px-2 py-1 text-bloomberg-white/80 hover:text-bloomberg-orange hover:border-bloomberg-orange transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-bloomberg-border disabled:hover:text-bloomberg-white/80`;
 
 // Hub actions shown next to the detail tabs: feed the Watchlist, hand off to the AI Agent,
 // or open the two-ticker comparison.

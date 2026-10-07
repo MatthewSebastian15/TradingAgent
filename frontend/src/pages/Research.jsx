@@ -10,6 +10,7 @@ import GrowthSparkline from '../components/research/GrowthSparkline';
 import NewsTab from '../components/research/NewsTab';
 import {
   DataRow,
+  FOCUS_RING,
   MarginBar,
   RangeDot,
   SectionCard,
@@ -174,7 +175,7 @@ function StockHeader({ data, loading, updatedAt = null, activeTab, onTabChange, 
                     onClick={() => setDescExpanded(!descExpanded)}
                     aria-expanded={descExpanded}
                     aria-controls="research-company-description"
-                    className="font-mono text-[10px] text-bloomberg-orange mt-1"
+                    className={`font-mono text-[10px] text-bloomberg-orange mt-1 ${FOCUS_RING}`}
                   >
                     {descExpanded ? 'Show less' : 'Show more...'}
                   </button>
@@ -192,7 +193,7 @@ function StockHeader({ data, loading, updatedAt = null, activeTab, onTabChange, 
               type="button"
               onClick={() => onTabChange(tab)}
               aria-pressed={activeTab === tab}
-              className={`py-2 font-mono text-[11px] border-b-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bloomberg-orange ${
+              className={`py-2 font-mono text-[11px] border-b-2 transition-colors ${FOCUS_RING} ${
                 activeTab === tab
                   ? 'border-bloomberg-orange text-bloomberg-orange'
                   : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white'
@@ -346,7 +347,7 @@ function PriceChartCard({
             key={r}
             type="button"
             onClick={() => setActiveRange(r)}
-            className={`font-mono text-[10px] px-2 py-0.5 ${
+            className={`font-mono text-[10px] px-2 py-0.5 ${FOCUS_RING} ${
               activeRange === r
                 ? 'text-bloomberg-orange border border-bloomberg-orange'
                 : 'text-bloomberg-muted border border-transparent hover:text-bloomberg-white'
@@ -871,7 +872,7 @@ function LoadFailure({ message, onRetry }) {
       <button
         type="button"
         onClick={onRetry}
-        className="border border-bloomberg-red px-2 py-1 text-bloomberg-red hover:bg-bloomberg-red hover:text-black transition-colors"
+        className={`border border-bloomberg-red px-2 py-1 text-bloomberg-red hover:bg-bloomberg-red hover:text-black transition-colors ${FOCUS_RING}`}
       >
         RETRY
       </button>
@@ -1135,7 +1136,7 @@ export default function Research() {
                     key={example}
                     type="button"
                     onClick={() => handleSelect(example)}
-                    className="border border-bloomberg-border px-3 py-1.5 font-mono text-[11px] text-bloomberg-white/80 transition-colors hover:border-bloomberg-orange hover:text-bloomberg-orange"
+                    className={`border border-bloomberg-border px-3 py-1.5 font-mono text-[11px] text-bloomberg-white/80 transition-colors hover:border-bloomberg-orange hover:text-bloomberg-orange ${FOCUS_RING}`}
                   >
                     {example}
                   </button>

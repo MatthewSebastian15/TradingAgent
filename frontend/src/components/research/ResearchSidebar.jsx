@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { FOCUS_RING } from './primitives';
 import { WATCHLIST_PATH } from '../../constants/routes';
 import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from '../../constants/sidebar';
 import { useWatchlistStore } from '../../hooks/useWatchlistStore';
@@ -15,7 +16,7 @@ function TickerRow({ item, active, onSelect }) {
     <button
       type="button"
       onClick={() => onSelect(item)}
-      className={`flex h-9 w-full items-center border-b border-[#1a1a1a] border-l-2 px-4 text-left font-mono text-[13px] ${
+      className={`flex h-9 min-h-[44px] md:min-h-0 w-full items-center border-b border-[#1a1a1a] border-l-2 px-4 text-left font-mono text-[13px] ${FOCUS_RING} ${
         active
           ? 'border-l-bloomberg-orange text-bloomberg-orange'
           : 'border-l-transparent text-bloomberg-white hover:text-bloomberg-orange'
@@ -46,7 +47,7 @@ export default function ResearchSidebar({ activeTicker, collapsed, onToggle, onS
         type="button"
         onClick={onToggle}
         aria-label="Expand sidebar"
-        className={`flex h-full ${SIDEBAR_COLLAPSED_WIDTH} shrink-0 items-center justify-center border-r border-bloomberg-border bg-[#111111] text-bloomberg-orange transition-all duration-200 ease-in-out`}
+        className={`${FOCUS_RING} flex h-full ${SIDEBAR_COLLAPSED_WIDTH} shrink-0 items-center justify-center border-r border-bloomberg-border bg-[#111111] text-bloomberg-orange transition-all duration-200 ease-in-out`}
       >
         <ChevronRight className="h-4 w-4" aria-hidden="true" />
       </button>
@@ -67,7 +68,7 @@ export default function ResearchSidebar({ activeTicker, collapsed, onToggle, onS
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`flex-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+            className={`flex-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${FOCUS_RING} ${
               tab === t
                 ? 'text-bloomberg-orange'
                 : 'text-bloomberg-muted hover:text-bloomberg-white'
@@ -80,7 +81,7 @@ export default function ResearchSidebar({ activeTicker, collapsed, onToggle, onS
           type="button"
           onClick={onToggle}
           aria-label="Collapse sidebar"
-          className="flex w-7 shrink-0 items-center justify-center border-l border-bloomberg-border text-bloomberg-orange"
+          className={`flex w-7 shrink-0 items-center justify-center border-l border-bloomberg-border text-bloomberg-orange ${FOCUS_RING}`}
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </button>

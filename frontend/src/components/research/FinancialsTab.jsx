@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { useCallback, useState } from 'react';
 
-import { SectionCard, SkeletonRow } from './primitives';
+import { FOCUS_RING, SectionCard, SkeletonRow } from './primitives';
 import { getFinancials } from '../../api/market';
 import { useResearchData } from '../../hooks/useResearchData';
 
@@ -29,7 +29,7 @@ export default function FinancialsTab({ ticker }) {
             type="button"
             onClick={() => setStatement(s)}
             aria-pressed={statement === s}
-            className={`font-mono text-[10px] px-2 py-0.5 uppercase ${
+            className={`font-mono text-[10px] px-2 py-0.5 uppercase ${FOCUS_RING} ${
               statement === s
                 ? 'text-bloomberg-orange border border-bloomberg-orange'
                 : 'text-bloomberg-muted border border-transparent hover:text-bloomberg-white'

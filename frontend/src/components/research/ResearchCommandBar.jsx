@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { useEffect, useState } from 'react';
 
 import TickerSearchBar from '../TickerSearchBar';
+import { FOCUS_RING } from './primitives';
 
 // Bloomberg command-line style bar: bracket label, search input, asset tag, status dot.
 export default function ResearchCommandBar({
@@ -66,7 +67,7 @@ export default function ResearchCommandBar({
           type="button"
           onClick={clear}
           aria-label="Clear search"
-          className="flex shrink-0 items-center border-l border-bloomberg-border px-2 text-bloomberg-muted hover:text-bloomberg-white"
+          className={`flex shrink-0 items-center border-l border-bloomberg-border px-2 text-bloomberg-muted hover:text-bloomberg-white ${FOCUS_RING}`}
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
         </button>

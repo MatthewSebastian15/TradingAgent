@@ -1,5 +1,9 @@
 import PropTypes from 'prop-types';
 
+// Orange ring for keyboard focus on the terminal's near-black surfaces.
+export const FOCUS_RING =
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bloomberg-orange';
+
 export function Skeleton({ className = '' }) {
   return (
     <div className={`animate-pulse bg-bloomberg-border rounded ${className}`} aria-hidden="true" />
