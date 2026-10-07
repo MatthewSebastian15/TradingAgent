@@ -106,6 +106,7 @@ export default function CandlestickPriceChart({
   rangeKey = '1Y',
   heightClass = 'h-[420px]',
   showVolume = true,
+  referenceLines = [],
 }) {
   const [hover, setHover] = useState(null);
   const chart = useMemo(() => {
@@ -376,6 +377,40 @@ export default function CandlestickPriceChart({
             {displayPrice(lastPoint.close, ticker)}
           </text>
 
+          {referenceLines
+            .filter(
+              (line) =>
+                Number.isFinite(line.value) &&
+                line.value >= chart.minPrice &&
+                line.value <= chart.maxPrice
+            )
+            .map((line) => {
+              const y = priceToY(line.value);
+              return (
+                <g key={line.label}>
+                  <line
+                    data-testid={line.testId}
+                    x1={PADDING.left}
+                    x2={WIDTH - PADDING.right}
+                    y1={y}
+                    y2={y}
+                    stroke={line.color}
+                    strokeDasharray="6 4"
+                  />
+                  <text
+                    x={PADDING.left + 6}
+                    y={y - 4}
+                    fill={line.color}
+                    fontFamily="monospace"
+                    fontSize="10"
+                    textAnchor="start"
+                  >
+                    {line.label}
+                  </text>
+                </g>
+              );
+            })}
+
           {showVolume &&
             chart.volumeTicks.map((tick) => {
               const y = volumeToY(tick);
@@ -451,4 +486,14 @@ CandlestickPriceChart.propTypes = {
   rangeKey: PropTypes.string,
   heightClass: PropTypes.string,
   showVolume: PropTypes.bool,
+  // Horizontal guides drawn on the chart's own price scale (e.g. moving averages); lines
+  // outside the visible price range are skipped rather than stretching the scale.
+  referenceLines: PropTypes.arrayOf(
+    PropTypes.shape({
+      value: PropTypes.number,
+      label: PropTypes.string.isRequired,
+      color: PropTypes.string.isRequired,
+      testId: PropTypes.string,
+    })
+  ),
 };

@@ -284,8 +284,20 @@ VolumeBarChart.propTypes = {
   rangeKey: PropTypes.string,
 };
 
-function PriceChartCard({ ticker, ohlcvData, ohlcvLoading, activeRange, setActiveRange }) {
+function PriceChartCard({
+  ticker,
+  ohlcvData,
+  ohlcvLoading,
+  activeRange,
+  setActiveRange,
+  ma50,
+  ma200,
+}) {
   const points = ohlcvData?.points || [];
+  const referenceLines = [
+    { value: ma50, label: 'MA50', color: '#3b82f6', testId: 'research-ma50-line' },
+    { value: ma200, label: 'MA200', color: '#06b6d4', testId: 'research-ma200-line' },
+  ];
   return (
     <SectionCard title="PRICE CHART" className="h-full">
       <div className="flex gap-2 px-3 py-2 border-b border-bloomberg-border">
@@ -318,6 +330,7 @@ function PriceChartCard({ ticker, ohlcvData, ohlcvLoading, activeRange, setActiv
             onZoom={() => {}}
             heightClass="h-[324px]"
             showVolume={false}
+            referenceLines={referenceLines}
           />
           <div className="border-y border-bloomberg-border px-3 py-1.5">
             <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
@@ -340,6 +353,8 @@ PriceChartCard.propTypes = {
   ohlcvLoading: PropTypes.bool,
   activeRange: PropTypes.string,
   setActiveRange: PropTypes.func,
+  ma50: PropTypes.number,
+  ma200: PropTypes.number,
 };
 
 function Range52WCard({ data, loading }) {
@@ -940,6 +955,8 @@ export default function Research() {
                         ohlcvLoading={ohlcvLoading}
                         activeRange={activeRange}
                         setActiveRange={setActiveRange}
+                        ma50={data?.ma_50d}
+                        ma200={data?.ma_200d}
                       />
                     </div>
                     <div className="space-y-3">

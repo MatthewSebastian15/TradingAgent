@@ -6,6 +6,7 @@ import CandlestickPriceChart from './CandlestickPriceChart';
 import {
   buildXAxisTicks,
   DOWN_COLOR,
+  LAST_PRICE_COLOR,
   filterPricePointsByRange,
   NEUTRAL_COLOR,
   normalizePricePoints,
@@ -187,5 +188,62 @@ describe('CandlestickPriceChart', () => {
     expect(volumeBars).toHaveLength(3);
     expect(screen.getByText('PRICE')).toBeTruthy();
     expect(screen.getByText('VOLUME')).toBeTruthy();
+  });
+
+  describe('referenceLines', () => {
+    const lineY = (testId) => Number(screen.getByTestId(testId).getAttribute('y1'));
+
+    it('draws horizontal lines on the chart price scale, ordered by value', () => {
+      render(
+        <CandlestickPriceChart
+          points={POINTS}
+          referenceLines={[
+            { value: 11, label: 'MA50', color: '#3b82f6', testId: 'ref-low' },
+            { value: 12, label: 'MA200', color: '#06b6d4', testId: 'ref-high' },
+          ]}
+        />
+      );
+
+      expect(lineY('ref-high')).toBeLessThan(lineY('ref-low')); // higher price = higher on screen
+      expect(screen.getByText('MA50')).toBeTruthy();
+      expect(screen.getByText('MA200')).toBeTruthy();
+    });
+
+    it('shares the chart scale: a line at the last close sits on the last-price line', () => {
+      const { container } = render(
+        <CandlestickPriceChart
+          points={POINTS}
+          referenceLines={[{ value: 10, label: 'MA', color: '#fff', testId: 'ref-last' }]}
+        />
+      );
+
+      const lastPriceLine = container.querySelector(`line[stroke="${LAST_PRICE_COLOR}"]`);
+      expect(lineY('ref-last')).toBe(Number(lastPriceLine.getAttribute('y1')));
+    });
+
+    it('skips lines outside the visible price range and non-finite values', () => {
+      render(
+        <CandlestickPriceChart
+          points={POINTS}
+          referenceLines={[
+            { value: 500, label: 'FAR', color: '#fff', testId: 'ref-far' },
+            { value: Number.NaN, label: 'NAN', color: '#fff', testId: 'ref-nan' },
+            { value: null, label: 'NULL', color: '#fff', testId: 'ref-null' },
+            { value: 11, label: 'IN', color: '#fff', testId: 'ref-in' },
+          ]}
+        />
+      );
+
+      expect(screen.queryByTestId('ref-far')).toBeNull();
+      expect(screen.queryByTestId('ref-nan')).toBeNull();
+      expect(screen.queryByTestId('ref-null')).toBeNull();
+      expect(screen.getByTestId('ref-in')).toBeTruthy();
+    });
+
+    it('renders nothing extra without referenceLines', () => {
+      const { container } = render(<CandlestickPriceChart points={POINTS} />);
+
+      expect(container.querySelectorAll('[data-testid^="ref-"]').length).toBe(0);
+    });
   });
 });

@@ -311,4 +311,49 @@ describe('Research page', () => {
       );
     });
   });
+
+  describe('MA overlay', () => {
+    const original = useStockOverview.getMockImplementation();
+    afterEach(() => useStockOverview.mockImplementation(original));
+
+    const candles = [
+      { date: '2026-01-01', open: 100, high: 130, low: 90, close: 120, volume: 1 },
+      { date: '2026-01-02', open: 120, high: 140, low: 95, close: 110, volume: 1 },
+    ];
+
+    function withMa(ma50, ma200) {
+      useStockOverview.mockImplementation((ticker) => ({
+        loading: false,
+        error: null,
+        retry: vi.fn(),
+        data: ticker
+          ? { name: 'Apple Inc.', price: 110, prev_close: 100, ma_50d: ma50, ma_200d: ma200 }
+          : null,
+      }));
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({ points: candles }),
+      });
+    }
+
+    it('draws MA50 and MA200 lines from the overview fields', async () => {
+      withMa(105, 115);
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(await screen.findByTestId('research-ma50-line')).toBeTruthy();
+      expect(screen.getByTestId('research-ma200-line')).toBeTruthy();
+    });
+
+    it('omits a line whose value is missing', async () => {
+      withMa(105, null);
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(await screen.findByTestId('research-ma50-line')).toBeTruthy();
+      expect(screen.queryByTestId('research-ma200-line')).toBeNull();
+    });
+  });
 });
